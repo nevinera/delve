@@ -2,8 +2,8 @@ import { describe, it, expect } from "vitest";
 import { changedTiles } from "./changes.js";
 
 const square = (x0, z0, x1, z1) => [[[[x0, z0], [x1, z0], [x1, z1], [x0, z1]]]];
-// A continent of one 20×20-tile zone, with whatever pins, strokes, rivers and pools.
-const continent = ({ region = square(0, 0, 20, 20), pins = [], strokes = [], rivers = [], pools = [] } = {}) => ({ zones: [{ region }], pins, strokes, watercourses: { rivers, pools } });
+// A continent of one 20×20-tile zone, with whatever pins, paths, rivers and pools.
+const continent = ({ region = square(0, 0, 20, 20), pins = [], paths = [], rivers = [], pools = [] } = {}) => ({ zones: [{ region }], pins, paths, watercourses: { rivers, pools } });
 const has = (tiles, tx, tz) => tiles.has(`${tx},${tz}`);
 
 describe("changedTiles", () => {
@@ -13,8 +13,8 @@ describe("changedTiles", () => {
 
   it("ignores info pins, hubs and roads", () => {
     const after = continent({
-      pins: [{ id: "p1", kind: "info", at: [5, 5], name: "Camp" }, { id: "p2", kind: "hub", at: [6, 6], radius: 200 }],
-      strokes: [{ id: "s1", kind: "road", points: [[1, 1], [9, 9]], width: 16 }],
+      pins: [{ id: "p1", kind: "info", at: [5, 5], name: "Camp" }, { id: "p2", kind: "hub", at: [6, 6], radius: 200 }, { id: "p3", kind: "road", at: [1, 1] }, { id: "p4", kind: "road", at: [9, 9] }],
+      paths: [{ id: "r1", from: "p3", to: "p4", width: 16 }],
     });
     expect(changedTiles(continent(), after).size).toBe(0);
   });
@@ -51,7 +51,7 @@ describe("changedTiles", () => {
   });
 
   it("ignores a border moving between two zones when there are no biomes", () => {
-    const split = (x) => ({ zones: [{ region: square(0, 0, x, 20) }, { region: square(x, 0, 20, 20) }], pins: [], strokes: [] });
+    const split = (x) => ({ zones: [{ region: square(0, 0, x, 20) }, { region: square(x, 0, 20, 20) }], pins: [], paths: [] });
     expect(changedTiles(split(10), split(12)).size).toBe(0);
   });
 
@@ -64,7 +64,7 @@ describe("changedTiles", () => {
 
   it("covers every tile of a brand-new region", () => {
     const triangle = [[[[0, 0], [10, 0], [0, 10]]]];
-    const tiles = changedTiles({ zones: [], pins: [], strokes: [] }, continent({ region: triangle }));
+    const tiles = changedTiles({ zones: [], pins: [], paths: [] }, continent({ region: triangle }));
     expect(has(tiles, 0, 9)).toBe(true);
     expect(has(tiles, 9, 0)).toBe(true);
   });
@@ -72,7 +72,7 @@ describe("changedTiles", () => {
 
 describe("pool changes", () => {
   const pool = { region: [[[[2.2, 2.2], [2.8, 2.2], [2.8, 2.8], [2.2, 2.8]]]], level: 40 };
-  const base = { zones: [], pins: [], strokes: [] };
+  const base = { zones: [], pins: [], paths: [] };
   const withPools = (pools) => ({ ...base, watercourses: { rivers: [], pools } });
 
   it("marks the tiles round a new pool", () => {

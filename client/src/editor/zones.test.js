@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { World } from "./world.js";
-import { createZone, dropOldWater, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveZone, sketchPath, zonePath } from "./zones.js";
+import { createZone, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveZone, sketchPath, upgradeSketch, zonePath } from "./zones.js";
 
 describe("zones", () => {
   it("creates a zone file keyed by its name", () => {
@@ -42,10 +42,10 @@ describe("zones", () => {
   });
 
   it("starts with an empty sketch", () => {
-    expect(loadSketch(World.empty(), "main")).toEqual({ version: 3, pins: [], strokes: [], watercourses: { key: null, rivers: [], pools: [] } });
+    expect(loadSketch(World.empty(), "main")).toEqual({ version: 4, pins: [], paths: [], watercourses: { key: null, rivers: [], pools: [] } });
   });
 
-  it("moves zones' own pins and strokes into the sketch, renumbering clashes", () => {
+  it("moves zones' own pins into the sketch, renumbering clashes and dropping their lines", () => {
     const world = World.empty();
     const region = [[[[0, 0], [4, 0], [4, 4]]]];
     world.writeJson(zonePath("main", "a"), { version: 2, name: "A", region, pins: [{ id: "p1", kind: "height", at: [1, 1], height: 5 }], strokes: [{ id: "s1", kind: "road", points: [], width: 16 }, { id: "s2", kind: "river", points: [], width: 30 }] });
@@ -53,20 +53,19 @@ describe("zones", () => {
     expect(moveIntoSketch(world, "main")).toEqual(["a", "b"]);
     const sketch = world.readJson(sketchPath("main"));
     expect(sketch.pins.map((p) => [p.id, p.kind])).toEqual([["p1", "height"], ["p2", "biome"]]);
-    expect(sketch.strokes.map((s) => s.id)).toEqual(["s1"]);
+    expect(sketch.strokes).toBeUndefined();
     expect(world.readJson(zonePath("main", "b"))).toEqual({ version: 3, name: "B", region });
     expect(listZones(world, "main").map((z) => z.key)).toEqual(["a", "b"]);
     expect(moveIntoSketch(world, "main")).toEqual([]);
   });
 
-  it("drops rivers kept as strokes, counting hand-drawn ones", () => {
+  it("drops rivers and roads kept as lines, counting them", () => {
     const drawn = { version: 1, pins: [], strokes: [{ id: "s1", kind: "river", points: [] }, { id: "s2", kind: "road", points: [] }] };
-    expect(dropOldWater(drawn)).toBe(1);
-    expect(drawn.strokes.map((s) => s.id)).toEqual(["s2"]);
-    expect(drawn.version).toBe(3);
-    expect(dropOldWater(drawn)).toBe(0);
+    expect(upgradeSketch(drawn)).toEqual({ rivers: 1, roads: 1 });
+    expect(drawn).toEqual({ version: 4, pins: [] });
+    expect(upgradeSketch(drawn)).toEqual({ rivers: 0, roads: 0 });
     const confirmed = { version: 2, pins: [{ id: "p1", kind: "source", confirmed: "1" }], strokes: [{ id: "s1", kind: "river", points: [] }], pools: [{}] };
-    expect(dropOldWater(confirmed)).toBe(0);
-    expect(confirmed).toEqual({ version: 3, pins: [{ id: "p1", kind: "source" }], strokes: [] });
+    expect(upgradeSketch(confirmed)).toEqual({ rivers: 0, roads: 0 });
+    expect(confirmed).toEqual({ version: 4, pins: [{ id: "p1", kind: "source" }] });
   });
 });

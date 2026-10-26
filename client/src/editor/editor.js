@@ -1,5 +1,5 @@
 import { changedTiles } from "./changes.js";
-import { FEATURE_HINTS, Features, PINS, STROKES } from "./features.js";
+import { FEATURE_HINTS, Features, PINS, nextId } from "./features.js";
 import { MapView } from "./mapView.js";
 import { keyNav } from "./keyNav.js";
 import { TileGenerator } from "./generation.js";
@@ -16,10 +16,11 @@ import {
   subtractZones,
   tilesTouched,
 } from "./region.js";
-import { createZone, dropOldWater, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveSketch, saveZone } from "./zones.js";
+import { createZone, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveSketch, saveZone, upgradeSketch } from "./zones.js";
 import { ShapePalette } from "./shapePalette.js";
 import { ShapePreview } from "./shapePreview.js";
 import { WaterSimulator } from "./waterflow.js";
+import { RoadRouter, findCrossing, gradeCap } from "./roads.js";
 import { hashString } from "../world/noise.js";
 import { TILE_FT } from "../world/constants.js";
 import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
@@ -42,14 +43,13 @@ const HINTS = {
   ...FEATURE_HINTS,
   tiles: `highlighted tiles are out of date, or not generated yet (faint) · generate brings them all up to date · ${NAV}`,
 };
-const HINT_ROADS = "roads are drawn and kept, but don't shape the ground yet";
 const HINT_WALK = "W/S run · A/D turn · Q/E strafe · space jumps · / walks · X sits · Z sprints · left-drag looks around · right-drag turns · wheel zooms · esc stops walking";
 const HINT_PICK_WALK = "click where to start walking · esc cancels";
 
 // The editor's steps, in the order you'd usually work, each with its own map and tools. Each step
 // is a layer that depends only on the ones before it: zones, then heights, then the water that runs
 // over them, then the biomes that grow along it, then the features on top. The zones step edits
-// one zone's region at a time; the rest edit the continent's sketch, the pins and strokes drawn
+// one zone's region at a time; the rest edit the continent's sketch, the pins and paths drawn
 // anywhere on its land. `map` is what the step draws under its marks: a live preview worked out
 // from the zones (shapePreview.js), or the generated tiles.
 const STEPS = {
@@ -67,6 +67,9 @@ const FULL_THUMB_ZOOM = 1.5;
 const PREVIEW_DELAY_MS = 80; // after panning or zooming stops, before the preview is redone
 const PREVIEW_MARGIN = 0.15; // of the view's size, worked out beyond each edge
 const PREVIEW_PX = 3; // screen pixels per preview sample
+const ROUTE_SAVE_DELAY_MS = 100; // routes arriving together are kept together
+const MAX_CROSSINGS = 50; // joined at once
+const CROSSING_GAP_FT = 16; // nearer a route's end than this, a crossing is left alone
 
 // Ties the map, the side panel and the in-memory world together. The side panel lists the steps,
 // with only the one you're on open.
@@ -109,6 +112,9 @@ export class Editor {
     this.preview = null; // the latest heights or biomes picture: { step, canvas, grid }
     this.water = new WaterSimulator((key, result) => this.showWater(key, result));
     this.waterKey = null; // what the latest watercourses asked for were worked out from
+    this.roads = new RoadRouter((id, key, route) => this.showRoute(id, key, route));
+    this.roadLand = null; // what the paths' routes are worked out over, as a key
+    this.roadAsk = null; // the latest routes asked for
     this.view3d = null; // the RenderView for walking, loaded the first time you walk
     this.bindPanel();
     this.fillContinents();
@@ -137,7 +143,6 @@ export class Editor {
     this.continent = world.info.continents[0]?.key;
     this.active = null;
     this.drawing = null;
-    this.features.stroke = null;
     this.features.select(null);
     this.dirty = false;
     this.pending.clear();
@@ -146,7 +151,7 @@ export class Editor {
   }
 
   // Loads the current continent's thumbnails, zones and sketch, and frames them. Zones that held
-  // their own pins and strokes hand them over to the sketch.
+  // their own pins hand them over to the sketch.
   showContinent() {
     this.thumbnails.load(this.world, this.continent);
     this.details.clear();
@@ -155,12 +160,13 @@ export class Editor {
     if (moved.length) this.dirty = true;
     this.waterKey = null;
     this.reload();
-    const dropped = dropOldWater(this.sketch);
+    const dropped = upgradeSketch(this.sketch);
     if (this.sketch.version !== loadSketch(this.world, this.continent).version) this.saveSketch();
     const older = olderZones(this.world, this.continent);
     const notes = [
-      moved.length && `Moved the pins and lines of ${moved.join(", ")} into the continent's sketch.`,
-      dropped && `Dropped ${dropped} hand-drawn river${dropped === 1 ? "" : "s"}; place water sources instead.`,
+      moved.length && `Moved the pins of ${moved.join(", ")} into the continent's sketch.`,
+      dropped.rivers && `Dropped ${dropped.rivers} hand-drawn river${dropped.rivers === 1 ? "" : "s"}; place water sources instead.`,
+      dropped.roads && `Dropped ${dropped.roads} road${dropped.roads === 1 ? "" : "s"} drawn as lines; place road pins instead.`,
       older.length && `Skipped zones in an older format: ${older.join(", ")}.`,
     ];
     this.say(notes.filter(Boolean).join(" "), { info: true });
@@ -231,14 +237,14 @@ export class Editor {
 
   // The continent as the generator takes it (generator.js prepareWorld).
   continentState() {
-    const { pins, strokes, watercourses } = this.sketch;
-    return { zones: this.scopeZones().map(({ region }) => ({ region })), pins, strokes, watercourses };
+    const { pins, paths, watercourses } = this.sketch;
+    return { zones: this.scopeZones().map(({ region }) => ({ region })), pins, paths, watercourses };
   }
 
   // The continent as last stored, from the world's files.
   storedState() {
-    const { pins, strokes, watercourses } = loadSketch(this.world, this.continent);
-    return { zones: listZones(this.world, this.continent).map(({ region }) => ({ region })), pins, strokes, watercourses };
+    const { pins, paths, watercourses } = loadSketch(this.world, this.continent);
+    return { zones: listZones(this.world, this.continent).map(({ region }) => ({ region })), pins, paths, watercourses };
   }
 
   reload() {
@@ -316,6 +322,69 @@ export class Editor {
       lost: "Its water wanders too far, and has been cut short.",
     };
     el.textContent = ends[this.waterEnds?.[pin.id]] ?? "Working out where its water goes…";
+  }
+
+  // --- roads ---
+
+  // Asks for routes for the paths whose route is missing or was worked out for other pins, widths
+  // or land. The land they're routed over is the zones, height and biome pins and watercourses.
+  updateRoads() {
+    const { zones, pins, watercourses } = this.continentState();
+    const land = { zones, pins: pins.filter((p) => p.kind === "height" || p.kind === "biome"), watercourses: { rivers: watercourses.rivers, pools: watercourses.pools } };
+    this.roadLand = String(hashString(JSON.stringify([land, this.continent])));
+    const jobs = this.sketch.paths.flatMap((path) => {
+      const key = this.routeKey(path);
+      if (!key || path.route?.key === key) return [];
+      const at = (id) => this.sketch.pins.find((p) => p.id === id).at;
+      return [{ id: path.id, key, from: at(path.from), to: at(path.to), width: path.width }];
+    });
+    const ask = JSON.stringify(jobs.map((j) => j.key));
+    if (!jobs.length || ask === this.roadAsk) return;
+    this.roadAsk = ask;
+    this.roads.request({ landKey: this.roadLand, continent: land, seedKey: this.continent, jobs });
+  }
+
+  // What a path's route is worked out from, as a key: its pins, its grade cap and the land.
+  routeKey(path) {
+    const at = (id) => this.sketch.pins.find((p) => p.id === id)?.at;
+    const [from, to] = [at(path.from), at(path.to)];
+    if (!from || !to) return null;
+    return String(hashString(JSON.stringify([this.roadLand, from, to, gradeCap(path.width)])));
+  }
+
+  // Keeps a route that's still wanted, and once the routes in hand are kept, puts road pins where
+  // paths cross. While something's being dragged, it's kept when the drag ends.
+  showRoute(id, key, route) {
+    const path = this.sketch.paths.find((p) => p.id === id);
+    if (!path || this.routeKey(path) !== key) return;
+    path.route = { key, ...route };
+    this.features.renderStatus();
+    this.map.render();
+    if (this.features.dragging) return;
+    clearTimeout(this.routeTimer);
+    this.routeTimer = setTimeout(() => {
+      if (this.features.dragging) return;
+      this.joinCrossings();
+      this.saveSketch();
+    }, ROUTE_SAVE_DELAY_MS);
+  }
+
+  // Where two paths' routes cross, a road pin, splitting both paths there. Returns how many it
+  // put.
+  joinCrossings() {
+    let n = 0;
+    for (; n < MAX_CROSSINGS; n++) {
+      const routed = this.sketch.paths.filter((p) => this.features.pathState(p) === "routed").map((p) => ({ ...p, points: p.route.points }));
+      const crossing = findCrossing(routed, CROSSING_GAP_FT / TILE_FT);
+      if (!crossing) break;
+      const pin = { id: nextId(this.sketch, "p"), kind: "road", at: snapToCell(crossing.point) };
+      this.sketch.pins.push(pin);
+      const path = (id) => this.sketch.paths.find((p) => p.id === id);
+      const [a, b] = [path(crossing.a), path(crossing.b)];
+      this.features.splitPath(this.sketch, a, crossing.ia, pin);
+      this.features.splitPath(this.sketch, b, crossing.ib, pin);
+    }
+    return n;
   }
 
   // --- walking ---
@@ -438,7 +507,6 @@ export class Editor {
     this.step = step;
     this.toolName = STEPS[step].tools[0] ?? "select";
     this.drawing = null;
-    this.features.stroke = null;
     this.features.select(null);
     this.say();
     this.renderPanel();
@@ -481,6 +549,7 @@ export class Editor {
   // mid-drag included.
   updatePreview() {
     this.updateWater();
+    this.updateRoads();
     const kind = this.previewKind();
     if (!kind) return;
     const [x0, z0, x1, z1] = this.map.bounds();
@@ -530,7 +599,7 @@ export class Editor {
         const b = document.createElement("button");
         b.type = "button";
         b.dataset.tool = name;
-        b.textContent = PINS[name]?.label ?? STROKES[name]?.label ?? name;
+        b.textContent = PINS[name]?.tool ?? PINS[name]?.label ?? name;
         b.addEventListener("click", () => this.setTool(name));
         tools.append(b);
       }
@@ -637,7 +706,7 @@ export class Editor {
       b.classList.toggle("active", b.dataset.tool === this.toolName);
       b.disabled = !this.scopeZones().length;
     }
-    hint.textContent = this.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : HINTS[this.mode()] + (this.toolName === "road" ? ` · ${HINT_ROADS}` : "");
+    hint.textContent = this.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : HINTS[this.mode()];
     this.el.graphicsButton.hidden = !this.walking;
     this.el.timeButton.hidden = !this.walking;
     this.el.scaleBar.hidden = this.walking;
@@ -697,14 +766,13 @@ export class Editor {
     }
     if (this.step === "tiles") return "tiles";
     if (!this.scopeZones().length) return "empty";
+    if (this.toolName === "road") return "road";
     if (PINS[this.toolName]) return "pin";
-    if (STROKES[this.toolName]) return "stroke";
     return this.toolName;
   }
 
   setTool(name) {
     this.toolName = name;
-    this.features.stroke = null;
     this.palette.render();
     this.say();
     this.renderPanel();
@@ -780,6 +848,11 @@ export class Editor {
       move: (tile, e) => {
         inner.move?.(tile, e);
         if (this.features.dragging) this.updatePreview();
+      },
+      // Routes kept mid-drag may cross others.
+      up: (tile, e) => {
+        inner.up?.(tile, e);
+        if (this.joinCrossings()) this.saveSketch();
       },
     };
   }
@@ -959,10 +1032,7 @@ export class Editor {
     }
     this.features.draw(ctx, this.sketch, this.markKinds());
     if (this.step === "water") this.drawFalls(ctx, map);
-    if (!editing) {
-      this.features.drawInProgress(ctx);
-      return;
-    }
+    if (!editing) return;
     if (!this.drawing) {
       this.drawRegion(ctx, map, editing, true);
       return;

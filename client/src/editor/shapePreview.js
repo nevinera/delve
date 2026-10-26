@@ -16,7 +16,7 @@ import { TILE_FT } from "../world/constants.js";
 const MARGIN_FT = 2 * TILE_FT; // sea around the zoned area, without bounds
 const MIN_STEP_FT = 2;
 
-// continent: { zones, pins, strokes }, as generator.js prepareWorld takes it. bounds: [x0, z0, x1,
+// continent: { zones, pins }, as generator.js prepareWorld takes it. bounds: [x0, z0, x1,
 // z1] continent feet to cover, or the whole zoned area with some sea around it; side: samples
 // along the longer side. Null when there's no land at all.
 export function shapeGrid(continent, seedKey, { biomes = false, bounds = null, side = 360 } = {}) {

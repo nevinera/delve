@@ -1,52 +1,54 @@
 import { snapToCell } from "./region.js";
+import { CART_WIDTH_FT, gradeCap, splitRoute } from "./roads.js";
 import { TILE_FT } from "../world/constants.js";
 
-// The continent's sketch (zones.js loadSketch): pins ({ id, kind, at, ... }) and strokes ({ id,
-// kind, points, width, ... }) anywhere on its land, in continent tile units with sizes in feet.
-// Height pins set the ground height at a spot; biome pins claim the land around them for a biome,
+// The continent's sketch (zones.js loadSketch): pins ({ id, kind, at, ... }) and road paths ({ id,
+// from, to, width, ... }) anywhere on its land, in continent tile units with sizes in feet. Height
+// pins set the ground height at a spot; biome pins claim the land around them for a biome,
 // adjusted by their tags; info pins carry a name, notes and tags for people and LLMs and don't
 // affect generation. Water source pins send water downhill, making the sketch's watercourses
-// (waterflow.js). Roads and hubs don't shape the ground yet. There are no coastlines: the sea is
-// wherever no zone is.
+// (waterflow.js). Road pins are joined by paths, each routed over the land between its two pins
+// (roads.js); a road is a run of paths. Roads and hubs don't shape the ground yet. There are no
+// coastlines: the sea is wherever no zone is.
 
 export const PINS = {
   height: { color: "#70d070", label: "height pin" },
   biome: { color: "#e0a040", label: "biome pin" },
+  road: { color: "#c8a26a", label: "road pin", tool: "road" },
   hub: { color: "#e05a5a", label: "hub" },
   info: { color: "#b08ae0", label: "info pin" },
   source: { color: "#3fb6ff", label: "water source" },
 };
-export const STROKES = {
-  river: { color: "#4a90d9", width: 30, label: "river" }, // only drawn, from the watercourses
-  road: { color: "#c8a26a", width: 16, label: "road" },
-};
+const RIVER_COLOR = "#4a90d9";
+const PATH = { color: "#c8a26a", none: "#ff4a4a", pending: "rgba(255, 255, 255, 0.6)", label: "road path" };
 const POOL_COLOR = "rgba(74, 144, 217, 0.8)";
 export const FEATURE_HINTS = {
-  select: "click a pin or line to select it · drag pins and line points · shift-click a selected line to add a point · alt-click a point to remove it · delete removes the selection",
+  select: "click a pin or road to select it · drag pins · delete removes the selection",
   pin: "click on land to place · click a pin to select or drag it",
-  stroke: "click on land to add points · click the last point or press enter to finish · backspace removes the last · esc cancels · right-drag to pan",
+  road: "click on land to place a road pin, joined to the selected one · click a road pin to join it, or drag it · click a road to branch off it · esc starts a new road · roads don't shape the ground yet",
 };
 
 const DEFAULT_HEIGHT_FT = 20;
 const DEFAULT_HUB_RADIUS_FT = 200;
 const DEFAULT_SOURCE_WIDTH_FT = 12;
+const DEFAULT_PATH_WIDTH_FT = 10;
 const SHAPE_PINS = ["height", "biome"];
 
 export function nextId(sketch, prefix) {
-  const used = new Set([...sketch.pins, ...sketch.strokes].map((f) => f.id));
+  const used = new Set([...sketch.pins, ...sketch.paths].map((f) => f.id));
   let n = 1;
   while (used.has(`${prefix}${n}`)) n++;
   return `${prefix}${n}`;
 }
 
 // Tools, drawing and the properties panel for the sketch's features. The editor keeps the sketch
-// (editor.sketch) and stores it (editor.saveSketch).
+// (editor.sketch) and stores it (editor.saveSketch), and works out the paths' routes
+// (editor.routeKey says which route a path needs).
 export class Features {
   constructor(editor) {
     this.editor = editor;
-    this.selected = null; // { type: "pin" | "stroke", id }
+    this.selected = null; // { type: "pin" | "path", id }
     this.kinds = []; // what the current tool can pick
-    this.stroke = null; // a stroke being drawn: { kind, points }
   }
 
   get map() {
@@ -56,7 +58,7 @@ export class Features {
   // The selected feature.
   find(sketch) {
     if (!this.selected) return null;
-    const list = this.selected.type === "pin" ? sketch.pins : sketch.strokes;
+    const list = this.selected.type === "pin" ? sketch.pins : sketch.paths;
     return list.find((f) => f.id === this.selected.id) ?? null;
   }
 
@@ -65,15 +67,20 @@ export class Features {
     this.editor.renderProps();
   }
 
-  isSelected(sketch, feature) {
+  isSelected(feature) {
     return this.selected?.id === feature.id;
   }
 
+  // Removes the selection, and a pin's paths with it.
   remove(sketch) {
     const feature = this.find(sketch);
     if (!feature) return;
-    const list = this.selected.type === "pin" ? sketch.pins : sketch.strokes;
-    list.splice(list.indexOf(feature), 1);
+    if (this.selected.type === "pin") {
+      sketch.pins.splice(sketch.pins.indexOf(feature), 1);
+      sketch.paths = sketch.paths.filter((p) => p.from !== feature.id && p.to !== feature.id);
+    } else {
+      sketch.paths.splice(sketch.paths.indexOf(feature), 1);
+    }
     this.select(null);
     this.editor.saveSketch();
   }
@@ -82,9 +89,9 @@ export class Features {
 
   // `kinds` limits what the select tool picks, and what a pin tool's click can grab.
   tool(sketch, name, kinds) {
-    this.kinds = kinds ?? [...Object.keys(PINS), ...Object.keys(STROKES)];
+    this.kinds = kinds ?? Object.keys(PINS);
+    if (name === "road") return this.roadTool(sketch);
     if (PINS[name]) return this.pinTool(sketch, name);
-    if (STROKES[name]) return this.strokeTool(sketch, name);
     return this.selectTool(sketch);
   }
 
@@ -125,47 +132,82 @@ export class Features {
     this.editor.saveSketch();
   }
 
-  strokeTool(sketch, kind) {
+  // Each click places a road pin, or picks one, and joins it to the road pin selected before, so a
+  // run of clicks draws a road. A click on a road puts a pin on it there, to branch from.
+  roadTool(sketch) {
     return {
       down: (tile) => {
-        const pts = this.stroke?.points ?? [];
-        if (pts.length >= 2 && this.editor.nearScreen(pts[pts.length - 1], tile)) {
-          this.finishStroke(sketch);
-          return true;
+        const selected = this.selected?.type === "pin" ? this.find(sketch) : null;
+        const from = selected?.kind === "road" ? selected : null;
+        const existing = this.pinAt(sketch, tile, ["road"]);
+        if (existing && (!from || existing === from)) return this.grabPin(sketch, existing);
+        let pin = existing;
+        if (!pin) {
+          const path = this.pathAt(sketch, tile);
+          if (path) {
+            pin = this.splitAt(sketch, path, tile);
+          } else {
+            const at = this.place(tile);
+            if (!at) return true;
+            pin = { id: nextId(sketch, "p"), kind: "road", at };
+            sketch.pins.push(pin);
+          }
         }
-        const point = this.place(tile);
-        if (!point) return true;
-        if (!this.stroke) this.stroke = { kind, points: [] };
-        this.stroke.points.push(point);
-        this.editor.say();
+        if (from) this.join(sketch, from, pin);
+        this.select(sketch, "pin", pin.id);
+        this.editor.saveSketch();
         return true;
       },
+      move: (tile) => this.dragTo(tile, sketch),
+      up: () => this.endDrag(sketch),
     };
   }
 
-  finishStroke(sketch) {
-    const { kind, points } = this.stroke ?? {};
-    this.stroke = null;
-    if (!points || points.length < 2) return;
-    const stroke = { id: nextId(sketch, "s"), kind, points, width: STROKES[kind].width };
-    sketch.strokes.push(stroke);
-    this.select(sketch, "stroke", stroke.id);
-    this.editor.saveSketch();
+  // A path from road pin `a` to `b`, as wide and tagged as another of a's paths, unless they're
+  // joined already.
+  join(sketch, a, b) {
+    if (sketch.paths.some((p) => (p.from === a.id && p.to === b.id) || (p.from === b.id && p.to === a.id))) return;
+    const like = sketch.paths.find((p) => p.from === a.id || p.to === a.id);
+    const path = { id: nextId(sketch, "r"), from: a.id, to: b.id, width: like?.width ?? DEFAULT_PATH_WIDTH_FT };
+    if (like?.tags) path.tags = [...like.tags];
+    sketch.paths.push(path);
+  }
+
+  // A new road pin on a path, nearest the given spot, splitting the path in two there.
+  splitAt(sketch, path, tile) {
+    const points = this.pathPoints(sketch, path);
+    const { index } = nearestOnStroke(points, tile);
+    const pin = { id: nextId(sketch, "p"), kind: "road", at: snapToCell(closestOnSegment(points[index], points[index + 1], tile)) };
+    sketch.pins.push(pin);
+    this.splitPath(sketch, path, index, pin);
+    return pin;
+  }
+
+  // Splits a path at `pin`, which lies on segment `index` of its route: the path runs to the pin,
+  // and a new one like it runs on from there. A route that's up to date is cut in two, so neither
+  // half needs working out again.
+  splitPath(sketch, path, index, pin) {
+    const { route, ...rest } = path;
+    const current = route?.points && route.key === this.editor.routeKey(path);
+    const next = { ...structuredClone(rest), id: nextId(sketch, "r"), from: pin.id };
+    path.to = pin.id;
+    sketch.paths.push(next);
+    delete path.route;
+    if (!current) return;
+    const halves = splitRoute(route.points, index, pin.at);
+    for (const [p, points] of [[path, halves[0]], [next, halves[1]]]) {
+      p.route = { key: this.editor.routeKey(p), points, lengthFt: Math.round(lengthOf(points) * TILE_FT), grade: route.grade };
+    }
   }
 
   selectTool(sketch) {
     return {
-      down: (tile, e) => {
-        const stroke = this.selected?.type === "stroke" ? this.find(sketch) : null;
-        if (stroke) {
-          const grabbed = this.grabStrokePoint(sketch, stroke, tile, e);
-          if (grabbed !== null) return grabbed;
-        }
+      down: (tile) => {
         const pin = this.pinAt(sketch, tile);
         if (pin) return this.grabPin(sketch, pin);
-        const hit = this.strokeAt(sketch, tile);
-        this.select(sketch, hit ? "stroke" : null, hit?.id);
-        return Boolean(hit);
+        const path = this.kinds.includes("road") ? this.pathAt(sketch, tile) : null;
+        this.select(sketch, path ? "path" : null, path?.id);
+        return Boolean(path);
       },
       move: (tile) => this.dragTo(tile, sketch),
       up: () => this.endDrag(sketch),
@@ -184,32 +226,6 @@ export class Features {
     return true;
   }
 
-  // Returns true when the press took a point of the selected stroke, false when it was used up
-  // without a drag, and null when it missed.
-  grabStrokePoint(sketch, stroke, tile, e) {
-    const index = stroke.points.findIndex((p) => this.editor.nearScreen(p, tile));
-    if (index >= 0 && e.altKey) {
-      stroke.points.splice(index, 1);
-      if (stroke.points.length < 2) this.remove(sketch);
-      else this.editor.saveSketch();
-      return true;
-    }
-    if (index >= 0) {
-      this.dragging = { target: stroke.points, key: index, kind: stroke.kind };
-      return true;
-    }
-    if (e.shiftKey) {
-      const near = nearestOnStroke(stroke.points, tile);
-      if (near.dist * this.map.view.scale > 8 * this.map.dpr) return null;
-      const point = this.place(tile);
-      if (!point) return true;
-      stroke.points.splice(near.index + 1, 0, point);
-      this.dragging = { target: stroke.points, key: near.index + 1, kind: stroke.kind };
-      return true;
-    }
-    return null;
-  }
-
   dragTo(tile, sketch) {
     if (!this.dragging) return;
     const point = snapToCell(tile);
@@ -217,28 +233,34 @@ export class Features {
     this.dragging.target[this.dragging.key] = point;
   }
 
-  pinAt(sketch, tile) {
-    return [...sketch.pins].reverse().find((p) => this.kinds.includes(p.kind) && this.editor.nearScreen(p.at, tile)) ?? null;
+  pinAt(sketch, tile, kinds = this.kinds) {
+    return [...sketch.pins].reverse().find((p) => kinds.includes(p.kind) && this.editor.nearScreen(p.at, tile)) ?? null;
   }
 
-  strokeAt(sketch, tile) {
+  pathAt(sketch, tile) {
     return (
-      [...sketch.strokes].reverse().find((s) => {
-        if (!this.kinds.includes(s.kind)) return false;
-        const reachFt = Math.max(s.width / 2, 0);
-        const reach = Math.max(8 * this.map.dpr, (reachFt / TILE_FT) * this.map.view.scale);
-        return nearestOnStroke(s.points, tile).dist * this.map.view.scale < reach;
+      [...sketch.paths].reverse().find((p) => {
+        const reach = Math.max(8 * this.map.dpr, (p.width / 2 / TILE_FT) * this.map.view.scale);
+        return nearestOnStroke(this.pathPoints(sketch, p), tile).dist * this.map.view.scale < reach;
       }) ?? null
     );
   }
 
+  // Where a path runs: its route, or straight between its pins while it has none.
+  pathPoints(sketch, path) {
+    if (path.route?.points) return path.route.points;
+    const pin = (id) => sketch.pins.find((p) => p.id === id)?.at ?? [0, 0];
+    return [pin(path.from), pin(path.to)];
+  }
+
+  // "routed", "none" when there's no route within its grade cap, or "pending" while it's being
+  // worked out.
+  pathState(path) {
+    if (!path.route || path.route.key !== this.editor.routeKey(path)) return "pending";
+    return path.route.points ? "routed" : "none";
+  }
+
   onKey(e, sketch) {
-    if (this.stroke) {
-      if (e.key === "Enter") this.finishStroke(sketch);
-      if (e.key === "Escape") this.stroke = null;
-      if (e.key === "Backspace") this.stroke.points.pop();
-      return true;
-    }
     if ((e.key === "Delete" || e.key === "Backspace") && this.selected) {
       this.remove(sketch);
       return true;
@@ -252,14 +274,13 @@ export class Features {
 
   // --- drawing ---
 
-  // Draws the sketch's features of the given kinds, and its rivers and pools when `water` is set.
+  // Draws the sketch's features of the given kinds (paths with road pins), and its rivers and
+  // pools when `water` is set.
   draw(ctx, sketch, { kinds, water = false }) {
     if (water) this.drawWater(ctx, sketch.watercourses);
-    for (const stroke of sketch.strokes) {
-      if (kinds.includes(stroke.kind)) this.drawStroke(ctx, stroke, this.isSelected(sketch, stroke));
-    }
+    if (kinds.includes("road")) for (const path of sketch.paths) this.drawPath(ctx, sketch, path);
     for (const pin of sketch.pins) {
-      if (kinds.includes(pin.kind)) this.drawPin(ctx, pin, this.isSelected(sketch, pin));
+      if (kinds.includes(pin.kind)) this.drawPin(ctx, pin, this.isSelected(pin));
     }
   }
 
@@ -277,40 +298,45 @@ export class Features {
       ctx.fill("evenodd");
       ctx.stroke();
     }
-    for (const river of rivers) this.drawStroke(ctx, { kind: "river", ...river }, false);
+    for (const river of rivers) this.drawLine(ctx, river.points, river.width, RIVER_COLOR);
   }
 
-  drawInProgress(ctx) {
-    if (!this.stroke) return;
-    const points = [...this.stroke.points];
-    if (this.map.pointer) points.push(snapToCell(this.map.pointer));
-    this.drawStroke(ctx, { kind: this.stroke.kind, points, width: STROKES[this.stroke.kind].width }, true);
-  }
-
-  drawStroke(ctx, stroke, highlight) {
-    const kind = STROKES[stroke.kind];
+  // A path along its route; while it's worked out, its old route faded or a dashed line between
+  // its pins, and with no route, a red dashed line.
+  drawPath(ctx, sketch, path) {
     const dpr = this.map.dpr;
-    const pts = stroke.points.map((p) => this.map.toScreen(p));
-    if (pts.length === 0) return;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.strokeStyle = kind.color;
-    ctx.lineWidth = Math.max(2 * dpr, (stroke.width / TILE_FT) * this.map.view.scale);
-    polyline(ctx, pts);
-
-    if (highlight) {
+    const state = this.pathState(path);
+    const points = this.pathPoints(sketch, path);
+    if (state === "routed" || (state === "pending" && path.route?.points)) {
+      ctx.globalAlpha = state === "routed" ? 1 : 0.5;
+      this.drawLine(ctx, points, path.width, PATH.color);
+      ctx.globalAlpha = 1;
+    } else {
+      ctx.setLineDash([6 * dpr, 4 * dpr]);
+      this.drawLine(ctx, points, 0, state === "none" ? PATH.none : PATH.pending);
+      ctx.setLineDash([]);
+    }
+    if (this.isSelected(path)) {
       ctx.strokeStyle = "#fff";
       ctx.lineWidth = dpr;
-      polyline(ctx, pts);
-      ctx.fillStyle = "#fff";
-      for (const [x, y] of pts) ctx.fillRect(x - 3 * dpr, y - 3 * dpr, 6 * dpr, 6 * dpr);
+      polyline(ctx, points.map((p) => this.map.toScreen(p)));
     }
+  }
+
+  drawLine(ctx, points, widthFt, color) {
+    const pts = points.map((p) => this.map.toScreen(p));
+    if (!pts.length) return;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(2 * this.map.dpr, (widthFt / TILE_FT) * this.map.view.scale);
+    polyline(ctx, pts);
   }
 
   drawPin(ctx, pin, highlight) {
     const dpr = this.map.dpr;
     const [x, y] = this.map.toScreen(pin.at);
-    const r = 7 * dpr;
+    const r = (pin.kind === "road" ? 5 : 7) * dpr;
     if (pin.kind === "hub" && pin.radius > 0) {
       // The ground a hub takes up.
       ctx.strokeStyle = PINS.hub.color;
@@ -363,30 +389,50 @@ export class Features {
 
   renderProps(box, sketch) {
     box.innerHTML = "";
+    this.status = null;
     const feature = sketch && this.find(sketch);
     if (!feature) {
       box.hidden = true;
       return;
     }
     box.hidden = false;
-    const kind = PINS[feature.kind] ?? STROKES[feature.kind];
+    const path = this.selected.type === "path";
+    const label = path ? PATH.label : PINS[feature.kind].label;
     const heading = document.createElement("h2");
-    heading.textContent = `${kind.label} · ${feature.id}`;
+    heading.textContent = `${label} · ${feature.id}`;
     box.append(heading);
 
     // Height and biome settings live in the shape palette.
     const fields = ["name"];
-    if (STROKES[feature.kind] || feature.kind === "source") fields.push("width");
+    if (path || feature.kind === "source") fields.push("width");
     if (feature.kind === "hub") fields.push("radius");
-    if (!SHAPE_PINS.includes(feature.kind)) fields.push("tags");
+    if (path || !SHAPE_PINS.includes(feature.kind)) fields.push("tags");
     fields.push("notes");
     for (const key of fields) box.append(this.field(sketch, feature, key));
     if (feature.kind === "source") box.append(this.editor.sourceStatus(feature));
+    if (path) {
+      this.status = { path: feature, el: document.createElement("p") };
+      box.append(this.status.el);
+      this.renderStatus();
+    }
 
     const row = document.createElement("div");
     row.className = "editor-row";
-    row.append(button(`delete ${kind.label}`, () => this.remove(sketch)));
+    row.append(button(`delete ${label}`, () => this.remove(sketch)));
     box.append(row);
+  }
+
+  // A line under a path's settings saying how its route went.
+  renderStatus() {
+    const { path, el } = this.status ?? {};
+    if (!el) return;
+    const cap = `${Math.round(gradeCap(path.width) * 100)}%`;
+    const carts = path.width > CART_WIDTH_FT ? "it's wide enough for carts, so it's held to" : "its grade cap is";
+    el.textContent = {
+      routed: `Runs ${path.route?.lengthFt?.toLocaleString()} ft, climbing ${Math.round((path.route?.grade ?? 0) * 100)}% at most (${carts} ${cap}).`,
+      none: `No route within a ${cap} grade without crossing a lake or the sea, or a river at an angle, so it's shown as a red dashed line.`,
+      pending: "Working out its route…",
+    }[this.pathState(path)];
   }
 
   field(sketch, feature, key) {
@@ -411,25 +457,35 @@ export class Features {
         feature[key] = numeric ? Number(value) : input.value;
       }
       this.editor.saveSketch();
+      this.renderStatus();
     });
     label.append(input);
     return label;
   }
 }
 
-// The segment of a stroke nearest a point: the index of its first point, and the distance.
+// The segment of a line nearest a point: the index of its first point, and the distance.
 export function nearestOnStroke(points, [x, z]) {
   let best = { index: -1, dist: Infinity };
   for (let i = 1; i < points.length; i++) {
-    const [ax, az] = points[i - 1];
-    const [bx, bz] = points[i];
-    const dx = bx - ax;
-    const dz = bz - az;
-    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
-    const dist = Math.hypot(x - (ax + t * dx), z - (az + t * dz));
+    const [px, pz] = closestOnSegment(points[i - 1], points[i], [x, z]);
+    const dist = Math.hypot(x - px, z - pz);
     if (dist < best.dist) best = { index: i - 1, dist };
   }
   return best;
+}
+
+function closestOnSegment([ax, az], [bx, bz], [x, z]) {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+  return [ax + t * dx, az + t * dz];
+}
+
+function lengthOf(points) {
+  let length = 0;
+  for (let k = 1; k < points.length; k++) length += Math.hypot(points[k][0] - points[k - 1][0], points[k][1] - points[k - 1][1]);
+  return length;
 }
 
 function polyline(ctx, pts) {

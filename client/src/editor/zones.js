@@ -2,22 +2,23 @@ import { nextId } from "./features.js";
 
 // Zones live at places/continents/<continent>/zones/<key>.json, each a name and a region. The key
 // is fixed when the zone is made; the name can change. Everything drawn on the land, pins and
-// strokes alike, lives in the continent's sketch at places/continents/<continent>/sketch.json,
+// paths alike, lives in the continent's sketch at places/continents/<continent>/sketch.json,
 // since the land is generated as one piece and features cross zone edges. The sketch also keeps
 // its watercourses, the rivers and pools its water sources make (waterflow.js), for the
-// generator. Sketches from before that hold rivers drawn by hand (format 1) or confirmed one
-// source at a time (format 2), which the editor drops.
+// generator, and its road paths between road pins (roads.js). Older sketches hold rivers drawn by
+// hand (format 1) or confirmed one source at a time (format 2), and roads drawn as lines (formats
+// 1 to 3), which the editor drops.
 
 export const ZONE_VERSION = 3;
-export const SKETCH_VERSION = 3;
-const SKETCH_ZONES = 2; // the zone format that held its own pins and strokes
+export const SKETCH_VERSION = 4;
+const SKETCH_ZONES = 2; // the zone format that held its own pins and lines
 const ZONE_PATH = /^places\/continents\/([\w-]+)\/zones\/([\w-]+)\.json$/;
 
 export function zonePath(continent, key) {
   return `places/continents/${continent}/zones/${key}.json`;
 }
 
-// The continent's zones in the current format, by key. Zones with their own pins and strokes
+// The continent's zones in the current format, by key. Zones with their own pins and lines
 // need moveIntoSketch first; older zone files are left alone (see olderZones).
 export function listZones(world, continent) {
   return zoneFiles(world, continent)
@@ -64,45 +65,46 @@ export function sketchPath(continent) {
   return `places/continents/${continent}/sketch.json`;
 }
 
-// The continent's pins, strokes and watercourses: { version, pins, strokes, watercourses }, with
-// watercourses as { key, rivers, pools } (waterflow.js simulateWater), key saying what they were
-// worked out from.
+// The continent's pins, paths and watercourses: { version, pins, paths, watercourses }. Paths are
+// { id, from, to, width, route, ... }, from and to the ids of road pins, and route { key, points,
+// lengthFt, grade } (roads.js), key saying what it was worked out from. Watercourses are { key,
+// rivers, pools } (waterflow.js simulateWater), the same way.
 export function loadSketch(world, continent) {
-  const sketch = world.readJson(sketchPath(continent)) ?? { version: SKETCH_VERSION, pins: [], strokes: [] };
+  const sketch = world.readJson(sketchPath(continent)) ?? { version: SKETCH_VERSION, pins: [], paths: [] };
+  sketch.paths ??= [];
   sketch.watercourses ??= { key: null, rivers: [], pools: [] };
   return sketch;
 }
 
-// Drops the rivers and pools kept in the strokes of a sketch from before watercourses. Returns how
-// many rivers were drawn by hand.
-export function dropOldWater(sketch) {
-  if (sketch.version >= SKETCH_VERSION) return 0;
-  const drawn = sketch.version < 2 ? sketch.strokes.filter((s) => s.kind === "river").length : 0;
-  sketch.strokes = sketch.strokes.filter((s) => s.kind !== "river");
+// Brings an older sketch up to date, dropping the lines it kept rivers and roads in. Returns how
+// many rivers were drawn by hand, and how many roads were drawn.
+export function upgradeSketch(sketch) {
+  if (sketch.version >= SKETCH_VERSION) return { rivers: 0, roads: 0 };
+  const strokes = sketch.strokes ?? [];
+  const rivers = sketch.version < 2 ? strokes.filter((s) => s.kind === "river").length : 0;
+  const roads = strokes.filter((s) => s.kind === "road").length;
+  delete sketch.strokes;
   delete sketch.pools;
   for (const pin of sketch.pins) delete pin.confirmed;
   sketch.version = SKETCH_VERSION;
-  return drawn;
+  return { rivers, roads };
 }
 
 export function saveSketch(world, continent, sketch) {
   world.writeJson(sketchPath(continent), sketch);
 }
 
-// Moves the pins and strokes out of zone files that held their own (format 2) into the sketch,
-// renumbering any whose id is taken and leaving out hand-drawn rivers, and rewrites those zones in the current format. Returns the
-// keys of the zones it moved.
+// Moves the pins out of zone files that held their own (format 2) into the sketch, renumbering any
+// whose id is taken and leaving out the lines they drew rivers and roads with, and rewrites those
+// zones in the current format. Returns the keys of the zones it moved.
 export function moveIntoSketch(world, continent) {
   const moving = zoneFiles(world, continent).filter((zone) => zone.version === SKETCH_ZONES);
   if (!moving.length) return [];
   const sketch = loadSketch(world, continent);
-  for (const { key, name, region, pins = [], strokes = [] } of moving) {
-    const kept = strokes.filter((s) => s.kind !== "river");
-    for (const [list, features, prefix] of [[sketch.pins, pins, "p"], [sketch.strokes, kept, "s"]]) {
-      for (const feature of features) {
-        const taken = [...sketch.pins, ...sketch.strokes].some((f) => f.id === feature.id);
-        list.push(taken ? { ...feature, id: nextId(sketch, prefix) } : feature);
-      }
+  for (const { key, name, region, pins = [] } of moving) {
+    for (const pin of pins) {
+      const taken = sketch.pins.some((p) => p.id === pin.id);
+      sketch.pins.push(taken ? { ...pin, id: nextId(sketch, "p") } : pin);
     }
     world.writeJson(zonePath(continent, key), { version: ZONE_VERSION, name, region });
   }

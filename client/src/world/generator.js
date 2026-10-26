@@ -225,6 +225,19 @@ export function shapeHeight(ctx, x, z, relief = 0) {
   return coast(ctx, ctx.heightAt(x, z) + relief, x, z, coastDist);
 }
 
+// The ground roads are routed over (editor/roads.js), from prepareWorld's ctx: the broad shape with
+// the biomes' hills and ridges, leaving out the crags and smaller bumps a road's cut and fill
+// smooths away. `water` is "sea", "lake" (lakes and the watercourses' pools) or null; rivers
+// aren't counted, since roads cross them.
+export function routeGround(ctx, x, z) {
+  const h = shapeHeight(ctx, x, z, biomeRelief(ctx, x, z, climateAt(ctx.biomes, x, z).profile));
+  if (seaAt(ctx, x, z)) return { h, water: "sea" };
+  const out = { h, water: NaN, lake: false };
+  lakes(ctx, out, x, z);
+  for (const p of ctx.ponds) pond(out, x, z, p);
+  return { h, water: out.lake ? "lake" : null };
+}
+
 // A biome profile's hills and rocky ridges at a point, in ft: the broad strokes of the land's
 // detail, without crags, facets, ledges or small bumps. Ridges are ridged noise squared, so their
 // crests are sharp and the ground between them opens out.
