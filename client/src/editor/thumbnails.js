@@ -1,6 +1,6 @@
 import { gunzipSync } from "fflate";
 import { decodeTile } from "../world/tileCodec.js";
-import { biomeRgba, tileRgba } from "../world/tileImage.js";
+import { biomeRgba, tileDetailRgba, tileRgba } from "../world/tileImage.js";
 
 const TILE_PATH = /^places\/continents\/([\w-]+)\/tiles\/surface\/(-?\d+)\/(-?\d+)\.dlt\.gz$/;
 const BATCH_MS = 12;
@@ -73,6 +73,72 @@ export class Thumbnails {
 
   get size() {
     return this.images.size;
+  }
+}
+
+// Close-up pictures of tiles (tileDetailRgba), for when only a few tiles are in sight. get()
+// answers null for one that isn't drawn yet and draws it soon after, a batch at a time, calling
+// onReady after each batch. The most recently used are kept.
+const DETAIL_PX = 4;
+const DETAIL_KEEP = 200;
+
+export class TileDetails {
+  // tileBytes(tx, tz): the tile's gzipped file, or undefined.
+  constructor(tileBytes, onReady) {
+    this.tileBytes = tileBytes;
+    this.onReady = onReady;
+    this.images = new Map(); // "tx,tz" -> canvas, least recently used first
+    this.queue = new Set();
+    this.timer = null;
+  }
+
+  get(tx, tz) {
+    const key = `${tx},${tz}`;
+    const image = this.images.get(key);
+    if (image) {
+      this.images.delete(key);
+      this.images.set(key, image);
+      return image;
+    }
+    this.queue.add(key);
+    this.timer ??= setTimeout(() => this.drawSome(), 0);
+    return null;
+  }
+
+  // Forgets a tile's picture, after it changes.
+  drop(tx, tz) {
+    this.images.delete(`${tx},${tz}`);
+  }
+
+  clear() {
+    this.images.clear();
+    this.queue.clear();
+  }
+
+  drawSome() {
+    this.timer = null;
+    const start = performance.now();
+    for (const key of this.queue) {
+      if (performance.now() - start > BATCH_MS) break;
+      this.queue.delete(key);
+      const [tx, tz] = key.split(",").map(Number);
+      const bytes = this.tileBytes(tx, tz);
+      if (!bytes) continue;
+      try {
+        const tile = decodeTile(gunzipSync(bytes));
+        this.images.set(key, rgbaCanvas(tileDetailRgba(tile, DETAIL_PX), tile.cells * DETAIL_PX));
+      } catch (err) {
+        console.warn(`couldn't read tile ${key}: ${err.message}`);
+      }
+      if (this.images.size > DETAIL_KEEP) this.images.delete(this.images.keys().next().value);
+    }
+    this.onReady?.();
+    if (this.queue.size) this.timer = setTimeout(() => this.drawSome(), 0);
+  }
+
+  // Drops queued tiles nobody asked for since the last call, so panning away stops their drawing.
+  forgetQueued() {
+    this.queue.clear();
   }
 }
 

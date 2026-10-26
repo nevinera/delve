@@ -10,13 +10,14 @@
 </header>
 <main class="editor-main">
   <div class="editor-view">
-    <nav class="editor-tabs editor-view-bar">
-      <span id="viewTabs" class="editor-tabs">
-        <button type="button" data-view="cells">cells</button>
-        <button type="button" data-view="terrain">terrain</button>
-        <button type="button" data-view="3d">3D</button>
+    <nav class="editor-view-bar">
+      <span id="scaleBar" class="editor-scale">
+        <button id="zoomOut" type="button" title="zoom out (V)">−</button>
+        <span id="scale"></span>
+        <button id="zoomIn" type="button" title="zoom in (C)">+</button>
       </span>
-      <button id="walk" type="button" hidden>walk</button>
+      <span class="spacer"></span>
+      <button id="walk" type="button">walk</button>
       <button id="graphicsButton" type="button" popovertarget="graphics" hidden>graphics</button>
       <div id="graphics" class="editor-popover" popover>
         <h3>Resolution</h3>
@@ -28,14 +29,10 @@
         <label class="editor-range">radius <input id="clutterRadius" type="range" step="10"><output id="clutterRadiusValue"></output></label>
         <label class="editor-range">density <input id="clutterDensity" type="range" min="10" max="100" step="5"><output id="clutterDensityValue"></output></label>
       </div>
-      <span class="spacer"></span>
-      <label class="editor-check"><input id="showBiomes" type="checkbox"><span>show biomes</span></label>
-      <label class="editor-check"><input id="showPins" type="checkbox" checked><span>show pins</span></label>
     </nav>
     <div class="editor-stage">
       <canvas id="map" class="editor-map"></canvas>
       <canvas id="scene" class="editor-map" hidden></canvas>
-      <div id="sceneTip" class="editor-tip" hidden></div>
     </div>
   </div>
   <aside class="editor-panel">
@@ -43,62 +40,70 @@
       <h2>Continent</h2>
       <select id="continent"></select>
     </section>
-    <section>
-      <h2>Zones</h2>
-      <ul id="zoneList" class="editor-zones"></ul>
-      <button id="newZone" type="button">new zone</button>
-    </section>
-    <nav id="stepTabs" class="editor-tabs editor-steps">
-      <button type="button" data-step="zones">zones</button>
-      <button type="button" data-step="heights">heights</button>
-      <button type="button" data-step="biomes">biomes</button>
-      <button type="button" data-step="features">features</button>
-      <button type="button" data-step="population">population</button>
-    </nav>
-    <p id="noZone" class="editor-empty">pick a zone to edit, or make a new one</p>
-    <section class="editor-step" data-step="zones" hidden>
-      <label class="editor-field">name <input id="zoneName" type="text"></label>
-      <p id="regionInfo"></p>
-      <div class="editor-row">
-        <button id="drawRegion" type="button">draw region</button>
-        <button id="deleteZone" type="button">delete zone</button>
-      </div>
-    </section>
-    <section class="editor-step" data-step="heights" hidden>
-      <div class="editor-tools" data-tools="heights"></div>
-      <div id="heightPalette" class="editor-palette" hidden>
-        <input id="heightSlider" class="editor-vslider" type="range" min="-180" max="1000" step="1" value="0">
-        <div>
-          <strong id="heightValue"></strong>
-          <p class="editor-empty">4 miles (21,120 ft) at the top, -50 at the bottom</p>
+    <div class="editor-steps">
+      <section class="editor-step" data-step="zones">
+        <button type="button" class="editor-step-head">zones</button>
+        <div class="editor-step-body">
+          <ul id="zoneList" class="editor-zones"></ul>
+          <button id="newZone" type="button">new zone</button>
+          <div id="zoneEdit" class="editor-step-body" hidden>
+            <label class="editor-field">name <input id="zoneName" type="text"></label>
+            <p id="regionInfo"></p>
+            <div class="editor-row">
+              <button id="drawRegion" type="button">draw region</button>
+              <button id="deleteZone" type="button">delete zone</button>
+            </div>
+          </div>
+          <label class="editor-check"><input type="checkbox" data-option="tiles"><span>display tiles</span></label>
         </div>
-      </div>
-    </section>
-    <section class="editor-step" data-step="biomes" hidden>
-      <div class="editor-tools" data-tools="biomes"></div>
-      <div id="biomePalette" class="editor-palette" hidden>
-        <div id="biomeChoices" class="editor-choices"></div>
-        <div id="biomeTags" class="editor-choices"></div>
-      </div>
-      <label class="editor-check"><input id="showRivers" type="checkbox"><span>show rivers</span></label>
-    </section>
-    <section class="editor-step" data-step="features" hidden>
-      <div class="editor-tools" data-tools="features"></div>
-    </section>
-    <section class="editor-step" data-step="population" hidden>
-      <div class="editor-tools" data-tools="population"></div>
-      <label class="editor-field editor-subhead">tree kind <select id="treeKind"></select></label>
-    </section>
-    <section id="generateBox" hidden>
-      <div class="editor-row editor-subhead">
-        <button id="generate" type="button">generate</button>
-        <button id="regenerate" type="button">regenerate changed</button>
-      </div>
-      <label class="editor-check">
-        <input id="highlight" type="checkbox">
-        <span>highlight changes (<span id="pendingInfo"></span>)</span>
-      </label>
-    </section>
+      </section>
+      <section class="editor-step" data-step="heights">
+        <button type="button" class="editor-step-head">heights</button>
+        <div class="editor-step-body">
+          <div class="editor-tools" data-tools="heights"></div>
+          <div id="heightPalette" class="editor-palette">
+            <input id="heightSlider" class="editor-vslider" type="range" min="-180" max="1000" step="1" value="0">
+            <div>
+              <strong id="heightValue"></strong>
+              <p class="editor-empty">4 miles (21,120 ft) at the top, -50 at the bottom</p>
+            </div>
+          </div>
+          <label class="editor-check"><input type="checkbox" data-option="tiles"><span>display tiles</span></label>
+          <label class="editor-check"><input type="checkbox" data-option="boundaries" checked><span>zone boundaries</span></label>
+        </div>
+      </section>
+      <section class="editor-step" data-step="biomes">
+        <button type="button" class="editor-step-head">biomes</button>
+        <div class="editor-step-body">
+          <div class="editor-tools" data-tools="biomes"></div>
+          <div id="biomePalette" class="editor-palette">
+            <div id="biomeChoices" class="editor-choices"></div>
+            <div id="biomeTags" class="editor-choices"></div>
+          </div>
+          <label class="editor-check"><input type="checkbox" data-option="rivers"><span>show rivers</span></label>
+          <label class="editor-check"><input type="checkbox" data-option="tiles"><span>display tiles</span></label>
+          <label class="editor-check"><input type="checkbox" data-option="boundaries" checked><span>zone boundaries</span></label>
+        </div>
+      </section>
+      <section class="editor-step" data-step="features">
+        <button type="button" class="editor-step-head">features</button>
+        <div class="editor-step-body">
+          <div class="editor-tools" data-tools="features"></div>
+          <label class="editor-check"><input type="checkbox" data-option="tiles"><span>display tiles</span></label>
+          <label class="editor-check"><input type="checkbox" data-option="boundaries" checked><span>zone boundaries</span></label>
+        </div>
+      </section>
+      <section class="editor-step" data-step="tiles">
+        <button type="button" class="editor-step-head">tiles</button>
+        <div class="editor-step-body">
+          <p id="tilesInfo"></p>
+          <button id="generate" type="button">generate</button>
+          <button id="regenerateAll" type="button">regenerate every tile</button>
+          <label class="editor-check"><input type="checkbox" data-option="stale" checked><span>highlight out-of-date tiles</span></label>
+          <label class="editor-check"><input type="checkbox" data-option="boundaries" checked><span>zone boundaries</span></label>
+        </div>
+      </section>
+    </div>
     <section id="props" class="editor-props" hidden></section>
     <p id="message" class="editor-message"></p>
     <p id="hint" class="editor-hint"></p>

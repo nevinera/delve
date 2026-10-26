@@ -4,21 +4,18 @@ import { gunzipSync } from "fflate";
 import { TILE_FT, WATER_KINDS } from "../world/constants.js";
 import { decodeTile } from "../world/tileCodec.js";
 import { findTrees } from "../world/trees.js";
-import { PINS, STROKES } from "./features.js";
-import { labelPoint, rings, tilesTouched } from "./region.js";
+import { rings } from "./region.js";
 import { terrainMesh, waterMesh } from "./terrainMesh.js";
 import { setTreeSight, treeMeshes, treeStage } from "./treeMeshes.js";
 import { clutterMeshes, gatherClutter, setClutterFocus, setClutterRadius } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
 import { objectMeshes, setObjectSight } from "./objectMeshes.js";
 import { Walker } from "./walker.js";
-import { surfaceTiles, tilePath } from "./thumbnails.js";
+import { tilePath } from "./thumbnails.js";
 import { disposeGround, groundMaterial } from "./groundMaterial.js";
 import { HORIZON, SUN_DIR, Sky } from "./sky.js";
 import { Stats, statsWanted } from "./stats.js";
-import { gridHeight, previewMesh } from "./shapePreview.js";
 
-const RING_TILES = 3; // tiles drawn in full around the active zone's editable tiles
 // What you can see while walking (plans/design.md, "Vision"): fog from `fogStartFt` to
 // `fogEndFt`, the 7×7 tiles around you in full (`tiles` either side), a far ring of cheap tiles
 // out to the 15×15 (`farTiles`: coarse ground, stand-in trees, no objects or clutter), objects out
@@ -42,13 +39,6 @@ const SEA = 0x1d4a6a;
 const SKY = HORIZON;
 const BOUNDARY_LIFT_FT = 6;
 const BOUNDARY_STEP_FT = 32;
-const ACTIVE = 0xf0c850;
-const PIN_LIFT_FT = 150; // pin heads float this far above the ground
-const PIN_STAB_FT = 20; // and their sticks reach this far into it
-const PIN_SIZE = 0.035; // head sizes, as a fraction of the view's height
-const POINT_SIZE = 0.022;
-const DRAG_PX = 4; // a press that moves less than this is a click
-const KEY = { pan: 0.8, zoom: 1.6, turn: 1.5 }; // per second: distances panned, e^zoom, radians
 // What the graphics settings can leave out of the scene, and the resolutions they offer: "full" is
 // the display's own pixel density, up to 2.
 export const SCENE_PARTS = ["clutter", "near trees", "far ring", "objects", "ground and water", "sky"];
@@ -60,12 +50,10 @@ const pixelRatio = (resolution) => Math.min(window.devicePixelRatio || 1, resolu
 const CLUTTER_VIEW_FT = 1500; // ground clutter shows when the camera's this close to what it looks at
 const CLUTTER_REGATHER_FT = 40; // clutter drawn round the focus is picked again when it moves this far
 
-// The editor's 3D view: the active zone's tiles plus a ring around them as lit terrain with river
-// water, every other existing tile as its thumbnail on the sea, and every zone's boundary draped
-// over the ground. Pins stand on sticks stabbed into the ground, with strokes strung between their
-// points' heads; `handlers` hears about hovering, dragging and clicking those heads, and about
-// presses on the ground. Trees stand on the tiles drawn in full. Positions are feet relative to the active zone's middle, so float32 stays
-// precise.
+// The editor's 3D view, for walk mode: the tiles around the walker as lit terrain with water,
+// trees, objects and clutter, a cheaper far ring beyond, and every zone's boundary draped over the
+// ground. `handlers.onGraphics` hears about changes to the graphics settings. Positions are feet
+// relative to the tile the walk started in, so float32 stays precise.
 export class RenderView {
   constructor(canvas, handlers = {}) {
     this.canvas = canvas;
@@ -103,18 +91,7 @@ export class RenderView {
     this.clutterTiles = new Map(); // "tx,tz" -> that tile's clutter, worked out when first needed
     this.clutterAround = null; // the tile clutter is drawn around
     this.decoded = new Map(); // "tx,tz" -> decoded tile, for the tiles drawn in full
-    this.surfaces = []; // what a pointer can land on
-    this.heads = []; // pin heads a pointer can pick
-    this.textures = { circle: markTexture("circle"), diamond: markTexture("diamond"), square: markTexture("square") };
-    this.raycaster = new THREE.Raycaster();
     this.handlers = handlers;
-    this.press = null;
-    this.dragging = false;
-    // Capture runs this before OrbitControls' own listener, so a grabbed head can turn orbiting off.
-    canvas.addEventListener("pointerdown", (e) => this.onDown(e), { capture: true });
-    canvas.addEventListener("pointermove", (e) => this.onMove(e));
-    canvas.addEventListener("pointerup", (e) => this.onUp(e));
-    canvas.addEventListener("pointerleave", () => this.hover(null));
     new ResizeObserver(() => this.resize()).observe(canvas);
   }
 
@@ -150,21 +127,6 @@ export class RenderView {
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
-    this.render();
-  }
-
-  // Keyboard navigation (keyNav.js): pans across the ground relative to where the camera faces, at
-  // a speed that scales with the camera's distance; zooms toward the target; turns around it.
-  nudge(dt, { x, z, zoom, turn }) {
-    const offset = this.camera.position.clone().sub(this.controls.target);
-    const forward = offset.clone().setY(0).normalize().negate();
-    const right = new THREE.Vector3(-forward.z, 0, forward.x);
-    const step = forward.multiplyScalar(-z).add(right.multiplyScalar(x)).multiplyScalar(offset.length() * KEY.pan * dt);
-    this.controls.target.add(step);
-    offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), turn * KEY.turn * dt);
-    offset.multiplyScalar(Math.exp(-zoom * KEY.zoom * dt));
-    this.camera.position.copy(this.controls.target).add(offset);
-    this.controls.update();
     this.render();
   }
 
@@ -342,21 +304,13 @@ export class RenderView {
     gatherClutter(this.clutter.children, focus.x, focus.z, clutterRadiusFt + CLUTTER_REGATHER_FT, clutterDensity);
   }
 
-  // Walk mode (walker.js): a character dropped at scene [x, z], or where the camera looks. onStop
+  // Walk mode (walker.js): a character dropped at scene [x, z]. onStop
   // runs when it ends, however it ends.
-  startWalk(onStop, at = [this.controls.target.x, this.controls.target.z]) {
-    this.walker ??= new Walker(this, {
-      onStop: () => {
-        this.controls.enabled = true;
-        this.showPins();
-        this.walkStopped?.();
-      },
-    });
+  startWalk(onStop, at) {
+    this.walker ??= new Walker(this, { onStop: () => this.walkStopped?.() });
     this.walkStopped = onStop;
     this.controls.enabled = false;
-    this.hover(null);
     this.walker.start(at);
-    this.showPins();
   }
 
   stopWalk() {
@@ -365,138 +319,6 @@ export class RenderView {
 
   get walking() {
     return Boolean(this.walker?.active);
-  }
-
-  // Pins and strokes hide while walking; zone outlines stay.
-  showPins() {
-    for (const child of this.marks.children) child.visible = !this.walking || Boolean(child.userData.outline);
-  }
-
-  // Rebuilds everything from the world. `keepCamera` leaves the view where it is.
-  show(state, { keepCamera = false } = {}) {
-    this.streaming = null;
-    this.previewing = null;
-    if (!keepCamera) this.stopWalk();
-    const { world, continent, active, thumbnails } = state;
-    [this.world, this.continent] = [world, continent];
-    this.clear();
-    const editable = active ? tilesTouched(active.region) : [];
-    const near = new Set();
-    for (const [tx, tz] of editable) {
-      for (let dx = -RING_TILES; dx <= RING_TILES; dx++) {
-        for (let dz = -RING_TILES; dz <= RING_TILES; dz++) near.add(`${tx + dx},${tz + dz}`);
-      }
-    }
-
-    const decoded = new Map();
-    this.decoded = decoded;
-    this.sightTile = null;
-    this.clutterTiles.clear();
-    this.clutterAround = null;
-    this.unreadable = []; // tiles near the zone that couldn't be read, such as ones from an old format
-    for (const { tx, tz, path } of surfaceTiles(world, continent)) {
-      if (!near.has(`${tx},${tz}`)) continue;
-      try {
-        decoded.set(`${tx},${tz}`, decodeTile(gunzipSync(world.files.get(path))));
-      } catch (err) {
-        console.warn(`couldn't read ${path}: ${err.message}`);
-        this.unreadable.push(path);
-      }
-    }
-
-    const middle = active?.region.length ? labelPoint(active.region) : [0, 0];
-    this.origin = [middle[0] * TILE_FT, middle[1] * TILE_FT];
-    const ground = groundSampler(decoded, this.origin);
-    this.ground = ground;
-
-    for (const key of decoded.keys()) this.buildGround(key);
-    this.buildOcean([...decoded.keys()]);
-
-    // Everything farther out is its thumbnail, lying on the sea.
-    for (const { tx, tz } of surfaceTiles(world, continent)) {
-      const image = thumbnails.get(tx, tz);
-      if (!image || decoded.has(`${tx},${tz}`)) continue;
-      const texture = new THREE.CanvasTexture(image);
-      texture.colorSpace = THREE.SRGBColorSpace;
-      const plane = new THREE.Mesh(new THREE.PlaneGeometry(TILE_FT, TILE_FT), new THREE.MeshBasicMaterial({ map: texture }));
-      plane.rotation.x = -Math.PI / 2;
-      plane.position.set((tx + 0.5) * TILE_FT - this.origin[0], 0.5, (tz + 0.5) * TILE_FT - this.origin[1]);
-      plane.userData.tile = [tx, tz];
-      this.content.add(plane);
-      this.surfaces.push(plane);
-    }
-
-    if (!keepCamera) {
-      // Back off far enough to frame the active zone's tiles, looking north from the south.
-      const xs = editable.map(([tx]) => tx);
-      const zs = editable.map(([, tz]) => tz);
-      const extent = editable.length ? Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs)) + 1 : 8;
-      const distance = extent * TILE_FT * 0.75;
-      const y = Math.max(0, ground(0, 0) || 0);
-      this.controls.target.set(0, y, 0);
-      this.camera.position.set(0, y + distance * 0.8, distance);
-      this.controls.update();
-    }
-    this.showTrees();
-    this.showObjects();
-    this.showMarks(state);
-    this.resize();
-  }
-
-  // The heights preview (shapePreview.js) in place of the tiles: the whole continent's shape as one
-  // coarse, height-tinted mesh with contour lines, on the open sea. `grid` may be null for no land
-  // yet. The camera frames it the first time it's shown for a continent, once there's a grid.
-  showPreview(state, grid) {
-    this.stopWalk();
-    if (this.previewing !== state.continent) this.framePending = true;
-    this.streaming = null;
-    this.previewing = state.continent;
-    [this.world, this.continent] = [state.world, state.continent];
-    this.clear();
-    this.decoded = new Map();
-    this.sightTile = null;
-    this.clutterTiles.clear();
-    this.clutterAround = null;
-    this.unreadable = [];
-    this.previewMesh = null;
-    this.origin ??= [0, 0];
-    this.materials();
-    this.buildOcean([]);
-    this.setPreviewGrid(grid);
-    this.showMarks(state);
-    this.resize();
-  }
-
-  // Swaps in a new heights preview grid. Pins and strokes stay where they were until showMarks.
-  setPreviewGrid(grid) {
-    if (!this.previewing) return;
-    this.grid = grid;
-    this.ground = (x, z) => {
-      const h = grid ? gridHeight(grid, x + this.origin[0], z + this.origin[1]) : NaN;
-      return Number.isNaN(h) ? 0 : Math.max(h, 0);
-    };
-    if (this.previewMesh) {
-      this.content.remove(this.previewMesh);
-      this.previewMesh.geometry.dispose();
-      this.surfaces.splice(this.surfaces.indexOf(this.previewMesh), 1);
-      this.previewMesh = null;
-    }
-    if (!grid) return this.render();
-    if (this.framePending) {
-      // Centered on the grid, seen from the south and well above.
-      this.framePending = false;
-      this.origin = [grid.x0 + ((grid.nx - 1) * grid.stepFt) / 2, grid.z0 + ((grid.nz - 1) * grid.stepFt) / 2];
-      this.buildOcean([]);
-      const extent = Math.max(grid.nx, grid.nz) * grid.stepFt;
-      this.controls.target.set(0, 0, 0);
-      this.camera.position.set(0, extent * 0.55, extent * 0.7);
-      this.controls.update();
-    }
-    this.contourMaterial ??= contourMaterial();
-    this.previewMesh = new THREE.Mesh(geometry(previewMesh(grid, this.origin)), this.contourMaterial);
-    this.content.add(this.previewMesh);
-    this.surfaces.unshift(this.previewMesh);
-    this.render();
   }
 
   materials() {
@@ -523,7 +345,6 @@ export class RenderView {
     terrain.userData.tile = [tx, tz];
     terrain.userData.ground = true;
     this.content.add(terrain);
-    this.surfaces.push(terrain);
     for (const kind of WATER_KINDS) {
       const water = waterMesh(tile, neighbours, this.origin, kind);
       if (!water) continue;
@@ -539,19 +360,16 @@ export class RenderView {
     if (this.ocean) {
       this.content.remove(this.ocean);
       this.ocean.geometry.dispose();
-      this.surfaces.splice(this.surfaces.indexOf(this.ocean), 1);
     }
     this.ocean = new THREE.Mesh(oceanGeometry(keys, this.origin), this.waterMaterials.sea);
     this.content.add(this.ocean);
-    this.surfaces.push(this.ocean);
   }
 
-  // Walk mode straight from the map, without drawing the whole zone: the character starts at
-  // continent feet [x, z], and only the tiles around them load, a tile farther than sight beyond
-  // what's drawn so seams close. They load and drop as the character crosses tiles.
+  // Starts walking: the character starts at continent feet [x, z], and only the tiles around them
+  // load, a tile farther than sight beyond what's drawn so seams close. They load and drop as the
+  // character crosses tiles. state: { world, continent, zones }.
   walkFrom(state, [x, z], onStop) {
     this.streaming = null;
-    this.previewing = null;
     this.stopWalk();
     this.clear();
     this.decoded = new Map();
@@ -565,7 +383,7 @@ export class RenderView {
     [this.world, this.continent] = [state.world, state.continent];
     this.streaming = { world: state.world, continent: state.continent, at: null, built: new Set() };
     this.streamAround(tx, tz);
-    this.showMarks(state);
+    this.showOutlines(state.zones);
     this.resize();
     const [sx, sz] = [x - this.origin[0], z - this.origin[1]];
     const y = this.ground(sx, sz) ?? 0;
@@ -634,31 +452,8 @@ export class RenderView {
         if (child.isInstancedMesh) child.dispose();
         else child.geometry.dispose();
         if (child.userData.ground) disposeGround(child.material);
-        if (group === this.content) this.surfaces.splice(this.surfaces.indexOf(child), 1);
       }
     }
-  }
-
-  // Swaps in a changed copy of a tile drawn in full, such as one being painted, and redraws the
-  // trees. The ground stays as it was until the next show().
-  setTile(tx, tz, tile) {
-    const key = `${tx},${tz}`;
-    if (!this.decoded.has(key)) return;
-    this.decoded.set(key, tile);
-    this.clutterTiles.delete(key);
-    this.clutterAround = null;
-    this.showTrees();
-    this.showObjects();
-    this.render();
-  }
-
-  // Every object on the tiles drawn in full.
-  showObjects() {
-    for (const child of [...this.objects.children]) {
-      child.dispose();
-      this.objects.remove(child);
-    }
-    for (const tile of this.decoded.values()) this.addObjects(tile);
   }
 
   addObjects(tile) {
@@ -668,15 +463,6 @@ export class RenderView {
       mesh.userData.tile = tile.coords;
       this.objects.add(mesh);
     }
-  }
-
-  // Every tree on the tiles drawn in full.
-  showTrees() {
-    for (const child of [...this.trees.children]) {
-      child.dispose();
-      this.trees.remove(child);
-    }
-    for (const tile of this.decoded.values()) this.addTrees(tile);
   }
 
   // A tile's trees, as a set of meshes per tile so whole tiles can be left out.
@@ -703,88 +489,13 @@ export class RenderView {
     return trees;
   }
 
-  // Zone outlines and, when `pins` is on, every zone's pins and strokes, with the active zone's
-  // brighter. Cheap, so it's redone on every edit and drag.
-  showMarks({ zones, active, selected, pins, kinds, lines = [] }) {
+  // Every zone's outline, draped over the ground.
+  showOutlines(zones) {
     empty(this.marks);
-    this.heads = [];
     for (const zone of zones) {
-      const mine = !active || zone.key === active.key;
-      const color = zone.key === active?.key ? ACTIVE : 0xffffff;
-      for (const { points } of rings(zone.region)) {
-        const outline = boundary(points, this.ground, this.origin, color);
-        outline.userData.outline = true;
-        this.marks.add(outline);
-      }
-      if (pins) this.addFeatures(zone, mine, selected?.zone === zone.key ? selected : null, kinds, lines);
+      for (const { points } of rings(zone.region)) this.marks.add(boundary(points, this.ground, this.origin, 0xffffff));
     }
-    this.showPins();
     this.render();
-  }
-
-  // Features of `kinds` on sticks, and strokes of `lines` kinds draped over the ground as plain
-  // lines.
-  addFeatures(zone, mine, selected, kinds, lines) {
-    const opacity = mine ? 1 : 0.45;
-    const sticks = [];
-    // A stick under a point; returns where its head goes and the ground there.
-    const stick = ([tx, tz]) => {
-      const x = tx * TILE_FT - this.origin[0];
-      const z = tz * TILE_FT - this.origin[1];
-      const ground = this.ground(x, z);
-      const y = Number.isNaN(ground) ? 0 : ground;
-      sticks.push(x, y - PIN_STAB_FT, z, x, y + PIN_LIFT_FT, z);
-      return { top: new THREE.Vector3(x, y + PIN_LIFT_FT, z), ground };
-    };
-
-    for (const stroke of zone.strokes) {
-      const color = STROKES[stroke.kind]?.color ?? "#fff";
-      if (lines.includes(stroke.kind)) {
-        this.marks.add(boundary(stroke.points, this.ground, this.origin, color, false));
-        continue;
-      }
-      if (!kinds.includes(stroke.kind)) continue;
-      const picked = selected?.type === "stroke" && selected.id === stroke.id;
-      const points = stroke.points.map(stick);
-      const line = new THREE.Line(
-        new THREE.BufferGeometry().setFromPoints(points.map((p) => p.top)),
-        new THREE.LineBasicMaterial({ color: picked ? "#fff" : color, transparent: true, opacity }),
-      );
-      this.marks.add(line);
-      points.forEach(({ top, ground }, index) => {
-        const hit = { zone: zone.key, type: "stroke", id: stroke.id, index, ground };
-        this.addHead(top, "circle", color, POINT_SIZE, { opacity, picked, hit });
-      });
-    }
-    for (const pin of zone.pins) {
-      if (!kinds.includes(pin.kind)) continue;
-      const { top, ground } = stick(pin.at);
-      const picked = selected?.type === "pin" && selected.id === pin.id;
-      const hit = { zone: zone.key, type: "pin", id: pin.id, ground };
-      const shape = { height: "diamond", biome: "square" }[pin.kind] ?? "circle";
-      this.addHead(top, shape, PINS[pin.kind]?.color ?? "#fff", PIN_SIZE, { opacity, picked, hit });
-    }
-
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(sticks, 3));
-    this.marks.add(new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color: 0xeeeeee, transparent: true, opacity: opacity * 0.8 })));
-  }
-
-  // A head drawn at the same size however far away it is, and over the terrain so hills don't hide
-  // it. A picked head gets a white halo.
-  addHead(position, shape, color, size, { opacity, picked, hit }) {
-    const sprite = (map, tint, scale, order) => {
-      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map, color: tint, sizeAttenuation: false, transparent: true, opacity, depthTest: false }));
-      s.position.copy(position);
-      s.scale.setScalar(scale);
-      s.renderOrder = order;
-      this.marks.add(s);
-      return s;
-    };
-    if (picked) sprite(this.textures[shape], "#fff", size * 1.5, 1);
-    const head = sprite(this.textures[shape], color, size, 2);
-    head.userData.hit = hit;
-    this.heads.push(head);
   }
 
   clear() {
@@ -798,7 +509,6 @@ export class RenderView {
     this.farTiles.clear();
     this.farDecoded = null;
     empty(this.content);
-    this.surfaces.length = 0;
     this.ocean = null;
     for (const group of [this.trees, this.objects]) {
       for (const child of [...group.children]) {
@@ -810,78 +520,6 @@ export class RenderView {
 
   // --- pointer ---
 
-  ray(e) {
-    const r = this.canvas.getBoundingClientRect();
-    const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
-    this.raycaster.setFromCamera(ndc, this.camera);
-    return this.raycaster;
-  }
-
-  pick(e) {
-    return this.ray(e).intersectObjects(this.heads)[0]?.object.userData.hit ?? null;
-  }
-
-  // The continent tile position under the pointer, or null off the edge of the world.
-  tileAt(e) {
-    const point = this.ray(e).intersectObjects(this.surfaces)[0]?.point;
-    return point ? [(point.x + this.origin[0]) / TILE_FT, (point.z + this.origin[1]) / TILE_FT] : null;
-  }
-
-  hover(hit, e) {
-    this.canvas.style.cursor = hit ? "pointer" : "";
-    this.handlers.hover?.(hit, e);
-  }
-
-  onDown(e) {
-    if (e.button !== 0 || this.walking) return;
-    const hit = this.pick(e);
-    this.press = { x: e.clientX, y: e.clientY, hit };
-    const took = hit ? this.handlers.grab?.(hit) : this.handlers.press?.(this.tileAt(e), e);
-    if (took) {
-      this.dragging = true;
-      this.controls.enabled = false;
-      this.canvas.setPointerCapture(e.pointerId);
-      this.hover(null);
-    }
-  }
-
-  onMove(e) {
-    if (this.walking) return;
-    if (this.dragging) {
-      const tile = this.tileAt(e);
-      if (tile) this.handlers.drag?.(tile, e);
-    } else if (!e.buttons) {
-      this.hover(this.pick(e), e);
-    }
-  }
-
-  onUp(e) {
-    if (this.walking) return;
-    const press = this.press;
-    this.press = null;
-    if (this.dragging) {
-      this.dragging = false;
-      this.controls.enabled = true;
-      this.handlers.drop?.();
-    } else if (press && Math.hypot(e.clientX - press.x, e.clientY - press.y) < DRAG_PX) {
-      this.handlers.click?.(press.hit, this.tileAt(e));
-    }
-  }
-}
-
-// Vertex colors with contour lines: a faint one every 100ft and a stronger one every 500ft, kept a
-// pixel or so wide at any distance.
-function contourMaterial() {
-  const material = new THREE.MeshLambertMaterial({ vertexColors: true });
-  material.onBeforeCompile = (shader) => {
-    shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying float vHeight;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvHeight = position.y;");
-    shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nvarying float vHeight;\nfloat contour(float every) { float h = vHeight / every; return 1.0 - min(abs(fract(h - 0.5) - 0.5) / fwidth(h), 1.0); }")
-      .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= 1.0 - 0.18 * contour(100.0) - 0.3 * contour(500.0);");
-  };
-  return material;
 }
 
 function hasClipControl() {
@@ -891,43 +529,14 @@ function hasClipControl() {
   return ok;
 }
 
-// Disposes a group's children. Sprites share one geometry and the heads share their textures, so
-// those stay; thumbnail textures go.
+// Disposes a group's children.
 function empty(group) {
   for (const child of [...group.children]) {
-    if (!child.isSprite) child.geometry.dispose();
-    if (child.material.map && !child.isSprite) child.material.map.dispose();
+    child.geometry.dispose();
     if (child.userData.ground) disposeGround(child.material);
     else child.material.dispose();
     group.remove(child);
   }
-}
-
-// A white shape with a dark rim, tinted per pin by the sprite's color.
-function markTexture(shape) {
-  const canvas = document.createElement("canvas");
-  canvas.width = canvas.height = 64;
-  const ctx = canvas.getContext("2d");
-  ctx.beginPath();
-  if (shape === "diamond") {
-    ctx.moveTo(32, 4);
-    ctx.lineTo(60, 32);
-    ctx.lineTo(32, 60);
-    ctx.lineTo(4, 32);
-    ctx.closePath();
-  } else if (shape === "square") {
-    ctx.rect(10, 10, 44, 44);
-  } else {
-    ctx.arc(32, 32, 26, 0, Math.PI * 2);
-  }
-  ctx.fillStyle = "#fff";
-  ctx.fill();
-  ctx.lineWidth = 5;
-  ctx.strokeStyle = "#111";
-  ctx.stroke();
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
 }
 
 function geometry({ positions, colors, indices, skirt }) {

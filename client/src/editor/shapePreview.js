@@ -3,48 +3,84 @@ import { BIOMES, biomesNear, climateAt } from "../world/biomes.js";
 import { BIOME_COLORS } from "../world/tileImage.js";
 import { TILE_FT } from "../world/constants.js";
 
-// Previews of the whole continent, sampled on a coarse grid over the zoned area, quick enough to
-// redo on every edit. The heights preview is the land's shape from the height pins and coasts
-// alone (generator.js shapeHeight). The biomes preview adds each biome's broad hills and ridges
-// (biomeRelief), and colors the ground by biome, blended at borders.
+// The heights and biomes maps: previews worked out straight from the zones, quick enough to redo
+// on every edit, over the part of the continent in sight. The heights map is the land's rough shape
+// from the height pins and coasts alone (generator.js shapeHeight), as an elevation heat map with
+// contour lines. The biomes map colors the land by biome, blended at borders, shaded by each
+// biome's broad hills and ridges (biomeRelief).
 //
-// A grid is { x0, z0, stepFt, nx, nz, heights, biomes, colors }: heights[j * nx + i] is the ground
-// at continent feet (x0 + i * stepFt, z0 + j * stepFt); `biomes` says which preview it is, and
-// for the biomes preview, colors holds each sample's RGB.
+// A grid is { x0, z0, stepFt, nx, nz, heights, biomes, rgba }: sample (i, j) is at continent feet
+// (x0 + i * stepFt, z0 + j * stepFt), heights[j * nx + i] is its ground, `biomes` says which map it
+// is, and rgba is the map's picture, a pixel per sample, clear over the sea.
 
-const MARGIN_FT = 2 * TILE_FT; // sea drawn around the zoned area
-const MIN_STEP_FT = 64;
-const MAX_SIDE = 360; // samples along the longer side
+const MARGIN_FT = 2 * TILE_FT; // sea around the zoned area, without bounds
+const MIN_STEP_FT = 2;
 
-export function shapeGrid(zones, seedKey, { biomes = false } = {}) {
+// bounds: [x0, z0, x1, z1] continent feet to cover, or the whole zoned area with some sea around
+// it; side: samples along the longer side. Null when there's no land at all.
+export function shapeGrid(zones, seedKey, { biomes = false, bounds = null, side = 360 } = {}) {
   const ctx = biomes ? prepareWorld(zones, seedKey) : prepareShape(zones, seedKey);
   const points = ctx.area.flat(2);
   if (!points.length) return null;
   const xs = points.map((p) => p[0]);
   const zs = points.map((p) => p[1]);
-  const [x0, z0] = [Math.min(...xs) - MARGIN_FT, Math.min(...zs) - MARGIN_FT];
-  const [x1, z1] = [Math.max(...xs) + MARGIN_FT, Math.max(...zs) + MARGIN_FT];
-  const stepFt = Math.max(MIN_STEP_FT, Math.ceil(Math.max(x1 - x0, z1 - z0) / MAX_SIDE / 8) * 8);
+  const [x0, z0, x1, z1] = bounds ?? [Math.min(...xs) - MARGIN_FT, Math.min(...zs) - MARGIN_FT, Math.max(...xs) + MARGIN_FT, Math.max(...zs) + MARGIN_FT];
+  const stepFt = Math.max(MIN_STEP_FT, Math.max(x1 - x0, z1 - z0) / side);
   const nx = Math.ceil((x1 - x0) / stepFt) + 1;
   const nz = Math.ceil((z1 - z0) / stepFt) + 1;
-  const grid = { x0, z0, stepFt, nx, nz, heights: new Float32Array(nx * nz), biomes, colors: null };
+  const grid = { x0, z0, stepFt, nx, nz, heights: new Float32Array(nx * nz), biomes, rgba: new Uint8ClampedArray(nx * nz * 4) };
   if (!biomes) {
     for (let j = 0; j < nz; j++) {
       for (let i = 0; i < nx; i++) grid.heights[j * nx + i] = shapeHeight(ctx, x0 + i * stepFt, z0 + j * stepFt);
     }
+    paint(grid, (k) => heightColor(grid.heights[k]), contours(grid));
     return grid;
   }
   const climate = coarseClimate(ctx, grid);
-  grid.colors = new Uint8Array(nx * nz * 3);
+  const colors = new Float32Array(nx * nz * 3);
   for (let j = 0; j < nz; j++) {
     for (let i = 0; i < nx; i++) {
       const [amp, rough, r, g, b] = climate(i, j);
       const [x, z] = [x0 + i * stepFt, z0 + j * stepFt];
       grid.heights[j * nx + i] = shapeHeight(ctx, x, z, biomeRelief(ctx, x, z, { amp, rough }));
-      grid.colors.set([r, g, b], (j * nx + i) * 3);
+      colors.set([r / 255, g / 255, b / 255], (j * nx + i) * 3);
     }
   }
+  paint(grid, (k) => colors.subarray(k * 3, k * 3 + 3), () => 1);
   return grid;
+}
+
+// Fills the grid's picture: `color(k)` (0-1 RGB) times `line(i, j)`, hill-shaded with light from
+// the north-west, and clear where the ground's under the sea.
+function paint(grid, color, line) {
+  const { nx, nz, heights, rgba, stepFt } = grid;
+  const at = (i, j) => heights[Math.max(0, Math.min(nz - 1, j)) * nx + Math.max(0, Math.min(nx - 1, i))];
+  for (let j = 0; j < nz; j++) {
+    for (let i = 0; i < nx; i++) {
+      const k = j * nx + i;
+      if (!(heights[k] >= 0)) continue;
+      const dx = (at(i + 1, j) - at(i - 1, j)) / (2 * stepFt);
+      const dz = (at(i, j + 1) - at(i, j - 1)) / (2 * stepFt);
+      const shade = Math.max(0.7, Math.min(1.25, 1 - (dx + dz) * 1.5)) * line(i, j);
+      const [r, g, b] = color(k);
+      rgba.set([r * shade * 255, g * shade * 255, b * shade * 255, 255], k * 4);
+    }
+  }
+}
+
+// Contour lines for the heights map, (i, j) => a darkening factor: a faint line every `minor` feet
+// and a stronger one every five, spaced out as the samples spread so they don't run together.
+function contours({ nx, nz, heights, stepFt }) {
+  const minor = stepFt <= 40 ? 100 : stepFt <= 100 ? 200 : 500;
+  const crosses = (k, every) => {
+    const band = Math.floor(heights[k] / every);
+    return (k % nx < nx - 1 && Math.floor(heights[k + 1] / every) !== band) || (k + nx < nx * nz && Math.floor(heights[k + nx] / every) !== band);
+  };
+  return (i, j) => {
+    const k = j * nx + i;
+    if (crosses(k, minor * 5)) return 0.62;
+    return crosses(k, minor) ? 0.84 : 1;
+  };
 }
 
 // Finding the biome is the slow part, so it's done on every other sample each way, in blocks that
@@ -86,16 +122,27 @@ function coarseClimate(ctx, { x0, z0, stepFt, nx, nz }) {
   };
 }
 
-// The grid's ground at continent feet (x, z), interpolated, or NaN off the grid.
-export function gridHeight({ x0, z0, stepFt, nx, nz, heights }, x, z) {
-  const u = (x - x0) / stepFt;
-  const v = (z - z0) / stepFt;
-  if (!(u >= 0 && v >= 0 && u <= nx - 1 && v <= nz - 1)) return NaN;
-  const i = Math.min(nx - 2, Math.floor(u));
-  const j = Math.min(nz - 2, Math.floor(v));
-  const [fu, fv] = [u - i, v - j];
-  const at = (di, dj) => heights[(j + dj) * nx + i + di];
-  return (at(0, 0) * (1 - fu) + at(1, 0) * fu) * (1 - fv) + (at(0, 1) * (1 - fu) + at(1, 1) * fu) * fv;
+// An elevation heat map by height (ft): dark blue at sea level up through cyan, green, yellow and
+// red to near-white at the top. It runs on a log scale, like the height slider, so low plains and
+// tall mountains both show their shape.
+const HEAT = [
+  [0.19, 0.07, 0.23],
+  [0.27, 0.45, 0.93],
+  [0.1, 0.81, 0.8],
+  [0.45, 0.95, 0.35],
+  [0.96, 0.84, 0.22],
+  [0.92, 0.36, 0.08],
+  [0.6, 0.06, 0.03],
+  [0.98, 0.92, 0.92],
+];
+const KNEE_FT = 20;
+const TOP_FT = 21120;
+
+export function heightColor(h) {
+  const t = Math.log1p(Math.max(0, h) / KNEE_FT) / Math.log1p(TOP_FT / KNEE_FT);
+  const f = Math.min(1, t) * (HEAT.length - 1);
+  const k = Math.min(HEAT.length - 2, Math.floor(f));
+  return HEAT[k].map((c, i) => c + (HEAT[k + 1][i] - c) * (f - k));
 }
 
 // Runs shapeGrid in a worker. Only the latest request matters: one runs at a time, and requests
@@ -127,57 +174,9 @@ export class ShapePreview {
       };
       this.worker.onerror = (e) => {
         this.busy = false;
-        console.warn(`heights preview failed: ${e.message}`);
+        console.warn(`map preview failed: ${e.message}`);
       };
     }
     this.worker.postMessage(message);
   }
-}
-
-// Mesh data for a grid (three-free, like terrainMesh.js): a vertex per sample, colored by biome
-// or else by a heat map of height, in feet relative to `origin`.
-export function previewMesh(grid, origin) {
-  const { x0, z0, stepFt, nx, nz, heights } = grid;
-  const positions = new Float32Array(nx * nz * 3);
-  const colors = new Float32Array(nx * nz * 3);
-  for (let j = 0; j < nz; j++) {
-    for (let i = 0; i < nx; i++) {
-      const v = j * nx + i;
-      positions.set([x0 + i * stepFt - origin[0], heights[v], z0 + j * stepFt - origin[1]], v * 3);
-      colors.set(grid.colors ? [...grid.colors.subarray(v * 3, v * 3 + 3)].map((c) => c / 255) : heightColor(heights[v]), v * 3);
-    }
-  }
-  const indices = new Uint32Array((nx - 1) * (nz - 1) * 6);
-  let n = 0;
-  for (let j = 0; j < nz - 1; j++) {
-    for (let i = 0; i < nx - 1; i++) {
-      const v = j * nx + i;
-      indices.set([v, v + nx, v + 1, v + 1, v + nx, v + nx + 1], n);
-      n += 6;
-    }
-  }
-  return { positions, colors, indices };
-}
-
-// An elevation heat map by height (ft): dark blue at sea level up through cyan, green, yellow and
-// red to near-white at the top. It runs on a log scale, like the height slider, so low plains and
-// tall mountains both show their shape.
-const HEAT = [
-  [0.19, 0.07, 0.23],
-  [0.27, 0.45, 0.93],
-  [0.1, 0.81, 0.8],
-  [0.45, 0.95, 0.35],
-  [0.96, 0.84, 0.22],
-  [0.92, 0.36, 0.08],
-  [0.6, 0.06, 0.03],
-  [0.98, 0.92, 0.92],
-];
-const KNEE_FT = 20;
-const TOP_FT = 21120;
-
-export function heightColor(h) {
-  const t = Math.log1p(Math.max(0, h) / KNEE_FT) / Math.log1p(TOP_FT / KNEE_FT);
-  const f = Math.min(1, t) * (HEAT.length - 1);
-  const k = Math.min(HEAT.length - 2, Math.floor(f));
-  return HEAT[k].map((c, i) => c + (HEAT[k + 1][i] - c) * (f - k));
 }

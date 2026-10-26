@@ -66,6 +66,8 @@
 }
 
 .editor-view-bar {
+  display: flex;
+  gap: 4px;
   align-items: center;
   padding: 4px 8px;
   background: #222;
@@ -87,28 +89,44 @@
   min-height: 0;
 }
 
-.editor-tabs {
+.editor-scale {
   display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.editor-scale[hidden] {
+  display: none;
+}
+
+/* The steps, as an accordion: only the open step shows its body. */
+.editor-steps {
+  display: flex;
+  flex-direction: column;
   gap: 4px;
 }
 
-.editor .editor-tabs button.active {
+.editor .editor-step-head {
+  width: 100%;
+  text-align: left;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.editor .editor-step.open > .editor-step-head {
   background: #5a4a1a;
   border-color: #f0c850;
 }
 
-.editor-steps button {
-  flex: 1;
-  padding: 4px 2px;
-}
-
-.editor-step {
+.editor-step-body {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  padding: 6px 0 10px;
 }
 
-.editor-step[hidden],
+.editor-step:not(.open) > .editor-step-body,
+.editor-step-body[hidden],
 .editor-empty[hidden] {
   display: none;
 }
@@ -204,28 +222,9 @@
   margin-top: 0;
 }
 
-.editor-tip {
-  position: absolute;
-  max-width: 280px;
-  padding: 6px 8px;
-  background: rgba(0, 0, 0, 0.8);
-  border: 1px solid #555;
-  border-radius: 3px;
-  white-space: pre-line;
-  pointer-events: none;
-}
-
-.editor-tip[hidden] {
-  display: none;
-}
-
 .editor-palette {
   display: flex;
   gap: 12px;
-}
-
-.editor-palette[hidden] {
-  display: none;
 }
 
 .editor-vslider {

@@ -4,8 +4,9 @@ import { TILE_FT } from "../world/constants.js";
 // A zone's sketch features: pins ({ id, kind, at, ... }) and strokes ({ id, kind, points, width,
 // ... }), in continent tile units with sizes in feet. Height pins set the ground height at a spot;
 // biome pins claim the land around them for a biome, adjusted by their tags; info pins carry a
-// name, notes and tags for people and LLMs and don't affect generation. Rivers
-// flow the way they're drawn. There are no coastlines: the sea is wherever no zone is.
+// name, notes and tags for people and LLMs and don't affect generation. Rivers flow the way
+// they're drawn. Roads don't shape the ground yet. There are no coastlines: the sea is wherever
+// no zone is.
 
 export const PINS = {
   height: { color: "#70d070", label: "height pin" },
@@ -14,6 +15,7 @@ export const PINS = {
 };
 export const STROKES = {
   river: { color: "#4a90d9", width: 30, label: "river" },
+  road: { color: "#c8a26a", width: 16, label: "road" },
 };
 export const FEATURE_HINTS = {
   select: "click a pin or line to select it · drag pins and line points · shift-click a selected line to add a point · alt-click a point to remove it · delete removes the selection",
@@ -82,11 +84,6 @@ export class Features {
     if (PINS[name]) return this.pinTool(zone, name);
     if (STROKES[name]) return this.strokeTool(zone, name);
     return this.selectTool(zone);
-  }
-
-  // The kind of the feature a 3D view pick points at.
-  kindOf(zone, { type, id }) {
-    return (type === "pin" ? zone.pins : zone.strokes).find((f) => f.id === id)?.kind;
   }
 
   // A spot inside the zone, snapped to the cell grid, or null (with a message) outside it.
@@ -180,36 +177,6 @@ export class Features {
     this.select(zone, "pin", pin.id);
     this.dragging = { target: pin, key: "at" };
     return true;
-  }
-
-  // Starts dragging something picked in the 3D view: a pin, or one point of a stroke.
-  grab(zone, { type, id, index }) {
-    if (type === "pin") {
-      const pin = zone.pins.find((p) => p.id === id);
-      return pin ? this.grabPin(zone, pin) : false;
-    }
-    const stroke = zone.strokes.find((s) => s.id === id);
-    if (!stroke) return false;
-    this.select(zone, "stroke", id);
-    this.dragging = { target: stroke.points, key: index };
-    return true;
-  }
-
-  // Lines of text about something picked in the 3D view, or null when it's gone.
-  describe(zone, { type, id, index, ground }) {
-    const feature = (type === "pin" ? zone.pins : zone.strokes).find((f) => f.id === id);
-    if (!feature) return null;
-    const kind = PINS[feature.kind] ?? STROKES[feature.kind];
-    const lines = [`${kind.label} · ${feature.id} · ${zone.name || zone.key}`];
-    if (feature.name) lines.push(feature.name);
-    if (feature.kind === "biome") lines.push(`biome: ${feature.biome}`);
-    const groundText = Number.isNaN(ground) ? "" : `ground ${Math.round(ground)}ft`;
-    const heights = [feature.kind === "height" && `height ${feature.height ?? "?"}ft`, groundText].filter(Boolean);
-    if (heights.length) lines.push(heights.join(" · "));
-    if (type === "stroke") lines.push(`point ${index + 1} of ${feature.points.length} · width ${feature.width}ft`);
-    if (feature.tags?.length) lines.push(`tags: ${feature.tags.join(", ")}`);
-    if (feature.notes) lines.push(feature.notes);
-    return lines;
   }
 
   // Returns true when the press took a point of the selected stroke, false when it was used up

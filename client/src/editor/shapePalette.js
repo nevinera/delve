@@ -25,7 +25,7 @@ export function heightSlider(ft) {
 // The heights and biomes steps' palettes: a height slider, and a biome with tags. A new pin takes its settings
 // from here. With a pin selected, the palette shows that pin, and changing it changes the pin.
 export class ShapePalette {
-  // el: { heightPalette, heightSlider, heightValue, biomePalette, biomeChoices, biomeTags }
+  // el: { heightSlider, heightValue, biomeChoices, biomeTags }
   constructor(editor, el) {
     this.editor = editor;
     this.el = el;
@@ -72,15 +72,13 @@ export class ShapePalette {
     return selected?.type === "pin" && selected.zone === zone.key ? zone.pins.find((p) => p.id === selected.id) : null;
   }
 
-  // Shows the current step's palette, reflecting the selected pin when there is one.
+  // Shows the palette's settings, reflecting the selected pin when there is one.
   render() {
     const zone = this.editor.focusZone;
     const pin = zone && this.selectedPin(zone);
     if (pin?.kind === "height") this.values.height = pin.height ?? DEFAULTS.height;
     if (pin?.kind === "biome") Object.assign(this.values, { biome: pin.biome, tags: [...(pin.tags ?? [])] });
 
-    this.el.heightPalette.hidden = this.editor.step !== "heights";
-    this.el.biomePalette.hidden = this.editor.step !== "biomes";
 
     this.el.heightSlider.value = heightSlider(this.values.height);
     this.el.heightValue.textContent = `${this.values.height.toLocaleString()} ft`;
