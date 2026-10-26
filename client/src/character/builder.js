@@ -183,6 +183,12 @@ function buildControls() {
     if (!free) $("offhand").value = look.offhand = "none";
   };
   showOffhand();
+  const sheathed = Object.assign(document.createElement("input"), { type: "checkbox", checked: look.sheathed });
+  sheathed.addEventListener("change", () => {
+    look.sheathed = sheathed.checked;
+    rebuild();
+  });
+  row("sheathed", sheathed);
   // A checkbox for each item of jewelry and each face marking.
   for (const [key, items] of [
     ["jewelry", JEWELRY],

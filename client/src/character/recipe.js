@@ -19,6 +19,7 @@ import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 // - weapon: one of weapons.js's WEAPONS, held in hand.
 // - offhand: one of weapons.js's OFFHANDS, a shield, orb or second weapon; none with a
 //   two-handed weapon.
+// - sheathed: true to put the weapon and off-hand item away, at the hips and across the back.
 // - armor: { slot: { type, colors: [main, trim] } } for armor.js's ARMOR_SLOTS and ARMOR_TYPES;
 //   type and each color can be a list to pick from.
 // - colors: { skin, hair, eyes, primary, secondary, metal, steel, wood, paint }, each "#rrggbb" or
@@ -47,6 +48,7 @@ export const DEFAULT_LOOK = {
   face: [],
   weapon: "none",
   offhand: "none",
+  sheathed: false,
   armor: {},
   colors: {
     skin: "#e0b48c",

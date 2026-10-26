@@ -150,9 +150,11 @@ export function bodyMesh(look) {
       along(n("upperarm_l"), 0, { rx: 0.15 * limb, rz: 0.17 * limb, bones: [[n("upperarm_l"), 0.6], ["spine_03", 0.4]] }),
       along(n("upperarm_l"), 0.04, { rx: 0.2 * limb, rz: 0.21 * limb, bones: [[n("upperarm_l"), 0.7], ["spine_03", 0.3]] }),
       along(n("upperarm_l"), 0.15, { rx: 0.19 * limb, rz: 0.19 * limb }),
-      along(n("upperarm_l"), 0.55, { rx: 0.16 * limb, rz: 0.16 * limb }),
-      along(n("upperarm_l"), 1, { rx: 0.13 * limb, rz: 0.13 * limb, bones: [[n("upperarm_l"), 0.5], [n("lowerarm_l"), 0.5]] }),
-      along(n("lowerarm_l"), 0.3, { rx: 0.14 * limb, rz: 0.14 * limb }),
+      // The elbow bends across three rings, the middle one fuller since blending between two
+      // bones draws it in.
+      along(n("upperarm_l"), 0.8, { rx: 0.15 * limb, rz: 0.15 * limb, bones: [[n("upperarm_l"), 0.85], [n("lowerarm_l"), 0.15]] }),
+      along(n("upperarm_l"), 1, { rx: 0.16 * limb, rz: 0.16 * limb, bones: [[n("upperarm_l"), 0.5], [n("lowerarm_l"), 0.5]] }),
+      along(n("lowerarm_l"), 0.2, { rx: 0.145 * limb, rz: 0.145 * limb, bones: [[n("lowerarm_l"), 0.85], [n("upperarm_l"), 0.15]] }),
       along(n("lowerarm_l"), 0.85, { rx: 0.1 * limb, rz: 0.1 * limb }),
       along(n("lowerarm_l"), 1, { rx: 0.09 * limb, rz: 0.09 * limb, bones: [[n("lowerarm_l"), 0.5], [n("hand_l"), 0.5]] }),
       along(n("hand_l"), 0.15, { rx: 0.05 * s, rz: 0.1 * s }),

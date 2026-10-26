@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { DEFAULT_LOOK } from "./recipe.js";
-import { HELD, OFFHANDS, WEAPONS, heldBy, weaponMesh } from "./weapons.js";
+import { HELD, OFFHANDS, WEAPONS, heldBy, sheathOf, weaponMesh } from "./weapons.js";
 
 describe("weaponMesh", () => {
   it("builds every item but none, and says which bone holds it", () => {
@@ -17,5 +17,12 @@ describe("weaponMesh", () => {
   it("moves one-handed weapons to the left hand in the off hand", () => {
     expect(heldBy("dagger", true).bone).toBe("hand_l");
     expect(heldBy("shield", true).bone).toBe("lowerarm_l");
+  });
+
+  it("puts one-handed items away at the hip across from their hand, and the rest on the back", () => {
+    expect(sheathOf("sword")).toMatchObject({ place: "hip", side: "l" });
+    expect(sheathOf("dagger", true)).toMatchObject({ place: "hip", side: "r" });
+    expect(sheathOf("orb", true)).toMatchObject({ place: "hip", side: "r" });
+    for (const type of ["greatsword", "maul", "staff", "bow", "gun", "shield"]) expect(sheathOf(type).place).toBe("back");
   });
 });

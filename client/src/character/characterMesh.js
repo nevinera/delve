@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { bodyMesh } from "./body.js";
-import { heldBy, weaponMesh } from "./weapons.js";
+import { heldBy, sheathOf, weaponMesh } from "./weapons.js";
 
 // A character as a three.js skinned mesh, built from a look (recipe.js's resolveRecipe). Its bones
 // carry body.js's names, for animations to drive. Weapons, shields and off-hand items ride on the
@@ -63,7 +63,8 @@ export function characterMesh(look) {
   return mesh;
 }
 
-// Puts an item on the bone that holds it, or nothing for "none".
+// Puts an item on the bone that holds it, or where it's put away when the look's weapons are
+// sheathed, or nothing for "none".
 function hold(bones, look, type, offhand = false) {
   const held = heldBy(type, offhand);
   if (!held) return null;
@@ -74,10 +75,36 @@ function hold(bones, look, type, offhand = false) {
   geometry.setAttribute("color", new THREE.BufferAttribute(linear(data.colors), 3));
   geometry.computeBoundingSphere();
   const item = new THREE.Mesh(geometry, weaponMaterial);
+  if (look.sheathed) {
+    sheathe(item, bones, look, sheathOf(type, offhand), data.positions);
+    return item;
+  }
   item.position.set(...held.at.map((v) => v * s));
   item.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...held.toward).normalize());
   bones.get(held.bone).add(item);
   return item;
+}
+
+// Hangs an item at a hip, its grip just above the belt, or centered across the back, just clear
+// of the body (sized as body.js sizes it).
+function sheathe(item, bones, look, sheath, positions) {
+  const s = look.height / 6;
+  const thick = 0.85 + 0.4 * look.build;
+  const y = new THREE.Vector3(...sheath.toward).normalize();
+  const z = new THREE.Vector3(...sheath.front).projectOnPlane(y).normalize();
+  item.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(new THREE.Vector3().crossVectors(y, z), y, z));
+  if (sheath.place === "hip") {
+    const out = (0.64 * (1 + 0.4 * (look.hips - 0.5)) * thick + 0.05) * (sheath.side === "l" ? 1 : -1);
+    item.position.set(out * s, 0.3 * s, 0.12 * s);
+    bones.get("pelvis").add(item);
+    return;
+  }
+  // The item's middle, along its length, goes to the middle of the back.
+  let [low, high] = [Infinity, -Infinity];
+  for (let i = 1; i < positions.length; i += 3) [low, high] = [Math.min(low, positions[i]), Math.max(high, positions[i])];
+  const back = new THREE.Vector3(0, -0.1 * s, -(0.43 * thick + 0.08) * s);
+  item.position.copy(back).addScaledVector(y, -(low + high) / 2);
+  bones.get("spine_03").add(item);
 }
 
 // Frees a character's geometry; the material is shared.

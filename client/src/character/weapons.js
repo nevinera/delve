@@ -38,6 +38,35 @@ export const HELD = {
 export const WEAPONS = ["none", ...Object.keys(HELD).filter((type) => !["shield", "orb"].includes(type))];
 export const OFFHANDS = ["none", "shield", "orb", "sword", "axe", "mace", "dagger", "fist"];
 
+// Where each item hangs when put away: one-handed items at a hip, the side away from their hand
+// for a cross draw, and the rest across the back. +y points along `toward`, and +z toward
+// `front`, from the hip or the middle of the back; on the back, the item is centered there.
+// Blades hang hilt up, and hafted weapons head up, over the right shoulder, all lying flat.
+const HIP_TOWARD = [0.12, -0.8, -0.55];
+const HIP_FRONT = [0, -0.55, 0.8];
+const HILT_UP = { toward: [0.5, -0.85, 0], front: [0.85, 0.5, 0] };
+const HEAD_UP = { toward: [-0.45, 0.9, 0], front: [0.9, 0.45, 0] };
+const ACROSS_BACK = {
+  greatsword: HILT_UP,
+  greataxe: HEAD_UP,
+  maul: HEAD_UP,
+  polearm: HEAD_UP,
+  staff: HEAD_UP,
+  bow: { toward: [-0.5, 0.85, 0], front: [0.85, 0.5, 0] },
+  crossbow: { toward: [-0.5, 0.85, 0], front: [0, 0, -1] },
+  gun: { toward: [-0.5, 0.85, 0], front: [0, 0, -1] },
+  shield: { toward: [0, 1, 0], front: [1, 0, 0] },
+};
+
+// Where an item is put away: { place: "back" } or { place: "hip", side }, with its toward and front.
+export function sheathOf(type, offhand = false) {
+  if (!HELD[type]) return null;
+  if (ACROSS_BACK[type]) return { place: "back", ...ACROSS_BACK[type] };
+  const side = offhand || HELD[type].bone === "hand_l" ? "r" : "l";
+  const mirror = (v) => [side === "r" ? -v[0] : v[0], v[1], v[2]];
+  return { place: "hip", side, toward: mirror(HIP_TOWARD), front: HIP_FRONT };
+}
+
 // Where an item rides; weapons held in the off hand move to the left hand.
 export function heldBy(type, offhand = false) {
   const held = HELD[type];
