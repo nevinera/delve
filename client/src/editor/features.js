@@ -20,7 +20,16 @@ export const PINS = {
   source: { color: "#3fb6ff", label: "water source" },
 };
 const RIVER_COLOR = "#4a90d9";
-const PATH = { color: "#c8a26a", none: "#ff4a4a", pending: "rgba(255, 255, 255, 0.6)", label: "road path" };
+const PATH = { color: "#c8a26a", none: "#ff4a4a", pending: "rgba(255, 255, 255, 0.6)", between: "rgba(20, 24, 30, 0.9)", label: "road path" };
+// The kinds of road, each with its own tool. A path's kind is the first of its tags that names one
+// (plain road without). New paths get the kind's width and tag. On the map, each kind is drawn
+// at least `minPx` wide: highways as a double line, roads solid, trails dashed and footpaths dotted.
+export const ROADS = {
+  highway: { width: 24, minPx: 6, style: "double" },
+  road: { width: 12, minPx: 3, style: "solid" },
+  trail: { width: 6, minPx: 2, style: "dashed" },
+  footpath: { width: 3, minPx: 2, style: "dotted" },
+};
 const POOL_COLOR = "rgba(74, 144, 217, 0.8)";
 export const FEATURE_HINTS = {
   select: "click a pin or road to select it · drag pins, and a selected hub's edge to size it · delete removes the selection",
@@ -32,7 +41,6 @@ const DEFAULT_HEIGHT_FT = 20;
 const DEFAULT_HUB_RADIUS_FT = 200;
 const MIN_HUB_RADIUS_FT = 16;
 const DEFAULT_SOURCE_WIDTH_FT = 12;
-const DEFAULT_PATH_WIDTH_FT = 10;
 const SHAPE_PINS = ["height", "biome"];
 
 export function nextId(sketch, prefix) {
@@ -91,7 +99,7 @@ export class Features {
   // `kinds` limits what the select tool picks, and what a pin tool's click can grab.
   tool(sketch, name, kinds) {
     this.kinds = kinds ?? Object.keys(PINS);
-    if (name === "road") return this.roadTool(sketch);
+    if (ROADS[name]) return this.roadTool(sketch, name);
     if (PINS[name]) return this.pinTool(sketch, name);
     return this.selectTool(sketch);
   }
@@ -134,9 +142,10 @@ export class Features {
     this.editor.saveSketch();
   }
 
-  // Each click places a road pin, or picks one, and joins it to the road pin selected before, so a
-  // run of clicks draws a road. A click on a road puts a pin on it there, to branch from.
-  roadTool(sketch) {
+  // Each click places a road pin, or picks one, and joins it to the road pin selected before with a
+  // path of the given kind (ROADS), so a run of clicks draws a road. A click on a road puts a pin
+  // on it there, to branch from.
+  roadTool(sketch, kind) {
     return {
       down: (tile) => {
         const selected = this.selected?.type === "pin" ? this.find(sketch) : null;
@@ -155,7 +164,7 @@ export class Features {
             sketch.pins.push(pin);
           }
         }
-        if (from) this.join(sketch, from, pin);
+        if (from) this.join(sketch, from, pin, kind);
         this.select(sketch, "pin", pin.id);
         this.editor.saveSketch();
         return true;
@@ -165,14 +174,12 @@ export class Features {
     };
   }
 
-  // A path from road pin `a` to `b`, as wide and tagged as another of a's paths, unless they're
-  // joined already.
-  join(sketch, a, b) {
+  // A path of the given kind from road pin `a` to `b`, unless they're joined already. It's as wide
+  // and tagged as another of a's paths of that kind, so a road carries on as it was set up.
+  join(sketch, a, b, kind) {
     if (sketch.paths.some((p) => (p.from === a.id && p.to === b.id) || (p.from === b.id && p.to === a.id))) return;
-    const like = sketch.paths.find((p) => p.from === a.id || p.to === a.id);
-    const path = { id: nextId(sketch, "r"), from: a.id, to: b.id, width: like?.width ?? DEFAULT_PATH_WIDTH_FT };
-    if (like?.tags) path.tags = [...like.tags];
-    sketch.paths.push(path);
+    const like = sketch.paths.find((p) => (p.from === a.id || p.to === a.id) && roadKind(p) === kind);
+    sketch.paths.push({ id: nextId(sketch, "r"), from: a.id, to: b.id, width: like?.width ?? ROADS[kind].width, tags: like?.tags ? [...like.tags] : [kind] });
   }
 
   // A new road pin on a path, nearest the given spot, splitting the path in two there.
@@ -350,7 +357,7 @@ export class Features {
     const points = this.pathPoints(sketch, path);
     if (state === "routed" || (state === "pending" && path.route?.points)) {
       ctx.globalAlpha = state === "routed" ? 1 : 0.5;
-      this.drawLine(ctx, points, path.width, PATH.color);
+      this.drawRoad(ctx, points, path);
       ctx.globalAlpha = 1;
     } else {
       ctx.setLineDash([6 * dpr, 4 * dpr]);
@@ -364,13 +371,26 @@ export class Features {
     }
   }
 
-  drawLine(ctx, points, widthFt, color) {
+  // A routed path, in its kind's style.
+  drawRoad(ctx, points, path) {
+    const dpr = this.map.dpr;
+    const { minPx, style } = ROADS[roadKind(path)];
+    const width = Math.max(minPx * dpr, (path.width / TILE_FT) * this.map.view.scale);
+    if (style === "dashed") ctx.setLineDash([Math.max(8 * dpr, 3 * width), Math.max(6 * dpr, 2 * width)]);
+    if (style === "dotted") ctx.setLineDash([0, Math.max(4 * dpr, 2.5 * width)]);
+    this.drawLine(ctx, points, 0, PATH.color, width, style === "dashed" ? "butt" : "round");
+    ctx.setLineDash([]);
+    if (style === "double") this.drawLine(ctx, points, 0, PATH.between, width * 0.4);
+  }
+
+  // A line `widthFt` wide, at least 2 pixels or `px` when given.
+  drawLine(ctx, points, widthFt, color, px = 0, cap = "round") {
     const pts = points.map((p) => this.map.toScreen(p));
     if (!pts.length) return;
-    ctx.lineCap = "round";
+    ctx.lineCap = cap;
     ctx.lineJoin = "round";
     ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(2 * this.map.dpr, (widthFt / TILE_FT) * this.map.view.scale);
+    ctx.lineWidth = px || Math.max(2 * this.map.dpr, (widthFt / TILE_FT) * this.map.view.scale);
     polyline(ctx, pts);
   }
 
@@ -526,6 +546,11 @@ export class Features {
     label.append(input);
     return label;
   }
+}
+
+// A path's kind of road (ROADS): the first of its tags that names one, or plain road.
+export function roadKind(path) {
+  return path.tags?.find((t) => ROADS[t]) ?? "road";
 }
 
 // The segment of a line nearest a point: the index of its first point, and the distance.

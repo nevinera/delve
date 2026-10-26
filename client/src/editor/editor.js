@@ -1,5 +1,5 @@
 import { changedTiles } from "./changes.js";
-import { FEATURE_HINTS, Features, PINS, nextId } from "./features.js";
+import { FEATURE_HINTS, Features, PINS, ROADS, nextId } from "./features.js";
 import { MapView } from "./mapView.js";
 import { keyNav } from "./keyNav.js";
 import { TileGenerator } from "./generation.js";
@@ -57,7 +57,7 @@ const STEPS = {
   heights: { tools: ["select", "height"], kinds: ["height"], map: "heights" },
   water: { tools: ["select", "source"], kinds: ["source"], map: "heights" },
   biomes: { tools: ["select", "biome"], kinds: ["biome"], map: "biomes" },
-  features: { tools: ["select", "road", "hub", "info"], kinds: ["road", "hub", "info"] },
+  features: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
   tiles: { tools: [], kinds: [], map: "tiles" },
 };
 // With this many tiles in sight or more, tiles draw as their thumbnails instead of close up.
@@ -766,7 +766,7 @@ export class Editor {
     }
     if (this.step === "tiles") return "tiles";
     if (!this.scopeZones().length) return "empty";
-    if (this.toolName === "road") return "road";
+    if (ROADS[this.toolName]) return "road";
     if (PINS[this.toolName]) return "pin";
     return this.toolName;
   }
