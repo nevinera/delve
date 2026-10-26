@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { parseTree } from "../world/trees.js";
 import { blocks } from "../world/objects.js";
+import { trunkRadius } from "./treeMeshes.js";
 
 // Walk mode for the 3D view: a person-sized character on the generated ground, with a third-person
 // camera, to get a feel for the land at eye level. Controls follow WoW: W/S run forward and back,
@@ -141,7 +141,7 @@ export class Walker {
   canStep(x, z) {
     const here = this.standHeight(this.pos.x, this.pos.z);
     const there = this.standHeight(x, z);
-    if (there === null || this.cell(x, z)?.tree || this.objectAt(x, z)) return false;
+    if (there === null || this.trunkAt(x, z) || this.objectAt(x, z)) return false;
     const run = Math.hypot(x - this.pos.x, z - this.pos.z);
     return here === null || run === 0 || (there - here) / run <= MAX_CLIMB || this.pos.y > there + 2;
   }
@@ -197,6 +197,28 @@ export class Walker {
     return null;
   }
 
+  // Whether a tree trunk is in the way of a character at scene (x, z), on that tile or the ones
+  // beside it. Like objects, a trunk the character is already inside doesn't hold them in.
+  trunkAt(x, z) {
+    const any = this.view.decoded.values().next().value;
+    if (!any) return false;
+    const size = any.cells * any.cellFt;
+    const { origin } = this.view;
+    const [tx, tz] = [Math.floor((x + origin[0]) / size), Math.floor((z + origin[1]) / size)];
+    this.trunks ??= new WeakMap(); // decoded tile -> its trunks as [x, z, radius]
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const tile = this.view.decoded.get(`${tx + dx},${tz + dz}`);
+        if (!tile) continue;
+        if (!this.trunks.has(tile)) this.trunks.set(tile, this.view.treesOf(tile).map((t) => [t.x, t.z, trunkRadius(t.kind, t.size) + BODY_FT]));
+        for (const [cx, cz, r] of this.trunks.get(tile)) {
+          if (Math.hypot(x - cx, z - cz) < r && Math.hypot(this.pos.x - cx, this.pos.z - cz) >= r) return true;
+        }
+      }
+    }
+    return false;
+  }
+
   cell(x, z) {
     const { origin } = this.view;
     const any = this.view.decoded.values().next().value;
@@ -204,7 +226,7 @@ export class Walker {
     return this.cellAt(Math.floor((x + origin[0]) / any.cellFt), Math.floor((z + origin[1]) / any.cellFt));
   }
 
-  // A cell by its continent cell position: { height, water, tree }, or null where no tile is drawn.
+  // A cell by its continent cell position: { height, water }, or null where no tile is drawn.
   cellAt(ci, cj) {
     const any = this.view.decoded.values().next().value;
     const n = any.cells;
@@ -217,7 +239,6 @@ export class Walker {
     return {
       height: tile.layers.height[k],
       water: Number.isNaN(water) ? null : water,
-      tree: Boolean(parseTree(tile.palettes.terrain[tile.layers.terrain[k]])),
     };
   }
 

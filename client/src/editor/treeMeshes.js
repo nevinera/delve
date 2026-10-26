@@ -153,12 +153,14 @@ const UP = new THREE.Vector3(0, 1, 0);
 const tilt = (angle, spin) =>
   new THREE.Quaternion().setFromAxisAngle(UP, spin).multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle));
 
-// kind: { height, clear, parts }, with clear the share of the height below the canopy.
+// kind: { height, trunk, clear, parts }, with trunk scaling the size's trunk radius and clear the
+// share of the height below the canopy.
 // part: { geometry, material, color?, at(h, c, t, r, b) -> [y, quaternion, [sx, sy, sz]] }, with
 // `t` the trunk radius and `r` a steady random number per tree.
 const KINDS = {
   oak: {
     height: 1,
+    trunk: 1,
     clear: 0.36,
     parts: [
       { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t, b + h * 0.26, t]] },
@@ -167,29 +169,37 @@ const KINDS = {
   },
   pine: {
     height: 1.15,
+    trunk: 0.8,
     clear: 0.18,
     parts: [
-      { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t * 0.8, b + h * 0.32, t * 0.8]] },
+      { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t, b + h * 0.32, t]] },
       ...crownParts(cone, { repeat: [6, 7], lift: 0.25 }, 0x356146, (h, c, t, r, b) => [b, null, [c * 0.6, h * 0.82, c * 0.6]]),
     ],
   },
   willow: {
     height: 0.9,
+    trunk: 1.2,
     clear: 0.3,
     parts: [
-      { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t * 1.2, b + h * 0.4, t * 1.2]] },
+      { geometry: trunk, material: bark, at: (h, c, t, r, b) => [0, null, [t, b + h * 0.4, t]] },
       ...crownParts(bowl, { repeat: [9, 3], lift: 0.3 }, 0x7a9a4c, (h, c, t, r, b) => [b, null, [c * 1.3, h * 0.5, c * 1.3]]),
     ],
   },
   dead: {
     height: 0.85,
+    trunk: 0.8,
     parts: [
-      { geometry: trunk, material: deadBark, at: (h, c, t) => [0, null, [t * 0.8, h * 0.9, t * 0.8]] },
-      { geometry: trunk, material: deadBark, at: (h, c, t, r) => [h * 0.45, tilt(0.8, r * 6.28), [t * 0.4, h * 0.35, t * 0.4]] },
-      { geometry: trunk, material: deadBark, at: (h, c, t, r) => [h * 0.6, tilt(0.7, r * 6.28 + 2.6), [t * 0.35, h * 0.28, t * 0.35]] },
+      { geometry: trunk, material: deadBark, at: (h, c, t) => [0, null, [t, h * 0.9, t]] },
+      { geometry: trunk, material: deadBark, at: (h, c, t, r) => [h * 0.45, tilt(0.8, r * 6.28), [t * 0.5, h * 0.35, t * 0.5]] },
+      { geometry: trunk, material: deadBark, at: (h, c, t, r) => [h * 0.6, tilt(0.7, r * 6.28 + 2.6), [t * 0.44, h * 0.28, t * 0.44]] },
     ],
   },
 };
+
+// The radius of a tree's trunk at the ground, in feet. Unknown kinds are oaks.
+export function trunkRadius(kind, size) {
+  return SIZES[size].trunk * (KINDS[kind] ?? KINDS.oak).trunk;
+}
 
 // trees: [{ x, z, ground, size, kind }] in scene feet. Unknown kinds draw as oaks. `far` draws
 // them as cheap stand-ins: a trunk and a crown of a few flat faces each.
@@ -217,7 +227,7 @@ export function treeMeshes(trees, { far = false } = {}) {
         const s = SIZES[size];
         const h = s.height * height * (0.85 + 0.3 * r);
         const c = s.crown * (0.9 + 0.2 * random(z, x));
-        const [y, q, scale] = part.at(h, c, s.trunk, r, clear * h * LIFT);
+        const [y, q, scale] = part.at(h, c, trunkRadius(kind, size), r, clear * h * LIFT);
         // Every tree gets its own turn, so crowns don't line up.
         const turn = new THREE.Quaternion().setFromAxisAngle(UP, r * 6.28).multiply(q ?? none);
         m.compose(new THREE.Vector3(x, ground + y, z), turn, new THREE.Vector3(...scale));
