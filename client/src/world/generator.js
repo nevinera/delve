@@ -40,7 +40,7 @@ const PEAK = { aloneFt: 2500, reach: 0.9, maxFt: 6000, flank: 0.7, blend: 0.3 };
 // Cliffs: in patches (`patchWavelength`, covering about `cover` of the land where the biomes'
 // `cliffs` is 1), ground climbs in ledges `minFt` to `maxFt` high, each rise squeezed into a
 // cliff over `riser` of the ledge's height. Cliff lines wander by up to a ledge either way.
-const CLIFFS = { patchWavelength: 1600, cover: 0.6, minFt: 20, maxFt: 60, stepWavelength: 900, wander: 260, riser: 0.15 };
+const CLIFFS = { patchWavelength: 1600, cover: 0.85, minFt: 12, maxFt: 45, stepWavelength: 900, wander: 260, riser: 0.07 };
 // Rocky ground breaks into flat facets (noise.js `facets`) at these sizes, each as tall as
 // `share` of the biome's roughness.
 const FACETS = [
@@ -92,6 +92,11 @@ export function riverReachFt(width) {
 }
 const STEEP = 0.7; // rise over run that turns into rock
 const FLOW_PROBE_FT = 16; // how far up and down a river its flow is judged over
+// Waterfalls: where a river's surface drops at least `minDropFt` from one PROFILE_STEP to the
+// next, carrying on while each step still drops `keepDropFt`. A plunge pool `widths` river widths
+// across (at least minPoolFt) is cut below each, deeper for taller falls, and the water churns
+// there as if it fell `churnSlope`.
+const FALLS = { minDropFt: 6, keepDropFt: 3, widths: 1.2, minPoolFt: 16, depthFt: [3, 14], depthPerDrop: 0.25, churnSlope: 0.3 };
 const PROFILE_STEP = 16;
 
 const smoothstep = (a, b, x) => {
@@ -134,6 +139,7 @@ export function prepareWorld(continent, seedKey) {
     let low = Infinity;
     return {
       line,
+      width,
       half: width / 2,
       bank: Math.max(RIVER.minBankFt, width),
       reach: width / 2 + Math.max(RIVER.minBankFt, width) * RIVER.maxBanks,
@@ -141,6 +147,7 @@ export function prepareWorld(continent, seedKey) {
       surface: ground.map((h) => (low = Math.min(low, h)) - RIVER.surfaceDrop),
     };
   });
+  ctx.falls = ctx.rivers.flatMap(fallsOf);
 
   ctx.ponds = (continent.watercourses?.pools ?? []).map(({ region, level }) => {
     const ft = region.map((polygon) => polygon.map((ring) => ring.map(toFt)));
@@ -201,10 +208,11 @@ export function shapeHeight(ctx, x, z, relief = 0) {
 }
 
 // A biome profile's hills and rocky ridges at a point, in ft: the broad strokes of the land's
-// detail, without crags, facets, ledges or small bumps.
+// detail, without crags, facets, ledges or small bumps. Ridges are ridged noise squared, so their
+// crests are sharp and the ground between them opens out.
 export function biomeRelief(ctx, x, z, { amp, rough }) {
   let h = fbm(x, z, ctx.seed, { wavelength: BASE.hillWavelength, octaves: 3 }) * amp;
-  if (rough > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x3c6ef372, { wavelength: BASE.roughWavelength, octaves: 3 }))) * rough;
+  if (rough > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x3c6ef372, { wavelength: BASE.roughWavelength, octaves: 3 }))) ** 2 * rough;
   return h;
 }
 
@@ -297,6 +305,10 @@ export function generateTile(ctx, tx, tz) {
     generator: { version: GENERATOR_VERSION, seed: ctx.seed },
     layers,
   };
+  // A waterfall belongs to the tile its lip is in.
+  const inTile = ([x, , z]) => x >= x0 && x < x0 + TILE_FT && z >= z0 && z < z0 + TILE_FT;
+  const round = (v) => Math.round(v * 10) / 10;
+  tile.falls = ctx.falls.filter((f) => inTile(f.top)).map((f) => ({ top: f.top.map(round), bottom: f.bottom.map(round), width: f.width, pool: round(f.pool) }));
   plantTrees(ctx, tile, (i, j) => samples[(j + 1) * N + (i + 1)]);
   tile.objects = scatterObjects(tile);
   return tile;
@@ -466,12 +478,49 @@ function sample(ctx, x, z, edges, biomes) {
       if (n.dist < r.half + bank * 0.6) out.bank = true;
     }
   }
+  plunge(ctx, out, x, z);
   // The sea covers the sea floor and the shore strip. Land below sea level further in stays dry.
   if (out.h < 0 && Number.isNaN(out.water) && (!out.land || out.coastDist < COAST.maxFt)) {
     out.water = 0;
     out.sea = true;
   }
   return out;
+}
+
+// A river's waterfalls, each { top: [x, y, z], bottom: [x, y, z], width, pool, depth }: the lip
+// the water leaves and where it lands (ft, y up, on the water's surface), the river's width, and
+// the plunge pool's radius and depth.
+export function fallsOf(r) {
+  const falls = [];
+  const s = r.surface;
+  for (let i = 0; i < s.length - 1; i++) {
+    if (s[i] - s[i + 1] < FALLS.minDropFt) continue;
+    let j = i + 1;
+    while (j < s.length - 1 && s[j] - s[j + 1] >= FALLS.keepDropFt) j++;
+    const at = (k) => pointAt(r.line, Math.min(r.line.length, k * PROFILE_STEP));
+    const [[tx, tz], [bx, bz]] = [at(i), at(j)];
+    const drop = s[i] - s[j];
+    falls.push({
+      top: [tx, s[i], tz],
+      bottom: [bx, s[j], bz],
+      width: r.width,
+      pool: Math.max(FALLS.minPoolFt, r.width * FALLS.widths) / 2,
+      depth: clamp(drop * FALLS.depthPerDrop, ...FALLS.depthFt),
+    });
+    i = j - 1;
+  }
+  return falls;
+}
+
+// The plunge pools below waterfalls: a bowl cut under the water, which churns.
+function plunge(ctx, out, x, z) {
+  if (Number.isNaN(out.water)) return;
+  for (const f of ctx.falls) {
+    const d = Math.hypot(x - f.bottom[0], z - f.bottom[2]);
+    if (d >= f.pool) continue;
+    out.h = Math.min(out.h, f.bottom[1] - f.depth * (1 - (d / f.pool) ** 2));
+    if (out.flow) out.flow = { ...out.flow, slope: Math.max(out.flow.slope, FALLS.churnSlope) };
+  }
 }
 
 // Which way a river runs at `along` ft down its line, and how steeply its surface falls there, as

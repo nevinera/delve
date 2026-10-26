@@ -4,7 +4,7 @@ import { encodeTile } from "../world/tileCodec.js";
 import { biomeRgba, tileRgba } from "../world/tileImage.js";
 
 // Generates tiles off the main thread. "prepare" sets up the continent once per run;
-// each "tile" message answers with the gzipped tile file and its thumbnail pixels.
+// each "tile" message answers with the gzipped tile file, its thumbnail pixels and its waterfalls.
 
 let ctx = null;
 
@@ -19,5 +19,5 @@ self.onmessage = ({ data }) => {
   const gz = gzipSync(encodeTile(tile), { level: 9, mtime: 0 });
   const rgba = tileRgba(tile);
   const biomes = biomeRgba(tile);
-  self.postMessage({ tx, tz, gz, rgba, biomes, cells: tile.cells }, [gz.buffer, rgba.buffer, biomes.buffer]);
+  self.postMessage({ tx, tz, gz, rgba, biomes, cells: tile.cells, falls: tile.falls }, [gz.buffer, rgba.buffer, biomes.buffer]);
 };

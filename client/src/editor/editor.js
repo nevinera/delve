@@ -618,10 +618,10 @@ export class Editor {
     this.renderPanel();
     this.say();
     try {
-      await this.generator.run(this.storedState(), this.continent, tiles, ({ tx, tz, gz, rgba, biomes, cells }) => {
+      await this.generator.run(this.storedState(), this.continent, tiles, ({ tx, tz, gz, rgba, biomes, cells, falls }) => {
         this.world.files.set(tilePath(this.continent, tx, tz), gz);
         this.pending.delete(`${tx},${tz}`);
-        this.thumbnails.set(tx, tz, rgba, cells, biomes);
+        this.thumbnails.set(tx, tz, rgba, cells, biomes, falls);
         this.details.drop(tx, tz);
         button.textContent = `generating ${++done}/${tiles.length}`;
         frame ??= requestAnimationFrame(() => {
@@ -895,6 +895,7 @@ export class Editor {
       for (const zone of this.zones) if (zone !== editing) this.drawRegion(ctx, map, zone, false);
     }
     this.features.draw(ctx, this.sketch, this.markKinds());
+    if (this.step === "water") this.drawFalls(ctx, map);
     if (!editing) {
       this.features.drawInProgress(ctx);
       return;
@@ -909,6 +910,25 @@ export class Editor {
     ctx.lineWidth = 2 * map.dpr;
     polyline(ctx, pts, false);
     this.drawing.forEach((p, i) => handle(ctx, map.toScreen(p), (i === 0 ? 6 : 4) * map.dpr, COLORS.active));
+  }
+
+  // The waterfalls in the generated tiles: a white line down each, from a ring at its lip.
+  drawFalls(ctx, map) {
+    const dpr = map.dpr;
+    ctx.strokeStyle = "#fff";
+    ctx.fillStyle = "#fff";
+    for (const falls of this.thumbnails.falls.values()) {
+      for (const { top, bottom } of falls) {
+        const [ax, ay] = map.toScreen([top[0] / TILE_FT, top[2] / TILE_FT]);
+        const [bx, by] = map.toScreen([bottom[0] / TILE_FT, bottom[2] / TILE_FT]);
+        ctx.lineWidth = 2 * dpr;
+        ctx.beginPath();
+        ctx.arc(ax, ay, 5 * dpr, 0, Math.PI * 2);
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+      }
+    }
   }
 
   drawOutOfDate(ctx, map) {

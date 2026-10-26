@@ -26,12 +26,14 @@ export class Thumbnails {
     this.onProgress = onProgress;
     this.images = new Map(); // "tx,tz" -> canvas
     this.biomes = new Map(); // "tx,tz" -> canvas of the biome layer
+    this.falls = new Map(); // "tx,tz" -> the tile's waterfalls (generator.js), where it has some
     this.loading = null;
   }
 
   load(world, continent) {
     this.images.clear();
     this.biomes.clear();
+    this.falls.clear();
     const queue = surfaceTiles(world, continent);
     const run = { cancelled: false };
     if (this.loading) this.loading.cancelled = true;
@@ -46,6 +48,7 @@ export class Thumbnails {
           const tile = decodeTile(gunzipSync(world.files.get(path)));
           this.images.set(`${tx},${tz}`, rgbaCanvas(tileRgba(tile), tile.cells));
           this.biomes.set(`${tx},${tz}`, rgbaCanvas(biomeRgba(tile), tile.cells));
+          if (tile.falls?.length) this.falls.set(`${tx},${tz}`, tile.falls);
         } catch (err) {
           console.warn(`couldn't read ${path}: ${err.message}`);
         }
@@ -56,11 +59,13 @@ export class Thumbnails {
     step();
   }
 
-  // A freshly generated or edited tile's pictures, from tileRgba and biomeRgba. Without biome
-  // pixels, the biome picture stays as it was.
-  set(tx, tz, rgba, cells, biomes) {
+  // A freshly generated or edited tile's pictures, from tileRgba and biomeRgba, and its
+  // waterfalls. Without biome pixels, the biome picture stays as it was.
+  set(tx, tz, rgba, cells, biomes, falls) {
     this.images.set(`${tx},${tz}`, rgbaCanvas(rgba, cells));
     if (biomes) this.biomes.set(`${tx},${tz}`, rgbaCanvas(biomes, cells));
+    if (falls?.length) this.falls.set(`${tx},${tz}`, falls);
+    else this.falls.delete(`${tx},${tz}`);
   }
 
   get(tx, tz) {

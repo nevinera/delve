@@ -7,6 +7,7 @@ import { findTrees } from "../world/trees.js";
 import { rings } from "./region.js";
 import { terrainMesh, waterMesh } from "./terrainMesh.js";
 import { setWaterTime, waterMaterial } from "./waterMaterial.js";
+import { waterfallMeshes } from "./waterfalls.js";
 import { setTreeSight, treeMeshes, treeStage } from "./treeMeshes.js";
 import { clutterMeshes, gatherClutter, setClutterFocus, setClutterRadius } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
@@ -351,6 +352,10 @@ export class RenderView {
       const water = waterMesh(tile, neighbours, this.origin, kind);
       if (!water) continue;
       const mesh = new THREE.Mesh(geometry(water), this.waterMaterials[kind]);
+      mesh.userData.tile = [tx, tz];
+      this.content.add(mesh);
+    }
+    for (const mesh of waterfallMeshes(tile.falls, this.origin, this.renderer)) {
       mesh.userData.tile = [tx, tz];
       this.content.add(mesh);
     }

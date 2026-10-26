@@ -15,7 +15,9 @@ const DRIFT = [0.35, 0.2]; // ft/s the ripples wander on still water, so lakes s
 // Steepness (0-1, the root of the surface's slope) where foam starts and where it covers the water.
 const FOAM = [0.15, 0.45];
 
-const time = { value: 0 };
+// The clock every moving water material shares (waterfalls.js too), in seconds.
+export const waterTime = { value: 0 };
+const time = waterTime;
 
 // Moves every water material's ripples on to `seconds`.
 export function setWaterTime(seconds) {

@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { CELLS, TILE_FT } from "./constants.js";
-import { decodeFlowDir, decodeFlowSlope, encodeFlowDir, encodeFlowSlope, generateTile, prepareWorld as prepareContinent } from "./generator.js";
+import { fallsOf, decodeFlowDir, decodeFlowSlope, encodeFlowDir, encodeFlowSlope, generateTile, prepareWorld as prepareContinent } from "./generator.js";
 import { findTrees } from "./trees.js";
 import { fbm } from "./noise.js";
+import { makePolyline } from "./polyline.js";
 
 // Zones written with their own pins and rivers, gathered into a continent's sketch.
 const prepareWorld = (zones, seedKey) => prepareContinent({ zones, pins: zones.flatMap((z) => z.pins), watercourses: { rivers: zones.flatMap((z) => z.rivers ?? []), pools: [] } }, seedKey);
@@ -101,6 +102,18 @@ describe("generator", () => {
     }
     expect(decodeFlowSlope(encodeFlowSlope(0.04))).toBeCloseTo(0.04, 2);
     expect(decodeFlowSlope(encodeFlowSlope(3))).toBe(1);
+  });
+
+  it("finds waterfalls where a river's surface drops sharply, one per drop", () => {
+    // A river falling 1ft per 16ft step, then 20ft over two steps, then gently again.
+    const surface = [50, 49, 48, 38, 28, 27, 26];
+    const river = { line: makePolyline([[0, 0], [96, 0]]), surface, width: 20 };
+    const falls = fallsOf(river);
+    expect(falls).toHaveLength(1);
+    expect(falls[0].top).toEqual([32, 48, 0]);
+    expect(falls[0].bottom).toEqual([64, 28, 0]);
+    expect(falls[0].depth).toBeGreaterThan(3);
+    expect(fallsOf({ ...river, surface: [50, 49, 48, 47, 46, 45, 44] })).toEqual([]);
   });
 
   it("floods a kept pool flat at its level, below the ground around it", () => {
