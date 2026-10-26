@@ -2,7 +2,7 @@ import "./builder.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { characterMesh, disposeCharacter } from "./characterMesh.js";
-import { BEARD, DEFAULT_LOOK, HAIR, JEWELRY, resolveRecipe, saveLook, savedLook } from "./recipe.js";
+import { BEARD, DEFAULT_LOOK, HAIR, JEWELRY, WEAPONS, resolveRecipe, saveLook, savedLook } from "./recipe.js";
 
 // The character builder page: one character on a patch of ground, with a control for each setting
 // of its look, and the look as recipe JSON to copy. Walk mode uses the look made here. "Test pose" swings the limbs, to check every
@@ -97,6 +97,7 @@ function buildControls() {
   for (const [key, options] of [
     ["hair", HAIR],
     ["beard", BEARD],
+    ["weapon", WEAPONS],
   ]) {
     const select = document.createElement("select");
     for (const option of options) select.add(new Option(option, option, false, option === look[key]));

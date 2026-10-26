@@ -342,7 +342,7 @@ function head(out, look, [hx, hy, hz], s, c) {
 }
 
 // Collects triangles, each corner with its own position, color and bone weights.
-class MeshOut {
+export class MeshOut {
   constructor(index) {
     this.index = index;
     this.positions = [];

@@ -12,13 +12,15 @@
 // - shoulders, waist, hips, jaw: 0 narrow to 1 broad.
 // - bust: 0 to 1.
 // - hair: a HAIR style; beard: a BEARD style; jewelry: a list of JEWELRY.
-// - colors: { skin, hair, eyes, primary, secondary, metal }, each "#rrggbb" or a list to pick
-//   from. primary is the shirt or tunic, secondary the trousers; boots and belt are darker shades
-//   of those.
+// - weapon: one of weapons.js's WEAPONS, held in hand.
+// - colors: { skin, hair, eyes, primary, secondary, metal, steel, wood }, each "#rrggbb" or a list
+//   to pick from. primary is the shirt or tunic, secondary the trousers; boots and belt are darker
+//   shades of those. metal is jewelry and fittings, steel blades, wood hafts and staves.
 
 export const HAIR = ["bald", "short", "long", "ponytail", "braids", "mohawk", "afro"];
 export const BEARD = ["none", "goatee", "handlebar", "full", "long"];
 export const JEWELRY = ["earrings", "necklace"];
+export const WEAPONS = ["none", "sword", "axe", "staff", "bow"];
 
 export const DEFAULT_LOOK = {
   body: "humanoid",
@@ -33,6 +35,7 @@ export const DEFAULT_LOOK = {
   hair: "short",
   beard: "none",
   jewelry: [],
+  weapon: "none",
   colors: {
     skin: "#e0b48c",
     hair: "#4a3020",
@@ -40,6 +43,8 @@ export const DEFAULT_LOOK = {
     primary: "#7a3b2e",
     secondary: "#4a4038",
     metal: "#d4b050",
+    steel: "#b8bcc4",
+    wood: "#6b4a2a",
   },
 };
 
@@ -67,6 +72,7 @@ export function resolveRecipe(recipe = {}, random = Math.random) {
   }
   if (!HAIR.includes(look.hair)) look.hair = DEFAULT_LOOK.hair;
   if (!BEARD.includes(look.beard)) look.beard = DEFAULT_LOOK.beard;
+  if (!WEAPONS.includes(look.weapon)) look.weapon = DEFAULT_LOOK.weapon;
   return look;
 }
 
