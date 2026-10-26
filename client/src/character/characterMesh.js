@@ -58,6 +58,7 @@ export function characterMesh(look) {
   mesh.add(root);
   mesh.bind(new THREE.Skeleton([...bones.values()]));
   mesh.userData.scale = look.height / 6;
+  mesh.userData.joints = joints;
   mesh.userData.held = [hold(bones, look, look.weapon), hold(bones, look, look.offhand, true)].filter(Boolean);
   return mesh;
 }

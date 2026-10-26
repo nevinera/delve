@@ -10,13 +10,12 @@ import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 // The character builder page: one character on a patch of ground, with a control for each setting
 // of its look, and the look as recipe JSON to copy. Walk mode uses the look made here. A button
 // for each animation clip plays it: loops until another is picked, one-shots then back to idle.
+// Dragging the time slider pauses the clip there.
 
 // Clips by what they're for, shown in this order; the rest go under "other".
 const CLIP_GROUPS = [
-  ["moving", /^(Idle_Loop|Walk|Jog|Sprint|Crouch|Jump|NinjaJump|Roll|Slide|Swim|Sit_Ground)/],
-  ["combat", /^(Sword|Punch|Melee|Shield|Idle_Shield|Spell|OverhandThrow|Hit|Death|LayToIdle)/],
-  ["zombie", /^Zombie/],
-  ["chair", /^Sitting/],
+  ["moving", /^(Idle_Loop|Walk|Jog|Sprint|Crouch|Jump|Roll|Swim|Sit_Ground)/],
+  ["combat", /^(TwoHand|Bow|Sword|Punch|Melee|Shield|Idle_Shield|Spell|OverhandThrow|Hit|Death|LayToIdle)/],
   ["other", /./],
 ];
 const IDLE = "Idle_Loop";
@@ -58,6 +57,7 @@ let baked = null;
 let mixer = null;
 let clips = new Map();
 let playing = null;
+let scrubbing = false;
 function rebuild() {
   if (character) {
     scene.remove(character);
@@ -78,6 +78,7 @@ function rebuild() {
 function play(name, fade = FADE_S) {
   const previous = playing && clips.get(playing) && mixer.existingAction(clips.get(playing));
   playing = name;
+  scrubbing = false;
   for (const button of document.querySelectorAll("#animations button")) button.classList.toggle("playing", button.dataset.clip === (name ?? ""));
   if (!name || !clips.has(name)) {
     mixer.stopAllAction();
@@ -93,8 +94,26 @@ function play(name, fade = FADE_S) {
   else if (previous && previous !== action) previous.stop();
 }
 
+// Pauses the playing clip `fraction` of the way through, with no fading.
+function scrub(fraction) {
+  const clip = clips.get(playing);
+  if (!clip) return;
+  scrubbing = true;
+  mixer.stopAllAction();
+  const action = mixer.clipAction(clip);
+  action.reset().play();
+  action.paused = true;
+  action.time = fraction * clip.duration;
+  mixer.update(0);
+}
+
 function buildAnimations() {
   const panel = $("animations");
+  const time = Object.assign(document.createElement("input"), { type: "range", id: "clipTime", min: 0, max: 1, step: 0.001, value: 0 });
+  time.addEventListener("input", () => scrub(Number(time.value)));
+  const row = Object.assign(document.createElement("label"), { className: "builder-row" });
+  row.append(Object.assign(document.createElement("span"), { textContent: "time" }), time);
+  panel.append(row);
   const names = clipNames(baked);
   const label = (name) => name.replace(/_Loop$/, "").replaceAll("_", " ").toLowerCase();
   const button = (text, clip) => {
@@ -251,6 +270,11 @@ loadAnimations().then((data) => {
 });
 const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
-  mixer.update(clock.getDelta());
+  const delta = clock.getDelta();
+  if (!scrubbing) {
+    mixer.update(delta);
+    const action = clips.get(playing) && mixer.existingAction(clips.get(playing));
+    if (action && $("clipTime")) $("clipTime").value = (action.time % action.getClip().duration) / action.getClip().duration;
+  }
   renderer.render(scene, camera);
 });

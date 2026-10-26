@@ -5,7 +5,10 @@ import { characterClips } from "./animations.js";
 import { characterMesh } from "./characterMesh.js";
 import { resolveRecipe } from "./recipe.js";
 
-const baked = JSON.parse(fs.readFileSync(new URL("./animations.json", import.meta.url)));
+const read = (file) => JSON.parse(fs.readFileSync(new URL(file, import.meta.url)));
+// The clips, with the stashed T-pose that checks the baking.
+const baked = read("./animations.json");
+baked.clips.A_TPose = read("./animations-stash.json").clips.A_TPose;
 
 // Where each bone is, in feet, at a time into a clip.
 function posed(name, time, look = resolveRecipe()) {
@@ -47,5 +50,23 @@ describe("characterClips", () => {
     expect(at("foot_l").y).toBeGreaterThan(0.1);
     expect(at("foot_l").y).toBeLessThan(0.6);
     expect(at("hand_l").y).toBeGreaterThan(0.3);
+  });
+
+  it("holds a two-handed weapon in both hands, in front, with the feet planted", () => {
+    for (const time of [0, 0.5, 0.6, 0.75]) {
+      const at = posed("TwoHand_Chop", time);
+      expect(at("hand_l").distanceTo(at("hand_r"))).toBeLessThan(0.75);
+      expect(at("foot_l").y).toBeCloseTo(0.32, 1);
+      expect(at("foot_r").y).toBeCloseTo(0.32, 1);
+    }
+    const ready = posed("TwoHand_Idle_Loop", 0);
+    expect(Math.abs(ready("hand_r").x)).toBeLessThan(0.4);
+    expect(ready("hand_r").z).toBeGreaterThan(0.6);
+  });
+
+  it("draws a bow with the left arm out ahead and the right hand at the jaw", () => {
+    const at = posed("Bow_Aim_Loop", 0);
+    expect(at("hand_l").z).toBeGreaterThan(1.3);
+    expect(at("hand_r").distanceTo(at("head"))).toBeLessThan(0.8);
   });
 });

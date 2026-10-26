@@ -1,6 +1,7 @@
 // Bakes Quaternius' Universal Animation Library clips (CC0, quaternius.com) onto the character
 // skeleton (client/src/character/body.js), as client/src/character/animations.json, which
-// animations.js plays.
+// animations.js plays. Zombie clips and the T-pose go to animations-stash.json instead, which
+// nothing loads yet: the zombies are for zombie enemies, and the T-pose checks the baking.
 //
 //   node script/bake_animations.mjs <UAL1 Godot .glb> <UAL2 Unreal-Godot .glb>
 //
@@ -18,8 +19,10 @@ import { DEFAULT_LOOK } from "../client/src/character/recipe.js";
 
 const FPS = 30;
 const OUT = new URL("../client/src/character/animations.json", import.meta.url);
-// Root motion, gun, vehicle and phone clips are left out.
-const SKIP = /_RM$|^Pistol_|^Driving|Phone|Rail/;
+const STASH_OUT = new URL("../client/src/character/animations-stash.json", import.meta.url);
+// Root motion, gun, vehicle, phone, parkour and chair clips are left out.
+const SKIP = /_RM$|^Pistol_|^Driving|Phone|Rail|^NinjaJump|^Slide|^Sitting/;
+const STASH = /^Zombie|^A_TPose$/;
 
 // The first pack names bones like Blender's Rigify, the second like Unreal.
 const RIGIFY = {
@@ -184,7 +187,13 @@ function bakePack(path, clips) {
   }
 }
 
-const clips = {};
-for (const path of process.argv.slice(2)) bakePack(path, clips);
-fs.writeFileSync(OUT, JSON.stringify({ fps: FPS, bones: BONES, clips }) + "\n");
-console.log(`${Object.keys(clips).length} clips, ${fs.statSync(OUT).size} bytes`);
+const all = {};
+for (const path of process.argv.slice(2)) bakePack(path, all);
+for (const [file, keep] of [
+  [OUT, (name) => !STASH.test(name)],
+  [STASH_OUT, (name) => STASH.test(name)],
+]) {
+  const clips = Object.fromEntries(Object.entries(all).filter(([name]) => keep(name)));
+  fs.writeFileSync(file, JSON.stringify({ fps: FPS, bones: BONES, clips }) + "\n");
+  console.log(`${file.pathname.split("/").pop()}: ${Object.keys(clips).length} clips, ${fs.statSync(file).size} bytes`);
+}
