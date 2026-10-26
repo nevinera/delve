@@ -23,6 +23,9 @@ const SWIM_DEPTH = 4.5; // how deep the feet go in water too deep to stand in
 const CAMERA = { near: 0.5, distance: 22, min: 4, max: 90, pitch: 0.35, minPitch: -1.3, maxPitch: 1.3 };
 const DRAG = 0.006; // radians per pixel
 
+// Frames are drawn at most this often, so a fast display doesn't keep the GPU (shared with the rest
+// of the screen) flat out. A little under the 60fps interval, so 60Hz displays don't drop frames.
+const MIN_FRAME_MS = 1000 / 60 - 2;
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "shift"]);
 
 export class Walker {
@@ -86,6 +89,10 @@ export class Walker {
 
   frame(now) {
     if (!this.active) return;
+    if (this.last !== null && now - this.last < MIN_FRAME_MS) {
+      requestAnimationFrame((t) => this.frame(t));
+      return;
+    }
     const dt = this.last === null ? 0 : Math.min(0.05, (now - this.last) / 1000);
     this.last = now;
     if (dt > 0) this.step(dt);

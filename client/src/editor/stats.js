@@ -5,6 +5,7 @@ import { TILE_FT } from "../world/constants.js";
 // it), and counts what's drawn. It updates a few times a second.
 //
 // fps counts renders: walking renders every frame, but orbiting only renders when something moves.
+// Keys 1-5 hide and show a group of meshes, to see what each costs.
 
 const REFRESH_MS = 250;
 const WINDOW_MS = 1000; // frame times are averaged, and the worst found, over this long
@@ -26,12 +27,38 @@ export class Stats {
     this.timer = gl.getExtension("EXT_disjoint_timer_query_webgl2");
     this.queries = [];
     this.shownAt = 0;
+    this.groups = [
+      ["clutter", view.clutter],
+      ["near trees", view.trees],
+      ["far ring", view.far],
+      ["objects", view.objects],
+      ["ground and water", view.content],
+    ];
+    this.hidden = new Set();
+    window.addEventListener("keydown", (e) => {
+      const n = Number(e.key);
+      if (e.target.matches?.("input, textarea, select") || !(n >= 1 && n <= this.groups.length)) return;
+      const name = this.groups[n - 1][0];
+      if (this.hidden.has(name)) this.hidden.delete(name);
+      else this.hidden.add(name);
+      if (!view.walking) view.render();
+    });
+  }
+
+  // Applies the hidden groups after the view has set what's visible for this frame. Groups the
+  // view doesn't switch itself come back on when unhidden.
+  hide() {
+    for (const [name, group] of this.groups) {
+      if (this.hidden.has(name)) group.visible = false;
+      else if (group !== this.view.clutter && group !== this.view.far) group.visible = true;
+    }
   }
 
   // Wraps one render: ours() is our per-frame work, draw() three.js's.
   measure(ours, draw) {
     const start = performance.now();
     ours();
+    this.hide();
     const mid = performance.now();
     const query = this.beginGpu();
     draw();
@@ -97,7 +124,7 @@ export class Stats {
     const nearTiles = view.content.children.filter((c) => c.visible && c.userData.tile && c.material === view.terrainMaterial).length;
     this.el.textContent = [
       `fps ${gaps.length ? (1000 / avg(gaps)).toFixed(0) : "-"}   frame ${ms(avg(gaps))} avg, ${ms(Math.max(0, ...gaps))} worst`,
-      `cpu: ours ${ms(avg(frames.map((f) => f.ours)))}, draw ${ms(avg(frames.map((f) => f.submit)))}   gpu ${this.timer ? (this.gpu.length ? ms(avg(this.gpu.map((g) => g.ms))) : "...") : "n/a"}`,
+      `cpu: ours ${ms(avg(frames.map((f) => f.ours)))} (worst ${ms(Math.max(0, ...frames.map((f) => f.ours)))}), draw ${ms(avg(frames.map((f) => f.submit)))} (worst ${ms(Math.max(0, ...frames.map((f) => f.submit)))})   gpu ${this.timer ? (this.gpu.length ? ms(avg(this.gpu.map((g) => g.ms))) : "...") : "n/a"}`,
       `draw calls ${info.render.calls}   triangles ${(info.render.triangles / 1000).toFixed(0)}k`,
       `memory: ${info.memory.geometries} geometries, ${info.memory.textures} textures, ${info.programs?.length ?? "?"} shaders`,
       `tiles: ${nearTiles} near, ${view.farTiles?.size ?? 0} far   ground and water: ${count(view.content)}`,
@@ -105,6 +132,7 @@ export class Stats {
       `far ring: ${count(view.far)}`,
       `clutter: ${count(view.clutter)}`,
       `objects: ${count(view.objects)}`,
+      `keys 1-5 hide: ${this.groups.map(([name], i) => `${i + 1} ${name}${this.hidden.has(name) ? " (hidden)" : ""}`).join(", ")}`,
       `at tile ${Math.floor(x / TILE_FT)}, ${Math.floor(z / TILE_FT)}   (${x.toFixed(0)}, ${z.toFixed(0)}) ft`,
     ].join("\n");
   }
