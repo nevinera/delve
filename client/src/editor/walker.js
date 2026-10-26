@@ -20,7 +20,7 @@ const MAX_CLIMB = 1.2; // rise over run
 const EYE_FT = 5.5;
 const BODY_FT = 1; // the character's radius, for bumping into objects
 const SWIM_DEPTH = 4.5; // how deep the feet go in water too deep to stand in
-const CAMERA = { near: 0.5, distance: 22, min: 4, max: 90, pitch: 0.35, minPitch: -0.3, maxPitch: 1.3 };
+const CAMERA = { near: 0.5, distance: 22, min: 4, max: 90, pitch: 0.35, minPitch: -1.3, maxPitch: 1.3 };
 const DRAG = 0.006; // radians per pixel
 
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "shift"]);
@@ -230,7 +230,9 @@ export class Walker {
     camera.position.copy(head).addScaledVector(away, hit ? Math.max(1, hit.distance - 1) : distance);
     const floor = this.groundAt(camera.position.x, camera.position.z);
     if (floor !== null) camera.position.y = Math.max(camera.position.y, floor + 1.5);
-    camera.lookAt(head);
+    // Look the way the pitch says even when the ground has pushed the camera up, so from low down
+    // you look up past the character at the sky.
+    camera.lookAt(camera.position.clone().sub(away));
   }
 
   onKey(e, down) {
