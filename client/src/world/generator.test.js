@@ -118,6 +118,39 @@ describe("generator", () => {
     expect(fallsOf({ ...river, surface: [50, 43, 36, 29, 22, 15, 8] })).toEqual([]);
   });
 
+  it("holds a river running across a slope in, with no water above the ground beside it", () => {
+    // Land falling to the south, with a river running east across it.
+    const slope = {
+      zones: [{ region: [square(0, -4, 8, 4)] }],
+      pins: [
+        { id: "a", kind: "height", at: [4, -1.5], height: 500 },
+        { id: "b", kind: "height", at: [4, 1.5], height: 40 },
+        { id: "c", kind: "biome", at: [4, 0], biome: "forest", tags: ["hilly"] },
+      ],
+      watercourses: { rivers: [{ points: [[1.5, 0.2], [6.5, 0.2]], width: 24 }], pools: [] },
+    };
+    const world = prepareContinent(slope, "test");
+    let edges = 0;
+    for (const [tx, tz] of [1, 2, 3, 4, 5, 6].flatMap((x) => [[x, -1], [x, 0]])) {
+      const tile = generateTile(world, tx, tz);
+      const { height, water } = tile.layers;
+      for (let j = 0; j < CELLS; j++) {
+        for (let i = 0; i < CELLS; i++) {
+          const k = j * CELLS + i;
+          if (Number.isNaN(water[k])) continue;
+          expect(height[k]).toBeLessThan(water[k]);
+          for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            const [ni, nj] = [i + di, j + dj];
+            if (ni < 0 || nj < 0 || ni >= CELLS || nj >= CELLS || !Number.isNaN(water[nj * CELLS + ni])) continue;
+            expect(height[nj * CELLS + ni]).toBeGreaterThanOrEqual(water[k] - 0.5);
+            edges++;
+          }
+        }
+      }
+    }
+    expect(edges).toBeGreaterThan(20);
+  });
+
   it("floods a kept pool flat at its level, below the ground around it", () => {
     // A square pool over the middle of tile (12, -2), whose cells run 0-63 across it.
     const pool = { region: [[[[12.25, -1.75], [12.75, -1.75], [12.75, -1.25], [12.25, -1.25]]]], level: 95 };

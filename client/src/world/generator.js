@@ -85,8 +85,11 @@ const COAST_REACH_FT = Math.max(COAST.maxFt, (SEA.shallow - SEA.floor) / SEA.dro
 export const EDGE_REACH_FT = COAST_REACH_FT + SHORE.maxFt;
 // A river's channel: `depth` is cut below its surface, up to maxDepth, scaled by the ground's bed
 // (biomes.js profiles). Banks slope up over its width (at least minBankFt), scaled by the ground's
-// banks, up to maxBanks.
-const RIVER = { surfaceDrop: 1.5, minDepth: 3, maxDepth: 10, minBankFt: 30, maxBanks: 2 };
+// banks, up to maxBanks. The surface follows the lowest ground across the channel, out to
+// `besideFt` past each edge, so on a slope it sits no higher than the downhill bank; where the bank
+// is still lower somewhere, it's raised to `leveeFt` above the water, easing back into the land
+// across the bank, so the water's always held in.
+const RIVER = { surfaceDrop: 1.5, minDepth: 3, maxDepth: 10, minBankFt: 30, maxBanks: 2, besideFt: 8, leveeFt: 1 };
 export function riverReachFt(width) {
   return width / 2 + Math.max(RIVER.minBankFt, width) * RIVER.maxBanks;
 }
@@ -136,7 +139,15 @@ export function prepareWorld(continent, seedKey) {
   ctx.rivers = rivers.map((s) => {
     const line = makePolyline(s.points.map(toFt));
     const width = s.width ?? 30;
-    const ground = sampleAlong(line, (x, z) => land(ctx, x, z, ctx.areaEdges, ctx.biomes).h);
+    // The lowest ground across the channel at each step down it.
+    const across = width / 2 + RIVER.besideFt;
+    const ground = sampleAlong(line, (x, z, along) => {
+      const [ax, az] = pointAt(line, Math.max(0, along - 1));
+      const [bx, bz] = pointAt(line, Math.min(line.length, along + 1));
+      const len = Math.hypot(bx - ax, bz - az) || 1;
+      const [sx, sz] = [-(bz - az) / len, (bx - ax) / len];
+      return Math.min(...[-1, -0.5, 0, 0.5, 1].map((k) => land(ctx, x + sx * across * k, z + sz * across * k, ctx.areaEdges, ctx.biomes).h));
+    });
     let low = Infinity;
     return {
       line,
@@ -459,6 +470,7 @@ function sample(ctx, x, z, edges, biomes) {
   if (ground.land) lakes(ctx, out, x, z);
   for (const p of ctx.ponds) pond(out, x, z, p);
   const { banks, bed } = ground.climate.profile;
+  let levee = -Infinity; // how high the banks of rivers here must be to hold their water
   for (const r of ctx.rivers) {
     if (!nearBounds(r.line, x, z, r.reach)) continue;
     const n = nearest(r.line, x, z);
@@ -475,10 +487,12 @@ function sample(ctx, x, z, edges, biomes) {
       out.river = true;
     } else {
       const t = smoothstep(0, 1, (n.dist - r.half) / bank);
+      levee = Math.max(levee, lerp(surface + RIVER.leveeFt, out.h, t));
       out.h = Math.min(out.h, lerp(surface + 1, out.h, t));
       if (n.dist < r.half + bank * 0.6) out.bank = true;
     }
   }
+  if (Number.isNaN(out.water)) out.h = Math.max(out.h, levee);
   plunge(ctx, out, x, z);
   // The sea covers the sea floor and the shore strip. Land below sea level further in stays dry.
   if (out.h < 0 && Number.isNaN(out.water) && (!out.land || out.coastDist < COAST.maxFt)) {
@@ -654,7 +668,10 @@ function distanceToEdges(x, z, edges) {
 
 function sampleAlong(line, fn) {
   const count = Math.max(2, Math.ceil(line.length / PROFILE_STEP) + 1);
-  return Array.from({ length: count }, (_, i) => fn(...pointAt(line, Math.min(line.length, i * PROFILE_STEP))));
+  return Array.from({ length: count }, (_, i) => {
+    const along = Math.min(line.length, i * PROFILE_STEP);
+    return fn(...pointAt(line, along), along);
+  });
 }
 
 function profileAt(profile, along) {
