@@ -42,6 +42,7 @@ const HINTS = {
   region: `drag corners · shift-click an edge to add a corner · alt-click a corner to remove it · click another zone to pick it · ${NAV}`,
   ...FEATURE_HINTS,
   tiles: `highlighted tiles are out of date, or not generated yet (faint) · generate brings them all up to date · ${NAV}`,
+  "3d": "drag to turn · right-drag or W A S D to pan · wheel or C/V to zoom · Q/E turn",
 };
 const HINT_WALK = "W/S run · A/D turn · Q/E strafe · space jumps · / walks · X sits · Z sprints · left-drag looks around · right-drag turns · wheel zooms · esc stops walking";
 const HINT_PICK_WALK = "click where to start walking · esc cancels";
@@ -59,6 +60,7 @@ const STEPS = {
   biomes: { tools: ["select", "biome"], kinds: ["biome"], map: "biomes" },
   features: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
   tiles: { tools: [], kinds: [], map: "tiles" },
+  "3d": { tools: [], kinds: [] },
 };
 // With this many tiles in sight or more, tiles draw as their thumbnails instead of close up.
 const DETAIL_MAX_TILES = 128;
@@ -97,7 +99,10 @@ export class Editor {
     });
 
     this.thumbnails = new Thumbnails({
-      onProgress: () => this.map.render(),
+      onProgress: () => {
+        this.map.render();
+        if (this.step === "3d") this.overview?.thumbsChanged();
+      },
       onSaved: () => this.onEdit?.(),
       near: () => [this.map.view.x, this.map.view.z],
     });
@@ -116,12 +121,14 @@ export class Editor {
     this.roadLand = null; // what the paths' routes are worked out over, as a key
     this.roadAsk = null; // the latest routes asked for
     this.view3d = null; // the RenderView for walking, loaded the first time you walk
+    this.overview = null; // the 3d step's Overview, loaded the first time it's opened
     this.bindPanel();
     this.fillContinents();
     window.addEventListener("keydown", (e) => this.onKey(e));
     noContextMenu(elements.map.parentElement);
     keyNav((dt, move) => {
-      if (!this.walking) this.map.nudge(dt, move);
+      if (this.step === "3d") this.overview?.nudge(dt, move);
+      else if (!this.walking) this.map.nudge(dt, move);
     });
     this.showContinent();
   }
@@ -171,6 +178,7 @@ export class Editor {
     ];
     this.say(notes.filter(Boolean).join(" "), { info: true });
     this.fitContinent();
+    if (this.step === "3d") this.showOverview();
   }
 
   fillContinents() {
@@ -510,8 +518,24 @@ export class Editor {
     this.features.select(null);
     this.say();
     this.renderPanel();
+    this.el.map.hidden = step === "3d";
+    this.el.overview.hidden = step !== "3d";
+    if (step === "3d") this.showOverview();
+    else this.overview?.hide();
     this.map.render();
     this.updatePreview();
+  }
+
+  // The 3d step: the continent's generated ground, seen from above.
+  async showOverview() {
+    if (!this.overview) {
+      const { Overview } = await import("./overview.js");
+      this.overview = new Overview(this.el.overview, {
+        thumbs: this.thumbnails,
+        onProgress: (read, total) => (this.el.overviewInfo.textContent = read < total ? `reading heights: ${read} of ${total} tiles` : `${total} tiles`),
+      });
+    }
+    if (this.step === "3d") this.overview.show(this.world, this.continent, [this.map.view.x, this.map.view.z]);
   }
 
   // The feature kinds the current step edits.
@@ -607,6 +631,10 @@ export class Editor {
     this.el.zoomIn.addEventListener("click", () => this.map.zoom(1));
     this.el.zoomOut.addEventListener("click", () => this.map.zoom(-1));
     // Walk asks where to start; the next click on the map starts there.
+    this.el.exaggeration.addEventListener("input", () => {
+      this.el.exaggerationValue.textContent = this.el.exaggeration.value;
+      this.overview?.setExaggeration(Number(this.el.exaggeration.value));
+    });
     this.el.walk.addEventListener("click", (e) => {
       e.currentTarget.blur(); // so space jumps instead of pressing the button again
       if (this.walking) this.view3d.stopWalk();
@@ -709,7 +737,8 @@ export class Editor {
     hint.textContent = this.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : HINTS[this.mode()];
     this.el.graphicsButton.hidden = !this.walking;
     this.el.timeButton.hidden = !this.walking;
-    this.el.scaleBar.hidden = this.walking;
+    this.el.scaleBar.hidden = this.walking || this.step === "3d";
+    this.el.walk.hidden = this.step === "3d";
     this.el.walk.textContent = this.walking ? "stop walking" : this.walkPicking ? "cancel walk" : "walk";
     this.el.walk.classList.toggle("active", Boolean(this.walking || this.walkPicking));
     this.renderScale();
@@ -764,7 +793,7 @@ export class Editor {
       if (this.drawing) return "draw";
       return zone.region.length ? "region" : "empty";
     }
-    if (this.step === "tiles") return "tiles";
+    if (this.step === "tiles" || this.step === "3d") return this.step;
     if (!this.scopeZones().length) return "empty";
     if (ROADS[this.toolName]) return "road";
     if (PINS[this.toolName]) return "pin";
@@ -948,7 +977,7 @@ export class Editor {
     }
     if (e.target.matches("input, textarea, select")) return;
     // G does what the walk button does: pick a spot to walk from, cancel that, or stop walking.
-    if (e.key.toLowerCase() === "g" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (e.key.toLowerCase() === "g" && this.step !== "3d" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       this.el.walk.click();
       return;

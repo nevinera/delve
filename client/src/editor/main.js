@@ -12,6 +12,10 @@ const $ = (id) => document.getElementById(id);
 const editor = new Editor(World.empty(), {
   map: $("map"),
   scene: $("scene"),
+  overview: $("overview"),
+  overviewInfo: $("overviewInfo"),
+  exaggeration: $("exaggeration"),
+  exaggerationValue: $("exaggerationValue"),
   scaleBar: $("scaleBar"),
   scale: $("scale"),
   zoomIn: $("zoomIn"),

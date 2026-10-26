@@ -41,6 +41,7 @@
     <div class="editor-stage">
       <canvas id="map" class="editor-map"></canvas>
       <canvas id="scene" class="editor-map" hidden></canvas>
+      <canvas id="overview" class="editor-map" hidden></canvas>
     </div>
   </div>
   <aside class="editor-panel">
@@ -55,6 +56,7 @@
       <button type="button" class="editor-step-head" data-step="biomes">biomes</button>
       <button type="button" class="editor-step-head" data-step="features">features</button>
       <button type="button" class="editor-step-head" data-step="tiles">tiles</button>
+      <button type="button" class="editor-step-head" data-step="3d">3d</button>
     </nav>
     <hr class="editor-divider">
     <div class="editor-steps">
@@ -122,6 +124,12 @@
           <button id="regenerateAll" type="button">regenerate every tile</button>
           <label class="editor-check"><input type="checkbox" data-option="stale" checked><span>highlight out-of-date tiles</span></label>
           <label class="editor-check"><input type="checkbox" data-option="boundaries" checked><span>zone boundaries</span></label>
+        </div>
+      </section>
+      <section class="editor-step" data-step="3d">
+        <div class="editor-step-body">
+          <p id="overviewInfo"></p>
+          <label class="editor-range">heights × <input id="exaggeration" type="range" min="1" max="4" step="0.5" value="1"><output id="exaggerationValue">1</output></label>
         </div>
       </section>
     </div>
