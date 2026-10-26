@@ -8,7 +8,8 @@ export class TileGenerator {
   }
 
   // Calls onTile({ tx, tz, gz, rgba, cells }) as each tile finishes; resolves when all are done.
-  run(zones, seedKey, tiles, onTile) {
+  // continent: { zones, pins, strokes }, as generator.js prepareWorld takes it.
+  run(continent, seedKey, tiles, onTile) {
     this.cancel();
     while (this.workers.length < Math.min(this.size, tiles.length)) {
       this.workers.push(new Worker(new URL("./generateWorker.js", import.meta.url), { type: "module" }));
@@ -40,7 +41,7 @@ export class TileGenerator {
           run.cancelled = true;
           reject(new Error(e.message));
         };
-        worker.postMessage({ type: "prepare", zones, seedKey });
+        worker.postMessage({ type: "prepare", continent, seedKey });
         feed(worker);
       }
     });

@@ -3,48 +3,44 @@ import { TILE_FT } from "../world/constants.js";
 import { EDGE_REACH_FT, riverReachFt } from "../world/generator.js";
 import { tilesTouched } from "./region.js";
 
-// Which tiles a sketch edit changes, so the editor can highlight them and regenerate just those.
-// Each kind of change reaches as far as the generator lets it: a moved region edge reshapes the
-// shore around it, and a river carves along its whole length. Info pins don't touch the ground.
-// Every hit tile brings its neighbours along.
+// Which tiles an edit changes, so the editor can highlight them and regenerate just those. Each
+// kind of change reaches as far as the generator lets it: a moved coast reshapes the shore around
+// it, and a river carves along its whole length. Info pins, hubs and roads don't touch the ground
+// yet. Every hit tile brings its neighbours along.
 //
 // Height pins shape one smooth surface across the continent, so a height pin change marks every
-// tile the zone touches. Biome borders can move anywhere a biome pin's region reaches, and rivers
-// and zone edges bend them, so when a zone has biome pins, any biome pin, river or region change
-// does too.
+// zoned tile. Biome borders can move anywhere a biome pin's region reaches, and rivers and zone
+// edges bend them, so when there are biome pins, any biome pin, river or region change does too.
 
 const key = (tx, tz) => `${tx},${tz}`;
 
-// Tile keys ("x,z") that differ between two versions of a zone. Either may be null for a zone
-// that was just made or removed.
+// Tile keys ("x,z") that differ between two versions of a continent, each { zones, pins, strokes }
+// with zones as stored ({ region }) and the sketch's pins and strokes.
 export function changedTiles(before, after) {
   const tiles = new Set();
-  const empty = { region: [], pins: [], strokes: [] };
-  const a = before ?? empty;
-  const b = after ?? empty;
-
-  const hasBiomes = [...a.pins, ...b.pins].some((p) => p.kind === "biome");
   const changed = (x, y) => JSON.stringify(x) !== JSON.stringify(y);
-  const pinsOf = (z, kind) => z.pins.filter((p) => p.kind === kind);
-  const biomesMoved = hasBiomes && (changed(pinsOf(a, "biome"), pinsOf(b, "biome")) || changed(a.strokes, b.strokes) || changed(a.region, b.region));
-  if (biomesMoved || changed(pinsOf(a, "height"), pinsOf(b, "height"))) {
-    for (const zone of [a, b]) for (const [tx, tz] of tilesTouched(zone.region)) addAround(tiles, tx, tz, 1);
+  const regions = (c) => c.zones.map((z) => z.region).filter((r) => r.length);
+  const pinsOf = (c, kind) => c.pins.filter((p) => p.kind === kind);
+  const rivers = (c) => c.strokes.filter((s) => s.kind === "river");
+
+  const hasBiomes = [...before.pins, ...after.pins].some((p) => p.kind === "biome");
+  const regionsMoved = changed(regions(before), regions(after));
+  const biomesMoved = hasBiomes && (changed(pinsOf(before, "biome"), pinsOf(after, "biome")) || changed(rivers(before), rivers(after)) || regionsMoved);
+  if (biomesMoved || changed(pinsOf(before, "height"), pinsOf(after, "height"))) {
+    for (const region of [...regions(before), ...regions(after)]) for (const [tx, tz] of tilesTouched(region)) addAround(tiles, tx, tz, 1);
   }
 
-  if (JSON.stringify(a.region) !== JSON.stringify(b.region)) {
-    const moved = !a.region.length
-      ? b.region
-      : !b.region.length
-        ? a.region
-        : openRings(polygonClipping.xor(a.region, b.region));
+  if (regionsMoved) {
+    const [a, b] = [regions(before), regions(after)];
+    const moved = !a.length ? b.flat() : !b.length ? a.flat() : openRings(polygonClipping.xor(polygonClipping.union(...a), polygonClipping.union(...b)));
     const reach = Math.ceil(EDGE_REACH_FT / TILE_FT);
     for (const [tx, tz] of tilesTouched(moved)) addAround(tiles, tx, tz, reach);
   }
 
-  for (const [old, now] of pairs(a.strokes, b.strokes)) {
-    if (JSON.stringify(old) === JSON.stringify(now)) continue;
+  for (const [old, now] of pairs(rivers(before), rivers(after))) {
+    if (!changed(old, now)) continue;
     for (const stroke of [old, now]) {
-      if (stroke?.kind === "river") addNearLine(tiles, stroke.points, riverReachFt(stroke.width ?? 30) / TILE_FT);
+      if (stroke) addNearLine(tiles, stroke.points, riverReachFt(stroke.width ?? 30) / TILE_FT);
     }
   }
 

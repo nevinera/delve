@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { heightColor, shapeGrid } from "./shapePreview.js";
+import { heightColor, shapeGrid as gridOf } from "./shapePreview.js";
 import { TILE_FT } from "../world/constants.js";
 
+// Zones written with their own pins, gathered into a continent's sketch.
+const shapeGrid = (zones, seedKey, options) => gridOf({ zones, pins: zones.flatMap((z) => z.pins), strokes: [] }, seedKey, options);
 const square = (x0, z0, x1, z1) => [[[x0, z0], [x1, z0], [x1, z1], [x0, z1], [x0, z0]]];
 const zone = (pins) => ({ region: [square(0, 0, 8, 8)], pins, strokes: [] });
 

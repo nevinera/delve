@@ -1,9 +1,11 @@
 import { describe, it, expect } from "vitest";
 import { CELLS, TILE_FT } from "./constants.js";
-import { generateTile, prepareWorld } from "./generator.js";
+import { generateTile, prepareWorld as prepareContinent } from "./generator.js";
 import { findTrees } from "./trees.js";
 import { fbm } from "./noise.js";
 
+// Zones written with their own pins and strokes, gathered into a continent's sketch.
+const prepareWorld = (zones, seedKey) => prepareContinent({ zones, pins: zones.flatMap((z) => z.pins), strokes: zones.flatMap((z) => z.strokes) }, seedKey);
 const square = (x0, z0, x1, z1) => [[[x0, z0], [x1, z0], [x1, z1], [x0, z1]]];
 
 // A 6×4-tile zone at (10, -4) with a 100ft height pin and a river flowing west into the sea.

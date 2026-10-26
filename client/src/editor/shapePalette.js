@@ -55,8 +55,7 @@ export class ShapePalette {
   // Changes the palette, and the selected pin when it's a pin these settings belong to.
   set(change) {
     Object.assign(this.values, change);
-    const zone = this.editor.focusZone;
-    const pin = zone && this.selectedPin(zone);
+    const pin = this.selectedPin();
     if (pin?.kind === "height" && "height" in change) pin.height = change.height;
     if (pin?.kind === "biome" && ("biome" in change || "tags" in change)) {
       pin.biome = this.values.biome;
@@ -64,18 +63,17 @@ export class ShapePalette {
       else delete pin.tags;
     }
     this.render();
-    if (pin && ["height", "biome"].includes(pin.kind)) this.editor.save(zone);
+    if (pin && ["height", "biome"].includes(pin.kind)) this.editor.saveSketch();
   }
 
-  selectedPin(zone) {
+  selectedPin() {
     const selected = this.editor.features.selected;
-    return selected?.type === "pin" && selected.zone === zone.key ? zone.pins.find((p) => p.id === selected.id) : null;
+    return selected?.type === "pin" ? this.editor.sketch.pins.find((p) => p.id === selected.id) : null;
   }
 
   // Shows the palette's settings, reflecting the selected pin when there is one.
   render() {
-    const zone = this.editor.focusZone;
-    const pin = zone && this.selectedPin(zone);
+    const pin = this.selectedPin();
     if (pin?.kind === "height") this.values.height = pin.height ?? DEFAULTS.height;
     if (pin?.kind === "biome") Object.assign(this.values, { biome: pin.biome, tags: [...(pin.tags ?? [])] });
 

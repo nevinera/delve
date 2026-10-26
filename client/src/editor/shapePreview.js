@@ -16,10 +16,11 @@ import { TILE_FT } from "../world/constants.js";
 const MARGIN_FT = 2 * TILE_FT; // sea around the zoned area, without bounds
 const MIN_STEP_FT = 2;
 
-// bounds: [x0, z0, x1, z1] continent feet to cover, or the whole zoned area with some sea around
-// it; side: samples along the longer side. Null when there's no land at all.
-export function shapeGrid(zones, seedKey, { biomes = false, bounds = null, side = 360 } = {}) {
-  const ctx = biomes ? prepareWorld(zones, seedKey) : prepareShape(zones, seedKey);
+// continent: { zones, pins, strokes }, as generator.js prepareWorld takes it. bounds: [x0, z0, x1,
+// z1] continent feet to cover, or the whole zoned area with some sea around it; side: samples
+// along the longer side. Null when there's no land at all.
+export function shapeGrid(continent, seedKey, { biomes = false, bounds = null, side = 360 } = {}) {
+  const ctx = biomes ? prepareWorld(continent, seedKey) : prepareShape(continent, seedKey);
   const points = ctx.area.flat(2);
   if (!points.length) return null;
   const xs = points.map((p) => p[0]);
@@ -155,8 +156,8 @@ export class ShapePreview {
     this.next = null;
   }
 
-  request(zones, seedKey, options) {
-    this.next = { zones: structuredClone(zones), seedKey, options };
+  request(continent, seedKey, options) {
+    this.next = { continent: structuredClone(continent), seedKey, options };
     if (!this.busy) this.send();
   }
 

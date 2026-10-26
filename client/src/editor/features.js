@@ -1,16 +1,17 @@
 import { snapToCell } from "./region.js";
 import { TILE_FT } from "../world/constants.js";
 
-// A zone's sketch features: pins ({ id, kind, at, ... }) and strokes ({ id, kind, points, width,
-// ... }), in continent tile units with sizes in feet. Height pins set the ground height at a spot;
+// The continent's sketch (zones.js loadSketch): pins ({ id, kind, at, ... }) and strokes ({ id,
+// kind, points, width, ... }) anywhere on its land, in continent tile units with sizes in feet. Height pins set the ground height at a spot;
 // biome pins claim the land around them for a biome, adjusted by their tags; info pins carry a
 // name, notes and tags for people and LLMs and don't affect generation. Rivers flow the way
-// they're drawn. Roads don't shape the ground yet. There are no coastlines: the sea is wherever
-// no zone is.
+// they're drawn. Roads and hubs don't shape the ground yet. There are no coastlines: the sea is
+// wherever no zone is.
 
 export const PINS = {
   height: { color: "#70d070", label: "height pin" },
   biome: { color: "#e0a040", label: "biome pin" },
+  hub: { color: "#e05a5a", label: "hub" },
   info: { color: "#b08ae0", label: "info pin" },
 };
 export const STROKES = {
@@ -19,118 +20,116 @@ export const STROKES = {
 };
 export const FEATURE_HINTS = {
   select: "click a pin or line to select it · drag pins and line points · shift-click a selected line to add a point · alt-click a point to remove it · delete removes the selection",
-  pin: "click inside the zone to place · click a pin to select or drag it",
-  stroke: "click inside the zone to add points · click the last point or press enter to finish · backspace removes the last · esc cancels · right-drag to pan",
+  pin: "click on land to place · click a pin to select or drag it",
+  stroke: "click on land to add points · click the last point or press enter to finish · backspace removes the last · esc cancels · right-drag to pan",
 };
 
 const DEFAULT_HEIGHT_FT = 20;
+const DEFAULT_HUB_RADIUS_FT = 200;
 const SHAPE_PINS = ["height", "biome"];
 
-export function nextId(zone, prefix) {
-  const used = new Set([...zone.pins, ...zone.strokes].map((f) => f.id));
+export function nextId(sketch, prefix) {
+  const used = new Set([...sketch.pins, ...sketch.strokes].map((f) => f.id));
   let n = 1;
   while (used.has(`${prefix}${n}`)) n++;
   return `${prefix}${n}`;
 }
 
-// Tools, drawing and the properties panel for the active zone's features.
+// Tools, drawing and the properties panel for the sketch's features. The editor keeps the sketch
+// (editor.sketch) and stores it (editor.saveSketch).
 export class Features {
   constructor(editor) {
     this.editor = editor;
-    this.selected = null; // { zone (its key), type: "pin" | "stroke", id }
+    this.selected = null; // { type: "pin" | "stroke", id }
     this.kinds = []; // what the current tool can pick
-    this.stroke = null; // a stroke being drawn: { zone (its key), kind, points }
+    this.stroke = null; // a stroke being drawn: { kind, points }
   }
 
   get map() {
     return this.editor.map;
   }
 
-  // The selected feature, when it's in this zone.
-  find(zone) {
-    if (this.selected?.zone !== zone.key) return null;
-    const list = this.selected.type === "pin" ? zone.pins : zone.strokes;
+  // The selected feature.
+  find(sketch) {
+    if (!this.selected) return null;
+    const list = this.selected.type === "pin" ? sketch.pins : sketch.strokes;
     return list.find((f) => f.id === this.selected.id) ?? null;
   }
 
-  select(zone, type, id) {
-    this.selected = zone && type ? { zone: zone.key, type, id } : null;
+  select(sketch, type, id) {
+    this.selected = sketch && type ? { type, id } : null;
     this.editor.renderProps();
   }
 
-  isSelected(zone, feature) {
-    return this.selected?.zone === zone.key && this.selected.id === feature.id;
+  isSelected(sketch, feature) {
+    return this.selected?.id === feature.id;
   }
 
-  // Whether a pin or stroke of the current tool's kinds is under the pointer.
-  hitAt(zone, tile) {
-    return Boolean(this.pinAt(zone, tile) ?? this.strokeAt(zone, tile));
-  }
-
-  remove(zone) {
-    const feature = this.find(zone);
+  remove(sketch) {
+    const feature = this.find(sketch);
     if (!feature) return;
-    const list = this.selected.type === "pin" ? zone.pins : zone.strokes;
+    const list = this.selected.type === "pin" ? sketch.pins : sketch.strokes;
     list.splice(list.indexOf(feature), 1);
     this.select(null);
-    this.editor.save(zone);
+    this.editor.saveSketch();
   }
 
   // --- tools ---
 
   // `kinds` limits what the select tool picks, and what a pin tool's click can grab.
-  tool(zone, name, kinds) {
+  tool(sketch, name, kinds) {
     this.kinds = kinds ?? [...Object.keys(PINS), ...Object.keys(STROKES)];
-    if (PINS[name]) return this.pinTool(zone, name);
-    if (STROKES[name]) return this.strokeTool(zone, name);
-    return this.selectTool(zone);
+    if (PINS[name]) return this.pinTool(sketch, name);
+    if (STROKES[name]) return this.strokeTool(sketch, name);
+    return this.selectTool(sketch);
   }
 
-  // A spot inside the zone, snapped to the cell grid, or null (with a message) outside it.
-  place(tile, zone) {
+  // A spot on land, snapped to the cell grid, or null (with a message) out at sea.
+  place(tile) {
     const point = snapToCell(tile);
-    if (this.editor.inRegion(point, zone)) return point;
-    this.editor.say("Features go inside the zone's region.");
+    if (this.editor.onLand(point)) return point;
+    this.editor.say("Features go on land, inside some zone.");
     return null;
   }
 
-  pinTool(zone, kind) {
+  pinTool(sketch, kind) {
     return {
       down: (tile) => {
-        const existing = this.pinAt(zone, tile);
-        if (existing) return this.grabPin(zone, existing);
-        this.addPin(zone, kind, tile, this.editor.palette.pinProps(kind));
+        const existing = this.pinAt(sketch, tile);
+        if (existing) return this.grabPin(sketch, existing);
+        this.addPin(sketch, kind, tile, this.editor.palette.pinProps(kind));
         return true;
       },
-      move: (tile) => this.dragTo(tile, zone),
-      up: () => this.endDrag(zone),
+      move: (tile) => this.dragTo(tile, sketch),
+      up: () => this.endDrag(sketch),
     };
   }
 
   // Places a pin with the given settings. Height and biome pins are dropped many at a time, so
   // placing one doesn't select it (and clears any selection, so the palette applies to new pins);
   // other pins are selected so their details can be filled in.
-  addPin(zone, kind, tile, props = {}) {
-    const at = this.place(tile, zone);
+  addPin(sketch, kind, tile, props = {}) {
+    const at = this.place(tile);
     if (!at) return;
-    const pin = { id: nextId(zone, "p"), kind, at, ...props };
+    const pin = { id: nextId(sketch, "p"), kind, at, ...props };
     if (kind === "height") pin.height ??= DEFAULT_HEIGHT_FT;
-    zone.pins.push(pin);
-    this.select(zone, SHAPE_PINS.includes(kind) ? null : "pin", pin.id);
-    this.editor.save(zone);
+    if (kind === "hub") pin.radius ??= DEFAULT_HUB_RADIUS_FT;
+    sketch.pins.push(pin);
+    this.select(sketch, SHAPE_PINS.includes(kind) ? null : "pin", pin.id);
+    this.editor.saveSketch();
   }
 
-  strokeTool(zone, kind) {
+  strokeTool(sketch, kind) {
     return {
       down: (tile) => {
         const pts = this.stroke?.points ?? [];
         if (pts.length >= 2 && this.editor.nearScreen(pts[pts.length - 1], tile)) {
-          this.finishStroke(zone);
+          this.finishStroke(sketch);
           return true;
         }
-        const point = this.place(tile, zone);
+        const point = this.place(tile);
         if (!point) return true;
-        if (!this.stroke) this.stroke = { zone: zone.key, kind, points: [] };
+        if (!this.stroke) this.stroke = { kind, points: [] };
         this.stroke.points.push(point);
         this.editor.say();
         return true;
@@ -138,55 +137,55 @@ export class Features {
     };
   }
 
-  finishStroke(zone) {
+  finishStroke(sketch) {
     const { kind, points } = this.stroke ?? {};
     this.stroke = null;
     if (!points || points.length < 2) return;
-    const stroke = { id: nextId(zone, "s"), kind, points, width: STROKES[kind].width };
-    zone.strokes.push(stroke);
-    this.select(zone, "stroke", stroke.id);
-    this.editor.save(zone);
+    const stroke = { id: nextId(sketch, "s"), kind, points, width: STROKES[kind].width };
+    sketch.strokes.push(stroke);
+    this.select(sketch, "stroke", stroke.id);
+    this.editor.saveSketch();
   }
 
-  selectTool(zone) {
+  selectTool(sketch) {
     return {
       down: (tile, e) => {
-        const stroke = this.selected?.type === "stroke" ? this.find(zone) : null;
+        const stroke = this.selected?.type === "stroke" ? this.find(sketch) : null;
         if (stroke) {
-          const grabbed = this.grabStrokePoint(zone, stroke, tile, e);
+          const grabbed = this.grabStrokePoint(sketch, stroke, tile, e);
           if (grabbed !== null) return grabbed;
         }
-        const pin = this.pinAt(zone, tile);
-        if (pin) return this.grabPin(zone, pin);
-        const hit = this.strokeAt(zone, tile);
-        this.select(zone, hit ? "stroke" : null, hit?.id);
+        const pin = this.pinAt(sketch, tile);
+        if (pin) return this.grabPin(sketch, pin);
+        const hit = this.strokeAt(sketch, tile);
+        this.select(sketch, hit ? "stroke" : null, hit?.id);
         return Boolean(hit);
       },
-      move: (tile) => this.dragTo(tile, zone),
-      up: () => this.endDrag(zone),
+      move: (tile) => this.dragTo(tile, sketch),
+      up: () => this.endDrag(sketch),
     };
   }
 
-  endDrag(zone) {
+  endDrag(sketch) {
     if (!this.dragging) return;
     this.dragging = null;
-    this.editor.save(zone);
+    this.editor.saveSketch();
   }
 
-  grabPin(zone, pin) {
-    this.select(zone, "pin", pin.id);
+  grabPin(sketch, pin) {
+    this.select(sketch, "pin", pin.id);
     this.dragging = { target: pin, key: "at" };
     return true;
   }
 
   // Returns true when the press took a point of the selected stroke, false when it was used up
   // without a drag, and null when it missed.
-  grabStrokePoint(zone, stroke, tile, e) {
+  grabStrokePoint(sketch, stroke, tile, e) {
     const index = stroke.points.findIndex((p) => this.editor.nearScreen(p, tile));
     if (index >= 0 && e.altKey) {
       stroke.points.splice(index, 1);
-      if (stroke.points.length < 2) this.remove(zone);
-      else this.editor.save(zone);
+      if (stroke.points.length < 2) this.remove(sketch);
+      else this.editor.saveSketch();
       return true;
     }
     if (index >= 0) {
@@ -196,7 +195,7 @@ export class Features {
     if (e.shiftKey) {
       const near = nearestOnStroke(stroke.points, tile);
       if (near.dist * this.map.view.scale > 8 * this.map.dpr) return null;
-      const point = this.place(tile, zone);
+      const point = this.place(tile);
       if (!point) return true;
       stroke.points.splice(near.index + 1, 0, point);
       this.dragging = { target: stroke.points, key: near.index + 1 };
@@ -205,20 +204,20 @@ export class Features {
     return null;
   }
 
-  dragTo(tile, zone) {
+  dragTo(tile, sketch) {
     if (!this.dragging) return;
     const point = snapToCell(tile);
-    if (!this.editor.inRegion(point, zone)) return;
+    if (!this.editor.onLand(point)) return;
     this.dragging.target[this.dragging.key] = point;
   }
 
-  pinAt(zone, tile) {
-    return [...zone.pins].reverse().find((p) => this.kinds.includes(p.kind) && this.editor.nearScreen(p.at, tile)) ?? null;
+  pinAt(sketch, tile) {
+    return [...sketch.pins].reverse().find((p) => this.kinds.includes(p.kind) && this.editor.nearScreen(p.at, tile)) ?? null;
   }
 
-  strokeAt(zone, tile) {
+  strokeAt(sketch, tile) {
     return (
-      [...zone.strokes].reverse().find((s) => {
+      [...sketch.strokes].reverse().find((s) => {
         if (!this.kinds.includes(s.kind)) return false;
         const reachFt = Math.max(s.width / 2, 0);
         const reach = Math.max(8 * this.map.dpr, (reachFt / TILE_FT) * this.map.view.scale);
@@ -227,15 +226,15 @@ export class Features {
     );
   }
 
-  onKey(e, zone) {
+  onKey(e, sketch) {
     if (this.stroke) {
-      if (e.key === "Enter") this.finishStroke(zone);
+      if (e.key === "Enter") this.finishStroke(sketch);
       if (e.key === "Escape") this.stroke = null;
       if (e.key === "Backspace") this.stroke.points.pop();
       return true;
     }
     if ((e.key === "Delete" || e.key === "Backspace") && this.selected) {
-      this.remove(zone);
+      this.remove(sketch);
       return true;
     }
     if (e.key === "Escape" && this.selected) {
@@ -247,18 +246,16 @@ export class Features {
 
   // --- drawing ---
 
-  // Draws the zone's features of the given kinds, and its strokes of `lines` kinds as plain
+  // Draws the sketch's features of the given kinds, and its strokes of `lines` kinds as plain
   // reference lines.
-  draw(ctx, zone, active, { kinds, lines = [] }) {
-    ctx.globalAlpha = active ? 1 : 0.45;
-    for (const stroke of zone.strokes) {
-      if (kinds.includes(stroke.kind)) this.drawStroke(ctx, stroke, this.isSelected(zone, stroke));
+  draw(ctx, sketch, { kinds, lines = [] }) {
+    for (const stroke of sketch.strokes) {
+      if (kinds.includes(stroke.kind)) this.drawStroke(ctx, stroke, this.isSelected(sketch, stroke));
       else if (lines.includes(stroke.kind)) this.drawLine(ctx, stroke);
     }
-    for (const pin of zone.pins) {
-      if (kinds.includes(pin.kind)) this.drawPin(ctx, pin, this.isSelected(zone, pin));
+    for (const pin of sketch.pins) {
+      if (kinds.includes(pin.kind)) this.drawPin(ctx, pin, this.isSelected(sketch, pin));
     }
-    ctx.globalAlpha = 1;
   }
 
   drawLine(ctx, stroke) {
@@ -299,6 +296,16 @@ export class Features {
     const dpr = this.map.dpr;
     const [x, y] = this.map.toScreen(pin.at);
     const r = 7 * dpr;
+    if (pin.kind === "hub" && pin.radius > 0) {
+      // The ground a hub takes up.
+      ctx.strokeStyle = PINS.hub.color;
+      ctx.lineWidth = dpr;
+      ctx.setLineDash([4 * dpr, 3 * dpr]);
+      ctx.beginPath();
+      ctx.arc(x, y, (pin.radius / TILE_FT) * this.map.view.scale, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+    }
     ctx.fillStyle = PINS[pin.kind].color;
     ctx.strokeStyle = highlight ? "#fff" : "#000";
     ctx.lineWidth = (highlight ? 2 : 1) * dpr;
@@ -332,9 +339,9 @@ export class Features {
 
   // --- properties panel ---
 
-  renderProps(box, zone) {
+  renderProps(box, sketch) {
     box.innerHTML = "";
-    const feature = zone && this.find(zone);
+    const feature = sketch && this.find(sketch);
     if (!feature) {
       box.hidden = true;
       return;
@@ -348,21 +355,22 @@ export class Features {
     // Height and biome settings live in the shape palette.
     const fields = ["name"];
     if (STROKES[feature.kind]) fields.push("width");
+    if (feature.kind === "hub") fields.push("radius");
     if (!SHAPE_PINS.includes(feature.kind)) fields.push("tags");
     fields.push("notes");
-    for (const key of fields) box.append(this.field(zone, feature, key));
+    for (const key of fields) box.append(this.field(sketch, feature, key));
 
     const row = document.createElement("div");
     row.className = "editor-row";
-    row.append(button(`delete ${kind.label}`, () => this.remove(zone)));
+    row.append(button(`delete ${kind.label}`, () => this.remove(sketch)));
     box.append(row);
   }
 
-  field(zone, feature, key) {
+  field(sketch, feature, key) {
     const label = document.createElement("label");
     label.className = "editor-field";
-    label.textContent = { width: "width (ft)", tags: "tags (comma-separated)" }[key] ?? key;
-    const numeric = key === "width";
+    label.textContent = { width: "width (ft)", radius: "radius (ft)", tags: "tags (comma-separated)" }[key] ?? key;
+    const numeric = key === "width" || key === "radius";
     const input = document.createElement(key === "notes" ? "textarea" : "input");
     if (key === "notes") input.rows = 4;
     else input.type = numeric ? "number" : "text";
@@ -378,7 +386,7 @@ export class Features {
       } else {
         feature[key] = numeric ? Number(value) : input.value;
       }
-      this.editor.save(zone);
+      this.editor.saveSketch();
     });
     label.append(input);
     return label;

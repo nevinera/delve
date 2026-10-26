@@ -94,20 +94,23 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const toFt = ([x, z]) => [x * TILE_FT, z * TILE_FT];
 
-// zones: every zone on the continent, as stored ({ region, pins, strokes }, continent tile
-// units). seedKey (the continent's key) seeds the noise.
-export function prepareWorld(zones, seedKey) {
-  const ctx = prepareShape(zones, seedKey);
+// The continent as { zones, pins, strokes }: every zone as stored ({ region }), and the sketch's
+// pins and strokes (editor/zones.js), in continent tile units. seedKey (the continent's key) seeds
+// the noise.
+export function prepareWorld(continent, seedKey) {
+  const ctx = prepareShape(continent, seedKey);
   ctx.lakeSites = new Map(); // "gi,gj" -> lake or null, filled as tiles need them
   const { zoned, heightPins } = ctx;
+  const { pins, strokes } = continent;
 
-  const pinsOf = (kind) => zoned.flatMap((z) => z.pins.filter((p) => p.kind === kind));
   ctx.biomes = prepareBiomes({
-    pins: pinsOf("biome").map((p) => {
-      const [x, z] = toFt(p.at);
-      return { x, z, biome: p.biome, tags: p.tags };
-    }),
-    rivers: zoned.flatMap((z) => z.strokes.filter((s) => s.kind === "river")).map((s) => s.points.map(toFt)),
+    pins: pins
+      .filter((p) => p.kind === "biome")
+      .map((p) => {
+        const [x, z] = toFt(p.at);
+        return { x, z, biome: p.biome, tags: p.tags };
+      }),
+    rivers: strokes.filter((s) => s.kind === "river").map((s) => s.points.map(toFt)),
     edges: zoned.flatMap((z) => edgesOf(z.region.map((polygon) => polygon.map((ring) => ring.map(toFt))))),
     seed: ctx.seed,
   });
@@ -115,7 +118,7 @@ export function prepareWorld(zones, seedKey) {
   ctx.heightAt = withPeaks(ctx.heightAt, summits(heightPins.map((p) => toFt(p.at).concat(p.height)), ctx.biomes));
 
   // Rivers always descend: the surface follows the lowest ground seen so far from the source.
-  ctx.rivers = zoned.flatMap((z) => z.strokes.filter((s) => s.kind === "river" && s.points.length >= 2)).map((s) => {
+  ctx.rivers = strokes.filter((s) => s.kind === "river" && s.points.length >= 2).map((s) => {
     const line = makePolyline(s.points.map(toFt));
     const width = s.width ?? 30;
     const ground = sampleAlong(line, (x, z) => land(ctx, x, z, ctx.areaEdges, ctx.biomes).h);
@@ -134,14 +137,14 @@ export function prepareWorld(zones, seedKey) {
 
 // The land's shape from the zones' regions and height pins alone, with no biomes: the zoned area,
 // and the broad shape through the pins (heightAt). prepareWorld builds on it, and the editor's
-// heights preview draws it with shapeHeight.
-export function prepareShape(zones, seedKey) {
+// heights map draws it with shapeHeight. continent: as for prepareWorld.
+export function prepareShape({ zones, pins }, seedKey) {
   const zoned = zones.filter((z) => z.region?.length);
 
   // The zoned area: every region together. Its outline is where land meets open ocean.
   const union = zoned.length ? polygonClipping.union(...zoned.map((z) => z.region)) : [];
   const area = union.map((polygon) => polygon.map((ring) => ring.slice(0, -1).map(toFt)));
-  const heightPins = zoned.flatMap((z) => z.pins.filter((p) => p.kind === "height" && Number.isFinite(p.height)));
+  const heightPins = pins.filter((p) => p.kind === "height" && Number.isFinite(p.height));
   const heightAt = prepareHeights(
     heightPins.map((p) => {
       const [x, z] = toFt(p.at);

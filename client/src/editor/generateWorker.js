@@ -3,14 +3,14 @@ import { generateTile, prepareWorld } from "../world/generator.js";
 import { encodeTile } from "../world/tileCodec.js";
 import { biomeRgba, tileRgba } from "../world/tileImage.js";
 
-// Generates tiles off the main thread. "prepare" sets up the continent's zones once per run;
+// Generates tiles off the main thread. "prepare" sets up the continent once per run;
 // each "tile" message answers with the gzipped tile file and its thumbnail pixels.
 
 let ctx = null;
 
 self.onmessage = ({ data }) => {
   if (data.type === "prepare") {
-    ctx = prepareWorld(data.zones, data.seedKey);
+    ctx = prepareWorld(data.continent, data.seedKey);
     return;
   }
   const { tx, tz } = data;

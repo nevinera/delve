@@ -15,7 +15,7 @@ import {
   subtractZones,
   tilesTouched,
 } from "./region.js";
-import { createZone, listZones, olderZones, removeZone, saveZone, zonePath } from "./zones.js";
+import { createZone, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveSketch, saveZone } from "./zones.js";
 import { ShapePalette } from "./shapePalette.js";
 import { ShapePreview } from "./shapePreview.js";
 import { TILE_FT } from "../world/constants.js";
@@ -42,15 +42,15 @@ const HINT_ROADS = "roads are drawn and kept, but don't shape the ground yet";
 const HINT_WALK = "W/S run · A/D turn · Q/E strafe · space jumps · / walks · X sits · shift sprints · left-drag looks around · right-drag turns · wheel zooms · esc stops walking";
 const HINT_PICK_WALK = "click where to start walking · esc cancels";
 
-// The editor's steps, in the order you'd usually work, each with its own map and tools. Only the
-// zones step works on one zone at a time; the rest edit every zone at once, each click going to
-// the zone it lands in. `map` is what the step draws under its marks: a live preview worked out
+// The editor's steps, in the order you'd usually work, each with its own map and tools. The zones
+// step edits one zone's region at a time; the rest edit the continent's sketch, the pins and
+// strokes drawn anywhere on its land. `map` is what the step draws under its marks: a live preview worked out
 // from the zones (shapePreview.js), or the generated tiles.
 const STEPS = {
   zones: { tools: [], kinds: [] },
   heights: { tools: ["select", "height"], kinds: ["height"], map: "heights" },
   biomes: { tools: ["select", "biome"], kinds: ["biome"], map: "biomes" },
-  features: { tools: ["select", "river", "road", "info"], kinds: ["river", "road", "info"] },
+  features: { tools: ["select", "river", "road", "hub", "info"], kinds: ["river", "road", "hub", "info"] },
   tiles: { tools: [], kinds: [], map: "tiles" },
 };
 // With more tiles than this in sight, tiles draw as their thumbnails instead of close up.
@@ -67,6 +67,7 @@ export class Editor {
     this.el = elements;
     this.continent = world.info.continents[0].key;
     this.zones = [];
+    this.sketch = loadSketch(world, this.continent);
     this.active = null; // the zone picked on the zones step
     this.drawing = null; // corners of a region being drawn
     this.step = "zones";
@@ -128,14 +129,21 @@ export class Editor {
     this.showContinent();
   }
 
-  // Loads the current continent's thumbnails and zones, and frames them.
+  // Loads the current continent's thumbnails, zones and sketch, and frames them. Zones that held
+  // their own pins and strokes hand them over to the sketch.
   showContinent() {
     this.thumbnails.load(this.world, this.continent);
     this.details.clear();
     this.preview = null;
+    const moved = moveIntoSketch(this.world, this.continent);
+    if (moved.length) this.dirty = true;
     this.reload();
     const older = olderZones(this.world, this.continent);
-    this.say(older.length ? `Skipped zones in an older format: ${older.join(", ")}.` : "", { info: true });
+    const notes = [
+      moved.length && `Moved the pins and lines of ${moved.join(", ")} into the continent's sketch.`,
+      older.length && `Skipped zones in an older format: ${older.join(", ")}.`,
+    ];
+    this.say(notes.filter(Boolean).join(" "), { info: true });
     this.fitContinent();
   }
 
@@ -167,17 +175,7 @@ export class Editor {
     return this.step === "zones" ? this.activeZone : null;
   }
 
-  zoneByKey(key) {
-    return this.zones.find((z) => z.key === key) ?? null;
-  }
-
-  // The zone an edit is about: the zone edits are limited to, or else the zone of the stroke being
-  // drawn or of the selected feature.
-  get focusZone() {
-    return this.editZone ?? this.zoneByKey(this.features.stroke?.zone ?? this.features.selected?.zone);
-  }
-
-  // The zones you can edit now: every zone with a region.
+  // The zones with a region.
   scopeZones() {
     return this.zones.filter((z) => z.region.length);
   }
@@ -206,8 +204,25 @@ export class Editor {
     return this.zones.find((z) => z.region.length && this.inRegion(point, z)) ?? null;
   }
 
+  // Whether a point's inside some zone.
+  onLand(point) {
+    return Boolean(this.zoneAt(point));
+  }
+
+  // The continent as the generator takes it (generator.js prepareWorld).
+  continentState() {
+    return { zones: this.scopeZones().map(({ region }) => ({ region })), pins: this.sketch.pins, strokes: this.sketch.strokes };
+  }
+
+  // The continent as last stored, from the world's files.
+  storedState() {
+    const { pins, strokes } = loadSketch(this.world, this.continent);
+    return { zones: listZones(this.world, this.continent).map(({ region }) => ({ region })), pins, strokes };
+  }
+
   reload() {
     this.zones = listZones(this.world, this.continent);
+    this.sketch = loadSketch(this.world, this.continent);
     this.zoneTileKeys = null;
     if (!this.activeZone) this.active = null;
     this.renderPanel();
@@ -218,11 +233,20 @@ export class Editor {
 
   // Stores the zone, and marks the generated tiles the edit changes as out of date.
   save(zone) {
-    const before = this.world.readJson(zonePath(this.continent, zone.key));
-    saveZone(this.world, this.continent, zone);
+    this.store(() => saveZone(this.world, this.continent, zone));
+  }
+
+  // Stores the sketch, the same way.
+  saveSketch() {
+    this.store(() => saveSketch(this.world, this.continent, this.sketch));
+  }
+
+  store(write) {
+    const before = this.storedState();
+    write();
     this.zoneTileKeys = null;
     const zoned = this.zoneTiles();
-    for (const tile of changedTiles(before, zone)) if (zoned.has(tile)) this.pending.add(tile);
+    for (const tile of changedTiles(before, this.storedState())) if (zoned.has(tile)) this.pending.add(tile);
     this.dirty = true;
     this.renderPanel();
     this.map.render();
@@ -359,7 +383,7 @@ export class Editor {
     const bounds = [x0 - mx, z0 - mz, x1 + mx, z1 + mz].map((v) => v * TILE_FT);
     const { width, height } = this.map.canvas;
     const side = Math.round((Math.max(width, height) * (1 + 2 * PREVIEW_MARGIN)) / PREVIEW_PX);
-    this.previews.request(this.scopeZones(), this.continent, { biomes: kind === "biomes", bounds, side });
+    this.previews.request(this.continentState(), this.continent, { biomes: kind === "biomes", bounds, side });
   }
 
   showPreview(grid) {
@@ -525,7 +549,7 @@ export class Editor {
     this.renderPanel();
     this.say();
     try {
-      await this.generator.run(listZones(this.world, this.continent), this.continent, tiles, ({ tx, tz, gz, rgba, biomes, cells }) => {
+      await this.generator.run(this.storedState(), this.continent, tiles, ({ tx, tz, gz, rgba, biomes, cells }) => {
         this.world.files.set(tilePath(this.continent, tx, tz), gz);
         this.pending.delete(`${tx},${tz}`);
         this.thumbnails.set(tx, tz, rgba, cells, biomes);
@@ -548,7 +572,7 @@ export class Editor {
   }
 
   renderProps() {
-    this.features.renderProps(this.el.props, this.focusZone);
+    this.features.renderProps(this.el.props, this.sketch);
     this.palette.render();
   }
 
@@ -638,31 +662,13 @@ export class Editor {
       return this.zoneTool(zone);
     }
     if (!this.kinds.length || !this.scopeZones().length) return null;
-    return this.worldTool();
-  }
-
-  // Each press goes to the zone it's about: the one a stroke is being drawn in, else the one whose
-  // feature is under the pointer, else the one the pointer is inside.
-  worldTool() {
-    let inner = null;
+    const inner = this.features.tool(this.sketch, this.toolName, this.kinds);
     return {
-      down: (tile, e) => {
-        this.features.kinds = this.kinds;
-        const zone =
-          this.zoneByKey(this.features.stroke?.zone) ??
-          [...this.zones].reverse().find((z) => this.features.hitAt(z, tile)) ??
-          this.zoneAt(tile);
-        inner = zone && this.features.tool(zone, this.toolName, this.kinds);
-        if (inner) return inner.down(tile, e);
-        this.features.select(null);
-        if (this.toolName !== "select") this.say("Click inside a zone.");
-        return false;
-      },
+      ...inner,
       move: (tile, e) => {
-        inner?.move?.(tile, e);
+        inner.move?.(tile, e);
         if (this.features.dragging) this.updatePreview();
       },
-      up: (tile, e) => inner?.up?.(tile, e),
     };
   }
 
@@ -755,13 +761,12 @@ export class Editor {
       this.renderPanel();
       return;
     }
-    const zone = this.focusZone;
-    if (e.target.matches("input, textarea, select") || !zone || this.walking) return;
+    if (e.target.matches("input, textarea, select") || this.walking) return;
     if (this.drawing && this.editZone) {
-      if (e.key === "Enter") this.finishDrawing(zone);
+      if (e.key === "Enter") this.finishDrawing(this.editZone);
       if (e.key === "Escape") this.drawing = null;
       if (e.key === "Backspace") this.drawing.pop();
-    } else if (!this.features.onKey(e, zone)) {
+    } else if (this.step === "zones" || !this.features.onKey(e, this.sketch)) {
       return;
     }
     e.preventDefault();
@@ -820,7 +825,7 @@ export class Editor {
     if (zonesStep || this.option("boundaries")) {
       for (const zone of this.zones) if (zone !== editing) this.drawRegion(ctx, map, zone, false);
     }
-    for (const zone of this.zones) this.features.draw(ctx, zone, true, this.markKinds());
+    this.features.draw(ctx, this.sketch, this.markKinds());
     if (!editing) {
       this.features.drawInProgress(ctx);
       return;

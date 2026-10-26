@@ -1,19 +1,13 @@
 import { describe, it, expect } from "vitest";
 import { World } from "./world.js";
-import { createZone, listZones, olderZones, removeZone, saveZone, zonePath } from "./zones.js";
+import { createZone, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveZone, sketchPath, zonePath } from "./zones.js";
 
 describe("zones", () => {
   it("creates a zone file keyed by its name", () => {
     const world = World.empty();
     const zone = createZone(world, "main", "Elm Shore");
     expect(zone.key).toBe("elm-shore");
-    expect(world.readJson(zonePath("main", "elm-shore"))).toEqual({
-      version: 2,
-      name: "Elm Shore",
-      region: [],
-      strokes: [],
-      pins: [],
-    });
+    expect(world.readJson(zonePath("main", "elm-shore"))).toEqual({ version: 3, name: "Elm Shore", region: [] });
   });
 
   it("keeps keys unique", () => {
@@ -45,5 +39,23 @@ describe("zones", () => {
     world.writeJson(zonePath("main", "cradle"), { version: 1, origin: [0, 0], tiles: [] });
     expect(listZones(world, "main").map((z) => z.key)).toEqual(["elm-shore"]);
     expect(olderZones(world, "main")).toEqual(["cradle"]);
+  });
+
+  it("starts with an empty sketch", () => {
+    expect(loadSketch(World.empty(), "main")).toEqual({ version: 1, pins: [], strokes: [] });
+  });
+
+  it("moves zones' own pins and strokes into the sketch, renumbering clashes", () => {
+    const world = World.empty();
+    const region = [[[[0, 0], [4, 0], [4, 4]]]];
+    world.writeJson(zonePath("main", "a"), { version: 2, name: "A", region, pins: [{ id: "p1", kind: "height", at: [1, 1], height: 5 }], strokes: [{ id: "s1", kind: "river", points: [], width: 30 }] });
+    world.writeJson(zonePath("main", "b"), { version: 2, name: "B", region, pins: [{ id: "p1", kind: "biome", at: [2, 2], biome: "forest" }], strokes: [] });
+    expect(moveIntoSketch(world, "main")).toEqual(["a", "b"]);
+    const sketch = world.readJson(sketchPath("main"));
+    expect(sketch.pins.map((p) => [p.id, p.kind])).toEqual([["p1", "height"], ["p2", "biome"]]);
+    expect(sketch.strokes.map((s) => s.id)).toEqual(["s1"]);
+    expect(world.readJson(zonePath("main", "b"))).toEqual({ version: 3, name: "B", region });
+    expect(listZones(world, "main").map((z) => z.key)).toEqual(["a", "b"]);
+    expect(moveIntoSketch(world, "main")).toEqual([]);
   });
 });
