@@ -233,9 +233,12 @@ export class Editor {
       this.view3d.startWalk(() => this.renderPanel(), [at[0] - origin[0], at[1] - origin[1]]);
     } else {
       const back = this.view;
+      this.walkingFromMap = true;
       await this.setView("3d", { walkFrom: at });
       this.view3d.walkFrom(this.sceneState(), at, () => {
-        if (this.view3d.streaming) this.setView(back);
+        const streaming = this.view3d.streaming;
+        this.walkingFromMap = false;
+        if (streaming) this.setView(back);
         else this.renderPanel();
       });
     }
@@ -554,8 +557,9 @@ export class Editor {
 
     const zone = this.activeZone;
     for (const b of this.el.stepTabs.children) b.classList.toggle("active", b.dataset.step === this.step);
-    // 3D draws one zone and its surroundings, so it needs a zone selected.
-    if (this.showing3d && !zone) {
+    // 3D draws one zone and its surroundings, so it needs a zone selected, unless it's walking
+    // from the map.
+    if (this.showing3d && !zone && !this.walkingFromMap) {
       this.setView("terrain");
       return;
     }

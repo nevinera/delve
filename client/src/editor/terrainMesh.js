@@ -5,8 +5,9 @@ import { groundRgb } from "../world/tileImage.js";
 // when they're loaded, so neighbouring tiles meet without gaps; otherwise the edge cells repeat.
 // Positions are feet relative to `origin`, to keep float32 coordinates small.
 
-// neighbours: { east, south, southEast }, each a decoded tile or undefined.
-export function terrainMesh(tile, neighbours, origin, step = 2) {
+// neighbours: { east, south, southEast }, each a decoded tile or undefined. `skirtFt` hangs a
+// strip that deep down from the edges, so a coarse tile beside a finer one shows no cracks.
+export function terrainMesh(tile, neighbours, origin, step = 2, { skirtFt = 0 } = {}) {
   const grid = sampler(tile, neighbours);
   const side = tile.cells / step + 1;
   const positions = new Float32Array(side * side * 3);
@@ -21,7 +22,37 @@ export function terrainMesh(tile, neighbours, origin, step = 2) {
       colors.set([rgb[0] / 255, rgb[1] / 255, rgb[2] / 255], v * 3);
     }
   }
-  return { positions, colors, indices: gridIndices(side, () => true) };
+  const mesh = { positions, colors, indices: gridIndices(side, () => true) };
+  return skirtFt > 0 ? withSkirt(mesh, side, skirtFt) : mesh;
+}
+
+// The mesh with a strip hanging `depth` down from each edge, facing both ways. The strip has its
+// own vertices, so it doesn't bend the ground's lighting at the edge; `skirt` says which ground
+// vertex each strip vertex copies, so the strip can be lit like the ground there.
+function withSkirt({ positions, colors, indices }, side, depth) {
+  const ring = [];
+  for (let a = 0; a < side - 1; a++) ring.push(a);
+  for (let b = 0; b < side - 1; b++) ring.push(b * side + side - 1);
+  for (let a = side - 1; a > 0; a--) ring.push((side - 1) * side + a);
+  for (let b = side - 1; b > 0; b--) ring.push(b * side);
+  const count = positions.length / 3;
+  const copies = [...ring, ...ring]; // the strip's top edge, then its bottom edge
+  const outPositions = new Float32Array((count + copies.length) * 3);
+  const outColors = new Float32Array((count + copies.length) * 3);
+  outPositions.set(positions);
+  outColors.set(colors);
+  copies.forEach((v, n) => {
+    const drop = n < ring.length ? 0 : depth;
+    outPositions.set([positions[v * 3], positions[v * 3 + 1] - drop, positions[v * 3 + 2]], (count + n) * 3);
+    outColors.set(colors.subarray(v * 3, v * 3 + 3), (count + n) * 3);
+  });
+  const strip = [];
+  for (let n = 0; n < ring.length; n++) {
+    const next = (n + 1) % ring.length;
+    const [top, topNext, low, lowNext] = [count + n, count + next, count + ring.length + n, count + ring.length + next];
+    strip.push(top, low, topNext, topNext, low, lowNext, top, topNext, low, topNext, lowNext, low);
+  }
+  return { positions: outPositions, colors: outColors, indices: Uint32Array.from([...indices, ...strip]), skirt: { from: count, copies } };
 }
 
 // A cell's kind of water (WATER_KINDS), or null where it's dry. Tiles from before the waterKind

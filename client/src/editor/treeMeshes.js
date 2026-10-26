@@ -38,6 +38,16 @@ function shell(shape, n, { repeat: [ru, rv], lift = 0 }) {
   return g;
 }
 
+// Far-ring stand-ins (renderView's far tiles): a few flat faces per crown, and a four-sided trunk.
+const LOW_POLY = new Map([
+  [blob, new THREE.IcosahedronGeometry(1, 0)],
+  [cone, new THREE.ConeGeometry(1, 1, 6).translate(0, 0.5, 0)],
+  [bowl, new THREE.ConeGeometry(1, 1, 6, 1, true).translate(0, 0.5, 0)],
+]);
+const farTrunk = new THREE.CylinderGeometry(0.7, 1, 1, 4, 1, true).translate(0, 0.5, 0);
+// Darker than the leaves, about as dark as a lace shell with its gaps looks from afar.
+const farLeaves = new THREE.MeshLambertMaterial({ color: 0xb8b8b8, flatShading: true, side: THREE.DoubleSide });
+
 const bark = new THREE.MeshLambertMaterial({ color: 0x5a4430 });
 const deadBark = new THREE.MeshLambertMaterial({ color: 0x6e6458 });
 
@@ -134,6 +144,8 @@ function crownParts(shape, opts, color, at) {
   return SHELLS.flatMap((_, n) => {
     const geometry = () => shell(shape, n, opts);
     const parts = [{ geometry, material: () => leafMaterial(false, last - n, last - n), stages: [last - n, last - n], color, at }];
+    // The outer shell stands in for the whole crown in the far ring, as a few flat faces.
+    if (n === 0) parts[0].far = LOW_POLY.get(shape);
     if (n < last) parts.push({ geometry, material: () => leafMaterial(true, 0, last - 1 - n), stages: [0, last - 1 - n], color, at });
     return parts;
   });
@@ -181,8 +193,9 @@ const KINDS = {
   },
 };
 
-// trees: [{ x, z, ground, size, kind }] in scene feet. Unknown kinds draw as oaks.
-export function treeMeshes(trees) {
+// trees: [{ x, z, ground, size, kind }] in scene feet. Unknown kinds draw as oaks. `far` draws
+// them as cheap stand-ins: a trunk and a crown of a few flat faces each.
+export function treeMeshes(trees, { far = false } = {}) {
   const byKind = new Map();
   for (const tree of trees) {
     const kind = KINDS[tree.kind] ? tree.kind : "oak";
@@ -195,7 +208,10 @@ export function treeMeshes(trees) {
   const none = new THREE.Quaternion();
   const color = new THREE.Color();
   for (const [kind, list] of byKind) {
-    const { height, clear = 0, parts } = KINDS[kind];
+    const { height, clear = 0 } = KINDS[kind];
+    const parts = far
+      ? [{ ...KINDS[kind].parts[0], geometry: farTrunk }, ...KINDS[kind].parts.filter((p) => p.far).map((p) => ({ ...p, geometry: p.far, material: farLeaves, stages: undefined }))]
+      : KINDS[kind].parts;
     for (const part of parts) {
       const mesh = new THREE.InstancedMesh(built(part), typeof part.material === "function" ? part.material() : part.material, list.length);
       list.forEach(({ x, z, ground, size }, n) => {

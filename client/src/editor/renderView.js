@@ -18,10 +18,12 @@ import { HORIZON, SUN_DIR, Sky } from "./sky.js";
 
 const RING_TILES = 3; // tiles drawn in full around the active zone's editable tiles
 // What you can see while walking (plans/design.md, "Vision"): fog from `fogStartFt` to
-// `fogEndFt`, the 7×7 tiles around you (`tiles` either side), objects out to `smallFt` (or
+// `fogEndFt`, the 7×7 tiles around you in full (`tiles` either side), a far ring of cheap tiles
+// out to the 15×15 (`farTiles`: coarse ground, stand-in trees, no objects or clutter), objects out
+// to `smallFt` (or
 // `largeFt` for large ones), and tree crowns drawn in simpler stages past each of `canopyFt`,
 // dissolving from one to the next across `canopyBandFt`.
-export const SIGHT = { fogStartFt: 350, fogEndFt: 1400, tiles: 3, smallFt: 500, largeFt: 1000, canopyFt: [250, 350, 450], canopyBandFt: 40 };
+export const SIGHT = { fogStartFt: 350, fogEndFt: 3500, tiles: 3, farTiles: 7, farStep: 8, farSkirtFt: 40, smallFt: 500, largeFt: 1000, canopyFt: [250, 350, 450], canopyBandFt: 40 };
 const ORBIT_FOG = [6000, 30000];
 
 // Fog thickens with straight-line distance from the camera, so turning doesn't move it, and along
@@ -82,7 +84,9 @@ export class RenderView {
     this.trees = new THREE.Group();
     this.clutter = new THREE.Group();
     this.objects = new THREE.Group();
-    this.scene.add(this.content, this.marks, this.trees, this.clutter, this.objects);
+    this.far = new THREE.Group(); // the far ring while walking: "tx,tz" tiles' cheap meshes
+    this.farTiles = new Map(); // "tx,tz" -> that tile's far meshes
+    this.scene.add(this.content, this.marks, this.trees, this.clutter, this.objects, this.far);
     this.clutterTiles = new Map(); // "tx,tz" -> that tile's clutter, worked out when first needed
     this.clutterAround = null; // the tile clutter is drawn around
     this.decoded = new Map(); // "tx,tz" -> decoded tile, for the tiles drawn in full
@@ -153,6 +157,7 @@ export class RenderView {
     const [tx, tz] = [Math.floor((focus.x + this.origin[0]) / TILE_FT), Math.floor((focus.z + this.origin[1]) / TILE_FT)];
     const near = (at) => !walking || !at || (Math.abs(at[0] - tx) <= SIGHT.tiles && Math.abs(at[1] - tz) <= SIGHT.tiles);
     this.showTreeStages(focus, near);
+    this.far.visible = walking;
     if (!walking) {
       setObjectSight(0, 0, Infinity, Infinity);
       if (this.sightTile !== null) for (const child of this.content.children) child.visible = true;
@@ -164,6 +169,69 @@ export class RenderView {
     if (key === this.sightTile) return;
     this.sightTile = key;
     for (const child of this.content.children) child.visible = near(child.userData.tile);
+    this.showFar(tx, tz);
+  }
+
+  // The far ring around tile (tx, tz): tiles beyond the full 7×7 out to the 15×15, built when
+  // they come into it and dropped when they leave.
+  showFar(tx, tz) {
+    const wanted = new Set();
+    for (let dz = -SIGHT.farTiles; dz <= SIGHT.farTiles; dz++) {
+      for (let dx = -SIGHT.farTiles; dx <= SIGHT.farTiles; dx++) {
+        if (Math.abs(dx) > SIGHT.tiles || Math.abs(dz) > SIGHT.tiles) wanted.add(`${tx + dx},${tz + dz}`);
+      }
+    }
+    for (const [key, meshes] of this.farTiles) {
+      if (wanted.has(key)) continue;
+      for (const mesh of meshes) {
+        this.far.remove(mesh);
+        if (mesh.isInstancedMesh) mesh.dispose();
+        else mesh.geometry.dispose();
+      }
+      this.farTiles.delete(key);
+    }
+    for (const key of wanted) if (!this.farTiles.has(key)) this.farTiles.set(key, this.buildFar(key));
+    // Walking from the map, the open sea leaves out every tile drawn, near or far.
+    if (this.streaming) this.buildOcean([...this.streaming.built, ...[...this.farTiles].filter(([, m]) => m.length).map(([k]) => k)]);
+  }
+
+  // A far tile's meshes: coarse ground with a skirt to hide cracks against finer tiles, its water,
+  // and stand-in trees. Its sea draws only where the open sea leaves the tile out.
+  buildFar(key) {
+    const tile = this.farTile(key);
+    if (!tile) return [];
+    const [tx, tz] = tile.coords;
+    const at = (x, z) => this.decoded.get(`${x},${z}`) ?? this.farDecoded?.get(`${x},${z}`);
+    const neighbours = { east: at(tx + 1, tz), south: at(tx, tz + 1), southEast: at(tx + 1, tz + 1) };
+    const meshes = [new THREE.Mesh(geometry(terrainMesh(tile, neighbours, this.origin, SIGHT.farStep, { skirtFt: SIGHT.farSkirtFt })), this.terrainMaterial)];
+    const ownSea = Boolean(this.streaming) || this.decoded.has(key);
+    for (const kind of WATER_KINDS) {
+      if (kind === "sea" && !ownSea) continue;
+      const water = waterMesh(tile, neighbours, this.origin, kind);
+      if (water) meshes.push(new THREE.Mesh(geometry(water), this.waterMaterials[kind]));
+    }
+    meshes.push(...treeMeshes(this.treesOf(tile), { far: true }));
+    for (const mesh of meshes) this.far.add(mesh);
+    return meshes;
+  }
+
+  // A tile for the far ring: one already decoded, else decoded now and kept while it's in the ring.
+  farTile(key) {
+    if (this.decoded.has(key)) return this.decoded.get(key);
+    this.farDecoded ??= new Map();
+    if (this.farDecoded.has(key)) return this.farDecoded.get(key);
+    const [tx, tz] = key.split(",").map(Number);
+    const bytes = this.world?.files.get(tilePath(this.continent, tx, tz));
+    let tile = null;
+    try {
+      tile = bytes ? decodeTile(gunzipSync(bytes)) : null;
+    } catch (err) {
+      console.warn(`couldn't read tile ${key}: ${err.message}`);
+    }
+    this.farDecoded.set(key, tile);
+    // Keep about the ring's worth, dropping the oldest.
+    if (this.farDecoded.size > (SIGHT.farTiles * 2 + 3) ** 2) this.farDecoded.delete(this.farDecoded.keys().next().value);
+    return tile;
   }
 
   // Each tile's tree meshes draw only when some tree on that tile can need them: trunks within
@@ -250,6 +318,7 @@ export class RenderView {
     this.streaming = null;
     if (!keepCamera) this.stopWalk();
     const { world, continent, active, thumbnails } = state;
+    [this.world, this.continent] = [world, continent];
     this.clear();
     const editable = active ? tilesTouched(active.region) : [];
     const near = new Set();
@@ -371,6 +440,7 @@ export class RenderView {
     const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
     this.origin = [(tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT];
     this.ground = groundSampler(this.decoded, this.origin);
+    [this.world, this.continent] = [state.world, state.continent];
     this.streaming = { world: state.world, continent: state.continent, at: null, built: new Set() };
     this.streamAround(tx, tz);
     this.showMarks(state);
@@ -488,6 +558,14 @@ export class RenderView {
 
   // A tile's trees, as a set of meshes per tile so whole tiles can be left out.
   addTrees(tile) {
+    for (const mesh of treeMeshes(this.treesOf(tile))) {
+      mesh.userData.tile = tile.coords;
+      this.trees.add(mesh);
+    }
+  }
+
+  // A tile's trees as treeMeshes takes them, in scene feet.
+  treesOf(tile) {
     const [tx, tz] = tile.coords;
     const trees = [];
     for (const { i, j, size, kind } of findTrees(tile)) {
@@ -499,10 +577,7 @@ export class RenderView {
       const z = (tz * tile.cells + j + size / 2) * tile.cellFt - this.origin[1];
       trees.push({ x, z, ground, size, kind });
     }
-    for (const mesh of treeMeshes(trees)) {
-      mesh.userData.tile = [tx, tz];
-      this.trees.add(mesh);
-    }
+    return trees;
   }
 
   // Zone outlines and, when `pins` is on, every zone's pins and strokes, with the active zone's
@@ -590,6 +665,15 @@ export class RenderView {
   }
 
   clear() {
+    for (const meshes of this.farTiles.values()) {
+      for (const mesh of meshes) {
+        if (mesh.isInstancedMesh) mesh.dispose();
+        else mesh.geometry.dispose();
+      }
+    }
+    this.far.clear();
+    this.farTiles.clear();
+    this.farDecoded = null;
     empty(this.content);
     this.surfaces.length = 0;
     this.ocean = null;
@@ -707,12 +791,17 @@ function markTexture(shape) {
   return texture;
 }
 
-function geometry({ positions, colors, indices }) {
+function geometry({ positions, colors, indices, skirt }) {
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   if (colors) g.setAttribute("color", new THREE.BufferAttribute(colors, 3));
   g.setIndex(new THREE.BufferAttribute(indices, 1));
   g.computeVertexNormals();
+  // A skirt is lit like the ground at its top, so it doesn't show as a dark line.
+  if (skirt) {
+    const normal = g.attributes.normal;
+    skirt.copies.forEach((v, n) => normal.setXYZ(skirt.from + n, normal.getX(v), normal.getY(v), normal.getZ(v)));
+  }
   return g;
 }
 
