@@ -843,7 +843,10 @@ export class Editor {
     }
     const flow = this.step === "features" ? this.riverFlow() : null;
     this.features.draw(ctx, this.sketch, { ...this.markKinds(), flow: flow?.flow });
-    if (flow) this.drawStuck(ctx, map, flow.stuck);
+    if (flow) {
+      this.ringPoints(ctx, map, flow.stuck, "#ff3030");
+      this.ringPoints(ctx, map, flow.splits, "#ff9a1a");
+    }
     if (!editing) {
       this.features.drawInProgress(ctx);
       return;
@@ -871,9 +874,10 @@ export class Editor {
     return this.flow;
   }
 
-  // A red ring round each river point with no way out.
-  drawStuck(ctx, map, points) {
-    ctx.strokeStyle = "#ff3030";
+  // A ring round each of the points: red ones round river points with no way out, orange ones
+  // round points a river splits at.
+  ringPoints(ctx, map, points, color) {
+    ctx.strokeStyle = color;
     ctx.lineWidth = 2.5 * map.dpr;
     for (const p of points) {
       const [x, y] = map.toScreen(p);

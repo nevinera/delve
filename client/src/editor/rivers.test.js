@@ -44,3 +44,16 @@ describe("riverFlow", () => {
     expect(riverFlow(rivers, slope).stuck).toEqual([]);
   });
 });
+
+describe("river splits", () => {
+  it("finds points more than one segment flows away from", () => {
+    const rivers = [river("a", [[3, 0], [5, 0]]), river("b", [[3, 0], [3, 4]]), river("c", [[1, 0], [3, 0]])];
+    const ridge = (x, z) => 100 - 10 * Math.abs(x - 3) - 10 * Math.abs(z);
+    expect(riverFlow(rivers, ridge).splits).toEqual([[3, 0]]);
+  });
+
+  it("finds a river that runs both ways from a high point in its middle", () => {
+    const peak = (x) => 100 - Math.abs(x - 5) * 10;
+    expect(riverFlow([river("a", [[1, 0], [5, 0], [9, 0]])], peak).splits).toEqual([[5, 0]]);
+  });
+});

@@ -69,18 +69,28 @@ function paint(grid, color, line) {
   }
 }
 
-// Contour lines for the heights map, (i, j) => a darkening factor: a faint line every `minor` feet
-// and a stronger one every five, spaced out as the samples spread so they don't run together.
-function contours({ nx, nz, heights, stepFt }) {
-  const minor = stepFt <= 40 ? 100 : stepFt <= 100 ? 200 : 500;
+// Contour lines for the heights map, (i, j) => a darkening factor. Each spot takes the closest
+// spacing from CONTOURS that keeps its lines at least CONTOUR_GAP samples apart, so flat ground
+// shows fine lines and steep ground coarse ones, and zooming in brings finer lines out. Every
+// spacing divides the next, so lines carry on unbroken where the spacing changes. Each line at the
+// next spacing up is darker.
+const CONTOURS = [1, 5, 10, 50, 100, 500, 1000, 5000];
+const CONTOUR_GAP = 4;
+
+function contours({ nx, nz, heights }) {
+  const at = (i, j) => heights[Math.max(0, Math.min(nz - 1, j)) * nx + Math.max(0, Math.min(nx - 1, i))];
   const crosses = (k, every) => {
     const band = Math.floor(heights[k] / every);
     return (k % nx < nx - 1 && Math.floor(heights[k + 1] / every) !== band) || (k + nx < nx * nz && Math.floor(heights[k + nx] / every) !== band);
   };
   return (i, j) => {
     const k = j * nx + i;
-    if (crosses(k, minor * 5)) return 0.62;
-    return crosses(k, minor) ? 0.84 : 1;
+    // How far the ground rises or falls over one sample here.
+    const rise = Math.max(Math.abs(at(i + 1, j) - at(i - 1, j)), Math.abs(at(i, j + 1) - at(i, j - 1))) / 2;
+    const n = CONTOURS.findIndex((every) => every >= rise * CONTOUR_GAP);
+    const level = n < 0 ? CONTOURS.length - 1 : n;
+    if (level + 1 < CONTOURS.length && crosses(k, CONTOURS[level + 1])) return 0.6;
+    return crosses(k, CONTOURS[level]) ? 0.82 : 1;
   };
 }
 
