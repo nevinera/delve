@@ -7,29 +7,29 @@ import { MeshOut } from "./body.js";
 
 // Where each item rides: the bone, the grip's place on it (in feet for a 6ft body, in the bone's
 // own frame), and the way +y points from it when the arm hangs down. A fist grips across the hand
-// bone, front to back, so held weapons run through it that way: short ones tipped down ahead,
-// long ones tipped up ahead so their butts clear the ground. A fist weapon's blades jut past the
-// knuckles, along the hand; a shield straps to the outside of the forearm.
+// bone, front to back, so held weapons run through it that way, tipped down ahead; a bow is held
+// upright. A polearm is tipped less, to clear the ground. A fist weapon's handle runs through the
+// fist with its claws jutting past the knuckles, along the hand; a shield straps to the outside of
+// the forearm.
 const IN_HAND = [0, -0.3, 0.02];
 const DOWN_AHEAD = [0, -0.6, 0.8];
 const UP_AHEAD = [0, 0.8, 0.6];
 export const HELD = {
   sword: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
-  greatsword: { bone: "hand_r", at: IN_HAND, toward: UP_AHEAD, twoHanded: true },
+  greatsword: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD, twoHanded: true },
   axe: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
-  greataxe: { bone: "hand_r", at: IN_HAND, toward: UP_AHEAD, twoHanded: true },
+  greataxe: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD, twoHanded: true },
   mace: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
-  maul: { bone: "hand_r", at: IN_HAND, toward: UP_AHEAD, twoHanded: true },
+  maul: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD, twoHanded: true },
   dagger: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
   fist: { bone: "hand_r", at: [0, -0.22, 0], toward: [0, -1, 0] },
-  polearm: { bone: "hand_r", at: IN_HAND, toward: UP_AHEAD, twoHanded: true },
-  staff: { bone: "hand_r", at: IN_HAND, toward: UP_AHEAD, twoHanded: true },
+  polearm: { bone: "hand_r", at: IN_HAND, toward: [0, -0.35, 0.94], twoHanded: true },
+  staff: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD, twoHanded: true },
   bow: { bone: "hand_l", at: IN_HAND, toward: UP_AHEAD, twoHanded: true },
   crossbow: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD, twoHanded: true },
   gun: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD, twoHanded: true },
   wand: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
   thrown: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
-  fishingpole: { bone: "hand_r", at: IN_HAND, toward: UP_AHEAD, twoHanded: true },
   shield: { bone: "lowerarm_l", at: [0.17, -0.5, 0], toward: [0, 1, 0] },
   orb: { bone: "hand_l", at: IN_HAND, toward: UP_AHEAD },
 };
@@ -153,15 +153,27 @@ export function weaponMesh(type, colors) {
     blade(0.14, 0.95, 1.15, 0.065, 0.022);
   }
   if (type === "fist") {
-    // Three claws jutting from a guard over the knuckles.
-    box(-0.08, 0.14, 0.42, 0.16, c.metal);
-    for (const z of [-0.13, 0, 0.13]) {
+    // A handle across the fist, in a frame whose crossbar carries three claws out past the
+    // knuckles.
+    const across = [0, 0, 1];
+    out.tube(
+      [
+        { center: [0, 0, -0.22], dir: across, rx: 0.04, rz: 0.04, bones },
+        { center: [0, 0, 0.22], dir: across, rx: 0.04, rz: 0.04, bones },
+      ],
+      6,
+      () => grip,
+      { capStart: true, capEnd: true },
+    );
+    for (const z of [-0.23, 0.23]) box(-0.06, 0.24, 0.04, 0.1, c.metal, z);
+    box(0.2, 0.28, 0.5, 0.1, c.metal);
+    for (const z of [-0.14, 0, 0.14]) {
       plate(
         [
-          [z - 0.04, 0.12],
-          [z + 0.04, 0.12],
-          [z + 0.02, 0.75],
-          [z, 0.95],
+          [z - 0.04, 0.26],
+          [z + 0.04, 0.26],
+          [z + 0.02, 0.85],
+          [z, 1.05],
         ],
         0.025,
         c.steel,
@@ -259,21 +271,6 @@ export function weaponMesh(type, colors) {
     // A small throwing axe.
     rod(-0.2, 0.95, 0.035, 5, c.wood);
     axeHead(0.82, 0.6);
-  }
-  if (type === "fishingpole") {
-    // A long tapering rod with a cork grip, and a reel ahead of the hand.
-    rod(-0.8, 5.5, 0.045, 5, c.wood, 0.012);
-    rod(-0.6, 0.3, 0.06, 6, [0.7, 0.55, 0.38]);
-    const across = [1, 0, 0];
-    out.tube(
-      [
-        { center: [-0.05, 0.5, 0.12], dir: across, rx: 0.1, rz: 0.1, bones },
-        { center: [0.05, 0.5, 0.12], dir: across, rx: 0.1, rz: 0.1, bones },
-      ],
-      6,
-      () => c.metal,
-      { capStart: true, capEnd: true },
-    );
   }
   if (type === "shield") {
     // A heater shield painted in the primary color on a metal backing, with a steel boss.
