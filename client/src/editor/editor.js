@@ -113,6 +113,7 @@ export class Editor {
     this.bindPanel();
     this.fillContinents();
     window.addEventListener("keydown", (e) => this.onKey(e));
+    noContextMenu(elements.map.parentElement);
     keyNav((dt, move) => {
       if (!this.walking) this.map.nudge(dt, move);
     });
@@ -1077,4 +1078,18 @@ function timeLabel(cycles) {
   const { name, through } = phaseAt(cycles);
   const minutes = Math.ceil(PHASES.find(([phase]) => phase === name)[1] * (1 - through));
   return { phase: name, left: minutes >= 60 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : `${minutes}m` };
+}
+
+// Right-drags pan the map and turn the walker, so the browser's menu never opens over the view,
+// nor where a right-drag that started there ends.
+function noContextMenu(stage) {
+  let dragged = false;
+  stage.addEventListener("pointerdown", (e) => (dragged ||= e.button === 2), { capture: true });
+  window.addEventListener("contextmenu", (e) => {
+    if (dragged || stage.contains(e.target)) e.preventDefault();
+    dragged = false;
+  });
+  window.addEventListener("pointerup", (e) => {
+    if (e.button === 2) setTimeout(() => (dragged = false), 300);
+  });
 }

@@ -147,7 +147,6 @@ export class MapView {
 
   listen() {
     const { canvas } = this;
-    canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
     window.addEventListener("keydown", (e) => {
       if (e.key === " " && !e.target.matches("input, textarea, select")) this.spaceHeld = true;

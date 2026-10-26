@@ -85,7 +85,6 @@ export class Walker {
       pointermove: (e) => this.onMove(e),
       pointerup: (e) => this.onUp(e),
       wheel: (e) => this.onWheel(e),
-      contextmenu: (e) => e.preventDefault(),
     };
   }
 
