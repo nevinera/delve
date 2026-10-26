@@ -1,21 +1,21 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_LOOK, WEAPONS } from "./recipe.js";
-import { HELD, weaponMesh } from "./weapons.js";
-
-const lowest = (positions) => Math.min(...positions.filter((_, i) => i % 3 === 1));
+import { DEFAULT_LOOK } from "./recipe.js";
+import { HELD, OFFHANDS, WEAPONS, heldBy, weaponMesh } from "./weapons.js";
 
 describe("weaponMesh", () => {
-  it("builds every weapon but none, and says which hand holds it", () => {
+  it("builds every item but none, and says which bone holds it", () => {
     expect(weaponMesh("none", DEFAULT_LOOK.colors)).toBeNull();
-    for (const type of WEAPONS.filter((w) => w !== "none")) {
+    for (const type of [...WEAPONS, ...OFFHANDS].filter((w) => w !== "none")) {
       const mesh = weaponMesh(type, DEFAULT_LOOK.colors);
       expect(mesh.positions.length).toBeGreaterThan(0);
       expect(mesh.colors.length).toBe(mesh.positions.length);
-      expect(HELD[type].hand).toMatch(/^hand_[lr]$/);
+      expect(mesh.positions.every(Number.isFinite)).toBe(true);
+      expect(HELD[type].bone).toMatch(/^(hand|lowerarm)_[lr]$/);
     }
   });
 
-  it("rests a staff on the ground below the grip", () => {
-    expect(lowest(weaponMesh("staff", DEFAULT_LOOK.colors, { ground: 2.5 }).positions)).toBeCloseTo(-2.5, 1);
+  it("moves one-handed weapons to the left hand in the off hand", () => {
+    expect(heldBy("dagger", true).bone).toBe("hand_l");
+    expect(heldBy("shield", true).bone).toBe("lowerarm_l");
   });
 });

@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { bodyMesh } from "./body.js";
-import { HELD, weaponMesh } from "./weapons.js";
+import { heldBy, weaponMesh } from "./weapons.js";
 
 // A character as a three.js skinned mesh, built from a look (recipe.js's resolveRecipe). Its bones
-// carry body.js's names, for animations to drive. A weapon rides on the bone of the hand holding
-// it.
+// carry body.js's names, for animations to drive. Weapons, shields and off-hand items ride on the
+// bones that hold them.
 
 // Chain mail faces (body.js's mail mark) are patterned with rows of rings, laid on the body as it
 // stands at rest, so the pattern moves with it. Each face takes the pattern from the side it
@@ -58,33 +58,31 @@ export function characterMesh(look) {
   mesh.add(root);
   mesh.bind(new THREE.Skeleton([...bones.values()]));
   mesh.userData.scale = look.height / 6;
-  holdWeapon(mesh, bones, joints, look);
+  mesh.userData.held = [hold(bones, look, look.weapon), hold(bones, look, look.offhand, true)].filter(Boolean);
   return mesh;
 }
 
-// Puts the look's weapon in its hand, gripped partway down the hand bone.
-function holdWeapon(mesh, bones, joints, look) {
-  const held = HELD[look.weapon];
-  if (!held) return;
+// Puts an item on the bone that holds it, or nothing for "none".
+function hold(bones, look, type, offhand = false) {
+  const held = heldBy(type, offhand);
+  if (!held) return null;
   const s = look.height / 6;
-  const hand = joints.find((j) => j.name === held.hand).at;
-  const grip = [0, -0.3 * s, 0.02 * s];
-  const data = weaponMesh(look.weapon, look.colors, { ground: hand[1] + grip[1] });
+  const data = weaponMesh(type, look.colors);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(data.positions, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(linear(data.colors), 3));
   geometry.computeBoundingSphere();
-  const weapon = new THREE.Mesh(geometry, weaponMaterial);
-  weapon.position.set(...grip);
-  weapon.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...held.toward).normalize());
-  bones.get(held.hand).add(weapon);
-  mesh.userData.weapon = weapon;
+  const item = new THREE.Mesh(geometry, weaponMaterial);
+  item.position.set(...held.at.map((v) => v * s));
+  item.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...held.toward).normalize());
+  bones.get(held.bone).add(item);
+  return item;
 }
 
 // Frees a character's geometry; the material is shared.
 export function disposeCharacter(mesh) {
   mesh.geometry.dispose();
-  mesh.userData.weapon?.geometry.dispose();
+  for (const item of mesh.userData.held) item.geometry.dispose();
   mesh.skeleton.dispose();
 }
 

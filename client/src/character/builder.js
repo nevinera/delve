@@ -4,7 +4,8 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { characterClips, clipNames, loadAnimations } from "./animations.js";
 import { characterMesh, disposeCharacter } from "./characterMesh.js";
 import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_TYPES } from "./armor.js";
-import { BEARD, DEFAULT_LOOK, HAIR, JEWELRY, WEAPONS, resolveRecipe, saveLook, savedLook } from "./recipe.js";
+import { BEARD, DEFAULT_LOOK, HAIR, JEWELRY, resolveRecipe, saveLook, savedLook } from "./recipe.js";
+import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 
 // The character builder page: one character on a patch of ground, with a control for each setting
 // of its look, and the look as recipe JSON to copy. Walk mode uses the look made here. A button
@@ -144,15 +145,25 @@ function buildControls() {
     ["hair", HAIR],
     ["beard", BEARD],
     ["weapon", WEAPONS],
+    ["offhand", OFFHANDS],
   ]) {
     const select = document.createElement("select");
+    select.id = key;
     for (const option of options) select.add(new Option(option, option, false, option === look[key]));
     select.addEventListener("change", () => {
       look[key] = select.value;
+      showOffhand();
       rebuild();
     });
     row(key, select);
   }
+  // Two-handed weapons leave no hand free.
+  const showOffhand = () => {
+    const free = !HELD[look.weapon]?.twoHanded;
+    $("offhand").disabled = !free;
+    if (!free) $("offhand").value = look.offhand = "none";
+  };
+  showOffhand();
   for (const item of JEWELRY) {
     const box = Object.assign(document.createElement("input"), { type: "checkbox", checked: look.jewelry.includes(item) });
     box.addEventListener("change", () => {

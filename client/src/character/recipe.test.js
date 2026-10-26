@@ -19,4 +19,9 @@ describe("resolveRecipe", () => {
     expect(look.hair).toBe(DEFAULT_LOOK.hair);
     expect(look.jewelry).toEqual(["earrings"]);
   });
+
+  it("frees no hand for an off-hand item beside a two-handed weapon", () => {
+    expect(resolveRecipe({ weapon: "sword", offhand: "shield" }).offhand).toBe("shield");
+    expect(resolveRecipe({ weapon: "greataxe", offhand: "shield" }).offhand).toBe("none");
+  });
 });

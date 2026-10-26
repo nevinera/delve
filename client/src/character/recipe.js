@@ -1,4 +1,5 @@
 import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_TYPES } from "./armor.js";
+import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 
 // Character recipes: how a kind of character looks, as plain JSON, so a world can describe its
 // enemies' looks and the client builds their models (body.js). A recipe gives each setting either a
@@ -15,6 +16,8 @@ import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_TYPES } from "./armor.js";
 // - bust: 0 to 1.
 // - hair: a HAIR style; beard: a BEARD style; jewelry: a list of JEWELRY.
 // - weapon: one of weapons.js's WEAPONS, held in hand.
+// - offhand: one of weapons.js's OFFHANDS, a shield, orb or second weapon; none with a
+//   two-handed weapon.
 // - armor: { slot: { type, colors: [main, trim] } } for armor.js's ARMOR_SLOTS and ARMOR_TYPES;
 //   type and each color can be a list to pick from.
 // - colors: { skin, hair, eyes, primary, secondary, metal, steel, wood }, each "#rrggbb" or a list
@@ -24,7 +27,6 @@ import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_TYPES } from "./armor.js";
 export const HAIR = ["bald", "short", "long", "ponytail", "braids", "mohawk", "afro"];
 export const BEARD = ["none", "goatee", "handlebar", "full", "long"];
 export const JEWELRY = ["earrings", "necklace"];
-export const WEAPONS = ["none", "sword", "axe", "staff", "bow"];
 
 export const DEFAULT_LOOK = {
   body: "humanoid",
@@ -40,6 +42,7 @@ export const DEFAULT_LOOK = {
   beard: "none",
   jewelry: [],
   weapon: "none",
+  offhand: "none",
   armor: {},
   colors: {
     skin: "#e0b48c",
@@ -84,6 +87,7 @@ export function resolveRecipe(recipe = {}, random = Math.random) {
   if (!HAIR.includes(look.hair)) look.hair = DEFAULT_LOOK.hair;
   if (!BEARD.includes(look.beard)) look.beard = DEFAULT_LOOK.beard;
   if (!WEAPONS.includes(look.weapon)) look.weapon = DEFAULT_LOOK.weapon;
+  if (!OFFHANDS.includes(look.offhand) || HELD[look.weapon]?.twoHanded) look.offhand = DEFAULT_LOOK.offhand;
   return look;
 }
 
