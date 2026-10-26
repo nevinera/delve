@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { gridHeight, previewMesh, shapeGrid } from "./shapePreview.js";
 import { TILE_FT } from "../world/constants.js";
+import { BIOME_COLORS } from "../world/tileImage.js";
 
 const square = (x0, z0, x1, z1) => [[[x0, z0], [x1, z0], [x1, z1], [x0, z1], [x0, z0]]];
 const zone = (pins) => ({ region: [square(0, 0, 8, 8)], pins, strokes: [] });
@@ -47,5 +48,29 @@ describe("previewMesh", () => {
     const mesh = previewMesh(grid, [100, 200]);
     expect(Array.from(mesh.positions.slice(0, 6))).toEqual([0, 1, 0, 64, 2, 0]);
     expect(mesh.indices.length).toBe(2 * 1 * 6);
+  });
+});
+
+describe("the biomes preview", () => {
+  const pins = [
+    { id: "a", kind: "biome", at: [2, 4], biome: "forest" },
+    { id: "b", kind: "biome", at: [6, 4], biome: "rocky" },
+  ];
+
+  it("colors each biome's ground by its biome", () => {
+    const grid = shapeGrid([zone(pins)], "test", { biomes: true });
+    const color = (tx, tz) => {
+      const [i, j] = [Math.round((tx * TILE_FT - grid.x0) / grid.stepFt), Math.round((tz * TILE_FT - grid.z0) / grid.stepFt)];
+      return Array.from(grid.colors.subarray((j * grid.nx + i) * 3, (j * grid.nx + i) * 3 + 3));
+    };
+    expect(color(2, 4)).toEqual(BIOME_COLORS.forest);
+    expect(color(6, 4)).toEqual(BIOME_COLORS.rocky);
+  });
+
+  it("roughens rocky ground", () => {
+    const flat = shapeGrid([zone([])], "test");
+    const rocky = shapeGrid([zone([{ id: "b", kind: "biome", at: [4, 4], biome: "rocky" }])], "test", { biomes: true });
+    const k = Math.round(flat.nz / 2) * flat.nx + Math.round(flat.nx / 2);
+    expect(Math.abs(rocky.heights[k] - flat.heights[k])).toBeGreaterThan(1);
   });
 });

@@ -42,7 +42,11 @@ const HINTS = {
 };
 const HINT_WALK = "W/S run · A/D turn · Q/E strafe · space jumps · / walks · X sits · shift sprints · left-drag looks around · right-drag turns · wheel zooms · esc stops walking";
 const HINT_PICK_WALK = "click where to start walking · esc cancels";
-const HINT_PREVIEW = "the land's shape from height pins and coasts alone, for every zone · drag to orbit · right-drag or W A S D to pan · wheel or C/V to zoom · Q/E to turn · drag pins to move them · with the height pin tool, click the ground to place one";
+const PREVIEW_NAV = "drag to orbit · right-drag or W A S D to pan · wheel or C/V to zoom · Q/E to turn · drag pins to move them";
+const HINT_PREVIEW = {
+  heights: `the land's shape from height pins and coasts alone, for every zone · ${PREVIEW_NAV} · with the height pin tool, click the ground to place one`,
+  biomes: `every zone's biomes, with their broad hills and ridges, at low detail · ${PREVIEW_NAV} · with the biome pin tool, click the ground to place one`,
+};
 const HINT_3D = "drag to orbit · right-drag or W A S D to pan · wheel or C/V to zoom · Q/E to turn · hover a pin for details · drag the zone's pins and line points to move them · with a pin tool, click the ground to place one · with a tree tool, drag to plant (alt removes)";
 const TREE_TOOLS = TREE_SIZES.map((size) => `tree_${size}`);
 const treeToolSize = (name) => Number(/^tree_(\d)$/.exec(name)?.[1] ?? 0);
@@ -58,14 +62,14 @@ const STEPS = {
   population: { tools: TREE_TOOLS, kinds: [] },
 };
 // Steps whose 3D view is a live preview of the whole continent, rather than the generated tiles.
-const PREVIEW_STEPS = new Set(["heights"]);
+const PREVIEW_STEPS = new Set(["heights", "biomes"]);
 
 // Ties the map, the side panel and the in-memory world together. With a zone selected, only that
 // zone is editable and every other zone shows but is locked; with none selected, the whole
 // continent is, and each click edits the zone it lands in. Step tabs pick what you're editing and
 // view tabs how the map shows: cells (the grid and pins), terrain (tile thumbnails) or 3D. 3D shows
-// the generated tiles around a selected zone, or on the heights step, a live preview of the whole
-// continent's shape.
+// the generated tiles around a selected zone, or on the heights and biomes steps, a live preview
+// of the whole continent (shapePreview.js).
 export class Editor {
   constructor(world, elements) {
     this.world = world;
@@ -95,13 +99,14 @@ export class Editor {
     this.pending = new Set(); // "x,z" keys of tiles whose sketch changed since upload or generation
     this.view3d = null; // the RenderView, loaded the first time 3D is shown
     this.showing3d = false;
-    this.shapes = new ShapePreview((grid) => {
-      this.shapeGrid = grid;
+    this.previews = new ShapePreview((grid) => {
+      if (!grid) this.previewGrids = {};
+      else this.previewGrids[grid.biomes ? "biomes" : "heights"] = grid;
       if (!this.previewing) return;
-      this.view3d.setPreviewGrid(grid);
+      this.view3d.setPreviewGrid(this.previewGrids[this.step] ?? null);
       this.refreshMarks();
     });
-    this.shapeGrid = null;
+    this.previewGrids = {}; // the latest preview for each preview step
     this.bindPanel();
     this.fillContinents();
     window.addEventListener("keydown", (e) => this.onKey(e));
@@ -145,6 +150,7 @@ export class Editor {
     const older = olderZones(this.world, this.continent);
     this.say(older.length ? `Skipped zones in an older format: ${older.join(", ")}.` : "", { info: true });
     this.fitContinent();
+    this.previewGrids = {};
     this.refresh3d({ keepCamera: false });
   }
 
@@ -227,14 +233,14 @@ export class Editor {
     this.updatePreview();
   }
 
-  // Whether the 3D view is showing the heights preview.
+  // Whether the 3D view is showing a preview of the whole continent.
   get previewing() {
     return this.showing3d && PREVIEW_STEPS.has(this.step);
   }
 
-  // Asks for a fresh heights preview from the zones as they are now, mid-drag included.
+  // Asks for a fresh preview from the zones as they are now, mid-drag included.
   updatePreview() {
-    if (this.previewing) this.shapes.request(this.zones, this.continent);
+    if (this.previewing) this.previews.request(this.zones, this.continent, { biomes: this.step === "biomes" });
   }
 
   // Starts walking at continent tile units [x, z]: from the 3D view, in the scene it shows; from
@@ -298,7 +304,7 @@ export class Editor {
     this.say();
     this.renderPanel();
     this.map.render();
-    if (preview !== PREVIEW_STEPS.has(step)) this.refresh3d({ keepCamera: false });
+    if (preview || PREVIEW_STEPS.has(step)) this.refresh3d({ keepCamera: false });
     else this.refreshMarks();
   }
 
@@ -332,7 +338,7 @@ export class Editor {
   refresh3d({ keepCamera = true } = {}) {
     if (!this.showing3d || !this.view3d) return;
     if (PREVIEW_STEPS.has(this.step)) {
-      this.view3d.showPreview(this.sceneState(), this.shapeGrid);
+      this.view3d.showPreview(this.sceneState(), this.previewGrids[this.step] ?? null);
       this.updatePreview();
       return;
     }
@@ -670,7 +676,7 @@ export class Editor {
       b.classList.toggle("active", b.dataset.tool === this.toolName);
       b.disabled = !this.scopeZones().length;
     }
-    hint.textContent = this.view3d?.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : this.previewing ? HINT_PREVIEW : this.showing3d ? HINT_3D : HINTS[this.mode()];
+    hint.textContent = this.view3d?.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : this.previewing ? HINT_PREVIEW[this.step] : this.showing3d ? HINT_3D : HINTS[this.mode()];
     this.el.walk.hidden = false;
     this.el.graphicsButton.hidden = !this.showing3d;
     this.el.walk.textContent = this.view3d?.walking ? "stop walking" : this.walkPicking ? "cancel walk" : "walk";

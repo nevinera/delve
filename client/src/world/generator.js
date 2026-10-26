@@ -152,14 +152,23 @@ export function prepareShape(zones, seedKey) {
   return { seed: hashString(seedKey), area, areaEdges: edgesOf(area), rivers: [], heightAt, zoned, heightPins };
 }
 
-// The ground from prepareShape: the broad shape meeting the sea at the wandering coast, and the
-// sea floor beyond it. No hills, crags, rivers or anything else the biomes bring.
-export function shapeHeight(ctx, x, z) {
+// The ground from prepareShape: the broad shape, raised by `relief` ft, meeting the sea at the
+// wandering coast, and the sea floor beyond it. No crags, rivers or anything else the biomes
+// bring, beyond the relief given.
+export function shapeHeight(ctx, x, z, relief = 0) {
   const edgeDist = Math.min(EDGE_REACH_FT, distanceToEdges(x, z, ctx.areaEdges));
   const inland = (pointInRegion(x, z, ctx.area) ? edgeDist : -edgeDist) - shoreInset(ctx, x, z);
   const coastDist = Math.min(COAST_REACH_FT, Math.abs(inland));
   if (inland <= 0) return seaFloor(ctx, x, z, coastDist);
-  return coast(ctx, ctx.heightAt(x, z), x, z, coastDist);
+  return coast(ctx, ctx.heightAt(x, z) + relief, x, z, coastDist);
+}
+
+// A biome profile's hills and rocky ridges at a point, in ft: the broad strokes of the land's
+// detail, without crags, facets, ledges or small bumps.
+export function biomeRelief(ctx, x, z, { amp, rough }) {
+  let h = fbm(x, z, ctx.seed, { wavelength: BASE.hillWavelength, octaves: 3 }) * amp;
+  if (rough > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x3c6ef372, { wavelength: BASE.roughWavelength, octaves: 3 }))) * rough;
+  return h;
 }
 
 // One tile's layers. tx and tz are continent tile coordinates.
@@ -272,11 +281,10 @@ function land(ctx, x, z, edges, biomes) {
   const coastDist = Math.min(COAST_REACH_FT, Math.abs(inland));
   if (inland <= 0) return { h: seaFloor(ctx, x, z, coastDist), t: 0, land: false, climate, coastDist };
 
-  const { amp, rough } = climate.profile;
+  const { rough } = climate.profile;
   const d = CRAG.probeFt;
   const steep = Math.hypot(ctx.heightAt(x + d, z) - ctx.heightAt(x - d, z), ctx.heightAt(x, z + d) - ctx.heightAt(x, z - d)) / (2 * d);
-  let h = ctx.heightAt(x, z) + fbm(x, z, ctx.seed, { wavelength: BASE.hillWavelength, octaves: 3 }) * amp;
-  if (rough > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x3c6ef372, { wavelength: BASE.roughWavelength, octaves: 3 }))) * rough;
+  let h = ctx.heightAt(x, z) + biomeRelief(ctx, x, z, climate.profile);
   const crag = rough * 0.5 + steep * CRAG.perSlope;
   if (crag > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x1b873593, { wavelength: CRAG.wavelength, octaves: 3 }))) ** 2 * crag;
   FACETS.forEach(({ wavelength, share }, n) => {
