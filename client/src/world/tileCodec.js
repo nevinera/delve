@@ -45,6 +45,7 @@ export function encodeTile(tile, layerSpecs = SURFACE_LAYERS) {
     layers: table,
     objects: tile.objects ?? [],
     ...(tile.falls?.length ? { falls: tile.falls } : {}),
+    ...(tile.roads?.length ? { roads: tile.roads } : {}),
     generator: tile.generator,
   };
   const json = new TextEncoder().encode(JSON.stringify(manifest));

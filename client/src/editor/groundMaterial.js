@@ -8,6 +8,10 @@ import { groundCells } from "./terrainMesh.js";
 // cracked rock, leaf litter under forest and so on), blended between cells the way the vertex
 // colors are. A pattern only changes the light and shade of the color under it, and it fades out
 // with distance before it would shimmer.
+//
+// Roads and highways in use are drawn over that from their middles (the tile's roads), so their
+// surface and edges are sharp, finer than the cells: packed earth with wheel ruts and a rim of
+// stones for roads, pale flagstone with a wider rim for highways.
 
 const SIZE = 256;
 const SCALES_FT = [9, 48, 210]; // how far each layer's texture stretches
@@ -19,6 +23,7 @@ const PATTERN_FT = { grass: 12, dirt: 14, sand: 16, rock: 30, path: 12, shore: 1
 const PATTERNS = Object.keys(PATTERN_FT);
 const LITTER = PATTERNS.indexOf("litter");
 const layerOf = (name) => Math.max(0, PATTERNS.indexOf(name));
+const MAX_ROAD_SEGMENTS = 96; // per tile; any past this are left out
 
 let detail = null;
 let patterns = null;
@@ -37,8 +42,14 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
     material.userData.cells = cells;
     material.userData.uniforms = { groundCells: { value: cells }, groundCorner: { value: new THREE.Vector2(...corner) }, groundSide: { value: side } };
     material.defines = { GROUND_PATTERNS: "" };
+    const segments = roadSegments(tile, origin);
+    if (segments) {
+      Object.assign(material.userData.uniforms, segments);
+      material.defines.GROUND_ROADS = "";
+    }
   }
-  material.customProgramCacheKey = () => (cells ? "ground-patterns" : "ground");
+  const roads = Boolean(material.defines?.GROUND_ROADS);
+  material.customProgramCacheKey = () => (cells ? (roads ? "ground-roads" : "ground-patterns") : "ground");
   material.onBeforeCompile = (shader) => {
     shader.uniforms.groundDetail = { value: detail };
     if (cells) Object.assign(shader.uniforms, material.userData.uniforms, { groundPatterns: { value: patterns } });
@@ -58,6 +69,11 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
         uniform sampler2D groundCells;
         uniform vec2 groundCorner;
         uniform float groundSide;
+        #ifdef GROUND_ROADS
+        uniform vec4 roadSegments[${MAX_ROAD_SEGMENTS}];
+        uniform vec2 roadKinds[${MAX_ROAD_SEGMENTS}];
+        uniform int roadCount;
+        #endif
         const float PATTERN_SCALE[${PATTERNS.length}] = float[](${PATTERNS.map((name) => (1 / PATTERN_FT[name]).toFixed(5)).join(", ")});
         // A vertex's pattern at scene position xz, and its forest cover in w.
         vec4 groundAt(vec2 cell, vec2 xz) {
@@ -86,10 +102,61 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
           grain = mix(grain, 0.5, near);
         }
         #endif
-        diffuseColor.rgb *= 0.6 + 0.3 * grain + 0.35 * blotch + 0.25 * sweep;`,
+        diffuseColor.rgb *= 0.6 + 0.3 * grain + 0.35 * blotch + 0.25 * sweep;
+        #ifdef GROUND_ROADS
+        {
+          // The nearest road, by how far inside its edge this is (negative outside).
+          float inward = -1e9;
+          float across = 0.0;
+          float highway = 0.0;
+          for (int i = 0; i < ${MAX_ROAD_SEGMENTS}; i++) {
+            if (i >= roadCount) break;
+            vec4 seg = roadSegments[i];
+            vec2 ab = seg.zw - seg.xy;
+            float t = clamp(dot(vGroundXZ - seg.xy, ab) / max(dot(ab, ab), 1e-4), 0.0, 1.0);
+            float fromMiddle = length(vGroundXZ - seg.xy - ab * t);
+            float d = roadKinds[i].x - fromMiddle;
+            if (d > inward) {
+              inward = d;
+              across = roadKinds[i].x;
+              highway = roadKinds[i].y;
+            }
+          }
+          float aa = fwidth(inward) + 0.05;
+          float on = smoothstep(-aa, aa, inward);
+          if (on > 0.0) {
+            float speck = texture2D(groundDetail, vGroundXZ * 0.4).r;
+            float stones = texture2D(groundDetail, vGroundXZ * 0.7 + 0.17).r;
+            float rimFt = mix(1.4, 2.2, highway);
+            float rim = 1.0 - smoothstep(rimFt - aa, rimFt + aa, inward);
+            vec3 earth = vec3(0.50, 0.40, 0.28) * (0.85 + 0.3 * speck);
+            // Wheel ruts, a third of the way in from each edge.
+            float rut = 1.0 - smoothstep(0.3, 1.1, abs(inward - across * 0.35));
+            earth *= 1.0 - 0.12 * rut;
+            vec3 flag = vec3(0.62, 0.59, 0.52) * (0.86 + 0.28 * stones);
+            vec3 surface = mix(earth, flag, highway);
+            vec3 edge = vec3(0.36, 0.34, 0.31) * (0.7 + 0.6 * stones);
+            diffuseColor.rgb = mix(diffuseColor.rgb, mix(surface, edge, rim), on);
+          }
+        }
+        #endif`,
       );
   };
   return material;
+}
+
+// A tile's roads (tile.roads) as uniforms: each segment's ends in scene feet, and its road's half
+// width and whether it's a highway (1) or road (0). Null without any.
+function roadSegments(tile, origin) {
+  const list = (tile.roads ?? []).flatMap(({ kind, half, segments }) => segments.map((s) => ({ s, kind, half }))).slice(0, MAX_ROAD_SEGMENTS);
+  if (!list.length) return null;
+  const [ox, oz] = origin;
+  const pad = (make) => Array.from({ length: MAX_ROAD_SEGMENTS }, (_, i) => (list[i] ? make(list[i]) : make(null)));
+  return {
+    roadSegments: { value: pad((r) => (r ? new THREE.Vector4(r.s[0] - ox, r.s[1] - oz, r.s[2] - ox, r.s[3] - oz) : new THREE.Vector4())) },
+    roadKinds: { value: pad((r) => new THREE.Vector2(r?.half ?? 0, r?.kind === "highway" ? 1 : 0)) },
+    roadCount: { value: list.length },
+  };
 }
 
 // The grainy noise texture the ground uses, shared with anything else that wants some: speckle in
