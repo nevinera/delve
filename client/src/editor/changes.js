@@ -1,13 +1,13 @@
 import polygonClipping from "polygon-clipping";
 import { TILE_FT } from "../world/constants.js";
-import { EDGE_REACH_FT, riverReachFt } from "../world/generator.js";
+import { EDGE_REACH_FT, riverReachFt, roadReachFt } from "../world/generator.js";
 import { RIVER_PULL_FT } from "../world/biomes.js";
 import { tilesTouched } from "./region.js";
 
 // Which tiles an edit changes, so the editor can highlight them and regenerate just those. Each
 // kind of change reaches as far as the generator lets it: a moved coast reshapes the shore around
-// it, and a river carves along its whole length. Info pins, hubs and roads don't touch the ground
-// yet. Every hit tile brings its neighbours along.
+// it, and a river carves along its whole length, as does a road. Info pins and hubs don't touch
+// the ground yet. Every hit tile brings its neighbours along.
 //
 // Height pins shape one smooth surface across the continent, so a height pin change marks every
 // zoned tile. Biome borders can move anywhere a biome pin's region reaches, and zone edges bend
@@ -17,7 +17,7 @@ import { tilesTouched } from "./region.js";
 
 const key = (tx, tz) => `${tx},${tz}`;
 
-// Tile keys ("x,z") that differ between two versions of a continent, each { zones, pins,
+// Tile keys ("x,z") that differ between two versions of a continent, each { zones, pins, paths,
 // watercourses } with zones as stored ({ region }) and the sketch's pins and watercourses.
 export function changedTiles(before, after) {
   const tiles = new Set();
@@ -43,6 +43,10 @@ export function changedTiles(before, after) {
   for (const river of unmatched(rivers(before), rivers(after))) {
     addNearLine(tiles, river.points, Math.max(riverReachFt(river.width), hasBiomes ? RIVER_PULL_FT : 0) / TILE_FT);
   }
+
+  // A road's tiles, where its route, width or tags changed: the old ones and the new.
+  const roads = (c) => (c.paths ?? []).filter((p) => p.route?.points).map((p) => ({ points: p.route.points, width: p.width, tags: p.tags }));
+  for (const road of unmatched(roads(before), roads(after))) addNearLine(tiles, road.points, roadReachFt(road.width) / TILE_FT);
 
   // A pool's rim reaches a little past its shore, well within the neighbours added below.
   const pools = (c) => c.watercourses?.pools ?? [];

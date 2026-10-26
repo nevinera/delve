@@ -8,8 +8,9 @@ import { TILE_FT } from "../world/constants.js";
 // adjusted by their tags; info pins carry a name, notes and tags for people and LLMs and don't
 // affect generation. Water source pins send water downhill, making the sketch's watercourses
 // (waterflow.js). Road pins are joined by paths, each routed over the land between its two pins
-// (roads.js); a road is a run of paths. Roads and hubs don't shape the ground yet. There are no
-// coastlines: the sea is wherever no zone is.
+// (roads.js); a road is a run of paths. The generator digs roads in and surfaces them (tags faint
+// and disused wear them away); hubs don't shape the ground yet. There are no coastlines: the sea
+// is wherever no zone is.
 
 export const PINS = {
   height: { color: "#70d070", label: "height pin" },
@@ -40,7 +41,7 @@ const POOL_COLOR = "rgba(74, 144, 217, 0.8)";
 export const FEATURE_HINTS = {
   select: "click a pin or road to select it · drag pins, and a selected hub's edge to size it · delete removes the selection",
   pin: "click on land to place · click a pin to select or drag it · drag a selected hub's edge to size it",
-  road: "click on land to place a road pin, joined to the selected one · click a road pin to join it, or drag it · click a road to branch off it · esc starts a new road · set the width under the selected pin, or select a single path with the select tool · roads don't shape the ground yet",
+  road: "click on land to place a road pin, joined to the selected one · click a road pin to join it, or drag it · click a road to branch off it · esc starts a new road · set the width under the selected pin, or select a single path with the select tool",
 };
 
 const DEFAULT_HEIGHT_FT = 20;

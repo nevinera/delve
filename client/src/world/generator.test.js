@@ -255,4 +255,31 @@ describe("rocky peaks", () => {
     expect(dome(x, z) - dome(x + 400, z)).toBeLessThan(60);
     expect(peak(x, z) - peak(x + 400, z)).toBeGreaterThan(150);
   });
+
+  describe("roads", () => {
+    // Rocky land rising east, with a 12ft road straight across tile (3, 4) along z = 4.5.
+    const land = { region: [square(0, 0, 8, 8)], pins: [{ id: "h1", kind: "height", at: [1, 4], height: 20 }, { id: "h2", kind: "height", at: [7, 4], height: 300 }, { id: "b", kind: "biome", at: [4, 4], biome: "rocky" }] };
+    const withRoad = (tags) =>
+      prepareContinent({ zones: [land], pins: land.pins, paths: [{ id: "r1", from: "a", to: "b", width: 12, tags, route: { points: [[2, 4.5], [6, 4.5]] } }], watercourses: { rivers: [], pools: [] } }, "roads");
+    const row = (tile, layer) => Array.from({ length: CELLS }, (_, i) => cell(tile, i, 32, layer));
+    const PATH = 4; // TERRAIN.indexOf("path")
+
+    it("digs the road in and builds it up to an even bed, surfaced in path", () => {
+      const road = generateTile(withRoad(["road"]), 3, 4);
+      const bare = generateTile(prepareContinent({ zones: [land], pins: land.pins, watercourses: { rivers: [], pools: [] } }, "roads"), 3, 4);
+      const heights = row(road, "height");
+      for (let i = 1; i < CELLS; i++) expect(Math.abs(heights[i] - heights[i - 1])).toBeLessThanOrEqual(0.1 * 8 + 0.01);
+      expect(heights.some((h, i) => Math.abs(h - row(bare, "height")[i]) > 1)).toBe(true);
+      expect(row(road, "terrain").every((t) => t === PATH)).toBe(true);
+      // Well off to the side, the land's untouched.
+      expect(cell(road, 10, 2, "height")).toBe(cell(bare, 10, 2, "height"));
+    });
+
+    it("surfaces faint and disused roads in patches", () => {
+      const share = (tags) => row(generateTile(withRoad(tags), 3, 4), "terrain").filter((t) => t === PATH).length / CELLS;
+      expect(share(["road", "faint"])).toBeGreaterThan(0.2);
+      expect(share(["road", "faint"])).toBeLessThan(0.95);
+      expect(share(["road", "disused"])).toBeLessThan(share(["road", "faint"]));
+    });
+  });
 });

@@ -11,12 +11,22 @@ describe("changedTiles", () => {
     expect(changedTiles(continent(), continent()).size).toBe(0);
   });
 
-  it("ignores info pins, hubs and roads", () => {
+  it("ignores info pins, hubs and roads without a route", () => {
     const after = continent({
       pins: [{ id: "p1", kind: "info", at: [5, 5], name: "Camp" }, { id: "p2", kind: "hub", at: [6, 6], radius: 200 }, { id: "p3", kind: "road", at: [1, 1] }, { id: "p4", kind: "road", at: [9, 9] }],
       paths: [{ id: "r1", from: "p3", to: "p4", width: 16 }],
     });
     expect(changedTiles(continent(), after).size).toBe(0);
+  });
+
+  it("covers the tiles along a road whose route, width or tags change", () => {
+    const pins = [{ id: "p3", kind: "road", at: [1.5, 1.5] }, { id: "p4", kind: "road", at: [9.5, 1.5] }];
+    const road = (width, tags) => continent({ pins, paths: [{ id: "r1", from: "p3", to: "p4", width, tags, route: { key: "k", points: [[1.5, 1.5], [9.5, 1.5]] } }] });
+    const tiles = changedTiles(continent({ pins }), road(12, ["road"]));
+    expect(has(tiles, 5, 1)).toBe(true);
+    expect(has(tiles, 5, 10)).toBe(false);
+    expect(has(changedTiles(road(12, ["road"]), road(12, ["road", "faint"])), 5, 1)).toBe(true);
+    expect(changedTiles(road(12, ["road"]), road(12, ["road"])).size).toBe(0);
   });
 
   it("covers every zoned tile when a height pin changes", () => {

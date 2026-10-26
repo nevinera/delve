@@ -1,4 +1,7 @@
 import { simplify } from "../world/polyline.js";
+import { CART_WIDTH_FT, gradeCap } from "../world/constants.js";
+
+export { CART_WIDTH_FT, gradeCap };
 
 // Routes for the sketch's road paths, after Galin et al., "Procedural Generation of Roads"
 // (Eurographics 2010): a shortest path where each foot costs more the steeper it climbs, and
@@ -28,8 +31,6 @@ export const ROUTE_VERSION = 2;
 const STEP_FT = 32;
 const SAMPLE_FT = STEP_FT;
 const RIVER_SAMPLE_FT = 8;
-export const CART_WIDTH_FT = 8;
-export const GRADES = { cart: 0.1, foot: 0.25 }; // rise over run
 // Each foot costs 1 + perGrade × (grade / cap)², so a foot at the cap costs 1 + perGrade.
 const GRADE_COST = { perGrade: 3 };
 // Where the ground's too steep, the road can be dug in or built up by as much as `maxFt` over
@@ -56,10 +57,6 @@ for (let di = -2; di <= 2; di++) {
   for (let dj = -2; dj <= 2; dj++) {
     if ((di || dj) && gcd(Math.abs(di), Math.abs(dj)) === 1) MOVES.push({ di, dj });
   }
-}
-
-export function gradeCap(widthFt) {
-  return widthFt > CART_WIDTH_FT ? GRADES.cart : GRADES.foot;
 }
 
 // The route from `from` to `to` ([x, z] ft). ground(x, z) is { h, water } (generator.js
