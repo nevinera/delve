@@ -8,7 +8,8 @@ import { trunkRadius } from "./treeMeshes.js";
 
 // Walk mode for the 3D view: a person-sized character on the generated ground, with a third-person
 // camera, to get a feel for the land at eye level. Controls follow WoW: W/S run forward and back,
-// A/D turn, Q/E strafe, space jumps, / toggles walking, X sits; shift sprints, which WoW doesn't.
+// A/D turn, Q/E strafe, space jumps, / toggles walking, X sits; Z toggles sprinting, which WoW
+// doesn't have.
 // Left-drag swings the camera around the character, right-drag turns the character with it, and
 // the wheel zooms. Escape stops.
 //
@@ -39,8 +40,8 @@ const DRAG = 0.006; // radians per pixel
 // of the screen) flat out. A little under the 60fps interval, so 60Hz displays don't drop frames.
 const MIN_FRAME_MS = 1000 / 60 - 2;
 const UP = new THREE.Vector3(0, 1, 0);
-const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "shift"]);
-const TOGGLES = new Set(["/", "x"]);
+const KEYS = new Set(["w", "a", "s", "d", "q", "e", " "]);
+const TOGGLES = new Set(["/", "x", "z"]);
 
 // The clips for moving at each gait, ahead, to the left and right and back, and how far one
 // stretches to match the character's speed before its feet are left to slide.
@@ -176,7 +177,7 @@ export class Walker {
     let mz = fz * forward - fx * strafe;
     const length = Math.hypot(mx, mz);
     const swimming = this.swimming();
-    const sprinting = this.held.has("shift") && !swimming;
+    const sprinting = this.sprinting && !swimming;
     const gait = swimming ? "swim" : sprinting ? "sprint" : this.gait;
     const speed = length ? (swimming ? SWIM_FT : gait === "walk" ? WALK_FT : forward < 0 ? BACK_FT : RUN_FT) * (sprinting ? SPRINT : 1) : 0;
     this.motion = { forward, strafe, speed, gait, swimming };
@@ -447,9 +448,10 @@ export class Walker {
     else this.held.delete(key);
   }
 
-  // / switches between walking and running; X sits down, or stands back up.
+  // / switches between walking and running; Z sprints, or stops; X sits down, or stands back up.
   toggle(key) {
     if (key === "/") this.gait = this.gait === "walk" ? "run" : "walk";
+    if (key === "z") this.sprinting = !this.sprinting;
     if (key !== "x" || this.motion?.speed || this.airTime > 0 || this.motion?.swimming) return;
     if (!this.sitting) this.sitting = { at: this.t };
     else if (!this.sitting.standing) this.sitting = { at: this.t, standing: true };

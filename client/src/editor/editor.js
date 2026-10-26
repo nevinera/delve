@@ -43,7 +43,7 @@ const HINTS = {
   tiles: `highlighted tiles are out of date, or not generated yet (faint) · generate brings them all up to date · ${NAV}`,
 };
 const HINT_ROADS = "roads are drawn and kept, but don't shape the ground yet";
-const HINT_WALK = "W/S run · A/D turn · Q/E strafe · space jumps · / walks · X sits · shift sprints · left-drag looks around · right-drag turns · wheel zooms · esc stops walking";
+const HINT_WALK = "W/S run · A/D turn · Q/E strafe · space jumps · / walks · X sits · Z sprints · left-drag looks around · right-drag turns · wheel zooms · esc stops walking";
 const HINT_PICK_WALK = "click where to start walking · esc cancels";
 
 // The editor's steps, in the order you'd usually work, each with its own map and tools. Each step
