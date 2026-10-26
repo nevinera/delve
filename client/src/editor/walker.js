@@ -35,6 +35,9 @@ const BODY_FT = 1; // the character's radius, for bumping into objects
 const SWIM_DEPTH = 4.5; // how deep the feet go in water too deep to stand in
 const CAMERA = { near: 0.5, distance: 22, min: 4, max: 90, pitch: 0.35, minPitch: -1.3, maxPitch: 1.3 };
 const DRAG = 0.006; // radians per pixel
+// While the character moves, a camera swung round by left-dragging drifts back behind it, as WoW's
+// does, closing the gap at this exponential rate per second.
+const CAMERA_FOLLOW = 2;
 
 // Frames are drawn at most this often, so a fast display doesn't keep the GPU (shared with the rest
 // of the screen) flat out. A little under the 60fps interval, so 60Hz displays don't drop frames.
@@ -181,6 +184,10 @@ export class Walker {
     const gait = swimming ? "swim" : sprinting ? "sprint" : this.gait;
     const speed = length ? (swimming ? SWIM_FT : gait === "walk" ? WALK_FT : forward < 0 ? BACK_FT : RUN_FT) * (sprinting ? SPRINT : 1) : 0;
     this.motion = { forward, strafe, speed, gait, swimming };
+    if (speed && this.drag?.button !== 0) {
+      const off = Math.atan2(Math.sin(this.cam.yaw), Math.cos(this.cam.yaw));
+      this.cam.yaw = off * Math.exp(-CAMERA_FOLLOW * dt);
+    }
     if (length > 0) {
       this.sitting = null;
       mx = (mx / length) * speed * dt;
