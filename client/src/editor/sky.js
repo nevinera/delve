@@ -25,6 +25,10 @@ const SUN = { color: 0xfff6e0, discDeg: 1.6, glow: 0xfff0c8 };
 // the horizon) they thin out between, so they stay above most far peaks.
 const CLOUDS = { cover: 0.52, wind: [0.012, 0.004], fade: [0.1, 0.3] };
 
+// The clouds' shapes: five octaves of value noise, worked out once into a texture that repeats every
+// `period` noise cells, rather than for every pixel of sky every frame.
+const CLOUD_NOISE = { size: 512, period: 8, octaves: 5 };
+
 const srgb = (hex) => `vec3(${[16, 8, 0].map((shift) => (((hex >> shift) & 255) / 255).toFixed(4)).join(", ")})`;
 const f = (v) => v.toFixed(4);
 
@@ -55,29 +59,10 @@ const fragmentShader = `
   uniform float sunCos;
   uniform float cover;
   uniform vec2 drift;
+  uniform sampler2D clouds;
   varying vec3 vDir;
 
   ${SKY_COLOR_GLSL}
-
-  float hash(vec2 p) {
-    return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453);
-  }
-  float noise(vec2 p) {
-    vec2 i = floor(p);
-    vec2 f = fract(p);
-    vec2 u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(hash(i), hash(i + vec2(1.0, 0.0)), u.x), mix(hash(i + vec2(0.0, 1.0)), hash(i + vec2(1.0, 1.0)), u.x), u.y);
-  }
-  float fbm(vec2 p) {
-    float sum = 0.0;
-    float amp = 0.5;
-    for (int i = 0; i < 5; i++) {
-      sum += amp * noise(p);
-      p = p * 2.03 + vec2(17.0, 9.0);
-      amp *= 0.5;
-    }
-    return sum;
-  }
 
   void main() {
     vec3 dir = normalize(vDir);
@@ -88,8 +73,8 @@ const fragmentShader = `
     // Clouds: two layers on a flat ceiling seen through the dome, drifting at different speeds,
     // thinning toward the horizon so they melt into the haze there.
     vec2 ceiling = dir.xz / (up + 0.08);
-    float big = fbm(ceiling * 0.9 + drift);
-    float small = fbm(ceiling * 2.6 + drift * 1.7 + vec2(40.0, 13.0));
+    float big = texture2D(clouds, (ceiling * 0.9 + drift) / ${f(CLOUD_NOISE.period)}).r;
+    float small = texture2D(clouds, (ceiling * 2.6 + drift * 1.7 + vec2(40.0, 13.0)) / ${f(CLOUD_NOISE.period)}).r;
     float shape = big * 0.7 + small * 0.3;
     float cloud = smoothstep(1.0 - cover, 1.0 - cover + 0.25, shape) * smoothstep(${f(CLOUDS.fade[0])}, ${f(CLOUDS.fade[1])}, up);
     // Lit from the sun's side, shaded underneath.
@@ -125,6 +110,7 @@ export class Sky {
         sunCos: { value: Math.cos(THREE.MathUtils.degToRad(SUN.discDeg)) },
         cover: { value: CLOUDS.cover },
         drift: { value: new THREE.Vector2() },
+        clouds: { value: cloudTexture() },
       },
       side: THREE.BackSide,
       depthWrite: false,
@@ -142,4 +128,39 @@ export class Sky {
     this.mesh.scale.setScalar(camera.far * 0.9);
     this.material.uniforms.drift.value.set(CLOUDS.wind[0] * seconds, CLOUDS.wind[1] * seconds);
   }
+}
+
+// Value noise on a lattice that wraps every `period` cells, so the texture tiles. Each octave doubles
+// the frequency, and the period with it.
+function cloudTexture() {
+  const { size, period, octaves } = CLOUD_NOISE;
+  const hash = (x, z, o) => {
+    let h = (x * 374761393 + z * 668265263 + o * 2147483647) | 0;
+    h = Math.imul(h ^ (h >>> 13), 1274126177);
+    return ((h ^ (h >>> 16)) >>> 0) / 4294967295;
+  };
+  const smooth = (t) => t * t * (3 - 2 * t);
+  const data = new Uint8Array(size * size);
+  for (let py = 0; py < size; py++) {
+    for (let px = 0; px < size; px++) {
+      let [sum, amp, cells] = [0, 0.5, period];
+      for (let o = 0; o < octaves; o++) {
+        const [x, z] = [(px / size) * cells, (py / size) * cells];
+        const [ix, iz] = [Math.floor(x), Math.floor(z)];
+        const [u, v] = [smooth(x - ix), smooth(z - iz)];
+        const at = (dx, dz) => hash((ix + dx) % cells, (iz + dz) % cells, o);
+        sum += amp * (at(0, 0) * (1 - u) * (1 - v) + at(1, 0) * u * (1 - v) + at(0, 1) * (1 - u) * v + at(1, 1) * u * v);
+        amp *= 0.5;
+        cells *= 2;
+      }
+      data[py * size + px] = Math.round(sum * 255);
+    }
+  }
+  const texture = new THREE.DataTexture(data, size, size, THREE.RedFormat, THREE.UnsignedByteType);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.needsUpdate = true;
+  return texture;
 }
