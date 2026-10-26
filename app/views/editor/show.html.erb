@@ -50,7 +50,8 @@
     </section>
     <nav id="stepTabs" class="editor-tabs editor-steps">
       <button type="button" data-step="zones">zones</button>
-      <button type="button" data-step="shape">shape</button>
+      <button type="button" data-step="heights">heights</button>
+      <button type="button" data-step="biomes">biomes</button>
       <button type="button" data-step="features">features</button>
       <button type="button" data-step="population">population</button>
     </nav>
@@ -63,8 +64,8 @@
         <button id="deleteZone" type="button">delete zone</button>
       </div>
     </section>
-    <section class="editor-step" data-step="shape" hidden>
-      <div class="editor-tools" data-tools="shape"></div>
+    <section class="editor-step" data-step="heights" hidden>
+      <div class="editor-tools" data-tools="heights"></div>
       <div id="heightPalette" class="editor-palette" hidden>
         <input id="heightSlider" class="editor-vslider" type="range" min="-180" max="1000" step="1" value="0">
         <div>
@@ -72,17 +73,23 @@
           <p class="editor-empty">4 miles (21,120 ft) at the top, -50 at the bottom</p>
         </div>
       </div>
+    </section>
+    <section class="editor-step" data-step="biomes" hidden>
+      <div class="editor-tools" data-tools="biomes"></div>
       <div id="biomePalette" class="editor-palette" hidden>
         <div id="biomeChoices" class="editor-choices"></div>
         <div id="biomeTags" class="editor-choices"></div>
       </div>
-      <div class="editor-row editor-subhead editor-show">
-        show
-        <label class="editor-check"><input type="radio" name="shapeShow" value="both" checked><span>both</span></label>
-        <label class="editor-check"><input type="radio" name="shapeShow" value="biomes"><span>biomes</span></label>
-        <label class="editor-check"><input type="radio" name="shapeShow" value="heights"><span>heights</span></label>
-      </div>
       <label class="editor-check"><input id="showRivers" type="checkbox"><span>show rivers</span></label>
+    </section>
+    <section class="editor-step" data-step="features" hidden>
+      <div class="editor-tools" data-tools="features"></div>
+    </section>
+    <section class="editor-step" data-step="population" hidden>
+      <div class="editor-tools" data-tools="population"></div>
+      <label class="editor-field editor-subhead">tree kind <select id="treeKind"></select></label>
+    </section>
+    <section id="generateBox" hidden>
       <div class="editor-row editor-subhead">
         <button id="generate" type="button">generate</button>
         <button id="regenerate" type="button">regenerate changed</button>
@@ -91,13 +98,6 @@
         <input id="highlight" type="checkbox">
         <span>highlight changes (<span id="pendingInfo"></span>)</span>
       </label>
-    </section>
-    <section class="editor-step" data-step="features" hidden>
-      <div class="editor-tools" data-tools="features"></div>
-    </section>
-    <section class="editor-step" data-step="population" hidden>
-      <div class="editor-tools" data-tools="population"></div>
-      <label class="editor-field editor-subhead">tree kind <select id="treeKind"></select></label>
     </section>
     <section id="props" class="editor-props" hidden></section>
     <p id="message" class="editor-message"></p>

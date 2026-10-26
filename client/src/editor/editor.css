@@ -250,15 +250,6 @@
   border-radius: 2px;
 }
 
-.editor-show {
-  align-items: center;
-  color: #aaa;
-}
-
-.editor-show .editor-check {
-  margin-top: 0;
-}
-
 .editor-empty {
   color: #777;
 }

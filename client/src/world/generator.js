@@ -92,32 +92,14 @@ const smoothstep = (a, b, x) => {
 };
 const lerp = (a, b, t) => a + (b - a) * t;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const toFt = ([x, z]) => [x * TILE_FT, z * TILE_FT];
 
 // zones: every zone on the continent, as stored ({ region, pins, strokes }, continent tile
 // units). seedKey (the continent's key) seeds the noise.
 export function prepareWorld(zones, seedKey) {
-  const toFt = ([x, z]) => [x * TILE_FT, z * TILE_FT];
-  const zoned = zones.filter((z) => z.region?.length);
-
-  // The zoned area: every region together. Its outline is where land meets open ocean.
-  const union = zoned.length ? polygonClipping.union(...zoned.map((z) => z.region)) : [];
-  const area = union.map((polygon) => polygon.map((ring) => ring.slice(0, -1).map(toFt)));
-
-  const ctx = {
-    seed: hashString(seedKey),
-    area,
-    areaEdges: edgesOf(area),
-    rivers: [],
-    lakeSites: new Map(), // "gi,gj" -> lake or null, filled as tiles need them
-  };
-  const heightPins = zoned.flatMap((z) => z.pins.filter((p) => p.kind === "height" && Number.isFinite(p.height)));
-  ctx.heightAt = prepareHeights(
-    heightPins.map((p) => {
-      const [x, z] = toFt(p.at);
-      return { x, z, height: p.height };
-    }),
-    BASE.defaultHeight,
-  );
+  const ctx = prepareShape(zones, seedKey);
+  ctx.lakeSites = new Map(); // "gi,gj" -> lake or null, filled as tiles need them
+  const { zoned, heightPins } = ctx;
 
   const pinsOf = (kind) => zoned.flatMap((z) => z.pins.filter((p) => p.kind === kind));
   ctx.biomes = prepareBiomes({
@@ -148,6 +130,36 @@ export function prepareWorld(zones, seedKey) {
   });
 
   return ctx;
+}
+
+// The land's shape from the zones' regions and height pins alone, with no biomes: the zoned area,
+// and the broad shape through the pins (heightAt). prepareWorld builds on it, and the editor's
+// heights preview draws it with shapeHeight.
+export function prepareShape(zones, seedKey) {
+  const zoned = zones.filter((z) => z.region?.length);
+
+  // The zoned area: every region together. Its outline is where land meets open ocean.
+  const union = zoned.length ? polygonClipping.union(...zoned.map((z) => z.region)) : [];
+  const area = union.map((polygon) => polygon.map((ring) => ring.slice(0, -1).map(toFt)));
+  const heightPins = zoned.flatMap((z) => z.pins.filter((p) => p.kind === "height" && Number.isFinite(p.height)));
+  const heightAt = prepareHeights(
+    heightPins.map((p) => {
+      const [x, z] = toFt(p.at);
+      return { x, z, height: p.height };
+    }),
+    BASE.defaultHeight,
+  );
+  return { seed: hashString(seedKey), area, areaEdges: edgesOf(area), rivers: [], heightAt, zoned, heightPins };
+}
+
+// The ground from prepareShape: the broad shape meeting the sea at the wandering coast, and the
+// sea floor beyond it. No hills, crags, rivers or anything else the biomes bring.
+export function shapeHeight(ctx, x, z) {
+  const edgeDist = Math.min(EDGE_REACH_FT, distanceToEdges(x, z, ctx.areaEdges));
+  const inland = (pointInRegion(x, z, ctx.area) ? edgeDist : -edgeDist) - shoreInset(ctx, x, z);
+  const coastDist = Math.min(COAST_REACH_FT, Math.abs(inland));
+  if (inland <= 0) return seaFloor(ctx, x, z, coastDist);
+  return coast(ctx, ctx.heightAt(x, z), x, z, coastDist);
 }
 
 // One tile's layers. tx and tz are continent tile coordinates.

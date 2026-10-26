@@ -16,6 +16,7 @@ import { surfaceTiles, tilePath } from "./thumbnails.js";
 import { disposeGround, groundMaterial } from "./groundMaterial.js";
 import { HORIZON, SUN_DIR, Sky } from "./sky.js";
 import { Stats, statsWanted } from "./stats.js";
+import { gridHeight, previewMesh } from "./shapePreview.js";
 
 const RING_TILES = 3; // tiles drawn in full around the active zone's editable tiles
 // What you can see while walking (plans/design.md, "Vision"): fog from `fogStartFt` to
@@ -374,6 +375,7 @@ export class RenderView {
   // Rebuilds everything from the world. `keepCamera` leaves the view where it is.
   show(state, { keepCamera = false } = {}) {
     this.streaming = null;
+    this.previewing = null;
     if (!keepCamera) this.stopWalk();
     const { world, continent, active, thumbnails } = state;
     [this.world, this.continent] = [world, continent];
@@ -441,17 +443,77 @@ export class RenderView {
     this.resize();
   }
 
+  // The heights preview (shapePreview.js) in place of the tiles: the whole continent's shape as one
+  // coarse, height-tinted mesh with contour lines, on the open sea. `grid` may be null for no land
+  // yet. The camera frames it the first time it's shown for a continent, once there's a grid.
+  showPreview(state, grid) {
+    this.stopWalk();
+    if (this.previewing !== state.continent) this.framePending = true;
+    this.streaming = null;
+    this.previewing = state.continent;
+    [this.world, this.continent] = [state.world, state.continent];
+    this.clear();
+    this.decoded = new Map();
+    this.sightTile = null;
+    this.clutterTiles.clear();
+    this.clutterAround = null;
+    this.unreadable = [];
+    this.previewMesh = null;
+    this.origin ??= [0, 0];
+    this.materials();
+    this.buildOcean([]);
+    this.setPreviewGrid(grid);
+    this.showMarks(state);
+    this.resize();
+  }
+
+  // Swaps in a new heights preview grid. Pins and strokes stay where they were until showMarks.
+  setPreviewGrid(grid) {
+    if (!this.previewing) return;
+    this.grid = grid;
+    this.ground = (x, z) => {
+      const h = grid ? gridHeight(grid, x + this.origin[0], z + this.origin[1]) : NaN;
+      return Number.isNaN(h) ? 0 : Math.max(h, 0);
+    };
+    if (this.previewMesh) {
+      this.content.remove(this.previewMesh);
+      this.previewMesh.geometry.dispose();
+      this.surfaces.splice(this.surfaces.indexOf(this.previewMesh), 1);
+      this.previewMesh = null;
+    }
+    if (!grid) return this.render();
+    if (this.framePending) {
+      // Centered on the grid, seen from the south and well above.
+      this.framePending = false;
+      this.origin = [grid.x0 + ((grid.nx - 1) * grid.stepFt) / 2, grid.z0 + ((grid.nz - 1) * grid.stepFt) / 2];
+      this.buildOcean([]);
+      const extent = Math.max(grid.nx, grid.nz) * grid.stepFt;
+      this.controls.target.set(0, 0, 0);
+      this.camera.position.set(0, extent * 0.55, extent * 0.7);
+      this.controls.update();
+    }
+    this.contourMaterial ??= contourMaterial();
+    this.previewMesh = new THREE.Mesh(geometry(previewMesh(grid, this.origin)), this.contourMaterial);
+    this.content.add(this.previewMesh);
+    this.surfaces.unshift(this.previewMesh);
+    this.render();
+  }
+
+  materials() {
+    this.terrainMaterial ??= groundMaterial(this.renderer);
+    this.waterMaterials ??= {
+      sea: new THREE.MeshLambertMaterial({ color: SEA }),
+      fresh: new THREE.MeshLambertMaterial({ color: 0x3a78b8, transparent: true, opacity: 0.85 }),
+    };
+  }
+
   // A tile's ground and water meshes, from its decoded copy and its neighbours to the east and
   // south, which it reaches over to close the seams.
   buildGround(key) {
     const { decoded } = this;
     const tile = decoded.get(key);
     const [tx, tz] = key.split(",").map(Number);
-    this.terrainMaterial ??= groundMaterial(this.renderer);
-    this.waterMaterials ??= {
-      sea: new THREE.MeshLambertMaterial({ color: SEA }),
-      fresh: new THREE.MeshLambertMaterial({ color: 0x3a78b8, transparent: true, opacity: 0.85 }),
-    };
+    this.materials();
     const neighbours = {
       east: decoded.get(`${tx + 1},${tz}`),
       south: decoded.get(`${tx},${tz + 1}`),
@@ -489,6 +551,7 @@ export class RenderView {
   // what's drawn so seams close. They load and drop as the character crosses tiles.
   walkFrom(state, [x, z], onStop) {
     this.streaming = null;
+    this.previewing = null;
     this.stopWalk();
     this.clear();
     this.decoded = new Map();
@@ -804,6 +867,21 @@ export class RenderView {
       this.handlers.click?.(press.hit, this.tileAt(e));
     }
   }
+}
+
+// Vertex colors with contour lines: a faint one every 100ft and a stronger one every 500ft, kept a
+// pixel or so wide at any distance.
+function contourMaterial() {
+  const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nvarying float vHeight;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvHeight = position.y;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nvarying float vHeight;\nfloat contour(float every) { float h = vHeight / every; return 1.0 - min(abs(fract(h - 0.5) - 0.5) / fwidth(h), 1.0); }")
+      .replace("#include <color_fragment>", "#include <color_fragment>\ndiffuseColor.rgb *= 1.0 - 0.18 * contour(100.0) - 0.3 * contour(500.0);");
+  };
+  return material;
 }
 
 function hasClipControl() {
