@@ -31,15 +31,15 @@ describe("cliffs", () => {
     expect(Math.max(...at.drops.values)).toBeGreaterThan(150);
   });
 
-  it("holds drops the pins don't call for at the least, and says so", () => {
+  it("drops no more than the pins call for, saying where that's hardly a cliff", () => {
     const pins = [
       { x: -1000, z: -400, height: 50 },
       { x: 1000, z: 400, height: 50 },
       { x: 1000, z: -400, height: 50 },
     ];
     const at = prepareHeights(pins, 20, prepareCliffs(cliff, 1));
-    expect(Math.min(...at.drops.values)).toBeCloseTo(CLIFF.minDropFt, 5);
-    expect(at.drops.least.some(Boolean)).toBe(true);
+    expect(Math.max(...at.drops.values)).toBeLessThan(CLIFF.shortFt);
+    expect(at.drops.short.every(Boolean)).toBe(true);
   });
 
   it("has a face 20 to 50ft across on the bottom side", () => {

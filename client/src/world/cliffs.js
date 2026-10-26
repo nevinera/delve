@@ -6,8 +6,9 @@
 // The step is a double layer along the line: a field that's smooth everywhere but on the line,
 // and jumps down by the drop crossing it. Away from the line it fades, half the drop up on the
 // top side and half down on the bottom side, so the smooth surface through the pins takes up the
-// rest. The drop is set at knots every `knotFt` or so along the line, at least `minDropFt`, and
-// varies straight between them. It eases to nothing over the last `taperFt` of each end, so a
+// rest. The drop is set at knots every `knotFt` or so along the line, never below nothing (the
+// ground never climbs across a cliff), and varies straight between them. Drops under `shortFt`
+// are hardly cliffs, and the editor marks them. It eases to nothing over the last `taperFt` of each end, so a
 // cliff fades into a slope there.
 //
 // On the bottom side the jump is spread into a jagged face `faceFt` across: its top edge ragged,
@@ -18,7 +19,7 @@
 import { fbm } from "./noise.js";
 import { makePolyline, nearBounds, nearest } from "./polyline.js";
 
-export const CLIFF = { minDropFt: 8, knotFt: 300, taperFt: 150 };
+export const CLIFF = { shortFt: 8, knotFt: 300, taperFt: 150 };
 // The face: as wide as `faceFt` (varying along the cliff over `widthWavelength`), its top edge
 // wandering by `raggedFt`, splinters pushing it in or out by up to `splinter` of its width, and
 // bumps up to `bumpsFt` high (or `bumpShare` of the drop, if less). Ledges cover about `ledges`

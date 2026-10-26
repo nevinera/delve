@@ -5,8 +5,8 @@
 // Far from every pin it eases to a default height.
 //
 // Cliffs (cliffs.js) step the ground down along lines, by drops worked out here: the ones that
-// let the surface through the pins bend least, so the cliffs take up the height between pins
-// either side of them. A drop is never less than CLIFF.minDropFt.
+// leave the ground through the pins least steep beside them, so the cliffs take up the height
+// between pins either side of them. A drop is never less than nothing.
 //
 // Points are feet in continent space. Solving happens once per continent; each point is then a sum
 // over the pins.
@@ -20,9 +20,9 @@ const FAR = { start: 3000, end: 8000 }; // ft from the nearest pin over which it
 // them the spline may go, and `edgeFt` how gently it bends onto a bound.
 const BOUND = { reachFt: 1000, softFt: 15, slackFt: 10, edgeFt: 8 };
 
-// How strongly drops are held near the least drop, and to their neighbours', where the pins
-// don't settle them, as shares of how strongly the pins do.
-const DROP_HOLD = { least: 1e-3, even: 0.1 };
+// How strongly drops are held near nothing, and to their neighbours', where the pins don't settle
+// them, as shares of how strongly the pins do.
+const DROP_HOLD = { none: 1e-3, even: 0.1 };
 const SLOPE_PROBE_FT = 1; // how far either way the cliffs' field's slope is measured over
 
 const phi = (r) => (r > 0 ? r * r * Math.log(r) : 0);
@@ -30,15 +30,13 @@ const phi = (r) => (r > 0 ? r * r * Math.log(r) : 0);
 // pins: [{ x, z, height }]; cliffs: from prepareCliffs, or null. Returns heightAt(x, z), with
 // heightAt.smooth(x, z), the ground without the cliffs, and when there are cliffs,
 // heightAt.step(x, z), what they add to it, and heightAt.drops, each cliff knot's drop ({ values,
-// least }, `least` saying which were held at the least drop).
+// short }, `short` saying which are under CLIFF.shortFt).
 export function prepareHeights(pins, defaultHeight, cliffs = null) {
   const m = cliffs?.knots.length ?? 0;
   if (!pins.length) {
     const flat = () => defaultHeight;
     if (!m) return Object.assign(flat, { smooth: flat });
-    const values = new Float64Array(m).fill(CLIFF.minDropFt);
-    const step = cliffs.settle(values);
-    return Object.assign((x, z) => defaultHeight + step(x, z), { smooth: flat, step, drops: { values, least: new Uint8Array(m).fill(1) } });
+    return Object.assign(flat, { smooth: flat, drops: { values: new Float64Array(m), short: new Uint8Array(m).fill(1) } });
   }
   // With fewer than three pins, or all in a line, the tilt terms can't be pinned down, so the
   // spline goes without them.
@@ -92,13 +90,13 @@ export function prepareHeights(pins, defaultHeight, cliffs = null) {
 }
 
 // The cliffs' drops that leave the ground through the pins (pts, [u, v, height]) least steep
-// across each cliff, near it, none less than CLIFF.minDropFt. terms[i][k] is how far knot k's
+// across each cliff, near it, none less than nothing. terms[i][k] is how far knot k's
 // drop moves the ground at pin i, per foot. The ground is the cliffs' field plus the spline
 // through the heights less the field's share, which is the spline through the heights less each
 // drop times the spline through its terms. So its slope across a cliff at a spot is linear in
 // the drops, and the drops minimise its square summed over spots either side of every knot, held a little toward the
-// least drop and each other, which settles knots no pin's near. Any that come out below the
-// least are held there, and the rest worked out again.
+// nothing and each other, which settles knots no pin's near. Any that come out below nothing are
+// held there, and the rest worked out again.
 function fitDrops(pts, terms, tilt, { knots, across, basis }) {
   const n = pts.length;
   const m = knots.length;
@@ -108,7 +106,7 @@ function fitDrops(pts, terms, tilt, { knots, across, basis }) {
     a[i][a.length + m] = pts[i][2];
   }
   const x = gauss(a, m + 1);
-  if (!x) return { values: new Float64Array(m).fill(CLIFF.minDropFt), least: new Uint8Array(m).fill(1) };
+  if (!x) return { values: new Float64Array(m), short: new Uint8Array(m).fill(1) };
   const g = Array.from({ length: m }, () => new Float64Array(m));
   const r = new Float64Array(m);
   const slope = new Float64Array(m + 1);
@@ -135,8 +133,7 @@ function fitDrops(pts, terms, tilt, { knots, across, basis }) {
   for (let k = 0; k < m; k++) trace += g[k][k];
   const hold = Math.max(trace / m, 1e-9);
   for (let k = 0; k < m; k++) {
-    g[k][k] += hold * DROP_HOLD.least;
-    r[k] += hold * DROP_HOLD.least * CLIFF.minDropFt;
+    g[k][k] += hold * DROP_HOLD.none;
     const next = k + 1 < m && knots[k + 1].cliff === knots[k].cliff ? k + 1 : -1;
     if (next < 0) continue;
     g[k][k] += hold * DROP_HOLD.even;
@@ -145,33 +142,27 @@ function fitDrops(pts, terms, tilt, { knots, across, basis }) {
     g[next][k] -= hold * DROP_HOLD.even;
   }
 
-  const values = new Float64Array(m).fill(CLIFF.minDropFt);
-  const least = new Uint8Array(m);
+  const values = new Float64Array(m);
+  const held = new Uint8Array(m);
   for (let round = 0; round < m; round++) {
-    const free = [...values.keys()].filter((k) => !least[k]);
+    const free = [...values.keys()].filter((k) => !held[k]);
     if (!free.length) break;
     const b = free.map((k) => {
       const row = new Float64Array(free.length + 1);
       free.forEach((j, c) => (row[c] = g[k][j]));
-      let rhs = r[k];
-      for (let j = 0; j < m; j++) if (least[j]) rhs -= g[k][j] * CLIFF.minDropFt;
-      row[free.length] = rhs;
+      row[free.length] = r[k];
       return row;
     });
     const solved = gauss(b);
     if (!solved) break;
-    let held = false;
+    let more = false;
     free.forEach((k, c) => {
-      values[k] = solved[c][0];
-      if (values[k] < CLIFF.minDropFt) {
-        values[k] = CLIFF.minDropFt;
-        least[k] = 1;
-        held = true;
-      }
+      values[k] = Math.max(0, solved[c][0]);
+      if (solved[c][0] < 0) held[k] = more = true;
     });
-    if (!held) break;
+    if (!more) break;
   }
-  return { values, least };
+  return { values, short: values.map((v) => v < CLIFF.shortFt) };
 }
 
 // Weights and affine terms for the spline through pts ([u, v, height]), or null when the system

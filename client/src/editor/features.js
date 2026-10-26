@@ -43,8 +43,8 @@ export const ROADS = {
   footpath: { width: 3, minPx: 2, style: "dotted" },
 };
 const POOL_COLOR = "rgba(74, 144, 217, 0.8)";
-// Cliffs are drawn with ticks down their bottom side, every `tickPx`, and red where the pins don't
-// call for a drop as big as the least a cliff has.
+// Cliffs are drawn with ticks down their bottom side, every `tickPx`, and red where the pins call
+// for so small a drop it's hardly a cliff.
 const CLIFF = { color: "#1c1612", low: "#ff4a4a", edge: "rgba(255, 255, 255, 0.7)", label: "cliff", tickPx: 9, tickLenPx: 6 };
 export const FEATURE_HINTS = {
   select: "click a pin or road to select it · drag pins, and a selected hub's edge to size it · delete removes the selection",
@@ -451,7 +451,7 @@ export class Features {
     }
   }
 
-  // Every cliff, ticked down its bottom side and red where it's held at the least drop, the
+  // Every cliff, ticked down its bottom side and red where it hardly drops, the
   // selected one with its corners, and the one being drawn.
   drawCliffs(ctx, sketch) {
     const dpr = this.map.dpr;
@@ -460,11 +460,11 @@ export class Features {
       const selected = this.isSelected(cliff);
       if (selected) this.drawLine(ctx, cliff.points, 0, CLIFF.edge, 6 * dpr);
       this.drawCliff(ctx, cliff.points, CLIFF.color);
-      // Each knot held at the least drop reddens the cliff halfway to its neighbours.
+      // Each knot that hardly drops reddens the cliff halfway to its neighbours.
       const own = knots.map((k, i) => ({ ...k, i })).filter((k) => k.cliff === index);
       const line = makePolyline(cliff.points.map(([x, z]) => [x * TILE_FT, z * TILE_FT]));
       own.forEach((k, j) => {
-        if (!drops.least[k.i]) return;
+        if (!drops.short[k.i]) return;
         const from = j ? (own[j - 1].along + k.along) / 2 : 0;
         const to = j < own.length - 1 ? (own[j + 1].along + k.along) / 2 : line.length;
         this.drawCliff(ctx, stretch(line, from, to), CLIFF.low);
@@ -699,8 +699,8 @@ export class Features {
     if (!own.length) return;
     const values = own.map((i) => Math.round(drops.values[i]));
     const [low, high] = [Math.min(...values), Math.max(...values)];
-    const least = own.some((i) => drops.least[i]);
-    const text = `Drops ${low === high ? low : `${low} to ${high}`} ft, on the ticked side.${least ? ` The pins either side don't call for a drop of ${CLIFF_DROP.minDropFt} ft where it's red, so it's held there.` : ""}`;
+    const short = own.some((i) => drops.short[i]);
+    const text = `Drops ${low === high ? low : `${low} to ${high}`} ft, on the ticked side.${short ? ` Where it's red, the pins either side call for less than ${CLIFF_DROP.shortFt} ft.` : ""}`;
     if (el.textContent !== text) el.textContent = text;
   }
 
