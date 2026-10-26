@@ -53,8 +53,8 @@ const STEPS = {
   features: { tools: ["select", "river", "road", "hub", "info"], kinds: ["river", "road", "hub", "info"] },
   tiles: { tools: [], kinds: [], map: "tiles" },
 };
-// With more tiles than this in sight, tiles draw as their thumbnails instead of close up.
-const DETAIL_MAX_TILES = 100;
+// With this many tiles in sight or more, tiles draw as their thumbnails instead of close up.
+const DETAIL_MAX_TILES = 128;
 const PREVIEW_DELAY_MS = 80; // after panning or zooming stops, before the preview is redone
 const PREVIEW_MARGIN = 0.15; // of the view's size, worked out beyond each edge
 const PREVIEW_PX = 3; // screen pixels per preview sample
@@ -535,8 +535,8 @@ export class Editor {
   }
 
   renderScale() {
-    const across = this.map.view.across;
-    this.el.scale.textContent = `${across} tile${across === 1 ? "" : "s"} across`;
+    const across = this.map.tilesAcross;
+    this.el.scale.textContent = `${across < 10 ? across.toFixed(1) : Math.round(across)} tiles across`;
   }
 
   // Generates the given tiles from every zone on the continent, counting progress on `button`.
@@ -803,7 +803,7 @@ export class Editor {
   drawTiles(ctx, map) {
     const [x0, z0, x1, z1] = map.bounds();
     const [tx0, tz0, tx1, tz1] = [Math.floor(x0), Math.floor(z0), Math.floor(x1), Math.floor(z1)];
-    const close = (tx1 - tx0 + 1) * (tz1 - tz0 + 1) <= DETAIL_MAX_TILES;
+    const close = (tx1 - tx0 + 1) * (tz1 - tz0 + 1) < DETAIL_MAX_TILES;
     this.details.forgetQueued();
     ctx.imageSmoothingEnabled = !close && map.view.scale < 64;
     for (let tx = tx0; tx <= tx1; tx++) {
