@@ -31,7 +31,7 @@ const KEYS = { g: "move", r: "turn", s: "size" };
 // The person for scale stands to the left as first framed (frameObject looks from +x, +z), where
 // the object won't hide it, twice as far out as the object reaches, and at least nearestFt.
 const PERSON = { heightFt: 6, nearestFt: 4, toward: new THREE.Vector2(-0.9, 0.7).normalize() };
-const TICKS = { minorFt: 0.15, majorFt: 0.4 }; // the vertical axis's discs' radii, at each foot and every 5
+const TICKS = { minorFt: 0.5 / 12, majorFt: 1 / 12 }; // the vertical axis's discs' radii, at each foot and every 5
 const LABEL_FT = 10; // how far out along each axis its label sits
 const FADED = 0.25; // how much of the unpicked pieces shows while one is picked
 const HOLE = { color: 0xff4040, opacity: 0.3 };
