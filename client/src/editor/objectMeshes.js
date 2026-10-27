@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { imageOf, makeObject, specOf } from "../world/objects.js";
-import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, objectGeometry } from "./builtMeshes.js";
+import { paletteColors } from "../world/builtObjects.js";
+import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, objectGeometry, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
 import { meshHeightAt } from "../world/clutter.js";
 
 // Objects for the 3D view (world/objects.js says what they are and where), as instanced meshes:
@@ -20,7 +21,12 @@ export function setObjectSight(x, z, smallFt, largeFt) {
 }
 
 function limited(range, vertexColors = false, material = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, side: THREE.DoubleSide, vertexColors })) {
-  material.onBeforeCompile = (shader) => {
+  const before = material.onBeforeCompile.bind(material);
+  // Shaders are shared by this key; it keeps what the material did to its shader before apart.
+  const key = material.customProgramCacheKey();
+  material.customProgramCacheKey = () => `${key}/limited`;
+  material.onBeforeCompile = (shader, renderer) => {
+    before(shader, renderer);
     shader.uniforms.objectFocus = sight.focus;
     shader.uniforms.objectRange = range;
     shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nuniform vec2 objectFocus;\nuniform float objectRange;").replace(
@@ -56,6 +62,26 @@ function decalsOf(object, colors = []) {
     const decals = decalGeometry(object, imageOf, colors);
     const texture = decals && atlasTexture(decals.atlas);
     kept.set(key, decals && { geometry: decals.geometry, small: limited(sight.small, false, decalMaterial(texture)), large: limited(sight.large, false, decalMaterial(texture)) });
+  }
+  return kept.get(key);
+}
+
+// A built object's tiled pieces with its parameters' colors, as [{ geometry, small, large }] (one
+// per image), kept as its geometry is.
+const builtTiles = new WeakMap(); // object -> Map(colors -> tiles)
+function tilesOf(object, colors = []) {
+  if (!builtTiles.has(object)) builtTiles.set(object, new Map());
+  const kept = builtTiles.get(object);
+  const key = colors.join(",");
+  if (!kept.has(key)) {
+    const wearer = paletteColors(object, colors);
+    kept.set(
+      key,
+      tiledGeometries(object, imageOf).map(({ image, geometry }) => {
+        const texture = tileTexture(image, wearer);
+        return { geometry, small: limited(sight.small, false, tiledMaterial(texture)), large: limited(sight.large, false, tiledMaterial(texture)) };
+      }),
+    );
   }
   return kept.get(key);
 }
@@ -188,6 +214,7 @@ export function objectMeshes(objects, tileAt, origin) {
       const large = spec.height * object.scale >= BUILT_LARGE_FT;
       const key = `${object.type}/${(object.colors ?? []).join(",")}/${large ? "large" : "small"}`;
       if (geometry) join(key, geometry, large ? materials.builtLarge : materials.builtSmall, { object, p: -1 });
+      tilesOf(spec.built, object.colors).forEach((tiles, n) => join(`${key}/tiles${n}`, tiles.geometry, large ? tiles.large : tiles.small, { object, p: -1 }));
       const decals = decalsOf(spec.built, object.colors);
       if (decals) join(`${key}/decals`, decals.geometry, large ? decals.large : decals.small, { object, p: -1 });
       continue;
@@ -228,6 +255,8 @@ export function typePreview(type) {
   if (!spec) return group;
   if (spec.built) {
     group.add(own(new THREE.Mesh(objectGeometry(spec.built) ?? new THREE.BufferGeometry(), builtMaterial())));
+    const colors = paletteColors(spec.built);
+    for (const { image, geometry } of tiledGeometries(spec.built, imageOf)) group.add(own(new THREE.Mesh(geometry, tiledMaterial(tileTexture(image, colors)))));
     const decals = decalGeometry(spec.built, imageOf);
     if (decals) group.add(own(new THREE.Mesh(decals.geometry, decalMaterial(atlasTexture(decals.atlas)))));
     return group;

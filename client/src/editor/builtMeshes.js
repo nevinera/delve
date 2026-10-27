@@ -261,6 +261,115 @@ export function atlasTexture({ size, rgba }) {
   return texture;
 }
 
+// --- tiled images ---
+
+// Where on a tiled image each corner of a sized piece's geometry falls, in copies of the image:
+// round sides (cylinders and cones) wrap, a whole number of copies around; other faces take the
+// two axes they face least along.
+function tileUvs(g, piece, every) {
+  const p = g.attributes.position;
+  const uv = new Float32Array(p.count * 2);
+  const round = piece.type === "cylinder" || piece.type === "cone";
+  const around = Math.max(1, Math.round((Math.PI * (piece.size[0] + piece.size[2])) / 2 / every));
+  const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  for (let i = 0; i < p.count; i += 3) {
+    a.fromBufferAttribute(p, i);
+    b.fromBufferAttribute(p, i + 1);
+    c.fromBufferAttribute(p, i + 2);
+    const n = b.clone().sub(a).cross(c.clone().sub(a)).normalize();
+    const corners = [a, b, c];
+    if (round && Math.abs(n.y) < 0.9) {
+      const us = corners.map((q) => ((Math.atan2(q.x, q.z) / (2 * Math.PI) + 1) % 1) * around);
+      // A triangle across the seam takes its far side's copy.
+      if (Math.max(...us) - Math.min(...us) > around / 2) us.forEach((u, k) => u < around / 2 && (us[k] = u + around));
+      corners.forEach((q, k) => uv.set([us[k], q.y / every], (i + k) * 2));
+      continue;
+    }
+    const [ax, ay, az] = [Math.abs(n.x), Math.abs(n.y), Math.abs(n.z)];
+    const flat = ax >= ay && ax >= az ? (q) => [q.z, q.y] : ay >= az ? (q) => [q.x, q.z] : (q) => [q.x, q.y];
+    corners.forEach((q, k) => uv.set(flat(q).map((v) => v / every), (i + k) * 2));
+  }
+  g.setAttribute("uv", new THREE.BufferAttribute(uv, 2));
+}
+
+const tileEvaluator = new Evaluator();
+tileEvaluator.attributes = ["position", "uv"];
+tileEvaluator.useGroups = false;
+
+// The object's tiled pieces, as a geometry (position, uv, and jitter for each corner) per image:
+// [{ image, geometry }], holes cut. image(id) finds an image; a piece whose image is gone shows
+// none.
+export function tiledGeometries(object, image) {
+  const cuts = object.pieces
+    .filter((p) => p.cut)
+    .map((p) => {
+      const g = pieceGeometry(p);
+      g.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
+      for (const name of Object.keys(g.attributes)) if (name !== "position" && name !== "uv") g.deleteAttribute(name);
+      return withBounds(g);
+    });
+  const byImage = new Map(); // image -> geometries
+  for (const piece of object.pieces) {
+    const img = !piece.cut && piece.tile && image(piece.tile.image);
+    if (!img) continue;
+    const g = primitive(piece.type, piece.taper).clone();
+    g.scale(...piece.size);
+    for (const name of Object.keys(g.attributes)) if (name !== "position") g.deleteAttribute(name);
+    tileUvs(g, piece, piece.tile.every);
+    g.applyQuaternion(pieceTurn(piece.turn));
+    g.translate(...piece.at);
+    let out = withBounds(g);
+    for (const cut of cuts) {
+      if (!cut.boundingBox.intersectsBox(out.boundingBox)) continue;
+      out = tileEvaluator.evaluate(new Brush(out), new Brush(cut), SUBTRACTION).geometry;
+      out = withBounds(out.index ? out.toNonIndexed() : out);
+    }
+    out.setAttribute("jitter", new THREE.BufferAttribute(new Float32Array(out.attributes.position.count).fill(piece.tile.jitter), 1));
+    if (!byImage.has(img)) byImage.set(img, []);
+    byImage.get(img).push(out);
+  }
+  return [...byImage].map(([img, parts]) => {
+    const geometry = mergeGeometries(parts);
+    geometry.computeVertexNormals();
+    geometry.computeBoundingSphere();
+    return { image: img, geometry };
+  });
+}
+
+// The texture for a tiled image in the wearer's colors: repeating, crisp pixels.
+export function tileTexture(img, colors) {
+  const pixels = imageRgba(img, colors);
+  const rgba = new Uint8ClampedArray(pixels.length);
+  const row = IMAGE_PX * 4;
+  for (let y = 0; y < IMAGE_PX; y++) rgba.set(pixels.subarray(y * row, (y + 1) * row), (IMAGE_PX - 1 - y) * row);
+  const texture = atlasTexture({ size: IMAGE_PX, rgba });
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  return texture;
+}
+
+// A tiled image lies just off its piece, see-through where its pixels are, each copy a little
+// lighter or darker by its jitter.
+export function tiledMaterial(texture) {
+  const material = decalMaterial(texture);
+  material.flatShading = true;
+  material.customProgramCacheKey = () => "tiled";
+  material.onBeforeCompile = (shader) => {
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nattribute float jitter;\nvarying float vJitter;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvJitter = jitter;");
+    shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vJitter;").replace(
+      "#include <map_fragment>",
+      `#include <map_fragment>
+        float tileShade = vJitter * (fract(sin(dot(floor(vMapUv), vec2(12.9898, 78.233))) * 43758.5453) - 0.5);
+        diffuseColor.rgb *= 1.0 + tileShade;
+        // Where the image is clear, a faint white or black film lightens or darkens the piece.
+        float filmAlpha = abs(tileShade) * (1.0 - diffuseColor.a);
+        float tileAlpha = diffuseColor.a + filmAlpha;
+        if (tileAlpha > 0.0) diffuseColor.rgb = (diffuseColor.rgb * diffuseColor.a + step(0.0, tileShade) * filmAlpha) / tileAlpha;
+        diffuseColor.a = tileAlpha;`,
+    );
+  };
+  return material;
+}
+
 // Decals lie just off their faces, see-through where their pixels are.
 export const decalMaterial = (texture) => new THREE.MeshLambertMaterial({ map: texture, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 

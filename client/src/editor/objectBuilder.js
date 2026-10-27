@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { MAX_PIECES, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, PALETTE_INKS, addColor, dropUnusedColors, emptyImage, paletteColors, pieceCorners, problems, shapeOf, turnPoint } from "../world/builtObjects.js";
-import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, faceFrame, faceIdOf, faceSpot, objectGeometry, primitive } from "./builtMeshes.js";
+import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, faceFrame, faceIdOf, faceSpot, objectGeometry, primitive, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
 import { ImagePainter, drawImage } from "./imagePainter.js";
 import { characterClips, loadAnimations } from "../character/animations.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
@@ -16,6 +16,7 @@ import { randomLook } from "../character/recipe.js";
 // sets its type, color, taper, whether it's a hole and, as a last resort, exact numbers. Holes show
 // as red glass while a piece is picked; with none picked the object shows as the game draws it,
 // holes cut. Decals go on the picked piece: pick a decal image, then click a face to put it there.
+// A tiled image covers the picked piece, repeated every so many feet.
 //
 // Opened read-only (a builtin or imported object), it shows the object and offers to copy it into
 // one of the world's own collections instead of saving. The palette lists every color the object uses: changing one recolors every
@@ -189,7 +190,8 @@ export class ObjectBuilder {
         field("at (ft) x y z", div("ob-xyz", ...this.inputs.at)),
         field("turn (°) yaw pitch roll", div("ob-xyz", ...this.inputs.turn)),
       ),
-      field("decals", this.decalList = div("ob-decals")),
+      field("decals", (this.decalList = div("ob-decals"))),
+      field("tiled image", (this.tileBox = div("ob-decals"))),
       div("ob-row", el("button", { type: "button", textContent: "copy", onclick: () => this.copyPiece() }), el("button", { type: "button", textContent: "remove", onclick: () => this.removePiece() })),
     );
 
@@ -426,6 +428,7 @@ export class ObjectBuilder {
       this.cut.checked = Boolean(piece.cut);
       for (const key of ["size", "at", "turn"]) this.inputs[key].forEach((input, axis) => (input.value = tidy(piece[key][axis])));
       this.refreshDecals(piece);
+      this.refreshTile(piece);
       this.swatches.replaceChildren(
         ...object.palette.map((p, i) => {
           const b = el("button", { type: "button", className: `ob-swatch${i === piece.color ? " active" : ""}`, title: p.color });
@@ -568,8 +571,31 @@ export class ObjectBuilder {
     });
   }
 
-  // The object's decals, drawn as the game draws them.
+  // The picked piece's tiled image: which (or none), how wide each copy is and how much the copies'
+  // brightness varies.
+  refreshTile(piece) {
+    const choices = this.images().filter((image) => image.kind === "tiled");
+    const pick = el("select", { title: "an image to repeat over this piece" }, new Option(choices.length ? "none" : "no tiled images yet", ""), ...choices.map((image) => new Option(image.name, image.id)));
+    pick.value = piece.tile?.image ?? "";
+    pick.addEventListener("change", () => this.changePiece((p) => (pick.value ? (p.tile = { every: 1, jitter: 0, ...p.tile, image: pick.value }) : delete p.tile)));
+    if (!piece.tile) return this.tileBox.replaceChildren(pick);
+    const every = el("input", { type: "number", value: piece.tile.every, step: 0.25, min: MIN_SIZE_FT, title: "how wide each copy is (ft)" });
+    every.addEventListener("change", () => this.changePiece((p) => (p.tile.every = Math.max(MIN_SIZE_FT, Number(every.value) || 1))));
+    const jitter = el("input", { type: "range", min: 0, max: 1, step: 0.05, value: piece.tile.jitter, title: "how much each copy's brightness varies" });
+    jitter.addEventListener("change", () => this.changePiece((p) => (p.tile.jitter = Number(jitter.value))));
+    this.tileBox.replaceChildren(pick, el("div", { className: "ob-decal" }, el("span", { textContent: "every" }), every, el("span", { textContent: "ft · jitter" }), jitter));
+  }
+
+  // The object's decals and tiled images, drawn as the game draws them.
   drawDecals() {
+    for (const mesh of [...this.tiles.children]) {
+      mesh.geometry.dispose();
+      mesh.material.map?.dispose();
+      mesh.material.dispose();
+      this.tiles.remove(mesh);
+    }
+    const colors = paletteColors(this.object);
+    for (const { image, geometry } of tiledGeometries(this.object, (id) => this.imageOf(id))) this.tiles.add(new THREE.Mesh(geometry, tiledMaterial(tileTexture(image, colors))));
     this.decals.material.map?.dispose();
     this.decals.geometry.dispose();
     const decals = decalGeometry(this.object, (id) => this.imageOf(id));
@@ -605,7 +631,8 @@ export class ObjectBuilder {
     this.whole = new THREE.Mesh(new THREE.BufferGeometry(), builtMaterial());
     this.scene.add(this.whole);
     this.decals = new THREE.Mesh(new THREE.BufferGeometry(), decalMaterial(null));
-    this.scene.add(this.decals);
+    this.tiles = new THREE.Group();
+    this.scene.add(this.decals, this.tiles);
     this.marks = new THREE.Group();
     this.scene.add(this.marks);
 

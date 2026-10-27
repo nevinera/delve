@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { PIECE_TYPES, addColor, emptyImage, emptyObject, pieceCorners, setPixel } from "../world/builtObjects.js";
-import { decalCorners, decalGeometry, faceSpot, objectGeometry, pieceFaces, pieceGeometry } from "./builtMeshes.js";
+import { decalCorners, decalGeometry, faceSpot, objectGeometry, pieceFaces, pieceGeometry, tiledGeometries } from "./builtMeshes.js";
 
 const bounds = (g) => {
   g.computeBoundingBox();
@@ -150,5 +150,27 @@ describe("built object meshes", () => {
     const i = (31 * 64 + 0) * 4;
     expect([...atlas.rgba.slice(i, i + 4)]).toEqual([0, 0, 255, 255]);
     expect(decalGeometry(emptyObject(), () => undefined)).toBeNull();
+  });
+
+  it("tiles images in feet, wrapping round sides a whole number of times", () => {
+    const object = emptyObject();
+    addColor(object, "#ffffff");
+    const shingle = { ...emptyImage("shingle", "tiled") };
+    object.pieces.push({ type: "box", size: [4, 2, 2], at: [0, 1, 0], turn: [0, 0, 0], color: 0, tile: { image: shingle.id, every: 0.5, jitter: 0.3 } });
+    object.pieces.push({ type: "cylinder", size: [2, 2, 2], at: [5, 1, 0], turn: [0, 0, 0], color: 0, tile: { image: shingle.id, every: 1, jitter: 0 } });
+    object.pieces.push({ type: "box", size: [1, 1, 1], at: [-5, 1, 0], turn: [0, 0, 0], color: 0, tile: { image: "gone0000", every: 1, jitter: 0 } });
+    const tiles = tiledGeometries(object, (id) => (id === shingle.id ? shingle : undefined));
+    expect(tiles).toHaveLength(1);
+    const { geometry } = tiles[0];
+    const uv = geometry.attributes.uv;
+    const jitter = geometry.attributes.jitter;
+    const us = [];
+    for (let i = 0; i < uv.count; i++) us.push(uv.getX(i));
+    // The 4 ft box, half-foot copies: 8 across, from -4 to 4.
+    expect(Math.min(...us)).toBeCloseTo(-4);
+    // The cylinder, 2 ft across, 1 ft copies: round(pi * 2) = 6 around, so its u reaches 6.
+    expect(Math.max(...us)).toBeCloseTo(6);
+    expect(jitter.getX(0)).toBeCloseTo(0.3);
+    expect(jitter.getX(jitter.count - 1)).toBe(0);
   });
 });

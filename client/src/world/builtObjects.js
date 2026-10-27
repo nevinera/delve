@@ -19,6 +19,8 @@
 //   decals: images stuck on its flat faces, each { image, face, at: [u, v], size: [w, h], turn }:
 //   face names one by its outward normal before sizing and turning, rounded ("0,1,0" is the top);
 //   at is where its middle is across the face, 0 to 1 each way; size is in feet; turn is degrees.
+//   tile: an image repeated over it, { image, every, jitter }: every is how wide one copy is, in
+//   feet; jitter (0 to 1) how much each copy's brightness varies, the same way every time.
 //   A piece with cut: true is a hole: it's taken out of every other piece, and the faces it leaves
 //   take its color.
 //
@@ -186,6 +188,7 @@ export function problems(object) {
       const ok = typeof d.image === "string" && typeof d.face === "string" && Array.isArray(d.at) && d.at.length === 2 && d.at.every((v) => v >= 0 && v <= 1) && Array.isArray(d.size) && d.size.length === 2 && d.size.every((v) => v >= MIN_SIZE_FT) && Number.isFinite(d.turn);
       if (!ok) out.push(`${name}'s decal ${k + 1} needs an image, a face, where across it (0 to 1), a size and a turn`);
     });
+    if (piece.tile !== undefined && !(typeof piece.tile.image === "string" && piece.tile.every >= MIN_SIZE_FT && piece.tile.jitter >= 0 && piece.tile.jitter <= 1)) out.push(`${name}'s tile needs an image, a width (feet) and a jitter (0 to 1)`);
     if (piece.cut !== undefined && typeof piece.cut !== "boolean") out.push(`${name}'s cut should be true or false`);
     if (piece.size.some((s) => s < MIN_SIZE_FT)) out.push(`${name} is smaller than ${MIN_SIZE_FT} ft across`);
     if (pieceCorners(piece).some(([x, y, z]) => Math.hypot(x, y, z) > REACH_FT + 1e-6)) out.push(`${name} reaches more than ${REACH_FT} ft from the centre`);
