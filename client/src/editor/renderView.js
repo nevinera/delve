@@ -633,7 +633,7 @@ function oceanGeometry(keys, origin) {
 
 // Ground height at a point relative to the origin, from the decoded tiles (nearest cell), or NaN
 // where no tile is loaded.
-function groundSampler(decoded, origin) {
+export function groundSampler(decoded, origin) {
   return (x, z) => {
     const wx = x + origin[0];
     const wz = z + origin[1];
@@ -657,7 +657,7 @@ function top(ground, x, z) {
 }
 
 // A zone outline laid over the ground, a little above it, or an open line with `closed` off.
-function boundary(points, ground, origin, color, closed = true) {
+export function boundary(points, ground, origin, color, closed = true) {
   const out = [];
   const ring = closed ? [...points, points[0]] : points;
   for (let i = 1; i < ring.length; i++) {

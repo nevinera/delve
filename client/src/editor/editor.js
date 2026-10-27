@@ -41,7 +41,10 @@ const COLORS = {
   lockedFill: "rgba(255, 255, 255, 0.07)",
 };
 const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
+// Steps drawn in 3d instead of on the map.
+const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
+  detail: "the arrows off the window's sides move it a strip that way · right-drag turns · middle-drag pans · wheel zooms",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
@@ -72,6 +75,7 @@ const STEPS = {
   civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
   zones: { tools: [], kinds: [], map: "heights" },
   tiles: { tools: [], kinds: [], map: "tiles" },
+  detail: { tools: [], kinds: [] },
   "3d": { tools: [], kinds: [] },
 };
 // With this many tiles in sight or more, tiles draw as their thumbnails instead of close up.
@@ -609,9 +613,12 @@ export class Editor {
     this.features.select(null);
     this.say();
     this.renderPanel();
-    this.el.map.hidden = step === "3d" || step === "heights";
+    this.el.map.hidden = IN_3D.has(step);
     this.el.overview.hidden = step !== "3d";
     this.el.sculpt.hidden = step !== "heights";
+    this.el.detail.hidden = step !== "detail";
+    if (step === "detail") this.showDetail();
+    else this.detail?.hide();
     if (step === "3d") this.showOverview();
     else this.overview?.hide();
     if (step === "heights") this.showSculpt();
@@ -635,6 +642,40 @@ export class Editor {
     });
     await this.overviewLoading;
     if (this.step === "3d") this.overview.show(this.world, this.continent, [this.map.view.x, this.map.view.z]);
+  }
+
+  // The detail step: a window of generated tiles in 3d, `detailSize` a side, first round the
+  // middle of the map.
+  async showDetail() {
+    this.detailLoading ??= import("./detailView.js").then(({ DetailView, WINDOW_SIZES }) => {
+      for (const size of WINDOW_SIZES) this.el.detailSize.add(new Option(`${size} × ${size} tiles`, size));
+      this.el.detailSize.addEventListener("change", () => {
+        const size = Number(this.el.detailSize.value);
+        const { tx0, tz0, size: was } = this.detailWindow;
+        // Grows and shrinks about the same middle.
+        const shift = Math.floor((was - size) / 2);
+        this.detailWindow = { tx0: tx0 + shift, tz0: tz0 + shift, size };
+        this.showDetail();
+      });
+      this.detail = new DetailView(this.el.detail, {
+        onMove: (dx, dz) => {
+          this.detailWindow.tx0 += dx;
+          this.detailWindow.tz0 += dz;
+          this.showDetail();
+        },
+      });
+    });
+    await this.detailLoading;
+    if (this.step !== "detail") return;
+    if (!this.detailWindow) {
+      const size = Number(this.el.detailSize.value) || 3;
+      this.detailWindow = { tx0: Math.floor(this.map.view.x) - Math.floor(size / 2), tz0: Math.floor(this.map.view.z) - Math.floor(size / 2), size };
+    }
+    const { tx0, tz0, size } = this.detailWindow;
+    this.el.detailSize.value = size;
+    this.detail.show({ world: this.world, continent: this.continent }, [tx0, tz0], size);
+    const loaded = this.detail.keys().filter((k) => this.detail.view.decoded.has(k)).length;
+    this.el.detailInfo.textContent = `tiles ${tx0},${tz0} to ${tx0 + size - 1},${tz0 + size - 1} · ${loaded} of ${size * size} generated`;
   }
 
   // The heights step: the land grid in 3d, to sculpt.
@@ -917,8 +958,8 @@ export class Editor {
     hint.textContent = this.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : HINTS[this.mode()];
     this.el.graphicsButton.hidden = !this.walking;
     this.el.timeButton.hidden = !this.walking;
-    this.el.scaleBar.hidden = this.walking || this.step === "3d" || this.step === "heights";
-    this.el.walk.hidden = this.step === "3d" || this.step === "heights";
+    this.el.scaleBar.hidden = this.walking || IN_3D.has(this.step);
+    this.el.walk.hidden = IN_3D.has(this.step);
     this.el.walk.textContent = this.walking ? "stop walking" : this.walkPicking ? "cancel walk" : "walk";
     this.el.walk.classList.toggle("active", Boolean(this.walking || this.walkPicking));
     this.renderScale();
@@ -975,7 +1016,7 @@ export class Editor {
       if (this.drawing) return "draw";
       return zone.region.length ? "region" : "empty";
     }
-    if (this.step === "tiles" || this.step === "3d" || this.step === "heights") return this.step === "heights" ? this.toolName : this.step;
+    if (this.step === "tiles" || IN_3D.has(this.step)) return this.step === "heights" ? this.toolName : this.step;
     if (!this.hasLand()) return "noLand";
     if (ROADS[this.toolName]) return "road";
     if (PINS[this.toolName]) return "pin";
