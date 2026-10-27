@@ -1,17 +1,17 @@
 import { collectionJson, emptyObject, imagePath, newObjectId, objectPath, readCollection } from "../world/builtObjects.js";
 import { BUILT_PREFIX, setBuiltObjects, specOf } from "../world/objects.js";
-import { COLLECTIONS_PATH } from "../editor/libraryStore.js";
 import { slug } from "../editor/zones.js";
 import { ObjectBuilder } from "../editor/objectBuilder.js";
 import { ObjectGallery } from "../editor/objectGallery.js";
 import { StructureBuilder } from "../editor/structureBuilder.js";
 import { BUILTIN_IMAGES } from "../world/builtinImages.js";
 import { STRUCTURE_PREFIX, emptyStructure, problems as structureProblems, structurePath, withWalk } from "../world/structures.js";
-import { addCollection, adoptStrays, allCollections, builtObjects, builtStructures, collections, images, ownCollections, wornImages } from "./collections.js";
+import { KINDS, addCollection, adoptStrays, allCollections, builtObjects, builtStructures, collections, images, ownCollections, wornImages } from "./collections.js";
 
-// The object library: the gallery of a world's collections and the builtins, with the builder
-// popping over it, importing and exporting collections. The objects page shows it on its own, and
-// the world editor in a popover; both hand it their World and hear about its changes.
+// A library, of objects or of structures: the gallery of a world's collections of that kind (and
+// for objects the builtins), with the object or structure builder popping over it, importing and
+// exporting collections. The objects and structures pages show it on its own, and the world editor
+// in a popover; both hand it their World and hear about its changes.
 
 function el(tag, props = {}, ...children) {
   const node = Object.assign(document.createElement(tag), props);
@@ -31,11 +31,13 @@ function download(name, text) {
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 
 export class ObjectLibrary {
-  // getWorld(): the World holding the library. onChange(choose): the library changed, with a type
-  // to pick next if there is one. placedCount(types): how many placed objects are of the types (a
-  // Set), maybe a promise. say(message, { info }): tells the person something.
-  constructor(container, { getWorld, onChange, placedCount, say }) {
-    Object.assign(this, { getWorld, onChange, placedCount, say });
+  // kind: "objects" or "structures". getWorld(): the World holding the library. onChange(choose):
+  // the library changed, with a type to pick next if there is one. placedCount(types): how many
+  // placed things are of the types (a Set), maybe a promise. say(message, { info }): tells the
+  // person something.
+  constructor(container, { kind = "objects", getWorld, onChange, placedCount, say }) {
+    Object.assign(this, { kind, getWorld, onChange, placedCount, say });
+    const one = kind === "objects" ? "object" : "structure";
     this.file = el("input", { type: "file", accept: ".json,application/json", hidden: true });
     this.file.addEventListener("change", async () => {
       const [file] = this.file.files;
@@ -44,26 +46,26 @@ export class ObjectLibrary {
     });
     const button = (label, title, onclick) => el("button", { type: "button", textContent: label, title, onclick });
     this.gallery = new ObjectGallery(container, {
+      what: one,
+      builtins: kind === "objects",
       onOpen: (collection, entry) => this.openEntry(collection, entry),
       onNew: (collection) => {
-        const name = window.prompt("A name for the new object:");
-        if (name?.trim()) this.buildObject({ ...emptyObject(name.trim()), collection: collection.id });
-      },
-      onNewStructure: (collection) => {
-        const name = window.prompt("A name for the new structure:");
-        if (name?.trim()) this.buildStructure({ ...emptyStructure(name.trim()), collection: collection.id });
+        const name = window.prompt(`A name for the new ${one}:`);
+        if (!name?.trim()) return;
+        if (kind === "objects") this.buildObject({ ...emptyObject(name.trim()), collection: collection.id });
+        else this.buildStructure({ ...emptyStructure(name.trim()), collection: collection.id });
       },
       onNewCollection: () => {
-        const name = window.prompt("A name for the new collection:");
+        const name = window.prompt(`A name for the new collection of ${kind}:`);
         if (!name?.trim()) return;
-        addCollection(this.world, name.trim());
+        addCollection(this.world, name.trim(), undefined, kind);
         this.changed();
       },
       onAction: (collection, action) => this.collectionAction(collection, action),
       tools: [
-        button("import file", "a collection or object file; it comes in read-only", () => this.file.click()),
-        button("import from URL", "a collection or object at a URL; it comes in read-only", () => this.objectsFromUrl()),
-        button("export all yours", "every object in your own collections, as one collection file", () => this.exportOwn()),
+        button("import file", `a collection or ${one} file; it comes in read-only`, () => this.file.click()),
+        button("import from URL", `a collection or ${one} at a URL; it comes in read-only`, () => this.objectsFromUrl()),
+        button("export all yours", `every ${one} in your own collections, as one collection file`, () => this.exportOwn()),
         this.file,
       ],
     });
@@ -88,7 +90,7 @@ export class ObjectLibrary {
   }
 
   show() {
-    this.gallery.show(allCollections(this.world));
+    this.gallery.show(allCollections(this.world, this.kind));
   }
 
   hide() {
@@ -108,7 +110,7 @@ export class ObjectLibrary {
   // offering to copy it into one of the world's own.
   buildObject(object, { readOnly = false } = {}) {
     this.builder.open(object, {
-      collections: ownCollections(this.world),
+      collections: ownCollections(this.world, "objects"),
       readOnly,
       onCopy: (copy, collection) => this.copyBuiltObject(copy, collection),
       images: () => [...images(this.world), ...BUILTIN_IMAGES],
@@ -177,7 +179,7 @@ export class ObjectLibrary {
   // Opens the structure builder: read-only for one in a builtin or imported collection.
   buildStructure(structure, { readOnly = false } = {}) {
     this.structureBuilder.open(structure, {
-      collections: ownCollections(this.world),
+      collections: ownCollections(this.world, "structures"),
       readOnly,
       onCopy: (copy, collection) => {
         const own = { ...copy, id: newObjectId(), collection, source: copy.source ?? "builtin" };
@@ -228,7 +230,7 @@ export class ObjectLibrary {
       const worn = wornImages(objects, structures);
       return download(`${slug(collection.name) || "objects"}.json`, `${collectionJson(collection.name, objects, images(this.world).filter((i) => worn.has(i.id)), structures)}\n`);
     }
-    const list = collections(this.world);
+    const list = collections(this.world, this.kind);
     const index = list.findIndex((c) => c.id === collection.id);
     if (action === "rename") {
       const name = window.prompt("A new name for the collection:", collection.name);
@@ -237,12 +239,12 @@ export class ObjectLibrary {
     } else if (action === "delete") {
       const placed = await this.placedCount(new Set([...objects.map((o) => `${BUILT_PREFIX}${o.id}`), ...structures.map((s) => `${STRUCTURE_PREFIX}${s.id}`)]));
       if (placed) return this.say(`${placed} placed thing${placed === 1 ? " comes" : "s come"} from ${collection.name}: replace them with something else before deleting it.`);
-      if (!window.confirm(`Delete ${collection.name}, its ${plural(objects.length, "object")} and ${plural(structures.length, "structure")}?`)) return;
+      if (!window.confirm(`Delete ${collection.name} and its ${this.kind === "objects" ? plural(objects.length, "object") : plural(structures.length, "structure")}?`)) return;
       for (const o of objects) this.world.files.delete(objectPath(o.id));
       for (const s of structures) this.world.files.delete(structurePath(s.id));
       list.splice(index, 1);
     }
-    this.world.writeJson(COLLECTIONS_PATH, list);
+    this.world.writeJson(KINDS[this.kind].path, list);
     this.changed();
   }
 
@@ -260,7 +262,11 @@ export class ObjectLibrary {
     } catch (err) {
       return this.say(`Couldn't import ${from}: ${err.message}`);
     }
-    const collection = addCollection(this.world, read.name ?? from.replace(/\.json$/i, ""), source);
+    // Objects go in a new collection of objects, structures in one of structures, named alike.
+    const name = read.name ?? from.replace(/\.json$/i, "");
+    if (!read.objects.length && !read.structures.length) return this.say(`${from} has nothing in it to import.`);
+    const objectCollection = read.objects.length ? addCollection(this.world, name, source, "objects") : null;
+    const structureCollection = read.structures.length ? addCollection(this.world, name, source, "structures") : null;
     let renamed = 0;
     // Images join the world's, keeping their ids, unless the world has a different image by that
     // id already: then they get new ones, and the things wearing them wear those.
@@ -279,7 +285,7 @@ export class ObjectLibrary {
         object.id = newObjectId();
         renamed++;
       }
-      this.world.writeJson(objectPath(object.id), { ...object, collection: collection.id });
+      this.world.writeJson(objectPath(object.id), { ...object, collection: objectCollection.id });
     }
     for (const structure of read.structures) {
       for (const m of Object.values(structure.materials)) for (const use of [m.tile, m.inside].filter(Boolean)) use.image = ids.get(use.image) ?? use.image;
@@ -287,10 +293,11 @@ export class ObjectLibrary {
         structure.id = newObjectId();
         renamed++;
       }
-      this.world.writeJson(structurePath(structure.id), withWalk({ ...structure, collection: collection.id }));
+      this.world.writeJson(structurePath(structure.id), withWalk({ ...structure, collection: structureCollection.id }));
     }
     this.changed();
-    this.say(`Imported ${collection.name}, ${plural(read.objects.length, "object")}${read.structures.length ? ` and ${plural(read.structures.length, "structure")}` : ""}${renamed ? `, ${renamed} of them already here, so with new ids` : ""}.`, { info: true });
+    const parts = [read.objects.length && `${plural(read.objects.length, "object")} into objects`, read.structures.length && `${plural(read.structures.length, "structure")} into structures`].filter(Boolean);
+    this.say(`Imported ${name}: ${parts.join(" and ")}${renamed ? `, ${renamed} of them already here, so with new ids` : ""}.`, { info: true });
   }
 
   async objectsFromUrl() {
@@ -306,10 +313,10 @@ export class ObjectLibrary {
   }
 
   exportOwn() {
-    const own = new Set(ownCollections(this.world).map((c) => c.id));
+    const own = new Set(ownCollections(this.world, this.kind).map((c) => c.id));
     const objects = builtObjects(this.world).filter((o) => own.has(o.collection));
     const structures = builtStructures(this.world).filter((s) => own.has(s.collection));
-    if (!objects.length && !structures.length) return this.say("There are no objects of your own to export yet.");
+    if (!objects.length && !structures.length) return this.say(`There are no ${this.kind} of your own to export yet.`);
     const name = window.prompt("A name for the collection:", this.world.info?.name ?? "objects");
     const worn = wornImages(objects, structures);
     if (name) download(`${slug(name) || "objects"}.json`, `${collectionJson(name, objects, images(this.world).filter((i) => worn.has(i.id)), structures)}\n`);

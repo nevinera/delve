@@ -268,7 +268,9 @@ export function shapeOf(object) {
 // wrong when something is.
 export function readCollection(text, source) {
   const data = JSON.parse(text);
-  const list = Array.isArray(data.objects) ? data.objects : [data];
+  // A lone structure has storeys; a lone object doesn't.
+  const lone = !Array.isArray(data.objects) && !Array.isArray(data.structures);
+  const list = Array.isArray(data.objects) ? data.objects : lone && !Array.isArray(data.storeys) ? [data] : [];
   for (const object of list) {
     const wrong = problems(object);
     if (wrong.length) throw new Error(`${object.name ?? object.id ?? "an object"}: ${wrong.join("; ")}`);
@@ -279,7 +281,7 @@ export function readCollection(text, source) {
     if (wrong.length) throw new Error(`image ${image.name ?? image.id ?? ""}: ${wrong.join("; ")}`);
   }
   const sourced = ({ collection, ...thing }) => (source ? { ...thing, source } : thing);
-  const structures = Array.isArray(data.structures) ? data.structures : [];
+  const structures = Array.isArray(data.structures) ? data.structures : lone && Array.isArray(data.storeys) ? [data] : [];
   return { name: typeof data.collection === "string" ? data.collection : null, objects: list.map(sourced), images: images.map(sourced), structures: structures.map(sourced) };
 }
 

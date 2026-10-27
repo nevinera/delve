@@ -4,9 +4,9 @@ import { disposePreview, typePreview } from "./objectMeshes.js";
 import { structureGroup } from "./structureMeshes.js";
 import { imageOf } from "../world/objects.js";
 
-// The objects step: every object type in the world's collections and the game's builtins, as a
-// gallery of rendered thumbnails grouped by collection, filtered by a search. Your own collections
-// start with a "+" tile for a new object. One offscreen renderer draws every thumbnail; the one
+// A library's gallery: every object type in the world's collections and the game's builtins, or
+// every structure in the world's structure collections, as rendered thumbnails grouped by
+// collection, filtered by a search. Your own collections start with a "+" tile for a new one. One offscreen renderer draws every thumbnail; the one
 // under the pointer turns.
 //
 // show(collections) takes [{ id, name, kind: "builtin" | "imported" | "own", source, entries }],
@@ -26,13 +26,13 @@ function el(tag, props = {}, ...children) {
 }
 
 export class ObjectGallery {
-  // onOpen(collection, entry), onNew(collection) and onNewStructure(collection) for the "+" tiles,
-  // onNewCollection(), and onAction(collection,
-  // action) for a collection heading's buttons: "rename", "export" or "delete". tools: more
-  // elements for the bar at the top.
-  constructor(container, { onOpen, onNew, onNewStructure, onNewCollection, onAction, tools = [] }) {
+  // what: "object" or "structure", what the "+" tiles make. builtins: whether there are builtin
+  // collections to leave out. onOpen(collection, entry), onNew(collection) for a "+" tile,
+  // onNewCollection(), and onAction(collection, action) for a collection heading's buttons:
+  // "rename", "export" or "delete". tools: more elements for the bar at the top.
+  constructor(container, { what = "object", builtins = true, onOpen, onNew, onNewCollection, onAction, tools = [] }) {
     this.container = container;
-    Object.assign(this, { onOpen, onNew, onNewStructure, onNewCollection, onAction });
+    Object.assign(this, { what, onOpen, onNew, onNewCollection, onAction });
     this.collections = [];
     this.queue = [];
     this.search = el("input", { type: "search", placeholder: "search collections, names and tags", className: "gallery-search" });
@@ -42,7 +42,7 @@ export class ObjectGallery {
       "div",
       { className: "gallery-top" },
       this.search,
-      el("label", { className: "gallery-check" }, this.noBuiltins, el("span", { textContent: "exclude builtins" })),
+      builtins ? el("label", { className: "gallery-check" }, this.noBuiltins, el("span", { textContent: "exclude builtins" })) : null,
       el("button", { type: "button", textContent: "new collection", onclick: () => this.onNewCollection?.() }),
       ...tools,
     );
@@ -93,7 +93,7 @@ export class ObjectGallery {
     const tiles = entries.map((entry) => this.tile(collection, entry));
     if (collection.kind === "own") {
       const plus = (what, onclick) => el("button", { type: "button", className: "gallery-tile gallery-new", title: `a new ${what} in this collection`, onclick }, el("span", { textContent: "+" }), el("span", { className: "gallery-new-what", textContent: what }));
-      tiles.unshift(plus("object", () => this.onNew?.(collection)), plus("structure", () => this.onNewStructure?.(collection)));
+      tiles.unshift(plus(this.what, () => this.onNew?.(collection)));
     }
     return el("section", { className: "gallery-collection" }, head, el("div", { className: "gallery-tiles" }, ...tiles));
   }

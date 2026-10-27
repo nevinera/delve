@@ -61,6 +61,7 @@
       <button type="button" class="editor-step-head" data-step="detail">detail</button>
       <button type="button" class="editor-step-head" data-step="3d">3d</button>
       <button id="openLibrary" type="button" class="editor-step-head" title="the world's object library (also on its own at /objects)">objects</button>
+      <button id="openStructures" type="button" class="editor-step-head" title="the world's structure library (also on its own at /structures)">structures</button>
     </nav>
     <hr class="editor-divider">
     <div class="editor-steps">
@@ -212,6 +213,10 @@
   <label class="editor-field">replace every placed <select id="replaceFrom"></select></label>
   <label class="editor-field">with <select id="replaceTo"></select></label>
   <div class="editor-row"><button id="replaceObjects" type="button">replace them</button><button id="replaceCancel" type="button">cancel</button></div>
+</dialog>
+<dialog id="structurePopover" class="library-popover">
+  <div class="library-bar"><h2>Structures</h2><a href="/structures" target="_blank">open on its own</a><span class="library-spacer"></span><p class="editor-message library-message"></p><button type="button" class="library-close">close</button></div>
+  <div id="structureGallery" class="editor-gallery"></div>
 </dialog>
 <dialog id="libraryPopover" class="library-popover">
   <div class="library-bar"><h2>Objects</h2><a href="/objects" target="_blank">open on its own</a><span class="library-spacer"></span><p class="editor-message library-message"></p><button type="button" class="library-close">close</button></div>

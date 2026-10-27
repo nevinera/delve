@@ -2,15 +2,19 @@ import { BUILTIN_COLLECTIONS } from "../world/builtinCollections.js";
 import { OLD_IMAGES, imagePath, newObjectId, objectPath } from "../world/builtObjects.js";
 import { BUILT_PREFIX } from "../world/objects.js";
 import { STRUCTURE_PREFIX, structurePath } from "../world/structures.js";
-import { COLLECTIONS_PATH } from "../editor/libraryStore.js";
+import { COLLECTIONS_PATH, STRUCTURE_COLLECTIONS_PATH } from "../editor/libraryStore.js";
 
-// A world's object library: its collections (collections.json, [{ id, name, source }], one with a
-// source imported and read-only), the built objects and structures in them (objects/<id>.json and
-// structures/<id>.json, each naming its collection), and the images they wear (textures/<id>.json,
-// the whole world's), with the game's builtin collections listed first. `world` is an editor
-// World.
+// A world's libraries, one of objects and one of structures, each its own collections
+// (collections.json and structure-collections.json, [{ id, name, source }], one with a source
+// imported and read-only) holding its things (objects/<id>.json and structures/<id>.json, each
+// naming its collection). The images they wear (textures/<id>.json) are the whole world's. The
+// game's builtin collections, all objects, are listed first. `world` is an editor World; `kind` is
+// "objects" or "structures".
 
-export const MY_OBJECTS = "my objects";
+export const KINDS = {
+  objects: { path: COLLECTIONS_PATH, home: "my objects", prefix: BUILT_PREFIX, things: (world) => builtObjects(world), thingPath: objectPath },
+  structures: { path: STRUCTURE_COLLECTIONS_PATH, home: "my structures", prefix: STRUCTURE_PREFIX, things: (world) => builtStructures(world), thingPath: structurePath },
+};
 
 // The world's built objects, by name.
 export function builtObjects(world) {
@@ -46,21 +50,24 @@ export function wornImages(objects = [], structures = []) {
   );
 }
 
-export function collections(world) {
-  return world.files.has(COLLECTIONS_PATH) ? world.readJson(COLLECTIONS_PATH) : [];
+export function collections(world, kind = "objects") {
+  const { path } = KINDS[kind];
+  return world.files.has(path) ? world.readJson(path) : [];
 }
 
-export const ownCollections = (world) => collections(world).filter((c) => !c.source);
+export const ownCollections = (world, kind = "objects") => collections(world, kind).filter((c) => !c.source);
 
 // Adds a collection, returning it.
-export function addCollection(world, name, source) {
+export function addCollection(world, name, source, kind = "objects") {
   const collection = { id: newObjectId(), name, ...(source ? { source } : {}) };
-  world.writeJson(COLLECTIONS_PATH, [...collections(world), collection]);
+  world.writeJson(KINDS[kind].path, [...collections(world, kind), collection]);
   return collection;
 }
 
-// Puts built objects and structures in no known collection into "my objects", made when needed,
-// and moves images kept with a collection (OLD_IMAGES) to the world's. Returns whether any moved.
+// Puts things in no collection of their kind into one: structures kept with objects, as they once
+// were, into a structure collection of the same name, and the rest into "my objects" or "my
+// structures", each made when needed. Moves images kept with a collection (OLD_IMAGES) to the
+// world's. Returns whether anything moved.
 export function adoptStrays(world) {
   let moved = false;
   for (const path of [...world.files.keys()].filter((p) => OLD_IMAGES.test(p))) {
@@ -69,29 +76,41 @@ export function adoptStrays(world) {
     world.files.delete(path);
     moved = true;
   }
-  const known = new Set(collections(world).map((c) => c.id));
-  const strays = [...builtObjects(world).map((o) => [objectPath(o.id), o]), ...builtStructures(world).map((s) => [structurePath(s.id), s])].filter(([, thing]) => !known.has(thing.collection));
-  if (!strays.length) return moved;
-  const home = ownCollections(world).find((c) => c.name === MY_OBJECTS) ?? addCollection(world, MY_OBJECTS);
-  for (const [path, thing] of strays) world.writeJson(path, { ...thing, collection: home.id });
-  return true;
+  const objectCollections = new Map(collections(world).map((c) => [c.id, c]));
+  for (const kind of Object.keys(KINDS)) {
+    const { home, things, thingPath } = KINDS[kind];
+    const known = new Set(collections(world, kind).map((c) => c.id));
+    const homes = new Map(); // a collection they were in -> the one they move to
+    for (const thing of things(world).filter((t) => !known.has(t.collection))) {
+      if (!homes.has(thing.collection)) {
+        const was = kind === "structures" && objectCollections.get(thing.collection);
+        const name = was ? was.name : home;
+        const own = was?.source ? undefined : collections(world, kind).find((c) => c.name === name && !c.source);
+        homes.set(thing.collection, own ?? addCollection(world, name, was?.source, kind));
+      }
+      world.writeJson(thingPath(thing.id), { ...thing, collection: homes.get(thing.collection).id });
+      moved = true;
+    }
+  }
+  return moved;
 }
 
-// Every collection with what's in it, builtins first: [{ id, name, kind: "builtin" | "imported" |
-// "own", source, entries }], each entry { key, type, name, tags, object, structure }. key changes
-// when the thing does; object is the built object and structure the structure, both absent for
-// builtins. Structures come after objects.
-export function allCollections(world) {
-  const builtins = BUILTIN_COLLECTIONS.map(({ id, name, types }) => ({ id: `builtin:${id}`, name, kind: "builtin", entries: types.map((type) => ({ key: `builtin:${type}`, type, name: type, tags: [] })) }));
-  const objects = builtObjects(world);
-  const structures = builtStructures(world);
-  const ours = collections(world).map((c) => ({
+// Every collection of a kind with what's in it, builtins first (objects only): [{ id, name, kind:
+// "builtin" | "imported" | "own", source, entries }], each entry { key, type, name, tags, object,
+// structure }. key changes when the thing does; object is the built object and structure the
+// structure, both absent for builtins.
+export function allCollections(world, kind = "objects") {
+  const builtins =
+    kind === "objects" ? BUILTIN_COLLECTIONS.map(({ id, name, types }) => ({ id: `builtin:${id}`, name, kind: "builtin", entries: types.map((type) => ({ key: `builtin:${type}`, type, name: type, tags: [] })) })) : [];
+  const { prefix, things } = KINDS[kind];
+  const all = things(world);
+  const field = kind === "objects" ? "object" : "structure";
+  const ours = collections(world, kind).map((c) => ({
     ...c,
     kind: c.source ? "imported" : "own",
-    entries: objects
-      .filter((o) => o.collection === c.id)
-      .map((o) => ({ key: `${o.id}:${hashText(JSON.stringify(o))}`, type: `${BUILT_PREFIX}${o.id}`, name: o.name, tags: o.tags ?? [], object: o }))
-      .concat(structures.filter((s) => s.collection === c.id).map((s) => ({ key: `${s.id}:${hashText(JSON.stringify(s))}`, type: `${STRUCTURE_PREFIX}${s.id}`, name: s.name, tags: s.tags ?? [], structure: s }))),
+    entries: all
+      .filter((t) => t.collection === c.id)
+      .map((t) => ({ key: `${t.id}:${hashText(JSON.stringify(t))}`, type: `${prefix}${t.id}`, name: t.name, tags: t.tags ?? [], [field]: t })),
   }));
   return [...builtins, ...ours];
 }

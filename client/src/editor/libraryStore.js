@@ -12,7 +12,8 @@ const CHANNEL = "delve3d-library";
 const MARKER = "#kept";
 
 export const COLLECTIONS_PATH = "collections.json";
-export const isLibraryPath = (path) => path === COLLECTIONS_PATH || /^(objects|textures|images|structures)\/[0-9a-z]{8}\.json$/.test(path);
+export const STRUCTURE_COLLECTIONS_PATH = "structure-collections.json";
+export const isLibraryPath = (path) => path === COLLECTIONS_PATH || path === STRUCTURE_COLLECTIONS_PATH || /^(objects|textures|images|structures)\/[0-9a-z]{8}\.json$/.test(path);
 
 // The store's records as a Map of path -> JSON text, or null when nothing was ever kept.
 const readStore = () =>

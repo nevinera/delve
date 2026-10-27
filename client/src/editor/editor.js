@@ -780,10 +780,19 @@ export class Editor {
     });
   }
 
-  // The object library (objects/library.js) in a popover over the editor.
-  async openLibrary() {
-    this.libraryLoading ??= import("../objects/library.js").then(({ ObjectLibrary }) => {
-      this.library = new ObjectLibrary(this.el.libraryGallery, {
+  // A library's popover and gallery, for "objects" or "structures".
+  libraryParts(kind) {
+    return kind === "objects" ? [this.el.libraryPopover, this.el.libraryGallery] : [this.el.structurePopover, this.el.structureGallery];
+  }
+
+  // The object or structure library (objects/library.js) in a popover over the editor.
+  async openLibrary(kind = "objects") {
+    const [popover, gallery] = this.libraryParts(kind);
+    this.libraries ??= {};
+    this.libraryLoading ??= {};
+    this.libraryLoading[kind] ??= import("../objects/library.js").then(({ ObjectLibrary }) => {
+      this.libraries[kind] = new ObjectLibrary(gallery, {
+        kind,
         getWorld: () => this.world,
         onChange: (choose) => {
           this.dirty = true;
@@ -792,15 +801,15 @@ export class Editor {
         placedCount: (types) => placedCount(this.world, types),
         say: (message, options) => {
           this.say(message, options);
-          const line = this.el.libraryPopover.querySelector(".library-message");
+          const line = popover.querySelector(".library-message");
           line.textContent = message;
           line.classList.toggle("info", Boolean(options?.info));
         },
       });
     });
-    await this.libraryLoading;
-    this.el.libraryPopover.showModal();
-    this.library.show();
+    await this.libraryLoading[kind];
+    popover.showModal();
+    this.libraries[kind].show();
   }
 
   // Registers the world's built objects (world/objects.js) and lists them to place, choosing
@@ -811,13 +820,16 @@ export class Editor {
     setBuiltObjects(builtObjects(this.world), images(this.world), builtStructures(this.world));
     this.fillObjectTypes(choose);
     if (this.step === "detail" && this.detail) this.showDetail();
-    if (this.el.libraryPopover.open) this.library?.show();
+    for (const kind of ["objects", "structures"]) if (this.libraryParts(kind)[0].open) this.libraries?.[kind]?.show();
   }
 
   // The place tool's types, by collection, builtins first; and the same for replacing.
   fillObjectTypes(choose) {
-    const collections = allCollections(this.world);
+    // Structures are listed after objects; replacing is for objects only.
+    const objects = allCollections(this.world, "objects");
+    const structures = allCollections(this.world, "structures").map((c) => ({ ...c, name: `structures: ${c.name}` }));
     for (const select of [this.el.placeType, this.el.replaceFrom, this.el.replaceTo]) {
+      const collections = select === this.el.placeType ? [...objects, ...structures] : objects;
       const was = select.value;
       select.replaceChildren();
       for (const collection of collections) {
@@ -1111,10 +1123,14 @@ export class Editor {
     });
     for (const tab of this.el.stepTabs) tab.addEventListener("click", () => (tab.dataset.step === "detail" ? this.pickDetail() : this.setStep(tab.dataset.step)));
     this.el.openLibrary.addEventListener("click", () => this.openLibrary());
-    // Keys stay in the library, away from the editor behind it.
-    this.el.libraryPopover.addEventListener("keydown", (e) => e.stopPropagation());
-    this.el.libraryPopover.querySelector(".library-close").addEventListener("click", () => this.el.libraryPopover.close());
-    this.el.libraryPopover.addEventListener("close", () => this.library?.hide());
+    this.el.openStructures.addEventListener("click", () => this.openLibrary("structures"));
+    for (const kind of ["objects", "structures"]) {
+      const [popover] = this.libraryParts(kind);
+      // Keys stay in the library, away from the editor behind it.
+      popover.addEventListener("keydown", (e) => e.stopPropagation());
+      popover.querySelector(".library-close").addEventListener("click", () => popover.close());
+      popover.addEventListener("close", () => this.libraries?.[kind]?.hide());
+    }
     this.el.detailPick.addEventListener("click", () => this.pickDetail());
     for (const section of this.el.steps) {
       for (const input of section.querySelectorAll("[data-option]")) {
