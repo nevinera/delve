@@ -66,6 +66,7 @@ const HINTS = {
 };
 const HINT_WALK = "W/S run · A/D turn · Q/E strafe · space jumps · / walks · X sits · Z sprints · left-drag looks around · right-drag turns · wheel zooms · esc stops walking";
 const HINT_PICK_WALK = "click where to start walking · esc cancels";
+const HINT_PICK_DETAIL = "click the middle of where to edit in detail · F or the detail tab again keeps the last spot · esc cancels";
 
 // The editor's steps, in the order you'd usually work, each with its own map and tools. Each step
 // is a layer that depends only on the ones before it: the land's heights, then the water that
@@ -614,9 +615,31 @@ export class Editor {
 
   // --- steps and options ---
 
+  // Opening the detail step from a map asks where, as walking does; asking again goes with the
+  // last spot. From the detail step it goes back to the last map to ask; from the other 3d steps,
+  // which have no map, it opens on the last spot.
+  pickDetail() {
+    if (this.detailPicking) return this.setStep("detail");
+    this.walkPicking = false;
+    if (this.step === "detail") this.setStep(this.mapStep ?? "tiles");
+    else if (IN_3D.has(this.step)) return this.setStep("detail");
+    this.detailPicking = true;
+    this.renderPanel();
+  }
+
+  // Centres the detail window on continent tile units [x, z].
+  detailAt([x, z]) {
+    this.detailPicking = false;
+    const size = this.detailWindow?.size ?? (Number(this.el.detailSize.value) || 3);
+    this.detailWindow = { tx0: Math.floor(x) - Math.floor(size / 2), tz0: Math.floor(z) - Math.floor(size / 2), size };
+    this.setStep("detail");
+  }
+
   // Opens a step, with its first tool.
   setStep(step) {
     this.step = step;
+    this.detailPicking = false;
+    if (!IN_3D.has(step)) this.mapStep = step;
     // Each view writes its own pointer readout.
     this.el.cursor.textContent = "";
     this.toolName = STEPS[step].tools[0] ?? "select";
@@ -1081,7 +1104,8 @@ export class Editor {
       const skip = overwrite(held) ? new Set() : new Set(held);
       this.generate(regenerateAll, keys(all.filter((k) => !skip.has(k))));
     });
-    for (const tab of this.el.stepTabs) tab.addEventListener("click", () => this.setStep(tab.dataset.step));
+    for (const tab of this.el.stepTabs) tab.addEventListener("click", () => (tab.dataset.step === "detail" ? this.pickDetail() : this.setStep(tab.dataset.step)));
+    this.el.detailPick.addEventListener("click", () => this.pickDetail());
     for (const section of this.el.steps) {
       for (const input of section.querySelectorAll("[data-option]")) {
         input.addEventListener("change", () => {
@@ -1190,6 +1214,7 @@ export class Editor {
       e.currentTarget.blur(); // so space jumps instead of pressing the button again
       if (this.walking) this.view3d.stopWalk();
       else this.walkPicking = !this.walkPicking;
+      this.detailPicking = false;
       this.renderPanel();
     });
 
@@ -1264,6 +1289,7 @@ export class Editor {
     if (!this.zones.length) zoneList.innerHTML = '<li class="editor-empty">no zones yet</li>';
 
     for (const el of [...this.el.steps, ...this.el.stepTabs]) el.classList.toggle("open", el.dataset.step === this.step);
+    for (const tab of this.el.stepTabs) tab.classList.toggle("picking", tab.dataset.step === "detail" && Boolean(this.detailPicking));
     const zone = this.activeZone;
     this.el.zoneEdit.hidden = !zone;
     if (zone) {
@@ -1290,7 +1316,7 @@ export class Editor {
       b.classList.toggle("active", b.dataset.tool === this.toolName);
       b.disabled = b.parentElement.dataset.tools !== "heights" && !this.hasLand();
     }
-    hint.textContent = this.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : HINTS[this.mode()];
+    hint.textContent = this.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : this.detailPicking ? HINT_PICK_DETAIL : HINTS[this.mode()];
     this.el.graphicsButton.hidden = !this.walking;
     this.el.timeButton.hidden = !this.walking;
     this.el.scaleBar.hidden = this.walking || IN_3D.has(this.step);
@@ -1425,6 +1451,7 @@ export class Editor {
 
   tool() {
     if (this.walkPicking) return { down: (tile) => (this.walkAt(tile), true) };
+    if (this.detailPicking) return { down: (tile) => (this.detailAt(tile), true) };
     if (this.step === "zones") {
       const zone = this.activeZone;
       if (zone && this.drawing) return this.drawTool(zone);
@@ -1530,8 +1557,8 @@ export class Editor {
   }
 
   onKey(e) {
-    if (this.walkPicking && e.key === "Escape") {
-      this.walkPicking = false;
+    if ((this.walkPicking || this.detailPicking) && e.key === "Escape") {
+      this.walkPicking = this.detailPicking = false;
       this.renderPanel();
       return;
     }
@@ -1550,6 +1577,11 @@ export class Editor {
     }
     if (this.step === "heights" && !e.ctrlKey && !e.metaKey && !e.altKey && this.sculptKey(e)) {
       e.preventDefault();
+      return;
+    }
+    if (e.key.toLowerCase() === "f" && !this.walking && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      e.preventDefault();
+      this.pickDetail();
       return;
     }
     if (e.key.toLowerCase() === "g" && !IN_3D.has(this.step) && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {

@@ -20,7 +20,7 @@ const UNDO_KEEP = 100;
 const HANDLES = { move: "translate", turn: "rotate", size: "scale" };
 const KEYS = { g: "move", r: "turn", s: "size" };
 const PERSON = { heightFt: 6, radiusFt: 0.8, at: [-5, -5] }; // behind and left, as first framed
-const COLORS = { grid: 0x555555, gridMajor: 0x777777, reach: 0x8fc4ff, footprint: 0xf0c850, picked: 0xffe066, person: 0x9aa4b0, background: 0x20242a };
+const COLORS = { grid: 0x555555, gridMajor: 0x777777, reach: 0x8fc4ff, footprint: 0xf0c850, picked: 0xffe066, person: 0x9aa4b0, ground: 0x4a5040, background: 0x20242a };
 const HINT = "click a piece to pick it · G moves, R turns, S sizes · right-drag turns the view · middle-drag pans · wheel zooms · delete removes the piece · ctrl-d copies it · ctrl-z undoes, ctrl-shift-z redoes";
 
 // An element with properties and children.
@@ -32,6 +32,9 @@ function el(tag, props = {}, ...children) {
 
 const round = (v, step) => Math.round(v / step) * step;
 const tidy = (v) => Math.round(v * 100) / 100;
+const lowest = (piece) => Math.min(...pieceCorners(piece).map((c) => c[1]));
+// Sizing grows a piece about its middle; this moves it back up or down so its bottom stays put.
+const keepBase = (piece, base) => (piece.at[1] = tidy(piece.at[1] + base - lowest(piece)));
 
 export class ObjectBuilder {
   // onSave(object) hears the object when it's saved.
@@ -90,7 +93,14 @@ export class ObjectBuilder {
     const numbers = (key, step) =>
       [0, 1, 2].map((axis) => {
         const input = el("input", { type: "number", step });
-        input.addEventListener("change", () => this.changePiece((p) => (p[key][axis] = key === "size" ? Math.max(MIN_SIZE_FT, Number(input.value) || MIN_SIZE_FT) : Number(input.value) || 0)));
+        input.addEventListener("change", () =>
+          this.changePiece((p) => {
+            if (key !== "size") return (p[key][axis] = Number(input.value) || 0);
+            const base = lowest(p);
+            p.size[axis] = Math.max(MIN_SIZE_FT, Number(input.value) || MIN_SIZE_FT);
+            keepBase(p, base);
+          }),
+        );
         return input;
       });
     this.inputs = { size: numbers("size", 0.25), at: numbers("at", 0.25), turn: numbers("turn", 5) };
@@ -305,8 +315,11 @@ export class ObjectBuilder {
     const wrong = problems(object);
     const { footprint, height } = shapeOf(object);
     this.info.textContent = `${object.pieces.length} of ${MAX_PIECES} pieces · ${tidy(height)} ft tall · blocks ${footprint.circle !== undefined ? `a circle ${tidy(footprint.circle * 2)} ft across` : `${footprint.rect.map(tidy).join(" × ")} ft`}`;
-    this.problems.textContent = wrong.join(" · ");
     this.saveButton.disabled = wrong.length > 0 || !object.pieces.length;
+    // Not a problem (a foundation on a slope wants it), but easy to do by accident.
+    const below = Math.min(0, ...object.pieces.map(lowest));
+    const sunk = below < -0.05 ? [`note: pieces reach ${tidy(-below)} ft below the ground`] : [];
+    this.problems.textContent = [...wrong, ...sunk].join(" · ");
   }
 
   // --- the view ---
@@ -327,6 +340,10 @@ export class ObjectBuilder {
     grid.material.transparent = true;
     grid.material.opacity = 0.35;
     this.scene.add(grid);
+    // Solid ground, so pieces sunk below it look sunk.
+    const ground = new THREE.Mesh(new THREE.CircleGeometry(REACH_FT * 1.5, 48).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: COLORS.ground, transparent: true, opacity: 0.85 }));
+    ground.position.y = -0.01;
+    this.scene.add(ground);
     this.scene.add(ring(REACH_FT, COLORS.reach));
     const person = new THREE.Mesh(new THREE.CapsuleGeometry(PERSON.radiusFt, PERSON.heightFt - PERSON.radiusFt * 2, 4, 8), new THREE.MeshLambertMaterial({ color: COLORS.person, transparent: true, opacity: 0.45 }));
     person.position.set(PERSON.at[0], PERSON.heightFt / 2, PERSON.at[1]);
@@ -345,7 +362,10 @@ export class ObjectBuilder {
     this.scene.add(this.transform.getHelper());
     this.transform.addEventListener("dragging-changed", (e) => {
       this.orbit.enabled = !e.value;
-      if (e.value) this.dragFrom = JSON.stringify(this.object);
+      if (e.value) {
+        this.dragFrom = JSON.stringify(this.object);
+        this.dragBase = lowest(this.object.pieces[this.picked]);
+      }
       else this.endDrag();
     });
     this.transform.addEventListener("objectChange", () => this.readHandles());
@@ -371,6 +391,10 @@ export class ObjectBuilder {
     const r = mesh.rotation;
     piece.turn = [r.y, r.x, r.z].map((v) => round(THREE.MathUtils.radToDeg(v), 0.1));
     piece.size = mesh.scale.toArray().map((v) => Math.max(MIN_SIZE_FT, tidy(Math.abs(v))));
+    if (this.handle === "size") {
+      keepBase(piece, this.dragBase);
+      mesh.position.y = piece.at[1];
+    }
     this.refreshPanel();
     this.drawMarks();
   }

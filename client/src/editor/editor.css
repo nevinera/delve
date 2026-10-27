@@ -116,6 +116,11 @@
   border-color: #f0c850;
 }
 
+.editor .editor-step-tabs button.picking {
+  border-color: #f0c850;
+  border-style: dashed;
+}
+
 .editor-divider {
   width: 100%;
   border: none;

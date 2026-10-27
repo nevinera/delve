@@ -57,6 +57,7 @@ const editor = new Editor(World.empty(), {
   detail: $("detail"),
   detailSize: $("detailSize"),
   detailInfo: $("detailInfo"),
+  detailPick: $("detailPick"),
   detailRadius: $("detailRadius"),
   detailRadiusValue: $("detailRadiusValue"),
   detailFalloff: $("detailFalloff"),
