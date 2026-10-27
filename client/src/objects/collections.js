@@ -1,4 +1,5 @@
 import { BUILTIN_COLLECTIONS } from "../world/builtinCollections.js";
+import { BUILTIN_OBJECT_COLLECTIONS } from "../world/builtinObjects.js";
 import { OLD_IMAGES, imagePath, newObjectId, objectPath } from "../world/builtObjects.js";
 import { BUILT_PREFIX } from "../world/objects.js";
 import { STRUCTURE_PREFIX, structurePath } from "../world/structures.js";
@@ -101,7 +102,17 @@ export function adoptStrays(world) {
 // structure, both absent for builtins.
 export function allCollections(world, kind = "objects") {
   const builtins =
-    kind === "objects" ? BUILTIN_COLLECTIONS.map(({ id, name, types }) => ({ id: `builtin:${id}`, name, kind: "builtin", entries: types.map((type) => ({ key: `builtin:${type}`, type, name: type, tags: [] })) })) : [];
+    kind === "objects"
+      ? [
+          ...BUILTIN_COLLECTIONS.map(({ id, name, types }) => ({ id: `builtin:${id}`, name, kind: "builtin", entries: types.map((type) => ({ key: `builtin:${type}`, type, name: type, tags: [] })) })),
+          ...BUILTIN_OBJECT_COLLECTIONS.map(({ id, name, objects }) => ({
+            id: `builtin:${id}`,
+            name,
+            kind: "builtin",
+            entries: objects.map((o) => ({ key: `builtin:${o.id}`, type: `${BUILT_PREFIX}${o.id}`, name: o.name, tags: o.tags ?? [], object: o })),
+          })),
+        ]
+      : [];
   const { prefix, things } = KINDS[kind];
   const all = things(world);
   const field = kind === "objects" ? "object" : "structure";

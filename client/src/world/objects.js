@@ -11,6 +11,7 @@
 
 import { shapeOf } from "./builtObjects.js";
 import { builtinImage } from "./builtinImages.js";
+import { BUILTIN_OBJECTS } from "./builtinObjects.js";
 import { CELL_FT, TILE_FT } from "./constants.js";
 import { KIT_OBJECTS } from "./kitObjects.js";
 import { hash2 } from "./noise.js";
@@ -70,7 +71,7 @@ const structures = new Map(); // id -> { structure, reach, height }
 
 export function setBuiltObjects(objects, wornImages = [], worldStructures = []) {
   built.clear();
-  for (const object of objects) built.set(object.id, { object, ...shapeOf(object) });
+  for (const object of [...BUILTIN_OBJECTS, ...objects]) built.set(object.id, { object, ...shapeOf(object) });
   structures.clear();
   for (const structure of worldStructures) {
     const cells = structureCells(structure);

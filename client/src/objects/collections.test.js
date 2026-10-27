@@ -29,7 +29,7 @@ describe("collections", () => {
     expect(names).toEqual(["farm", "my structures"]);
     const farm = allCollections(world, "structures").find((c) => c.name === "farm");
     expect(farm.entries.map((e) => e.name)).toEqual(["barn0001", "shed0001"]);
-    expect(allCollections(world, "objects").find((c) => c.name === "farm").entries.map((e) => e.name)).toEqual(["crate"]);
+    expect(allCollections(world, "objects").find((c) => c.name === "farm" && c.kind !== "builtin").entries.map((e) => e.name)).toEqual(["crate"]);
     expect(adoptStrays(world)).toBe(false);
   });
 });
