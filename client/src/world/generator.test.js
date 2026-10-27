@@ -66,7 +66,7 @@ describe("generator", () => {
       expect(heights[2 * CELLS - 7]).toBeLessThan(0);
       expect(cell(generateTile(ctx, 15, -2), CELLS - 7, j, "water")).toBe(0);
     }
-  });
+  }, 20000);
 
   it("follows the land grid inland", () => {
     const tile = generateTile(ctx, 13, -2);

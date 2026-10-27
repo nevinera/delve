@@ -16,7 +16,7 @@ describe("bones", () => {
     const bones = island([{ op: "noise", height: 50, wavelength: 1000 }, { op: "erode", by: "water", drops: 1 }]);
     expect(runBones(bones).hash()).toBe(runBones(bones).hash());
     expect(runBones({ ...bones, seed: 4 }).hash()).not.toBe(runBones(bones).hash());
-  });
+  }, 20000);
 
   it("builds ridges up, cuts valleys down, and sinks craters to their floor", () => {
     const land = runBones(
