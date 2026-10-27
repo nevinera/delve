@@ -355,3 +355,58 @@ export function placedWalk(structure, { at, yaw, base }) {
   }
   return { cells, edges };
 }
+
+// A yaw in radians as whole quarter turns, 0 to 3.
+export const quartersOf = (yaw) => ((Math.round(yaw / (Math.PI / 2)) % 4) + 4) % 4;
+
+// Every cell the structure has floor or walk surface on, in any storey, as [x, z].
+export function structureCells(structure) {
+  const walk = structure.walk ?? bakeWalk(structure);
+  const keys = new Set([...structure.storeys.flatMap((s) => s.floor), ...walk.storeys.flatMap((s) => Object.keys(s.cells))]);
+  return [...keys].map(parseCell);
+}
+
+// Pushes the ground down under a placed structure's ground floor, so none shows through it.
+// Ground cells are `terrainFt` square with their heights at their middles, the ground between
+// following them smoothly: those whose middles are under the ground floor go below its floor,
+// and those near enough to reach under it go just below its top. placement is { at, yaw (radians),
+// base, pushed }: pushed is what an earlier push changed, [[ci, cj, height before], ...], put back
+// first. ground is { height(ci, cj), editable(ci, cj) }. Returns { changes: [[ci, cj, h], ...],
+// pushed }.
+export function pushGround(structure, placement, ground, terrainFt) {
+  const { base } = placement;
+  const placed = placedWalk(structure, { ...placement, yaw: quartersOf(placement.yaw) });
+  const targets = new Map(); // "ci,cj" -> the height it may be at most
+  const lower = (ci, cj, h) => {
+    const key = `${ci},${cj}`;
+    targets.set(key, Math.min(targets.get(key) ?? Infinity, h));
+  };
+  for (const { cell, level } of placed.cells) {
+    if (level !== 0) continue;
+    const [x0, z0] = cell.map((v) => v * CELL_FT);
+    const near = (v0) => {
+      const out = [];
+      for (let c = Math.floor((v0 - terrainFt) / terrainFt); c <= Math.floor((v0 + CELL_FT + terrainFt) / terrainFt); c++) {
+        const middle = (c + 0.5) * terrainFt;
+        if (middle > v0 - terrainFt && middle < v0 + CELL_FT + terrainFt) out.push([c, middle >= v0 && middle <= v0 + CELL_FT]);
+      }
+      return out;
+    };
+    for (const [ci, inX] of near(x0)) for (const [cj, inZ] of near(z0)) lower(ci, cj, inX && inZ ? base - FLOOR_FT - 0.2 : base - 0.1);
+  }
+  const before = new Map((placement.pushed ?? []).map(([ci, cj, h]) => [`${ci},${cj}`, h]));
+  const changes = [];
+  const pushed = [];
+  for (const key of new Set([...before.keys(), ...targets.keys()])) {
+    const [ci, cj] = key.split(",").map(Number);
+    if (!ground.editable(ci, cj)) {
+      if (before.has(key)) pushed.push([ci, cj, before.get(key)]);
+      continue;
+    }
+    const was = before.get(key) ?? ground.height(ci, cj);
+    const want = targets.has(key) ? Math.min(was, round(targets.get(key))) : was;
+    if (want !== ground.height(ci, cj)) changes.push([ci, cj, want]);
+    if (want < was) pushed.push([ci, cj, was]);
+  }
+  return { changes, pushed };
+}

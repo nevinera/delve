@@ -3,7 +3,7 @@ import { LibrarySync } from "../editor/libraryStore.js";
 import { loadLocal } from "../editor/localSave.js";
 import { World } from "../editor/world.js";
 import { setBuiltObjects } from "../world/objects.js";
-import { builtObjects, images } from "./collections.js";
+import { builtObjects, builtStructures, images } from "./collections.js";
 import { ObjectLibrary } from "./library.js";
 import { placedCount } from "./placed.js";
 
@@ -26,12 +26,12 @@ async function keptWorld() {
 let world = await keptWorld();
 $("worldName").textContent = world.info.name;
 const sync = new LibrarySync(world, async () => {
-  setBuiltObjects(builtObjects(world), images(world));
+  setBuiltObjects(builtObjects(world), images(world), builtStructures(world));
   library.show();
   $("worldName").textContent = (await keptWorld()).info.name;
 });
 await sync.pull();
-setBuiltObjects(builtObjects(world), images(world));
+setBuiltObjects(builtObjects(world), images(world), builtStructures(world));
 
 const library = new ObjectLibrary($("gallery"), {
   getWorld: () => world,

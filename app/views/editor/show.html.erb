@@ -176,7 +176,7 @@
             </div>
           </div>
           <label class="editor-field" data-for="place">object <select id="placeType"></select></label>
-          <label class="editor-range" data-for="place">size <input id="placeScale" type="range" min="1" max="100" step="0.5" value="5"><output id="placeScaleValue"></output></label>
+          <label id="placeSizeRow" class="editor-range" data-for="place">size <input id="placeScale" type="range" min="1" max="100" step="0.5" value="5"><output id="placeScaleValue"></output></label>
           <div class="editor-stack" data-for="place">
             <label class="editor-field">replace every placed <select id="replaceFrom"></select></label>
             <label class="editor-field">with <select id="replaceTo"></select></label>
@@ -186,7 +186,8 @@
             <div id="objectPanel" class="editor-stack" hidden>
               <p id="objectInfo"></p>
               <label class="editor-range">turn <input id="objectYaw" type="range" min="0" max="355" step="5" value="0"><output id="objectYawValue"></output></label>
-              <label class="editor-range">size <input id="objectScale" type="range" min="1" max="100" step="0.5" value="5"><output id="objectScaleValue"></output></label>
+              <label id="objectSizeRow" class="editor-range">size <input id="objectScale" type="range" min="1" max="100" step="0.5" value="5"><output id="objectScaleValue"></output></label>
+              <div id="objectBaseRow" class="editor-row" hidden title="shift-click for a quarter foot">ground floor <button id="objectLower" type="button">▼</button><output id="objectBaseValue"></output><button id="objectRaise" type="button">▲</button></div>
               <div id="objectColors" class="editor-row editor-wrap"></div>
               <div id="objectTexts" class="editor-stack"></div>
               <button id="objectDelete" type="button">delete</button>

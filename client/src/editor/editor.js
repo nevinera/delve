@@ -30,7 +30,7 @@ import { TRAIL_KINDS, TRAIL_STATES } from "./detailTrails.js";
 import { BUILT_PREFIX, builtOf, makeObject, setBuiltObjects, specOf } from "../world/objects.js";
 import { paletteColors, textsOf } from "../world/builtObjects.js";
 import { MAX_TEXT, signText } from "../world/pixelFont.js";
-import { adoptStrays, allCollections, builtObjects, images } from "../objects/collections.js";
+import { adoptStrays, allCollections, builtObjects, builtStructures, images } from "../objects/collections.js";
 import { placedCount } from "../objects/placed.js";
 import { decodeTile, encodeTile } from "../world/tileCodec.js";
 import { gunzipSync, gzipSync } from "fflate";
@@ -740,6 +740,8 @@ export class Editor {
     if (this.step !== "detail") return;
     const { placeType, placeScale, placeScaleValue } = this.el;
     placeScaleValue.textContent = placeType.value.startsWith(BUILT_PREFIX) ? `×${placeScale.value}` : `${placeScale.value} ft`;
+    // Structures come as built, so they've no size to choose.
+    this.el.placeSizeRow.style.display = specOf(placeType.value)?.structure ? "none" : "";
     const { channelWidth, channelWidthValue, channelDepth, channelDepthValue, sourceFlow, sourceFlowValue } = this.el;
     channelWidthValue.textContent = `${channelWidth.value} ft`;
     channelDepthValue.textContent = `${channelDepth.value} ft`;
@@ -790,7 +792,7 @@ export class Editor {
   // changed.
   loadBuiltObjects(choose) {
     adoptStrays(this.world);
-    setBuiltObjects(builtObjects(this.world), images(this.world));
+    setBuiltObjects(builtObjects(this.world), images(this.world), builtStructures(this.world));
     this.fillObjectTypes(choose);
     if (this.step === "detail" && this.detail) this.showDetail();
     if (this.el.libraryPopover.open) this.library?.show();
@@ -819,16 +821,18 @@ export class Editor {
   // objects.
   scaleSlider(input, output, type, value) {
     const spec = specOf(type);
-    const [least, most] = spec?.built ? spec.size : (spec?.size ?? [1, 1]).map((v, i) => v * [0.5, 2][i]);
-    [input.min, input.max, input.step] = [least, most, spec?.built ? 0.05 : 0.5];
+    const [least, most] = spec?.built || spec?.structure ? spec.size : (spec?.size ?? [1, 1]).map((v, i) => v * [0.5, 2][i]);
+    [input.min, input.max, input.step] = [least, most, spec?.built || spec?.structure ? 0.05 : 0.5];
     input.value = value;
-    output.textContent = spec?.built ? `×${value}` : `${value} ft`;
+    output.textContent = spec?.built || spec?.structure ? `×${value}` : `${value} ft`;
   }
 
   // Swaps every placed object of type `from` for type `to`, in every continent's tiles, keeping
   // where each stands and which way it faces. Changed tiles are marked edited by hand.
   replaceInstances(from, to) {
     if (!from || !to || from === to) return this.say("Pick two different types.");
+    // A structure's placement keeps the ground it pushed down, which nothing else would put back.
+    if ([from, to].some((type) => specOf(type)?.structure)) return this.say("Structures can't be swapped this way.");
     const name = (type) => builtOf(type)?.name ?? type;
     if (!window.confirm(`Replace every placed ${name(from)} with ${name(to)}?`)) return;
     const sameKind = from.startsWith(BUILT_PREFIX) === to.startsWith(BUILT_PREFIX);
@@ -863,8 +867,14 @@ export class Editor {
     objectPanel.hidden = !object;
     if (!object) return;
     const spec = specOf(object.type);
-    objectInfo.textContent = `${spec?.built?.name ?? object.type} at ${object.at.map(Math.round).join(", ")}`;
+    objectInfo.textContent = `${spec?.built?.name ?? spec?.structure?.name ?? object.type} at ${object.at.map(Math.round).join(", ")}`;
     const degrees = Math.round((object.yaw * 180) / Math.PI) % 360;
+    // Structures turn in quarter turns, and rise and sink instead of growing.
+    const structure = Boolean(spec?.structure);
+    [objectYaw.step, objectYaw.max] = structure ? [90, 270] : [5, 355];
+    this.el.objectSizeRow.hidden = structure;
+    this.el.objectBaseRow.hidden = !structure;
+    if (structure) this.el.objectBaseValue.textContent = `${object.base} ft`;
     objectYaw.value = degrees;
     objectYawValue.textContent = `${degrees}°`;
     this.scaleSlider(objectScale, objectScaleValue, object.type, object.scale);
@@ -1153,6 +1163,12 @@ export class Editor {
       input.addEventListener("change", () => this.detail?.endEdit());
     }
     this.el.objectDelete.addEventListener("click", () => this.detail?.deleteSelected());
+    for (const [button, way] of [[this.el.objectLower, -1], [this.el.objectRaise, 1]]) {
+      button.addEventListener("click", (e) => {
+        const object = this.detail?.selected?.object;
+        if (object?.base !== undefined) this.detail.changeSelected({ base: object.base + way * (e.shiftKey ? 0.25 : 1) });
+      });
+    }
     this.el.pickedFlow.addEventListener("input", () => (this.el.pickedFlowValue.textContent = this.el.pickedFlow.value));
     this.el.pickedFlow.addEventListener("change", () => this.detail?.changeSource({ flow: Number(this.el.pickedFlow.value) }));
     this.el.sourceFree.addEventListener("click", () => this.detail?.changeSource({ free: true }));

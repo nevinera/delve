@@ -99,7 +99,7 @@ export class ObjectLibrary {
   // gallery drawn again.
   changed(choose) {
     adoptStrays(this.world);
-    setBuiltObjects(builtObjects(this.world), images(this.world));
+    setBuiltObjects(builtObjects(this.world), images(this.world), builtStructures(this.world));
     this.onChange?.(choose);
     if (!this.gallery.container.hidden) this.show();
   }

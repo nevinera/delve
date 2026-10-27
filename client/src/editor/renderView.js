@@ -11,6 +11,8 @@ import { waterfallMeshes } from "./waterfalls.js";
 import { setTreeSight, treeMeshes, treeStage } from "./treeMeshes.js";
 import { clutterMeshes, gatherClutter, setClutterFocus, setClutterRadius } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
+import { structureCover } from "../world/objects.js";
+import { CELL_FT as STRUCTURE_CELL_FT } from "../world/structures.js";
 import { objectMeshes, setObjectSight } from "./objectMeshes.js";
 import { Walker } from "./walker.js";
 import { tilePath } from "./thumbnails.js";
@@ -323,15 +325,16 @@ export class RenderView {
       this.clutter.remove(child);
     }
     const tileAt = (x, z) => this.decoded.get(`${x},${z}`);
+    const near = [];
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (tileAt(tx + dx, tz + dz)) near.push(`${tx + dx},${tz + dz}`);
+    // None grows on structures' ground floors.
+    const covered = structureCover(near.flatMap((k) => this.decoded.get(k).objects ?? []));
+    const cell = STRUCTURE_CELL_FT;
     const instances = [];
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const near = `${tx + dx},${tz + dz}`;
-        const tile = this.decoded.get(near);
-        if (!tile) continue;
-        if (!this.clutterTiles.has(near)) this.clutterTiles.set(near, clutterForTile(tile, tileAt));
-        instances.push(...this.clutterTiles.get(near));
-      }
+    for (const k of near) {
+      if (!this.clutterTiles.has(k)) this.clutterTiles.set(k, clutterForTile(this.decoded.get(k), tileAt));
+      const list = this.clutterTiles.get(k);
+      instances.push(...(covered.size ? list.filter((c) => !covered.has(`${Math.floor(c.x / cell)},${Math.floor(c.z / cell)}`)) : list));
     }
     if (instances.length) this.clutter.add(...clutterMeshes(instances, this.origin));
     this.gatherClutter(focus);

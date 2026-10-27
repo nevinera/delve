@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { bakeWalk, edgeToward, emptyStructure, placedWalk, problems, turnCell, turnEdge, withWalk } from "./structures.js";
+import { bakeWalk, edgeToward, emptyStructure, placedWalk, problems, pushGround, turnCell, turnEdge, withWalk } from "./structures.js";
 
 // A 2 by 2 cell hut: stone walls all round, a door on the south, a window on the east, and a
 // cellar under its west half, down a stair from the north-east cell.
@@ -120,5 +120,30 @@ describe("structures", () => {
     expect(stair.heights).toEqual([50, 40, 40, 50]);
     // The south door now faces east.
     expect(placed.edges.find((e) => e.kind === "door")).toEqual({ edge: "102,199,w", kind: "door", level: 0, heights: [50, 60] });
+  });
+
+  it("pushes the ground down under the ground floor, and puts it back", () => {
+    const s = emptyStructure("pad", () => 0.5);
+    s.storeys[0].floor = ["0,0"];
+    const heights = new Map();
+    const ground = { height: (ci, cj) => heights.get(`${ci},${cj}`) ?? 100, editable: (ci) => ci < 5 };
+    const apply = (changes) => changes.forEach(([ci, cj, h]) => heights.set(`${ci},${cj}`, h));
+    // The cell covers 4 to 8 ft each way: ground cell 0,0's middle is under it; the three round
+    // it reach under it.
+    const sunk = pushGround(s, { at: [4, 4], yaw: 0, base: 99, pushed: [] }, ground, 8);
+    expect(sunk.changes.sort()).toEqual([[0, 0, 98.3], [0, 1, 98.9], [1, 0, 98.9], [1, 1, 98.9]]);
+    expect(sunk.pushed.length).toBe(4);
+    apply(sunk.changes);
+    // Lower still: pushed further, remembering the ground as it first was.
+    const deeper = pushGround(s, { at: [4, 4], yaw: 0, base: 98, pushed: sunk.pushed }, ground, 8);
+    expect(deeper.pushed.every(([, , h]) => h === 100)).toBe(true);
+    apply(deeper.changes);
+    // Raised above the ground: all put back.
+    const raised = pushGround(s, { at: [4, 4], yaw: 0, base: 101, pushed: deeper.pushed }, ground, 8);
+    expect(raised.pushed).toEqual([]);
+    apply(raised.changes);
+    expect([...heights.values()].every((h) => h === 100)).toBe(true);
+    // Ground that can't be edited is left alone.
+    expect(pushGround(s, { at: [36, 4], yaw: 0, base: 0, pushed: [] }, ground, 8).changes.every(([ci]) => ci < 5)).toBe(true);
   });
 });

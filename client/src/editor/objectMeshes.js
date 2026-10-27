@@ -5,6 +5,8 @@ import { paletteColors } from "../world/builtObjects.js";
 import { TEXT_PLACEHOLDER } from "../world/pixelFont.js";
 import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, objectGeometry, textGeometry, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
 import { meshHeightAt } from "../world/clutter.js";
+import { CELL_FT as STRUCTURE_CELL_FT, placedWalk, quartersOf } from "../world/structures.js";
+import { structureGeometries } from "./structureMeshes.js";
 
 // Objects for the 3D view (world/objects.js says what they are and where), as instanced meshes:
 // one per part shape and variant. Shapes are for scale 1, standing on y = 0 and matching their
@@ -100,6 +102,35 @@ function signsOf(object, colors = [], texts = {}) {
     kept.set(key, signs && { geometry: signs.geometry, small: limited(sight.small, false, decalMaterial(texture)), large: limited(sight.large, false, decalMaterial(texture)) });
   }
   return kept.get(key);
+}
+
+// A structure's meshes with its parameters' colors and its foundation `depthFt` deep, as { base,
+// overlays: [{ geometry, material }] } (one overlay per image), kept as built objects' are.
+const builtStructures = new WeakMap(); // structure -> Map(colors and depth -> meshes)
+function structureOf(structure, colors = [], depthFt) {
+  if (!builtStructures.has(structure)) builtStructures.set(structure, new Map());
+  const kept = builtStructures.get(structure);
+  const key = `${colors.join(",")}/${depthFt}`;
+  if (!kept.has(key)) {
+    const storeys = [...structureGeometries(structure, { params: colors, depthFt, imageOf }).values()];
+    const byImage = new Map(); // image -> [geometry]
+    for (const { image, geometry } of storeys.flatMap((s) => s.overlays)) byImage.set(image, [...(byImage.get(image) ?? []), geometry]);
+    const wearer = paletteColors(structure, colors);
+    kept.set(key, {
+      base: storeys.length ? mergeGeometries(storeys.map((s) => s.base)) : null,
+      overlays: [...byImage].map(([image, list]) => ({ geometry: mergeGeometries(list), material: limited(sight.large, false, tiledMaterial(tileTexture(image, wearer))) })),
+    });
+  }
+  return kept.get(key);
+}
+
+// How deep a placed structure's foundation reaches: from its base to a foot under the lowest
+// ground beneath its ground floor, in whole feet.
+function foundationDepth(object, structure, tileAt) {
+  const half = STRUCTURE_CELL_FT / 2;
+  const cells = placedWalk(structure, { at: object.at, yaw: quartersOf(object.yaw), base: object.base }).cells.filter((c) => c.level === 0);
+  const low = Math.min(...cells.map(({ cell: [x, z] }) => meshHeightAt(tileAt, x * STRUCTURE_CELL_FT + half, z * STRUCTURE_CELL_FT + half) ?? object.base));
+  return Number.isFinite(low) ? Math.max(1, Math.ceil(object.base - low + 1)) : 2;
 }
 
 // A kit type's object at scale 1, white where its parameter is, for its color to tint.
@@ -221,6 +252,14 @@ export function objectMeshes(objects, tileAt, origin) {
   for (const object of objects) {
     const spec = specOf(object.type);
     if (!spec) continue;
+    if (spec.structure) {
+      const depth = foundationDepth(object, spec.structure, tileAt);
+      const made = structureOf(spec.structure, object.colors, depth);
+      const key = `${object.type}/${(object.colors ?? []).join(",")}/${depth}`;
+      if (made.base) join(key, made.base, materials.builtLarge, { object, p: -1 });
+      made.overlays.forEach(({ geometry, material }, n) => join(`${key}/tiles${n}`, geometry, material, { object, p: -1 }));
+      continue;
+    }
     if (spec.kit) {
       join(`kit:${object.type}/${spec.large ? "large" : "small"}`, kitGeometry(spec), materials[spec.large ? "builtLarge" : "builtSmall"], { object, p: 0 });
       continue;
@@ -251,7 +290,8 @@ export function objectMeshes(objects, tileAt, origin) {
   for (const { geometry, material, list } of groups.values()) {
     const mesh = new THREE.InstancedMesh(geometry, material, list.length);
     list.forEach(({ object, p }, n) => {
-      const { y, pitch } = seat(object, tileAt);
+      // Structures stand at their base, upright.
+      const { y, pitch } = object.base !== undefined ? { y: object.base, pitch: 0 } : seat(object, tileAt);
       q.setFromAxisAngle(UP, object.yaw).multiply(tilt.setFromAxisAngle(AXIS_Z, pitch));
       m.compose(new THREE.Vector3(object.at[0] - origin[0], y, object.at[1] - origin[1]), q, new THREE.Vector3(object.scale, object.scale, object.scale));
       mesh.setMatrixAt(n, m);
