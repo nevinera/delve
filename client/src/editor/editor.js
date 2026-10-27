@@ -773,7 +773,7 @@ export class Editor {
   // or imported collection, offering to copy it into one of the world's own.
   async buildObject(object, { readOnly = false } = {}) {
     this.builderLoading ??= import("./objectBuilder.js").then(({ ObjectBuilder }) => {
-      this.builder = new ObjectBuilder({ onSave: (saved) => this.saveBuiltObject(saved) });
+      this.builder = new ObjectBuilder({ onSave: (saved) => this.saveBuiltObject(saved), onDelete: (object) => this.deleteBuiltObject(object) });
     });
     await this.builderLoading;
     const own = this.collections().filter((c) => !c.source);
@@ -786,6 +786,19 @@ export class Editor {
     this.dirty = true;
     this.loadBuiltObjects(`${BUILT_PREFIX}${object.id}`);
     this.say(`Saved ${object.name}.`, { info: true });
+  }
+
+  // Deletes a built object, unless it's placed somewhere.
+  deleteBuiltObject(object) {
+    if (!this.world.files.has(objectPath(object.id))) return this.builder.close();
+    const placed = this.placedCount(new Set([`${BUILT_PREFIX}${object.id}`]));
+    if (placed) return window.alert(`${object.name} is placed ${placed} time${placed === 1 ? "" : "s"}: replace those with something else before deleting it.`);
+    if (!window.confirm(`Delete ${object.name}?`)) return;
+    this.world.files.delete(objectPath(object.id));
+    this.dirty = true;
+    this.builder.close();
+    this.loadBuiltObjects();
+    this.say(`Deleted ${object.name}.`, { info: true });
   }
 
   // A copy of a read-only object in one of the world's own collections, opened to change.
@@ -890,11 +903,11 @@ export class Editor {
       const name = window.prompt("A new name for the collection:", collection.name);
       if (!name?.trim()) return;
       list[index] = { ...list[index], name: name.trim() };
-    } else if (action === "remove") {
+    } else if (action === "delete") {
       const types = new Set(objects.map((o) => `${BUILT_PREFIX}${o.id}`));
       const placed = this.placedCount(types);
-      if (placed) return this.say(`${placed} placed object${placed === 1 ? " comes" : "s come"} from ${collection.name}: replace them with something else before removing it.`);
-      if (!window.confirm(`Remove ${collection.name} and its ${objects.length} object${objects.length === 1 ? "" : "s"} from this world?`)) return;
+      if (placed) return this.say(`${placed} placed object${placed === 1 ? " comes" : "s come"} from ${collection.name}: replace them with something else before deleting it.`);
+      if (!window.confirm(`Delete ${collection.name} and its ${objects.length} object${objects.length === 1 ? "" : "s"} from this world?`)) return;
       for (const o of objects) this.world.files.delete(objectPath(o.id));
       list.splice(index, 1);
     }

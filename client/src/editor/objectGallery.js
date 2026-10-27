@@ -25,7 +25,7 @@ function el(tag, props = {}, ...children) {
 
 export class ObjectGallery {
   // onOpen(collection, entry), onNew(collection), onNewCollection(), and onAction(collection,
-  // action) for a collection heading's buttons: "rename", "export" or "remove".
+  // action) for a collection heading's buttons: "rename", "export" or "delete".
   constructor(container, { onOpen, onNew, onNewCollection, onAction }) {
     this.container = container;
     Object.assign(this, { onOpen, onNew, onNewCollection, onAction });
@@ -76,7 +76,7 @@ export class ObjectGallery {
 
   section(collection, entries) {
     const button = (action, label) => el("button", { type: "button", textContent: label, onclick: () => this.onAction?.(collection, action) });
-    const actions = { own: [button("rename", "rename"), button("export", "export")], imported: [button("export", "export"), button("remove", "remove")], builtin: [] }[collection.kind];
+    const actions = { own: [button("rename", "rename"), button("export", "export"), button("delete", "delete")], imported: [button("export", "export"), button("delete", "delete")], builtin: [] }[collection.kind];
     const kind = KIND_LABELS[collection.kind];
     const head = el(
       "div",

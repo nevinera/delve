@@ -53,9 +53,10 @@ function sizeFrom(piece, from, size, sides = [0, 1, 0]) {
 }
 
 export class ObjectBuilder {
-  // onSave(object) hears the object when it's saved.
-  constructor({ onSave }) {
+  // onSave(object) hears the object when it's saved, onDelete(object) when deleting it is asked for.
+  constructor({ onSave, onDelete }) {
     this.onSave = onSave;
+    this.onDelete = onDelete;
     this.object = null;
     this.picked = null; // the picked piece's index
     this.handle = "move";
@@ -184,6 +185,7 @@ export class ObjectBuilder {
       el("span", { className: "ob-view-only" }, this.copyTo),
       el("button", { type: "button", className: "ob-view-only", textContent: "copy", onclick: () => this.copy() }),
       el("span", { className: "ob-spacer" }),
+      el("button", { type: "button", className: "ob-edit", textContent: "delete", title: "delete this object from the world", onclick: () => this.onDelete?.(this.object) }),
       el("button", { type: "button", textContent: "close", className: "ob-view-only", onclick: () => this.close() }),
       el("button", { type: "button", className: "ob-edit", textContent: "cancel", onclick: () => this.cancel() }),
       this.saveButton,
