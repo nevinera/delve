@@ -60,7 +60,11 @@ export class ObjectLibrary {
         this.file,
       ],
     });
-    this.builder = new ObjectBuilder({ onSave: (object) => this.saveBuiltObject(object), onDelete: (object) => this.deleteBuiltObject(object) });
+    this.builder = new ObjectBuilder({
+      onSave: (object) => this.saveBuiltObject(object),
+      onSaveCopy: (object) => this.saveCopy(object),
+      onDelete: (object) => this.deleteBuiltObject(object),
+    });
   }
 
   get world() {
@@ -94,6 +98,13 @@ export class ObjectLibrary {
     this.world.writeJson(objectPath(object.id), object);
     this.changed(`${BUILT_PREFIX}${object.id}`);
     this.say(`Saved ${object.name}.`, { info: true });
+  }
+
+  // Saves an object as a new one in the same collection, and goes on with the copy.
+  saveCopy(object) {
+    const copy = { ...object, id: newObjectId(), name: `${object.name} copy` };
+    this.saveBuiltObject(copy);
+    this.buildObject(copy);
   }
 
   // Deletes a built object, unless it's placed somewhere.

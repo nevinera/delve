@@ -59,9 +59,11 @@ function sizeFrom(piece, from, size, sides = [0, 1, 0]) {
 }
 
 export class ObjectBuilder {
-  // onSave(object) hears the object when it's saved, onDelete(object) when deleting it is asked for.
-  constructor({ onSave, onDelete }) {
+  // onSave(object) hears the object when it's saved, onSaveCopy(object) when it's saved as a copy
+  // instead, and onDelete(object) when deleting it is asked for.
+  constructor({ onSave, onSaveCopy, onDelete }) {
     this.onSave = onSave;
+    this.onSaveCopy = onSaveCopy;
     this.onDelete = onDelete;
     this.object = null;
     this.picked = null; // the picked piece's index
@@ -194,6 +196,7 @@ export class ObjectBuilder {
       el("button", { type: "button", className: "ob-view-only", textContent: "copy", onclick: () => this.copy() }),
       el("span", { className: "ob-spacer" }),
       el("button", { type: "button", className: "ob-edit", textContent: "delete", title: "delete this object from the world", onclick: () => this.onDelete?.(this.object) }),
+      el("button", { type: "button", className: "ob-edit", textContent: "save as copy", title: "save this as a new object, leaving the original as it was last saved", onclick: () => this.saveCopy() }),
       el("button", { type: "button", textContent: "close", className: "ob-view-only", onclick: () => this.close() }),
       el("button", { type: "button", className: "ob-edit", textContent: "cancel", onclick: () => this.cancel() }),
       this.saveButton,
@@ -357,6 +360,13 @@ export class ObjectBuilder {
     if (problems(object).length) return;
     this.onSave?.(object);
     this.close();
+  }
+
+  saveCopy() {
+    const object = structuredClone(this.object);
+    dropUnusedColors(object);
+    if (problems(object).length || !object.pieces.length) return;
+    this.onSaveCopy?.(object);
   }
 
   copy() {
