@@ -33,7 +33,8 @@ const COLORS = {
   activeFill: "rgba(240, 200, 80, 0.06)",
   stale: "rgba(255, 130, 40, 0.45)",
   missing: "rgba(255, 255, 255, 0.16)",
-  locked: "rgba(255, 255, 255, 0.55)",
+  locked: "rgba(255, 255, 255, 0.95)",
+  casing: "rgba(0, 0, 0, 0.75)",
   lockedFill: "rgba(255, 255, 255, 0.07)",
 };
 const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
@@ -676,9 +677,11 @@ export class Editor {
 
   // --- the heights and biomes maps ---
 
-  // The map drawn under the current step's marks: "heights", "biomes", or null.
+  // The map drawn under the current step's marks: "heights", "biomes", "relief" (bare shaded
+  // ground), or null.
   previewKind() {
-    if (this.step === "civilization" || this.step === "zones") return this.option("heightmap") ? "heights" : null;
+    if (this.step === "civilization") return this.option("heightmap") ? "heights" : null;
+    if (this.step === "zones") return this.option("heightmap") ? "heights" : "relief";
     return ["heights", "biomes"].includes(STEPS[this.step].map) ? STEPS[this.step].map : null;
   }
 
@@ -702,7 +705,7 @@ export class Editor {
     const { width, height } = this.map.canvas;
     if (!width || !height) return; // hidden, while walking
     const side = Math.round((Math.max(width, height) * (1 + 2 * PREVIEW_MARGIN)) / PREVIEW_PX);
-    this.previews.request(this.continentState(), this.continent, { biomes: kind === "biomes", bounds, side });
+    this.previews.request(this.continentState(), this.continent, { biomes: kind === "biomes", plain: kind === "relief", bounds, side });
   }
 
   showPreview(grid) {
@@ -712,7 +715,7 @@ export class Editor {
       const canvas = document.createElement("canvas");
       [canvas.width, canvas.height] = [grid.nx, grid.nz];
       canvas.getContext("2d").putImageData(new ImageData(grid.rgba, grid.nx, grid.nz), 0, 0);
-      this.preview = { step: grid.biomes ? "biomes" : "heights", canvas, grid };
+      this.preview = { step: grid.biomes ? "biomes" : grid.plain ? "relief" : "heights", canvas, grid };
     }
     this.map.render();
   }
@@ -1215,11 +1218,24 @@ export class Editor {
       return;
     }
     const pts = this.drawing.map((p) => map.toScreen(p));
-    if (map.pointer) pts.push(map.toScreen(this.snap(map.pointer, editing)));
-    ctx.strokeStyle = COLORS.active;
-    ctx.lineWidth = 2 * map.dpr;
-    polyline(ctx, pts, false);
+    const snapped = map.pointer && this.snap(map.pointer, editing);
+    if (snapped) pts.push(map.toScreen(snapped));
+    for (const [color, width] of [[COLORS.casing, 5], [COLORS.active, 2.5]]) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width * map.dpr;
+      polyline(ctx, pts, false);
+    }
     this.drawing.forEach((p, i) => handle(ctx, map.toScreen(p), (i === 0 ? 6 : 4) * map.dpr, COLORS.active));
+    // A ring where the next corner lands on a neighbour's corner or edge.
+    const free = map.pointer && snapToCell(map.pointer);
+    if (snapped && (snapped[0] !== free[0] || snapped[1] !== free[1])) {
+      const [x, y] = map.toScreen(snapped);
+      ctx.strokeStyle = COLORS.active;
+      ctx.lineWidth = 2 * map.dpr;
+      ctx.beginPath();
+      ctx.arc(x, y, 10 * map.dpr, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   // The waterfalls in the generated tiles: a white line down each, from a ring at its lip.
@@ -1263,12 +1279,15 @@ export class Editor {
     }
     ctx.fillStyle = active ? COLORS.activeFill : COLORS.lockedFill;
     if (this.step === "zones") ctx.fill("evenodd");
-    ctx.strokeStyle = active ? COLORS.active : COLORS.locked;
-    ctx.lineWidth = (active ? 2 : 1.5) * dpr;
-    ctx.setLineDash(active ? [] : [6 * dpr, 4 * dpr]);
+    // A dark casing under each line, so it shows over any map.
+    ctx.strokeStyle = COLORS.casing;
+    ctx.lineWidth = 5 * dpr;
     ctx.stroke();
-    ctx.setLineDash([]);
-    if (active) all.flat().forEach((p) => handle(ctx, p, 4 * dpr, COLORS.active));
+    ctx.strokeStyle = active ? COLORS.active : COLORS.locked;
+    ctx.lineWidth = 2.5 * dpr;
+    ctx.stroke();
+    // On the zones step every corner shows, so neighbours can be drawn to meet them.
+    if (active || this.step === "zones") all.flat().forEach((p) => handle(ctx, p, (active ? 4.5 : 3.5) * dpr, active ? COLORS.active : COLORS.locked));
 
     const [cx, cy] = map.toScreen(labelPoint(zone.region));
     ctx.fillStyle = active ? COLORS.active : COLORS.locked;
@@ -1287,6 +1306,8 @@ function polyline(ctx, pts, closed) {
 }
 
 function handle(ctx, [x, y], r, color) {
+  ctx.fillStyle = COLORS.casing;
+  ctx.fillRect(x - r - 1.5, y - r - 1.5, 2 * r + 3, 2 * r + 3);
   ctx.fillStyle = color;
   ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
 }

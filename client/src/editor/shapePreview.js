@@ -7,8 +7,9 @@ import { landBounds } from "../world/landGrid.js";
 // The heights and biomes maps: previews worked out straight from the land and sketch, quick enough
 // to redo on every edit, over the part of the continent in sight. The heights map is the land's
 // rough shape from the land grid alone (generator.js shapeHeight), as an elevation heat map with
-// contour lines. The biomes map colors the land by biome, blended at borders, shaded by each
-// biome's broad hills and ridges (biomeRelief).
+// contour lines, or with `plain`, as bare sandstone, only hill-shaded, for drawing over. The biomes
+// map colors the land by biome, blended at borders, shaded by each biome's broad hills and ridges
+// (biomeRelief).
 //
 // A grid is { x0, z0, stepFt, nx, nz, heights, biomes, rgba }: sample (i, j) is at continent feet
 // (x0 + i * stepFt, z0 + j * stepFt), heights[j * nx + i] is its ground, `biomes` says which map it
@@ -16,11 +17,12 @@ import { landBounds } from "../world/landGrid.js";
 
 const MARGIN_FT = 2 * TILE_FT; // sea around the land, without bounds
 const MIN_STEP_FT = 2;
+const SANDSTONE = [0.8, 0.68, 0.5];
 
 // continent: { land, pins }, as generator.js prepareWorld takes it. bounds: [x0, z0, x1, z1]
 // continent feet to cover, or all the land grid with some sea around it; side: samples along the
 // longer side. Null when there's no land at all.
-export function shapeGrid(continent, seedKey, { biomes = false, bounds = null, side = 360 } = {}) {
+export function shapeGrid(continent, seedKey, { biomes = false, plain = false, bounds = null, side = 360 } = {}) {
   const ctx = biomes ? prepareWorld(continent, seedKey) : prepareShape(continent, seedKey);
   const all = landBounds(ctx.grid);
   if (!all) return null;
@@ -28,12 +30,13 @@ export function shapeGrid(continent, seedKey, { biomes = false, bounds = null, s
   const stepFt = Math.max(MIN_STEP_FT, Math.max(x1 - x0, z1 - z0) / side);
   const nx = Math.ceil((x1 - x0) / stepFt) + 1;
   const nz = Math.ceil((z1 - z0) / stepFt) + 1;
-  const grid = { x0, z0, stepFt, nx, nz, heights: new Float32Array(nx * nz), biomes, rgba: new Uint8ClampedArray(nx * nz * 4) };
+  const grid = { x0, z0, stepFt, nx, nz, heights: new Float32Array(nx * nz), biomes, plain, rgba: new Uint8ClampedArray(nx * nz * 4) };
   if (!biomes) {
     for (let j = 0; j < nz; j++) {
       for (let i = 0; i < nx; i++) grid.heights[j * nx + i] = shapeHeight(ctx, x0 + i * stepFt, z0 + j * stepFt);
     }
-    paint(grid, (k) => heightColor(grid.heights[k]), contours(grid));
+    if (plain) paint(grid, () => SANDSTONE, () => 1);
+    else paint(grid, (k) => heightColor(grid.heights[k]), contours(grid));
     return grid;
   }
   const climate = coarseClimate(ctx, grid);
