@@ -1,5 +1,6 @@
 import { LAND_FT } from "../world/landGrid.js";
 import { fbm } from "../world/noise.js";
+import { rain, slump } from "./erosion.js";
 
 // The heights step's sculpting tools, worked on a land grid (world/landGrid.js). Each returns the
 // changes it makes, [[gx, gz, h], ...], for the view to apply, keep for undoing and redraw.
@@ -10,7 +11,10 @@ import { fbm } from "../world/noise.js";
 // - smooth pulls each point toward its neighbours' average;
 // - flatten pulls toward the height where the stroke began, and set toward a typed height;
 // - noise raises and lowers in a pattern of lumps about half the brush across;
-// - terrace pulls toward the nearest step of `terrace` ft.
+// - terrace pulls toward the nearest step of `terrace` ft;
+// - erode wears the ground away (erosion.js): by running water, with rain falling at about
+//   strength / RAIN_PER drops a cell each second, or by slumping where it's steeper than `talus`
+//   degrees, strength / SLUMP_PER passes each second.
 // The pulling brushes go about strength / PULL_PER of the way each second.
 //
 // Stamps press a shape into the ground, as wide as the brush and `height` ft tall: added to it,
@@ -18,11 +22,14 @@ import { fbm } from "../world/noise.js";
 // ground at its middle. A ramp evens the ground out along a line between two points, as wide as the
 // brush, from one's height to the other's.
 
-export const BRUSHES = ["raise", "lower", "smooth", "flatten", "set", "noise", "terrace"];
-export const TOOLS = [...BRUSHES, "stamp", "ramp"];
+export const BRUSHES = ["raise", "lower", "smooth", "flatten", "set", "noise", "terrace", "erode"];
+export const TOOLS = ["raise", "lower", "smooth", "flatten", "set", "noise", "terrace", "stamp", "ramp", "erode"];
+export const EROSIONS = ["water", "slump"];
 const SMOOTH_RATE = 6; // of the way to the neighbours' average, per second at the brush's middle
 const PULL_PER = 30; // strength per unit of pull a second
 const NOISE_SEED = 0x2c1b3c6d;
+const RAIN_PER = 30;
+const SLUMP_PER = 6;
 const RAMP_CORE = 0.6; // of the ramp's half-width that's held right to it, before easing off
 
 // A shape's height at d (0 at the middle, 1 at the edge), from 0 to 1.
@@ -56,7 +63,9 @@ const ease = (d) => 0.5 + 0.5 * Math.cos(Math.PI * d);
 
 // One frame of a brush at (x, z), dt seconds long. `from` is the height where the stroke began,
 // for flatten.
-export function brush(grid, { tool, radius, strength, target, terrace }, [x, z], dt, from) {
+export function brush(grid, { tool, radius, strength, target, terrace, erosion, talus }, [x, z], dt, from) {
+  if (tool === "erode" && erosion === "slump") return slump(grid, { x, z, radius }, { talus, passes: (strength * dt) / SLUMP_PER });
+  if (tool === "erode") return rain(grid, { x, z, radius }, { drops: Math.round((Math.PI * (radius / LAND_FT) ** 2 * strength * dt) / RAIN_PER) });
   const changes = [];
   const pull = (h, to, w) => h + (to - h) * Math.min(1, (strength / PULL_PER) * dt * w);
   for (const [gx, gz, d] of within(x, z, radius)) {

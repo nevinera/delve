@@ -70,7 +70,7 @@ export class SculptView {
 
     // tool, radius (ft), strength (ft a second), target (ft, for set), terrace (ft), and the stamp's
     // shape, blend and height (ft).
-    this.settings = { tool: "raise", radius: 256, strength: 60, target: 0, terrace: 50, shape: "hill", blend: "add", height: 200 };
+    this.settings = { tool: "raise", radius: 256, strength: 60, target: 0, terrace: 50, shape: "hill", blend: "add", height: 200, erosion: "water", talus: 35 };
     this.keys = { shift: false, ctrl: false };
     this.rampStart = null; // [x, h, z] of a ramp's first click
     this.undos = [];

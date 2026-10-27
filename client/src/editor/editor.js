@@ -23,7 +23,7 @@ import { WaterSimulator } from "./waterflow.js";
 import { ROUTE_VERSION, RoadRouter, findCrossing, gradeCap } from "./roads.js";
 import { hashString } from "../world/noise.js";
 import { LandGrid, landBounds, loadLand, saveLand } from "../world/landGrid.js";
-import { BLENDS, SHAPES, TOOLS as SCULPT_TOOLS } from "./sculptTools.js";
+import { BLENDS, EROSIONS, SHAPES, TOOLS as SCULPT_TOOLS } from "./sculptTools.js";
 import { TILE_FT } from "../world/constants.js";
 import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
 
@@ -44,7 +44,7 @@ const HINTS = {
   ...Object.fromEntries(
     SCULPT_TOOLS.map((tool) => [
       tool,
-      `${{ stamp: "click to stamp the shape", ramp: "click where the ramp starts, then where it ends · esc drops it" }[tool] ?? `left-drag to ${tool === "set" ? "set the ground's height" : tool}`} · shift-drag smooths · ctrl turns the tool around · 1-9 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag or W A S D pans · wheel or C/V zooms · ctrl-z undoes, ctrl-shift-z redoes`,
+      `${{ stamp: "click to stamp the shape", ramp: "click where the ramp starts, then where it ends · esc drops it" }[tool] ?? `left-drag to ${{ set: "set the ground's height", erode: "wear the ground away" }[tool] ?? tool}`} · shift-drag smooths · ctrl turns the tool around · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag or W A S D pans · wheel or C/V zooms · ctrl-z undoes, ctrl-shift-z redoes`,
     ]),
   ),
   ...FEATURE_HINTS,
@@ -614,7 +614,7 @@ export class Editor {
 
   // The sculpting settings from the heights step's panel.
   applyBrush() {
-    const { brushSize, brushSizeValue, brushStrength, brushStrengthValue, setHeight, terraceStep, stampShape, stampBlend, stampHeight } = this.el;
+    const { brushSize, brushSizeValue, brushStrength, brushStrengthValue, setHeight, terraceStep, stampShape, stampBlend, stampHeight, erosionKind, talus } = this.el;
     brushSizeValue.textContent = `${brushSize.value} ft`;
     brushStrengthValue.textContent = `${brushStrength.value} ft/s`;
     this.sculpt?.setBrush({
@@ -626,6 +626,8 @@ export class Editor {
       shape: stampShape.value,
       blend: stampBlend.value,
       height: Number(stampHeight.value) || 0,
+      erosion: erosionKind.value,
+      talus: Math.max(5, Math.min(85, Number(talus.value) || 35)),
     });
   }
 
@@ -637,7 +639,7 @@ export class Editor {
       input.value = Math.max(Number(input.min), Math.min(Number(input.max), Math.round(Number(input.value) * by)));
       this.applyBrush();
     };
-    if (/^[1-9]$/.test(e.key) && SCULPT_TOOLS[Number(e.key) - 1]) this.setTool(SCULPT_TOOLS[Number(e.key) - 1]);
+    if (/^[0-9]$/.test(e.key) && SCULPT_TOOLS[(Number(e.key) + 9) % 10]) this.setTool(SCULPT_TOOLS[(Number(e.key) + 9) % 10]);
     else if (e.key === "[") step(brushSize, 1 / 1.25);
     else if (e.key === "]") step(brushSize, 1.25);
     else if (e.key === "-") step(brushStrength, 1 / 1.25);
@@ -741,11 +743,12 @@ export class Editor {
     this.el.zoomIn.addEventListener("click", () => this.map.zoom(1));
     this.el.zoomOut.addEventListener("click", () => this.map.zoom(-1));
     // Walk asks where to start; the next click on the map starts there.
-    for (const input of [this.el.brushSize, this.el.brushStrength, this.el.setHeight, this.el.terraceStep, this.el.stampShape, this.el.stampBlend, this.el.stampHeight]) {
+    for (const input of [this.el.brushSize, this.el.brushStrength, this.el.setHeight, this.el.terraceStep, this.el.stampShape, this.el.stampBlend, this.el.stampHeight, this.el.erosionKind, this.el.talus]) {
       input.addEventListener("input", () => this.applyBrush());
     }
     for (const shape of Object.keys(SHAPES)) this.el.stampShape.add(new Option(shape, shape));
     for (const blend of BLENDS) this.el.stampBlend.add(new Option({ add: "add to the ground", max: "raise to the shape", min: "cut to the shape" }[blend], blend));
+    for (const kind of EROSIONS) this.el.erosionKind.add(new Option({ water: "running water", slump: "slumping" }[kind], kind));
     this.el.commitLand.addEventListener("click", () => this.commitLand());
     this.el.discardLand.addEventListener("click", () => {
       if (window.confirm("Discard the sculpting since the last commit?")) this.discardLand();

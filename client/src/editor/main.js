@@ -63,6 +63,8 @@ const editor = new Editor(World.empty(), {
   stampShape: $("stampShape"),
   stampBlend: $("stampBlend"),
   stampHeight: $("stampHeight"),
+  erosionKind: $("erosionKind"),
+  talus: $("talus"),
   landStatus: $("landStatus"),
   commitLand: $("commitLand"),
   discardLand: $("discardLand"),
