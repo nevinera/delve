@@ -519,7 +519,11 @@ export class RenderView {
   addObjects(tile) {
     if (!tile.objects?.length) return;
     const tileAt = (x, z) => this.decoded.get(`${x},${z}`);
-    for (const mesh of objectMeshes(tile.objects, tileAt, this.origin)) {
+    // The structures around, for the objects inside them to stand on.
+    const [tx, tz] = tile.coords;
+    const near = [];
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) near.push(...(tileAt(tx + dx, tz + dz)?.objects ?? []));
+    for (const mesh of objectMeshes(tile.objects, tileAt, this.origin, tileWalk(near))) {
       mesh.userData.tile = tile.coords;
       this.objects.add(mesh);
     }

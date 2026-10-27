@@ -92,9 +92,11 @@ export class DetailView {
       if (!at || !this.brush) return;
       canvas.setPointerCapture(e.pointerId);
       if (this.brush.tool === "objects" || this.brush.tool === "structures") {
-        const picked = this.objectAt(e);
-        // Clicking the ground places what's armed, if anything.
-        if (!picked && this.brush.type) return this.place(at);
+        // The objects tool reaches past structures, to put things on their floors.
+        const objects = this.brush.tool === "objects";
+        const picked = this.objectAt(e, objects);
+        // Clicking the ground, or a structure's floor, places what's armed, if anything.
+        if (!picked && this.brush.type) return this.place((objects && this.objectAt(e)?.point) || at);
         this.select(picked);
         if (picked) {
           this.beginEdit();
@@ -591,8 +593,9 @@ export class DetailView {
 
   // --- objects ---
 
-  // The object under a pointer event, as { object, key }, or null.
-  objectAt(e) {
+  // The object under a pointer event, as { object, key, point: [x, z] continent feet where the
+  // pointer meets it }, or null. `pastStructures` passes over structures.
+  objectAt(e, pastStructures = false) {
     const r = this.canvas.getBoundingClientRect();
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), this.view.camera);
@@ -600,7 +603,8 @@ export class DetailView {
     for (const hit of ray.intersectObjects(this.view.objects.children, false)) {
       const object = hit.object.userData.objects?.[hit.instanceId];
       const key = hit.object.userData.tile?.join(",");
-      if (object && shown.has(key)) return { object, key };
+      if (pastStructures && object && specOf(object.type)?.structure) continue;
+      if (object && shown.has(key)) return { object, key, point: [hit.point.x + this.view.origin[0], hit.point.z + this.view.origin[1]] };
     }
     return null;
   }
@@ -804,6 +808,12 @@ export class DetailView {
   // Makes the objects of tiles whose ground hasn't changed again.
   rebuildObjects() {
     const { view } = this;
+    // A structure changing moves what stands in it, in the tiles around too.
+    for (const key of [...this.dirtyObjects]) {
+      if (!view.decoded.get(key)?.objects?.some((o) => specOf(o.type)?.structure)) continue;
+      const [tx, tz] = key.split(",").map(Number);
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (view.decoded.has(`${tx + dx},${tz + dz}`)) this.dirtyObjects.add(`${tx + dx},${tz + dz}`);
+    }
     for (const key of this.dirtyObjects) {
       if (this.dirty.has(key)) continue;
       const [tx, tz] = key.split(",").map(Number);

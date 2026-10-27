@@ -187,6 +187,7 @@ export class ObjectLibrary {
         this.buildStructure(own);
       },
       images: () => [...images(this.world), ...BUILTIN_IMAGES],
+      objects: () => allCollections(this.world, "objects"),
     });
   }
 

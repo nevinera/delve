@@ -2,7 +2,9 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { MAX_PARAMS, PALETTE_INKS, addColor, emptyImage, newObjectId, paletteColors } from "../world/builtObjects.js";
 import { CELL_FT, COMPONENTS, FOUNDATIONS, LEVELS, REACH_CELLS, ROOF, ROOF_SHAPES, STOREY_FT, WALL_FT, cellKey, edgeKey, parseCell, problems, withWalk } from "../world/structures.js";
-import { disposeStructureGroup, structureGroup } from "./structureMeshes.js";
+import { BUILT_SCALES, specOf } from "../world/objects.js";
+import { typePreview } from "./objectMeshes.js";
+import { disposeStructureGroup, furnishingLevel, structureGroup } from "./structureMeshes.js";
 import { ImagePainter, drawImage } from "./imagePainter.js";
 
 // The structure builder: a dialog over most of the page for laying out a structure
@@ -16,7 +18,9 @@ import { ImagePainter, drawImage } from "./imagePainter.js";
 // storey height, the materials (each a palette color and a wall thickness), what floors and the
 // foundation are made of, and how tall doors and windows are. A material can wear a tiled image
 // (the collection's or a builtin), with another on walls' inside faces; the images section paints
-// the collection's, as the object builder's does.
+// the collection's, as the object builder's does. The objects tool puts library objects in it where
+// you click (shift-click takes the nearest away); they're part of the structure. One whose object
+// isn't in the world is left out, with a warning.
 //
 // Opened read-only, it shows the structure and offers to copy it into one of the world's own
 // collections. Saving bakes its walk data and hands it to onSave.
@@ -24,8 +28,10 @@ import { ImagePainter, drawImage } from "./imagePainter.js";
 // Right-drag turns the view, middle-drag pans and the wheel zooms, as in the object builder.
 
 const UNDO_KEEP = 100;
-const TOOLS = ["floor", "wall", "door", "window", "stairs", "ramp", "railing", "roof", "span"];
-const KEYS = Object.fromEntries(TOOLS.map((tool, i) => [String(i + 1), tool]));
+const TOOLS = ["floor", "wall", "door", "window", "stairs", "ramp", "railing", "roof", "span", "objects"];
+const KEYS = Object.fromEntries(TOOLS.map((tool, i) => [String((i + 1) % 10), tool]));
+const SNAP_FT = 0.5; // where objects go
+const NEAR_FT = 3; // how near a shift-click takes an object away
 // Tools that draw on edges, not cells.
 const EDGE_TOOLS = new Set(["wall", "door", "window", "railing"]);
 // How many cells a component made with a click alone runs.
@@ -36,7 +42,7 @@ const OPENING_START = { door: { sill: 0, top: 8 }, window: { sill: 3, top: 6 } }
 const FADED = 0.15; // how much of the storeys above the current one shows
 const NEW_MATERIAL = { color: "#a0a0a0", thicknessFt: 1 };
 const COLORS = { grid: 0x626a58, gridMajor: 0x9aa48c, ground: 0x4a5040, background: 0x20242a, hover: 0xffe066, erase: 0xff6060 };
-const HINT = "1-9 pick a tool · drag to draw, shift-drag erases · page up and down change storey · F frames it · right-drag turns the view · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes";
+const HINT = "1-9 and 0 pick a tool · drag to draw, shift-drag erases · page up and down change storey · F frames it · right-drag turns the view · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes";
 
 function el(tag, props = {}, ...children) {
   const node = Object.assign(document.createElement(tag), props);
@@ -71,10 +77,12 @@ export class StructureBuilder {
   // Opens the builder on a copy of `structure`. collections: the world's own, [{ id, name }].
   // readOnly: look, don't touch; onCopy(structure, collectionId) hears a copy asked for. images():
   // the images it can wear, the world's and the builtins.
-  open(structure, { collections = [], readOnly = false, onCopy, images = () => [] } = {}) {
+  // objects(): the object collections to furnish it from, as allCollections gives them.
+  open(structure, { collections = [], readOnly = false, onCopy, images = () => [], objects = () => [] } = {}) {
     this.readOnly = readOnly;
     this.onCopy = onCopy;
     this.images = images;
+    this.objectCollections = objects;
     for (const select of [this.collection, this.copyTo]) select.replaceChildren(...collections.map((c) => new Option(c.name, c.id)));
     this.dialog.classList.toggle("ob-readonly", readOnly);
     for (const node of [this.details, this.settings, this.imageList]) node.inert = readOnly;
@@ -129,7 +137,7 @@ export class StructureBuilder {
       el("span", { textContent: "ft" }),
     );
 
-    this.toolButtons = TOOLS.map((tool, i) => button(tool, () => this.setTool(tool), `${i + 1}`));
+    this.toolButtons = TOOLS.map((tool, i) => button(tool, () => this.setTool(tool), `${(i + 1) % 10}`));
     this.width = el("input", { type: "number", min: 1, max: 8, step: 1, value: 1, title: "how many cells wide new stairs, ramps and spans are" });
     this.wallMaterial = el("select", { title: "what new walls are made of", onchange: () => (this.material = this.wallMaterial.value) });
     const opening = (kind, part) => {
@@ -153,6 +161,8 @@ export class StructureBuilder {
       el("span", { textContent: "wide" }),
     );
     this.componentList = div("sb-components");
+    this.furnishing = el("select", { title: "the object the objects tool puts in", onchange: () => this.setTool("objects") });
+    this.furnishingList = div("sb-components");
 
     this.materials = div("ob-palette");
     this.floorMaterial = el("select", { onchange: () => this.change((s) => (s.floor = this.floorMaterial.value)) });
@@ -168,6 +178,9 @@ export class StructureBuilder {
       draw,
       el("h3", { textContent: "components on this storey" }),
       this.componentList,
+      el("h3", { textContent: "objects on this storey" }),
+      div("ob-row", field("put in", this.furnishing)),
+      this.furnishingList,
       el("h3", { textContent: "materials" }),
       this.materials,
       button("+ material", () => this.addMaterial()),
@@ -176,6 +189,7 @@ export class StructureBuilder {
 
     this.info = el("p", { className: "ob-info" });
     this.problems = el("p", { className: "ob-problems" });
+    this.warnings = el("p", { className: "ob-problems" });
     this.saveButton = button("save", () => this.save());
     this.saveButton.classList.add("ob-edit");
     this.copyTo = el("select", { title: "your collection to copy it into" });
@@ -196,7 +210,7 @@ export class StructureBuilder {
       this.saveButton,
     );
     this.imageList = div("ob-images");
-    const panel = div("ob-panel", this.details, this.settings, el("h3", { textContent: "images (the collection's, then builtins)" }), this.imageList, this.info, this.problems, footer);
+    const panel = div("ob-panel", this.details, this.settings, el("h3", { textContent: "images (the collection's, then builtins)" }), this.imageList, this.info, this.problems, this.warnings, footer);
     this.dialog = el("dialog", { className: "ob sb" }, div("ob-main", div("ob-view", this.canvas, el("p", { className: "ob-hint", textContent: HINT })), panel));
     document.body.append(this.dialog);
     this.dialog.addEventListener("cancel", (e) => {
@@ -390,6 +404,23 @@ export class StructureBuilder {
     }
   }
 
+  // Puts the chosen object in at a target on the current storey, or with `erase` takes away the one
+  // nearest it.
+  furnish(target, erase) {
+    const [x, z] = [target.px, target.pz].map((v) => Math.round((v * CELL_FT) / SNAP_FT) * SNAP_FT);
+    const y = this.height();
+    if (erase) {
+      const near = (o) => furnishingLevel(o, this.structure) === this.level && Math.hypot(o.at[0] - x, o.at[2] - z) < NEAR_FT;
+      const nearest = this.structure.objects.map((o, n) => [o, n]).filter(([o]) => near(o)).sort(([a], [b]) => Math.hypot(a.at[0] - x, a.at[2] - z) - Math.hypot(b.at[0] - x, b.at[2] - z))[0];
+      if (nearest) this.change((s) => s.objects.splice(nearest[1], 1));
+      return;
+    }
+    const type = this.furnishing.value;
+    if (!type) return;
+    const name = this.furnishing.selectedOptions[0]?.textContent;
+    this.change((s) => s.objects.push({ type, name, at: [x, y, z], yaw: 0, scale: 1 }));
+  }
+
   save() {
     if (problems(this.structure).length) return;
     this.onSave?.(withWalk(this.structure));
@@ -462,10 +493,13 @@ export class StructureBuilder {
     this.refreshImages();
 
     this.refreshComponents();
+    this.refreshFurnishings();
     const cells = new Set(s.storeys.flatMap((x) => x.floor));
     const wrong = problems(s);
     this.info.textContent = `${s.storeys.length} storey${s.storeys.length === 1 ? "" : "s"} · ${cells.size} cells of floor · ${params} of ${MAX_PARAMS} colors are params`;
     this.problems.textContent = wrong.join(" · ");
+    const missing = [...new Set(s.objects.filter((o) => !specOf(o.type)?.built).map((o) => o.name ?? o.type))];
+    this.warnings.textContent = missing.length ? `left out, not in this world's objects: ${missing.join(", ")}` : "";
     this.saveButton.disabled = wrong.length > 0;
   }
 
@@ -577,6 +611,47 @@ export class StructureBuilder {
     this.componentList.replaceChildren(...(rows.length ? rows : [el("p", { className: "ob-info", textContent: "none yet: draw some with tools 5 to 9" })]));
   }
 
+  // The object collections to choose from, and the current storey's objects, each with its turn,
+  // size and height above the floor, and a button to take it away.
+  refreshFurnishings() {
+    const s = this.structure;
+    const chosen = this.furnishing.value;
+    this.furnishing.replaceChildren(
+      ...this.objectCollections()
+        .filter((c) => c.entries.some((e) => e.object))
+        .map((c) => el("optgroup", { label: c.name }, ...c.entries.filter((e) => e.object).map((e) => new Option(e.name, e.type)))),
+    );
+    if (chosen) this.furnishing.value = chosen;
+    const set = (n, fn) => this.change((x) => fn(x.objects[n]));
+    const number = (value, { min, max, step, title }, fn) => {
+      const input = el("input", { type: "number", min, max, step, value, title });
+      input.addEventListener("change", () => fn(Math.max(min, Math.min(max, Number(input.value) || 0))));
+      return input;
+    };
+    const rows = s.objects
+      .map((o, n) => [o, n])
+      .filter(([o]) => furnishingLevel(o, s) === this.level)
+      .map(([o, n]) => {
+        const missing = !specOf(o.type)?.built;
+        const floor = this.level * s.storeyFt;
+        return el(
+          "div",
+          { className: "sb-component" },
+          el("span", { className: "sb-component-type", textContent: missing ? `${o.name ?? o.type} (missing)` : (specOf(o.type).built.name ?? o.name) }),
+          el("span", { textContent: "turn" }),
+          number(Math.round((o.yaw * 180) / Math.PI), { min: -360, max: 360, step: 15, title: "its turn, in degrees" }, (v) => set(n, (x) => (x.yaw = (v * Math.PI) / 180))),
+          el("span", { textContent: "° size" }),
+          number(o.scale, { min: BUILT_SCALES[0], max: BUILT_SCALES[1], step: 0.05, title: "its size" }, (v) => set(n, (x) => (x.scale = v || 1))),
+          el("span", { textContent: "raised" }),
+          number(Math.round((o.at[1] - floor) * 100) / 100, { min: 0, max: s.storeyFt - 0.5, step: 0.25, title: "how far above the floor it is (ft)" }, (v) => set(n, (x) => (x.at[1] = floor + v))),
+          el("span", { textContent: "ft" }),
+          el("button", { type: "button", textContent: "×", title: "take it away", onclick: () => this.change((x) => x.objects.splice(n, 1)) }),
+        );
+      });
+    const none = this.furnishing.options.length ? "none yet: pick one above, then click with tool 0" : "no objects in this world to put in";
+    this.furnishingList.replaceChildren(...(rows.length ? rows : [el("p", { className: "ob-info", textContent: none })]));
+  }
+
   // --- the view ---
 
   setupView() {
@@ -610,6 +685,7 @@ export class StructureBuilder {
       this.canvas.focus();
       const start = this.targetAt(e);
       if (e.button !== 0 || this.readOnly || !start) return;
+      if (this.tool === "objects") return this.furnish(start, e.shiftKey);
       this.canvas.setPointerCapture(e.pointerId);
       this.stroke = { before: JSON.stringify(this.structure), storey: JSON.stringify(this.storey()), erase: e.shiftKey, start };
       this.drawStroke(start);
@@ -683,7 +759,7 @@ export class StructureBuilder {
     if (!this.built) return;
     disposeStructureGroup(this.built);
     this.scene.remove(this.built);
-    this.built = structureGroup(this.structure, { imageOf: (id) => this.imageOf(id) });
+    this.built = structureGroup(this.structure, { imageOf: (id) => this.imageOf(id), furnish: (o) => specOf(o.type)?.built && typePreview(o.type) });
     for (const storey of this.built.children) {
       if (storey.userData.level <= this.level) continue;
       storey.traverse((mesh) => mesh.isMesh && Object.assign(mesh.material, { transparent: true, opacity: FADED, depthWrite: false }));

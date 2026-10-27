@@ -335,19 +335,40 @@ export function structureGeometries(structure, { params, depthFt = 2, imageOf = 
 }
 
 // The structure as a group with a group per storey (userData.level) of meshes, each with its own
-// material: the storey, and its tiled images over it.
+// material: the storey, and its tiled images over it. options.furnish(object), given one of the
+// structure's objects, returns a group to show for it standing on y = 0, or nothing for one that's
+// missing.
 export function structureGroup(structure, options = {}) {
   const group = new THREE.Group();
   const colors = paletteColors(structure, options.params);
+  const storeys = new Map();
+  const storeyOf = (level) => {
+    if (!storeys.has(level)) {
+      const storey = new THREE.Group();
+      storey.userData.level = level;
+      storeys.set(level, storey);
+      group.add(storey);
+    }
+    return storeys.get(level);
+  };
   for (const [level, { base, overlays }] of structureGeometries(structure, options)) {
-    const storey = new THREE.Group();
-    storey.userData.level = level;
+    const storey = storeyOf(level);
     storey.add(new THREE.Mesh(base, builtMaterial()));
     for (const { image, geometry } of overlays) storey.add(new THREE.Mesh(geometry, tiledMaterial(tileTexture(image, colors))));
-    group.add(storey);
+  }
+  for (const object of structure.objects ?? []) {
+    const made = options.furnish?.(object);
+    if (!made) continue;
+    made.position.set(...object.at);
+    made.rotation.y = object.yaw;
+    made.scale.setScalar(object.scale);
+    storeyOf(furnishingLevel(object, structure)).add(made);
   }
   return group;
 }
+
+// The storey one of a structure's objects stands on.
+export const furnishingLevel = (object, structure) => Math.floor(object.at[1] / structure.storeyFt + 0.01);
 
 export function disposeStructureGroup(group) {
   group.traverse((mesh) => {

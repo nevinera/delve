@@ -5,7 +5,8 @@ import { paletteColors } from "../world/builtObjects.js";
 import { TEXT_PLACEHOLDER } from "../world/pixelFont.js";
 import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, objectGeometry, textGeometry, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
 import { meshHeightAt } from "../world/clutter.js";
-import { CELL_FT as STRUCTURE_CELL_FT, placedWalk, quartersOf } from "../world/structures.js";
+import { CELL_FT as STRUCTURE_CELL_FT, cellKey, placedWalk, quartersOf } from "../world/structures.js";
+import { surfaceAt } from "../world/walkIndex.js";
 import { structureGeometries } from "./structureMeshes.js";
 
 // Objects for the 3D view (world/objects.js says what they are and where), as instanced meshes:
@@ -241,15 +242,33 @@ function variants(name) {
   return geometries.get(name);
 }
 
+// The objects placed in a placed structure, as world objects standing at a fixed height (y), each
+// with the structure as its owner. Missing ones are left out.
+function furnishingsOf(placed, structure) {
+  const [c, s] = [Math.cos(placed.yaw), Math.sin(placed.yaw)];
+  return (structure.objects ?? [])
+    .filter((object) => specOf(object.type)?.built)
+    .map((object) => {
+      const [x, y, z] = object.at;
+      // Turned as three.js's rotation.y turns the structure.
+      return { ...object, at: [placed.at[0] + x * c + z * s, placed.at[1] - x * s + z * c], y: placed.base + y, yaw: placed.yaw + object.yaw, owner: placed };
+    });
+}
+
 // objects: from tiles' objects lists. tileAt(tx, tz): a decoded tile, for the ground under them.
-// origin: the continent position of the scene's origin.
-export function objectMeshes(objects, tileAt, origin) {
+// origin: the continent position of the scene's origin. walk: the walk (walkIndex.js tileWalk) of
+// the structures around them, so objects inside one sit on its floor.
+export function objectMeshes(objects, tileAt, origin, walk) {
   const groups = new Map(); // key -> { geometry, material, list: [{ object, p }] }
   const join = (key, geometry, material, item) => {
     if (!groups.has(key)) groups.set(key, { geometry, material, list: [] });
     groups.get(key).list.push(item);
   };
-  for (const object of objects) {
+  const all = objects.flatMap((object) => {
+    const structure = specOf(object.type)?.structure;
+    return structure ? [object, ...furnishingsOf(object, structure)] : [object];
+  });
+  for (const object of all) {
     const spec = specOf(object.type);
     if (!spec) continue;
     if (spec.structure) {
@@ -290,8 +309,8 @@ export function objectMeshes(objects, tileAt, origin) {
   for (const { geometry, material, list } of groups.values()) {
     const mesh = new THREE.InstancedMesh(geometry, material, list.length);
     list.forEach(({ object, p }, n) => {
-      // Structures stand at their base, upright.
-      const { y, pitch } = object.base !== undefined ? { y: object.base, pitch: 0 } : seat(object, tileAt);
+      // Structures stand at their base, upright, and the objects in them where they're put.
+      const { y, pitch } = object.base !== undefined ? { y: object.base, pitch: 0 } : object.y !== undefined ? { y: object.y, pitch: 0 } : seat(object, tileAt, walk);
       q.setFromAxisAngle(UP, object.yaw).multiply(tilt.setFromAxisAngle(AXIS_Z, pitch));
       m.compose(new THREE.Vector3(object.at[0] - origin[0], y, object.at[1] - origin[1]), q, new THREE.Vector3(object.scale, object.scale, object.scale));
       mesh.setMatrixAt(n, m);
@@ -299,7 +318,7 @@ export function objectMeshes(objects, tileAt, origin) {
       mesh.setColorAt(n, p < 0 ? color.set(0xffffff) : color.setRGB(...object.colors[p], THREE.SRGBColorSpace));
     });
     mesh.computeBoundingSphere();
-    mesh.userData.objects = list.map(({ object }) => object);
+    mesh.userData.objects = list.map(({ object }) => object.owner ?? object);
     meshes.push(mesh);
   }
   return meshes;
@@ -354,12 +373,15 @@ export function disposePreview(group) {
 }
 
 // Where an object sits: long ones rest on the ground at both ends and tilt between them, others
-// on the lowest ground under them, so nothing floats. Each sinks in a little.
-function seat(object, tileAt) {
+// on the lowest ground under them, so nothing floats. Each sinks in a little. One whose middle is
+// on a structure's floor stands on that floor.
+function seat(object, tileAt, walk) {
   const spec = specOf(object.type);
   const [x, z] = object.at;
   const ground = (dx, dz) => meshHeightAt(tileAt, x + dx, z + dz) ?? 0;
   const sink = (spec.sink ?? 0.1) * object.height;
+  const floor = floorAt(walk, x, z, ground(0, 0));
+  if (floor !== ground(0, 0)) return { y: floor - sink, pitch: 0 };
   const { footprint } = object;
   if (footprint.capsule) {
     const half = footprint.capsule[1];
@@ -372,6 +394,16 @@ function seat(object, tileAt) {
   const r = footprint.circle ?? Math.min(...footprint.rect) / 2;
   const low = Math.min(ground(0, 0), ground(r, 0), ground(-r, 0), ground(0, r), ground(0, -r));
   return { y: low - sink, pitch: 0 };
+}
+
+// What an object at continent feet (x, z) stands on, with the ground there at `ground`: the lowest
+// structure floor not under the ground, or with only floors under it (a cellar open to the sky),
+// the highest of those, or with no floors the ground.
+export function floorAt(walk, x, z, ground) {
+  const floors = (walk?.cells.get(cellKey(Math.floor(x / STRUCTURE_CELL_FT), Math.floor(z / STRUCTURE_CELL_FT))) ?? []).map((cell) => surfaceAt(cell, x, z));
+  if (!floors.length) return ground;
+  const over = floors.filter((h) => h >= ground - 0.5);
+  return over.length ? Math.min(...over) : Math.max(...floors);
 }
 
 function hashString(s) {

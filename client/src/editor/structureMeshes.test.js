@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import * as THREE from "three";
 import { emptyStructure } from "../world/structures.js";
 import { builtinImage } from "../world/builtinImages.js";
-import { structureGeometries } from "./structureMeshes.js";
+import { structureGeometries, structureGroup } from "./structureMeshes.js";
 
 const bounds = (g) => {
   g.computeBoundingBox();
@@ -31,6 +31,19 @@ describe("structure meshes", () => {
       if (Math.abs(v.x - 2) < 1.4 && v.z < -0.1 && v.y > 0.1 && v.y < 7.9) inDoor++;
     }
     expect(inDoor).toBe(0);
+  });
+
+  it("stands its objects on their storeys, leaving out missing ones", () => {
+    const s = emptyStructure();
+    s.storeys[0].floor = ["0,0"];
+    s.storeys.push({ level: 1, floor: ["0,0"], edges: {} });
+    s.objects.push({ type: "a", at: [1, 10, 2], yaw: 1, scale: 2 }, { type: "gone", at: [0, 0, 0], yaw: 0, scale: 1 });
+    const furnish = (o) => (o.type === "a" ? new THREE.Group() : undefined);
+    const upstairs = structureGroup(s, { furnish }).children.find((g) => g.userData.level === 1);
+    const made = upstairs.children.find((c) => c.isGroup);
+    expect(made.position.toArray()).toEqual([1, 10, 2]);
+    expect([made.rotation.y, made.scale.x]).toEqual([1, 2]);
+    expect(structureGroup(s, { furnish }).children.flatMap((g) => g.children).filter((c) => c.isGroup)).toHaveLength(1);
   });
 
   it("puts no foundation over a cellar", () => {
