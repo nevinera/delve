@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { problems, shapeOf } from "./builtObjects.js";
+import { BUILTIN_COLLECTIONS } from "./builtinCollections.js";
 import { OBJECT_TYPES, blocks, makeObject, scatterObjects, tileOf } from "./objects.js";
 
 const TERRAIN = ["grass", "rock", "sand", "tree_oak_1"];
@@ -73,5 +74,10 @@ describe("objects", () => {
       expect(problems(spec.kit), type).toEqual([]);
       expect(shapeOf(spec.kit).height / spec.unitFt, type).toBeCloseTo(spec.height, 1);
     }
+  });
+
+  it("lists every type in exactly one builtin collection", () => {
+    const listed = BUILTIN_COLLECTIONS.flatMap((c) => c.types);
+    expect([...listed].sort()).toEqual(Object.keys(OBJECT_TYPES).sort());
   });
 });

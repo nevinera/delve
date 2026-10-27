@@ -11,7 +11,10 @@ import { builtMaterial, objectGeometry, primitive } from "./builtMeshes.js";
 // move, turn or size it along its own axes, sizing from the face opposite the handle, and the panel
 // sets its type, color, taper, whether it's a hole and, as a last resort, exact numbers. Holes show
 // as red glass while a piece is picked; with none picked the object shows as the game draws it,
-// holes cut. The palette lists every color the object uses: changing one recolors every
+// holes cut.
+//
+// Opened read-only (a builtin or imported object), it shows the object and offers to copy it into
+// one of the world's own collections instead of saving. The palette lists every color the object uses: changing one recolors every
 // piece using it, and up to three are parameters. Saving hands the object to onSave.
 //
 // Right-drag turns the view, middle-drag pans and the wheel zooms, as in the detail step.
@@ -67,7 +70,15 @@ export class ObjectBuilder {
   }
 
   // Opens the builder on a copy of `object`.
-  open(object) {
+  // Opens the builder on a copy of `object`. collections: the world's own, [{ id, name }], to move
+  // it between or copy it into. readOnly: look, don't touch; onCopy(object, collectionId) hears a
+  // copy asked for.
+  open(object, { collections = [], readOnly = false, onCopy } = {}) {
+    this.readOnly = readOnly;
+    this.onCopy = onCopy;
+    for (const select of [this.collection, this.copyTo]) select.replaceChildren(...collections.map((c) => new Option(c.name, c.id)));
+    this.dialog.classList.toggle("ob-readonly", readOnly);
+    for (const node of [this.pieceBox, this.palette, this.details]) node.inert = readOnly;
     this.object = structuredClone(object);
     this.saved = JSON.stringify(this.object);
     this.undos = [];
@@ -93,6 +104,16 @@ export class ObjectBuilder {
     this.canvas = el("canvas", { className: "ob-canvas" });
     this.name = el("input", { type: "text", placeholder: "name" });
     this.name.addEventListener("change", () => this.change(() => (this.object.name = this.name.value.trim() || "unnamed")));
+    this.tags = el("input", { type: "text", placeholder: "tags, by commas" });
+    this.tags.addEventListener("change", () =>
+      this.change((o) => {
+        const tags = this.tags.value.split(",").map((t) => t.trim()).filter(Boolean);
+        if (tags.length) o.tags = tags;
+        else delete o.tags;
+      }),
+    );
+    this.collection = el("select", { title: "the collection it's in", onchange: () => this.change((o) => (o.collection = this.collection.value)) });
+    this.details = div("ob-details", this.name, this.tags, el("label", { className: "ob-field" }, "collection", this.collection));
 
     const add = div("ob-row", ...PIECE_TYPES.map((type) => el("button", { type: "button", textContent: type, onclick: () => this.addPiece(type) })));
     this.handleButtons = Object.keys(HANDLES).map((name) => el("button", { type: "button", textContent: name, onclick: () => this.setHandle(name) }));
@@ -154,19 +175,27 @@ export class ObjectBuilder {
     this.problems = el("p", { className: "ob-problems" });
     this.info = el("p", { className: "ob-info" });
     this.saveButton = el("button", { type: "button", textContent: "save", onclick: () => this.save() });
+    this.copyTo = el("select", { title: "your collection to copy it into" });
     const footer = div(
       "ob-row ob-footer",
-      el("button", { type: "button", textContent: "undo", onclick: () => this.undo() }),
-      el("button", { type: "button", textContent: "redo", onclick: () => this.redo() }),
+      el("button", { type: "button", className: "ob-edit", textContent: "undo", onclick: () => this.undo() }),
+      el("button", { type: "button", className: "ob-edit", textContent: "redo", onclick: () => this.redo() }),
+      el("span", { className: "ob-view-only", textContent: "read-only · copy into" }),
+      el("span", { className: "ob-view-only" }, this.copyTo),
+      el("button", { type: "button", className: "ob-view-only", textContent: "copy", onclick: () => this.copy() }),
       el("span", { className: "ob-spacer" }),
-      el("button", { type: "button", textContent: "cancel", onclick: () => this.cancel() }),
+      el("button", { type: "button", textContent: "close", className: "ob-view-only", onclick: () => this.close() }),
+      el("button", { type: "button", className: "ob-edit", textContent: "cancel", onclick: () => this.cancel() }),
       this.saveButton,
     );
+    this.saveButton.classList.add("ob-edit");
+    add.classList.add("ob-edit");
+    handles.classList.add("ob-edit");
 
     const panel = div(
       "ob-panel",
-      this.name,
-      el("h3", { textContent: "add a piece" }),
+      this.details,
+      el("h3", { className: "ob-edit", textContent: "add a piece" }),
       add,
       el("h3", { textContent: "pieces" }),
       handles,
@@ -196,6 +225,10 @@ export class ObjectBuilder {
   onKey(e) {
     if (e.target.matches("input, select, textarea")) return;
     const ctrl = e.ctrlKey || e.metaKey;
+    if (this.readOnly) {
+      if (!ctrl && e.key.toLowerCase() === "f") this.frameObject();
+      return;
+    }
     if (ctrl && e.key.toLowerCase() === "z") e.shiftKey ? this.redo() : this.undo();
     else if (ctrl && e.key.toLowerCase() === "d") this.copyPiece();
     else if (!ctrl && KEYS[e.key.toLowerCase()]) this.setHandle(KEYS[e.key.toLowerCase()]);
@@ -210,6 +243,7 @@ export class ObjectBuilder {
 
   // Makes a change to the object as one undoable step.
   change(fn) {
+    if (this.readOnly) return;
     const before = JSON.stringify(this.object);
     fn(this.object);
     if (JSON.stringify(this.object) === before) return this.refresh();
@@ -315,7 +349,13 @@ export class ObjectBuilder {
     this.close();
   }
 
+  copy() {
+    if (!this.copyTo.value) return window.alert("Make a collection of your own to copy it into first.");
+    this.onCopy?.(structuredClone(this.object), this.copyTo.value);
+  }
+
   cancel() {
+    if (this.readOnly) return this.close();
     if (JSON.stringify(this.object) !== this.saved && !window.confirm("Throw away the changes to this object?")) return;
     this.close();
   }
@@ -330,6 +370,8 @@ export class ObjectBuilder {
   refreshPanel() {
     const { object } = this;
     this.name.value = object.name;
+    this.tags.value = (object.tags ?? []).join(", ");
+    this.collection.value = object.collection ?? "";
     for (const b of this.handleButtons) b.classList.toggle("active", b.textContent === this.handle);
     this.worldBox.checked = this.worldMoves;
 
@@ -490,7 +532,7 @@ export class ObjectBuilder {
       mesh.scale.set(...piece.size);
       mesh.userData.index = n;
       this.pieces.add(mesh);
-      if (n === this.picked) this.transform.attach(mesh);
+      if (n === this.picked && !this.readOnly) this.transform.attach(mesh);
     });
     this.drawMarks();
   }

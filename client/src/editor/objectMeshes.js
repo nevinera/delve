@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { specOf } from "../world/objects.js";
-import { objectGeometry } from "./builtMeshes.js";
+import { makeObject, specOf } from "../world/objects.js";
+import { builtMaterial, objectGeometry } from "./builtMeshes.js";
 import { meshHeightAt } from "../world/clutter.js";
 
 // Objects for the 3D view (world/objects.js says what they are and where), as instanced meshes:
@@ -200,6 +200,47 @@ export function objectMeshes(objects, tileAt, origin) {
     meshes.push(mesh);
   }
   return meshes;
+}
+
+// One object of `type` on its own, at the middle of its sizes, to look at: a group with its own
+// materials, standing on y = 0. Dispose it with disposePreview.
+export function typePreview(type) {
+  const spec = specOf(type);
+  const group = new THREE.Group();
+  if (!spec) return group;
+  if (spec.built) {
+    group.add(own(new THREE.Mesh(objectGeometry(spec.built) ?? new THREE.BufferGeometry(), builtMaterial())));
+    return group;
+  }
+  const object = makeObject(type, [0, 0], 0, (spec.size[0] + spec.size[1]) / 2, random(hashString(type)));
+  if (spec.kit) {
+    const mesh = own(new THREE.Mesh(objectGeometry(spec.kit, [`#${new THREE.Color().setRGB(...object.colors[0], THREE.SRGBColorSpace).getHexString()}`]), builtMaterial()));
+    mesh.scale.setScalar(object.scale / spec.unitFt);
+    group.add(mesh);
+    return group;
+  }
+  spec.parts.forEach((part, p) => {
+    const material = new THREE.MeshLambertMaterial({ flatShading: true, side: THREE.DoubleSide, color: new THREE.Color().setRGB(...object.colors[p], THREE.SRGBColorSpace) });
+    const mesh = new THREE.Mesh(variants(part.shape)[0], material);
+    mesh.scale.setScalar(object.scale);
+    group.add(mesh);
+  });
+  return group;
+}
+
+// Marks a preview's mesh as having geometry made only for it.
+function own(mesh) {
+  mesh.userData.ownGeometry = true;
+  return mesh;
+}
+
+// Frees a preview's materials, and the geometry made only for it (code shapes are shared).
+export function disposePreview(group) {
+  group.traverse((m) => {
+    if (!m.isMesh) return;
+    m.material.dispose();
+    if (m.userData.ownGeometry) m.geometry.dispose();
+  });
 }
 
 // Where an object sits: long ones rest on the ground at both ends and tilt between them, others

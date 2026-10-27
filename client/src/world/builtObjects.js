@@ -1,9 +1,12 @@
 // Built objects: object types an author puts together from primitive pieces in the editor's object
 // builder, stored per world as objects/<id>.json, and shared as collections of them.
 //
-// An object is { id, name, source, palette, pieces }:
-// - id: 8 random base-36 characters, kept through copies and exports; name is only a label.
-// - source: where it was copied from (a collection's URL), or absent.
+// An object is { id, name, tags, collection, source, palette, pieces }:
+// - id: 8 random base-36 characters, kept through exports; name is only a label.
+// - tags: words to find it by, or absent.
+// - collection: the id of the world's collection it's in (the editor's collections.json); left
+//   out of exports.
+// - source: where it was copied from (a collection's URL or file), or absent.
 // - palette: the colors its pieces use, each { color: "#rrggbb", param, name }. Up to MAX_PARAMS of
 //   them are parameters, which a placement can override; their colors are the defaults. The first
 //   colors added are parameters until there are MAX_PARAMS of them.
@@ -101,6 +104,7 @@ export function problems(object) {
   if (object.pieces.length > MAX_PIECES) out.push(`it has ${object.pieces.length} pieces, more than ${MAX_PIECES}`);
   if (object.palette.filter((p) => p.param).length > MAX_PARAMS) out.push(`more than ${MAX_PARAMS} of its colors are parameters`);
   for (const p of object.palette) if (!/^#[0-9a-f]{6}$/i.test(p.color ?? "")) out.push(`${JSON.stringify(p.color)} isn't a #rrggbb color`);
+  if (object.tags !== undefined && !(Array.isArray(object.tags) && object.tags.every((t) => typeof t === "string"))) out.push("its tags should be a list of words");
   object.pieces.forEach((piece, n) => {
     const name = `piece ${n + 1}`;
     const before = out.length;
@@ -139,19 +143,28 @@ export function shapeOf(object) {
   return { footprint, height: round(height) };
 }
 
-// An object or collection read from JSON text, as a list of objects, each checked. Throws with
+// An object or collection read from JSON text, as { name, objects }: name is the collection's,
+// or null for a lone object. Each object is checked, and records `source` when given. Throws with
 // what's wrong when something is.
-export function readObjects(text, source) {
+export function readCollection(text, source) {
   const data = JSON.parse(text);
   const list = Array.isArray(data.objects) ? data.objects : [data];
   for (const object of list) {
     const wrong = problems(object);
     if (wrong.length) throw new Error(`${object.name ?? object.id ?? "an object"}: ${wrong.join("; ")}`);
   }
-  return list.map((object) => (source ? { ...object, source } : object));
+  const objects = list.map(({ collection, ...object }) => (source ? { ...object, source } : object));
+  return { name: typeof data.collection === "string" ? data.collection : null, objects };
 }
 
 // A collection of objects, as JSON text to share.
 export function collectionJson(name, objects) {
-  return JSON.stringify({ collection: name, objects }, null, 2);
+  return JSON.stringify({ collection: name, objects: objects.map(({ collection, ...object }) => object) }, null, 2);
+}
+
+// Whether an object, in a collection named `collectionName`, matches a search: its collection's
+// name, its name or one of its tags contains the text, ignoring case.
+export function matches(text, collectionName, name, tags = []) {
+  const want = text.trim().toLowerCase();
+  return !want || [collectionName, name, ...tags].some((s) => s.toLowerCase().includes(want));
 }

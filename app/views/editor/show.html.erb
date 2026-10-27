@@ -44,6 +44,7 @@
       <canvas id="overview" class="editor-map" hidden></canvas>
       <canvas id="sculpt" class="editor-map" hidden></canvas>
       <canvas id="detail" class="editor-map" hidden></canvas>
+      <div id="objectsGallery" class="editor-gallery" hidden></div>
     </div>
   </div>
   <aside class="editor-panel">
@@ -60,6 +61,7 @@
       <button type="button" class="editor-step-head" data-step="tiles">tiles</button>
       <button type="button" class="editor-step-head" data-step="detail">detail</button>
       <button type="button" class="editor-step-head" data-step="3d">3d</button>
+      <button type="button" class="editor-step-head" data-step="objects">objects</button>
     </nav>
     <hr class="editor-divider">
     <div class="editor-steps">
@@ -176,18 +178,6 @@
           </div>
           <label class="editor-field" data-for="place">object <select id="placeType"></select></label>
           <label class="editor-range" data-for="place">size <input id="placeScale" type="range" min="1" max="100" step="0.5" value="5"><output id="placeScaleValue"></output></label>
-          <div class="editor-row editor-wrap" data-for="place">
-            <button id="buildObject" type="button">new</button>
-            <button id="editObject" type="button">edit</button>
-            <button id="importObjects" type="button">import</button>
-            <button id="objectsFromUrl" type="button">from URL</button>
-            <button id="exportObject" type="button">export</button>
-            <button id="exportObjects" type="button">export all</button>
-            <input id="objectsFile" type="file" accept=".json,application/json" hidden>
-          </div>
-          <label class="editor-field" data-for="place">replace every <select id="replaceFrom"></select></label>
-          <label class="editor-field" data-for="place">with <select id="replaceTo"></select></label>
-          <div class="editor-row" data-for="place"><button id="replaceObjects" type="button">replace them</button></div>
           <div data-for="objects place">
             <div id="objectPanel" class="editor-stack" hidden>
               <p id="objectInfo"></p>
@@ -196,6 +186,22 @@
               <div id="objectColors" class="editor-row editor-wrap"></div>
               <button id="objectDelete" type="button">delete</button>
             </div>
+          </div>
+        </div>
+      </section>
+      <section class="editor-step" data-step="objects">
+        <div class="editor-step-body">
+          <p>Collections you import are read-only: copy an object into one of your own to change it.</p>
+          <div class="editor-row editor-wrap">
+            <button id="importObjects" type="button">import file</button>
+            <button id="objectsFromUrl" type="button">import from URL</button>
+            <button id="exportObjects" type="button">export all yours</button>
+            <input id="objectsFile" type="file" accept=".json,application/json" hidden>
+          </div>
+          <div class="editor-stack">
+            <label class="editor-field">replace every placed <select id="replaceFrom"></select></label>
+            <label class="editor-field">with <select id="replaceTo"></select></label>
+            <div class="editor-row"><button id="replaceObjects" type="button">replace them</button></div>
           </div>
         </div>
       </section>

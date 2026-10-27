@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_PARAMS, addColor, collectionJson, dropUnusedColors, emptyObject, newObjectId, paletteColors, pieceCorners, problems, readObjects, shapeOf, turnPoint } from "./builtObjects.js";
+import { MAX_PARAMS, addColor, collectionJson, dropUnusedColors, matches, emptyObject, newObjectId, paletteColors, pieceCorners, problems, readCollection, shapeOf, turnPoint } from "./builtObjects.js";
 
 const piece = (over = {}) => ({ type: "box", size: [2, 2, 2], at: [0, 1, 0], turn: [0, 0, 0], color: 0, ...over });
 
@@ -95,10 +95,21 @@ describe("built objects", () => {
 
   it("reads an object or a collection, recording where it came from", () => {
     const one = table();
-    expect(readObjects(JSON.stringify(one))).toEqual([one]);
-    const read = readObjects(collectionJson("furniture", [one, table()]), "https://example.com/furniture.json");
-    expect(read).toHaveLength(2);
-    expect(read[0].source).toBe("https://example.com/furniture.json");
-    expect(() => readObjects(JSON.stringify({ ...one, pieces: [piece({ type: "blob" })] }))).toThrow(/unknown type/);
+    expect(readCollection(JSON.stringify(one))).toEqual({ name: null, objects: [one] });
+    const read = readCollection(collectionJson("furniture", [{ ...one, collection: "abcdefgh" }, table()]), "https://example.com/furniture.json");
+    expect(read.name).toBe("furniture");
+    expect(read.objects).toHaveLength(2);
+    expect(read.objects[0].source).toBe("https://example.com/furniture.json");
+    expect(read.objects[0].collection).toBeUndefined();
+    expect(() => readCollection(JSON.stringify({ ...one, pieces: [piece({ type: "blob" })] }))).toThrow(/unknown type/);
+    expect(() => readCollection(JSON.stringify({ ...one, tags: "wood" }))).toThrow(/tags/);
+  });
+
+  it("matches a search on the collection's name, the object's name or a tag", () => {
+    expect(matches("", "huts", "hut")).toBe(true);
+    expect(matches("HUT", "village", "big hut")).toBe(true);
+    expect(matches("vill", "village", "hut")).toBe(true);
+    expect(matches("thatch", "village", "hut", ["thatched", "roof"])).toBe(true);
+    expect(matches("stone", "village", "hut", ["thatched"])).toBe(false);
   });
 });
