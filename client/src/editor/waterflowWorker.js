@@ -1,14 +1,13 @@
 import { simulateWater } from "./waterflow.js";
 import { prepareShape, seaAt, shapeHeight } from "../world/generator.js";
 
-// Works out where the continent's water goes (waterflow.js) off the main thread, from the zones and
-// height pins alone: the ground is the land's rough shape, as the heights map shows it, and the
-// only water already there is the sea.
-let land = null; // { key, shape } for the latest zones and pins
+// Works out where the continent's water goes (waterflow.js) off the main thread, from the land
+// grid alone: the ground is the land's rough shape, as the heights step shows it, and the only
+// water already there is the sea.
+let land = null; // { key, shape } for the latest land
 
 self.onmessage = ({ data }) => {
-  const { key, continent, seedKey, sources } = data;
-  const landKey = JSON.stringify([continent, seedKey]);
+  const { key, landKey, continent, seedKey, sources } = data;
   if (land?.key !== landKey) land = { key: landKey, shape: prepareShape(continent, seedKey) };
   const result = simulateWater({
     sources,

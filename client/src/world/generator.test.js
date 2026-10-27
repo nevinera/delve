@@ -4,27 +4,37 @@ import { fallsOf, decodeFlowDir, decodeFlowSlope, encodeFlowDir, encodeFlowSlope
 import { findTrees } from "./trees.js";
 import { fbm } from "./noise.js";
 import { makePolyline } from "./polyline.js";
+import { LAND_FT, LandGrid, PER_TILE } from "./landGrid.js";
 
-// Zones written with their own pins and rivers, gathered into a continent's sketch.
-const prepareWorld = (zones, seedKey) => prepareContinent({ zones, pins: zones.flatMap((z) => z.pins), watercourses: { rivers: zones.flatMap((z) => z.rivers ?? []), pools: [] } }, seedKey);
-const square = (x0, z0, x1, z1) => [[[x0, z0], [x1, z0], [x1, z1], [x0, z1]]];
+// A land grid over tiles [tx0, tz0] to [tx1, tz1] and a margin of sea floor around them, each
+// point's height (ft) from height(x, z) in feet.
+function landOf([tx0, tz0, tx1, tz1], height) {
+  const land = new LandGrid();
+  for (let gz = (tz0 - 2) * PER_TILE; gz <= (tz1 + 2) * PER_TILE; gz++) {
+    for (let gx = (tx0 - 2) * PER_TILE; gx <= (tx1 + 2) * PER_TILE; gx++) land.set(gx, gz, height(gx * LAND_FT, gz * LAND_FT));
+  }
+  return land.data;
+}
+// Land over tiles [tx0, tz0] to [tx1, tz1], rising from the sea floor at its edge at `slope` (rise
+// over run) to `top` ft, so the coast's 80ft in from its edge with slope 0.25 and top at least 0.
+function island([tx0, tz0, tx1, tz1], top, slope = 0.25) {
+  return landOf([tx0, tz0, tx1, tz1], (x, z) => {
+    const inside = Math.min(x - tx0 * TILE_FT, tx1 * TILE_FT - x, z - tz0 * TILE_FT, tz1 * TILE_FT - z);
+    return Math.max(-50, Math.min(top, inside * slope - 20));
+  });
+}
+const prepareWorld = (land, { pins = [], rivers = [], pools = [], paths = [] } = {}) => prepareContinent({ land, pins, paths, watercourses: { rivers, pools } }, "test");
 
-// A 6×4-tile zone at (10, -4) with a 100ft height pin and a river flowing west into the sea.
-const zones = [
-  {
-    region: [square(10, -4, 16, 0)],
-    pins: [{ id: "p1", kind: "height", at: [14, -2], height: 100 }],
-    rivers: [{ points: [[15.5, -3.5], [13, -3], [10.5, -3]], width: 40 }],
-  },
-];
-
-const ctx = prepareWorld(zones, "test");
+// A 6×4-tile island at (10, -4), 100ft high, with a river flowing west into the sea.
+const land = island([10, -4, 16, 0], 100);
+const rivers = [{ points: [[15.5, -3.5], [13, -3], [10.5, -3]], width: 40 }];
+const ctx = prepareWorld(land, { rivers });
 const cell = (tile, i, j, layer) => tile.layers[layer][j * CELLS + i];
 
 describe("generator", () => {
   it("is deterministic", () => {
     const a = generateTile(ctx, 12, -3);
-    const b = generateTile(prepareWorld(zones, "test"), 12, -3);
+    const b = generateTile(prepareWorld(land, { rivers }), 12, -3);
     expect(Array.from(a.layers.height)).toEqual(Array.from(b.layers.height));
     expect(Array.from(a.layers.forest)).toEqual(Array.from(b.layers.forest));
   });
@@ -38,40 +48,30 @@ describe("generator", () => {
     }
   });
 
-  it("leaves open ocean far from any zone, with an uneven floor", () => {
+  it("leaves open ocean far from any land, with an uneven floor", () => {
     const tile = generateTile(ctx, 30, 30);
     expect(cell(tile, 32, 32, "height")).toBeLessThan(-40);
     expect(cell(tile, 32, 32, "water")).toBe(0);
     expect(new Set(tile.layers.height).size).toBeGreaterThan(10);
   });
 
-  // Heights along one row, west to east, across the zone's east edge at x = 16 tiles.
+  // Heights along one row, west to east, across the island's east edge at x = 16 tiles.
   const row = (j) => [14, 15, 16].flatMap((tx) => Array.from({ length: CELLS }, (_, i) => cell(generateTile(ctx, tx, -2), i, j, "height")));
 
-  it("puts the coast a little inside the zoned area's edge", () => {
+  it("puts the coast where the land grid crosses sea level", () => {
+    // The grid crosses 0 80ft in from the edge, 10 cells.
     for (const j of [8, 32, 56]) {
       const heights = row(j);
-      expect(heights[2 * CELLS - 100]).toBeGreaterThan(0); // 800ft inside
-      expect(heights[2 * CELLS]).toBeLessThan(0); // on the edge
-      expect(heights[2 * CELLS + 40]).toBeLessThan(0);
+      expect(heights[2 * CELLS - 13]).toBeGreaterThan(0);
+      expect(heights[2 * CELLS - 7]).toBeLessThan(0);
+      expect(cell(generateTile(ctx, 15, -2), CELLS - 7, j, "water")).toBe(0);
     }
   });
 
-  it("wanders the coast rather than following the edge", () => {
-    const coast = (j) => row(j).findIndex((h) => h < 0);
-    const spots = [0, 16, 32, 48, 63].map(coast);
-    expect(Math.max(...spots) - Math.min(...spots)).toBeGreaterThan(3);
-  }, 20000); // generates the tiles along a row
-
-  it("meets the sea in a cliff where the land is high", () => {
-    const heights = row(32);
-    const drops = heights.slice(1).map((h, i) => heights[i] - h);
-    expect(Math.max(...drops)).toBeGreaterThan(40);
-  });
-
-  it("raises the land toward the height pin", () => {
-    const tile = generateTile(ctx, 14, -2);
-    expect(cell(tile, 0, 0, "height")).toBeGreaterThan(80);
+  it("follows the land grid inland", () => {
+    const tile = generateTile(ctx, 13, -2);
+    expect(cell(tile, 32, 0, "height")).toBeGreaterThan(80);
+    expect(cell(tile, 32, 0, "height")).toBeLessThan(130);
   });
 
   it("keeps river water flowing downhill", () => {
@@ -120,16 +120,8 @@ describe("generator", () => {
 
   it("holds a river running across a slope in, with no water above the ground beside it", () => {
     // Land falling to the south, with a river running east across it.
-    const slope = {
-      zones: [{ region: [square(0, -4, 8, 4)] }],
-      pins: [
-        { id: "a", kind: "height", at: [4, -1.5], height: 500 },
-        { id: "b", kind: "height", at: [4, 1.5], height: 40 },
-        { id: "c", kind: "biome", at: [4, 0], biome: "forest", tags: ["hilly"] },
-      ],
-      watercourses: { rivers: [{ points: [[1.5, 0.2], [6.5, 0.2]], width: 24 }], pools: [] },
-    };
-    const world = prepareContinent(slope, "test");
+    const slope = landOf([0, -4, 8, 4], (x, z) => Math.max(40, Math.min(500, 270 - (z / TILE_FT) * 153)));
+    const world = prepareWorld(slope, { pins: [{ id: "c", kind: "biome", at: [4, 0], biome: "forest", tags: ["hilly"] }], rivers: [{ points: [[1.5, 0.2], [6.5, 0.2]], width: 24 }] });
     let edges = 0;
     for (const [tx, tz] of [1, 2, 3, 4, 5, 6].flatMap((x) => [[x, -1], [x, 0]])) {
       const tile = generateTile(world, tx, tz);
@@ -153,25 +145,24 @@ describe("generator", () => {
 
   it("floods a kept pool flat at its level, below the ground around it", () => {
     // A square pool over the middle of tile (12, -2), whose cells run 0-63 across it.
-    const pool = { region: [[[[12.25, -1.75], [12.75, -1.75], [12.75, -1.25], [12.25, -1.25]]]], level: 95 };
-    const tile = generateTile(prepareContinent({ zones, pins: zones[0].pins, watercourses: { rivers: [], pools: [pool] } }, "test"), 12, -2);
-    // The ground there is about 92ft; the rim just outside holds the water in.
-    expect(cell(tile, 32, 32, "water")).toBe(95);
-    expect(cell(tile, 32, 32, "height")).toBeLessThan(94);
-    expect(cell(tile, 15, 32, "height")).toBeGreaterThan(95);
+    const pool = { region: [[[[12.25, -1.75], [12.75, -1.75], [12.75, -1.25], [12.25, -1.25]]]], level: 96 };
+    const tile = generateTile(prepareWorld(land, { pools: [pool] }), 12, -2);
+    // The ground there is about 90 to 100ft; the rim just outside holds the water in.
+    expect(cell(tile, 32, 32, "water")).toBe(96);
+    expect(cell(tile, 32, 32, "height")).toBeLessThan(95);
+    expect(cell(tile, 15, 32, "height")).toBeGreaterThan(96);
     expect(Number.isNaN(cell(tile, 4, 32, "water"))).toBe(true);
   });
 
-  it("is all ocean with no zones", () => {
-    const tile = generateTile(prepareWorld([], "test"), 0, 0);
+  it("is all ocean with no land", () => {
+    const tile = generateTile(prepareWorld(new LandGrid().data), 0, 0);
     expect(Math.max(...tile.layers.height)).toBeLessThan(-40);
   });
 });
 
 describe("beaches", () => {
-  // A low, flat zone, 8×8 tiles, all one biome.
-  const low = (biome) =>
-    prepareWorld([{ region: [square(0, 0, 8, 8)], pins: [{ id: "h", kind: "height", at: [4, 4], height: 3 }, { id: "b", kind: "biome", at: [4, 4], biome, tags: ["flat"] }], strokes: [] }], "test");
+  // Low, flat land, 8×8 tiles, all one biome.
+  const low = (biome) => prepareWorld(island([0, 0, 8, 8], 3, 1), { pins: [{ id: "b", kind: "biome", at: [4, 4], biome, tags: ["flat"] }] });
   // Sand on land; the sea floor is sand everywhere.
   const sand = (tile) => tile.layers.terrain.filter((t, k) => tile.palettes.terrain[t] === "sand" && tile.layers.height[k] > 0).length;
 
@@ -188,9 +179,8 @@ describe("beaches", () => {
 });
 
 describe("biomes in the generator", () => {
-  // One flat 8×8-tile zone given over to a single biome pin.
-  const world = (biome, tags = []) =>
-    prepareWorld([{ region: [square(0, 0, 8, 8)], pins: [{ id: "b", kind: "biome", at: [4, 4], biome, tags }], strokes: [] }], "test");
+  // Flat land 20ft up, 8×8 tiles, given over to a single biome pin.
+  const world = (biome, tags = []) => prepareWorld(island([0, 0, 8, 8], 20, 1), { pins: [{ id: "b", kind: "biome", at: [4, 4], biome, tags }] });
   const tiles = (ctx) => [3, 4].flatMap((tx) => [3, 4].map((tz) => generateTile(ctx, tx, tz)));
   const count = (ctx, fn) => tiles(ctx).reduce((sum, tile) => sum + fn(tile), 0);
 
@@ -234,52 +224,29 @@ describe("fbm", () => {
   });
 });
 
-describe("rocky peaks", () => {
-  const world = (biome) => {
-    const sq = [[[0, 0], [12, 0], [12, 12], [0, 12]]];
-    const pins = [
-      { id: "b", kind: "biome", at: [6, 6], biome },
-      { id: "top", kind: "height", at: [6, 6], height: 900 },
-      { id: "low1", kind: "height", at: [1, 6], height: 20 },
-      { id: "low2", kind: "height", at: [11, 6], height: 20 },
-    ];
-    return prepareWorld([{ region: [sq], pins, strokes: [] }], "peaks");
-  };
+describe("roads", () => {
+  // Rocky land rising east, with a 12ft road straight across tile (3, 4) along z = 4.5.
+  const rising = landOf([0, 0, 8, 8], (x) => Math.max(20, Math.min(300, 20 + ((x / TILE_FT - 1) * 280) / 6)));
+  const pins = [{ id: "b", kind: "biome", at: [4, 4], biome: "rocky" }];
+  const withRoad = (tags) => prepareWorld(rising, { pins, paths: [{ id: "r1", from: "a", to: "b", width: 12, tags, route: { points: [[2, 4.5], [6, 4.5]] } }] });
+  const row = (tile, layer) => Array.from({ length: CELLS }, (_, i) => cell(tile, i, 32, layer));
+  const PATH = 4; // TERRAIN.indexOf("path")
 
-  it("cuts a summit's dome down to a peak in rocky land", () => {
-    const x = 6 * TILE_FT;
-    const z = 6 * TILE_FT;
-    const dome = world("plains").heightAt;
-    const peak = world("rocky").heightAt;
-    expect(peak(x, z)).toBeCloseTo(dome(x, z), 0);
-    expect(dome(x, z) - dome(x + 400, z)).toBeLessThan(60);
-    expect(peak(x, z) - peak(x + 400, z)).toBeGreaterThan(150);
+  it("digs the road in and builds it up to an even bed, surfaced in path", () => {
+    const road = generateTile(withRoad(["road"]), 3, 4);
+    const bare = generateTile(prepareWorld(rising, { pins }), 3, 4);
+    const heights = row(road, "height");
+    for (let i = 1; i < CELLS; i++) expect(Math.abs(heights[i] - heights[i - 1])).toBeLessThanOrEqual(0.1 * 8 + 0.01);
+    expect(heights.some((h, i) => Math.abs(h - row(bare, "height")[i]) > 1)).toBe(true);
+    expect(row(road, "terrain").every((t) => t === PATH)).toBe(true);
+    // Well off to the side, the land's untouched.
+    expect(cell(road, 10, 2, "height")).toBe(cell(bare, 10, 2, "height"));
   });
 
-  describe("roads", () => {
-    // Rocky land rising east, with a 12ft road straight across tile (3, 4) along z = 4.5.
-    const land = { region: [square(0, 0, 8, 8)], pins: [{ id: "h1", kind: "height", at: [1, 4], height: 20 }, { id: "h2", kind: "height", at: [7, 4], height: 300 }, { id: "b", kind: "biome", at: [4, 4], biome: "rocky" }] };
-    const withRoad = (tags) =>
-      prepareContinent({ zones: [land], pins: land.pins, paths: [{ id: "r1", from: "a", to: "b", width: 12, tags, route: { points: [[2, 4.5], [6, 4.5]] } }], watercourses: { rivers: [], pools: [] } }, "roads");
-    const row = (tile, layer) => Array.from({ length: CELLS }, (_, i) => cell(tile, i, 32, layer));
-    const PATH = 4; // TERRAIN.indexOf("path")
-
-    it("digs the road in and builds it up to an even bed, surfaced in path", () => {
-      const road = generateTile(withRoad(["road"]), 3, 4);
-      const bare = generateTile(prepareContinent({ zones: [land], pins: land.pins, watercourses: { rivers: [], pools: [] } }, "roads"), 3, 4);
-      const heights = row(road, "height");
-      for (let i = 1; i < CELLS; i++) expect(Math.abs(heights[i] - heights[i - 1])).toBeLessThanOrEqual(0.1 * 8 + 0.01);
-      expect(heights.some((h, i) => Math.abs(h - row(bare, "height")[i]) > 1)).toBe(true);
-      expect(row(road, "terrain").every((t) => t === PATH)).toBe(true);
-      // Well off to the side, the land's untouched.
-      expect(cell(road, 10, 2, "height")).toBe(cell(bare, 10, 2, "height"));
-    });
-
-    it("surfaces faint and disused roads in patches", () => {
-      const share = (tags) => row(generateTile(withRoad(tags), 3, 4), "terrain").filter((t) => t === PATH).length / CELLS;
-      expect(share(["road", "faint"])).toBeGreaterThan(0.2);
-      expect(share(["road", "faint"])).toBeLessThan(0.95);
-      expect(share(["road", "disused"])).toBeLessThan(share(["road", "faint"]));
-    });
+  it("surfaces faint and disused roads in patches", () => {
+    const share = (tags) => row(generateTile(withRoad(tags), 3, 4), "terrain").filter((t) => t === PATH).length / CELLS;
+    expect(share(["road", "faint"])).toBeGreaterThan(0.2);
+    expect(share(["road", "faint"])).toBeLessThan(0.95);
+    expect(share(["road", "disused"])).toBeLessThan(share(["road", "faint"]));
   });
 });

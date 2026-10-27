@@ -1,11 +1,11 @@
-// Turns a continent's zone sketches into baked tiles (plans/design.md, "Zone authoring"). Every
-// cell is a pure function of its continent position and the sketches, so tiles generate
-// independently and agree across seams, whichever zone asked for them.
+// Turns a continent's land and sketch into baked tiles (plans/design.md, "Zone authoring"). Every
+// cell is a pure function of its continent position, the land and the sketch, so tiles generate
+// independently and agree across seams.
 //
-// The world is open ocean. Land is wherever a zone's region is, so a region's outline is its coast.
-// The land's broad shape is a smooth surface through every height pin on the continent
-// (heightField.js), with rolling hills on top, and crags that grow where the land is steep. It
-// meets the sea in cliffs, or in a rough, uneven shore where it's low. Rivers carve down through it.
+// The land's broad shape is the height grid sculpted on the heights step (landGrid.js). Where it's
+// below sea level is sea, and where it's below DEEP_FT, deep ocean that gets no tiles. On land the
+// biomes add rolling hills, and crags that grow where the land is steep, growing in from nothing
+// at the shore over SHORE_FT of height. Rivers carve down through it.
 //
 // Biome pins split the land into biomes (biomes.js), and each biome's profile shapes its ground,
 // surface and trees, blended at borders. Trees are planted as tree terrain cells (trees.js).
@@ -16,11 +16,9 @@
 // down to its bed or built up to it, with sides that slope back to the land, and is surfaced in
 // path, raggedly for trails and footpaths, in patches for faint and disused ones.
 
-import polygonClipping from "polygon-clipping";
 import { BIOMES, biomesNear, climateAt, prepareBiomes } from "./biomes.js";
 import { CELLS, CELL_FT, TILE_FT, WATER_KINDS, gradeCap } from "./constants.js";
-import { prepareCliffs } from "./cliffs.js";
-import { prepareHeights } from "./heightField.js";
+import { LandGrid } from "./landGrid.js";
 import { facets, fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { scatterObjects } from "./objects.js";
@@ -32,17 +30,10 @@ export const TERRAIN = ["grass", "dirt", "sand", "rock", "path", "shore", "mud",
 const T = Object.fromEntries(TERRAIN.map((name, i) => [name, i]));
 
 const BASE = {
-  defaultHeight: 20, // land height away from every height pin
   shoreHeight: 3, // land below this plus 2.5ft, near the coast, is beach
   hillWavelength: 1200, // rolling hills
   roughWavelength: 350, // a rocky biome's ridges
 };
-// Rocky peaks: a height pin in peaky land (the biomes' `peaks`) that's higher than every other pin
-// within `aloneFt` is a summit. The broad shape is a smooth dome there, capped flat by its bounds,
-// so around a summit it's cut down to a peak: a cone reaching from the summit to the ground
-// `reach` of the way to the nearest pin (at most `maxFt`), its flanks steepest near the top
-// (`flank` < 1). It eases back to the broad shape over the outer `blend` share.
-const PEAK = { aloneFt: 2500, reach: 0.9, maxFt: 6000, flank: 0.7, blend: 0.3 };
 // Cliffs: in patches (`patchWavelength`, covering about `cover` of the land where the biomes'
 // `cliffs` is 1), ground climbs in ledges `minFt` to `maxFt` high, each rise squeezed into a
 // cliff over `riser` of the ledge's height. Cliff lines wander by up to a ledge either way.
@@ -61,13 +52,14 @@ const CRAG = { wavelength: 160, perSlope: 60, probeFt: 24 };
 // swing.)
 // Swells shrink on land lower than `swellFullAt`, so they don't sink low plains under the sea.
 const JITTER = { swellFt: 16, swellWavelength: 650, swellFullAt: 40, ft: 3, wavelength: 90 };
-// Land at or above `cliff` ft meets the sea in a cliff; lower land in a rough shore of uneven
-// width (`minFt` to `maxFt`) and bumpy height. Between `low` and `cliff` it shifts from one to the
-// other.
-const COAST = { low: 6, cliff: 10, minFt: 16, maxFt: 90, bumps: 2.5 };
-const SEA = { shallow: -2, drop: 0.08, floor: -60, swell: 8, bumps: 3 };
-// Low land within `reachFt` of the coast is beach, in biomes that get beaches.
-const BEACH = { reachFt: 200, biomes: new Set(["plains", "forest", "rocky"]) };
+// The sea floor: bumps up to `bumps` ft either way, growing in over `fadeFt` from the shore, and
+// never shallower than `shallowFt`.
+const SEA = { bumps: 3, fadeFt: 6, shallowFt: -0.3 };
+// Biome detail grows in from nothing at sea level to full at SHORE_FT, so the coast stays where
+// the land grid puts it.
+const SHORE_FT = 12;
+// Low land within `reachFt` of the sea is beach, in biomes that get beaches.
+const BEACH = { reachFt: 120, biomes: new Set(["plains", "forest", "rocky"]) };
 const POOL = { wavelength: 220, level: -0.1, maxDepth: 4 };
 // Ponds and small lakes: at most one per `gridFt` square, by `chance` times the biome's lakes,
 // `minFt` to `maxFt` across (mostly small), with wobbly shores. Each has one water level, a little
@@ -81,14 +73,6 @@ const PONDS = { shelfFt: 1, depthFt: [2, 12], wideFt: 2000, rimFt: 1, rimWidthFt
 const RAVINE = { depth: 40, width: 0.04, wavelength: 1400, wander: 250, floor: 1.5 };
 const TREE_GRID = 4; // cells per side of a tree planting square
 const TREE_GROUND = new Set(["grass", "dirt", "moss", "mud"]);
-// The coast wanders inside the zoned area's edge, by up to `maxFt`, in bays and headlands at
-// three sizes. It never crosses the edge, so land stays on the zones' own tiles.
-const SHORE = { maxFt: 700, layers: [{ wavelength: 1800, weight: 1 }, { wavelength: 400, weight: 0.5 }, { wavelength: 90, weight: 0.15 }] };
-// How far each feature reaches, so the editor knows which tiles a change touches. Past
-// COAST_REACH_FT from the coast, nothing about the coast matters any more, and past EDGE_REACH_FT
-// from the zoned area's edge, nothing about the edge does.
-const COAST_REACH_FT = Math.max(COAST.maxFt, (SEA.shallow - SEA.floor) / SEA.drop) + 64;
-export const EDGE_REACH_FT = COAST_REACH_FT + SHORE.maxFt;
 // A river's channel: `depth` is cut below its surface, up to maxDepth, scaled by the ground's bed
 // (biomes.js profiles). Banks slope up over its width (at least minBankFt), scaled by the ground's
 // banks, up to maxBanks. The surface follows the lowest ground across the channel, out to
@@ -156,13 +140,12 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const toFt = ([x, z]) => [x * TILE_FT, z * TILE_FT];
 
-// The continent as { zones, pins, cliffs, paths, watercourses }: every zone as stored ({ region }),
-// and the sketch's pins, cliffs, road paths and watercourses ({ rivers, pools }, editor/waterflow.js), in
-// continent tile units. seedKey (the continent's key) seeds the noise.
+// The continent as { land, pins, paths, watercourses }: the land grid (landGrid.js, or what was sent
+// a worker of it), and the sketch's pins, road paths and watercourses ({ rivers, pools },
+// editor/waterflow.js), in continent tile units. seedKey (the continent's key) seeds the noise.
 export function prepareWorld(continent, seedKey) {
   const ctx = prepareShape(continent, seedKey);
   ctx.lakeSites = new Map(); // "gi,gj" -> lake or null, filled as tiles need them
-  const { zoned, heightPins } = ctx;
   const { pins } = continent;
   const rivers = (continent.watercourses?.rivers ?? []).filter((r) => r.points.length >= 2);
 
@@ -174,15 +157,10 @@ export function prepareWorld(continent, seedKey) {
         return { x, z, biome: p.biome, tags: p.tags };
       }),
     rivers: rivers.map((r) => simplify(r.points.map(toFt), BIOME_RIVER_TOLERANCE_FT)),
-    edges: zoned.flatMap((z) => edgesOf(z.region.map((polygon) => polygon.map((ring) => ring.map(toFt))))),
+    edges: [],
     seed: ctx.seed,
   });
 
-  const peaks = summits(heightPins.map((p) => toFt(p.at).concat(p.height)), ctx.biomes);
-  // Peaks are cut from the ground without its cliffs, which then step it down as before.
-  const step = ctx.heightAt.step;
-  ctx.smoothAt = withPeaks(ctx.smoothAt, peaks);
-  ctx.heightAt = step ? (x, z) => ctx.smoothAt(x, z) + step(x, z) : ctx.smoothAt;
 
   // Rivers always descend: the surface follows the lowest ground seen so far from the source.
   ctx.rivers = rivers.map((s) => {
@@ -195,7 +173,7 @@ export function prepareWorld(continent, seedKey) {
       const [bx, bz] = pointAt(line, Math.min(line.length, along + 1));
       const len = Math.hypot(bx - ax, bz - az) || 1;
       const [sx, sz] = [-(bz - az) / len, (bx - ax) / len];
-      return Math.min(...[-1, -0.5, 0, 0.5, 1].map((k) => land(ctx, x + sx * across * k, z + sz * across * k, ctx.areaEdges, ctx.biomes).h));
+      return Math.min(...[-1, -0.5, 0, 0.5, 1].map((k) => land(ctx, x + sx * across * k, z + sz * across * k, ctx.biomes).h));
     });
     let low = Infinity;
     return {
@@ -229,50 +207,24 @@ export function prepareWorld(continent, seedKey) {
   return ctx;
 }
 
-// Whether the sea covers a point, from prepareShape's ctx: past the coast, or in the shore strip
-// where the ground's below sea level.
+// Whether the sea covers a point, from prepareShape's ctx: where the land grid's below sea level.
 export function seaAt(ctx, x, z) {
-  const edgeDist = Math.min(EDGE_REACH_FT, distanceToEdges(x, z, ctx.areaEdges));
-  const inland = (pointInRegion(x, z, ctx.area) ? edgeDist : -edgeDist) - shoreInset(ctx, x, z);
-  const coastDist = Math.min(COAST_REACH_FT, Math.abs(inland));
-  return inland <= 0 || (coastDist < COAST.maxFt && coast(ctx, ctx.heightAt(x, z), x, z, coastDist) < 0);
+  return ctx.heightAt(x, z) < 0;
 }
 
-// The land's shape from the zones' regions, height pins and cliffs alone, with no biomes: the
-// zoned area, and the broad shape through the pins and cliffs (heightAt; smoothAt leaves the
-// cliffs out). prepareWorld builds on it, and the editor's heights map draws it with shapeHeight.
-// continent: as for prepareWorld.
-export function prepareShape({ zones, pins, cliffs = [] }, seedKey) {
-  const zoned = zones.filter((z) => z.region?.length);
-  const seed = hashString(seedKey);
-
-  // The zoned area: every region together. Its outline is where land meets open ocean.
-  const union = zoned.length ? polygonClipping.union(...zoned.map((z) => z.region)) : [];
-  const area = union.map((polygon) => polygon.map((ring) => ring.slice(0, -1).map(toFt)));
-  const heightPins = pins.filter((p) => p.kind === "height" && Number.isFinite(p.height));
-  const heightAt = prepareHeights(
-    heightPins.map((p) => {
-      const [x, z] = toFt(p.at);
-      return { x, z, height: p.height };
-    }),
-    BASE.defaultHeight,
-    prepareCliffs(
-      cliffs.map((c) => ({ points: c.points.map(toFt) })),
-      seed,
-    ),
-  );
-  return { seed, area, areaEdges: edgesOf(area), rivers: [], heightAt, smoothAt: heightAt.smooth, zoned, heightPins };
+// The land's shape alone, with no biomes: the land grid (heightAt). prepareWorld builds on it, and
+// the editor's heights map draws it with shapeHeight. continent: as for prepareWorld.
+export function prepareShape({ land }, seedKey) {
+  const grid = LandGrid.from(land);
+  return { seed: hashString(seedKey), grid, heightAt: (x, z) => grid.heightAt(x, z), rivers: [] };
 }
 
-// The ground from prepareShape: the broad shape, raised by `relief` ft, meeting the sea at the
-// wandering coast, and the sea floor beyond it. No crags, rivers or anything else the biomes
-// bring, beyond the relief given.
+// The ground from prepareShape: the land grid, raised on land by `relief` ft as much as the
+// biomes' detail is there, and the sea floor under the sea. No crags, rivers or anything else the
+// biomes bring, beyond the relief given.
 export function shapeHeight(ctx, x, z, relief = 0) {
-  const edgeDist = Math.min(EDGE_REACH_FT, distanceToEdges(x, z, ctx.areaEdges));
-  const inland = (pointInRegion(x, z, ctx.area) ? edgeDist : -edgeDist) - shoreInset(ctx, x, z);
-  const coastDist = Math.min(COAST_REACH_FT, Math.abs(inland));
-  if (inland <= 0) return seaFloor(ctx, x, z, coastDist);
-  return coast(ctx, ctx.heightAt(x, z) + relief, x, z, coastDist);
+  const base = ctx.heightAt(x, z);
+  return base < 0 ? base : base + relief * smoothstep(0, SHORE_FT, base);
 }
 
 // The ground roads are routed over (editor/roads.js), from prepareWorld's ctx: the broad shape with
@@ -324,14 +276,7 @@ export function decodeFlowSlope(byte) {
 
 // One tile's layers. tx and tz are continent tile coordinates.
 export function generateTile(ctx, tx, tz) {
-  // Only the area edges that can reach this tile.
   const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];
-  const near = ([ax, az, bx, bz]) =>
-    Math.max(ax, bx) > x0 - EDGE_REACH_FT &&
-    Math.min(ax, bx) < x0 + TILE_FT + EDGE_REACH_FT &&
-    Math.max(az, bz) > z0 - EDGE_REACH_FT &&
-    Math.min(az, bz) < z0 + TILE_FT + EDGE_REACH_FT;
-  const edges = ctx.areaEdges.filter(near);
   const biomes = biomesNear(ctx.biomes, [x0, z0, x0 + TILE_FT, z0 + TILE_FT]);
 
   // One extra cell on each side, so slopes at the tile edge see their neighbours.
@@ -339,7 +284,7 @@ export function generateTile(ctx, tx, tz) {
   const samples = new Array(N * N);
   for (let j = 0; j < N; j++) {
     for (let i = 0; i < N; i++) {
-      samples[j * N + i] = sample(ctx, x0 + (i - 0.5) * CELL_FT, z0 + (j - 0.5) * CELL_FT, edges, biomes);
+      samples[j * N + i] = sample(ctx, x0 + (i - 0.5) * CELL_FT, z0 + (j - 0.5) * CELL_FT, biomes);
     }
   }
 
@@ -435,66 +380,32 @@ function pick(odds, r) {
 
 // --- height ---
 
-// Ground before rivers, pools and ravines: the sea floor outside the zoned area, and inside it the
-// broad shape with hills and crags, meeting the sea at the coast. Returns { h, t, land, climate,
-// coastDist }, where t grows from 0 at the coast to 1 a little inland, for features that keep off
-// the shore, and coastDist is how far it is to the coast (capped at COAST_REACH_FT).
-function land(ctx, x, z, edges, biomes) {
+// Ground before rivers, pools and ravines: the sea floor where the land grid's below sea level,
+// and elsewhere the grid with the biomes' hills and crags. Returns { h, base, t, shore, land,
+// climate }, where base is the grid's height, t grows from 0 at sea level to 1 at SHORE_FT, for
+// features that keep off the shore, and shore says whether low land is near the sea.
+function land(ctx, x, z, biomes) {
   const climate = climateAt(biomes, x, z);
-  // Feet inland from the coast, negative out to sea.
-  const edgeDist = Math.min(EDGE_REACH_FT, distanceToEdges(x, z, edges));
-  const inland = (pointInRegion(x, z, ctx.area) ? edgeDist : -edgeDist) - shoreInset(ctx, x, z);
-  const coastDist = Math.min(COAST_REACH_FT, Math.abs(inland));
-  if (inland <= 0) return { h: seaFloor(ctx, x, z, coastDist), t: 0, land: false, climate, coastDist };
+  const base = ctx.heightAt(x, z);
+  if (base < 0) return { h: seaFloor(ctx, x, z, base), base, t: 0, land: false, climate };
 
   const { rough } = climate.profile;
   const d = CRAG.probeFt;
-  const steep = Math.hypot(ctx.smoothAt(x + d, z) - ctx.smoothAt(x - d, z), ctx.smoothAt(x, z + d) - ctx.smoothAt(x, z - d)) / (2 * d);
-  let h = ctx.heightAt(x, z) + biomeRelief(ctx, x, z, climate.profile);
+  const steep = Math.hypot(ctx.heightAt(x + d, z) - ctx.heightAt(x - d, z), ctx.heightAt(x, z + d) - ctx.heightAt(x, z - d)) / (2 * d);
+  let h = base + biomeRelief(ctx, x, z, climate.profile);
   const crag = rough * 0.5 + steep * CRAG.perSlope;
   if (crag > 0) h += (1 - Math.abs(fbm(x, z, ctx.seed ^ 0x1b873593, { wavelength: CRAG.wavelength, octaves: 3 }))) ** 2 * crag;
   FACETS.forEach(({ wavelength, share }, n) => {
     if (rough > 0) h += facets(x, z, ctx.seed ^ (0x5bd1e995 + n), wavelength) * rough * share;
   });
   if (climate.profile.cliffs > 0) h = ledges(ctx, h, x, z, climate.profile.cliffs);
-  const swell = JITTER.swellFt * smoothstep(0, JITTER.swellFullAt, ctx.heightAt(x, z));
+  const swell = JITTER.swellFt * smoothstep(0, JITTER.swellFullAt, base);
   h += fbm(x, z, ctx.seed ^ 0x3c6ef373, { wavelength: JITTER.swellWavelength, octaves: 2 }) * swell;
   h += fbm(x, z, ctx.seed ^ 0x6a09e667, { wavelength: JITTER.wavelength, octaves: 2 }) * JITTER.ft;
 
-  return { h: coast(ctx, h, x, z, coastDist), t: smoothstep(0, COAST.maxFt, coastDist), land: true, climate, coastDist };
-}
-
-// How far inside the zoned area's edge the coast lies here, between 0 and SHORE.maxFt.
-// Height pins that are summits: [{ x, z, height, radius }], from pins as [x, z, height].
-function summits(pins, biomes) {
-  return pins.flatMap(([x, z, height], i) => {
-    if (climateAt(biomes, x, z).profile.peaks < 0.5) return [];
-    let nearest = Infinity;
-    for (const [ox, oz, other] of pins.filter((_, j) => j !== i)) {
-      const d = Math.hypot(ox - x, oz - z);
-      if (other >= height && d < PEAK.aloneFt) return [];
-      nearest = Math.min(nearest, d);
-    }
-    return [{ x, z, height, radius: Math.min(PEAK.maxFt, nearest * PEAK.reach) }];
-  });
-}
-
-// The broad shape, with each summit's dome cut down to a peak: from the summit down to where the
-// dome is at `radius` along the same line, the height follows a curve that's steepest at the top.
-function withPeaks(heightAt, peaks) {
-  if (!peaks.length) return heightAt;
-  return (x, z) => {
-    const h = heightAt(x, z);
-    for (const p of peaks) {
-      const r = Math.hypot(x - p.x, z - p.z);
-      if (r >= p.radius) continue;
-      const foot = r > 0 ? heightAt(p.x + ((x - p.x) / r) * p.radius, p.z + ((z - p.z) / r) * p.radius) : heightAt(p.x + p.radius, p.z);
-      const peak = p.height + (foot - p.height) * (r / p.radius) ** PEAK.flank;
-      const cut = Math.min(h, peak);
-      return cut + (h - cut) * smoothstep(p.radius * (1 - PEAK.blend), p.radius, r);
-    }
-    return h;
-  };
+  const t = smoothstep(0, SHORE_FT, base);
+  const shore = t < 1 && [0, 1, 2, 3, 4, 5, 6, 7].some((k) => ctx.heightAt(x + Math.cos(k * 0.785) * BEACH.reachFt, z + Math.sin(k * 0.785) * BEACH.reachFt) < 0);
+  return { h: Math.max(Math.min(base, 0.5), base + (h - base) * t), base, t, shore, land: true, climate };
 }
 
 // Ground stepped into ledges and cliffs, in patches, by `amount` (0-1).
@@ -509,36 +420,16 @@ function ledges(ctx, h, x, z, amount) {
   return h + (ledge - h) * where;
 }
 
-function shoreInset(ctx, x, z) {
-  let n = 0;
-  SHORE.layers.forEach(({ wavelength, weight }, i) => (n += fbm(x, z, ctx.seed ^ (0x7f4a7c15 + i), { wavelength, octaves: 2 }) * weight));
-  return SHORE.maxFt * (0.5 + 0.5 * Math.tanh(1.2 * n));
+// The sea floor: the land grid, with bumps that grow in away from the shore.
+function seaFloor(ctx, x, z, base) {
+  const bumps = fbm(x, z, ctx.seed ^ 0x2545f491, { wavelength: 250 }) * SEA.bumps * smoothstep(0, SEA.fadeFt, -base);
+  return Math.min(SEA.shallowFt, base + bumps);
 }
 
-// Cliffs where the land is high; where it's low, a shore of uneven width that drops in bumps to
-// just below sea level.
-function coast(ctx, h, x, z, coastDist) {
-  const low = 1 - smoothstep(COAST.low, COAST.cliff, h);
-  if (low <= 0) return h;
-  const width = lerp(COAST.minFt, COAST.maxFt, fbm(x, z, ctx.seed ^ 0x27d4eb2f, { wavelength: 500 }) * 0.5 + 0.5) * low;
-  if (coastDist >= width) return h;
-  const shore = SEA.shallow + (coastDist / width) * (h - SEA.shallow) + fbm(x, z, ctx.seed ^ 0x165667b1, { wavelength: 40 }) * COAST.bumps;
-  return Math.min(h, shore);
-}
-
-// The sea floor: shallow by the coast and deeper further out, with slow swells and finer bumps.
-// Always under water.
-function seaFloor(ctx, x, z, coastDist) {
-  const depth = Math.max(SEA.floor, SEA.shallow - coastDist * SEA.drop);
-  const swell = fbm(x, z, ctx.seed ^ 0x61c88647, { wavelength: 1500 }) * SEA.swell;
-  const bumps = fbm(x, z, ctx.seed ^ 0x2545f491, { wavelength: 250 }) * SEA.bumps;
-  return Math.min(-1, depth + swell + bumps);
-}
-
-function sample(ctx, x, z, edges, biomes) {
-  const ground = land(ctx, x, z, edges, biomes);
+function sample(ctx, x, z, biomes) {
+  const ground = land(ctx, x, z, biomes);
   if (ground.land) roadAt(ctx, ground, x, z);
-  const out = { road: ground.road ?? null, paved: Boolean(ground.paved), h: ground.h, water: NaN, sea: false, river: false, bank: false, pool: false, lake: false, land: ground.land, climate: ground.climate, coastDist: ground.coastDist };
+  const out = { road: ground.road ?? null, paved: Boolean(ground.paved), h: ground.h, water: NaN, sea: false, river: false, bank: false, pool: false, lake: false, land: ground.land, shore: ground.shore, climate: ground.climate };
   const { pools, ravines } = ground.climate.profile;
   if (pools > 0 && ground.t > 0) pool(ctx, out, x, z, pools * ground.t);
   if (ravines > 0 && ground.t > 0) ravine(ctx, out, x, z, ravines * ground.t);
@@ -574,8 +465,8 @@ function sample(ctx, x, z, edges, biomes) {
   }
   if (Number.isNaN(out.water)) out.h = Math.max(out.h, levee);
   plunge(ctx, out, x, z);
-  // The sea covers the sea floor and the shore strip. Land below sea level further in stays dry.
-  if (out.h < 0 && Number.isNaN(out.water) && (!out.land || out.coastDist < COAST.maxFt)) {
+  // The sea covers the sea floor. Land carved below sea level stays dry.
+  if (!out.land && Number.isNaN(out.water)) {
     out.water = 0;
     out.sea = true;
   }
@@ -590,7 +481,7 @@ function prepareRoad(ctx, path) {
   const traffic = Boolean(kind) && !tags.has("faint") && !tags.has("disused");
   const points = path.route.points.map(toFt);
   const line = makePolyline(points);
-  const ground = sampleAlong(line, (x, z) => land(ctx, x, z, ctx.areaEdges, ctx.biomes).h);
+  const ground = sampleAlong(line, (x, z) => land(ctx, x, z, ctx.biomes).h);
   const even = Math.round((traffic ? ROAD.evenTrafficFt : ROAD.evenFt) / PROFILE_STEP);
   const bed = ground.map((_, i) => {
     const near = ground.slice(Math.max(0, i - even), i + even + 1);
@@ -768,9 +659,11 @@ function lakeSite(ctx, gi, gj) {
   if (!(amount > 0) || roll(3) >= LAKES.chance * amount) return null;
   const size = roll(4) ** 2;
   const r = lerp(LAKES.minFt, LAKES.maxFt, size) / 2;
-  const around = [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]].map(([dx, dz]) => land(ctx, x + dx, z + dz, ctx.areaEdges, ctx.biomes));
+  const reach = r * (1 + LAKES.wobble) + LAKES.damFt;
+  const around = [[0, 0], [r, 0], [-r, 0], [0, r], [0, -r]].map(([dx, dz]) => land(ctx, x + dx, z + dz, ctx.biomes));
   const heights = around.map((g) => g.h);
-  if (!around.every((g) => g.land && g.coastDist > r * (1 + LAKES.wobble) + LAKES.damFt)) return null;
+  if (!around.every((g) => g.t >= 1)) return null;
+  if (![[reach, 0], [-reach, 0], [0, reach], [0, -reach]].every(([dx, dz]) => ctx.heightAt(x + dx, z + dz) >= SHORE_FT)) return null;
   if (Math.max(...heights) - Math.min(...heights) > LAKES.maxDropFt) return null;
   const site = { x, z, r, level: Math.min(...heights) - LAKES.belowFt, depth: lerp(...LAKES.depthFt, size) };
   ctx.lakeSites.set(key, site);
@@ -848,7 +741,7 @@ function terrainFor(ctx, s, slope, ci, cj) {
   if (s.bank) return T.shore;
   const { biome, second, weight } = s.climate;
   const here = BIOMES[hash2(ci, cj, ctx.seed ^ 0x2545f491) < weight ? biome : second];
-  if (s.h < 2.5 + BASE.shoreHeight && s.coastDist < BEACH.reachFt && BEACH.biomes.has(here)) return T.sand;
+  if (s.h < 2.5 + BASE.shoreHeight && s.shore && BEACH.biomes.has(here)) return T.sand;
   if (s.h < 0) return T.mud;
   const n = fbm(ci * CELL_FT, cj * CELL_FT, ctx.seed ^ 0x6a09e667, { wavelength: 60, octaves: 3 });
   if (here === "swamp") return n > 0.25 ? T.moss : n > 0.05 ? T.mud : T.grass;

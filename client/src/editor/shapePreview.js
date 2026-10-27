@@ -2,10 +2,11 @@ import { biomeRelief, prepareShape, prepareWorld, shapeHeight } from "../world/g
 import { BIOMES, biomesNear, climateAt } from "../world/biomes.js";
 import { BIOME_COLORS } from "../world/tileImage.js";
 import { TILE_FT } from "../world/constants.js";
+import { landBounds } from "../world/landGrid.js";
 
-// The heights and biomes maps: previews worked out straight from the zones, quick enough to redo
-// on every edit, over the part of the continent in sight. The heights map is the land's rough shape
-// from the height pins and coasts alone (generator.js shapeHeight), as an elevation heat map with
+// The heights and biomes maps: previews worked out straight from the land and sketch, quick enough
+// to redo on every edit, over the part of the continent in sight. The heights map is the land's
+// rough shape from the land grid alone (generator.js shapeHeight), as an elevation heat map with
 // contour lines. The biomes map colors the land by biome, blended at borders, shaded by each
 // biome's broad hills and ridges (biomeRelief).
 //
@@ -13,19 +14,17 @@ import { TILE_FT } from "../world/constants.js";
 // (x0 + i * stepFt, z0 + j * stepFt), heights[j * nx + i] is its ground, `biomes` says which map it
 // is, and rgba is the map's picture, a pixel per sample, clear over the sea.
 
-const MARGIN_FT = 2 * TILE_FT; // sea around the zoned area, without bounds
+const MARGIN_FT = 2 * TILE_FT; // sea around the land, without bounds
 const MIN_STEP_FT = 2;
 
-// continent: { zones, pins }, as generator.js prepareWorld takes it. bounds: [x0, z0, x1,
-// z1] continent feet to cover, or the whole zoned area with some sea around it; side: samples
-// along the longer side. Null when there's no land at all.
+// continent: { land, pins }, as generator.js prepareWorld takes it. bounds: [x0, z0, x1, z1]
+// continent feet to cover, or all the land grid with some sea around it; side: samples along the
+// longer side. Null when there's no land at all.
 export function shapeGrid(continent, seedKey, { biomes = false, bounds = null, side = 360 } = {}) {
   const ctx = biomes ? prepareWorld(continent, seedKey) : prepareShape(continent, seedKey);
-  const points = ctx.area.flat(2);
-  if (!points.length) return null;
-  const xs = points.map((p) => p[0]);
-  const zs = points.map((p) => p[1]);
-  const [x0, z0, x1, z1] = bounds ?? [Math.min(...xs) - MARGIN_FT, Math.min(...zs) - MARGIN_FT, Math.max(...xs) + MARGIN_FT, Math.max(...zs) + MARGIN_FT];
+  const all = landBounds(ctx.grid);
+  if (!all) return null;
+  const [x0, z0, x1, z1] = bounds ?? [all[0] - MARGIN_FT, all[1] - MARGIN_FT, all[2] + MARGIN_FT, all[3] + MARGIN_FT];
   const stepFt = Math.max(MIN_STEP_FT, Math.max(x1 - x0, z1 - z0) / side);
   const nx = Math.ceil((x1 - x0) / stepFt) + 1;
   const nz = Math.ceil((z1 - z0) / stepFt) + 1;

@@ -429,7 +429,7 @@ export class WaterSimulator {
     this.next = null;
   }
 
-  // message: { key, continent: { zones, pins, cliffs }, seedKey, sources }
+  // message: { key, landKey, continent: { land }, seedKey, sources }
   request(message) {
     this.next = structuredClone(message);
     if (!this.busy) this.send();

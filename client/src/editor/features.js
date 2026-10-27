@@ -1,24 +1,18 @@
 import { snapToCell } from "./region.js";
 import { CART_WIDTH_FT, gradeCap, splitRoute } from "./roads.js";
 import { TILE_FT } from "../world/constants.js";
-import { CLIFF as CLIFF_DROP, prepareCliffs } from "../world/cliffs.js";
-import { prepareHeights } from "../world/heightField.js";
-import { makePolyline, pointAt } from "../world/polyline.js";
 
 // The continent's sketch (zones.js loadSketch): pins ({ id, kind, at, ... }) and road paths ({ id,
-// from, to, width, ... }) anywhere on its land, in continent tile units with sizes in feet. Height
-// pins set the ground height at a spot; biome pins claim the land around them for a biome,
+// from, to, width, ... }) anywhere on its land, in continent tile units with sizes in feet. Biome
+// pins claim the land around them for a biome,
 // adjusted by their tags; info pins carry a name, notes and tags for people and LLMs and don't
 // affect generation. Water source pins send water downhill, making the sketch's watercourses
 // (waterflow.js). Road pins are joined by paths, each routed over the land between its two pins
 // (roads.js); a road is a run of paths. The generator digs roads in and surfaces them (tags faint
-// and disused wear them away); hubs don't shape the ground yet. There are no coastlines: the sea
-// is wherever no zone is. Cliffs ({ id, points }) are lines the ground drops across, to the right
-// of the way they were drawn, by however much the height pins either side call for
-// (world/cliffs.js).
+// and disused wear them away); hubs don't shape the ground yet. The land itself is the land grid
+// (world/landGrid.js), sculpted on the heights step.
 
 export const PINS = {
-  height: { color: "#70d070", label: "height pin" },
   biome: { color: "#e0a040", label: "biome pin" },
   road: { color: "#c8a26a", label: "road pin", tool: "road" },
   hub: { color: "#e05a5a", label: "hub" },
@@ -43,25 +37,19 @@ export const ROADS = {
   footpath: { width: 3, minPx: 2, style: "dotted" },
 };
 const POOL_COLOR = "rgba(74, 144, 217, 0.8)";
-// Cliffs are drawn with ticks down their bottom side, every `tickPx`, and red where the pins call
-// for so small a drop it's hardly a cliff.
-const CLIFF = { color: "#1c1612", low: "#ff4a4a", edge: "rgba(255, 255, 255, 0.7)", label: "cliff", tickPx: 9, tickLenPx: 6 };
 export const FEATURE_HINTS = {
   select: "click a pin or road to select it · drag pins, and a selected hub's edge to size it · delete removes the selection",
   pin: "click on land to place · click a pin to select or drag it · drag a selected hub's edge to size it",
   road: "click on land to place a road pin, joined to the selected one · click a road pin to join it, or drag it · click a road to branch off it · esc starts a new road · set the width under the selected pin, or select a single path with the select tool",
-  cliff: "click to add corners · enter, or click the last corner, finishes · backspace removes the last · esc cancels · the ground drops on the ticked side, to the right of the way you draw · drag a selected cliff's corners · shift-click its line to add one · alt-click one to remove it",
 };
 
-const HIT_PX = 8; // how near a click must be to a line or corner, in css pixels
-const DEFAULT_HEIGHT_FT = 20;
 const DEFAULT_HUB_RADIUS_FT = 200;
 const MIN_HUB_RADIUS_FT = 16;
 const DEFAULT_SOURCE_WIDTH_FT = 12;
-const SHAPE_PINS = ["height", "biome"];
+const SHAPE_PINS = ["biome"];
 
 export function nextId(sketch, prefix) {
-  const used = new Set([...sketch.pins, ...sketch.paths, ...(sketch.cliffs ?? [])].map((f) => f.id));
+  const used = new Set([...sketch.pins, ...sketch.paths].map((f) => f.id));
   let n = 1;
   while (used.has(`${prefix}${n}`)) n++;
   return `${prefix}${n}`;
@@ -73,9 +61,8 @@ export function nextId(sketch, prefix) {
 export class Features {
   constructor(editor) {
     this.editor = editor;
-    this.selected = null; // { type: "pin" | "path" | "cliff", id }
+    this.selected = null; // { type: "pin" | "path", id }
     this.kinds = []; // what the current tool can pick
-    this.cliffDrawing = null; // corners of a cliff being drawn
   }
 
   get map() {
@@ -85,7 +72,7 @@ export class Features {
   // The selected feature.
   find(sketch) {
     if (!this.selected) return null;
-    const list = { pin: sketch.pins, path: sketch.paths, cliff: sketch.cliffs }[this.selected.type];
+    const list = this.selected.type === "pin" ? sketch.pins : sketch.paths;
     return list.find((f) => f.id === this.selected.id) ?? null;
   }
 
@@ -102,12 +89,6 @@ export class Features {
   remove(sketch) {
     const feature = this.find(sketch);
     if (!feature) return;
-    if (this.selected.type === "cliff") {
-      sketch.cliffs.splice(sketch.cliffs.indexOf(feature), 1);
-      this.select(null);
-      this.editor.saveSketch();
-      return;
-    }
     const gone = this.selected.type === "pin" ? sketch.paths.filter((p) => p.from === feature.id || p.to === feature.id) : [feature];
     if (this.selected.type === "pin") sketch.pins.splice(sketch.pins.indexOf(feature), 1);
     sketch.paths = sketch.paths.filter((p) => !gone.includes(p));
@@ -122,7 +103,6 @@ export class Features {
   // `kinds` limits what the select tool picks, and what a pin tool's click can grab.
   tool(sketch, name, kinds) {
     this.kinds = kinds ?? Object.keys(PINS);
-    if (name === "cliff") return this.cliffTool(sketch);
     if (ROADS[name]) return this.roadTool(sketch, name);
     if (PINS[name]) return this.pinTool(sketch, name);
     return this.selectTool(sketch);
@@ -151,14 +131,13 @@ export class Features {
     };
   }
 
-  // Places a pin with the given settings. Height and biome pins are dropped many at a time, so
+  // Places a pin with the given settings. Biome pins are dropped many at a time, so
   // placing one doesn't select it (and clears any selection, so the palette applies to new pins);
   // other pins are selected so their details can be filled in.
   addPin(sketch, kind, tile, props = {}) {
     const at = this.place(tile);
     if (!at) return;
     const pin = { id: nextId(sketch, "p"), kind, at, ...props };
-    if (kind === "height") pin.height ??= DEFAULT_HEIGHT_FT;
     if (kind === "hub") pin.radius ??= DEFAULT_HUB_RADIUS_FT;
     if (kind === "source") pin.width ??= DEFAULT_SOURCE_WIDTH_FT;
     sketch.pins.push(pin);
@@ -235,103 +214,17 @@ export class Features {
 
   selectTool(sketch) {
     return {
-      down: (tile, e) => {
+      down: (tile) => {
         if (this.grabHandle(sketch, tile)) return true;
-        if (this.grabCorner(sketch, tile, e)) return true;
         const pin = this.pinAt(sketch, tile);
         if (pin) return this.grabPin(sketch, pin);
         const path = this.kinds.includes("road") ? this.pathAt(sketch, tile) : null;
-        const cliff = !path && this.kinds.includes("cliff") ? this.cliffAt(sketch, tile) : null;
-        this.select(sketch, path ? "path" : cliff ? "cliff" : null, (path ?? cliff)?.id);
-        return Boolean(path ?? cliff);
+        this.select(sketch, path ? "path" : null, path?.id);
+        return Boolean(path);
       },
       move: (tile) => this.dragTo(tile, sketch),
       up: () => this.endDrag(sketch),
     };
-  }
-
-  // Each click adds a corner to the cliff being drawn, which a click on its last corner (or enter)
-  // finishes. Out of drawing, a click picks a cliff, or edits the selected one's corners as the
-  // select tool does, and anywhere else starts a new one.
-  cliffTool(sketch) {
-    return {
-      down: (tile, e) => {
-        const drawing = this.cliffDrawing;
-        if (drawing) {
-          if (drawing.length >= 2 && this.editor.nearScreen(drawing[drawing.length - 1], tile)) this.finishCliff(sketch);
-          else drawing.push(snapToCell(tile));
-        } else if (!this.grabCorner(sketch, tile, e)) {
-          const cliff = this.cliffAt(sketch, tile);
-          if (cliff) this.select(sketch, "cliff", cliff.id);
-          else {
-            this.select(null);
-            this.cliffDrawing = [snapToCell(tile)];
-          }
-        }
-        this.map.render();
-        return true;
-      },
-      move: (tile) => this.dragTo(tile, sketch),
-      up: () => this.endDrag(sketch),
-    };
-  }
-
-  finishCliff(sketch) {
-    const points = this.cliffDrawing;
-    this.cliffDrawing = null;
-    if (points.length < 2) return;
-    const cliff = { id: nextId(sketch, "c"), points };
-    sketch.cliffs.push(cliff);
-    this.select(sketch, "cliff", cliff.id);
-    this.editor.saveSketch();
-  }
-
-  // On the selected cliff: alt-click removes a corner (leaving at least two), shift-click on its
-  // line adds one, and a corner is dragged.
-  grabCorner(sketch, tile, e) {
-    const cliff = this.selected?.type === "cliff" && this.kinds.includes("cliff") ? this.find(sketch) : null;
-    if (!cliff) return false;
-    let index = cliff.points.findIndex((p) => this.editor.nearScreen(p, tile));
-    if (index >= 0 && e?.altKey) {
-      if (cliff.points.length > 2) {
-        cliff.points.splice(index, 1);
-        this.editor.saveSketch();
-      }
-      return true;
-    }
-    if (index < 0 && e?.shiftKey) {
-      const near = nearestOnStroke(cliff.points, tile);
-      if (near.dist * this.map.view.scale > HIT_PX * this.map.dpr) return false;
-      index = near.index + 1;
-      cliff.points.splice(index, 0, snapToCell(tile));
-    }
-    if (index < 0) return false;
-    this.dragging = { target: cliff.points, key: index, kind: "cliff" };
-    return true;
-  }
-
-  cliffAt(sketch, tile) {
-    return [...sketch.cliffs].reverse().find((c) => nearestOnStroke(c.points, tile).dist * this.map.view.scale < HIT_PX * this.map.dpr) ?? null;
-  }
-
-  // Reverses the selected cliff, so the ground drops on its other side.
-  flipCliff(sketch, cliff) {
-    cliff.points.reverse();
-    this.editor.saveSketch();
-  }
-
-  // The cliffs' drops as the generator works them out from the height pins: { knots, drops }
-  // (world/cliffs.js, heightField.js), kept until the pins or cliffs change.
-  cliffDrops(sketch) {
-    const pins = sketch.pins.filter((p) => p.kind === "height" && Number.isFinite(p.height));
-    const key = JSON.stringify([pins.map((p) => [p.at, p.height]), sketch.cliffs.map((c) => c.points)]);
-    if (this.drops?.key !== key) {
-      const toFt = ([x, z]) => [x * TILE_FT, z * TILE_FT];
-      const cliffs = prepareCliffs(sketch.cliffs.map((c) => ({ points: c.points.map(toFt) })), 0);
-      const at = prepareHeights(pins.map((p) => ({ x: p.at[0] * TILE_FT, z: p.at[1] * TILE_FT, height: p.height })), DEFAULT_HEIGHT_FT, cliffs);
-      this.drops = { key, knots: cliffs?.knots ?? [], drops: at.drops };
-    }
-    return this.drops;
   }
 
   endDrag(sketch) {
@@ -372,7 +265,7 @@ export class Features {
       return;
     }
     const point = snapToCell(tile);
-    if (this.dragging.kind !== "cliff" && !this.editor.onLand(point)) return;
+    if (!this.editor.onLand(point)) return;
     this.dragging.target[this.dragging.key] = point;
   }
 
@@ -404,14 +297,6 @@ export class Features {
   }
 
   onKey(e, sketch) {
-    if (this.cliffDrawing) {
-      if (e.key === "Enter") this.finishCliff(sketch);
-      else if (e.key === "Escape") this.cliffDrawing = null;
-      else if (e.key === "Backspace") this.cliffDrawing.pop();
-      else return false;
-      if (!this.cliffDrawing?.length) this.cliffDrawing = null;
-      return true;
-    }
     if ((e.key === "Delete" || e.key === "Backspace") && this.selected) {
       this.remove(sketch);
       return true;
@@ -429,7 +314,6 @@ export class Features {
   // pools when `water` is set.
   draw(ctx, sketch, { kinds, water = false }) {
     if (water) this.drawWater(ctx, sketch.watercourses);
-    if (kinds.includes("cliff")) this.drawCliffs(ctx, sketch);
     if (kinds.includes("road")) for (const path of sketch.paths) this.drawPath(ctx, sketch, path);
     for (const pin of sketch.pins) {
       if (kinds.includes(pin.kind)) this.drawPin(ctx, pin, this.isSelected(pin));
@@ -449,58 +333,6 @@ export class Features {
         ctx.fillText(`${handle.pin.radius} ft`, x + 8 * dpr, y + 4 * dpr);
       }
     }
-  }
-
-  // Every cliff, ticked down its bottom side and red where it hardly drops, the
-  // selected one with its corners, and the one being drawn.
-  drawCliffs(ctx, sketch) {
-    const dpr = this.map.dpr;
-    const { knots, drops } = sketch.cliffs.length ? this.cliffDrops(sketch) : { knots: [] };
-    sketch.cliffs.forEach((cliff, index) => {
-      const selected = this.isSelected(cliff);
-      if (selected) this.drawLine(ctx, cliff.points, 0, CLIFF.edge, 6 * dpr);
-      this.drawCliff(ctx, cliff.points, CLIFF.color);
-      // Each knot that hardly drops reddens the cliff halfway to its neighbours.
-      const own = knots.map((k, i) => ({ ...k, i })).filter((k) => k.cliff === index);
-      const line = makePolyline(cliff.points.map(([x, z]) => [x * TILE_FT, z * TILE_FT]));
-      own.forEach((k, j) => {
-        if (!drops.short[k.i]) return;
-        const from = j ? (own[j - 1].along + k.along) / 2 : 0;
-        const to = j < own.length - 1 ? (own[j + 1].along + k.along) / 2 : line.length;
-        this.drawCliff(ctx, stretch(line, from, to), CLIFF.low);
-      });
-      if (selected) for (const p of cliff.points) handle(ctx, this.map.toScreen(p), 4 * dpr, "#fff");
-    });
-    if (this.selected?.type === "cliff") this.renderCliffStatus(sketch);
-    const drawing = this.cliffDrawing;
-    if (!drawing) return;
-    const points = this.map.pointer ? [...drawing, snapToCell(this.map.pointer)] : drawing;
-    this.drawCliff(ctx, points, CLIFF.color);
-    for (const p of drawing) handle(ctx, this.map.toScreen(p), 4 * dpr, "#fff");
-  }
-
-  // A line with ticks off its right side.
-  drawCliff(ctx, points, color) {
-    const dpr = this.map.dpr;
-    const pts = points.map((p) => this.map.toScreen(p));
-    this.drawLine(ctx, points, 0, color, 2.5 * dpr, "butt");
-    ctx.beginPath();
-    let carry = CLIFF.tickPx * dpr * 0.5;
-    for (let i = 1; i < pts.length; i++) {
-      const [[ax, ay], [bx, by]] = [pts[i - 1], pts[i]];
-      const len = Math.hypot(bx - ax, by - ay);
-      if (!len) continue;
-      const [dx, dy] = [(bx - ax) / len, (by - ay) / len];
-      for (let t = carry; t < len; t += CLIFF.tickPx * dpr) {
-        const [x, y] = [ax + dx * t, ay + dy * t];
-        ctx.moveTo(x, y);
-        ctx.lineTo(x - dy * CLIFF.tickLenPx * dpr, y + dx * CLIFF.tickLenPx * dpr);
-      }
-      carry = (carry - len) % (CLIFF.tickPx * dpr);
-      if (carry < 0) carry += CLIFF.tickPx * dpr;
-    }
-    ctx.lineWidth = 1.5 * dpr;
-    ctx.stroke();
   }
 
   // The watercourses' pools and rivers.
@@ -612,12 +444,6 @@ export class Features {
       ctx.quadraticCurveTo(x - r, y, x, y - r * 1.2);
     } else if (pin.kind === "biome") {
       ctx.rect(x - r * 0.75, y - r * 0.75, r * 1.5, r * 1.5);
-    } else if (pin.kind === "height") {
-      ctx.moveTo(x, y - r);
-      ctx.lineTo(x + r, y);
-      ctx.lineTo(x, y + r);
-      ctx.lineTo(x - r, y);
-      ctx.closePath();
     } else {
       ctx.arc(x, y, r * 0.8, 0, Math.PI * 2);
     }
@@ -625,13 +451,11 @@ export class Features {
     ctx.stroke();
 
     const label =
-      pin.kind === "height"
-        ? `${pin.height ?? "?"}ft`
-        : pin.kind === "biome"
-          ? [pin.biome, ...(pin.tags ?? [])].join(" · ")
-          : pin.kind === "source"
-            ? [pin.name, `${pin.width}ft`].filter(Boolean).join(" · ")
-            : pin.name || (pin.tags ?? []).join(", ");
+      pin.kind === "biome"
+        ? [pin.biome, ...(pin.tags ?? [])].join(" · ")
+        : pin.kind === "source"
+          ? [pin.name, `${pin.width}ft`].filter(Boolean).join(" · ")
+          : pin.name || (pin.tags ?? []).join(", ");
     if (label) {
       ctx.fillStyle = "#eee";
       ctx.font = `${12 * dpr}px ui-monospace, monospace`;
@@ -651,24 +475,12 @@ export class Features {
     }
     box.hidden = false;
     const path = this.selected.type === "path";
-    const cliff = this.selected.type === "cliff";
-    const label = path ? PATH.label : cliff ? CLIFF.label : PINS[feature.kind].label;
+    const label = path ? PATH.label : PINS[feature.kind].label;
     const heading = document.createElement("h2");
     heading.textContent = `${label} · ${feature.id}`;
     box.append(heading);
-    if (cliff) {
-      this.status = { cliff: feature, el: document.createElement("p") };
-      box.append(this.status.el);
-      this.renderCliffStatus(sketch);
-      const row = document.createElement("div");
-      row.className = "editor-row";
-      row.append(button("flip side", () => this.flipCliff(sketch, feature)));
-      row.append(button("delete cliff", () => this.remove(sketch)));
-      box.append(row);
-      return;
-    }
 
-    // Height and biome settings live in the shape palette.
+    // Biome settings live in the shape palette.
     const fields = ["name"];
     if (path || feature.kind === "source") fields.push("width");
     if (feature.kind === "hub") fields.push("radius");
@@ -689,25 +501,10 @@ export class Features {
     box.append(row);
   }
 
-  // A line under a cliff's settings saying how far it drops.
-  renderCliffStatus(sketch) {
-    const { cliff, el } = this.status ?? {};
-    if (!el || !cliff) return;
-    const index = sketch.cliffs.indexOf(cliff);
-    const { knots, drops } = this.cliffDrops(sketch);
-    const own = knots.flatMap((k, i) => (k.cliff === index ? [i] : []));
-    if (!own.length) return;
-    const values = own.map((i) => Math.round(drops.values[i]));
-    const [low, high] = [Math.min(...values), Math.max(...values)];
-    const short = own.some((i) => drops.short[i]);
-    const text = `Drops ${low === high ? low : `${low} to ${high}`} ft, on the ticked side.${short ? ` Where it's red, the pins either side call for less than ${CLIFF_DROP.shortFt} ft.` : ""}`;
-    if (el.textContent !== text) el.textContent = text;
-  }
-
   // A line under a path's settings saying how its route went.
   renderStatus() {
     const { path, el } = this.status ?? {};
-    if (!el || !path) return;
+    if (!el) return;
     const cap = `${Math.round(gradeCap(path.width) * 100)}%`;
     const carts = path.width > CART_WIDTH_FT ? "it's wide enough for carts, so it's held to" : "its grade cap is";
     el.textContent = {
@@ -805,20 +602,6 @@ function closestOnSegment([ax, az], [bx, bz], [x, z]) {
   const dz = bz - az;
   const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
   return [ax + t * dx, az + t * dz];
-}
-
-// The points along a polyline (in ft) from one distance along it to another, in tile units.
-function stretch(line, from, to) {
-  const ft = [pointAt(line, from), ...line.segments.filter((s) => s.start > from && s.start < to).map((s) => [s.ax, s.az]), pointAt(line, to)];
-  return ft.map(([x, z]) => [x / TILE_FT, z / TILE_FT]);
-}
-
-function handle(ctx, [x, y], r, color) {
-  ctx.fillStyle = color;
-  ctx.strokeStyle = "#000";
-  ctx.lineWidth = 1;
-  ctx.fillRect(x - r, y - r, 2 * r, 2 * r);
-  ctx.strokeRect(x - r, y - r, 2 * r, 2 * r);
 }
 
 function lengthOf(points) {

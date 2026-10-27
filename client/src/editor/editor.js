@@ -22,6 +22,7 @@ import { ShapePreview } from "./shapePreview.js";
 import { WaterSimulator } from "./waterflow.js";
 import { ROUTE_VERSION, RoadRouter, findCrossing, gradeCap } from "./roads.js";
 import { hashString } from "../world/noise.js";
+import { LandGrid, landBounds, loadLand, saveLand } from "../world/landGrid.js";
 import { TILE_FT } from "../world/constants.js";
 import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
 
@@ -38,6 +39,10 @@ const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 const HINTS = {
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
+  noLand: "raise some land on the heights step first",
+  raise: "left-drag raises the ground under the brush · right-drag turns · middle-drag or W A S D pans · wheel or C/V zooms · Q/E turn · ctrl-z undoes a stroke, ctrl-shift-z redoes it",
+  lower: "left-drag lowers the ground under the brush · right-drag turns · middle-drag or W A S D pans · wheel or C/V zooms · Q/E turn · ctrl-z undoes a stroke, ctrl-shift-z redoes it",
+  smooth: "left-drag smooths the ground under the brush · right-drag turns · middle-drag or W A S D pans · wheel or C/V zooms · Q/E turn · ctrl-z undoes a stroke, ctrl-shift-z redoes it",
   draw: "click to add corners · click the first corner or press enter to close · backspace removes the last · esc cancels · right-drag to pan",
   region: `drag corners · shift-click an edge to add a corner · alt-click a corner to remove it · click another zone to pick it · ${NAV}`,
   ...FEATURE_HINTS,
@@ -48,17 +53,18 @@ const HINT_WALK = "W/S run · A/D turn · Q/E strafe · space jumps · / walks �
 const HINT_PICK_WALK = "click where to start walking · esc cancels";
 
 // The editor's steps, in the order you'd usually work, each with its own map and tools. Each step
-// is a layer that depends only on the ones before it: zones, then heights, then the water that runs
-// over them, then the biomes that grow along it, then the features on top. The zones step edits
-// one zone's region at a time; the rest edit the continent's sketch, the pins and paths drawn
-// anywhere on its land. `map` is what the step draws under its marks: a live preview worked out
-// from the zones (shapePreview.js), or the generated tiles.
+// is a layer that depends only on the ones before it: the land's heights, then the water that
+// runs over them, then the biomes that grow along it, then civilization on top, then the zones
+// that divide it all up. The heights step sculpts the land grid in 3d (sculptView.js); the zones
+// step edits one zone's region at a time; the rest edit the continent's sketch, the pins and paths
+// drawn anywhere on its land. `map` is what the step draws under its marks: a live preview worked
+// out from the land (shapePreview.js), or the generated tiles.
 const STEPS = {
-  zones: { tools: [], kinds: [] },
-  heights: { tools: ["select", "height", "cliff"], kinds: ["height", "cliff"], map: "heights" },
+  heights: { tools: ["raise", "lower", "smooth"], kinds: [] },
   water: { tools: ["select", "source"], kinds: ["source"], map: "heights" },
   biomes: { tools: ["select", "biome"], kinds: ["biome"], map: "biomes" },
-  features: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
+  civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
+  zones: { tools: [], kinds: [] },
   tiles: { tools: [], kinds: [], map: "tiles" },
   "3d": { tools: [], kinds: [] },
 };
@@ -84,8 +90,8 @@ export class Editor {
     this.sketch = loadSketch(world, this.continent);
     this.active = null; // the zone picked on the zones step
     this.drawing = null; // corners of a region being drawn
-    this.step = "zones";
-    this.toolName = "select";
+    this.step = "heights";
+    this.toolName = "raise";
     this.features = new Features(this);
     this.palette = new ShapePalette(this, elements);
     this.unsaved = false; // changed since the last download
@@ -122,15 +128,20 @@ export class Editor {
     this.roadAsk = null; // the latest routes asked for
     this.view3d = null; // the RenderView for walking, loaded the first time you walk
     this.overview = null; // the 3d step's Overview, loaded the first time it's opened
+    this.sculpt = null; // the heights step's SculptView, loaded the first time it's opened
+    this.land = new LandGrid(); // the continent's land grid, as it's being sculpted
+    this.landKey = null; // the land grid's hash, worked out when needed
     this.bindPanel();
     this.fillContinents();
     window.addEventListener("keydown", (e) => this.onKey(e));
     noContextMenu(elements.map.parentElement);
     keyNav((dt, move) => {
       if (this.step === "3d") this.overview?.nudge(dt, move);
+      else if (this.step === "heights") this.sculpt?.nudge(dt, move);
       else if (!this.walking) this.map.nudge(dt, move);
     });
     this.showContinent();
+    this.setStep(this.step);
   }
 
   // Whether the world changed since the last download. Setting it runs onEdit, so the world can be
@@ -179,6 +190,7 @@ export class Editor {
     this.say(notes.filter(Boolean).join(" "), { info: true });
     this.fitContinent();
     if (this.step === "3d") this.showOverview();
+    if (this.step === "heights") this.showSculpt();
   }
 
   fillContinents() {
@@ -188,11 +200,13 @@ export class Editor {
     select.value = this.continent;
   }
 
-  // Frames the continent's tiles and zones.
+  // Frames the continent's tiles, land and zones.
   fitContinent() {
+    const land = landBounds(this.land);
     const points = [
       ...surfaceTiles(this.world, this.continent).flatMap(({ tx, tz }) => [[tx, tz], [tx + 1, tz + 1]]),
       ...this.zones.flatMap((z) => rings(z.region).flatMap((r) => r.points)),
+      ...(land ? [land.slice(0, 2), land.slice(2)].map((p) => p.map((v) => v / TILE_FT)) : []),
     ];
     if (!points.length) return;
     const xs = points.map((p) => p[0]);
@@ -209,23 +223,28 @@ export class Editor {
     return this.step === "zones" ? this.activeZone : null;
   }
 
-  // The zones with a region.
-  scopeZones() {
-    return this.zones.filter((z) => z.region.length);
+  // Every tile with land above deep ocean, as a set of "tx,tz" keys.
+  landTiles() {
+    this.landTileKeys ??= this.land.tiles();
+    return this.landTileKeys;
   }
 
-  // Every tile some zone touches, as a set of "tx,tz" keys.
-  zoneTiles() {
-    this.zoneTileKeys ??= new Set(this.scopeZones().flatMap((z) => tilesTouched(z.region).map(([tx, tz]) => `${tx},${tz}`)));
-    return this.zoneTileKeys;
+  hasLand() {
+    return this.landTiles().size > 0;
   }
 
-  // Zone tiles that need generating: { stale } ones generated before a change that reaches them,
+  // The land grid's hash, kept until it changes.
+  landHash() {
+    this.landKey ??= this.land.hash();
+    return this.landKey;
+  }
+
+  // Land tiles that need generating: { stale } ones generated before a change that reaches them,
   // and { missing } ones never generated. Both are lists of "tx,tz" keys.
   outOfDate() {
     const stale = [];
     const missing = [];
-    for (const key of this.zoneTiles()) {
+    for (const key of this.landTiles()) {
       const [tx, tz] = key.split(",").map(Number);
       if (!this.world.files.has(tilePath(this.continent, tx, tz))) missing.push(key);
       else if (this.pending.has(key)) stale.push(key);
@@ -238,27 +257,29 @@ export class Editor {
     return this.zones.find((z) => z.region.length && this.inRegion(point, z)) ?? null;
   }
 
-  // Whether a point's inside some zone.
-  onLand(point) {
-    return Boolean(this.zoneAt(point));
+  // Whether a point (tile units) is on land, above sea level.
+  onLand([x, z]) {
+    return this.land.heightAt(x * TILE_FT, z * TILE_FT) >= 0;
   }
 
   // The continent as the generator takes it (generator.js prepareWorld).
   continentState() {
-    const { pins, cliffs, paths, watercourses } = this.sketch;
-    return { zones: this.scopeZones().map(({ region }) => ({ region })), pins, cliffs, paths, watercourses };
+    const { pins, paths, watercourses } = this.sketch;
+    return { land: this.land.data, pins, paths, watercourses };
   }
 
   // The continent as last stored, from the world's files.
   storedState() {
-    const { pins, cliffs, paths, watercourses } = loadSketch(this.world, this.continent);
-    return { zones: listZones(this.world, this.continent).map(({ region }) => ({ region })), pins, cliffs, paths, watercourses };
+    const { pins, paths, watercourses } = loadSketch(this.world, this.continent);
+    return { land: loadLand(this.world.files, this.continent), pins, paths, watercourses };
   }
 
   reload() {
     this.zones = listZones(this.world, this.continent);
     this.sketch = loadSketch(this.world, this.continent);
-    this.zoneTileKeys = null;
+    this.land = loadLand(this.world.files, this.continent);
+    this.landTileKeys = null;
+    this.landKey = null;
     if (!this.activeZone) this.active = null;
     this.renderPanel();
     this.renderProps();
@@ -276,12 +297,18 @@ export class Editor {
     this.store(() => saveSketch(this.world, this.continent, this.sketch));
   }
 
+  // Stores the land grid after a stroke, the same way.
+  saveLand() {
+    this.landKey = null;
+    this.store(() => saveLand(this.world.files, this.continent, this.land));
+  }
+
   store(write) {
     const before = this.storedState();
     write();
-    this.zoneTileKeys = null;
-    const zoned = this.zoneTiles();
-    for (const tile of changedTiles(before, this.storedState())) if (zoned.has(tile)) this.pending.add(tile);
+    this.landTileKeys = null;
+    const tiles = this.landTiles();
+    for (const tile of changedTiles(before, this.storedState(), tiles)) if (tiles.has(tile)) this.pending.add(tile);
     this.dirty = true;
     this.renderPanel();
     this.map.render();
@@ -294,13 +321,12 @@ export class Editor {
   // last worked out. They're kept in the sketch when they arrive, unless something's being dragged,
   // in which case they're kept when the drag ends.
   updateWater() {
-    const { zones, pins, cliffs } = this.continentState();
-    const land = { zones, pins: pins.filter((p) => p.kind === "height"), cliffs };
-    const sources = pins.filter((p) => p.kind === "source").map(({ id, at, width }) => ({ id, at, width }));
-    const key = String(hashString(JSON.stringify([land, sources, this.continent])));
+    const sources = this.sketch.pins.filter((p) => p.kind === "source").map(({ id, at, width }) => ({ id, at, width }));
+    const landKey = String(this.landHash());
+    const key = String(hashString(JSON.stringify([landKey, sources, this.continent])));
     if (key === this.waterKey) return;
     this.waterKey = key;
-    this.water.request({ key, continent: land, seedKey: this.continent, sources });
+    this.water.request({ key, landKey, continent: { land: this.land.data }, seedKey: this.continent, sources });
   }
 
   showWater(key, { rivers, pools, ends }) {
@@ -335,12 +361,11 @@ export class Editor {
   // --- roads ---
 
   // Asks for routes for the paths whose route is missing or was worked out for other pins, widths
-  // or land. The land they're routed over is the zones, height and biome pins, cliffs and
-  // watercourses.
+  // or land. The land they're routed over is the land grid, biome pins and watercourses.
   updateRoads() {
-    const { zones, pins, cliffs, watercourses } = this.continentState();
-    const land = { zones, pins: pins.filter((p) => p.kind === "height" || p.kind === "biome"), cliffs, watercourses: { rivers: watercourses.rivers, pools: watercourses.pools } };
-    this.roadLand = String(hashString(JSON.stringify([land, this.continent])));
+    const { pins, watercourses } = this.sketch;
+    const land = { land: this.land.data, pins: pins.filter((p) => p.kind === "biome"), watercourses: { rivers: watercourses.rivers, pools: watercourses.pools } };
+    this.roadLand = String(hashString(JSON.stringify([this.landHash(), land.pins, land.watercourses, this.continent])));
     const jobs = this.sketch.paths.flatMap((path) => {
       const key = this.routeKey(path);
       if (!key || path.route?.key === key) return [];
@@ -516,14 +541,16 @@ export class Editor {
     this.step = step;
     this.toolName = STEPS[step].tools[0] ?? "select";
     this.drawing = null;
-    this.features.cliffDrawing = null;
     this.features.select(null);
     this.say();
     this.renderPanel();
-    this.el.map.hidden = step === "3d";
+    this.el.map.hidden = step === "3d" || step === "heights";
     this.el.overview.hidden = step !== "3d";
+    this.el.sculpt.hidden = step !== "heights";
     if (step === "3d") this.showOverview();
     else this.overview?.hide();
+    if (step === "heights") this.showSculpt();
+    else this.sculpt?.hide();
     this.map.render();
     this.updatePreview();
   }
@@ -540,6 +567,30 @@ export class Editor {
     if (this.step === "3d") this.overview.show(this.world, this.continent, [this.map.view.x, this.map.view.z]);
   }
 
+  // The heights step: the land grid in 3d, to sculpt.
+  async showSculpt() {
+    if (!this.sculpt) {
+      const { SculptView } = await import("./sculptView.js");
+      this.sculpt = new SculptView(this.el.sculpt, {
+        onStroke: () => this.saveLand(),
+        onPointer: (hit) => (this.el.cursor.textContent = hit ? `tile ${Math.floor(hit[0] / TILE_FT)}, ${Math.floor(hit[2] / TILE_FT)} · ${Math.round(hit[1])} ft` : ""),
+      });
+      this.applyBrush();
+    }
+    if (this.step !== "heights") return;
+    this.sculpt.setLayers({ heat: this.option("heat"), contours: this.option("contours"), grid: this.option("grid") });
+    const [x, z] = [this.map.view.x * TILE_FT, this.map.view.z * TILE_FT];
+    this.sculpt.show(this.land, [x, z]);
+  }
+
+  // The brush settings from the heights step's panel.
+  applyBrush() {
+    const { brushSize, brushSizeValue, brushStrength, brushStrengthValue } = this.el;
+    brushSizeValue.textContent = `${brushSize.value} ft`;
+    brushStrengthValue.textContent = `${brushStrength.value} ft/s`;
+    this.sculpt?.setBrush({ tool: this.toolName, radius: Number(brushSize.value), strength: Number(brushStrength.value) });
+  }
+
   // The feature kinds the current step edits.
   get kinds() {
     return STEPS[this.step].kinds;
@@ -553,14 +604,14 @@ export class Editor {
   // Which of the sketch's features the map shows: the step's own, and the water on the water and
   // features steps, or on the biomes step when asked.
   markKinds() {
-    return { kinds: this.kinds, water: this.step === "water" || this.step === "features" || (this.step === "biomes" && this.option("rivers")) };
+    return { kinds: this.kinds, water: this.step === "water" || this.step === "civilization" || (this.step === "biomes" && this.option("rivers")) };
   }
 
   // --- the heights and biomes maps ---
 
   // The map drawn under the current step's marks: "heights", "biomes", or null.
   previewKind() {
-    if (this.step === "features") return this.option("heightmap") ? "heights" : null;
+    if (this.step === "civilization") return this.option("heightmap") ? "heights" : null;
     return ["heights", "biomes"].includes(STEPS[this.step].map) ? STEPS[this.step].map : null;
   }
 
@@ -608,7 +659,7 @@ export class Editor {
       this.generate(generate, [...stale, ...missing].map((k) => k.split(",").map(Number)));
     });
     regenerateAll.addEventListener("click", () => {
-      const tiles = [...this.zoneTiles()].map((k) => k.split(",").map(Number));
+      const tiles = [...this.landTiles()].map((k) => k.split(",").map(Number));
       if (window.confirm(`Regenerate all ${tiles.length} tiles? It replaces every generated tile, edits included.`)) this.generate(regenerateAll, tiles);
     });
     for (const tab of this.el.stepTabs) tab.addEventListener("click", () => this.setStep(tab.dataset.step));
@@ -617,6 +668,7 @@ export class Editor {
         input.addEventListener("change", () => {
           this.map.render();
           this.updatePreview();
+          if (this.step === "heights") this.showSculpt();
         });
       }
     }
@@ -633,6 +685,7 @@ export class Editor {
     this.el.zoomIn.addEventListener("click", () => this.map.zoom(1));
     this.el.zoomOut.addEventListener("click", () => this.map.zoom(-1));
     // Walk asks where to start; the next click on the map starts there.
+    for (const input of [this.el.brushSize, this.el.brushStrength]) input.addEventListener("input", () => this.applyBrush());
     this.el.exaggeration.addEventListener("input", () => {
       this.el.exaggerationValue.textContent = this.el.exaggeration.value;
       this.overview?.setExaggeration(Number(this.el.exaggeration.value));
@@ -725,22 +778,22 @@ export class Editor {
 
     const { stale, missing } = this.outOfDate();
     const todo = stale.length + missing.length;
-    this.el.tilesInfo.textContent = `${this.zoneTiles().size} tiles in zones · ${stale.length} out of date · ${missing.length} not generated`;
+    this.el.tilesInfo.textContent = `${this.landTiles().size} tiles with land · ${stale.length} out of date · ${missing.length} not generated`;
     this.el.generate.disabled = !todo || this.generating;
-    this.el.regenerateAll.disabled = !this.zoneTiles().size || this.generating;
+    this.el.regenerateAll.disabled = !this.landTiles().size || this.generating;
     if (!this.generating) {
       this.el.generate.textContent = todo ? `generate ${todo} tile${todo === 1 ? "" : "s"}` : "all tiles up to date";
       this.el.regenerateAll.textContent = "regenerate every tile";
     }
     for (const b of this.el.tools.flatMap((t) => [...t.children])) {
       b.classList.toggle("active", b.dataset.tool === this.toolName);
-      b.disabled = !this.scopeZones().length;
+      b.disabled = b.parentElement.dataset.tools !== "heights" && !this.hasLand();
     }
     hint.textContent = this.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : HINTS[this.mode()];
     this.el.graphicsButton.hidden = !this.walking;
     this.el.timeButton.hidden = !this.walking;
-    this.el.scaleBar.hidden = this.walking || this.step === "3d";
-    this.el.walk.hidden = this.step === "3d";
+    this.el.scaleBar.hidden = this.walking || this.step === "3d" || this.step === "heights";
+    this.el.walk.hidden = this.step === "3d" || this.step === "heights";
     this.el.walk.textContent = this.walking ? "stop walking" : this.walkPicking ? "cancel walk" : "walk";
     this.el.walk.classList.toggle("active", Boolean(this.walking || this.walkPicking));
     this.renderScale();
@@ -795,8 +848,8 @@ export class Editor {
       if (this.drawing) return "draw";
       return zone.region.length ? "region" : "empty";
     }
-    if (this.step === "tiles" || this.step === "3d") return this.step;
-    if (!this.scopeZones().length) return "empty";
+    if (this.step === "tiles" || this.step === "3d" || this.step === "heights") return this.step === "heights" ? this.toolName : this.step;
+    if (!this.hasLand()) return "noLand";
     if (ROADS[this.toolName]) return "road";
     if (PINS[this.toolName]) return "pin";
     return this.toolName;
@@ -804,7 +857,7 @@ export class Editor {
 
   setTool(name) {
     this.toolName = name;
-    this.features.cliffDrawing = null;
+    this.applyBrush();
     this.palette.render();
     this.say();
     this.renderPanel();
@@ -873,7 +926,7 @@ export class Editor {
       if (zone && this.drawing) return this.drawTool(zone);
       return this.zoneTool(zone);
     }
-    if (!this.kinds.length || !this.scopeZones().length) return null;
+    if (!this.kinds.length || !this.hasLand()) return null;
     const inner = this.features.tool(this.sketch, this.toolName, this.kinds);
     return {
       ...inner,
@@ -980,7 +1033,13 @@ export class Editor {
     }
     if (e.target.matches("input, textarea, select")) return;
     // G does what the walk button does: pick a spot to walk from, cancel that, or stop walking.
-    if (e.key.toLowerCase() === "g" && this.step !== "3d" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (this.step === "heights" && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+      e.preventDefault();
+      if (e.shiftKey) this.sculpt?.redo();
+      else this.sculpt?.undo();
+      return;
+    }
+    if (e.key.toLowerCase() === "g" && this.step !== "3d" && this.step !== "heights" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       this.el.walk.click();
       return;

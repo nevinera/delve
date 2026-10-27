@@ -42,6 +42,7 @@
       <canvas id="map" class="editor-map"></canvas>
       <canvas id="scene" class="editor-map" hidden></canvas>
       <canvas id="overview" class="editor-map" hidden></canvas>
+      <canvas id="sculpt" class="editor-map" hidden></canvas>
     </div>
   </div>
   <aside class="editor-panel">
@@ -50,43 +51,24 @@
       <select id="continent"></select>
     </section>
     <nav class="editor-step-tabs">
-      <button type="button" class="editor-step-head" data-step="zones">zones</button>
       <button type="button" class="editor-step-head" data-step="heights">heights</button>
       <button type="button" class="editor-step-head" data-step="water">water</button>
       <button type="button" class="editor-step-head" data-step="biomes">biomes</button>
-      <button type="button" class="editor-step-head" data-step="features">features</button>
+      <button type="button" class="editor-step-head" data-step="civilization">civilization</button>
+      <button type="button" class="editor-step-head" data-step="zones">zones</button>
       <button type="button" class="editor-step-head" data-step="tiles">tiles</button>
       <button type="button" class="editor-step-head" data-step="3d">3d</button>
     </nav>
     <hr class="editor-divider">
     <div class="editor-steps">
-      <section class="editor-step" data-step="zones">
-        <div class="editor-step-body">
-          <ul id="zoneList" class="editor-zones"></ul>
-          <button id="newZone" type="button">new zone</button>
-          <div id="zoneEdit" class="editor-step-body" hidden>
-            <label class="editor-field">name <input id="zoneName" type="text"></label>
-            <p id="regionInfo"></p>
-            <div class="editor-row">
-              <button id="drawRegion" type="button">draw region</button>
-              <button id="deleteZone" type="button">delete zone</button>
-            </div>
-          </div>
-          <label class="editor-check"><input type="checkbox" data-option="tiles"><span>display tiles</span></label>
-        </div>
-      </section>
       <section class="editor-step" data-step="heights">
         <div class="editor-step-body">
           <div class="editor-tools" data-tools="heights"></div>
-          <div id="heightPalette" class="editor-palette">
-            <input id="heightSlider" class="editor-vslider" type="range" min="-180" max="1000" step="1" value="0">
-            <div>
-              <strong id="heightValue"></strong>
-              <p class="editor-empty">4 miles (21,120 ft) at the top, -50 at the bottom</p>
-            </div>
-          </div>
-          <label class="editor-check"><input type="checkbox" data-option="tiles"><span>display tiles</span></label>
-          <label class="editor-check"><input type="checkbox" data-option="boundaries" checked><span>zone boundaries</span></label>
+          <label class="editor-range">brush <input id="brushSize" type="range" min="32" max="4096" step="32" value="256"><output id="brushSizeValue"></output></label>
+          <label class="editor-range">strength <input id="brushStrength" type="range" min="5" max="500" step="5" value="60"><output id="brushStrengthValue"></output></label>
+          <label class="editor-check"><input type="checkbox" data-option="heat" checked><span>heat map</span></label>
+          <label class="editor-check"><input type="checkbox" data-option="contours" checked><span>contour lines</span></label>
+          <label class="editor-check"><input type="checkbox" data-option="grid"><span>32ft grid</span></label>
         </div>
       </section>
       <section class="editor-step" data-step="water">
@@ -109,12 +91,27 @@
           <label class="editor-check"><input type="checkbox" data-option="boundaries" checked><span>zone boundaries</span></label>
         </div>
       </section>
-      <section class="editor-step" data-step="features">
+      <section class="editor-step" data-step="civilization">
         <div class="editor-step-body">
-          <div class="editor-tools" data-tools="features"></div>
+          <div class="editor-tools" data-tools="civilization"></div>
           <label class="editor-check"><input type="checkbox" data-option="heightmap"><span>display height map</span></label>
           <label class="editor-check"><input type="checkbox" data-option="tiles"><span>display tiles</span></label>
           <label class="editor-check"><input type="checkbox" data-option="boundaries" checked><span>zone boundaries</span></label>
+        </div>
+      </section>
+      <section class="editor-step" data-step="zones">
+        <div class="editor-step-body">
+          <ul id="zoneList" class="editor-zones"></ul>
+          <button id="newZone" type="button">new zone</button>
+          <div id="zoneEdit" class="editor-step-body" hidden>
+            <label class="editor-field">name <input id="zoneName" type="text"></label>
+            <p id="regionInfo"></p>
+            <div class="editor-row">
+              <button id="drawRegion" type="button">draw region</button>
+              <button id="deleteZone" type="button">delete zone</button>
+            </div>
+          </div>
+          <label class="editor-check"><input type="checkbox" data-option="tiles"><span>display tiles</span></label>
         </div>
       </section>
       <section class="editor-step" data-step="tiles">

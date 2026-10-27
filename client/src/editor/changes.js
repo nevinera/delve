@@ -1,63 +1,54 @@
-import polygonClipping from "polygon-clipping";
 import { TILE_FT } from "../world/constants.js";
-import { EDGE_REACH_FT, riverReachFt, roadReachFt } from "../world/generator.js";
+import { PER_TILE, changedPoints } from "../world/landGrid.js";
+import { riverReachFt, roadReachFt } from "../world/generator.js";
 import { RIVER_PULL_FT } from "../world/biomes.js";
 import { tilesTouched } from "./region.js";
 
 // Which tiles an edit changes, so the editor can highlight them and regenerate just those. Each
-// kind of change reaches as far as the generator lets it: a moved coast reshapes the shore around
-// it, and a river carves along its whole length, as does a road. Info pins and hubs don't touch
-// the ground yet. Every hit tile brings its neighbours along.
+// kind of change reaches as far as the generator lets it: a changed land height reshapes the
+// ground a grid point either side of it, and a river carves along its whole length, as does a
+// road. Info pins and hubs don't touch the ground yet. Every hit tile brings its neighbours along.
 //
-// Height pins and cliffs shape one surface across the continent, so a height pin or cliff change
-// marks every zoned tile. Biome borders can move anywhere a biome pin's region reaches, and zone edges bend
-// them, so when there are biome pins, any biome pin or region change does too. Rivers bend biome
-// borders only within RIVER_PULL_FT of themselves, so a changed river marks the tiles that near
-// it.
+// Biome borders can move anywhere a biome pin's region reaches, so any biome pin change marks
+// every tile with land. Rivers bend biome borders only within RIVER_PULL_FT of themselves, so a
+// changed river marks the tiles that near it.
 
 const key = (tx, tz) => `${tx},${tz}`;
 
-// Tile keys ("x,z") that differ between two versions of a continent, each { zones, pins, cliffs,
-// paths, watercourses } with zones as stored ({ region }) and the sketch's pins and watercourses.
-export function changedTiles(before, after) {
-  const tiles = new Set();
+// Tile keys ("x,z") that differ between two versions of a continent, each { land, pins, paths,
+// watercourses } with land a LandGrid (landGrid.js) and the sketch's pins and watercourses.
+// `tiles` is every tile with land, after the edit.
+export function changedTiles(before, after, tiles) {
+  const out = new Set();
   const changed = (x, y) => JSON.stringify(x) !== JSON.stringify(y);
-  const regions = (c) => c.zones.map((z) => z.region).filter((r) => r.length);
   const pinsOf = (c, kind) => c.pins.filter((p) => p.kind === kind);
   const rivers = (c) => c.watercourses?.rivers ?? [];
 
   const hasBiomes = [...before.pins, ...after.pins].some((p) => p.kind === "biome");
-  const regionsMoved = changed(regions(before), regions(after));
-  const biomesMoved = hasBiomes && (changed(pinsOf(before, "biome"), pinsOf(after, "biome")) || regionsMoved);
-  const cliffs = (c) => (c.cliffs ?? []).map((cliff) => cliff.points);
-  if (biomesMoved || changed(pinsOf(before, "height"), pinsOf(after, "height")) || changed(cliffs(before), cliffs(after))) {
-    for (const region of [...regions(before), ...regions(after)]) for (const [tx, tz] of tilesTouched(region)) addAround(tiles, tx, tz, 1);
-  }
+  if (changed(pinsOf(before, "biome"), pinsOf(after, "biome"))) for (const k of tiles) out.add(k);
 
-  if (regionsMoved) {
-    const [a, b] = [regions(before), regions(after)];
-    const moved = !a.length ? b.flat() : !b.length ? a.flat() : openRings(polygonClipping.xor(polygonClipping.union(...a), polygonClipping.union(...b)));
-    const reach = Math.ceil(EDGE_REACH_FT / TILE_FT);
-    for (const [tx, tz] of tilesTouched(moved)) addAround(tiles, tx, tz, reach);
+  // A point shapes the ground out to the next point either way.
+  for (const [gx, gz] of changedPoints(before.land, after.land)) {
+    for (const [dx, dz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) out.add(key(Math.floor((gx + dx) / PER_TILE), Math.floor((gz + dz) / PER_TILE)));
   }
 
   for (const river of unmatched(rivers(before), rivers(after))) {
-    addNearLine(tiles, river.points, Math.max(riverReachFt(river.width), hasBiomes ? RIVER_PULL_FT : 0) / TILE_FT);
+    addNearLine(out, river.points, Math.max(riverReachFt(river.width), hasBiomes ? RIVER_PULL_FT : 0) / TILE_FT);
   }
 
   // A road's tiles, where its route, width or tags changed: the old ones and the new.
   const roads = (c) => (c.paths ?? []).filter((p) => p.route?.points).map((p) => ({ points: p.route.points, width: p.width, tags: p.tags }));
-  for (const road of unmatched(roads(before), roads(after))) addNearLine(tiles, road.points, roadReachFt(road.width) / TILE_FT);
+  for (const road of unmatched(roads(before), roads(after))) addNearLine(out, road.points, roadReachFt(road.width) / TILE_FT);
 
   // A pool's rim reaches a little past its shore, well within the neighbours added below.
   const pools = (c) => c.watercourses?.pools ?? [];
-  for (const pool of unmatched(pools(before), pools(after))) for (const [tx, tz] of tilesTouched(pool.region)) tiles.add(key(tx, tz));
+  for (const pool of unmatched(pools(before), pools(after))) for (const [tx, tz] of tilesTouched(pool.region)) out.add(key(tx, tz));
 
-  for (const k of [...tiles]) {
+  for (const k of [...out]) {
     const [tx, tz] = k.split(",").map(Number);
-    addAround(tiles, tx, tz, 1);
+    addAround(out, tx, tz, 1);
   }
-  return tiles;
+  return out;
 }
 
 // The things in only one of the two lists, compared whole.
@@ -65,11 +56,6 @@ function unmatched(before, after) {
   const text = (list) => new Set(list.map((f) => JSON.stringify(f)));
   const [a, b] = [text(before), text(after)];
   return [...before.filter((f) => !b.has(JSON.stringify(f))), ...after.filter((f) => !a.has(JSON.stringify(f)))];
-}
-
-// polygon-clipping repeats each ring's first corner at the end.
-function openRings(region) {
-  return region.map((polygon) => polygon.map((ring) => ring.slice(0, -1)));
 }
 
 function addAround(tiles, tx, tz, reach) {

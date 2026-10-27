@@ -42,7 +42,7 @@ describe("zones", () => {
   });
 
   it("starts with an empty sketch", () => {
-    expect(loadSketch(World.empty(), "main")).toEqual({ version: 4, pins: [], paths: [], cliffs: [], watercourses: { key: null, rivers: [], pools: [] } });
+    expect(loadSketch(World.empty(), "main")).toEqual({ version: 4, pins: [], paths: [], watercourses: { key: null, rivers: [], pools: [] } });
   });
 
   it("moves zones' own pins into the sketch, renumbering clashes and dropping their lines", () => {

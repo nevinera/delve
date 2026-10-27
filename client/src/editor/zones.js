@@ -65,16 +65,15 @@ export function sketchPath(continent) {
   return `places/continents/${continent}/sketch.json`;
 }
 
-// The continent's pins, cliffs, paths and watercourses: { version, pins, cliffs, paths,
-// watercourses }. Cliffs are { id, points } (world/cliffs.js), the ground dropping to the right of
-// the way they run. Paths are
+// The continent's pins, paths and watercourses: { version, pins, paths, watercourses }. Paths are
 // { id, from, to, width, route, ... }, from and to the ids of road pins, and route { key, points,
 // lengthFt, grade } (roads.js), key saying what it was worked out from. Watercourses are { key,
 // rivers, pools } (waterflow.js simulateWater), the same way.
 export function loadSketch(world, continent) {
   const sketch = world.readJson(sketchPath(continent)) ?? { version: SKETCH_VERSION, pins: [], paths: [] };
   sketch.paths ??= [];
-  sketch.cliffs ??= [];
+  // Height pins shaped the land before the land grid; the grid's sculpted from scratch.
+  sketch.pins = sketch.pins.filter((p) => p.kind !== "height");
   sketch.watercourses ??= { key: null, rivers: [], pools: [] };
   return sketch;
 }
