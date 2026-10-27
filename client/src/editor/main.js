@@ -82,6 +82,7 @@ const editor = new Editor(World.empty(), {
   sourceFree: $("sourceFree"),
   sourceRemove: $("sourceRemove"),
   placeType: $("placeType"),
+  buildObject: $("buildObject"),
   placeScale: $("placeScale"),
   placeScaleValue: $("placeScaleValue"),
   objectPanel: $("objectPanel"),

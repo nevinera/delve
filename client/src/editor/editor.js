@@ -28,6 +28,7 @@ import { BLENDS, EROSIONS, SHAPES, TOOLS as SCULPT_TOOLS } from "./sculptTools.j
 import { DETAIL_TOOLS } from "./detailTools.js";
 import { TRAIL_KINDS, TRAIL_STATES } from "./detailTrails.js";
 import { OBJECT_TYPES } from "../world/objects.js";
+import { emptyObject, objectPath } from "../world/builtObjects.js";
 import { encodeTile } from "../world/tileCodec.js";
 import { gzipSync } from "fflate";
 import { CELL_FT, TILE_FT } from "../world/constants.js";
@@ -732,6 +733,22 @@ export class Editor {
     });
   }
 
+  // Opens the object builder (objectBuilder.js) on a built object.
+  async buildObject(object) {
+    this.builderLoading ??= import("./objectBuilder.js").then(({ ObjectBuilder }) => {
+      this.builder = new ObjectBuilder({ onSave: (saved) => this.saveBuiltObject(saved) });
+    });
+    await this.builderLoading;
+    this.builder.open(object);
+  }
+
+  // Keeps a built object in the world.
+  saveBuiltObject(object) {
+    this.world.writeJson(objectPath(object.id), object);
+    this.dirty = true;
+    this.say(`Saved ${object.name}.`, { info: true });
+  }
+
   // The detail step's picked object in the panel, or none.
   showObject(object) {
     const { objectPanel, objectInfo, objectYaw, objectYawValue, objectScale, objectScaleValue } = this.el;
@@ -994,6 +1011,7 @@ export class Editor {
       input.addEventListener("change", () => this.detail?.endEdit());
     }
     this.el.objectDelete.addEventListener("click", () => this.detail?.deleteSelected());
+    this.el.buildObject.addEventListener("click", () => this.buildObject(emptyObject()));
     this.el.pickedFlow.addEventListener("input", () => (this.el.pickedFlowValue.textContent = this.el.pickedFlow.value));
     this.el.pickedFlow.addEventListener("change", () => this.detail?.changeSource({ flow: Number(this.el.pickedFlow.value) }));
     this.el.sourceFree.addEventListener("click", () => this.detail?.changeSource({ free: true }));

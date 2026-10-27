@@ -210,6 +210,7 @@ export class DetailView {
       view.addTrees(view.decoded.get(key));
       view.addObjects(view.decoded.get(key));
     }
+    view.materials();
     view.buildOcean(keys);
     this.drawFrame();
     this.drawSources();

@@ -42,7 +42,8 @@ const PRIMITIVES = {
 };
 
 const unit = new Map();
-function primitive(type) {
+// A type's primitive filling a unit box, shared: clone it to change it.
+export function primitive(type) {
   if (!unit.has(type)) {
     const g = PRIMITIVES[type]();
     unit.set(type, g.index ? g.toNonIndexed() : g);
