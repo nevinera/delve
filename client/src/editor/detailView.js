@@ -40,6 +40,9 @@ const SOURCE_PICK_FT = 12; // how near a click picks a source
 const DRAWN = new Set(["trails", "channel"]); // tools that draw a line
 const TRAIL_STEP_FT = 16; // between the points a drawn trail keeps
 const UNDO_KEEP = 50;
+// Held-key moves (keyNav.js): panning by this share of the camera's distance a second, zooming and
+// turning (radians) this fast, the camera kept between these distances.
+const KEYS = { pan: 0.8, zoom: 1.5, turn: 1.5, nearFt: 10, farFt: 20000 };
 const MAX_DT = 0.1;
 
 export class DetailView {
@@ -345,6 +348,22 @@ export class DetailView {
     this.changed(entry[side].keys());
     this.drawSources();
     this.onEdit?.([...entry[side].keys()]);
+  }
+
+  // Held-key moves from keyNav.js: W A S D pan across the ground, C and V zoom, Q and E turn.
+  nudge(dt, { x, z, zoom, turn }) {
+    const { camera, controls } = this.view;
+    const { target } = controls;
+    const offset = camera.position.clone().sub(target);
+    const distance = offset.length();
+    const forward = new THREE.Vector3(-offset.x, 0, -offset.z).normalize();
+    const right = new THREE.Vector3(-forward.z, 0, forward.x);
+    target.add(forward.multiplyScalar(-z).add(right.multiplyScalar(x)).multiplyScalar(distance * KEYS.pan * dt));
+    if (turn) offset.applyAxisAngle(new THREE.Vector3(0, 1, 0), turn * KEYS.turn * dt);
+    if (zoom) offset.multiplyScalar(THREE.MathUtils.clamp(distance * Math.exp(-zoom * KEYS.zoom * dt), KEYS.nearFt, KEYS.farFt) / distance);
+    camera.position.copy(target).add(offset);
+    controls.update();
+    if (this.pointer) this.hover(this.groundAt(this.pointer));
   }
 
   // --- water ---

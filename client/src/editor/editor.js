@@ -50,7 +50,7 @@ const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 // Steps drawn in 3d instead of on the map.
 const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
-  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it; water runs along a channel the way it was drawn) · with water, click to place a source or pick one · with objects, click one to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · the arrows off the window's sides move the window a strip that way · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
+  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it; water runs along a channel the way it was drawn) · with water, click to place a source or pick one · with objects, click one to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
@@ -155,6 +155,8 @@ export class Editor {
     keyNav((dt, move) => {
       if (this.step === "3d") this.overview?.nudge(dt, move);
       else if (this.step === "heights") this.sculpt?.nudge(dt, move);
+      // Q and E turn a picked object instead (detailKey).
+      else if (this.step === "detail") this.detail?.nudge(dt, this.detail.selected ? { ...move, turn: 0 } : move);
       else if (!this.walking) this.map.nudge(dt, move);
     });
     this.showContinent();
@@ -1550,7 +1552,7 @@ export class Editor {
       e.preventDefault();
       return;
     }
-    if (e.key.toLowerCase() === "g" && this.step !== "3d" && this.step !== "heights" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
+    if (e.key.toLowerCase() === "g" && !IN_3D.has(this.step) && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
       e.preventDefault();
       this.el.walk.click();
       return;
