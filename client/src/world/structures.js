@@ -24,7 +24,15 @@ import { MAX_PARAMS, newObjectId } from "./builtObjects.js";
 //   may have an opening
 //   ("door" or "window") from `sill` feet up to `top` feet up (a door's sill is 0); faces are the
 //   images on its two faces, [north or west, south or east], each an image id or null.
-// - components: structural pieces snapped to the grid (COMPONENTS), each { type, level, ... }.
+// - components: structural pieces snapped to the grid (COMPONENTS), each { type, level, material,
+//   ... }: material, one of its materials, defaults to its floor's. Flights (stairs and ramps) and
+//   spans start at cell `at` and run `run` cells toward `facing` (0 to 3: north, east, south,
+//   west), `width` cells wide to the right of that. A flight climbs `rise` feet, a storey unless
+//   said; a span is a level deck, with railings down its sides unless `rails` is false. A railing
+//   runs along `edges`. A roof covers `size` [w, d] cells from `at`, on top of its storey's walls:
+//   `shape` is one of ROOF_SHAPES, `pitch` its rise over run, `overhangFt` how far it reaches past
+//   its cells; a gable or hip's ridge runs along `ridge` ("x" or "z"), and a lean-to slopes down
+//   toward `facing`; `ends` is the material of a gable's end walls, its walls' if absent.
 // - objects: library objects placed in it, each { type, at: [x, y, z] feet from the anchor's
 //   base, yaw, scale, colors, texts }, as world objects are.
 // - walk: the walk data, baked by bakeWalk on save (see there); readers bake it again.
@@ -37,6 +45,8 @@ export const WALL_FT = { least: 0.25, most: 4 };
 export const FOUNDATIONS = ["plinth", "posts", "stilts"];
 export const FLOOR_FT = 0.5; // how thick floors are, under their level's height
 export const OPENINGS = ["door", "window"];
+export const ROOF_SHAPES = ["gable", "hip", "lean-to", "flat"];
+export const ROOF = { pitch: { least: 0, most: 3 }, overhangFt: { least: 0, most: 4 } };
 export const STRUCTURE_PREFIX = "structure:";
 export const structurePath = (id) => `structures/${id}.json`;
 
@@ -78,8 +88,9 @@ export function emptyStructure(name = "new structure", random = Math.random) {
 // --- components ---
 
 // Each component type: what it needs, checked by `problems` (a list of messages), and how it
-// walks, `walk(component, structure)`: { cells: { key: [heights] }, edges: { key: kind } } for its
-// level. Heights are feet above the structure's base at a cell's corners, in WALK_CORNERS order.
+// walks, `walk(component, structure)`: { cells: { key: [heights] }, edges: { key: kind }, level }
+// for its level (its own, unless it says). Heights are feet above the structure's base at a cell's
+// corners, in WALK_CORNERS order.
 const inCells = (x, z) => Number.isInteger(x) && Number.isInteger(z) && Math.abs(x + 0.5) < REACH_CELLS && Math.abs(z + 0.5) < REACH_CELLS;
 const isCount = (n, most = REACH_CELLS * 2) => Number.isInteger(n) && n >= 1 && n <= most;
 
@@ -104,12 +115,65 @@ function flight({ level, at, facing, run, width = 1, rise }, structure) {
   return { cells, edges: {} };
 }
 
-const flightProblems = (c) => [
+const runProblems = (c) => [
   ...(Array.isArray(c.at) && inCells(...c.at) ? [] : ["needs a cell to start from"]),
   ...([0, 1, 2, 3].includes(c.facing) ? [] : ["should face 0 to 3 (north, east, south, west)"]),
   ...(isCount(c.run) ? [] : ["needs a run of whole cells"]),
   ...(c.width === undefined || isCount(c.width) ? [] : ["needs a width of whole cells"]),
-  ...(c.rise === undefined || (c.rise > 0 && c.rise <= STOREY_FT.most * 2) ? [] : ["needs a rise in feet"]),
+];
+const flightProblems = (c) => [...runProblems(c), ...(c.rise === undefined || (c.rise > 0 && c.rise <= STOREY_FT.most * 2) ? [] : ["needs a rise in feet"])];
+
+// A span: a level deck along its run, railed down both sides unless `rails` is false.
+function span(c, structure) {
+  const { cells } = flight({ ...c, rise: 0 }, structure);
+  const edges = {};
+  if (c.rails !== false) {
+    const width = c.width ?? 1;
+    const [fx, fz] = STEPS[c.facing];
+    const [rx, rz] = STEPS[(c.facing + 1) % 4];
+    for (let i = 0; i < c.run; i++) {
+      edges[edgeToward(c.at[0] + fx * i, c.at[1] + fz * i, (c.facing + 3) % 4)] = "railing";
+      edges[edgeToward(c.at[0] + fx * i + rx * (width - 1), c.at[1] + fz * i + rz * (width - 1), (c.facing + 1) % 4)] = "railing";
+    }
+  }
+  return { cells, edges };
+}
+
+// How high a roof's top is over a point (x, z, in feet from the anchor), in feet above the base:
+// its storey's top at the edges of its cells, rising with its pitch, and lower out over the
+// overhang.
+export function roofHeight(c, structure) {
+  const top = (c.level + 1) * structure.storeyFt;
+  const [x0, z0] = c.at.map((v) => v * CELL_FT);
+  const [x1, z1] = [x0 + c.size[0] * CELL_FT, z0 + c.size[1] * CELL_FT];
+  const inward = {
+    flat: () => 0,
+    "lean-to": (x, z) => [z - z0, x1 - x, z1 - z, x - x0][c.facing],
+    gable: (x, z) => (c.ridge === "z" ? Math.min(x - x0, x1 - x) : Math.min(z - z0, z1 - z)),
+    hip: (x, z) => Math.min(x - x0, x1 - x, z - z0, z1 - z),
+  }[c.shape];
+  return (x, z) => top + c.pitch * inward(x, z);
+}
+
+// A roof walks on the level above its storey, where its cells' corners are as high as its top.
+function roof(c, structure) {
+  const height = roofHeight(c, structure);
+  const cells = {};
+  for (let i = 0; i < c.size[0]; i++) {
+    for (let j = 0; j < c.size[1]; j++) {
+      const [x, z] = [c.at[0] + i, c.at[1] + j];
+      cells[cellKey(x, z)] = WALK_CORNERS.map(([cx, cz]) => round(height((x + cx) * CELL_FT, (z + cz) * CELL_FT)));
+    }
+  }
+  return { cells, edges: {}, level: c.level + 1 };
+}
+
+const roofProblems = (c) => [
+  ...(Array.isArray(c.at) && inCells(...c.at) && Array.isArray(c.size) && c.size.every((n) => isCount(n)) && inCells(c.at[0] + c.size[0] - 1, c.at[1] + c.size[1] - 1) ? [] : ["needs a cell to start from and a size in whole cells, within reach"]),
+  ...(ROOF_SHAPES.includes(c.shape) ? [] : [`should be one of ${ROOF_SHAPES.join(", ")}`]),
+  ...(c.pitch >= ROOF.pitch.least && c.pitch <= ROOF.pitch.most ? [] : [`needs a pitch from ${ROOF.pitch.least} to ${ROOF.pitch.most}`]),
+  ...(c.overhangFt >= ROOF.overhangFt.least && c.overhangFt <= ROOF.overhangFt.most ? [] : [`needs an overhang from ${ROOF.overhangFt.least} to ${ROOF.overhangFt.most} ft`]),
+  ...((c.shape === "lean-to" ? [0, 1, 2, 3].includes(c.facing) : c.shape === "flat" || ["x", "z"].includes(c.ridge)) ? [] : ["needs a ridge (x or z), or for a lean-to a way down (0 to 3)"]),
 ];
 
 export const COMPONENTS = {
@@ -121,6 +185,8 @@ export const COMPONENTS = {
     problems: (c) => (Array.isArray(c.edges) && c.edges.length && c.edges.every(isEdge) ? [] : ["needs edges to run along"]),
     walk: (c) => ({ cells: {}, edges: Object.fromEntries(c.edges.map((e) => [e, "railing"])) }),
   },
+  span: { problems: (c) => [...runProblems(c), ...(c.rails === undefined || typeof c.rails === "boolean" ? [] : ["should be railed or not"])], walk: span },
+  roof: { problems: roofProblems, walk: roof },
 };
 
 // --- checking ---
@@ -169,6 +235,7 @@ export function problems(structure) {
     if (!kind) return out.push(`${name} is an unknown type, ${JSON.stringify(c.type)}`);
     if (!levels.includes(c.level)) out.push(`${name} is on level ${c.level}, which has no storey`);
     for (const message of kind.problems(c)) out.push(`${name} (${c.type}) ${message}`);
+    for (const key of ["material", "ends"]) if (c[key] !== undefined && !s.materials[c[key]]) out.push(`${name} (${c.type}) is made of an unknown material, ${JSON.stringify(c[key])}`);
   });
   s.objects.forEach((o, n) => {
     if (!(typeof o.type === "string" && Array.isArray(o.at) && o.at.length === 3 && o.at.every(Number.isFinite) && Number.isFinite(o.yaw) && o.scale > 0)) out.push(`object ${n + 1} needs a type, where (x, y, z), a yaw and a scale`);
@@ -199,20 +266,27 @@ const edgeWalk = (edge) => edge.opening ?? "wall";
 // "railing"; open edges are left out. cut lists the cells where a storey below ground opens up
 // past ground level, where the ground has to be cut away.
 export function bakeWalk(structure) {
-  const storeys = [...structure.storeys]
-    .sort((a, b) => a.level - b.level)
-    .map((storey) => {
-      const height = storey.level * structure.storeyFt;
-      const cells = Object.fromEntries(storey.floor.map((key) => [key, [height, height, height, height]]));
-      const edges = Object.fromEntries(Object.entries(storey.edges ?? {}).map(([key, edge]) => [key, edgeWalk(edge)]));
-      for (const c of structure.components) {
-        if (c.level !== storey.level) continue;
-        const walk = COMPONENTS[c.type].walk(c, structure);
-        Object.assign(cells, walk.cells);
-        Object.assign(edges, walk.edges);
-      }
-      return { level: storey.level, cells, edges };
-    });
+  const levels = new Map(); // level -> { cells, edges }
+  const at = (level) => {
+    if (!levels.has(level)) levels.set(level, { level, cells: {}, edges: {} });
+    return levels.get(level);
+  };
+  for (const storey of structure.storeys) {
+    const height = storey.level * structure.storeyFt;
+    const { cells, edges } = at(storey.level);
+    for (const key of storey.floor) cells[key] = [height, height, height, height];
+    for (const [key, edge] of Object.entries(storey.edges ?? {})) edges[key] = edgeWalk(edge);
+  }
+  // Components after floors, so a flight replaces the floor it stands on; a roof under a floor
+  // above it gives way.
+  for (const c of structure.components) {
+    const walk = COMPONENTS[c.type].walk(c, structure);
+    const { cells, edges } = at(walk.level ?? c.level);
+    const floor = new Set(structure.storeys.find((s) => s.level === walk.level)?.floor ?? []);
+    for (const [key, heights] of Object.entries(walk.cells)) if (!floor.has(key)) cells[key] = heights;
+    Object.assign(edges, walk.edges);
+  }
+  const storeys = [...levels.values()].sort((a, b) => a.level - b.level);
   // Below ground, a cell opens to the sky unless some storey above it, up to the ground floor, has
   // a floor there.
   const covered = new Set();
@@ -220,8 +294,7 @@ export function bakeWalk(structure) {
   for (const storey of [...storeys].reverse()) {
     if (storey.level > 0) continue;
     if (storey.level < 0) for (const key of Object.keys(storey.cells)) if (!covered.has(key)) cut.add(key);
-    const floor = structure.storeys.find((s) => s.level === storey.level).floor;
-    for (const key of floor) covered.add(key);
+    for (const key of structure.storeys.find((s) => s.level === storey.level)?.floor ?? []) covered.add(key);
   }
   return { storeys, cut: [...cut].sort() };
 }

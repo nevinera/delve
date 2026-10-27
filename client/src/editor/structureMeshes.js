@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { paletteColors } from "../world/builtObjects.js";
-import { CELL_FT, COMPONENTS, FLOOR_FT, parseCell } from "../world/structures.js";
+import { CELL_FT, COMPONENTS, FLOOR_FT, parseCell, roofHeight } from "../world/structures.js";
 import { builtMaterial } from "./builtMeshes.js";
 
 // Structures (world/structures.js) as meshes: floors as slabs under their level's height, walls as
@@ -13,6 +13,7 @@ const OPENING_FT = 3; // how wide doors and windows are
 const STEP_FT = 0.75; // about how tall a stair's steps are
 const RAIL = { heightFt: 3, thicknessFt: 0.3, postFt: 0.35 };
 const POST_FT = { posts: 0.6, stilts: 0.35 };
+const ROOF_FT = 0.4; // how thick roofs are
 const DIRECTIONS = [
   [0, -1],
   [1, 0],
@@ -27,7 +28,9 @@ function box(min, max, color) {
   return colored(g, color);
 }
 
-function colored(g, color) {
+// Every part is unindexed, so roofs (built from triangles) merge with boxes.
+function colored(geometry, color) {
+  const g = geometry.index ? geometry.toNonIndexed() : geometry;
   g.deleteAttribute("uv");
   const rgb = new Float32Array(g.attributes.position.count * 3);
   for (let i = 0; i < rgb.length; i += 3) rgb.set([color.r, color.g, color.b], i);
@@ -98,7 +101,98 @@ function railing(c, structure, color) {
   return parts;
 }
 
-const DRAW = { stairs: flight, ramp: flight, railing };
+// A span's deck, and its railings.
+function span(c, structure, color) {
+  const deck = flight({ ...c, type: "ramp", rise: 0 }, structure, color);
+  const edges = Object.keys(COMPONENTS.span.walk(c, structure).edges);
+  return [...deck, ...railing({ ...c, edges }, structure, color)];
+}
+
+// Triangles as a colored geometry: [[a, b, c], ...] of [x, y, z] points.
+function triangles(list, color) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(list.flat(2), 3));
+  g.computeVertexNormals();
+  return colored(g, color);
+}
+
+// A roof: its top over its cells and overhang, a slab ROOF_FT thick, and the walls filling up
+// from its storey's top to its slopes along its cells' sides (a gable's ends, a lean-to's high
+// side).
+function roof(c, structure, color, endColor, endThickness) {
+  const height = roofHeight(c, structure);
+  const o = c.overhangFt;
+  const [x0, z0] = c.at.map((v) => v * CELL_FT);
+  const [x1, z1] = [x0 + c.size[0] * CELL_FT, z0 + c.size[1] * CELL_FT];
+  const [w, d] = [x1 - x0, z1 - z0];
+  // Where the slopes change: the ridge, and a hip's corners.
+  const xs = [x0 - o, x1 + o];
+  const zs = [z0 - o, z1 + o];
+  if (c.shape === "gable") (c.ridge === "z" ? xs : zs).push(c.ridge === "z" ? (x0 + x1) / 2 : (z0 + z1) / 2);
+  if (c.shape === "hip") {
+    if (w >= d) xs.push(x0 + d / 2, x1 - d / 2), zs.push((z0 + z1) / 2);
+    else zs.push(z0 + w / 2, z1 - w / 2), xs.push((x0 + x1) / 2);
+  }
+  const sorted = (list) => [...new Set(list.map((v) => Math.round(v * 1000) / 1000))].sort((a, b) => a - b);
+  const [gx, gz] = [sorted(xs), sorted(zs)];
+  const top = (x, z, drop = 0) => [x, height(x, z) - drop, z];
+  const faces = [];
+  for (let i = 0; i + 1 < gx.length; i++) {
+    for (let j = 0; j + 1 < gz.length; j++) {
+      const [xa, xb, za, zb] = [gx[i], gx[i + 1], gz[j], gz[j + 1]];
+      // Split along whichever diagonal the roof bends along, so each triangle lies in one slope.
+      const middle = height((xa + xb) / 2, (za + zb) / 2);
+      const across = Math.abs((height(xa, za) + height(xb, zb)) / 2 - middle) < 1e-6;
+      const quad = across
+        ? [
+            [[xa, za], [xa, zb], [xb, zb]],
+            [[xa, za], [xb, zb], [xb, za]],
+          ]
+        : [
+            [[xa, za], [xa, zb], [xb, za]],
+            [[xa, zb], [xb, zb], [xb, za]],
+          ];
+      for (const tri of quad) {
+        faces.push(tri.map(([x, z]) => top(x, z)));
+        faces.push([...tri].reverse().map(([x, z]) => top(x, z, ROOF_FT)));
+      }
+    }
+  }
+  // Its edges, top to bottom, facing out.
+  const ring = [...gx.map((x) => [x, gz[0]]), ...gz.slice(1).map((z) => [gx.at(-1), z]), ...[...gx].reverse().slice(1).map((x) => [x, gz.at(-1)]), ...[...gz].reverse().slice(1).map((z) => [gx[0], z])];
+  for (let k = 0; k + 1 < ring.length; k++) {
+    const [[ax, az], [bx, bz]] = [ring[k], ring[k + 1]];
+    faces.push([top(ax, az), top(bx, bz, ROOF_FT), top(bx, bz)], [top(ax, az), top(ax, az, ROOF_FT), top(bx, bz, ROOF_FT)]);
+  }
+  const parts = [triangles(faces, color)];
+  // The walls up to the slopes, along each side of its cells, a slab per stretch between breaks.
+  const base = (c.level + 1) * structure.storeyFt;
+  const t = endThickness / 2;
+  const sides = [
+    [gx.filter((x) => x >= x0 && x <= x1), (x) => [x, z0], "x"],
+    [gx.filter((x) => x >= x0 && x <= x1), (x) => [x, z1], "x"],
+    [gz.filter((z) => z >= z0 && z <= z1), (z) => [x0, z], "z"],
+    [gz.filter((z) => z >= z0 && z <= z1), (z) => [x1, z], "z"],
+  ];
+  for (const [stops, at, axis] of sides) {
+    for (let k = 0; k + 1 < stops.length; k++) {
+      const [[ax, az], [bx, bz]] = [at(stops[k]), at(stops[k + 1])];
+      const [ha, hb] = [height(ax, az), height(bx, bz)];
+      if (Math.max(ha, hb) - base < 0.01) continue;
+      const slab = axis === "x" ? box([ax, base - FLOOR_FT, az - t], [bx, Math.max(ha, hb), az + t], endColor) : box([ax - t, base - FLOOR_FT, az], [ax + t, Math.max(ha, hb), bz], endColor);
+      const p = slab.attributes.position;
+      for (let i = 0; i < p.count; i++) {
+        if (p.getY(i) <= base) continue;
+        const along = axis === "x" ? (p.getX(i) - ax) / (bx - ax) : (p.getZ(i) - az) / (bz - az);
+        p.setY(i, ha + (hb - ha) * along - ROOF_FT / 2);
+      }
+      parts.push(slab);
+    }
+  }
+  return parts;
+}
+
+const DRAW = { stairs: flight, ramp: flight, railing, span };
 
 // The foundation under the ground floor, reaching `depthFt` below the base.
 function foundation(structure, cells, depthFt, color) {
@@ -127,7 +221,14 @@ export function structureGeometries(structure, { params, depthFt = 2 } = {}) {
       const material = structure.materials[edge.material];
       if (material) parts.push(...wall(key, edge, material.thicknessFt, height - FLOOR_FT, height + structure.storeyFt, height, colorOf(edge.material)));
     }
-    for (const c of structure.components) if (c.level === storey.level && DRAW[c.type] && COMPONENTS[c.type]) parts.push(...DRAW[c.type](c, structure, colorOf(c.material ?? structure.floor)));
+    for (const c of structure.components) {
+      if (c.level !== storey.level) continue;
+      const color = colorOf(c.material ?? structure.floor);
+      if (c.type === "roof") {
+        const ends = c.ends ?? Object.values(storey.edges)[0]?.material ?? structure.floor;
+        parts.push(...roof(c, structure, color, colorOf(ends), structure.materials[ends]?.thicknessFt ?? 1));
+      } else if (DRAW[c.type]) parts.push(...DRAW[c.type](c, structure, color));
+    }
     if (storey.level === 0 && cells.length) parts.push(...foundation(structure, cells, depthFt, colorOf(structure.foundation.material)));
     if (!parts.length) continue;
     const merged = mergeGeometries(parts);

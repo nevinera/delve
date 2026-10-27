@@ -77,6 +77,29 @@ describe("structures", () => {
     expect(cells["2,0"]).toEqual([8, 12, 12, 8]);
   });
 
+  it("walks roofs on the level above, and spans as railed decks", () => {
+    const s = emptyStructure();
+    s.storeys[0].floor = ["0,0", "1,0", "0,1", "1,1"];
+    s.components.push({ type: "roof", level: 0, at: [0, 0], size: [2, 2], shape: "gable", ridge: "x", pitch: 0.5, overhangFt: 1 });
+    s.components.push({ type: "span", level: 0, at: [5, 0], facing: 2, run: 3, width: 2 });
+    expect(problems(s)).toEqual([]);
+    const [ground, above] = bakeWalk(s).storeys;
+    expect(above.level).toBe(1);
+    // The ridge runs east-west over the middle: 4 ft in from the eaves at half pitch, 2 ft up.
+    expect(above.cells["0,0"]).toEqual([10, 10, 12, 12]);
+    expect(above.cells["1,1"]).toEqual([12, 12, 10, 10]);
+    // Running south, its width spreads west, the way a southward walker's right hand points.
+    expect(ground.cells["4,2"]).toEqual([0, 0, 0, 0]);
+    expect(ground.edges).toMatchObject({ "6,0,w": "railing", "6,2,w": "railing", "4,1,w": "railing" });
+    s.components[0].shape = "lean-to";
+    s.components[0].facing = 1;
+    expect(problems(s)).toEqual([]);
+    // Low on the east: 8 ft across at half pitch.
+    expect(bakeWalk(s).storeys[1].cells["0,0"]).toEqual([14, 12, 12, 14]);
+    s.components[0].material = "gold";
+    expect(problems(s)).toEqual(['component 1 (roof) is made of an unknown material, "gold"']);
+  });
+
   it("turns cells and edges by quarter turns, as yaw does", () => {
     // A quarter turn takes east to north.
     expect(turnCell(0, 0, 1).cell).toEqual([0, -1]);

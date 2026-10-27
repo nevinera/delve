@@ -847,3 +847,24 @@
 .sb-material > span:first-of-type {
   flex: 1;
 }
+
+.sb-components {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.sb-component {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  border: 1px solid #3a3a3a;
+  border-radius: 4px;
+}
+
+.sb-component-type {
+  flex-basis: 100%;
+  color: #aaa;
+}

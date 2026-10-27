@@ -1,14 +1,17 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { MAX_PARAMS, addColor } from "../world/builtObjects.js";
-import { CELL_FT, FOUNDATIONS, LEVELS, REACH_CELLS, STOREY_FT, WALL_FT, cellKey, edgeKey, parseCell, problems, withWalk } from "../world/structures.js";
+import { CELL_FT, COMPONENTS, FOUNDATIONS, LEVELS, REACH_CELLS, ROOF, ROOF_SHAPES, STOREY_FT, WALL_FT, cellKey, edgeKey, parseCell, problems, withWalk } from "../world/structures.js";
 import { disposeStructureGroup, structureGroup } from "./structureMeshes.js";
 
 // The structure builder: a dialog over most of the page for laying out a structure
 // (world/structures.js) on its grid, storey by storey. Pick a storey, then draw on its grid: floor
 // fills the rectangle of cells you drag across; wall, door and window set the edges along a
 // straight line from where you start, across or down the grid, whichever way you drag further.
-// Holding shift erases. The storeys above the one you're on fade. The panel sets the
+// Holding shift erases. The component tools draw the same ways: stairs, ramps and spans run from
+// the cell you start on toward where you drag (a click alone makes a short one going north);
+// railings follow a line of edges; a roof covers a rectangle. Shift-dragging over one takes it
+// away. The panel lists the storey's components, to change their settings. The storeys above the one you're on fade. The panel sets the
 // storey height, the materials (each a palette color and a wall thickness), what floors and the
 // foundation are made of, and how tall doors and windows are.
 //
@@ -18,13 +21,19 @@ import { disposeStructureGroup, structureGroup } from "./structureMeshes.js";
 // Right-drag turns the view, middle-drag pans and the wheel zooms, as in the object builder.
 
 const UNDO_KEEP = 100;
-const TOOLS = ["floor", "wall", "door", "window"];
-const KEYS = { 1: "floor", 2: "wall", 3: "door", 4: "window" };
+const TOOLS = ["floor", "wall", "door", "window", "stairs", "ramp", "railing", "roof", "span"];
+const KEYS = Object.fromEntries(TOOLS.map((tool, i) => [String(i + 1), tool]));
+// Tools that draw on edges, not cells.
+const EDGE_TOOLS = new Set(["wall", "door", "window", "railing"]);
+// How many cells a component made with a click alone runs.
+const CLICK_RUN = { stairs: 3, ramp: 3, span: 1 };
+const NEW_ROOF = { shape: "gable", pitch: 0.75, overhangFt: 1 };
+const FACINGS = ["north", "east", "south", "west"];
 const OPENING_START = { door: { sill: 0, top: 8 }, window: { sill: 3, top: 6 } };
 const FADED = 0.15; // how much of the storeys above the current one shows
 const NEW_MATERIAL = { color: "#a0a0a0", thicknessFt: 1 };
 const COLORS = { grid: 0x626a58, gridMajor: 0x9aa48c, ground: 0x4a5040, background: 0x20242a, hover: 0xffe066, erase: 0xff6060 };
-const HINT = "1 floor, 2 wall, 3 door, 4 window · drag to draw, shift-drag erases · page up and down change storey · F frames it · right-drag turns the view · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes";
+const HINT = "1-9 pick a tool · drag to draw, shift-drag erases · page up and down change storey · F frames it · right-drag turns the view · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes";
 
 function el(tag, props = {}, ...children) {
   const node = Object.assign(document.createElement(tag), props);
@@ -111,6 +120,7 @@ export class StructureBuilder {
     );
 
     this.toolButtons = TOOLS.map((tool, i) => button(tool, () => this.setTool(tool), `${i + 1}`));
+    this.width = el("input", { type: "number", min: 1, max: 8, step: 1, value: 1, title: "how many cells wide new stairs, ramps and spans are" });
     this.wallMaterial = el("select", { title: "what new walls are made of", onchange: () => (this.material = this.wallMaterial.value) });
     const opening = (kind, part) => {
       const input = el("input", { type: "number", min: 0, step: 0.5, title: `${kind} ${part === "sill" ? "sill" : "top"}, feet above the floor` });
@@ -128,8 +138,11 @@ export class StructureBuilder {
       this.openingInputs.window.sill,
       el("span", { textContent: "to" }),
       this.openingInputs.window.top,
-      el("span", { textContent: "ft" }),
+      el("span", { textContent: "ft · runs" }),
+      this.width,
+      el("span", { textContent: "wide" }),
     );
+    this.componentList = div("sb-components");
 
     this.materials = div("ob-palette");
     this.floorMaterial = el("select", { onchange: () => this.change((s) => (s.floor = this.floorMaterial.value)) });
@@ -143,6 +156,8 @@ export class StructureBuilder {
       storeys,
       el("h3", { textContent: "draw" }),
       draw,
+      el("h3", { textContent: "components on this storey" }),
+      this.componentList,
       el("h3", { textContent: "materials" }),
       this.materials,
       button("+ material", () => this.addMaterial()),
@@ -273,15 +288,17 @@ export class StructureBuilder {
     this.change((s) => (s.materials[name.trim()] = { color: addColor(s, NEW_MATERIAL.color), thicknessFt: NEW_MATERIAL.thicknessFt }));
   }
 
-  // The cells or edges a stroke from `start` to `end` covers: the rectangle of cells between them,
-  // or the edges along a straight line from the start, across or down the grid.
-  strokeKeys(start, end) {
-    if (this.tool === "floor") {
-      const [[ax, az], [bx, bz]] = [parseCell(start.cell), parseCell(end.cell)];
-      const keys = [];
-      for (let x = Math.min(ax, bx); x <= Math.max(ax, bx); x++) for (let z = Math.min(az, bz); z <= Math.max(az, bz); z++) keys.push(cellKey(x, z));
-      return keys;
-    }
+  // The cells from `start` to `end`, as a rectangle.
+  rectCells(start, end) {
+    const [[ax, az], [bx, bz]] = [parseCell(start.cell), parseCell(end.cell)];
+    const keys = [];
+    for (let x = Math.min(ax, bx); x <= Math.max(ax, bx); x++) for (let z = Math.min(az, bz); z <= Math.max(az, bz); z++) keys.push(cellKey(x, z));
+    return keys;
+  }
+
+  // The edges along a straight line from `start` toward `end`, across or down the grid, whichever
+  // it goes further.
+  lineEdges(start, end) {
     const [dx, dz] = [end.px - start.px, end.pz - start.pz];
     if (Math.hypot(dx, dz) < 0.3) return [start.edge];
     const across = Math.abs(dx) >= Math.abs(dz);
@@ -292,15 +309,52 @@ export class StructureBuilder {
     return keys;
   }
 
-  // Redraws the stroke so far: the storey as it was when the stroke began, with the tool used on
-  // everything from its start to `end`.
+  // Redraws the stroke so far: the structure as it was when the stroke began, with the tool used
+  // from its start to `end`.
   drawStroke(end) {
-    const keys = this.strokeKeys(this.stroke.start, end);
-    const at = this.structure.storeys.findIndex((s) => s.level === this.level);
-    this.structure.storeys[at] = JSON.parse(this.stroke.storey);
-    for (const key of keys) this.apply(key, this.stroke.erase);
-    this.showHover(keys, this.stroke.erase);
+    const { start, erase } = this.stroke;
+    this.structure = JSON.parse(this.stroke.before);
+    let keys;
+    if (COMPONENTS[this.tool]) keys = this.strokeComponent(start, end, erase);
+    else {
+      keys = this.tool === "floor" ? this.rectCells(start, end) : this.lineEdges(start, end);
+      for (const key of keys) this.apply(key, erase);
+    }
+    this.showHover(keys, erase);
     this.refreshScene();
+  }
+
+  // Adds the component the stroke draws, or takes away those of its type it crosses. Returns the
+  // cells or edges to outline.
+  strokeComponent(start, end, erase) {
+    const { tool, level } = this;
+    const s = this.structure;
+    if (tool === "railing") {
+      const keys = this.lineEdges(start, end);
+      if (erase) {
+        for (const c of s.components) if (c.type === "railing" && c.level === level) c.edges = c.edges.filter((e) => !keys.includes(e));
+        s.components = s.components.filter((c) => c.type !== "railing" || c.edges.length);
+      } else s.components.push({ type: "railing", level, edges: keys });
+      return keys;
+    }
+    const rect = this.rectCells(start, end);
+    if (erase) {
+      s.components = s.components.filter((c) => c.type !== tool || c.level !== level || !Object.keys(COMPONENTS[tool].walk(c, s).cells).some((k) => rect.includes(k)));
+      return rect;
+    }
+    const [[sx, sz], [ex, ez]] = [parseCell(start.cell), parseCell(end.cell)];
+    let c;
+    if (tool === "roof") {
+      const size = [Math.abs(ex - sx) + 1, Math.abs(ez - sz) + 1];
+      c = { type: "roof", level, at: [Math.min(sx, ex), Math.min(sz, ez)], size, ...NEW_ROOF, ridge: size[0] >= size[1] ? "x" : "z" };
+    } else {
+      const [dx, dz] = [ex - sx, ez - sz];
+      const facing = !dx && !dz ? 0 : Math.abs(dx) >= Math.abs(dz) ? (dx > 0 ? 1 : 3) : dz > 0 ? 2 : 0;
+      const run = !dx && !dz ? CLICK_RUN[tool] : Math.max(Math.abs(dx), Math.abs(dz)) + 1;
+      c = { type: tool, level, at: [sx, sz], facing, run, width: Math.max(1, Math.round(Number(this.width.value)) || 1) };
+    }
+    s.components.push(c);
+    return Object.keys(COMPONENTS[tool].walk(c, s).cells);
   }
 
   // Uses the tool on a cell or edge; `erase` takes away instead.
@@ -394,11 +448,61 @@ export class StructureBuilder {
       }),
     );
 
+    this.refreshComponents();
     const cells = new Set(s.storeys.flatMap((x) => x.floor));
     const wrong = problems(s);
     this.info.textContent = `${s.storeys.length} storey${s.storeys.length === 1 ? "" : "s"} · ${cells.size} cells of floor · ${params} of ${MAX_PARAMS} colors are params`;
     this.problems.textContent = wrong.join(" · ");
     this.saveButton.disabled = wrong.length > 0;
+  }
+
+  // The current storey's components, each with its settings and a button to take it away.
+  refreshComponents() {
+    const s = this.structure;
+    const names = Object.keys(s.materials);
+    const set = (n, key, value) => this.change((x) => (value === undefined ? delete x.components[n][key] : (x.components[n][key] = value)));
+    const number = (n, key, { min, max, step = 1, placeholder = "", title }) => {
+      const c = s.components[n];
+      const input = el("input", { type: "number", min, max, step, value: c[key] ?? "", placeholder, title });
+      input.addEventListener("change", () => set(n, key, input.value === "" && placeholder ? undefined : Math.max(min, Math.min(max, Number(input.value) || min))));
+      return input;
+    };
+    const choice = (n, key, options, title, fallback) => {
+      const select = el("select", { title }, ...options.map(([label, value]) => new Option(label, value)));
+      select.value = String(s.components[n][key] ?? fallback ?? "");
+      select.addEventListener("change", () => set(n, key, select.value === "" ? undefined : typeof options[0][1] === "number" ? Number(select.value) : select.value));
+      return select;
+    };
+    const material = (n, key = "material", title = "what it's made of") => choice(n, key, [[`(${key === "ends" ? "walls'" : s.floor})`, ""], ...names.map((m) => [m, m])], title);
+    const facing = (n, title) => choice(n, "facing", FACINGS.map((f, i) => [f, i]), title);
+    const rows = s.components
+      .map((c, n) => [c, n])
+      .filter(([c]) => c.level === this.level)
+      .map(([c, n]) => {
+        let fields = [];
+        if (c.type === "stairs" || c.type === "ramp" || c.type === "span") {
+          fields = [facing(n, c.type === "span" ? "which way it runs" : "which way it goes up"), number(n, "run", { min: 1, max: REACH_CELLS * 2, title: "how many cells long" }), number(n, "width", { min: 1, max: 8, title: "how many cells wide" })];
+          if (c.type === "span") {
+            const rails = el("input", { type: "checkbox", checked: c.rails !== false, onchange: () => set(n, "rails", rails.checked ? undefined : false) });
+            fields.push(el("label", { className: "ob-check" }, rails, el("span", { textContent: "rails" })));
+          } else fields.push(number(n, "rise", { min: 1, max: STOREY_FT.most * 2, placeholder: String(s.storeyFt), title: "how far it climbs (ft), a storey if left empty" }));
+          fields.push(material(n));
+        } else if (c.type === "railing") {
+          fields = [el("span", { textContent: `${c.edges.length} edge${c.edges.length === 1 ? "" : "s"}` }), material(n)];
+        } else if (c.type === "roof") {
+          fields = [
+            choice(n, "shape", ROOF_SHAPES.map((x) => [x, x]), "its shape"),
+            c.shape === "lean-to" ? facing(n, "which way it slopes down") : c.shape === "flat" ? null : choice(n, "ridge", [["ridge east-west", "x"], ["ridge north-south", "z"]], "which way its ridge runs"),
+            number(n, "pitch", { min: ROOF.pitch.least, max: ROOF.pitch.most, step: 0.05, title: "how steep: rise over run" }),
+            number(n, "overhangFt", { min: ROOF.overhangFt.least, max: ROOF.overhangFt.most, step: 0.25, title: "how far it reaches past the walls (ft)" }),
+            material(n),
+            c.shape === "flat" || c.shape === "hip" ? null : material(n, "ends", "what the walls up to its slopes are made of"),
+          ];
+        }
+        const remove = el("button", { type: "button", textContent: "×", title: "take it away", onclick: () => this.change((x) => x.components.splice(n, 1)) });
+        return el("div", { className: "sb-component" }, el("span", { className: "sb-component-type", textContent: c.type }), ...fields.filter(Boolean), remove);
+      });
+    this.componentList.replaceChildren(...(rows.length ? rows : [el("p", { className: "ob-info", textContent: "none yet: draw some with tools 5 to 9" })]));
   }
 
   // --- the view ---
@@ -440,7 +544,7 @@ export class StructureBuilder {
     });
     this.canvas.addEventListener("pointermove", (e) => {
       const target = this.targetAt(e);
-      if (!this.stroke) return this.showHover(target && [this.tool === "floor" ? target.cell : target.edge], e.shiftKey);
+      if (!this.stroke) return this.showHover(target && [EDGE_TOOLS.has(this.tool) ? target.edge : target.cell], e.shiftKey);
       if (target) this.drawStroke(target);
     });
     this.canvas.addEventListener("pointerup", () => {
@@ -476,7 +580,7 @@ export class StructureBuilder {
     return { cell: cellKey(x, z), edge, px, pz };
   }
 
-  // Outlines cells (for the floor tool) or edges on the current storey, or nothing.
+  // Outlines cells ("x,z") or edges ("x,z,side") on the current storey, or nothing.
   showHover(keys, erase = false) {
     for (const child of [...this.hover.children]) {
       child.geometry.dispose();
@@ -490,7 +594,7 @@ export class StructureBuilder {
     for (const key of keys) {
       const [x, z, side] = key.split(",");
       const [ax, az] = [Number(x) * CELL_FT, Number(z) * CELL_FT];
-      if (this.tool === "floor") {
+      if (!side) {
         segment(ax, az, ax + CELL_FT, az);
         segment(ax + CELL_FT, az, ax + CELL_FT, az + CELL_FT);
         segment(ax + CELL_FT, az + CELL_FT, ax, az + CELL_FT);

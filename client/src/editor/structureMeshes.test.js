@@ -43,4 +43,16 @@ describe("structure meshes", () => {
     for (let i = 0; i < p.count; i++) if (p.getX(i) < 4.01) westTop = Math.max(westTop, p.getY(i));
     expect(westTop).toBeCloseTo(10);
   });
+
+  it("draws a roof's slopes over its overhang, and its gable ends up to the ridge", () => {
+    const s = emptyStructure();
+    s.components.push({ type: "roof", level: 0, at: [0, 0], size: [3, 2], shape: "gable", ridge: "x", pitch: 0.5, overhangFt: 1, ends: "stone" });
+    const g = structureGeometries(s).get(0);
+    // The ridge 2 ft over the 10 ft walls; the eaves half a foot lower again, a foot out.
+    expect(bounds(g)).toEqual([-1, 9.1, -1, 13, 12, 9]);
+    for (const shape of ["hip", "lean-to", "flat"]) {
+      s.components[0] = { ...s.components[0], shape, facing: 0 };
+      expect(structureGeometries(s).get(0).attributes.position.count).toBeGreaterThan(0);
+    }
+  });
 });
