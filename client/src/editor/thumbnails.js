@@ -97,6 +97,13 @@ export class Thumbnails {
     this.draw(`${tx},${tz}`, { rgba, small: shrinkRgba(rgba, cells, THUMB_PX), cells, falls, print: fingerprint(gz) });
   }
 
+  // Draws a tile's picture again from its file, after it's changed.
+  redraw(tx, tz, gz) {
+    if (!this.run) return;
+    this.tiles.add(`${tx},${tz}`);
+    this.pool.redraw([{ key: `${tx},${tz}`, gz, run: this.run }]);
+  }
+
   // Whether the tile exists.
   has(tx, tz) {
     return this.tiles.has(`${tx},${tz}`);

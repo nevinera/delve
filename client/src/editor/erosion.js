@@ -27,27 +27,27 @@ const RAIN = {
 
 // The region's points and weights, and the box around it with `margin` cells to spare. A region
 // is a circle, { x, z, radius }, or a box of grid points, { gx0, gz0, gx1, gz1 }, with an optional
-// weight(x, z) from 0 to 1 (1 everywhere by default).
-function area(region, margin) {
+// weight(x, z) from 0 to 1 (1 everywhere by default). Points are `spacing` ft apart.
+function area(region, margin, spacing) {
   if (region.radius === undefined) {
     const box = { gx0: region.gx0 - margin, gz0: region.gz0 - margin, size: Math.max(region.gx1 - region.gx0, region.gz1 - region.gz0) + 1 + 2 * margin };
     const weights = new Float32Array(box.size * box.size);
     for (let j = margin; j < box.size - margin; j++) {
       for (let i = margin; i < box.size - margin; i++) {
         const [gx, gz] = [box.gx0 + i, box.gz0 + j];
-        if (gx <= region.gx1 && gz <= region.gz1) weights[j * box.size + i] = region.weight ? region.weight(gx * LAND_FT, gz * LAND_FT) : 1;
+        if (gx <= region.gx1 && gz <= region.gz1) weights[j * box.size + i] = region.weight ? region.weight(gx * spacing, gz * spacing) : 1;
       }
     }
     return { box, weights };
   }
   const { x, z, radius } = region;
-  const reach = Math.ceil(radius / LAND_FT);
-  const [cx, cz] = [Math.round(x / LAND_FT), Math.round(z / LAND_FT)];
+  const reach = Math.ceil(radius / spacing);
+  const [cx, cz] = [Math.round(x / spacing), Math.round(z / spacing)];
   const box = { gx0: cx - reach - margin, gz0: cz - reach - margin, size: 2 * (reach + margin) + 1 };
   const weights = new Float32Array(box.size * box.size);
   for (let j = 0; j < box.size; j++) {
     for (let i = 0; i < box.size; i++) {
-      const d = Math.hypot((box.gx0 + i) * LAND_FT - x, (box.gz0 + j) * LAND_FT - z) / radius;
+      const d = Math.hypot((box.gx0 + i) * spacing - x, (box.gz0 + j) * spacing - z) / radius;
       if (d < 1) weights[j * box.size + i] = 0.5 + 0.5 * Math.cos(Math.PI * d);
     }
   }
@@ -75,11 +75,12 @@ function changes(grid, { gx0, gz0, size }, heights) {
 
 const AROUND = [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]];
 
-// Slumping, `passes` times over (a fraction does a partial pass).
-export function slump(grid, region, { talus = 35, passes = 1 } = {}) {
-  const { box, weights } = area(region, 1);
+// Slumping, `passes` times over (a fraction does a partial pass). The grid's points are `spacing`
+// ft apart, a land grid's by default.
+export function slump(grid, region, { talus = 35, passes = 1, spacing = LAND_FT } = {}) {
+  const { box, weights } = area(region, 1, spacing);
   const heights = read(grid, box);
-  const limit = Math.tan((talus * Math.PI) / 180) * LAND_FT;
+  const limit = Math.tan((talus * Math.PI) / 180) * spacing;
   for (let left = passes; left > 0; left--) slumpPass(box.size, heights, weights, limit, Math.min(1, left));
   return changes(grid, box, heights);
 }
@@ -109,12 +110,12 @@ function slumpPass(size, heights, weights, limit, rate) {
 }
 
 // `drops` raindrops over the region, each `size` times as heavy as a brush's. `random` gives
-// numbers from 0 to 1, Math.random by default.
-export function rain(grid, region, { drops, size: heavy = 1, random = Math.random } = {}) {
-  const { box, weights } = area(region, RAIN.reach + 1);
+// numbers from 0 to 1, Math.random by default. The grid's points are `spacing` ft apart.
+export function rain(grid, region, { drops, size: heavy = 1, random = Math.random, spacing = LAND_FT } = {}) {
+  const { box, weights } = area(region, RAIN.reach + 1, spacing);
   const { size } = box;
   // Worked in cells: heights too, so slopes come out as they are.
-  const heights = read(grid, box).map((h) => h / LAND_FT);
+  const heights = read(grid, box).map((h) => h / spacing);
   const wear = wearKernel(RAIN.reach);
   const at = (x, z) => {
     const [i, j] = [Math.floor(x), Math.floor(z)];
@@ -174,7 +175,7 @@ export function rain(grid, region, { drops, size: heavy = 1, random = Math.rando
     // Whatever it still carries settles where it ends.
     if (load) drop(at(x, z), load);
   }
-  return changes(grid, box, heights.map((h) => h * LAND_FT));
+  return changes(grid, box, heights.map((h) => h * spacing));
 }
 
 // The cells around a drop it wears away, and each one's share, closer ones more.

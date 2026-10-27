@@ -25,7 +25,10 @@ import { ROUTE_VERSION, RoadRouter, findCrossing, gradeCap } from "./roads.js";
 import { hashString } from "../world/noise.js";
 import { LandGrid, landBounds, loadLand, saveLand } from "../world/landGrid.js";
 import { BLENDS, EROSIONS, SHAPES, TOOLS as SCULPT_TOOLS } from "./sculptTools.js";
-import { TILE_FT } from "../world/constants.js";
+import { DETAIL_TOOLS } from "./detailTools.js";
+import { encodeTile } from "../world/tileCodec.js";
+import { gzipSync } from "fflate";
+import { CELL_FT, TILE_FT } from "../world/constants.js";
 import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
 
 const HIT_PX = 8;
@@ -44,7 +47,7 @@ const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 // Steps drawn in 3d instead of on the map.
 const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
-  detail: "the arrows off the window's sides move it a strip that way · right-drag turns · middle-drag pans · wheel zooms",
+  detail: "left-drag to work the brush · the arrows off the window's sides move it a strip that way · 1-6 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
@@ -75,7 +78,7 @@ const STEPS = {
   civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
   zones: { tools: [], kinds: [], map: "heights" },
   tiles: { tools: [], kinds: [], map: "tiles" },
-  detail: { tools: [], kinds: [] },
+  detail: { tools: DETAIL_TOOLS, kinds: [] },
   "3d": { tools: [], kinds: [] },
 };
 // With this many tiles in sight or more, tiles draw as their thumbnails instead of close up.
@@ -663,10 +666,14 @@ export class Editor {
           this.detailWindow.tz0 += dz;
           this.showDetail();
         },
+        onEdit: (keys) => this.saveDetail(keys),
+        onPointer: (hit) => this.showCursor(hit),
       });
+      this.applyDetailBrush();
     });
     await this.detailLoading;
     if (this.step !== "detail") return;
+    this.applyDetailBrush();
     if (!this.detailWindow) {
       const size = Number(this.el.detailSize.value) || 3;
       this.detailWindow = { tx0: Math.floor(this.map.view.x) - Math.floor(size / 2), tz0: Math.floor(this.map.view.z) - Math.floor(size / 2), size };
@@ -678,13 +685,68 @@ export class Editor {
     this.el.detailInfo.textContent = `tiles ${tx0},${tz0} to ${tx0 + size - 1},${tz0 + size - 1} · ${loaded} of ${size * size} generated`;
   }
 
+  // Where the pointer is on a 3d view's ground, [x, y, z] in continent feet, or null.
+  showCursor(hit) {
+    this.el.cursor.textContent = hit ? `tile ${Math.floor(hit[0] / TILE_FT)}, ${Math.floor(hit[2] / TILE_FT)} · ${Math.round(hit[1])} ft` : "";
+  }
+
+  // The detail step's brush settings, from its panel. Falloff is set as a share of the brush.
+  applyDetailBrush() {
+    const { detailRadius, detailRadiusValue, detailFalloff, detailFalloffValue, detailStrength, detailStrengthValue, detailErosion, detailTalus } = this.el;
+    const radius = Number(detailRadius.value);
+    const falloff = Math.max(CELL_FT, (radius * Number(detailFalloff.value)) / 100);
+    detailRadiusValue.textContent = `${radius} ft`;
+    detailFalloffValue.textContent = `${Math.round(falloff)} ft`;
+    detailStrengthValue.textContent = `${detailStrength.value} ft/s`;
+    if (this.step !== "detail") return;
+    this.detail?.setBrush({
+      tool: this.toolName,
+      radius,
+      falloff,
+      strength: Number(detailStrength.value),
+      erosion: detailErosion.value,
+      talus: Math.max(5, Math.min(85, Number(detailTalus.value) || 35)),
+    });
+  }
+
+  // Writes tiles changed in the detail step back into the world, and marks them edited by hand.
+  saveDetail(keys) {
+    for (const key of keys) {
+      const tile = this.detail.view.decoded.get(key);
+      const [tx, tz] = tile.coords;
+      const gz = gzipSync(encodeTile(tile));
+      this.world.files.set(tilePath(this.continent, tx, tz), gz);
+      this.thumbnails.redraw(tx, tz, gz);
+      this.details.drop(tx, tz);
+    }
+    this.setEdited(keys, true);
+    this.renderPanel();
+  }
+
+  // Detail step hotkeys: digits pick a tool, [ and ] size the brush, and - and = its strength.
+  // Returns whether the key was one of them.
+  detailKey(e) {
+    const { detailRadius, detailStrength } = this.el;
+    const step = (input, by, least) => {
+      input.value = Math.max(Number(input.min), Math.min(Number(input.max), Math.round(Math.max(least, Number(input.value)) * by)));
+      this.applyDetailBrush();
+    };
+    if (/^[1-9]$/.test(e.key) && DETAIL_TOOLS[Number(e.key) - 1]) this.setTool(DETAIL_TOOLS[Number(e.key) - 1]);
+    else if (e.key === "[") step(detailRadius, 1 / 1.25, 0);
+    else if (e.key === "]") step(detailRadius, 1.25, 8);
+    else if (e.key === "-") step(detailStrength, 1 / 1.25, 0);
+    else if (e.key === "=") step(detailStrength, 1.25, 4);
+    else return false;
+    return true;
+  }
+
   // The heights step: the land grid in 3d, to sculpt.
   async showSculpt() {
     // Made once, though it's asked for again while the module loads.
     this.sculptLoading ??= import("./sculptView.js").then(({ SculptView }) => {
       this.sculpt = new SculptView(this.el.sculpt, {
         onStroke: () => this.landChanged(),
-        onPointer: (hit) => (this.el.cursor.textContent = hit ? `tile ${Math.floor(hit[0] / TILE_FT)}, ${Math.floor(hit[2] / TILE_FT)} · ${Math.round(hit[1])} ft` : ""),
+        onPointer: (hit) => this.showCursor(hit),
       });
       this.applyBrush();
     });
@@ -840,7 +902,15 @@ export class Editor {
     }
     for (const shape of Object.keys(SHAPES)) this.el.stampShape.add(new Option(shape, shape));
     for (const blend of BLENDS) this.el.stampBlend.add(new Option({ add: "add to the ground", max: "raise to the shape", min: "cut to the shape" }[blend], blend));
-    for (const kind of EROSIONS) this.el.erosionKind.add(new Option({ water: "running water", slump: "slumping" }[kind], kind));
+    for (const kind of EROSIONS) {
+      const name = { water: "running water", slump: "slumping" }[kind];
+      this.el.erosionKind.add(new Option(name, kind));
+      this.el.detailErosion.add(new Option(name, kind));
+    }
+    for (const input of [this.el.detailRadius, this.el.detailFalloff, this.el.detailStrength, this.el.detailErosion, this.el.detailTalus]) {
+      input.addEventListener("input", () => this.applyDetailBrush());
+    }
+    this.applyDetailBrush();
     this.el.commitLand.addEventListener("click", () => this.commitLand());
     this.el.discardLand.addEventListener("click", () => {
       if (window.confirm("Discard the sculpting since the last commit?")) this.discardLand();
@@ -944,7 +1014,7 @@ export class Editor {
     this.el.landStatus.textContent = this.landDirty ? "Sculpted since the last commit. Tiles are made from committed land only." : "Everything's committed.";
     this.el.commitLand.disabled = !this.landDirty;
     this.el.discardLand.disabled = !this.landDirty;
-    for (const el of this.el.steps.find((s) => s.dataset.step === "heights").querySelectorAll("[data-for]")) el.hidden = !el.dataset.for.split(" ").includes(this.toolName);
+    for (const el of this.el.steps.find((s) => s.dataset.step === this.step)?.querySelectorAll("[data-for]") ?? []) el.hidden = !el.dataset.for.split(" ").includes(this.toolName);
     this.el.generate.disabled = !todo || this.generating;
     this.el.regenerateAll.disabled = !this.landTiles().size || this.generating;
     if (!this.generating) {
@@ -1026,6 +1096,7 @@ export class Editor {
   setTool(name) {
     this.toolName = name;
     this.applyBrush();
+    this.applyDetailBrush();
     this.palette.render();
     this.say();
     this.renderPanel();
@@ -1201,10 +1272,15 @@ export class Editor {
     }
     if (e.target.matches("input, textarea, select")) return;
     // G does what the walk button does: pick a spot to walk from, cancel that, or stop walking.
-    if (this.step === "heights" && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+    if ((this.step === "heights" || this.step === "detail") && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
       e.preventDefault();
-      if (e.shiftKey) this.sculpt?.redo();
-      else this.sculpt?.undo();
+      const target = this.step === "heights" ? this.sculpt : this.detail;
+      if (e.shiftKey) target?.redo();
+      else target?.undo();
+      return;
+    }
+    if (this.step === "detail" && !e.ctrlKey && !e.metaKey && !e.altKey && this.detailKey(e)) {
+      e.preventDefault();
       return;
     }
     if (this.step === "heights" && !e.ctrlKey && !e.metaKey && !e.altKey && this.sculptKey(e)) {

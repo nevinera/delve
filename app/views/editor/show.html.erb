@@ -151,6 +151,12 @@
         <div class="editor-step-body">
           <label class="editor-field">window <select id="detailSize"></select></label>
           <p id="detailInfo"></p>
+          <div class="editor-tools" data-tools="detail"></div>
+          <label class="editor-range">brush <input id="detailRadius" type="range" min="0" max="256" step="4" value="32"><output id="detailRadiusValue"></output></label>
+          <label class="editor-range">falloff <input id="detailFalloff" type="range" min="0" max="200" step="5" value="50"><output id="detailFalloffValue"></output></label>
+          <label class="editor-range">strength <input id="detailStrength" type="range" min="1" max="100" step="1" value="10"><output id="detailStrengthValue"></output></label>
+          <label class="editor-field" data-for="erode">by <select id="detailErosion"></select></label>
+          <label class="editor-field" data-for="erode">slumps past (°) <input id="detailTalus" type="number" min="5" max="85" step="5" value="35"></label>
         </div>
       </section>
       <section class="editor-step" data-step="3d">
