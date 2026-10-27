@@ -106,6 +106,16 @@ export class SculptView {
     this.resize();
   }
 
+  // Looks down at [x0, z0, x1, z1] (continent feet) from the south, near enough to see it all.
+  lookOver([x0, z0, x1, z1]) {
+    const [x, z] = [(x0 + x1) / 2, (z0 + z1) / 2];
+    const distance = Math.max(x1 - x0, z1 - z0) / 2 / Math.tan((FOV * Math.PI) / 360);
+    this.placed = true;
+    this.controls.target.set(x, 0, z);
+    this.camera.position.set(x, distance * 0.8, z + distance * 0.6);
+    this.controls.update();
+  }
+
   hide() {
     this.shown = false;
     this.stroke = null;

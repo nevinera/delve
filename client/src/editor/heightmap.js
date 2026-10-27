@@ -77,6 +77,18 @@ export function encodePng(width, height, values, text = {}) {
   return concat([new Uint8Array(SIGNATURE), ...chunks]);
 }
 
+// An 8-bit RGB PNG from `rgb`, three bytes a pixel, row by row; for pictures of the land.
+export function encodeRgbPng(width, height, rgb) {
+  const raw = new Uint8Array(height * (1 + width * 3));
+  for (let z = 0; z < height; z++) raw.set(rgb.subarray(z * width * 3, (z + 1) * width * 3), z * (1 + width * 3) + 1);
+  const header = new Uint8Array(13);
+  const view = new DataView(header.buffer);
+  view.setUint32(0, width);
+  view.setUint32(4, height);
+  header.set([8, 2, 0, 0, 0], 8); // 8-bit RGB, not interlaced
+  return concat([new Uint8Array(SIGNATURE), chunk("IHDR", header), chunk("IDAT", zlibSync(raw)), chunk("IEND", new Uint8Array(0))]);
+}
+
 // { width, height, values, text }: values the first channel of each pixel, 0 to 1. Takes grayscale,
 // RGB, and either with alpha, at 8 or 16 bits; not palettes, low bit depths or interlacing.
 export function decodePng(bytes) {

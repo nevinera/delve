@@ -86,6 +86,10 @@
             <button id="importHeightmap" type="button" title="a 16-bit grayscale heightmap, from here or another tool">import png</button>
           </div>
           <input id="heightmapFile" type="file" accept="image/png" hidden>
+          <div class="editor-row">
+            <button id="importBones" type="button" title="a bones file: the land written as a list of operations (script/bones.mjs ops lists them)">import bones</button>
+          </div>
+          <input id="bonesFile" type="file" accept=".json,application/json" hidden>
         </div>
       </section>
       <section class="editor-step" data-step="water">

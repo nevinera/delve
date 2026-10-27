@@ -315,11 +315,13 @@ export class Editor {
     this.store(() => saveLand(this.world.files, this.continent, this.land));
   }
 
-  // Swaps in land from a heightmap, uncommitted.
-  replaceLand(land) {
+  // Swaps in land from a heightmap or a bones file, uncommitted, and looks at it.
+  async replaceLand(land) {
     this.land = land;
     this.landChanged();
-    this.showSculpt();
+    await this.showSculpt();
+    const bounds = landBounds(land);
+    if (bounds) this.sculpt.lookOver(bounds);
   }
 
   // Puts the land back as it was last committed.

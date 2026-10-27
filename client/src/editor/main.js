@@ -5,7 +5,7 @@ import { exportHeightmap, importHeightmap, needsRange } from "./heightmap.js";
 import { loadLocal, saveLocal } from "./localSave.js";
 import { World } from "./world.js";
 import { slug } from "./zones.js";
-import { LAND_FT } from "../world/landGrid.js";
+import { LAND_FT, LandGrid } from "../world/landGrid.js";
 
 // Editor entry (plans/roadmap.md, "World editor").
 
@@ -122,6 +122,34 @@ $("heightmapFile").addEventListener("change", async (e) => {
   } catch (err) {
     window.alert(`Couldn't import ${file.name}: ${err.message}`);
   }
+});
+
+$("importBones").addEventListener("click", () => $("bonesFile").click());
+
+// A bones file (bones.js) runs in a worker, and its land replaces the land being sculpted.
+$("bonesFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  let bones;
+  try {
+    bones = JSON.parse(await file.text());
+  } catch (err) {
+    return window.alert(`Couldn't read ${file.name}: ${err.message}`);
+  }
+  if (editor.land.blocks.size && !window.confirm("Replace the land being sculpted with this bones file's? Discard brings back the committed land.")) return;
+  editor.say(`Running ${file.name}...`, { info: true });
+  const worker = new Worker(new URL("./bonesWorker.js", import.meta.url), { type: "module" });
+  worker.onmessage = ({ data }) => {
+    worker.terminate();
+    if (data.error) {
+      editor.say();
+      return window.alert(`Couldn't run ${file.name}: ${data.error}`);
+    }
+    editor.replaceLand(LandGrid.from({ blocks: data.blocks }));
+    editor.say(`Ran ${file.name}. Commit to keep its land.`, { info: true });
+  };
+  worker.postMessage(bones);
 });
 
 $("newWorld").addEventListener("click", () => {

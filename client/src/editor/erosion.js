@@ -1,8 +1,9 @@
 import { LAND_FT } from "../world/landGrid.js";
 
 // Erosion over part of a land grid (world/landGrid.js), each returning the changes it makes,
-// [[gx, gz, h], ...], as sculptTools.js does. `region` is { x, z, radius } in continent feet, and
-// works most at its middle, easing to nothing at its edge.
+// [[gx, gz, h], ...], as sculptTools.js does. `region` is a brush, { x, z, radius } in continent
+// feet, working most at its middle and easing to nothing at its edge, or a box of grid points
+// (see area()).
 //
 // - slump: ground steeper than `talus` degrees slides down to its lower neighbours, a little way
 //   toward resting each pass, leaving scree slopes at the foot of cliffs and softening ridges.
@@ -24,8 +25,22 @@ const RAIN = {
   reach: 2, // cells around a drop that it wears away
 };
 
-// The region's points and weights, and the box around it with `margin` cells to spare.
-function area({ x, z, radius }, margin) {
+// The region's points and weights, and the box around it with `margin` cells to spare. A region
+// is a circle, { x, z, radius }, or a box of grid points, { gx0, gz0, gx1, gz1 }, with an optional
+// weight(x, z) from 0 to 1 (1 everywhere by default).
+function area(region, margin) {
+  if (region.radius === undefined) {
+    const box = { gx0: region.gx0 - margin, gz0: region.gz0 - margin, size: Math.max(region.gx1 - region.gx0, region.gz1 - region.gz0) + 1 + 2 * margin };
+    const weights = new Float32Array(box.size * box.size);
+    for (let j = margin; j < box.size - margin; j++) {
+      for (let i = margin; i < box.size - margin; i++) {
+        const [gx, gz] = [box.gx0 + i, box.gz0 + j];
+        if (gx <= region.gx1 && gz <= region.gz1) weights[j * box.size + i] = region.weight ? region.weight(gx * LAND_FT, gz * LAND_FT) : 1;
+      }
+    }
+    return { box, weights };
+  }
+  const { x, z, radius } = region;
   const reach = Math.ceil(radius / LAND_FT);
   const [cx, cz] = [Math.round(x / LAND_FT), Math.round(z / LAND_FT)];
   const box = { gx0: cx - reach - margin, gz0: cz - reach - margin, size: 2 * (reach + margin) + 1 };
@@ -93,8 +108,9 @@ function slumpPass(size, heights, weights, limit, rate) {
   for (let k = 0; k < heights.length; k++) heights[k] += moved[k];
 }
 
-// `drops` raindrops over the region. `random` gives numbers from 0 to 1, Math.random by default.
-export function rain(grid, region, { drops, random = Math.random } = {}) {
+// `drops` raindrops over the region, each `size` times as heavy as a brush's. `random` gives
+// numbers from 0 to 1, Math.random by default.
+export function rain(grid, region, { drops, size: heavy = 1, random = Math.random } = {}) {
   const { box, weights } = area(region, RAIN.reach + 1);
   const { size } = box;
   // Worked in cells: heights too, so slopes come out as they are.
@@ -134,7 +150,7 @@ export function rain(grid, region, { drops, random = Math.random } = {}) {
       if (!inside(nx, nz)) break;
       const rise = at(nx, nz).h - here.h;
       // It carries less toward the region's edge, so it sheds its load on the way out.
-      const room = Math.max(-rise * speed * water * RAIN.capacity, RAIN.minCapacity) * RAIN.size * here.w;
+      const room = Math.max(-rise * speed * water * RAIN.capacity, RAIN.minCapacity) * RAIN.size * heavy * here.w;
       if (load > room || rise > 0) {
         // Uphill it fills the hollow it's in; otherwise it sheds what it can't carry.
         const amount = rise > 0 ? Math.min(rise, load) : (load - room) * RAIN.deposit;
