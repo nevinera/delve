@@ -522,7 +522,7 @@ export class Editor {
       const { RenderView, SCENE_PARTS, RESOLUTIONS, CLUTTER_RADIUS_FT } = await import("./renderView.js");
       this.view3d = new RenderView(this.el.scene, { onGraphics: (graphics) => this.showGraphics?.(graphics), onTime: (clock) => this.showTime?.(clock) });
       this.buildGraphics(SCENE_PARTS, RESOLUTIONS, CLUTTER_RADIUS_FT);
-      this.buildTime();
+      if (!this.showTime) this.buildTime();
     }
     this.el.map.hidden = true;
     this.el.scene.hidden = false;
@@ -579,23 +579,27 @@ export class Editor {
     placeUnder(this.el.graphics, this.el.graphicsButton);
   }
 
+  // The view the time popover sets: the detail step's, or the 3d view's.
+  timeView() {
+    return this.step === "detail" && this.detail ? this.detail.view : this.view3d;
+  }
+
   // The time popover: sliders for the time of day, the day of the moon's month and how fast time
   // passes while walking, and a button back to the shared clock's time. Its button names the part
-  // of the day.
+  // of the day. It sets the time of whichever view is showing (timeView).
   buildTime() {
     const { timeButton, timePanel, timeOfDay, timeOfDayValue, moonDay, moonDayValue, timeSpeed, timeSpeedValue, timeNow } = this.el;
-    const view = this.view3d;
     moonDay.max = LUNAR_DAYS - 1;
-    const day = () => Math.floor(view.clock.cycles);
-    timeOfDay.addEventListener("input", () => view.setTime({ cycles: day() + Number(timeOfDay.value) }));
+    const day = () => Math.floor(this.timeView().clock.cycles);
+    timeOfDay.addEventListener("input", () => this.timeView()?.setTime({ cycles: day() + Number(timeOfDay.value) }));
     moonDay.addEventListener("input", () => {
-      const { cycles } = view.clock;
+      const { cycles } = this.timeView().clock;
       const month = Math.floor(cycles / LUNAR_DAYS) * LUNAR_DAYS;
-      view.setTime({ cycles: month + Number(moonDay.value) + (cycles - Math.floor(cycles)) });
+      this.timeView()?.setTime({ cycles: month + Number(moonDay.value) + (cycles - Math.floor(cycles)) });
     });
     timeSpeed.max = TIME_SPEEDS.length - 1;
-    timeSpeed.addEventListener("input", () => view.setTime({ speed: TIME_SPEEDS[timeSpeed.value] }));
-    timeNow.addEventListener("click", () => view.setTime({ cycles: cyclesAt(Date.now()) }));
+    timeSpeed.addEventListener("input", () => this.timeView()?.setTime({ speed: TIME_SPEEDS[timeSpeed.value] }));
+    timeNow.addEventListener("click", () => this.timeView()?.setTime({ cycles: cyclesAt(Date.now()) }));
     let shown = "";
     this.showTime = ({ cycles, speed }) => {
       const { phase, left } = timeLabel(cycles);
@@ -611,7 +615,7 @@ export class Editor {
       timeSpeedValue.textContent = speedLabel(speed);
       if (document.activeElement !== timeSpeed) timeSpeed.value = nearestSpeed(speed);
     };
-    this.showTime(view.clock);
+    if (this.timeView()) this.showTime(this.timeView().clock);
     timePanel.addEventListener("change", (e) => e.target.blur());
     placeUnder(timePanel, timeButton);
   }
@@ -694,6 +698,7 @@ export class Editor {
         this.detailWindow = { tx0: tx0 + shift, tz0: tz0 + shift, size };
         this.showDetail();
       });
+      if (!this.showTime) this.buildTime();
       this.detail = new DetailView(this.el.detail, {
         onMove: (dx, dz) => {
           this.detailWindow.tx0 += dx;
@@ -707,6 +712,7 @@ export class Editor {
         onAsk: (question) => window.confirm(question),
         onSay: (message) => this.say(message),
       });
+      this.detail.view.handlers.onTime = (clock) => this.showTime?.(clock);
       this.applyDetailBrush();
     });
     await this.detailLoading;
@@ -948,7 +954,7 @@ export class Editor {
     const picked = this.detail?.selected?.object;
     if (/^[0-9]$/.test(e.key) && tools[(Number(e.key) + 9) % 10]) this.setTool(tools[(Number(e.key) + 9) % 10]);
     else if (picked && (e.key === "Delete" || e.key === "Backspace")) this.detail.deleteSelected();
-    else if (picked && (e.key === "q" || e.key === "e")) this.detail.changeSelected({ yaw: picked.yaw + ((e.key === "e" ? 1 : -1) * Math.PI) / 12 });
+    else if (picked && (e.key === "q" || e.key === "e")) this.detail.changeSelected({ yaw: picked.yaw + ((e.key === "e" ? 1 : -1) * Math.PI) / (picked.base !== undefined ? 2 : 12) });
     else if (picked && this.toolName === "objects" && (e.key === "[" || e.key === "]")) this.detail.changeSelected({ scale: picked.scale * (e.key === "]" ? 1.1 : 1 / 1.1) });
     else if (e.key === "Escape") this.detail?.cancel();
     else if (e.key === "[") step(detailRadius, 1 / 1.25, 0);
@@ -1295,7 +1301,7 @@ export class Editor {
     }
     hint.textContent = this.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : this.detailPicking ? HINT_PICK_DETAIL : HINTS[this.mode()];
     this.el.graphicsButton.hidden = !this.walking;
-    this.el.timeButton.hidden = !this.walking;
+    this.el.timeButton.hidden = !this.walking && this.step !== "detail";
     this.el.scaleBar.hidden = this.walking || IN_3D.has(this.step);
     this.el.walk.hidden = IN_3D.has(this.step);
     this.el.walk.textContent = this.walking ? "stop walking" : this.walkPicking ? "cancel walk" : "walk";
