@@ -40,7 +40,7 @@ const COLORS = {
   stale: "rgba(255, 130, 40, 0.45)",
   missing: "rgba(255, 255, 255, 0.16)",
   edited: "rgba(200, 120, 255, 0.9)",
-  held: "rgba(230, 40, 60, 0.45)",
+  held: "rgba(220, 20, 40, 0.85)",
   locked: "rgba(255, 255, 255, 0.95)",
   casing: "rgba(0, 0, 0, 0.75)",
   lockedFill: "rgba(255, 255, 255, 0.07)",
@@ -613,6 +613,8 @@ export class Editor {
   // Opens a step, with its first tool.
   setStep(step) {
     this.step = step;
+    // Each view writes its own pointer readout.
+    this.el.cursor.textContent = "";
     this.toolName = STEPS[step].tools[0] ?? "select";
     this.drawing = null;
     this.features.select(null);
@@ -693,7 +695,7 @@ export class Editor {
 
   // Where the pointer is on a 3d view's ground, [x, y, z] in continent feet, or null.
   showCursor(hit) {
-    this.el.cursor.textContent = hit ? `tile ${Math.floor(hit[0] / TILE_FT)}, ${Math.floor(hit[2] / TILE_FT)} · ${Math.round(hit[1])} ft` : "";
+    this.el.cursor.textContent = hit?.every(Number.isFinite) ? `tile ${Math.floor(hit[0] / TILE_FT)}, ${Math.floor(hit[2] / TILE_FT)} · ${Math.round(hit[1])} ft` : "";
   }
 
   // The detail step's brush settings, from its panel. Falloff is set as a share of the brush.
