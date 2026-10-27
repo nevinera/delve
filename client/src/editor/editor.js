@@ -36,6 +36,8 @@ import { decodeTile, encodeTile } from "../world/tileCodec.js";
 import { gunzipSync, gzipSync } from "fflate";
 import { CELL_FT, TILE_FT } from "../world/constants.js";
 import { TREE_KINDS, TREE_SIZES, treeTerrain } from "../world/trees.js";
+import { STRUCTURE_PREFIX } from "../world/structures.js";
+import { PlacePicker } from "./placePicker.js";
 import { TERRAIN } from "../world/generator.js";
 import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
 
@@ -55,7 +57,7 @@ const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 // Steps drawn in 3d instead of on the map.
 const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
-  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it; water runs along a channel the way it was drawn) · with water, click to place a source or pick one · with objects, click one to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
+  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it; water runs along a channel the way it was drawn) · with water, click to place a source or pick one · with objects or structures, click a thumbnail, then the ground to place it (esc lets it go); click one placed to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
@@ -87,7 +89,7 @@ const STEPS = {
   civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
   zones: { tools: [], kinds: [], map: "heights" },
   tiles: { tools: [], kinds: [], map: "tiles" },
-  detail: { tools: [...DETAIL_TOOLS, "trails", "channel", "water", "objects", "place", "paint"], kinds: [] },
+  detail: { tools: [...DETAIL_TOOLS, "trails", "channel", "water", "objects", "structures", "paint"], kinds: [] },
   "3d": { tools: [], kinds: [] },
 };
 // With this many tiles in sight or more, tiles draw as their thumbnails instead of close up.
@@ -746,18 +748,14 @@ export class Editor {
     detailStrengthValue.textContent = `${detailStrength.value} ft/s`;
     this.el.trailWidthValue.textContent = `${this.el.trailWidth.value} ft`;
     if (this.step !== "detail") return;
-    const { placeType, placeScale, placeScaleValue } = this.el;
-    placeScaleValue.textContent = placeType.value.startsWith(BUILT_PREFIX) ? `×${placeScale.value}` : `${placeScale.value} ft`;
-    // Structures come as built, so they've no size to choose.
-    this.el.placeSizeRow.style.display = specOf(placeType.value)?.structure ? "none" : "";
     const { channelWidth, channelWidthValue, channelDepth, channelDepthValue, sourceFlow, sourceFlowValue } = this.el;
     channelWidthValue.textContent = `${channelWidth.value} ft`;
     channelDepthValue.textContent = `${channelDepth.value} ft`;
     sourceFlowValue.textContent = sourceFlow.value;
     if (this.toolName === "channel") return this.detail?.setBrush({ tool: "channel", width: Number(channelWidth.value), depth: Number(channelDepth.value) });
     if (this.toolName === "water") return this.detail?.setBrush({ tool: "water", flow: Number(sourceFlow.value) });
-    if (this.toolName === "objects") return this.detail?.setBrush({ tool: "objects" });
-    if (this.toolName === "place") return this.detail?.setBrush({ tool: "place", type: placeType.value, scale: Number(placeScale.value) });
+    if (this.toolName === "objects") return this.detail?.setBrush({ tool: "objects", type: this.pickers.objects.armed });
+    if (this.toolName === "structures") return this.detail?.setBrush({ tool: "structures", type: this.pickers.structures.armed });
     if (this.toolName === "paint") {
       const { paintTerrain, treeKind, treeSize, paintRadius, paintRadiusValue } = this.el;
       const tree = paintTerrain.value === "tree";
@@ -823,13 +821,16 @@ export class Editor {
     for (const kind of ["objects", "structures"]) if (this.libraryParts(kind)[0].open) this.libraries?.[kind]?.show();
   }
 
-  // The place tool's types, by collection, builtins first; and the same for replacing.
+  // The objects and structures tools' pickers, `choose` armed if given; and the object types to
+  // replace, by collection, builtins first.
   fillObjectTypes(choose) {
-    // Structures are listed after objects; replacing is for objects only.
+    if (!this.pickers) return;
     const objects = allCollections(this.world, "objects");
-    const structures = allCollections(this.world, "structures").map((c) => ({ ...c, name: `structures: ${c.name}` }));
-    for (const select of [this.el.placeType, this.el.replaceFrom, this.el.replaceTo]) {
-      const collections = select === this.el.placeType ? [...objects, ...structures] : objects;
+    this.pickers.objects.show(objects);
+    this.pickers.structures.show(allCollections(this.world, "structures"));
+    if (choose) this.pickers[choose.startsWith(STRUCTURE_PREFIX) ? "structures" : "objects"].arm(choose);
+    for (const select of [this.el.replaceFrom, this.el.replaceTo]) {
+      const collections = objects;
       const was = select.value;
       select.replaceChildren();
       for (const collection of collections) {
@@ -839,10 +840,9 @@ export class Editor {
         g.append(...collection.entries.map((e) => new Option(e.name, e.type)));
         select.append(g);
       }
-      select.value = select === this.el.placeType && choose ? choose : was;
+      select.value = was;
       if (!select.value) select.selectedIndex = 0;
     }
-    if (choose) this.el.placeType.dispatchEvent(new Event("change"));
   }
 
   // A scale slider and its readout for a type: feet for the scattered kinds, a factor for built
@@ -978,6 +978,7 @@ export class Editor {
     else if (picked && (e.key === "Delete" || e.key === "Backspace")) this.detail.deleteSelected();
     else if (picked && (e.key === "q" || e.key === "e")) this.detail.changeSelected({ yaw: picked.yaw + ((e.key === "e" ? 1 : -1) * Math.PI) / (picked.base !== undefined ? 2 : 12) });
     else if (picked && this.toolName === "objects" && (e.key === "[" || e.key === "]")) this.detail.changeSelected({ scale: picked.scale * (e.key === "]" ? 1.1 : 1 / 1.1) });
+    else if (e.key === "Escape" && this.pickers[this.toolName]?.armed) this.pickers[this.toolName].arm(null);
     else if (e.key === "Escape") this.detail?.cancel();
     else if (e.key === "[") step(detailRadius, 1 / 1.25, 0);
     else if (e.key === "]") step(detailRadius, 1.25, 8);
@@ -1179,16 +1180,12 @@ export class Editor {
     this.el.treeSize.value = 2;
     for (const input of [this.el.paintTerrain, this.el.treeKind, this.el.treeSize]) input.addEventListener("change", () => this.applyDetailBrush());
     this.el.paintRadius.addEventListener("input", () => this.applyDetailBrush());
-    this.fillObjectTypes();
-    // Each type starts in the middle of its sizes, and built objects as built.
-    const placeSizes = () => {
-      const type = this.el.placeType.value;
-      const [least, most] = specOf(type)?.size ?? [1, 1];
-      this.scaleSlider(this.el.placeScale, this.el.placeScaleValue, type, type.startsWith(BUILT_PREFIX) ? 1 : (least + most) / 2);
-      this.applyDetailBrush();
+    // What the objects and structures tools place, picked from their libraries' thumbnails.
+    this.pickers = {
+      objects: new PlacePicker(this.el.objectPicker, { onArm: () => this.applyDetailBrush() }),
+      structures: new PlacePicker(this.el.structurePicker, { onArm: () => this.applyDetailBrush() }),
     };
-    this.el.placeType.addEventListener("change", placeSizes);
-    placeSizes();
+    this.fillObjectTypes();
     this.el.replaceOpen.addEventListener("click", () => this.el.replaceDialog.showModal());
     this.el.replaceCancel.addEventListener("click", () => this.el.replaceDialog.close());
     // Closed first, so what replacing says shows in the panel.
@@ -1218,7 +1215,7 @@ export class Editor {
     this.el.pickedFlow.addEventListener("change", () => this.detail?.changeSource({ flow: Number(this.el.pickedFlow.value) }));
     this.el.sourceFree.addEventListener("click", () => this.detail?.changeSource({ free: true }));
     this.el.sourceRemove.addEventListener("click", () => this.detail?.removeSource());
-    for (const input of [this.el.detailRadius, this.el.detailFalloff, this.el.detailStrength, this.el.detailErosion, this.el.detailTalus, this.el.trailKind, this.el.trailState, this.el.trailWidth, this.el.placeScale, this.el.channelWidth, this.el.channelDepth, this.el.sourceFlow]) {
+    for (const input of [this.el.detailRadius, this.el.detailFalloff, this.el.detailStrength, this.el.detailErosion, this.el.detailTalus, this.el.trailKind, this.el.trailState, this.el.trailWidth, this.el.channelWidth, this.el.channelDepth, this.el.sourceFlow]) {
       input.addEventListener("input", () => this.applyDetailBrush());
     }
     this.applyDetailBrush();

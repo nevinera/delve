@@ -91,8 +91,10 @@ export class DetailView {
       const at = this.pointAt(e);
       if (!at || !this.brush) return;
       canvas.setPointerCapture(e.pointerId);
-      if (this.brush.tool === "objects") {
+      if (this.brush.tool === "objects" || this.brush.tool === "structures") {
         const picked = this.objectAt(e);
+        // Clicking the ground places what's armed, if anything.
+        if (!picked && this.brush.type) return this.place(at);
         this.select(picked);
         if (picked) {
           this.beginEdit();
@@ -101,7 +103,6 @@ export class DetailView {
         }
         return;
       }
-      if (this.brush.tool === "place") return this.place(at);
       if (this.brush.tool === "paint") {
         this.beginEdit();
         this.painting = true;
@@ -642,12 +643,15 @@ export class DetailView {
     this.changed(changed);
   }
 
-  // Puts a new object of the place tool's type down at [x, z].
+  // Puts a new object of the armed type down at [x, z]: as built, or in the middle of its sizes.
   place(at) {
     const key = tileOf(at).join(",");
     if (!this.editable(key)) return;
-    const { type, scale } = this.brush;
-    const structure = specOf(type)?.structure;
+    const { type } = this.brush;
+    const spec = specOf(type);
+    if (!spec) return;
+    const { structure } = spec;
+    const scale = spec.built || structure ? 1 : (spec.size[0] + spec.size[1]) / 2;
     const object = { ...makeObject(type, at, structure ? 0 : Math.random() * Math.PI * 2, scale), id: `${key.replace(",", ".")}.${Math.random().toString(36).slice(2, 8)}` };
     this.beginEdit();
     this.touch(key);
@@ -859,7 +863,7 @@ export class DetailView {
         return [hit.x + origin[0] + Math.cos(a) * radius, hit.z + origin[1] + Math.sin(a) * radius];
       });
     if (this.brush.tool === "paint") return add(ring(Math.max(CELL_FT / 2, this.brush.radius)), CURSOR.trail);
-    if (["objects", "place", "water"].includes(this.brush.tool)) return;
+    if (["objects", "structures", "water"].includes(this.brush.tool)) return;
     const rings = DRAWN.has(this.brush.tool) ? [[Math.max(CELL_FT / 2, this.brush.width / 2), CURSOR.trail]] : [[this.brush.radius, CURSOR.inner], [this.brush.radius + this.brush.falloff, CURSOR.outer]];
     for (const [r, color] of rings) if (r > 0) add(ring(r), color);
   }
