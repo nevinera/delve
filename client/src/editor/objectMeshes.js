@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { OBJECT_TYPES } from "../world/objects.js";
+import { specOf } from "../world/objects.js";
+import { objectGeometry } from "./builtMeshes.js";
 import { meshHeightAt } from "../world/clutter.js";
 
 // Objects for the 3D view (world/objects.js says what they are and where), as instanced meshes:
@@ -18,8 +19,8 @@ export function setObjectSight(x, z, smallFt, largeFt) {
   sight.large.value = Math.min(largeFt, 1e9);
 }
 
-function limited(range) {
-  const material = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, side: THREE.DoubleSide });
+function limited(range, vertexColors = false) {
+  const material = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, side: THREE.DoubleSide, vertexColors });
   material.onBeforeCompile = (shader) => {
     shader.uniforms.objectFocus = sight.focus;
     shader.uniforms.objectRange = range;
@@ -32,7 +33,19 @@ function limited(range) {
   };
   return material;
 }
-const materials = { small: limited(sight.small), large: limited(sight.large) };
+const materials = { small: limited(sight.small), large: limited(sight.large), builtSmall: limited(sight.small, true), builtLarge: limited(sight.large, true) };
+// Built objects at least this tall reach as far as large types.
+const BUILT_LARGE_FT = 10;
+
+// A built object's geometry with its parameters' colors, kept per object read from the world.
+const builtGeometries = new WeakMap(); // object -> Map(colors -> geometry)
+function builtGeometry(object, colors = []) {
+  if (!builtGeometries.has(object)) builtGeometries.set(object, new Map());
+  const kept = builtGeometries.get(object);
+  const key = colors.join(",");
+  if (!kept.has(key)) kept.set(key, objectGeometry(object, colors));
+  return kept.get(key);
+}
 const UP = new THREE.Vector3(0, 1, 0);
 const AXIS_Z = new THREE.Vector3(0, 0, 1);
 
@@ -144,16 +157,23 @@ function variants(name) {
 // objects: from tiles' objects lists. tileAt(tx, tz): a decoded tile, for the ground under them.
 // origin: the continent position of the scene's origin.
 export function objectMeshes(objects, tileAt, origin) {
-  const groups = new Map(); // "shape/variant" -> [{ object, part }]
+  const groups = new Map(); // key -> { geometry, material, list: [{ object, p }] }
+  const join = (key, geometry, material, item) => {
+    if (!groups.has(key)) groups.set(key, { geometry, material, list: [] });
+    groups.get(key).list.push(item);
+  };
   for (const object of objects) {
-    const spec = OBJECT_TYPES[object.type];
+    const spec = specOf(object.type);
     if (!spec) continue;
+    if (spec.built) {
+      const geometry = builtGeometry(spec.built, object.colors);
+      if (geometry) join(`${object.type}/${(object.colors ?? []).join(",")}`, geometry, spec.height * object.scale >= BUILT_LARGE_FT ? materials.builtLarge : materials.builtSmall, { object, p: -1 });
+      continue;
+    }
     spec.parts.forEach((part, p) => {
       const shape = SHAPE_FOR[object.type]?.[part.shape] ?? part.shape;
       const v = Math.floor(object.yaw * 1000) % variants(shape).length;
-      const key = `${shape}/${v}/${spec.large ? "large" : "small"}`;
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push({ object, p });
+      join(`${shape}/${v}/${spec.large ? "large" : "small"}`, variants(shape)[v], materials[spec.large ? "large" : "small"], { object, p });
     });
   }
   const meshes = [];
@@ -161,15 +181,15 @@ export function objectMeshes(objects, tileAt, origin) {
   const q = new THREE.Quaternion();
   const tilt = new THREE.Quaternion();
   const color = new THREE.Color();
-  for (const [key, list] of groups) {
-    const [shape, v, size] = key.split("/");
-    const mesh = new THREE.InstancedMesh(variants(shape)[Number(v)], materials[size], list.length);
+  for (const { geometry, material, list } of groups.values()) {
+    const mesh = new THREE.InstancedMesh(geometry, material, list.length);
     list.forEach(({ object, p }, n) => {
       const { y, pitch } = seat(object, tileAt);
       q.setFromAxisAngle(UP, object.yaw).multiply(tilt.setFromAxisAngle(AXIS_Z, pitch));
       m.compose(new THREE.Vector3(object.at[0] - origin[0], y, object.at[1] - origin[1]), q, new THREE.Vector3(object.scale, object.scale, object.scale));
       mesh.setMatrixAt(n, m);
-      mesh.setColorAt(n, color.setRGB(...object.colors[p], THREE.SRGBColorSpace));
+      // Built objects carry their colors in their geometry.
+      mesh.setColorAt(n, p < 0 ? color.set(0xffffff) : color.setRGB(...object.colors[p], THREE.SRGBColorSpace));
     });
     mesh.computeBoundingSphere();
     mesh.userData.objects = list.map(({ object }) => object);
@@ -181,7 +201,7 @@ export function objectMeshes(objects, tileAt, origin) {
 // Where an object sits: long ones rest on the ground at both ends and tilt between them, others
 // on the lowest ground under them, so nothing floats. Each sinks in a little.
 function seat(object, tileAt) {
-  const spec = OBJECT_TYPES[object.type];
+  const spec = specOf(object.type);
   const [x, z] = object.at;
   const ground = (dx, dz) => meshHeightAt(tileAt, x + dx, z + dz) ?? 0;
   const sink = (spec.sink ?? 0.1) * object.height;

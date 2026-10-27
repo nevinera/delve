@@ -196,6 +196,10 @@
   gap: 6px;
 }
 
+.editor-wrap {
+  flex-wrap: wrap;
+}
+
 .editor-tools {
   display: flex;
   flex-wrap: wrap;

@@ -8,7 +8,7 @@ import { stampTrail } from "./detailTrails.js";
 import { carveChannel, traceSource } from "./detailWater.js";
 import { FLOW_NONE, encodeFlowDir, encodeFlowSlope } from "../world/generator.js";
 import { fellTree, paletteIndex, parseTree } from "../world/trees.js";
-import { OBJECT_TYPES, footprintOf, makeObject, reachOf, tileOf } from "../world/objects.js";
+import { footprintOf, makeObject, reachOf, specOf, tileOf } from "../world/objects.js";
 import { RenderView, boundary, groundSampler } from "./renderView.js";
 import { tilePath } from "./thumbnails.js";
 
@@ -624,10 +624,11 @@ export class DetailView {
     const { object } = selected;
     if (changes.yaw !== undefined) object.yaw = ((changes.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
     if (changes.scale !== undefined) {
-      const [least, most] = OBJECT_TYPES[object.type].size;
-      object.scale = Math.round(Math.max(least / 2, Math.min(most * 2, changes.scale)) * 10) / 10;
+      const spec = specOf(object.type);
+      const [least, most] = spec.built ? spec.size : spec.size.map((v, i) => v * [0.5, 2][i]);
+      object.scale = Math.round(Math.max(least, Math.min(most, changes.scale)) * 100) / 100;
       object.footprint = footprintOf(object.type, object.scale);
-      object.height = OBJECT_TYPES[object.type].height * object.scale;
+      object.height = Math.round(spec.height * object.scale * 100) / 100;
     }
     this.dirtyObjects.add(selected.key);
     this.drawSelection();

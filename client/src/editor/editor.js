@@ -17,7 +17,7 @@ import {
   tilesTouched,
 } from "./region.js";
 import { editedPath, loadEdited, saveEdited } from "./edited.js";
-import { createZone, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveSketch, saveZone, upgradeSketch } from "./zones.js";
+import { createZone, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveSketch, saveZone, upgradeSketch, slug } from "./zones.js";
 import { ShapePalette } from "./shapePalette.js";
 import { ShapePreview } from "./shapePreview.js";
 import { WaterSimulator } from "./waterflow.js";
@@ -27,10 +27,10 @@ import { LandGrid, landBounds, loadLand, saveLand } from "../world/landGrid.js";
 import { BLENDS, EROSIONS, SHAPES, TOOLS as SCULPT_TOOLS } from "./sculptTools.js";
 import { DETAIL_TOOLS } from "./detailTools.js";
 import { TRAIL_KINDS, TRAIL_STATES } from "./detailTrails.js";
-import { OBJECT_TYPES } from "../world/objects.js";
-import { emptyObject, objectPath } from "../world/builtObjects.js";
-import { encodeTile } from "../world/tileCodec.js";
-import { gzipSync } from "fflate";
+import { BUILT_PREFIX, OBJECT_TYPES, builtOf, makeObject, setBuiltObjects, specOf } from "../world/objects.js";
+import { collectionJson, emptyObject, newObjectId, objectPath, readObjects } from "../world/builtObjects.js";
+import { decodeTile, encodeTile } from "../world/tileCodec.js";
+import { gunzipSync, gzipSync } from "fflate";
 import { CELL_FT, TILE_FT } from "../world/constants.js";
 import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
 
@@ -188,6 +188,7 @@ export class Editor {
   // Loads the current continent's thumbnails, zones and sketch, and frames them. Zones that held
   // their own pins hand them over to the sketch.
   showContinent() {
+    this.loadBuiltObjects();
     this.thumbnails.load(this.world, this.continent);
     this.details.clear();
     this.preview = null;
@@ -710,7 +711,7 @@ export class Editor {
     this.el.trailWidthValue.textContent = `${this.el.trailWidth.value} ft`;
     if (this.step !== "detail") return;
     const { placeType, placeScale, placeScaleValue } = this.el;
-    placeScaleValue.textContent = `${placeScale.value} ft`;
+    placeScaleValue.textContent = placeType.value.startsWith(BUILT_PREFIX) ? `×${placeScale.value}` : `${placeScale.value} ft`;
     const { channelWidth, channelWidthValue, channelDepth, channelDepthValue, sourceFlow, sourceFlowValue } = this.el;
     channelWidthValue.textContent = `${channelWidth.value} ft`;
     channelDepthValue.textContent = `${channelDepth.value} ft`;
@@ -742,11 +743,129 @@ export class Editor {
     this.builder.open(object);
   }
 
-  // Keeps a built object in the world.
+  // Keeps a built object in the world, and has it placed next.
   saveBuiltObject(object) {
     this.world.writeJson(objectPath(object.id), object);
     this.dirty = true;
+    this.loadBuiltObjects(`${BUILT_PREFIX}${object.id}`);
     this.say(`Saved ${object.name}.`, { info: true });
+  }
+
+  // The world's built objects (objects/<id>.json), by name.
+  builtObjects() {
+    return [...this.world.files.keys()]
+      .filter((path) => /^objects\/[0-9a-z]{8}\.json$/.test(path))
+      .map((path) => this.world.readJson(path))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  // Registers the world's built objects (world/objects.js) and lists them to place, choosing
+  // `choose` if given. The detail view draws them again, since they may have changed.
+  loadBuiltObjects(choose) {
+    setBuiltObjects(this.builtObjects());
+    this.fillObjectTypes(choose);
+    if (this.step === "detail" && this.detail) this.showDetail();
+  }
+
+  // The place tool's types: built objects, then the scattered kinds; and the same for replacing.
+  fillObjectTypes(choose) {
+    const built = this.builtObjects();
+    for (const select of [this.el.placeType, this.el.replaceFrom, this.el.replaceTo]) {
+      const was = select.value;
+      select.replaceChildren();
+      const group = (label, options) => {
+        if (!options.length) return;
+        const g = document.createElement("optgroup");
+        g.label = label;
+        g.append(...options);
+        select.append(g);
+      };
+      group("built", built.map((o) => new Option(o.name, `${BUILT_PREFIX}${o.id}`)));
+      group("scattered", Object.keys(OBJECT_TYPES).map((type) => new Option(type, type)));
+      select.value = select === this.el.placeType && choose ? choose : was;
+      if (!select.value) select.selectedIndex = 0;
+    }
+    if (choose) this.el.placeType.dispatchEvent(new Event("change"));
+    this.renderObjectButtons();
+  }
+
+  renderObjectButtons() {
+    const isBuilt = Boolean(builtOf(this.el.placeType.value));
+    this.el.editObject.disabled = !isBuilt;
+    this.el.exportObject.disabled = !isBuilt;
+  }
+
+  // A scale slider and its readout for a type: feet for the scattered kinds, a factor for built
+  // objects.
+  scaleSlider(input, output, type, value) {
+    const spec = specOf(type);
+    const [least, most] = spec?.built ? spec.size : (spec?.size ?? [1, 1]).map((v, i) => v * [0.5, 2][i]);
+    [input.min, input.max, input.step] = [least, most, spec?.built ? 0.05 : 0.5];
+    input.value = value;
+    output.textContent = spec?.built ? `×${value}` : `${value} ft`;
+  }
+
+  // Copies objects from an object or collection's JSON into the world, recording `source` (a
+  // URL) on each. One already here asks before it's overwritten; kept, the import gets a new id.
+  importObjects(text, from, source) {
+    let objects;
+    try {
+      objects = readObjects(text, source);
+    } catch (err) {
+      return this.say(`Couldn't import ${from}: ${err.message}`);
+    }
+    for (const object of objects) {
+      const here = this.world.files.has(objectPath(object.id)) && this.world.readJson(objectPath(object.id));
+      if (here && !window.confirm(`This world already has ${here.name}, which ${object.name} from ${from} is a copy of. Overwrite it? Cancel keeps both, the import with a new id.`)) object.id = newObjectId();
+      this.world.writeJson(objectPath(object.id), object);
+    }
+    this.dirty = true;
+    this.loadBuiltObjects(objects.length ? `${BUILT_PREFIX}${objects[0].id}` : undefined);
+    this.say(`Imported ${objects.length} object${objects.length === 1 ? "" : "s"} from ${from}.`, { info: true });
+  }
+
+  async objectsFromUrl() {
+    const url = window.prompt("The URL of an object or collection (JSON):");
+    if (!url) return;
+    try {
+      const response = await fetch(url);
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+      this.importObjects(await response.text(), url, url);
+    } catch (err) {
+      this.say(`Couldn't load ${url}: ${err.message}`);
+    }
+  }
+
+  // Swaps every placed object of type `from` for type `to`, in every continent's tiles, keeping
+  // where each stands and which way it faces. Changed tiles are marked edited by hand.
+  replaceInstances(from, to) {
+    if (!from || !to || from === to) return this.say("Pick two different types.");
+    const name = (type) => builtOf(type)?.name ?? type;
+    if (!window.confirm(`Replace every placed ${name(from)} with ${name(to)}?`)) return;
+    const sameKind = from.startsWith(BUILT_PREFIX) === to.startsWith(BUILT_PREFIX);
+    const [least, most] = specOf(to).size;
+    let count = 0;
+    for (const { key: continent } of this.world.info.continents) {
+      const edited = loadEdited(this.world.files, continent);
+      for (const { tx, tz, path } of surfaceTiles(this.world, continent)) {
+        const tile = decodeTile(gunzipSync(this.world.files.get(path)));
+        if (!tile.objects?.some((o) => o.type === from)) continue;
+        tile.objects = tile.objects.map((o) => {
+          if (o.type !== from) return o;
+          count++;
+          const scale = sameKind ? o.scale : to.startsWith(BUILT_PREFIX) ? 1 : (least + most) / 2;
+          return { ...makeObject(to, o.at, o.yaw, scale), id: o.id };
+        });
+        this.world.files.set(path, gzipSync(encodeTile(tile)));
+        this.details.drop(tx, tz);
+        edited.add(`${tx},${tz}`);
+      }
+      saveEdited(this.world.files, continent, edited);
+    }
+    this.dirty = true;
+    if (this.step === "detail" && this.detail) this.showDetail();
+    this.renderPanel();
+    this.say(`Replaced ${count} placed ${name(from)} with ${name(to)}.`, { info: true });
   }
 
   // The detail step's picked object in the panel, or none.
@@ -754,14 +873,12 @@ export class Editor {
     const { objectPanel, objectInfo, objectYaw, objectYawValue, objectScale, objectScaleValue } = this.el;
     objectPanel.hidden = !object;
     if (!object) return;
-    const [least, most] = OBJECT_TYPES[object.type].size;
-    objectInfo.textContent = `${object.type} at ${object.at.map(Math.round).join(", ")}`;
+    const spec = specOf(object.type);
+    objectInfo.textContent = `${spec?.built?.name ?? object.type} at ${object.at.map(Math.round).join(", ")}`;
     const degrees = Math.round((object.yaw * 180) / Math.PI) % 360;
     objectYaw.value = degrees;
     objectYawValue.textContent = `${degrees}°`;
-    [objectScale.min, objectScale.max] = [least / 2, most * 2];
-    objectScale.value = object.scale;
-    objectScaleValue.textContent = `${object.scale} ft`;
+    this.scaleSlider(objectScale, objectScaleValue, object.type, object.scale);
   }
 
   // The detail step's picked water source in the panel, or none.
@@ -989,16 +1106,39 @@ export class Editor {
       this.el.trailWidth.value = ROADS[this.el.trailKind.value].width;
       this.applyDetailBrush();
     });
-    for (const type of Object.keys(OBJECT_TYPES)) this.el.placeType.add(new Option(type, type));
-    // Each type starts in the middle of its sizes.
+    this.fillObjectTypes();
+    // Each type starts in the middle of its sizes, and built objects as built.
     const placeSizes = () => {
-      const [least, most] = OBJECT_TYPES[this.el.placeType.value].size;
-      [this.el.placeScale.min, this.el.placeScale.max] = [least / 2, most * 2];
-      this.el.placeScale.value = (least + most) / 2;
+      const type = this.el.placeType.value;
+      const [least, most] = specOf(type)?.size ?? [1, 1];
+      this.scaleSlider(this.el.placeScale, this.el.placeScaleValue, type, type.startsWith(BUILT_PREFIX) ? 1 : (least + most) / 2);
+      this.renderObjectButtons();
       this.applyDetailBrush();
     };
     this.el.placeType.addEventListener("change", placeSizes);
     placeSizes();
+    this.el.editObject.addEventListener("click", () => {
+      const object = builtOf(this.el.placeType.value);
+      if (object) this.buildObject(structuredClone(object));
+    });
+    this.el.importObjects.addEventListener("click", () => this.el.objectsFile.click());
+    this.el.objectsFile.addEventListener("change", async (e) => {
+      const [file] = e.target.files;
+      e.target.value = "";
+      if (file) this.importObjects(await file.text(), file.name);
+    });
+    this.el.objectsFromUrl.addEventListener("click", () => this.objectsFromUrl());
+    this.el.exportObject.addEventListener("click", () => {
+      const object = builtOf(this.el.placeType.value);
+      if (object) download(`${slug(object.name) || object.id}.json`, `${JSON.stringify(object, null, 2)}\n`);
+    });
+    this.el.exportObjects.addEventListener("click", () => {
+      const objects = this.builtObjects();
+      if (!objects.length) return this.say("There are no built objects to export yet.");
+      const name = window.prompt("A name for the collection:", this.world.info.name ?? "objects");
+      if (name) download(`${slug(name) || "objects"}.json`, `${collectionJson(name, objects)}\n`);
+    });
+    this.el.replaceObjects.addEventListener("click", () => this.replaceInstances(this.el.replaceFrom.value, this.el.replaceTo.value));
     // Dragging a slider is one edit, undone together.
     for (const [input, change] of [
       [this.el.objectYaw, (v) => ({ yaw: (v * Math.PI) / 180 })],
@@ -1647,4 +1787,13 @@ function noContextMenu(stage) {
   window.addEventListener("pointerup", (e) => {
     if (e.button === 2) setTimeout(() => (dragged = false), 300);
   });
+}
+
+// Hands the browser a file to save.
+function download(name, text) {
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  link.download = name;
+  link.click();
+  URL.revokeObjectURL(link.href);
 }

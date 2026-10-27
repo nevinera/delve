@@ -8,6 +8,7 @@
 // [r, g, b] (0-1) per part. footprint and height (the blocking shape and how tall it stands) are
 // worked out from the type when placed, so the game server never needs the types.
 
+import { shapeOf } from "./builtObjects.js";
 import { CELL_FT, TILE_FT } from "./constants.js";
 import { hash2 } from "./noise.js";
 import { parseTree } from "./trees.js";
@@ -44,6 +45,31 @@ export const OBJECT_TYPES = {
   hummock: { size: [2, 3.5], footprint: { circle: 1.1 }, height: 1, parts: [{ shape: "hummock", colors: [MOSS] }] },
   driftLog: { size: [15, 35], footprint: { capsule: [0.07, 0.5] }, height: 0.14, parts: [{ shape: "log", colors: [BLEACHED] }] },
 };
+
+// Built objects (builtObjects.js) are types too, named "built:<id>". For them scale is a factor, 1
+// being as built, and colors are their parameters' colors (paletteColors), absent for the defaults.
+// The world's built objects are registered here with setBuiltObjects.
+export const BUILT_PREFIX = "built:";
+export const BUILT_SCALES = [0.25, 4];
+const built = new Map(); // id -> { object, footprint, height }
+
+export function setBuiltObjects(objects) {
+  built.clear();
+  for (const object of objects) built.set(object.id, { object, ...shapeOf(object) });
+}
+
+// The built object a type names, or undefined.
+export function builtOf(type) {
+  return type?.startsWith(BUILT_PREFIX) ? built.get(type.slice(BUILT_PREFIX.length))?.object : undefined;
+}
+
+// What a type is, as OBJECT_TYPES gives it, for built objects too: { size, footprint, height,
+// built }. Undefined for a type that isn't known.
+export function specOf(type) {
+  if (!type?.startsWith(BUILT_PREFIX)) return OBJECT_TYPES[type];
+  const b = built.get(type.slice(BUILT_PREFIX.length));
+  return b && { size: BUILT_SCALES, footprint: b.footprint, height: b.height, built: b.object, sink: 0 };
+}
 
 // Where objects scatter: `at` names a kind of cell (see placeOf), `per` is the chance per cell,
 // and `biomes` limits a rule to those biomes. `wet` lets a type lie in shallow water.
@@ -123,7 +149,8 @@ export function scatterObjects(tile) {
 
 // A new object of `type`, its colors picked by roll(q) in [0, 1).
 export function makeObject(type, at, yaw, scale, roll = Math.random) {
-  const spec = OBJECT_TYPES[type];
+  const spec = specOf(type);
+  if (spec.built) return { id: null, type, at, yaw, scale, footprint: footprintOf(type, scale), height: spec.height * scale };
   return {
     id: null,
     type,
@@ -138,7 +165,7 @@ export function makeObject(type, at, yaw, scale, roll = Math.random) {
 
 // The type's blocking shape at a scale, in feet.
 export function footprintOf(type, scale) {
-  const { footprint } = OBJECT_TYPES[type];
+  const { footprint } = specOf(type);
   if (footprint.circle) return { circle: footprint.circle * scale };
   if (footprint.capsule) return { capsule: footprint.capsule.map((v) => v * scale) };
   return { rect: footprint.rect.map((v) => v * scale) };

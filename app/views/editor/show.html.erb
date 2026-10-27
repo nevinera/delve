@@ -174,8 +174,19 @@
             </div>
           </div>
           <label class="editor-field" data-for="place">object <select id="placeType"></select></label>
-          <div class="editor-row" data-for="place"><button id="buildObject" type="button">build a new object</button></div>
           <label class="editor-range" data-for="place">size <input id="placeScale" type="range" min="1" max="100" step="0.5" value="5"><output id="placeScaleValue"></output></label>
+          <div class="editor-row editor-wrap" data-for="place">
+            <button id="buildObject" type="button">new</button>
+            <button id="editObject" type="button">edit</button>
+            <button id="importObjects" type="button">import</button>
+            <button id="objectsFromUrl" type="button">from URL</button>
+            <button id="exportObject" type="button">export</button>
+            <button id="exportObjects" type="button">export all</button>
+            <input id="objectsFile" type="file" accept=".json,application/json" hidden>
+          </div>
+          <label class="editor-field" data-for="place">replace every <select id="replaceFrom"></select></label>
+          <label class="editor-field" data-for="place">with <select id="replaceTo"></select></label>
+          <div class="editor-row" data-for="place"><button id="replaceObjects" type="button">replace them</button></div>
           <div data-for="objects place">
             <div id="objectPanel" hidden>
               <p id="objectInfo"></p>
