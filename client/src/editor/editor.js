@@ -16,6 +16,7 @@ import {
   subtractZones,
   tilesTouched,
 } from "./region.js";
+import { editedPath, loadEdited, saveEdited } from "./edited.js";
 import { createZone, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveSketch, saveZone, upgradeSketch } from "./zones.js";
 import { ShapePalette } from "./shapePalette.js";
 import { ShapePreview } from "./shapePreview.js";
@@ -33,6 +34,8 @@ const COLORS = {
   activeFill: "rgba(240, 200, 80, 0.06)",
   stale: "rgba(255, 130, 40, 0.45)",
   missing: "rgba(255, 255, 255, 0.16)",
+  edited: "rgba(200, 120, 255, 0.9)",
+  held: "rgba(230, 40, 60, 0.45)",
   locked: "rgba(255, 255, 255, 0.95)",
   casing: "rgba(0, 0, 0, 0.75)",
   lockedFill: "rgba(255, 255, 255, 0.07)",
@@ -246,15 +249,37 @@ export class Editor {
 
   // Land tiles that need generating: { stale } ones generated before a change that reaches them,
   // and { missing } ones never generated. Both are lists of "tx,tz" keys.
+  // The tiles to generate: stale (changed since generated) and missing ones, and held ones, stale
+  // but edited by hand, which are only regenerated when asked.
   outOfDate() {
     const stale = [];
     const missing = [];
+    const held = [];
+    const edited = this.editedTiles();
     for (const key of this.landTiles()) {
       const [tx, tz] = key.split(",").map(Number);
       if (!this.world.files.has(tilePath(this.continent, tx, tz))) missing.push(key);
-      else if (this.pending.has(key)) stale.push(key);
+      else if (this.pending.has(key)) (edited.has(key) ? held : stale).push(key);
     }
-    return { stale, missing };
+    return { stale, missing, held };
+  }
+
+  // The continent's hand-edited tiles (edited.js), read again when the file changes.
+  editedTiles() {
+    const bytes = this.world.files.get(editedPath(this.continent));
+    if (this.editedCache?.bytes !== bytes || this.editedCache?.continent !== this.continent) this.editedCache = { bytes, continent: this.continent, keys: loadEdited(this.world.files, this.continent) };
+    return this.editedCache.keys;
+  }
+
+  // Marks tiles ("tx,tz" keys) edited by hand, or not.
+  setEdited(keys, edited) {
+    const all = new Set(this.editedTiles());
+    for (const key of keys) {
+      if (edited) all.add(key);
+      else all.delete(key);
+    }
+    saveEdited(this.world.files, this.continent, all);
+    this.dirty = true;
   }
 
   // The zone whose region holds a point, if any.
@@ -341,7 +366,14 @@ export class Editor {
     write();
     this.landTileKeys = null;
     const tiles = this.landTiles();
-    for (const tile of changedTiles(before, this.storedState(), tiles)) if (tiles.has(tile)) this.pending.add(tile);
+    const edited = this.editedTiles();
+    let touched = 0;
+    for (const tile of changedTiles(before, this.storedState(), tiles)) {
+      if (!tiles.has(tile)) continue;
+      if (edited.has(tile) && !this.pending.has(tile)) touched++;
+      this.pending.add(tile);
+    }
+    if (touched) this.say(`That affects ${touched} manually edited tile${touched === 1 ? "" : "s"}, marked in red. Generating leaves them as they are unless you allow it.`);
     this.dirty = true;
     this.renderPanel();
     this.map.render();
@@ -724,13 +756,20 @@ export class Editor {
 
   bindPanel() {
     const { continent, newZone, zoneName, drawRegion, deleteZone, generate, regenerateAll } = this.el;
+    // Tiles edited by hand are only overwritten when the author says so.
+    const overwrite = (held) => held.length > 0 && window.confirm(`${held.length} of these tile${held.length === 1 ? " was" : "s were"} edited by hand. Overwrite ${held.length === 1 ? "it" : "them"} too? Cancel generates the rest and leaves ${held.length === 1 ? "it" : "them"} as ${held.length === 1 ? "it is" : "they are"}.`);
+    const keys = (list) => list.map((k) => k.split(",").map(Number));
     generate.addEventListener("click", () => {
-      const { stale, missing } = this.outOfDate();
-      this.generate(generate, [...stale, ...missing].map((k) => k.split(",").map(Number)));
+      const { stale, missing, held } = this.outOfDate();
+      this.generate(generate, keys([...stale, ...missing, ...(overwrite(held) ? held : [])]));
     });
     regenerateAll.addEventListener("click", () => {
-      const tiles = [...this.landTiles()].map((k) => k.split(",").map(Number));
-      if (window.confirm(`Regenerate all ${tiles.length} tiles? It replaces every generated tile, edits included.`)) this.generate(regenerateAll, tiles);
+      const edited = this.editedTiles();
+      const all = [...this.landTiles()];
+      if (!window.confirm(`Regenerate all ${all.length} tiles? It replaces every generated tile.`)) return;
+      const held = all.filter((k) => edited.has(k) && this.world.files.has(tilePath(this.continent, ...k.split(",").map(Number))));
+      const skip = overwrite(held) ? new Set() : new Set(held);
+      this.generate(regenerateAll, keys(all.filter((k) => !skip.has(k))));
     });
     for (const tab of this.el.stepTabs) tab.addEventListener("click", () => this.setStep(tab.dataset.step));
     for (const section of this.el.steps) {
@@ -857,9 +896,10 @@ export class Editor {
       drawRegion.textContent = zone.region.length ? "redraw region" : "draw region";
     }
 
-    const { stale, missing } = this.outOfDate();
-    const todo = stale.length + missing.length;
-    this.el.tilesInfo.textContent = `${this.landTiles().size} tiles with land · ${stale.length} out of date · ${missing.length} not generated${this.landDirty ? " · land not committed yet" : ""}`;
+    const { stale, missing, held } = this.outOfDate();
+    const todo = stale.length + missing.length + held.length;
+    const edited = this.editedTiles().size;
+    this.el.tilesInfo.textContent = `${this.landTiles().size} tiles with land · ${stale.length + held.length} out of date · ${missing.length} not generated${edited ? ` · ${edited} edited by hand${held.length ? `, ${held.length} of them out of date` : ""}` : ""}${this.landDirty ? " · land not committed yet" : ""}`;
     this.el.landStatus.textContent = this.landDirty ? "Sculpted since the last commit. Tiles are made from committed land only." : "Everything's committed.";
     this.el.commitLand.disabled = !this.landDirty;
     this.el.discardLand.disabled = !this.landDirty;
@@ -899,6 +939,8 @@ export class Editor {
     this.renderPanel();
     this.say();
     try {
+      const overwritten = tiles.map(([tx, tz]) => `${tx},${tz}`).filter((k) => this.editedTiles().has(k));
+      if (overwritten.length) this.setEdited(overwritten, false);
       await this.generator.run(this.storedState(), this.continent, tiles, ({ tx, tz, gz, rgba, cells, falls }) => {
         this.world.files.set(tilePath(this.continent, tx, tz), gz);
         this.pending.delete(`${tx},${tz}`);
@@ -1205,6 +1247,7 @@ export class Editor {
 
   draw(ctx, map) {
     if (this.step === "tiles" && this.option("stale")) this.drawOutOfDate(ctx, map);
+    this.drawEdited(ctx, map);
     const zonesStep = this.step === "zones";
     const editing = this.editZone;
     if (zonesStep || this.option("boundaries")) {
@@ -1254,6 +1297,24 @@ export class Editor {
         ctx.lineTo(bx, by);
         ctx.stroke();
       }
+    }
+  }
+
+  // Hand-edited tiles, outlined, and filled red where something upstream changed under them.
+  drawEdited(ctx, map) {
+    const edited = this.editedTiles();
+    if (!edited.size) return;
+    const s = map.view.scale;
+    ctx.fillStyle = COLORS.held;
+    for (const key of this.outOfDate().held) {
+      const [sx, sy] = map.toScreen(key.split(",").map(Number));
+      ctx.fillRect(sx, sy, s, s);
+    }
+    ctx.strokeStyle = COLORS.edited;
+    ctx.lineWidth = Math.max(1, Math.min(3, s / 16)) * map.dpr;
+    for (const key of edited) {
+      const [sx, sy] = map.toScreen(key.split(",").map(Number));
+      ctx.strokeRect(sx + 1, sy + 1, s - 2, s - 2);
     }
   }
 
