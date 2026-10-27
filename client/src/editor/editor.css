@@ -398,6 +398,7 @@
 }
 
 .ob-canvas {
+  outline: none;
   display: block;
   width: 100%;
   height: 100%;
@@ -412,6 +413,10 @@
   color: #999;
   font-size: 11px;
   pointer-events: none;
+}
+
+.ob-panel > * {
+  flex-shrink: 0;
 }
 
 .ob-panel {

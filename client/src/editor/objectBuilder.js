@@ -3,11 +3,14 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { MAX_PIECES, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, addColor, dropUnusedColors, pieceCorners, problems, shapeOf, turnPoint } from "../world/builtObjects.js";
 import { builtMaterial, objectGeometry, primitive } from "./builtMeshes.js";
+import { characterClips, loadAnimations } from "../character/animations.js";
+import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
+import { randomLook } from "../character/recipe.js";
 
 // The object builder: a dialog over most of the page for putting a built object
 // (world/builtObjects.js) together from pieces. The 3D view shows the pieces on a ground grid (1 ft,
 // heavier every 5 ft), the object's axes, a ring where they must stay within, the footprint the
-// game will use, and a person for scale. Clicking a piece picks it and fades the rest; handles
+// game will use, and on asking, a person for scale. Clicking a piece picks it and fades the rest; handles
 // move, turn or size it along its own axes, sizing from the face opposite the handle, and the panel
 // sets its type, color, taper, whether it's a hole and, as a last resort, exact numbers. Holes show
 // as red glass while a piece is picked; with none picked the object shows as the game draws it,
@@ -25,12 +28,15 @@ const SNAP = { ft: 0.25, degrees: 5 };
 const UNDO_KEEP = 100;
 const HANDLES = { move: "translate", turn: "rotate", size: "scale" };
 const KEYS = { g: "move", r: "turn", s: "size" };
-const PERSON = { heightFt: 6, radiusFt: 0.8, at: [-5, -5] }; // behind and left, as first framed
+// The person for scale stands to the left as first framed (frameObject looks from +x, +z), where
+// the object won't hide it, twice as far out as the object reaches, and at least nearestFt.
+const PERSON = { heightFt: 6, nearestFt: 4, toward: new THREE.Vector2(-0.9, 0.7).normalize() };
+const TICKS = { minorFt: 0.15, majorFt: 0.4 }; // the vertical axis's discs' radii, at each foot and every 5
 const LABEL_FT = 10; // how far out along each axis its label sits
 const FADED = 0.25; // how much of the unpicked pieces shows while one is picked
 const HOLE = { color: 0xff4040, opacity: 0.3 };
 const AXES = { x: { color: 0xe05a5a, label: "x east" }, y: { color: 0x6ad06a, label: "y up" }, z: { color: 0x5a8ae0, label: "z south" } };
-const COLORS = { grid: 0x626a58, gridMajor: 0x9aa48c, reach: 0x8fc4ff, footprint: 0xf0c850, picked: 0xffe066, person: 0x9aa4b0, ground: 0x4a5040, background: 0x20242a };
+const COLORS = { grid: 0x626a58, gridMajor: 0x9aa48c, reach: 0x8fc4ff, footprint: 0xf0c850, picked: 0xffe066, ground: 0x4a5040, background: 0x20242a };
 const HINT = "click a piece to pick it · G moves, R turns, S sizes, all along the piece's own axes · W toggles moving along the world's · F frames the object · right-drag turns the view · middle-drag pans · wheel zooms · delete removes the piece · ctrl-d copies it · ctrl-z undoes, ctrl-shift-z redoes";
 
 // An element with properties and children.
@@ -102,7 +108,8 @@ export class ObjectBuilder {
 
   buildDom() {
     const { div, field } = { div: (cls, ...c) => el("div", { className: cls }, ...c), field: (label, input) => el("label", { className: "ob-field" }, label, input) };
-    this.canvas = el("canvas", { className: "ob-canvas" });
+    // Focusable, so keys reach the builder once the view's been used.
+    this.canvas = el("canvas", { className: "ob-canvas", tabIndex: -1 });
     this.name = el("input", { type: "text", placeholder: "name" });
     this.name.addEventListener("change", () => this.change(() => (this.object.name = this.name.value.trim() || "unnamed")));
     this.tags = el("input", { type: "text", placeholder: "tags, by commas" });
@@ -119,8 +126,9 @@ export class ObjectBuilder {
     const add = div("ob-row", ...PIECE_TYPES.map((type) => el("button", { type: "button", textContent: type, onclick: () => this.addPiece(type) })));
     this.handleButtons = Object.keys(HANDLES).map((name) => el("button", { type: "button", textContent: name, onclick: () => this.setHandle(name) }));
     this.snap = el("input", { type: "checkbox", checked: true, onchange: () => this.applySnap() });
+    this.personBox = el("input", { type: "checkbox", onchange: () => (this.canvas.focus(), this.showPerson(this.personBox.checked)) });
     this.worldBox = el("input", { type: "checkbox", onchange: () => ((this.worldMoves = this.worldBox.checked), this.setHandle(this.handle)) });
-    const handles = div("ob-row", ...this.handleButtons, el("label", { className: "ob-check" }, this.snap, el("span", { textContent: "snap" })), el("label", { className: "ob-check", title: "move along the world's axes, not the piece's (W)" }, this.worldBox, el("span", { textContent: "world" })));
+    const handles = div("ob-row", ...this.handleButtons, el("label", { className: "ob-check" }, this.snap, el("span", { textContent: "snap" })), el("label", { className: "ob-check", title: "move along the world's axes, not the piece's (W)" }, this.worldBox, el("span", { textContent: "world" })), el("label", { className: "ob-check ob-person", title: "a random character beside the object, for scale" }, this.personBox, el("span", { textContent: "person" })));
 
     this.list = el("select", { size: 8, className: "ob-list", onchange: () => this.pick(this.list.value === "" ? null : Number(this.list.value)) });
 
@@ -444,9 +452,7 @@ export class ObjectBuilder {
     ground.position.y = -0.01;
     this.scene.add(ground);
     this.scene.add(ring(REACH_FT, COLORS.reach));
-    const person = new THREE.Mesh(new THREE.CapsuleGeometry(PERSON.radiusFt, PERSON.heightFt - PERSON.radiusFt * 2, 4, 8), new THREE.MeshLambertMaterial({ color: COLORS.person, transparent: true, opacity: 0.45 }));
-    person.position.set(PERSON.at[0], PERSON.heightFt / 2, PERSON.at[1]);
-    this.scene.add(person);
+    this.clock = new THREE.Clock();
 
     this.pieces = new THREE.Group();
     this.scene.add(this.pieces);
@@ -476,6 +482,7 @@ export class ObjectBuilder {
     this.applySnap();
 
     this.canvas.addEventListener("pointerdown", (e) => {
+      this.canvas.focus();
       if (e.button !== 0 || this.transform.axis) return;
       const r = this.canvas.getBoundingClientRect();
       const ray = new THREE.Raycaster();
@@ -539,8 +546,41 @@ export class ObjectBuilder {
     this.drawMarks();
   }
 
+  // A random character for scale, as walking makes, idling beside the object; or none.
+  showPerson(on) {
+    if (this.person) {
+      this.scene.remove(this.person);
+      disposeCharacter(this.person);
+      this.person = this.mixer = null;
+    }
+    if (!on) return;
+    const person = characterMesh({ ...randomLook(), sheathed: true });
+    this.person = person;
+    this.mixer = new THREE.AnimationMixer(person);
+    this.scene.add(person);
+    this.placePerson();
+    loadAnimations().then((baked) => {
+      const idle = this.person === person && characterClips(person, baked).get("Idle_Loop");
+      if (idle) this.mixer.clipAction(idle).play();
+    });
+  }
+
+  // How far out the object reaches across the ground from its centre.
+  reach() {
+    return Math.max(0, ...this.object.pieces.flatMap((p) => pieceCorners(p).map(([x, , z]) => Math.hypot(x, z))));
+  }
+
+  placePerson() {
+    if (!this.person) return;
+    const d = Math.max(PERSON.nearestFt, 2 * this.reach());
+    this.person.position.set(PERSON.toward.x * d, 0, PERSON.toward.y * d);
+    // Facing the object.
+    this.person.rotation.y = Math.atan2(-PERSON.toward.x, -PERSON.toward.y);
+  }
+
   // The footprint the game will use, on the ground.
   drawMarks() {
+    this.placePerson();
     for (const child of [...this.marks.children]) {
       child.geometry.dispose();
       child.material.dispose();
@@ -559,6 +599,7 @@ export class ObjectBuilder {
   // Looks at the whole object, or at where one would stand.
   frameObject() {
     const box = new THREE.Box3(new THREE.Vector3(-3, 0, -3), new THREE.Vector3(3, PERSON.heightFt, 3));
+    if (this.person) box.expandByPoint(this.person.position.clone().setY(PERSON.heightFt));
     for (const piece of this.object.pieces) for (const corner of pieceCorners(piece)) box.expandByPoint(new THREE.Vector3(...corner));
     const middle = box.getCenter(new THREE.Vector3());
     const reach = box.getSize(new THREE.Vector3()).length();
@@ -583,6 +624,7 @@ export class ObjectBuilder {
         return;
       }
       if (this.canvas.width !== Math.round(this.canvas.clientWidth * this.renderer.getPixelRatio())) this.resize();
+      this.mixer?.update(this.clock.getDelta());
       this.renderer.render(this.scene, this.camera);
       this.frame = requestAnimationFrame(loop);
     };
@@ -608,6 +650,14 @@ function axes(reach) {
     const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ends[axis].map((p) => new THREE.Vector3(...p))), new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.8 }));
     line.renderOrder = 1;
     group.add(line, textSprite(label, color, ends[axis][1].map((v, i) => (i === "xyz".indexOf(axis) ? LABEL_FT : v))));
+  }
+  // Discs up the vertical axis every foot, bigger every 5.
+  const material = new THREE.MeshBasicMaterial({ color: AXES.y.color, side: THREE.DoubleSide, depthTest: false, transparent: true, opacity: 0.8 });
+  for (let y = 1; y <= reach / 2; y++) {
+    const disc = new THREE.Mesh(new THREE.CircleGeometry(y % 5 ? TICKS.minorFt : TICKS.majorFt, 16).rotateX(-Math.PI / 2), material);
+    disc.position.y = y;
+    disc.renderOrder = 1;
+    group.add(disc);
   }
   return group;
 }
