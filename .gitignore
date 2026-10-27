@@ -43,3 +43,6 @@ node_modules/
 
 # Local world checkouts, linked in for development
 /public/worlds
+
+# Local-only allow-list restricting Google login (see config/allow_only.yml.example).
+/config/allow_only.yml

@@ -1,0 +1,11 @@
+# Copy this file to config/allow_only.yml (gitignored) to restrict logins to a
+# fixed list. Each key is optional independently - an absent or empty key
+# allows everyone through that provider; only present, non-empty keys
+# restrict.
+google:
+  - someone@example.com
+  - someone.else@example.com
+
+github:
+  - some-github-username
+  - another-github-username
