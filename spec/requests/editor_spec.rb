@@ -1,6 +1,8 @@
 require "rails_helper"
 
 RSpec.describe "Editor", type: :request do
+  before { sign_in create(:user) }
+
   it "shows the map and the download button" do
     get editor_path
 

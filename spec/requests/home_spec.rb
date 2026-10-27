@@ -9,4 +9,16 @@ RSpec.describe "Home", type: :request do
     expect(response.body).to match(/screenshot-\h+\.png/)
     expect(response.body).to include(%(href="/editor"))
   end
+
+  it "offers Google sign-in when signed out" do
+    get root_path
+    expect(response.body).to include("Sign in with Google")
+  end
+
+  it "shows who is signed in and a sign-out button" do
+    sign_in create(:user, email: "me@example.com")
+    get root_path
+    expect(response.body).to include("Signed in as me@example.com")
+    expect(response.body).to include("Sign out")
+  end
 end

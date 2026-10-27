@@ -1,6 +1,11 @@
 <main class="home">
   <h1>Delve</h1>
   <%= image_tag "screenshot.png", alt: "A 3D tile of forest, lakes and hills", width: 560, height: 350 %>
+  <% if user_signed_in? %>
+    <p>Signed in as <%= current_user.email %>. <%= button_to "Sign out", destroy_user_session_path, method: :delete, form: {style: "display: inline"} %></p>
+  <% else %>
+    <p><%= button_to "Sign in with Google", user_google_oauth2_omniauth_authorize_path, method: :post, data: {turbo: false} %></p>
+  <% end %>
   <p><%= link_to "World editor", editor_path %></p>
   <p><%= link_to "Object library", objects_path %></p>
   <p><%= link_to "Character builder", character_builder_path %></p>

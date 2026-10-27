@@ -1,6 +1,8 @@
 require "rails_helper"
 
 RSpec.describe "Character builder", type: :request do
+  before { sign_in create(:user) }
+
   it "shows the stage and the controls" do
     get character_builder_path
 

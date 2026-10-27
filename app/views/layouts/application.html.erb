@@ -24,6 +24,8 @@
   </head>
 
   <body>
+    <% if alert %><p class="flash flash-alert"><%= alert %></p><% end %>
+    <% if notice %><p class="flash flash-notice"><%= notice %></p><% end %>
     <%= yield %>
   </body>
 </html>

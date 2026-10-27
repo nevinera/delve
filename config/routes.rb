@@ -9,6 +9,14 @@ Rails.application.routes.draw do
   # get "manifest" => "rails/pwa#manifest", as: :pwa_manifest
   # get "service-worker" => "rails/pwa#service_worker", as: :pwa_service_worker
 
+  devise_for :users, controllers: {omniauth_callbacks: "users/omniauth_callbacks"},
+    skip: [:sessions, :registrations, :passwords, :confirmations, :unlocks]
+
+  as :user do
+    get "/login", to: "devise/sessions#new", as: :new_user_session
+    delete "/logout", to: "sessions#destroy", as: :destroy_user_session
+  end
+
   root "home#show"
   get "editor" => "editor#show"
   get "objects" => "objects#show"

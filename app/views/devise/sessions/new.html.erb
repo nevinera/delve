@@ -1,0 +1,4 @@
+<main class="home">
+  <h1>Sign in</h1>
+  <%= button_to "Sign in with Google", user_google_oauth2_omniauth_authorize_path, method: :post, data: {turbo: false} %>
+</main>
