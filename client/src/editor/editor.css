@@ -200,6 +200,17 @@
   flex-wrap: wrap;
 }
 
+/* A panel inside a step, laid out as the step's body is. */
+.editor-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.editor-stack[hidden] {
+  display: none;
+}
+
 .editor-tools {
   display: flex;
   flex-wrap: wrap;

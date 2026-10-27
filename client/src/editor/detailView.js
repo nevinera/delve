@@ -613,7 +613,8 @@ export class DetailView {
     this.onSelect?.(selected.object);
   }
 
-  // Changes the selected object: { yaw } in radians, { scale } in feet, or both. Changes made
+  // Changes the selected object: { yaw } in radians, { scale } in feet (a factor for built
+  // objects), { colors } (a built object's parameter colors), or several. Changes made
   // between beginEdit and endEdit undo together; without, each is its own edit.
   changeSelected(changes) {
     const { selected } = this;
@@ -622,6 +623,7 @@ export class DetailView {
     if (own) this.beginEdit();
     this.touch(selected.key);
     const { object } = selected;
+    if (changes.colors !== undefined) object.colors = changes.colors;
     if (changes.yaw !== undefined) object.yaw = ((changes.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
     if (changes.scale !== undefined) {
       const spec = specOf(object.type);

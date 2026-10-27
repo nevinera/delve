@@ -28,7 +28,7 @@ import { BLENDS, EROSIONS, SHAPES, TOOLS as SCULPT_TOOLS } from "./sculptTools.j
 import { DETAIL_TOOLS } from "./detailTools.js";
 import { TRAIL_KINDS, TRAIL_STATES } from "./detailTrails.js";
 import { BUILT_PREFIX, OBJECT_TYPES, builtOf, makeObject, setBuiltObjects, specOf } from "../world/objects.js";
-import { collectionJson, emptyObject, newObjectId, objectPath, readObjects } from "../world/builtObjects.js";
+import { collectionJson, emptyObject, newObjectId, objectPath, paletteColors, readObjects } from "../world/builtObjects.js";
 import { decodeTile, encodeTile } from "../world/tileCodec.js";
 import { gunzipSync, gzipSync } from "fflate";
 import { CELL_FT, TILE_FT } from "../world/constants.js";
@@ -879,6 +879,20 @@ export class Editor {
     objectYaw.value = degrees;
     objectYawValue.textContent = `${degrees}°`;
     this.scaleSlider(objectScale, objectScaleValue, object.type, object.scale);
+    // A built object's parameter colors, each defaulting to its palette color.
+    const palette = spec?.built?.palette ?? [];
+    const colors = paletteColors({ palette }, object.colors).filter((_, i) => palette[i].param);
+    this.el.objectColors.replaceChildren(
+      ...palette
+        .filter((p) => p.param)
+        .map((p, n) => {
+          const input = Object.assign(document.createElement("input"), { type: "color", value: colors[n] });
+          input.addEventListener("change", () => this.detail?.changeSelected({ colors: colors.map((c, i) => (i === n ? input.value : c)) }));
+          const label = Object.assign(document.createElement("label"), { className: "editor-check" });
+          label.append(input, p.name ?? `color ${n + 1}`);
+          return label;
+        }),
+    );
   }
 
   // The detail step's picked water source in the panel, or none.
