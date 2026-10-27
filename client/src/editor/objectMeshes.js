@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { imageOf, makeObject, specOf } from "../world/objects.js";
 import { paletteColors } from "../world/builtObjects.js";
-import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, objectGeometry, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
+import { TEXT_PLACEHOLDER } from "../world/pixelFont.js";
+import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, objectGeometry, textGeometry, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
 import { meshHeightAt } from "../world/clutter.js";
 
 // Objects for the 3D view (world/objects.js says what they are and where), as instanced meshes:
@@ -82,6 +83,21 @@ function tilesOf(object, colors = []) {
         return { geometry, small: limited(sight.small, false, tiledMaterial(texture)), large: limited(sight.large, false, tiledMaterial(texture)) };
       }),
     );
+  }
+  return kept.get(key);
+}
+
+// A built object's texts with its parameters' colors and a placement's wording, as { geometry,
+// small, large } or null, kept as its geometry is.
+const builtTexts = new WeakMap(); // object -> Map(colors and wording -> texts)
+function signsOf(object, colors = [], texts = {}) {
+  if (!builtTexts.has(object)) builtTexts.set(object, new Map());
+  const kept = builtTexts.get(object);
+  const key = JSON.stringify([colors, texts]);
+  if (!kept.has(key)) {
+    const signs = textGeometry(object, colors, texts);
+    const texture = signs && atlasTexture(signs.atlas);
+    kept.set(key, signs && { geometry: signs.geometry, small: limited(sight.small, false, decalMaterial(texture)), large: limited(sight.large, false, decalMaterial(texture)) });
   }
   return kept.get(key);
 }
@@ -217,6 +233,8 @@ export function objectMeshes(objects, tileAt, origin) {
       tilesOf(spec.built, object.colors).forEach((tiles, n) => join(`${key}/tiles${n}`, tiles.geometry, large ? tiles.large : tiles.small, { object, p: -1 }));
       const decals = decalsOf(spec.built, object.colors);
       if (decals) join(`${key}/decals`, decals.geometry, large ? decals.large : decals.small, { object, p: -1 });
+      const signs = signsOf(spec.built, object.colors, object.texts);
+      if (signs) join(`${key}/texts${JSON.stringify(object.texts ?? {})}`, signs.geometry, large ? signs.large : signs.small, { object, p: -1 });
       continue;
     }
     spec.parts.forEach((part, p) => {
@@ -259,6 +277,8 @@ export function typePreview(type) {
     for (const { image, geometry } of tiledGeometries(spec.built, imageOf)) group.add(own(new THREE.Mesh(geometry, tiledMaterial(tileTexture(image, colors)))));
     const decals = decalGeometry(spec.built, imageOf);
     if (decals) group.add(own(new THREE.Mesh(decals.geometry, decalMaterial(atlasTexture(decals.atlas)))));
+    const signs = textGeometry(spec.built, [], {}, TEXT_PLACEHOLDER);
+    if (signs) group.add(own(new THREE.Mesh(signs.geometry, decalMaterial(atlasTexture(signs.atlas)))));
     return group;
   }
   const object = makeObject(type, [0, 0], 0, (spec.size[0] + spec.size[1]) / 2, random(hashString(type)));

@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
-import { MAX_PIECES, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, PALETTE_INKS, addColor, dropUnusedColors, emptyImage, paletteColors, pieceCorners, problems, shapeOf, turnPoint } from "../world/builtObjects.js";
-import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, faceFrame, faceIdOf, faceSpot, objectGeometry, primitive, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
+import { GRAY_INKS, MAX_PIECES, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, PALETTE_INKS, addColor, dropUnusedColors, emptyImage, inkColor, paletteColors, pieceCorners, problems, shapeOf, textsOf, turnPoint } from "../world/builtObjects.js";
+import { MAX_TEXT, TEXT_PLACEHOLDER, signText } from "../world/pixelFont.js";
+import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, faceFrame, faceIdOf, faceSpot, objectGeometry, primitive, textGeometry, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
 import { ImagePainter, drawImage } from "./imagePainter.js";
 import { characterClips, loadAnimations } from "../character/animations.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
@@ -16,7 +17,9 @@ import { randomLook } from "../character/recipe.js";
 // sets its type, color, taper, whether it's a hole and, as a last resort, exact numbers. Holes show
 // as red glass while a piece is picked; with none picked the object shows as the game draws it,
 // holes cut. Decals go on the picked piece: pick a decal image, then click a face to put it there.
-// A tiled image covers the picked piece, repeated every so many feet.
+// A tiled image covers the picked piece, repeated every so many feet. Texts go on faces as decals
+// do, each a parameter a placement can fill in; the panel's texts section names them and says
+// what each says by default. An empty one shows part of the alphabet here.
 //
 // Opened read-only (a builtin or imported object), it shows the object and offers to copy it into
 // one of the world's own collections instead of saving. The palette lists every color the object uses: changing one recolors every
@@ -191,6 +194,7 @@ export class ObjectBuilder {
         field("turn (°) yaw pitch roll", div("ob-xyz", ...this.inputs.turn)),
       ),
       field("decals", (this.decalList = div("ob-decals"))),
+      field("texts", (this.textList = div("ob-decals"))),
       field("tiled image", (this.tileBox = div("ob-decals"))),
       div("ob-row", el("button", { type: "button", textContent: "copy", onclick: () => this.copyPiece() }), el("button", { type: "button", textContent: "remove", onclick: () => this.removePiece() })),
     );
@@ -230,6 +234,7 @@ export class ObjectBuilder {
       this.pieceBox,
       el("h3", { textContent: "palette" }),
       this.palette,
+      (this.textParams = div("ob-texts")),
       el("h3", { textContent: "images (the collection's)" }),
       this.imageList,
       this.info,
@@ -339,6 +344,14 @@ export class ObjectBuilder {
     this.change((object) => {
       const copy = structuredClone(object.pieces[this.picked]);
       copy.at[0] = tidy(copy.at[0] + copy.size[0]);
+      // Text names stay unique.
+      const names = new Set(textsOf(object).map((t) => t.name));
+      for (const text of copy.texts ?? []) {
+        let n = 2;
+        while (names.has(`${text.name} ${n}`)) n++;
+        text.name = `${text.name} ${n}`;
+        names.add(text.name);
+      }
       object.pieces.push(copy);
     });
     this.picked = this.object.pieces.length - 1;
@@ -428,6 +441,7 @@ export class ObjectBuilder {
       this.cut.checked = Boolean(piece.cut);
       for (const key of ["size", "at", "turn"]) this.inputs[key].forEach((input, axis) => (input.value = tidy(piece[key][axis])));
       this.refreshDecals(piece);
+      this.refreshTexts(piece);
       this.refreshTile(piece);
       this.swatches.replaceChildren(
         ...object.palette.map((p, i) => {
@@ -440,6 +454,7 @@ export class ObjectBuilder {
     }
 
     this.refreshImages();
+    this.refreshTextParams();
     this.palette.replaceChildren(
       ...object.palette.map((p, i) => {
         const uses = object.pieces.filter((x) => x.color === i).length;
@@ -527,20 +542,20 @@ export class ObjectBuilder {
       const lost = !faceFrame(piece, decal.face);
       return el(
         "div",
-        { className: `ob-decal${this.placing?.index === k ? " placing" : ""}`, title: lost ? "its face is gone: move it onto another" : "" },
+        { className: `ob-decal${this.placing?.list === "decals" && this.placing.index === k ? " placing" : ""}`, title: lost ? "its face is gone: move it onto another" : "" },
         thumb,
         size(0),
         el("span", { textContent: "×" }),
         size(1),
         number(decal.turn, 15, "turn (°)", (p, v) => (p.decals[k].turn = v)),
-        el("button", { type: "button", textContent: lost ? "lost: move" : "move", onclick: () => this.startPlacing({ index: k, image: decal.image }) }),
+        el("button", { type: "button", textContent: lost ? "lost: move" : "move", onclick: () => this.startPlacing({ list: "decals", index: k, image: decal.image }) }),
         el("button", { type: "button", textContent: "×", title: "take it off", onclick: () => this.changePiece((p) => (p.decals.splice(k, 1), p.decals.length || delete p.decals)) }),
       );
     });
     const choices = this.images().filter((image) => image.kind === "decal");
     const add = el("select", { title: "a decal image to put on this piece" }, new Option(choices.length ? "add a decal…" : "no decal images yet", ""), ...choices.map((image) => new Option(image.name, image.id)));
-    add.addEventListener("change", () => add.value && this.startPlacing({ index: null, image: add.value }));
-    const hint = this.placing ? el("p", { className: "ob-info", textContent: "click a flat face of this piece to put it there · esc stops" }) : null;
+    add.addEventListener("change", () => add.value && this.startPlacing({ list: "decals", index: null, image: add.value }));
+    const hint = this.placing?.list === "decals" ? el("p", { className: "ob-info", textContent: "click a flat face of this piece to put it there · esc stops" }) : null;
     this.decalList.replaceChildren(...rows, add, ...(hint ? [hint] : []));
   }
 
@@ -550,24 +565,81 @@ export class ObjectBuilder {
     this.refresh();
   }
 
-  // Puts the decal being placed where the click hit the picked piece, on the face it hit.
+  // The picked piece's texts, each with its ink, size, turn, and buttons to move or take it off;
+  // then a button for a new one.
+  refreshTexts(piece) {
+    const colors = paletteColors(this.object);
+    const number = (value, step, title, set) => {
+      const input = el("input", { type: "number", value: tidy(value), step, title });
+      input.addEventListener("change", () => this.changePiece((p) => set(p, Number(input.value) || 0)));
+      return input;
+    };
+    const inks = [...PALETTE_INKS.slice(0, this.object.palette.length), ...GRAY_INKS];
+    const rows = (piece.texts ?? []).map((text, k) => {
+      const ink = el("select", { title: "its ink" }, ...inks.map((i) => new Option(GRAY_INKS.includes(i) ? `gray ${i}` : `color ${PALETTE_INKS.indexOf(i) + 1}`, i)));
+      ink.value = text.ink;
+      ink.style.background = inkColor(text.ink, colors);
+      ink.addEventListener("change", () => this.changePiece((p) => (p.texts[k].ink = ink.value)));
+      const size = (axis) => number(text.size[axis], 0.25, axis ? "height (ft)" : "width (ft)", (p, v) => (p.texts[k].size[axis] = Math.max(MIN_SIZE_FT, v)));
+      const lost = !faceFrame(piece, text.face);
+      return el(
+        "div",
+        { className: `ob-decal ob-text${this.placing?.list === "texts" && this.placing.index === k ? " placing" : ""}`, title: lost ? "its face is gone: move it onto another" : "" },
+        el("span", { className: "ob-text-name", textContent: text.name }),
+        ink,
+        size(0),
+        el("span", { textContent: "×" }),
+        size(1),
+        number(text.turn, 15, "turn (°)", (p, v) => (p.texts[k].turn = v)),
+        el("button", { type: "button", textContent: lost ? "lost: move" : "move", onclick: () => this.startPlacing({ list: "texts", index: k }) }),
+        el("button", { type: "button", textContent: "×", title: "take it off", onclick: () => this.changePiece((p) => (p.texts.splice(k, 1), p.texts.length || delete p.texts)) }),
+      );
+    });
+    const add = el("button", { type: "button", textContent: "+ text", title: "a sign a placement can fill in", onclick: () => this.startPlacing({ list: "texts", index: null }) });
+    const hint = this.placing?.list === "texts" ? el("p", { className: "ob-info", textContent: "click a flat face of this piece to put it there · esc stops" }) : null;
+    this.textList.replaceChildren(...rows, add, ...(hint ? [hint] : []));
+  }
+
+  // The object's texts: each one's name, and what it says unless a placement says otherwise.
+  refreshTextParams() {
+    const texts = textsOf(this.object);
+    const rows = texts.map((text) => {
+      const name = el("input", { type: "text", value: text.name, title: "its name, as placements see it" });
+      name.addEventListener("change", () => {
+        const wanted = name.value.trim();
+        if (!wanted || texts.some((t) => t !== text && t.name === wanted)) return this.refreshPanel();
+        this.change((o) => (findText(o, text.name).name = wanted));
+      });
+      const says = el("input", { type: "text", value: text.text, maxLength: MAX_TEXT, placeholder: TEXT_PLACEHOLDER, title: "what it says unless a placement says otherwise: capitals, digits, space and - . ! ?" });
+      says.addEventListener("change", () => this.change((o) => (findText(o, text.name).text = signText(says.value))));
+      return el("div", { className: "ob-text-param" }, name, says);
+    });
+    this.textParams.replaceChildren(...(rows.length ? [el("h3", { textContent: "texts" }), ...rows] : []));
+  }
+
+  // Puts the decal or text being placed where the click hit the picked piece, on the face it hit.
   placeDecal(hit) {
     const piece = this.object.pieces[this.picked];
     if (!hit || hit.object.userData.index !== this.picked || !piece) return;
     const face = faceIdOf(hit.face.normal);
     const at = faceSpot(piece, face, hit.object.worldToLocal(hit.point.clone()).toArray());
-    const { index, image } = this.placing;
+    const { list, index, image } = this.placing;
     this.placing = null;
+    const names = new Set(textsOf(this.object).map((t) => t.name));
+    let n = names.size + 1;
+    while (names.has(`text ${n}`)) n++;
     this.changePiece((p) => {
-      p.decals ??= [];
+      p[list] ??= [];
       const frame = faceFrame(p, face);
-      // A new one is a square nearly as big as fits the face.
-      const side = tidy(Math.max(MIN_SIZE_FT, 1.6 * Math.min(frame.u.length(), frame.v.length())));
-      const decal = index !== null ? p.decals[index] : { image, size: [side, side], turn: 0 };
+      // A new decal is a square nearly as big as fits the face; a new text a strip across it.
+      const [w, h] = [frame.u.length(), frame.v.length()];
+      const side = tidy(Math.max(MIN_SIZE_FT, 1.6 * Math.min(w, h)));
+      const fresh = list === "texts" ? { name: `text ${n}`, text: "", ink: "7", size: [tidy(Math.max(MIN_SIZE_FT, 1.8 * w)), tidy(Math.max(MIN_SIZE_FT, Math.min(1.8 * h, 0.4 * w)))], turn: 0 } : { image, size: [side, side], turn: 0 };
+      const decal = index !== null ? p[list][index] : fresh;
       // Kept on the face where it fits, so it doesn't hang off an edge.
       const inside = (n, half, extent) => (half >= extent ? 0.5 : Math.min(1 - half / extent / 2, Math.max(half / extent / 2, n)));
       Object.assign(decal, { face, at: [inside(at[0], decal.size[0] / 2, frame.u.length()), inside(at[1], decal.size[1] / 2, frame.v.length())].map((n) => Math.round(n * 1000) / 1000) });
-      if (index === null) p.decals.push(decal);
+      if (index === null) p[list].push(decal);
     });
   }
 
@@ -586,7 +658,7 @@ export class ObjectBuilder {
     this.tileBox.replaceChildren(pick, el("div", { className: "ob-decal" }, el("span", { textContent: "every" }), every, el("span", { textContent: "ft · jitter" }), jitter));
   }
 
-  // The object's decals and tiled images, drawn as the game draws them.
+  // The object's decals, texts and tiled images, drawn as the game draws them.
   drawDecals() {
     for (const mesh of [...this.tiles.children]) {
       mesh.geometry.dispose();
@@ -602,6 +674,12 @@ export class ObjectBuilder {
     this.decals.geometry = decals?.geometry ?? new THREE.BufferGeometry();
     this.decals.material.map = decals ? atlasTexture(decals.atlas) : null;
     this.decals.material.needsUpdate = true;
+    this.signs.material.map?.dispose();
+    this.signs.geometry.dispose();
+    const signs = textGeometry(this.object, [], {}, TEXT_PLACEHOLDER);
+    this.signs.geometry = signs?.geometry ?? new THREE.BufferGeometry();
+    this.signs.material.map = signs ? atlasTexture(signs.atlas) : null;
+    this.signs.material.needsUpdate = true;
   }
 
   // --- the view ---
@@ -631,8 +709,9 @@ export class ObjectBuilder {
     this.whole = new THREE.Mesh(new THREE.BufferGeometry(), builtMaterial());
     this.scene.add(this.whole);
     this.decals = new THREE.Mesh(new THREE.BufferGeometry(), decalMaterial(null));
+    this.signs = new THREE.Mesh(new THREE.BufferGeometry(), decalMaterial(null));
     this.tiles = new THREE.Group();
-    this.scene.add(this.decals, this.tiles);
+    this.scene.add(this.decals, this.signs, this.tiles);
     this.marks = new THREE.Group();
     this.scene.add(this.marks);
 
@@ -863,4 +942,9 @@ function ring(radius, color) {
     return new THREE.Vector3(Math.cos(a) * radius, 0.03, Math.sin(a) * radius);
   });
   return new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color }));
+}
+
+// The text named `name` on one of the object's pieces.
+function findText(object, name) {
+  return textsOf(object).find((t) => t.name === name);
 }

@@ -804,3 +804,21 @@
 .ob-decal input[type="number"] {
   width: 52px;
 }
+
+.ob-text {
+  flex-wrap: wrap;
+}
+
+.ob-text-name {
+  flex-basis: 100%;
+}
+
+.ob-text-param {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 4px;
+}
+
+.ob-text-param input {
+  min-width: 0;
+}

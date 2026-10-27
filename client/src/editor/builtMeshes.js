@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { Brush, Evaluator, SUBTRACTION } from "three-bvh-csg";
-import { IMAGE_PX, imageRgba, paletteColors } from "../world/builtObjects.js";
+import { IMAGE_PX, imageRgba, inkColor, paletteColors, textSays } from "../world/builtObjects.js";
+import { layoutText } from "../world/pixelFont.js";
 
 // Geometry for built objects (world/builtObjects.js): each piece's primitive filling a unit box,
 // sized, turned and moved into place, and the pieces merged into one geometry with a color per
@@ -251,9 +252,62 @@ export function decalGeometry(object, image, params) {
   return { geometry, atlas: { size, rgba } };
 }
 
-// The texture for a decal atlas: crisp pixels, as painted.
-export function atlasTexture({ size, rgba }) {
-  const texture = new THREE.DataTexture(rgba, size, size);
+// The object's texts as one geometry (position, normal, uv) with an atlas of their lettering:
+// { geometry, atlas: { width, height, rgba } }, like decalGeometry's. placed: a placement's texts
+// ({ name: text }). An empty text shows `placeholder`, or nothing. Null with nothing to show.
+export function textGeometry(object, params, placed = {}, placeholder = "") {
+  const colors = paletteColors(object, params);
+  const signs = [];
+  for (const piece of object.pieces) {
+    if (piece.cut) continue;
+    for (const text of piece.texts ?? []) {
+      const says = textSays(text, placed) || placeholder;
+      const quad = says && decalCorners(piece, text);
+      if (!quad) continue;
+      const layout = layoutText(says, text.size[0], text.size[1]);
+      if (layout.on.length) signs.push({ ...quad, layout, hex: inkColor(text.ink, colors) });
+    }
+  }
+  if (!signs.length) return null;
+  // Each sign's lettering, one above another.
+  const width = Math.max(...signs.map((s) => s.layout.cols));
+  const height = signs.reduce((sum, s) => sum + s.layout.rows, 0);
+  const rgba = new Uint8ClampedArray(width * height * 4);
+  const positions = [];
+  const normals = [];
+  const uvs = [];
+  let top = 0;
+  for (const { corners, normal, layout, hex } of signs) {
+    const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16));
+    // Textures take the bottom row first.
+    for (const [x, y] of layout.on) rgba.set([...rgb, 255], ((height - 1 - top - y) * width + x) * 4);
+    const inset = 0.01;
+    const [u0, u1] = [inset / width, (layout.cols - inset) / width];
+    const [v0, v1] = [(height - top - layout.rows + inset) / height, (height - top - inset) / height];
+    const uv = [
+      [u0, v0],
+      [u1, v0],
+      [u1, v1],
+      [u0, v1],
+    ];
+    for (const k of [0, 1, 2, 0, 2, 3]) {
+      positions.push(...corners[k].toArray());
+      normals.push(...normal.toArray());
+      uvs.push(...uv[k]);
+    }
+    top += layout.rows;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.computeBoundingSphere();
+  return { geometry, atlas: { width, height, rgba } };
+}
+
+// The texture for a decal or text atlas: crisp pixels, as painted.
+export function atlasTexture({ size, width = size, height = size, rgba }) {
+  const texture = new THREE.DataTexture(rgba, width, height);
   texture.colorSpace = THREE.SRGBColorSpace;
   texture.magFilter = THREE.NearestFilter;
   texture.minFilter = THREE.NearestFilter;

@@ -100,6 +100,7 @@ const editor = new Editor(World.empty(), {
   objectScaleValue: $("objectScaleValue"),
   objectDelete: $("objectDelete"),
   objectColors: $("objectColors"),
+  objectTexts: $("objectTexts"),
   brushSize: $("brushSize"),
   brushSizeValue: $("brushSizeValue"),
   brushStrength: $("brushStrength"),

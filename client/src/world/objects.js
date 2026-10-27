@@ -5,7 +5,8 @@
 //
 // An object is { id, type, at: [x, z], yaw, scale, colors, footprint, height }: at is continent
 // feet, yaw radians about up (three.js's rotation.y), scale the type's size in feet, colors one
-// [r, g, b] (0-1) per part. footprint and height (the blocking shape and how tall it stands) are
+// [r, g, b] (0-1) per part. A built object's colors are its parameters' (paletteColors), and its
+// texts, if any, what its signs say ({ name: text }, overriding the type's). footprint and height (the blocking shape and how tall it stands) are
 // worked out from the type when placed, so the game server never needs the types.
 
 import { shapeOf } from "./builtObjects.js";

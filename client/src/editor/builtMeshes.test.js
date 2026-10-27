@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { PIECE_TYPES, addColor, emptyImage, emptyObject, pieceCorners, setPixel } from "../world/builtObjects.js";
-import { decalCorners, decalGeometry, faceSpot, objectGeometry, pieceFaces, pieceGeometry, tiledGeometries } from "./builtMeshes.js";
+import { decalCorners, decalGeometry, faceSpot, objectGeometry, pieceFaces, pieceGeometry, textGeometry, tiledGeometries } from "./builtMeshes.js";
 
 const bounds = (g) => {
   g.computeBoundingBox();
@@ -150,6 +150,26 @@ describe("built object meshes", () => {
     const i = (31 * 64 + 0) * 4;
     expect([...atlas.rgba.slice(i, i + 4)]).toEqual([0, 0, 255, 255]);
     expect(decalGeometry(emptyObject(), () => undefined)).toBeNull();
+  });
+
+  it("letters texts in their ink, a placement's wording first, an empty one as the placeholder or not at all", () => {
+    const object = emptyObject();
+    addColor(object, "#ff0000");
+    const sign = { name: "to", text: "OAK", ink: "a", face: "0,0,1", at: [0.5, 0.5], size: [2.6, 1.4], turn: 0 };
+    object.pieces.push({ type: "box", size: [3, 2, 0.2], at: [0, 4, 0], turn: [0, 0, 0], color: 0, texts: [sign] });
+    const lit = (signs) => {
+      const { rgba } = signs.atlas;
+      let n = 0;
+      for (let i = 0; i < rgba.length; i += 4) if (rgba[i + 3]) n++;
+      return n;
+    };
+    const oak = textGeometry(object, []);
+    expect(oak.geometry.attributes.position.count).toBe(6);
+    expect([...oak.atlas.rgba.slice(oak.atlas.rgba.findIndex((v, i) => i % 4 === 3 && v) - 3).slice(0, 4)]).toEqual([255, 0, 0, 255]);
+    expect(lit(textGeometry(object, [], { to: "MILL" }))).not.toBe(lit(oak));
+    sign.text = "";
+    expect(textGeometry(object, [])).toBeNull();
+    expect(textGeometry(object, [], {}, "ABC")).not.toBeNull();
   });
 
   it("tiles images in feet, wrapping round sides a whole number of times", () => {

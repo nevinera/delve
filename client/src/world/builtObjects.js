@@ -1,3 +1,5 @@
+import { signText } from "./pixelFont.js";
+
 // Built objects: object types an author puts together from primitive pieces in the editor's object
 // builder, stored per world as objects/<id>.json, and shared as collections of them.
 //
@@ -19,6 +21,9 @@
 //   decals: images stuck on its flat faces, each { image, face, at: [u, v], size: [w, h], turn }:
 //   face names one by its outward normal before sizing and turning, rounded ("0,1,0" is the top);
 //   at is where its middle is across the face, 0 to 1 each way; size is in feet; turn is degrees.
+//   texts: signs on its flat faces, each a text parameter { name, text, ink, face, at, size, turn }
+//   placed as a decal is: name is unique in the object; text is what it says unless a placement
+//   says otherwise (pixelFont.js's characters, possibly empty); ink is an image ink.
 //   tile: an image repeated over it, { image, every, jitter }: every is how wide one copy is, in
 //   feet; jitter (0 to 1) how much each copy's brightness varies, the same way every time.
 //   A piece with cut: true is a hole: it's taken out of every other piece, and the faces it leaves
@@ -126,10 +131,11 @@ export function addColor(object, color) {
   return object.palette.length - 1;
 }
 
-// Drops palette colors nothing uses: no piece, and no ink of `images` (the ones its pieces wear).
+// Drops palette colors nothing uses: no piece, no text, and no ink of `images` (the ones its pieces wear).
 // Colors keep their places, since images name them by place, so only unused ones at the end go.
 export function dropUnusedColors(object, images = []) {
   const used = new Set(object.pieces.map((p) => p.color));
+  for (const text of textsOf(object)) if (PALETTE_INKS.includes(text.ink)) used.add(PALETTE_INKS.indexOf(text.ink));
   for (const image of images) for (const row of image.rows) for (let x = 0; x < row.length; x += 2) if (PALETTE_INKS.includes(row[x])) used.add(PALETTE_INKS.indexOf(row[x]));
   while (object.palette.length && !used.has(object.palette.length - 1)) object.palette.pop();
 }
@@ -188,13 +194,25 @@ export function problems(object) {
       const ok = typeof d.image === "string" && typeof d.face === "string" && Array.isArray(d.at) && d.at.length === 2 && d.at.every((v) => v >= 0 && v <= 1) && Array.isArray(d.size) && d.size.length === 2 && d.size.every((v) => v >= MIN_SIZE_FT) && Number.isFinite(d.turn);
       if (!ok) out.push(`${name}'s decal ${k + 1} needs an image, a face, where across it (0 to 1), a size and a turn`);
     });
+    (piece.texts ?? []).forEach((t, k) => {
+      const ok = typeof t.name === "string" && t.name && typeof t.text === "string" && t.text === signText(t.text) && (PALETTE_INKS.includes(t.ink) || GRAY_INKS.includes(t.ink)) && typeof t.face === "string" && Array.isArray(t.at) && t.at.length === 2 && t.at.every((v) => v >= 0 && v <= 1) && Array.isArray(t.size) && t.size.length === 2 && t.size.every((v) => v >= MIN_SIZE_FT) && Number.isFinite(t.turn);
+      if (!ok) out.push(`${name}'s text ${k + 1} needs a name, sign text, an ink, a face, where across it (0 to 1), a size and a turn`);
+    });
     if (piece.tile !== undefined && !(typeof piece.tile.image === "string" && piece.tile.every >= MIN_SIZE_FT && piece.tile.jitter >= 0 && piece.tile.jitter <= 1)) out.push(`${name}'s tile needs an image, a width (feet) and a jitter (0 to 1)`);
     if (piece.cut !== undefined && typeof piece.cut !== "boolean") out.push(`${name}'s cut should be true or false`);
     if (piece.size.some((s) => s < MIN_SIZE_FT)) out.push(`${name} is smaller than ${MIN_SIZE_FT} ft across`);
     if (pieceCorners(piece).some(([x, y, z]) => Math.hypot(x, y, z) > REACH_FT + 1e-6)) out.push(`${name} reaches more than ${REACH_FT} ft from the centre`);
   });
+  const names = textsOf(object).map((t) => t.name);
+  if (new Set(names).size < names.length) out.push("two of its texts have the same name");
   return out;
 }
+
+// The object's texts, every piece's in order.
+export const textsOf = (object) => object.pieces.flatMap((p) => (p.cut ? [] : (p.texts ?? [])));
+
+// What a text says, given a placement's texts ({ name: text }, overriding the object's).
+export const textSays = (text, placed = {}) => signText(placed[text.name] ?? text.text);
 
 // What the game needs to block movement and sight, as world/objects.js keeps for every object:
 // { footprint, height } for scale 1. The footprint is round or a rectangle about the centre,

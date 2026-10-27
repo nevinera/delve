@@ -28,7 +28,8 @@ import { BLENDS, EROSIONS, SHAPES, TOOLS as SCULPT_TOOLS } from "./sculptTools.j
 import { DETAIL_TOOLS } from "./detailTools.js";
 import { TRAIL_KINDS, TRAIL_STATES } from "./detailTrails.js";
 import { BUILT_PREFIX, builtOf, makeObject, setBuiltObjects, specOf } from "../world/objects.js";
-import { paletteColors } from "../world/builtObjects.js";
+import { paletteColors, textsOf } from "../world/builtObjects.js";
+import { MAX_TEXT, signText } from "../world/pixelFont.js";
 import { adoptStrays, allCollections, builtObjects, images } from "../objects/collections.js";
 import { placedCount } from "../objects/placed.js";
 import { decodeTile, encodeTile } from "../world/tileCodec.js";
@@ -842,7 +843,7 @@ export class Editor {
           if (o.type !== from) return o;
           count++;
           const scale = sameKind ? o.scale : to.startsWith(BUILT_PREFIX) ? 1 : (least + most) / 2;
-          return { ...makeObject(to, o.at, o.yaw, scale), id: o.id };
+          return { ...makeObject(to, o.at, o.yaw, scale), id: o.id, ...(o.texts && { texts: o.texts }) };
         });
         this.world.files.set(path, gzipSync(encodeTile(tile)));
         this.details.drop(tx, tz);
@@ -880,6 +881,21 @@ export class Editor {
           label.append(input, p.name ?? `color ${n + 1}`);
           return label;
         }),
+    );
+    // Its texts, each saying the type's text until given its own.
+    const texts = textsOf(spec?.built ?? { pieces: [] });
+    this.el.objectTexts.replaceChildren(
+      ...texts.map((text) => {
+        const input = Object.assign(document.createElement("input"), { type: "text", value: object.texts?.[text.name] ?? "", placeholder: text.text, maxLength: MAX_TEXT });
+        input.addEventListener("change", () => {
+          const says = signText(input.value);
+          const { [text.name]: _, ...rest } = object.texts ?? {};
+          this.detail?.changeSelected({ texts: says ? { ...rest, [text.name]: says } : rest });
+        });
+        const label = Object.assign(document.createElement("label"), { className: "editor-range" });
+        label.append(text.name, input);
+        return label;
+      }),
     );
   }
 
