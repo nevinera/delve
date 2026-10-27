@@ -2,17 +2,17 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { BLOCK, LAND_FT, SEA_FLOOR_FT, blockKey } from "../world/landGrid.js";
 import { TILE_FT } from "../world/constants.js";
+import { brush, ramp, stamp } from "./sculptTools.js";
 
-// The heights step's view: the land grid (landGrid.js) in 3d, a vertex per point, to sculpt with a
-// brush under the cursor. Left-drag sculpts with the current tool; right-drag turns, middle-drag
-// pans, the wheel zooms. Beyond the grid's blocks the sea floor's a flat sheet, and the sea's a
+// The heights step's view: the land grid (landGrid.js) in 3d, a vertex per point, to sculpt with
+// the tools in sculptTools.js under the cursor. Left-drag works a brush, a click places a stamp,
+// and two clicks lay a ramp; right-drag turns, middle-drag pans, the wheel zooms. Held down, shift
+// smooths instead, and ctrl (or cmd) turns a tool around: raise lowers, noise and added stamps go
+// the other way, and stamps raised to their shape cut down to it instead. Beyond the grid's blocks the sea floor's a flat sheet, and the sea's a
 // clear sheet at 0 over everything. The ground can be coloured by height (the same heat map as the
 // 2d heights map), and lined with contours and the 32ft grid. It draws only when something changes,
 // or while a stroke goes on.
-//
-// Tools: raise and lower move the ground by up to `strength` ft a second at the brush's middle,
-// easing to nothing at its edge; smooth pulls each point toward its neighbours' average. Each
-// stroke can be undone.
+// Each stroke, stamp and ramp can be undone.
 const FOV = 45;
 const MIN_DISTANCE_FT = 150;
 const MAX_DISTANCE_FT = 400000;
@@ -21,7 +21,6 @@ const ABOVE_GROUND_FT = 40; // the least the camera keeps above the ground under
 const KEY_PAN = 0.8; // of the camera's distance, per second
 const KEY_ZOOM = 1.5;
 const KEY_TURN = 1.5; // radians per second
-const SMOOTH_RATE = 6; // of the way to the neighbours' average, per second at the brush's middle
 const UNDO_STROKES = 40;
 const SEA_SIZE_FT = 2e6;
 
@@ -64,10 +63,16 @@ export class SculptView {
     this.ring.renderOrder = 2;
     this.ring.visible = false;
     this.scene.add(this.ring);
+    this.rampLine = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffe080, depthTest: false, transparent: true }));
+    this.rampLine.renderOrder = 2;
+    this.rampLine.visible = false;
+    this.scene.add(this.rampLine);
 
-    this.tool = "raise";
-    this.radius = 256;
-    this.strength = 60;
+    // tool, radius (ft), strength (ft a second), target (ft, for set), terrace (ft), and the stamp's
+    // shape, blend and height (ft).
+    this.settings = { tool: "raise", radius: 256, strength: 60, target: 0, terrace: 50, shape: "hill", blend: "add", height: 200 };
+    this.keys = { shift: false, ctrl: false };
+    this.rampStart = null; // [x, h, z] of a ramp's first click
     this.undos = [];
     this.redos = [];
     this.stroke = null; // { before: Map of blockKey -> copy or null, button }
@@ -104,6 +109,14 @@ export class SculptView {
   hide() {
     this.shown = false;
     this.stroke = null;
+    this.cancel();
+  }
+
+  // Drops a ramp that's been started.
+  cancel() {
+    this.rampStart = null;
+    this.rampLine.visible = false;
+    this.render();
   }
 
   // Which of the heat map, contours and grid are drawn.
@@ -114,9 +127,33 @@ export class SculptView {
     this.render();
   }
 
-  setBrush({ tool = this.tool, radius = this.radius, strength = this.strength }) {
-    Object.assign(this, { tool, radius, strength });
+  setBrush(settings) {
+    if (settings.tool && settings.tool !== this.settings.tool) this.cancel();
+    Object.assign(this.settings, settings);
     this.updateRing();
+  }
+
+  // Whether shift and ctrl (or cmd) are held, which change what the tool does.
+  setKeys(keys) {
+    this.keys = keys;
+  }
+
+  get radius() {
+    return this.settings.radius;
+  }
+
+  // The settings the next bit of sculpting uses, with shift and ctrl taken into account.
+  effective() {
+    const settings = { ...this.settings };
+    const { tool } = settings;
+    if (this.keys.shift && tool !== "stamp" && tool !== "ramp") return { ...settings, tool: "smooth" };
+    if (!this.keys.ctrl) return settings;
+    if (tool === "raise") settings.tool = "lower";
+    else if (tool === "lower") settings.tool = "raise";
+    else if (tool === "noise") settings.strength = -settings.strength;
+    else if (tool === "stamp" && settings.blend === "add") settings.height = -settings.height;
+    else if (tool === "stamp") settings.blend = settings.blend === "max" ? "min" : "max";
+    return settings;
   }
 
   // Held-key moves from keyNav.js, as Overview.nudge.
@@ -143,9 +180,16 @@ export class SculptView {
     };
     canvas.addEventListener("pointerdown", (e) => {
       if (e.button !== 0 || !this.grid) return;
-      canvas.setPointerCapture(e.pointerId);
       this.pointer = at(e);
-      this.stroke = { before: new Map(), last: performance.now() };
+      this.keys = { shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey };
+      const settings = this.effective();
+      const hit = this.groundUnder(this.pointer);
+      if (settings.tool === "stamp" || settings.tool === "ramp") {
+        if (hit) this.click(settings, hit);
+        return;
+      }
+      canvas.setPointerCapture(e.pointerId);
+      this.stroke = { before: new Map(), last: performance.now(), from: hit?.[1] ?? 0 };
       this.tick();
     });
     canvas.addEventListener("pointermove", (e) => {
@@ -156,11 +200,7 @@ export class SculptView {
       if (!this.stroke) return;
       const { before } = this.stroke;
       this.stroke = null;
-      if (!before.size) return;
-      this.undos.push(before);
-      if (this.undos.length > UNDO_STROKES) this.undos.shift();
-      this.redos = [];
-      this.onStroke?.();
+      this.finish(before);
     };
     canvas.addEventListener("pointerup", end);
     canvas.addEventListener("pointercancel", end);
@@ -185,32 +225,45 @@ export class SculptView {
 
   // The brush at ground point [x, h, z], for dt seconds.
   apply([x, , z], dt) {
-    const grid = this.grid;
-    const reach = Math.ceil(this.radius / LAND_FT);
-    const [cx, cz] = [Math.round(x / LAND_FT), Math.round(z / LAND_FT)];
-    const changes = [];
-    for (let gz = cz - reach; gz <= cz + reach; gz++) {
-      for (let gx = cx - reach; gx <= cx + reach; gx++) {
-        const d = Math.hypot(gx * LAND_FT - x, gz * LAND_FT - z) / this.radius;
-        if (d >= 1) continue;
-        const weight = 0.5 + 0.5 * Math.cos(Math.PI * d);
-        const h = grid.point(gx, gz);
-        let next = h;
-        if (this.tool === "raise") next = h + this.strength * dt * weight;
-        else if (this.tool === "lower") next = h - this.strength * dt * weight;
-        else if (this.tool === "smooth") {
-          let sum = 0;
-          for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) sum += grid.point(gx + dx, gz + dz);
-          next = h + (sum / 4 - h) * Math.min(1, SMOOTH_RATE * dt * weight);
-        }
-        if (next !== h) changes.push([gx, gz, next]);
-      }
+    this.change(brush(this.grid, this.effective(), [x, z], dt, this.stroke.from));
+  }
+
+  // A click with a stamp, or for one end of a ramp.
+  click(settings, hit) {
+    if (settings.tool === "ramp" && !this.rampStart) {
+      this.rampStart = hit;
+      this.updateRing();
+      return;
     }
+    this.stroke = { before: new Map() };
+    if (settings.tool === "stamp") this.change(stamp(this.grid, settings, [hit[0], hit[2]]));
+    else this.change(ramp(this.grid, this.rampStart, hit, settings.radius));
+    const { before } = this.stroke;
+    this.stroke = null;
+    this.rampStart = null;
+    this.finish(before);
+    this.updateRing();
+  }
+
+  // Applies changes ([[gx, gz, h], ...]) during a stroke, keeping what they replace.
+  change(changes) {
+    if (!changes.length) return;
+    let [gx0, gz0, gx1, gz1] = [Infinity, Infinity, -Infinity, -Infinity];
     for (const [gx, gz, h] of changes) {
       this.keepBefore(gx, gz);
-      grid.set(gx, gz, h);
+      this.grid.set(gx, gz, h);
+      [gx0, gz0, gx1, gz1] = [Math.min(gx0, gx), Math.min(gz0, gz), Math.max(gx1, gx), Math.max(gz1, gz)];
     }
-    if (changes.length) this.refresh(cx - reach - 1, cz - reach - 1, cx + reach + 1, cz + reach + 1);
+    this.refresh(gx0 - 1, gz0 - 1, gx1 + 1, gz1 + 1);
+  }
+
+  // Ends a stroke that kept `before`, for undoing it.
+  finish(before) {
+    if (!before.size) return;
+    this.undos.push(before);
+    if (this.undos.length > UNDO_STROKES) this.undos.shift();
+    this.redos = [];
+    this.onStroke?.();
   }
 
   // Keeps the block a point's in as it was before the stroke, for undoing it.
@@ -274,10 +327,17 @@ export class SculptView {
     return null;
   }
 
-  // The brush's outline on the ground under the cursor.
+  // The brush's outline on the ground under the cursor, and the line a ramp would take.
   updateRing() {
     const hit = this.shown && this.grid && this.pointer ? this.groundUnder(this.pointer) : null;
     this.onPointer?.(hit);
+    this.rampLine.visible = Boolean(this.rampStart && hit);
+    if (this.rampLine.visible) {
+      const [a, b] = [this.rampStart, hit];
+      const points = new Float32Array([a[0], a[1] + 2, a[2], b[0], b[1] + 2, b[2]]);
+      this.rampLine.geometry.setAttribute("position", new THREE.BufferAttribute(points, 3));
+      this.rampLine.geometry.computeBoundingSphere();
+    }
     this.ring.visible = Boolean(hit);
     if (hit) {
       const n = 64;

@@ -137,7 +137,8 @@
 
 .editor-step:not(.open),
 .editor-step-body[hidden],
-.editor-empty[hidden] {
+.editor-empty[hidden],
+.editor-field[hidden] {
   display: none;
 }
 

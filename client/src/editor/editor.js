@@ -23,6 +23,7 @@ import { WaterSimulator } from "./waterflow.js";
 import { ROUTE_VERSION, RoadRouter, findCrossing, gradeCap } from "./roads.js";
 import { hashString } from "../world/noise.js";
 import { LandGrid, landBounds, loadLand, saveLand } from "../world/landGrid.js";
+import { BLENDS, SHAPES, TOOLS as SCULPT_TOOLS } from "./sculptTools.js";
 import { TILE_FT } from "../world/constants.js";
 import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
 
@@ -40,11 +41,12 @@ const HINTS = {
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
-  raise: "left-drag raises the ground under the brush · right-drag turns · middle-drag or W A S D pans · wheel or C/V zooms · Q/E turn · ctrl-z undoes a stroke, ctrl-shift-z redoes it",
-  lower: "left-drag lowers the ground under the brush · right-drag turns · middle-drag or W A S D pans · wheel or C/V zooms · Q/E turn · ctrl-z undoes a stroke, ctrl-shift-z redoes it",
-  smooth: "left-drag smooths the ground under the brush · right-drag turns · middle-drag or W A S D pans · wheel or C/V zooms · Q/E turn · ctrl-z undoes a stroke, ctrl-shift-z redoes it",
-  draw: "click to add corners · click the first corner or press enter to close · backspace removes the last · esc cancels · right-drag to pan",
-  region: `drag corners · shift-click an edge to add a corner · alt-click a corner to remove it · click another zone to pick it · ${NAV}`,
+  ...Object.fromEntries(
+    SCULPT_TOOLS.map((tool) => [
+      tool,
+      `${{ stamp: "click to stamp the shape", ramp: "click where the ramp starts, then where it ends · esc drops it" }[tool] ?? `left-drag to ${tool === "set" ? "set the ground's height" : tool}`} · shift-drag smooths · ctrl turns the tool around · 1-9 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag or W A S D pans · wheel or C/V zooms · ctrl-z undoes, ctrl-shift-z redoes`,
+    ]),
+  ),
   ...FEATURE_HINTS,
   tiles: `highlighted tiles are out of date, or not generated yet (faint) · generate brings them all up to date · ${NAV}`,
   "3d": "drag to turn · right-drag or W A S D to pan · wheel or C/V to zoom · Q/E turn",
@@ -60,7 +62,7 @@ const HINT_PICK_WALK = "click where to start walking · esc cancels";
 // drawn anywhere on its land. `map` is what the step draws under its marks: a live preview worked
 // out from the land (shapePreview.js), or the generated tiles.
 const STEPS = {
-  heights: { tools: ["raise", "lower", "smooth"], kinds: [] },
+  heights: { tools: SCULPT_TOOLS, kinds: [] },
   water: { tools: ["select", "source"], kinds: ["source"], map: "heights" },
   biomes: { tools: ["select", "biome"], kinds: ["biome"], map: "biomes" },
   civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
@@ -131,6 +133,7 @@ export class Editor {
     this.sculpt = null; // the heights step's SculptView, loaded the first time it's opened
     this.land = new LandGrid(); // the continent's land grid, as it's being sculpted
     this.landKey = null; // the land grid's hash, worked out when needed
+    this.landDirty = false; // sculpted since the land was last committed
     this.bindPanel();
     this.fillContinents();
     window.addEventListener("keydown", (e) => this.onKey(e));
@@ -223,14 +226,15 @@ export class Editor {
     return this.step === "zones" ? this.activeZone : null;
   }
 
-  // Every tile with land above deep ocean, as a set of "tx,tz" keys.
+  // Every tile with committed land above deep ocean, as a set of "tx,tz" keys.
   landTiles() {
-    this.landTileKeys ??= this.land.tiles();
+    this.landTileKeys ??= loadLand(this.world.files, this.continent).tiles();
     return this.landTileKeys;
   }
 
+  // Whether anything's been raised, committed or not.
   hasLand() {
-    return this.landTiles().size > 0;
+    return this.land.blocks.size > 0;
   }
 
   // The land grid's hash, kept until it changes.
@@ -280,6 +284,7 @@ export class Editor {
     this.land = loadLand(this.world.files, this.continent);
     this.landTileKeys = null;
     this.landKey = null;
+    this.landDirty = false;
     if (!this.activeZone) this.active = null;
     this.renderPanel();
     this.renderProps();
@@ -297,10 +302,26 @@ export class Editor {
     this.store(() => saveSketch(this.world, this.continent, this.sketch));
   }
 
-  // Stores the land grid after a stroke, the same way.
-  saveLand() {
+  // The land's been sculpted: the water and roads follow it, but tiles wait for a commit.
+  landChanged() {
     this.landKey = null;
+    this.landDirty = true;
+    this.renderPanel();
+  }
+
+  // Stores the land grid as sculpted, and marks the generated tiles it changes as out of date.
+  commitLand() {
+    this.landDirty = false;
     this.store(() => saveLand(this.world.files, this.continent, this.land));
+  }
+
+  // Puts the land back as it was last committed.
+  discardLand() {
+    this.land = loadLand(this.world.files, this.continent);
+    this.landKey = null;
+    this.landDirty = false;
+    this.renderPanel();
+    this.showSculpt();
   }
 
   store(write) {
@@ -557,38 +578,66 @@ export class Editor {
 
   // The 3d step: the continent's generated ground, seen from above.
   async showOverview() {
-    if (!this.overview) {
-      const { Overview } = await import("./overview.js");
+    this.overviewLoading ??= import("./overview.js").then(({ Overview }) => {
       this.overview = new Overview(this.el.overview, {
         thumbs: this.thumbnails,
         onProgress: (read, total) => (this.el.overviewInfo.textContent = read < total ? `reading heights: ${read} of ${total} tiles` : `${total} tiles`),
       });
-    }
+    });
+    await this.overviewLoading;
     if (this.step === "3d") this.overview.show(this.world, this.continent, [this.map.view.x, this.map.view.z]);
   }
 
   // The heights step: the land grid in 3d, to sculpt.
   async showSculpt() {
-    if (!this.sculpt) {
-      const { SculptView } = await import("./sculptView.js");
+    // Made once, though it's asked for again while the module loads.
+    this.sculptLoading ??= import("./sculptView.js").then(({ SculptView }) => {
       this.sculpt = new SculptView(this.el.sculpt, {
-        onStroke: () => this.saveLand(),
+        onStroke: () => this.landChanged(),
         onPointer: (hit) => (this.el.cursor.textContent = hit ? `tile ${Math.floor(hit[0] / TILE_FT)}, ${Math.floor(hit[2] / TILE_FT)} · ${Math.round(hit[1])} ft` : ""),
       });
       this.applyBrush();
-    }
+    });
+    await this.sculptLoading;
     if (this.step !== "heights") return;
     this.sculpt.setLayers({ heat: this.option("heat"), contours: this.option("contours"), grid: this.option("grid") });
     const [x, z] = [this.map.view.x * TILE_FT, this.map.view.z * TILE_FT];
     this.sculpt.show(this.land, [x, z]);
   }
 
-  // The brush settings from the heights step's panel.
+  // The sculpting settings from the heights step's panel.
   applyBrush() {
-    const { brushSize, brushSizeValue, brushStrength, brushStrengthValue } = this.el;
+    const { brushSize, brushSizeValue, brushStrength, brushStrengthValue, setHeight, terraceStep, stampShape, stampBlend, stampHeight } = this.el;
     brushSizeValue.textContent = `${brushSize.value} ft`;
     brushStrengthValue.textContent = `${brushStrength.value} ft/s`;
-    this.sculpt?.setBrush({ tool: this.toolName, radius: Number(brushSize.value), strength: Number(brushStrength.value) });
+    this.sculpt?.setBrush({
+      tool: this.toolName,
+      radius: Number(brushSize.value),
+      strength: Number(brushStrength.value),
+      target: Number(setHeight.value) || 0,
+      terrace: Math.max(1, Number(terraceStep.value) || 50),
+      shape: stampShape.value,
+      blend: stampBlend.value,
+      height: Number(stampHeight.value) || 0,
+    });
+  }
+
+  // Heights step hotkeys: digits pick a tool, [ and ] size the brush, - and = its strength, and
+  // escape drops a ramp half laid. Returns whether the key was one of them.
+  sculptKey(e) {
+    const { brushSize, brushStrength } = this.el;
+    const step = (input, by) => {
+      input.value = Math.max(Number(input.min), Math.min(Number(input.max), Math.round(Number(input.value) * by)));
+      this.applyBrush();
+    };
+    if (/^[1-9]$/.test(e.key) && SCULPT_TOOLS[Number(e.key) - 1]) this.setTool(SCULPT_TOOLS[Number(e.key) - 1]);
+    else if (e.key === "[") step(brushSize, 1 / 1.25);
+    else if (e.key === "]") step(brushSize, 1.25);
+    else if (e.key === "-") step(brushStrength, 1 / 1.25);
+    else if (e.key === "=") step(brushStrength, 1.25);
+    else if (e.key === "Escape") this.sculpt?.cancel();
+    else return false;
+    return true;
   }
 
   // The feature kinds the current step edits.
@@ -685,7 +734,17 @@ export class Editor {
     this.el.zoomIn.addEventListener("click", () => this.map.zoom(1));
     this.el.zoomOut.addEventListener("click", () => this.map.zoom(-1));
     // Walk asks where to start; the next click on the map starts there.
-    for (const input of [this.el.brushSize, this.el.brushStrength]) input.addEventListener("input", () => this.applyBrush());
+    for (const input of [this.el.brushSize, this.el.brushStrength, this.el.setHeight, this.el.terraceStep, this.el.stampShape, this.el.stampBlend, this.el.stampHeight]) {
+      input.addEventListener("input", () => this.applyBrush());
+    }
+    for (const shape of Object.keys(SHAPES)) this.el.stampShape.add(new Option(shape, shape));
+    for (const blend of BLENDS) this.el.stampBlend.add(new Option({ add: "add to the ground", max: "raise to the shape", min: "cut to the shape" }[blend], blend));
+    this.el.commitLand.addEventListener("click", () => this.commitLand());
+    this.el.discardLand.addEventListener("click", () => {
+      if (window.confirm("Discard the sculpting since the last commit?")) this.discardLand();
+    });
+    // Shift and ctrl change what a sculpting tool does while they're held.
+    for (const type of ["keydown", "keyup"]) window.addEventListener(type, (e) => this.sculpt?.setKeys({ shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey }));
     this.el.exaggeration.addEventListener("input", () => {
       this.el.exaggerationValue.textContent = this.el.exaggeration.value;
       this.overview?.setExaggeration(Number(this.el.exaggeration.value));
@@ -778,7 +837,11 @@ export class Editor {
 
     const { stale, missing } = this.outOfDate();
     const todo = stale.length + missing.length;
-    this.el.tilesInfo.textContent = `${this.landTiles().size} tiles with land · ${stale.length} out of date · ${missing.length} not generated`;
+    this.el.tilesInfo.textContent = `${this.landTiles().size} tiles with land · ${stale.length} out of date · ${missing.length} not generated${this.landDirty ? " · land not committed yet" : ""}`;
+    this.el.landStatus.textContent = this.landDirty ? "Sculpted since the last commit. Tiles are made from committed land only." : "Everything's committed.";
+    this.el.commitLand.disabled = !this.landDirty;
+    this.el.discardLand.disabled = !this.landDirty;
+    for (const el of this.el.steps.find((s) => s.dataset.step === "heights").querySelectorAll("[data-for]")) el.hidden = !el.dataset.for.split(" ").includes(this.toolName);
     this.el.generate.disabled = !todo || this.generating;
     this.el.regenerateAll.disabled = !this.landTiles().size || this.generating;
     if (!this.generating) {
@@ -1037,6 +1100,10 @@ export class Editor {
       e.preventDefault();
       if (e.shiftKey) this.sculpt?.redo();
       else this.sculpt?.undo();
+      return;
+    }
+    if (this.step === "heights" && !e.ctrlKey && !e.metaKey && !e.altKey && this.sculptKey(e)) {
+      e.preventDefault();
       return;
     }
     if (e.key.toLowerCase() === "g" && this.step !== "3d" && this.step !== "heights" && !e.repeat && !e.ctrlKey && !e.metaKey && !e.altKey) {
