@@ -26,6 +26,7 @@ import { hashString } from "../world/noise.js";
 import { LandGrid, landBounds, loadLand, saveLand } from "../world/landGrid.js";
 import { BLENDS, EROSIONS, SHAPES, TOOLS as SCULPT_TOOLS } from "./sculptTools.js";
 import { DETAIL_TOOLS } from "./detailTools.js";
+import { TRAIL_KINDS, TRAIL_STATES } from "./detailTrails.js";
 import { encodeTile } from "../world/tileCodec.js";
 import { gzipSync } from "fflate";
 import { CELL_FT, TILE_FT } from "../world/constants.js";
@@ -47,7 +48,7 @@ const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 // Steps drawn in 3d instead of on the map.
 const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
-  detail: "left-drag to work the brush · the arrows off the window's sides move it a strip that way · 1-6 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
+  detail: "left-drag to work the brush, or draw a trail (esc drops it) · the arrows off the window's sides move it a strip that way · 1-7 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
@@ -78,7 +79,7 @@ const STEPS = {
   civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
   zones: { tools: [], kinds: [], map: "heights" },
   tiles: { tools: [], kinds: [], map: "tiles" },
-  detail: { tools: DETAIL_TOOLS, kinds: [] },
+  detail: { tools: [...DETAIL_TOOLS, "trails"], kinds: [] },
   "3d": { tools: [], kinds: [] },
 };
 // With this many tiles in sight or more, tiles draw as their thumbnails instead of close up.
@@ -698,7 +699,12 @@ export class Editor {
     detailRadiusValue.textContent = `${radius} ft`;
     detailFalloffValue.textContent = `${Math.round(falloff)} ft`;
     detailStrengthValue.textContent = `${detailStrength.value} ft/s`;
+    this.el.trailWidthValue.textContent = `${this.el.trailWidth.value} ft`;
     if (this.step !== "detail") return;
+    if (this.toolName === "trails") {
+      const { trailKind, trailState, trailWidth } = this.el;
+      return this.detail?.setBrush({ tool: "trails", kind: trailKind.value, state: trailState.value, width: Number(trailWidth.value) });
+    }
     this.detail?.setBrush({
       tool: this.toolName,
       radius,
@@ -731,7 +737,9 @@ export class Editor {
       input.value = Math.max(Number(input.min), Math.min(Number(input.max), Math.round(Math.max(least, Number(input.value)) * by)));
       this.applyDetailBrush();
     };
-    if (/^[1-9]$/.test(e.key) && DETAIL_TOOLS[Number(e.key) - 1]) this.setTool(DETAIL_TOOLS[Number(e.key) - 1]);
+    const tools = STEPS.detail.tools;
+    if (/^[1-9]$/.test(e.key) && tools[Number(e.key) - 1]) this.setTool(tools[Number(e.key) - 1]);
+    else if (e.key === "Escape") this.detail?.cancel();
     else if (e.key === "[") step(detailRadius, 1 / 1.25, 0);
     else if (e.key === "]") step(detailRadius, 1.25, 8);
     else if (e.key === "-") step(detailStrength, 1 / 1.25, 0);
@@ -907,7 +915,15 @@ export class Editor {
       this.el.erosionKind.add(new Option(name, kind));
       this.el.detailErosion.add(new Option(name, kind));
     }
-    for (const input of [this.el.detailRadius, this.el.detailFalloff, this.el.detailStrength, this.el.detailErosion, this.el.detailTalus]) {
+    for (const kind of TRAIL_KINDS) this.el.trailKind.add(new Option(kind, kind));
+    for (const state of TRAIL_STATES) this.el.trailState.add(new Option(state, state));
+    this.el.trailKind.value = "trail";
+    // Each kind starts at its usual width.
+    this.el.trailKind.addEventListener("change", () => {
+      this.el.trailWidth.value = ROADS[this.el.trailKind.value].width;
+      this.applyDetailBrush();
+    });
+    for (const input of [this.el.detailRadius, this.el.detailFalloff, this.el.detailStrength, this.el.detailErosion, this.el.detailTalus, this.el.trailKind, this.el.trailState, this.el.trailWidth]) {
       input.addEventListener("input", () => this.applyDetailBrush());
     }
     this.applyDetailBrush();

@@ -68,7 +68,7 @@ export function fellTree(tile, i, j) {
 }
 
 // The palette index for a terrain type, adding it to the tile's palette when it's new.
-function paletteIndex(tile, name) {
+export function paletteIndex(tile, name) {
   const palette = tile.palettes.terrain;
   if (!palette.includes(name)) palette.push(name);
   return palette.indexOf(name);

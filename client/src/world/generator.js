@@ -107,7 +107,7 @@ export function riverReachFt(width) {
 // ground to draw their surface and edges sharply (editor/groundMaterial.js), along with any within
 // `tileMarginFt` of it; their cells are surfaced in path only `coreFt` inside their edges, for
 // the map and far off, and trees keep `clearFt` clear of their edges.
-const ROAD = {
+export const ROAD = {
   evenFt: 48,
   sideSlope: 1,
   minShoulderFt: 6,
@@ -195,7 +195,7 @@ export function prepareWorld(continent, seedKey) {
     };
   });
   ctx.falls = ctx.rivers.flatMap(fallsOf);
-  ctx.roads = (continent.paths ?? []).filter((p) => p.route?.points?.length >= 2).map((p) => prepareRoad(ctx, p));
+  ctx.roads = (continent.paths ?? []).filter((p) => p.route?.points?.length >= 2).map((p) => prepareRoad(p, (x, z) => land(ctx, x, z, ctx.biomes).h));
 
   ctx.ponds = (continent.watercourses?.pools ?? []).map(({ region, level }) => {
     const ft = region.map((polygon) => polygon.map((ring) => ring.map(toFt)));
@@ -344,7 +344,7 @@ export function generateTile(ctx, tx, tz) {
   const inTile = ([x, , z]) => x >= x0 && x < x0 + TILE_FT && z >= z0 && z < z0 + TILE_FT;
   const round = (v) => Math.round(v * 10) / 10;
   tile.falls = ctx.falls.filter((f) => inTile(f.top)).map((f) => ({ top: f.top.map(round), bottom: f.bottom.map(round), width: f.width, pool: round(f.pool) }));
-  tile.roads = roadsNear(ctx, x0, z0);
+  tile.roads = roadsNear(ctx.roads, x0, z0);
   plantTrees(ctx, tile, (i, j) => samples[(j + 1) * N + (i + 1)]);
   // Objects keep off roads, by the cell they stand in.
   const onRoad = ([x, z]) => samples[(Math.floor((z - z0) / CELL_FT) + 1) * N + Math.floor((x - x0) / CELL_FT) + 1]?.road;
@@ -439,7 +439,7 @@ function seaFloor(ctx, x, z, base) {
 
 function sample(ctx, x, z, biomes) {
   const ground = land(ctx, x, z, biomes);
-  if (ground.land) roadAt(ctx, ground, x, z);
+  if (ground.land) roadAt(ctx.roads, ground, x, z, ctx.seed);
   const out = { road: ground.road ?? null, paved: Boolean(ground.paved), h: ground.h, water: NaN, sea: false, river: false, bank: false, pool: false, lake: false, land: ground.land, shore: ground.shore, climate: ground.climate };
   const { pools, ravines } = ground.climate.profile;
   if (pools > 0 && ground.t > 0) bogs(ctx, out, x, z);
@@ -484,15 +484,16 @@ function sample(ctx, x, z, biomes) {
   return out;
 }
 
-// A road path's line and bed (see ROAD), and how its surface looks.
-function prepareRoad(ctx, path) {
+// A road path's line and bed (see ROAD), and how its surface looks. path: { tags, width, route:
+// { points } } with points in tiles; groundAt(x, z) is the ground's height before the road.
+export function prepareRoad(path, groundAt) {
   const tags = new Set(path.tags ?? []);
   // Roads and highways in use; plain paths from before kinds count as roads.
   const kind = TRAFFIC.find((k) => tags.has(k)) ?? (["trail", "footpath"].some((k) => tags.has(k)) ? null : "road");
   const traffic = Boolean(kind) && !tags.has("faint") && !tags.has("disused");
   const points = path.route.points.map(toFt);
   const line = makePolyline(points);
-  const ground = sampleAlong(line, (x, z) => land(ctx, x, z, ctx.biomes).h);
+  const ground = sampleAlong(line, groundAt);
   const even = Math.round((traffic ? ROAD.evenTrafficFt : ROAD.evenFt) / PROFILE_STEP);
   const bed = ground.map((_, i) => {
     const near = ground.slice(Math.max(0, i - even), i + even + 1);
@@ -518,9 +519,10 @@ function prepareRoad(ctx, path) {
 }
 
 // Digs the ground down to the roads' beds or builds it up, sloping back to the land beside them,
-// and marks where they're surfaced (ground.paved) and kept clear of trees (ground.road).
-function roadAt(ctx, ground, x, z) {
-  for (const r of ctx.roads) {
+// and marks where they're surfaced (ground.paved) and kept clear of trees (ground.road). `roads`
+// are prepareRoad's; `seed` sets how ragged edges and patches wander.
+export function roadAt(roads, ground, x, z, seed) {
+  for (const r of roads) {
     if (!nearBounds(r.line, x, z, r.reach)) continue;
     const n = nearest(r.line, x, z);
     if (n.dist >= r.reach) continue;
@@ -536,18 +538,18 @@ function roadAt(ctx, ground, x, z) {
       if (n.dist < Math.max(r.half - ROAD.coreFt, ROAD.minHalfFt)) ground.paved = true;
       continue;
     }
-    const edge = r.half * (1 + r.ragged * fbm(x, z, ctx.seed ^ 0x2f6b1a37, { wavelength: 30, octaves: 2 }));
+    const edge = r.half * (1 + r.ragged * fbm(x, z, seed ^ 0x2f6b1a37, { wavelength: 30, octaves: 2 }));
     if (n.dist >= edge) continue;
-    const patch = r.cover >= 1 || (fbm(x, z, ctx.seed ^ 0x4c1d2e93, { wavelength: 20, octaves: 2 }) + 1) / 2 < r.cover;
+    const patch = r.cover >= 1 || (fbm(x, z, seed ^ 0x4c1d2e93, { wavelength: 20, octaves: 2 }) + 1) / 2 < r.cover;
     if (patch) [ground.road, ground.paved] = [r, true];
   }
 }
 
 // The roads and highways in use near a tile, for drawing: { kind, half, segments } with each
 // segment [ax, az, bx, bz] in continent ft.
-function roadsNear(ctx, x0, z0) {
+export function roadsNear(roads, x0, z0) {
   const round = (v) => Math.round(v * 10) / 10;
-  return ctx.roads.flatMap((r) => {
+  return roads.flatMap((r) => {
     if (!r.traffic) return [];
     const m = r.half + ROAD.tileMarginFt;
     const segments = [];

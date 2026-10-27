@@ -4,6 +4,7 @@ import { CELL_FT, CELLS, TILE_FT } from "../world/constants.js";
 import { SEA_FLOOR_FT } from "../world/landGrid.js";
 import { decodeTile } from "../world/tileCodec.js";
 import { detailBrush } from "./detailTools.js";
+import { stampTrail } from "./detailTrails.js";
 import { RenderView, boundary, groundSampler } from "./renderView.js";
 import { tilePath } from "./thumbnails.js";
 
@@ -21,7 +22,8 @@ import { tilePath } from "./thumbnails.js";
 export const WINDOW_SIZES = [3, 5, 7];
 const ARROW = { lengthFt: 70, widthFt: 50, outFt: 70, color: 0xf0c850 };
 const SIDES = { east: [1, 0], west: [-1, 0], south: [0, 1], north: [0, -1] };
-const CURSOR = { inner: 0xffffff, outer: 0x8fc4ff, points: 48 };
+const CURSOR = { inner: 0xffffff, outer: 0x8fc4ff, trail: 0xe0a060, points: 48 };
+const TRAIL_STEP_FT = 16; // between the points a drawn trail keeps
 const UNDO_KEEP = 50;
 const MAX_DT = 0.1;
 
@@ -35,15 +37,16 @@ export class DetailView {
     controls.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
     controls.screenSpacePanning = false;
     this.arrows = new THREE.Group();
-    this.view.scene.add(this.arrows);
     this.cursor = new THREE.Group();
-    this.view.scene.add(this.cursor);
+    this.view.scene.add(this.arrows, this.cursor);
     this.onMove = onMove;
     this.onEdit = onEdit;
     this.onPointer = onPointer;
     this.shown = false;
     this.brush = null;
-    this.stroke = null;
+    this.stroke = null; // a brush being dragged
+    this.trail = null; // a trail being drawn: its points so far, continent feet
+    this.edit = null; // the tiles an edit's changing, "tx,tz" -> their state before
     this.pointer = null;
     this.dirty = new Set(); // "tx,tz" of meshes to make again
     this.undos = [];
@@ -52,32 +55,67 @@ export class DetailView {
       if (e.button !== 0) return;
       const side = this.arrowAt(e);
       if (side) return this.onMove?.(...SIDES[side]);
-      const hit = this.groundAt(e);
-      if (!hit || !this.brush) return;
+      const at = this.pointAt(e);
+      if (!at || !this.brush) return;
       canvas.setPointerCapture(e.pointerId);
-      const from = this.cells().height(Math.floor((hit.x + this.view.origin[0]) / CELL_FT), Math.floor((hit.z + this.view.origin[1]) / CELL_FT));
-      this.stroke = { from, before: new Map(), last: performance.now() };
+      if (this.brush.tool === "trails") {
+        this.trail = [at];
+        return;
+      }
+      const from = this.cells().height(Math.floor(at[0] / CELL_FT), Math.floor(at[1] / CELL_FT));
+      this.beginEdit();
+      this.stroke = { from, last: performance.now() };
     });
     canvas.addEventListener("pointermove", (e) => {
       this.pointer = e;
       const over = Boolean(this.arrowAt(e));
       canvas.style.cursor = over ? "pointer" : "";
+      const at = !over && this.pointAt(e);
+      if (this.trail && at && Math.hypot(at[0] - this.trail.at(-1)[0], at[1] - this.trail.at(-1)[1]) >= TRAIL_STEP_FT) this.trail.push(at);
       this.hover(over ? null : this.groundAt(e));
     });
-    canvas.addEventListener("pointerleave", () => this.stroke || this.hover(null));
-    for (const type of ["pointerup", "pointercancel"]) canvas.addEventListener(type, () => this.endStroke());
+    canvas.addEventListener("pointerleave", () => this.stroke || this.trail || this.hover(null));
+    for (const type of ["pointerup", "pointercancel"]) canvas.addEventListener(type, (e) => this.release(type === "pointercancel"));
   }
 
-  // brush: { tool, radius, falloff, strength, erosion, talus } (detailTools.js).
+  // brush: { tool, radius, falloff, strength, erosion, talus } (detailTools.js), or for the trail
+  // tool, { tool: "trails", kind, state, width } (detailTrails.js).
   setBrush(brush) {
     this.brush = brush;
     if (this.pointer) this.hover(this.groundAt(this.pointer));
   }
 
-  // The brush's rings and the height readout, for the ground under the pointer.
+  // The cursor and the height readout, for the ground under the pointer.
   hover(hit) {
     this.drawCursor(hit);
     this.onPointer?.(hit && [hit.x + this.view.origin[0], hit.y, hit.z + this.view.origin[1]]);
+  }
+
+  // The left button's let go: a brush stroke ends, and a trail's stamped (or dropped, if `cancel`).
+  release(cancel = false) {
+    if (this.stroke) {
+      this.stroke = null;
+      this.endEdit();
+    }
+    const trail = this.trail;
+    this.trail = null;
+    if (trail && !cancel && trail.length >= 2) {
+      this.beginEdit();
+      const editable = new Set(this.keys());
+      const { kind, state, width } = this.brush;
+      // Snapshots every tile the trail could reach first, since stamping changes them in place.
+      for (const key of editable) if (this.view.decoded.has(key)) this.touch(key);
+      const changed = stampTrail(this.view.decoded, (key) => editable.has(key), { kind, state, width }, trail);
+      for (const key of [...this.edit.keys()]) if (!changed.includes(key)) this.edit.delete(key);
+      this.changed(changed);
+      this.endEdit();
+    }
+    if (this.pointer) this.hover(this.groundAt(this.pointer));
+  }
+
+  // Drops a trail half drawn.
+  cancel() {
+    if (this.trail) this.release(true);
   }
 
   // Loads the window of tiles whose north-west tile is (tx0, tz0), `size` a side, from
@@ -95,7 +133,7 @@ export class DetailView {
     view.origin = [(tx0 + size / 2) * TILE_FT, (tz0 + size / 2) * TILE_FT];
     view.ground = groundSampler(view.decoded, view.origin);
     this.window = { tx0, tz0, size, world: state.world, continent: state.continent };
-    this.endStroke();
+    this.release(true);
     this.dirty.clear();
     // Undoing reaches only tiles still loaded, so moving the window starts afresh.
     this.undos = [];
@@ -160,54 +198,60 @@ export class DetailView {
     };
   }
 
-  // Sets cells' heights, [[ci, cj, h], ...], and marks the meshes they reach to be made again: a
-  // tile's own, and those west and north of it, which reach over into it to close their seams.
-  // Returns the tiles changed.
+  // Sets cells' heights, [[ci, cj, h], ...], within the edit under way.
   setHeights(changes) {
     const touched = new Set();
     for (const [ci, cj, h] of changes) {
       const [tx, tz] = [Math.floor(ci / CELLS), Math.floor(cj / CELLS)];
-      const tile = this.view.decoded.get(`${tx},${tz}`);
-      tile.layers.height[(cj - tz * CELLS) * CELLS + ci - tx * CELLS] = h;
-      touched.add(`${tx},${tz}`);
+      const key = `${tx},${tz}`;
+      this.touch(key);
+      this.view.decoded.get(key).layers.height[(cj - tz * CELLS) * CELLS + ci - tx * CELLS] = h;
+      touched.add(key);
     }
+    this.changed(touched);
+  }
+
+  // Marks the meshes changed tiles reach to be made again: a tile's own, and those west and north
+  // of it, which reach over into it to close their seams.
+  changed(keys) {
     const shown = new Set(this.keys());
-    for (const key of touched) {
+    for (const key of keys) {
       const [tx, tz] = key.split(",").map(Number);
       for (const near of [key, `${tx - 1},${tz}`, `${tx},${tz - 1}`, `${tx - 1},${tz - 1}`]) {
         if (shown.has(near) && this.view.decoded.has(near)) this.dirty.add(near);
       }
     }
-    return touched;
   }
 
-  // One frame of the stroke under the pointer.
+  // One frame of the brush stroke under the pointer.
   work(now) {
     const { stroke } = this;
     const dt = Math.min(MAX_DT, (now - stroke.last) / 1000);
     stroke.last = now;
-    const hit = this.pointer && this.groundAt(this.pointer);
-    if (!hit || !dt) return;
-    const cells = this.cells();
-    const at = [hit.x + this.view.origin[0], hit.z + this.view.origin[1]];
-    const changes = detailBrush(cells, this.brush, at, dt, stroke.from);
-    for (const [ci, cj] of changes) {
-      const key = `${ci},${cj}`;
-      if (!stroke.before.has(key)) stroke.before.set(key, cells.height(ci, cj));
-    }
-    this.setHeights(changes);
+    const at = this.pointer && this.pointAt(this.pointer);
+    if (!at || !dt) return;
+    this.setHeights(detailBrush(this.cells(), this.brush, at, dt, stroke.from));
   }
 
-  endStroke() {
-    const stroke = this.stroke;
-    this.stroke = null;
-    if (!stroke?.before.size) return;
-    const cells = this.cells();
-    const after = new Map([...stroke.before.keys()].map((key) => [key, cells.height(...key.split(",").map(Number))]));
-    this.undos.push({ before: stroke.before, after });
+  // Edits are kept for undoing as each changed tile's state before and after.
+  beginEdit() {
+    this.edit = new Map();
+  }
+
+  // Keeps a tile's state before the edit under way first changes it.
+  touch(key) {
+    if (this.edit && !this.edit.has(key)) this.edit.set(key, snapshot(this.view.decoded.get(key)));
+  }
+
+  endEdit() {
+    const edit = this.edit;
+    this.edit = null;
+    if (!edit?.size) return;
+    const after = new Map([...edit.keys()].map((key) => [key, snapshot(this.view.decoded.get(key))]));
+    this.undos.push({ before: edit, after });
     if (this.undos.length > UNDO_KEEP) this.undos.shift();
     this.redos = [];
-    this.onEdit?.(this.tilesOf(after));
+    this.onEdit?.([...edit.keys()]);
   }
 
   undo() {
@@ -219,21 +263,12 @@ export class DetailView {
   }
 
   replay(from, to, side) {
-    if (this.stroke || !from.length) return;
+    if (this.stroke || this.trail || !from.length) return;
     const entry = from.pop();
     to.push(entry);
-    const touched = this.setHeights([...entry[side]].map(([key, h]) => [...key.split(",").map(Number), h]));
-    this.onEdit?.([...touched]);
-  }
-
-  // The tiles holding a map of "ci,cj" cells.
-  tilesOf(cells) {
-    const tiles = new Set();
-    for (const key of cells.keys()) {
-      const [ci, cj] = key.split(",").map(Number);
-      tiles.add(`${Math.floor(ci / CELLS)},${Math.floor(cj / CELLS)}`);
-    }
-    return [...tiles];
+    for (const [key, state] of entry[side]) restore(this.view.decoded.get(key), state);
+    this.changed(entry[side].keys());
+    this.onEdit?.([...entry[side].keys()]);
   }
 
   // Makes the changed tiles' meshes again.
@@ -248,6 +283,12 @@ export class DetailView {
     this.dirty.clear();
   }
 
+  // Where a pointer event meets the ground, [x, z] in continent feet, or null.
+  pointAt(e) {
+    const hit = this.groundAt(e);
+    return hit && [hit.x + this.view.origin[0], hit.z + this.view.origin[1]];
+  }
+
   // Where a pointer event meets the window's ground, in scene feet, or null.
   groundAt(e) {
     if (!this.window) return null;
@@ -258,28 +299,31 @@ export class DetailView {
     return ray.intersectObjects(ground, false)[0]?.point ?? null;
   }
 
-  // Rings round the brush where it works fully and where its falloff ends, or none.
+  // Rings round the brush where it works fully and where its falloff ends; for the trail tool, a
+  // ring as wide as the trail, and the trail drawn so far.
   drawCursor(hit) {
     for (const child of [...this.cursor.children]) {
       child.geometry.dispose();
       child.material.dispose();
       this.cursor.remove(child);
     }
-    if (!hit || !this.brush) return;
+    if (!this.brush) return;
     const { origin, ground } = this.view;
-    const ring = (radius) =>
-      Array.from({ length: CURSOR.points }, (_, n) => {
-        const a = (n / CURSOR.points) * Math.PI * 2;
-        return [(hit.x + origin[0] + Math.cos(a) * radius) / TILE_FT, (hit.z + origin[1] + Math.sin(a) * radius) / TILE_FT];
-      });
-    const { radius, falloff } = this.brush;
-    for (const [r, color] of [[radius, CURSOR.inner], [radius + falloff, CURSOR.outer]]) {
-      if (r <= 0) continue;
-      const line = boundary(ring(r), ground, origin, color);
+    const add = (points, color, closed = true) => {
+      const line = boundary(points.map(([x, z]) => [x / TILE_FT, z / TILE_FT]), ground, origin, color, closed);
       line.material.depthTest = false;
       line.renderOrder = 4;
       this.cursor.add(line);
-    }
+    };
+    if (this.trail?.length >= 2) add(this.trail, CURSOR.trail, false);
+    if (!hit) return;
+    const ring = (radius) =>
+      Array.from({ length: CURSOR.points }, (_, n) => {
+        const a = (n / CURSOR.points) * Math.PI * 2;
+        return [hit.x + origin[0] + Math.cos(a) * radius, hit.z + origin[1] + Math.sin(a) * radius];
+      });
+    const rings = this.brush.tool === "trails" ? [[Math.max(CELL_FT / 2, this.brush.width / 2), CURSOR.trail]] : [[this.brush.radius, CURSOR.inner], [this.brush.radius + this.brush.falloff, CURSOR.outer]];
+    for (const [r, color] of rings) if (r > 0) add(ring(r), color);
   }
 
   // The window's tiles, as "tx,tz" keys.
@@ -352,7 +396,7 @@ export class DetailView {
       if (this.dirty.size) {
         this.rebuild();
         if (this.pointer) this.hover(this.groundAt(this.pointer));
-      }
+      } else if (this.trail) this.drawCursor(this.pointer && this.groundAt(this.pointer));
       this.view.render();
       this.frame = requestAnimationFrame(loop);
     };
@@ -360,7 +404,22 @@ export class DetailView {
   }
 
   hide() {
-    this.endStroke();
+    this.release(true);
     this.shown = false;
   }
+}
+
+// A tile's changeable state, copied, for undoing.
+function snapshot(tile) {
+  return {
+    layers: Object.fromEntries(Object.entries(tile.layers).map(([name, values]) => [name, values.slice()])),
+    palettes: structuredClone(tile.palettes),
+    objects: structuredClone(tile.objects ?? []),
+    roads: structuredClone(tile.roads ?? []),
+  };
+}
+
+function restore(tile, state) {
+  const copy = snapshot(state);
+  Object.assign(tile, { layers: copy.layers, palettes: copy.palettes, objects: copy.objects, roads: copy.roads });
 }
