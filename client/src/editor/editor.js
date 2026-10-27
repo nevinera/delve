@@ -49,7 +49,7 @@ const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 // Steps drawn in 3d instead of on the map.
 const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
-  detail: "left-drag to work the brush, or draw a trail (esc drops it) · with objects, click one to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · the arrows off the window's sides move the window a strip that way · 1-9 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
+  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it; water runs along a channel the way it was drawn) · with water, click to place a source or pick one · with objects, click one to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · the arrows off the window's sides move the window a strip that way · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
@@ -80,7 +80,7 @@ const STEPS = {
   civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
   zones: { tools: [], kinds: [], map: "heights" },
   tiles: { tools: [], kinds: [], map: "tiles" },
-  detail: { tools: [...DETAIL_TOOLS, "trails", "objects", "place"], kinds: [] },
+  detail: { tools: [...DETAIL_TOOLS, "trails", "channel", "water", "objects", "place"], kinds: [] },
   "3d": { tools: [], kinds: [] },
 };
 // With this many tiles in sight or more, tiles draw as their thumbnails instead of close up.
@@ -671,6 +671,9 @@ export class Editor {
         onEdit: (keys) => this.saveDetail(keys),
         onPointer: (hit) => this.showCursor(hit),
         onSelect: (object) => this.showObject(object),
+        onSource: (source) => this.showSource(source),
+        onAsk: (question) => window.confirm(question),
+        onSay: (message) => this.say(message),
       });
       this.applyDetailBrush();
     });
@@ -705,6 +708,12 @@ export class Editor {
     if (this.step !== "detail") return;
     const { placeType, placeScale, placeScaleValue } = this.el;
     placeScaleValue.textContent = `${placeScale.value} ft`;
+    const { channelWidth, channelWidthValue, channelDepth, channelDepthValue, sourceFlow, sourceFlowValue } = this.el;
+    channelWidthValue.textContent = `${channelWidth.value} ft`;
+    channelDepthValue.textContent = `${channelDepth.value} ft`;
+    sourceFlowValue.textContent = sourceFlow.value;
+    if (this.toolName === "channel") return this.detail?.setBrush({ tool: "channel", width: Number(channelWidth.value), depth: Number(channelDepth.value) });
+    if (this.toolName === "water") return this.detail?.setBrush({ tool: "water", flow: Number(sourceFlow.value) });
     if (this.toolName === "objects") return this.detail?.setBrush({ tool: "objects" });
     if (this.toolName === "place") return this.detail?.setBrush({ tool: "place", type: placeType.value, scale: Number(placeScale.value) });
     if (this.toolName === "trails") {
@@ -736,10 +745,23 @@ export class Editor {
     objectScaleValue.textContent = `${object.scale} ft`;
   }
 
+  // The detail step's picked water source in the panel, or none.
+  showSource(source) {
+    const { sourcePanel, sourceInfo, pickedFlow, pickedFlowValue, sourceFree } = this.el;
+    sourcePanel.hidden = !source;
+    if (!source) return;
+    const cells = Object.values(source.wet ?? {}).reduce((sum, list) => sum + list.length, 0);
+    const end = { water: "in the sea or other water", dry: "where it runs dry", outside: "at the window's edge", limit: "where it got too big to follow" }[source.end] ?? "";
+    sourceInfo.textContent = `source at ${source.at.map(Math.round).join(", ")} · water over ${cells} cells${end ? `, ending ${end}` : ""}${source.free ? " · runs past the window" : ""}`;
+    pickedFlow.value = source.flow;
+    pickedFlowValue.textContent = source.flow;
+    sourceFree.hidden = source.free;
+  }
+
   // Writes tiles changed in the detail step back into the world, and marks them edited by hand.
   saveDetail(keys) {
     for (const key of keys) {
-      const tile = this.detail.view.decoded.get(key);
+      const tile = this.detail.tile(key);
       const [tx, tz] = tile.coords;
       const gz = gzipSync(encodeTile(tile));
       this.world.files.set(tilePath(this.continent, tx, tz), gz);
@@ -760,7 +782,7 @@ export class Editor {
     };
     const tools = STEPS.detail.tools;
     const picked = this.detail?.selected?.object;
-    if (/^[1-9]$/.test(e.key) && tools[Number(e.key) - 1]) this.setTool(tools[Number(e.key) - 1]);
+    if (/^[0-9]$/.test(e.key) && tools[(Number(e.key) + 9) % 10]) this.setTool(tools[(Number(e.key) + 9) % 10]);
     else if (picked && (e.key === "Delete" || e.key === "Backspace")) this.detail.deleteSelected();
     else if (picked && (e.key === "q" || e.key === "e")) this.detail.changeSelected({ yaw: picked.yaw + ((e.key === "e" ? 1 : -1) * Math.PI) / 12 });
     else if (picked && this.toolName === "objects" && (e.key === "[" || e.key === "]")) this.detail.changeSelected({ scale: picked.scale * (e.key === "]" ? 1.1 : 1 / 1.1) });
@@ -970,7 +992,11 @@ export class Editor {
       input.addEventListener("change", () => this.detail?.endEdit());
     }
     this.el.objectDelete.addEventListener("click", () => this.detail?.deleteSelected());
-    for (const input of [this.el.detailRadius, this.el.detailFalloff, this.el.detailStrength, this.el.detailErosion, this.el.detailTalus, this.el.trailKind, this.el.trailState, this.el.trailWidth, this.el.placeScale]) {
+    this.el.pickedFlow.addEventListener("input", () => (this.el.pickedFlowValue.textContent = this.el.pickedFlow.value));
+    this.el.pickedFlow.addEventListener("change", () => this.detail?.changeSource({ flow: Number(this.el.pickedFlow.value) }));
+    this.el.sourceFree.addEventListener("click", () => this.detail?.changeSource({ free: true }));
+    this.el.sourceRemove.addEventListener("click", () => this.detail?.removeSource());
+    for (const input of [this.el.detailRadius, this.el.detailFalloff, this.el.detailStrength, this.el.detailErosion, this.el.detailTalus, this.el.trailKind, this.el.trailState, this.el.trailWidth, this.el.placeScale, this.el.channelWidth, this.el.channelDepth, this.el.sourceFlow]) {
       input.addEventListener("input", () => this.applyDetailBrush());
     }
     this.applyDetailBrush();

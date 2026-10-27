@@ -25,7 +25,8 @@ export const SURFACE_LAYERS = [
   { name: "flowSlope", type: "u8", optional: true }, // how steeply it falls (generator.js)
 ];
 
-// tile: { coords: [tx, tz], layer, cells, cellFt, palettes, objects, generator, layers: { name: array } }
+// tile: { coords: [tx, tz], layer, cells, cellFt, palettes, objects, generator, layers: { name: array } },
+// and optionally falls, roads and sources (editor/detailView.js: water placed by hand).
 export function encodeTile(tile, layerSpecs = SURFACE_LAYERS) {
   const count = tile.cells * tile.cells;
   let offset = 0;
@@ -46,6 +47,7 @@ export function encodeTile(tile, layerSpecs = SURFACE_LAYERS) {
     objects: tile.objects ?? [],
     ...(tile.falls?.length ? { falls: tile.falls } : {}),
     ...(tile.roads?.length ? { roads: tile.roads } : {}),
+    ...(tile.sources?.length ? { sources: tile.sources } : {}),
     generator: tile.generator,
   };
   const json = new TextEncoder().encode(JSON.stringify(manifest));

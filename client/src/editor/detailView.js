@@ -5,6 +5,9 @@ import { SEA_FLOOR_FT } from "../world/landGrid.js";
 import { decodeTile } from "../world/tileCodec.js";
 import { detailBrush } from "./detailTools.js";
 import { stampTrail } from "./detailTrails.js";
+import { carveChannel, traceSource } from "./detailWater.js";
+import { FLOW_NONE, encodeFlowDir, encodeFlowSlope } from "../world/generator.js";
+import { fellTree, paletteIndex, parseTree } from "../world/trees.js";
 import { OBJECT_TYPES, footprintOf, makeObject, reachOf, tileOf } from "../world/objects.js";
 import { RenderView, boundary, groundSampler } from "./renderView.js";
 import { tilePath } from "./thumbnails.js";
@@ -16,16 +19,25 @@ import { tilePath } from "./thumbnails.js";
 //
 // Left-dragging works the brush (detailTools.js) on the window's tiles, a little each frame, or draws
 // a trail (detailTrails.js), stamped when it's let go. The objects tool picks an object to drag,
-// turn, size or delete, and the place tool puts new ones down. Meshes are made again as tiles
-// change, and when an edit ends onEdit hears which tiles it changed, to save them. Edits can be
-// undone and redone.
+// turn, size or delete, and the place tool puts new ones down. The channel tool digs along a drawn
+// line, and the water tool places sources (detailWater.js) or picks one.
+//
+// A source is kept in its tile's `sources`, as { id, at, flow, free, wet }: wet lists the cells its
+// water covers, per tile, with the terrain each had before, so its water can be taken away again.
+// Whenever the ground changes, every source in the window runs again. Water that would leave the
+// window asks first (onAsk); allowed, it's `free` and runs on into tiles outside, which change too.
+//
+// Meshes are made again as tiles change, and when an edit ends onEdit hears which tiles it changed,
+// to save them. Edits can be undone and redone.
 //
 // Positions in the scene are feet from the window's middle, as RenderView keeps them.
 
 export const WINDOW_SIZES = [3, 5, 7];
 const ARROW = { lengthFt: 70, widthFt: 50, outFt: 70, color: 0xf0c850 };
 const SIDES = { east: [1, 0], west: [-1, 0], south: [0, 1], north: [0, -1] };
-const CURSOR = { inner: 0xffffff, outer: 0x8fc4ff, trail: 0xe0a060, selected: 0xffe066, points: 48 };
+const CURSOR = { inner: 0xffffff, outer: 0x8fc4ff, trail: 0xe0a060, channel: 0x4aa0e0, selected: 0xffe066, source: 0x3fb6ff, points: 48 };
+const SOURCE_PICK_FT = 12; // how near a click picks a source
+const DRAWN = new Set(["trails", "channel"]); // tools that draw a line
 const TRAIL_STEP_FT = 16; // between the points a drawn trail keeps
 const UNDO_KEEP = 50;
 const MAX_DT = 0.1;
@@ -33,8 +45,9 @@ const MAX_DT = 0.1;
 export class DetailView {
   // onMove(dx, dz) hears when an arrow's clicked; onEdit(keys) when tiles ("tx,tz") change;
   // onPointer([x, y, z]) where the pointer's over the ground, in continent feet, or null; onSelect
-  // the object picked, or null.
-  constructor(canvas, { onMove, onEdit, onPointer, onSelect } = {}) {
+  // the object picked, or null; onSource the source picked, or null; onAsk(question) is answered
+  // true or false; onSay(message) tells the author something.
+  constructor(canvas, { onMove, onEdit, onPointer, onSelect, onSource, onAsk, onSay } = {}) {
     this.canvas = canvas;
     this.view = new RenderView(canvas);
     const { controls } = this.view;
@@ -47,6 +60,13 @@ export class DetailView {
     this.onEdit = onEdit;
     this.onPointer = onPointer;
     this.onSelect = onSelect;
+    this.onSource = onSource;
+    this.onAsk = onAsk;
+    this.onSay = onSay;
+    this.source = null; // { source, key }: the source picked
+    this.extra = new Map(); // tiles outside the window and its ring, loaded for water running there
+    this.sourceMarks = new THREE.Group();
+    this.view.scene.add(this.sourceMarks);
     this.selected = null; // { object, key }: the object picked and the tile listing it
     this.dragging = false;
     this.dirtyObjects = new Set(); // "tx,tz" whose objects alone need making again
@@ -77,7 +97,8 @@ export class DetailView {
         return;
       }
       if (this.brush.tool === "place") return this.place(at);
-      if (this.brush.tool === "trails") {
+      if (this.brush.tool === "water") return this.water(at);
+      if (DRAWN.has(this.brush.tool)) {
         this.trail = [at];
         return;
       }
@@ -114,13 +135,19 @@ export class DetailView {
   // The left button's let go: a brush stroke ends, and a trail's stamped (or dropped, if `cancel`).
   release(cancel = false) {
     if (this.stroke || this.dragging) {
+      if (this.stroke) this.reflow();
       this.stroke = null;
       this.dragging = false;
       this.endEdit();
     }
     const trail = this.trail;
     this.trail = null;
-    if (trail && !cancel && trail.length >= 2) {
+    if (trail && !cancel && trail.length >= 2 && this.brush.tool === "channel") {
+      this.beginEdit();
+      this.setHeights(carveChannel(this.cells(), trail, this.brush));
+      this.reflow();
+      this.endEdit();
+    } else if (trail && !cancel && trail.length >= 2) {
       this.beginEdit();
       const editable = new Set(this.keys());
       const { kind, state, width } = this.brush;
@@ -129,6 +156,7 @@ export class DetailView {
       const changed = stampTrail(this.view.decoded, (key) => editable.has(key), { kind, state, width }, trail);
       for (const key of [...this.edit.keys()]) if (!changed.includes(key)) this.edit.delete(key);
       this.changed(changed);
+      this.reflow();
       this.endEdit();
     }
     if (this.pointer) this.hover(this.groundAt(this.pointer));
@@ -156,6 +184,8 @@ export class DetailView {
     this.window = { tx0, tz0, size, world: state.world, continent: state.continent };
     this.release(true);
     this.select(null);
+    this.pickSource(null);
+    this.extra = new Map();
     this.dirty.clear();
     this.dirtyObjects.clear();
     // Undoing reaches only tiles still loaded, so moving the window starts afresh.
@@ -182,6 +212,7 @@ export class DetailView {
     }
     view.buildOcean(keys);
     this.drawFrame();
+    this.drawSources();
 
     const { controls, camera } = view;
     if (!before) {
@@ -263,14 +294,32 @@ export class DetailView {
 
   // Keeps a tile's state before the edit under way first changes it.
   touch(key) {
-    if (this.edit && !this.edit.has(key)) this.edit.set(key, snapshot(this.view.decoded.get(key)));
+    if (this.edit && !this.edit.has(key)) this.edit.set(key, snapshot(this.tile(key)));
+  }
+
+  // A generated tile, from those shown, those loaded for water outside the window, or the world's
+  // files. Undefined where there's none.
+  tile(key) {
+    let tile = this.view.decoded.get(key) ?? this.extra.get(key);
+    if (tile || !this.window) return tile;
+    const [tx, tz] = key.split(",").map(Number);
+    const bytes = this.window.world.files.get(tilePath(this.window.continent, tx, tz));
+    if (!bytes) return undefined;
+    try {
+      tile = decodeTile(gunzipSync(bytes));
+    } catch (err) {
+      console.warn(`couldn't read tile ${key}: ${err.message}`);
+      return undefined;
+    }
+    this.extra.set(key, tile);
+    return tile;
   }
 
   endEdit() {
     const edit = this.edit;
     this.edit = null;
     if (!edit?.size) return;
-    const after = new Map([...edit.keys()].map((key) => [key, snapshot(this.view.decoded.get(key))]));
+    const after = new Map([...edit.keys()].map((key) => [key, snapshot(this.tile(key))]));
     this.undos.push({ before: edit, after });
     if (this.undos.length > UNDO_KEEP) this.undos.shift();
     this.redos = [];
@@ -290,9 +339,213 @@ export class DetailView {
     this.select(null);
     const entry = from.pop();
     to.push(entry);
-    for (const [key, state] of entry[side]) restore(this.view.decoded.get(key), state);
+    this.pickSource(null);
+    for (const [key, state] of entry[side]) restore(this.tile(key), state);
     this.changed(entry[side].keys());
+    this.drawSources();
     this.onEdit?.([...entry[side].keys()]);
+  }
+
+  // --- water ---
+
+  // The sources listed by the window's tiles, each as { source, key }.
+  sources() {
+    return this.keys().flatMap((key) => (this.view.decoded.get(key)?.sources ?? []).map((source) => ({ source, key })));
+  }
+
+  // A click with the water tool: picks the source there, or places a new one.
+  water(at) {
+    const near = this.sources().find(({ source }) => Math.hypot(source.at[0] - at[0], source.at[1] - at[1]) < SOURCE_PICK_FT);
+    if (near) return this.pickSource(near);
+    const key = tileOf(at).join(",");
+    if (!this.editable(key)) return;
+    const source = { id: `${key.replace(",", ".")}.${Math.random().toString(36).slice(2, 8)}`, at: at.map((v) => Math.round(v * 10) / 10), flow: this.brush.flow, free: false, wet: {} };
+    const run = this.run(source, true);
+    if (!run) return;
+    this.beginEdit();
+    this.touch(key);
+    const tile = this.view.decoded.get(key);
+    tile.sources = [...(tile.sources ?? []), source];
+    this.wet(source, run.wet, run.end);
+    this.endEdit();
+    this.pickSource({ source, key });
+  }
+
+  // Where a source's water goes, as traceSource has it. Water that would leave the window asks
+  // whether it may (if `ask`), and runs on if so, the source becoming free; null if it may not.
+  // Without asking, water from a source that isn't free stops at the window's edge.
+  run(source, ask = false) {
+    const [ci, cj] = source.at.map((v) => Math.floor(v / CELL_FT));
+    const trace = (free) => traceSource(this.waterCells(free), [ci, cj], source.flow);
+    let result = trace(source.free);
+    if (result.end === "outside" && !source.free) {
+      if (!ask) {
+        this.onSay?.("Water from a source now reaches the window's edge, and stops there. Pick the source and let it run on, if it should.");
+        return result;
+      }
+      if (!this.onAsk?.("This water would run out of the window. Let it run on to where it ends? Tiles it reaches outside the window will be marked as edited.")) return null;
+      source.free = true;
+      result = trace(true);
+    }
+    return result;
+  }
+
+  // The cells as traceSource takes them: water may go anywhere in the window, or anywhere there's a
+  // generated tile if `free`.
+  waterCells(free) {
+    const shown = new Set(this.keys());
+    const at = (ci, cj) => {
+      const [tx, tz] = [Math.floor(ci / CELLS), Math.floor(cj / CELLS)];
+      const key = `${tx},${tz}`;
+      const tile = free || shown.has(key) ? this.tile(key) : this.view.decoded.get(key);
+      return { key, tile, k: (cj - tz * CELLS) * CELLS + ci - tx * CELLS };
+    };
+    return {
+      height: (ci, cj) => {
+        const { tile, k } = at(ci, cj);
+        return tile ? tile.layers.height[k] : SEA_FLOOR_FT;
+      },
+      water: (ci, cj) => {
+        const { tile, k } = at(ci, cj);
+        return Boolean(tile) && !Number.isNaN(tile.layers.water[k]);
+      },
+      inside: (ci, cj) => {
+        const { key, tile } = at(ci, cj);
+        return Boolean(tile) && (free || shown.has(key));
+      },
+    };
+  }
+
+  // Puts a source's water down, keeping the terrain under it in source.wet, and how it ends
+  // (traceSource) in source.end.
+  wet(source, cells, end) {
+    source.end = end;
+    const fresh = (tile) => {
+      tile.palettes.water ??= ["sea", "fresh"];
+      if (!tile.palettes.water.includes("fresh")) tile.palettes.water.push("fresh");
+      return tile.palettes.water.indexOf("fresh");
+    };
+    const changed = new Set();
+    for (const [cell, { surface, dir, slope }] of cells) {
+      const [ci, cj] = cell.split(",").map(Number);
+      const [tx, tz] = [Math.floor(ci / CELLS), Math.floor(cj / CELLS)];
+      const key = `${tx},${tz}`;
+      const tile = this.tile(key);
+      this.touch(key);
+      const [i, j] = [ci - tx * CELLS, cj - tz * CELLS];
+      const k = j * CELLS + i;
+      const { layers, palettes } = tile;
+      if (parseTree(palettes.terrain[layers.terrain[k]])) fellTree(tile, i, j);
+      if (!layers.waterKind) {
+        // Without the layer, water at 0 ft was sea and the rest fresh (terrainMesh.js kindOf).
+        const sea = Math.max(0, (palettes.water ??= ["sea", "fresh"]).indexOf("sea"));
+        const freshKind = fresh(tile);
+        layers.waterKind = Uint8Array.from(layers.water, (w) => (w === 0 ? sea : freshKind));
+      }
+      layers.flowDir ??= new Uint8Array(CELLS * CELLS).fill(FLOW_NONE);
+      layers.flowSlope ??= new Uint8Array(CELLS * CELLS);
+      (source.wet[key] ??= []).push([k, palettes.terrain[layers.terrain[k]]]);
+      layers.water[k] = Math.round(surface * 4) / 4;
+      layers.waterKind[k] = fresh(tile);
+      layers.terrain[k] = paletteIndex(tile, "mud");
+      layers.flowDir[k] = dir ? encodeFlowDir(...dir) : FLOW_NONE;
+      layers.flowSlope[k] = dir ? encodeFlowSlope(slope) : 0;
+      changed.add(key);
+    }
+    this.changed(changed);
+  }
+
+  // Takes a source's water away again.
+  dry(source) {
+    const changed = new Set();
+    for (const [key, list] of Object.entries(source.wet ?? {})) {
+      const tile = this.tile(key);
+      if (!tile) continue;
+      this.touch(key);
+      for (const [k, terrain] of list) {
+        tile.layers.water[k] = NaN;
+        tile.layers.terrain[k] = paletteIndex(tile, terrain);
+        if (tile.layers.flowDir) tile.layers.flowDir[k] = FLOW_NONE;
+        if (tile.layers.flowSlope) tile.layers.flowSlope[k] = 0;
+      }
+      changed.add(key);
+    }
+    source.wet = {};
+    this.changed(changed);
+  }
+
+  // Runs every source in the window again, within the edit under way, after the ground's changed.
+  reflow() {
+    const all = this.sources();
+    if (!all.length) return;
+    for (const { key } of all) this.touch(key);
+    for (const { source } of [...all].reverse()) this.dry(source);
+    for (const { source } of all) {
+      const run = this.run(source);
+      this.wet(source, run.wet, run.end);
+    }
+  }
+
+  pickSource(picked) {
+    this.source = picked;
+    this.drawSources();
+    this.onSource?.(picked?.source ?? null);
+  }
+
+  // Changes the picked source's flow, or lets its water leave the window (`free`).
+  changeSource({ flow, free }) {
+    const { source: picked } = this;
+    if (!picked) return;
+    const { source, key } = picked;
+    const was = { flow: source.flow, free: source.free };
+    this.beginEdit();
+    this.touch(key);
+    this.dry(source);
+    if (flow !== undefined) source.flow = flow;
+    if (free) source.free = true;
+    const run = this.run(source, true);
+    if (!run) {
+      // Back as it was.
+      Object.assign(source, was);
+      const back = this.run(source);
+      this.wet(source, back.wet, back.end);
+    } else this.wet(source, run.wet, run.end);
+    this.endEdit();
+    this.onSource?.(source);
+  }
+
+  removeSource() {
+    const { source: picked } = this;
+    if (!picked) return;
+    this.beginEdit();
+    this.touch(picked.key);
+    this.dry(picked.source);
+    const tile = this.view.decoded.get(picked.key);
+    tile.sources = tile.sources.filter((s) => s !== picked.source);
+    this.endEdit();
+    this.pickSource(null);
+  }
+
+  // A ring at each source in the window, the picked one highlighted.
+  drawSources() {
+    for (const child of [...this.sourceMarks.children]) {
+      child.geometry.dispose();
+      child.material.dispose();
+      this.sourceMarks.remove(child);
+    }
+    if (!this.window) return;
+    for (const { source } of this.sources()) {
+      const picked = source === this.source?.source;
+      const r = picked ? 8 : 5;
+      const points = Array.from({ length: 16 }, (_, n) => {
+        const a = (n / 16) * Math.PI * 2;
+        return [(source.at[0] + Math.cos(a) * r) / TILE_FT, (source.at[1] + Math.sin(a) * r) / TILE_FT];
+      });
+      const line = boundary(points, this.view.ground, this.view.origin, picked ? CURSOR.selected : CURSOR.source);
+      line.material.depthTest = false;
+      line.renderOrder = 4;
+      this.sourceMarks.add(line);
+    }
   }
 
   // --- objects ---
@@ -476,15 +729,15 @@ export class DetailView {
       line.renderOrder = 4;
       this.cursor.add(line);
     };
-    if (this.trail?.length >= 2) add(this.trail, CURSOR.trail, false);
+    if (this.trail?.length >= 2) add(this.trail, this.brush.tool === "channel" ? CURSOR.channel : CURSOR.trail, false);
     if (!hit) return;
     const ring = (radius) =>
       Array.from({ length: CURSOR.points }, (_, n) => {
         const a = (n / CURSOR.points) * Math.PI * 2;
         return [hit.x + origin[0] + Math.cos(a) * radius, hit.z + origin[1] + Math.sin(a) * radius];
       });
-    if (this.brush.tool === "objects" || this.brush.tool === "place") return;
-    const rings = this.brush.tool === "trails" ? [[Math.max(CELL_FT / 2, this.brush.width / 2), CURSOR.trail]] : [[this.brush.radius, CURSOR.inner], [this.brush.radius + this.brush.falloff, CURSOR.outer]];
+    if (["objects", "place", "water"].includes(this.brush.tool)) return;
+    const rings = DRAWN.has(this.brush.tool) ? [[Math.max(CELL_FT / 2, this.brush.width / 2), CURSOR.trail]] : [[this.brush.radius, CURSOR.inner], [this.brush.radius + this.brush.falloff, CURSOR.outer]];
     for (const [r, color] of rings) if (r > 0) add(ring(r), color);
   }
 
@@ -579,10 +832,11 @@ function snapshot(tile) {
     palettes: structuredClone(tile.palettes),
     objects: structuredClone(tile.objects ?? []),
     roads: structuredClone(tile.roads ?? []),
+    sources: structuredClone(tile.sources ?? []),
   };
 }
 
 function restore(tile, state) {
   const copy = snapshot(state);
-  Object.assign(tile, { layers: copy.layers, palettes: copy.palettes, objects: copy.objects, roads: copy.roads });
+  Object.assign(tile, { layers: copy.layers, palettes: copy.palettes, objects: copy.objects, roads: copy.roads, sources: copy.sources });
 }
