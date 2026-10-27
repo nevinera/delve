@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
-import { MAX_PIECES, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, addColor, dropUnusedColors, pieceCorners, problems, shapeOf, turnPoint } from "../world/builtObjects.js";
+import { MAX_PIECES, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, PALETTE_INKS, addColor, dropUnusedColors, emptyImage, paletteColors, pieceCorners, problems, shapeOf, turnPoint } from "../world/builtObjects.js";
 import { builtMaterial, objectGeometry, primitive } from "./builtMeshes.js";
+import { ImagePainter, drawImage } from "./imagePainter.js";
 import { characterClips, loadAnimations } from "../character/animations.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
 import { randomLook } from "../character/recipe.js";
@@ -60,8 +61,15 @@ function sizeFrom(piece, from, size, sides = [0, 1, 0]) {
 
 export class ObjectBuilder {
   // onSave(object) hears the object when it's saved, onSaveCopy(object) when it's saved as a copy
-  // instead, and onDelete(object) when deleting it is asked for.
-  constructor({ onSave, onSaveCopy, onDelete }) {
+  // instead, and onDelete(object) when deleting it is asked for. onSaveImage(image) and
+  // onDeleteImage(image) are the same for its collection's images.
+  constructor({ onSave, onSaveCopy, onDelete, onSaveImage, onDeleteImage }) {
+    this.onSaveImage = onSaveImage;
+    this.onDeleteImage = onDeleteImage;
+    this.painter = new ImagePainter({
+      onSave: (image) => this.onSaveImage?.({ ...image, collection: this.object.collection }),
+      onDelete: (image) => this.onDeleteImage?.(image),
+    });
     this.onSave = onSave;
     this.onSaveCopy = onSaveCopy;
     this.onDelete = onDelete;
@@ -81,13 +89,14 @@ export class ObjectBuilder {
   // Opens the builder on a copy of `object`.
   // Opens the builder on a copy of `object`. collections: the world's own, [{ id, name }], to move
   // it between or copy it into. readOnly: look, don't touch; onCopy(object, collectionId) hears a
-  // copy asked for.
-  open(object, { collections = [], readOnly = false, onCopy } = {}) {
+  // copy asked for. images(): the images of the collection it's in.
+  open(object, { collections = [], readOnly = false, onCopy, images = () => [] } = {}) {
     this.readOnly = readOnly;
+    this.images = images;
     this.onCopy = onCopy;
     for (const select of [this.collection, this.copyTo]) select.replaceChildren(...collections.map((c) => new Option(c.name, c.id)));
     this.dialog.classList.toggle("ob-readonly", readOnly);
-    for (const node of [this.pieceBox, this.palette, this.details]) node.inert = readOnly;
+    for (const node of [this.pieceBox, this.palette, this.details, this.imageList]) node.inert = readOnly;
     this.object = structuredClone(object);
     this.saved = JSON.stringify(this.object);
     this.undos = [];
@@ -183,6 +192,7 @@ export class ObjectBuilder {
     );
 
     this.palette = div("ob-palette");
+    this.imageList = div("ob-images");
     this.problems = el("p", { className: "ob-problems" });
     this.info = el("p", { className: "ob-info" });
     this.saveButton = el("button", { type: "button", textContent: "save", onclick: () => this.save() });
@@ -216,6 +226,8 @@ export class ObjectBuilder {
       this.pieceBox,
       el("h3", { textContent: "palette" }),
       this.palette,
+      el("h3", { textContent: "images (the collection's)" }),
+      this.imageList,
       this.info,
       this.problems,
       footer,
@@ -356,7 +368,7 @@ export class ObjectBuilder {
 
   save() {
     const object = structuredClone(this.object);
-    dropUnusedColors(object);
+    dropUnusedColors(object, this.wornImages());
     if (problems(object).length) return;
     this.onSave?.(object);
     this.close();
@@ -364,7 +376,7 @@ export class ObjectBuilder {
 
   saveCopy() {
     const object = structuredClone(this.object);
-    dropUnusedColors(object);
+    dropUnusedColors(object, this.wornImages());
     if (problems(object).length || !object.pieces.length) return;
     this.onSaveCopy?.(object);
   }
@@ -419,6 +431,7 @@ export class ObjectBuilder {
       );
     }
 
+    this.refreshImages();
     this.palette.replaceChildren(
       ...object.palette.map((p, i) => {
         const uses = object.pieces.filter((x) => x.color === i).length;
@@ -440,6 +453,46 @@ export class ObjectBuilder {
     const below = Math.min(0, ...object.pieces.map(lowest));
     const sunk = below < -0.05 ? [`note: pieces reach ${tidy(-below)} ft below the ground`] : [];
     this.problems.textContent = [...wrong, ...sunk].join(" · ");
+  }
+
+  // --- images ---
+
+  // The images the object's pieces wear.
+  wornImages() {
+    const ids = new Set(this.object.pieces.flatMap((p) => [...(p.decals ?? []).map((d) => d.image), p.tile?.image].filter(Boolean)));
+    return this.images().filter((image) => ids.has(image.id));
+  }
+
+  // The palette for painting: each color with its ink and a label.
+  paintPalette() {
+    const colors = paletteColors(this.object);
+    let param = 0;
+    return this.object.palette.map((p, i) => ({ ink: PALETTE_INKS[i], color: colors[i], label: p.param ? (p.name ?? `parameter ${++param}`) : `color ${i + 1}` }));
+  }
+
+  // What shows under an image: the picked piece's color, or the first one.
+  underlay() {
+    const piece = this.object.pieces[this.picked] ?? this.object.pieces[0];
+    return paletteColors(this.object)[piece?.color ?? 0] ?? "#808080";
+  }
+
+  paint(image, isNew = false) {
+    if (this.readOnly) return;
+    this.painter.open(image, { palette: this.paintPalette(), underlay: this.underlay(), isNew });
+  }
+
+  // The collection's images, each a thumbnail to paint, then a button for a new one.
+  refreshImages() {
+    const colors = paletteColors(this.object);
+    const underlay = this.underlay();
+    this.imageList.replaceChildren(
+      ...this.images().map((image) => {
+        const canvas = el("canvas", { width: 48, height: 48 });
+        drawImage(canvas, image, colors, underlay);
+        return el("button", { type: "button", className: "ob-image", title: `${image.name} (${image.kind})`, onclick: () => this.paint(image) }, canvas, el("span", { textContent: image.name }));
+      }),
+      el("button", { type: "button", className: "ob-image ob-edit", textContent: "+ image", onclick: () => this.paint(emptyImage(), true) }),
+    );
   }
 
   // --- the view ---

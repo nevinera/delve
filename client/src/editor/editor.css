@@ -717,3 +717,64 @@
 .library-spacer {
   flex: 1;
 }
+
+.ob-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.editor .ob-image {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 60px;
+  min-height: 66px;
+  padding: 2px;
+  font-size: 10px;
+}
+
+.editor .ob-image.picked {
+  border-color: #f0c850;
+}
+
+.ob-image canvas {
+  width: 48px;
+  height: 48px;
+  image-rendering: pixelated;
+}
+
+.ob-image span {
+  max-width: 56px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ip-view {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ip-canvas {
+  width: 384px;
+  height: 384px;
+  image-rendering: pixelated;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.ip-tiles {
+  width: 288px;
+  height: 288px;
+  image-rendering: pixelated;
+}
+
+.ip-inks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}

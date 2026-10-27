@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_PARAMS, addColor, collectionJson, dropUnusedColors, matches, emptyObject, newObjectId, paletteColors, pieceCorners, problems, readCollection, shapeOf, turnPoint } from "./builtObjects.js";
+import { MAX_PARAMS, addColor, collectionJson, dropUnusedColors, emptyImage, imageProblems, imageRgba, matches, emptyObject, pixelAt, setPixel, newObjectId, paletteColors, pieceCorners, problems, readCollection, shapeOf, turnPoint } from "./builtObjects.js";
 
 const piece = (over = {}) => ({ type: "box", size: [2, 2, 2], at: [0, 1, 0], turn: [0, 0, 0], color: 0, ...over });
 
@@ -31,13 +31,40 @@ describe("built objects", () => {
     expect(paletteColors(object, ["#ff0000"])).toEqual(["#ff0000", "#000002", "#000003", "#000004"]);
   });
 
-  it("drops colors no piece uses", () => {
+  it("drops unused colors from the end only, keeping the ones images use", () => {
     const object = emptyObject();
-    ["#000001", "#000002", "#000003"].forEach((c) => addColor(object, c));
-    object.pieces.push(piece({ color: 2 }));
-    dropUnusedColors(object);
-    expect(object.palette.map((p) => p.color)).toEqual(["#000003"]);
-    expect(object.pieces[0].color).toBe(0);
+    ["#000001", "#000002", "#000003", "#000004"].forEach((c) => addColor(object, c));
+    object.pieces.push(piece({ color: 1 }));
+    const image = emptyImage();
+    setPixel(image, 3, 4, { ink: "c", opacity: "4" });
+    const plain = structuredClone(object);
+    dropUnusedColors(plain);
+    expect(plain.palette.map((p) => p.color)).toEqual(["#000001", "#000002"]);
+    dropUnusedColors(object, [image]);
+    expect(object.palette.map((p) => p.color)).toEqual(["#000001", "#000002", "#000003"]);
+    expect(object.pieces[0].color).toBe(1);
+  });
+
+  it("paints images with the wearer's palette and grays", () => {
+    const object = emptyObject();
+    addColor(object, "#ff0000");
+    addColor(object, "#00ff00");
+    const image = emptyImage("arrow", "decal");
+    setPixel(image, 0, 0, { ink: "b", opacity: "4" });
+    setPixel(image, 1, 0, { ink: "7", opacity: "2" });
+    setPixel(image, 2, 0, { ink: "0", opacity: "1" });
+    setPixel(image, 3, 0, { ink: "e", opacity: "4" });
+    expect(pixelAt(image, 0, 0)).toEqual({ ink: "b", opacity: "4" });
+    expect(pixelAt(image, 4, 0)).toBeNull();
+    expect(imageProblems(image)).toEqual([]);
+    const rgba = imageRgba(image, paletteColors(object, ["#0000ff"]));
+    expect([...rgba.slice(0, 16)]).toEqual([0, 255, 0, 255, 0, 0, 0, 128, 255, 255, 255, 64, 128, 128, 128, 255]);
+    expect(rgba[19]).toBe(0);
+    // A parameter override reaches the image as it does the pieces.
+    image.rows[0] = "a4" + image.rows[0].slice(2);
+    expect([...imageRgba(image, paletteColors(object, ["#0000ff"])).slice(0, 4)]).toEqual([0, 0, 255, 255]);
+    expect(imageProblems({ ...image, rows: image.rows.slice(1) })).toHaveLength(1);
+    expect(imageProblems({ ...image, kind: "sticker" })).toHaveLength(1);
   });
 
   it("turns as three.js's YXZ order does: yaw 90 takes east to north", () => {
@@ -95,7 +122,7 @@ describe("built objects", () => {
 
   it("reads an object or a collection, recording where it came from", () => {
     const one = table();
-    expect(readCollection(JSON.stringify(one))).toEqual({ name: null, objects: [one] });
+    expect(readCollection(JSON.stringify(one))).toEqual({ name: null, objects: [one], images: [] });
     const read = readCollection(collectionJson("furniture", [{ ...one, collection: "abcdefgh" }, table()]), "https://example.com/furniture.json");
     expect(read.name).toBe("furniture");
     expect(read.objects).toHaveLength(2);
@@ -103,6 +130,19 @@ describe("built objects", () => {
     expect(read.objects[0].collection).toBeUndefined();
     expect(() => readCollection(JSON.stringify({ ...one, pieces: [piece({ type: "blob" })] }))).toThrow(/unknown type/);
     expect(() => readCollection(JSON.stringify({ ...one, tags: "wood" }))).toThrow(/tags/);
+  });
+
+  it("reads and writes a collection's images, and checks decals", () => {
+    const image = emptyImage("arrow");
+    const object = { ...table(), collection: "abcdefgh" };
+    object.pieces[0].decals = [{ image: image.id, face: "0,1,0", at: [0.5, 0.5], size: [1, 0.5], turn: 0 }];
+    expect(problems(object)).toEqual([]);
+    const read = readCollection(collectionJson("signs", [object], [{ ...image, collection: "abcdefgh" }]), "signs.json");
+    expect(read.images).toEqual([{ ...image, source: "signs.json" }]);
+    expect(readCollection(JSON.stringify(object)).images).toEqual([]);
+    expect(() => readCollection(JSON.stringify({ collection: "x", objects: [], images: [{ ...image, kind: "x" }] }))).toThrow(/kind/);
+    object.pieces[0].decals.push({ image: image.id, face: "0,1,0", at: [2, 0], size: [0, 1], turn: 0 });
+    expect(problems(object).join()).toMatch(/piece 1's decal 2/);
   });
 
   it("matches a search on the collection's name, the object's name or a tag", () => {

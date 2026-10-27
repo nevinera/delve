@@ -4,8 +4,9 @@ import { BUILT_PREFIX } from "../world/objects.js";
 import { COLLECTIONS_PATH } from "../editor/libraryStore.js";
 
 // A world's object library: its collections (collections.json, [{ id, name, source }], one with a
-// source imported and read-only) and the built objects in them (objects/<id>.json, each naming its
-// collection), with the game's builtin collections listed first. `world` is an editor World.
+// source imported and read-only), the built objects in them and the images their pieces wear
+// (objects/<id>.json and images/<id>.json, each naming its collection), with the game's builtin
+// collections listed first. `world` is an editor World.
 
 export const MY_OBJECTS = "my objects";
 
@@ -14,6 +15,15 @@ export function builtObjects(world) {
   return [...world.files.keys()]
     .filter((path) => /^objects\/[0-9a-z]{8}\.json$/.test(path))
     .map((path) => world.readJson(path))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// The world's images, or a collection's.
+export function images(world, collection) {
+  return [...world.files.keys()]
+    .filter((path) => /^images\/[0-9a-z]{8}\.json$/.test(path))
+    .map((path) => world.readJson(path))
+    .filter((image) => !collection || image.collection === collection)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 

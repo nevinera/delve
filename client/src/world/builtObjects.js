@@ -16,12 +16,24 @@
 //   first, then pitch, then yaw (three.js's "YXZ" order), so yaw and pitch aim the piece and roll
 //   spins it about its own axis; color indexes the palette.
 //   A cylinder may have a taper, its top's width over its bottom's (0 to 1, 1 when absent).
+//   decals: images stuck on its flat faces, each { image, face, at: [u, v], size: [w, h], turn }:
+//   face names one by its outward normal before sizing and turning, rounded ("0,1,0" is the top);
+//   at is where its middle is across the face, 0 to 1 each way; size is in feet; turn is degrees.
 //   A piece with cut: true is a hole: it's taken out of every other piece, and the faces it leaves
 //   take its color.
 //
 // Every piece stays within REACH_FT of the centre.
 //
-// A collection is { collection: name, objects: [object, ...] }.
+// A collection is { collection: name, objects: [object, ...], images: [image, ...] }.
+//
+// An image is { id, name, kind, collection, rows }, belonging to a collection, for its objects'
+// pieces to wear:
+// - kind: "decal" (stuck on one flat face) or "tiled" (repeated over a piece).
+// - rows: IMAGE_PX strings of IMAGE_PX pixels, top row first, each pixel two characters: its ink
+//   ("a" to "z" for the wearing object's palette colors in order, parameters overridden as its
+//   pieces are; "0" to "7" for grays from white to black) then its opacity ("1" to "4", in
+//   quarters), or ".." for none, where the piece's own color shows. Since inks name palette places,
+//   saving keeps them (dropUnusedColors drops only from the end).
 
 export const PIECE_TYPES = ["box", "wedge", "cylinder", "cone", "sphere", "pyramid", "tetrahedron"];
 export const MAX_PIECES = 32;
@@ -32,6 +44,65 @@ export const MIN_SIZE_FT = 0.1;
 const BLOCK_BELOW_FT = 6;
 
 export const objectPath = (id) => `objects/${id}.json`;
+export const imagePath = (id) => `images/${id}.json`;
+
+export const IMAGE_PX = 32;
+export const IMAGE_KINDS = ["decal", "tiled"];
+export const PALETTE_INKS = [..."abcdefghijklmnopqrstuvwxyz"];
+export const GRAY_INKS = ["0", "1", "2", "3", "4", "5", "6", "7"];
+export const OPACITIES = ["1", "2", "3", "4"];
+const MISSING_INK = "#808080"; // for an ink naming a palette place the object doesn't have
+
+export function emptyImage(name = "new image", kind = "decal", random = Math.random) {
+  return { id: newObjectId(random), name, kind, rows: Array.from({ length: IMAGE_PX }, () => "..".repeat(IMAGE_PX)) };
+}
+
+// A pixel as { ink, opacity } ("a" to "z" or "0" to "7", and "1" to "4"), or null when clear.
+export function pixelAt(image, x, y) {
+  const s = image.rows[y].slice(x * 2, x * 2 + 2);
+  return s === ".." ? null : { ink: s[0], opacity: s[1] };
+}
+
+// Sets a pixel, or clears it with null; changes `image` in place.
+export function setPixel(image, x, y, pixel) {
+  const row = image.rows[y];
+  image.rows[y] = row.slice(0, x * 2) + (pixel ? pixel.ink + pixel.opacity : "..") + row.slice(x * 2 + 2);
+}
+
+// An ink's color as "#rrggbb", given the wearer's colors (paletteColors).
+export function inkColor(ink, colors) {
+  const gray = GRAY_INKS.indexOf(ink);
+  if (gray >= 0) {
+    const v = Math.round(255 * (1 - gray / (GRAY_INKS.length - 1)));
+    return `#${v.toString(16).padStart(2, "0").repeat(3)}`;
+  }
+  return colors[PALETTE_INKS.indexOf(ink)] ?? MISSING_INK;
+}
+
+// The image as RGBA bytes (IMAGE_PX square, top row first), given the wearer's colors.
+export function imageRgba(image, colors) {
+  const out = new Uint8ClampedArray(IMAGE_PX * IMAGE_PX * 4);
+  for (let y = 0; y < IMAGE_PX; y++) {
+    for (let x = 0; x < IMAGE_PX; x++) {
+      const pixel = pixelAt(image, x, y);
+      if (!pixel) continue;
+      const hex = inkColor(pixel.ink, colors);
+      const i = (y * IMAGE_PX + x) * 4;
+      out.set([parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16), Math.round((255 * Number(pixel.opacity)) / OPACITIES.length)], i);
+    }
+  }
+  return out;
+}
+
+// What's wrong with an image, as a list of messages; empty when it's fine.
+export function imageProblems(image) {
+  const out = [];
+  if (!/^[0-9a-z]{8}$/.test(image.id ?? "")) out.push("its id should be 8 letters and digits");
+  if (!IMAGE_KINDS.includes(image.kind)) out.push(`its kind should be one of ${IMAGE_KINDS.join(", ")}`);
+  const pixel = new RegExp(`^(\\.\\.|[${PALETTE_INKS.join("")}${GRAY_INKS.join("")}][${OPACITIES.join("")}])*$`);
+  if (!Array.isArray(image.rows) || image.rows.length !== IMAGE_PX || !image.rows.every((row) => typeof row === "string" && row.length === IMAGE_PX * 2 && pixel.test(row))) out.push(`its rows should be ${IMAGE_PX} rows of ${IMAGE_PX} pixels`);
+  return out;
+}
 
 export function newObjectId(random = Math.random) {
   let id = "";
@@ -53,16 +124,12 @@ export function addColor(object, color) {
   return object.palette.length - 1;
 }
 
-// Drops palette colors no piece uses, renumbering the pieces' colors.
-export function dropUnusedColors(object) {
+// Drops palette colors nothing uses: no piece, and no ink of `images` (the ones its pieces wear).
+// Colors keep their places, since images name them by place, so only unused ones at the end go.
+export function dropUnusedColors(object, images = []) {
   const used = new Set(object.pieces.map((p) => p.color));
-  const renumber = new Map();
-  object.palette = object.palette.filter((_, i) => {
-    if (!used.has(i)) return false;
-    renumber.set(i, renumber.size);
-    return true;
-  });
-  for (const piece of object.pieces) piece.color = renumber.get(piece.color);
+  for (const image of images) for (const row of image.rows) for (let x = 0; x < row.length; x += 2) if (PALETTE_INKS.includes(row[x])) used.add(PALETTE_INKS.indexOf(row[x]));
+  while (object.palette.length && !used.has(object.palette.length - 1)) object.palette.pop();
 }
 
 // The piece's colors, as "#rrggbb", with `params` (the parameters' colors in palette order, any
@@ -115,6 +182,10 @@ export function problems(object) {
     if (!Number.isInteger(piece.color) || !object.palette[piece.color]) out.push(`${name}'s color isn't in the palette`);
     if (out.length > before) return;
     if (piece.taper !== undefined && (piece.type !== "cylinder" || !(piece.taper >= 0 && piece.taper <= 1))) out.push(`${name}'s taper should be 0 to 1, on a cylinder`);
+    (piece.decals ?? []).forEach((d, k) => {
+      const ok = typeof d.image === "string" && typeof d.face === "string" && Array.isArray(d.at) && d.at.length === 2 && d.at.every((v) => v >= 0 && v <= 1) && Array.isArray(d.size) && d.size.length === 2 && d.size.every((v) => v >= MIN_SIZE_FT) && Number.isFinite(d.turn);
+      if (!ok) out.push(`${name}'s decal ${k + 1} needs an image, a face, where across it (0 to 1), a size and a turn`);
+    });
     if (piece.cut !== undefined && typeof piece.cut !== "boolean") out.push(`${name}'s cut should be true or false`);
     if (piece.size.some((s) => s < MIN_SIZE_FT)) out.push(`${name} is smaller than ${MIN_SIZE_FT} ft across`);
     if (pieceCorners(piece).some(([x, y, z]) => Math.hypot(x, y, z) > REACH_FT + 1e-6)) out.push(`${name} reaches more than ${REACH_FT} ft from the centre`);
@@ -143,9 +214,9 @@ export function shapeOf(object) {
   return { footprint, height: round(height) };
 }
 
-// An object or collection read from JSON text, as { name, objects }: name is the collection's,
-// or null for a lone object. Each object is checked, and records `source` when given. Throws with
-// what's wrong when something is.
+// An object or collection read from JSON text, as { name, objects, images }: name is the
+// collection's, or null for a lone object. Each object and image is checked, and records `source`
+// when given. Throws with what's wrong when something is.
 export function readCollection(text, source) {
   const data = JSON.parse(text);
   const list = Array.isArray(data.objects) ? data.objects : [data];
@@ -153,13 +224,19 @@ export function readCollection(text, source) {
     const wrong = problems(object);
     if (wrong.length) throw new Error(`${object.name ?? object.id ?? "an object"}: ${wrong.join("; ")}`);
   }
-  const objects = list.map(({ collection, ...object }) => (source ? { ...object, source } : object));
-  return { name: typeof data.collection === "string" ? data.collection : null, objects };
+  const images = Array.isArray(data.images) ? data.images : [];
+  for (const image of images) {
+    const wrong = imageProblems(image);
+    if (wrong.length) throw new Error(`image ${image.name ?? image.id ?? ""}: ${wrong.join("; ")}`);
+  }
+  const sourced = ({ collection, ...thing }) => (source ? { ...thing, source } : thing);
+  return { name: typeof data.collection === "string" ? data.collection : null, objects: list.map(sourced), images: images.map(sourced) };
 }
 
-// A collection of objects, as JSON text to share.
-export function collectionJson(name, objects) {
-  return JSON.stringify({ collection: name, objects: objects.map(({ collection, ...object }) => object) }, null, 2);
+// A collection of objects and their images, as JSON text to share.
+export function collectionJson(name, objects, images = []) {
+  const bare = ({ collection, ...thing }) => thing;
+  return JSON.stringify({ collection: name, objects: objects.map(bare), images: images.map(bare) }, null, 2);
 }
 
 // Whether an object, in a collection named `collectionName`, matches a search: its collection's
