@@ -1,14 +1,15 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
-import { MAX_PIECES, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, addColor, dropUnusedColors, pieceCorners, problems, shapeOf } from "../world/builtObjects.js";
+import { MAX_PIECES, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, addColor, dropUnusedColors, pieceCorners, problems, shapeOf, turnPoint } from "../world/builtObjects.js";
 import { primitive } from "./builtMeshes.js";
 
 // The object builder: a dialog over most of the page for putting a built object
-// (world/builtObjects.js) together from pieces. The 3D view shows the pieces on a ground grid, a
-// ring where they must stay within, the footprint the game will use, and a person for scale.
-// Clicking a piece picks it; handles move, turn or size it, and the panel sets its numbers, type
-// and color exactly. The palette lists every color the object uses: changing one recolors every
+// (world/builtObjects.js) together from pieces. The 3D view shows the pieces on a ground grid (1 ft,
+// heavier every 5 ft), the object's axes, a ring where they must stay within, the footprint the
+// game will use, and a person for scale. Clicking a piece picks it and fades the rest; handles
+// move, turn or size it along its own axes, sizing from the face opposite the handle, and the panel
+// sets its type, color and, as a last resort, exact numbers. The palette lists every color the object uses: changing one recolors every
 // piece using it, and up to three are parameters. Saving hands the object to onSave.
 //
 // Right-drag turns the view, middle-drag pans and the wheel zooms, as in the detail step.
@@ -20,8 +21,11 @@ const UNDO_KEEP = 100;
 const HANDLES = { move: "translate", turn: "rotate", size: "scale" };
 const KEYS = { g: "move", r: "turn", s: "size" };
 const PERSON = { heightFt: 6, radiusFt: 0.8, at: [-5, -5] }; // behind and left, as first framed
-const COLORS = { grid: 0x555555, gridMajor: 0x777777, reach: 0x8fc4ff, footprint: 0xf0c850, picked: 0xffe066, person: 0x9aa4b0, ground: 0x4a5040, background: 0x20242a };
-const HINT = "click a piece to pick it · G moves, R turns, S sizes · right-drag turns the view · middle-drag pans · wheel zooms · delete removes the piece · ctrl-d copies it · ctrl-z undoes, ctrl-shift-z redoes";
+const LABEL_FT = 10; // how far out along each axis its label sits
+const FADED = 0.25; // how much of the unpicked pieces shows while one is picked
+const AXES = { x: { color: 0xe05a5a, label: "x east" }, y: { color: 0x6ad06a, label: "y up" }, z: { color: 0x5a8ae0, label: "z south" } };
+const COLORS = { grid: 0x626a58, gridMajor: 0x9aa48c, reach: 0x8fc4ff, footprint: 0xf0c850, picked: 0xffe066, person: 0x9aa4b0, ground: 0x4a5040, background: 0x20242a };
+const HINT = "click a piece to pick it · G moves, R turns, S sizes, all along the piece's own axes · W toggles moving along the world's · F frames the object · right-drag turns the view · middle-drag pans · wheel zooms · delete removes the piece · ctrl-d copies it · ctrl-z undoes, ctrl-shift-z redoes";
 
 // An element with properties and children.
 function el(tag, props = {}, ...children) {
@@ -33,8 +37,14 @@ function el(tag, props = {}, ...children) {
 const round = (v, step) => Math.round(v / step) * step;
 const tidy = (v) => Math.round(v * 100) / 100;
 const lowest = (piece) => Math.min(...pieceCorners(piece).map((c) => c[1]));
-// Sizing grows a piece about its middle; this moves it back up or down so its bottom stays put.
-const keepBase = (piece, base) => (piece.at[1] = tidy(piece.at[1] + base - lowest(piece)));
+// Sizes `piece` to `size` from `from` (the piece before), growing each axis toward `sides`: 1 grows
+// the positive end and keeps the negative face still, -1 the reverse, 0 grows both ends alike.
+// Typed sizes grow upward and evenly across.
+function sizeFrom(piece, from, size, sides = [0, 1, 0]) {
+  const shift = turnPoint(size.map((s, axis) => (sides[axis] * (s - from.size[axis])) / 2), from.turn);
+  piece.size = size;
+  piece.at = from.at.map((v, axis) => tidy(v + shift[axis]));
+}
 
 export class ObjectBuilder {
   // onSave(object) hears the object when it's saved.
@@ -43,6 +53,7 @@ export class ObjectBuilder {
     this.object = null;
     this.picked = null; // the picked piece's index
     this.handle = "move";
+    this.worldMoves = false; // moving along the world's axes instead of the piece's
     this.undos = [];
     this.redos = [];
     this.buildDom();
@@ -83,7 +94,8 @@ export class ObjectBuilder {
     const add = div("ob-row", ...PIECE_TYPES.map((type) => el("button", { type: "button", textContent: type, onclick: () => this.addPiece(type) })));
     this.handleButtons = Object.keys(HANDLES).map((name) => el("button", { type: "button", textContent: name, onclick: () => this.setHandle(name) }));
     this.snap = el("input", { type: "checkbox", checked: true, onchange: () => this.applySnap() });
-    const handles = div("ob-row", ...this.handleButtons, el("label", { className: "ob-check" }, this.snap, el("span", { textContent: "snap" })));
+    this.worldBox = el("input", { type: "checkbox", onchange: () => ((this.worldMoves = this.worldBox.checked), this.setHandle(this.handle)) });
+    const handles = div("ob-row", ...this.handleButtons, el("label", { className: "ob-check" }, this.snap, el("span", { textContent: "snap" })), el("label", { className: "ob-check", title: "move along the world's axes, not the piece's (W)" }, this.worldBox, el("span", { textContent: "world" })));
 
     this.list = el("select", { size: 8, className: "ob-list", onchange: () => this.pick(this.list.value === "" ? null : Number(this.list.value)) });
 
@@ -96,9 +108,9 @@ export class ObjectBuilder {
         input.addEventListener("change", () =>
           this.changePiece((p) => {
             if (key !== "size") return (p[key][axis] = Number(input.value) || 0);
-            const base = lowest(p);
-            p.size[axis] = Math.max(MIN_SIZE_FT, Number(input.value) || MIN_SIZE_FT);
-            keepBase(p, base);
+            const size = [...p.size];
+            size[axis] = Math.max(MIN_SIZE_FT, Number(input.value) || MIN_SIZE_FT);
+            sizeFrom(p, structuredClone(p), size);
           }),
         );
         return input;
@@ -110,10 +122,15 @@ export class ObjectBuilder {
     this.pieceBox = div(
       "ob-piece",
       field("type", this.type),
-      field("size (ft) x y z", div("ob-xyz", ...this.inputs.size)),
-      field("at (ft) x y z", div("ob-xyz", ...this.inputs.at)),
-      field("turn (°) yaw pitch roll", div("ob-xyz", ...this.inputs.turn)),
       field("color", div("ob-row", this.swatches, this.newColor)),
+      el(
+        "details",
+        { className: "ob-numbers" },
+        el("summary", { textContent: "exact numbers" }),
+        field("size (ft) x y z", div("ob-xyz", ...this.inputs.size)),
+        field("at (ft) x y z", div("ob-xyz", ...this.inputs.at)),
+        field("turn (°) yaw pitch roll", div("ob-xyz", ...this.inputs.turn)),
+      ),
       div("ob-row", el("button", { type: "button", textContent: "copy", onclick: () => this.copyPiece() }), el("button", { type: "button", textContent: "remove", onclick: () => this.removePiece() })),
     );
 
@@ -166,6 +183,8 @@ export class ObjectBuilder {
     if (ctrl && e.key.toLowerCase() === "z") e.shiftKey ? this.redo() : this.undo();
     else if (ctrl && e.key.toLowerCase() === "d") this.copyPiece();
     else if (!ctrl && KEYS[e.key.toLowerCase()]) this.setHandle(KEYS[e.key.toLowerCase()]);
+    else if (!ctrl && e.key.toLowerCase() === "w") this.worldBox.click();
+    else if (!ctrl && e.key.toLowerCase() === "f") this.frameObject();
     else if (e.key === "Delete" || e.key === "Backspace") this.removePiece();
     else return;
     e.preventDefault();
@@ -242,7 +261,7 @@ export class ObjectBuilder {
   setHandle(name) {
     this.handle = name;
     this.transform?.setMode(HANDLES[name]);
-    this.transform?.setSpace(name === "move" ? "world" : "local");
+    this.transform?.setSpace(name === "move" && this.worldMoves ? "world" : "local");
     this.refreshPanel();
   }
 
@@ -277,6 +296,7 @@ export class ObjectBuilder {
     const { object } = this;
     this.name.value = object.name;
     for (const b of this.handleButtons) b.classList.toggle("active", b.textContent === this.handle);
+    this.worldBox.checked = this.worldMoves;
 
     this.list.replaceChildren(
       ...object.pieces.map((piece, n) => {
@@ -336,10 +356,7 @@ export class ObjectBuilder {
     this.scene.add(sun);
     this.camera = new THREE.PerspectiveCamera(45, 1, 0.1, 1000);
 
-    const grid = new THREE.GridHelper(REACH_FT * 2, REACH_FT * 2, COLORS.gridMajor, COLORS.grid);
-    grid.material.transparent = true;
-    grid.material.opacity = 0.35;
-    this.scene.add(grid);
+    this.scene.add(grid(REACH_FT + 3, 1, COLORS.grid), grid(REACH_FT + 3, 5, COLORS.gridMajor), axes(REACH_FT));
     // Solid ground, so pieces sunk below it look sunk.
     const ground = new THREE.Mesh(new THREE.CircleGeometry(REACH_FT * 1.5, 48).rotateX(-Math.PI / 2), new THREE.MeshLambertMaterial({ color: COLORS.ground, transparent: true, opacity: 0.85 }));
     ground.position.y = -0.01;
@@ -364,9 +381,11 @@ export class ObjectBuilder {
       this.orbit.enabled = !e.value;
       if (e.value) {
         this.dragFrom = JSON.stringify(this.object);
-        this.dragBase = lowest(this.object.pieces[this.picked]);
-      }
-      else this.endDrag();
+        this.dragPiece = structuredClone(this.object.pieces[this.picked]);
+        // Which end of each axis the grabbed size handle is on; the middle one grows upward.
+        const grabbed = this.transform.pointStart.clone().applyQuaternion(this.transform.object.quaternion.clone().invert());
+        this.dragSides = this.transform.axis === "XYZ" ? [0, 1, 0] : grabbed.toArray().map((v) => Math.sign(v) || 1);
+      } else this.endDrag();
     });
     this.transform.addEventListener("objectChange", () => this.readHandles());
     this.setHandle(this.handle);
@@ -387,13 +406,13 @@ export class ObjectBuilder {
     const mesh = this.transform.object;
     const piece = this.object.pieces[this.picked];
     if (!mesh || !piece) return;
-    piece.at = mesh.position.toArray().map((v) => tidy(v));
-    const r = mesh.rotation;
-    piece.turn = [r.y, r.x, r.z].map((v) => round(THREE.MathUtils.radToDeg(v), 0.1));
-    piece.size = mesh.scale.toArray().map((v) => Math.max(MIN_SIZE_FT, tidy(Math.abs(v))));
     if (this.handle === "size") {
-      keepBase(piece, this.dragBase);
-      mesh.position.y = piece.at[1];
+      sizeFrom(piece, this.dragPiece, mesh.scale.toArray().map((v) => Math.max(MIN_SIZE_FT, tidy(Math.abs(v)))), this.dragSides);
+      mesh.position.set(...piece.at);
+    } else {
+      piece.at = mesh.position.toArray().map((v) => tidy(v));
+      const r = mesh.rotation;
+      piece.turn = [r.y, r.x, r.z].map((v) => round(THREE.MathUtils.radToDeg(v), 0.1));
     }
     this.refreshPanel();
     this.drawMarks();
@@ -418,7 +437,8 @@ export class ObjectBuilder {
     this.transform.detach();
     this.object.pieces.forEach((piece, n) => {
       const color = this.object.palette[piece.color]?.color ?? "#ff00ff";
-      const mesh = new THREE.Mesh(primitive(piece.type), new THREE.MeshLambertMaterial({ color, flatShading: true, emissive: n === this.picked ? 0x332a10 : 0x000000 }));
+      const faded = this.picked !== null && n !== this.picked;
+      const mesh = new THREE.Mesh(primitive(piece.type), new THREE.MeshLambertMaterial({ color, flatShading: true, emissive: n === this.picked ? 0x332a10 : 0x000000, transparent: faded, opacity: faded ? FADED : 1, depthWrite: !faded }));
       mesh.position.set(...piece.at);
       mesh.rotation.set(THREE.MathUtils.degToRad(piece.turn[1]), THREE.MathUtils.degToRad(piece.turn[0]), THREE.MathUtils.degToRad(piece.turn[2]), "YXZ");
       mesh.scale.set(...piece.size);
@@ -478,6 +498,44 @@ export class ObjectBuilder {
     };
     this.frame = requestAnimationFrame(loop);
   }
+}
+
+// Grid lines on the ground every `step` feet, out to `reach` each way.
+function grid(reach, step, color) {
+  const points = [];
+  const end = Math.floor(reach / step) * step;
+  for (let v = -end; v <= end; v += step) points.push(-end, 0.01, v, end, 0.01, v, v, 0.01, -end, v, 0.01, end);
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
+  return new THREE.LineSegments(geometry, new THREE.LineBasicMaterial({ color }));
+}
+
+// The object's axes through its centre, each labelled at its positive end.
+function axes(reach) {
+  const group = new THREE.Group();
+  const ends = { x: [[-reach, 0.02, 0], [reach, 0.02, 0]], y: [[0, 0, 0], [0, reach / 2, 0]], z: [[0, 0.02, -reach], [0, 0.02, reach]] };
+  for (const [axis, { color, label }] of Object.entries(AXES)) {
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(ends[axis].map((p) => new THREE.Vector3(...p))), new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true, opacity: 0.8 }));
+    line.renderOrder = 1;
+    group.add(line, textSprite(label, color, ends[axis][1].map((v, i) => (i === "xyz".indexOf(axis) ? LABEL_FT : v))));
+  }
+  return group;
+}
+
+function textSprite(text, color, at) {
+  const canvas = Object.assign(document.createElement("canvas"), { width: 256, height: 64 });
+  const g = canvas.getContext("2d");
+  g.font = "bold 36px monospace";
+  g.fillStyle = `#${color.toString(16).padStart(6, "0")}`;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.fillText(text, 128, 32);
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas), depthTest: false, sizeAttenuation: false }));
+  // The same size on screen however near.
+  sprite.scale.set(0.12, 0.03, 1);
+  sprite.position.set(at[0], at[1] + 0.5, at[2]);
+  sprite.renderOrder = 2;
+  return sprite;
 }
 
 // A circle on the ground.
