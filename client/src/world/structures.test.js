@@ -1,0 +1,100 @@
+import { describe, expect, it } from "vitest";
+import { bakeWalk, edgeToward, emptyStructure, placedWalk, problems, turnCell, turnEdge, withWalk } from "./structures.js";
+
+// A 2 by 2 cell hut: stone walls all round, a door on the south, a window on the east, and a
+// cellar under its west half, down a stair from the north-east cell.
+function hut() {
+  const s = emptyStructure("hut", () => 0.5);
+  const ground = s.storeys[0];
+  ground.floor = ["0,0", "1,0", "0,1"];
+  for (const x of [0, 1]) {
+    ground.edges[`${x},0,n`] = { wall: "stone" };
+    ground.edges[`${x},2,n`] = { wall: "stone" };
+  }
+  for (const z of [0, 1]) {
+    ground.edges[`0,${z},w`] = { wall: "stone" };
+    ground.edges[`2,${z},w`] = { wall: "stone" };
+  }
+  ground.edges["0,2,n"] = { wall: "stone", opening: "door", sill: 0, top: 8 };
+  ground.edges["2,0,w"] = { wall: "stone", opening: "window", sill: 3, top: 6, faces: ["img00000", null] };
+  s.storeys.push({ level: -1, floor: ["0,0", "0,1", "1,0"], edges: {} });
+  // Up from the cellar, northward, into the hole in the ground floor at 1,1.
+  s.components.push({ type: "stairs", level: -1, at: [1, 1], facing: 0, run: 1 });
+  s.components.push({ type: "railing", level: 0, edges: [edgeToward(1, 1, 3)] });
+  return s;
+}
+
+describe("structures", () => {
+  it("finds nothing wrong with a sound structure", () => {
+    expect(problems(hut())).toEqual([]);
+    expect(problems(emptyStructure())).toEqual([]);
+  });
+
+  it("says what's wrong", () => {
+    const s = hut();
+    s.storeyFt = 4;
+    s.storeys[0].edges["0,0,n"] = { wall: "brick" };
+    s.storeys[0].edges["0,2,n"].sill = 2;
+    s.storeys[0].floor.push("40,0");
+    s.storeys.push({ level: -1, floor: [], edges: {} });
+    s.components.push({ type: "stairs", level: 3, at: [0, 0], facing: 5, run: 0 }, { type: "lift", level: 0 });
+    expect(problems(s)).toEqual([
+      "its storeys should be 6 to 30 whole feet",
+      "two of its storeys are on the same level",
+      "storey 0's floor should list cells within 16 of the anchor",
+      'storey 0\'s edge 0,0,n is an unknown wall, "brick"',
+      "storey 0's edge 0,2,n needs a door from the floor, or a window, with a sill below its top, within the storey",
+      "storey 0's edge 2,0,w needs a door from the floor, or a window, with a sill below its top, within the storey",
+      "component 3 is on level 3, which has no storey",
+      "component 3 (stairs) should face 0 to 3 (north, east, south, west)",
+      "component 3 (stairs) needs a run of whole cells",
+      'component 4 is an unknown type, "lift"',
+    ]);
+  });
+
+  it("bakes floors, walls, openings, flights and railings into walk data", () => {
+    const walk = bakeWalk(hut());
+    const [cellar, ground] = walk.storeys;
+    expect(cellar.level).toBe(-1);
+    expect(cellar.cells["0,0"]).toEqual([-10, -10, -10, -10]);
+    // The stair climbs northward: its south corners at the cellar floor, its north ones at the
+    // ground floor.
+    expect(cellar.cells["1,1"]).toEqual([0, 0, -10, -10]);
+    expect(ground.cells["1,0"]).toEqual([0, 0, 0, 0]);
+    expect(ground.cells["1,1"]).toBeUndefined();
+    expect(ground.edges).toMatchObject({ "0,0,n": "wall", "0,2,n": "door", "2,0,w": "window", "1,1,w": "railing" });
+    // The stairwell is under no floor; the cellar's other cells are.
+    expect(walk.cut).toEqual(["1,1"]);
+  });
+
+  it("spreads a flight to the right of its way up, over its run", () => {
+    const s = emptyStructure();
+    s.storeyFt = 12;
+    s.components.push({ type: "ramp", level: 0, at: [0, 0], facing: 1, run: 3, width: 2 });
+    const { cells } = bakeWalk(s).storeys[0];
+    expect(Object.keys(cells).sort()).toEqual(["0,0", "0,1", "1,0", "1,1", "2,0", "2,1"]);
+    expect(cells["0,1"]).toEqual([0, 4, 4, 0]);
+    expect(cells["2,0"]).toEqual([8, 12, 12, 8]);
+  });
+
+  it("turns cells and edges by quarter turns, as yaw does", () => {
+    // A quarter turn takes east to north.
+    expect(turnCell(0, 0, 1).cell).toEqual([0, -1]);
+    expect(turnCell(2, 0, 1).cell).toEqual([0, -3]);
+    expect(turnEdge("1,0,w", 1)).toBe("0,-1,n");
+    // Four quarter turns come back round.
+    for (const key of ["0,0,n", "3,-2,w", "-5,4,n"]) expect(turnEdge(key, 4)).toBe(key);
+    expect(turnCell(3, -2, 4)).toEqual({ cell: [3, -2], from: [0, 1, 2, 3] });
+  });
+
+  it("places walk data in world cells, turned and raised", () => {
+    const s = withWalk(hut());
+    const placed = placedWalk(s, { at: [400, 800], yaw: 1, base: 50 });
+    // Turned a quarter, the stair (cell 1,1, climbing north) climbs west from cell 1,-2.
+    const stair = placed.cells.find((c) => c.level === -1 && c.heights.some((h) => h === 50));
+    expect(stair.cell).toEqual([101, 198]);
+    expect(stair.heights).toEqual([50, 40, 40, 50]);
+    // The south door now faces east.
+    expect(placed.edges.find((e) => e.kind === "door")).toEqual({ edge: "102,199,w", kind: "door", level: 0, heights: [50, 60] });
+  });
+});
