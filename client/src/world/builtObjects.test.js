@@ -60,6 +60,12 @@ describe("built objects", () => {
     expect(wrong).toMatch(/smaller than/);
     expect(wrong).toMatch(/unknown type/);
     expect(wrong).toMatch(/isn't in the palette/);
+    object.pieces.push(piece({ taper: 0.5 }), piece({ type: "cylinder", taper: 2 }), piece({ cut: "yes" }));
+    const more = problems(object).join("\n");
+    expect(more).toMatch(/piece 10's taper/);
+    expect(more).toMatch(/piece 11's taper/);
+    expect(more).toMatch(/piece 12's cut/);
+    expect(problems({ ...table(), pieces: [piece({ type: "cylinder", taper: 0.5 }), piece({ cut: true })] })).toEqual([]);
     while (object.pieces.length <= 32) object.pieces.push(piece());
     expect(problems(object).join("\n")).toMatch(/more than 32/);
   });
@@ -74,6 +80,10 @@ describe("built objects", () => {
     addColor(pole, "#ffffff");
     pole.pieces.push(piece({ size: [1, 10, 1], at: [0, 5, 0], turn: [45, 0, 0] }));
     expect(shapeOf(pole).footprint.circle).toBeCloseTo(Math.SQRT1_2);
+    // Holes take nothing away from what it blocks, nor add to it.
+    pole.pieces.push(piece({ size: [8, 20, 8], at: [0, 10, 0], cut: true }));
+    expect(shapeOf(pole).footprint.circle).toBeCloseTo(Math.SQRT1_2);
+    expect(shapeOf(pole).height).toBeCloseTo(10);
   });
 
   it("leaves pieces above head height out of the footprint", () => {

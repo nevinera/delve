@@ -470,6 +470,10 @@
   color: #9aa4b0;
 }
 
+.ob-field[hidden] {
+  display: none;
+}
+
 .ob-field {
   display: flex;
   flex-direction: column;

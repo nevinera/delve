@@ -2,14 +2,16 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { MAX_PIECES, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, addColor, dropUnusedColors, pieceCorners, problems, shapeOf, turnPoint } from "../world/builtObjects.js";
-import { primitive } from "./builtMeshes.js";
+import { builtMaterial, objectGeometry, primitive } from "./builtMeshes.js";
 
 // The object builder: a dialog over most of the page for putting a built object
 // (world/builtObjects.js) together from pieces. The 3D view shows the pieces on a ground grid (1 ft,
 // heavier every 5 ft), the object's axes, a ring where they must stay within, the footprint the
 // game will use, and a person for scale. Clicking a piece picks it and fades the rest; handles
 // move, turn or size it along its own axes, sizing from the face opposite the handle, and the panel
-// sets its type, color and, as a last resort, exact numbers. The palette lists every color the object uses: changing one recolors every
+// sets its type, color, taper, whether it's a hole and, as a last resort, exact numbers. Holes show
+// as red glass while a piece is picked; with none picked the object shows as the game draws it,
+// holes cut. The palette lists every color the object uses: changing one recolors every
 // piece using it, and up to three are parameters. Saving hands the object to onSave.
 //
 // Right-drag turns the view, middle-drag pans and the wheel zooms, as in the detail step.
@@ -23,6 +25,7 @@ const KEYS = { g: "move", r: "turn", s: "size" };
 const PERSON = { heightFt: 6, radiusFt: 0.8, at: [-5, -5] }; // behind and left, as first framed
 const LABEL_FT = 10; // how far out along each axis its label sits
 const FADED = 0.25; // how much of the unpicked pieces shows while one is picked
+const HOLE = { color: 0xff4040, opacity: 0.3 };
 const AXES = { x: { color: 0xe05a5a, label: "x east" }, y: { color: 0x6ad06a, label: "y up" }, z: { color: 0x5a8ae0, label: "z south" } };
 const COLORS = { grid: 0x626a58, gridMajor: 0x9aa48c, reach: 0x8fc4ff, footprint: 0xf0c850, picked: 0xffe066, person: 0x9aa4b0, ground: 0x4a5040, background: 0x20242a };
 const HINT = "click a piece to pick it · G moves, R turns, S sizes, all along the piece's own axes · W toggles moving along the world's · F frames the object · right-drag turns the view · middle-drag pans · wheel zooms · delete removes the piece · ctrl-d copies it · ctrl-z undoes, ctrl-shift-z redoes";
@@ -100,7 +103,18 @@ export class ObjectBuilder {
     this.list = el("select", { size: 8, className: "ob-list", onchange: () => this.pick(this.list.value === "" ? null : Number(this.list.value)) });
 
     // The picked piece's settings.
-    this.type = el("select", { onchange: () => this.changePiece((p) => (p.type = this.type.value)) });
+    this.type = el("select", {
+      onchange: () =>
+        this.changePiece((p) => {
+          p.type = this.type.value;
+          if (p.type !== "cylinder") delete p.taper;
+        }),
+    });
+    this.taper = el("input", { type: "range", min: 0, max: 1, step: 0.05 });
+    this.taper.addEventListener("input", () => this.taperPiece(Number(this.taper.value)));
+    this.taper.addEventListener("change", () => this.endTaper());
+    this.taperField = field("taper (top over bottom)", this.taper);
+    this.cut = el("input", { type: "checkbox", onchange: () => this.changePiece((p) => (this.cut.checked ? (p.cut = true) : delete p.cut)) });
     for (const type of PIECE_TYPES) this.type.add(new Option(type, type));
     const numbers = (key, step) =>
       [0, 1, 2].map((axis) => {
@@ -122,6 +136,8 @@ export class ObjectBuilder {
     this.pieceBox = div(
       "ob-piece",
       field("type", this.type),
+      this.taperField,
+      el("label", { className: "ob-check", title: "take this piece out of the others, as a hole; its color colors the hole's sides" }, this.cut, el("span", { textContent: "hole" })),
       field("color", div("ob-row", this.swatches, this.newColor)),
       el(
         "details",
@@ -224,6 +240,25 @@ export class ObjectBuilder {
     this.refresh();
   }
 
+  // Tapers the picked piece live as the slider moves, one undoable step per drag.
+  taperPiece(taper) {
+    const piece = this.object.pieces[this.picked];
+    if (!piece) return;
+    this.taperFrom ??= JSON.stringify(this.object);
+    if (taper === 1) delete piece.taper;
+    else piece.taper = taper;
+    this.refreshScene();
+  }
+
+  endTaper() {
+    if (this.taperFrom && this.taperFrom !== JSON.stringify(this.object)) {
+      this.undos.push(this.taperFrom);
+      this.redos = [];
+    }
+    this.taperFrom = null;
+    this.refresh();
+  }
+
   addPiece(type) {
     if (this.object.pieces.length >= MAX_PIECES) return;
     this.change((object) => {
@@ -300,7 +335,7 @@ export class ObjectBuilder {
 
     this.list.replaceChildren(
       ...object.pieces.map((piece, n) => {
-        return new Option(`${n + 1}. ${piece.type} ${piece.size.map(tidy).join("×")}`, n, false, n === this.picked);
+        return new Option(`${n + 1}. ${piece.cut ? "hole: " : ""}${piece.type} ${piece.size.map(tidy).join("×")}`, n, false, n === this.picked);
       }),
     );
 
@@ -308,6 +343,9 @@ export class ObjectBuilder {
     this.pieceBox.hidden = !piece;
     if (piece) {
       this.type.value = piece.type;
+      this.taperField.hidden = piece.type !== "cylinder";
+      this.taper.value = piece.taper ?? 1;
+      this.cut.checked = Boolean(piece.cut);
       for (const key of ["size", "at", "turn"]) this.inputs[key].forEach((input, axis) => (input.value = tidy(piece[key][axis])));
       this.swatches.replaceChildren(
         ...object.palette.map((p, i) => {
@@ -368,6 +406,8 @@ export class ObjectBuilder {
 
     this.pieces = new THREE.Group();
     this.scene.add(this.pieces);
+    this.whole = new THREE.Mesh(new THREE.BufferGeometry(), builtMaterial());
+    this.scene.add(this.whole);
     this.marks = new THREE.Group();
     this.scene.add(this.marks);
 
@@ -435,10 +475,16 @@ export class ObjectBuilder {
       this.pieces.remove(mesh);
     }
     this.transform.detach();
+    this.whole.geometry?.dispose();
+    // With nothing picked and holes to cut, the pieces only catch clicks, and the whole object
+    // shows as the game draws it.
+    const whole = this.picked === null && this.object.pieces.some((p) => p.cut) ? objectGeometry(this.object) : null;
+    this.whole.geometry = whole ?? new THREE.BufferGeometry();
     this.object.pieces.forEach((piece, n) => {
-      const color = this.object.palette[piece.color]?.color ?? "#ff00ff";
+      const color = piece.cut ? HOLE.color : (this.object.palette[piece.color]?.color ?? "#ff00ff");
       const faded = this.picked !== null && n !== this.picked;
-      const mesh = new THREE.Mesh(primitive(piece.type), new THREE.MeshLambertMaterial({ color, flatShading: true, emissive: n === this.picked ? 0x332a10 : 0x000000, transparent: faded, opacity: faded ? FADED : 1, depthWrite: !faded }));
+      const opacity = piece.cut ? HOLE.opacity : faded ? FADED : 1;
+      const mesh = new THREE.Mesh(primitive(piece.type, piece.taper), new THREE.MeshLambertMaterial({ color, flatShading: true, emissive: n === this.picked ? 0x332a10 : 0x000000, transparent: opacity < 1, opacity, depthWrite: opacity === 1, visible: !whole }));
       mesh.position.set(...piece.at);
       mesh.rotation.set(THREE.MathUtils.degToRad(piece.turn[1]), THREE.MathUtils.degToRad(piece.turn[0]), THREE.MathUtils.degToRad(piece.turn[2]), "YXZ");
       mesh.scale.set(...piece.size);

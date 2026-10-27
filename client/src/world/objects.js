@@ -10,6 +10,7 @@
 
 import { shapeOf } from "./builtObjects.js";
 import { CELL_FT, TILE_FT } from "./constants.js";
+import { KIT_OBJECTS } from "./kitObjects.js";
 import { hash2 } from "./noise.js";
 import { parseTree } from "./trees.js";
 
@@ -25,12 +26,14 @@ const MOSS = [[0.2, 0.26], [0.4, 0.55], [0.3, 0.4]];
 // footprint: the blocking shape for scale 1, one of { circle: r }, { capsule: [r, half] } (along
 // the object's own x) or { rect: [w, d] } (w along its x). height: how tall it stands, for scale 1.
 // parts: a shape each (objectMeshes.js) and the color ranges to pick from, HSL 0-1.
+// kit: instead of parts' shapes, a built object made of pieces (kitObjects.js), unitFt of its feet
+// to one of the type's; its first part's color tints the whole of it.
 export const OBJECT_TYPES = {
   boulder: { size: [3, 8], footprint: { circle: 0.45 }, height: 0.8, parts: [{ shape: "boulder", colors: [GREY] }] },
   outcrop: { size: [2.5, 4], footprint: { rect: [2.6, 1.6] }, height: 1, parts: [{ shape: "outcrop", colors: [GREY] }] },
   bush: { size: [3, 5], footprint: { circle: 0.42 }, height: 0.95, parts: [{ shape: "bush", colors: [BUSH] }] },
-  fence: { size: [3.5, 4.5], footprint: { rect: [2.6, 0.2] }, height: 1, parts: [{ shape: "fencePosts", colors: [BLEACHED] }, { shape: "fenceRail", colors: [BLEACHED] }] },
-  log: { size: [25, 50], footprint: { capsule: [0.1, 0.5] }, height: 0.2, parts: [{ shape: "log", colors: [BARK] }] },
+  fence: { size: [3.5, 4.5], footprint: { rect: [2.6, 0.2] }, height: 1, kit: KIT_OBJECTS.fence, unitFt: 4, parts: [{ colors: [BLEACHED] }] },
+  log: { size: [25, 50], footprint: { capsule: [0.1, 0.5] }, height: 0.2, kit: KIT_OBJECTS.log, unitFt: 30, parts: [{ colors: [BARK] }] },
   stump: { size: [3, 6], footprint: { circle: 0.8 }, height: 1, parts: [{ shape: "stump", colors: [BARK] }] },
   mossyBoulder: { size: [3, 6], footprint: { circle: 0.45 }, height: 0.85, parts: [{ shape: "boulder", colors: [DARK_GREY] }, { shape: "mossCap", colors: [MOSS] }] },
   thicket: { size: [4, 6], footprint: { circle: 0.7 }, height: 0.95, parts: [{ shape: "thicket", colors: [BUSH] }] },
@@ -39,11 +42,11 @@ export const OBJECT_TYPES = {
   spire: { size: [10, 25], footprint: { circle: 0.15 }, height: 1, parts: [{ shape: "spire", colors: [GREY] }] },
   rubble: { size: [4, 8], footprint: { circle: 0.5 }, height: 0.35, parts: [{ shape: "rubble", colors: [GREY] }] },
   deadStump: { size: [3, 6], footprint: { circle: 0.8 }, height: 1, parts: [{ shape: "stump", colors: [BLEACHED] }] },
-  rottingLog: { size: [20, 45], footprint: { capsule: [0.1, 0.5] }, height: 0.2, sink: 0.3, parts: [{ shape: "log", colors: [ROTTEN] }] },
+  rottingLog: { size: [20, 45], footprint: { capsule: [0.1, 0.5] }, height: 0.2, sink: 0.3, kit: KIT_OBJECTS.log, unitFt: 30, parts: [{ colors: [ROTTEN] }] },
   hollowStump: { size: [4, 7], footprint: { circle: 0.8 }, height: 1, parts: [{ shape: "hollowStump", colors: [ROTTEN] }] },
   rootTangle: { size: [4, 7], footprint: { circle: 0.55 }, height: 0.7, parts: [{ shape: "rootArches", colors: [ROTTEN] }] },
   hummock: { size: [2, 3.5], footprint: { circle: 1.1 }, height: 1, parts: [{ shape: "hummock", colors: [MOSS] }] },
-  driftLog: { size: [15, 35], footprint: { capsule: [0.07, 0.5] }, height: 0.14, parts: [{ shape: "log", colors: [BLEACHED] }] },
+  driftLog: { size: [15, 35], footprint: { capsule: [0.07, 0.5] }, height: 0.14, kit: KIT_OBJECTS.driftLog, unitFt: 30, parts: [{ colors: [BLEACHED] }] },
 };
 
 // Built objects (builtObjects.js) are types too, named "built:<id>". For them scale is a factor, 1

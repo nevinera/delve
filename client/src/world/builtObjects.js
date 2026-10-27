@@ -12,6 +12,9 @@
 //   centre, which sits on the ground (y up, x east, z south); turn is in degrees, applied roll
 //   first, then pitch, then yaw (three.js's "YXZ" order), so yaw and pitch aim the piece and roll
 //   spins it about its own axis; color indexes the palette.
+//   A cylinder may have a taper, its top's width over its bottom's (0 to 1, 1 when absent).
+//   A piece with cut: true is a hole: it's taken out of every other piece, and the faces it leaves
+//   take its color.
 //
 // Every piece stays within REACH_FT of the centre.
 //
@@ -107,6 +110,8 @@ export function problems(object) {
     }
     if (!Number.isInteger(piece.color) || !object.palette[piece.color]) out.push(`${name}'s color isn't in the palette`);
     if (out.length > before) return;
+    if (piece.taper !== undefined && (piece.type !== "cylinder" || !(piece.taper >= 0 && piece.taper <= 1))) out.push(`${name}'s taper should be 0 to 1, on a cylinder`);
+    if (piece.cut !== undefined && typeof piece.cut !== "boolean") out.push(`${name}'s cut should be true or false`);
     if (piece.size.some((s) => s < MIN_SIZE_FT)) out.push(`${name} is smaller than ${MIN_SIZE_FT} ft across`);
     if (pieceCorners(piece).some(([x, y, z]) => Math.hypot(x, y, z) > REACH_FT + 1e-6)) out.push(`${name} reaches more than ${REACH_FT} ft from the centre`);
   });
@@ -115,11 +120,12 @@ export function problems(object) {
 
 // What the game needs to block movement and sight, as world/objects.js keeps for every object:
 // { footprint, height } for scale 1. The footprint is round or a rectangle about the centre,
-// whichever covers less, of the pieces reaching below head height.
+// whichever covers less, of the pieces reaching below head height. Holes don't change it.
 export function shapeOf(object) {
   let height = 0;
   let [halfX, halfZ, radius] = [0, 0, 0];
   for (const piece of object.pieces) {
+    if (piece.cut) continue;
     const corners = pieceCorners(piece);
     height = Math.max(height, ...corners.map((c) => c[1]));
     if (Math.min(...corners.map((c) => c[1])) >= BLOCK_BELOW_FT) continue;

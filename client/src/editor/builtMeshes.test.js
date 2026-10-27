@@ -6,7 +6,7 @@ import { objectGeometry, pieceGeometry } from "./builtMeshes.js";
 const bounds = (g) => {
   g.computeBoundingBox();
   const { min, max } = g.boundingBox;
-  return [min.toArray(), max.toArray()].map((v) => v.map((n) => Math.round(n * 1000) / 1000));
+  return [min.toArray(), max.toArray()].map((v) => v.map((n) => Math.round(n * 1000) / 1000 + 0));
 };
 
 describe("built object meshes", () => {
@@ -16,6 +16,41 @@ describe("built object meshes", () => {
       expect(min, type).toEqual([0, 0, 0]);
       expect(max, type).toEqual([2, 4, 6]);
     }
+  });
+
+  it("tapers cylinders, keeping their bottoms", () => {
+    const g = pieceGeometry({ type: "cylinder", taper: 0.5, size: [2, 2, 2], at: [0, 1, 0], turn: [0, 0, 0] });
+    const p = g.attributes.position;
+    let [top, bottom] = [0, 0];
+    for (let i = 0; i < p.count; i++) {
+      const r = Math.hypot(p.getX(i), p.getZ(i));
+      if (p.getY(i) > 1.99) top = Math.max(top, r);
+      else if (p.getY(i) < 0.01) bottom = Math.max(bottom, r);
+    }
+    expect(top).toBeCloseTo(0.5);
+    expect(bottom).toBeCloseTo(1);
+  });
+
+  it("cuts holes out of the pieces they reach into, colored as the hole", () => {
+    const object = emptyObject();
+    const wood = addColor(object, "#884422");
+    const inside = addColor(object, "#000000");
+    object.pieces.push({ type: "box", size: [4, 4, 4], at: [0, 2, 0], turn: [0, 0, 0], color: wood });
+    object.pieces.push({ type: "cylinder", size: [2, 6, 2], at: [0, 2, 0], turn: [0, 0, 0], color: inside, cut: true });
+    const g = objectGeometry(object);
+    // A ray straight down the middle meets nothing: the hole goes right through.
+    const mesh = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }));
+    const down = new THREE.Raycaster(new THREE.Vector3(0, 10, 0), new THREE.Vector3(0, -1, 0));
+    expect(down.intersectObject(mesh)).toHaveLength(0);
+    const offCentre = new THREE.Raycaster(new THREE.Vector3(1.5, 10, 0), new THREE.Vector3(0, -1, 0));
+    expect(offCentre.intersectObject(mesh).length).toBeGreaterThan(0);
+    // The hole's walls are black; the box's faces aren't.
+    const c = g.attributes.color;
+    const shades = new Set(Array.from({ length: c.count }, (_, i) => (c.getX(i) < 0.01 ? "black" : "wood")));
+    expect([...shades].sort()).toEqual(["black", "wood"]);
+    const [min, max] = bounds(g);
+    expect(min).toEqual([-2, 0, -2]);
+    expect(max).toEqual([2, 4, 2]);
   });
 
   it("faces every primitive's triangles outward", () => {

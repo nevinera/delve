@@ -46,6 +46,13 @@ function builtGeometry(object, colors = []) {
   if (!kept.has(key)) kept.set(key, objectGeometry(object, colors));
   return kept.get(key);
 }
+// A kit type's object at scale 1, white where its parameter is, for its color to tint.
+const kitGeometries = new WeakMap(); // spec -> geometry
+function kitGeometry(spec) {
+  if (!kitGeometries.has(spec)) kitGeometries.set(spec, objectGeometry(spec.kit, ["#ffffff"]).scale(1 / spec.unitFt, 1 / spec.unitFt, 1 / spec.unitFt));
+  return kitGeometries.get(spec);
+}
+
 const UP = new THREE.Vector3(0, 1, 0);
 const AXIS_Z = new THREE.Vector3(0, 0, 1);
 
@@ -104,10 +111,6 @@ const SHAPES = {
   outcrop: [7, 8].map((seed) => () => mergeGeometries([stone(1.4, 1, 1.2, seed, { detail: 0, rough: 0.25 }).translate(-0.5, 0, 0), stone(1.2, 0.7, 1.1, seed + 10, { detail: 0, rough: 0.25 }).translate(0.55, 0, 0.1), stone(0.8, 0.45, 0.8, seed + 20, { detail: 0 }).translate(0.1, 0, -0.35)])),
   bush: [9, 10].map((seed) => () => stone(0.85, 0.95, 0.8, seed, { rough: 0.15 })),
   thicket: [11, 12].map((seed) => () => mergeGeometries([0, 1, 2, 3, 4].map((b) => { const a = b * 1.3 + seed; const r = b ? 0.45 : 0; return stone(0.75, 0.75 + 0.2 * Math.sin(a * 3), 0.7, seed * 7 + b, { rough: 0.15 }).translate(Math.cos(a) * r, 0, Math.sin(a) * r); }))),
-  fencePosts: () => mergeGeometries([-1.2, 0, 1.2].map((x, n) => new THREE.BoxGeometry(0.12, n === 1 ? 0.7 : 1, 0.12).translate(x, n === 1 ? 0.35 : 0.5, 0))),
-  fenceRail: () => mergeGeometries([new THREE.BoxGeometry(2.6, 0.08, 0.05).translate(0, 0.8, 0), new THREE.BoxGeometry(1.4, 0.08, 0.05).rotateZ(-0.35).translate(-0.6, 0.35, 0)]),
-  log: () => log(0.1),
-  driftLog: () => log(0.07),
   trunk: () => log(0.045),
   // The root plate at the trunk's foot (+x end), standing on edge.
   roots: () => {
@@ -140,9 +143,6 @@ const SHAPES = {
   hummock: () => lumpy(new THREE.SphereGeometry(1.1, 10, 4, 0, Math.PI * 2, 0, Math.PI / 2), 0.08, 23).scale(1, 0.9, 1),
 };
 
-// Driftwood is thinner than other logs.
-const SHAPE_FOR = { driftLog: { log: "driftLog" } };
-
 const geometries = new Map();
 function variants(name) {
   if (!geometries.has(name)) {
@@ -165,13 +165,17 @@ export function objectMeshes(objects, tileAt, origin) {
   for (const object of objects) {
     const spec = specOf(object.type);
     if (!spec) continue;
+    if (spec.kit) {
+      join(`kit:${object.type}/${spec.large ? "large" : "small"}`, kitGeometry(spec), materials[spec.large ? "builtLarge" : "builtSmall"], { object, p: 0 });
+      continue;
+    }
     if (spec.built) {
       const geometry = builtGeometry(spec.built, object.colors);
       if (geometry) join(`${object.type}/${(object.colors ?? []).join(",")}`, geometry, spec.height * object.scale >= BUILT_LARGE_FT ? materials.builtLarge : materials.builtSmall, { object, p: -1 });
       continue;
     }
     spec.parts.forEach((part, p) => {
-      const shape = SHAPE_FOR[object.type]?.[part.shape] ?? part.shape;
+      const { shape } = part;
       const v = Math.floor(object.yaw * 1000) % variants(shape).length;
       join(`${shape}/${v}/${spec.large ? "large" : "small"}`, variants(shape)[v], materials[spec.large ? "large" : "small"], { object, p });
     });

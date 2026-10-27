@@ -1,10 +1,12 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { Brush, Evaluator, SUBTRACTION } from "three-bvh-csg";
 import { paletteColors } from "../world/builtObjects.js";
 
 // Geometry for built objects (world/builtObjects.js): each piece's primitive filling a unit box,
 // sized, turned and moved into place, and the pieces merged into one geometry with a color per
-// vertex, flat-shaded like the rest of the world.
+// vertex, flat-shaded like the rest of the world. Holes (cut pieces) are taken out of each piece
+// they reach into.
 
 // A multiple of four, so round pieces reach their box's sides.
 const SIDES = 12;
@@ -42,21 +44,22 @@ const PRIMITIVES = {
 };
 
 const unit = new Map();
-// A type's primitive filling a unit box, shared: clone it to change it.
-export function primitive(type) {
-  if (!unit.has(type)) {
-    const g = PRIMITIVES[type]();
-    unit.set(type, g.index ? g.toNonIndexed() : g);
+// A type's primitive filling a unit box, with a cylinder's taper, shared: clone it to change it.
+export function primitive(type, taper = 1) {
+  const key = type === "cylinder" && taper !== 1 ? `cylinder/${taper}` : type;
+  if (!unit.has(key)) {
+    const g = key === type ? PRIMITIVES[type]() : new THREE.CylinderGeometry(0.5 * taper, 0.5, 1, SIDES);
+    unit.set(key, g.index ? g.toNonIndexed() : g);
   }
-  return unit.get(type);
+  return unit.get(key);
 }
 
 const euler = new THREE.Euler(0, 0, 0, "YXZ");
 const deg = Math.PI / 180;
 
 // One piece's geometry, in place in the object.
-export function pieceGeometry({ type, size, at, turn }) {
-  const g = primitive(type).clone();
+export function pieceGeometry({ type, taper, size, at, turn }) {
+  const g = primitive(type, taper).clone();
   g.scale(...size);
   g.applyQuaternion(new THREE.Quaternion().setFromEuler(euler.set(turn[1] * deg, turn[0] * deg, turn[2] * deg, "YXZ")));
   g.translate(...at);
@@ -68,7 +71,7 @@ export function pieceGeometry({ type, size, at, turn }) {
 export function objectGeometry(object, params) {
   if (!object.pieces.length) return null;
   const colors = paletteColors(object, params).map((hex) => new THREE.Color(hex));
-  const parts = object.pieces.map((piece) => {
+  const colored = (piece) => {
     const g = pieceGeometry(piece);
     const c = colors[piece.color] ?? new THREE.Color(0xff00ff);
     const rgb = new Float32Array(g.attributes.position.count * 3);
@@ -76,11 +79,36 @@ export function objectGeometry(object, params) {
     g.setAttribute("color", new THREE.BufferAttribute(rgb, 3));
     for (const name of Object.keys(g.attributes)) if (name !== "position" && name !== "color") g.deleteAttribute(name);
     return g;
-  });
+  };
+  const cuts = object.pieces.filter((p) => p.cut).map((p) => withBounds(colored(p)));
+  const parts = object.pieces.filter((p) => !p.cut).map((p) => carve(withBounds(colored(p)), cuts));
+  if (!parts.length) return null;
   const merged = mergeGeometries(parts);
   merged.computeVertexNormals();
   merged.computeBoundingSphere();
   return merged;
+}
+
+function withBounds(g) {
+  g.computeBoundingBox();
+  return g;
+}
+
+const evaluator = new Evaluator();
+evaluator.attributes = ["position", "color"];
+evaluator.useGroups = false;
+
+// A piece's geometry with the holes that reach into it taken out.
+function carve(g, cuts) {
+  let brush = null;
+  for (const cut of cuts) {
+    if (!cut.boundingBox.intersectsBox(g.boundingBox)) continue;
+    brush ??= new Brush(g);
+    brush = evaluator.evaluate(brush, new Brush(cut), SUBTRACTION);
+  }
+  if (!brush) return g;
+  const out = brush.geometry;
+  return out.index ? out.toNonIndexed() : out;
 }
 
 export const builtMaterial = () => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
