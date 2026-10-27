@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title><%= content_for(:title) || "Delve objects" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <link rel="icon" href="/icon.png" type="image/png">
+    <%= vite_stylesheet_tags "src/objects/main.js" %>
+    <%= vite_script_tags "src/objects/main.js", "/client/objects.js" %>
+  </head>
+
+  <body class="editor">
+    <%= yield %>
+  </body>
+</html>

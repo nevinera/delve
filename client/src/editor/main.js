@@ -2,6 +2,7 @@ import "./editor.css";
 import { updateIndexes } from "./continentIndex.js";
 import { Editor } from "./editor.js";
 import { exportHeightmap, importHeightmap, needsRange } from "./heightmap.js";
+import { LibrarySync } from "./libraryStore.js";
 import { loadLocal, saveLocal } from "./localSave.js";
 import { World } from "./world.js";
 import { slug } from "./zones.js";
@@ -47,7 +48,7 @@ const editor = new Editor(World.empty(), {
   newZone: $("newZone"),
   zoneEdit: $("zoneEdit"),
   steps: [...document.querySelectorAll(".editor-step")],
-  stepTabs: [...document.querySelectorAll(".editor-step-tabs button")],
+  stepTabs: [...document.querySelectorAll(".editor-step-tabs button[data-step]")],
   zoneName: $("zoneName"),
   regionInfo: $("regionInfo"),
   drawRegion: $("drawRegion"),
@@ -55,7 +56,9 @@ const editor = new Editor(World.empty(), {
   tools: [...document.querySelectorAll("[data-tools]")],
   sculpt: $("sculpt"),
   detail: $("detail"),
-  objectsGallery: $("objectsGallery"),
+  openLibrary: $("openLibrary"),
+  libraryPopover: $("libraryPopover"),
+  libraryGallery: $("libraryGallery"),
   detailSize: $("detailSize"),
   detailInfo: $("detailInfo"),
   detailPick: $("detailPick"),
@@ -84,10 +87,6 @@ const editor = new Editor(World.empty(), {
   sourceFree: $("sourceFree"),
   sourceRemove: $("sourceRemove"),
   placeType: $("placeType"),
-  importObjects: $("importObjects"),
-  objectsFromUrl: $("objectsFromUrl"),
-  exportObjects: $("exportObjects"),
-  objectsFile: $("objectsFile"),
   replaceFrom: $("replaceFrom"),
   replaceTo: $("replaceTo"),
   replaceObjects: $("replaceObjects"),
@@ -199,11 +198,24 @@ $("bonesFile").addEventListener("change", async (e) => {
   worker.postMessage(bones);
 });
 
+// The object library is kept apart from the rest of the world (libraryStore.js), shared with the
+// objects page; another tab's changes come in here.
+const library = new LibrarySync(editor.world, () => {
+  editor.dirty = true;
+  editor.loadBuiltObjects();
+});
+
+// Starts on a new or uploaded world, its library replacing the one kept in this browser.
+function startWorld(world) {
+  editor.setWorld(world);
+  $("worldName").textContent = editor.world.info.name;
+  library.replace(editor.world).catch((err) => editor.say(`Couldn't keep the object library in this browser: ${err.message}`));
+  keep();
+}
+
 $("newWorld").addEventListener("click", () => {
   if (editor.dirty && !window.confirm("Start a new world? Changes you haven't downloaded will be lost.")) return;
-  editor.setWorld(World.empty());
-  $("worldName").textContent = editor.world.info.name;
-  keep();
+  startWorld(World.empty());
 });
 
 $("upload").addEventListener("click", () => {
@@ -220,9 +232,7 @@ $("loadDefault").addEventListener("click", async () => {
   try {
     const response = await fetch(DEFAULT_WORLD, { cache: "no-cache" });
     if (!response.ok) throw new Error(response.status === 404 ? "this server has no default world" : `the server said ${response.status}`);
-    editor.setWorld(World.fromZip(new Uint8Array(await response.arrayBuffer())));
-    $("worldName").textContent = editor.world.info.name;
-    keep();
+    startWorld(World.fromZip(new Uint8Array(await response.arrayBuffer())));
   } catch (err) {
     window.alert(`Couldn't load the default world: ${err.message}`);
   }
@@ -233,9 +243,7 @@ $("uploadFile").addEventListener("change", async (e) => {
   e.target.value = "";
   if (!file) return;
   try {
-    editor.setWorld(World.fromZip(new Uint8Array(await file.arrayBuffer())));
-    $("worldName").textContent = editor.world.info.name;
-    keep();
+    startWorld(World.fromZip(new Uint8Array(await file.arrayBuffer())));
   } catch (err) {
     window.alert(`Couldn't load ${file.name}: ${err.message}`);
   }
@@ -252,6 +260,7 @@ async function keep() {
   clearTimeout(keepTimer);
   keepTimer = null;
   try {
+    await library.push();
     await saveLocal({ zip: editor.world.toZip(), pending: [...editor.pending], dirty: editor.dirty });
     keeping = keepTimer !== null;
   } catch (err) {
@@ -284,4 +293,11 @@ try {
   }
 } catch (err) {
   editor.say(`Couldn't load the world kept in this browser: ${err.message}`);
+}
+// The library kept in this browser is newer than the copy in the kept world's zip.
+try {
+  library.world = editor.world;
+  if (await library.pull()) editor.loadBuiltObjects();
+} catch (err) {
+  editor.say(`Couldn't load the object library kept in this browser: ${err.message}`);
 }

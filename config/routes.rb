@@ -11,5 +11,6 @@ Rails.application.routes.draw do
 
   root "home#show"
   get "editor" => "editor#show"
+  get "objects" => "objects#show"
   get "character_builder" => "character_builder#show"
 end

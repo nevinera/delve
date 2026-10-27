@@ -25,8 +25,9 @@ function el(tag, props = {}, ...children) {
 
 export class ObjectGallery {
   // onOpen(collection, entry), onNew(collection), onNewCollection(), and onAction(collection,
-  // action) for a collection heading's buttons: "rename", "export" or "delete".
-  constructor(container, { onOpen, onNew, onNewCollection, onAction }) {
+  // action) for a collection heading's buttons: "rename", "export" or "delete". tools: more
+  // elements for the bar at the top.
+  constructor(container, { onOpen, onNew, onNewCollection, onAction, tools = [] }) {
     this.container = container;
     Object.assign(this, { onOpen, onNew, onNewCollection, onAction });
     this.collections = [];
@@ -40,6 +41,7 @@ export class ObjectGallery {
       this.search,
       el("label", { className: "gallery-check" }, this.noBuiltins, el("span", { textContent: "exclude builtins" })),
       el("button", { type: "button", textContent: "new collection", onclick: () => this.onNewCollection?.() }),
+      ...tools,
     );
     this.sections = el("div", { className: "gallery-sections" });
     container.append(top, this.sections);

@@ -654,3 +654,61 @@
 .gallery-none {
   color: #8a94a0;
 }
+
+.library-popover {
+  width: calc(100vw - 48px);
+  height: calc(100vh - 48px);
+  max-width: none;
+  max-height: none;
+  padding: 0;
+  border: 1px solid #555;
+  background: #1a1d22;
+  color: inherit;
+}
+
+.library-popover[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.library-popover::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+.library-page {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+.library-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 16px;
+  border-bottom: 1px solid #333;
+  background: #24272c;
+}
+
+.library-bar h2 {
+  margin: 0;
+  font-size: 15px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.library-bar a {
+  color: #8fc4ff;
+}
+
+.library-bar .editor-message {
+  margin: 0;
+}
+
+.library-world {
+  color: #aaa;
+}
+
+.library-spacer {
+  flex: 1;
+}

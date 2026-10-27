@@ -17,7 +17,7 @@ import {
   tilesTouched,
 } from "./region.js";
 import { editedPath, loadEdited, saveEdited } from "./edited.js";
-import { createZone, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveSketch, saveZone, upgradeSketch, slug } from "./zones.js";
+import { createZone, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveSketch, saveZone, upgradeSketch } from "./zones.js";
 import { ShapePalette } from "./shapePalette.js";
 import { ShapePreview } from "./shapePreview.js";
 import { WaterSimulator } from "./waterflow.js";
@@ -28,8 +28,9 @@ import { BLENDS, EROSIONS, SHAPES, TOOLS as SCULPT_TOOLS } from "./sculptTools.j
 import { DETAIL_TOOLS } from "./detailTools.js";
 import { TRAIL_KINDS, TRAIL_STATES } from "./detailTrails.js";
 import { BUILT_PREFIX, builtOf, makeObject, setBuiltObjects, specOf } from "../world/objects.js";
-import { collectionJson, emptyObject, newObjectId, objectPath, paletteColors, readCollection } from "../world/builtObjects.js";
-import { BUILTIN_COLLECTIONS } from "../world/builtinCollections.js";
+import { paletteColors } from "../world/builtObjects.js";
+import { adoptStrays, allCollections, builtObjects } from "../objects/collections.js";
+import { placedCount } from "../objects/placed.js";
 import { decodeTile, encodeTile } from "../world/tileCodec.js";
 import { gunzipSync, gzipSync } from "fflate";
 import { CELL_FT, TILE_FT } from "../world/constants.js";
@@ -49,7 +50,7 @@ const COLORS = {
 };
 const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 // Steps drawn in 3d instead of on the map.
-const IN_3D = new Set(["heights", "detail", "3d", "objects"]);
+const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
   detail: "left-drag to work the brush, or draw a trail or channel (esc drops it; water runs along a channel the way it was drawn) · with water, click to place a source or pick one · with objects, click one to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
@@ -63,7 +64,6 @@ const HINTS = {
   ),
   ...FEATURE_HINTS,
   tiles: `highlighted tiles are out of date, or not generated yet (faint) · generate brings them all up to date · ${NAV}`,
-  objects: "click an object to open it · + makes a new one in that collection · hover to turn one",
   "3d": "drag to turn · right-drag or W A S D to pan · wheel or C/V to zoom · Q/E turn",
 };
 const HINT_WALK = "W/S run · A/D turn · Q/E strafe · space jumps · / walks · X sits · Z sprints · left-drag looks around · right-drag turns · wheel zooms · esc stops walking";
@@ -86,12 +86,7 @@ const STEPS = {
   tiles: { tools: [], kinds: [], map: "tiles" },
   detail: { tools: [...DETAIL_TOOLS, "trails", "channel", "water", "objects", "place"], kinds: [] },
   "3d": { tools: [], kinds: [] },
-  objects: { tools: [], kinds: [] },
 };
-// The world's object collections, as [{ id, name, source }]; one with a source was imported and
-// is read-only. Built objects name theirs (builtObjects.js).
-const COLLECTIONS_PATH = "collections.json";
-const MY_OBJECTS = "my objects";
 // With this many tiles in sight or more, tiles draw as their thumbnails instead of close up.
 const DETAIL_MAX_TILES = 128;
 // Past this many screen pixels per pixel of the small thumbnails, tiles draw their full ones.
@@ -165,7 +160,7 @@ export class Editor {
       else if (this.step === "heights") this.sculpt?.nudge(dt, move);
       // Q and E turn a picked object instead (detailKey).
       else if (this.step === "detail") this.detail?.nudge(dt, this.detail.selected ? { ...move, turn: 0 } : move);
-      else if (!this.walking && this.step !== "objects") this.map.nudge(dt, move);
+      else if (!this.walking) this.map.nudge(dt, move);
     });
     this.showContinent();
     this.setStep(this.step);
@@ -660,9 +655,6 @@ export class Editor {
     this.el.detail.hidden = step !== "detail";
     if (step === "detail") this.showDetail();
     else this.detail?.hide();
-    this.el.objectsGallery.hidden = step !== "objects";
-    if (step === "objects") this.showGallery();
-    else this.gallery?.hide();
     if (step === "3d") this.showOverview();
     else this.overview?.hide();
     if (step === "heights") this.showSculpt();
@@ -769,168 +761,43 @@ export class Editor {
     });
   }
 
-  // Opens the object builder (objectBuilder.js) on a built object: read-only for one in a builtin
-  // or imported collection, offering to copy it into one of the world's own.
-  async buildObject(object, { readOnly = false } = {}) {
-    this.builderLoading ??= import("./objectBuilder.js").then(({ ObjectBuilder }) => {
-      this.builder = new ObjectBuilder({ onSave: (saved) => this.saveBuiltObject(saved), onDelete: (object) => this.deleteBuiltObject(object) });
+  // The object library (objects/library.js) in a popover over the editor.
+  async openLibrary() {
+    this.libraryLoading ??= import("../objects/library.js").then(({ ObjectLibrary }) => {
+      this.library = new ObjectLibrary(this.el.libraryGallery, {
+        getWorld: () => this.world,
+        onChange: (choose) => {
+          this.dirty = true;
+          this.loadBuiltObjects(choose);
+        },
+        placedCount: (types) => placedCount(this.world, types),
+        say: (message, options) => {
+          this.say(message, options);
+          const line = this.el.libraryPopover.querySelector(".library-message");
+          line.textContent = message;
+          line.classList.toggle("info", Boolean(options?.info));
+        },
+      });
     });
-    await this.builderLoading;
-    const own = this.collections().filter((c) => !c.source);
-    this.builder.open(object, { collections: own, readOnly, onCopy: (copy, collection) => this.copyBuiltObject(copy, collection) });
-  }
-
-  // Keeps a built object in the world, and has it placed next.
-  saveBuiltObject(object) {
-    this.world.writeJson(objectPath(object.id), object);
-    this.dirty = true;
-    this.loadBuiltObjects(`${BUILT_PREFIX}${object.id}`);
-    this.say(`Saved ${object.name}.`, { info: true });
-  }
-
-  // Deletes a built object, unless it's placed somewhere.
-  deleteBuiltObject(object) {
-    if (!this.world.files.has(objectPath(object.id))) return this.builder.close();
-    const placed = this.placedCount(new Set([`${BUILT_PREFIX}${object.id}`]));
-    if (placed) return window.alert(`${object.name} is placed ${placed} time${placed === 1 ? "" : "s"}: replace those with something else before deleting it.`);
-    if (!window.confirm(`Delete ${object.name}?`)) return;
-    this.world.files.delete(objectPath(object.id));
-    this.dirty = true;
-    this.builder.close();
-    this.loadBuiltObjects();
-    this.say(`Deleted ${object.name}.`, { info: true });
-  }
-
-  // A copy of a read-only object in one of the world's own collections, opened to change.
-  copyBuiltObject(object, collection) {
-    const copy = { ...object, id: newObjectId(), collection, source: object.source ?? "builtin" };
-    this.saveBuiltObject(copy);
-    this.buildObject(copy);
-  }
-
-  // The world's built objects (objects/<id>.json), by name.
-  builtObjects() {
-    return [...this.world.files.keys()]
-      .filter((path) => /^objects\/[0-9a-z]{8}\.json$/.test(path))
-      .map((path) => this.world.readJson(path))
-      .sort((a, b) => a.name.localeCompare(b.name));
-  }
-
-  collections() {
-    return this.world.files.has(COLLECTIONS_PATH) ? this.world.readJson(COLLECTIONS_PATH) : [];
-  }
-
-  // Adds a collection, returning it.
-  addCollection(name, source) {
-    const collection = { id: newObjectId(), name, ...(source ? { source } : {}) };
-    this.world.writeJson(COLLECTIONS_PATH, [...this.collections(), collection]);
-    this.dirty = true;
-    return collection;
-  }
-
-  // Puts built objects in no known collection into "my objects", made when needed.
-  adoptStrayObjects() {
-    const known = new Set(this.collections().map((c) => c.id));
-    const strays = this.builtObjects().filter((o) => !known.has(o.collection));
-    if (!strays.length) return;
-    const home = this.collections().find((c) => !c.source && c.name === MY_OBJECTS) ?? this.addCollection(MY_OBJECTS);
-    for (const object of strays) this.world.writeJson(objectPath(object.id), { ...object, collection: home.id });
+    await this.libraryLoading;
+    this.el.libraryPopover.showModal();
+    this.library.show();
   }
 
   // Registers the world's built objects (world/objects.js) and lists them to place, choosing
-  // `choose` if given. The detail view and the gallery draw them again, since they may have changed.
+  // `choose` if given. The detail view and an open library draw them again, since they may have
+  // changed.
   loadBuiltObjects(choose) {
-    this.adoptStrayObjects();
-    setBuiltObjects(this.builtObjects());
+    adoptStrays(this.world);
+    setBuiltObjects(builtObjects(this.world));
     this.fillObjectTypes(choose);
     if (this.step === "detail" && this.detail) this.showDetail();
-    if (this.step === "objects") this.showGallery();
-  }
-
-  // Every collection with what's in it, builtins first: [{ id, name, kind, source, entries }], as
-  // the gallery and the place tool list them.
-  allCollections() {
-    const builtins = BUILTIN_COLLECTIONS.map(({ id, name, types }) => ({ id: `builtin:${id}`, name, kind: "builtin", entries: types.map((type) => ({ key: `builtin:${type}`, type, name: type, tags: [] })) }));
-    const objects = this.builtObjects();
-    const ours = this.collections().map((c) => ({
-      ...c,
-      kind: c.source ? "imported" : "own",
-      entries: objects
-        .filter((o) => o.collection === c.id)
-        .map((o) => ({ key: `${o.id}:${hashText(JSON.stringify(o))}`, type: `${BUILT_PREFIX}${o.id}`, name: o.name, tags: o.tags ?? [], object: o })),
-    }));
-    return [...builtins, ...ours];
-  }
-
-  // The objects step's gallery (objectGallery.js).
-  async showGallery() {
-    this.galleryLoading ??= import("./objectGallery.js").then(({ ObjectGallery }) => {
-      this.gallery = new ObjectGallery(this.el.objectsGallery, {
-        onOpen: (collection, entry) => this.openEntry(collection, entry),
-        onNew: (collection) => {
-          const name = window.prompt("A name for the new object:");
-          if (name?.trim()) this.buildObject({ ...emptyObject(name.trim()), collection: collection.id });
-        },
-        onNewCollection: () => {
-          const name = window.prompt("A name for the new collection:");
-          if (!name?.trim()) return;
-          this.addCollection(name.trim());
-          this.showGallery();
-        },
-        onAction: (collection, action) => this.collectionAction(collection, action),
-      });
-    });
-    await this.galleryLoading;
-    if (this.step === "objects") this.gallery.show(this.allCollections());
-  }
-
-  openEntry(collection, entry) {
-    if (entry.object) return this.buildObject(structuredClone(entry.object), { readOnly: collection.kind !== "own" });
-    const kit = specOf(entry.type)?.kit;
-    if (kit) return this.buildObject(structuredClone(kit), { readOnly: true });
-    this.say(`${entry.name} is made in code, not pieces: you can place it, but not open or copy it yet.`, { info: true });
-  }
-
-  collectionAction(collection, action) {
-    const objects = this.builtObjects().filter((o) => o.collection === collection.id);
-    if (action === "export") {
-      if (!objects.length) return this.say(`${collection.name} is empty.`);
-      return download(`${slug(collection.name) || "objects"}.json`, `${collectionJson(collection.name, objects)}\n`);
-    }
-    const list = this.collections();
-    const index = list.findIndex((c) => c.id === collection.id);
-    if (action === "rename") {
-      const name = window.prompt("A new name for the collection:", collection.name);
-      if (!name?.trim()) return;
-      list[index] = { ...list[index], name: name.trim() };
-    } else if (action === "delete") {
-      const types = new Set(objects.map((o) => `${BUILT_PREFIX}${o.id}`));
-      const placed = this.placedCount(types);
-      if (placed) return this.say(`${placed} placed object${placed === 1 ? " comes" : "s come"} from ${collection.name}: replace them with something else before deleting it.`);
-      if (!window.confirm(`Delete ${collection.name} and its ${objects.length} object${objects.length === 1 ? "" : "s"} from this world?`)) return;
-      for (const o of objects) this.world.files.delete(objectPath(o.id));
-      list.splice(index, 1);
-    }
-    this.world.writeJson(COLLECTIONS_PATH, list);
-    this.dirty = true;
-    this.loadBuiltObjects();
-  }
-
-  // How many objects of the given types are placed, in every continent's tiles.
-  placedCount(types) {
-    let count = 0;
-    for (const { key: continent } of this.world.info.continents) {
-      for (const { path } of surfaceTiles(this.world, continent)) {
-        const tile = decodeTile(gunzipSync(this.world.files.get(path)));
-        count += (tile.objects ?? []).filter((o) => types.has(o.type)).length;
-      }
-    }
-    return count;
+    if (this.el.libraryPopover.open) this.library?.show();
   }
 
   // The place tool's types, by collection, builtins first; and the same for replacing.
   fillObjectTypes(choose) {
-    const collections = this.allCollections();
+    const collections = allCollections(this.world);
     for (const select of [this.el.placeType, this.el.replaceFrom, this.el.replaceTo]) {
       const was = select.value;
       select.replaceChildren();
@@ -955,43 +822,6 @@ export class Editor {
     [input.min, input.max, input.step] = [least, most, spec?.built ? 0.05 : 0.5];
     input.value = value;
     output.textContent = spec?.built ? `×${value}` : `${value} ft`;
-  }
-
-  // Copies an object or collection's JSON into the world as a new read-only collection, each
-  // object recording `source` (a URL, or the file's name). An object whose id the world already
-  // has gets a new one, so a newer version comes in beside the old, for replacing placed ones.
-  importObjects(text, from, source = from) {
-    let read;
-    try {
-      read = readCollection(text, source);
-    } catch (err) {
-      return this.say(`Couldn't import ${from}: ${err.message}`);
-    }
-    const collection = this.addCollection(read.name ?? from.replace(/\.json$/i, ""), source);
-    let renamed = 0;
-    for (const object of read.objects) {
-      if (this.world.files.has(objectPath(object.id))) {
-        object.id = newObjectId();
-        renamed++;
-      }
-      this.world.writeJson(objectPath(object.id), { ...object, collection: collection.id });
-    }
-    this.dirty = true;
-    this.loadBuiltObjects();
-    const n = read.objects.length;
-    this.say(`Imported ${collection.name}, ${n} object${n === 1 ? "" : "s"}${renamed ? `, ${renamed} of them already here, so with new ids` : ""}.`, { info: true });
-  }
-
-  async objectsFromUrl() {
-    const url = window.prompt("The URL of an object or collection (JSON):");
-    if (!url) return;
-    try {
-      const response = await fetch(url);
-      if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-      this.importObjects(await response.text(), url, url);
-    } catch (err) {
-      this.say(`Couldn't load ${url}: ${err.message}`);
-    }
   }
 
   // Swaps every placed object of type `from` for type `to`, in every continent's tiles, keeping
@@ -1238,6 +1068,11 @@ export class Editor {
       this.generate(regenerateAll, keys(all.filter((k) => !skip.has(k))));
     });
     for (const tab of this.el.stepTabs) tab.addEventListener("click", () => (tab.dataset.step === "detail" ? this.pickDetail() : this.setStep(tab.dataset.step)));
+    this.el.openLibrary.addEventListener("click", () => this.openLibrary());
+    // Keys stay in the library, away from the editor behind it.
+    this.el.libraryPopover.addEventListener("keydown", (e) => e.stopPropagation());
+    this.el.libraryPopover.querySelector(".library-close").addEventListener("click", () => this.el.libraryPopover.close());
+    this.el.libraryPopover.addEventListener("close", () => this.library?.hide());
     this.el.detailPick.addEventListener("click", () => this.pickDetail());
     for (const section of this.el.steps) {
       for (const input of section.querySelectorAll("[data-option]")) {
@@ -1289,20 +1124,6 @@ export class Editor {
     };
     this.el.placeType.addEventListener("change", placeSizes);
     placeSizes();
-    this.el.importObjects.addEventListener("click", () => this.el.objectsFile.click());
-    this.el.objectsFile.addEventListener("change", async (e) => {
-      const [file] = e.target.files;
-      e.target.value = "";
-      if (file) this.importObjects(await file.text(), file.name);
-    });
-    this.el.objectsFromUrl.addEventListener("click", () => this.objectsFromUrl());
-    this.el.exportObjects.addEventListener("click", () => {
-      const own = new Set(this.collections().filter((c) => !c.source).map((c) => c.id));
-      const objects = this.builtObjects().filter((o) => own.has(o.collection));
-      if (!objects.length) return this.say("There are no objects of your own to export yet.");
-      const name = window.prompt("A name for the collection:", this.world.info.name ?? "objects");
-      if (name) download(`${slug(name) || "objects"}.json`, `${collectionJson(name, objects)}\n`);
-    });
     this.el.replaceObjects.addEventListener("click", () => this.replaceInstances(this.el.replaceFrom.value, this.el.replaceTo.value));
     // Dragging a slider is one edit, undone together.
     for (const [input, change] of [
@@ -1959,20 +1780,4 @@ function noContextMenu(stage) {
   window.addEventListener("pointerup", (e) => {
     if (e.button === 2) setTimeout(() => (dragged = false), 300);
   });
-}
-
-// Hands the browser a file to save.
-function download(name, text) {
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
-  link.download = name;
-  link.click();
-  URL.revokeObjectURL(link.href);
-}
-
-// A short hash of text, to tell versions of an object apart.
-function hashText(text) {
-  let h = 2166136261;
-  for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 16777619);
-  return (h >>> 0).toString(36);
 }
