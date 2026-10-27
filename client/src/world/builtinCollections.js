@@ -3,7 +3,7 @@
 // made in code, so they can only be looked at and placed.
 
 export const BUILTIN_COLLECTIONS = [
-  { id: "structures", name: "structures", types: ["fence"] },
+  { id: "crafted", name: "crafted", types: ["fence"] },
   { id: "wood", name: "wood", types: ["log", "rottingLog", "driftLog", "stump", "deadStump", "hollowStump", "rootTangle", "uprooted"] },
   { id: "rocks", name: "rocks", types: ["boulder", "mossyBoulder", "rock", "outcrop", "spire", "rubble"] },
   { id: "plants", name: "plants", types: ["bush", "thicket", "hummock"] },
