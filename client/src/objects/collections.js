@@ -1,5 +1,6 @@
 import { BUILTIN_COLLECTIONS } from "../world/builtinCollections.js";
 import { BUILTIN_OBJECT_COLLECTIONS } from "../world/builtinObjects.js";
+import { BUILTIN_STRUCTURE_COLLECTIONS } from "../world/builtinStructures.js";
 import { OLD_IMAGES, imagePath, newObjectId, objectPath } from "../world/builtObjects.js";
 import { BUILT_PREFIX } from "../world/objects.js";
 import { STRUCTURE_PREFIX, structurePath } from "../world/structures.js";
@@ -112,7 +113,12 @@ export function allCollections(world, kind = "objects") {
             entries: objects.map((o) => ({ key: `builtin:${o.id}`, type: `${BUILT_PREFIX}${o.id}`, name: o.name, tags: o.tags ?? [], object: o })),
           })),
         ]
-      : [];
+      : BUILTIN_STRUCTURE_COLLECTIONS.map(({ id, name, structures }) => ({
+          id: `builtin:${id}`,
+          name,
+          kind: "builtin",
+          entries: structures.map((s) => ({ key: `builtin:${s.id}`, type: `${STRUCTURE_PREFIX}${s.id}`, name: s.name, tags: s.tags ?? [], structure: s })),
+        }));
   const { prefix, things } = KINDS[kind];
   const all = things(world);
   const field = kind === "objects" ? "object" : "structure";

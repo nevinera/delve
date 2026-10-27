@@ -47,7 +47,7 @@ export class ObjectLibrary {
     const button = (label, title, onclick) => el("button", { type: "button", textContent: label, title, onclick });
     this.gallery = new ObjectGallery(container, {
       what: one,
-      builtins: kind === "objects",
+      builtins: true,
       onOpen: (collection, entry) => this.openEntry(collection, entry),
       onNew: (collection) => {
         const name = window.prompt(`A name for the new ${one}:`);

@@ -12,6 +12,7 @@
 import { shapeOf } from "./builtObjects.js";
 import { builtinImage } from "./builtinImages.js";
 import { BUILTIN_OBJECTS } from "./builtinObjects.js";
+import { BUILTIN_STRUCTURES } from "./builtinStructures.js";
 import { CELL_FT, TILE_FT } from "./constants.js";
 import { KIT_OBJECTS } from "./kitObjects.js";
 import { hash2 } from "./noise.js";
@@ -73,7 +74,7 @@ export function setBuiltObjects(objects, wornImages = [], worldStructures = []) 
   built.clear();
   for (const object of [...BUILTIN_OBJECTS, ...objects]) built.set(object.id, { object, ...shapeOf(object) });
   structures.clear();
-  for (const structure of worldStructures) {
+  for (const structure of [...BUILTIN_STRUCTURES, ...worldStructures]) {
     const cells = structureCells(structure);
     const reach = Math.max(4, ...cells.flatMap(([x, z]) => [x, x + 1].flatMap((cx) => [z, z + 1].map((cz) => Math.hypot(cx, cz) * STRUCTURE_CELL_FT))));
     const top = Math.max(1, ...structure.storeys.map((s) => s.level + 1), ...structure.components.map((c) => c.level + 1));
