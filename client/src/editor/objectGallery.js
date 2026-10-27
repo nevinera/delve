@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { matches } from "../world/builtObjects.js";
 import { disposePreview, typePreview } from "./objectMeshes.js";
 import { structureGroup } from "./structureMeshes.js";
+import { imageOf } from "../world/objects.js";
 
 // The objects step: every object type in the world's collections and the game's builtins, as a
 // gallery of rendered thumbnails grouped by collection, filtered by a search. Your own collections
@@ -124,8 +125,8 @@ export class ObjectGallery {
 
   preview(entry) {
     if (!this.previews.has(entry.key)) {
-      const preview = entry.structure ? structureGroup(entry.structure) : typePreview(entry.type);
-      if (entry.structure) for (const mesh of preview.children) mesh.userData.ownGeometry = true;
+      const preview = entry.structure ? structureGroup(entry.structure, { imageOf }) : typePreview(entry.type);
+      if (entry.structure) preview.traverse((mesh) => (mesh.userData.ownGeometry = true));
       this.previews.set(entry.key, preview);
     }
     return this.previews.get(entry.key);

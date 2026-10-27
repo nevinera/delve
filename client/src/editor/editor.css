@@ -838,6 +838,24 @@
   width: 56px;
 }
 
+.sb-material-box {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sb-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  padding-left: 40px;
+}
+
+.sb-tiles input[type="range"] {
+  width: 70px;
+}
+
 .sb-material {
   display: flex;
   align-items: center;

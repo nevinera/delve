@@ -14,16 +14,17 @@ import { MAX_PARAMS, newObjectId } from "./builtObjects.js";
 // - palette: as a built object's (builtObjects.js), for its materials, images and params.
 // - storeyFt: floor to floor, whole feet. Storey `level` n's floor is n * storeyFt above the
 //   structure's base; levels below 0 dig into the ground.
-// - materials: what it's made of, { name: { color, thicknessFt } }: color indexes the palette;
-//   thicknessFt is how thick a wall of it is.
+// - materials: what it's made of, { name: { color, thicknessFt, tile, inside } }: color indexes
+//   the palette; thicknessFt is how thick a wall of it is; tile is a tiled image it wears, { image,
+//   every, jitter } as a built object's piece wears one, and inside another for walls' inside
+//   faces (the sides with floor), the tile if absent.
 // - floor: the material its floors are made of.
 // - foundation: what fills down from the ground floor to the ground, { kind, material }, kind one
 //   of FOUNDATIONS.
-// - storeys: each { level, floor: ["x,z", ...], edges: { edge: { material, opening, sill, top,
-//   faces } } }: floor lists the cells with floor; each edge with a wall says its material, and
-//   may have an opening
-//   ("door" or "window") from `sill` feet up to `top` feet up (a door's sill is 0); faces are the
-//   images on its two faces, [north or west, south or east], each an image id or null.
+// - storeys: each { level, floor: ["x,z", ...], edges: { edge: { material, opening, sill, top } } }:
+//   floor lists the cells with floor; each edge with a wall says its material, and may have an
+//   opening
+//   ("door" or "window") from `sill` feet up to `top` feet up (a door's sill is 0).
 // - components: structural pieces snapped to the grid (COMPONENTS), each { type, level, material,
 //   ... }: material, one of its materials, defaults to its floor's. Flights (stairs and ramps) and
 //   spans start at cell `at` and run `run` cells toward `facing` (0 to 3: north, east, south,
@@ -212,6 +213,10 @@ export function problems(structure) {
   for (const [name, m] of Object.entries(s.materials)) {
     if (!(m?.thicknessFt >= WALL_FT.least && m.thicknessFt <= WALL_FT.most)) out.push(`its ${name} walls should be ${WALL_FT.least} to ${WALL_FT.most} ft thick`);
     if (!(Number.isInteger(m?.color) && s.palette[m.color])) out.push(`its ${name}'s color isn't in the palette`);
+    for (const key of ["tile", "inside"]) {
+      const t = m?.[key];
+      if (t !== undefined && !(typeof t.image === "string" && t.every >= 0.1 && t.jitter >= 0 && t.jitter <= 1)) out.push(`its ${name}'s ${key === "tile" ? "tiled image" : "inside image"} needs an image, a width (feet) and a jitter (0 to 1)`);
+    }
   }
   const levels = s.storeys.map((storey) => storey.level);
   if (new Set(levels).size < levels.length) out.push("two of its storeys are on the same level");
@@ -224,8 +229,6 @@ export function problems(structure) {
       else if (!s.materials[edge.material]) out.push(`${name}'s edge ${key} is an unknown material, ${JSON.stringify(edge.material)}`);
       else if (edge.opening !== undefined && !(OPENINGS.includes(edge.opening) && edge.sill >= 0 && edge.top > edge.sill && edge.top <= s.storeyFt && (edge.opening === "window" || edge.sill === 0))) {
         out.push(`${name}'s edge ${key} needs a door from the floor, or a window, with a sill below its top, within the storey`);
-      } else if (edge.faces !== undefined && !(Array.isArray(edge.faces) && edge.faces.length === 2 && edge.faces.every((f) => f === null || typeof f === "string"))) {
-        out.push(`${name}'s edge ${key} should have two faces, each an image or none`);
       }
     }
   }

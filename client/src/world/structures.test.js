@@ -16,7 +16,8 @@ function hut() {
     ground.edges[`2,${z},w`] = { material: "stone" };
   }
   ground.edges["0,2,n"] = { material: "stone", opening: "door", sill: 0, top: 8 };
-  ground.edges["2,0,w"] = { material: "stone", opening: "window", sill: 3, top: 6, faces: ["img00000", null] };
+  ground.edges["2,0,w"] = { material: "stone", opening: "window", sill: 3, top: 6 };
+  s.materials.stone.tile = { image: "bistone0", every: 4, jitter: 0.2 };
   s.storeys.push({ level: -1, floor: ["0,0", "0,1", "1,0"], edges: {} });
   // Up from the cellar, northward, into the hole in the ground floor at 1,1.
   s.components.push({ type: "stairs", level: -1, at: [1, 1], facing: 0, run: 1 });

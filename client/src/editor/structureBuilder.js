@@ -1,8 +1,9 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { MAX_PARAMS, addColor } from "../world/builtObjects.js";
+import { MAX_PARAMS, PALETTE_INKS, addColor, emptyImage, newObjectId, paletteColors } from "../world/builtObjects.js";
 import { CELL_FT, COMPONENTS, FOUNDATIONS, LEVELS, REACH_CELLS, ROOF, ROOF_SHAPES, STOREY_FT, WALL_FT, cellKey, edgeKey, parseCell, problems, withWalk } from "../world/structures.js";
 import { disposeStructureGroup, structureGroup } from "./structureMeshes.js";
+import { ImagePainter, drawImage } from "./imagePainter.js";
 
 // The structure builder: a dialog over most of the page for laying out a structure
 // (world/structures.js) on its grid, storey by storey. Pick a storey, then draw on its grid: floor
@@ -13,7 +14,9 @@ import { disposeStructureGroup, structureGroup } from "./structureMeshes.js";
 // railings follow a line of edges; a roof covers a rectangle. Shift-dragging over one takes it
 // away. The panel lists the storey's components, to change their settings. The storeys above the one you're on fade. The panel sets the
 // storey height, the materials (each a palette color and a wall thickness), what floors and the
-// foundation are made of, and how tall doors and windows are.
+// foundation are made of, and how tall doors and windows are. A material can wear a tiled image
+// (the collection's or a builtin), with another on walls' inside faces; the images section paints
+// the collection's, as the object builder's does.
 //
 // Opened read-only, it shows the structure and offers to copy it into one of the world's own
 // collections. Saving bakes its walk data and hands it to onSave.
@@ -43,9 +46,14 @@ function el(tag, props = {}, ...children) {
 
 export class StructureBuilder {
   // onSave(structure) hears the structure when it's saved, onSaveCopy(structure) when it's saved
-  // as a copy instead, and onDelete(structure) when deleting it is asked for.
-  constructor({ onSave, onSaveCopy, onDelete }) {
-    Object.assign(this, { onSave, onSaveCopy, onDelete });
+  // as a copy instead, and onDelete(structure) when deleting it is asked for. onSaveImage(image)
+  // and onDeleteImage(image) are the same for its collection's images.
+  constructor({ onSave, onSaveCopy, onDelete, onSaveImage, onDeleteImage }) {
+    Object.assign(this, { onSave, onSaveCopy, onDelete, onSaveImage, onDeleteImage });
+    this.painter = new ImagePainter({
+      onSave: (image) => this.onSaveImage?.({ ...image, collection: this.structure.collection }),
+      onDelete: (image) => this.onDeleteImage?.(image),
+    });
     this.structure = null;
     this.level = 0;
     this.tool = "wall";
@@ -61,13 +69,15 @@ export class StructureBuilder {
   }
 
   // Opens the builder on a copy of `structure`. collections: the world's own, [{ id, name }].
-  // readOnly: look, don't touch; onCopy(structure, collectionId) hears a copy asked for.
-  open(structure, { collections = [], readOnly = false, onCopy } = {}) {
+  // readOnly: look, don't touch; onCopy(structure, collectionId) hears a copy asked for. images():
+  // the images it can wear, its collection's and the builtins.
+  open(structure, { collections = [], readOnly = false, onCopy, images = () => [] } = {}) {
     this.readOnly = readOnly;
     this.onCopy = onCopy;
+    this.images = images;
     for (const select of [this.collection, this.copyTo]) select.replaceChildren(...collections.map((c) => new Option(c.name, c.id)));
     this.dialog.classList.toggle("ob-readonly", readOnly);
-    for (const node of [this.details, this.settings]) node.inert = readOnly;
+    for (const node of [this.details, this.settings, this.imageList]) node.inert = readOnly;
     this.structure = structuredClone(structure);
     this.saved = JSON.stringify(this.structure);
     this.undos = [];
@@ -185,7 +195,8 @@ export class StructureBuilder {
       edit("cancel", () => this.cancel()),
       this.saveButton,
     );
-    const panel = div("ob-panel", this.details, this.settings, this.info, this.problems, footer);
+    this.imageList = div("ob-images");
+    const panel = div("ob-panel", this.details, this.settings, el("h3", { textContent: "images (the collection's, then builtins)" }), this.imageList, this.info, this.problems, footer);
     this.dialog = el("dialog", { className: "ob sb" }, div("ob-main", div("ob-view", this.canvas, el("p", { className: "ob-hint", textContent: HINT })), panel));
     document.body.append(this.dialog);
     this.dialog.addEventListener("cancel", (e) => {
@@ -369,7 +380,7 @@ export class StructureBuilder {
     const edge = storey.edges[key];
     if (this.tool === "wall") {
       if (erase) delete storey.edges[key];
-      else storey.edges[key] = { material: this.material, ...(edge?.faces ? { faces: edge.faces } : {}) };
+      else storey.edges[key] = { material: this.material };
     } else if (erase) {
       if (edge?.opening === this.tool) for (const k of ["opening", "sill", "top"]) delete edge[k];
     } else {
@@ -444,9 +455,11 @@ export class StructureBuilder {
         thickness.addEventListener("change", () => this.change((x) => (x.materials[name].thicknessFt = Math.max(WALL_FT.least, Math.min(WALL_FT.most, Number(thickness.value) || 1)))));
         const used = s.storeys.some((x) => Object.values(x.edges).some((e) => e.material === name)) || s.floor === name || s.foundation.material === name;
         const remove = el("button", { type: "button", textContent: "×", title: used ? "it's in use" : "take it away", disabled: used, onclick: () => this.change((x) => delete x.materials[name]) });
-        return el("div", { className: "sb-material" }, color, el("span", { textContent: name }), el("label", { className: "ob-check" }, param, el("span", { textContent: "param" })), thickness, el("span", { textContent: "ft" }), remove);
+        const row = el("div", { className: "sb-material" }, color, el("span", { textContent: name }), el("label", { className: "ob-check" }, param, el("span", { textContent: "param" })), thickness, el("span", { textContent: "ft" }), remove);
+        return el("div", { className: "sb-material-box" }, row, this.tileRow(name, m));
       }),
     );
+    this.refreshImages();
 
     this.refreshComponents();
     const cells = new Set(s.storeys.flatMap((x) => x.floor));
@@ -454,6 +467,65 @@ export class StructureBuilder {
     this.info.textContent = `${s.storeys.length} storey${s.storeys.length === 1 ? "" : "s"} · ${cells.size} cells of floor · ${params} of ${MAX_PARAMS} colors are params`;
     this.problems.textContent = wrong.join(" · ");
     this.saveButton.disabled = wrong.length > 0;
+  }
+
+  // A material's tiled images: what it wears, how wide a copy is and how much copies vary, and
+  // what walls' inside faces wear.
+  tileRow(name, m) {
+    const tiled = this.images().filter((image) => image.kind === "tiled");
+    const pick = (value, first, title) => {
+      const select = el("select", { title }, new Option(first, ""), ...tiled.map((image) => new Option(image.name, image.id)));
+      select.value = value ?? "";
+      return select;
+    };
+    const tile = pick(m.tile?.image, "no image", "a tiled image it wears");
+    tile.addEventListener("change", () => this.change((x) => (tile.value ? (x.materials[name].tile = { every: 4, jitter: 0, ...x.materials[name].tile, image: tile.value }) : delete x.materials[name].tile)));
+    const inside = pick(m.inside?.image, "inside the same", "what walls' inside faces wear");
+    inside.addEventListener("change", () => this.change((x) => (inside.value ? (x.materials[name].inside = { every: 4, jitter: 0, ...(x.materials[name].inside ?? x.materials[name].tile), image: inside.value }) : delete x.materials[name].inside)));
+    const fields = [tile];
+    if (m.tile) {
+      const every = el("input", { type: "number", min: 0.25, step: 0.25, value: m.tile.every, title: "how wide each copy is (ft)" });
+      every.addEventListener("change", () => this.change((x) => (x.materials[name].tile.every = Math.max(0.25, Number(every.value) || 4))));
+      const jitter = el("input", { type: "range", min: 0, max: 1, step: 0.05, value: m.tile.jitter, title: "how much each copy's brightness varies" });
+      jitter.addEventListener("change", () => this.change((x) => (x.materials[name].tile.jitter = Number(jitter.value))));
+      fields.push(el("span", { textContent: "every" }), every, el("span", { textContent: "ft" }), jitter);
+    }
+    fields.push(inside);
+    return el("div", { className: "sb-tiles" }, ...fields);
+  }
+
+  // The images to pick from, each a thumbnail to paint (a builtin's copy), then a button for a new
+  // one.
+  refreshImages() {
+    const colors = paletteColors(this.structure);
+    const underlay = this.underlay();
+    this.imageList.replaceChildren(
+      ...this.images().map((image) => {
+        const canvas = el("canvas", { width: 48, height: 48 });
+        drawImage(canvas, image, colors, underlay);
+        return el("button", { type: "button", className: "ob-image", title: `${image.name} (${image.kind}${image.builtin ? ", builtin: painting makes a copy" : ""})`, onclick: () => this.paint(image) }, canvas, el("span", { textContent: image.name }));
+      }),
+      el("button", { type: "button", className: "ob-image ob-edit", textContent: "+ image", onclick: () => this.paint(emptyImage("new image", "tiled"), true) }),
+    );
+  }
+
+  // What shows under an image: the first material's color.
+  underlay() {
+    const first = Object.values(this.structure.materials)[0];
+    return paletteColors(this.structure)[first?.color] ?? "#808080";
+  }
+
+  paint(image, isNew = false) {
+    if (this.readOnly) return;
+    const own = image.builtin ? { ...structuredClone(image), id: newObjectId(), name: `${image.name} copy`, builtin: undefined } : image;
+    let param = 0;
+    const colors = paletteColors(this.structure);
+    const palette = this.structure.palette.map((p, i) => ({ ink: PALETTE_INKS[i], color: colors[i], label: p.param ? (p.name ?? `parameter ${++param}`) : `color ${i + 1}` }));
+    this.painter.open(own, { palette, underlay: this.underlay(), isNew: isNew || image.builtin });
+  }
+
+  imageOf(id) {
+    return this.images().find((image) => image.id === id);
   }
 
   // The current storey's components, each with its settings and a button to take it away.
@@ -611,10 +683,10 @@ export class StructureBuilder {
     if (!this.built) return;
     disposeStructureGroup(this.built);
     this.scene.remove(this.built);
-    this.built = structureGroup(this.structure);
-    for (const mesh of this.built.children) {
-      if (mesh.userData.level <= this.level) continue;
-      Object.assign(mesh.material, { transparent: true, opacity: FADED, depthWrite: false });
+    this.built = structureGroup(this.structure, { imageOf: (id) => this.imageOf(id) });
+    for (const storey of this.built.children) {
+      if (storey.userData.level <= this.level) continue;
+      storey.traverse((mesh) => mesh.isMesh && Object.assign(mesh.material, { transparent: true, opacity: FADED, depthWrite: false }));
     }
     this.scene.add(this.built);
     this.grid.position.y = this.height() + 0.02;

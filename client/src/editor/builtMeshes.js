@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { Brush, Evaluator, SUBTRACTION } from "three-bvh-csg";
-import { IMAGE_PX, imageRgba, inkColor, paletteColors, textSays } from "../world/builtObjects.js";
+import { IMAGE_PX, imageRgba, imageSize, inkColor, paletteColors, textSays } from "../world/builtObjects.js";
 import { layoutText } from "../world/pixelFont.js";
 
 // Geometry for built objects (world/builtObjects.js): each piece's primitive filling a unit box,
@@ -394,9 +394,10 @@ export function tiledGeometries(object, image) {
 export function tileTexture(img, colors) {
   const pixels = imageRgba(img, colors);
   const rgba = new Uint8ClampedArray(pixels.length);
-  const row = IMAGE_PX * 4;
-  for (let y = 0; y < IMAGE_PX; y++) rgba.set(pixels.subarray(y * row, (y + 1) * row), (IMAGE_PX - 1 - y) * row);
-  const texture = atlasTexture({ size: IMAGE_PX, rgba });
+  const size = imageSize(img);
+  const row = size * 4;
+  for (let y = 0; y < size; y++) rgba.set(pixels.subarray(y * row, (y + 1) * row), (size - 1 - y) * row);
+  const texture = atlasTexture({ size, rgba });
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   return texture;
 }

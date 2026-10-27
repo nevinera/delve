@@ -10,6 +10,7 @@
 // worked out from the type when placed, so the game server never needs the types.
 
 import { shapeOf } from "./builtObjects.js";
+import { builtinImage } from "./builtinImages.js";
 import { CELL_FT, TILE_FT } from "./constants.js";
 import { KIT_OBJECTS } from "./kitObjects.js";
 import { hash2 } from "./noise.js";
@@ -66,7 +67,7 @@ export function setBuiltObjects(objects, wornImages = []) {
 }
 
 // An image built objects wear, by id, or undefined.
-export const imageOf = (id) => images.get(id);
+export const imageOf = (id) => images.get(id) ?? builtinImage(id);
 
 // The built object a type names, or undefined.
 export function builtOf(type) {

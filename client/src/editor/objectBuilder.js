@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
-import { GRAY_INKS, MAX_PIECES, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, PALETTE_INKS, addColor, dropUnusedColors, emptyImage, inkColor, paletteColors, pieceCorners, problems, shapeOf, textsOf, turnPoint } from "../world/builtObjects.js";
+import { GRAY_INKS, MAX_PIECES, newObjectId, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, PALETTE_INKS, addColor, dropUnusedColors, emptyImage, inkColor, paletteColors, pieceCorners, problems, shapeOf, textsOf, turnPoint } from "../world/builtObjects.js";
 import { MAX_TEXT, TEXT_PLACEHOLDER, signText } from "../world/pixelFont.js";
 import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, faceFrame, faceIdOf, faceSpot, objectGeometry, primitive, textGeometry, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
 import { ImagePainter, drawImage } from "./imagePainter.js";
@@ -499,9 +499,11 @@ export class ObjectBuilder {
     return paletteColors(this.object)[piece?.color ?? 0] ?? "#808080";
   }
 
+  // Paints an image of the collection, or a copy of a builtin one.
   paint(image, isNew = false) {
     if (this.readOnly) return;
-    this.painter.open(image, { palette: this.paintPalette(), underlay: this.underlay(), isNew });
+    const own = image.builtin ? { ...structuredClone(image), id: newObjectId(), name: `${image.name} copy`, builtin: undefined } : image;
+    this.painter.open(own, { palette: this.paintPalette(), underlay: this.underlay(), isNew: isNew || image.builtin });
   }
 
   // The collection's images, each a thumbnail to paint, then a button for a new one.
@@ -512,7 +514,7 @@ export class ObjectBuilder {
       ...this.images().map((image) => {
         const canvas = el("canvas", { width: 48, height: 48 });
         drawImage(canvas, image, colors, underlay);
-        return el("button", { type: "button", className: "ob-image", title: `${image.name} (${image.kind})`, onclick: () => this.paint(image) }, canvas, el("span", { textContent: image.name }));
+        return el("button", { type: "button", className: "ob-image", title: `${image.name} (${image.kind}${image.builtin ? ", builtin: painting makes a copy" : ""})`, onclick: () => this.paint(image) }, canvas, el("span", { textContent: image.name }));
       }),
       el("button", { type: "button", className: "ob-image ob-edit", textContent: "+ image", onclick: () => this.paint(emptyImage(), true) }),
     );

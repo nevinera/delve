@@ -1,4 +1,4 @@
-import { GRAY_INKS, IMAGE_KINDS, IMAGE_PX, OPACITIES, PALETTE_INKS, emptyImage, imageRgba, inkColor, pixelAt, setPixel } from "../world/builtObjects.js";
+import { GRAY_INKS, IMAGE_KINDS, IMAGE_PX, OPACITIES, PALETTE_INKS, TILED_SIZES, emptyImage, imageRgba, imageSize, inkColor, pixelAt, resizeImage, setPixel } from "../world/builtObjects.js";
 
 // The image painter: a dialog over the object builder for painting one of a collection's images
 // (world/builtObjects.js) pixel by pixel. Inks are the object's palette colors and eight grays,
@@ -7,7 +7,7 @@ import { GRAY_INKS, IMAGE_KINDS, IMAGE_PX, OPACITIES, PALETTE_INKS, emptyImage, 
 // clear. Left-drag paints with the tool (pen, fill or eraser), right-drag erases. A tiled image
 // shows repeated beside it.
 
-const CELL_PX = 12; // screen pixels per image pixel
+const CANVAS_PX = 384; // the painting canvas's size, whatever the image's
 const TILE_PREVIEW = 3; // a tiled image's preview repeats it this many times each way
 const UNDO_KEEP = 100;
 const TOOLS = ["pen", "fill", "eraser"];
@@ -24,8 +24,9 @@ function el(tag, props = {}, ...children) {
 // Draws an image over `underlay` into a 2D canvas, scaled to fit it.
 export function drawImage(canvas, image, colors, underlay) {
   const g = canvas.getContext("2d");
-  const pixels = new ImageData(imageRgba(image, colors), IMAGE_PX, IMAGE_PX);
-  const scratch = Object.assign(document.createElement("canvas"), { width: IMAGE_PX, height: IMAGE_PX });
+  const size = imageSize(image);
+  const pixels = new ImageData(imageRgba(image, colors), size, size);
+  const scratch = Object.assign(document.createElement("canvas"), { width: size, height: size });
   scratch.getContext("2d").putImageData(pixels, 0, 0);
   g.imageSmoothingEnabled = false;
   g.fillStyle = underlay;
@@ -66,11 +67,25 @@ export class ImagePainter {
 
   buildDom() {
     const div = (cls, ...c) => el("div", { className: cls }, ...c);
-    this.canvas = el("canvas", { className: "ip-canvas", width: IMAGE_PX * CELL_PX, height: IMAGE_PX * CELL_PX });
+    this.canvas = el("canvas", { className: "ip-canvas", width: CANVAS_PX, height: CANVAS_PX });
+    this.file = el("input", { type: "file", accept: "image/*", hidden: true });
+    this.file.addEventListener("change", async () => {
+      const [file] = this.file.files;
+      this.file.value = "";
+      if (file) this.importPicture(await createImageBitmap(file));
+    });
     this.tiles = el("canvas", { className: "ip-tiles", width: IMAGE_PX * TILE_PREVIEW * 3, height: IMAGE_PX * TILE_PREVIEW * 3 });
     this.name = el("input", { type: "text", placeholder: "name" });
     this.name.addEventListener("change", () => (this.image.name = this.name.value.trim() || "unnamed"));
-    this.kind = el("select", { onchange: () => ((this.image.kind = this.kind.value), this.refresh()) });
+    this.kind = el("select", {
+      onchange: () =>
+        this.change(() => {
+          this.image.kind = this.kind.value;
+          if (this.image.kind !== "tiled" && imageSize(this.image) !== IMAGE_PX) this.image.rows = resizeImage(this.image, IMAGE_PX).rows;
+        }),
+    });
+    this.size = el("select", { title: "pixels on a side; a tiled image can be bigger", onchange: () => this.change(() => (this.image.rows = resizeImage(this.image, Number(this.size.value)).rows)) });
+    for (const size of TILED_SIZES) this.size.add(new Option(`${size} × ${size}`, size));
     for (const kind of IMAGE_KINDS) this.kind.add(new Option(kind === "decal" ? "decal: stuck on one face" : "tiled: repeated over a piece", kind));
     this.inks = div("ip-inks");
     this.opacities = div("ob-row", ...STRENGTHS.map((o) => el("button", { type: "button", textContent: `${(Number(o) / OPACITIES.length) * 100}%`, onclick: () => ((this.opacity = o), this.refresh()) })));
@@ -80,12 +95,14 @@ export class ImagePainter {
       "ob-panel ip-panel",
       this.name,
       el("label", { className: "ob-field" }, "kind", this.kind),
+      (this.sizeField = el("label", { className: "ob-field" }, "size", this.size)),
       el("h3", { textContent: "ink" }),
       this.inks,
       el("h3", { textContent: "opacity" }),
       this.opacities,
       el("h3", { textContent: "tool" }),
-      div("ob-row", ...this.toolButtons, el("button", { type: "button", textContent: "clear", onclick: () => this.change(() => (this.image.rows = emptyImage().rows)) })),
+      div("ob-row", ...this.toolButtons, el("button", { type: "button", textContent: "clear", onclick: () => this.change(() => (this.image.rows = emptyImage(undefined, undefined, undefined, imageSize(this.image)).rows)) })),
+      div("ob-row", el("button", { type: "button", textContent: "import PNG", title: "an image file, its colors matched to the nearest inks", onclick: () => this.file.click() }), this.file),
       this.tiles,
       el("p", { className: "ob-info", textContent: "left-drag paints · right-drag erases · B pen, G fill, E eraser · ctrl-z undoes, ctrl-shift-z redoes" }),
       div(
@@ -131,12 +148,44 @@ export class ImagePainter {
     this.refresh();
   }
 
+  // Paints a picture over the whole image, scaled to fit: each pixel the nearest ink, at the
+  // nearest opacity, or clear where it's mostly see-through.
+  importPicture(bitmap) {
+    const size = imageSize(this.image);
+    const canvas = Object.assign(document.createElement("canvas"), { width: size, height: size });
+    const g = canvas.getContext("2d");
+    g.drawImage(bitmap, 0, 0, size, size);
+    const { data } = g.getImageData(0, 0, size, size);
+    const inks = [...this.palette.map((p) => p.ink), ...GRAY_INKS].map((ink) => {
+      const hex = inkColor(ink, this.colors);
+      return { ink, rgb: [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16)) };
+    });
+    this.change(() => {
+      for (let y = 0; y < size; y++) {
+        for (let x = 0; x < size; x++) {
+          const i = (y * size + x) * 4;
+          const opacity = Math.round((data[i + 3] / 255) * OPACITIES.length);
+          if (!opacity) {
+            setPixel(this.image, x, y, null);
+            continue;
+          }
+          const nearest = inks.reduce((best, c) => {
+            const d = c.rgb.reduce((sum, v, k) => sum + (v - data[i + k]) ** 2, 0);
+            return d < best.d ? { ink: c.ink, d } : best;
+          }, { ink: "7", d: Infinity });
+          setPixel(this.image, x, y, { ink: nearest.ink, opacity: String(opacity) });
+        }
+      }
+    });
+  }
+
   // The pixel under the pointer gets the tool.
   paintAt(e) {
     const r = this.canvas.getBoundingClientRect();
-    const x = Math.floor(((e.clientX - r.left) / r.width) * IMAGE_PX);
-    const y = Math.floor(((e.clientY - r.top) / r.height) * IMAGE_PX);
-    if (x < 0 || y < 0 || x >= IMAGE_PX || y >= IMAGE_PX) return;
+    const size = imageSize(this.image);
+    const x = Math.floor(((e.clientX - r.left) / r.width) * size);
+    const y = Math.floor(((e.clientY - r.top) / r.height) * size);
+    if (x < 0 || y < 0 || x >= size || y >= size) return;
     const pixel = this.stroke.erase || this.tool === "eraser" || this.opacity === CLEAR ? null : { ink: this.ink, opacity: this.opacity };
     if (this.tool === "fill" && !this.stroke.erase) fill(this.image, x, y, pixel);
     else setPixel(this.image, x, y, pixel);
@@ -197,31 +246,35 @@ export class ImagePainter {
     this.opacities.querySelectorAll("button").forEach((b, i) => b.classList.toggle("active", STRENGTHS[i] === this.opacity));
     for (const b of this.toolButtons) b.classList.toggle("active", b.textContent === this.tool);
     this.tiles.hidden = this.image.kind !== "tiled";
+    this.sizeField.hidden = this.image.kind !== "tiled";
+    this.size.value = imageSize(this.image);
     this.draw();
   }
 
   draw() {
     drawImage(this.canvas, this.image, this.colors, this.underlay);
     const g = this.canvas.getContext("2d");
+    const size = imageSize(this.image);
+    const cell = CANVAS_PX / size;
     // Clear pixels checkered, lighter and darker, so they stand apart from painted ones.
-    const half = CELL_PX / 2;
-    for (let y = 0; y < IMAGE_PX; y++) {
-      for (let x = 0; x < IMAGE_PX; x++) {
+    const half = cell / 2;
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
         if (pixelAt(this.image, x, y)) continue;
         for (const [i, j] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
           g.fillStyle = (i + j) % 2 ? "rgba(0, 0, 0, 0.18)" : "rgba(255, 255, 255, 0.18)";
-          g.fillRect(x * CELL_PX + i * half, y * CELL_PX + j * half, half, half);
+          g.fillRect(x * cell + i * half, y * cell + j * half, half, half);
         }
       }
     }
     // Faint lines between pixels.
     g.strokeStyle = "rgba(0, 0, 0, 0.15)";
     g.beginPath();
-    for (let i = 1; i < IMAGE_PX; i++) {
-      g.moveTo(i * CELL_PX + 0.5, 0);
-      g.lineTo(i * CELL_PX + 0.5, this.canvas.height);
-      g.moveTo(0, i * CELL_PX + 0.5);
-      g.lineTo(this.canvas.width, i * CELL_PX + 0.5);
+    for (let i = 1; i < size; i++) {
+      g.moveTo(i * cell + 0.5, 0);
+      g.lineTo(i * cell + 0.5, this.canvas.height);
+      g.moveTo(0, i * cell + 0.5);
+      g.lineTo(this.canvas.width, i * cell + 0.5);
     }
     g.stroke();
     if (this.image.kind !== "tiled") return;
@@ -240,7 +293,7 @@ function fill(image, x, y, pixel) {
   const stack = [[x, y]];
   while (stack.length) {
     const [i, j] = stack.pop();
-    if (i < 0 || j < 0 || i >= IMAGE_PX || j >= IMAGE_PX || key(pixelAt(image, i, j)) !== was) continue;
+    if (i < 0 || j < 0 || i >= imageSize(image) || j >= imageSize(image) || key(pixelAt(image, i, j)) !== was) continue;
     setPixel(image, i, j, pixel);
     stack.push([i + 1, j], [i - 1, j], [i, j + 1], [i, j - 1]);
   }

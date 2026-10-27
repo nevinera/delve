@@ -37,7 +37,8 @@ import { signText } from "./pixelFont.js";
 // An image is { id, name, kind, collection, rows }, belonging to a collection, for its objects'
 // pieces to wear:
 // - kind: "decal" (stuck on one flat face) or "tiled" (repeated over a piece).
-// - rows: IMAGE_PX strings of IMAGE_PX pixels, top row first, each pixel two characters: its ink
+// - rows: IMAGE_PX strings of IMAGE_PX pixels (or for a tiled image, maybe TILED_SIZES' larger),
+//   top row first, each pixel two characters: its ink
 //   ("a" to "z" for the wearing object's palette colors in order, parameters overridden as its
 //   pieces are; "0" to "7" for grays from white to black) then its opacity ("1" to "4", in
 //   quarters), or ".." for none, where the piece's own color shows. Since inks name palette places,
@@ -55,14 +56,32 @@ export const objectPath = (id) => `objects/${id}.json`;
 export const imagePath = (id) => `images/${id}.json`;
 
 export const IMAGE_PX = 32;
+export const TILED_SIZES = [32, 64];
 export const IMAGE_KINDS = ["decal", "tiled"];
 export const PALETTE_INKS = [..."abcdefghijklmnopqrstuvwxyz"];
 export const GRAY_INKS = ["0", "1", "2", "3", "4", "5", "6", "7"];
 export const OPACITIES = ["1", "2", "3", "4"];
 const MISSING_INK = "#808080"; // for an ink naming a palette place the object doesn't have
 
-export function emptyImage(name = "new image", kind = "decal", random = Math.random) {
-  return { id: newObjectId(random), name, kind, rows: Array.from({ length: IMAGE_PX }, () => "..".repeat(IMAGE_PX)) };
+export function emptyImage(name = "new image", kind = "decal", random = Math.random, size = IMAGE_PX) {
+  return { id: newObjectId(random), name, kind, rows: Array.from({ length: size }, () => "..".repeat(size)) };
+}
+
+// How many pixels an image is on a side.
+export const imageSize = (image) => image.rows.length;
+
+// The image at another size, each pixel doubled, or every other one kept.
+export function resizeImage(image, size) {
+  const from = imageSize(image);
+  const rows = Array.from({ length: size }, (_, y) => {
+    let row = "";
+    for (let x = 0; x < size; x++) {
+      const [sx, sy] = [Math.floor((x * from) / size), Math.floor((y * from) / size)];
+      row += image.rows[sy].slice(sx * 2, sx * 2 + 2);
+    }
+    return row;
+  });
+  return { ...image, rows };
 }
 
 // A pixel as { ink, opacity } ("a" to "z" or "0" to "7", and "1" to "4"), or null when clear.
@@ -87,15 +106,16 @@ export function inkColor(ink, colors) {
   return colors[PALETTE_INKS.indexOf(ink)] ?? MISSING_INK;
 }
 
-// The image as RGBA bytes (IMAGE_PX square, top row first), given the wearer's colors.
+// The image as RGBA bytes (imageSize square, top row first), given the wearer's colors.
 export function imageRgba(image, colors) {
-  const out = new Uint8ClampedArray(IMAGE_PX * IMAGE_PX * 4);
-  for (let y = 0; y < IMAGE_PX; y++) {
-    for (let x = 0; x < IMAGE_PX; x++) {
+  const size = imageSize(image);
+  const out = new Uint8ClampedArray(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
       const pixel = pixelAt(image, x, y);
       if (!pixel) continue;
       const hex = inkColor(pixel.ink, colors);
-      const i = (y * IMAGE_PX + x) * 4;
+      const i = (y * size + x) * 4;
       out.set([parseInt(hex.slice(1, 3), 16), parseInt(hex.slice(3, 5), 16), parseInt(hex.slice(5, 7), 16), Math.round((255 * Number(pixel.opacity)) / OPACITIES.length)], i);
     }
   }
@@ -108,7 +128,9 @@ export function imageProblems(image) {
   if (!/^[0-9a-z]{8}$/.test(image.id ?? "")) out.push("its id should be 8 letters and digits");
   if (!IMAGE_KINDS.includes(image.kind)) out.push(`its kind should be one of ${IMAGE_KINDS.join(", ")}`);
   const pixel = new RegExp(`^(\\.\\.|[${PALETTE_INKS.join("")}${GRAY_INKS.join("")}][${OPACITIES.join("")}])*$`);
-  if (!Array.isArray(image.rows) || image.rows.length !== IMAGE_PX || !image.rows.every((row) => typeof row === "string" && row.length === IMAGE_PX * 2 && pixel.test(row))) out.push(`its rows should be ${IMAGE_PX} rows of ${IMAGE_PX} pixels`);
+  const sizes = image.kind === "tiled" ? TILED_SIZES : [IMAGE_PX];
+  const size = image.rows?.length;
+  if (!Array.isArray(image.rows) || !sizes.includes(size) || !image.rows.every((row) => typeof row === "string" && row.length === size * 2 && pixel.test(row))) out.push(`its rows should be ${sizes.join(" or ")} rows of as many pixels`);
   return out;
 }
 

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { paletteColors } from "../world/builtObjects.js";
 import { CELL_FT, COMPONENTS, FLOOR_FT, parseCell, roofHeight } from "../world/structures.js";
-import { builtMaterial } from "./builtMeshes.js";
+import { builtMaterial, tileTexture, tiledMaterial } from "./builtMeshes.js";
 
 // Structures (world/structures.js) as meshes: floors as slabs under their level's height, walls as
 // slabs along cell edges with their doors and windows left open, the foundation below the ground
@@ -207,52 +207,150 @@ function foundation(structure, cells, depthFt, color) {
   });
 }
 
-// The structure's geometry by storey: Map of level -> geometry (position, normal, color), with
-// `params` overriding its parameter colors, and its foundation `depthFt` deep under level 0.
-export function structureGeometries(structure, { params, depthFt = 2 } = {}) {
+// Which way a wall's inside faces: toward the side with floor, both ways between two floored
+// cells, or neither (null) with floor on neither side.
+function insideOf(key, floor) {
+  const [x, z, side] = key.split(",");
+  const [a, b] = side === "n" ? [`${x},${Number(z) - 1}`, `${x},${z}`] : [`${Number(x) - 1},${z}`, `${x},${z}`];
+  const [hasA, hasB] = [floor.has(a), floor.has(b)];
+  if (hasA && hasB) return "both";
+  if (!hasA && !hasB) return null;
+  const toward = hasB ? 1 : -1;
+  return side === "n" ? new THREE.Vector3(0, 0, toward) : new THREE.Vector3(toward, 0, 0);
+}
+
+// A tiled image's overlay over parts: each triangle mapped in feet over the two axes it faces
+// least along, a copy every `every` feet, with its jitter. parts: [{ g, tile }].
+function overlay(parts) {
+  const positions = [];
+  const uvs = [];
+  const jitters = [];
+  const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  for (const { g, tile } of parts) {
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i += 3) {
+      a.fromBufferAttribute(p, i);
+      b.fromBufferAttribute(p, i + 1);
+      c.fromBufferAttribute(p, i + 2);
+      const n = b.clone().sub(a).cross(c.clone().sub(a)).normalize();
+      const [ax, ay, az] = [Math.abs(n.x), Math.abs(n.y), Math.abs(n.z)];
+      const flat = ax >= ay && ax >= az ? (q) => [q.z, q.y] : ay >= az ? (q) => [q.x, q.z] : (q) => [q.x, q.y];
+      for (const q of [a, b, c]) {
+        positions.push(q.x, q.y, q.z);
+        uvs.push(...flat(q).map((v) => v / tile.every));
+        jitters.push(tile.jitter ?? 0);
+      }
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute("jitter", new THREE.Float32BufferAttribute(jitters, 1));
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
+  return geometry;
+}
+
+// Splits a part's triangles by which of its material's tiles they wear: a wall's inside faces
+// wear `inside` if the material has one. Returns [{ g, tile }].
+function tiled(part, material) {
+  const { g, inside } = part;
+  if (!material?.tile && !material?.inside) return [];
+  const insideTile = material.inside ?? material.tile;
+  if (!inside || insideTile === material.tile) return material.tile ? [{ g, tile: material.tile }] : [];
+  const p = g.attributes.position;
+  const lists = { out: [], in: [] };
+  const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  for (let i = 0; i < p.count; i += 3) {
+    a.fromBufferAttribute(p, i);
+    b.fromBufferAttribute(p, i + 1);
+    c.fromBufferAttribute(p, i + 2);
+    const n = b.clone().sub(a).cross(c.clone().sub(a)).normalize();
+    const facesIn = inside === "both" ? Math.abs(n.y) < 0.5 : n.dot(inside) > 0.5;
+    lists[facesIn ? "in" : "out"].push(a.x, a.y, a.z, b.x, b.y, b.z, c.x, c.y, c.z);
+  }
+  return [
+    [lists.out, material.tile],
+    [lists.in, insideTile],
+  ]
+    .filter(([list, tile]) => list.length && tile)
+    .map(([list, tile]) => {
+      const part = new THREE.BufferGeometry();
+      part.setAttribute("position", new THREE.Float32BufferAttribute(list, 3));
+      return { g: part, tile };
+    });
+}
+
+// The structure's geometry by storey: Map of level -> { base, overlays }: base (position, normal,
+// color) with `params` overriding its parameter colors, and overlays [{ image, geometry }] for its
+// materials' tiled images, found by `imageOf(id)`. The foundation reaches `depthFt` under level 0.
+export function structureGeometries(structure, { params, depthFt = 2, imageOf = () => undefined } = {}) {
   const colors = paletteColors(structure, params).map((hex) => new THREE.Color(hex));
   const colorOf = (name) => colors[structure.materials[name]?.color] ?? new THREE.Color(0xff00ff);
   const out = new Map();
   for (const storey of structure.storeys) {
     const height = storey.level * structure.storeyFt;
     const cells = storey.floor.map(parseCell);
-    const parts = cells.map(([x, z]) => box([x * CELL_FT, height - FLOOR_FT, z * CELL_FT], [(x + 1) * CELL_FT, height, (z + 1) * CELL_FT], colorOf(structure.floor)));
+    const floor = new Set(storey.floor);
+    const parts = []; // { g, material, inside }
+    const add = (list, material, inside = null) => parts.push(...list.map((g) => ({ g, material, inside })));
+    add(
+      cells.map(([x, z]) => box([x * CELL_FT, height - FLOOR_FT, z * CELL_FT], [(x + 1) * CELL_FT, height, (z + 1) * CELL_FT], colorOf(structure.floor))),
+      structure.floor,
+    );
     for (const [key, edge] of Object.entries(storey.edges)) {
       const material = structure.materials[edge.material];
-      if (material) parts.push(...wall(key, edge, material.thicknessFt, height - FLOOR_FT, height + structure.storeyFt, height, colorOf(edge.material)));
+      if (material) add(wall(key, edge, material.thicknessFt, height - FLOOR_FT, height + structure.storeyFt, height, colorOf(edge.material)), edge.material, insideOf(key, floor));
     }
     for (const c of structure.components) {
       if (c.level !== storey.level) continue;
-      const color = colorOf(c.material ?? structure.floor);
+      const made = c.material ?? structure.floor;
       if (c.type === "roof") {
         const ends = c.ends ?? Object.values(storey.edges)[0]?.material ?? structure.floor;
-        parts.push(...roof(c, structure, color, colorOf(ends), structure.materials[ends]?.thicknessFt ?? 1));
-      } else if (DRAW[c.type]) parts.push(...DRAW[c.type](c, structure, color));
+        const [slopes, ...walls] = roof(c, structure, colorOf(made), colorOf(ends), structure.materials[ends]?.thicknessFt ?? 1);
+        add([slopes], made);
+        add(walls, ends);
+      } else if (DRAW[c.type]) add(DRAW[c.type](c, structure, colorOf(made)), made);
     }
-    if (storey.level === 0 && cells.length) parts.push(...foundation(structure, cells, depthFt, colorOf(structure.foundation.material)));
+    if (storey.level === 0 && cells.length) add(foundation(structure, cells, depthFt, colorOf(structure.foundation.material)), structure.foundation.material);
     if (!parts.length) continue;
-    const merged = mergeGeometries(parts);
-    merged.computeBoundingSphere();
-    out.set(storey.level, merged);
+    const base = mergeGeometries(parts.map((p) => p.g));
+    base.computeBoundingSphere();
+    // The overlays, one per image.
+    const byImage = new Map(); // image -> [{ g, tile }]
+    for (const part of parts) {
+      for (const piece of tiled(part, structure.materials[part.material])) {
+        const image = imageOf(piece.tile.image);
+        if (!image) continue;
+        if (!byImage.has(image)) byImage.set(image, []);
+        byImage.get(image).push(piece);
+      }
+    }
+    out.set(storey.level, { base, overlays: [...byImage].map(([image, list]) => ({ image, geometry: overlay(list) })) });
   }
   return out;
 }
 
-// The structure as a group of meshes, one per storey (userData.level), each with its own
-// material.
-export function structureGroup(structure, options) {
+// The structure as a group with a group per storey (userData.level) of meshes, each with its own
+// material: the storey, and its tiled images over it.
+export function structureGroup(structure, options = {}) {
   const group = new THREE.Group();
-  for (const [level, geometry] of structureGeometries(structure, options)) {
-    const mesh = new THREE.Mesh(geometry, builtMaterial());
-    mesh.userData.level = level;
-    group.add(mesh);
+  const colors = paletteColors(structure, options.params);
+  for (const [level, { base, overlays }] of structureGeometries(structure, options)) {
+    const storey = new THREE.Group();
+    storey.userData.level = level;
+    storey.add(new THREE.Mesh(base, builtMaterial()));
+    for (const { image, geometry } of overlays) storey.add(new THREE.Mesh(geometry, tiledMaterial(tileTexture(image, colors))));
+    group.add(storey);
   }
   return group;
 }
 
 export function disposeStructureGroup(group) {
-  for (const mesh of group.children) {
+  group.traverse((mesh) => {
+    if (!mesh.isMesh) return;
     mesh.geometry.dispose();
+    mesh.material.map?.dispose();
     mesh.material.dispose();
-  }
+  });
 }
