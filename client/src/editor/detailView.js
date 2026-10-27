@@ -9,7 +9,7 @@ import { carveChannel, traceSource } from "./detailWater.js";
 import { FLOW_NONE, encodeFlowDir, encodeFlowSlope } from "../world/generator.js";
 import { fellTree, paletteIndex, parseTree } from "../world/trees.js";
 import { footprintOf, makeObject, reachOf, specOf, tileOf } from "../world/objects.js";
-import { CELL_FT as STRUCTURE_CELL_FT, placedWalk, pushGround, quartersOf } from "../world/structures.js";
+import { CELL_FT as STRUCTURE_CELL_FT, bakeWalk, placedWalk, pushGround, quartersOf } from "../world/structures.js";
 import { meshHeightAt } from "../world/clutter.js";
 import { RenderView, boundary, groundSampler } from "./renderView.js";
 import { tilePath } from "./thumbnails.js";
@@ -748,6 +748,13 @@ export class DetailView {
     const { changes, pushed } = pushGround(structure, object, this.cells(), CELL_FT);
     object.pushed = pushed;
     this.setHeights(changes);
+    // The ground's drawn again where a cellar opens up, to cut it away there.
+    if ((structure.walk ?? bakeWalk(structure)).cut.length) {
+      const [tx, tz] = tileOf(object.at);
+      const near = [];
+      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) near.push(`${tx + dx},${tz + dz}`);
+      this.changed(near);
+    }
   }
 
   // The height of the highest ground under a structure's ground floor, rounded up to a foot.

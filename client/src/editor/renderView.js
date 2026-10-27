@@ -12,6 +12,7 @@ import { setTreeSight, treeMeshes, treeStage } from "./treeMeshes.js";
 import { clutterMeshes, gatherClutter, setClutterFocus, setClutterRadius } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
 import { structureCover } from "../world/objects.js";
+import { tileWalk } from "../world/walkIndex.js";
 import { CELL_FT as STRUCTURE_CELL_FT } from "../world/structures.js";
 import { objectMeshes, setObjectSight } from "./objectMeshes.js";
 import { Walker } from "./walker.js";
@@ -383,7 +384,20 @@ export class RenderView {
       south: decoded.get(`${tx},${tz + 1}`),
       southEast: decoded.get(`${tx + 1},${tz + 1}`),
     };
-    const terrain = new THREE.Mesh(geometry(terrainMesh(tile, neighbours, this.origin, 1)), groundMaterial(this.renderer, { tile, neighbours, origin: this.origin }));
+    // Where structures' cellars open up, the ground's cut away.
+    const cuts = [];
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        for (const key of tileWalk(decoded.get(`${tx + dx},${tz + dz}`)?.objects).cut) {
+          const [x, z] = key.split(",").map((v) => Number(v) * STRUCTURE_CELL_FT);
+          // The tile's mesh reaches a cell past its east and south edges, to close the seams.
+          const within = (v, t) => v >= t * TILE_FT - STRUCTURE_CELL_FT && v < (t + 1) * TILE_FT + tile.cellFt;
+          if (within(x, tx) && within(z, tz)) cuts.push([x - this.origin[0], z - this.origin[1]]);
+        }
+      }
+    }
+    const material = groundMaterial(this.renderer, { tile, neighbours, origin: this.origin, cuts, cutFt: STRUCTURE_CELL_FT });
+    const terrain = new THREE.Mesh(geometry(terrainMesh(tile, neighbours, this.origin, 1)), material);
     terrain.userData.tile = [tx, tz];
     terrain.userData.ground = true;
     this.content.add(terrain);

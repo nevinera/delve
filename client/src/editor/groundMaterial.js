@@ -25,13 +25,16 @@ const LITTER = PATTERNS.indexOf("litter");
 const PATH = PATTERNS.indexOf("path");
 const layerOf = (name) => Math.max(0, PATTERNS.indexOf(name));
 const MAX_ROAD_SEGMENTS = 96; // per tile; any past this are left out
+const MAX_CUTS = 64; // cells cut away over cellars, per tile; any past this are left out
 
 let detail = null;
 let patterns = null;
 
 // With `tile` (and its neighbours, and the scene origin), the material for that tile drawn in full,
-// with its ground patterns; without, the plain one shared by every far tile.
-export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
+// with its ground patterns; without, the plain one shared by every far tile. cuts: the
+// north-west corners of square cells `cutFt` across, in scene feet, where the ground isn't drawn
+// (over a structure's cellar stairs or well).
+export function groundMaterial(renderer, { tile, neighbours, origin, cuts = [], cutFt = 4 } = {}) {
   detail ??= detailTexture(renderer);
   const material = new THREE.MeshLambertMaterial({ vertexColors: true });
   let cells = null;
@@ -48,9 +51,16 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
       Object.assign(material.userData.uniforms, segments);
       material.defines.GROUND_ROADS = "";
     }
+    if (cuts.length) {
+      const list = cuts.slice(0, MAX_CUTS);
+      const corners = Array.from({ length: MAX_CUTS }, (_, i) => new THREE.Vector2(...(list[i] ?? [0, 0])));
+      Object.assign(material.userData.uniforms, { groundCuts: { value: corners }, groundCutCount: { value: list.length }, groundCutFt: { value: cutFt } });
+      material.defines.GROUND_CUTS = "";
+    }
   }
   const roads = Boolean(material.defines?.GROUND_ROADS);
-  material.customProgramCacheKey = () => (cells ? (roads ? "ground-roads" : "ground-patterns") : "ground");
+  const cut = Boolean(material.defines?.GROUND_CUTS);
+  material.customProgramCacheKey = () => (cells ? `${roads ? "ground-roads" : "ground-patterns"}${cut ? "-cuts" : ""}` : "ground");
   material.onBeforeCompile = (shader) => {
     shader.uniforms.groundDetail = { value: detail };
     if (cells) Object.assign(shader.uniforms, material.userData.uniforms, { groundPatterns: { value: patterns } });
@@ -70,6 +80,11 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
         uniform sampler2D groundCells;
         uniform vec2 groundCorner;
         uniform float groundSide;
+        #ifdef GROUND_CUTS
+        uniform vec2 groundCuts[${MAX_CUTS}];
+        uniform int groundCutCount;
+        uniform float groundCutFt;
+        #endif
         #ifdef GROUND_ROADS
         uniform vec4 roadSegments[${MAX_ROAD_SEGMENTS}];
         uniform vec2 roadKinds[${MAX_ROAD_SEGMENTS}];
@@ -87,6 +102,13 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
       .replace(
         "#include <color_fragment>",
         `#include <color_fragment>
+        #ifdef GROUND_CUTS
+        for (int i = 0; i < ${MAX_CUTS}; i++) {
+          if (i >= groundCutCount) break;
+          vec2 into = vGroundXZ - groundCuts[i];
+          if (into.x >= 0.0 && into.y >= 0.0 && into.x < groundCutFt && into.y < groundCutFt) discard;
+        }
+        #endif
         float grain = texture2D(groundDetail, vGroundXZ * ${fine}).r;
         float blotch = texture2D(groundDetail, vGroundXZ * ${mid} + 0.31).g;
         float sweep = texture2D(groundDetail, vGroundXZ * ${broad} + 0.67).g;

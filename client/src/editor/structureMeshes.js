@@ -312,7 +312,10 @@ export function structureGeometries(structure, { params, depthFt = 2, imageOf = 
         add(walls, ends);
       } else if (DRAW[c.type]) add(DRAW[c.type](c, structure, colorOf(made)), made);
     }
-    if (storey.level === 0 && cells.length) add(foundation(structure, cells, depthFt, colorOf(structure.foundation.material)), structure.foundation.material);
+    // The foundation fills under the ground floor, but not into a storey below it.
+    const below = new Set(structure.storeys.filter((other) => other.level < 0).flatMap((other) => other.floor));
+    const footing = cells.filter(([x, z]) => !below.has(`${x},${z}`));
+    if (storey.level === 0 && footing.length) add(foundation(structure, footing, depthFt, colorOf(structure.foundation.material)), structure.foundation.material);
     if (!parts.length) continue;
     const base = mergeGeometries(parts.map((p) => p.g));
     base.computeBoundingSphere();

@@ -33,6 +33,14 @@ describe("structure meshes", () => {
     expect(inDoor).toBe(0);
   });
 
+  it("puts no foundation over a cellar", () => {
+    const s = emptyStructure();
+    s.storeys[0].floor = ["0,0"];
+    s.storeys.push({ level: -1, floor: ["0,0"], edges: {} });
+    // The ground floor's slab, and nothing under it down to the cellar's.
+    expect(bounds(structureGeometries(s, { depthFt: 5 }).get(0).base)).toEqual([0, -0.5, 0, 4, 0, 4]);
+  });
+
   it("turns a flight to face its way up", () => {
     const s = emptyStructure();
     s.components.push({ type: "ramp", level: 0, at: [2, 0], facing: 3, run: 2, width: 1 });
