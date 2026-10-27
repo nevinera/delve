@@ -1,9 +1,11 @@
 import "./editor.css";
 import { updateIndexes } from "./continentIndex.js";
 import { Editor } from "./editor.js";
+import { exportHeightmap, importHeightmap, needsRange } from "./heightmap.js";
 import { loadLocal, saveLocal } from "./localSave.js";
 import { World } from "./world.js";
 import { slug } from "./zones.js";
+import { LAND_FT } from "../world/landGrid.js";
 
 // Editor entry (plans/roadmap.md, "World editor").
 
@@ -84,6 +86,40 @@ $("download").addEventListener("click", () => {
   URL.revokeObjectURL(link.href);
   editor.markSaved();
   keep();
+});
+
+$("exportHeightmap").addEventListener("click", () => {
+  const map = exportHeightmap(editor.land);
+  if (!map) return window.alert("There's no land to export yet.");
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([map.bytes], { type: "image/png" }));
+  link.download = `${slug(editor.world.info.name) || "world"}-${editor.continent}-heights.png`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+});
+
+$("importHeightmap").addEventListener("click", () => $("heightmapFile").click());
+
+// A heightmap from another tool needs telling what heights black and white stand for. It's put
+// down centred on the point the heights view looks at, a pixel every LAND_FT ft.
+$("heightmapFile").addEventListener("change", async (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";
+  if (!file) return;
+  try {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    let range = null;
+    if (needsRange(bytes)) {
+      const answer = window.prompt(`What heights do black and white stand for, in ft? Each pixel is ${LAND_FT}ft across.`, "-50 1000");
+      if (answer === null) return;
+      range = answer.split(/[\s,]+/).filter(Boolean).map(Number);
+      if (range.length !== 2 || !range.every(Number.isFinite)) throw new Error("give two heights, like -50 1000");
+    }
+    if (editor.land.blocks.size && !window.confirm("Replace the land being sculpted with this heightmap? Discard brings back the committed land.")) return;
+    editor.replaceLand(importHeightmap(bytes, { range, centre: editor.sculpt?.centre ?? [0, 0] }));
+  } catch (err) {
+    window.alert(`Couldn't import ${file.name}: ${err.message}`);
+  }
 });
 
 $("newWorld").addEventListener("click", () => {

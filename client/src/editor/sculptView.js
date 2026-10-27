@@ -138,6 +138,12 @@ export class SculptView {
     this.keys = keys;
   }
 
+  // The ground point looked at, [x, z] in continent feet.
+  get centre() {
+    const { target } = this.controls;
+    return [target.x, target.z];
+  }
+
   get radius() {
     return this.settings.radius;
   }

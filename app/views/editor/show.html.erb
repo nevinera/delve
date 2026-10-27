@@ -79,6 +79,11 @@
             <button id="commitLand" type="button">commit</button>
             <button id="discardLand" type="button">discard</button>
           </div>
+          <div class="editor-row">
+            <button id="exportHeightmap" type="button" title="the land as a 16-bit grayscale heightmap">export png</button>
+            <button id="importHeightmap" type="button" title="a 16-bit grayscale heightmap, from here or another tool">import png</button>
+          </div>
+          <input id="heightmapFile" type="file" accept="image/png" hidden>
         </div>
       </section>
       <section class="editor-step" data-step="water">

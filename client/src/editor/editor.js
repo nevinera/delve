@@ -315,6 +315,13 @@ export class Editor {
     this.store(() => saveLand(this.world.files, this.continent, this.land));
   }
 
+  // Swaps in land from a heightmap, uncommitted.
+  replaceLand(land) {
+    this.land = land;
+    this.landChanged();
+    this.showSculpt();
+  }
+
   // Puts the land back as it was last committed.
   discardLand() {
     this.land = loadLand(this.world.files, this.continent);
