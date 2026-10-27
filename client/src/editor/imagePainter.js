@@ -3,7 +3,8 @@ import { GRAY_INKS, IMAGE_KINDS, IMAGE_PX, OPACITIES, PALETTE_INKS, emptyImage, 
 // The image painter: a dialog over the object builder for painting one of a collection's images
 // (world/builtObjects.js) pixel by pixel. Inks are the object's palette colors and eight grays,
 // each at one of four opacities, or none (0%, clear, like the eraser); under the pixels shows the
-// piece's color, as it will on the piece. A new image starts clear. Left-drag paints with the tool (pen, fill or eraser), right-drag erases. A tiled image
+// piece's color, as it will on the piece, checkered where a pixel is clear. A new image starts
+// clear. Left-drag paints with the tool (pen, fill or eraser), right-drag erases. A tiled image
 // shows repeated beside it.
 
 const CELL_PX = 12; // screen pixels per image pixel
@@ -201,8 +202,19 @@ export class ImagePainter {
 
   draw() {
     drawImage(this.canvas, this.image, this.colors, this.underlay);
-    // Faint lines between pixels.
     const g = this.canvas.getContext("2d");
+    // Clear pixels checkered, lighter and darker, so they stand apart from painted ones.
+    const half = CELL_PX / 2;
+    for (let y = 0; y < IMAGE_PX; y++) {
+      for (let x = 0; x < IMAGE_PX; x++) {
+        if (pixelAt(this.image, x, y)) continue;
+        for (const [i, j] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+          g.fillStyle = (i + j) % 2 ? "rgba(0, 0, 0, 0.18)" : "rgba(255, 255, 255, 0.18)";
+          g.fillRect(x * CELL_PX + i * half, y * CELL_PX + j * half, half, half);
+        }
+      }
+    }
+    // Faint lines between pixels.
     g.strokeStyle = "rgba(0, 0, 0, 0.15)";
     g.beginPath();
     for (let i = 1; i < IMAGE_PX; i++) {
