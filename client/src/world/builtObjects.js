@@ -53,7 +53,11 @@ export const MIN_SIZE_FT = 0.1;
 const BLOCK_BELOW_FT = 6;
 
 export const objectPath = (id) => `objects/${id}.json`;
-export const imagePath = (id) => `images/${id}.json`;
+// Images (textures) belong to the whole world, not a collection: any object or structure can
+// wear any of them. Worlds kept before that have them in images/, each naming a collection;
+// adoptStrays (objects/collections.js) moves them.
+export const imagePath = (id) => `textures/${id}.json`;
+export const OLD_IMAGES = /^images\/[0-9a-z]{8}\.json$/;
 
 export const IMAGE_PX = 32;
 export const TILED_SIZES = [32, 64];

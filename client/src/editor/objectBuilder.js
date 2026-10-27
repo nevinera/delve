@@ -71,7 +71,7 @@ export class ObjectBuilder {
     this.onSaveImage = onSaveImage;
     this.onDeleteImage = onDeleteImage;
     this.painter = new ImagePainter({
-      onSave: (image) => this.onSaveImage?.({ ...image, collection: this.object.collection }),
+      onSave: (image) => this.onSaveImage?.(image),
       onDelete: (image) => this.onDeleteImage?.(image),
     });
     this.onSave = onSave;
@@ -93,7 +93,7 @@ export class ObjectBuilder {
   // Opens the builder on a copy of `object`.
   // Opens the builder on a copy of `object`. collections: the world's own, [{ id, name }], to move
   // it between or copy it into. readOnly: look, don't touch; onCopy(object, collectionId) hears a
-  // copy asked for. images(): the images of the collection it's in.
+  // copy asked for. images(): the images it can wear, the world's and the builtins.
   open(object, { collections = [], readOnly = false, onCopy, images = () => [] } = {}) {
     this.placing = null;
     this.readOnly = readOnly;

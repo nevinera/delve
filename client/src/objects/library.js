@@ -7,7 +7,7 @@ import { ObjectGallery } from "../editor/objectGallery.js";
 import { StructureBuilder } from "../editor/structureBuilder.js";
 import { BUILTIN_IMAGES } from "../world/builtinImages.js";
 import { STRUCTURE_PREFIX, emptyStructure, problems as structureProblems, structurePath, withWalk } from "../world/structures.js";
-import { addCollection, adoptStrays, allCollections, builtObjects, builtStructures, collections, images, ownCollections } from "./collections.js";
+import { addCollection, adoptStrays, allCollections, builtObjects, builtStructures, collections, images, ownCollections, wornImages } from "./collections.js";
 
 // The object library: the gallery of a world's collections and the builtins, with the builder
 // popping over it, importing and exporting collections. The objects page shows it on its own, and
@@ -111,35 +111,14 @@ export class ObjectLibrary {
       collections: ownCollections(this.world),
       readOnly,
       onCopy: (copy, collection) => this.copyBuiltObject(copy, collection),
-      images: () => [...images(this.world, this.builder.object?.collection), ...BUILTIN_IMAGES],
+      images: () => [...images(this.world), ...BUILTIN_IMAGES],
     });
   }
 
   saveBuiltObject(object) {
-    this.bringImages(object);
     this.world.writeJson(objectPath(object.id), object);
     this.changed(`${BUILT_PREFIX}${object.id}`);
     this.say(`Saved ${object.name}.`, { info: true });
-  }
-
-  // Copies the images an object wears from other collections into its own (as moving or copying
-  // it between collections needs), with new ids, changing `object` to wear the copies.
-  bringImages(object) {
-    const copies = new Map(); // old id -> new
-    for (const piece of object.pieces) {
-      for (const use of [...(piece.decals ?? []), piece.tile].filter(Boolean)) {
-        if (!copies.has(use.image)) {
-          const path = imagePath(use.image);
-          const image = this.world.files.has(path) && this.world.readJson(path);
-          if (image && image.collection !== object.collection) {
-            const copy = { ...image, id: newObjectId(), collection: object.collection };
-            this.world.writeJson(imagePath(copy.id), copy);
-            copies.set(use.image, copy.id);
-          } else copies.set(use.image, use.image);
-        }
-        use.image = copies.get(use.image);
-      }
-    }
   }
 
   saveImage(image) {
@@ -205,7 +184,7 @@ export class ObjectLibrary {
         this.saveStructure(own);
         this.buildStructure(own);
       },
-      images: () => [...images(this.world, this.structureBuilder.structure?.collection), ...BUILTIN_IMAGES],
+      images: () => [...images(this.world), ...BUILTIN_IMAGES],
     });
   }
 
@@ -246,7 +225,8 @@ export class ObjectLibrary {
     const structures = builtStructures(this.world).filter((s) => s.collection === collection.id);
     if (action === "export") {
       if (!objects.length && !structures.length) return this.say(`${collection.name} is empty.`);
-      return download(`${slug(collection.name) || "objects"}.json`, `${collectionJson(collection.name, objects, images(this.world, collection.id), structures)}\n`);
+      const worn = wornImages(objects, structures);
+      return download(`${slug(collection.name) || "objects"}.json`, `${collectionJson(collection.name, objects, images(this.world).filter((i) => worn.has(i.id)), structures)}\n`);
     }
     const list = collections(this.world);
     const index = list.findIndex((c) => c.id === collection.id);
@@ -260,7 +240,6 @@ export class ObjectLibrary {
       if (!window.confirm(`Delete ${collection.name}, its ${plural(objects.length, "object")} and ${plural(structures.length, "structure")}?`)) return;
       for (const o of objects) this.world.files.delete(objectPath(o.id));
       for (const s of structures) this.world.files.delete(structurePath(s.id));
-      for (const image of images(this.world, collection.id)) this.world.files.delete(imagePath(image.id));
       list.splice(index, 1);
     }
     this.world.writeJson(COLLECTIONS_PATH, list);
@@ -283,12 +262,16 @@ export class ObjectLibrary {
     }
     const collection = addCollection(this.world, read.name ?? from.replace(/\.json$/i, ""), source);
     let renamed = 0;
-    // Images keep their ids unless the world has them already; objects wear the new ones.
+    // Images join the world's, keeping their ids, unless the world has a different image by that
+    // id already: then they get new ones, and the things wearing them wear those.
     const ids = new Map();
+    const pixels = ({ source, collection, ...image }) => JSON.stringify(image);
     for (const image of read.images) {
-      const id = this.world.files.has(imagePath(image.id)) ? newObjectId() : image.id;
+      const path = imagePath(image.id);
+      const same = this.world.files.has(path) && pixels(this.world.readJson(path)) === pixels(image);
+      const id = same || !this.world.files.has(path) ? image.id : newObjectId();
       ids.set(image.id, id);
-      this.world.writeJson(imagePath(id), { ...image, id, collection: collection.id });
+      if (!same) this.world.writeJson(imagePath(id), { ...image, id });
     }
     for (const object of read.objects) {
       for (const piece of object.pieces) for (const use of [...(piece.decals ?? []), piece.tile].filter(Boolean)) use.image = ids.get(use.image) ?? use.image;
@@ -328,7 +311,7 @@ export class ObjectLibrary {
     const structures = builtStructures(this.world).filter((s) => own.has(s.collection));
     if (!objects.length && !structures.length) return this.say("There are no objects of your own to export yet.");
     const name = window.prompt("A name for the collection:", this.world.info?.name ?? "objects");
-    const worn = new Set([...objects.flatMap((o) => o.pieces.flatMap((p) => [...(p.decals ?? []).map((d) => d.image), p.tile?.image])), ...structures.flatMap((s) => Object.values(s.materials).flatMap((m) => [m.tile?.image, m.inside?.image]))]);
+    const worn = wornImages(objects, structures);
     if (name) download(`${slug(name) || "objects"}.json`, `${collectionJson(name, objects, images(this.world).filter((i) => worn.has(i.id)), structures)}\n`);
   }
 }

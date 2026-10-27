@@ -314,7 +314,10 @@ try {
 // The library kept in this browser is newer than the copy in the kept world's zip.
 try {
   library.world = editor.world;
-  if (await library.pull()) editor.loadBuiltObjects();
+  await library.pull();
+  // Loading moves images kept the old way (adoptStrays), which the store should hear about.
+  editor.loadBuiltObjects();
+  await library.push();
 } catch (err) {
   editor.say(`Couldn't load the object library kept in this browser: ${err.message}`);
 }

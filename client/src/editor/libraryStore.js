@@ -1,6 +1,6 @@
 import { run } from "./localSave.js";
 
-// The world's object library (its collections.json, objects/, structures/ and images/ files, see objects/collections.js)
+// The world's object library (its collections.json, objects/, structures/ and textures/ files, see objects/collections.js)
 // kept in the browser apart from the rest of the world, so the world editor and the objects page
 // can both change it, even open at once. Each page holds the library in its World's files and
 // keeps them in step with the store: pull reads the store over them, push writes what changed,
@@ -12,7 +12,7 @@ const CHANNEL = "delve3d-library";
 const MARKER = "#kept";
 
 export const COLLECTIONS_PATH = "collections.json";
-export const isLibraryPath = (path) => path === COLLECTIONS_PATH || /^(objects|images|structures)\/[0-9a-z]{8}\.json$/.test(path);
+export const isLibraryPath = (path) => path === COLLECTIONS_PATH || /^(objects|textures|images|structures)\/[0-9a-z]{8}\.json$/.test(path);
 
 // The store's records as a Map of path -> JSON text, or null when nothing was ever kept.
 const readStore = () =>

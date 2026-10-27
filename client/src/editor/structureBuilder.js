@@ -47,11 +47,11 @@ function el(tag, props = {}, ...children) {
 export class StructureBuilder {
   // onSave(structure) hears the structure when it's saved, onSaveCopy(structure) when it's saved
   // as a copy instead, and onDelete(structure) when deleting it is asked for. onSaveImage(image)
-  // and onDeleteImage(image) are the same for its collection's images.
+  // and onDeleteImage(image) are the same for the world's images.
   constructor({ onSave, onSaveCopy, onDelete, onSaveImage, onDeleteImage }) {
     Object.assign(this, { onSave, onSaveCopy, onDelete, onSaveImage, onDeleteImage });
     this.painter = new ImagePainter({
-      onSave: (image) => this.onSaveImage?.({ ...image, collection: this.structure.collection }),
+      onSave: (image) => this.onSaveImage?.(image),
       onDelete: (image) => this.onDeleteImage?.(image),
     });
     this.structure = null;
@@ -70,7 +70,7 @@ export class StructureBuilder {
 
   // Opens the builder on a copy of `structure`. collections: the world's own, [{ id, name }].
   // readOnly: look, don't touch; onCopy(structure, collectionId) hears a copy asked for. images():
-  // the images it can wear, its collection's and the builtins.
+  // the images it can wear, the world's and the builtins.
   open(structure, { collections = [], readOnly = false, onCopy, images = () => [] } = {}) {
     this.readOnly = readOnly;
     this.onCopy = onCopy;

@@ -1,13 +1,14 @@
 import { BUILTIN_COLLECTIONS } from "../world/builtinCollections.js";
-import { newObjectId, objectPath } from "../world/builtObjects.js";
+import { OLD_IMAGES, imagePath, newObjectId, objectPath } from "../world/builtObjects.js";
 import { BUILT_PREFIX } from "../world/objects.js";
 import { STRUCTURE_PREFIX, structurePath } from "../world/structures.js";
 import { COLLECTIONS_PATH } from "../editor/libraryStore.js";
 
 // A world's object library: its collections (collections.json, [{ id, name, source }], one with a
-// source imported and read-only), the built objects and structures in them and the images they
-// wear (objects/<id>.json, structures/<id>.json and images/<id>.json, each naming its collection),
-// with the game's builtin collections listed first. `world` is an editor World.
+// source imported and read-only), the built objects and structures in them (objects/<id>.json and
+// structures/<id>.json, each naming its collection), and the images they wear (textures/<id>.json,
+// the whole world's), with the game's builtin collections listed first. `world` is an editor
+// World.
 
 export const MY_OBJECTS = "my objects";
 
@@ -27,13 +28,22 @@ export function builtStructures(world) {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
-// The world's images, or a collection's.
-export function images(world, collection) {
+// The world's images.
+export function images(world) {
   return [...world.files.keys()]
-    .filter((path) => /^images\/[0-9a-z]{8}\.json$/.test(path))
+    .filter((path) => /^textures\/[0-9a-z]{8}\.json$/.test(path))
     .map((path) => world.readJson(path))
-    .filter((image) => !collection || image.collection === collection)
     .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// The ids of the images objects and structures wear.
+export function wornImages(objects = [], structures = []) {
+  return new Set(
+    [
+      ...objects.flatMap((o) => o.pieces.flatMap((p) => [...(p.decals ?? []).map((d) => d.image), p.tile?.image])),
+      ...structures.flatMap((s) => Object.values(s.materials).flatMap((m) => [m.tile?.image, m.inside?.image])),
+    ].filter(Boolean),
+  );
 }
 
 export function collections(world) {
@@ -49,12 +59,19 @@ export function addCollection(world, name, source) {
   return collection;
 }
 
-// Puts built objects and structures in no known collection into "my objects", made when needed.
-// Returns whether any moved.
+// Puts built objects and structures in no known collection into "my objects", made when needed,
+// and moves images kept with a collection (OLD_IMAGES) to the world's. Returns whether any moved.
 export function adoptStrays(world) {
+  let moved = false;
+  for (const path of [...world.files.keys()].filter((p) => OLD_IMAGES.test(p))) {
+    const { collection, ...image } = world.readJson(path);
+    world.writeJson(imagePath(image.id), image);
+    world.files.delete(path);
+    moved = true;
+  }
   const known = new Set(collections(world).map((c) => c.id));
   const strays = [...builtObjects(world).map((o) => [objectPath(o.id), o]), ...builtStructures(world).map((s) => [structurePath(s.id), s])].filter(([, thing]) => !known.has(thing.collection));
-  if (!strays.length) return false;
+  if (!strays.length) return moved;
   const home = ownCollections(world).find((c) => c.name === MY_OBJECTS) ?? addCollection(world, MY_OBJECTS);
   for (const [path, thing] of strays) world.writeJson(path, { ...thing, collection: home.id });
   return true;

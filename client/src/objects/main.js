@@ -3,7 +3,7 @@ import { LibrarySync } from "../editor/libraryStore.js";
 import { loadLocal } from "../editor/localSave.js";
 import { World } from "../editor/world.js";
 import { setBuiltObjects } from "../world/objects.js";
-import { builtObjects, builtStructures, images } from "./collections.js";
+import { adoptStrays, builtObjects, builtStructures, images } from "./collections.js";
 import { ObjectLibrary } from "./library.js";
 import { placedCount } from "./placed.js";
 
@@ -31,6 +31,8 @@ const sync = new LibrarySync(world, async () => {
   $("worldName").textContent = (await keptWorld()).info.name;
 });
 await sync.pull();
+// Images kept the old way move to the world's (adoptStrays), which the store should hear about.
+if (adoptStrays(world)) await sync.push();
 setBuiltObjects(builtObjects(world), images(world), builtStructures(world));
 
 const library = new ObjectLibrary($("gallery"), {
