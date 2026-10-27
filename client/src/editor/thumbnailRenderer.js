@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import { disposePreview, typePreview } from "./objectMeshes.js";
+import { builtPreview, disposePreview, typePreview } from "./objectMeshes.js";
 import { structureGroup } from "./structureMeshes.js";
-import { imageOf, specOf } from "../world/objects.js";
+import { imageOf } from "../world/objects.js";
 
 // Rendered thumbnails of library entries ({ key, type, structure }: key is unique and changes when
 // the thing does, type is what typePreview draws, a structure is drawn as itself), for galleries.
@@ -36,7 +36,7 @@ export class Thumbnails {
 
   preview(entry) {
     if (!this.previews.has(entry.key)) {
-      const preview = entry.structure ? structureGroup(entry.structure, { imageOf, furnish: (o) => specOf(o.type)?.built && typePreview(o.type) }) : typePreview(entry.type);
+      const preview = entry.structure ? structureGroup(entry.structure, { imageOf, furnish: (o) => builtPreview(o.type, o.colors, o.texts) }) : typePreview(entry.type);
       if (entry.structure) preview.traverse((mesh) => (mesh.userData.ownGeometry = true));
       this.previews.set(entry.key, preview);
     }

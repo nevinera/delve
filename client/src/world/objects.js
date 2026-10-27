@@ -100,6 +100,30 @@ export function structureCover(objects) {
   return covered;
 }
 
+// The objects placed in a placed structure, as world objects standing at a fixed height (y), each
+// with the structure as its owner, so they're drawn and bump walkers as others do. Missing ones
+// are left out.
+export function furnishingsOf(placed) {
+  const structure = structureOf(placed.type);
+  if (!structure) return [];
+  const [c, s] = [Math.cos(placed.yaw), Math.sin(placed.yaw)];
+  return structure.objects
+    .filter((object) => specOf(object.type)?.built)
+    .map((object) => {
+      const [x, y, z] = object.at;
+      // Turned as three.js's rotation.y turns the structure.
+      return {
+        ...object,
+        at: [placed.at[0] + x * c + z * s, placed.at[1] - x * s + z * c],
+        y: placed.base + y,
+        yaw: placed.yaw + object.yaw,
+        footprint: footprintOf(object.type, object.scale),
+        height: specOf(object.type).height * object.scale,
+        owner: placed,
+      };
+    });
+}
+
 // An image built objects wear, by id, or undefined.
 export const imageOf = (id) => images.get(id) ?? builtinImage(id);
 

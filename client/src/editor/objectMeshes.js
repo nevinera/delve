@@ -1,12 +1,12 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { imageOf, makeObject, specOf } from "../world/objects.js";
+import { furnishingsOf, imageOf, makeObject, specOf } from "../world/objects.js";
 import { paletteColors } from "../world/builtObjects.js";
 import { TEXT_PLACEHOLDER } from "../world/pixelFont.js";
 import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, objectGeometry, textGeometry, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
 import { meshHeightAt } from "../world/clutter.js";
-import { CELL_FT as STRUCTURE_CELL_FT, cellKey, placedWalk, quartersOf } from "../world/structures.js";
-import { surfaceAt } from "../world/walkIndex.js";
+import { CELL_FT as STRUCTURE_CELL_FT, placedWalk, quartersOf } from "../world/structures.js";
+import { floorAt } from "../world/walkIndex.js";
 import { structureGeometries } from "./structureMeshes.js";
 
 // Objects for the 3D view (world/objects.js says what they are and where), as instanced meshes:
@@ -242,19 +242,6 @@ function variants(name) {
   return geometries.get(name);
 }
 
-// The objects placed in a placed structure, as world objects standing at a fixed height (y), each
-// with the structure as its owner. Missing ones are left out.
-function furnishingsOf(placed, structure) {
-  const [c, s] = [Math.cos(placed.yaw), Math.sin(placed.yaw)];
-  return (structure.objects ?? [])
-    .filter((object) => specOf(object.type)?.built)
-    .map((object) => {
-      const [x, y, z] = object.at;
-      // Turned as three.js's rotation.y turns the structure.
-      return { ...object, at: [placed.at[0] + x * c + z * s, placed.at[1] - x * s + z * c], y: placed.base + y, yaw: placed.yaw + object.yaw, owner: placed };
-    });
-}
-
 // objects: from tiles' objects lists. tileAt(tx, tz): a decoded tile, for the ground under them.
 // origin: the continent position of the scene's origin. walk: the walk (walkIndex.js tileWalk) of
 // the structures around them, so objects inside one sit on its floor.
@@ -264,10 +251,7 @@ export function objectMeshes(objects, tileAt, origin, walk) {
     if (!groups.has(key)) groups.set(key, { geometry, material, list: [] });
     groups.get(key).list.push(item);
   };
-  const all = objects.flatMap((object) => {
-    const structure = specOf(object.type)?.structure;
-    return structure ? [object, ...furnishingsOf(object, structure)] : [object];
-  });
+  const all = objects.flatMap((object) => [object, ...furnishingsOf(object)]);
   for (const object of all) {
     const spec = specOf(object.type);
     if (!spec) continue;
@@ -356,6 +340,22 @@ export function typePreview(type) {
   return group;
 }
 
+// A built object of `type` with its parameters' `colors` and its `texts`, as a group like
+// typePreview's, or undefined for a type that isn't a built object.
+export function builtPreview(type, colors = [], texts = {}) {
+  const built = specOf(type)?.built;
+  if (!built) return undefined;
+  const group = new THREE.Group();
+  group.add(own(new THREE.Mesh(objectGeometry(built, colors) ?? new THREE.BufferGeometry(), builtMaterial())));
+  const wearer = paletteColors(built, colors);
+  for (const { image, geometry } of tiledGeometries(built, imageOf)) group.add(own(new THREE.Mesh(geometry, tiledMaterial(tileTexture(image, wearer)))));
+  const decals = decalGeometry(built, imageOf, colors);
+  if (decals) group.add(own(new THREE.Mesh(decals.geometry, decalMaterial(atlasTexture(decals.atlas)))));
+  const signs = textGeometry(built, colors, texts);
+  if (signs) group.add(own(new THREE.Mesh(signs.geometry, decalMaterial(atlasTexture(signs.atlas)))));
+  return group;
+}
+
 // Marks a preview's mesh as having geometry made only for it.
 function own(mesh) {
   mesh.userData.ownGeometry = true;
@@ -394,16 +394,6 @@ function seat(object, tileAt, walk) {
   const r = footprint.circle ?? Math.min(...footprint.rect) / 2;
   const low = Math.min(ground(0, 0), ground(r, 0), ground(-r, 0), ground(0, r), ground(0, -r));
   return { y: low - sink, pitch: 0 };
-}
-
-// What an object at continent feet (x, z) stands on, with the ground there at `ground`: the lowest
-// structure floor not under the ground, or with only floors under it (a cellar open to the sky),
-// the highest of those, or with no floors the ground.
-export function floorAt(walk, x, z, ground) {
-  const floors = (walk?.cells.get(cellKey(Math.floor(x / STRUCTURE_CELL_FT), Math.floor(z / STRUCTURE_CELL_FT))) ?? []).map((cell) => surfaceAt(cell, x, z));
-  if (!floors.length) return ground;
-  const over = floors.filter((h) => h >= ground - 0.5);
-  return over.length ? Math.min(...over) : Math.max(...floors);
 }
 
 function hashString(s) {

@@ -49,6 +49,16 @@ export function surfaceAt({ heights }, x, z) {
   return north + (south - north) * fz;
 }
 
+// What an object at continent feet (x, z) stands on, with the ground there at `ground`: the lowest
+// structure floor not under the ground, or with only floors under it (a cellar open to the sky),
+// the highest of those, or with no floors the ground.
+export function floorAt(walk, x, z, ground) {
+  const floors = (walk?.cells.get(cellKey(Math.floor(x / CELL_FT), Math.floor(z / CELL_FT))) ?? []).map((cell) => surfaceAt(cell, x, z));
+  if (!floors.length) return ground;
+  const over = floors.filter((h) => h >= ground - 0.5);
+  return over.length ? Math.min(...over) : Math.max(...floors);
+}
+
 // Where a walker with its feet at `feet` stands at (x, z), from the structure surfaces there and
 // the ground (null where it doesn't count): the highest one within `step` above the feet, or with
 // none that low, the lowest (too high to step onto, which a move up to it can tell).

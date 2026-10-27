@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { addColor, emptyObject } from "../world/builtObjects.js";
 import { setBuiltObjects } from "../world/objects.js";
 import { emptyStructure, withWalk } from "../world/structures.js";
-import { tileWalk } from "../world/walkIndex.js";
-import { floorAt, objectMeshes } from "./objectMeshes.js";
+import { floorAt, tileWalk } from "../world/walkIndex.js";
+import { objectMeshes } from "./objectMeshes.js";
 
 const crate = () => {
   const object = { ...emptyObject("crate"), id: "crate000" };

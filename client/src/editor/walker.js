@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { blocks } from "../world/objects.js";
-import { BLOCKING, edgeDistance, edgesNear, standOn, surfaceAt, tileWalk } from "../world/walkIndex.js";
+import { blocks, furnishingsOf } from "../world/objects.js";
+import { BLOCKING, edgeDistance, edgesNear, floorAt, standOn, surfaceAt, tileWalk } from "../world/walkIndex.js";
 import { CELL_FT as STRUCTURE_CELL_FT } from "../world/structures.js";
 import { characterClips, loadAnimations } from "../character/animations.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
@@ -367,21 +367,30 @@ export class Walker {
 
   // The walk data (walkIndex.js tileWalk) of the tile at scene (x, z) and those beside it, each
   // worked out again when its objects change.
+  // What's worked out from a tile's objects, kept while they stay the same: { objects, walk, all },
+  // all being its objects with the ones in its structures. Undefined for a tile without objects.
+  keptOf(tile) {
+    if (!tile?.objects?.length) return undefined;
+    this.walks ??= new WeakMap(); // decoded tile -> kept
+    let kept = this.walks.get(tile);
+    if (kept?.objects !== tile.objects) {
+      kept = { objects: tile.objects, walk: tileWalk(tile.objects), all: tile.objects.flatMap((o) => [o, ...furnishingsOf(o)]) };
+      this.walks.set(tile, kept);
+    }
+    return kept;
+  }
+
   walksNear(x, z) {
     const any = this.view.decoded.values().next().value;
     if (!any) return [];
     const size = any.cells * any.cellFt;
     const { origin } = this.view;
     const [tx, tz] = [Math.floor((x + origin[0]) / size), Math.floor((z + origin[1]) / size)];
-    this.walks ??= new WeakMap(); // decoded tile -> { objects, walk }
     const out = [];
     for (let dz = -1; dz <= 1; dz++) {
       for (let dx = -1; dx <= 1; dx++) {
-        const tile = this.view.decoded.get(`${tx + dx},${tz + dz}`);
-        if (!tile?.objects?.length) continue;
-        let kept = this.walks.get(tile);
-        if (kept?.objects !== tile.objects) this.walks.set(tile, (kept = { objects: tile.objects, walk: tileWalk(tile.objects) }));
-        if (kept.walk.cells.size) out.push(kept.walk);
+        const kept = this.keptOf(this.view.decoded.get(`${tx + dx},${tz + dz}`));
+        if (kept?.walk.cells.size) out.push(kept.walk);
       }
     }
     return out;
@@ -429,9 +438,9 @@ export class Walker {
     return top + (bottom - top) * fv;
   }
 
-  // An object in the way of a character at scene (x, z), on that tile or the ones beside it. One
-  // the character is already inside (one placed on them, say) doesn't hold them in, and a jump
-  // clears low ones.
+  // An object in the way of a character at scene (x, z), on that tile or the ones beside it,
+  // structures' objects too. One the character is already inside (one placed on them, say)
+  // doesn't hold them in, a jump clears low ones, and ones on another storey don't count.
   objectAt(x, z) {
     const { origin } = this.view;
     const any = this.view.decoded.values().next().value;
@@ -442,13 +451,27 @@ export class Walker {
     const [tx, tz] = [Math.floor(cx / size), Math.floor(cz / size)];
     for (let dz = -1; dz <= 1; dz++) {
       for (let dx = -1; dx <= 1; dx++) {
-        for (const object of this.view.decoded.get(`${tx + dx},${tz + dz}`)?.objects ?? []) {
-          if (this.pos.y > (this.groundAt(x, z) ?? 0) + object.height * 0.9) continue;
-          if (blocks(object, cx, cz, BODY_FT) && !blocks(object, hx, hz, BODY_FT)) return object;
+        for (const object of this.keptOf(this.view.decoded.get(`${tx + dx},${tz + dz}`))?.all ?? []) {
+          if (!blocks(object, cx, cz, BODY_FT) || blocks(object, hx, hz, BODY_FT)) continue;
+          const bottom = object.y ?? this.seatOf(object);
+          if (this.pos.y > bottom + object.height * 0.9 || this.pos.y + EYE_FT < bottom) continue;
+          return object;
         }
       }
     }
     return null;
+  }
+
+  // How high a world object stands: on the structure floor under its middle, or the ground.
+  seatOf(object) {
+    const { origin } = this.view;
+    const [x, z] = [object.at[0] - origin[0], object.at[1] - origin[1]];
+    const ground = this.groundAt(x, z) ?? 0;
+    for (const walk of this.walksNear(x, z)) {
+      const floor = floorAt(walk, ...object.at, ground);
+      if (floor !== ground) return floor;
+    }
+    return ground;
   }
 
   // Whether a tree trunk is in the way of a character at scene (x, z), on that tile or the ones

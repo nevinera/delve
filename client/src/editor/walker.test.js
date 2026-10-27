@@ -24,16 +24,22 @@ function house() {
   return withWalk(s);
 }
 
-// A walker on flat ground at 100 ft, the house at continent (200, 200) with its floor at 100.6.
-function walker() {
-  setBuiltObjects([], [], [house()]);
+// A 3 ft crate.
+const crate = { id: "crate001", name: "crate", palette: [{ color: "#806040" }], pieces: [{ type: "box", size: [3, 3, 3], at: [0, 1.5, 0], turn: [0, 0, 0], color: 0 }] };
+
+// A walker on flat ground at 100 ft, the house at continent (200, 200) with its floor at 100.6,
+// and `others` among its tile's objects.
+function walker({ furnished = false, others = [] } = {}) {
+  const h = house();
+  if (furnished) h.objects.push({ type: "built:crate001", at: [6, 0, 6], yaw: 0, scale: 1 });
+  setBuiltObjects([crate], [], [h]);
   const n = 64;
   const tile = {
     coords: [0, 0],
     cells: n,
     cellFt: 8,
     layers: { height: new Float32Array(n * n).fill(100), water: new Float32Array(n * n).fill(NaN) },
-    objects: [{ type: "structure:house001", at: [200, 200], yaw: 0, base: 100.6, scale: 1, footprint: { open: 20 }, height: 20 }],
+    objects: [{ type: "structure:house001", at: [200, 200], yaw: 0, base: 100.6, scale: 1, footprint: { open: 20 }, height: 20 }, ...others],
   };
   const w = Object.create(Walker.prototype);
   w.view = { decoded: new Map([["0,0", tile]]), origin: [0, 0], treesOf: () => [] };
@@ -68,5 +74,14 @@ describe("walker on structures", () => {
     expect(at(w, 210, 100.6, 207.9).canStep(210, 208.2)).toBe(true);
     // From the cellar, not up into the ground outside.
     expect(at(walker(), 200.2, 90.6, 206).canStep(199.8, 206)).toBe(false);
+  });
+
+  it("bumps into the house's objects, and world objects on its floor", () => {
+    expect(at(walker(), 203, 100.6, 206).canStep(204.5, 206)).toBe(true);
+    expect(at(walker({ furnished: true }), 203, 100.6, 206).canStep(204.5, 206)).toBe(false);
+    const placed = { type: "built:crate001", at: [206, 210], yaw: 0, scale: 1, footprint: { rect: [3, 3] }, height: 3 };
+    expect(at(walker({ others: [placed] }), 203, 100.6, 210).canStep(204.5, 210)).toBe(false);
+    // Down in the cellar, the crate upstairs isn't in the way.
+    expect(at(walker({ furnished: true }), 203, 90.6, 206).canStep(204.5, 206)).toBe(true);
   });
 });

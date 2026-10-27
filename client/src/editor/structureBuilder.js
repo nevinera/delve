@@ -3,7 +3,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { MAX_PARAMS, PALETTE_INKS, addColor, emptyImage, newObjectId, paletteColors } from "../world/builtObjects.js";
 import { CELL_FT, COMPONENTS, FOUNDATIONS, LEVELS, REACH_CELLS, ROOF, ROOF_SHAPES, STOREY_FT, WALL_FT, cellKey, edgeKey, parseCell, problems, withWalk } from "../world/structures.js";
 import { BUILT_SCALES, specOf } from "../world/objects.js";
-import { typePreview } from "./objectMeshes.js";
+import { builtPreview } from "./objectMeshes.js";
 import { disposeStructureGroup, furnishingLevel, structureGroup } from "./structureMeshes.js";
 import { ImagePainter, drawImage } from "./imagePainter.js";
 
@@ -612,7 +612,7 @@ export class StructureBuilder {
   }
 
   // The object collections to choose from, and the current storey's objects, each with its turn,
-  // size and height above the floor, and a button to take it away.
+  // size, height above the floor and parameter colors, and a button to take it away.
   refreshFurnishings() {
     const s = this.structure;
     const chosen = this.furnishing.value;
@@ -645,11 +645,26 @@ export class StructureBuilder {
           el("span", { textContent: "raised" }),
           number(Math.round((o.at[1] - floor) * 100) / 100, { min: 0, max: s.storeyFt - 0.5, step: 0.25, title: "how far above the floor it is (ft)" }, (v) => set(n, (x) => (x.at[1] = floor + v))),
           el("span", { textContent: "ft" }),
+          ...this.furnishingColors(o, n),
           el("button", { type: "button", textContent: "×", title: "take it away", onclick: () => this.change((x) => x.objects.splice(n, 1)) }),
         );
       });
     const none = this.furnishing.options.length ? "none yet: pick one above, then click with tool 0" : "no objects in this world to put in";
     this.furnishingList.replaceChildren(...(rows.length ? rows : [el("p", { className: "ob-info", textContent: none })]));
+  }
+
+  // A color input for each of a furnishing's object's parameters, each defaulting to its palette
+  // color, as the world editor's are.
+  furnishingColors(o, n) {
+    const palette = specOf(o.type)?.built?.palette ?? [];
+    const colors = paletteColors({ palette }, o.colors).filter((_, i) => palette[i].param);
+    return palette
+      .filter((p) => p.param)
+      .map((p, k) => {
+        const input = el("input", { type: "color", value: colors[k], title: p.name ?? `color ${k + 1}` });
+        input.addEventListener("change", () => this.change((x) => (x.objects[n].colors = colors.map((c, i) => (i === k ? input.value : c)))));
+        return input;
+      });
   }
 
   // --- the view ---
@@ -759,7 +774,7 @@ export class StructureBuilder {
     if (!this.built) return;
     disposeStructureGroup(this.built);
     this.scene.remove(this.built);
-    this.built = structureGroup(this.structure, { imageOf: (id) => this.imageOf(id), furnish: (o) => specOf(o.type)?.built && typePreview(o.type) });
+    this.built = structureGroup(this.structure, { imageOf: (id) => this.imageOf(id), furnish: (o) => builtPreview(o.type, o.colors, o.texts) });
     for (const storey of this.built.children) {
       if (storey.userData.level <= this.level) continue;
       storey.traverse((mesh) => mesh.isMesh && Object.assign(mesh.material, { transparent: true, opacity: FADED, depthWrite: false }));
