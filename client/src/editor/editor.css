@@ -778,3 +778,29 @@
   flex-direction: column;
   gap: 4px;
 }
+
+.ob-decals {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ob-decal {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.ob-decal.placing {
+  outline: 1px dashed #f0c850;
+}
+
+.ob-decal canvas {
+  width: 24px;
+  height: 24px;
+  image-rendering: pixelated;
+}
+
+.ob-decal input[type="number"] {
+  width: 52px;
+}

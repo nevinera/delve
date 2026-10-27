@@ -85,7 +85,7 @@ export class ObjectLibrary {
   // gallery drawn again.
   changed(choose) {
     adoptStrays(this.world);
-    setBuiltObjects(builtObjects(this.world));
+    setBuiltObjects(builtObjects(this.world), images(this.world));
     this.onChange?.(choose);
     if (!this.gallery.container.hidden) this.show();
   }
@@ -131,7 +131,7 @@ export class ObjectLibrary {
   saveImage(image) {
     this.world.writeJson(imagePath(image.id), image);
     this.changed();
-    this.builder.refreshImages();
+    this.builder.refresh();
     this.say(`Saved the image ${image.name}.`, { info: true });
   }
 
@@ -143,7 +143,7 @@ export class ObjectLibrary {
     this.world.files.delete(imagePath(image.id));
     this.builder.painter.close();
     this.changed();
-    this.builder.refreshImages();
+    this.builder.refresh();
   }
 
   // Saves an object as a new one in the same collection, and goes on with the copy.

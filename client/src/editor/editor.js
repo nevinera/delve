@@ -29,7 +29,7 @@ import { DETAIL_TOOLS } from "./detailTools.js";
 import { TRAIL_KINDS, TRAIL_STATES } from "./detailTrails.js";
 import { BUILT_PREFIX, builtOf, makeObject, setBuiltObjects, specOf } from "../world/objects.js";
 import { paletteColors } from "../world/builtObjects.js";
-import { adoptStrays, allCollections, builtObjects } from "../objects/collections.js";
+import { adoptStrays, allCollections, builtObjects, images } from "../objects/collections.js";
 import { placedCount } from "../objects/placed.js";
 import { decodeTile, encodeTile } from "../world/tileCodec.js";
 import { gunzipSync, gzipSync } from "fflate";
@@ -789,7 +789,7 @@ export class Editor {
   // changed.
   loadBuiltObjects(choose) {
     adoptStrays(this.world);
-    setBuiltObjects(builtObjects(this.world));
+    setBuiltObjects(builtObjects(this.world), images(this.world));
     this.fillObjectTypes(choose);
     if (this.step === "detail" && this.detail) this.showDetail();
     if (this.el.libraryPopover.open) this.library?.show();

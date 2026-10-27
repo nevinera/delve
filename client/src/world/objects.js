@@ -55,11 +55,17 @@ export const OBJECT_TYPES = {
 export const BUILT_PREFIX = "built:";
 export const BUILT_SCALES = [0.25, 4];
 const built = new Map(); // id -> { object, footprint, height }
+const images = new Map(); // id -> the image, as built objects' pieces wear them
 
-export function setBuiltObjects(objects) {
+export function setBuiltObjects(objects, wornImages = []) {
   built.clear();
   for (const object of objects) built.set(object.id, { object, ...shapeOf(object) });
+  images.clear();
+  for (const image of wornImages) images.set(image.id, image);
 }
+
+// An image built objects wear, by id, or undefined.
+export const imageOf = (id) => images.get(id);
 
 // The built object a type names, or undefined.
 export function builtOf(type) {

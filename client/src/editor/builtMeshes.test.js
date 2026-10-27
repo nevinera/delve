@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { PIECE_TYPES, addColor, emptyObject, pieceCorners } from "../world/builtObjects.js";
-import { objectGeometry, pieceGeometry } from "./builtMeshes.js";
+import { PIECE_TYPES, addColor, emptyImage, emptyObject, pieceCorners, setPixel } from "../world/builtObjects.js";
+import { decalCorners, decalGeometry, faceSpot, objectGeometry, pieceFaces, pieceGeometry } from "./builtMeshes.js";
 
 const bounds = (g) => {
   g.computeBoundingBox();
@@ -96,5 +96,59 @@ describe("built object meshes", () => {
     expect([c.getX(0), c.getY(0), c.getZ(0)]).toEqual([0, 1, 0]);
     expect([c.getX(c.count - 1), c.getY(c.count - 1), c.getZ(c.count - 1)]).toEqual([0, 0, 1]);
     expect(objectGeometry(emptyObject())).toBeNull();
+  });
+
+  it("finds each primitive's flat faces", () => {
+    expect(pieceFaces("box").map((f) => f.id).sort()).toEqual(["-1,0,0", "0,-1,0", "0,0,-1", "0,0,1", "0,1,0", "1,0,0"]);
+    expect(pieceFaces("wedge").map((f) => f.id)).toContain("0,0.71,0.71");
+    expect(pieceFaces("cylinder").filter((f) => f.id === "0,1,0")).toHaveLength(1);
+    const top = pieceFaces("box").find((f) => f.id === "0,1,0");
+    expect(top.center.toArray()).toEqual([0, 0.5, 0]);
+    expect(top.u.toArray()).toEqual([0.5, 0, 0]);
+    expect(top.v.toArray().map((n) => n + 0)).toEqual([0, 0, -0.5]);
+  });
+
+  it("places a decal on a face, sized in feet, turned with its piece", () => {
+    const piece = { type: "box", size: [4, 2, 2], at: [0, 1, 0], turn: [0, 0, 0] };
+    const decal = { image: "x", face: "0,0,1", at: [0.75, 0.5], size: [1, 1], turn: 0 };
+    const { corners, normal } = decalCorners(piece, decal);
+    const round = (v) => v.toArray().map((n) => Math.round(n * 1000) / 1000 + 0);
+    // On the south face (z = 1), a quarter of the way in from the east edge, a foot square.
+    expect(corners.map(round)).toEqual([
+      [0.5, 0.5, 1.02],
+      [1.5, 0.5, 1.02],
+      [1.5, 1.5, 1.02],
+      [0.5, 1.5, 1.02],
+    ]);
+    expect(round(normal)).toEqual([0, 0, 1]);
+    // Turned a quarter, the south face looks east.
+    const turned = decalCorners({ ...piece, turn: [90, 0, 0] }, decal);
+    expect(round(turned.normal)).toEqual([1, 0, 0]);
+    expect(faceSpot(piece, "0,0,1", [0.25, 0, 0.5])).toEqual([0.75, 0.5]);
+    expect(decalCorners(piece, { ...decal, face: "9,9,9" })).toBeUndefined();
+  });
+
+  it("gathers decals into one geometry with an atlas of their images", () => {
+    const object = emptyObject();
+    addColor(object, "#ff0000");
+    const arrow = emptyImage("arrow");
+    setPixel(arrow, 0, 0, { ink: "a", opacity: "4" });
+    const dot = emptyImage("dot");
+    const piece = { type: "box", size: [2, 2, 2], at: [0, 1, 0], turn: [0, 0, 0], color: 0 };
+    piece.decals = [
+      { image: arrow.id, face: "0,0,1", at: [0.5, 0.5], size: [1, 1], turn: 0 },
+      { image: dot.id, face: "1,0,0", at: [0.5, 0.5], size: [1, 1], turn: 0 },
+      { image: "gone0000", face: "1,0,0", at: [0.5, 0.5], size: [1, 1], turn: 0 },
+    ];
+    object.pieces.push(piece);
+    const images = new Map([arrow, dot].map((i) => [i.id, i]));
+    const { geometry, atlas } = decalGeometry(object, (id) => images.get(id), ["#0000ff"]);
+    expect(geometry.attributes.position.count).toBe(12);
+    expect(atlas.size).toBe(64);
+    // The arrow's top-left pixel lands at the top of its cell (textures run bottom row first),
+    // in the parameter's color.
+    const i = (31 * 64 + 0) * 4;
+    expect([...atlas.rgba.slice(i, i + 4)]).toEqual([0, 0, 255, 255]);
+    expect(decalGeometry(emptyObject(), () => undefined)).toBeNull();
   });
 });

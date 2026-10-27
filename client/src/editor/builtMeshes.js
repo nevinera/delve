@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { Brush, Evaluator, SUBTRACTION } from "three-bvh-csg";
-import { paletteColors } from "../world/builtObjects.js";
+import { IMAGE_PX, imageRgba, paletteColors } from "../world/builtObjects.js";
 
 // Geometry for built objects (world/builtObjects.js): each piece's primitive filling a unit box,
 // sized, turned and moved into place, and the pieces merged into one geometry with a color per
@@ -110,5 +110,158 @@ function carve(g, cuts) {
   const out = brush.geometry;
   return out.index ? out.toNonIndexed() : out;
 }
+
+// --- decals ---
+
+const DECAL_LIFT_FT = 0.02; // off the face, so it doesn't flicker into it
+const roundKey = (v) => v.toArray().map((n) => Number(n.toFixed(2)) + 0).join(",");
+// The face a normal (in a primitive's unit box) points out of, as pieceFaces names it.
+export const faceIdOf = (normal) => roundKey(normal.clone().normalize());
+
+// A primitive's flat faces, each { id, center, u, v } in its unit box: id is the outward normal
+// rounded ("0,1,0" the top); center the middle of the face's extent, and u and v half its extent
+// across, u level (along x on tops and bottoms) and v up the face (toward -z on tops).
+const faceSets = new Map();
+export function pieceFaces(type, taper = 1) {
+  const key = `${type}/${taper}`;
+  if (faceSets.has(key)) return faceSets.get(key);
+  const p = primitive(type, taper).attributes.position;
+  const groups = new Map(); // id -> { normal, points }
+  const [a, b, c] = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+  for (let i = 0; i < p.count; i += 3) {
+    a.fromBufferAttribute(p, i);
+    b.fromBufferAttribute(p, i + 1);
+    c.fromBufferAttribute(p, i + 2);
+    const normal = b.clone().sub(a).cross(c.clone().sub(a));
+    if (normal.lengthSq() < 1e-12) continue;
+    normal.normalize();
+    const id = roundKey(normal);
+    if (!groups.has(id)) groups.set(id, { normal, points: [] });
+    groups.get(id).points.push(a.clone(), b.clone(), c.clone());
+  }
+  const faces = [...groups].map(([id, { normal, points }]) => {
+    const u = Math.abs(normal.y) > 0.99 ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 1, 0).cross(normal).normalize();
+    const v = normal.clone().cross(u);
+    const across = (axis) => {
+      const d = points.map((q) => q.dot(axis));
+      return [Math.min(...d), Math.max(...d)];
+    };
+    const [u0, u1] = across(u);
+    const [v0, v1] = across(v);
+    const center = u.clone().multiplyScalar((u0 + u1) / 2).add(v.clone().multiplyScalar((v0 + v1) / 2)).add(normal.clone().multiplyScalar(points[0].dot(normal)));
+    return { id, center, u: u.multiplyScalar((u1 - u0) / 2), v: v.multiplyScalar((v1 - v0) / 2) };
+  });
+  faceSets.set(key, faces);
+  return faces;
+}
+
+// A face of a sized piece, before turning and placing: { center, u, v, across, up, normal }, where
+// u and v are the face's half extents, sized; across and up unit directions on the face (up made
+// square to across); normal outward. Undefined for a face the piece hasn't got.
+export function faceFrame(piece, faceId) {
+  const face = pieceFaces(piece.type, piece.taper).find((f) => f.id === faceId);
+  if (!face) return undefined;
+  const size = new THREE.Vector3(...piece.size);
+  const [center, u, v] = [face.center, face.u, face.v].map((w) => w.clone().multiply(size));
+  const across = u.clone().normalize();
+  const up = v.clone().sub(across.clone().multiplyScalar(v.dot(across))).normalize();
+  return { center, u, v, across, up, normal: across.clone().cross(up) };
+}
+
+// Where on a piece's face a point (in its unit box) is, as a decal's at: [0 to 1, 0 to 1].
+export function faceSpot(piece, faceId, point) {
+  const face = pieceFaces(piece.type, piece.taper).find((f) => f.id === faceId);
+  const d = new THREE.Vector3(...point).sub(face.center);
+  const clamp = (n) => Math.min(1, Math.max(0, n));
+  return [clamp((d.dot(face.u) / face.u.lengthSq() + 1) / 2), clamp((d.dot(face.v) / face.v.lengthSq() + 1) / 2)];
+}
+
+const pieceTurn = (turn) => new THREE.Quaternion().setFromEuler(euler.set(turn[1] * deg, turn[0] * deg, turn[2] * deg, "YXZ"));
+
+// A decal's four corners in the object, bottom-left, bottom-right, top-right, top-left, with its
+// normal; undefined when its face is gone.
+export function decalCorners(piece, decal) {
+  const frame = faceFrame(piece, decal.face);
+  if (!frame) return undefined;
+  const middle = frame.center.clone().add(frame.u.clone().multiplyScalar(decal.at[0] * 2 - 1)).add(frame.v.clone().multiplyScalar(decal.at[1] * 2 - 1)).add(frame.normal.clone().multiplyScalar(DECAL_LIFT_FT));
+  const spin = new THREE.Quaternion().setFromAxisAngle(frame.normal, decal.turn * deg);
+  const across = frame.across.clone().applyQuaternion(spin).multiplyScalar(decal.size[0] / 2);
+  const up = frame.up.clone().applyQuaternion(spin).multiplyScalar(decal.size[1] / 2);
+  const q = pieceTurn(piece.turn);
+  const at = new THREE.Vector3(...piece.at);
+  const corners = [
+    [-1, -1],
+    [1, -1],
+    [1, 1],
+    [-1, 1],
+  ].map(([i, j]) => middle.clone().add(across.clone().multiplyScalar(i)).add(up.clone().multiplyScalar(j)).applyQuaternion(q).add(at));
+  return { corners, normal: frame.normal.clone().applyQuaternion(q) };
+}
+
+// The object's decals as one geometry (position, normal, uv) with an atlas of their images:
+// { geometry, atlas: { size, rgba } }, rgba bottom row first as textures take it. image(id) finds
+// an image; decals whose image or face is gone are left out. Null with no decals.
+export function decalGeometry(object, image, params) {
+  const colors = paletteColors(object, params);
+  const placed = [];
+  for (const piece of object.pieces) {
+    if (piece.cut) continue;
+    for (const decal of piece.decals ?? []) {
+      const img = image(decal.image);
+      const quad = img && decalCorners(piece, decal);
+      if (quad) placed.push({ img, ...quad });
+    }
+  }
+  if (!placed.length) return null;
+  const used = [...new Set(placed.map((d) => d.img))];
+  const cells = Math.ceil(Math.sqrt(used.length));
+  const size = cells * IMAGE_PX;
+  const rgba = new Uint8ClampedArray(size * size * 4);
+  used.forEach((img, n) => {
+    const pixels = imageRgba(img, colors);
+    const [cx, cy] = [(n % cells) * IMAGE_PX, Math.floor(n / cells) * IMAGE_PX];
+    for (let y = 0; y < IMAGE_PX; y++) rgba.set(pixels.subarray(y * IMAGE_PX * 4, (y + 1) * IMAGE_PX * 4), ((cy + IMAGE_PX - 1 - y) * size + cx) * 4);
+  });
+  const positions = [];
+  const normals = [];
+  const uvs = [];
+  for (const { img, corners, normal } of placed) {
+    const n = used.indexOf(img);
+    // The cell's edges, in from the pixel edges by a hair so neighbors don't bleed in.
+    const inset = 0.01 / size;
+    const [u0, v0] = [((n % cells) * IMAGE_PX) / size + inset, (Math.floor(n / cells) * IMAGE_PX) / size + inset];
+    const [u1, v1] = [u0 + IMAGE_PX / size - 2 * inset, v0 + IMAGE_PX / size - 2 * inset];
+    const uv = [
+      [u0, v0],
+      [u1, v0],
+      [u1, v1],
+      [u0, v1],
+    ];
+    for (const k of [0, 1, 2, 0, 2, 3]) {
+      positions.push(...corners[k].toArray());
+      normals.push(...normal.toArray());
+      uvs.push(...uv[k]);
+    }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("normal", new THREE.Float32BufferAttribute(normals, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.computeBoundingSphere();
+  return { geometry, atlas: { size, rgba } };
+}
+
+// The texture for a decal atlas: crisp pixels, as painted.
+export function atlasTexture({ size, rgba }) {
+  const texture = new THREE.DataTexture(rgba, size, size);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.magFilter = THREE.NearestFilter;
+  texture.minFilter = THREE.NearestFilter;
+  texture.needsUpdate = true;
+  return texture;
+}
+
+// Decals lie just off their faces, see-through where their pixels are.
+export const decalMaterial = (texture) => new THREE.MeshLambertMaterial({ map: texture, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
 
 export const builtMaterial = () => new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });

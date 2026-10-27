@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { makeObject, specOf } from "../world/objects.js";
-import { builtMaterial, objectGeometry } from "./builtMeshes.js";
+import { imageOf, makeObject, specOf } from "../world/objects.js";
+import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, objectGeometry } from "./builtMeshes.js";
 import { meshHeightAt } from "../world/clutter.js";
 
 // Objects for the 3D view (world/objects.js says what they are and where), as instanced meshes:
@@ -19,8 +19,7 @@ export function setObjectSight(x, z, smallFt, largeFt) {
   sight.large.value = Math.min(largeFt, 1e9);
 }
 
-function limited(range, vertexColors = false) {
-  const material = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, side: THREE.DoubleSide, vertexColors });
+function limited(range, vertexColors = false, material = new THREE.MeshLambertMaterial({ color: 0xffffff, flatShading: true, side: THREE.DoubleSide, vertexColors })) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.objectFocus = sight.focus;
     shader.uniforms.objectRange = range;
@@ -46,6 +45,21 @@ function builtGeometry(object, colors = []) {
   if (!kept.has(key)) kept.set(key, objectGeometry(object, colors));
   return kept.get(key);
 }
+// A built object's decals with its parameters' colors, as { geometry, small, large } (a material
+// for each reach), or null; kept as its geometry is.
+const builtDecals = new WeakMap(); // object -> Map(colors -> decals)
+function decalsOf(object, colors = []) {
+  if (!builtDecals.has(object)) builtDecals.set(object, new Map());
+  const kept = builtDecals.get(object);
+  const key = colors.join(",");
+  if (!kept.has(key)) {
+    const decals = decalGeometry(object, imageOf, colors);
+    const texture = decals && atlasTexture(decals.atlas);
+    kept.set(key, decals && { geometry: decals.geometry, small: limited(sight.small, false, decalMaterial(texture)), large: limited(sight.large, false, decalMaterial(texture)) });
+  }
+  return kept.get(key);
+}
+
 // A kit type's object at scale 1, white where its parameter is, for its color to tint.
 const kitGeometries = new WeakMap(); // spec -> geometry
 function kitGeometry(spec) {
@@ -171,7 +185,11 @@ export function objectMeshes(objects, tileAt, origin) {
     }
     if (spec.built) {
       const geometry = builtGeometry(spec.built, object.colors);
-      if (geometry) join(`${object.type}/${(object.colors ?? []).join(",")}`, geometry, spec.height * object.scale >= BUILT_LARGE_FT ? materials.builtLarge : materials.builtSmall, { object, p: -1 });
+      const large = spec.height * object.scale >= BUILT_LARGE_FT;
+      const key = `${object.type}/${(object.colors ?? []).join(",")}/${large ? "large" : "small"}`;
+      if (geometry) join(key, geometry, large ? materials.builtLarge : materials.builtSmall, { object, p: -1 });
+      const decals = decalsOf(spec.built, object.colors);
+      if (decals) join(`${key}/decals`, decals.geometry, large ? decals.large : decals.small, { object, p: -1 });
       continue;
     }
     spec.parts.forEach((part, p) => {
@@ -210,6 +228,8 @@ export function typePreview(type) {
   if (!spec) return group;
   if (spec.built) {
     group.add(own(new THREE.Mesh(objectGeometry(spec.built) ?? new THREE.BufferGeometry(), builtMaterial())));
+    const decals = decalGeometry(spec.built, imageOf);
+    if (decals) group.add(own(new THREE.Mesh(decals.geometry, decalMaterial(atlasTexture(decals.atlas)))));
     return group;
   }
   const object = makeObject(type, [0, 0], 0, (spec.size[0] + spec.size[1]) / 2, random(hashString(type)));
@@ -238,6 +258,7 @@ function own(mesh) {
 export function disposePreview(group) {
   group.traverse((m) => {
     if (!m.isMesh) return;
+    m.material.map?.dispose();
     m.material.dispose();
     if (m.userData.ownGeometry) m.geometry.dispose();
   });

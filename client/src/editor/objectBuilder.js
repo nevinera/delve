@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { MAX_PIECES, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, PALETTE_INKS, addColor, dropUnusedColors, emptyImage, paletteColors, pieceCorners, problems, shapeOf, turnPoint } from "../world/builtObjects.js";
-import { builtMaterial, objectGeometry, primitive } from "./builtMeshes.js";
+import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, faceFrame, faceIdOf, faceSpot, objectGeometry, primitive } from "./builtMeshes.js";
 import { ImagePainter, drawImage } from "./imagePainter.js";
 import { characterClips, loadAnimations } from "../character/animations.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
@@ -15,7 +15,7 @@ import { randomLook } from "../character/recipe.js";
 // move, turn or size it along its own axes, sizing from the face opposite the handle, and the panel
 // sets its type, color, taper, whether it's a hole and, as a last resort, exact numbers. Holes show
 // as red glass while a piece is picked; with none picked the object shows as the game draws it,
-// holes cut.
+// holes cut. Decals go on the picked piece: pick a decal image, then click a face to put it there.
 //
 // Opened read-only (a builtin or imported object), it shows the object and offers to copy it into
 // one of the world's own collections instead of saving. The palette lists every color the object uses: changing one recolors every
@@ -91,6 +91,7 @@ export class ObjectBuilder {
   // it between or copy it into. readOnly: look, don't touch; onCopy(object, collectionId) hears a
   // copy asked for. images(): the images of the collection it's in.
   open(object, { collections = [], readOnly = false, onCopy, images = () => [] } = {}) {
+    this.placing = null;
     this.readOnly = readOnly;
     this.images = images;
     this.onCopy = onCopy;
@@ -188,6 +189,7 @@ export class ObjectBuilder {
         field("at (ft) x y z", div("ob-xyz", ...this.inputs.at)),
         field("turn (°) yaw pitch roll", div("ob-xyz", ...this.inputs.turn)),
       ),
+      field("decals", this.decalList = div("ob-decals")),
       div("ob-row", el("button", { type: "button", textContent: "copy", onclick: () => this.copyPiece() }), el("button", { type: "button", textContent: "remove", onclick: () => this.removePiece() })),
     );
 
@@ -237,6 +239,7 @@ export class ObjectBuilder {
     // Escape asks before throwing changes away.
     this.dialog.addEventListener("cancel", (e) => {
       e.preventDefault();
+      if (this.placing) return this.startPlacing(null);
       this.cancel();
     });
     // Keys stay in the builder, away from the editor behind it.
@@ -349,6 +352,7 @@ export class ObjectBuilder {
 
   pick(n) {
     this.picked = n;
+    this.placing = null;
     this.refresh();
   }
 
@@ -421,6 +425,7 @@ export class ObjectBuilder {
       this.taper.value = piece.taper ?? 1;
       this.cut.checked = Boolean(piece.cut);
       for (const key of ["size", "at", "turn"]) this.inputs[key].forEach((input, axis) => (input.value = tidy(piece[key][axis])));
+      this.refreshDecals(piece);
       this.swatches.replaceChildren(
         ...object.palette.map((p, i) => {
           const b = el("button", { type: "button", className: `ob-swatch${i === piece.color ? " active" : ""}`, title: p.color });
@@ -495,6 +500,84 @@ export class ObjectBuilder {
     );
   }
 
+  // --- decals ---
+
+  imageOf(id) {
+    return this.images().find((image) => image.id === id);
+  }
+
+  // The picked piece's decals, each with its size, turn, and buttons to move or take it off; then
+  // a choice of decal image to add, and what to do next while placing.
+  refreshDecals(piece) {
+    const colors = paletteColors(this.object);
+    const underlay = this.underlay();
+    const number = (value, step, title, set) => {
+      const input = el("input", { type: "number", value: tidy(value), step, title });
+      input.addEventListener("change", () => this.changePiece((p) => set(p, Number(input.value) || 0)));
+      return input;
+    };
+    const rows = (piece.decals ?? []).map((decal, k) => {
+      const image = this.imageOf(decal.image);
+      const thumb = el("canvas", { width: 32, height: 32, title: image?.name ?? "a missing image" });
+      if (image) drawImage(thumb, image, colors, underlay);
+      const size = (axis) => number(decal.size[axis], 0.25, axis ? "height (ft)" : "width (ft)", (p, v) => (p.decals[k].size[axis] = Math.max(MIN_SIZE_FT, v)));
+      const lost = !faceFrame(piece, decal.face);
+      return el(
+        "div",
+        { className: `ob-decal${this.placing?.index === k ? " placing" : ""}`, title: lost ? "its face is gone: move it onto another" : "" },
+        thumb,
+        size(0),
+        el("span", { textContent: "×" }),
+        size(1),
+        number(decal.turn, 15, "turn (°)", (p, v) => (p.decals[k].turn = v)),
+        el("button", { type: "button", textContent: lost ? "lost: move" : "move", onclick: () => this.startPlacing({ index: k, image: decal.image }) }),
+        el("button", { type: "button", textContent: "×", title: "take it off", onclick: () => this.changePiece((p) => (p.decals.splice(k, 1), p.decals.length || delete p.decals)) }),
+      );
+    });
+    const choices = this.images().filter((image) => image.kind === "decal");
+    const add = el("select", { title: "a decal image to put on this piece" }, new Option(choices.length ? "add a decal…" : "no decal images yet", ""), ...choices.map((image) => new Option(image.name, image.id)));
+    add.addEventListener("change", () => add.value && this.startPlacing({ index: null, image: add.value }));
+    const hint = this.placing ? el("p", { className: "ob-info", textContent: "click a flat face of this piece to put it there · esc stops" }) : null;
+    this.decalList.replaceChildren(...rows, add, ...(hint ? [hint] : []));
+  }
+
+  // Placing hides the handles, so clicks reach the piece's faces.
+  startPlacing(placing) {
+    this.placing = placing;
+    this.refresh();
+  }
+
+  // Puts the decal being placed where the click hit the picked piece, on the face it hit.
+  placeDecal(hit) {
+    const piece = this.object.pieces[this.picked];
+    if (!hit || hit.object.userData.index !== this.picked || !piece) return;
+    const face = faceIdOf(hit.face.normal);
+    const at = faceSpot(piece, face, hit.object.worldToLocal(hit.point.clone()).toArray());
+    const { index, image } = this.placing;
+    this.placing = null;
+    this.changePiece((p) => {
+      p.decals ??= [];
+      const frame = faceFrame(p, face);
+      // A new one is a square nearly as big as fits the face.
+      const side = tidy(Math.max(MIN_SIZE_FT, 1.6 * Math.min(frame.u.length(), frame.v.length())));
+      const decal = index !== null ? p.decals[index] : { image, size: [side, side], turn: 0 };
+      // Kept on the face where it fits, so it doesn't hang off an edge.
+      const inside = (n, half, extent) => (half >= extent ? 0.5 : Math.min(1 - half / extent / 2, Math.max(half / extent / 2, n)));
+      Object.assign(decal, { face, at: [inside(at[0], decal.size[0] / 2, frame.u.length()), inside(at[1], decal.size[1] / 2, frame.v.length())].map((n) => Math.round(n * 1000) / 1000) });
+      if (index === null) p.decals.push(decal);
+    });
+  }
+
+  // The object's decals, drawn as the game draws them.
+  drawDecals() {
+    this.decals.material.map?.dispose();
+    this.decals.geometry.dispose();
+    const decals = decalGeometry(this.object, (id) => this.imageOf(id));
+    this.decals.geometry = decals?.geometry ?? new THREE.BufferGeometry();
+    this.decals.material.map = decals ? atlasTexture(decals.atlas) : null;
+    this.decals.material.needsUpdate = true;
+  }
+
   // --- the view ---
 
   setupView() {
@@ -521,6 +604,8 @@ export class ObjectBuilder {
     this.scene.add(this.pieces);
     this.whole = new THREE.Mesh(new THREE.BufferGeometry(), builtMaterial());
     this.scene.add(this.whole);
+    this.decals = new THREE.Mesh(new THREE.BufferGeometry(), decalMaterial(null));
+    this.scene.add(this.decals);
     this.marks = new THREE.Group();
     this.scene.add(this.marks);
 
@@ -546,11 +631,12 @@ export class ObjectBuilder {
 
     this.canvas.addEventListener("pointerdown", (e) => {
       this.canvas.focus();
-      if (e.button !== 0 || this.transform.axis) return;
+      if (e.button !== 0 || (this.transform.axis && !this.placing)) return;
       const r = this.canvas.getBoundingClientRect();
       const ray = new THREE.Raycaster();
       ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), this.camera);
       const hit = ray.intersectObjects(this.pieces.children, false)[0];
+      if (this.placing) return this.placeDecal(hit);
       this.pick(hit ? hit.object.userData.index : null);
     });
   }
@@ -570,6 +656,7 @@ export class ObjectBuilder {
     }
     this.refreshPanel();
     this.drawMarks();
+    this.drawDecals();
   }
 
   // A drag of the handles is one undoable step.
@@ -594,6 +681,7 @@ export class ObjectBuilder {
     // shows as the game draws it.
     const whole = this.picked === null && this.object.pieces.some((p) => p.cut) ? objectGeometry(this.object) : null;
     this.whole.geometry = whole ?? new THREE.BufferGeometry();
+    this.drawDecals();
     this.object.pieces.forEach((piece, n) => {
       const color = piece.cut ? HOLE.color : (this.object.palette[piece.color]?.color ?? "#ff00ff");
       const faded = this.picked !== null && n !== this.picked;
@@ -604,7 +692,7 @@ export class ObjectBuilder {
       mesh.scale.set(...piece.size);
       mesh.userData.index = n;
       this.pieces.add(mesh);
-      if (n === this.picked && !this.readOnly) this.transform.attach(mesh);
+      if (n === this.picked && !this.readOnly && !this.placing) this.transform.attach(mesh);
     });
     this.drawMarks();
   }
