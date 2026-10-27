@@ -1,0 +1,157 @@
+import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
+import { paletteColors } from "../world/builtObjects.js";
+import { CELL_FT, COMPONENTS, FLOOR_FT, parseCell } from "../world/structures.js";
+import { builtMaterial } from "./builtMeshes.js";
+
+// Structures (world/structures.js) as meshes: floors as slabs under their level's height, walls as
+// slabs along cell edges with their doors and windows left open, the foundation below the ground
+// floor, and the components. Each storey is its own mesh, so the builder can fade the ones above
+// the storey it's working on. Positions are feet from the anchor, y up from the base.
+
+const OPENING_FT = 3; // how wide doors and windows are
+const STEP_FT = 0.75; // about how tall a stair's steps are
+const RAIL = { heightFt: 3, thicknessFt: 0.3, postFt: 0.35 };
+const POST_FT = { posts: 0.6, stilts: 0.35 };
+const DIRECTIONS = [
+  [0, -1],
+  [1, 0],
+  [0, 1],
+  [-1, 0],
+];
+
+// An axis-aligned box from `min` to `max`, colored.
+function box(min, max, color) {
+  const size = max.map((v, i) => v - min[i]);
+  const g = new THREE.BoxGeometry(...size).translate(...min.map((v, i) => v + size[i] / 2));
+  return colored(g, color);
+}
+
+function colored(g, color) {
+  g.deleteAttribute("uv");
+  const rgb = new Float32Array(g.attributes.position.count * 3);
+  for (let i = 0; i < rgb.length; i += 3) rgb.set([color.r, color.g, color.b], i);
+  g.setAttribute("color", new THREE.BufferAttribute(rgb, 3));
+  return g;
+}
+
+// A wall along an edge, from `bottom` to `top`, with its opening left out.
+function wall(key, edge, thickness, bottom, top, height, color) {
+  const [x, z, side] = key.split(",");
+  const half = (CELL_FT + thickness) / 2;
+  const o = OPENING_FT / 2;
+  // Spans along the wall (from its middle) and up, each a slab.
+  const spans = [];
+  if (edge.opening) {
+    spans.push([-half, -o, bottom, top], [o, half, bottom, top], [-o, o, bottom, height + edge.sill], [-o, o, height + edge.top, top]);
+  } else spans.push([-half, half, bottom, top]);
+  const [mx, mz] = side === "n" ? [(Number(x) + 0.5) * CELL_FT, Number(z) * CELL_FT] : [Number(x) * CELL_FT, (Number(z) + 0.5) * CELL_FT];
+  const t = thickness / 2;
+  return spans
+    .filter(([a, b, lo, hi]) => b - a > 1e-3 && hi - lo > 1e-3)
+    .map(([a, b, lo, hi]) => (side === "n" ? box([mx + a, lo, mz - t], [mx + b, hi, mz + t], color) : box([mx - t, lo, mz + a], [mx + t, hi, mz + b], color)));
+}
+
+// A flight's geometry: solid steps, or a solid slope for a ramp.
+function flight(c, structure, color) {
+  const height = c.level * structure.storeyFt;
+  const rise = c.rise ?? structure.storeyFt;
+  const run = c.run * CELL_FT;
+  const across = (c.width ?? 1) * CELL_FT;
+  const parts = [];
+  if (c.type === "ramp") {
+    const g = box([0, height - FLOOR_FT, 0], [run, height + rise, across], color);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i++) if (p.getY(i) > height) p.setY(i, height + (rise * p.getX(i)) / run);
+    parts.push(g);
+  } else {
+    const steps = Math.max(1, Math.round(rise / STEP_FT));
+    for (let k = 0; k < steps; k++) parts.push(box([(k * run) / steps, height - FLOOR_FT, 0], [((k + 1) * run) / steps, height + ((k + 1) * rise) / steps, across], color));
+  }
+  // From the flight's own frame (x up the run, z to its right) into the structure's.
+  const [fx, fz] = DIRECTIONS[c.facing];
+  const [rx, rz] = DIRECTIONS[(c.facing + 1) % 4];
+  const ox = (c.at[0] + 0.5) * CELL_FT - (fx + rx) * (CELL_FT / 2);
+  const oz = (c.at[1] + 0.5) * CELL_FT - (fz + rz) * (CELL_FT / 2);
+  const m = new THREE.Matrix4().set(fx, 0, rx, ox, 0, 1, 0, 0, fz, 0, rz, oz, 0, 0, 0, 1);
+  return parts.map((g) => g.applyMatrix4(m));
+}
+
+// A railing's rails along its edges, with a post at each end.
+function railing(c, structure, color) {
+  const height = c.level * structure.storeyFt;
+  const parts = [];
+  for (const key of c.edges) {
+    const [x, z, side] = key.split(",").map((v, i) => (i < 2 ? Number(v) : v));
+    const [a, b] = side === "n" ? [[x, z], [x + 1, z]] : [[x, z], [x, z + 1]];
+    const [ax, az, bx, bz] = [...a, ...b].map((v) => v * CELL_FT);
+    const t = RAIL.thicknessFt / 2;
+    parts.push(box([Math.min(ax, bx) - t, height + RAIL.heightFt - 0.25, Math.min(az, bz) - t], [Math.max(ax, bx) + t, height + RAIL.heightFt, Math.max(az, bz) + t], color));
+    const p = RAIL.postFt / 2;
+    for (const [px, pz] of [
+      [ax, az],
+      [bx, bz],
+    ]) {
+      parts.push(box([px - p, height, pz - p], [px + p, height + RAIL.heightFt, pz + p], color));
+    }
+  }
+  return parts;
+}
+
+const DRAW = { stairs: flight, ramp: flight, railing };
+
+// The foundation under the ground floor, reaching `depthFt` below the base.
+function foundation(structure, cells, depthFt, color) {
+  const { kind } = structure.foundation;
+  const top = -FLOOR_FT;
+  if (kind === "plinth") return cells.map(([x, z]) => box([x * CELL_FT, -depthFt, z * CELL_FT], [(x + 1) * CELL_FT, top, (z + 1) * CELL_FT], color));
+  const corners = new Set(cells.flatMap(([x, z]) => [`${x},${z}`, `${x + 1},${z}`, `${x},${z + 1}`, `${x + 1},${z + 1}`]));
+  const p = POST_FT[kind] / 2;
+  return [...corners].map((key) => {
+    const [x, z] = parseCell(key).map((v) => v * CELL_FT);
+    return box([x - p, -depthFt, z - p], [x + p, top, z + p], color);
+  });
+}
+
+// The structure's geometry by storey: Map of level -> geometry (position, normal, color), with
+// `params` overriding its parameter colors, and its foundation `depthFt` deep under level 0.
+export function structureGeometries(structure, { params, depthFt = 2 } = {}) {
+  const colors = paletteColors(structure, params).map((hex) => new THREE.Color(hex));
+  const colorOf = (name) => colors[structure.materials[name]?.color] ?? new THREE.Color(0xff00ff);
+  const out = new Map();
+  for (const storey of structure.storeys) {
+    const height = storey.level * structure.storeyFt;
+    const cells = storey.floor.map(parseCell);
+    const parts = cells.map(([x, z]) => box([x * CELL_FT, height - FLOOR_FT, z * CELL_FT], [(x + 1) * CELL_FT, height, (z + 1) * CELL_FT], colorOf(structure.floor)));
+    for (const [key, edge] of Object.entries(storey.edges)) {
+      const material = structure.materials[edge.material];
+      if (material) parts.push(...wall(key, edge, material.thicknessFt, height - FLOOR_FT, height + structure.storeyFt, height, colorOf(edge.material)));
+    }
+    for (const c of structure.components) if (c.level === storey.level && DRAW[c.type] && COMPONENTS[c.type]) parts.push(...DRAW[c.type](c, structure, colorOf(c.material ?? structure.floor)));
+    if (storey.level === 0 && cells.length) parts.push(...foundation(structure, cells, depthFt, colorOf(structure.foundation.material)));
+    if (!parts.length) continue;
+    const merged = mergeGeometries(parts);
+    merged.computeBoundingSphere();
+    out.set(storey.level, merged);
+  }
+  return out;
+}
+
+// The structure as a group of meshes, one per storey (userData.level), each with its own
+// material.
+export function structureGroup(structure, options) {
+  const group = new THREE.Group();
+  for (const [level, geometry] of structureGeometries(structure, options)) {
+    const mesh = new THREE.Mesh(geometry, builtMaterial());
+    mesh.userData.level = level;
+    group.add(mesh);
+  }
+  return group;
+}
+
+export function disposeStructureGroup(group) {
+  for (const mesh of group.children) {
+    mesh.geometry.dispose();
+    mesh.material.dispose();
+  }
+}

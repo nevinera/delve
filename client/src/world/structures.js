@@ -9,15 +9,19 @@ import { MAX_PARAMS, newObjectId } from "./builtObjects.js";
 // side, "x,z,n" (its north side) or "x,z,w" (its west side); a cell's south side is the north side
 // of the cell below it, and its east side the west side of the cell beside it.
 //
-// A structure is { id, name, tags, collection, source, palette, storeyFt, foundation, walls,
-// storeys, components, objects, walk }:
-// - palette: as a built object's (builtObjects.js), for its images and its params.
+// A structure is { id, name, tags, collection, source, palette, storeyFt, materials, floor,
+// foundation, storeys, components, objects, walk }:
+// - palette: as a built object's (builtObjects.js), for its materials, images and params.
 // - storeyFt: floor to floor, whole feet. Storey `level` n's floor is n * storeyFt above the
 //   structure's base; levels below 0 dig into the ground.
-// - foundation: what fills down from the ground floor to the ground, one of FOUNDATIONS.
-// - walls: the kinds of wall it uses, { name: { thicknessFt } }.
-// - storeys: each { level, floor: ["x,z", ...], edges: { edge: { wall, opening, sill, top, faces } } }:
-//   floor lists the cells with floor; each edge with a wall says its kind, and may have an opening
+// - materials: what it's made of, { name: { color, thicknessFt } }: color indexes the palette;
+//   thicknessFt is how thick a wall of it is.
+// - floor: the material its floors are made of.
+// - foundation: what fills down from the ground floor to the ground, { kind, material }, kind one
+//   of FOUNDATIONS.
+// - storeys: each { level, floor: ["x,z", ...], edges: { edge: { material, opening, sill, top,
+//   faces } } }: floor lists the cells with floor; each edge with a wall says its material, and
+//   may have an opening
 //   ("door" or "window") from `sill` feet up to `top` feet up (a door's sill is 0); faces are the
 //   images on its two faces, [north or west, south or east], each an image id or null.
 // - components: structural pieces snapped to the grid (COMPONENTS), each { type, level, ... }.
@@ -31,6 +35,7 @@ export const LEVELS = { least: -4, most: 6 };
 export const STOREY_FT = { least: 6, most: 30, start: 10 };
 export const WALL_FT = { least: 0.25, most: 4 };
 export const FOUNDATIONS = ["plinth", "posts", "stilts"];
+export const FLOOR_FT = 0.5; // how thick floors are, under their level's height
 export const OPENINGS = ["door", "window"];
 export const STRUCTURE_PREFIX = "structure:";
 export const structurePath = (id) => `structures/${id}.json`;
@@ -56,10 +61,14 @@ export function emptyStructure(name = "new structure", random = Math.random) {
   return {
     id: newObjectId(random),
     name,
-    palette: [],
+    palette: [
+      { color: "#8a6a4a", param: true, name: "wood" },
+      { color: "#8c8a84", param: true, name: "stone" },
+    ],
     storeyFt: STOREY_FT.start,
-    foundation: "plinth",
-    walls: { timber: { thicknessFt: 0.75 }, stone: { thicknessFt: 1.5 } },
+    materials: { timber: { color: 0, thicknessFt: 0.75 }, stone: { color: 1, thicknessFt: 1.5 } },
+    floor: "timber",
+    foundation: { kind: "plinth", material: "stone" },
     storeys: [{ level: 0, floor: [], edges: {} }],
     components: [],
     objects: [],
@@ -126,15 +135,17 @@ export function problems(structure) {
   const out = [];
   const s = structure;
   if (!/^[0-9a-z]{8}$/.test(s.id ?? "")) out.push("its id should be 8 letters and digits");
-  if (!Array.isArray(s.palette) || !Array.isArray(s.storeys) || !Array.isArray(s.components) || !Array.isArray(s.objects) || typeof s.walls !== "object" || !s.walls) {
-    return [...out, "it needs a palette, walls, storeys, components and objects"];
+  if (!Array.isArray(s.palette) || !Array.isArray(s.storeys) || !Array.isArray(s.components) || !Array.isArray(s.objects) || typeof s.materials !== "object" || !s.materials) {
+    return [...out, "it needs a palette, materials, storeys, components and objects"];
   }
   if (s.palette.filter((p) => p.param).length > MAX_PARAMS) out.push(`more than ${MAX_PARAMS} of its colors are parameters`);
   for (const p of s.palette) if (!/^#[0-9a-f]{6}$/i.test(p.color ?? "")) out.push(`${JSON.stringify(p.color)} isn't a #rrggbb color`);
   if (!(Number.isInteger(s.storeyFt) && s.storeyFt >= STOREY_FT.least && s.storeyFt <= STOREY_FT.most)) out.push(`its storeys should be ${STOREY_FT.least} to ${STOREY_FT.most} whole feet`);
-  if (!FOUNDATIONS.includes(s.foundation)) out.push(`its foundation should be one of ${FOUNDATIONS.join(", ")}`);
-  for (const [name, wall] of Object.entries(s.walls)) {
-    if (!(wall?.thicknessFt >= WALL_FT.least && wall.thicknessFt <= WALL_FT.most)) out.push(`its ${name} walls should be ${WALL_FT.least} to ${WALL_FT.most} ft thick`);
+  if (!(FOUNDATIONS.includes(s.foundation?.kind) && s.materials[s.foundation.material])) out.push(`its foundation should be one of ${FOUNDATIONS.join(", ")}, of one of its materials`);
+  if (!s.materials[s.floor]) out.push("its floor should be one of its materials");
+  for (const [name, m] of Object.entries(s.materials)) {
+    if (!(m?.thicknessFt >= WALL_FT.least && m.thicknessFt <= WALL_FT.most)) out.push(`its ${name} walls should be ${WALL_FT.least} to ${WALL_FT.most} ft thick`);
+    if (!(Number.isInteger(m?.color) && s.palette[m.color])) out.push(`its ${name}'s color isn't in the palette`);
   }
   const levels = s.storeys.map((storey) => storey.level);
   if (new Set(levels).size < levels.length) out.push("two of its storeys are on the same level");
@@ -144,7 +155,7 @@ export function problems(structure) {
     if (!Array.isArray(storey.floor) || !storey.floor.every((key) => /^-?\d+,-?\d+$/.test(key) && inCells(...parseCell(key)))) out.push(`${name}'s floor should list cells within ${REACH_CELLS} of the anchor`);
     for (const [key, edge] of Object.entries(storey.edges ?? {})) {
       if (!isEdge(key)) out.push(`${name} has an edge ${JSON.stringify(key)} that isn't one`);
-      else if (!s.walls[edge.wall]) out.push(`${name}'s edge ${key} is an unknown wall, ${JSON.stringify(edge.wall)}`);
+      else if (!s.materials[edge.material]) out.push(`${name}'s edge ${key} is an unknown material, ${JSON.stringify(edge.material)}`);
       else if (edge.opening !== undefined && !(OPENINGS.includes(edge.opening) && edge.sill >= 0 && edge.top > edge.sill && edge.top <= s.storeyFt && (edge.opening === "window" || edge.sill === 0))) {
         out.push(`${name}'s edge ${key} needs a door from the floor, or a window, with a sill below its top, within the storey`);
       } else if (edge.faces !== undefined && !(Array.isArray(edge.faces) && edge.faces.length === 2 && edge.faces.every((f) => f === null || typeof f === "string"))) {

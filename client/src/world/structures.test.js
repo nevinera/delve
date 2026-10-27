@@ -8,15 +8,15 @@ function hut() {
   const ground = s.storeys[0];
   ground.floor = ["0,0", "1,0", "0,1"];
   for (const x of [0, 1]) {
-    ground.edges[`${x},0,n`] = { wall: "stone" };
-    ground.edges[`${x},2,n`] = { wall: "stone" };
+    ground.edges[`${x},0,n`] = { material: "stone" };
+    ground.edges[`${x},2,n`] = { material: "stone" };
   }
   for (const z of [0, 1]) {
-    ground.edges[`0,${z},w`] = { wall: "stone" };
-    ground.edges[`2,${z},w`] = { wall: "stone" };
+    ground.edges[`0,${z},w`] = { material: "stone" };
+    ground.edges[`2,${z},w`] = { material: "stone" };
   }
-  ground.edges["0,2,n"] = { wall: "stone", opening: "door", sill: 0, top: 8 };
-  ground.edges["2,0,w"] = { wall: "stone", opening: "window", sill: 3, top: 6, faces: ["img00000", null] };
+  ground.edges["0,2,n"] = { material: "stone", opening: "door", sill: 0, top: 8 };
+  ground.edges["2,0,w"] = { material: "stone", opening: "window", sill: 3, top: 6, faces: ["img00000", null] };
   s.storeys.push({ level: -1, floor: ["0,0", "0,1", "1,0"], edges: {} });
   // Up from the cellar, northward, into the hole in the ground floor at 1,1.
   s.components.push({ type: "stairs", level: -1, at: [1, 1], facing: 0, run: 1 });
@@ -33,7 +33,7 @@ describe("structures", () => {
   it("says what's wrong", () => {
     const s = hut();
     s.storeyFt = 4;
-    s.storeys[0].edges["0,0,n"] = { wall: "brick" };
+    s.storeys[0].edges["0,0,n"] = { material: "brick" };
     s.storeys[0].edges["0,2,n"].sill = 2;
     s.storeys[0].floor.push("40,0");
     s.storeys.push({ level: -1, floor: [], edges: {} });
@@ -42,7 +42,7 @@ describe("structures", () => {
       "its storeys should be 6 to 30 whole feet",
       "two of its storeys are on the same level",
       "storey 0's floor should list cells within 16 of the anchor",
-      'storey 0\'s edge 0,0,n is an unknown wall, "brick"',
+      'storey 0\'s edge 0,0,n is an unknown material, "brick"',
       "storey 0's edge 0,2,n needs a door from the floor, or a window, with a sill below its top, within the storey",
       "storey 0's edge 2,0,w needs a door from the floor, or a window, with a sill below its top, within the storey",
       "component 3 is on level 3, which has no storey",

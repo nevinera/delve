@@ -122,7 +122,7 @@ describe("built objects", () => {
 
   it("reads an object or a collection, recording where it came from", () => {
     const one = table();
-    expect(readCollection(JSON.stringify(one))).toEqual({ name: null, objects: [one], images: [] });
+    expect(readCollection(JSON.stringify(one))).toEqual({ name: null, objects: [one], images: [], structures: [] });
     const read = readCollection(collectionJson("furniture", [{ ...one, collection: "abcdefgh" }, table()]), "https://example.com/furniture.json");
     expect(read.name).toBe("furniture");
     expect(read.objects).toHaveLength(2);

@@ -31,7 +31,8 @@ import { signText } from "./pixelFont.js";
 //
 // Every piece stays within REACH_FT of the centre.
 //
-// A collection is { collection: name, objects: [object, ...], images: [image, ...] }.
+// A collection is { collection: name, objects: [object, ...], images: [image, ...], structures:
+// [structure, ...] } (structures.js), structures absent when there are none.
 //
 // An image is { id, name, kind, collection, rows }, belonging to a collection, for its objects'
 // pieces to wear:
@@ -235,9 +236,10 @@ export function shapeOf(object) {
   return { footprint, height: round(height) };
 }
 
-// An object or collection read from JSON text, as { name, objects, images }: name is the
-// collection's, or null for a lone object. Each object and image is checked, and records `source`
-// when given. Throws with what's wrong when something is.
+// An object or collection read from JSON text, as { name, objects, images, structures }: name is
+// the collection's, or null for a lone object. Each object and image is checked, and records
+// `source` when given; structures come as they are, for structures.js to check. Throws with what's
+// wrong when something is.
 export function readCollection(text, source) {
   const data = JSON.parse(text);
   const list = Array.isArray(data.objects) ? data.objects : [data];
@@ -251,13 +253,14 @@ export function readCollection(text, source) {
     if (wrong.length) throw new Error(`image ${image.name ?? image.id ?? ""}: ${wrong.join("; ")}`);
   }
   const sourced = ({ collection, ...thing }) => (source ? { ...thing, source } : thing);
-  return { name: typeof data.collection === "string" ? data.collection : null, objects: list.map(sourced), images: images.map(sourced) };
+  const structures = Array.isArray(data.structures) ? data.structures : [];
+  return { name: typeof data.collection === "string" ? data.collection : null, objects: list.map(sourced), images: images.map(sourced), structures: structures.map(sourced) };
 }
 
 // A collection of objects and their images, as JSON text to share.
-export function collectionJson(name, objects, images = []) {
+export function collectionJson(name, objects, images = [], structures = []) {
   const bare = ({ collection, ...thing }) => thing;
-  return JSON.stringify({ collection: name, objects: objects.map(bare), images: images.map(bare) }, null, 2);
+  return JSON.stringify({ collection: name, objects: objects.map(bare), images: images.map(bare), ...(structures.length ? { structures: structures.map(bare) } : {}) }, null, 2);
 }
 
 // Whether an object, in a collection named `collectionName`, matches a search: its collection's

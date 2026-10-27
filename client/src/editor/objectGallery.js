@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { matches } from "../world/builtObjects.js";
 import { disposePreview, typePreview } from "./objectMeshes.js";
+import { structureGroup } from "./structureMeshes.js";
 
 // The objects step: every object type in the world's collections and the game's builtins, as a
 // gallery of rendered thumbnails grouped by collection, filtered by a search. Your own collections
@@ -8,8 +9,8 @@ import { disposePreview, typePreview } from "./objectMeshes.js";
 // under the pointer turns.
 //
 // show(collections) takes [{ id, name, kind: "builtin" | "imported" | "own", source, entries }],
-// each entry { key, type, name, tags }: key is unique across the gallery and changes when the
-// object does, type is what typePreview draws.
+// each entry { key, type, name, tags, structure }: key is unique across the gallery and changes
+// when the object does, type is what typePreview draws; a structure is drawn as itself.
 
 const THUMB_PX = 140;
 const PER_FRAME = 4; // thumbnails drawn per animation frame, so a big gallery doesn't stall
@@ -24,12 +25,13 @@ function el(tag, props = {}, ...children) {
 }
 
 export class ObjectGallery {
-  // onOpen(collection, entry), onNew(collection), onNewCollection(), and onAction(collection,
+  // onOpen(collection, entry), onNew(collection) and onNewStructure(collection) for the "+" tiles,
+  // onNewCollection(), and onAction(collection,
   // action) for a collection heading's buttons: "rename", "export" or "delete". tools: more
   // elements for the bar at the top.
-  constructor(container, { onOpen, onNew, onNewCollection, onAction, tools = [] }) {
+  constructor(container, { onOpen, onNew, onNewStructure, onNewCollection, onAction, tools = [] }) {
     this.container = container;
-    Object.assign(this, { onOpen, onNew, onNewCollection, onAction });
+    Object.assign(this, { onOpen, onNew, onNewStructure, onNewCollection, onAction });
     this.collections = [];
     this.queue = [];
     this.search = el("input", { type: "search", placeholder: "search collections, names and tags", className: "gallery-search" });
@@ -88,7 +90,10 @@ export class ObjectGallery {
       ...actions,
     );
     const tiles = entries.map((entry) => this.tile(collection, entry));
-    if (collection.kind === "own") tiles.unshift(el("button", { type: "button", className: "gallery-tile gallery-new", title: "a new object in this collection", onclick: () => this.onNew?.(collection) }, el("span", { textContent: "+" })));
+    if (collection.kind === "own") {
+      const plus = (what, onclick) => el("button", { type: "button", className: "gallery-tile gallery-new", title: `a new ${what} in this collection`, onclick }, el("span", { textContent: "+" }), el("span", { className: "gallery-new-what", textContent: what }));
+      tiles.unshift(plus("object", () => this.onNew?.(collection)), plus("structure", () => this.onNewStructure?.(collection)));
+    }
     return el("section", { className: "gallery-collection" }, head, el("div", { className: "gallery-tiles" }, ...tiles));
   }
 
@@ -118,7 +123,11 @@ export class ObjectGallery {
   }
 
   preview(entry) {
-    if (!this.previews.has(entry.key)) this.previews.set(entry.key, typePreview(entry.type));
+    if (!this.previews.has(entry.key)) {
+      const preview = entry.structure ? structureGroup(entry.structure) : typePreview(entry.type);
+      if (entry.structure) for (const mesh of preview.children) mesh.userData.ownGeometry = true;
+      this.previews.set(entry.key, preview);
+    }
     return this.previews.get(entry.key);
   }
 

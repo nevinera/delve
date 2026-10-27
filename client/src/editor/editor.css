@@ -656,6 +656,10 @@
   color: #8a94a0;
 }
 
+.editor .gallery-new .gallery-new-what {
+  font-size: 12px;
+}
+
 .gallery-none {
   color: #8a94a0;
 }
@@ -821,4 +825,25 @@
 
 .ob-text-param input {
   min-width: 0;
+}
+
+/* The structure builder (structureBuilder.js), in the object builder's dialog. */
+.sb-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sb-settings input[type="number"] {
+  width: 56px;
+}
+
+.sb-material {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.sb-material > span:first-of-type {
+  flex: 1;
 }

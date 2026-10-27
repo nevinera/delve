@@ -4,7 +4,9 @@ import { COLLECTIONS_PATH } from "../editor/libraryStore.js";
 import { slug } from "../editor/zones.js";
 import { ObjectBuilder } from "../editor/objectBuilder.js";
 import { ObjectGallery } from "../editor/objectGallery.js";
-import { addCollection, adoptStrays, allCollections, builtObjects, collections, images, ownCollections } from "./collections.js";
+import { StructureBuilder } from "../editor/structureBuilder.js";
+import { STRUCTURE_PREFIX, emptyStructure, problems as structureProblems, structurePath, withWalk } from "../world/structures.js";
+import { addCollection, adoptStrays, allCollections, builtObjects, builtStructures, collections, images, ownCollections } from "./collections.js";
 
 // The object library: the gallery of a world's collections and the builtins, with the builder
 // popping over it, importing and exporting collections. The objects page shows it on its own, and
@@ -46,6 +48,10 @@ export class ObjectLibrary {
         const name = window.prompt("A name for the new object:");
         if (name?.trim()) this.buildObject({ ...emptyObject(name.trim()), collection: collection.id });
       },
+      onNewStructure: (collection) => {
+        const name = window.prompt("A name for the new structure:");
+        if (name?.trim()) this.buildStructure({ ...emptyStructure(name.trim()), collection: collection.id });
+      },
       onNewCollection: () => {
         const name = window.prompt("A name for the new collection:");
         if (!name?.trim()) return;
@@ -66,6 +72,11 @@ export class ObjectLibrary {
       onDelete: (object) => this.deleteBuiltObject(object),
       onSaveImage: (image) => this.saveImage(image),
       onDeleteImage: (image) => this.deleteImage(image),
+    });
+    this.structureBuilder = new StructureBuilder({
+      onSave: (structure) => this.saveStructure(structure),
+      onSaveCopy: (structure) => this.saveStructureCopy(structure),
+      onDelete: (structure) => this.deleteStructure(structure),
     });
   }
 
@@ -172,7 +183,45 @@ export class ObjectLibrary {
     this.buildObject(copy);
   }
 
+  // Opens the structure builder: read-only for one in a builtin or imported collection.
+  buildStructure(structure, { readOnly = false } = {}) {
+    this.structureBuilder.open(structure, {
+      collections: ownCollections(this.world),
+      readOnly,
+      onCopy: (copy, collection) => {
+        const own = { ...copy, id: newObjectId(), collection, source: copy.source ?? "builtin" };
+        this.saveStructure(own);
+        this.buildStructure(own);
+      },
+    });
+  }
+
+  saveStructure(structure) {
+    this.world.writeJson(structurePath(structure.id), structure);
+    this.changed();
+    this.say(`Saved ${structure.name}.`, { info: true });
+  }
+
+  saveStructureCopy(structure) {
+    const copy = { ...structure, id: newObjectId(), name: `${structure.name} copy` };
+    this.saveStructure(copy);
+    this.buildStructure(copy);
+  }
+
+  // Deletes a structure, unless it's placed somewhere.
+  async deleteStructure(structure) {
+    if (!this.world.files.has(structurePath(structure.id))) return this.structureBuilder.close();
+    const placed = await this.placedCount(new Set([`${STRUCTURE_PREFIX}${structure.id}`]));
+    if (placed) return window.alert(`${structure.name} is placed ${plural(placed, "time")}: replace those with something else before deleting it.`);
+    if (!window.confirm(`Delete ${structure.name}?`)) return;
+    this.world.files.delete(structurePath(structure.id));
+    this.structureBuilder.close();
+    this.changed();
+    this.say(`Deleted ${structure.name}.`, { info: true });
+  }
+
   openEntry(collection, entry) {
+    if (entry.structure) return this.buildStructure(structuredClone(entry.structure), { readOnly: collection.kind !== "own" });
     if (entry.object) return this.buildObject(structuredClone(entry.object), { readOnly: collection.kind !== "own" });
     const kit = specOf(entry.type)?.kit;
     if (kit) return this.buildObject(structuredClone(kit), { readOnly: true });
@@ -181,9 +230,10 @@ export class ObjectLibrary {
 
   async collectionAction(collection, action) {
     const objects = builtObjects(this.world).filter((o) => o.collection === collection.id);
+    const structures = builtStructures(this.world).filter((s) => s.collection === collection.id);
     if (action === "export") {
-      if (!objects.length) return this.say(`${collection.name} is empty.`);
-      return download(`${slug(collection.name) || "objects"}.json`, `${collectionJson(collection.name, objects, images(this.world, collection.id))}\n`);
+      if (!objects.length && !structures.length) return this.say(`${collection.name} is empty.`);
+      return download(`${slug(collection.name) || "objects"}.json`, `${collectionJson(collection.name, objects, images(this.world, collection.id), structures)}\n`);
     }
     const list = collections(this.world);
     const index = list.findIndex((c) => c.id === collection.id);
@@ -192,10 +242,11 @@ export class ObjectLibrary {
       if (!name?.trim()) return;
       list[index] = { ...list[index], name: name.trim() };
     } else if (action === "delete") {
-      const placed = await this.placedCount(new Set(objects.map((o) => `${BUILT_PREFIX}${o.id}`)));
-      if (placed) return this.say(`${placed} placed object${placed === 1 ? " comes" : "s come"} from ${collection.name}: replace them with something else before deleting it.`);
-      if (!window.confirm(`Delete ${collection.name} and its ${plural(objects.length, "object")}?`)) return;
+      const placed = await this.placedCount(new Set([...objects.map((o) => `${BUILT_PREFIX}${o.id}`), ...structures.map((s) => `${STRUCTURE_PREFIX}${s.id}`)]));
+      if (placed) return this.say(`${placed} placed thing${placed === 1 ? " comes" : "s come"} from ${collection.name}: replace them with something else before deleting it.`);
+      if (!window.confirm(`Delete ${collection.name}, its ${plural(objects.length, "object")} and ${plural(structures.length, "structure")}?`)) return;
       for (const o of objects) this.world.files.delete(objectPath(o.id));
+      for (const s of structures) this.world.files.delete(structurePath(s.id));
       for (const image of images(this.world, collection.id)) this.world.files.delete(imagePath(image.id));
       list.splice(index, 1);
     }
@@ -210,6 +261,10 @@ export class ObjectLibrary {
     let read;
     try {
       read = readCollection(text, source);
+      for (const structure of read.structures) {
+        const wrong = structureProblems(structure);
+        if (wrong.length) throw new Error(`${structure.name ?? structure.id ?? "a structure"}: ${wrong.join("; ")}`);
+      }
     } catch (err) {
       return this.say(`Couldn't import ${from}: ${err.message}`);
     }
@@ -230,8 +285,15 @@ export class ObjectLibrary {
       }
       this.world.writeJson(objectPath(object.id), { ...object, collection: collection.id });
     }
+    for (const structure of read.structures) {
+      if (this.world.files.has(structurePath(structure.id))) {
+        structure.id = newObjectId();
+        renamed++;
+      }
+      this.world.writeJson(structurePath(structure.id), withWalk({ ...structure, collection: collection.id }));
+    }
     this.changed();
-    this.say(`Imported ${collection.name}, ${plural(read.objects.length, "object")}${renamed ? `, ${renamed} of them already here, so with new ids` : ""}.`, { info: true });
+    this.say(`Imported ${collection.name}, ${plural(read.objects.length, "object")}${read.structures.length ? ` and ${plural(read.structures.length, "structure")}` : ""}${renamed ? `, ${renamed} of them already here, so with new ids` : ""}.`, { info: true });
   }
 
   async objectsFromUrl() {
@@ -249,9 +311,10 @@ export class ObjectLibrary {
   exportOwn() {
     const own = new Set(ownCollections(this.world).map((c) => c.id));
     const objects = builtObjects(this.world).filter((o) => own.has(o.collection));
-    if (!objects.length) return this.say("There are no objects of your own to export yet.");
+    const structures = builtStructures(this.world).filter((s) => own.has(s.collection));
+    if (!objects.length && !structures.length) return this.say("There are no objects of your own to export yet.");
     const name = window.prompt("A name for the collection:", this.world.info?.name ?? "objects");
     const worn = new Set(objects.flatMap((o) => o.pieces.flatMap((p) => [...(p.decals ?? []).map((d) => d.image), p.tile?.image])));
-    if (name) download(`${slug(name) || "objects"}.json`, `${collectionJson(name, objects, images(this.world).filter((i) => worn.has(i.id)))}\n`);
+    if (name) download(`${slug(name) || "objects"}.json`, `${collectionJson(name, objects, images(this.world).filter((i) => worn.has(i.id)), structures)}\n`);
   }
 }
