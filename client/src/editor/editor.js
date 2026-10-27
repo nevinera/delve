@@ -66,7 +66,7 @@ const STEPS = {
   water: { tools: ["select", "source"], kinds: ["source"], map: "heights" },
   biomes: { tools: ["select", "biome"], kinds: ["biome"], map: "biomes" },
   civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
-  zones: { tools: [], kinds: [] },
+  zones: { tools: [], kinds: [], map: "heights" },
   tiles: { tools: [], kinds: [], map: "tiles" },
   "3d": { tools: [], kinds: [] },
 };
@@ -319,6 +319,8 @@ export class Editor {
   async replaceLand(land) {
     this.land = land;
     this.landChanged();
+    // The map's hidden on the heights step, so it's fitted to the land when it's next shown.
+    this.fitWhenShown = true;
     await this.showSculpt();
     const bounds = landBounds(land);
     if (bounds) this.sculpt.lookOver(bounds);
@@ -581,6 +583,11 @@ export class Editor {
     else this.overview?.hide();
     if (step === "heights") this.showSculpt();
     else this.sculpt?.hide();
+    if (this.fitWhenShown && !this.el.map.hidden) {
+      this.fitWhenShown = false;
+      this.map.resize();
+      this.fitContinent();
+    }
     this.map.render();
     this.updatePreview();
   }
