@@ -678,7 +678,7 @@ export class Editor {
 
   // The map drawn under the current step's marks: "heights", "biomes", or null.
   previewKind() {
-    if (this.step === "civilization") return this.option("heightmap") ? "heights" : null;
+    if (this.step === "civilization" || this.step === "zones") return this.option("heightmap") ? "heights" : null;
     return ["heights", "biomes"].includes(STEPS[this.step].map) ? STEPS[this.step].map : null;
   }
 
