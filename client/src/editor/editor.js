@@ -27,6 +27,7 @@ import { LandGrid, landBounds, loadLand, saveLand } from "../world/landGrid.js";
 import { BLENDS, EROSIONS, SHAPES, TOOLS as SCULPT_TOOLS } from "./sculptTools.js";
 import { DETAIL_TOOLS } from "./detailTools.js";
 import { TRAIL_KINDS, TRAIL_STATES } from "./detailTrails.js";
+import { OBJECT_TYPES } from "../world/objects.js";
 import { encodeTile } from "../world/tileCodec.js";
 import { gzipSync } from "fflate";
 import { CELL_FT, TILE_FT } from "../world/constants.js";
@@ -48,7 +49,7 @@ const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 // Steps drawn in 3d instead of on the map.
 const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
-  detail: "left-drag to work the brush, or draw a trail (esc drops it) · the arrows off the window's sides move it a strip that way · 1-7 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
+  detail: "left-drag to work the brush, or draw a trail (esc drops it) · with objects, click one to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · the arrows off the window's sides move the window a strip that way · 1-9 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
@@ -79,7 +80,7 @@ const STEPS = {
   civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
   zones: { tools: [], kinds: [], map: "heights" },
   tiles: { tools: [], kinds: [], map: "tiles" },
-  detail: { tools: [...DETAIL_TOOLS, "trails"], kinds: [] },
+  detail: { tools: [...DETAIL_TOOLS, "trails", "objects", "place"], kinds: [] },
   "3d": { tools: [], kinds: [] },
 };
 // With this many tiles in sight or more, tiles draw as their thumbnails instead of close up.
@@ -669,6 +670,7 @@ export class Editor {
         },
         onEdit: (keys) => this.saveDetail(keys),
         onPointer: (hit) => this.showCursor(hit),
+        onSelect: (object) => this.showObject(object),
       });
       this.applyDetailBrush();
     });
@@ -701,6 +703,10 @@ export class Editor {
     detailStrengthValue.textContent = `${detailStrength.value} ft/s`;
     this.el.trailWidthValue.textContent = `${this.el.trailWidth.value} ft`;
     if (this.step !== "detail") return;
+    const { placeType, placeScale, placeScaleValue } = this.el;
+    placeScaleValue.textContent = `${placeScale.value} ft`;
+    if (this.toolName === "objects") return this.detail?.setBrush({ tool: "objects" });
+    if (this.toolName === "place") return this.detail?.setBrush({ tool: "place", type: placeType.value, scale: Number(placeScale.value) });
     if (this.toolName === "trails") {
       const { trailKind, trailState, trailWidth } = this.el;
       return this.detail?.setBrush({ tool: "trails", kind: trailKind.value, state: trailState.value, width: Number(trailWidth.value) });
@@ -713,6 +719,21 @@ export class Editor {
       erosion: detailErosion.value,
       talus: Math.max(5, Math.min(85, Number(detailTalus.value) || 35)),
     });
+  }
+
+  // The detail step's picked object in the panel, or none.
+  showObject(object) {
+    const { objectPanel, objectInfo, objectYaw, objectYawValue, objectScale, objectScaleValue } = this.el;
+    objectPanel.hidden = !object;
+    if (!object) return;
+    const [least, most] = OBJECT_TYPES[object.type].size;
+    objectInfo.textContent = `${object.type} at ${object.at.map(Math.round).join(", ")}`;
+    const degrees = Math.round((object.yaw * 180) / Math.PI) % 360;
+    objectYaw.value = degrees;
+    objectYawValue.textContent = `${degrees}°`;
+    [objectScale.min, objectScale.max] = [least / 2, most * 2];
+    objectScale.value = object.scale;
+    objectScaleValue.textContent = `${object.scale} ft`;
   }
 
   // Writes tiles changed in the detail step back into the world, and marks them edited by hand.
@@ -738,7 +759,11 @@ export class Editor {
       this.applyDetailBrush();
     };
     const tools = STEPS.detail.tools;
+    const picked = this.detail?.selected?.object;
     if (/^[1-9]$/.test(e.key) && tools[Number(e.key) - 1]) this.setTool(tools[Number(e.key) - 1]);
+    else if (picked && (e.key === "Delete" || e.key === "Backspace")) this.detail.deleteSelected();
+    else if (picked && (e.key === "q" || e.key === "e")) this.detail.changeSelected({ yaw: picked.yaw + ((e.key === "e" ? 1 : -1) * Math.PI) / 12 });
+    else if (picked && this.toolName === "objects" && (e.key === "[" || e.key === "]")) this.detail.changeSelected({ scale: picked.scale * (e.key === "]" ? 1.1 : 1 / 1.1) });
     else if (e.key === "Escape") this.detail?.cancel();
     else if (e.key === "[") step(detailRadius, 1 / 1.25, 0);
     else if (e.key === "]") step(detailRadius, 1.25, 8);
@@ -923,7 +948,29 @@ export class Editor {
       this.el.trailWidth.value = ROADS[this.el.trailKind.value].width;
       this.applyDetailBrush();
     });
-    for (const input of [this.el.detailRadius, this.el.detailFalloff, this.el.detailStrength, this.el.detailErosion, this.el.detailTalus, this.el.trailKind, this.el.trailState, this.el.trailWidth]) {
+    for (const type of Object.keys(OBJECT_TYPES)) this.el.placeType.add(new Option(type, type));
+    // Each type starts in the middle of its sizes.
+    const placeSizes = () => {
+      const [least, most] = OBJECT_TYPES[this.el.placeType.value].size;
+      [this.el.placeScale.min, this.el.placeScale.max] = [least / 2, most * 2];
+      this.el.placeScale.value = (least + most) / 2;
+      this.applyDetailBrush();
+    };
+    this.el.placeType.addEventListener("change", placeSizes);
+    placeSizes();
+    // Dragging a slider is one edit, undone together.
+    for (const [input, change] of [
+      [this.el.objectYaw, (v) => ({ yaw: (v * Math.PI) / 180 })],
+      [this.el.objectScale, (v) => ({ scale: v })],
+    ]) {
+      input.addEventListener("input", () => {
+        if (!this.detail?.edit) this.detail?.beginEdit();
+        this.detail?.changeSelected(change(Number(input.value)));
+      });
+      input.addEventListener("change", () => this.detail?.endEdit());
+    }
+    this.el.objectDelete.addEventListener("click", () => this.detail?.deleteSelected());
+    for (const input of [this.el.detailRadius, this.el.detailFalloff, this.el.detailStrength, this.el.detailErosion, this.el.detailTalus, this.el.trailKind, this.el.trailState, this.el.trailWidth, this.el.placeScale]) {
       input.addEventListener("input", () => this.applyDetailBrush());
     }
     this.applyDetailBrush();

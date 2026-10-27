@@ -5,6 +5,7 @@ import { SEA_FLOOR_FT } from "../world/landGrid.js";
 import { decodeTile } from "../world/tileCodec.js";
 import { detailBrush } from "./detailTools.js";
 import { stampTrail } from "./detailTrails.js";
+import { OBJECT_TYPES, footprintOf, makeObject, reachOf, tileOf } from "../world/objects.js";
 import { RenderView, boundary, groundSampler } from "./renderView.js";
 import { tilePath } from "./thumbnails.js";
 
@@ -13,24 +14,27 @@ import { tilePath } from "./thumbnails.js";
 // off each side of the window moves it a strip of tiles that way. Right-drag turns, middle-drag
 // pans and the wheel zooms; the left button is the tools'.
 //
-// Left-dragging works the brush (detailTools.js) on the window's tiles, a little each frame. Their
-// meshes are made again as they change, and when a stroke ends onEdit hears which tiles it changed,
-// to save them. Strokes can be undone and redone.
+// Left-dragging works the brush (detailTools.js) on the window's tiles, a little each frame, or draws
+// a trail (detailTrails.js), stamped when it's let go. The objects tool picks an object to drag,
+// turn, size or delete, and the place tool puts new ones down. Meshes are made again as tiles
+// change, and when an edit ends onEdit hears which tiles it changed, to save them. Edits can be
+// undone and redone.
 //
 // Positions in the scene are feet from the window's middle, as RenderView keeps them.
 
 export const WINDOW_SIZES = [3, 5, 7];
 const ARROW = { lengthFt: 70, widthFt: 50, outFt: 70, color: 0xf0c850 };
 const SIDES = { east: [1, 0], west: [-1, 0], south: [0, 1], north: [0, -1] };
-const CURSOR = { inner: 0xffffff, outer: 0x8fc4ff, trail: 0xe0a060, points: 48 };
+const CURSOR = { inner: 0xffffff, outer: 0x8fc4ff, trail: 0xe0a060, selected: 0xffe066, points: 48 };
 const TRAIL_STEP_FT = 16; // between the points a drawn trail keeps
 const UNDO_KEEP = 50;
 const MAX_DT = 0.1;
 
 export class DetailView {
   // onMove(dx, dz) hears when an arrow's clicked; onEdit(keys) when tiles ("tx,tz") change;
-  // onPointer([x, y, z]) where the pointer's over the ground, in continent feet, or null.
-  constructor(canvas, { onMove, onEdit, onPointer } = {}) {
+  // onPointer([x, y, z]) where the pointer's over the ground, in continent feet, or null; onSelect
+  // the object picked, or null.
+  constructor(canvas, { onMove, onEdit, onPointer, onSelect } = {}) {
     this.canvas = canvas;
     this.view = new RenderView(canvas);
     const { controls } = this.view;
@@ -42,6 +46,10 @@ export class DetailView {
     this.onMove = onMove;
     this.onEdit = onEdit;
     this.onPointer = onPointer;
+    this.onSelect = onSelect;
+    this.selected = null; // { object, key }: the object picked and the tile listing it
+    this.dragging = false;
+    this.dirtyObjects = new Set(); // "tx,tz" whose objects alone need making again
     this.shown = false;
     this.brush = null;
     this.stroke = null; // a brush being dragged
@@ -58,6 +66,17 @@ export class DetailView {
       const at = this.pointAt(e);
       if (!at || !this.brush) return;
       canvas.setPointerCapture(e.pointerId);
+      if (this.brush.tool === "objects") {
+        const picked = this.objectAt(e);
+        this.select(picked);
+        if (picked) {
+          this.beginEdit();
+          const [x, z] = picked.object.at;
+          this.dragging = { dx: x - at[0], dz: z - at[1] };
+        }
+        return;
+      }
+      if (this.brush.tool === "place") return this.place(at);
       if (this.brush.tool === "trails") {
         this.trail = [at];
         return;
@@ -72,9 +91,10 @@ export class DetailView {
       canvas.style.cursor = over ? "pointer" : "";
       const at = !over && this.pointAt(e);
       if (this.trail && at && Math.hypot(at[0] - this.trail.at(-1)[0], at[1] - this.trail.at(-1)[1]) >= TRAIL_STEP_FT) this.trail.push(at);
+      if (this.dragging && at) this.moveSelected([at[0] + this.dragging.dx, at[1] + this.dragging.dz]);
       this.hover(over ? null : this.groundAt(e));
     });
-    canvas.addEventListener("pointerleave", () => this.stroke || this.trail || this.hover(null));
+    canvas.addEventListener("pointerleave", () => this.stroke || this.trail || this.dragging || this.hover(null));
     for (const type of ["pointerup", "pointercancel"]) canvas.addEventListener(type, (e) => this.release(type === "pointercancel"));
   }
 
@@ -93,8 +113,9 @@ export class DetailView {
 
   // The left button's let go: a brush stroke ends, and a trail's stamped (or dropped, if `cancel`).
   release(cancel = false) {
-    if (this.stroke) {
+    if (this.stroke || this.dragging) {
       this.stroke = null;
+      this.dragging = false;
       this.endEdit();
     }
     const trail = this.trail;
@@ -134,7 +155,9 @@ export class DetailView {
     view.ground = groundSampler(view.decoded, view.origin);
     this.window = { tx0, tz0, size, world: state.world, continent: state.continent };
     this.release(true);
+    this.select(null);
     this.dirty.clear();
+    this.dirtyObjects.clear();
     // Undoing reaches only tiles still loaded, so moving the window starts afresh.
     this.undos = [];
     this.redos = [];
@@ -263,12 +286,150 @@ export class DetailView {
   }
 
   replay(from, to, side) {
-    if (this.stroke || this.trail || !from.length) return;
+    if (this.stroke || this.trail || this.dragging || !from.length) return;
+    this.select(null);
     const entry = from.pop();
     to.push(entry);
     for (const [key, state] of entry[side]) restore(this.view.decoded.get(key), state);
     this.changed(entry[side].keys());
     this.onEdit?.([...entry[side].keys()]);
+  }
+
+  // --- objects ---
+
+  // The object under a pointer event, as { object, key }, or null.
+  objectAt(e) {
+    const r = this.canvas.getBoundingClientRect();
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), this.view.camera);
+    const shown = new Set(this.keys());
+    for (const hit of ray.intersectObjects(this.view.objects.children, false)) {
+      const object = hit.object.userData.objects?.[hit.instanceId];
+      const key = hit.object.userData.tile?.join(",");
+      if (object && shown.has(key)) return { object, key };
+    }
+    return null;
+  }
+
+  select(picked) {
+    this.selected = picked;
+    this.drawSelection();
+    this.onSelect?.(picked?.object ?? null);
+  }
+
+  // Whether a tile in the window can be edited.
+  editable(key) {
+    return this.keys().includes(key) && this.view.decoded.has(key);
+  }
+
+  // Puts a new object of the place tool's type down at [x, z].
+  place(at) {
+    const key = tileOf(at).join(",");
+    if (!this.editable(key)) return;
+    const { type, scale } = this.brush;
+    const object = { ...makeObject(type, at, Math.random() * Math.PI * 2, scale), id: `${key.replace(",", ".")}.${Math.random().toString(36).slice(2, 8)}` };
+    this.beginEdit();
+    this.touch(key);
+    const tile = this.view.decoded.get(key);
+    tile.objects = [...(tile.objects ?? []), object];
+    this.dirtyObjects.add(key);
+    this.endEdit();
+    this.select({ object, key });
+  }
+
+  // Moves the selected object to [x, z], into another tile's list if it crosses into one. It
+  // won't leave the window.
+  moveSelected(at) {
+    const { selected } = this;
+    const key = tileOf(at).join(",");
+    if (!selected || !this.editable(key)) return;
+    this.touch(selected.key);
+    if (key !== selected.key) {
+      this.touch(key);
+      const from = this.view.decoded.get(selected.key);
+      from.objects = from.objects.filter((o) => o !== selected.object);
+      const to = this.view.decoded.get(key);
+      to.objects = [...(to.objects ?? []), selected.object];
+      this.dirtyObjects.add(selected.key);
+      selected.key = key;
+    }
+    selected.object.at = at.map((v) => Math.round(v * 10) / 10);
+    this.dirtyObjects.add(key);
+    this.drawSelection();
+    this.onSelect?.(selected.object);
+  }
+
+  // Changes the selected object: { yaw } in radians, { scale } in feet, or both. Changes made
+  // between beginEdit and endEdit undo together; without, each is its own edit.
+  changeSelected(changes) {
+    const { selected } = this;
+    if (!selected) return;
+    const own = !this.edit;
+    if (own) this.beginEdit();
+    this.touch(selected.key);
+    const { object } = selected;
+    if (changes.yaw !== undefined) object.yaw = ((changes.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+    if (changes.scale !== undefined) {
+      const [least, most] = OBJECT_TYPES[object.type].size;
+      object.scale = Math.round(Math.max(least / 2, Math.min(most * 2, changes.scale)) * 10) / 10;
+      object.footprint = footprintOf(object.type, object.scale);
+      object.height = OBJECT_TYPES[object.type].height * object.scale;
+    }
+    this.dirtyObjects.add(selected.key);
+    this.drawSelection();
+    if (own) this.endEdit();
+    this.onSelect?.(object);
+  }
+
+  deleteSelected() {
+    const { selected } = this;
+    if (!selected) return;
+    this.beginEdit();
+    this.touch(selected.key);
+    const tile = this.view.decoded.get(selected.key);
+    tile.objects = tile.objects.filter((o) => o !== selected.object);
+    this.dirtyObjects.add(selected.key);
+    this.endEdit();
+    this.select(null);
+  }
+
+  // A ring round the selected object's footprint.
+  drawSelection() {
+    this.selectionRing ??= new THREE.Group();
+    this.view.scene.add(this.selectionRing);
+    for (const child of [...this.selectionRing.children]) {
+      child.geometry.dispose();
+      child.material.dispose();
+      this.selectionRing.remove(child);
+    }
+    if (!this.selected) return;
+    const { object } = this.selected;
+    const r = reachOf(object) + 1;
+    const points = Array.from({ length: CURSOR.points }, (_, n) => {
+      const a = (n / CURSOR.points) * Math.PI * 2;
+      return [(object.at[0] + Math.cos(a) * r) / TILE_FT, (object.at[1] + Math.sin(a) * r) / TILE_FT];
+    });
+    const line = boundary(points, this.view.ground, this.view.origin, CURSOR.selected);
+    line.material.depthTest = false;
+    line.renderOrder = 4;
+    this.selectionRing.add(line);
+  }
+
+  // Makes the objects of tiles whose ground hasn't changed again.
+  rebuildObjects() {
+    const { view } = this;
+    for (const key of this.dirtyObjects) {
+      if (this.dirty.has(key)) continue;
+      const [tx, tz] = key.split(",").map(Number);
+      for (const child of [...view.objects.children]) {
+        const at = child.userData.tile;
+        if (!at || at[0] !== tx || at[1] !== tz) continue;
+        view.objects.remove(child);
+        child.dispose();
+      }
+      view.addObjects(view.decoded.get(key));
+    }
+    this.dirtyObjects.clear();
   }
 
   // Makes the changed tiles' meshes again.
@@ -322,6 +483,7 @@ export class DetailView {
         const a = (n / CURSOR.points) * Math.PI * 2;
         return [hit.x + origin[0] + Math.cos(a) * radius, hit.z + origin[1] + Math.sin(a) * radius];
       });
+    if (this.brush.tool === "objects" || this.brush.tool === "place") return;
     const rings = this.brush.tool === "trails" ? [[Math.max(CELL_FT / 2, this.brush.width / 2), CURSOR.trail]] : [[this.brush.radius, CURSOR.inner], [this.brush.radius + this.brush.falloff, CURSOR.outer]];
     for (const [r, color] of rings) if (r > 0) add(ring(r), color);
   }
@@ -393,6 +555,7 @@ export class DetailView {
       }
       const now = performance.now();
       if (this.stroke) this.work(now);
+      if (this.dirtyObjects.size) this.rebuildObjects();
       if (this.dirty.size) {
         this.rebuild();
         if (this.pointer) this.hover(this.groundAt(this.pointer));

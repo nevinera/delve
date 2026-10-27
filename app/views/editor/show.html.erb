@@ -160,6 +160,16 @@
           <label class="editor-field" data-for="trails">kind <select id="trailKind"></select></label>
           <label class="editor-field" data-for="trails">state <select id="trailState"></select></label>
           <label class="editor-range" data-for="trails">width <input id="trailWidth" type="range" min="2" max="40" step="1" value="6"><output id="trailWidthValue"></output></label>
+          <label class="editor-field" data-for="place">object <select id="placeType"></select></label>
+          <label class="editor-range" data-for="place">size <input id="placeScale" type="range" min="1" max="100" step="0.5" value="5"><output id="placeScaleValue"></output></label>
+          <div data-for="objects place">
+            <div id="objectPanel" hidden>
+              <p id="objectInfo"></p>
+              <label class="editor-range">turn <input id="objectYaw" type="range" min="0" max="355" step="5" value="0"><output id="objectYawValue"></output></label>
+              <label class="editor-range">size <input id="objectScale" type="range" min="1" max="100" step="0.5" value="5"><output id="objectScaleValue"></output></label>
+              <button id="objectDelete" type="button">delete</button>
+            </div>
+          </div>
         </div>
       </section>
       <section class="editor-step" data-step="3d">
