@@ -102,6 +102,11 @@ export class DetailView {
         return;
       }
       if (this.brush.tool === "place") return this.place(at);
+      if (this.brush.tool === "paint") {
+        this.beginEdit();
+        this.painting = true;
+        return this.paint(at);
+      }
       if (this.brush.tool === "water") return this.water(at);
       if (DRAWN.has(this.brush.tool)) {
         this.trail = [at];
@@ -118,6 +123,7 @@ export class DetailView {
       const at = !over && this.pointAt(e);
       if (this.trail && at && Math.hypot(at[0] - this.trail.at(-1)[0], at[1] - this.trail.at(-1)[1]) >= TRAIL_STEP_FT) this.trail.push(at);
       if (this.dragging && at) this.moveSelected([at[0] + this.dragging.dx, at[1] + this.dragging.dz]);
+      if (this.painting && at) this.paint(at);
       this.hover(over ? null : this.groundAt(e));
     });
     canvas.addEventListener("pointerleave", () => this.stroke || this.trail || this.dragging || this.hover(null));
@@ -139,6 +145,10 @@ export class DetailView {
 
   // The left button's let go: a brush stroke ends, and a trail's stamped (or dropped, if `cancel`).
   release(cancel = false) {
+    if (this.painting) {
+      this.painting = false;
+      this.endEdit();
+    }
     if (this.stroke || this.dragging) {
       if (this.stroke) this.reflow();
       this.stroke = null;
@@ -348,7 +358,7 @@ export class DetailView {
   }
 
   replay(from, to, side) {
-    if (this.stroke || this.trail || this.dragging || !from.length) return;
+    if (this.stroke || this.trail || this.dragging || this.painting || !from.length) return;
     this.select(null);
     const entry = from.pop();
     to.push(entry);
@@ -605,6 +615,33 @@ export class DetailView {
     return this.keys().includes(key) && this.view.decoded.has(key);
   }
 
+  // Paints the paint tool's terrain on the cells within its radius of [x, z] (the cell there,
+  // at least), within the edit under way. Trees aren't painted into water.
+  paint([x, z]) {
+    const { terrain, radius } = this.brush;
+    const tree = Boolean(parseTree(terrain));
+    const changed = new Set();
+    const reach = Math.ceil(radius / CELL_FT);
+    const [ci0, cj0] = [Math.floor(x / CELL_FT), Math.floor(z / CELL_FT)];
+    for (let cj = cj0 - reach; cj <= cj0 + reach; cj++) {
+      for (let ci = ci0 - reach; ci <= ci0 + reach; ci++) {
+        const middle = Math.hypot((ci + 0.5) * CELL_FT - x, (cj + 0.5) * CELL_FT - z);
+        if (middle > radius && (ci !== ci0 || cj !== cj0)) continue;
+        const key = `${Math.floor(ci / CELLS)},${Math.floor(cj / CELLS)}`;
+        if (!this.editable(key)) continue;
+        const [tx, tz] = key.split(",").map(Number);
+        const tile = this.view.decoded.get(key);
+        const k = (cj - tz * CELLS) * CELLS + ci - tx * CELLS;
+        if (tree && !Number.isNaN(tile.layers.water[k])) continue;
+        if (tile.palettes.terrain[tile.layers.terrain[k]] === terrain) continue;
+        this.touch(key);
+        tile.layers.terrain[k] = paletteIndex(tile, terrain);
+        changed.add(key);
+      }
+    }
+    this.changed(changed);
+  }
+
   // Puts a new object of the place tool's type down at [x, z].
   place(at) {
     const key = tileOf(at).join(",");
@@ -821,6 +858,7 @@ export class DetailView {
         const a = (n / CURSOR.points) * Math.PI * 2;
         return [hit.x + origin[0] + Math.cos(a) * radius, hit.z + origin[1] + Math.sin(a) * radius];
       });
+    if (this.brush.tool === "paint") return add(ring(Math.max(CELL_FT / 2, this.brush.radius)), CURSOR.trail);
     if (["objects", "place", "water"].includes(this.brush.tool)) return;
     const rings = DRAWN.has(this.brush.tool) ? [[Math.max(CELL_FT / 2, this.brush.width / 2), CURSOR.trail]] : [[this.brush.radius, CURSOR.inner], [this.brush.radius + this.brush.falloff, CURSOR.outer]];
     for (const [r, color] of rings) if (r > 0) add(ring(r), color);

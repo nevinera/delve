@@ -35,6 +35,8 @@ import { placedCount } from "../objects/placed.js";
 import { decodeTile, encodeTile } from "../world/tileCodec.js";
 import { gunzipSync, gzipSync } from "fflate";
 import { CELL_FT, TILE_FT } from "../world/constants.js";
+import { TREE_KINDS, TREE_SIZES, treeTerrain } from "../world/trees.js";
+import { TERRAIN } from "../world/generator.js";
 import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
 
 const HIT_PX = 8;
@@ -53,7 +55,7 @@ const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 // Steps drawn in 3d instead of on the map.
 const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
-  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it; water runs along a channel the way it was drawn) · with water, click to place a source or pick one · with objects, click one to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
+  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it; water runs along a channel the way it was drawn) · with water, click to place a source or pick one · with objects, click one to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
@@ -85,7 +87,7 @@ const STEPS = {
   civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
   zones: { tools: [], kinds: [], map: "heights" },
   tiles: { tools: [], kinds: [], map: "tiles" },
-  detail: { tools: [...DETAIL_TOOLS, "trails", "channel", "water", "objects", "place"], kinds: [] },
+  detail: { tools: [...DETAIL_TOOLS, "trails", "channel", "water", "objects", "place", "paint"], kinds: [] },
   "3d": { tools: [], kinds: [] },
 };
 // With this many tiles in sight or more, tiles draw as their thumbnails instead of close up.
@@ -756,6 +758,14 @@ export class Editor {
     if (this.toolName === "water") return this.detail?.setBrush({ tool: "water", flow: Number(sourceFlow.value) });
     if (this.toolName === "objects") return this.detail?.setBrush({ tool: "objects" });
     if (this.toolName === "place") return this.detail?.setBrush({ tool: "place", type: placeType.value, scale: Number(placeScale.value) });
+    if (this.toolName === "paint") {
+      const { paintTerrain, treeKind, treeSize, paintRadius, paintRadiusValue } = this.el;
+      const tree = paintTerrain.value === "tree";
+      this.el.treeKindRow.style.display = this.el.treeSizeRow.style.display = tree ? "" : "none";
+      paintRadiusValue.textContent = Number(paintRadius.value) ? `${paintRadius.value} ft` : "one cell";
+      const terrain = tree ? treeTerrain(treeKind.value, Number(treeSize.value)) : paintTerrain.value;
+      return this.detail?.setBrush({ tool: "paint", terrain, radius: Number(paintRadius.value) });
+    }
     if (this.toolName === "trails") {
       const { trailKind, trailState, trailWidth } = this.el;
       return this.detail?.setBrush({ tool: "trails", kind: trailKind.value, state: trailState.value, width: Number(trailWidth.value) });
@@ -1146,6 +1156,13 @@ export class Editor {
       this.el.trailWidth.value = ROADS[this.el.trailKind.value].width;
       this.applyDetailBrush();
     });
+    for (const terrain of [...TERRAIN, "tree"]) this.el.paintTerrain.add(new Option(terrain, terrain));
+    for (const kind of TREE_KINDS) this.el.treeKind.add(new Option(kind, kind));
+    // A size-N tree's cells are painted as one; painted together, they make N by N trees.
+    for (const size of TREE_SIZES) this.el.treeSize.add(new Option(`${size * CELL_FT} ft`, size));
+    this.el.treeSize.value = 2;
+    for (const input of [this.el.paintTerrain, this.el.treeKind, this.el.treeSize]) input.addEventListener("change", () => this.applyDetailBrush());
+    this.el.paintRadius.addEventListener("input", () => this.applyDetailBrush());
     this.fillObjectTypes();
     // Each type starts in the middle of its sizes, and built objects as built.
     const placeSizes = () => {
