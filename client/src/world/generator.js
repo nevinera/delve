@@ -60,7 +60,13 @@ const SEA = { bumps: 3, fadeFt: 6, shallowFt: -0.3 };
 const SHORE_FT = 12;
 // Low land within `reachFt` of the sea is beach, in biomes that get beaches.
 const BEACH = { reachFt: 120, biomes: new Set(["plains", "forest", "rocky"]) };
-const POOL = { wavelength: 220, level: -0.1, maxDepth: 4 };
+// Swamp pools fill the ground's hollows, each flat at its own level: a little under the lowest
+// point it would spill over, at most `maxDepthFt` over its bottom, and none shallower than
+// `minDepthFt`. Hollows are found by running downhill from points `gridFt` apart, in steps from
+// `stepFt` down to 1ft, and a pool's shore by looking out along `rays` lines up to `reachFt`, every
+// `rayStepFt`. Swamp ground is pressed with `dentFt`-deep dents about `dentWavelength` ft apart, so
+// there are hollows even on level ground; slopes stay dry.
+const BOG = { gridFt: 64, stepFt: 8, rays: 12, reachFt: 150, rayStepFt: 8, belowFt: 0.3, minDepthFt: 0.4, maxDepthFt: 5, dentFt: 3, dentWavelength: 80, dentFrom: 0.1, dentFull: 0.45 };
 // Ponds and small lakes: at most one per `gridFt` square, by `chance` times the biome's lakes,
 // `minFt` to `maxFt` across (mostly small), with wobbly shores. Each has one water level, a little
 // under the lowest ground around it, a bed that deepens from the shore, and a rim that holds it. A
@@ -146,6 +152,8 @@ const toFt = ([x, z]) => [x * TILE_FT, z * TILE_FT];
 export function prepareWorld(continent, seedKey) {
   const ctx = prepareShape(continent, seedKey);
   ctx.lakeSites = new Map(); // "gi,gj" -> lake or null, filled as tiles need them
+  ctx.bogSites = new Map(); // "gi,gj" -> swamp pool or null, the same way
+  ctx.bogs = new Map(); // hollow "x,z" -> swamp pool or null
   const { pins } = continent;
   const rivers = (continent.watercourses?.rivers ?? []).filter((r) => r.points.length >= 2);
 
@@ -402,6 +410,9 @@ function land(ctx, x, z, biomes) {
   const swell = JITTER.swellFt * smoothstep(0, JITTER.swellFullAt, base);
   h += fbm(x, z, ctx.seed ^ 0x3c6ef373, { wavelength: JITTER.swellWavelength, octaves: 2 }) * swell;
   h += fbm(x, z, ctx.seed ^ 0x6a09e667, { wavelength: JITTER.wavelength, octaves: 2 }) * JITTER.ft;
+  const { pools } = climate.profile;
+  // Turned, so the noise's lattice doesn't line the dents up north-south and east-west.
+  if (pools > 0) h -= BOG.dentFt * pools * smoothstep(BOG.dentFrom, BOG.dentFull, fbm(x * 0.8 - z * 0.6, x * 0.6 + z * 0.8, ctx.seed ^ 0x51ab3c, { wavelength: BOG.dentWavelength, octaves: 2 }));
 
   const t = smoothstep(0, SHORE_FT, base);
   const shore = t < 1 && [0, 1, 2, 3, 4, 5, 6, 7].some((k) => ctx.heightAt(x + Math.cos(k * 0.785) * BEACH.reachFt, z + Math.sin(k * 0.785) * BEACH.reachFt) < 0);
@@ -431,7 +442,7 @@ function sample(ctx, x, z, biomes) {
   if (ground.land) roadAt(ctx, ground, x, z);
   const out = { road: ground.road ?? null, paved: Boolean(ground.paved), h: ground.h, water: NaN, sea: false, river: false, bank: false, pool: false, lake: false, land: ground.land, shore: ground.shore, climate: ground.climate };
   const { pools, ravines } = ground.climate.profile;
-  if (pools > 0 && ground.t > 0) pool(ctx, out, x, z, pools * ground.t);
+  if (pools > 0 && ground.t > 0) bogs(ctx, out, x, z);
   if (ravines > 0 && ground.t > 0) ravine(ctx, out, x, z, ravines * ground.t);
   if (ground.land) lakes(ctx, out, x, z);
   for (const p of ctx.ponds) pond(out, x, z, p);
@@ -597,15 +608,79 @@ function flowAt(r, along) {
   return { dx: (bx - ax) / len, dz: (bz - az) / len, slope };
 }
 
-// Swamp pools: standing water a little below the ground around it, where noise dips. `amount`
-// (0-1) grows them from none to full size.
-function pool(ctx, out, x, z, amount) {
-  const level = lerp(-1, POOL.level, amount);
-  const n = fbm(x, z, ctx.seed ^ 0x51ab3c, { wavelength: POOL.wavelength, octaves: 2 });
-  if (n >= level) return;
-  out.water = out.h - 0.5;
-  out.h = out.water - Math.min(POOL.maxDepth, (level - n) * 30);
-  out.pool = true;
+// Swamp pools: water over the ground here when it's in a hollow's pool, below its level and
+// inside its shore.
+function bogs(ctx, out, x, z) {
+  const reach = Math.ceil(BOG.reachFt / BOG.gridFt);
+  const [gi, gj] = [Math.floor(x / BOG.gridFt), Math.floor(z / BOG.gridFt)];
+  for (let dj = -reach; dj <= reach; dj++) {
+    for (let di = -reach; di <= reach; di++) {
+      const bog = bogSite(ctx, gi + di, gj + dj);
+      if (!bog || out.h >= bog.level || out.water >= bog.level) continue;
+      const d = Math.hypot(x - bog.x, z - bog.z);
+      if (d >= BOG.reachFt) continue;
+      // The shore's distance this way, between the two rays either side.
+      const a = ((Math.atan2(z - bog.z, x - bog.x) / (2 * Math.PI)) * BOG.rays + BOG.rays) % BOG.rays;
+      const k = Math.floor(a);
+      const shore = lerp(bog.shore[k], bog.shore[(k + 1) % BOG.rays], a - k);
+      if (d > shore) continue;
+      out.water = bog.level;
+      out.h = Math.min(out.h, bog.level - 0.2);
+      out.pool = true;
+    }
+  }
+}
+
+// The swamp pool found by running downhill from the point in grid square (gi, gj), or null.
+function bogSite(ctx, gi, gj) {
+  const key = `${gi},${gj}`;
+  if (ctx.bogSites.has(key)) return ctx.bogSites.get(key);
+  ctx.bogSites.set(key, null);
+  const roll = (k) => hash2(gi, gj, ctx.seed ^ Math.imul(k + 7, 0x165667b1));
+  let [x, z] = [(gi + 0.2 + 0.6 * roll(1)) * BOG.gridFt, (gj + 0.2 + 0.6 * roll(2)) * BOG.gridFt];
+  const ground = (px, pz) => land(ctx, px, pz, ctx.biomes);
+  const start = ground(x, z);
+  if (!(start.climate.profile.pools > 0) || start.t < 1) return null;
+  let h = start.h;
+  for (let step = BOG.stepFt; step >= 1; ) {
+    let best = null;
+    for (const [dx, dz] of [[1, 0], [-1, 0], [0, 1], [0, -1], [1, 1], [1, -1], [-1, 1], [-1, -1]]) {
+      const g = ground(x + dx * step, z + dz * step).h;
+      if (g < h && (!best || g < best[2])) best = [x + dx * step, z + dz * step, g];
+    }
+    if (best) [x, z, h] = best;
+    else step /= 2;
+  }
+  const bog = bogAt(ctx, Math.round(x), Math.round(z), ground);
+  ctx.bogSites.set(key, bog);
+  return bog;
+}
+
+// The pool in the hollow at (x, z), or null when it's too shallow to hold one: its level is a
+// little under the lowest of the highest points along each ray out, and its shore along each ray
+// is where the ground first rises over that level.
+function bogAt(ctx, x, z, ground) {
+  const key = `${x},${z}`;
+  if (ctx.bogs.has(key)) return ctx.bogs.get(key);
+  const bottom = ground(x, z).h;
+  const rays = Array.from({ length: BOG.rays }, (_, k) => {
+    const [dx, dz] = [Math.cos((k / BOG.rays) * 2 * Math.PI), Math.sin((k / BOG.rays) * 2 * Math.PI)];
+    const heights = [];
+    for (let d = BOG.rayStepFt; d <= BOG.reachFt; d += BOG.rayStepFt) heights.push(ground(x + dx * d, z + dz * d).h);
+    return heights;
+  });
+  const spill = Math.min(...rays.map((heights) => Math.max(...heights)));
+  const level = Math.min(spill - BOG.belowFt, bottom + BOG.maxDepthFt);
+  let bog = null;
+  if (level - bottom >= BOG.minDepthFt) {
+    const shore = rays.map((heights) => {
+      const out = heights.findIndex((g) => g >= level);
+      return (out < 0 ? heights.length : out + 0.5) * BOG.rayStepFt;
+    });
+    bog = { x, z, level, shore };
+  }
+  ctx.bogs.set(key, bog);
+  return bog;
 }
 
 // A pool from the water flow: flat water inside its outline, and a rim just outside.

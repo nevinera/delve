@@ -195,6 +195,25 @@ describe("biomes in the generator", () => {
     expect(wet("swamp")).toBeGreaterThan(500);
   });
 
+  it("keeps each swamp pool flat, in a hollow, and off slopes", () => {
+    const tile = tiles(world("swamp"))[0];
+    const levels = new Set();
+    tile.layers.water.forEach((w, k) => {
+      if (Number.isNaN(w)) return;
+      levels.add(w);
+      expect(w).toBeGreaterThan(tile.layers.height[k]);
+    });
+    expect(levels.size).toBeGreaterThan(1);
+    expect(levels.size).toBeLessThan(tile.layers.water.filter((w) => !Number.isNaN(w)).length / 20); // a level per pool
+    // Land climbing 1ft in 6 has no hollows to hold water.
+    const slope = prepareWorld(
+      landOf([0, 0, 8, 8], (x) => 20 + x / 6),
+      { pins: [{ id: "b", kind: "biome", at: [4, 4], biome: "swamp", tags: [] }] },
+    );
+    const sloped = generateTile(slope, 4, 4);
+    expect(sloped.layers.water.filter((w) => !Number.isNaN(w)).length).toBeLessThan(40);
+  });
+
   it("scatters flat-topped ponds and lakes where tagged", () => {
     const all = (ctx) => [2, 3, 4, 5].flatMap((tx) => [2, 3, 4, 5].map((tz) => generateTile(ctx, tx, tz)));
     const water = (tiles) => tiles.flatMap((t) => Array.from(t.layers.water).filter((w) => !Number.isNaN(w)));
