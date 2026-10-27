@@ -1,4 +1,4 @@
-import { box, color, cone, cut, object, post, rod, sphere, tiled, wedge, wheel } from "./pieces.js";
+import { box, color, cone, cut, gable, object, post, rod, sphere, tiled, wedge, wheel } from "./pieces.js";
 
 // Farm props: hay, carts, tools, fences, crops and animals' things.
 
@@ -9,12 +9,6 @@ const STONE = "#8c8a84";
 const IRON = "#4a4a4e";
 const LEAF = "#5f8f3a";
 const SOIL = "#6b5034";
-
-// Two wedges back to back, a gable roof `size` big (y its rise) along x, its eaves at `y`.
-const gable = ([x, rise, z], y, c, image = "shingles") => [
-  tiled(wedge([x, rise, z / 2], [0, y + rise / 2, -z / 4], c, [180, 0, 0]), image),
-  tiled(wedge([x, rise, z / 2], [0, y + rise / 2, z / 4], c), image),
-];
 
 const pumpkin = (x, z, s = 1) => [
   sphere([1.8 * s, 1.2 * s, 1.8 * s], [x, 0.6 * s, z], 0),

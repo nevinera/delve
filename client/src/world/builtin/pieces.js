@@ -32,3 +32,53 @@ export const tiled = (piece, image, every = 2, jitter = 0.15) => ({ ...piece, ti
 export const color = (hex, name) => (name ? { color: hex, param: true, name } : { color: hex, param: false });
 
 export const object = (id, name, tags, palette, pieces) => ({ id, name, tags, palette, pieces });
+
+// Words on a piece's face (named by its outward normal, "0,0,1" its south face), `size` feet.
+export const sign = (piece, name, text, size, face = "0,0,1", ink = "7") => ({ ...piece, texts: [...(piece.texts ?? []), { name, text, ink, face, at: [0.5, 0.5], size, turn: 0 }] });
+
+// --- parts several collections use, each a list of pieces ---
+
+// A gable roof `size` big (y its rise) along x from two wedges back to back, its eaves at `y`,
+// its middle at (x, z).
+export const gable = ([w, rise, d], y, c, image = "shingles", [x, z] = [0, 0]) => [
+  tiled(wedge([w, rise, d / 2], [x, y + rise / 2, z - d / 4], c, [180, 0, 0]), image),
+  tiled(wedge([w, rise, d / 2], [x, y + rise / 2, z + d / 4], c), image),
+];
+
+// A barrel `s` times 3 ft tall standing at (x, y, z): staves of color c, hoops of color hoop.
+export const barrel = (x, z, c, hoop, s = 1, y = 0) => [
+  tiled(post(2 * s, 3 * s, [x, y + 1.5 * s, z], c), "planks", 0.8 * s),
+  post(2.2 * s, 1.6 * s, [x, y + 1.5 * s, z], c),
+  post(2.08 * s, 0.15 * s, [x, y + 0.45 * s, z], hoop),
+  post(2.08 * s, 0.15 * s, [x, y + 2.55 * s, z], hoop),
+  post(2.25 * s, 0.15 * s, [x, y + 1.5 * s, z], hoop),
+];
+
+// A crate `s` ft on a side with its middle at (x, y + s / 2, z), banded in color band.
+export const crate = (x, y, z, s, c, band, yaw = 0) => [
+  tiled(box([s, s, s], [x, y + s / 2, z], c, [yaw, 0, 0]), "planks", s / 2),
+  box([s * 1.04, s * 0.12, s * 1.04], [x, y + s * 0.08, z], band, [yaw, 0, 0]),
+  box([s * 1.04, s * 0.12, s * 1.04], [x, y + s * 0.92, z], band, [yaw, 0, 0]),
+];
+
+// A sack about 2 ft tall at (x, z), leaning `lean` degrees.
+export const sack = (x, z, c, s = 1, y = 0, lean = 0) => [
+  sphere([1.6 * s, 2 * s, 1.4 * s], [x, y + 1 * s, z], c, [0, 0, lean]),
+  post(0.5 * s, 0.45 * s, [x, y + 2.05 * s, z], c, { taper: 0.6 }),
+];
+
+// A small fire at (x, z): crossed logs of color log and flames of colors flame and core.
+export const fire = (x, z, log, flame, core, s = 1) => [
+  rod(0.4 * s, 2.6 * s, [x, 0.25 * s, z], log, 0),
+  rod(0.4 * s, 2.6 * s, [x, 0.25 * s, z], log, 60),
+  rod(0.4 * s, 2.6 * s, [x, 0.25 * s, z], log, 120),
+  cone([1.6 * s, 2.2 * s, 1.6 * s], [x, 1.3 * s, z], flame),
+  cone([0.9 * s, 1.5 * s, 0.9 * s], [x, 1.05 * s, z], core),
+];
+
+// A ring of `n` stones `r` ft out from (x, z).
+export const ring = (x, z, r, n, c, s = 0.8) =>
+  Array.from({ length: n }, (_, k) => {
+    const a = (k / n) * Math.PI * 2;
+    return sphere([s * 1.2, s * 0.8, s], [x + Math.cos(a) * r, s * 0.3, z + Math.sin(a) * r], c, [(-a * 180) / Math.PI, 0, 0]);
+  });
