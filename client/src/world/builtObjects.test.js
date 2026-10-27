@@ -1,0 +1,94 @@
+import { describe, expect, it } from "vitest";
+import { MAX_PARAMS, addColor, collectionJson, dropUnusedColors, emptyObject, newObjectId, paletteColors, pieceCorners, problems, readObjects, shapeOf, turnPoint } from "./builtObjects.js";
+
+const piece = (over = {}) => ({ type: "box", size: [2, 2, 2], at: [0, 1, 0], turn: [0, 0, 0], color: 0, ...over });
+
+function table() {
+  const object = emptyObject("table", () => 0.5);
+  const wood = addColor(object, "#8a5a2b");
+  object.pieces.push(piece({ size: [6, 0.3, 3], at: [0, 3, 0], color: wood }));
+  for (const x of [-2.7, 2.7]) for (const z of [-1.2, 1.2]) object.pieces.push(piece({ size: [0.3, 3, 0.3], at: [x, 1.5, z], color: wood }));
+  return object;
+}
+
+describe("built objects", () => {
+  it("makes short ids of letters and digits", () => {
+    expect(newObjectId()).toMatch(/^[0-9a-z]{8}$/);
+  });
+
+  it("makes the first colors parameters, up to the limit", () => {
+    const object = emptyObject();
+    for (const c of ["#000001", "#000002", "#000003", "#000004"]) addColor(object, c);
+    expect(object.palette.map((p) => p.param)).toEqual([true, true, true, false]);
+    expect(object.palette.filter((p) => p.param)).toHaveLength(MAX_PARAMS);
+    expect(addColor(object, "#000002")).toBe(1);
+  });
+
+  it("overrides parameter colors and keeps the rest", () => {
+    const object = emptyObject();
+    for (const c of ["#000001", "#000002", "#000003", "#000004"]) addColor(object, c);
+    object.palette[1].param = false;
+    expect(paletteColors(object, ["#ff0000"])).toEqual(["#ff0000", "#000002", "#000003", "#000004"]);
+  });
+
+  it("drops colors no piece uses", () => {
+    const object = emptyObject();
+    ["#000001", "#000002", "#000003"].forEach((c) => addColor(object, c));
+    object.pieces.push(piece({ color: 2 }));
+    dropUnusedColors(object);
+    expect(object.palette.map((p) => p.color)).toEqual(["#000003"]);
+    expect(object.pieces[0].color).toBe(0);
+  });
+
+  it("turns as three.js's YXZ order does: yaw 90 takes east to north", () => {
+    const [x, y, z] = turnPoint([1, 0, 0], [90, 0, 0]);
+    expect([x, y, z].map((v) => Math.round(v * 1e6) / 1e6)).toEqual([0, 0, -1]);
+    // Pitch 90 tips up (+y) toward south (+z); roll 90 tips east (+x) up.
+    expect(turnPoint([0, 1, 0], [0, 90, 0])[2]).toBeCloseTo(1);
+    expect(turnPoint([1, 0, 0], [0, 0, 90])[1]).toBeCloseTo(1);
+  });
+
+  it("finds nothing wrong with a good object", () => {
+    expect(problems(table())).toEqual([]);
+  });
+
+  it("finds pieces too far out, too small, of unknown types or colors, and too many", () => {
+    const object = table();
+    object.pieces.push(piece({ at: [40, 0, 0] }), piece({ size: [0, 1, 1] }), piece({ type: "blob" }), piece({ color: 5 }));
+    const wrong = problems(object).join("\n");
+    expect(wrong).toMatch(/reaches more than 32 ft/);
+    expect(wrong).toMatch(/smaller than/);
+    expect(wrong).toMatch(/unknown type/);
+    expect(wrong).toMatch(/isn't in the palette/);
+    while (object.pieces.length <= 32) object.pieces.push(piece());
+    expect(problems(object).join("\n")).toMatch(/more than 32/);
+  });
+
+  it("works out how tall it stands and what it blocks", () => {
+    const { footprint, height } = shapeOf(table());
+    expect(height).toBeCloseTo(3.15);
+    expect(footprint.rect[0]).toBeCloseTo(6);
+    expect(footprint.rect[1]).toBeCloseTo(3);
+    // A square pole turned 45° covers less as a circle.
+    const pole = emptyObject();
+    addColor(pole, "#ffffff");
+    pole.pieces.push(piece({ size: [1, 10, 1], at: [0, 5, 0], turn: [45, 0, 0] }));
+    expect(shapeOf(pole).footprint.circle).toBeCloseTo(Math.SQRT1_2);
+  });
+
+  it("leaves pieces above head height out of the footprint", () => {
+    const object = table();
+    object.pieces.push(piece({ size: [20, 0.5, 20], at: [0, 10, 0] }));
+    expect(shapeOf(object).footprint.rect[0]).toBeCloseTo(6);
+    expect(pieceCorners(object.pieces.at(-1))).toHaveLength(8);
+  });
+
+  it("reads an object or a collection, recording where it came from", () => {
+    const one = table();
+    expect(readObjects(JSON.stringify(one))).toEqual([one]);
+    const read = readObjects(collectionJson("furniture", [one, table()]), "https://example.com/furniture.json");
+    expect(read).toHaveLength(2);
+    expect(read[0].source).toBe("https://example.com/furniture.json");
+    expect(() => readObjects(JSON.stringify({ ...one, pieces: [piece({ type: "blob" })] }))).toThrow(/unknown type/);
+  });
+});
