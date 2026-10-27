@@ -17,6 +17,10 @@ Rails.application.routes.draw do
     delete "/logout", to: "sessions#destroy", as: :destroy_user_session
   end
 
+  if Rails.env.local?
+    post "/dev_session", to: "dev_sessions#create", as: :dev_session
+  end
+
   root "home#show"
   get "editor" => "editor#show"
   get "objects" => "objects#show"
