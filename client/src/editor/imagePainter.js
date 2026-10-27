@@ -2,8 +2,8 @@ import { GRAY_INKS, IMAGE_KINDS, IMAGE_PX, OPACITIES, PALETTE_INKS, emptyImage, 
 
 // The image painter: a dialog over the object builder for painting one of a collection's images
 // (world/builtObjects.js) pixel by pixel. Inks are the object's palette colors and eight grays,
-// each at one of four opacities; under the pixels shows the piece's color, as it will on the
-// piece. Left-drag paints with the tool (pen, fill or eraser), right-drag erases. A tiled image
+// each at one of four opacities, or none (0%, clear, like the eraser); under the pixels shows the
+// piece's color, as it will on the piece. A new image starts clear. Left-drag paints with the tool (pen, fill or eraser), right-drag erases. A tiled image
 // shows repeated beside it.
 
 const CELL_PX = 12; // screen pixels per image pixel
@@ -11,6 +11,8 @@ const TILE_PREVIEW = 3; // a tiled image's preview repeats it this many times ea
 const UNDO_KEEP = 100;
 const TOOLS = ["pen", "fill", "eraser"];
 const KEYS = { b: "pen", g: "fill", e: "eraser" };
+const CLEAR = "0"; // the opacity that paints pixels clear
+const STRENGTHS = [CLEAR, ...OPACITIES];
 
 function el(tag, props = {}, ...children) {
   const node = Object.assign(document.createElement(tag), props);
@@ -70,7 +72,7 @@ export class ImagePainter {
     this.kind = el("select", { onchange: () => ((this.image.kind = this.kind.value), this.refresh()) });
     for (const kind of IMAGE_KINDS) this.kind.add(new Option(kind === "decal" ? "decal: stuck on one face" : "tiled: repeated over a piece", kind));
     this.inks = div("ip-inks");
-    this.opacities = div("ob-row", ...OPACITIES.map((o) => el("button", { type: "button", textContent: `${(Number(o) / OPACITIES.length) * 100}%`, onclick: () => ((this.opacity = o), this.refresh()) })));
+    this.opacities = div("ob-row", ...STRENGTHS.map((o) => el("button", { type: "button", textContent: `${(Number(o) / OPACITIES.length) * 100}%`, onclick: () => ((this.opacity = o), this.refresh()) })));
     this.toolButtons = TOOLS.map((tool) => el("button", { type: "button", textContent: tool, onclick: () => ((this.tool = tool), this.refresh()) }));
     this.deleteButton = el("button", { type: "button", textContent: "delete", onclick: () => this.onDelete?.(this.image) });
     const panel = div(
@@ -134,7 +136,7 @@ export class ImagePainter {
     const x = Math.floor(((e.clientX - r.left) / r.width) * IMAGE_PX);
     const y = Math.floor(((e.clientY - r.top) / r.height) * IMAGE_PX);
     if (x < 0 || y < 0 || x >= IMAGE_PX || y >= IMAGE_PX) return;
-    const pixel = this.stroke.erase || this.tool === "eraser" ? null : { ink: this.ink, opacity: this.opacity };
+    const pixel = this.stroke.erase || this.tool === "eraser" || this.opacity === CLEAR ? null : { ink: this.ink, opacity: this.opacity };
     if (this.tool === "fill" && !this.stroke.erase) fill(this.image, x, y, pixel);
     else setPixel(this.image, x, y, pixel);
     this.draw();
@@ -191,7 +193,7 @@ export class ImagePainter {
       el("div", { className: "ob-row" }, ...this.palette.map((p) => swatch(p.ink, p.color, p.label))),
       el("div", { className: "ob-row" }, ...GRAY_INKS.map((ink) => swatch(ink, inkColor(ink, []), `gray ${ink}`))),
     );
-    this.opacities.querySelectorAll("button").forEach((b, i) => b.classList.toggle("active", OPACITIES[i] === this.opacity));
+    this.opacities.querySelectorAll("button").forEach((b, i) => b.classList.toggle("active", STRENGTHS[i] === this.opacity));
     for (const b of this.toolButtons) b.classList.toggle("active", b.textContent === this.tool);
     this.tiles.hidden = this.image.kind !== "tiled";
     this.draw();
