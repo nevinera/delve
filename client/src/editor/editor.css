@@ -363,6 +363,17 @@
   margin-top: 4px;
 }
 
+/* The replace dialog, a small modal in the middle of the page. */
+.replace-dialog {
+  inset: 0;
+  margin: auto;
+  min-width: 320px;
+}
+
+.replace-dialog .editor-row {
+  margin-top: 10px;
+}
+
 /* The time popover's readouts, like "waxing crescent", need more room than the graphics ones. */
 #timePanel .editor-range {
   grid-template-columns: 6em 10em 9.5em;

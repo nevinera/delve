@@ -1173,7 +1173,13 @@ export class Editor {
     };
     this.el.placeType.addEventListener("change", placeSizes);
     placeSizes();
-    this.el.replaceObjects.addEventListener("click", () => this.replaceInstances(this.el.replaceFrom.value, this.el.replaceTo.value));
+    this.el.replaceOpen.addEventListener("click", () => this.el.replaceDialog.showModal());
+    this.el.replaceCancel.addEventListener("click", () => this.el.replaceDialog.close());
+    // Closed first, so what replacing says shows in the panel.
+    this.el.replaceObjects.addEventListener("click", () => {
+      this.el.replaceDialog.close();
+      this.replaceInstances(this.el.replaceFrom.value, this.el.replaceTo.value);
+    });
     // Dragging a slider is one edit, undone together.
     for (const [input, change] of [
       [this.el.objectYaw, (v) => ({ yaw: (v * Math.PI) / 180 })],

@@ -181,11 +181,7 @@
           <label class="editor-range" data-for="paint">brush <input id="paintRadius" type="range" min="0" max="48" step="4" value="0"><output id="paintRadiusValue"></output></label>
           <label class="editor-field" data-for="place">object <select id="placeType"></select></label>
           <label id="placeSizeRow" class="editor-range" data-for="place">size <input id="placeScale" type="range" min="1" max="100" step="0.5" value="5"><output id="placeScaleValue"></output></label>
-          <div class="editor-stack" data-for="place">
-            <label class="editor-field">replace every placed <select id="replaceFrom"></select></label>
-            <label class="editor-field">with <select id="replaceTo"></select></label>
-            <div class="editor-row"><button id="replaceObjects" type="button">replace them</button></div>
-          </div>
+          <div class="editor-row" data-for="place"><button id="replaceOpen" type="button">replace every…</button></div>
           <div data-for="objects place">
             <div id="objectPanel" class="editor-stack" hidden>
               <p id="objectInfo"></p>
@@ -211,6 +207,12 @@
     <p id="hint" class="editor-hint"></p>
   </aside>
 </main>
+<dialog id="replaceDialog" class="editor-popover replace-dialog">
+  <h3>Replace placed objects</h3>
+  <label class="editor-field">replace every placed <select id="replaceFrom"></select></label>
+  <label class="editor-field">with <select id="replaceTo"></select></label>
+  <div class="editor-row"><button id="replaceObjects" type="button">replace them</button><button id="replaceCancel" type="button">cancel</button></div>
+</dialog>
 <dialog id="libraryPopover" class="library-popover">
   <div class="library-bar"><h2>Objects</h2><a href="/objects" target="_blank">open on its own</a><span class="library-spacer"></span><p class="editor-message library-message"></p><button type="button" class="library-close">close</button></div>
   <div id="libraryGallery" class="editor-gallery"></div>
