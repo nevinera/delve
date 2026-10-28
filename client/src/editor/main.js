@@ -5,6 +5,7 @@ import { fromRepo, loadFromGithub, recordOpened, sameRepo } from "./githubWorld.
 import { exportHeightmap, importHeightmap, needsRange } from "./heightmap.js";
 import { LibrarySync } from "./libraryStore.js";
 import { loadLocal, saveLocal } from "./localSave.js";
+import { PlatePool } from "./plates.js";
 import { World } from "./world.js";
 import { slug } from "./zones.js";
 import { LAND_FT, LandGrid } from "../world/landGrid.js";
@@ -142,9 +143,21 @@ const editor = new Editor(World.empty(), {
   message: $("message"),
 });
 
-$("download").addEventListener("click", () => {
+// Plates are packed and unpacked on these workers (plates.js).
+const plates = new PlatePool();
+const progress = (what) => ({ done, total }) => editor.say(`${what}: ${done} of ${total} plates...`, { info: true });
+
+// Opens a world from its stored files, splitting its plates into tiles.
+async function unpacked(world) {
+  await world.unpack({ pool: plates, onProgress: progress("Opening") });
+  return world;
+}
+
+$("download").addEventListener("click", async () => {
   updateIndexes(editor.world);
-  const blob = new Blob([editor.world.toZip()], { type: "application/zip" });
+  const stored = await editor.world.stored({ pool: plates, onProgress: progress("Packing") });
+  editor.say("");
+  const blob = new Blob([editor.world.toZip(stored)], { type: "application/zip" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
   link.download = `${slug(editor.world.info.name) || "world"}.zip`;
@@ -256,7 +269,7 @@ $("loadDefault").addEventListener("click", async () => {
   try {
     const response = await fetch(DEFAULT_WORLD, { cache: "no-cache" });
     if (!response.ok) throw new Error(response.status === 404 ? "this server has no default world" : `the server said ${response.status}`);
-    startWorld(World.fromZip(new Uint8Array(await response.arrayBuffer())));
+    startWorld(await unpacked(World.fromZip(new Uint8Array(await response.arrayBuffer()))));
   } catch (err) {
     window.alert(`Couldn't load the default world: ${err.message}`);
   }
@@ -267,7 +280,7 @@ $("uploadFile").addEventListener("change", async (e) => {
   e.target.value = "";
   if (!file) return;
   try {
-    startWorld(World.fromZip(new Uint8Array(await file.arrayBuffer())));
+    startWorld(await unpacked(World.fromZip(new Uint8Array(await file.arrayBuffer()))));
   } catch (err) {
     window.alert(`Couldn't load ${file.name}: ${err.message}`);
   }
@@ -346,7 +359,7 @@ async function openRepo(repo) {
     const client = new GithubClient(repo);
     if (same && source.commitSha && (await client.headSha(source.branch)) === source.commitSha) return opened(repo, `Opened ${repo}.`);
     const onProgress = ({ done, total }) => editor.say(`Opening ${repo}: ${done} of ${total} files...`, { info: true });
-    const loaded = await loadFromGithub(client, { kept: { world: editor.world, source }, onProgress });
+    const loaded = await loadFromGithub(client, { kept: { world: editor.world, source }, onProgress, pool: plates });
     startWorld(loaded.world, loaded.source);
     opened(repo, loaded.source.commitSha ? `Opened ${repo}.` : `${repo} is empty, so this is a new world.`);
   } catch (err) {

@@ -55,4 +55,14 @@ describe("worlds from GitHub", () => {
     const { world } = await loadFromGithub(fakeClient({ "places/continents/main/sketch.json": ["s1", "{}"] }));
     expect(world.info).toMatchObject({ name: "thorn", continents: [{ key: "main" }] });
   });
+
+  it("keeps the kept world's tiles for a plate that hasn't changed", async () => {
+    const kept = World.empty();
+    const tile = "places/continents/main/tiles/surface/3/4.dlt.gz";
+    kept.files.set(tile, new Uint8Array([1, 2, 3]));
+    const client = fakeClient({ "world.json": ["w1", '{"name":"Thornwood","continents":[]}'], "places/continents/main/plates/surface/0_0.plate": ["p1", "unread"] });
+    const { world } = await loadFromGithub(client, { kept: { world: kept, source: { repo: "me/thorn", shas: { "places/continents/main/plates/surface/0_0.plate": "p1" } } } });
+    expect(client.read).toEqual(["w1"]);
+    expect(world.files.get(tile)).toEqual(new Uint8Array([1, 2, 3]));
+  });
 });

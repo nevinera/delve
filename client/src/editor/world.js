@@ -1,8 +1,11 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
+import { builtObjects, builtStructures, images } from "../objects/collections.js";
+import { packPlates, unpackPlates } from "./plates.js";
 
 // A whole world directory held in memory, keyed by path within the world (no leading slash). The
 // editor reads and writes files here and downloads the lot as a zip that unzips straight over a
-// world checkout. Files it doesn't understand are kept as they were.
+// world checkout. Files it doesn't understand are kept as they were. Tiles are stored in plates,
+// but held here a file each (unpack, stored).
 export class World {
   constructor(files = new Map()) {
     this.files = files;
@@ -63,8 +66,22 @@ export class World {
     this.files.set(path, strToU8(`${JSON.stringify(data, null, 2)}\n`));
   }
 
-  toZip() {
-    const sorted = [...this.files.keys()].sort();
-    return zipSync(Object.fromEntries(sorted.map((path) => [path, this.files.get(path)])));
+  // Splits the world's plates into the tile files the editor works on (plates.js), with its own
+  // kinds of objects registered so they can be sized.
+  async unpack({ pool, onProgress } = {}) {
+    const library = { objects: builtObjects(this), images: images(this), structures: builtStructures(this) };
+    this.files = await unpackPlates(this.files, { library, pool, onProgress });
+  }
+
+  // The files as the world stores them, with its tiles in plates.
+  stored({ pool, onProgress } = {}) {
+    this.plateCache ??= new Map();
+    return packPlates(this.files, { cache: this.plateCache, pool, onProgress });
+  }
+
+  // The world's files zipped, these files by default, or others such as stored() gives.
+  toZip(files = this.files) {
+    const sorted = [...files.keys()].sort();
+    return zipSync(Object.fromEntries(sorted.map((path) => [path, files.get(path)])));
   }
 }
