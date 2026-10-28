@@ -18,47 +18,41 @@ import { HELD } from "./weapons.js";
 // - feet: where the ankles go, the legs bending to reach them and the feet kept flat.
 // - feetYaw: how far each foot (and its knee) is turned about the vertical, toward the left, in
 //   radians; straight ahead without.
+// - knees: the way each knee points, by its foot, overriding the turn feetYaw gives it.
 // Places are in feet for a 6ft body, from the ground beneath the character's middle, facing +z.
 
-// Sitting on the ground: knees up, forearms resting on them.
+// Sitting cross-legged on the ground: knees out to the sides, each foot tucked under the other
+// knee, hands resting on the knees.
 const SITTING = {
-  pelvis: [0, -2.72, -0.35],
+  pelvis: [0, -2.72, -0.1],
+  feet: { foot_l: [-0.32, 0.18, 0.5], foot_r: [0.32, 0.24, 0.72] },
+  feetYaw: { foot_l: -1.3, foot_r: 1.3 },
+  knees: { foot_l: [1, 0.35, 0.5], foot_r: [-1, 0.35, 0.5] },
   bones: {
-    pelvis: [-0.2, 0, 0],
-    spine_01: [0.12, 0, 0],
-    spine_02: [0.12, 0, 0],
-    head: [0.1, 0, 0],
-    thigh_l: [-2.1, 0, 0.18],
-    thigh_r: [-2.1, 0, -0.18],
-    calf_l: [1.45, 0, 0],
-    calf_r: [1.45, 0, 0],
-    foot_l: [0.85, 0, 0],
-    foot_r: [0.85, 0, 0],
-    upperarm_l: [-1.1, 0, -0.12],
-    upperarm_r: [-1.1, 0, 0.12],
-    lowerarm_l: [-0.6, 0, 0],
-    lowerarm_r: [-0.6, 0, 0],
+    spine_01: [0.08, 0, 0],
+    spine_02: [0.06, 0, 0],
+    head: [0.06, 0, 0],
+    upperarm_l: [-0.25, 0, 0.2],
+    upperarm_r: [-0.25, 0, -0.2],
+    lowerarm_l: [-1.0, 0, 0],
+    lowerarm_r: [-1.0, 0, 0],
   },
 };
 // Halfway down: crouched, leaning forward over the knees.
 const CROUCHED = {
   pelvis: [0, -1.45, -0.2],
+  feet: { foot_l: [0.4, 0.32, 0.1], foot_r: [-0.4, 0.32, 0.1] },
+  knees: { foot_l: [0.6, 0, 1], foot_r: [-0.6, 0, 1] },
   bones: {
     spine_01: [0.25, 0, 0],
     spine_02: [0.15, 0, 0],
-    thigh_l: [-1.5, 0, 0.12],
-    thigh_r: [-1.5, 0, -0.12],
-    calf_l: [1.9, 0, 0],
-    calf_r: [1.9, 0, 0],
-    foot_l: [-0.4, 0, 0],
-    foot_r: [-0.4, 0, 0],
-    upperarm_l: [-0.5, 0, -0.1],
-    upperarm_r: [-0.5, 0, 0.1],
+    upperarm_l: [-0.5, 0, 0.1],
+    upperarm_r: [-0.5, 0, -0.1],
     lowerarm_l: [-0.5, 0, 0],
     lowerarm_r: [-0.5, 0, 0],
   },
 };
-const STANDING = { pelvis: [0, 0, 0], bones: {} };
+const STANDING = { pelvis: [0, 0, 0], feet: { foot_l: [0.35, 0.32, 0], foot_r: [-0.35, 0.32, 0] }, bones: {} };
 // Breathing in while sitting: the chest lifts a little.
 const BREATH = { ...SITTING, bones: { ...SITTING.bones, spine_02: [0.08, 0, 0], head: [0.06, 0.08, 0] } };
 
@@ -262,11 +256,13 @@ function blend(from, to, u) {
   }
   const feet = {};
   for (const foot of Object.keys(to.feet ?? {})) feet[foot] = lerp(from.feet?.[foot] ?? to.feet[foot], to.feet[foot]);
+  const knees = {};
+  for (const foot of Object.keys(to.knees ?? {})) knees[foot] = lerp(from.knees?.[foot] ?? to.knees[foot], to.knees[foot]);
   const feetYaw = {};
   for (const foot of new Set([...Object.keys(from.feetYaw ?? {}), ...Object.keys(to.feetYaw ?? {})])) {
     feetYaw[foot] = lerp([from.feetYaw?.[foot] ?? 0], [to.feetYaw?.[foot] ?? 0])[0];
   }
-  return { pelvis: lerp(from.pelvis ?? [0, 0, 0], to.pelvis ?? [0, 0, 0]), bones, reach, feet, feetYaw };
+  return { pelvis: lerp(from.pelvis ?? [0, 0, 0], to.pelvis ?? [0, 0, 0]), bones, reach, feet, feetYaw, knees };
 }
 
 // A keyframed clip's pose at a time, eased from the keyframe before it to the one after.
@@ -354,7 +350,8 @@ function poseRig(rig, pose, s) {
     if (!pose.feet[foot]) continue;
     const side = foot.slice(-1);
     const yaw = new THREE.Quaternion().setFromAxisAngle(UP, pose.feetYaw?.[foot] ?? 0);
-    reachFor(LEG(side), v3(pose.feet[foot]).multiplyScalar(s), v3([side === "l" ? 0.15 : -0.15, 0, 1]).applyQuaternion(yaw).toArray(), yaw);
+    const knee = pose.knees?.[foot] ?? v3([side === "l" ? 0.15 : -0.15, 0, 1]).applyQuaternion(yaw).toArray();
+    reachFor(LEG(side), v3(pose.feet[foot]).multiplyScalar(s), knee, yaw);
   }
 }
 

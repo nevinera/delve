@@ -43,11 +43,15 @@ describe("characterClips", () => {
     expect(tall("pelvis").y / short("pelvis").y).toBeCloseTo(7.5 / 4.5, 1);
   });
 
-  it("sits on the ground with the knees up and the feet down", () => {
+  it("sits cross-legged on the ground, knees out and each foot under the other knee", () => {
     const at = posed("Sit_Ground_Idle_Loop", 1);
     expect(at("pelvis").y).toBeGreaterThan(0.25);
     expect(at("pelvis").y).toBeLessThan(0.8);
-    expect(at("calf_l").y).toBeGreaterThan(at("pelvis").y + 0.3);
+    expect(at("calf_l").x).toBeGreaterThan(0.7);
+    expect(at("calf_r").x).toBeLessThan(-0.7);
+    expect(at("calf_l").y).toBeLessThan(at("pelvis").y + 0.4);
+    expect(at("foot_l").x).toBeLessThan(0);
+    expect(at("foot_r").x).toBeGreaterThan(0);
     expect(at("foot_l").y).toBeGreaterThan(0.1);
     expect(at("foot_l").y).toBeLessThan(0.6);
     expect(at("hand_l").y).toBeGreaterThan(0.3);
