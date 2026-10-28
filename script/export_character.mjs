@@ -2,8 +2,8 @@
 // the default look, 6ft tall, holding a weapon (a greatsword unless given), in meters as glTF
 // expects, or times `scale` for a tool that takes them for some other unit. Its bones carry
 // body.js's names and stand unrotated, arms down. The skeleton sits beside the mesh rather than
-// inside it, and each mesh has normals, triangle indices and texture coordinates (all zero), as
-// some tools need.
+// inside it, each joint's place is given as a translation rather than a matrix, and each mesh
+// has normals, triangle indices and texture coordinates (all zero), as some tools need.
 //
 //   node script/export_character.mjs [out.glb] [weapon] [scale]
 import fs from "fs";
@@ -62,6 +62,6 @@ scene.add(armature, mesh);
 scene.updateMatrixWorld(true);
 mesh.skeleton.calculateInverses();
 mesh.bind(mesh.skeleton, mesh.matrixWorld);
-const glb = await new GLTFExporter().parseAsync(scene, { binary: true });
+const glb = await new GLTFExporter().parseAsync(scene, { binary: true, trs: true });
 fs.writeFileSync(out, Buffer.from(glb));
 console.log(`wrote ${out}`);
