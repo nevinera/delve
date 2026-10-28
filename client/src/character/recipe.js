@@ -14,6 +14,7 @@ import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 // - limbs: 0 thin to 1 thick, the limbs on top of build.
 // - shoulders, waist, hips, jaw: 0 narrow to 1 broad.
 // - bust: 0 to 1.
+// - rear: 0 flat to 1 full.
 // - hair: a HAIR style; beard: a BEARD style; jewelry: a list of JEWELRY; face: a list of FACE
 //   markings and wear.
 // - weapon: one of weapons.js's WEAPONS, held in hand.
@@ -42,6 +43,7 @@ export const DEFAULT_LOOK = {
   hips: 0.5,
   jaw: 0.5,
   bust: 0,
+  rear: 0.3,
   hair: "short",
   beard: "none",
   jewelry: [],
@@ -146,6 +148,7 @@ export function randomLook(random = Math.random) {
       hips: [0, 1],
       jaw: [0, 1],
       bust: chance(0.5) ? [0.3, 1] : 0,
+      rear: [0, 0.8],
       hair: HAIR,
       beard: chance(0.5) ? "none" : BEARD,
       jewelry: some(JEWELRY, 0.25),

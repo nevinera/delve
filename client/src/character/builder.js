@@ -23,6 +23,7 @@ const SLIDERS = [
   ["hips", 0, 1, 0.01],
   ["jaw", 0, 1, 0.01],
   ["bust", 0, 1, 0.01],
+  ["rear", 0, 1, 0.01],
 ];
 
 // The colors a player picks, each from a palette of swatches, with their labels and when they show

@@ -42,6 +42,10 @@ const TRUNK_SIDES = 32;
 // larger, the shirt across the middle is pulled up to `tight` of the way to flat, and below a full
 // bust it hangs as far as `hang` past the bust's underside before meeting the stomach.
 const BUST = { y: 4.27, angle: 0.62, inner: 0.5, outer: 0.62, above: 0.36, below: 0.29, depth: 0.32, drop: 0.1, longer: 0.1, tight: 0.6, hang: 0.35 };
+// The rear's middle on each side (height in feet for a 6ft body, angle from straight back), how
+// far it spreads toward the middle of the back and out toward the hips, above and below its middle,
+// and how far it stands out at most.
+const REAR = { y: 3.1, angle: 0.42, inner: 0.42, outer: 0.7, above: 0.4, below: 0.36, depth: 0.13 };
 const ARM = ["clavicle_l", "upperarm_l", "lowerarm_l", "hand_l"];
 const LEG = ["thigh_l", "calf_l", "foot_l", "ball_l"];
 
@@ -132,6 +136,7 @@ export function bodyMesh(look) {
   const { shoulders, waist, hips } = widths(look);
   const trunkRings = [
     level(2.92, { rx: 0.5 * hips * trunk, rz: 0.36 * trunk, bones: [["pelvis", 1]] }),
+    level(3.05, { rx: 0.57 * hips * trunk, rz: 0.4 * trunk, bones: [["pelvis", 1]] }),
     level(3.18, { rx: 0.62 * hips * trunk, rz: 0.42 * trunk, bones: [["pelvis", 1]] }),
     level(3.32, { rx: 0.6 * hips * trunk, rz: 0.41 * trunk, bones: [["pelvis", 0.6], ["spine_01", 0.4]] }),
     level(3.44, { rx: 0.56 * waist * trunk, rz: 0.39 * trunk, bones: [["spine_01", 1]] }),
@@ -152,7 +157,10 @@ export function bodyMesh(look) {
     level(4.97, { rx: 0.2 * trunk, rz: 0.2 * trunk, bones: [["spine_03", 0.5], ["neck_01", 0.5]] }),
     level(5.25, { rx: 0.18 * trunk, rz: 0.18 * trunk, bones: [["neck_01", 1]] }),
   ];
-  for (const ring of trunkRings) ring.push = bustPush(look, ring, s);
+  for (const ring of trunkRings) {
+    const pushes = [bustPush(look, ring, s), rearPush(look, ring, s)].filter(Boolean);
+    if (pushes.length) ring.push = (angle) => pushes.reduce((sum, push) => sum + push(angle), 0);
+  }
   // Trousers to the belt, then the shirt to the neck.
   const trunkColor = (band) => {
     const y = trunkRings[band].center[1] / s;
@@ -195,6 +203,12 @@ export function bodyMesh(look) {
       along(n("calf_l"), 0.56, { rx: 0.18 * limb, rz: 0.2 * limb }),
       along(n("calf_l"), 0.97, { rx: 0.13 * limb, rz: 0.14 * limb, bones: [[n("calf_l"), 0.5], [n("foot_l"), 0.5]] }),
     ];
+    // The top of the thigh carries the rear's underside down into the leg (angle 0 is its back).
+    const under = rearAt(look, leg[0].center[1] / s, s);
+    if (under) {
+      const depth = under.depth * 0.5 * (1 + Math.cos(Math.PI * under.down));
+      leg[0].push = (angle) => (Math.abs(angle) < 1.4 ? depth * 0.5 * (1 + Math.cos((Math.PI * angle) / 1.4)) : 0);
+    }
     parts[`leg_${side}`] = { rings: leg, sides: 8, color: (band) => (band < 5 ? c.secondary : boots), opts: {} };
     // Foot, heel to toe, its rings standing upright.
     const [fx, , fz] = at(n("foot_l"));
@@ -223,7 +237,16 @@ export function bodyMesh(look) {
     return reach(lower) + (reach(upper) - reach(lower)) * t;
   };
   parts.head = head(out, look, at("head"), s, c, chestFront);
-  dressArmor(out, parts, look, { s, trunk, limb, along, level, shoulders, hips, trunkSides: TRUNK_SIDES, n: (name, side) => name.replace(/_l$/, `_${side}`) });
+  // How far the trunk reaches from its middle at a height and angle round it, or 0 off its ends.
+  const trunkReach = (y, angle) => {
+    const above = trunkRings.findIndex((r) => r.center[1] >= y);
+    if (above < 1) return 0;
+    const reach = (ring) => ring.rz + (ring.push?.(angle) ?? 0);
+    const [lower, upper] = [trunkRings[above - 1], trunkRings[above]];
+    const t = (y - lower.center[1]) / (upper.center[1] - lower.center[1]);
+    return reach(lower) + (reach(upper) - reach(lower)) * t;
+  };
+  dressArmor(out, parts, look, { s, trunk, limb, along, level, shoulders, hips, trunkSides: TRUNK_SIDES, trunkReach, n: (name, side) => name.replace(/_l$/, `_${side}`) });
   for (const { rings, sides, color, opts } of Object.values(parts)) out.tube(rings, sides, color, opts);
   return { bones, ...out.arrays() };
 }
@@ -262,6 +285,29 @@ function bustPush(look, ring, s) {
   const below = (middle - y) / (BUST.below + BUST.hang * look.bust);
   const hang = y < middle && below < 1 ? 0.5 * (1 + Math.cos(Math.PI * below)) * look.bust : 0;
   return (angle) => Math.max(lying(y, angle), lying(middle, angle) * hang);
+}
+
+// How far the rear stands out at its fullest at a height (in feet for a 6ft body), and how far
+// that height is above or below its middle, from -1 to 1, or null outside it.
+function rearAt(look, y, s) {
+  if (!look.rear) return null;
+  const down = (y - REAR.y) / (y > REAR.y ? REAR.above : REAR.below);
+  if (Math.abs(down) >= 1) return null;
+  return { depth: look.rear * REAR.depth * s, down };
+}
+
+// How far the rear pushes a trunk ring out at each angle round it (0 the front): a rounded swell
+// either side of the middle of the back, or null for none.
+function rearPush(look, ring, s) {
+  const at = rearAt(look, ring.center[1] / s, s);
+  if (!at) return null;
+  const { depth, down } = at;
+  return (angle) => {
+    const off = Math.PI - Math.abs(angle) - REAR.angle;
+    const across = off / (off < 0 ? REAR.inner : REAR.outer);
+    const r = across * across + down * down;
+    return r < 1 ? depth * 0.5 * (1 + Math.cos(Math.PI * Math.sqrt(r))) : 0;
+  };
 }
 
 // How a hand grips, or null when it hangs open. The hand holding a weapon or off-hand item makes a

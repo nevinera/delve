@@ -84,7 +84,7 @@ function skirt(out, ctx, heights, widths, color, mail = false) {
   const top = heights[0];
   const rings = heights.map((y, i) => {
     const sway = Math.min(0.45, ((top - y) / (top - heights[heights.length - 1])) * 0.45);
-    return ctx.level(y, {
+    const ring = ctx.level(y, {
       rx: widths[i][0] * hips * trunk,
       rz: widths[i][1] * trunk,
       bones: [["pelvis", 1]],
@@ -97,6 +97,14 @@ function skirt(out, ctx, heights, widths, color, mail = false) {
         ].filter(([, w]) => w > 0);
       },
     });
+    // Out over anything the trunk pushes past it (the rear) between the rings either side.
+    const [from, to] = [heights[i + 1] ?? y, heights[i - 1] ?? y].map((h) => h * s);
+    const room = (angle) => {
+      let need = 0;
+      for (let k = 0; k <= 8; k++) need = Math.max(need, ctx.trunkReach(from + ((to - from) * k) / 8, angle) + 0.02 * s - ring.rz);
+      return need;
+    };
+    return { ...ring, push: room };
   });
   out.mail = mail;
   out.tube(rings, 16, color, {});
