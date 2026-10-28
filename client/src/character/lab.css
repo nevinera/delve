@@ -1,0 +1,40 @@
+/* The animation lab's player: the clip, its transport buttons, and the views. */
+.lab-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+.lab-buttons button {
+  flex: 1;
+  padding: 4px 6px;
+  background: #333;
+  color: #ddd;
+  border: 1px solid #555;
+  border-radius: 3px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.lab-buttons button:hover {
+  border-color: #c49a2a;
+}
+
+.lab-panel select,
+.lab-panel input[type="range"] {
+  width: 100%;
+  min-width: 0;
+}
+
+.lab-panel select {
+  background: #222;
+  color: #ddd;
+  border: 1px solid #555;
+  font: inherit;
+}
+
+.lab-help {
+  margin-top: 12px;
+  color: #777;
+}

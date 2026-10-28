@@ -36,4 +36,5 @@ Rails.application.routes.draw do
   get "structures" => "objects#structures"
   get "character_builder", to: redirect("/characters/new")
   resources :characters, except: [:show]
+  get "animation_lab" => "animation_lab#show"
 end
