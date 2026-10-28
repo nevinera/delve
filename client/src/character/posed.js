@@ -58,7 +58,7 @@ const BREATH = { ...SITTING, bones: { ...SITTING.bones, spine_02: [0.08, 0, 0], 
 
 // A two-handed weapon: the right hand by the guard, the left below it, in a fighting stance with
 // the left foot forward. Each swing starts and ends at the ready.
-const STANCE = { pelvis: [0, -0.18, 0.02], feet: { foot_l: [0.42, 0.32, 0.45], foot_r: [-0.42, 0.32, -0.35] } };
+const STANCE = { pelvis: [0, -0.2, 0.02], feet: { foot_l: [0.6, 0.32, 0.55], foot_r: [-0.6, 0.32, -0.45] } };
 const ARMS_DOWN = { hand_r: [-0.6, -0.7, -0.2], hand_l: [0.6, -0.7, -0.2] };
 const twoHanded = (bones, grip, dir, front, elbows = ARMS_DOWN) => ({
   ...STANCE,
@@ -90,12 +90,12 @@ const FOLLOWED = {
   ...twoHanded({ pelvis: [0.25, 0.2, 0], spine_01: [0.4, 0.25, 0], spine_02: [0.2, 0.1, 0], head: [-0.45, -0.25, 0] }, [0.6, 2.0, 2.15], [0.35, -0.85, 0.35], [0, -0.5, -0.85]),
   ...CHOP_STANCE(0.4),
 };
-// The sweep, swung round the body as heavy as it is, the legs and hips leading and the torso, arms and
-// blade following each a little behind (as a batter swings). It loads like a bat, the hands by
-// the right side of the head and the blade out behind, the hips and still more the shoulders
-// wound round to the right, the left shoulder under the chin, the weight back. The hips open first; leaning left, the body hauls the blade out from it in a
-// wide arc across the front and down, until its tip meets the ground behind on the left (for a
-// blade 3.9ft from the grip), the right shoulder thrown forward. It holds there a moment.
+// The sweep, swung round the body as heavy as it is, the legs and hips leading and the torso, arms
+// and blade following each a little behind. It loads with the whole body wound round to the right,
+// the left shoulder leading, the handle by the right side of the head and the blade out behind,
+// the head turned partway with the shoulders, the weight back. The hips open first; leaning left,
+// the body hauls the blade out from it in a wide arc across the front and a little down, and ends
+// with it on the left, pointing mostly ahead, a little down and left, the right shoulder forward.
 const ARC_ELBOWS = { hand_r: [-0.4, -0.9, -0.2], hand_l: [0.4, -0.9, -0.2] };
 // A blade's edge leads round the arc, square to the way it points.
 const leading = ([x, , z]) => [-z, 0, x];
@@ -110,30 +110,30 @@ const legs = (pelvis, back, yaw, knees) => ({
   knees: { foot_l: knees[0], foot_r: knees[1] },
 });
 const SWEEP_LOADED = {
-  ...sweep({ pelvis: [0, -0.4, 0.04], spine_01: [-0.05, -0.55, 0.06], spine_02: [0, -0.4, 0], head: [0, 1.2, 0] }, [-0.5, 4.75, 0.0], [-0.25, 0.35, -0.9], {
-    hand_r: [-1, -0.2, -0.3],
-    hand_l: [0.3, -1, 0.2],
+  ...sweep({ pelvis: [0, -0.7, 0.04], spine_01: [-0.05, -0.6, 0.06], spine_02: [0, -0.4, 0], head: [0, 0.9, 0] }, [-0.15, 4.8, -0.5], [-0.3, 0.35, -0.9], {
+    hand_r: [-0.6, 0.1, -1],
+    hand_l: [0.6, -1, 0.3],
   }),
-  ...legs([-0.12, -0.5, -0.1], [-0.42, 0.32, -0.35], [-0.35, -0.25], [[-0.35, 0, 1], [-0.6, 0, 0.8]]),
+  ...legs([-0.15, -0.52, -0.12], [-0.6, 0.32, -0.45], [-0.5, -0.45], [[-0.45, 0, 1], [-0.8, 0, 0.6]]),
 };
 const SWEEP_IN = {
-  ...sweep({ pelvis: [0, 0.2, 0], spine_01: [0, -0.5, 0], spine_02: [0, -0.3, 0], head: [0, 0.6, 0] }, [-0.85, 4.0, 0.45], [-0.8, 0.15, -0.55], {
+  ...sweep({ pelvis: [0, -0.1, 0], spine_01: [0, -0.55, 0], spine_02: [0, -0.35, 0], head: [0, 0.8, 0] }, [-0.9, 4.15, 0.25], [-0.9, 0.1, -0.3], {
     hand_r: [-0.8, -0.6, -0.2],
     hand_l: [0.3, -1, 0.2],
   }),
-  ...legs([0, -0.45, 0.05], [-0.42, 0.36, -0.35], [0.1, 0.3], [[0.1, 0, 1], [0, 0, 1]]),
+  ...legs([-0.02, -0.48, 0.02], [-0.6, 0.34, -0.45], [0, 0.2], [[0.05, 0, 1], [-0.1, 0, 1]]),
 };
 const SWEEP_MID = {
-  ...sweep({ pelvis: [0.05, 0.45, 0], spine_01: [0.08, 0, -0.12], spine_02: [0.05, 0, -0.05], head: [0, -0.4, 0.12] }, [-0.05, 3.5, 1.35], [0.05, -0.18, 1]),
-  ...legs([0.12, -0.42, 0.15], [-0.4, 0.45, -0.3], [0.3, 0.8], [[0.35, 0, 1], [0.55, -0.1, 0.8]]),
+  ...sweep({ pelvis: [0.05, 0.35, 0], spine_01: [0.05, -0.1, -0.1], spine_02: [0.03, -0.05, 0], head: [0, -0.2, 0.1] }, [-0.35, 3.75, 1.3], [-0.3, -0.08, 0.95]),
+  ...legs([0.12, -0.45, 0.15], [-0.58, 0.42, -0.42], [0.3, 0.7], [[0.35, 0, 1], [0.5, -0.1, 0.85]]),
 };
 const SWEEP_OUT = {
-  ...sweep({ pelvis: [0.1, 0.55, 0], spine_01: [0.15, 0.3, -0.12], spine_02: [0.08, 0.15, -0.05], head: [-0.05, -0.9, 0.12] }, [0.7, 2.95, 0.9], [0.75, -0.45, 0.5]),
-  ...legs([0.17, -0.42, 0.2], [-0.36, 0.5, -0.26], [0.4, 1.1], [[0.45, 0, 0.9], [0.8, -0.15, 0.55]]),
+  ...sweep({ pelvis: [0.08, 0.5, 0], spine_01: [0.1, 0.2, -0.12], spine_02: [0.05, 0.1, -0.05], head: [-0.05, -0.75, 0.12] }, [0.3, 3.45, 1.3], [0.25, -0.18, 0.95]),
+  ...legs([0.2, -0.45, 0.2], [-0.54, 0.48, -0.38], [0.4, 1.0], [[0.45, 0, 0.9], [0.75, -0.15, 0.6]]),
 };
 const SWEEP_TO = {
-  ...sweep({ pelvis: [0.15, 0.6, 0], spine_01: [0.3, 0.5, -0.08], spine_02: [0.1, 0.3, 0], head: [-0.15, -1.2, 0.08] }, [0.75, 2.42, 0.25], [0.5, -0.62, -0.6]),
-  ...legs([0.2, -0.42, 0.2], [-0.34, 0.5, -0.24], [0.45, 1.25], [[0.5, 0, 0.85], [0.85, -0.15, 0.5]]),
+  ...sweep({ pelvis: [0.12, 0.55, 0], spine_01: [0.18, 0.35, -0.1], spine_02: [0.08, 0.2, 0], head: [-0.1, -1.05, 0.1] }, [0.8, 3.15, 0.85], [0.5, -0.3, 0.8]),
+  ...legs([0.24, -0.47, 0.22], [-0.52, 0.5, -0.36], [0.45, 1.2], [[0.5, 0, 0.85], [0.85, -0.15, 0.5]]),
 };
 
 // A bow: turned side-on, the left arm holding the bow out ahead and the right hand drawing the
