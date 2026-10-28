@@ -38,8 +38,10 @@ const TRUNK_SIDES = 32;
 // notch at the top of the breastbone and the two nipples make a triangle with equal sides (Penn
 // 1955), each side's inner edge stops short of the middle of the chest and its outer edge reaches
 // the front of the armpit (Westreich 1997), and the nipple is 45% of the way down (Mallucci and
-// Branford 2012).
-const BUST = { y: 4.27, angle: 0.62, inner: 0.5, outer: 0.62, above: 0.36, below: 0.29, depth: 0.32 };
+// Branford 2012). The fullest point drops by `drop` and the upper slope grows `longer` as it gets
+// larger, the shirt across the middle is pulled up to `tight` of the way to flat, and below it
+// hangs as far as `hang` before meeting the stomach.
+const BUST = { y: 4.27, angle: 0.62, inner: 0.5, outer: 0.62, above: 0.36, below: 0.29, depth: 0.32, drop: 0.1, longer: 0.1, tight: 0.6, hang: 0.4 };
 const ARM = ["clavicle_l", "upperarm_l", "lowerarm_l", "hand_l"];
 const LEG = ["thigh_l", "calf_l", "foot_l", "ball_l"];
 
@@ -122,43 +124,35 @@ export function bodyMesh(look) {
   const up = [0, 1, 0];
   const level = (y, extra) => ({ center: [0, y * s, 0], dir: up, ...extra });
 
-  // The trunk, crotch to neck. The bust pushes the chest's front out either side of the middle, a
-  // rounded swell on each side that eases into the chest at its edges, its fullest point a little
-  // below its middle so it slopes more gently above.
+  // The trunk, crotch to neck. The chest has extra rings, and the trunk extra sides, so the bust
+  // rounds off rather than coming to a point. The bust follows the chest's bone alone, and the
+  // stomach bends from the bones below it a little at a time under the bust, so the spine bending
+  // doesn't fold the bust under, pull it to a point or leave a ledge below it. The shoulder ring
+  // reaches out over the top of the arms.
   const { shoulders, waist, hips } = widths(look);
-  const bust = (y) => (angle) => {
-    const off = Math.abs(angle) - BUST.angle;
-    const across = off / (off < 0 ? BUST.inner : BUST.outer);
-    const down = (y - BUST.y) / (y > BUST.y ? BUST.above : BUST.below);
-    const r = across * across + down * down;
-    return r < 1 ? look.bust * BUST.depth * s * 0.5 * (1 + Math.cos(Math.PI * Math.sqrt(r))) : 0;
-  };
-  // The chest has extra rings, and the trunk extra sides, so the bust rounds off rather than
-  // coming to a point. The bust follows the chest's bone alone, and the stomach bends from the
-  // bones below it a little at a time under the bust, so the spine bending doesn't fold the bust
-  // under, pull it to a point or leave a ledge below it. The shoulder ring reaches out over the top of the arms.
   const trunkRings = [
     level(2.92, { rx: 0.5 * hips * trunk, rz: 0.36 * trunk, bones: [["pelvis", 1]] }),
     level(3.18, { rx: 0.62 * hips * trunk, rz: 0.42 * trunk, bones: [["pelvis", 1]] }),
     level(3.32, { rx: 0.6 * hips * trunk, rz: 0.41 * trunk, bones: [["pelvis", 0.6], ["spine_01", 0.4]] }),
     level(3.44, { rx: 0.56 * waist * trunk, rz: 0.39 * trunk, bones: [["spine_01", 1]] }),
     level(3.65, { rx: 0.52 * waist * trunk, rz: 0.37 * trunk, bones: [["spine_01", 0.6], ["spine_02", 0.4]] }),
-    level(3.92, { rx: 0.57 * shoulders * trunk, rz: 0.4 * trunk, push: bust(3.92), bones: [["spine_02", 0.7], ["spine_03", 0.3]] }),
-    level(3.99, { rx: 0.585 * shoulders * trunk, rz: 0.41 * trunk, push: bust(3.99), bones: [["spine_02", 0.45], ["spine_03", 0.55]] }),
-    level(4.06, { rx: 0.6 * shoulders * trunk, rz: 0.42 * trunk, push: bust(4.06), bones: [["spine_02", 0.2], ["spine_03", 0.8]] }),
-    level(4.12, { rx: 0.61 * shoulders * trunk, rz: 0.425 * trunk, push: bust(4.12), bones: [["spine_03", 1]] }),
-    level(4.18, { rx: 0.62 * shoulders * trunk, rz: 0.43 * trunk, push: bust(4.18), bones: [["spine_03", 1]] }),
-    level(4.24, { rx: 0.63 * shoulders * trunk, rz: 0.43 * trunk, push: bust(4.24), bones: [["spine_03", 1]] }),
-    level(4.3, { rx: 0.64 * shoulders * trunk, rz: 0.43 * trunk, push: bust(4.3), bones: [["spine_03", 1]] }),
-    level(4.36, { rx: 0.655 * shoulders * trunk, rz: 0.425 * trunk, push: bust(4.36), bones: [["spine_03", 1]] }),
-    level(4.42, { rx: 0.67 * shoulders * trunk, rz: 0.42 * trunk, push: bust(4.42), bones: [["spine_03", 1]] }),
-    level(4.55, { rx: 0.7 * shoulders * trunk, rz: 0.4 * trunk, push: bust(4.55), bones: [["spine_03", 1]] }),
+    level(3.92, { rx: 0.57 * shoulders * trunk, rz: 0.4 * trunk, bones: [["spine_02", 0.7], ["spine_03", 0.3]] }),
+    level(3.99, { rx: 0.585 * shoulders * trunk, rz: 0.41 * trunk, bones: [["spine_02", 0.45], ["spine_03", 0.55]] }),
+    level(4.06, { rx: 0.6 * shoulders * trunk, rz: 0.42 * trunk, bones: [["spine_02", 0.2], ["spine_03", 0.8]] }),
+    level(4.12, { rx: 0.61 * shoulders * trunk, rz: 0.425 * trunk, bones: [["spine_03", 1]] }),
+    level(4.18, { rx: 0.62 * shoulders * trunk, rz: 0.43 * trunk, bones: [["spine_03", 1]] }),
+    level(4.24, { rx: 0.63 * shoulders * trunk, rz: 0.43 * trunk, bones: [["spine_03", 1]] }),
+    level(4.3, { rx: 0.64 * shoulders * trunk, rz: 0.43 * trunk, bones: [["spine_03", 1]] }),
+    level(4.36, { rx: 0.655 * shoulders * trunk, rz: 0.425 * trunk, bones: [["spine_03", 1]] }),
+    level(4.42, { rx: 0.67 * shoulders * trunk, rz: 0.42 * trunk, bones: [["spine_03", 1]] }),
+    level(4.55, { rx: 0.7 * shoulders * trunk, rz: 0.4 * trunk, bones: [["spine_03", 1]] }),
     level(4.68, { rx: 0.72 * shoulders * trunk, rz: 0.36 * trunk, bones: [["spine_03", 1]] }),
     level(4.8, { rx: 0.6 * shoulders * trunk, rz: 0.3 * trunk, bones: [["spine_03", 1]] }),
     level(4.9, { rx: 0.36 * trunk, rz: 0.24 * trunk, bones: [["spine_03", 0.7], ["neck_01", 0.3]] }),
     level(4.97, { rx: 0.2 * trunk, rz: 0.2 * trunk, bones: [["spine_03", 0.5], ["neck_01", 0.5]] }),
     level(5.25, { rx: 0.18 * trunk, rz: 0.18 * trunk, bones: [["neck_01", 1]] }),
   ];
+  for (const ring of trunkRings) ring.push = bustPush(look, ring, s);
   // Trousers to the belt, then the shirt to the neck.
   const trunkColor = (band) => {
     const y = trunkRings[band].center[1] / s;
@@ -214,10 +208,58 @@ export function bodyMesh(look) {
     parts[`foot_${side}`] = { rings: foot, sides: 8, color: () => boots, opts: { capStart: true, capEnd: true } };
   }
 
-  parts.head = head(out, look, at("head"), s, c);
+  // How far forward the trunk's front reaches at a point's x and height, where it's in front of
+  // the trunk: between the rings above and below it, bust and all.
+  const chestFront = (x, y) => {
+    const above = trunkRings.findIndex((r) => r.center[1] >= y);
+    if (above < 1) return null;
+    const reach = (ring) => {
+      if (Math.abs(x) >= ring.rx) return ring.center[2];
+      const angle = Math.asin(x / ring.rx);
+      return ring.center[2] + Math.cos(angle) * (ring.rz + (ring.push?.(angle) ?? 0));
+    };
+    const [lower, upper] = [trunkRings[above - 1], trunkRings[above]];
+    const t = (y - lower.center[1]) / (upper.center[1] - lower.center[1]);
+    return reach(lower) + (reach(upper) - reach(lower)) * t;
+  };
+  parts.head = head(out, look, at("head"), s, c, chestFront);
   dressArmor(out, parts, look, { s, trunk, limb, along, level, shoulders, hips, trunkSides: TRUNK_SIDES, n: (name, side) => name.replace(/_l$/, `_${side}`) });
   for (const { rings, sides, color, opts } of Object.values(parts)) out.tube(rings, sides, color, opts);
   return { bones, ...out.arrays() };
+}
+
+// How far the bust pushes a trunk ring out at each angle round it (0 the front), as the shirt over
+// it lies: a rounded swell either side of the middle that eases into the chest at its edges,
+// fullest a little below its middle. A larger bust hangs lower and heavier, its upper slope longer
+// and flatter and its underside rounder. Toward the middle the shirt clings a little to a small
+// bust, and stretches flatter across a larger one. Below, the shirt hangs from the fullest point
+// a little way before it meets the stomach, rather than tucking in under the bust.
+function bustPush(look, ring, s) {
+  if (!look.bust) return null;
+  const droop = look.bust ** 1.5;
+  const middle = BUST.y - BUST.drop * droop;
+  const depth = look.bust * BUST.depth * s;
+  const tight = BUST.tight * look.bust;
+  // The push at height y and angle, before the shirt hangs.
+  const lying = (y, angle) => {
+    const down = y > middle ? (y - middle) / (BUST.above + BUST.longer * droop) : (y - middle) / BUST.below;
+    const swell = (off) => {
+      const across = off / (off < 0 ? BUST.inner : BUST.outer);
+      const r = across * across + down * down;
+      if (r >= 1) return 0;
+      const bell = 0.5 * (1 + Math.cos(Math.PI * Math.sqrt(r)));
+      return depth * (y > middle ? bell : bell + (Math.sqrt(1 - r) - bell) * droop);
+    };
+    const off = Math.abs(angle) - BUST.angle;
+    const push = swell(off);
+    if (off >= 0) return push;
+    // Laid flat across the front from the fullest point at this height.
+    const flat = (Math.cos(BUST.angle) * (ring.rz + swell(0))) / Math.cos(angle) - ring.rz;
+    return Math.max(push, push + (flat - push) * tight);
+  };
+  const y = ring.center[1] / s;
+  const hang = y < middle ? Math.max(0, 1 - (middle - y) / BUST.hang) ** 2 * look.bust : 0;
+  return (angle) => Math.max(lying(y, angle), lying(middle, angle) * hang);
 }
 
 // How a hand grips, or null when it hangs open. The hand holding a weapon or off-hand item makes a
@@ -310,7 +352,7 @@ function hand(parts, side, wrist, end, s, grip, c) {
 
 // The head: rings round the head bone, chin to crown, with hair and beard colored onto its faces
 // and built out from it where they stand proud, a nose, eyes and any earrings and necklace.
-function head(out, look, [hx, hy, hz], s, c) {
+function head(out, look, [hx, hy, hz], s, c, chestFront) {
   const jaw = 1 + 0.32 * (look.jaw - 0.5);
   const bearded = look.beard === "full" || look.beard === "long";
   const ring = (dy, rx, rz, dz, extra = {}) => ({ center: [hx, hy + dy * s, hz + dz * s], dir: [0, 1, 0], rx: rx * s, rz: rz * s, bones: [["head", 1]], ...extra });
@@ -485,7 +527,14 @@ function head(out, look, [hx, hy, hz], s, c) {
       points.push(knots[knots.length - 1]);
       const radii = points.map((_, i) => (i % 2 ? 0.045 : 0.07) * s * (i === points.length - 1 ? 0.6 : 1));
       const along = (i) => (i < 3 ? bones : i < 6 ? neck : [["spine_03", 1]]);
-      out.path(points.map(([x, dy, z]) => p(side * x, dy, z)), radii, 6, () => c.hair, along, { capEnd: true });
+      // Over the chest, each knot lies on the outside of it, however full the bust.
+      const laid = points.map(([x, dy, z], i) => {
+        const point = p(side * x, dy, z);
+        const front = chestFront(point[0], point[1]);
+        if (front !== null) point[2] = Math.max(point[2], front + radii[i] + 0.015 * s);
+        return point;
+      });
+      out.path(laid, radii, 6, () => c.hair, along, { capEnd: true });
     }
   }
 
