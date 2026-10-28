@@ -71,20 +71,47 @@ const twoHanded = (bones, grip, dir, front, elbows = ARMS_DOWN) => ({
 });
 const READY = twoHanded({ spine_01: [0.08, -0.15, 0], head: [0, 0.15, 0] }, [-0.1, 3.4, 1.05], [0.15, 0.75, 0.55], [0, 0, 1]);
 const READY_BREATH = twoHanded({ spine_01: [0.06, -0.15, 0], spine_02: [-0.03, 0, 0], head: [0, 0.15, 0] }, [-0.1, 3.47, 1.03], [0.15, 0.75, 0.55], [0, 0, 1]);
-// The overhead chop: leaning back with the blade over the right shoulder, up over the head, then
-// bending forward from the hips, knees giving, arms out straight as it comes down ahead, and on
-// down to the left.
+// Poses for the keyframes from `start` to `end`, evenly spaced, after the first (already keyed at
+// `start`): the body moves through them without stopping, easing only out of the first and into
+// the last.
+const through = (start, end, poses) =>
+  poses.slice(1).map((pose, i, rest) => [start + ((i + 1) / rest.length) * (end - start), i < rest.length - 1 ? { ...pose, through: true } : pose]);
+// The overhead chop: crouched, leaning back with the blade over the right shoulder and the
+// shoulders shrugged up, then rolling the blade up over the head and on down ahead in one even arc,
+// bending forward from the hips, knees giving, arms out straight, and on down to the left.
 const CHOP_STANCE = (drop) => ({ ...STANCE, pelvis: [0, STANCE.pelvis[1] - drop, STANCE.pelvis[2]] });
-const WOUND = twoHanded({ pelvis: [-0.08, -0.15, 0], spine_01: [-0.12, -0.3, 0], spine_02: [-0.1, -0.15, 0], head: [0.15, 0.4, 0] }, [-0.4, 5.55, -0.15], [-0.25, 0.25, -0.95], [0, 1, 0], {
-  hand_r: [-1, 0.1, -0.3],
-  hand_l: [0.6, -0.4, 0.5],
-});
-const OVERHEAD = twoHanded({ pelvis: [-0.04, 0, 0], spine_01: [-0.08, -0.1, 0], spine_02: [-0.05, 0, 0], head: [0.1, 0.1, 0] }, [-0.15, 6.05, 0.55], [0, 0.55, -0.85], [0, 1, 0.3], {
-  hand_r: [-1, 0, 0.1],
-  hand_l: [1, 0, 0.1],
-});
+const SHRUG = (up) => ({ clavicle_l: [0, 0, up], clavicle_r: [0, 0, -up] });
+const WOUND = {
+  ...twoHanded({ pelvis: [-0.08, -0.15, 0], spine_01: [-0.12, -0.3, 0], spine_02: [-0.1, -0.15, 0], head: [0.15, 0.4, 0], ...SHRUG(0.3) }, [-0.4, 5.55, -0.15], [-0.25, 0.25, -0.95], [0, 1, 0], {
+    hand_r: [-1, 0.1, -0.3],
+    hand_l: [0.6, -0.4, 0.5],
+  }),
+  ...CHOP_STANCE(0.15),
+};
+const OVERHEAD = {
+  ...twoHanded({ pelvis: [-0.04, 0, 0], spine_01: [-0.08, -0.1, 0], spine_02: [-0.05, 0, 0], head: [0.1, 0.1, 0], ...SHRUG(0.35) }, [-0.15, 6.05, 0.55], [0, 0.55, -0.85], [0, 0.85, 0.55], {
+    hand_r: [-1, 0, 0.1],
+    hand_l: [1, 0, 0.1],
+  }),
+  ...CHOP_STANCE(0.05),
+};
+// The blade straight up over the head, then out ahead at shoulder height, its edge leading.
+const ABOVE = {
+  ...twoHanded({ pelvis: [0.04, 0.03, 0], spine_01: [0.06, -0.04, 0], spine_02: [0.03, 0, 0], head: [0, 0.05, 0], ...SHRUG(0.3) }, [-0.08, 6.15, 1.2], [0.02, 1, 0.05], [0, -0.05, 1], {
+    hand_r: [-1, -0.2, 0],
+    hand_l: [1, -0.2, 0],
+  }),
+  ...CHOP_STANCE(0.1),
+};
+const AHEAD = {
+  ...twoHanded({ pelvis: [0.12, 0.06, 0], spine_01: [0.22, 0.04, 0], spine_02: [0.14, 0, 0], head: [-0.2, 0, 0], ...SHRUG(0.12) }, [0, 4.8, 2.3], [0.05, 0.4, 0.92], [0, -0.92, 0.4], {
+    hand_r: [-0.8, -0.5, -0.1],
+    hand_l: [0.8, -0.5, -0.1],
+  }),
+  ...CHOP_STANCE(0.25),
+};
 const CHOPPED = {
-  ...twoHanded({ pelvis: [0.2, 0.08, 0], spine_01: [0.35, 0.08, 0], spine_02: [0.22, 0, 0], head: [-0.4, 0, 0] }, [0.05, 2.85, 2.7], [0.1, -0.45, 0.9], [0, -1, 0]),
+  ...twoHanded({ pelvis: [0.2, 0.08, 0], spine_01: [0.35, 0.08, 0], spine_02: [0.22, 0, 0], head: [-0.4, 0, 0] }, [0.05, 2.85, 2.7], [0.1, -0.45, 0.9], [0, -0.9, -0.45]),
   ...CHOP_STANCE(0.35),
 };
 const FOLLOWED = {
@@ -96,11 +123,6 @@ const FOLLOWED = {
 // hips open and haul the blade round in a wide arc across the front, the right foot stepping
 // through, to end on the left pointing mostly ahead, a little down and left. Each pose is a frame
 // of that animation, its blade smoothed onto an even arc (script/cascadeur_pose.mjs).
-// Poses for the keyframes from `start` to `end`, evenly spaced, after the first (already keyed at
-// `start`): the body moves through them without stopping, easing only out of the first and into
-// the last.
-const through = (start, end, poses) =>
-  poses.slice(1).map((pose, i, rest) => [start + ((i + 1) / rest.length) * (end - start), i < rest.length - 1 ? { ...pose, through: true } : pose]);
 const SWEEP = [
   {
     pelvis: [0.02, -0.57, 0.27],
@@ -306,10 +328,10 @@ export const POSED = {
   TwoHand_Chop: [
     [0, READY],
     [0.4, WOUND],
-    [0.5, OVERHEAD],
-    [0.6, CHOPPED],
-    [0.75, FOLLOWED],
-    [1.3, READY],
+    [0.5, WOUND],
+    ...through(0.5, 0.82, [WOUND, OVERHEAD, ABOVE, AHEAD, CHOPPED, FOLLOWED]),
+    [1.0, FOLLOWED],
+    [1.5, READY],
   ],
   TwoHand_Sweep: [
     [0, READY],
