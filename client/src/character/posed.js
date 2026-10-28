@@ -159,9 +159,12 @@ function gait({ speed, cycle, planted, lift, heading = 0, bob, low = 0, lean, sw
       feet,
       feetYaw,
       bones: {
-        pelvis: [0, -0.15 * twist * turn, 0],
-        spine_01: [lean * forward, 0, -lean * Math.sin(heading) * 0.5],
-        spine_02: [0, 0.25 * twist * turn, 0],
+        // The lean tips the hips and bends the spine above them, and the head tips back up to look
+        // ahead. The legs still reach their feet.
+        pelvis: [0.4 * lean * forward, -0.15 * twist * turn, 0],
+        spine_01: [0.35 * lean * forward, 0, -lean * Math.sin(heading) * 0.5],
+        spine_02: [0.25 * lean * forward, 0.25 * twist * turn, 0],
+        neck_01: [-0.5 * lean * forward, 0, 0],
         upperarm_l: [swing * turn, 0, 0.12],
         upperarm_r: [-swing * turn, 0, -0.12],
         lowerarm_l: [elbow, 0, 0],
@@ -171,7 +174,7 @@ function gait({ speed, cycle, planted, lift, heading = 0, bob, low = 0, lean, sw
   };
   return { length, at, speed };
 }
-const RUN = { speed: 21, cycle: 0.66, planted: 0.22, lift: 0.75, bob: 0.12, low: -0.2, lean: 0.2, swing: 0.7, elbow: -1.4, width: 0.22 };
+const RUN = { speed: 21, cycle: 0.66, planted: 0.22, lift: 0.75, bob: 0.12, low: -0.2, lean: 0.4, swing: 0.7, elbow: -1.4, width: 0.22 };
 const WALK = { speed: 7.5, cycle: 1.1, planted: 0.6, lift: 0.25, bob: 0.06, low: -0.03, lean: 0.03, swing: 0.3, elbow: -0.35, width: 0.25 };
 // Strafing runs half turned toward the side, the feet a little further apart so they pass.
 const STRAFE = Math.PI / 4;
