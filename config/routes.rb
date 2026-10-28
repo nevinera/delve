@@ -30,6 +30,7 @@ Rails.application.routes.draw do
   end
 
   root "home#show"
+  get "home" => "dashboard#show", :as => :home
   get "editor" => "editor#show"
   get "objects" => "objects#show"
   get "structures" => "objects#structures"

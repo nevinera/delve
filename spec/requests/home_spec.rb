@@ -10,13 +10,9 @@ RSpec.describe "Home", type: :request do
     expect(response.body).not_to include(%(href="/editor"))
   end
 
-  it "links to the characters, the editor and signing out when signed in" do
+  it "sends you to /home when signed in" do
     sign_in create(:user)
     get root_path
-
-    expect(response.body).to include(%(href="/characters"))
-    expect(response.body).to include(%(href="/editor"))
-    expect(response.body).to include("Sign out")
-    expect(response.body).not_to include(%(href="/login"))
+    expect(response).to redirect_to(home_path)
   end
 end

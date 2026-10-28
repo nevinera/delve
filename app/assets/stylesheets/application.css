@@ -167,3 +167,39 @@ input[type="submit"].secondary:hover {
 .character-actions form {
   margin: 0;
 }
+
+/* Links under a section of /home, the main one a button. */
+.section-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem 1.25rem;
+  align-items: center;
+}
+
+.muted {
+  color: var(--pico-muted-color);
+}
+
+/* Your worlds on /home: a row each. */
+.world-list {
+  padding: 0;
+}
+
+.world-list li {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  align-items: baseline;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+
+.world-list strong {
+  font-family: "Cinzel", serif;
+  color: #e8d5a0;
+}
+
+.world-list a {
+  margin-left: auto;
+}

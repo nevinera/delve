@@ -1,0 +1,49 @@
+<% content_for :title, "Home - Delve" %>
+<% content_for :head do %>
+  <%= vite_script_tags "src/character/list.js", "/client/characterList.js" %>
+<% end %>
+<section>
+  <h2>Your characters</h2>
+  <% if @characters.any? %>
+    <ul class="character-list">
+      <%= render partial: "characters/character", collection: @characters %>
+    </ul>
+    <p class="section-links">
+      <%= link_to "New character", new_character_path, role: "button" %>
+      <% if @character_count > @characters.size %>
+        <%= link_to "All #{@character_count} characters", characters_path %>
+      <% else %>
+        <%= link_to "All characters", characters_path %>
+      <% end %>
+    </p>
+  <% else %>
+    <p>You don't have any characters yet.</p>
+    <p><%= link_to "Make a character", new_character_path, role: "button" %></p>
+  <% end %>
+</section>
+
+<section>
+  <h2>Your worlds</h2>
+  <% if @github.nil? %>
+    <p>Worlds are kept in GitHub repos. <%= link_to "Connect GitHub", github_connect_path %> to make and edit them.</p>
+  <% elsif @worlds.any? %>
+    <ul class="world-list">
+      <% @worlds.each do |world| %>
+        <li>
+          <strong><%= world.name %></strong>
+          <span class="muted"><%= world.repo %>, edited <%= time_ago_in_words(world.edited_at) %> ago</span>
+          <%= link_to "edit", editor_path %>
+        </li>
+      <% end %>
+    </ul>
+  <% else %>
+    <p>You haven't opened any worlds yet.</p>
+  <% end %>
+  <% if @github %>
+    <p class="section-links">
+      <%= link_to "World editor", editor_path, role: "button" %>
+      <%= link_to "Object library", objects_path %>
+      <%= link_to "GitHub: #{@github.login}", github_connect_path %>
+    </p>
+  <% end %>
+</section>

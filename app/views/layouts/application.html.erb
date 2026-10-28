@@ -33,10 +33,6 @@
         </ul>
         <ul>
           <% if user_signed_in? %>
-            <li><%= link_to "Characters", characters_path %></li>
-            <li><%= link_to "World editor", editor_path %></li>
-            <li><%= link_to "Objects", objects_path %></li>
-            <li><%= link_to(current_user.github_connection ? "GitHub: #{current_user.github_connection.login}" : "Connect GitHub", github_connect_path) %></li>
             <li><%= button_to "Sign out", destroy_user_session_path, method: :delete, class: "compact" %></li>
           <% elsif !current_page?(new_user_session_path) %>
             <li><%= link_to "Sign in", new_user_session_path %></li>
