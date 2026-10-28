@@ -25,9 +25,16 @@ const SLIDERS = [
   ["bust", 0, 1, 0.01],
 ];
 
-// Colors a player picks freely, with their labels. Skin picks from SKIN's swatches, and steel and
-// wood stay as they are.
-const PICKED_COLORS = { hair: "hair color", eyes: "eyes", primary: "shirt", secondary: "trousers", metal: "jewelry", paint: "warpaint" };
+// Colors a player picks freely, with their labels and when they show on the character. Skin picks
+// from SKIN's swatches, and steel and wood stay as they are.
+const PICKED_COLORS = {
+  hair: ["hair color", () => look.hair !== "bald" || look.beard !== "none" || look.face.includes("sideburns")],
+  eyes: ["eyes", () => true],
+  primary: ["shirt", () => true],
+  secondary: ["trousers", () => true],
+  metal: ["metal", () => look.jewelry.length || look.face.includes("glasses") || wield().weapon !== "none"],
+  paint: ["warpaint", () => look.face.includes("warpaint")],
+};
 
 // Attacks, each a run of clips played in turn.
 const SWORD = [["Sword_Attack"], ["Sword_Regular_A", "Sword_Regular_A_Rec"], ["Sword_Regular_B", "Sword_Regular_B_Rec"], ["Sword_Regular_C"]];
@@ -51,23 +58,27 @@ const WIELDS = {
   bow: { weapon: "bow", offhand: "none", attacks: [["Bow_Shoot"]] },
 };
 
-// The animation buttons, each a run of clips: { clip, for } holds a looping clip that many seconds,
-// and a run that ends on a loop keeps it until another button is pressed. The character idles
-// between them.
+// The animation buttons, each a run of clips. A clip can be { clip, from, speed, for }: started
+// `from` seconds in, played at `speed`, and moved on from after `for` seconds; a looping one with
+// `air` holds until the character lands. A run that ends on a loop keeps it until another button
+// is pressed. The character idles between them.
 const MOVES = {
   run: () => ["Run_Fwd_Loop"],
   dance: () => ["Dance_Loop"],
   attack: () => wield().attacks[Math.floor(Math.random() * wield().attacks.length)],
-  jump: () => ["Jump_Start", { clip: "Jump_Loop", for: 0.35 }, "Jump_Land"],
+  // As the walker jumps (editor/walker.js): up at takeoff, falling back under gravity.
+  jump: () => [{ clip: "Jump_Start", from: 0.1, speed: 1.5, for: 0.35, takeoff: true }, { clip: "Jump_Loop", air: true }, { clip: "Jump_Land", speed: 1.6, for: 0.55 }],
   sit: () => ["Sit_Ground_Enter", { clip: "Sit_Ground_Idle_Loop", for: 3 }, "Sit_Ground_Exit"],
 };
+const JUMP_FT = 16; // upward speed at takeoff, per second
+const GRAVITY = 48;
 
 const $ = (id) => document.getElementById(id);
 const page = $("builder").dataset;
 const saved = JSON.parse(page.character);
 // A new character starts as someone random.
 let look = saved.id ? resolveRecipe(saved.look) : resolveRecipe(appearance(randomLook()));
-const gear = { armor: "none", helmet: true, wield: "unarmed" };
+const gear = { armor: "none", colors: null, helmet: true, wield: "unarmed" };
 const wield = () => WIELDS[gear.wield];
 
 // The look with the gear it's trying on.
@@ -75,7 +86,7 @@ function dressed() {
   const armor = {};
   if (ARMOR_TYPES.includes(gear.armor)) {
     for (const slot of ARMOR_SLOTS) {
-      if (slot !== "head" || gear.helmet) armor[slot] = { type: gear.armor, colors: [...ARMOR_COLORS[gear.armor]] };
+      if (slot !== "head" || gear.helmet) armor[slot] = { type: gear.armor, colors: [...gear.colors] };
     }
   }
   const { weapon, offhand } = wield();
@@ -103,9 +114,16 @@ let character = null;
 let baked = null;
 let mixer = null;
 let clips = new Map();
+// Controls that only show when they'd change something: [row, when].
+let showing = [];
+const showRows = () => showing.forEach(([row, when]) => (row.hidden = !when()));
+
 // The move playing: its button, its run of clips, which one is on, and for how long.
 let move = null;
 let current = null;
+// How high the character is off the ground, and how fast it's rising.
+let height = 0;
+let rising = 0;
 function rebuild() {
   if (character) {
     scene.remove(character);
@@ -113,17 +131,19 @@ function rebuild() {
     mixer.stopAllAction();
   }
   character = characterMesh(dressed());
+  character.position.y = height;
   scene.add(character);
   mixer = new THREE.AnimationMixer(character);
   mixer.addEventListener("finished", next);
   clips = baked ? characterClips(character, baked) : new Map();
   current = null;
+  showRows();
   if (move) step(move.index, 0);
   else play(IDLE, 0);
 }
 
-// Plays a clip, fading from the one playing.
-function play(name, fade = FADE_S) {
+// Plays a clip, fading from the one playing, `from` seconds in at `speed`.
+function play(name, fade = FADE_S, { from = 0, speed = 1 } = {}) {
   const clip = clips.get(name);
   if (!clip) return;
   const previous = current && mixer.existingAction(clips.get(current));
@@ -131,6 +151,8 @@ function play(name, fade = FADE_S) {
   const action = mixer.clipAction(clip);
   action.reset().setLoop(/_Loop$/.test(name) ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
   action.clampWhenFinished = true;
+  action.timeScale = speed;
+  action.time = from;
   action.play();
   if (previous && previous !== action && fade) previous.crossFadeTo(action, fade, false);
   else if (previous && previous !== action) previous.stop();
@@ -140,6 +162,7 @@ function play(name, fade = FADE_S) {
 function start(name) {
   move = name && move?.name !== name ? { name, run: MOVES[name](), index: 0, held: 0 } : null;
   for (const button of document.querySelectorAll("#moves button")) button.classList.toggle("playing", button.dataset.move === move?.name);
+  if (move?.run[0].takeoff && height === 0) rising = JUMP_FT;
   if (move) step(0);
   else play(IDLE);
 }
@@ -148,7 +171,7 @@ function step(index, fade = FADE_S) {
   const item = move.run[index];
   move.index = index;
   move.held = 0;
-  play(typeof item === "string" ? item : item.clip, fade);
+  play(item.clip ?? item, fade, item);
 }
 
 // The next clip of the move, or idle after its last.
@@ -176,7 +199,9 @@ function buildControls() {
     el.append(Object.assign(document.createElement("span"), { textContent: label }), input);
     if (after) el.append(after);
     panel.append(el);
+    return el;
   };
+  showing = [];
   const heading = (text) => panel.append(Object.assign(document.createElement("h2"), { textContent: text }));
   const choose = (label, options, value, set) => {
     const select = document.createElement("select");
@@ -185,8 +210,7 @@ function buildControls() {
       set(select.value);
       rebuild();
     });
-    row(label, select);
-    return select;
+    return row(label, select);
   };
   const check = (label, checked, set) => {
     const box = Object.assign(document.createElement("input"), { type: "checkbox", checked });
@@ -194,8 +218,7 @@ function buildControls() {
       set(box.checked);
       rebuild();
     });
-    row(label, box);
-    return box;
+    return row(label, box);
   };
 
   heading("Body");
@@ -237,23 +260,36 @@ function buildControls() {
     swatches.append(swatch);
   }
   row("skin", swatches);
-  for (const [key, label] of Object.entries(PICKED_COLORS)) {
+  for (const [key, [label, when]] of Object.entries(PICKED_COLORS)) {
     const input = Object.assign(document.createElement("input"), { type: "color", value: look.colors[key] });
     input.addEventListener("input", () => {
       look.colors[key] = input.value;
       rebuild();
     });
-    row(label, input);
+    showing.push([row(label, input), when]);
   }
 
+  // Armor in its main and trim colors, which start as the type's own.
   heading("Try on (not saved)");
-  let helmet = null;
+  const worn = () => gear.armor !== "none";
+  const paints = Object.assign(document.createElement("span"), { className: "builder-pair" });
+  const pickers = [0, 1].map((i) => {
+    const input = Object.assign(document.createElement("input"), { type: "color" });
+    input.addEventListener("input", () => {
+      gear.colors[i] = input.value;
+      rebuild();
+    });
+    paints.append(input);
+    return input;
+  });
   choose("armor", ["none", ...ARMOR_TYPES], gear.armor, (value) => {
     gear.armor = value;
-    helmet.disabled = value === "none";
+    gear.colors = worn() ? [...ARMOR_COLORS[value]] : null;
+    pickers.forEach((input, i) => worn() && (input.value = gear.colors[i]));
   });
-  helmet = check("helmet", gear.helmet, (on) => (gear.helmet = on));
-  helmet.disabled = gear.armor === "none";
+  if (worn()) pickers.forEach((input, i) => (input.value = gear.colors[i]));
+  showing.push([row("armor paint", paints), worn]);
+  showing.push([check("helmet", gear.helmet, (on) => (gear.helmet = on)), worn]);
   choose("weapons", Object.keys(WIELDS), gear.wield, (value) => (gear.wield = value));
 }
 
@@ -292,6 +328,7 @@ async function save() {
     if (page.saveMethod === "POST") {
       page.saveUrl = body.edit_url.replace(/\/edit$/, "");
       page.saveMethod = "PATCH";
+      $("save").textContent = "Save changes";
       history.replaceState(null, "", body.edit_url);
     }
     note.textContent = "saved";
@@ -325,8 +362,15 @@ const clock = new THREE.Clock();
 renderer.setAnimationLoop(() => {
   const delta = clock.getDelta();
   mixer.update(delta);
-  // A looping clip held for a while moves on when its time is up.
+  if (height > 0 || rising > 0) {
+    rising -= GRAVITY * delta;
+    height = Math.max(0, height + rising * delta);
+    if (height === 0) rising = 0;
+    character.position.y = height;
+  }
+  // A clip held for a while moves on when its time is up, and one held in the air when it lands.
   const item = move?.run[move.index];
   if (item?.for && (move.held += delta) >= item.for) next();
+  else if (item?.air && height === 0) next();
   renderer.render(scene, camera);
 });

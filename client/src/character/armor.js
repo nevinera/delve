@@ -61,6 +61,16 @@ function recolor(part, which) {
   part.color = (band, angle) => which(band, angle) ?? before(band, angle);
 }
 
+// Gloves over a side's fingers and thumb (body.js's hand_l_0 to hand_l_4): recolored, and made
+// `thick` thicker.
+function gloveFingers(parts, side, color, thick = 0) {
+  for (const [name, part] of Object.entries(parts)) {
+    if (!name.startsWith(`hand_${side}_`)) continue;
+    part.color = () => color;
+    part.rings = part.rings.map((r) => ({ ...r, rx: r.rx + thick, rz: r.rz + thick }));
+  }
+}
+
 // A skirt hanging from the belt, `heights` down, its lower rings following the thigh on their side
 // so it sways with the legs without tearing.
 function skirt(out, ctx, heights, widths, color, mail = false) {
@@ -173,19 +183,27 @@ const DRESS = {
       for (const side of SIDES) {
         recolor(parts[`arm_${side}`], (band) => (band === 6 ? trim : band >= 7 ? main : null));
         parts[`arm_${side}`].opts = { ...parts[`arm_${side}`].opts, endColor: main };
+        gloveFingers(parts, side, main);
       }
     },
     leather: ({ out, parts, ctx, main, trim }) => {
-      for (const side of SIDES) shell(out, parts[`arm_${side}`].rings.slice(5), 10, 0.025 * ctx.s, (band) => (band === 0 ? trim : main), { capEnd: true });
+      for (const side of SIDES) {
+        shell(out, parts[`arm_${side}`].rings.slice(5), 10, 0.025 * ctx.s, (band) => (band === 0 ? trim : main), { capEnd: true });
+        gloveFingers(parts, side, main, 0.008 * ctx.s);
+      }
     },
     chain: ({ out, parts, ctx, main, trim }) => {
-      for (const side of SIDES) shell(out, parts[`arm_${side}`].rings.slice(6), 10, 0.025 * ctx.s, (band) => (band === 0 ? trim : main), { capEnd: true, mail: true });
+      for (const side of SIDES) {
+        shell(out, parts[`arm_${side}`].rings.slice(6), 10, 0.025 * ctx.s, (band) => (band === 0 ? trim : main), { capEnd: true, mail: true });
+        gloveFingers(parts, side, shadeOf(main, 0.7), 0.008 * ctx.s);
+      }
     },
     plate: ({ out, parts, ctx, main, trim }) => {
       for (const side of SIDES) {
         // A gauntlet, its cuff flaring over the forearm.
         const rings = parts[`arm_${side}`].rings.slice(5).map((r, i) => (i === 0 ? { ...r, rx: r.rx * 1.5, rz: r.rz * 1.5 } : r));
         shell(out, rings, 10, 0.045 * ctx.s, (band) => (band === 3 ? trim : main), { capEnd: true });
+        gloveFingers(parts, side, main, 0.018 * ctx.s);
       }
     },
   },

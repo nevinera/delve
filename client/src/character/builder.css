@@ -54,6 +54,16 @@
   justify-self: start;
 }
 
+.builder-pair {
+  display: flex;
+  gap: 2px;
+}
+
+.builder-pair input {
+  width: 2.1em;
+  padding: 0;
+}
+
 .builder-buttons {
   display: flex;
   gap: 8px;
@@ -99,6 +109,30 @@
   color: #ddd;
   border: 1px solid #555;
   border-radius: 3px;
+}
+
+.builder .builder-save {
+  display: block;
+  width: 100%;
+  margin-top: 18px;
+  padding: 10px;
+  font-size: 15px;
+  font-weight: bold;
+  background: #c8902a;
+  color: #1a1a1a;
+  border-color: #e8b04a;
+}
+
+.builder .builder-save:hover {
+  background: #e0a838;
+}
+
+.builder .builder-save:disabled {
+  opacity: 0.6;
+}
+
+.builder-row[hidden] {
+  display: none;
 }
 
 .builder-note {

@@ -9,15 +9,13 @@
     <span>name</span>
     <input id="name" type="text" maxlength="16" autocomplete="off" value="<%= @character.name %>">
   </label>
-  <div class="builder-buttons">
-    <button id="save" type="button">save</button>
-    <%= link_to "your characters", characters_path %>
-  </div>
-  <p id="saveNote" class="builder-note"></p>
   <div id="moves" class="builder-moves"></div>
   <div id="controls"></div>
   <div class="builder-buttons">
     <button id="random" type="button">random</button>
     <button id="reset" type="button">reset</button>
   </div>
+  <button id="save" type="button" class="builder-save"><%= @character.persisted? ? "Save changes" : "Create character" %></button>
+  <p id="saveNote" class="builder-note"></p>
+  <p><%= link_to "your characters", characters_path %></p>
 </aside>

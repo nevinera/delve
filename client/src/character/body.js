@@ -1,4 +1,5 @@
 import { dressArmor } from "./armor.js";
+import { HELD, heldBy } from "./weapons.js";
 
 // A character's body as mesh data, without three.js, so it can be tested: a skeleton and a low-poly
 // skin over it, built from a look (recipe.js's resolveRecipe). Each limb and the trunk are tubes of
@@ -145,6 +146,7 @@ export function bodyMesh(look) {
 
   for (const side of ["l", "r"]) {
     const n = (name) => name.replace(/_l$/, `_${side}`);
+    const grip = gripping(look, side);
     // Arm, sleeved to the wrist, starting under the trunk's shoulder.
     const arm = [
       along(n("upperarm_l"), 0, { rx: 0.15 * limb, rz: 0.17 * limb, bones: [[n("upperarm_l"), 0.6], ["spine_03", 0.4]] }),
@@ -157,11 +159,13 @@ export function bodyMesh(look) {
       along(n("lowerarm_l"), 0.2, { rx: 0.145 * limb, rz: 0.145 * limb, bones: [[n("lowerarm_l"), 0.85], [n("upperarm_l"), 0.15]] }),
       along(n("lowerarm_l"), 0.85, { rx: 0.1 * limb, rz: 0.1 * limb }),
       along(n("lowerarm_l"), 1, { rx: 0.09 * limb, rz: 0.09 * limb, bones: [[n("lowerarm_l"), 0.5], [n("hand_l"), 0.5]] }),
-      along(n("hand_l"), 0.15, { rx: 0.05 * s, rz: 0.1 * s }),
-      along(n("hand_l"), 0.55, { rx: 0.055 * s, rz: 0.12 * s }),
-      along(n("hand_l"), 0.95, { rx: 0.045 * s, rz: 0.08 * s }),
+      // The palm, wrist to knuckles, shorter in a fist so the grip runs below it.
+      along(n("hand_l"), 0.15, { rx: 0.05 * s, rz: 0.095 * s }),
+      along(n("hand_l"), 0.33, { rx: 0.055 * s, rz: 0.115 * s }),
+      along(n("hand_l"), grip ? 0.44 : 0.53, { rx: 0.045 * s, rz: 0.11 * s }),
     ];
     parts[`arm_${side}`] = { rings: arm, sides: 10, color: (band) => (band < 7 ? c.primary : c.skin), opts: { capStart: true, capEnd: true } };
+    hand(parts, side, at(n("hand_l")), endOf(n("hand_l")), s, grip, c);
 
     // Leg, booted from mid-calf.
     const leg = [
@@ -191,6 +195,94 @@ export function bodyMesh(look) {
   dressArmor(out, parts, look, { s, trunk, limb, along, level, shoulders, hips, n: (name, side) => name.replace(/_l$/, `_${side}`) });
   for (const { rings, sides, color, opts } of Object.values(parts)) out.tube(rings, sides, color, opts);
   return { bones, ...out.arrays() };
+}
+
+// How a hand grips, or null when it hangs open. The hand holding a weapon or off-hand item makes a
+// fist round its grip, which runs through the fist tipped by `slope` (how far down the hand it
+// goes for each foot forward). The left hand makes a level fist for a shield's strap or a
+// two-handed weapon's haft, which it only reaches in some clips. Put away, both hands hang open.
+function gripping(look, side) {
+  if (look.sheathed) return null;
+  for (const [type, offhand] of [
+    [look.weapon, false],
+    [look.offhand, true],
+  ]) {
+    const held = heldBy(type, offhand);
+    if (held?.bone !== `hand_${side}`) continue;
+    const [, y, z] = held.toward;
+    return { slope: Math.max(-0.75, Math.min(0.75, -y / z)) };
+  }
+  if (side === "l" && (look.offhand !== "none" || HELD[look.weapon]?.twoHanded)) return { slope: 0 };
+  return null;
+}
+
+// Fingers and a thumb from the palm (in the arm's last rings), each a part of its own, hand_l_0 to
+// hand_l_4, so gloves can cover them. Open, each finger bends a little toward the palm at its three
+// joints. In a fist each wraps round the grip (weapons.js's IN_HAND, through the middle of the
+// hand), from the back of the hand under it and up the palm side, the thumb closing over them.
+// Sizes are feet for a 6ft body: u down the hand from the wrist, v toward the palm, w forward
+// toward the thumb.
+const FINGERS = [
+  { w: 0.07, length: 0.25, r: 0.027 },
+  { w: 0.024, length: 0.27, r: 0.028 },
+  { w: -0.022, length: 0.25, r: 0.026 },
+  { w: -0.066, length: 0.2, r: 0.023 },
+];
+const KNUCKLES = 0.3;
+const PHALANGES = [0.45, 0.32, 0.23];
+const OPEN_CURL = [0.3, 0.45, 0.25];
+const OPEN_THUMB = [
+  [0.1, 0.03, 0.075],
+  [0.18, 0.06, 0.12],
+  [0.27, 0.08, 0.13],
+];
+// The grip's middle, and how far round it the fingers wrap: the grip's radius and a finger's.
+const GRIP = { u: 0.3, w: 0.02, wrap: 0.085 };
+
+function hand(parts, side, wrist, end, s, grip, c) {
+  const bone = `hand_${side}`;
+  const down = norm(sub(end, wrist));
+  // The palm faces the body, and the thumb is forward.
+  const toward = norm(sub([side === "l" ? -1 : 1, 0, 0], mul(down, side === "l" ? -down[0] : down[0])));
+  const ahead = cross(side === "l" ? toward : down, side === "l" ? down : toward);
+  const p = (u, v, w) => add(wrist, add(mul(down, u * s), add(mul(toward, v * s), mul(ahead, w * s))));
+  const part = (points, radii) => ({ rings: pathRings(points, radii, () => [[bone, 1]]), sides: 5, color: () => c.skin, opts: { capEnd: true } });
+  // Where the grip runs through a finger's plane: lower for fingers further along it.
+  const middle = (w) => GRIP.u + (grip?.slope ?? 0) * (w - GRIP.w);
+  FINGERS.forEach(({ w, length, r }, i) => {
+    const points = [];
+    if (grip) {
+      // Round the grip from behind it, each joint `share` of the finger further on. A tipped grip
+      // cuts the finger's plane long, so the way round is longer down the hand.
+      const [mu, stretch] = [middle(w), Math.hypot(1, grip.slope ?? 0)];
+      const at = (angle) => p(mu + Math.sin(angle) * GRIP.wrap * stretch, -Math.cos(angle) * GRIP.wrap, w);
+      let angle = -0.75;
+      points.push(p(mu - 0.11, -0.01, w), at(angle));
+      for (const share of PHALANGES) points.push(at((angle += (share * length) / GRIP.wrap)));
+    } else {
+      let [u, v, turn] = [KNUCKLES, 0, 0];
+      points.push(p(u - 0.03, 0, w), p(u, 0, w));
+      PHALANGES.forEach((share, joint) => {
+        turn += OPEN_CURL[joint];
+        u += Math.cos(turn) * share * length;
+        v += Math.sin(turn) * share * length;
+        points.push(p(u, v, w));
+      });
+    }
+    parts[`${bone}_${i}`] = part(points, [r, r, r * 0.95, r * 0.85, r * 0.75].map((x) => x * s));
+  });
+  // The thumb closes over the grip on the palm side, across the first two fingers.
+  const thumb = grip
+    ? [
+        [0.1, 0.03, 0.075],
+        [0.19, 0.09, 0.1],
+        [middle(0.05) - 0.01, GRIP.wrap + 0.025, 0.04],
+      ]
+    : OPEN_THUMB;
+  parts[`${bone}_4`] = part(
+    thumb.map(([u, v, w]) => p(u, v, w)),
+    [0.032, 0.028, 0.022].map((x) => x * s),
+  );
 }
 
 // The head: rings round the head bone, chin to crown, with hair and beard colored onto its faces
@@ -473,6 +565,14 @@ function head(out, look, [hx, hy, hz], s, c) {
   return part;
 }
 
+// Rings along a line of points, for MeshOut.path.
+function pathRings(points, radii, bones, depth = null) {
+  return points.map((center, i) => {
+    const [before, after] = [points[Math.max(0, i - 1)], points[Math.min(points.length - 1, i + 1)]];
+    return { center, dir: norm(sub(after, before)), rx: radii[i], rz: depth?.[i] ?? radii[i], bones: bones(i) };
+  });
+}
+
 // Collects triangles, each corner with its own position, color and bone weights. Faces made
 // while `mail` is on are marked for characterMesh.js's mail texture.
 export class MeshOut {
@@ -556,11 +656,7 @@ export class MeshOut {
   // A tube along a line of points, `radii` round each (or `depth` deep, square to the side, where
   // given), its rings following bones(i).
   path(points, radii, sides, color, bones, { capStart = false, capEnd = false, depth = null } = {}) {
-    const rings = points.map((center, i) => {
-      const [before, after] = [points[Math.max(0, i - 1)], points[Math.min(points.length - 1, i + 1)]];
-      return { center, dir: norm(sub(after, before)), rx: radii[i], rz: depth?.[i] ?? radii[i], bones: bones(i) };
-    });
-    this.tube(rings, sides, color, { capStart, capEnd });
+    this.tube(pathRings(points, radii, bones, depth), sides, color, { capStart, capEnd });
   }
 
   // A small eight-faced gem.
