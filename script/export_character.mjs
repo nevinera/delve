@@ -2,7 +2,8 @@
 // the default look, 6ft tall, holding a weapon (a greatsword unless given), in meters as glTF
 // expects, or times `scale` for a tool that takes them for some other unit. Its bones carry
 // body.js's names and stand unrotated, arms down. The skeleton sits beside the mesh rather than
-// inside it, and the mesh has normals, as some tools need.
+// inside it, and each mesh has normals, triangle indices and texture coordinates (all zero), as
+// some tools need.
 //
 //   node script/export_character.mjs [out.glb] [weapon] [scale]
 import fs from "fs";
@@ -30,18 +31,26 @@ globalThis.FileReader ??= class {
   }
 };
 
+// Normals, indices and texture coordinates for a mesh of loose triangles.
+function complete(geometry) {
+  const { count } = geometry.attributes.position;
+  geometry.computeVertexNormals();
+  geometry.setIndex([...Array(count).keys()]);
+  geometry.setAttribute("uv", new THREE.BufferAttribute(new Float32Array(count * 2), 2));
+}
+
 const mesh = characterMesh(resolveRecipe({ height: 6, weapon }));
 mesh.name = "character";
 // Feet to meters: the body, each bone's offset from its parent, and the items the bones hold.
 mesh.geometry.deleteAttribute("mail");
 mesh.geometry.scale(FT, FT, FT);
-mesh.geometry.computeVertexNormals();
+complete(mesh.geometry);
 for (const bone of mesh.skeleton.bones) {
   bone.position.multiplyScalar(FT);
   for (const item of bone.children.filter((child) => child.isMesh)) {
     item.position.multiplyScalar(FT);
     item.geometry.scale(FT, FT, FT);
-    item.geometry.computeVertexNormals();
+    complete(item.geometry);
     item.name = `held_${weapon}`;
   }
 }
