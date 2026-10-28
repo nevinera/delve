@@ -81,14 +81,14 @@ function gloveFingers(parts, side, color, thick = 0) {
 const KNEE_FT = 1.68;
 
 // A skirt hanging from the belt, `heights` down, its lower rings following the thigh on their side
-// so it sways with the legs without tearing, up to `follow` of the way at the hem. Below the knee
+// so it sways with the legs without tearing, up to `follow` of the way from `full` down. Below the knee
 // it follows the shin more and more, so a bent knee bends the skirt too. Its inside is shaded.
-function skirt(out, ctx, heights, widths, color, mail = false, follow = 0.45) {
+function skirt(out, ctx, heights, widths, color, mail = false, follow = 0.45, full = heights[heights.length - 1]) {
   const { s, trunk, hips } = ctx;
   const top = heights[0];
   const rings = heights.map((y, i) => {
-    const sway = ((top - y) / (top - heights[heights.length - 1])) * follow;
-    const shin = Math.min(1, Math.max(0, (KNEE_FT - y) / (KNEE_FT - 0.55))) * 0.8;
+    const sway = Math.min(1, (top - y) / (top - full)) * follow;
+    const shin = Math.min(1, Math.max(0, (KNEE_FT - y) / (KNEE_FT - 0.62)));
     const ring = ctx.level(y, {
       rx: widths[i][0] * hips * trunk,
       rz: widths[i][1] * trunk,
@@ -154,7 +154,9 @@ const DRESS = {
         return y >= 3.3 && y < 3.44 ? trim : y >= 3.44 && y < 4.95 ? (y >= 4.85 ? trim : main) : null;
       });
       for (const side of SIDES) recolor(parts[`arm_${side}`], (band) => (band === 6 ? trim : band < 6 ? main : null));
-      skirt(out, ctx, [3.36, 2.9, 2.2, 1.4, 0.62, 0.55], [[0.66, 0.46], [0.7, 0.5], [0.78, 0.56], [0.86, 0.62], [0.92, 0.66], [0.9, 0.64]], (band) => (band >= 3 ? trim : main), false, 0.85);
+      // It follows the thighs wholly from just below the hips, and bends at the knee, so a
+      // stride lifts its front the way it lifts a bare knee.
+      skirt(out, ctx, [3.36, 2.9, 2.2, 1.7, 1.4, 0.62, 0.55], [[0.66, 0.46], [0.7, 0.5], [0.78, 0.56], [0.83, 0.6], [0.86, 0.62], [0.92, 0.66], [0.9, 0.64]], (band) => (band >= 4 ? trim : main), false, 1, 2.6);
       for (const side of SIDES) parts[`leg_${side}`].opts.skip = (band) => band < 6;
     },
     leather: ({ out, parts, ctx, main, trim }) => {
