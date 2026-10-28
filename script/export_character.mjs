@@ -45,13 +45,13 @@ mesh.name = "character";
 mesh.geometry.deleteAttribute("mail");
 mesh.geometry.scale(FT, FT, FT);
 complete(mesh.geometry);
+const held = [];
 for (const bone of mesh.skeleton.bones) {
   bone.position.multiplyScalar(FT);
   for (const item of bone.children.filter((child) => child.isMesh)) {
     item.position.multiplyScalar(FT);
     item.geometry.scale(FT, FT, FT);
-    complete(item.geometry);
-    item.name = `held_${weapon}`;
+    held.push({ item, bone });
   }
 }
 const scene = new THREE.Scene();
@@ -62,6 +62,21 @@ scene.add(armature, mesh);
 scene.updateMatrixWorld(true);
 mesh.skeleton.calculateInverses();
 mesh.bind(mesh.skeleton, mesh.matrixWorld);
+// Each held item as a mesh of its own skinned wholly to the bone that holds it: some tools drop a
+// mesh hung on a joint.
+for (const { item, bone } of held) {
+  const geometry = item.geometry.clone().applyMatrix4(item.matrixWorld);
+  const { count } = geometry.attributes.position;
+  const joint = mesh.skeleton.bones.indexOf(bone);
+  geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(new Uint16Array(count * 4).map((_, i) => (i % 4 ? 0 : joint)), 4));
+  geometry.setAttribute("skinWeight", new THREE.BufferAttribute(new Float32Array(count * 4).map((_, i) => (i % 4 ? 0 : 1)), 4));
+  complete(geometry);
+  const skinned = new THREE.SkinnedMesh(geometry, item.material);
+  skinned.name = `held_${weapon}`;
+  bone.remove(item);
+  scene.add(skinned);
+  skinned.bind(mesh.skeleton, skinned.matrixWorld);
+}
 const glb = await new GLTFExporter().parseAsync(scene, { binary: true, trs: true });
 fs.writeFileSync(out, Buffer.from(glb));
 console.log(`wrote ${out}`);
