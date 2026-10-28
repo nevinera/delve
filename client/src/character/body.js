@@ -33,8 +33,13 @@ const JOINTS = [
 export const ENDS = { head: [0, 6, 0], hand_l: [0.97, 2.18, 0.05], ball_l: [0.36, 0.06, 0.75] };
 const TRUNK_SIDES = 32;
 // The bust's middle on each side (height in feet for a 6ft body, angle from the front), how far it
-// spreads round the chest, above and below the middle, and how far it stands out at most.
-const BUST = { y: 4.18, angle: 0.42, across: 0.62, above: 0.42, below: 0.3, depth: 0.32 };
+// spreads toward the middle of the chest and out toward the arm, above and below its middle, and
+// how far it stands out at most. Proportions from plastic surgery's measures of the breast: the
+// notch at the top of the breastbone and the two nipples make a triangle with equal sides (Penn
+// 1955), each side's inner edge stops short of the middle of the chest and its outer edge reaches
+// the front of the armpit (Westreich 1997), and the nipple is 45% of the way down (Mallucci and
+// Branford 2012).
+const BUST = { y: 4.27, angle: 0.62, inner: 0.5, outer: 0.62, above: 0.36, below: 0.29, depth: 0.32 };
 const ARM = ["clavicle_l", "upperarm_l", "lowerarm_l", "hand_l"];
 const LEG = ["thigh_l", "calf_l", "foot_l", "ball_l"];
 
@@ -122,7 +127,8 @@ export function bodyMesh(look) {
   // below its middle so it slopes more gently above.
   const { shoulders, waist, hips } = widths(look);
   const bust = (y) => (angle) => {
-    const across = (Math.abs(angle) - BUST.angle) / BUST.across;
+    const off = Math.abs(angle) - BUST.angle;
+    const across = off / (off < 0 ? BUST.inner : BUST.outer);
     const down = (y - BUST.y) / (y > BUST.y ? BUST.above : BUST.below);
     const r = across * across + down * down;
     return r < 1 ? look.bust * BUST.depth * s * 0.5 * (1 + Math.cos(Math.PI * Math.sqrt(r))) : 0;
