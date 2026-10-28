@@ -1,11 +1,12 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" data-theme="dark">
   <head>
     <title><%= content_for(:title) || "Delve" %></title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="application-name" content="Delve">
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0e0c12">
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
 
@@ -18,14 +19,36 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" href="/icon.png">
 
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2.0.6/css/pico.classless.min.css">
     <%# Includes all stylesheet files in app/assets/stylesheets %>
     <%= stylesheet_link_tag :app, "data-turbo-track": "reload" %>
     <%= javascript_importmap_tags %>
   </head>
 
   <body>
-    <% if alert %><p class="flash flash-alert"><%= alert %></p><% end %>
-    <% if notice %><p class="flash flash-notice"><%= notice %></p><% end %>
-    <%= yield %>
+    <header>
+      <nav>
+        <ul>
+          <li><%= link_to root_path, class: "site-name" do %><strong>Delve</strong><% end %></li>
+        </ul>
+        <ul>
+          <% if user_signed_in? %>
+            <li><%= link_to "Characters", characters_path %></li>
+            <li><%= link_to "World editor", editor_path %></li>
+            <li><%= link_to "Objects", objects_path %></li>
+            <li><%= link_to(current_user.github_connection ? "GitHub: #{current_user.github_connection.login}" : "Connect GitHub", github_connect_path) %></li>
+            <li><%= button_to "Sign out", destroy_user_session_path, method: :delete, class: "compact" %></li>
+          <% elsif !current_page?(new_user_session_path) %>
+            <li><%= link_to "Sign in", new_user_session_path %></li>
+          <% end %>
+        </ul>
+      </nav>
+    </header>
+
+    <main>
+      <% if notice %><article role="alert"><%= notice %></article><% end %>
+      <% if alert %><article role="alert" class="alert"><%= alert %></article><% end %>
+      <%= yield %>
+    </main>
   </body>
 </html>

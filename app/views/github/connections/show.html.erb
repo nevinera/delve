@@ -1,13 +1,10 @@
-<main class="home">
-  <h1>GitHub</h1>
-  <% if @connection %>
-    <p>Connected as <strong><%= @connection.login %></strong>. The editor can open every repo you've granted the app.</p>
-    <p><%= link_to "Choose which repos the app can see", @install_url %></p>
-    <%= button_to "Disconnect", github_disconnect_path, method: :delete %>
-  <% else %>
-    <p>Connect GitHub to edit worlds stored in your repos. The app sees only the repos you choose, and you can change them later.</p>
-    <p><%= link_to "Install the app and choose repos", @install_url %></p>
-    <p>Already installed it? <%= link_to "Connect to it", @authorize_url %></p>
-  <% end %>
-  <p><%= link_to "Home", root_path %></p>
-</main>
+<h1>GitHub</h1>
+<% if @connection %>
+  <p>Connected as <strong><%= @connection.login %></strong>. The editor can open every repo you've granted the app.</p>
+  <p><%= link_to "Choose which repos the app can see", @install_url %></p>
+  <%= button_to "Disconnect", github_disconnect_path, method: :delete %>
+<% else %>
+  <p>Connect GitHub to edit worlds stored in your repos. The app sees only the repos you choose, and you can change them later.</p>
+  <p><%= link_to "Install the app and choose repos", @install_url %></p>
+  <p>Already installed it? <%= link_to "Connect to it", @authorize_url %></p>
+<% end %>

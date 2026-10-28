@@ -1,45 +1,140 @@
-body {
-  margin: 0;
-  background: #c9d6de;
-  color: #23301f;
-  font-family: system-ui, sans-serif;
+@import url("https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Crimson+Text:ital,wght@0,400;0,600;1,400&display=swap");
+
+/* Pico's classless styles (in the layout) themed dark and gold, with Cinzel headings. */
+:root,
+[data-theme="dark"] {
+  /* backgrounds */
+  --pico-background-color: #0e0c12;
+  --pico-card-background-color: #16131f;
+  --pico-dropdown-background-color: #16131f;
+  --pico-code-background-color: #1c1826;
+
+  /* text */
+  --pico-color: #ddd5c0;
+  --pico-muted-color: #8a7f6e;
+  --pico-muted-border-color: #2e2840;
+
+  /* accent: deep gold */
+  --pico-primary: #c49a2a;
+  --pico-primary-background: #c49a2a;
+  --pico-primary-border: #c49a2a;
+  --pico-primary-hover: #e0b93a;
+  --pico-primary-hover-background: #e0b93a;
+  --pico-primary-hover-border: #e0b93a;
+  --pico-primary-underline: rgba(196, 154, 42, 0.5);
+  --pico-primary-focus: rgba(196, 154, 42, 0.3);
+  --pico-primary-inverse: #0e0c12;
+
+  /* borders and shadows */
+  --pico-border-color: #2e2840;
+  --pico-box-shadow: 0 2px 12px rgba(0, 0, 0, 0.6);
+
+  /* forms */
+  --pico-form-element-background-color: #16131f;
+  --pico-form-element-border-color: #2e2840;
+  --pico-form-element-color: #ddd5c0;
+  --pico-form-element-focus-color: #c49a2a;
+
+  /* typography */
+  --pico-font-family: "Crimson Text", Georgia, serif;
+  --pico-font-size: 1.1rem;
+  --pico-line-height: 1.6;
 }
 
-.home {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: "Cinzel", "Times New Roman", serif;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: #e8d5a0;
+}
+
+/* The site name in the header. */
+header nav .site-name strong {
+  font-family: "Cinzel", serif;
+  font-size: 1.2rem;
+  color: #c49a2a;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+header nav form {
+  margin: 0;
+}
+
+article.alert {
+  border-left: 3px solid #b84a3a;
+}
+
+/* Small, low-key buttons, as for a row's actions. */
+button.compact,
+input[type="submit"].compact {
+  width: auto;
+  margin: 0;
+  padding: 0.15rem 0.6rem;
+  font-size: 0.85rem;
+}
+
+/* Quieter buttons, outlined, for actions beside the main one. */
+button.secondary,
+input[type="submit"].secondary {
+  --pico-background-color: transparent;
+  --pico-border-color: #4a4060;
+  --pico-color: #ddd5c0;
+}
+
+button.secondary:hover,
+input[type="submit"].secondary:hover {
+  --pico-background-color: transparent;
+  --pico-border-color: #c49a2a;
+  --pico-color: #e0b93a;
+}
+
+/* The front page: the name, large. */
+.hero {
+  min-height: 60vh;
   display: flex;
   flex-direction: column;
   align-items: center;
-  padding: 2rem 1rem;
+  justify-content: center;
+  text-align: center;
 }
 
-.home h1 {
-  font-size: 3rem;
-  margin: 0 0 1.5rem;
-}
-
-.home img {
-  max-width: 100%;
-  height: auto;
-  image-rendering: auto;
+.hero h1 {
+  margin: 0 0 2rem;
+  font-size: clamp(4rem, 18vw, 10rem);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #e0b93a;
+  text-shadow:
+    0 0 24px rgba(196, 154, 42, 0.35),
+    0 4px 0 #5a4210;
 }
 
 /* Your characters: each a card with its picture beside its name. */
 .character-list {
   list-style: none;
-  margin: 0;
+  margin: 0 0 var(--pico-spacing);
   padding: 0;
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
-  width: min(32rem, 100%);
 }
 
 .character-list li {
+  list-style: none;
   display: flex;
   gap: 1rem;
   align-items: center;
+  margin: 0;
   padding: 0.5rem 1rem 0.5rem 0.5rem;
-  background: #e4ecf0;
+  background: var(--pico-card-background-color);
+  border: 1px solid var(--pico-muted-border-color);
   border-radius: 6px;
 }
 
@@ -58,11 +153,17 @@ body {
 }
 
 .character-about strong {
+  font-family: "Cinzel", serif;
   font-size: 1.4rem;
+  color: #e8d5a0;
 }
 
 .character-actions {
   display: flex;
   gap: 0.75rem;
   align-items: center;
+}
+
+.character-actions form {
+  margin: 0;
 }

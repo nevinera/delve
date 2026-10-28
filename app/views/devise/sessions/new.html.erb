@@ -1,14 +1,12 @@
-<main class="home">
-  <h1>Sign in</h1>
-  <%= button_to "Sign in with Google", user_google_oauth2_omniauth_authorize_path, method: :post, data: {turbo: false} %>
-  <% if respond_to?(:dev_session_path) %>
-    <h2>Development</h2>
-    <% User.order(:email).each do |user| %>
-      <%= button_to "Sign in as #{user.email}", dev_session_path, params: {user_id: user.id} %>
-    <% end %>
-    <%= form_with url: dev_session_path do |f| %>
-      <%= f.email_field :email, placeholder: "new@example.com", required: true %>
-      <%= f.submit "Sign in as new user" %>
-    <% end %>
+<h1>Sign in</h1>
+<%= button_to "Sign in with Google", user_google_oauth2_omniauth_authorize_path, method: :post, data: {turbo: false} %>
+<% if respond_to?(:dev_session_path) %>
+  <h2>Development</h2>
+  <% User.order(:email).each do |user| %>
+    <%= button_to "Sign in as #{user.email}", dev_session_path, params: {user_id: user.id}, class: "secondary" %>
   <% end %>
-</main>
+  <%= form_with url: dev_session_path do |f| %>
+    <%= f.email_field :email, placeholder: "new@example.com", required: true %>
+    <%= f.submit "Sign in as new user" %>
+  <% end %>
+<% end %>

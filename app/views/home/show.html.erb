@@ -1,13 +1,6 @@
-<main class="home">
+<section class="hero">
   <h1>Delve</h1>
-  <%= image_tag "screenshot.png", alt: "A 3D tile of forest, lakes and hills", width: 560, height: 350 %>
-  <% if user_signed_in? %>
-    <p>Signed in as <%= current_user.email %>. <%= button_to "Sign out", destroy_user_session_path, method: :delete, form: {style: "display: inline"} %></p>
-    <p><%= link_to(current_user.github_connection ? "GitHub: #{current_user.github_connection.login}" : "Connect GitHub", github_connect_path) %></p>
-  <% else %>
-    <p><%= button_to "Sign in with Google", user_google_oauth2_omniauth_authorize_path, method: :post, data: {turbo: false} %></p>
+  <% unless user_signed_in? %>
+    <p><%= link_to "Sign in", new_user_session_path, role: "button" %></p>
   <% end %>
-  <p><%= link_to "World editor", editor_path %></p>
-  <p><%= link_to "Object library", objects_path %></p>
-  <p><%= link_to "Your characters", characters_path %></p>
-</main>
+</section>
