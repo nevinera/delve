@@ -141,7 +141,7 @@ const DRESS = {
       const { s } = ctx;
       // A jerkin with a strap across the chest, front and back.
       const rings = trunkBetween(parts, s, 3.18, 4.8);
-      shell(out, rings, 16, 0.035 * s, (band, angle) => {
+      shell(out, rings, ctx.trunkSides, 0.035 * s, (band, angle) => {
         const y = heightOf(rings[band], s);
         return Math.abs(y - (4.15 + 0.45 * Math.sin(angle))) < 0.12 || (y >= 3.3 && y < 3.44) ? trim : main;
       });
@@ -150,7 +150,7 @@ const DRESS = {
       const { s } = ctx;
       // A hauberk: mail from the hips to the neck, a hem below the belt, and short sleeves.
       const rings = trunkBetween(parts, s, 3.18, 4.9);
-      shell(out, rings, 16, 0.03 * s, () => main, { mail: true, edge: trim });
+      shell(out, rings, ctx.trunkSides, 0.03 * s, () => main, { mail: true, edge: trim });
       skirt(out, ctx, [3.25, 2.95, 2.7], [[0.7, 0.5], [0.74, 0.53], [0.74, 0.53]], (band) => (band === 1 ? trim : main), true);
       for (const side of SIDES) shell(out, parts[`arm_${side}`].rings.slice(1, 4), 10, 0.025 * s, () => main, { mail: true, edge: trim });
     },
@@ -158,11 +158,11 @@ const DRESS = {
       const { s } = ctx;
       // A breastplate over lames at the belly, a gorget at the neck, and tassets over the hips.
       const rings = trunkBetween(parts, s, 3.32, 4.8);
-      shell(out, rings, 16, 0.06 * s, (band) => {
+      shell(out, rings, ctx.trunkSides, 0.06 * s, (band) => {
         const y = heightOf(rings[band], s);
         return y < 3.44 || (y >= 3.65 && y < 3.92) ? trim : main;
       });
-      shell(out, trunkBetween(parts, s, 4.8, 4.97), 16, 0.05 * s, () => trim);
+      shell(out, trunkBetween(parts, s, 4.8, 4.97), ctx.trunkSides, 0.05 * s, () => trim);
       skirt(out, ctx, [3.4, 3.1, 2.75], [[0.72, 0.52], [0.78, 0.56], [0.8, 0.57]], (band) => (band === 1 ? trim : main));
     },
   },
@@ -170,14 +170,14 @@ const DRESS = {
   shoulders: {
     cloth: ({ out, parts, ctx, main, trim }) => {
       const rings = trunkBetween(parts, ctx.s, 4.55, 4.97);
-      shell(out, rings, 16, 0.05 * ctx.s, (band) => (band === 0 ? trim : main));
+      shell(out, rings, ctx.trunkSides, 0.05 * ctx.s, (band) => (band === 0 ? trim : main));
     },
     leather: ({ out, ctx, main, trim }) => {
       pauldrons(out, ctx, [[-0.13, 0.12], [0.02, 0.27], [0.22, 0.27], [0.3, 0.25]], (band) => (band === 2 ? trim : main));
     },
     chain: ({ out, parts, ctx, main, trim }) => {
       const rings = trunkBetween(parts, ctx.s, 4.42, 4.97);
-      shell(out, rings, 16, 0.04 * ctx.s, (band) => (band === 0 ? trim : main), { mail: true });
+      shell(out, rings, ctx.trunkSides, 0.04 * ctx.s, (band) => (band === 0 ? trim : main), { mail: true });
     },
     plate: ({ out, ctx, main, trim }) => {
       pauldrons(out, ctx, [[-0.2, 0.1], [-0.06, 0.3], [0.12, 0.35], [0.28, 0.34], [0.36, 0.3]], (band) => (band === 1 || band === 3 ? trim : main));

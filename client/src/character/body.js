@@ -31,6 +31,10 @@ const JOINTS = [
 ];
 // Where bones with no child end, for their direction.
 export const ENDS = { head: [0, 6, 0], hand_l: [0.97, 2.18, 0.05], ball_l: [0.36, 0.06, 0.75] };
+const TRUNK_SIDES = 32;
+// The bust's middle on each side (height in feet for a 6ft body, angle from the front), how far it
+// spreads round the chest, above and below the middle, and how far it stands out at most.
+const BUST = { y: 4.18, angle: 0.42, across: 0.62, above: 0.42, below: 0.3, depth: 0.32 };
 const ARM = ["clavicle_l", "upperarm_l", "lowerarm_l", "hand_l"];
 const LEG = ["thigh_l", "calf_l", "foot_l", "ball_l"];
 
@@ -113,23 +117,35 @@ export function bodyMesh(look) {
   const up = [0, 1, 0];
   const level = (y, extra) => ({ center: [0, y * s, 0], dir: up, ...extra });
 
-  // The trunk, crotch to neck. The bust pushes the chest's front out either side of the middle.
+  // The trunk, crotch to neck. The bust pushes the chest's front out either side of the middle, a
+  // rounded swell on each side that eases into the chest at its edges, its fullest point a little
+  // below its middle so it slopes more gently above.
   const { shoulders, waist, hips } = widths(look);
-  const bust = (amount) => (angle) => amount * look.bust * 0.34 * s * Math.exp(-(((Math.abs(angle) - 0.45) / 0.5) ** 2)) * (Math.cos(angle) > 0 ? 1 : 0);
-  // The chest has extra rings, so the bust rounds off rather than coming to a point. The shoulder
-  // ring reaches out over the top of the arms.
+  const bust = (y) => (angle) => {
+    const across = (Math.abs(angle) - BUST.angle) / BUST.across;
+    const down = (y - BUST.y) / (y > BUST.y ? BUST.above : BUST.below);
+    const r = across * across + down * down;
+    return r < 1 ? look.bust * BUST.depth * s * 0.5 * (1 + Math.cos(Math.PI * Math.sqrt(r))) : 0;
+  };
+  // The chest has extra rings, and the trunk extra sides, so the bust rounds off rather than
+  // coming to a point. The bust follows the chest's bone, since rings blending two would bend it
+  // out of shape as the spine moves. The shoulder ring reaches out over the top of the arms.
   const trunkRings = [
     level(2.92, { rx: 0.5 * hips * trunk, rz: 0.36 * trunk, bones: [["pelvis", 1]] }),
     level(3.18, { rx: 0.62 * hips * trunk, rz: 0.42 * trunk, bones: [["pelvis", 1]] }),
     level(3.32, { rx: 0.6 * hips * trunk, rz: 0.41 * trunk, bones: [["pelvis", 0.6], ["spine_01", 0.4]] }),
     level(3.44, { rx: 0.56 * waist * trunk, rz: 0.39 * trunk, bones: [["spine_01", 1]] }),
     level(3.65, { rx: 0.52 * waist * trunk, rz: 0.37 * trunk, bones: [["spine_01", 1]] }),
-    level(3.92, { rx: 0.57 * shoulders * trunk, rz: 0.4 * trunk, push: bust(0.1), bones: [["spine_01", 0.4], ["spine_02", 0.6]] }),
-    level(4.06, { rx: 0.6 * shoulders * trunk, rz: 0.42 * trunk, push: bust(0.45), bones: [["spine_02", 1]] }),
-    level(4.18, { rx: 0.62 * shoulders * trunk, rz: 0.43 * trunk, push: bust(0.85), bones: [["spine_02", 1]] }),
-    level(4.3, { rx: 0.64 * shoulders * trunk, rz: 0.43 * trunk, push: bust(1), bones: [["spine_02", 0.5], ["spine_03", 0.5]] }),
-    level(4.42, { rx: 0.67 * shoulders * trunk, rz: 0.42 * trunk, push: bust(0.75), bones: [["spine_03", 1]] }),
-    level(4.55, { rx: 0.7 * shoulders * trunk, rz: 0.4 * trunk, push: bust(0.3), bones: [["spine_03", 1]] }),
+    level(3.92, { rx: 0.57 * shoulders * trunk, rz: 0.4 * trunk, push: bust(3.92), bones: [["spine_01", 0.4], ["spine_02", 0.6]] }),
+    level(3.99, { rx: 0.585 * shoulders * trunk, rz: 0.41 * trunk, push: bust(3.99), bones: [["spine_02", 0.6], ["spine_03", 0.4]] }),
+    level(4.06, { rx: 0.6 * shoulders * trunk, rz: 0.42 * trunk, push: bust(4.06), bones: [["spine_03", 1]] }),
+    level(4.12, { rx: 0.61 * shoulders * trunk, rz: 0.425 * trunk, push: bust(4.12), bones: [["spine_03", 1]] }),
+    level(4.18, { rx: 0.62 * shoulders * trunk, rz: 0.43 * trunk, push: bust(4.18), bones: [["spine_03", 1]] }),
+    level(4.24, { rx: 0.63 * shoulders * trunk, rz: 0.43 * trunk, push: bust(4.24), bones: [["spine_03", 1]] }),
+    level(4.3, { rx: 0.64 * shoulders * trunk, rz: 0.43 * trunk, push: bust(4.3), bones: [["spine_03", 1]] }),
+    level(4.36, { rx: 0.655 * shoulders * trunk, rz: 0.425 * trunk, push: bust(4.36), bones: [["spine_03", 1]] }),
+    level(4.42, { rx: 0.67 * shoulders * trunk, rz: 0.42 * trunk, push: bust(4.42), bones: [["spine_03", 1]] }),
+    level(4.55, { rx: 0.7 * shoulders * trunk, rz: 0.4 * trunk, push: bust(4.55), bones: [["spine_03", 1]] }),
     level(4.68, { rx: 0.72 * shoulders * trunk, rz: 0.36 * trunk, bones: [["spine_03", 1]] }),
     level(4.8, { rx: 0.6 * shoulders * trunk, rz: 0.3 * trunk, bones: [["spine_03", 1]] }),
     level(4.9, { rx: 0.36 * trunk, rz: 0.24 * trunk, bones: [["spine_03", 0.7], ["neck_01", 0.3]] }),
@@ -142,7 +158,7 @@ export function bodyMesh(look) {
     return y < 3.3 ? c.secondary : y < 3.4 ? belt : y < 4.95 ? c.primary : c.skin;
   };
   // Each part of the body, kept as rings and colors until armor has been put over it.
-  const parts = { trunk: { rings: trunkRings, sides: 16, color: trunkColor, opts: { capStart: true } } };
+  const parts = { trunk: { rings: trunkRings, sides: TRUNK_SIDES, color: trunkColor, opts: { capStart: true } } };
 
   for (const side of ["l", "r"]) {
     const n = (name) => name.replace(/_l$/, `_${side}`);
@@ -192,7 +208,7 @@ export function bodyMesh(look) {
   }
 
   parts.head = head(out, look, at("head"), s, c);
-  dressArmor(out, parts, look, { s, trunk, limb, along, level, shoulders, hips, n: (name, side) => name.replace(/_l$/, `_${side}`) });
+  dressArmor(out, parts, look, { s, trunk, limb, along, level, shoulders, hips, trunkSides: TRUNK_SIDES, n: (name, side) => name.replace(/_l$/, `_${side}`) });
   for (const { rings, sides, color, opts } of Object.values(parts)) out.tube(rings, sides, color, opts);
   return { bones, ...out.arrays() };
 }
