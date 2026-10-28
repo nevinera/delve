@@ -10,18 +10,24 @@ import { MeshOut } from "./body.js";
 // bone, front to back, so held weapons run through it that way, tipped down ahead; a bow is held
 // upright. A polearm is tipped less, to clear the ground. A fist weapon's handle runs through the
 // fist with its claws jutting past the knuckles, along the hand; an orb's cup sits square to the
-// hand; a shield straps across the outside of the forearm, its point back and a little down.
+// hand; a shield straps across the outside of the forearm, its point back and a little down, the
+// fist gripping a third of the way back from its leading edge.
 const IN_HAND = [0, -0.3, 0.02];
 const DOWN_AHEAD = [0, -0.38, 0.92];
 const UP_AHEAD = [0, 0.8, 0.6];
+// A blade's grip slid on through the fist toward its tip, so the guard clears the fingers.
+const CLEAR_GUARD = (() => {
+  const length = Math.hypot(...DOWN_AHEAD);
+  return IN_HAND.map((v, i) => v + (DOWN_AHEAD[i] / length) * 0.09);
+})();
 export const HELD = {
-  sword: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
+  sword: { bone: "hand_r", at: CLEAR_GUARD, toward: DOWN_AHEAD },
   greatsword: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD, twoHanded: true },
   axe: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
   greataxe: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD, twoHanded: true },
   mace: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
   maul: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD, twoHanded: true },
-  dagger: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
+  dagger: { bone: "hand_r", at: CLEAR_GUARD, toward: DOWN_AHEAD },
   fist: { bone: "hand_r", at: [0, -0.22, 0], toward: [0, -1, 0] },
   polearm: { bone: "hand_r", at: IN_HAND, toward: [0, -0.35, 0.94], twoHanded: true },
   staff: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD, twoHanded: true },
@@ -30,7 +36,7 @@ export const HELD = {
   gun: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD, twoHanded: true },
   wand: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
   thrown: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
-  shield: { bone: "lowerarm_l", at: [0.17, -0.5, 0], toward: [0, 0.17, 0.98] },
+  shield: { bone: "lowerarm_l", at: [0.17, -0.85, 0], toward: [0, 0.17, 0.98] },
   orb: { bone: "hand_l", at: IN_HAND, toward: [0, 0, 1] },
 };
 
