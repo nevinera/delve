@@ -49,8 +49,10 @@ export class DetailView {
   // onPointer([x, y, z]) where the pointer's over the ground, in continent feet, or null; onSelect
   // the object picked, or null; onPour([x, z]) hears where the water tool's clicked, in continent
   // feet. bodies() gives the generator's view of the continent (generator.js prepareWorld), for
-  // working out water.
-  constructor(canvas, { onMove, onEdit, onPointer, onSelect, onPour, bodies } = {}) {
+  // working out water. onReflow(cells) hears of ground changed beside water ([ci, cj] continent
+  // cells), and answers with tiles whose water to work out again, or null. water { get, set } is
+  // the sketch's water, undone with the edits that change it.
+  constructor(canvas, { onMove, onEdit, onPointer, onSelect, onPour, bodies, onReflow, water } = {}) {
     this.canvas = canvas;
     this.view = new RenderView(canvas);
     const { controls } = this.view;
@@ -65,6 +67,8 @@ export class DetailView {
     this.onSelect = onSelect;
     this.onPour = onPour;
     this.bodies = bodies;
+    this.onReflow = onReflow;
+    this.water = water;
     this.extra = new Map(); // tiles outside the window and its ring, loaded when asked for
     this.proposalMarks = new THREE.Group();
     this.view.scene.add(this.proposalMarks);
@@ -149,10 +153,11 @@ export class DetailView {
       this.endEdit();
     }
     if (this.stroke || this.dragging) {
-      if (this.stroke) this.rework();
+      const stroke = this.stroke;
+      if (stroke) this.rework();
       this.stroke = null;
       this.dragging = false;
-      this.endEdit();
+      this.endEdit({ reflow: Boolean(stroke) });
     }
     const trail = this.trail;
     this.trail = null;
@@ -160,7 +165,7 @@ export class DetailView {
       this.beginEdit();
       this.setHeights(carveChannel(this.cells(), trail, this.brush));
       this.rework();
-      this.endEdit();
+      this.endEdit({ reflow: true });
     } else if (trail && !cancel && trail.length >= 2) {
       this.beginEdit();
       const editable = new Set(this.keys());
@@ -171,7 +176,7 @@ export class DetailView {
       for (const key of [...this.edit.keys()]) if (!changed.includes(key)) this.edit.delete(key);
       this.changed(changed);
       this.rework();
-      this.endEdit();
+      this.endEdit({ reflow: true });
     }
     if (this.pointer) this.hover(this.groundAt(this.pointer));
   }
@@ -304,9 +309,11 @@ export class DetailView {
     this.setHeights(detailBrush(this.cells(), this.brush, at, dt, stroke.from));
   }
 
-  // Edits are kept for undoing as each changed tile's state before and after.
+  // Edits are kept for undoing as each changed tile's state before and after, and the sketch's
+  // water before and after, if it changed.
   beginEdit() {
     this.edit = new Map();
+    this.editWater = this.water && JSON.stringify(this.water.get());
   }
 
   // Keeps a tile's state before the edit under way first changes it.
@@ -332,17 +339,47 @@ export class DetailView {
     return tile;
   }
 
-  endEdit() {
+  // Ends the edit under way. With `reflow`, water beside ground it changed is poured again
+  // (onReflow), and what that changes joins the same edit. With `amend`, the edit joins the last.
+  endEdit({ reflow = false, amend = false } = {}) {
     const edit = this.edit;
+    const waterBefore = this.editWater;
     this.edit = null;
-    if (!edit?.size) return;
+    this.editWater = null;
+    const waterAfter = this.water && JSON.stringify(this.water.get());
+    const water = waterBefore !== waterAfter ? { before: waterBefore, after: waterAfter } : null;
+    if (!edit?.size && !water) return;
+    const wet = reflow ? wetCells(edit, (key) => this.view.decoded.get(key)) : [];
     const after = new Map([...edit.keys()].map((key) => [key, snapshot(this.tile(key))]));
-    this.undos.push({ before: edit, after });
-    if (this.undos.length > UNDO_KEEP) this.undos.shift();
-    this.redos = [];
+    const last = amend && this.undos.at(-1);
+    if (last) {
+      for (const [key, state] of edit) {
+        if (!last.before.has(key)) last.before.set(key, state);
+        last.after.set(key, after.get(key));
+      }
+      if (water) last.water = { before: last.water?.before ?? water.before, after: water.after };
+    } else {
+      this.undos.push({ before: edit, after, water });
+      if (this.undos.length > UNDO_KEEP) this.undos.shift();
+      this.redos = [];
+    }
     this.freshClutter(edit.keys());
     this.onEdit?.([...edit.keys()]);
+    if (wet.length) this.reflow(wet);
   }
+
+  // Pours the water beside changed ground again (onReflow), and works out the water over the tiles
+  // that reaches, as part of the last edit.
+  reflow(cells) {
+    const before = this.water && JSON.stringify(this.water.get());
+    const keys = this.onReflow?.(cells);
+    if (!keys) return;
+    this.beginEdit();
+    this.editWater = before;
+    this.rework(keys);
+    this.endEdit({ amend: true });
+  }
+
 
   // Clutter for changed tiles is worked out again, for their heights and the structures on them.
   freshClutter(keys) {
@@ -364,6 +401,7 @@ export class DetailView {
     const entry = from.pop();
     to.push(entry);
     for (const [key, state] of entry[side]) restore(this.tile(key), state);
+    if (entry.water) this.water?.set(JSON.parse(entry.water[side]));
     this.changed(entry[side].keys());
     this.freshClutter(entry[side].keys());
     this.onEdit?.([...entry[side].keys()]);
@@ -424,9 +462,10 @@ export class DetailView {
   }
 
   // Works out the water over the tiles again as an edit of its own, as when the sketch's water has
-  // changed.
-  reworkWater(keys) {
+  // changed: waterBefore (JSON) is the sketch's water before it did, to undo to.
+  reworkWater(keys, waterBefore) {
     this.beginEdit();
+    if (waterBefore !== undefined) this.editWater = waterBefore;
     this.rework(keys);
     this.endEdit();
   }
@@ -825,6 +864,25 @@ export class DetailView {
     this.release(true);
     this.shown = false;
   }
+}
+
+// The cells an edit's changed beside water, before or after, as [ci, cj] continent cells. edit
+// maps "tx,tz" to each tile's state before; tileOf(key) gives the tile now.
+function wetCells(edit, tileOf) {
+  const cells = [];
+  for (const [key, before] of edit) {
+    const tile = tileOf(key);
+    if (!tile) continue;
+    const [tx, tz] = tile.coords;
+    const [was, now] = [before.layers, tile.layers];
+    const wet = (i, j) => i >= 0 && j >= 0 && i < CELLS && j < CELLS && (!Number.isNaN(was.water[j * CELLS + i]) || !Number.isNaN(now.water[j * CELLS + i]));
+    for (let k = 0; k < now.height.length; k++) {
+      if (was.height[k] === now.height[k]) continue;
+      const [i, j] = [k % CELLS, Math.floor(k / CELLS)];
+      if ([-1, 0, 1].some((dj) => [-1, 0, 1].some((di) => wet(i + di, j + dj)))) cells.push([tx * CELLS + i, tz * CELLS + j]);
+    }
+  }
+  return cells;
 }
 
 // A tile's changeable state, copied, for undoing.

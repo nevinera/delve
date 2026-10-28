@@ -20,6 +20,7 @@ import { BIOMES, biomesNear, climateAt, prepareBiomes } from "./biomes.js";
 import { CELLS, CELL_FT, TILE_FT, WATER_KINDS, gradeCap } from "./constants.js";
 import { LandGrid } from "./landGrid.js";
 import { fillLake } from "./lakes.js";
+import { waterGround } from "./waterGround.js";
 import { facets, fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { scatterObjects } from "./objects.js";
@@ -148,9 +149,10 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const toFt = ([x, z]) => [x * TILE_FT, z * TILE_FT];
 
-// The continent as { land, pins, paths, water }: the land grid (landGrid.js, or what was sent a
-// worker of it), and the sketch's pins, road paths and water ({ rivers, lakes }, plans/water.md), in
-// continent tile units. seedKey (the continent's key) seeds the noise.
+// The continent as { land, pins, paths, water, edited }: the land grid (landGrid.js, or what was
+// sent a worker of it), the sketch's pins, road paths and water ({ rivers, lakes }, plans/water.md),
+// in continent tile units, and the height layers of tiles shaped by hand, by "tx,tz", which lakes
+// fill over (waterGround.js). seedKey (the continent's key) seeds the noise.
 export function prepareWorld(continent, seedKey) {
   const ctx = prepareShape(continent, seedKey);
   ctx.lakeSites = new Map(); // "gi,gj" -> lake or null, filled as tiles need them
@@ -201,9 +203,10 @@ export function prepareWorld(continent, seedKey) {
   ctx.falls = ctx.rivers.flatMap(fallsOf);
   ctx.roads = (continent.paths ?? []).filter((p) => p.route?.points?.length >= 2).map((p) => prepareRoad(p, (x, z) => land(ctx, x, z, ctx.biomes).h));
 
-  // A lake fills the land grid's hollows, as the editor's water flow sees the ground.
+  // A lake fills the ground's hollows, as the editor's water flow sees the ground.
+  const waterAt = waterGround(ctx.heightAt, continent.edited);
   ctx.ponds = (continent.water?.lakes ?? []).flatMap(({ seed, level }) => {
-    const { region } = fillLake(ctx.heightAt, { seed, level });
+    const { region } = fillLake(waterAt, { seed, level });
     if (!region.length) return [];
     const ft = region.map((polygon) => polygon.map((ring) => ring.map(toFt)));
     const xs = ft.flat(2).map(([x]) => x);

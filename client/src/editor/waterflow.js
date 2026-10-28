@@ -1,7 +1,9 @@
 import { TILE_FT } from "../world/constants.js";
 import { LAKE_STEP_FT, outline } from "../world/lakes.js";
 import { fbm, hashString } from "../world/noise.js";
-import { simplify } from "../world/polyline.js";
+import { makePolyline, nearBounds, nearest, simplify } from "../world/polyline.js";
+import { seaAt, shapeHeight } from "../world/generator.js";
+import { waterGround } from "../world/waterGround.js";
 
 // Where the water from a continent's sources goes. It steps across a lattice STEP_FT apart, always
 // to the neighbour it drops to most steeply. Where nothing's lower it fills the hollow, lowest
@@ -179,6 +181,31 @@ export function simulateWater({ sources, heightAt, isWater, seed = 0 }) {
       .map((p) => ({ seed: p.cells[0].map((v) => round((v * STEP_FT) / TILE_FT)), level: Math.round(p.level * 10) / 10, region: outline(p.cells) })),
     ends,
   };
+}
+
+// Pours sources over a continent (simulateWater): shape from generator.js prepareShape, edited
+// the height layers of tiles shaped by hand, by "tx,tz", which the water runs over instead of the
+// land grid (waterGround.js). Water already there is the sea and `water`: { rivers: [{ points,
+// half }], lakes: [region] } in ft.
+export function pourOver({ shape, edited, sources, water = { rivers: [], lakes: [] } }) {
+  const rivers = water.rivers.filter((r) => r.points.length >= 2).map((r) => ({ line: makePolyline(r.points), half: r.half }));
+  const inLake = (x, z) => water.lakes.some((region) => region.some(([outer, ...holes]) => inRing(x, z, outer) && !holes.some((h) => inRing(x, z, h))));
+  return simulateWater({
+    sources,
+    heightAt: waterGround((x, z) => shapeHeight(shape, x, z), edited),
+    isWater: (x, z) => seaAt(shape, x, z) || rivers.some((r) => nearBounds(r.line, x, z, r.half) && nearest(r.line, x, z).dist < r.half) || inLake(x, z),
+    seed: shape.seed,
+  });
+}
+
+function inRing(x, z, ring) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, zi] = ring[i];
+    const [xj, zj] = ring[j];
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
 }
 
 // The rivers as runs of cells with the same flow, each { cells, q }. A run ends where the flow

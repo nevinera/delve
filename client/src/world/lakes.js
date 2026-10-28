@@ -152,6 +152,11 @@ function area(ring) {
   return sum / 2;
 }
 
+// Whether a point is inside a region, polygons of rings as outline gives them.
+export function inRegion(p, region) {
+  return region.some(([outer, ...holes]) => inRing(p, outer) && !holes.some((h) => inRing(p, h)));
+}
+
 function inRing([x, z], ring) {
   let inside = false;
   for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {

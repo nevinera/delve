@@ -51,7 +51,7 @@ export const FEATURE_HINTS = {
 
 const DEFAULT_HUB_RADIUS_FT = 200;
 const MIN_HUB_RADIUS_FT = 16;
-const DEFAULT_SOURCE_WIDTH_FT = 12;
+export const DEFAULT_SOURCE_WIDTH_FT = 12;
 const SHAPE_PINS = ["biome"];
 
 // The next free id for a river ("w") or lake ("l") in the sketch's water.

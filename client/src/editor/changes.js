@@ -4,6 +4,7 @@ import { riverReachFt, roadReachFt } from "../world/generator.js";
 import { RIVER_PULL_FT } from "../world/biomes.js";
 import { tilesTouched } from "./region.js";
 import { fillLake } from "../world/lakes.js";
+import { waterGround } from "../world/waterGround.js";
 
 // Which tiles an edit changes, so the editor can highlight them and regenerate just those. Each
 // kind of change reaches as far as the generator lets it: a changed land height reshapes the
@@ -17,7 +18,8 @@ import { fillLake } from "../world/lakes.js";
 const key = (tx, tz) => `${tx},${tz}`;
 
 // Tile keys ("x,z") that differ between two versions of a continent, each { land, pins, paths,
-// water } with land a LandGrid (landGrid.js) and the sketch's pins, paths and water.
+// water, edited } with land a LandGrid (landGrid.js), the sketch's pins, paths and water, and the
+// hand-shaped tiles' heights (generator.js prepareWorld).
 // `tiles` is every tile with land, after the edit.
 export function changedTiles(before, after, tiles) {
   const out = new Set();
@@ -45,7 +47,7 @@ export function changedTiles(before, after, tiles) {
   // seed and level. Its rim reaches a little past its shore, well within the neighbours added below.
   const lakes = (c) => new Map((c.water?.lakes ?? []).map((lake) => [lake.id, lake]));
   const [was, now] = [lakes(before), lakes(after)];
-  const shape = (c, lake) => (lake ? fillLake((x, z) => c.land.heightAt(x, z), lake).region : []);
+  const shape = (c, lake) => (lake ? fillLake(waterGround((x, z) => c.land.heightAt(x, z), c.edited), lake).region : []);
   for (const id of new Set([...was.keys(), ...now.keys()])) {
     const [a, b] = [shape(before, was.get(id)), shape(after, now.get(id))];
     if (JSON.stringify(a) === JSON.stringify(b)) continue;

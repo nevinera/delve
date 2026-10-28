@@ -1,5 +1,5 @@
 import { changedTiles } from "./changes.js";
-import { FEATURE_HINTS, Features, PINS, ROADS, nextId, nextWaterId } from "./features.js";
+import { DEFAULT_SOURCE_WIDTH_FT, FEATURE_HINTS, Features, PINS, ROADS, nextId, nextWaterId } from "./features.js";
 import { MapView } from "./mapView.js";
 import { keyNav } from "./keyNav.js";
 import { TileGenerator } from "./generation.js";
@@ -20,10 +20,12 @@ import { editedPath, loadEdited, saveEdited } from "./edited.js";
 import { createZone, listZones, loadSketch, moveIntoSketch, olderZones, removeZone, saveSketch, saveZone, upgradeSketch } from "./zones.js";
 import { ShapePalette } from "./shapePalette.js";
 import { ShapePreview } from "./shapePreview.js";
-import { WaterSimulator } from "./waterflow.js";
+import { WaterSimulator, pourOver } from "./waterflow.js";
 import { ROUTE_VERSION, RoadRouter, findCrossing, gradeCap } from "./roads.js";
 import { hashString } from "../world/noise.js";
-import { fillLake } from "../world/lakes.js";
+import { LAKE_STEP_FT, fillLake, inRegion } from "../world/lakes.js";
+import { makePolyline, nearBounds, nearest } from "../world/polyline.js";
+import { waterGround } from "../world/waterGround.js";
 import { LandGrid, landBounds, loadLand, saveLand } from "../world/landGrid.js";
 import { BLENDS, EROSIONS, SHAPES, TOOLS as SCULPT_TOOLS } from "./sculptTools.js";
 import { DETAIL_TOOLS } from "./detailTools.js";
@@ -39,7 +41,7 @@ import { CELL_FT, TILE_FT } from "../world/constants.js";
 import { TREE_KINDS, TREE_SIZES, treeTerrain } from "../world/trees.js";
 import { STRUCTURE_PREFIX } from "../world/structures.js";
 import { PlacePicker } from "./placePicker.js";
-import { TERRAIN, prepareWorld } from "../world/generator.js";
+import { TERRAIN, prepareShape, prepareWorld } from "../world/generator.js";
 import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
 
 const HIT_PX = 8;
@@ -319,13 +321,38 @@ export class Editor {
   // The continent as the generator takes it (generator.js prepareWorld).
   continentState() {
     const { pins, paths, water } = this.sketch;
-    return { land: this.land.data, pins, paths, water };
+    return { land: this.land.data, pins, paths, water, edited: this.editedHeights() };
   }
 
   // The continent as last stored, from the world's files.
   storedState() {
     const { pins, paths, water } = loadSketch(this.world, this.continent);
-    return { land: loadLand(this.world.files, this.continent), pins, paths, water };
+    return { land: loadLand(this.world.files, this.continent), pins, paths, water, edited: this.editedHeights() };
+  }
+
+  // The height layers of the tiles shaped by hand, by "tx,tz", which water runs over instead of the
+  // land grid (world/waterGround.js). Each is read from its file once.
+  editedHeights() {
+    this.heightsOf ??= new WeakMap();
+    const heights = new Map();
+    for (const key of this.editedTiles()) {
+      const bytes = this.world.files.get(tilePath(this.continent, ...key.split(",").map(Number)));
+      if (!bytes) continue;
+      if (!this.heightsOf.has(bytes)) this.heightsOf.set(bytes, decodeTile(gunzipSync(bytes)).layers.height);
+      heights.set(key, this.heightsOf.get(bytes));
+    }
+    return heights;
+  }
+
+  // A key for the ground water runs over: the land grid and the hand-shaped tiles, as they are.
+  groundKey() {
+    this.fileIds ??= new WeakMap();
+    const id = (bytes) => {
+      if (bytes && !this.fileIds.has(bytes)) this.fileIds.set(bytes, (this.nextFileId = (this.nextFileId ?? 0) + 1));
+      return bytes ? this.fileIds.get(bytes) : 0;
+    };
+    const tiles = [...this.editedTiles()].sort().map((key) => `${key}:${id(this.world.files.get(tilePath(this.continent, ...key.split(",").map(Number))))}`);
+    return String(hashString(`${this.landHash()}|${tiles.join(";")}`));
   }
 
   reload() {
@@ -412,9 +439,9 @@ export class Editor {
     const sources = [{ id: pin.id, at: pin.at, width: pin.width }];
     const landKey = String(this.landHash());
     const water = this.waterShapes();
-    const key = String(hashString(JSON.stringify([landKey, sources, water, this.continent])));
+    const key = String(hashString(JSON.stringify([this.groundKey(), sources, water, this.continent])));
     this.proposal = { pin: pin.id, key, result: null };
-    this.water.request({ key, landKey, continent: { land: this.land.data }, seedKey: this.continent, sources, water });
+    this.water.request({ key, landKey, continent: { land: this.land.data }, seedKey: this.continent, edited: this.editedHeights(), sources, water });
     this.renderProps();
     this.showPour();
   }
@@ -432,6 +459,7 @@ export class Editor {
     const { rivers, pools } = this.proposal?.result ?? {};
     if (!rivers) return;
     const water = this.sketch.water;
+    const before = JSON.stringify(water);
     for (const { points, width } of rivers) water.rivers.push({ id: nextWaterId(water, "w"), points, width });
     for (const { seed, level } of pools) water.lakes.push({ id: nextWaterId(water, "l"), seed, level });
     const inDetail = this.proposal.pin === DETAIL_POUR;
@@ -442,7 +470,7 @@ export class Editor {
     if (inDetail && this.detail) {
       // Hand-edited tiles in the window take the water now; the rest get it when tiles are generated.
       const edited = this.editedTiles();
-      this.detail.reworkWater(this.detail.keys().filter((key) => edited.has(key)));
+      this.detail.reworkWater(this.detail.keys().filter((key) => edited.has(key)), before);
       this.say("Kept. Tiles you haven't edited by hand get the new water when tiles are generated again.");
     }
   }
@@ -457,29 +485,112 @@ export class Editor {
   // The generator's view of the continent as it is (generator.js prepareWorld), for the detail
   // step's water. Kept until the land or the sketch changes.
   bodies() {
-    const key = hashString(JSON.stringify([this.landHash(), this.sketch.pins, this.sketch.paths, this.sketch.water]));
+    const key = hashString(JSON.stringify([this.groundKey(), this.sketch.pins, this.sketch.paths, this.sketch.water]));
     if (this.bodiesCache?.key !== key) this.bodiesCache = { key, ctx: prepareWorld(this.continentState(), this.continent) };
     return this.bodiesCache.ctx;
   }
 
   // The sketch's water as the water flow sees it, in ft: rivers' lines and half widths, and lakes'
-  // outlines.
-  waterShapes() {
+  // outlines. Rivers and lakes in `leaving` are left out.
+  waterShapes(leaving = new Set()) {
     const ft = (p) => p.map((v) => v * TILE_FT);
+    const { rivers, lakes } = this.sketch.water;
     return {
-      rivers: this.sketch.water.rivers.map((r) => ({ points: r.points.map(ft), half: r.width / 2 })),
-      lakes: this.sketch.water.lakes.map((lake) => this.lakeShape(lake).region.map((polygon) => polygon.map((ring) => ring.map(ft)))),
+      rivers: rivers.filter((r) => !leaving.has(r)).map((r) => ({ points: r.points.map(ft), half: r.width / 2 })),
+      lakes: lakes.filter((l) => !leaving.has(l)).map((lake) => this.lakeShape(lake).region.map((polygon) => polygon.map((ring) => ring.map(ft)))),
     };
   }
 
-  // A lake's shape over the land as it is (world/lakes.js fillLake), kept until the land or the lake
-  // changes.
+  // Pours the sketch's water again where the detail step changed the ground beside it (cells:
+  // [ci, cj] continent cells), so it runs the way the ground now sends it. A river touched is cut
+  // where it was touched and poured on from there; a lake touched is poured again from its seed,
+  // with the flow of the rivers running into it, and its outflows go, to be made again. Whatever
+  // the pours make joins the sketch. Returns the window's hand-shaped tiles, to work their water
+  // out again, or null if nothing was touched.
+  reflowWater(cells) {
+    const water = this.sketch.water;
+    const lattice = new Set(cells.map(([ci, cj]) => `${Math.round(((ci + 0.5) * CELL_FT) / LAKE_STEP_FT)},${Math.round(((cj + 0.5) * CELL_FT) / LAKE_STEP_FT)}`));
+    const points = [...lattice].map((k) => k.split(",").map((v) => v * LAKE_STEP_FT));
+    // A lake's lattice points, and whether a point (tile units) is within two of them.
+    const lakeCells = new Map(water.lakes.map((lake) => [lake, new Set(this.lakeShape(lake).cells.map(([i, j]) => `${i},${j}`))]));
+    const nearLake = (lake, [x, z]) => {
+      const [i0, j0] = [Math.round((x * TILE_FT) / LAKE_STEP_FT), Math.round((z * TILE_FT) / LAKE_STEP_FT)];
+      for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) if (lakeCells.get(lake).has(`${i0 + di},${j0 + dj}`)) return true;
+      return false;
+    };
+    const lakes = water.lakes.filter((lake) => points.some(([x, z]) => lakeCells.get(lake).has(`${Math.round(x / LAKE_STEP_FT)},${Math.round(z / LAKE_STEP_FT)}`) || nearLake(lake, [x / TILE_FT, z / TILE_FT])));
+    const outflows = new Set(water.rivers.filter((r) => lakes.some((lake) => nearLake(lake, r.points[0]))));
+    // Each river touched, and how far along it (ft) it was first touched.
+    const cuts = new Map();
+    for (const river of water.rivers) {
+      if (outflows.has(river) || river.points.length < 2) continue;
+      const line = makePolyline(river.points.map((p) => p.map((v) => v * TILE_FT)));
+      const reach = river.width / 2 + 2 * CELL_FT;
+      for (const [x, z] of points) {
+        if (!nearBounds(line, x, z, reach)) continue;
+        const n = nearest(line, x, z);
+        if (n.dist < reach) cuts.set(river, Math.min(cuts.get(river) ?? Infinity, n.along));
+      }
+    }
+    if (!lakes.length && !cuts.size) return null;
+
+    const sources = [];
+    const cutAt = new Map(); // river -> the point it's poured on from
+    for (const [river, along] of cuts) {
+      // The last of its points before the touch.
+      let k = 0;
+      let walked = 0;
+      for (let n = 1; n < river.points.length; n++) {
+        walked += Math.hypot(river.points[n][0] - river.points[n - 1][0], river.points[n][1] - river.points[n - 1][1]) * TILE_FT;
+        if (walked >= along) break;
+        k = n;
+      }
+      cutAt.set(river, k);
+      sources.push({ id: `river:${river.id}`, at: river.points[k], width: river.width });
+    }
+    for (const lake of lakes) {
+      // Its inflow: the rivers ending in it, or a source's width if none do.
+      const q = water.rivers.filter((r) => !outflows.has(r) && nearLake(lake, r.points.at(-1))).reduce((sum, r) => sum + r.width ** 2, 0);
+      sources.push({ id: `lake:${lake.id}`, at: lake.seed, width: Math.sqrt(q || DEFAULT_SOURCE_WIDTH_FT ** 2) });
+    }
+    const leaving = new Set([...cuts.keys(), ...lakes, ...outflows]);
+    this.shapeCache = this.shapeCache?.key === this.landHash() ? this.shapeCache : { key: this.landHash(), shape: prepareShape({ land: this.land.data }, this.continent) };
+    const result = pourOver({ shape: this.shapeCache.shape, edited: this.editedHeights(), sources, water: this.waterShapes(leaving) });
+
+    // Rivers cut keep their course up to the cut, carried on by the river poured from there.
+    const fresh = [...result.rivers];
+    for (const [river, k] of cutAt) {
+      const kept = river.points.slice(0, k + 1);
+      const from = kept.at(-1);
+      const on = fresh.findIndex((r) => Math.hypot(r.points[0][0] - from[0], r.points[0][1] - from[1]) * TILE_FT < 2 * LAKE_STEP_FT);
+      const carried = on >= 0 ? fresh.splice(on, 1)[0].points.slice(1) : [];
+      river.points = [...kept, ...carried];
+    }
+    water.rivers = water.rivers.filter((r) => !outflows.has(r) && r.points.length >= 2);
+    // A lake poured again takes the pool its seed's in; with none, it's drained away.
+    const pools = [...result.pools];
+    for (const lake of lakes) {
+      const p = pools.findIndex(({ region }) => inRegion(lake.seed, region));
+      if (p < 0) water.lakes = water.lakes.filter((l) => l !== lake);
+      else Object.assign(lake, { seed: pools[p].seed, level: pools.splice(p, 1)[0].level });
+    }
+    for (const { points, width } of fresh) water.rivers.push({ id: nextWaterId(water, "w"), points, width });
+    for (const { seed, level } of pools) water.lakes.push({ id: nextWaterId(water, "l"), seed, level });
+    this.saveSketch();
+    const edited = this.editedTiles();
+    return this.detail.keys().filter((key) => edited.has(key));
+  }
+
+  // A lake's shape over the ground as it is (world/lakes.js fillLake), kept until the ground or the
+  // lake changes.
   lakeShape(lake) {
-    const key = JSON.stringify([this.landHash(), lake.seed, lake.level]);
+    const ground = this.groundKey();
+    const key = JSON.stringify([ground, lake.seed, lake.level]);
     this.lakeShapes ??= new Map();
     if (!this.lakeShapes.has(key)) {
       if (this.lakeShapes.size > 200) this.lakeShapes.clear();
-      this.lakeShapes.set(key, fillLake((x, z) => this.land.heightAt(x, z), lake));
+      if (this.waterAt?.key !== ground) this.waterAt = { key: ground, at: waterGround((x, z) => this.land.heightAt(x, z), this.editedHeights()) };
+      this.lakeShapes.set(key, fillLake(this.waterAt.at, lake));
     }
     return this.lakeShapes.get(key);
   }
@@ -787,6 +898,14 @@ export class Editor {
         onSelect: (object) => this.showObject(object),
         onPour: ([x, z]) => this.pour({ id: DETAIL_POUR, at: [x / TILE_FT, z / TILE_FT].map((v) => Math.round(v * 1000) / 1000), width: Number(this.el.pourWidth.value) }),
         bodies: () => this.bodies(),
+        onReflow: (cells) => this.reflowWater(cells),
+        water: {
+          get: () => this.sketch.water,
+          set: (water) => {
+            this.sketch.water = water;
+            this.saveSketch();
+          },
+        },
       });
       this.detail.view.handlers.onTime = (clock) => this.showTime?.(clock);
       this.applyDetailBrush();
