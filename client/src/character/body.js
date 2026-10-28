@@ -623,8 +623,8 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
     ];
     const points = curve.map(([x, dy]) => add(front(dy, x), [0, 0, (0.03 - Math.abs(x) * 0.15) * s]));
     const radii = curve.map(([x]) => (0.04 - Math.abs(x) * 0.09) * s);
-    // An even number of sides, so the ends match: the rings turn half over from one end to the other.
-    out.path(points, radii, 6, () => c.hair, () => bones, { capStart: true, capEnd: true });
+    // Each ring carries on from the one before, so the curl doesn't turn the rings over.
+    out.path(points, radii, 6, () => c.hair, () => bones, { capStart: true, capEnd: true, carry: true });
   }
 
   // Face markings and wear, laid a little proud of the face.
@@ -740,11 +740,15 @@ export class MeshOut {
   // Bands of faces between rings of `sides` corners, each colored by color(band, angle), angle 0
   // facing the ring's front. Caps close the first or last ring to a point; skip(band, angle) leaves
   // faces out. A ring's weights(angle), where it has one, weights each corner by its angle instead
-  // of the ring's bones.
-  tube(rings, sides, color, { capStart = false, capEnd = false, endColor = null, skip = null } = {}) {
+  // of the ring's bones. With `carry`, each ring after the first takes its side from the ring
+  // before, so a tube that bends round toward +x doesn't turn its rings over partway.
+  tube(rings, sides, color, { capStart = false, capEnd = false, endColor = null, skip = null, carry = false } = {}) {
+    let last = null;
     const points = rings.map((r) => {
       // The ring's side axis is +x where it can be; its front is square to that and the bone.
-      const side = norm(Math.abs(r.dir[0]) > 0.9 ? [0, 0, -1] : sub([1, 0, 0], mul(r.dir, r.dir[0])));
+      const from = carry && last ? last : Math.abs(r.dir[0]) > 0.9 ? [0, 0, -1] : [1, 0, 0];
+      const side = norm(sub(from, mul(r.dir, dot(from, r.dir))));
+      last = side;
       const front = cross(side, r.dir);
       return Array.from({ length: sides }, (_, k) => {
         const angle = (k / sides) * Math.PI * 2;
@@ -787,8 +791,8 @@ export class MeshOut {
 
   // A tube along a line of points, `radii` round each (or `depth` deep, square to the side, where
   // given), its rings following bones(i).
-  path(points, radii, sides, color, bones, { capStart = false, capEnd = false, depth = null } = {}) {
-    this.tube(pathRings(points, radii, bones, depth), sides, color, { capStart, capEnd });
+  path(points, radii, sides, color, bones, { capStart = false, capEnd = false, depth = null, carry = false } = {}) {
+    this.tube(pathRings(points, radii, bones, depth), sides, color, { capStart, capEnd, carry });
   }
 
   // A small eight-faced gem.
