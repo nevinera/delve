@@ -3,8 +3,8 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { characterClips, loadAnimations } from "./animations.js";
 import { characterMesh, disposeCharacter } from "./characterMesh.js";
-import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_TYPES } from "./armor.js";
-import { BEARD, FACE, HAIR, JEWELRY, SKIN, appearance, randomLook, resolveRecipe } from "./recipe.js";
+import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_SWATCHES, ARMOR_TYPES } from "./armor.js";
+import { BEARD, CLOTH, EYES, FACE, HAIR, HAIR_COLORS, JEWELRY, METAL, PAINT, SKIN, appearance, randomLook, resolveRecipe } from "./recipe.js";
 
 // The character builder page: one character on a patch of ground, with a control for each part of
 // its appearance and its name. It makes a new character or changes one of yours. A set of armor
@@ -25,15 +25,16 @@ const SLIDERS = [
   ["bust", 0, 1, 0.01],
 ];
 
-// Colors a player picks freely, with their labels and when they show on the character. Skin picks
-// from SKIN's swatches, and steel and wood stay as they are.
+// The colors a player picks, each from a palette of swatches, with their labels and when they show
+// on the character. Steel and wood stay as they are.
 const PICKED_COLORS = {
-  hair: ["hair color", () => look.hair !== "bald" || look.beard !== "none" || look.face.includes("sideburns")],
-  eyes: ["eyes", () => true],
-  primary: ["shirt", () => true],
-  secondary: ["trousers", () => true],
-  metal: ["metal", () => look.jewelry.length || look.face.includes("glasses") || wield().weapon !== "none"],
-  paint: ["warpaint", () => look.face.includes("warpaint")],
+  skin: ["skin", SKIN, () => true],
+  hair: ["hair color", HAIR_COLORS, () => look.hair !== "bald" || look.beard !== "none" || look.face.includes("sideburns")],
+  eyes: ["eyes", EYES, () => true],
+  primary: ["shirt", CLOTH, () => true],
+  secondary: ["trousers", CLOTH, () => true],
+  metal: ["metal", METAL, () => look.jewelry.length || look.face.includes("glasses") || wield().weapon !== "none"],
+  paint: ["warpaint", PAINT, () => look.face.includes("warpaint")],
 };
 
 // Attacks, each a run of clips played in turn.
@@ -114,9 +115,14 @@ let character = null;
 let baked = null;
 let mixer = null;
 let clips = new Map();
-// Controls that only show when they'd change something: [row, when].
+// Controls that only show when they'd change something: [row, when]. Each set of swatches marks
+// the one picked: [row, mark].
 let showing = [];
-const showRows = () => showing.forEach(([row, when]) => (row.hidden = !when()));
+let marking = [];
+const showRows = () => {
+  showing.forEach(([row, when]) => (row.hidden = !when()));
+  marking.forEach(([, mark]) => mark());
+};
 
 // The move playing: its button, its run of clips, which one is on, and for how long.
 let move = null;
@@ -191,8 +197,8 @@ function buildMoves() {
   }
 }
 
-function buildControls() {
-  const panel = $("controls");
+// Helpers that add rows of controls to a panel, each rebuilding the character when changed.
+function controlsIn(panel) {
   const row = (label, input, after = null) => {
     const el = document.createElement("label");
     el.className = "builder-row";
@@ -201,25 +207,53 @@ function buildControls() {
     panel.append(el);
     return el;
   };
-  showing = [];
-  const heading = (text) => panel.append(Object.assign(document.createElement("h2"), { textContent: text }));
-  const choose = (label, options, value, set) => {
-    const select = document.createElement("select");
-    for (const option of options) select.add(new Option(option, option, false, option === value));
-    select.addEventListener("change", () => {
-      set(select.value);
-      rebuild();
-    });
-    return row(label, select);
+  return {
+    row,
+    heading: (text) => panel.append(Object.assign(document.createElement("h2"), { textContent: text })),
+    choose: (label, options, value, set) => {
+      const select = document.createElement("select");
+      for (const option of options) select.add(new Option(option, option, false, option === value));
+      select.addEventListener("change", () => {
+        set(select.value);
+        rebuild();
+      });
+      return row(label, select);
+    },
+    check: (label, checked, set) => {
+      const box = Object.assign(document.createElement("input"), { type: "checkbox", checked });
+      box.addEventListener("change", () => {
+        set(box.checked);
+        rebuild();
+      });
+      return row(label, box);
+    },
+    // A label over a palette's swatches, ten to a row.
+    swatches: (label, palette, get, set) => {
+      const el = Object.assign(document.createElement("div"), { className: "builder-colors" });
+      const grid = Object.assign(document.createElement("div"), { className: "builder-swatches" });
+      for (const color of palette) {
+        const swatch = Object.assign(document.createElement("button"), { type: "button", title: color });
+        swatch.style.background = color;
+        swatch.addEventListener("click", () => {
+          set(color);
+          rebuild();
+        });
+        grid.append(swatch);
+      }
+      marking.push([el, () => [...grid.children].forEach((swatch) => swatch.classList.toggle("picked", swatch.title === get()))]);
+      el.append(Object.assign(document.createElement("span"), { textContent: label }), grid);
+      panel.append(el);
+      return el;
+    },
   };
-  const check = (label, checked, set) => {
-    const box = Object.assign(document.createElement("input"), { type: "checkbox", checked });
-    box.addEventListener("change", () => {
-      set(box.checked);
-      rebuild();
-    });
-    return row(label, box);
-  };
+}
+
+// The controls for the character's appearance.
+function buildControls() {
+  const { row, heading, choose, check, swatches } = controlsIn($("controls"));
+  // Rows that went with the controls these replace are dropped.
+  showing = showing.filter(([el]) => el.isConnected);
+  marking = marking.filter(([el]) => el.isConnected);
 
   heading("Body");
   for (const [key, min, max, step] of SLIDERS) {
@@ -247,49 +281,23 @@ function buildControls() {
   }
 
   heading("Colors");
-  const swatches = Object.assign(document.createElement("span"), { className: "builder-swatches" });
-  for (const tone of SKIN) {
-    const swatch = Object.assign(document.createElement("button"), { type: "button", title: tone });
-    swatch.style.background = tone;
-    swatch.classList.toggle("picked", tone === look.colors.skin);
-    swatch.addEventListener("click", () => {
-      look.colors.skin = tone;
-      for (const other of swatches.children) other.classList.toggle("picked", other === swatch);
-      rebuild();
-    });
-    swatches.append(swatch);
+  for (const [key, [label, palette, when]] of Object.entries(PICKED_COLORS)) {
+    showing.push([swatches(label, palette, () => look.colors[key], (color) => (look.colors[key] = color)), when]);
   }
-  row("skin", swatches);
-  for (const [key, [label, when]] of Object.entries(PICKED_COLORS)) {
-    const input = Object.assign(document.createElement("input"), { type: "color", value: look.colors[key] });
-    input.addEventListener("input", () => {
-      look.colors[key] = input.value;
-      rebuild();
-    });
-    showing.push([row(label, input), when]);
-  }
+}
 
-  // Armor in its main and trim colors, which start as the type's own.
+// The armor and weapons to try on, which stay as they are when the look changes. Armor starts in
+// its type's own colors.
+function buildTryOn() {
+  const { heading, choose, check, swatches } = controlsIn($("tryOn"));
   heading("Try on (not saved)");
   const worn = () => gear.armor !== "none";
-  const paints = Object.assign(document.createElement("span"), { className: "builder-pair" });
-  const pickers = [0, 1].map((i) => {
-    const input = Object.assign(document.createElement("input"), { type: "color" });
-    input.addEventListener("input", () => {
-      gear.colors[i] = input.value;
-      rebuild();
-    });
-    paints.append(input);
-    return input;
-  });
   choose("armor", ["none", ...ARMOR_TYPES], gear.armor, (value) => {
     gear.armor = value;
     gear.colors = worn() ? [...ARMOR_COLORS[value]] : null;
-    pickers.forEach((input, i) => worn() && (input.value = gear.colors[i]));
   });
-  if (worn()) pickers.forEach((input, i) => (input.value = gear.colors[i]));
-  showing.push([row("armor paint", paints), worn]);
   showing.push([check("helmet", gear.helmet, (on) => (gear.helmet = on)), worn]);
+  ["armor main", "armor trim"].forEach((label, i) => showing.push([swatches(label, ARMOR_SWATCHES[i], () => gear.colors?.[i], (color) => (gear.colors[i] = color)), worn]));
   choose("weapons", Object.keys(WIELDS), gear.wield, (value) => (gear.wield = value));
 }
 
@@ -351,6 +359,7 @@ function resize() {
 new ResizeObserver(resize).observe(canvas);
 
 buildControls();
+buildTryOn();
 buildMoves();
 rebuild();
 loadAnimations().then((data) => {

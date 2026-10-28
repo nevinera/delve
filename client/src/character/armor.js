@@ -8,6 +8,12 @@
 
 export const ARMOR_SLOTS = ["head", "shoulders", "chest", "hands", "legs", "feet"];
 export const ARMOR_TYPES = ["cloth", "leather", "chain", "plate"];
+// ARMOR_SWATCHES are the main and trim colors a player can paint armor in the builder, each
+// type's own among them.
+export const ARMOR_SWATCHES = [
+  ["#4a3e7a", "#6b4a2e", "#8a8e94", "#a8adb5", "#7a2a2a", "#2a4a6a", "#3a5a32", "#6a5a3a", "#d8d0c0", "#2a2a2e"],
+  ["#c8b070", "#3a2a1a", "#5a3a2a", "#c8a040", "#d8d8d8", "#9a2a2a", "#2a3a6a", "#4a7a4a", "#b87040", "#1a1a1a"],
+];
 // Colors each type starts with when picked in the builder.
 export const ARMOR_COLORS = {
   cloth: ["#4a3e7a", "#c8b070"],

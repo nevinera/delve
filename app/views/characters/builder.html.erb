@@ -4,18 +4,23 @@
   data-character="<%= {id: @character.id, name: @character.name, look: @character.look}.to_json %>"
   data-save-url="<%= @character.persisted? ? character_path(@character) : characters_path %>"
   data-save-method="<%= @character.persisted? ? "PATCH" : "POST" %>">
-  <h1><%= @character.persisted? ? @character.name : "New character" %></h1>
-  <label class="builder-row builder-name">
-    <span>name</span>
-    <input id="name" type="text" maxlength="16" autocomplete="off" value="<%= @character.name %>">
-  </label>
-  <div id="moves" class="builder-moves"></div>
-  <div id="controls"></div>
-  <div class="builder-buttons">
-    <button id="random" type="button">random</button>
-    <button id="reset" type="button">reset</button>
-  </div>
-  <button id="save" type="button" class="builder-save"><%= @character.persisted? ? "Save changes" : "Create character" %></button>
-  <p id="saveNote" class="builder-note"></p>
-  <p><%= link_to "your characters", characters_path %></p>
+  <section class="builder-config">
+    <h1><%= @character.persisted? ? @character.name : "New character" %></h1>
+    <label class="builder-row builder-name">
+      <span>name</span>
+      <input id="name" type="text" maxlength="16" autocomplete="off" value="<%= @character.name %>">
+    </label>
+    <div id="controls"></div>
+    <div class="builder-buttons">
+      <button id="random" type="button">random</button>
+      <button id="reset" type="button">reset</button>
+    </div>
+    <button id="save" type="button" class="builder-save"><%= @character.persisted? ? "Save changes" : "Create character" %></button>
+    <p id="saveNote" class="builder-note"></p>
+    <p><%= link_to "your characters", characters_path %></p>
+  </section>
+  <section class="builder-preview">
+    <div id="moves" class="builder-moves"></div>
+    <div id="tryOn"></div>
+  </section>
 </aside>

@@ -109,14 +109,29 @@ export function resolveRecipe(recipe = {}, random = Math.random) {
   return look;
 }
 
+// The colors a player picks from in the character builder, ten to a row, and a random look's
+// colors. Skin runs light to dark. Hair is natural colors first, then dyed ones a passer-by never
+// has. CLOTH colors shirts and trousers alike; METAL is jewelry and fittings.
+export const SKIN = [
+  "#fbe8d8", "#f6e0cc", "#f3d6bd", "#efcfb0", "#e8c2a0", "#e6bc98", "#e0b48c", "#d9a882", "#d1a077", "#c99166",
+  "#be8558", "#b07b52", "#a56d48", "#98603e", "#8d5a3a", "#7c4a30", "#6b4029", "#5e3a26", "#4f2f1f", "#3e2418",
+];
+export const HAIR_COLORS = [
+  "#0e0b0a", "#1b1310", "#2a1c14", "#3a2618", "#4a3020", "#5e3c22", "#6e4628", "#8a5a30", "#9a6a3a", "#b07a44",
+  "#c8a060", "#d8b878", "#e3cf98", "#ecdcb0", "#8a3018", "#a8401c", "#c05a2a", "#808080", "#b0aca6", "#e6e2da",
+  "#d03030", "#e06090", "#a040c0", "#5040c0", "#3070d0", "#20a0b0", "#30a050", "#90c030", "#f0c020", "#f08030",
+];
+const NATURAL_HAIR = HAIR_COLORS.slice(0, 20);
+export const EYES = ["#3a5a7a", "#5a7a9a", "#7a9ab8", "#4a6a3a", "#6a8a4a", "#8a8a4a", "#9a8a5a", "#6b4a2a", "#3a2a1a", "#6a7a7a"];
+export const CLOTH = [
+  "#7a3b2e", "#9a3a3a", "#6b2a2a", "#c07a30", "#b8a040", "#6b5a3a", "#8a7a5a", "#a08060", "#c8c0a8", "#e8e0d0",
+  "#3e5a32", "#6a8a4a", "#2a5a5a", "#3a6a8a", "#2e4a6b", "#5a3a6b", "#7a4a6a", "#5a5a5a", "#4a4038", "#2a2a2a",
+];
+export const PAINT = ["#2a4a9a", "#2a8a8a", "#3a7a3a", "#c8a020", "#c86020", "#a05030", "#9a2a2a", "#6a2a8a", "#e8e0d0", "#1a1a1a"];
+export const METAL = ["#e8c868", "#d4b050", "#b89040", "#a07040", "#b86a40", "#d8a088", "#c8ccd0", "#7a7e84", "#4a4c50", "#2a2826"];
+
 // A random look, for a passer-by: any body, hair and face, ordinary colors, about half the armor
 // slots filled, and any weapon.
-// SKIN is the range of skin tones a player picks from too.
-export const SKIN = ["#f6e0cc", "#f3d6bd", "#e8c2a0", "#e0b48c", "#d1a077", "#c99166", "#b07b52", "#a56d48", "#8d5a3a", "#7c4a30", "#5e3a26", "#4f2f1f"];
-const HAIR_COLORS = ["#1b1310", "#3a2618", "#5e3c22", "#8a5a30", "#c8a060", "#e3cf98", "#a8401c", "#808080", "#e6e2da"];
-const EYES = ["#3a5a7a", "#5a7a9a", "#4a6a3a", "#6b4a2a", "#3a2a1a", "#6a7a7a"];
-const CLOTH = ["#7a3b2e", "#4a4038", "#2e4a6b", "#3e5a32", "#6b5a3a", "#5a3a6b", "#8a7a5a", "#2a2a2a", "#a08060", "#6b2a2a", "#c8c0a8", "#2a5a5a"];
-const PAINT = ["#2a4a9a", "#9a2a2a", "#e8e0d0", "#1a1a1a", "#3a7a3a"];
 
 export function randomLook(random = Math.random) {
   const chance = (p) => random() < p;
@@ -138,7 +153,7 @@ export function randomLook(random = Math.random) {
       weapon: WEAPONS.filter((w) => w !== "none"),
       offhand: OFFHANDS,
       armor: Object.fromEntries(ARMOR_SLOTS.filter(() => chance(0.5)).map((slot) => [slot, { type: ARMOR_TYPES, colors: [CLOTH, CLOTH] }])),
-      colors: { skin: SKIN, hair: HAIR_COLORS, eyes: EYES, primary: CLOTH, secondary: CLOTH, paint: PAINT },
+      colors: { skin: SKIN, hair: NATURAL_HAIR, eyes: EYES, primary: CLOTH, secondary: CLOTH, paint: PAINT },
     },
     random,
   );
