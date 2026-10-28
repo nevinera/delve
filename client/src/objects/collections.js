@@ -5,6 +5,7 @@ import { OLD_IMAGES, imagePath, newObjectId, objectPath } from "../world/builtOb
 import { BUILT_PREFIX } from "../world/objects.js";
 import { STRUCTURE_PREFIX, structurePath } from "../world/structures.js";
 import { COLLECTIONS_PATH, STRUCTURE_COLLECTIONS_PATH } from "../editor/libraryStore.js";
+import { IMAGE_PATH, OBJECT_PATH, STRUCTURE_PATH } from "../world/paths.js";
 
 // A world's libraries, one of objects and one of structures, each its own collections
 // (collections.json and structure-collections.json, [{ id, name, source }], one with a source
@@ -21,7 +22,7 @@ export const KINDS = {
 // The world's built objects, by name.
 export function builtObjects(world) {
   return [...world.files.keys()]
-    .filter((path) => /^objects\/[0-9a-z]{8}\.json$/.test(path))
+    .filter((path) => OBJECT_PATH.test(path))
     .map((path) => world.readJson(path))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -29,7 +30,7 @@ export function builtObjects(world) {
 // The world's structures, by name.
 export function builtStructures(world) {
   return [...world.files.keys()]
-    .filter((path) => /^structures\/[0-9a-z]{8}\.json$/.test(path))
+    .filter((path) => STRUCTURE_PATH.test(path))
     .map((path) => world.readJson(path))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -37,7 +38,7 @@ export function builtStructures(world) {
 // The world's images.
 export function images(world) {
   return [...world.files.keys()]
-    .filter((path) => /^textures\/[0-9a-z]{8}\.json$/.test(path))
+    .filter((path) => IMAGE_PATH.test(path))
     .map((path) => world.readJson(path))
     .sort((a, b) => a.name.localeCompare(b.name));
 }

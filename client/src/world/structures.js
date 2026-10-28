@@ -1,4 +1,5 @@
 import { MAX_PARAMS, newObjectId } from "./builtObjects.js";
+import { structurePath } from "./paths.js";
 
 // Structures: buildings and other things you walk on or into (plans/structures.md), stored per
 // world as structures/<id>.json in the same collections as built objects.
@@ -49,7 +50,7 @@ export const OPENINGS = ["door", "window"];
 export const ROOF_SHAPES = ["gable", "hip", "lean-to", "flat"];
 export const ROOF = { pitch: { least: 0, most: 3 }, overhangFt: { least: 0, most: 4 } };
 export const STRUCTURE_PREFIX = "structure:";
-export const structurePath = (id) => `structures/${id}.json`;
+export { structurePath };
 
 // Directions as quarter turns from north, the way components face: north (-z), east, south, west.
 const STEPS = [

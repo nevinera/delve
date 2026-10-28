@@ -42,7 +42,8 @@ describe("plates", () => {
   const a = tileAt([16, 0], { fill, objects: [rock], falls: [{ top: [1, 2, 3], bottom: [4, 5, 6], width: 9, pool: 3 }], rivers: [{ half: 6, segments: [[[0, 0], [1, 1]]] }] });
   // Another tile whose terrain palette is in another order, with a tree.
   const b = tileAt([17, 0], { terrain: ["rock", "tree_oak_2", "grass"], fill: (name, i, j) => (name === "terrain" ? (i + j) % 3 : fill(name, i, j)) });
-  const text = encodePlate(plateOf(16, 0), "surface", [b, a]);
+  const sizes = { rock: { footprint: { circle: 1.5 }, height: 2, fixed: false } };
+  const text = encodePlate(plateOf(16, 0), "surface", [b, a], sizes);
   const { header, tiles } = decodePlate(text);
 
   it("gives back the same tiles", () => {
@@ -60,7 +61,31 @@ describe("plates", () => {
     const [object] = tiles[0].objects;
     expect(object).toMatchObject({ id: "16.0.0", type: "rock", at: rock.at, yaw: expect.closeTo(1.25, 3), scale: 2.5 });
     expect(object.colors[0].map((c) => Math.round(c * 255))).toEqual([51, 102, 153]);
-    expect(object.footprint.circle).toBeGreaterThan(0);
+    expect(object.footprint).toEqual({ circle: 3.75 });
+    expect(object.height).toBe(5);
+  });
+
+  it("keeps each kind's size in the object table", () => {
+    expect(text).toContain("object 0 circle:1.5 2 rock");
+    expect(header.sizes[0]).toEqual({ footprint: { circle: 1.5 }, height: 2, fixed: false });
+  });
+
+  it("sizes a kind it isn't given from its objects, and keeps structures' heights fixed", () => {
+    const hut = { type: "structure:abcd1234", at: [16 * TILE_FT + 8, 8], yaw: 0, scale: 1, footprint: { open: 12 }, height: 9 };
+    const big = { type: "boulder", at: [16 * TILE_FT + 30, 8], yaw: 0, scale: 2, footprint: { rect: [4, 6] }, height: 8 };
+    const plate = encodePlate([1, 0], "surface", [tileAt([16, 0], { objects: [hut, big] })]);
+    expect(plate).toContain("rect:2,3 4 boulder");
+    expect(plate).toContain("open:12 =9 structure:abcd1234");
+    const objects = decodePlate(plate).tiles[0].objects;
+    expect(objects.find((o) => o.type === "boulder")).toMatchObject({ footprint: { rect: [4, 6] }, height: 8 });
+    expect(objects.find((o) => o.type === hut.type)).toMatchObject({ footprint: { open: 12 }, height: 9 });
+  });
+
+  it("reads version 1 plates, whose objects have no sizes", () => {
+    const old = text.replace(/^plate 2 /, "plate 1 ").replace("object 0 circle:1.5 2 rock", "object 0 rock");
+    const [object] = decodePlate(old).tiles[0].objects;
+    expect(object.type).toBe("rock");
+    expect(object.footprint).toBeUndefined();
   });
 
   it("keeps an object's other fields, and a position out of the plate", () => {

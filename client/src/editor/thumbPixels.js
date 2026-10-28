@@ -6,17 +6,9 @@ export const THUMB_PX = 16;
 export const CHUNK = 16;
 export const THUMBS_VERSION = 1;
 
-export function thumbsDir(continent) {
-  return `places/continents/${continent}/thumbs`;
-}
+import { chunkPath, thumbsDir, thumbsIndexPath } from "../world/paths.js";
 
-export function chunkPath(continent, cx, cz) {
-  return `${thumbsDir(continent)}/${cx}/${cz}.png`;
-}
-
-export function thumbsIndexPath(continent) {
-  return `${thumbsDir(continent)}/index.json`;
-}
+export { chunkPath, thumbsDir, thumbsIndexPath };
 
 // The chunk a tile is in, and the tile's place within it.
 export function chunkOf(tx, tz) {

@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "structure.schema.json",
+  "title": "structures/<id>.json",
+  "description": "A structure: a building or other thing you walk on or into, laid out in storeys on a grid of cells. Placed as \"structure:<id>\". client/src/world/structures.js documents every field.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "palette",
+    "storeyFt",
+    "materials",
+    "storeys"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-z]{8}$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "collection": {
+      "type": "string",
+      "pattern": "^[0-9a-z]{8}$"
+    },
+    "source": {
+      "type": "string"
+    },
+    "palette": {
+      "type": "array"
+    },
+    "storeyFt": {
+      "type": "integer",
+      "description": "floor to floor, feet"
+    },
+    "materials": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "properties": {
+          "color": {
+            "type": "integer"
+          },
+          "thicknessFt": {
+            "type": "number"
+          },
+          "tile": {
+            "type": "object"
+          },
+          "inside": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "floor": {
+      "type": "string",
+      "description": "the material floors are made of"
+    },
+    "foundation": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "type": "string"
+        },
+        "material": {
+          "type": "string"
+        }
+      }
+    },
+    "storeys": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "level"
+        ],
+        "properties": {
+          "level": {
+            "type": "integer"
+          },
+          "floor": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^-?\\d+,-?\\d+$"
+            }
+          },
+          "edges": {
+            "type": "object"
+          }
+        }
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type"
+        ]
+      }
+    },
+    "objects": {
+      "type": "array"
+    },
+    "walk": {
+      "description": "Walk data, baked on save; readers bake it again."
+    }
+  }
+}

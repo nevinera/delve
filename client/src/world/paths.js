@@ -1,0 +1,66 @@
+// Every path in a world, relative to its root (docs/formats/world-files.md). Builders
+// make a path; parsers take one apart, returning null for a path that isn't theirs.
+
+const CONTINENT = (continent) => `places/continents/${continent}`;
+
+export const WORLD_PATH = "world.json";
+export const COLLECTIONS_PATH = "collections.json";
+export const STRUCTURE_COLLECTIONS_PATH = "structure-collections.json";
+
+export const objectPath = (id) => `objects/${id}.json`;
+export const structurePath = (id) => `structures/${id}.json`;
+export const imagePath = (id) => `textures/${id}.json`;
+export const OLD_IMAGES = /^images\/[0-9a-z]{8}\.json$/;
+export const OBJECT_PATH = /^objects\/[0-9a-z]{8}\.json$/;
+export const STRUCTURE_PATH = /^structures\/[0-9a-z]{8}\.json$/;
+export const IMAGE_PATH = /^textures\/[0-9a-z]{8}\.json$/;
+
+export const sketchPath = (continent) => `${CONTINENT(continent)}/sketch.json`;
+export const editedPath = (continent) => `${CONTINENT(continent)}/edited.json`;
+export const indexPath = (continent) => `${CONTINENT(continent)}/index.json`;
+export const platesIndexPath = (continent) => `${CONTINENT(continent)}/plates.json`;
+export const zonePath = (continent, key) => `${CONTINENT(continent)}/zones/${key}.json`;
+export const landPath = (continent, bx, bz) => `${CONTINENT(continent)}/land/${bx}_${bz}.f32`;
+export const platePath = (continent, layer, px, pz) => `${CONTINENT(continent)}/plates/${layer}/${px}_${pz}.plate`;
+export const thumbsDir = (continent) => `${CONTINENT(continent)}/thumbs`;
+export const thumbsIndexPath = (continent) => `${thumbsDir(continent)}/index.json`;
+export const chunkPath = (continent, cx, cz) => `${thumbsDir(continent)}/${cx}/${cz}.png`;
+// A tile file: how the editor holds a tile while a world is open. Stored worlds keep tiles in plates.
+export const tilePath = (continent, layer, tx, tz) => `${CONTINENT(continent)}/tiles/${layer}/${tx}/${tz}.dlt.gz`;
+
+const TILE = /^places\/continents\/([\w-]+)\/tiles\/([\w-]+)\/(-?\d+)\/(-?\d+)\.dlt\.gz$/;
+const PLATE = /^places\/continents\/([\w-]+)\/plates\/([\w-]+)\/(-?\d+)_(-?\d+)\.plate$/;
+const PLATES_INDEX = /^places\/continents\/([\w-]+)\/plates\.json$/;
+const LAND = /^places\/continents\/([\w-]+)\/land\/(-?\d+)_(-?\d+)\.f32$/;
+const ZONE = /^places\/continents\/([\w-]+)\/zones\/([\w-]+)\.json$/;
+const ANY = /^places\/continents\/([\w-]+)\//;
+
+// { continent, layer, tx, tz } for a tile file.
+export function tileAt(path) {
+  const m = path.match(TILE);
+  return m && { continent: m[1], layer: m[2], tx: Number(m[3]), tz: Number(m[4]) };
+}
+
+// { continent, layer, coords: [px, pz] } for a plate.
+export function plateAt(path) {
+  const m = path.match(PLATE);
+  return m && { continent: m[1], layer: m[2], coords: [Number(m[3]), Number(m[4])] };
+}
+
+// { continent, bx, bz } for a land block.
+export function landBlockAt(path) {
+  const m = path.match(LAND);
+  return m && { continent: m[1], bx: Number(m[2]), bz: Number(m[3]) };
+}
+
+// { continent, key } for a zone file.
+export function zoneAt(path) {
+  const m = path.match(ZONE);
+  return m && { continent: m[1], key: m[2] };
+}
+
+export const isPlatePath = (path) => PLATE.test(path);
+export const isPlatesIndex = (path) => PLATES_INDEX.test(path);
+
+// The continent a path is under, if any.
+export const continentOf = (path) => path.match(ANY)?.[1] ?? null;

@@ -16,7 +16,7 @@ import { tileWalk } from "../world/walkIndex.js";
 import { CELL_FT as STRUCTURE_CELL_FT } from "../world/structures.js";
 import { objectMeshes, setObjectSight } from "./objectMeshes.js";
 import { Walker } from "./walker.js";
-import { tilePath } from "./thumbnails.js";
+import { surfacePath } from "./thumbnails.js";
 import { disposeGround, groundMaterial } from "./groundMaterial.js";
 import { HORIZON, Sky } from "./sky.js";
 import { CYCLE_MS, cyclesAt, skyAt } from "../world/dayNight.js";
@@ -273,7 +273,7 @@ export class RenderView {
     this.farDecoded ??= new Map();
     if (this.farDecoded.has(key)) return this.farDecoded.get(key);
     const [tx, tz] = key.split(",").map(Number);
-    const bytes = this.world?.files.get(tilePath(this.continent, tx, tz));
+    const bytes = this.world?.files.get(surfacePath(this.continent, tx, tz));
     let tile = null;
     try {
       tile = bytes ? decodeTile(gunzipSync(bytes)) : null;
@@ -480,7 +480,7 @@ export class RenderView {
       for (let dx = -reach - 1; dx <= reach + 1; dx++) {
         const k = `${tx + dx},${tz + dz}`;
         if (this.decoded.has(k)) continue;
-        const bytes = s.world.files.get(tilePath(s.continent, tx + dx, tz + dz));
+        const bytes = s.world.files.get(surfacePath(s.continent, tx + dx, tz + dz));
         if (!bytes) continue;
         try {
           this.decoded.set(k, decodeTile(gunzipSync(bytes)));

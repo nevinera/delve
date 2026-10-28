@@ -1,25 +1,23 @@
 import { tilesTouched } from "./region.js";
 import { listZones, olderZones } from "./zones.js";
+import { indexPath, tileAt } from "../world/paths.js";
 
 // places/continents/<continent>/index.json says which tiles exist, which layers each has, and which
 // zones touch it, so nothing has to probe for missing tiles (plans/design.md, "Worlds and zone
 // exits"). It's rebuilt from the world's files and zones, so it can't drift from them.
 
 export const INDEX_VERSION = 2;
-const TILE_PATH = /^places\/continents\/([\w-]+)\/tiles\/([\w-]+)\/(-?\d+)\/(-?\d+)\.dlt\.gz$/;
 
-export function indexPath(continent) {
-  return `places/continents/${continent}/index.json`;
-}
+export { indexPath };
 
 export function buildIndex(world, continent) {
   const layers = new Map(); // "x,z" -> Set of layer names
   for (const path of world.files.keys()) {
-    const match = path.match(TILE_PATH);
-    if (!match || match[1] !== continent) continue;
-    const key = `${match[3]},${match[4]}`;
+    const at = tileAt(path);
+    if (!at || at.continent !== continent) continue;
+    const key = `${at.tx},${at.tz}`;
     if (!layers.has(key)) layers.set(key, new Set());
-    layers.get(key).add(match[2]);
+    layers.get(key).add(at.layer);
   }
 
   const zonesAt = new Map(); // "x,z" -> zone keys

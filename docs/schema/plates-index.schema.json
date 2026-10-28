@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plates-index.schema.json",
+  "title": "plates.json",
+  "description": "A continent's plates and the hash of each, at places/continents/<c>/plates.json. See docs/formats/plates.md.",
+  "type": "object",
+  "required": [
+    "version",
+    "plates"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "plates": {
+      "type": "object",
+      "description": "\"<layer>/<px>_<pz>\": 16 hex digits, a 64-bit hash of the plate's text",
+      "propertyNames": {
+        "pattern": "^[\\w-]+/-?\\d+_-?\\d+$"
+      },
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^[0-9a-f]{16}$"
+      }
+    }
+  }
+}

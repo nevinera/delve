@@ -1,13 +1,15 @@
 import { CELL_FT, TILE_FT } from "./constants.js";
-import { footprintOf, specOf } from "./objects.js";
+import { platePath } from "./paths.js";
+import { STRUCTURE_PREFIX } from "./structures.js";
+import { SURFACE_LAYERS } from "./tileCodec.js";
 
-// Plates: tiles kept as text, 16×16 tiles to a file (plans/plates.md). A plate is a header, then
+// Plates: tiles kept as text, 16×16 tiles to a file (docs/formats/plates.md). A plate is a header, then
 // its tiles in row order, each from its `tile` line to the next, so it reads as a stream of tiles.
 //
-//   plate 1 3,1 surface              format version, plate coords, layer
+//   plate 2 3,1 surface              format version, plate coords, layer
 //   palette terrain grass dirt …     names the layers' values index into
 //   clutter 100                      the plate's clutter default
-//   object 0 rock                    the object table: a short id for each kind of object
+//   object 0 circle:1.5 3 rock       the object table: each kind's short id, size and name
 //   tile 48,16 64                    tile coords, cells a side
 //   generator 23 3935363592
 //   clutter 90                       the tile's clutter default, where it isn't the plate's
@@ -22,9 +24,11 @@ import { footprintOf, specOf } from "./objects.js";
 // palette's longer than 64; forest and clutter are 2. A place line's object id is 1 or 2 symbols,
 // then x and z within the plate in 1/32 ft (3 each), yaw in 1/4096 turns (2) and scale in 1/64ths
 // (2), then each color as 6 hex digits, then any other fields as JSON. Ids aren't kept: decoding
-// numbers each tile's objects, and works out their footprint and height from their kind.
+// numbers each tile's objects, and sizes them from the object table: a kind's footprint and
+// height at scale 1 (`=` before a height that doesn't scale, `-` for a size not known).
 
-export const PLATE_VERSION = 1;
+export const PLATE_VERSION = 2;
+const VERSIONS = new Set([1, 2]); // 1: the object table had no sizes
 export const PLATE_TILES = 16;
 export const PLATE_FT = PLATE_TILES * TILE_FT;
 const CHUNK = 8; // cells a side
@@ -33,15 +37,15 @@ const ALPHABET = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz
 const VALUE = new Map([...ALPHABET].map((c, i) => [c, i]));
 const NONE = "~";
 const PALETTES = ["terrain", "biome", "water"];
-// Layers in tile order: how wide each value is, and the palette it indexes, if any.
-const LAYERS = [
-  { name: "height", width: 3 },
-  { name: "water", width: 3 },
-  { name: "waterKind", palette: "water" },
-  { name: "terrain", palette: "terrain" },
-  { name: "biome", palette: "biome" },
-  { name: "forest", width: 2 },
-];
+// The palette each palette layer indexes.
+const PALETTE_OF = { waterKind: "water", terrain: "terrain", biome: "biome" };
+// Layers in tile order (tileCodec.js), but clutter, which goes by chunks: how wide each value is,
+// and the palette it indexes, if any. Heights are quarter feet in 3 symbols.
+const LAYERS = SURFACE_LAYERS.filter(({ name }) => name !== "clutter").map(({ name, type, scale }) => {
+  if (type === "i32" && scale !== 4) throw new Error(`plates keep ${name} in quarter feet`);
+  if (type === "i32") return { name, width: 3 };
+  return PALETTE_OF[name] ? { name, palette: PALETTE_OF[name] } : { name, width: 2 };
+});
 // Object fields a place line holds itself, or that decoding works out.
 const PLACED = new Set(["id", "type", "at", "yaw", "scale", "colors", "footprint", "height"]);
 const POSITION_STEPS = 32;
@@ -50,13 +54,13 @@ const SCALE_STEPS = 64;
 
 export const plateOf = (tx, tz) => [Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES)];
 
-export function platePath(continent, layer, px, pz) {
-  return `places/continents/${continent}/plates/${layer}/${px}_${pz}.plate`;
-}
+export { platePath };
 
 // The plate (px, pz) of a layer as text, from its tiles (tileCodec.js's shape). Tiles from other
 // plates are an error.
-export function encodePlate([px, pz], layer, tiles) {
+// sizes: { type: { footprint, height, fixed } } at scale 1 (world/objects.js kindSizes); a kind not
+// in it is sized from its objects.
+export function encodePlate([px, pz], layer, tiles, sizes = {}) {
   const sorted = [...tiles].sort((a, b) => a.coords[1] - b.coords[1] || a.coords[0] - b.coords[0]);
   for (const { coords } of sorted) {
     const [qx, qz] = plateOf(...coords);
@@ -76,7 +80,7 @@ export function encodePlate([px, pz], layer, tiles) {
   const lines = [`plate ${PLATE_VERSION} ${px},${pz} ${layer}`];
   for (const kind of PALETTES) lines.push(`palette ${kind}${palettes[kind].map((name) => ` ${name}`).join("")}`);
   lines.push(`clutter ${plateClutter}`);
-  kinds.forEach((type, n) => lines.push(`object ${encode(n, idWidth)} ${type}`));
+  kinds.forEach((type, n) => lines.push(`object ${encode(n, idWidth)} ${sizeText(sizes[type] ?? sizeFrom(sorted, type))} ${type}`));
   sorted.forEach((tile, n) => encodeTileInto(lines, tile, { palettes, kinds, idWidth, clutter: clutters[n], plateClutter, origin: [px * PLATE_FT, pz * PLATE_FT] }));
   return `${lines.join("\n")}\n`;
 }
@@ -143,19 +147,23 @@ export function splitPlate(text) {
   return { header: readHeader(header), tiles };
 }
 
-// A plate's header: { version, coords, layer, palettes, clutter, kinds }.
+// A plate's header: { version, coords, layer, palettes, clutter, kinds, sizes }, sizes by kind id.
 export function readHeader(text) {
-  const header = { palettes: {}, kinds: [], clutter: 100 };
+  const header = { palettes: {}, kinds: [], sizes: [], clutter: 100 };
   for (const line of text.split("\n")) {
     const words = line.split(" ");
     if (words[0] === "plate") {
       header.version = Number(words[1]);
-      if (header.version !== PLATE_VERSION) throw new Error(`unsupported plate version ${words[1]}`);
+      if (!VERSIONS.has(header.version)) throw new Error(`unsupported plate version ${words[1]}`);
       header.coords = words[2].split(",").map(Number);
       header.layer = words[3];
     } else if (words[0] === "palette") header.palettes[words[1]] = words.slice(2);
     else if (words[0] === "clutter") header.clutter = Number(words[1]);
-    else if (words[0] === "object") header.kinds[decode(words[1])] = words.slice(2).join(" ");
+    else if (words[0] === "object" && header.version === 1) header.kinds[decode(words[1])] = words.slice(2).join(" ");
+    else if (words[0] === "object") {
+      header.kinds[decode(words[1])] = words.slice(4).join(" ");
+      header.sizes[decode(words[1])] = readSize(words[2], words[3]);
+    }
   }
   header.idWidth = widthFor(header.kinds.length);
   return header;
@@ -228,7 +236,8 @@ function readPlace(rest, header, [x0, z0], n, [tx, tz]) {
   const json = rest.indexOf(" {");
   const extra = json < 0 ? {} : JSON.parse(rest.slice(json + 1));
   const [idText, position, colorText = ""] = (json < 0 ? rest : rest.slice(0, json)).split(" ");
-  const type = header.kinds[decode(idText.slice(0, w))];
+  const kind = decode(idText.slice(0, w));
+  const type = header.kinds[kind];
   const object = {
     id: `${tx}.${tz}.${n}`,
     type,
@@ -238,11 +247,9 @@ function readPlace(rest, header, [x0, z0], n, [tx, tz]) {
   };
   if (colorText) object.colors = colorText.match(/.{6}/g).map((h) => [0, 2, 4].map((k) => parseInt(h.slice(k, k + 2), 16) / 255));
   Object.assign(object, extra);
-  const spec = specOf(type);
-  if (spec) {
-    object.footprint = footprintOf(type, object.scale);
-    object.height = spec.structure ? spec.height : spec.height * object.scale;
-  }
+  const size = header.sizes[kind];
+  if (size?.footprint) object.footprint = scaleFootprint(size.footprint, object.scale);
+  if (size?.height !== undefined) object.height = size.fixed ? size.height : size.height * object.scale;
   return object;
 }
 
@@ -325,3 +332,45 @@ function mostCommon(values) {
 const widthFor = (size) => (size > 64 ? 2 : 1);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const hex = (rgb) => rgb.map((c) => clamp(Math.round(c * 255), 0, 255).toString(16).padStart(2, "0")).join("");
+
+// A footprint at a scale. Open footprints (structures') don't scale.
+function scaleFootprint(footprint, scale) {
+  if (footprint.open) return { open: footprint.open };
+  if (footprint.circle) return { circle: footprint.circle * scale };
+  if (footprint.capsule) return { capsule: footprint.capsule.map((v) => v * scale) };
+  return { rect: footprint.rect.map((v) => v * scale) };
+}
+
+// A kind's size from its objects, for a kind the caller didn't size: the first one with a size, back
+// at scale 1. Structures' heights don't scale.
+function sizeFrom(tiles, type) {
+  const object = tiles.flatMap((tile) => tile.objects ?? []).find((o) => o.type === type && SHAPES.some((s) => o.footprint?.[s] !== undefined) && o.height !== undefined);
+  if (!object) return null;
+  const fixed = type.startsWith(STRUCTURE_PREFIX);
+  return { footprint: scaleFootprint(object.footprint, 1 / object.scale), height: fixed ? object.height : object.height / object.scale, fixed };
+}
+
+const SHAPES = ["rect", "circle", "capsule", "open"];
+const number = (v) => String(Number(v.toFixed(3)));
+
+// A size as the object table's two words, footprint and height.
+function sizeText(size) {
+  const shape = size?.footprint && SHAPES.find((s) => size.footprint[s] !== undefined);
+  const footprint = shape ? `${shape}:${[size.footprint[shape]].flat().map(number).join(",")}` : "-";
+  const height = size?.height === undefined ? "-" : `${size.fixed ? "=" : ""}${number(size.height)}`;
+  return `${footprint} ${height}`;
+}
+
+function readSize(footprintText, heightText) {
+  const size = {};
+  if (footprintText !== "-") {
+    const [shape, values] = footprintText.split(":");
+    const numbers = values.split(",").map(Number);
+    size.footprint = { [shape]: shape === "rect" || shape === "capsule" ? numbers : numbers[0] };
+  }
+  if (heightText !== "-") {
+    size.fixed = heightText.startsWith("=");
+    size.height = Number(heightText.replace("=", ""));
+  }
+  return size;
+}

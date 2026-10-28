@@ -2,6 +2,7 @@ import { gunzipSync, gzipSync, strFromU8 } from "fflate";
 import { describe, expect, it } from "vitest";
 import { generateTile, prepareWorld } from "../world/generator.js";
 import { LandGrid, PER_TILE } from "../world/landGrid.js";
+import { kindSizes } from "../world/objects.js";
 import { decodeTile, encodeTile } from "../world/tileCodec.js";
 import { packPlates, unpackPlates } from "./plates.js";
 
@@ -43,6 +44,20 @@ describe("plate files", () => {
     const second = await packPlates(changed, { cache });
     expect(second.get("places/continents/main/plates/surface/0_0.plate")).toEqual(first.get("places/continents/main/plates/surface/0_0.plate"));
     expect(cache.get("places/continents/main/plates/surface/1_0.plate").sources[0]).toBe(changed.get("places/continents/main/tiles/surface/16/0.dlt.gz"));
+  });
+
+  it("makes a plate again when one of its kinds of object changes size", async () => {
+    const cache = new Map();
+    const path = "places/continents/main/plates/surface/0_0.plate";
+    const first = await packPlates(files, { cache });
+    const kinds = cache.get(path).kinds;
+    expect(kinds.length).toBeGreaterThan(0);
+    expect((await packPlates(files, { cache })).get(path)).toBe(first.get(path));
+    const sizes = kindSizes();
+    sizes[kinds[0]] = { ...sizes[kinds[0]], height: 99 };
+    const resized = await packPlates(files, { cache, sizes });
+    expect(resized.get(path)).not.toBe(first.get(path));
+    expect(strFromU8(resized.get(path))).toMatch(new RegExp(` 99 ${kinds[0]}$`, "m"));
   });
 
   it("packs the same plates again from tiles it unpacked", async () => {

@@ -1,4 +1,5 @@
 import { signText } from "./pixelFont.js";
+import { OLD_IMAGES, imagePath, objectPath } from "./paths.js";
 
 // Built objects: object types an author puts together from primitive pieces in the editor's object
 // builder, stored per world as objects/<id>.json, and shared as collections of them.
@@ -52,12 +53,10 @@ export const MIN_SIZE_FT = 0.1;
 // Pieces reaching below this are what a character bumps into.
 const BLOCK_BELOW_FT = 6;
 
-export const objectPath = (id) => `objects/${id}.json`;
+export { objectPath, imagePath, OLD_IMAGES };
 // Images (textures) belong to the whole world, not a collection: any object or structure can
 // wear any of them. Worlds kept before that have them in images/, each naming a collection;
 // adoptStrays (objects/collections.js) moves them.
-export const imagePath = (id) => `textures/${id}.json`;
-export const OLD_IMAGES = /^images\/[0-9a-z]{8}\.json$/;
 
 export const IMAGE_PX = 32;
 export const TILED_SIZES = [32, 64];

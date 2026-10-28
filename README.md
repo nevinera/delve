@@ -7,6 +7,8 @@ A browser-based 3D MMO in a tiled, height-mapped world.
 - `client/`: the three.js game client, built with vite into `public/client`.
 - `game-server/`: the Go game server.
 
+[docs/architecture.md](docs/architecture.md) covers how the pieces fit together and links the world file formats.
+
 ## Development
 
 ### Requirements

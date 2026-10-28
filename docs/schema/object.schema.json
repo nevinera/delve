@@ -1,0 +1,123 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "object.schema.json",
+  "title": "objects/<id>.json",
+  "description": "A built object: a kind of object put together from primitive pieces. Placed as \"built:<id>\".",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "palette",
+    "pieces"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-z]{8}$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "collection": {
+      "type": "string",
+      "pattern": "^[0-9a-z]{8}$",
+      "description": "the collection it's in"
+    },
+    "source": {
+      "type": "string"
+    },
+    "palette": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "color"
+        ],
+        "properties": {
+          "color": {
+            "type": "string",
+            "pattern": "^#[0-9a-f]{6}$"
+          },
+          "param": {
+            "type": "boolean",
+            "description": "a placement can override it"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "pieces": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "size",
+          "at",
+          "turn",
+          "color"
+        ],
+        "properties": {
+          "type": {
+            "type": "string"
+          },
+          "size": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "bounding box, feet"
+          },
+          "at": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "middle, feet from the object's centre on the ground; y up, x east, z south"
+          },
+          "turn": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "[yaw, pitch, roll] degrees, applied roll, pitch, yaw"
+          },
+          "color": {
+            "type": "integer",
+            "description": "index into palette"
+          },
+          "taper": {
+            "type": "number"
+          },
+          "cut": {
+            "type": "boolean",
+            "description": "a hole, taken out of the other pieces"
+          },
+          "decals": {
+            "type": "array"
+          },
+          "texts": {
+            "type": "array"
+          },
+          "tile": {
+            "type": "object"
+          }
+        }
+      }
+    }
+  }
+}

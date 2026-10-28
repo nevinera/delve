@@ -1,21 +1,20 @@
 import { gunzipSync } from "fflate";
 import { decodeTile } from "../world/tileCodec.js";
+import { tileAt, tilePath } from "../world/paths.js";
 import { tileDetailRgba } from "../world/tileImage.js";
 import { CHUNK, THUMB_PX, THUMBS_VERSION, chunkOf, chunkPath, fingerprint, shrinkRgba, thumbChanges, thumbsDir, thumbsIndexPath } from "./thumbPixels.js";
 
-const TILE_PATH = /^places\/continents\/([\w-]+)\/tiles\/surface\/(-?\d+)\/(-?\d+)\.dlt\.gz$/;
 const BATCH_MS = 12;
 
-export function tilePath(continent, tx, tz) {
-  return `places/continents/${continent}/tiles/surface/${tx}/${tz}.dlt.gz`;
-}
+// The surface tile file at (tx, tz).
+export const surfacePath = (continent, tx, tz) => tilePath(continent, "surface", tx, tz);
 
 // The surface tiles a continent has in the world, as { tx, tz, path }.
 export function surfaceTiles(world, continent) {
   const tiles = [];
   for (const path of world.files.keys()) {
-    const match = path.match(TILE_PATH);
-    if (match && match[1] === continent) tiles.push({ tx: Number(match[2]), tz: Number(match[3]), path });
+    const at = tileAt(path);
+    if (at && at.continent === continent && at.layer === "surface") tiles.push({ tx: at.tx, tz: at.tz, path });
   }
   return tiles;
 }
@@ -129,7 +128,7 @@ export class Thumbnails {
       this.fine.set(key, image);
       return image;
     }
-    if (this.run && this.tiles.has(key)) this.pool.want({ key, gz: this.run.world.files.get(tilePath(this.run.continent, tx, tz)), run: this.run, fine: true });
+    if (this.run && this.tiles.has(key)) this.pool.want({ key, gz: this.run.world.files.get(surfacePath(this.run.continent, tx, tz)), run: this.run, fine: true });
     return null;
   }
 

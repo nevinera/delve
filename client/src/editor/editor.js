@@ -4,7 +4,7 @@ import { MapView } from "./mapView.js";
 import { keyNav } from "./keyNav.js";
 import { TileGenerator } from "./generation.js";
 import { CHUNK, THUMB_PX } from "./thumbPixels.js";
-import { Thumbnails, TileDetails, surfaceTiles, tilePath } from "./thumbnails.js";
+import { Thumbnails, TileDetails, surfaceTiles, surfacePath } from "./thumbnails.js";
 import {
   cornerCount,
   labelPoint,
@@ -142,7 +142,7 @@ export class Editor {
       near: () => [this.map.view.x, this.map.view.z],
     });
     this.details = new TileDetails(
-      (tx, tz) => this.world.files.get(tilePath(this.continent, tx, tz)),
+      (tx, tz) => this.world.files.get(surfacePath(this.continent, tx, tz)),
       () => this.map.render(),
     );
     this.generator = new TileGenerator();
@@ -284,7 +284,7 @@ export class Editor {
     const edited = this.editedTiles();
     for (const key of this.landTiles()) {
       const [tx, tz] = key.split(",").map(Number);
-      if (!this.world.files.has(tilePath(this.continent, tx, tz))) missing.push(key);
+      if (!this.world.files.has(surfacePath(this.continent, tx, tz))) missing.push(key);
       else if (this.pending.has(key)) (edited.has(key) ? held : stale).push(key);
     }
     return { stale, missing, held };
@@ -336,7 +336,7 @@ export class Editor {
     this.heightsOf ??= new WeakMap();
     const heights = new Map();
     for (const key of this.editedTiles()) {
-      const bytes = this.world.files.get(tilePath(this.continent, ...key.split(",").map(Number)));
+      const bytes = this.world.files.get(surfacePath(this.continent, ...key.split(",").map(Number)));
       if (!bytes) continue;
       if (!this.heightsOf.has(bytes)) this.heightsOf.set(bytes, decodeTile(gunzipSync(bytes)).layers.height);
       heights.set(key, this.heightsOf.get(bytes));
@@ -351,7 +351,7 @@ export class Editor {
       if (bytes && !this.fileIds.has(bytes)) this.fileIds.set(bytes, (this.nextFileId = (this.nextFileId ?? 0) + 1));
       return bytes ? this.fileIds.get(bytes) : 0;
     };
-    const tiles = [...this.editedTiles()].sort().map((key) => `${key}:${id(this.world.files.get(tilePath(this.continent, ...key.split(",").map(Number))))}`);
+    const tiles = [...this.editedTiles()].sort().map((key) => `${key}:${id(this.world.files.get(surfacePath(this.continent, ...key.split(",").map(Number))))}`);
     return String(hashString(`${this.landHash()}|${tiles.join(";")}`));
   }
 
@@ -733,7 +733,7 @@ export class Editor {
   // the walker, and goes back to the map after.
   async walkAt([x, z]) {
     this.walkPicking = false;
-    if (!this.world.files.has(tilePath(this.continent, Math.floor(x), Math.floor(z)))) {
+    if (!this.world.files.has(surfacePath(this.continent, Math.floor(x), Math.floor(z)))) {
       this.say("Generate the tiles here before walking on them.");
       this.renderPanel();
       return;
@@ -1174,7 +1174,7 @@ export class Editor {
       const tile = this.detail.tile(key);
       const [tx, tz] = tile.coords;
       const gz = gzipSync(encodeTile(tile));
-      this.world.files.set(tilePath(this.continent, tx, tz), gz);
+      this.world.files.set(surfacePath(this.continent, tx, tz), gz);
       this.thumbnails.redraw(tx, tz, gz);
       this.details.drop(tx, tz);
     }
@@ -1335,7 +1335,7 @@ export class Editor {
       const edited = this.editedTiles();
       const all = [...this.landTiles()];
       if (!window.confirm(`Regenerate all ${all.length} tiles? It replaces every generated tile.`)) return;
-      const held = all.filter((k) => edited.has(k) && this.world.files.has(tilePath(this.continent, ...k.split(",").map(Number))));
+      const held = all.filter((k) => edited.has(k) && this.world.files.has(surfacePath(this.continent, ...k.split(",").map(Number))));
       const skip = overwrite(held) ? new Set() : new Set(held);
       this.generate(regenerateAll, keys(all.filter((k) => !skip.has(k))));
     });
@@ -1578,7 +1578,7 @@ export class Editor {
       const overwritten = tiles.map(([tx, tz]) => `${tx},${tz}`).filter((k) => this.editedTiles().has(k));
       if (overwritten.length) this.setEdited(overwritten, false);
       await this.generator.run(this.storedState(), this.continent, tiles, ({ tx, tz, gz, rgba, cells, falls }) => {
-        this.world.files.set(tilePath(this.continent, tx, tz), gz);
+        this.world.files.set(surfacePath(this.continent, tx, tz), gz);
         this.pending.delete(`${tx},${tz}`);
         this.thumbnails.set(tx, tz, { rgba, cells, gz, falls });
         this.details.drop(tx, tz);

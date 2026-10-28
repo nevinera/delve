@@ -1,6 +1,8 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { builtObjects, builtStructures, images } from "../objects/collections.js";
 import { packPlates, unpackPlates } from "./plates.js";
+import { WORLD_PATH, continentOf } from "../world/paths.js";
+import { kindSizes, setBuiltObjects } from "../world/objects.js";
 
 // A whole world directory held in memory, keyed by path within the world (no leading slash). The
 // editor reads and writes files here and downloads the lot as a zip that unzips straight over a
@@ -13,7 +15,7 @@ export class World {
 
   static empty() {
     const world = new World();
-    world.writeJson("world.json", {
+    world.writeJson(WORLD_PATH, {
       version: 1,
       name: "New world",
       continents: [{ key: "main", name: "Main" }],
@@ -29,7 +31,7 @@ export class World {
     if (!entries.length) throw new Error("the zip is empty");
     const tops = new Set(entries.map(([path]) => path.split("/")[0]));
     const [top] = tops;
-    const looksLikeWorld = (paths) => paths.some((path) => path === "world.json" || path.startsWith("places/"));
+    const looksLikeWorld = (paths) => paths.some((path) => path === WORLD_PATH || path.startsWith("places/"));
     const stripped = entries.map(([path, data]) => [path.slice(top.length + 1), data]);
     const wrapped = tops.size === 1 && !looksLikeWorld(entries.map(([p]) => p)) && looksLikeWorld(stripped.map(([p]) => p));
     if (wrapped) entries = stripped;
@@ -40,10 +42,10 @@ export class World {
   // found in places/.
   static fromFiles(files, name) {
     const world = new World(files);
-    if (!world.files.has("world.json")) {
-      const keys = [...new Set([...files.keys()].map((path) => path.match(/^places\/continents\/([\w-]+)\//)?.[1]).filter(Boolean))];
+    if (!world.files.has(WORLD_PATH)) {
+      const keys = [...new Set([...files.keys()].map((path) => continentOf(path)).filter(Boolean))];
       if (!keys.length) throw new Error("no world.json and no places/continents/");
-      world.writeJson("world.json", {
+      world.writeJson(WORLD_PATH, {
         version: 1,
         name,
         continents: keys.sort().map((key) => ({ key, name: key[0].toUpperCase() + key.slice(1) })),
@@ -54,7 +56,7 @@ export class World {
   }
 
   get info() {
-    return this.readJson("world.json");
+    return this.readJson(WORLD_PATH);
   }
 
   readJson(path) {
@@ -66,17 +68,16 @@ export class World {
     this.files.set(path, strToU8(`${JSON.stringify(data, null, 2)}\n`));
   }
 
-  // Splits the world's plates into the tile files the editor works on (plates.js), with its own
-  // kinds of objects registered so they can be sized.
+  // Splits the world's plates into the tile files the editor works on (plates.js).
   async unpack({ pool, onProgress } = {}) {
-    const library = { objects: builtObjects(this), images: images(this), structures: builtStructures(this) };
-    this.files = await unpackPlates(this.files, { library, pool, onProgress });
+    this.files = await unpackPlates(this.files, { pool, onProgress });
   }
 
-  // The files as the world stores them, with its tiles in plates.
+  // The files as the world stores them, with its tiles in plates, sized by its own library.
   stored({ pool, onProgress } = {}) {
     this.plateCache ??= new Map();
-    return packPlates(this.files, { cache: this.plateCache, pool, onProgress });
+    setBuiltObjects(builtObjects(this), images(this), builtStructures(this));
+    return packPlates(this.files, { cache: this.plateCache, pool, sizes: kindSizes(), onProgress });
   }
 
   // The world's files zipped, these files by default, or others such as stored() gives.

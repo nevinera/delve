@@ -1,4 +1,5 @@
 import { TILE_FT } from "./constants.js";
+import { landBlockAt, landPath } from "./paths.js";
 
 // The land's shape: a height every LAND_FT ft across the continent, sculpted on the heights step.
 // Everything is sea floor at SEA_FLOOR_FT until it's raised. Sea level is 0, so the coast is
@@ -18,8 +19,6 @@ export const BLOCK_TILES = 16;
 export const BLOCK = PER_TILE * BLOCK_TILES;
 export const SEA_FLOOR_FT = -50;
 export const DEEP_FT = -30;
-
-const LAND_PATH = /^places\/continents\/([\w-]+)\/land\/(-?\d+)_(-?\d+)\.f32$/;
 
 export const blockKey = (bx, bz) => (bx + 32768) * 65536 + (bz + 32768);
 const blockOf = (key) => [Math.floor(key / 65536) - 32768, (key % 65536) - 32768];
@@ -130,19 +129,17 @@ function curve(p0, p1, p2, p3, t) {
   return Math.max(Math.min(p1, p2), Math.min(Math.max(p1, p2), v));
 }
 
-export function landPath(continent, bx, bz) {
-  return `places/continents/${continent}/land/${bx}_${bz}.f32`;
-}
+export { landPath };
 
 // The continent's land from the world's files (a Map of path -> bytes).
 export function loadLand(files, continent) {
   const blocks = new Map();
   for (const [path, bytes] of files) {
-    const match = path.match(LAND_PATH);
-    if (!match || match[1] !== continent || bytes.length !== BLOCK * BLOCK * 4) continue;
+    const at = landBlockAt(path);
+    if (!at || at.continent !== continent || bytes.length !== BLOCK * BLOCK * 4) continue;
     const block = new Float32Array(BLOCK * BLOCK);
     new Uint8Array(block.buffer).set(bytes);
-    blocks.set(blockKey(Number(match[2]), Number(match[3])), block);
+    blocks.set(blockKey(at.bx, at.bz), block);
   }
   return new LandGrid(blocks);
 }
@@ -150,8 +147,8 @@ export function loadLand(files, continent) {
 // Writes the land's blocks to the world's files, dropping files for blocks it no longer has.
 export function saveLand(files, continent, land) {
   for (const path of [...files.keys()]) {
-    const match = path.match(LAND_PATH);
-    if (match && match[1] === continent && !land.blocks.has(blockKey(Number(match[2]), Number(match[3])))) files.delete(path);
+    const at = landBlockAt(path);
+    if (at && at.continent === continent && !land.blocks.has(blockKey(at.bx, at.bz))) files.delete(path);
   }
   for (const [key, block] of land.blocks) {
     const [bx, bz] = blockOf(key);

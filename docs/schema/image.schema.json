@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "image.schema.json",
+  "title": "textures/<id>.json",
+  "description": "An image objects and structures wear, as a decal on one face or tiled over a piece.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "kind",
+    "rows"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-z]{8}$"
+    },
+    "name": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "decal",
+        "tiled"
+      ]
+    },
+    "collection": {
+      "type": "string",
+      "pattern": "^[0-9a-z]{8}$"
+    },
+    "rows": {
+      "type": "array",
+      "description": "Top row first. Each pixel is two characters: ink (a-z: the wearer's palette colors; 0-7: grays, white to black) then opacity (1-4 quarters), or '..' for none.",
+      "items": {
+        "type": "string",
+        "pattern": "^(\\.\\.|[a-z0-7][1-4])*$"
+      }
+    }
+  }
+}

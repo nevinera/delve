@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "edited.schema.json",
+  "title": "edited.json",
+  "description": "Tiles changed by hand in the detail editor, which generating leaves alone, at places/continents/<c>/edited.json.",
+  "type": "object",
+  "required": [
+    "tiles"
+  ],
+  "properties": {
+    "tiles": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^-?\\d+,-?\\d+$"
+      },
+      "description": "\"tx,tz\" keys"
+    }
+  }
+}

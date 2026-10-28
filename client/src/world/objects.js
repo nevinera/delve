@@ -84,6 +84,18 @@ export function setBuiltObjects(objects, wornImages = [], worldStructures = []) 
   for (const image of wornImages) images.set(image.id, image);
 }
 
+// Every kind of object's size at scale 1, { type: { footprint, height, fixed } }, fixed for a height
+// that doesn't scale with the object. Plates keep these (plateCodec.js).
+export function kindSizes() {
+  const sizes = {};
+  const types = [...Object.keys(OBJECT_TYPES), ...[...built.keys()].map((id) => BUILT_PREFIX + id), ...[...structures.keys()].map((id) => STRUCTURE_PREFIX + id)];
+  for (const type of types) {
+    const spec = specOf(type);
+    if (spec?.footprint) sizes[type] = { footprint: spec.footprint, height: spec.height, fixed: !!spec.structure };
+  }
+  return sizes;
+}
+
 // The structure a type names, or undefined.
 export function structureOf(type) {
   return type?.startsWith(STRUCTURE_PREFIX) ? structures.get(type.slice(STRUCTURE_PREFIX.length))?.structure : undefined;

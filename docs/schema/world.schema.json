@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "world.schema.json",
+  "title": "world.json",
+  "description": "The world's name, continents and dungeons, at the world's root.",
+  "type": "object",
+  "required": [
+    "version",
+    "name",
+    "continents"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string"
+    },
+    "continents": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "name"
+        ],
+        "properties": {
+          "key": {
+            "type": "string",
+            "pattern": "^[\\w-]+$"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "dungeons": {
+      "type": "array"
+    }
+  }
+}

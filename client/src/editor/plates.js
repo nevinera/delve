@@ -1,40 +1,24 @@
 import { gunzipSync, gzipSync, strFromU8, strToU8 } from "fflate";
-import { decodePlateTile, encodePlate, plateOf, platePath, splitPlate } from "../world/plateCodec.js";
+import { decodePlateTile, encodePlate, plateOf, platePath, readHeader, splitPlate } from "../world/plateCodec.js";
 import { decodeTile, encodeTile } from "../world/tileCodec.js";
-import { setBuiltObjects } from "../world/objects.js";
+import { kindSizes } from "../world/objects.js";
+import { isPlatePath, isPlatesIndex, plateAt, platesIndexPath, tileAt, tilePath } from "../world/paths.js";
 
-// A world keeps its tiles in plates (world/plateCodec.js, plans/plates.md), with an index per
+// A world keeps its tiles in plates (world/plateCodec.js, docs/formats/plates.md), with an index per
 // continent listing each plate's hash, so clients only fetch plates that changed. The editor works
 // on one file per tile (tileCodec.js, gzipped) and turns them into plates only to store the world.
 
-const TILE_PATH = /^places\/continents\/([\w-]+)\/tiles\/([\w-]+)\/(-?\d+)\/(-?\d+)\.dlt\.gz$/;
-const PLATE_PATH = /^places\/continents\/([\w-]+)\/plates\/([\w-]+)\/(-?\d+)_(-?\d+)\.plate$/;
-const INDEX_PATH = /^places\/continents\/([\w-]+)\/plates\.json$/;
 export const PLATES_INDEX_VERSION = 1;
 
-export function platesIndexPath(continent) {
-  return `places/continents/${continent}/plates.json`;
-}
-
-function tileFilePath(continent, layer, tx, tz) {
-  return `places/continents/${continent}/tiles/${layer}/${tx}/${tz}.dlt.gz`;
-}
-
-export const isPlatePath = (path) => PLATE_PATH.test(path);
-
-// The plate a stored path is, as { continent, layer, coords }, or null.
-export function plateAt(path) {
-  const match = path.match(PLATE_PATH);
-  return match && { continent: match[1], layer: match[2], coords: [Number(match[3]), Number(match[4])] };
-}
+export { isPlatePath, plateAt, platesIndexPath };
 
 // The tile files (paths to gzipped tiles) that belong in a plate.
 export function tilesInPlate(files, { continent, layer, coords: [px, pz] }) {
   const paths = [];
   for (const path of files.keys()) {
-    const match = path.match(TILE_PATH);
-    if (!match || match[1] !== continent || match[2] !== layer) continue;
-    const [qx, qz] = plateOf(Number(match[3]), Number(match[4]));
+    const at = tileAt(path);
+    if (!at || at.continent !== continent || at.layer !== layer) continue;
+    const [qx, qz] = plateOf(at.tx, at.tz);
     if (qx === px && qz === pz) paths.push(path);
   }
   return paths;
@@ -46,28 +30,26 @@ export function unpackPlate(path, bytes) {
   const { header, tiles } = splitPlate(strFromU8(bytes));
   return tiles.map(({ text }) => {
     const tile = decodePlateTile(header, text);
-    return [tileFilePath(plate.continent, plate.layer, ...tile.coords), gzipSync(encodeTile(tile), { level: 6, mtime: 0 })];
+    return [tilePath(plate.continent, plate.layer, ...tile.coords), gzipSync(encodeTile(tile), { level: 6, mtime: 0 })];
   });
 }
 
 // A plate's text from its gzipped tiles.
-export function packPlate(coords, layer, tiles) {
-  return encodePlate(coords, layer, tiles.map((bytes) => decodeTile(gunzipSync(bytes))));
+export function packPlate(coords, layer, tiles, sizes) {
+  return encodePlate(coords, layer, tiles.map((bytes) => decodeTile(gunzipSync(bytes))), sizes);
 }
 
-// The files with every plate split into tile files, and the plate indexes dropped. Objects of the
-// world's own kinds need its library ({ objects, images, structures }, as world/objects.js
-// setBuiltObjects takes them) to work out their sizes. pool: a PlatePool, or none to work here.
-export async function unpackPlates(files, { library, pool = new PlatePool(), onProgress } = {}) {
+// The files with every plate split into tile files, and the plate indexes dropped. pool: a
+// PlatePool, or none to work here.
+export async function unpackPlates(files, { pool = new PlatePool(), onProgress } = {}) {
   const out = new Map();
   const plates = [];
   for (const [path, bytes] of files) {
-    if (INDEX_PATH.test(path)) continue;
+    if (isPlatesIndex(path)) continue;
     if (isPlatePath(path)) plates.push([path, bytes]);
     else out.set(path, bytes);
   }
   if (!plates.length) return out;
-  pool.library(library);
   let done = 0;
   await Promise.all(plates.map(async ([path, bytes]) => {
     for (const [tile, gz] of await pool.unpack(path, bytes)) out.set(tile, gz);
@@ -77,19 +59,22 @@ export async function unpackPlates(files, { library, pool = new PlatePool(), onP
 }
 
 // The files as a world stores them: tile files grouped into plates, and each continent's plate
-// index. `cache` (a Map, kept between calls) holds each plate with the tile files it came from, so
-// a plate whose tiles are the same files as last time isn't made again, and is the same bytes.
-export async function packPlates(files, { cache = new Map(), pool = new PlatePool(), onProgress } = {}) {
+// index. Plates size each kind of object from `sizes` (world/objects.js kindSizes, so the kinds
+// registered now). `cache` (a Map, kept between calls) holds each plate with the tile files it came
+// from, so a plate whose tiles are the same files as last time, and whose kinds are the same sizes,
+// isn't made again, and is the same bytes.
+export async function packPlates(files, { cache = new Map(), pool = new PlatePool(), sizes = kindSizes(), onProgress } = {}) {
+  pool.sizes(sizes);
   const out = new Map();
   const plates = new Map(); // plate path -> { continent, layer, coords, members: [tile path] }
   for (const [path, bytes] of files) {
-    const match = path.match(TILE_PATH);
-    if (!match) {
-      if (!INDEX_PATH.test(path)) out.set(path, bytes);
+    const at = tileAt(path);
+    if (!at) {
+      if (!isPlatesIndex(path)) out.set(path, bytes);
       continue;
     }
-    const [continent, layer] = [match[1], match[2]];
-    const coords = plateOf(Number(match[3]), Number(match[4]));
+    const { continent, layer } = at;
+    const coords = plateOf(at.tx, at.tz);
     const plate = platePath(continent, layer, ...coords);
     if (!plates.has(plate)) plates.set(plate, { continent, layer, coords, members: [] });
     plates.get(plate).members.push(path);
@@ -99,9 +84,10 @@ export async function packPlates(files, { cache = new Map(), pool = new PlatePoo
   await Promise.all(sorted.map(async ([path, { layer, coords, members }]) => {
     const sources = members.sort().map((member) => files.get(member));
     const kept = cache.get(path);
-    if (!kept || kept.sources.length !== sources.length || kept.sources.some((s, i) => s !== sources[i])) {
+    if (!kept || kept.sources.length !== sources.length || kept.sources.some((s, i) => s !== sources[i]) || kept.sizes !== sizesKey(kept.kinds, sizes)) {
       const text = await pool.pack(coords, layer, sources);
-      cache.set(path, { sources, bytes: strToU8(text), hash: plateHash(text) });
+      const { kinds } = readHeader(text);
+      cache.set(path, { sources, kinds, sizes: sizesKey(kinds, sizes), bytes: strToU8(text), hash: plateHash(text) });
     }
     onProgress?.({ done: ++done, total: sorted.length });
   }));
@@ -117,6 +103,8 @@ export async function packPlates(files, { cache = new Map(), pool = new PlatePoo
   return out;
 }
 
+const sizesKey = (kinds, sizes) => JSON.stringify(kinds.map((type) => sizes[type] ?? null));
+
 // Packs and unpacks plates on a few workers, or here where there are no workers (tests, scripts).
 export class PlatePool {
   constructor() {
@@ -127,11 +115,12 @@ export class PlatePool {
     this.nextId = 0;
   }
 
-  library(library) {
-    if (!library) return;
-    if (!this.size) return setBuiltObjects(library.objects, library.images, library.structures);
+  // The kinds' sizes later packs use (packPlate), sent to the workers once.
+  sizes(sizes) {
+    this.kindSizes = sizes;
+    if (!this.size) return;
     this.start();
-    for (const { worker } of this.workers) worker.postMessage({ type: "library", ...library });
+    for (const { worker } of this.workers) worker.postMessage({ type: "sizes", sizes });
   }
 
   unpack(path, bytes) {
@@ -140,7 +129,7 @@ export class PlatePool {
   }
 
   pack(coords, layer, tiles) {
-    if (!this.size) return Promise.resolve(packPlate(coords, layer, tiles));
+    if (!this.size) return Promise.resolve(packPlate(coords, layer, tiles, this.kindSizes));
     return this.job({ type: "pack", coords, layer, tiles });
   }
 

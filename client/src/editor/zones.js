@@ -1,5 +1,6 @@
 import { nextId } from "./features.js";
 import { interiorPoint } from "../world/lakes.js";
+import { sketchPath, zoneAt, zonePath } from "../world/paths.js";
 
 // Zones live at places/continents/<continent>/zones/<key>.json, each a name and a region. The key
 // is fixed when the zone is made; the name can change. Everything drawn on the land, pins and
@@ -13,11 +14,8 @@ import { interiorPoint } from "../world/lakes.js";
 export const ZONE_VERSION = 3;
 export const SKETCH_VERSION = 5;
 const SKETCH_ZONES = 2; // the zone format that held its own pins and lines
-const ZONE_PATH = /^places\/continents\/([\w-]+)\/zones\/([\w-]+)\.json$/;
 
-export function zonePath(continent, key) {
-  return `places/continents/${continent}/zones/${key}.json`;
-}
+export { zonePath };
 
 // The continent's zones in the current format, by key. Zones with their own pins and lines
 // need moveIntoSketch first; older zone files are left alone (see olderZones).
@@ -38,8 +36,8 @@ export function olderZones(world, continent) {
 function zoneFiles(world, continent) {
   const zones = [];
   for (const path of world.files.keys()) {
-    const match = path.match(ZONE_PATH);
-    if (match && match[1] === continent) zones.push({ key: match[2], ...world.readJson(path) });
+    const at = zoneAt(path);
+    if (at && at.continent === continent) zones.push({ key: at.key, ...world.readJson(path) });
   }
   return zones;
 }
@@ -62,9 +60,7 @@ export function removeZone(world, continent, key) {
   world.files.delete(zonePath(continent, key));
 }
 
-export function sketchPath(continent) {
-  return `places/continents/${continent}/sketch.json`;
-}
+export { sketchPath };
 
 // The continent's pins, paths and water: { version, pins, paths, water }. Paths are { id, from, to,
 // width, route, ... }, from and to the ids of road pins, and route { key, points, lengthFt, grade }

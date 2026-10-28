@@ -12,7 +12,7 @@ import { footprintOf, makeObject, reachOf, specOf, tileOf } from "../world/objec
 import { CELL_FT as STRUCTURE_CELL_FT, bakeWalk, placedWalk, pushGround, quartersOf } from "../world/structures.js";
 import { meshHeightAt } from "../world/clutter.js";
 import { RenderView, boundary, groundSampler } from "./renderView.js";
-import { tilePath } from "./thumbnails.js";
+import { surfacePath } from "./thumbnails.js";
 
 // The detail step's 3d view (plans/design.md, "Editor"): a window of generated tiles, `size` a side,
 // drawn as the game draws them (renderView.js), for shaping local content cell by cell. An arrow
@@ -214,7 +214,7 @@ export class DetailView {
     // The window's tiles, and a ring round it so the seams at its edge close.
     for (let tz = tz0 - 1; tz <= tz0 + size; tz++) {
       for (let tx = tx0 - 1; tx <= tx0 + size; tx++) {
-        const bytes = state.world.files.get(tilePath(state.continent, tx, tz));
+        const bytes = state.world.files.get(surfacePath(state.continent, tx, tz));
         if (!bytes) continue;
         try {
           const tile = decodeTile(gunzipSync(bytes));
@@ -327,7 +327,7 @@ export class DetailView {
     let tile = this.view.decoded.get(key) ?? this.extra.get(key);
     if (tile || !this.window) return tile;
     const [tx, tz] = key.split(",").map(Number);
-    const bytes = this.window.world.files.get(tilePath(this.window.continent, tx, tz));
+    const bytes = this.window.world.files.get(surfacePath(this.window.continent, tx, tz));
     if (!bytes) return undefined;
     try {
       tile = decodeTile(gunzipSync(bytes));
