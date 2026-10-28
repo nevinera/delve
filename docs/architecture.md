@@ -42,6 +42,7 @@ The editor builds a continent in steps, each writing its own files:
 3. **Zones**: named regions ([schema](schema/zone.schema.json)).
 4. **Tiles**: the generator makes 512 ft tiles from the land and the sketch.
 5. **Detail**: change tiles by hand. Edited tiles are listed in `edited.json`, and generating leaves them alone. Digging beside water makes the water flow again over the edited ground.
+6. **Publish**: validate the saved world and tag it as a version.
 
 Tiles are the heavy part. The editor holds each as a binary [tile file](formats/tile-file.md) while a world is open, and stores them 256 to a text [plate](formats/plates.md). Each plate carries the sizes of the objects in it, so a reader such as the game server can block movement without the world's object library.
 
@@ -51,7 +52,7 @@ Tiles are the heavy part. The editor holds each as a binary [tile file](formats/
 
 ## Loading and saving
 
-The editor opens a world from a zip or a GitHub repo, and saves to a zip or to GitHub as one commit. [Opening and saving worlds on GitHub](formats/github-sync.md) covers the protocol.
+The editor opens a world from a zip or a GitHub repo, and saves to a zip or to GitHub as one commit. Publishing tags a saved commit that passes the validator as a version. [Opening, saving and publishing worlds on GitHub](formats/github-sync.md) covers the protocol.
 
 Opening splits plates into tile files on a few workers. Saving packs them again, remaking only plates whose tiles or object sizes changed, so an edit to one tile changes one plate.
 

@@ -7,7 +7,7 @@
   <button id="loadDefault" type="button" title="Loads the shared default world from this server">load default</button>
   <input id="uploadFile" type="file" accept=".zip,application/zip" hidden>
   <button id="download" type="button">download world</button>
-  <button id="saveGithub" type="button" hidden>save to GitHub</button>
+  <button id="saveGithub" type="button" hidden>save</button>
 </header>
 <main class="editor-main">
   <div class="editor-view">
@@ -61,6 +61,7 @@
       <button type="button" class="editor-step-head" data-step="tiles">tiles</button>
       <button type="button" class="editor-step-head" data-step="detail">detail</button>
       <button type="button" class="editor-step-head" data-step="3d">3d</button>
+      <button type="button" class="editor-step-head" data-step="publish">publish</button>
       <button id="openLibrary" type="button" class="editor-step-head" title="the world's object library (also on its own at /objects)">objects</button>
       <button id="openStructures" type="button" class="editor-step-head" title="the world's structure library (also on its own at /structures)">structures</button>
     </nav>
@@ -196,6 +197,18 @@
           <div class="editor-row" data-for="objects"><button id="replaceOpen" type="button">replace every…</button></div>
         </div>
       </section>
+      <section class="editor-step" data-step="publish">
+        <div class="editor-step-body">
+          <p id="publishWhere"></p>
+          <dl id="publishFacts" class="editor-facts"></dl>
+          <button id="validate" type="button">validate</button>
+          <p id="validateInfo"></p>
+          <ol id="validateProblems" class="editor-problems" hidden></ol>
+          <label class="editor-field">tag <input id="publishTag" type="text" spellcheck="false"></label>
+          <button id="publish" type="button" disabled>publish</button>
+          <p id="publishInfo"></p>
+        </div>
+      </section>
       <section class="editor-step" data-step="3d">
         <div class="editor-step-body">
           <p id="overviewInfo"></p>
@@ -208,6 +221,13 @@
     <p id="hint" class="editor-hint"></p>
   </aside>
 </main>
+<dialog id="saveDialog" class="editor-popover save-dialog">
+  <h3>Save to GitHub</h3>
+  <label class="editor-field">what you changed <input id="saveMessage" type="text"></label>
+  <div class="editor-row"><button id="saveStart" type="button">save</button><button id="saveClose" type="button">close</button></div>
+  <p id="saveProgress" class="save-progress"></p>
+  <ol id="saveLog" class="save-log"></ol>
+</dialog>
 <dialog id="replaceDialog" class="editor-popover replace-dialog">
   <h3>Replace placed objects</h3>
   <label class="editor-field">replace every placed <select id="replaceFrom"></select></label>

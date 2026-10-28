@@ -1,4 +1,4 @@
-# Opening and saving worlds on GitHub
+# Opening, saving and publishing worlds on GitHub
 
 The editor reads and writes a world's repo straight from the browser, through GitHub's REST API. Code: `client/src/github/github.js` (the API) and `client/src/editor/githubWorld.js` (worlds).
 
@@ -19,7 +19,7 @@ The world remembers where it came from: `{ repo, branch, commitSha, shas }`, whe
 
 ## Saving
 
-Saving makes one commit on the branch the world came from.
+Saving makes one commit on the branch the world came from. The editor's save button, there in every step, opens a dialog that logs each stage and stays open until the save is done.
 
 1. Pack tiles into plates and write each continent's `plates.json`.
 2. Work out each file's blob sha (SHA-1 of `blob <length>\0` followed by its bytes). A file whose sha matches `shas` hasn't changed. A path in `shas` that the world no longer has is a deletion.
@@ -29,3 +29,13 @@ Saving makes one commit on the branch the world came from.
 6. Make the commit and move the branch to it.
 
 After a save, the new commit and shas become the world's source, so the next save sends only what changed since.
+
+## Publishing
+
+A published version is a tag on a saved commit, named `v1`, `v2` and so on by default. Saving never validates. The editor's publish step does:
+
+1. It shows the last published version, what's changed since it, anything unsaved, and the world's size.
+2. **Validate** packs the world as it would be stored and runs the validator (`client/src/world/validate.js`) on a worker. It lists the first 50 problems and warnings.
+3. **Publish** stays off until validating finds no problems, nothing is unsaved, and the commit isn't published already. The tag defaults to one more than the highest `v<n>` tag.
+4. Publishing creates the tag on the saved commit (`POST /repos/<repo>/git/refs`).
+

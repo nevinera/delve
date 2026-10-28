@@ -378,6 +378,71 @@
   margin-top: 10px;
 }
 
+/* The save dialog (main.js): what you changed, then a log of the save as it goes. */
+.save-dialog {
+  inset: 0;
+  margin: auto;
+  width: min(560px, 92vw);
+}
+
+.save-dialog .editor-row {
+  margin-top: 10px;
+}
+
+.save-progress {
+  min-height: 1em;
+  margin: 10px 0 4px;
+  color: #aaa;
+}
+
+.save-log {
+  max-height: 40vh;
+  overflow-y: auto;
+  margin: 0;
+  padding-left: 2.4em;
+  line-height: 1.5;
+}
+
+.save-log .error {
+  color: #e88;
+}
+
+.save-log .done {
+  color: #8c8;
+}
+
+/* The publish step (publish.js): facts about the world and its versions, then what the
+   validator found. */
+.editor-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+}
+
+.editor-facts dt {
+  color: #888;
+}
+
+.editor-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.editor-problems {
+  max-height: 40vh;
+  overflow-y: auto;
+  margin: 0;
+  padding-left: 2.4em;
+  color: #e88;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+.editor-problems .warning {
+  color: #db8;
+}
+
 /* The time popover's readouts, like "waxing crescent", need more room than the graphics ones. */
 #timePanel .editor-range {
   grid-template-columns: 6em 10em 9.5em;

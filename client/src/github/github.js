@@ -196,6 +196,30 @@ export class GithubClient {
   }
 
 
+  // The repo's tags, as [{ name, sha }], sha the commit each points at.
+  async tags() {
+    const refs = (await this._request("/git/matching-refs/tags/")) ?? [];
+    const tags = [];
+    for (const ref of refs) {
+      let { sha, type } = ref.object;
+      // An annotated tag points at a tag object, which points at the commit.
+      if (type === "tag") ({ sha } = (await this._get(`/git/tags/${sha}`, `Tag ${sha}`)).object);
+      tags.push({ name: ref.ref.replace(/^refs\/tags\//, ""), sha });
+    }
+    return tags;
+  }
+
+  // A commit's message and when it was made.
+  async commitInfo(sha) {
+    const commit = await this._get(`/git/commits/${sha}`, `Commit ${sha}`);
+    return { sha, message: commit.message, date: commit.committer?.date ?? commit.author?.date };
+  }
+
+  // Tags the commit `sha` as `name`. Fails if the tag's taken.
+  async createTag(name, sha) {
+    await this._request("/git/refs", { method: "POST", body: { ref: `refs/tags/${name}`, sha } });
+  }
+
   // Commits `files`, { path: content }, to `branch` as one commit on `parentSha` and moves the
   // branch to it. Content is text, bytes (Uint8Array or Blob), an ExistingBlob, or null to
   // delete the path. Text goes inline in the tree, and the tree goes up in parts (TREE_BYTES,

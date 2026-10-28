@@ -1,7 +1,7 @@
 import { strToU8 } from "fflate";
 import { describe, expect, it } from "vitest";
 import { blobSha } from "../github/github.js";
-import { BranchMoved, fromRepo, loadFromGithub, saveToGithub } from "./githubWorld.js";
+import { BranchMoved, delta, fromRepo, latestVersion, loadFromGithub, nextVersion, saveToGithub } from "./githubWorld.js";
 import { World } from "./world.js";
 
 // A fake GithubClient over { path: [sha, text] }, counting the blobs it reads.
@@ -90,6 +90,23 @@ describe("worlds from GitHub", () => {
       const { world, source, client } = await opened();
       client.head = "c9";
       await expect(saveToGithub(client, world, source)).rejects.toBeInstanceOf(BranchMoved);
+    });
+  });
+
+  describe("versions", () => {
+    const tags = [{ name: "v2", sha: "b" }, { name: "v10", sha: "c" }, { name: "beta", sha: "d" }, { name: "v9x", sha: "e" }];
+
+    it("finds the newest version tag, and names the next", () => {
+      expect(latestVersion(tags)).toEqual({ name: "v10", sha: "c", number: 10 });
+      expect(nextVersion(tags)).toBe("v11");
+      expect(latestVersion([{ name: "beta", sha: "d" }])).toBeNull();
+      expect(nextVersion([])).toBe("v1");
+    });
+
+    it("measures what changed between two sets of files", () => {
+      const before = { "a.json": { sha: "1", size: 5 }, "b.json": { sha: "2", size: 5 }, "gone.json": { sha: "3", size: 5 } };
+      expect(delta(before, { "a.json": "1", "b.json": "9", "new.json": "8" }, { "b.json": 40, "new.json": 60 })).toEqual({ files: 3, bytes: 100 });
+      expect(delta(before, { "a.json": "1", "b.json": "2", "gone.json": "3" })).toEqual({ files: 0, bytes: 0 });
     });
   });
 });

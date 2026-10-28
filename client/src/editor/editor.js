@@ -73,6 +73,7 @@ const HINTS = {
   ...FEATURE_HINTS,
   tiles: `highlighted tiles are out of date, or not generated yet (faint) · generate brings them all up to date · ${NAV}`,
   "3d": "drag to turn · right-drag or W A S D to pan · wheel or C/V to zoom · Q/E turn",
+  publish: `validate checks the saved world; a world that passes can be published as a version · ${NAV}`,
 };
 const HINT_WALK = "W/S run · A/D turn · Q/E strafe · space jumps · / walks · X sits · Z sprints · left-drag looks around · right-drag turns · wheel zooms · esc stops walking";
 const HINT_PICK_WALK = "click where to start walking · esc cancels";
@@ -83,7 +84,8 @@ const HINT_PICK_DETAIL = "click the middle of where to edit in detail · F or th
 // runs over them, then the biomes that grow along it, then civilization on top, then the zones
 // that divide it all up. The heights step sculpts the land grid in 3d (sculptView.js); the zones
 // step edits one zone's region at a time; the rest edit the continent's sketch, the pins and paths
-// drawn anywhere on its land. `map` is what the step draws under its marks: a live preview worked
+// drawn anywhere on its land. Publish checks the saved world and tags it as a version (main.js).
+// `map` is what the step draws under its marks: a live preview worked
 // out from the land (shapePreview.js), or the generated tiles.
 const STEPS = {
   heights: { tools: SCULPT_TOOLS, kinds: [] },
@@ -94,6 +96,7 @@ const STEPS = {
   tiles: { tools: [], kinds: [], map: "tiles" },
   detail: { tools: [...DETAIL_TOOLS, "trails", "channel", "water", "objects", "structures", "paint"], kinds: [] },
   "3d": { tools: [], kinds: [] },
+  publish: { tools: [], kinds: [], map: "tiles" },
 };
 // With this many tiles in sight or more, tiles draw as their thumbnails instead of close up.
 const DETAIL_MAX_TILES = 128;
@@ -891,6 +894,7 @@ export class Editor {
     }
     this.map.render();
     this.updatePreview();
+    this.onStep?.(step);
   }
 
   // The 3d step: the continent's generated ground, seen from above.
@@ -1611,7 +1615,7 @@ export class Editor {
       if (this.drawing) return "draw";
       return zone.region.length ? "region" : "empty";
     }
-    if (this.step === "tiles" || IN_3D.has(this.step)) return this.step === "heights" ? this.toolName : this.step;
+    if (this.step === "tiles" || this.step === "publish" || IN_3D.has(this.step)) return this.step === "heights" ? this.toolName : this.step;
     if (!this.hasLand()) return "noLand";
     if (ROADS[this.toolName]) return "road";
     if (PINS[this.toolName]) return "pin";
@@ -1846,7 +1850,7 @@ export class Editor {
 
   // Under the grid: the generated tiles, when the step shows them, and the heights or biomes map.
   drawBase(ctx, map) {
-    const tiles = this.step === "tiles" || this.option("tiles");
+    const tiles = this.step === "tiles" || this.step === "publish" || this.option("tiles");
     if (tiles) this.drawTiles(ctx, map);
     const preview = this.preview;
     if (!preview || preview.step !== this.previewKind()) return;

@@ -6,6 +6,7 @@ import { exportHeightmap, importHeightmap, needsRange } from "./heightmap.js";
 import { LibrarySync } from "./libraryStore.js";
 import { loadLocal, saveLocal } from "./localSave.js";
 import { PlatePool } from "./plates.js";
+import { PublishPanel } from "./publish.js";
 import { World } from "./world.js";
 import { slug } from "./zones.js";
 import { LAND_FT, LandGrid } from "../world/landGrid.js";
@@ -245,32 +246,97 @@ function setSource(from) {
   source = from;
   $("saveGithub").hidden = !source;
   $("saveGithub").title = source ? `Commits your changes to ${source.repo}` : "";
+  publish.invalidate();
 }
 
-$("saveGithub").addEventListener("click", async () => {
-  const message = window.prompt(`Describe what you changed, for the commit to ${source.repo}:`, `Edit ${editor.world.info.name}`);
-  if (message === null) return;
-  const button = $("saveGithub");
-  button.disabled = true;
+// Saving opens a dialog that logs the save as it goes, and can't be closed until it's done.
+const saveDialog = $("saveDialog");
+let saving = false;
+
+function logSave(text, kind = "") {
+  const item = document.createElement("li");
+  item.textContent = text;
+  if (kind) item.className = kind;
+  $("saveLog").append(item);
+  item.scrollIntoView({ block: "nearest" });
+}
+
+function setSaving(on) {
+  saving = on;
+  for (const id of ["saveMessage", "saveStart", "saveClose"]) $(id).disabled = on;
+}
+
+$("saveGithub").addEventListener("click", () => {
+  $("saveMessage").value = `Edit ${editor.world.info.name}`;
+  $("saveLog").replaceChildren();
+  $("saveProgress").textContent = `Commits your changes to ${source.repo}, on ${source.branch}.`;
+  setSaving(false);
+  saveDialog.showModal();
+  $("saveMessage").select();
+});
+
+saveDialog.addEventListener("cancel", (e) => {
+  if (saving) e.preventDefault();
+});
+$("saveClose").addEventListener("click", () => saveDialog.close());
+$("saveMessage").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") $("saveStart").click();
+});
+
+$("saveStart").addEventListener("click", async () => {
+  const message = $("saveMessage").value.trim() || "Edit the world";
+  setSaving(true);
+  const progress = $("saveProgress");
+  let moved = null;
   try {
     updateIndexes(editor.world);
-    const onProgress = ({ stage, done, total }) => editor.say(stage === "packing" ? `Packing: ${done} of ${total} plates...` : `Saving to ${source.repo}: ${done} of ${total} files...`, { info: true });
-    const saved = await saveToGithub(new GithubClient(source.repo), editor.world, source, { message: message.trim() || "Edit the world", pool: plates, onProgress });
+    const onProgress = ({ stage, done, total }) => (progress.textContent = stage === "packing" ? `Packing plates: ${done} of ${total}` : `Sending files: ${done} of ${total}`);
+    const saved = await saveToGithub(new GithubClient(source.repo), editor.world, source, { message, pool: plates, onProgress, log: logSave });
     if (saved) setSource(saved);
     keptUnsaved = false;
     editor.markSaved();
     keep();
-    editor.say(saved ? `Saved to ${source.repo}.` : "Nothing's changed since it was last saved.", { info: true });
+    progress.textContent = "";
+    logSave(saved ? `Saved to ${source.repo}.` : "Nothing's changed since it was last saved.", "done");
+    $("saveStart").disabled = true;
+    publish.invalidate();
+    if (editor.step === "publish") publish.refresh();
   } catch (err) {
+    progress.textContent = "";
     if (err instanceof BranchMoved) {
-      editor.say(`${err.message}, so saving would drop what's there.`);
-      if (window.confirm(`${err.message}. Open it again from GitHub? Changes here that aren't saved will be lost; download the world first to keep them.`)) await openRepo(source.repo, { fresh: true });
-    } else if (err instanceof GithubAuthError) editor.say("Connect GitHub to save, on your home page.");
-    else editor.say(`Couldn't save to ${source.repo}: ${err.message}`);
+      logSave(`${err.message}, so saving would drop what's there.`, "error");
+      moved = err;
+    } else if (err instanceof GithubAuthError) logSave("Connect GitHub to save, on your home page.", "error");
+    else logSave(`Couldn't save: ${err.message}`, "error");
   } finally {
-    button.disabled = false;
+    saving = false;
+    $("saveClose").disabled = false;
+    $("saveMessage").disabled = false;
+    if (!$("saveLog").lastElementChild?.classList.contains("done")) $("saveStart").disabled = false;
+  }
+  if (moved && window.confirm(`${moved.message}. Open it again from GitHub? Changes here that aren't saved will be lost; download the world first to keep them.`)) {
+    saveDialog.close();
+    await openRepo(source.repo, { fresh: true });
   }
 });
+
+// The publish step (publish.js), which tags the saved commit as a version once it validates.
+const publish = new PublishPanel(
+  {
+    where: $("publishWhere"),
+    facts: $("publishFacts"),
+    validate: $("validate"),
+    validateInfo: $("validateInfo"),
+    problems: $("validateProblems"),
+    tag: $("publishTag"),
+    publish: $("publish"),
+    info: $("publishInfo"),
+  },
+  { world: () => editor.world, source: () => source, beforeStore: () => updateIndexes(editor.world), pool: plates },
+);
+editor.onStep = (step) => {
+  if (step === "publish") publish.refresh();
+};
 
 // Starts on a new, uploaded or opened world, its library replacing the one kept in this browser.
 function startWorld(world, from = null) {
@@ -337,6 +403,7 @@ async function keep() {
 }
 
 editor.onEdit = () => {
+  publish.invalidate();
   keeping = true;
   clearTimeout(keepTimer);
   keepTimer = setTimeout(keep, KEEP_DELAY_MS);

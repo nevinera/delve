@@ -126,6 +126,28 @@ describe("GithubClient", () => {
   });
 });
 
+describe("tags", () => {
+  it("lists tags with the commit each points at, through annotated tags", async () => {
+    fakeGithub({
+      [`GET ${API}/git/matching-refs/tags/`]: [
+        { ref: "refs/tags/v1", object: { sha: "c1", type: "commit" } },
+        { ref: "refs/tags/v2", object: { sha: "t2", type: "tag" } },
+      ],
+      [`GET ${API}/git/tags/t2`]: { object: { sha: "c2", type: "commit" } },
+    });
+    expect(await new GithubClient("me/world").tags()).toEqual([
+      { name: "v1", sha: "c1" },
+      { name: "v2", sha: "c2" },
+    ]);
+  });
+
+  it("tags a commit", async () => {
+    const calls = fakeGithub({ [`POST ${API}/git/refs`]: { ref: "refs/tags/v3" } });
+    await new GithubClient("me/world").createTag("v3", "c3");
+    expect(calls.find((c) => c.method === "POST").body).toEqual({ ref: "refs/tags/v3", sha: "c3" });
+  });
+});
+
 describe("blobSha", () => {
   it("is git's sha for the bytes", async () => {
     expect(await blobSha(new TextEncoder().encode("hello\n"))).toBe("ce013625030ba8dba906f756967f9e9ca394464a");
