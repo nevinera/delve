@@ -90,51 +90,95 @@ const FOLLOWED = {
   ...twoHanded({ pelvis: [0.25, 0.2, 0], spine_01: [0.4, 0.25, 0], spine_02: [0.2, 0.1, 0], head: [-0.45, -0.25, 0] }, [0.6, 2.0, 2.15], [0.35, -0.85, 0.35], [0, -0.5, -0.85]),
   ...CHOP_STANCE(0.4),
 };
-// The sweep, swung round the body as heavy as it is, the legs and hips leading and the torso, arms
-// and blade following each a little behind. It loads with the whole body wound round to the right,
-// the left shoulder leading, the handle by the right side of the head and the blade out behind,
-// the head turned partway with the shoulders, the weight back. The hips open first; leaning left,
-// the body hauls the blade out from it in a wide arc across the front and a little down, and ends
-// with it on the left, pointing mostly ahead, a little down and left, the right shoulder forward.
-const ARC_ELBOWS = { hand_r: [-0.4, -0.9, -0.2], hand_l: [0.4, -0.9, -0.2] };
-// A blade's edge leads round the arc, square to the way it points.
-const leading = ([x, , z]) => [-z, 0, x];
-const sweep = (bones, grip, dir, elbows = ARC_ELBOWS) => twoHanded(bones, grip, dir, leading(dir), elbows);
-// The legs drive it: crouched and sitting back on the right leg as it loads, knees turned in
-// toward it; then pushing off the right foot, the weight goes onto the braced left leg, and the
-// right foot pivots up onto its toes, its knee turning in toward the left.
-const legs = (pelvis, back, yaw, knees) => ({
-  pelvis,
-  feet: { foot_l: STANCE.feet.foot_l, foot_r: back },
-  feetYaw: { foot_l: yaw[0], foot_r: yaw[1] },
-  knees: { foot_l: knees[0], foot_r: knees[1] },
-});
-const SWEEP_LOADED = {
-  ...sweep({ pelvis: [0, -0.7, 0.04], spine_01: [-0.05, -0.6, 0.06], spine_02: [0, -0.4, 0], head: [0, 0.9, 0] }, [-0.15, 4.8, -0.5], [-0.3, 0.35, -0.9], {
-    hand_r: [-0.6, 0.1, -1],
-    hand_l: [0.6, -1, 0.3],
-  }),
-  ...legs([-0.15, -0.52, -0.12], [-0.6, 0.32, -0.45], [-0.5, -0.45], [[-0.45, 0, 1], [-0.8, 0, 0.6]]),
-};
-const SWEEP_IN = {
-  ...sweep({ pelvis: [0, -0.1, 0], spine_01: [0, -0.55, 0], spine_02: [0, -0.35, 0], head: [0, 0.8, 0] }, [-0.9, 4.15, 0.25], [-0.9, 0.1, -0.3], {
-    hand_r: [-0.8, -0.6, -0.2],
-    hand_l: [0.3, -1, 0.2],
-  }),
-  ...legs([-0.02, -0.48, 0.02], [-0.6, 0.34, -0.45], [0, 0.2], [[0.05, 0, 1], [-0.1, 0, 1]]),
-};
-const SWEEP_MID = {
-  ...sweep({ pelvis: [0.05, 0.35, 0], spine_01: [0.05, -0.1, -0.1], spine_02: [0.03, -0.05, 0], head: [0, -0.2, 0.1] }, [-0.35, 3.75, 1.3], [-0.3, -0.08, 0.95]),
-  ...legs([0.12, -0.45, 0.15], [-0.58, 0.42, -0.42], [0.3, 0.7], [[0.35, 0, 1], [0.5, -0.1, 0.85]]),
-};
-const SWEEP_OUT = {
-  ...sweep({ pelvis: [0.08, 0.5, 0], spine_01: [0.1, 0.2, -0.12], spine_02: [0.05, 0.1, -0.05], head: [-0.05, -0.75, 0.12] }, [0.3, 3.45, 1.3], [0.25, -0.18, 0.95]),
-  ...legs([0.2, -0.45, 0.2], [-0.54, 0.48, -0.38], [0.4, 1.0], [[0.45, 0, 0.9], [0.75, -0.15, 0.6]]),
-};
-const SWEEP_TO = {
-  ...sweep({ pelvis: [0.12, 0.55, 0], spine_01: [0.18, 0.35, -0.1], spine_02: [0.08, 0.2, 0], head: [-0.1, -1.05, 0.1] }, [0.8, 3.15, 0.85], [0.5, -0.3, 0.8]),
-  ...legs([0.24, -0.47, 0.22], [-0.52, 0.5, -0.36], [0.45, 1.2], [[0.5, 0, 0.85], [0.85, -0.15, 0.5]]),
-};
+// The sweep, posed in Cascadeur: the whole body wound round to the right as it loads, the left
+// shoulder leading, the handle by the right side of the head and the blade out behind; then the
+// hips open and haul the blade round in a wide arc across the front, the right foot stepping
+// through, to end on the left pointing mostly ahead, a little down and left. Each pose is a frame
+// of that animation, its blade smoothed onto an even arc (script/cascadeur_pose.mjs).
+// Poses for the keyframes from `start` to `end`, evenly spaced, after the first (already keyed at
+// `start`): the body moves through them without stopping, easing only out of the first and into
+// the last.
+const through = (start, end, poses) =>
+  poses.slice(1).map((pose, i, rest) => [start + ((i + 1) / rest.length) * (end - start), i < rest.length - 1 ? { ...pose, through: true } : pose]);
+const SWEEP = [
+  {
+    pelvis: [0.02, -0.57, 0.27],
+    bones: { pelvis: [0.25, -0.62, 0.23], spine_01: [0.01, -0.03, -0.01], spine_02: [0.02, -0.03, -0.01], spine_03: [0.02, -0.01, 0], neck_01: [-0.07, 0.16, -0.03], head: [-0.22, 0.19, 0], clavicle_l: [0.1, -0.25, 0.69], clavicle_r: [0.09, 0.02, -0.49] },
+    reach: {
+      hand_r: { item: "greatsword", grip: [-1.56, 5.65, 0.61], dir: [0.41, 0.33, -0.85], front: [0.05, 0.92, 0.38], elbow: [-0.79, -0.61, -0.07] },
+      hand_l: { along: "hand_r", back: 0.5, elbow: [0.01, -0.17, 0.99] },
+    },
+    feet: { foot_l: [1.1, 0.37, -0.14], foot_r: [-0.23, 0.56, -0.08] },
+    feetYaw: { foot_l: -0.48, foot_r: -0.76 },
+    knees: { foot_l: [-0.38, -0.38, 0.84], foot_r: [-0.72, -0.05, 0.7] },
+  },
+  {
+    pelvis: [0.03, -0.54, 0.25],
+    bones: { pelvis: [0.03, -0.66, 0.12], spine_01: [0.13, -0.03, 0], spine_02: [0.12, -0.02, -0.01], spine_03: [0.06, 0, -0.01], neck_01: [-0.17, 0.19, -0.04], head: [-0.23, 0.24, 0], clavicle_l: [0.26, -0.64, 0.46], clavicle_r: [0.14, 0.34, -0.3] },
+    reach: {
+      hand_r: { item: "greatsword", grip: [-2.29, 4.1, 1.34], dir: [-0.32, 0.47, -0.83], front: [-0.66, 0.45, 0.5], elbow: [0.05, -0.98, -0.2] },
+      hand_l: { along: "hand_r", back: 0.5, elbow: [0.44, -0.59, 0.68] },
+    },
+    feet: { foot_l: [1.13, 0.34, -0.14], foot_r: [-0.23, 0.55, -0.1] },
+    feetYaw: { foot_l: -0.39, foot_r: -0.64 },
+    knees: { foot_l: [-0.25, -0.34, 0.91], foot_r: [-0.61, -0.06, 0.79] },
+  },
+  {
+    pelvis: [0.03, -0.54, 0.27],
+    bones: { pelvis: [0.19, -0.6, 0.13], spine_01: [0.04, -0.05, 0], spine_02: [0.04, -0.05, 0], spine_03: [0.03, -0.01, 0], neck_01: [-0.05, 0.1, -0.01], head: [-0.12, 0.16, 0], clavicle_l: [0.16, -0.35, 0.13], clavicle_r: [0.21, 0.27, -0.16] },
+    reach: {
+      hand_r: { item: "greatsword", grip: [-1.89, 3.32, 1.76], dir: [-0.76, 0.64, -0.11], front: [-0.13, -0.05, 0.92], elbow: [-0.17, -0.78, -0.6] },
+      hand_l: { along: "hand_r", back: 0.5, elbow: [0.62, -0.73, 0.29] },
+    },
+    feet: { foot_l: [1.11, 0.37, -0.13], foot_r: [-0.47, 0.42, 0.53] },
+    feetYaw: { foot_l: -0.37, foot_r: -0.67 },
+    knees: { foot_l: [-0.28, -0.34, 0.89], foot_r: [-0.66, 0.23, 0.72] },
+  },
+  {
+    pelvis: [0.06, -0.58, 0.27],
+    bones: { pelvis: [0.42, -0.25, 0.07], spine_01: [0, -0.02, -0.01], spine_02: [0.03, -0.02, -0.01], spine_03: [0.03, 0, -0.01], neck_01: [-0.11, -0.07, 0.03], head: [-0.23, -0.06, 0.01], clavicle_l: [0.21, -0.12, 0.19], clavicle_r: [0.2, 0.13, -0.08] },
+    reach: {
+      hand_r: { item: "greatsword", grip: [-0.84, 2.94, 2.03], dir: [-0.5, 0.57, 0.65], front: [0.57, -0.35, 0.7], elbow: [-0.5, -0.5, -0.71] },
+      hand_l: { along: "hand_r", back: 0.5, elbow: [0.58, -0.56, -0.59] },
+    },
+    feet: { foot_l: [1.11, 0.39, -0.13], foot_r: [-0.42, 0.39, 0.54] },
+    feetYaw: { foot_l: -0.31, foot_r: -0.67 },
+    knees: { foot_l: [-0.25, -0.28, 0.92], foot_r: [-0.61, 0.19, 0.77] },
+  },
+  {
+    pelvis: [0.06, -0.57, 0.26],
+    bones: { pelvis: [0.35, 0.07, -0.01], spine_01: [0.17, -0.02, 0.02], spine_02: [0.13, -0.01, 0.01], spine_03: [0.05, 0, 0], neck_01: [-0.24, -0.03, 0.03], head: [-0.27, -0.13, 0], clavicle_l: [0.04, -0.06, 0.26], clavicle_r: [0.09, 0.12, -0.08] },
+    reach: {
+      hand_r: { item: "greatsword", grip: [0.09, 2.53, 2.41], dir: [-0.08, 0.35, 0.93], front: [0.91, -0.28, 0.17], elbow: [-0.65, -0.58, -0.49] },
+      hand_l: { along: "hand_r", back: 0.5, elbow: [0.3, -0.37, -0.88] },
+    },
+    feet: { foot_l: [1.08, 0.4, -0.13], foot_r: [-0.48, 0.37, 0.48] },
+    feetYaw: { foot_l: -0.08, foot_r: -0.38 },
+    knees: { foot_l: [-0.06, -0.18, 0.98], foot_r: [-0.36, 0.14, 0.92] },
+  },
+  {
+    pelvis: [0.07, -0.57, 0.26],
+    bones: { pelvis: [0.37, 0.2, -0.06], spine_01: [0.14, 0.02, 0.07], spine_02: [0.11, 0.02, 0.05], spine_03: [0.05, 0, 0.02], neck_01: [-0.23, 0.01, -0.05], head: [-0.19, -0.07, -0.02], clavicle_l: [0, -0.2, 0.32], clavicle_r: [0.16, 0.24, -0.13] },
+    reach: {
+      hand_r: { item: "greatsword", grip: [0.77, 2.3, 2.48], dir: [0.34, 0.1, 0.94], front: [0.91, 0.07, -0.35], elbow: [-0.62, -0.72, -0.3] },
+      hand_l: { along: "hand_r", back: 0.5, elbow: [0.3, -0.27, -0.91] },
+    },
+    feet: { foot_l: [1.08, 0.38, -0.12], foot_r: [-0.52, 0.4, 0.49] },
+    feetYaw: { foot_l: 0.08, foot_r: -0.04 },
+    knees: { foot_l: [0.11, -0.1, 0.99], foot_r: [-0.07, 0.11, 0.99] },
+  },
+  {
+    pelvis: [0.07, -0.56, 0.27],
+    bones: { pelvis: [0.4, 0.17, -0.06], spine_01: [0.1, 0.2, 0.06], spine_02: [0.07, 0.25, 0.07], spine_03: [0.03, 0.05, 0.05], neck_01: [-0.18, -0.17, -0.16], head: [-0.09, -0.3, -0.03], clavicle_l: [0.05, -0.76, 0.38], clavicle_r: [0.21, 0.12, -0.07] },
+    reach: {
+      hand_r: { item: "greatsword", grip: [1.2, 2.21, 2.15], dir: [0.65, -0.17, 0.75], front: [0.76, 0.26, -0.6], elbow: [-0.67, -0.73, -0.11] },
+      hand_l: { along: "hand_r", back: 0.5, elbow: [0.22, -0.11, -0.97] },
+    },
+    feet: { foot_l: [1.02, 0.4, -0.12], foot_r: [-0.5, 0.44, 0.53] },
+    feetYaw: { foot_l: 0.36, foot_r: 0.14 },
+    knees: { foot_l: [0.38, -0.01, 0.93], foot_r: [0.13, 0.1, 0.99] },
+  },
+];
 
 // A bow: turned side-on, the left arm holding the bow out ahead and the right hand drawing the
 // string back to the jaw.
@@ -268,14 +312,11 @@ export const POSED = {
   ],
   TwoHand_Sweep: [
     [0, READY],
-    [0.45, SWEEP_LOADED],
-    [0.55, SWEEP_LOADED],
-    [0.63, SWEEP_IN],
-    [0.69, SWEEP_MID],
-    [0.75, SWEEP_OUT],
-    [0.85, SWEEP_TO],
-    [1.15, SWEEP_TO],
-    [1.6, READY],
+    [0.5, SWEEP[0]],
+    [0.6, SWEEP[0]],
+    ...through(0.6, 0.95, SWEEP),
+    [1.2, SWEEP[6]],
+    [1.75, READY],
   ],
   Bow_Shoot: [
     [0, BOW_LOW],
@@ -324,13 +365,21 @@ function blend(from, to, u) {
   return { pelvis: lerp(from.pelvis ?? [0, 0, 0], to.pelvis ?? [0, 0, 0]), bones, reach, feet, feetYaw, knees };
 }
 
-// A keyframed clip's pose at a time, eased from the keyframe before it to the one after.
+// A keyframed clip's pose at a time, eased from the keyframe before it to the one after, or
+// across a run of keyframes the body moves through without stopping.
 function keyed(keys, time) {
   let k = 0;
   while (k < keys.length - 2 && keys[k + 1][0] <= time) k++;
-  const [[t0, from], [t1, to]] = [keys[k], keys[k + 1]];
+  let [start, end] = [k, k + 1];
+  while (start > 0 && keys[start][1].through) start--;
+  while (end < keys.length - 1 && keys[end][1].through) end++;
+  const [t0, t1] = [keys[start][0], keys[end][0]];
   const u = THREE.MathUtils.clamp((time - t0) / (t1 - t0), 0, 1);
-  return blend(from, to, u * u * (3 - 2 * u));
+  const eased = t0 + u * u * (3 - 2 * u) * (t1 - t0);
+  let i = start;
+  while (i < end - 1 && keys[i + 1][0] <= eased) i++;
+  const [[from0, from], [to0, to]] = [keys[i], keys[i + 1]];
+  return blend(from, to, THREE.MathUtils.clamp((eased - from0) / (to0 - from0), 0, 1));
 }
 
 // How fast a gait carries the body, in feet per second for a 6ft body, or undefined.
