@@ -111,7 +111,8 @@ export function resolveRecipe(recipe = {}, random = Math.random) {
 
 // A random look, for a passer-by: any body, hair and face, ordinary colors, about half the armor
 // slots filled, and any weapon.
-const SKIN = ["#f3d6bd", "#e0b48c", "#c99166", "#a56d48", "#7c4a30", "#4f2f1f"];
+// SKIN is the range of skin tones a player picks from too.
+export const SKIN = ["#f6e0cc", "#f3d6bd", "#e8c2a0", "#e0b48c", "#d1a077", "#c99166", "#b07b52", "#a56d48", "#8d5a3a", "#7c4a30", "#5e3a26", "#4f2f1f"];
 const HAIR_COLORS = ["#1b1310", "#3a2618", "#5e3c22", "#8a5a30", "#c8a060", "#e3cf98", "#a8401c", "#808080", "#e6e2da"];
 const EYES = ["#3a5a7a", "#5a7a9a", "#4a6a3a", "#6b4a2a", "#3a2a1a", "#6a7a7a"];
 const CLOTH = ["#7a3b2e", "#4a4038", "#2e4a6b", "#3e5a32", "#6b5a3a", "#5a3a6b", "#8a7a5a", "#2a2a2a", "#a08060", "#6b2a2a", "#c8c0a8", "#2a5a5a"];

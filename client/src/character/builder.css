@@ -54,36 +54,42 @@
   justify-self: start;
 }
 
-.builder-pair {
-  display: flex;
-  gap: 2px;
-}
-
-.builder-pair input {
-  width: 2.1em;
-  padding: 0;
-}
-
 .builder-buttons {
   display: flex;
   gap: 8px;
   margin-top: 14px;
 }
 
-.builder-clips {
+.builder-moves {
   display: flex;
   flex-wrap: wrap;
   gap: 4px;
+  margin-top: 10px;
 }
 
-.builder-clips button {
-  padding: 2px 6px;
-  font-size: 11px;
-}
-
-.builder-clips button.playing {
+.builder-moves button.playing {
   background: #3a5a7a;
   border-color: #7aa;
+}
+
+.builder-swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+  grid-column: 2 / 4;
+}
+
+.builder .builder-swatches button {
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid #333;
+  border-radius: 50%;
+}
+
+.builder .builder-swatches button.picked {
+  outline: 2px solid #fff;
+  outline-offset: 1px;
 }
 
 .builder button {
@@ -95,39 +101,9 @@
   border-radius: 3px;
 }
 
-.builder-saved {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-.builder-saved select {
-  flex: 1;
-  min-width: 8em;
-}
-
-.builder-paste {
-  width: 100%;
-  box-sizing: border-box;
-  background: #222;
-  color: #ddd;
-  border: 1px solid #555;
-  font: 11px ui-monospace, Menlo, monospace;
-}
-
 .builder-note {
   align-self: center;
   color: #c98;
-}
-
-.builder-recipe {
-  margin: 10px 0 0;
-  padding: 8px;
-  background: #222;
-  font-size: 11px;
-  white-space: pre-wrap;
-  color: #9ab;
 }
 
 @media (max-width: 700px) {
