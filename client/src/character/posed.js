@@ -90,7 +90,7 @@ const FOLLOWED = {
   ...twoHanded({ pelvis: [0.25, 0.2, 0], spine_01: [0.4, 0.25, 0], spine_02: [0.2, 0.1, 0], head: [-0.45, -0.25, 0] }, [0.6, 2.0, 2.15], [0.35, -0.85, 0.35], [0, -0.5, -0.85]),
   ...CHOP_STANCE(0.4),
 };
-// The sweep, swung round the body as heavy as it is, the hips leading and the torso, arms and
+// The sweep, swung round the body as heavy as it is, the legs and hips leading and the torso, arms and
 // blade following each a little behind (as a batter swings). It loads like a bat, the hands by
 // the right side of the head and the blade out behind, the hips and still more the shoulders
 // wound round to the right, the left shoulder under the chin, the weight back. The hips open first; leaning left, the body hauls the blade out from it in a
@@ -100,22 +100,40 @@ const ARC_ELBOWS = { hand_r: [-0.4, -0.9, -0.2], hand_l: [0.4, -0.9, -0.2] };
 // A blade's edge leads round the arc, square to the way it points.
 const leading = ([x, , z]) => [-z, 0, x];
 const sweep = (bones, grip, dir, elbows = ARC_ELBOWS) => twoHanded(bones, grip, dir, leading(dir), elbows);
+// The legs drive it: crouched and sitting back on the right leg as it loads, knees turned in
+// toward it; then pushing off the right foot, the weight goes onto the braced left leg, and the
+// right foot pivots up onto its toes, its knee turning in toward the left.
+const legs = (pelvis, back, yaw, knees) => ({
+  pelvis,
+  feet: { foot_l: STANCE.feet.foot_l, foot_r: back },
+  feetYaw: { foot_l: yaw[0], foot_r: yaw[1] },
+  knees: { foot_l: knees[0], foot_r: knees[1] },
+});
 const SWEEP_LOADED = {
-  ...sweep({ pelvis: [0, -0.4, 0.04], spine_01: [-0.05, -0.55, 0.06], spine_02: [0, -0.4, 0], head: [0, 1.2, 0] }, [-0.5, 5.05, 0.05], [-0.25, 0.35, -0.9], {
+  ...sweep({ pelvis: [0, -0.4, 0.04], spine_01: [-0.05, -0.55, 0.06], spine_02: [0, -0.4, 0], head: [0, 1.2, 0] }, [-0.5, 4.75, 0.0], [-0.25, 0.35, -0.9], {
     hand_r: [-1, -0.2, -0.3],
     hand_l: [0.3, -1, 0.2],
   }),
-  pelvis: [0, -0.2, -0.05],
+  ...legs([-0.12, -0.5, -0.1], [-0.42, 0.32, -0.35], [-0.35, -0.25], [[-0.35, 0, 1], [-0.6, 0, 0.8]]),
 };
-const SWEEP_IN = sweep({ pelvis: [0, 0.2, 0], spine_01: [0, -0.5, 0], spine_02: [0, -0.3, 0], head: [0, 0.6, 0] }, [-0.85, 4.3, 0.45], [-0.8, 0.15, -0.55], {
-  hand_r: [-0.8, -0.6, -0.2],
-  hand_l: [0.3, -1, 0.2],
-});
-const SWEEP_MID = sweep({ pelvis: [0.05, 0.45, 0], spine_01: [0.08, 0, -0.12], spine_02: [0.05, 0, -0.05], head: [0, -0.4, 0.12] }, [-0.05, 3.75, 1.35], [0.05, -0.18, 1]);
-const SWEEP_OUT = sweep({ pelvis: [0.1, 0.55, 0], spine_01: [0.15, 0.3, -0.12], spine_02: [0.08, 0.15, -0.05], head: [-0.05, -0.9, 0.12] }, [0.7, 3.2, 0.9], [0.75, -0.45, 0.5]);
+const SWEEP_IN = {
+  ...sweep({ pelvis: [0, 0.2, 0], spine_01: [0, -0.5, 0], spine_02: [0, -0.3, 0], head: [0, 0.6, 0] }, [-0.85, 4.0, 0.45], [-0.8, 0.15, -0.55], {
+    hand_r: [-0.8, -0.6, -0.2],
+    hand_l: [0.3, -1, 0.2],
+  }),
+  ...legs([0, -0.45, 0.05], [-0.42, 0.36, -0.35], [0.1, 0.3], [[0.1, 0, 1], [0, 0, 1]]),
+};
+const SWEEP_MID = {
+  ...sweep({ pelvis: [0.05, 0.45, 0], spine_01: [0.08, 0, -0.12], spine_02: [0.05, 0, -0.05], head: [0, -0.4, 0.12] }, [-0.05, 3.5, 1.35], [0.05, -0.18, 1]),
+  ...legs([0.12, -0.42, 0.15], [-0.4, 0.45, -0.3], [0.3, 0.8], [[0.35, 0, 1], [0.55, -0.1, 0.8]]),
+};
+const SWEEP_OUT = {
+  ...sweep({ pelvis: [0.1, 0.55, 0], spine_01: [0.15, 0.3, -0.12], spine_02: [0.08, 0.15, -0.05], head: [-0.05, -0.9, 0.12] }, [0.7, 2.95, 0.9], [0.75, -0.45, 0.5]),
+  ...legs([0.17, -0.42, 0.2], [-0.36, 0.5, -0.26], [0.4, 1.1], [[0.45, 0, 0.9], [0.8, -0.15, 0.55]]),
+};
 const SWEEP_TO = {
   ...sweep({ pelvis: [0.15, 0.6, 0], spine_01: [0.3, 0.5, -0.08], spine_02: [0.1, 0.3, 0], head: [-0.15, -1.2, 0.08] }, [0.75, 2.42, 0.25], [0.5, -0.62, -0.6]),
-  ...CHOP_STANCE(0.2),
+  ...legs([0.2, -0.42, 0.2], [-0.34, 0.5, -0.24], [0.45, 1.25], [[0.5, 0, 0.85], [0.85, -0.15, 0.5]]),
 };
 
 // A bow: turned side-on, the left arm holding the bow out ahead and the right hand drawing the
@@ -277,6 +295,9 @@ export const POSED = {
 const v3 = (a) => new THREE.Vector3(...a);
 const UP = new THREE.Vector3(0, 1, 0);
 
+// The way a knee points unless a pose says: ahead and a little out, turned with its foot.
+const kneeOf = (foot, yaw = 0) => v3([foot === "foot_l" ? 0.15 : -0.15, 0, 1]).applyAxisAngle(UP, yaw).toArray();
+
 // The pose `u` (0-1) of the way from one to another: turns slerped, places and directions lerped.
 function blend(from, to, u) {
   const lerp = (a, b) => a.map((v, i) => v + (b[i] - v) * u);
@@ -293,7 +314,9 @@ function blend(from, to, u) {
   const feet = {};
   for (const foot of Object.keys(to.feet ?? {})) feet[foot] = lerp(from.feet?.[foot] ?? to.feet[foot], to.feet[foot]);
   const knees = {};
-  for (const foot of Object.keys(to.knees ?? {})) knees[foot] = lerp(from.knees?.[foot] ?? to.knees[foot], to.knees[foot]);
+  for (const foot of new Set([...Object.keys(from.knees ?? {}), ...Object.keys(to.knees ?? {})])) {
+    knees[foot] = lerp(from.knees?.[foot] ?? kneeOf(foot, from.feetYaw?.[foot]), to.knees?.[foot] ?? kneeOf(foot, to.feetYaw?.[foot]));
+  }
   const feetYaw = {};
   for (const foot of new Set([...Object.keys(from.feetYaw ?? {}), ...Object.keys(to.feetYaw ?? {})])) {
     feetYaw[foot] = lerp([from.feetYaw?.[foot] ?? 0], [to.feetYaw?.[foot] ?? 0])[0];
@@ -386,7 +409,7 @@ function poseRig(rig, pose, s) {
     if (!pose.feet[foot]) continue;
     const side = foot.slice(-1);
     const yaw = new THREE.Quaternion().setFromAxisAngle(UP, pose.feetYaw?.[foot] ?? 0);
-    const knee = pose.knees?.[foot] ?? v3([side === "l" ? 0.15 : -0.15, 0, 1]).applyQuaternion(yaw).toArray();
+    const knee = pose.knees?.[foot] ?? kneeOf(foot, pose.feetYaw?.[foot]);
     reachFor(LEG(side), v3(pose.feet[foot]).multiplyScalar(s), knee, yaw);
   }
 }
