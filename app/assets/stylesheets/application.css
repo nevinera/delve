@@ -205,7 +205,8 @@ input[type="submit"].secondary:hover {
 }
 
 /* A world's page (/worlds/:id): its published versions, and what importing each found. */
-.versions button.small {
+.versions button.small,
+.import-list button.small {
   margin: 0;
   padding: 0.2rem 0.7rem;
   font-size: 0.85rem;

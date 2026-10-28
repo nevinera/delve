@@ -56,7 +56,7 @@ The editor opens a world from a zip or a GitHub repo, and saves to a zip or to G
 
 Opening splits plates into tile files on a few workers. Saving packs them again, remaking only plates whose tiles or object sizes changed, so an edit to one tile changes one plate.
 
-## Importing versions
+## Importing and releasing versions
 
 A published version is a tag. The world's page (`/worlds/:id`) lists its tags for the owner, with an import button for each. Importing (`ImportWorldJob`, on the SolidQueue worker):
 
@@ -66,6 +66,8 @@ A published version is a tag. The world's page (`/worlds/:id`) lists its tags fo
 4. records a `WorldImport`: passed or failed, the problems, and each file's blob sha and size.
 
 Nothing after step 1 reads the tag again, so moving or rewriting a tag can't change an import. The page shows when a tag has moved since it was imported.
+
+The owner releases an import that passed from the same page. Releasing checks that the repo is public right then, and sets the world's `released_sha` to the import's sha (with `released_tag` and `released_at`). Players get that commit the next time they enter.
 
 ## Docs
 

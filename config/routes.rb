@@ -34,6 +34,7 @@ Rails.application.routes.draw do
   get "editor" => "editor#show"
   resources :worlds, only: [:index, :create, :show] do
     resources :imports, only: [:create], controller: "world_imports"
+    resource :release, only: [:create], controller: "world_releases"
   end
   get "objects" => "objects#show"
   get "structures" => "objects#structures"

@@ -1,5 +1,6 @@
 # A world kept in a GitHub repo, recorded the first time someone opens it in the editor. Players
-# play the commit at released_sha. Its user is whoever opened it first.
+# play the commit at released_sha, set from an import (WorldImport) when its owner releases it, and
+# never looked up from a tag. Its user is whoever opened it first.
 class World < ApplicationRecord
   belongs_to :user
   has_many :imports, class_name: "WorldImport", dependent: :destroy
@@ -11,4 +12,11 @@ class World < ApplicationRecord
   def source = "github/#{repo}"
 
   def display_name = name.presence || repo.split("/").last
+
+  def released? = released_sha.present?
+
+  # Makes an import the version players get the next time they enter.
+  def release!(import)
+    update!(released_sha: import.sha, released_tag: import.tag, released_at: Time.current)
+  end
 end

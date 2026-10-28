@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_29_010000) do
   create_table "characters", force: :cascade do |t|
     t.integer "user_id", null: false
     t.string "name", null: false
@@ -79,6 +79,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_000000) do
     t.datetime "opened_at", null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "released_tag"
+    t.datetime "released_at"
     t.index ["repo"], name: "index_worlds_on_repo", unique: true
     t.index ["user_id"], name: "index_worlds_on_user_id"
   end

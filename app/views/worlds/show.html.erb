@@ -9,6 +9,13 @@
   <%= link_to "your worlds", worlds_path %>
 </p>
 
+<h2>Released</h2>
+<% if @world.released? %>
+  <p><strong><%= @world.released_tag %></strong> <code><%= @world.released_sha.first(7) %></code> <span class="muted">released <%= time_ago_in_words(@world.released_at) %> ago. Players get this commit when they enter.</span></p>
+<% else %>
+  <p>Nothing's released yet. Import a published version, then release it once it passes.</p>
+<% end %>
+
 <h2>Published versions</h2>
 <% if @github.nil? %>
   <p><%= link_to "Connect GitHub", github_connect_path %> to see this world's versions.</p>
@@ -60,6 +67,11 @@
             <% if import.file_count %>· <%= pluralize(import.file_count, "file") %>, <%= number_to_human_size(import.bytes) %><% end %>
             <% if import.private_repo %>· private repo, so it can't be released<% end %>
           </span>
+          <% if import.sha.present? && import.sha == @world.released_sha %>
+            <span class="status status-passed">released</span>
+          <% elsif import.passed? && !import.private_repo %>
+            <%= button_to "release", world_release_path(@world), params: {import_id: import.id}, class: "small", form: {data: {turbo_confirm: "Release #{import.tag}? Players get it the next time they enter."}} %>
+          <% end %>
         </p>
         <% if import.error %><p class="alert"><%= import.error %></p><% end %>
         <% if import.problems.present? %>
