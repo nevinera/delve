@@ -165,14 +165,13 @@
           <label class="editor-range" data-for="trails">width <input id="trailWidth" type="range" min="2" max="40" step="1" value="6"><output id="trailWidthValue"></output></label>
           <label class="editor-range" data-for="channel">width <input id="channelWidth" type="range" min="2" max="40" step="1" value="6"><output id="channelWidthValue"></output></label>
           <label class="editor-range" data-for="channel">depth <input id="channelDepth" type="range" min="0.5" max="20" step="0.5" value="3"><output id="channelDepthValue"></output></label>
-          <label class="editor-range" data-for="water">flow <input id="sourceFlow" type="range" min="0.5" max="200" step="0.5" value="5"><output id="sourceFlowValue"></output></label>
+          <label class="editor-range" data-for="water">river width <input id="pourWidth" type="range" min="2" max="100" step="1" value="12"><output id="pourWidthValue"></output></label>
           <div data-for="water">
-            <div id="sourcePanel" class="editor-stack" hidden>
-              <p id="sourceInfo"></p>
-              <label class="editor-range">flow <input id="pickedFlow" type="range" min="0.5" max="200" step="0.5" value="5"><output id="pickedFlowValue"></output></label>
+            <div id="pourPanel" class="editor-stack" hidden>
+              <p id="pourInfo"></p>
               <div class="editor-row">
-                <button id="sourceFree" type="button">let it run past the window</button>
-                <button id="sourceRemove" type="button">remove</button>
+                <button id="pourKeep" type="button">keep</button>
+                <button id="pourDrop" type="button">drop</button>
               </div>
             </div>
           </div>

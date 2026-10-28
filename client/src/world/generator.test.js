@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { CELLS, TILE_FT } from "./constants.js";
-import { fallsOf, generateTile, prepareWorld as prepareContinent } from "./generator.js";
+import { fallsOf, generateTile, prepareWorld as prepareContinent, waterOver } from "./generator.js";
 import { findTrees } from "./trees.js";
 import { fbm } from "./noise.js";
 import { makePolyline } from "./polyline.js";
@@ -143,6 +143,37 @@ describe("generator", () => {
     expect(cell(tile, 32, 32, "water")).toBe(90);
     expect(cell(tile, 32, 32, "height")).toBeLessThan(89);
     expect(Number.isNaN(cell(tile, 4, 32, "water"))).toBe(true);
+  });
+
+  it("puts water over ground shaped by hand without carving it", () => {
+    const middle = [12.5 * TILE_FT, -1.5 * TILE_FT];
+    const hollow = landOf([10, -4, 16, 0], (x, z) => {
+      const inside = Math.min(x - 10 * TILE_FT, 16 * TILE_FT - x, z + 4 * TILE_FT, -z);
+      return Math.max(-50, Math.min(100, inside * 0.25 - 20, 80 + Math.hypot(x - middle[0], z - middle[1]) / 10));
+    });
+    const lakeCtx = prepareWorld(hollow, { lakes: [{ id: "l1", seed: [12.5, -1.5], level: 90 }] });
+    const height = Float32Array.from(generateTile(lakeCtx, 12, -2).layers.height);
+    // An island raised in the middle, and a ditch dug from the shore out to the tile's west edge.
+    height[32 * CELLS + 32] = 95;
+    for (let i = 0; i < 20; i++) height[32 * CELLS + i] = 85;
+    const [{ water, kinds }] = waterOver(lakeCtx, [{ coords: [12, -2], height }]);
+    const at = (i, j) => water[j * CELLS + i];
+    expect(at(30, 32)).toBe(90);
+    expect(kinds[32 * CELLS + 30]).toBe("fresh");
+    expect(Number.isNaN(at(32, 32))).toBe(true);
+    expect(at(2, 32)).toBe(90);
+    expect(Number.isNaN(at(2, 30))).toBe(true);
+  });
+
+  it("leaves a river dry where the ground's been raised above it", () => {
+    const tile = generateTile(ctx, 13, -4);
+    const height = Float32Array.from(tile.layers.height);
+    const wet = [...tile.layers.water.keys()].filter((k) => !Number.isNaN(tile.layers.water[k]) && tile.layers.height[k] > 0);
+    expect(wet.length).toBeGreaterThan(0);
+    for (const k of wet.slice(0, 10)) height[k] = 200;
+    const [{ water }] = waterOver(ctx, [{ coords: [13, -4], height }]);
+    expect(wet.slice(0, 10).every((k) => Number.isNaN(water[k]))).toBe(true);
+    expect(wet.slice(10).filter((k) => !Number.isNaN(water[k])).length).toBeGreaterThan(0);
   });
 
   it("is all ocean with no land", () => {

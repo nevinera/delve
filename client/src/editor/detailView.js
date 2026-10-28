@@ -5,7 +5,8 @@ import { SEA_FLOOR_FT } from "../world/landGrid.js";
 import { decodeTile } from "../world/tileCodec.js";
 import { detailBrush } from "./detailTools.js";
 import { stampTrail } from "./detailTrails.js";
-import { carveChannel, traceSource } from "./detailWater.js";
+import { carveChannel } from "./detailWater.js";
+import { waterOver } from "../world/generator.js";
 import { fellTree, paletteIndex, parseTree } from "../world/trees.js";
 import { footprintOf, makeObject, reachOf, specOf, tileOf } from "../world/objects.js";
 import { CELL_FT as STRUCTURE_CELL_FT, bakeWalk, placedWalk, pushGround, quartersOf } from "../world/structures.js";
@@ -21,12 +22,10 @@ import { tilePath } from "./thumbnails.js";
 // Left-dragging works the brush (detailTools.js) on the window's tiles, a little each frame, or draws
 // a trail (detailTrails.js), stamped when it's let go. The objects tool picks an object to drag,
 // turn, size or delete, and the place tool puts new ones down. The channel tool digs along a drawn
-// line, and the water tool places sources (detailWater.js) or picks one.
+// line (detailWater.js), and the water tool pours water from where it's clicked (onPour).
 //
-// A source is kept in its tile's `sources`, as { id, at, flow, free, wet }: wet lists the cells its
-// water covers, per tile, with the terrain each had before, so its water can be taken away again.
-// Whenever the ground changes, every source in the window runs again. Water that would leave the
-// window asks first (onAsk); allowed, it's `free` and runs on into tiles outside, which change too.
+// Water comes from the sketch's rivers and lakes (plans/water.md). Whenever the ground changes, the
+// changed tiles' water is worked out again from them, over the ground as it is (rework).
 //
 // Meshes are made again as tiles change, and when an edit ends onEdit hears which tiles it changed,
 // to save them. Edits can be undone and redone.
@@ -36,8 +35,7 @@ import { tilePath } from "./thumbnails.js";
 export const WINDOW_SIZES = [3, 5, 7];
 const ARROW = { lengthFt: 70, widthFt: 50, outFt: 70, color: 0xf0c850 };
 const SIDES = { east: [1, 0], west: [-1, 0], south: [0, 1], north: [0, -1] };
-const CURSOR = { inner: 0xffffff, outer: 0x8fc4ff, trail: 0xe0a060, channel: 0x4aa0e0, selected: 0xffe066, source: 0x3fb6ff, points: 48 };
-const SOURCE_PICK_FT = 12; // how near a click picks a source
+const CURSOR = { inner: 0xffffff, outer: 0x8fc4ff, trail: 0xe0a060, channel: 0x4aa0e0, selected: 0xffe066, proposal: 0x3fb6ff, points: 48 };
 const DRAWN = new Set(["trails", "channel"]); // tools that draw a line
 const TRAIL_STEP_FT = 16; // between the points a drawn trail keeps
 const UNDO_KEEP = 50;
@@ -49,9 +47,10 @@ const MAX_DT = 0.1;
 export class DetailView {
   // onMove(dx, dz) hears when an arrow's clicked; onEdit(keys) when tiles ("tx,tz") change;
   // onPointer([x, y, z]) where the pointer's over the ground, in continent feet, or null; onSelect
-  // the object picked, or null; onSource the source picked, or null; onAsk(question) is answered
-  // true or false; onSay(message) tells the author something.
-  constructor(canvas, { onMove, onEdit, onPointer, onSelect, onSource, onAsk, onSay } = {}) {
+  // the object picked, or null; onPour([x, z]) hears where the water tool's clicked, in continent
+  // feet. bodies() gives the generator's view of the continent (generator.js prepareWorld), for
+  // working out water.
+  constructor(canvas, { onMove, onEdit, onPointer, onSelect, onPour, bodies } = {}) {
     this.canvas = canvas;
     this.view = new RenderView(canvas);
     const { controls } = this.view;
@@ -64,13 +63,11 @@ export class DetailView {
     this.onEdit = onEdit;
     this.onPointer = onPointer;
     this.onSelect = onSelect;
-    this.onSource = onSource;
-    this.onAsk = onAsk;
-    this.onSay = onSay;
-    this.source = null; // { source, key }: the source picked
-    this.extra = new Map(); // tiles outside the window and its ring, loaded for water running there
-    this.sourceMarks = new THREE.Group();
-    this.view.scene.add(this.sourceMarks);
+    this.onPour = onPour;
+    this.bodies = bodies;
+    this.extra = new Map(); // tiles outside the window and its ring, loaded when asked for
+    this.proposalMarks = new THREE.Group();
+    this.view.scene.add(this.proposalMarks);
     this.selected = null; // { object, key }: the object picked and the tile listing it
     this.dragging = false;
     this.dirtyObjects = new Set(); // "tx,tz" whose objects alone need making again
@@ -109,7 +106,7 @@ export class DetailView {
         this.painting = true;
         return this.paint(at);
       }
-      if (this.brush.tool === "water") return this.water(at);
+      if (this.brush.tool === "water") return this.onPour?.(at);
       if (DRAWN.has(this.brush.tool)) {
         this.trail = [at];
         return;
@@ -152,7 +149,7 @@ export class DetailView {
       this.endEdit();
     }
     if (this.stroke || this.dragging) {
-      if (this.stroke) this.reflow();
+      if (this.stroke) this.rework();
       this.stroke = null;
       this.dragging = false;
       this.endEdit();
@@ -162,7 +159,7 @@ export class DetailView {
     if (trail && !cancel && trail.length >= 2 && this.brush.tool === "channel") {
       this.beginEdit();
       this.setHeights(carveChannel(this.cells(), trail, this.brush));
-      this.reflow();
+      this.rework();
       this.endEdit();
     } else if (trail && !cancel && trail.length >= 2) {
       this.beginEdit();
@@ -173,7 +170,7 @@ export class DetailView {
       const changed = stampTrail(this.view.decoded, (key) => editable.has(key), { kind, state, width }, trail);
       for (const key of [...this.edit.keys()]) if (!changed.includes(key)) this.edit.delete(key);
       this.changed(changed);
-      this.reflow();
+      this.rework();
       this.endEdit();
     }
     if (this.pointer) this.hover(this.groundAt(this.pointer));
@@ -201,7 +198,7 @@ export class DetailView {
     this.window = { tx0, tz0, size, world: state.world, continent: state.continent };
     this.release(true);
     this.select(null);
-    this.pickSource(null);
+    this.showProposal(null);
     this.extra = new Map();
     this.dirty.clear();
     this.dirtyObjects.clear();
@@ -215,7 +212,10 @@ export class DetailView {
         const bytes = state.world.files.get(tilePath(state.continent, tx, tz));
         if (!bytes) continue;
         try {
-          view.decoded.set(`${tx},${tz}`, decodeTile(gunzipSync(bytes)));
+          const tile = decodeTile(gunzipSync(bytes));
+          // Water sources placed by hand are gone: their water stays, and they drop on the next save.
+          delete tile.sources;
+          view.decoded.set(`${tx},${tz}`, tile);
         } catch (err) {
           console.warn(`couldn't read tile ${tx},${tz}: ${err.message}`);
         }
@@ -230,7 +230,6 @@ export class DetailView {
     view.materials();
     view.buildOcean(keys);
     this.drawFrame();
-    this.drawSources();
 
     const { controls, camera } = view;
     if (!before) {
@@ -315,7 +314,7 @@ export class DetailView {
     if (this.edit && !this.edit.has(key)) this.edit.set(key, snapshot(this.tile(key)));
   }
 
-  // A generated tile, from those shown, those loaded for water outside the window, or the world's
+  // A generated tile, from those shown, those loaded before from outside the window, or the world's
   // files. Undefined where there's none.
   tile(key) {
     let tile = this.view.decoded.get(key) ?? this.extra.get(key);
@@ -364,11 +363,9 @@ export class DetailView {
     this.select(null);
     const entry = from.pop();
     to.push(entry);
-    this.pickSource(null);
     for (const [key, state] of entry[side]) restore(this.tile(key), state);
     this.changed(entry[side].keys());
     this.freshClutter(entry[side].keys());
-    this.drawSources();
     this.onEdit?.([...entry[side].keys()]);
   }
 
@@ -390,197 +387,65 @@ export class DetailView {
 
   // --- water ---
 
-  // The sources listed by the window's tiles, each as { source, key }.
-  sources() {
-    return this.keys().flatMap((key) => (this.view.decoded.get(key)?.sources ?? []).map((source) => ({ source, key })));
-  }
-
-  // A click with the water tool: picks the source there, or places a new one.
-  water(at) {
-    const near = this.sources().find(({ source }) => Math.hypot(source.at[0] - at[0], source.at[1] - at[1]) < SOURCE_PICK_FT);
-    if (near) return this.pickSource(near);
-    const key = tileOf(at).join(",");
-    if (!this.editable(key)) return;
-    const source = { id: `${key.replace(",", ".")}.${Math.random().toString(36).slice(2, 8)}`, at: at.map((v) => Math.round(v * 10) / 10), flow: this.brush.flow, free: false, wet: {} };
-    const run = this.run(source, true);
-    if (!run) return;
-    this.beginEdit();
-    this.touch(key);
-    const tile = this.view.decoded.get(key);
-    tile.sources = [...(tile.sources ?? []), source];
-    this.wet(source, run.wet, run.end);
-    this.endEdit();
-    this.pickSource({ source, key });
-  }
-
-  // Where a source's water goes, as traceSource has it. Water that would leave the window asks
-  // whether it may (if `ask`), and runs on if so, the source becoming free; null if it may not.
-  // Without asking, water from a source that isn't free stops at the window's edge.
-  run(source, ask = false) {
-    const [ci, cj] = source.at.map((v) => Math.floor(v / CELL_FT));
-    const trace = (free) => traceSource(this.waterCells(free), [ci, cj], source.flow);
-    let result = trace(source.free);
-    if (result.end === "outside" && !source.free) {
-      if (!ask) {
-        this.onSay?.("Water from a source now reaches the window's edge, and stops there. Pick the source and let it run on, if it should.");
-        return result;
-      }
-      if (!this.onAsk?.("This water would run out of the window. Let it run on to where it ends? Tiles it reaches outside the window will be marked as edited.")) return null;
-      source.free = true;
-      result = trace(true);
-    }
-    return result;
-  }
-
-  // The cells as traceSource takes them: water may go anywhere in the window, or anywhere there's a
-  // generated tile if `free`.
-  waterCells(free) {
-    const shown = new Set(this.keys());
-    const at = (ci, cj) => {
-      const [tx, tz] = [Math.floor(ci / CELLS), Math.floor(cj / CELLS)];
-      const key = `${tx},${tz}`;
-      const tile = free || shown.has(key) ? this.tile(key) : this.view.decoded.get(key);
-      return { key, tile, k: (cj - tz * CELLS) * CELLS + ci - tx * CELLS };
-    };
-    return {
-      height: (ci, cj) => {
-        const { tile, k } = at(ci, cj);
-        return tile ? tile.layers.height[k] : SEA_FLOOR_FT;
-      },
-      water: (ci, cj) => {
-        const { tile, k } = at(ci, cj);
-        return Boolean(tile) && !Number.isNaN(tile.layers.water[k]);
-      },
-      inside: (ci, cj) => {
-        const { key, tile } = at(ci, cj);
-        return Boolean(tile) && (free || shown.has(key));
-      },
-    };
-  }
-
-  // Puts a source's water down, keeping the terrain under it in source.wet, and how it ends
-  // (traceSource) in source.end.
-  wet(source, cells, end) {
-    source.end = end;
-    const fresh = (tile) => {
-      tile.palettes.water ??= ["sea", "fresh"];
-      if (!tile.palettes.water.includes("fresh")) tile.palettes.water.push("fresh");
-      return tile.palettes.water.indexOf("fresh");
-    };
+  // Works out the water over tiles again, within the edit under way, from the sketch's bodies over
+  // the ground as it is (generator.js waterOver): by default the tiles the edit's changed. Water
+  // that comes fells the trees there and leaves mud; ground raised out of the water keeps its
+  // terrain.
+  rework(keys = [...(this.edit?.keys() ?? [])]) {
+    const ctx = this.bodies?.();
+    const tiles = keys.filter((key) => this.editable(key)).map((key) => this.view.decoded.get(key));
+    if (!ctx || !tiles.length) return;
+    const results = waterOver(ctx, tiles.map((tile) => ({ coords: tile.coords, height: tile.layers.height })));
     const changed = new Set();
-    for (const [cell, { surface }] of cells) {
-      const [ci, cj] = cell.split(",").map(Number);
-      const [tx, tz] = [Math.floor(ci / CELLS), Math.floor(cj / CELLS)];
-      const key = `${tx},${tz}`;
-      const tile = this.tile(key);
-      this.touch(key);
-      const [i, j] = [ci - tx * CELLS, cj - tz * CELLS];
-      const k = j * CELLS + i;
-      const { layers, palettes } = tile;
-      if (parseTree(palettes.terrain[layers.terrain[k]])) fellTree(tile, i, j);
-      if (!layers.waterKind) {
-        // Without the layer, water at 0 ft was sea and the rest fresh (terrainMesh.js kindOf).
-        const sea = Math.max(0, (palettes.water ??= ["sea", "fresh"]).indexOf("sea"));
-        const freshKind = fresh(tile);
-        layers.waterKind = Uint8Array.from(layers.water, (w) => (w === 0 ? sea : freshKind));
+    tiles.forEach((tile, n) => {
+      const { water, kinds } = results[n];
+      const key = tile.coords.join(",");
+      const { layers } = tile;
+      let any = false;
+      for (let k = 0; k < water.length; k++) {
+        const was = layers.water[k];
+        const now = Math.round(water[k] * 4) / 4;
+        if (Number.isNaN(was) && Number.isNaN(now)) continue;
+        const kind = kinds[k] && waterKind(tile, kinds[k]);
+        if (Math.abs(was - now) < 0.2 && layers.waterKind[k] === kind) continue;
+        this.touch(key);
+        any = true;
+        layers.water[k] = now;
+        if (Number.isNaN(now)) continue;
+        layers.waterKind[k] = kind;
+        if (!Number.isNaN(was)) continue;
+        const [i, j] = [k % CELLS, Math.floor(k / CELLS)];
+        if (parseTree(tile.palettes.terrain[layers.terrain[k]])) fellTree(tile, i, j);
+        if (kinds[k] === "fresh") layers.terrain[k] = paletteIndex(tile, "mud");
       }
-      (source.wet[key] ??= []).push([k, palettes.terrain[layers.terrain[k]]]);
-      layers.water[k] = Math.round(surface * 4) / 4;
-      layers.waterKind[k] = fresh(tile);
-      layers.terrain[k] = paletteIndex(tile, "mud");
-      changed.add(key);
-    }
+      if (any) changed.add(key);
+    });
     this.changed(changed);
   }
 
-  // Takes a source's water away again.
-  dry(source) {
-    const changed = new Set();
-    for (const [key, list] of Object.entries(source.wet ?? {})) {
-      const tile = this.tile(key);
-      if (!tile) continue;
-      this.touch(key);
-      for (const [k, terrain] of list) {
-        tile.layers.water[k] = NaN;
-        tile.layers.terrain[k] = paletteIndex(tile, terrain);
-      }
-      changed.add(key);
-    }
-    source.wet = {};
-    this.changed(changed);
-  }
-
-  // Runs every source in the window again, within the edit under way, after the ground's changed.
-  reflow() {
-    const all = this.sources();
-    if (!all.length) return;
-    for (const { key } of all) this.touch(key);
-    for (const { source } of [...all].reverse()) this.dry(source);
-    for (const { source } of all) {
-      const run = this.run(source);
-      this.wet(source, run.wet, run.end);
-    }
-  }
-
-  pickSource(picked) {
-    this.source = picked;
-    this.drawSources();
-    this.onSource?.(picked?.source ?? null);
-  }
-
-  // Changes the picked source's flow, or lets its water leave the window (`free`).
-  changeSource({ flow, free }) {
-    const { source: picked } = this;
-    if (!picked) return;
-    const { source, key } = picked;
-    const was = { flow: source.flow, free: source.free };
+  // Works out the water over the tiles again as an edit of its own, as when the sketch's water has
+  // changed.
+  reworkWater(keys) {
     this.beginEdit();
-    this.touch(key);
-    this.dry(source);
-    if (flow !== undefined) source.flow = flow;
-    if (free) source.free = true;
-    const run = this.run(source, true);
-    if (!run) {
-      // Back as it was.
-      Object.assign(source, was);
-      const back = this.run(source);
-      this.wet(source, back.wet, back.end);
-    } else this.wet(source, run.wet, run.end);
+    this.rework(keys);
     this.endEdit();
-    this.onSource?.(source);
   }
 
-  removeSource() {
-    const { source: picked } = this;
-    if (!picked) return;
-    this.beginEdit();
-    this.touch(picked.key);
-    this.dry(picked.source);
-    const tile = this.view.decoded.get(picked.key);
-    tile.sources = tile.sources.filter((s) => s !== picked.source);
-    this.endEdit();
-    this.pickSource(null);
-  }
-
-  // A ring at each source in the window, the picked one highlighted.
-  drawSources() {
-    for (const child of [...this.sourceMarks.children]) {
+  // What pouring water would add (editor.js pour), as lines over the ground: { rivers: [{ points }],
+  // pools: [{ region }] } in tile units, or null for none.
+  showProposal(result) {
+    for (const child of [...this.proposalMarks.children]) {
       child.geometry.dispose();
       child.material.dispose();
-      this.sourceMarks.remove(child);
+      this.proposalMarks.remove(child);
     }
-    if (!this.window) return;
-    for (const { source } of this.sources()) {
-      const picked = source === this.source?.source;
-      const r = picked ? 8 : 5;
-      const points = Array.from({ length: 16 }, (_, n) => {
-        const a = (n / 16) * Math.PI * 2;
-        return [(source.at[0] + Math.cos(a) * r) / TILE_FT, (source.at[1] + Math.sin(a) * r) / TILE_FT];
-      });
-      const line = boundary(points, this.view.ground, this.view.origin, picked ? CURSOR.selected : CURSOR.source);
+    if (!result || !this.window) return;
+    const lines = [...result.rivers.map(({ points }) => [points, false]), ...result.pools.flatMap(({ region }) => region.flat().map((ring) => [ring, true]))];
+    for (const [points, closed] of lines) {
+      const line = boundary(points, this.view.ground, this.view.origin, CURSOR.proposal, closed);
       line.material.depthTest = false;
       line.renderOrder = 4;
-      this.sourceMarks.add(line);
+      this.proposalMarks.add(line);
     }
   }
 
@@ -969,11 +834,21 @@ function snapshot(tile) {
     palettes: structuredClone(tile.palettes),
     objects: structuredClone(tile.objects ?? []),
     roads: structuredClone(tile.roads ?? []),
-    sources: structuredClone(tile.sources ?? []),
   };
 }
 
 function restore(tile, state) {
   const copy = snapshot(state);
-  Object.assign(tile, { layers: copy.layers, palettes: copy.palettes, objects: copy.objects, roads: copy.roads, sources: copy.sources });
+  Object.assign(tile, { layers: copy.layers, palettes: copy.palettes, objects: copy.objects, roads: copy.roads });
+}
+
+// The index of a kind of water ("sea" or "fresh") in a tile's palette, adding the kinds, and the
+// waterKind layer, if the tile hasn't got them yet.
+function waterKind(tile, kind) {
+  const { layers, palettes } = tile;
+  palettes.water ??= [];
+  for (const name of ["sea", "fresh"]) if (!palettes.water.includes(name)) palettes.water.push(name);
+  // Without the layer, water at 0 ft was sea and the rest fresh (terrainMesh.js kindOf).
+  layers.waterKind ??= Uint8Array.from(layers.water, (w) => palettes.water.indexOf(w === 0 ? "sea" : "fresh"));
+  return palettes.water.indexOf(kind);
 }

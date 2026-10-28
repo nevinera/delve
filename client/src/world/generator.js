@@ -329,6 +329,47 @@ export function generateTile(ctx, tx, tz) {
   return tile;
 }
 
+// The water over tiles whose ground was shaped by hand, which bodies don't carve (plans/water.md):
+// each cell gets the water generating would give it (the sea, rivers, lakes, the biomes' pools)
+// where its ground is below that water. Still water also fills hollows dug beside it, across the
+// tiles given. tiles: [{ coords: [tx, tz], height }], height as a tile's layer. Returns, per tile,
+// { water, kinds }: water as a tile's layer, and each cell's kind ("sea" or "fresh") or null.
+export function waterOver(ctx, tiles) {
+  const out = tiles.map(() => ({ water: new Float32Array(CELLS * CELLS).fill(NaN), kinds: new Array(CELLS * CELLS).fill(null) }));
+  const index = new Map(tiles.map((t, n) => [t.coords.join(","), n]));
+  const still = [];
+  tiles.forEach(({ coords: [tx, tz], height }, n) => {
+    const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];
+    const biomes = biomesNear(ctx.biomes, [x0, z0, x0 + TILE_FT, z0 + TILE_FT]);
+    for (let j = 0; j < CELLS; j++) {
+      for (let i = 0; i < CELLS; i++) {
+        const s = sample(ctx, x0 + (i + 0.5) * CELL_FT, z0 + (j + 0.5) * CELL_FT, biomes);
+        const k = j * CELLS + i;
+        if (!(height[k] < s.water)) continue;
+        out[n].water[k] = s.water;
+        out[n].kinds[k] = s.sea ? "sea" : "fresh";
+        if (!s.river) still.push([tx * CELLS + i, tz * CELLS + j]);
+      }
+    }
+  });
+  const at = (ci, cj) => {
+    const n = index.get(`${Math.floor(ci / CELLS)},${Math.floor(cj / CELLS)}`);
+    return n === undefined ? null : { n, k: (cj - tiles[n].coords[1] * CELLS) * CELLS + ci - tiles[n].coords[0] * CELLS };
+  };
+  for (let q = 0; q < still.length; q++) {
+    const [ci, cj] = still[q];
+    const { n, k } = at(ci, cj);
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const next = at(ci + di, cj + dj);
+      if (!next || !Number.isNaN(out[next.n].water[next.k]) || !(tiles[next.n].height[next.k] < out[n].water[k])) continue;
+      out[next.n].water[next.k] = out[n].water[k];
+      out[next.n].kinds[next.k] = out[n].kinds[k];
+      still.push([ci + di, cj + dj]);
+    }
+  }
+  return out;
+}
+
 // Trees on a grid of TREE_GRID-cell squares: each square may get one tree, by its biome's odds,
 // at a random spot in the square. Squares are counted across the continent so every tile agrees.
 function plantTrees(ctx, tile, sampleAt) {

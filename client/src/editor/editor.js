@@ -39,7 +39,7 @@ import { CELL_FT, TILE_FT } from "../world/constants.js";
 import { TREE_KINDS, TREE_SIZES, treeTerrain } from "../world/trees.js";
 import { STRUCTURE_PREFIX } from "../world/structures.js";
 import { PlacePicker } from "./placePicker.js";
-import { TERRAIN } from "../world/generator.js";
+import { TERRAIN, prepareWorld } from "../world/generator.js";
 import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
 
 const HIT_PX = 8;
@@ -58,7 +58,7 @@ const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 // Steps drawn in 3d instead of on the map.
 const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
-  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it; water runs along a channel the way it was drawn) · with water, click to place a source or pick one · with objects or structures, click a thumbnail, then the ground to place it (esc lets it go); click one placed to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
+  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it) · with water, click to pour from there, then keep or drop the rivers and lakes it would make · with objects or structures, click a thumbnail, then the ground to place it (esc lets it go); click one placed to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
@@ -97,6 +97,8 @@ const STEPS = {
 const DETAIL_MAX_TILES = 128;
 // Past this many screen pixels per pixel of the small thumbnails, tiles draw their full ones.
 const FULL_THUMB_ZOOM = 1.5;
+// The detail step's pours stand in for a source pin with this id.
+const DETAIL_POUR = "detail";
 const PREVIEW_DELAY_MS = 80; // after panning or zooming stops, before the preview is redone
 const PREVIEW_MARGIN = 0.15; // of the view's size, worked out beyond each edge
 const PREVIEW_PX = 3; // screen pixels per preview sample
@@ -414,12 +416,14 @@ export class Editor {
     this.proposal = { pin: pin.id, key, result: null };
     this.water.request({ key, landKey, continent: { land: this.land.data }, seedKey: this.continent, sources, water });
     this.renderProps();
+    this.showPour();
   }
 
   showWater(key, result) {
     if (key !== this.proposal?.key) return;
     this.proposal.result = result;
     this.renderProps();
+    this.showPour();
     this.map.render();
   }
 
@@ -430,15 +434,32 @@ export class Editor {
     const water = this.sketch.water;
     for (const { points, width } of rivers) water.rivers.push({ id: nextWaterId(water, "w"), points, width });
     for (const { seed, level } of pools) water.lakes.push({ id: nextWaterId(water, "l"), seed, level });
+    const inDetail = this.proposal.pin === DETAIL_POUR;
     this.proposal = null;
     this.saveSketch();
     this.renderProps();
+    this.showPour();
+    if (inDetail && this.detail) {
+      // Hand-edited tiles in the window take the water now; the rest get it when tiles are generated.
+      const edited = this.editedTiles();
+      this.detail.reworkWater(this.detail.keys().filter((key) => edited.has(key)));
+      this.say("Kept. Tiles you haven't edited by hand get the new water when tiles are generated again.");
+    }
   }
 
   dropProposal() {
     this.proposal = null;
     this.renderProps();
+    this.showPour();
     this.map.render();
+  }
+
+  // The generator's view of the continent as it is (generator.js prepareWorld), for the detail
+  // step's water. Kept until the land or the sketch changes.
+  bodies() {
+    const key = hashString(JSON.stringify([this.landHash(), this.sketch.pins, this.sketch.paths, this.sketch.water]));
+    if (this.bodiesCache?.key !== key) this.bodiesCache = { key, ctx: prepareWorld(this.continentState(), this.continent) };
+    return this.bodiesCache.ctx;
   }
 
   // The sketch's water as the water flow sees it, in ft: rivers' lines and half widths, and lakes'
@@ -764,9 +785,8 @@ export class Editor {
         onEdit: (keys) => this.saveDetail(keys),
         onPointer: (hit) => this.showCursor(hit),
         onSelect: (object) => this.showObject(object),
-        onSource: (source) => this.showSource(source),
-        onAsk: (question) => window.confirm(question),
-        onSay: (message) => this.say(message),
+        onPour: ([x, z]) => this.pour({ id: DETAIL_POUR, at: [x / TILE_FT, z / TILE_FT].map((v) => Math.round(v * 1000) / 1000), width: Number(this.el.pourWidth.value) }),
+        bodies: () => this.bodies(),
       });
       this.detail.view.handlers.onTime = (clock) => this.showTime?.(clock);
       this.applyDetailBrush();
@@ -800,12 +820,12 @@ export class Editor {
     detailStrengthValue.textContent = `${detailStrength.value} ft/s`;
     this.el.trailWidthValue.textContent = `${this.el.trailWidth.value} ft`;
     if (this.step !== "detail") return;
-    const { channelWidth, channelWidthValue, channelDepth, channelDepthValue, sourceFlow, sourceFlowValue } = this.el;
+    const { channelWidth, channelWidthValue, channelDepth, channelDepthValue, pourWidth, pourWidthValue } = this.el;
     channelWidthValue.textContent = `${channelWidth.value} ft`;
     channelDepthValue.textContent = `${channelDepth.value} ft`;
-    sourceFlowValue.textContent = sourceFlow.value;
+    pourWidthValue.textContent = `${pourWidth.value} ft`;
     if (this.toolName === "channel") return this.detail?.setBrush({ tool: "channel", width: Number(channelWidth.value), depth: Number(channelDepth.value) });
-    if (this.toolName === "water") return this.detail?.setBrush({ tool: "water", flow: Number(sourceFlow.value) });
+    if (this.toolName === "water") return this.detail?.setBrush({ tool: "water" });
     if (this.toolName === "objects") return this.detail?.setBrush({ tool: "objects", type: this.pickers.objects.armed });
     if (this.toolName === "structures") return this.detail?.setBrush({ tool: "structures", type: this.pickers.structures.armed });
     if (this.toolName === "paint") {
@@ -989,17 +1009,12 @@ export class Editor {
     );
   }
 
-  // The detail step's picked water source in the panel, or none.
-  showSource(source) {
-    const { sourcePanel, sourceInfo, pickedFlow, pickedFlowValue, sourceFree } = this.el;
-    sourcePanel.hidden = !source;
-    if (!source) return;
-    const cells = Object.values(source.wet ?? {}).reduce((sum, list) => sum + list.length, 0);
-    const end = { water: "in the sea or other water", dry: "where it runs dry", outside: "at the window's edge", limit: "where it got too big to follow" }[source.end] ?? "";
-    sourceInfo.textContent = `source at ${source.at.map(Math.round).join(", ")} · water over ${cells} cells${end ? `, ending ${end}` : ""}${source.free ? " · runs past the window" : ""}`;
-    pickedFlow.value = source.flow;
-    pickedFlowValue.textContent = source.flow;
-    sourceFree.hidden = source.free;
+  // What pouring in the detail step would add, with keep and drop, while there's such a proposal.
+  showPour() {
+    const { pourPanel, pourInfo } = this.el;
+    pourPanel.hidden = this.proposal?.pin !== DETAIL_POUR;
+    pourInfo.replaceChildren(this.pourStatus({ id: DETAIL_POUR }));
+    this.detail?.showProposal(this.proposal?.result ?? null);
   }
 
   // Writes tiles changed in the detail step back into the world, and marks them edited by hand.
@@ -1262,11 +1277,9 @@ export class Editor {
         if (object?.base !== undefined) this.detail.changeSelected({ base: object.base + way * (e.shiftKey ? 0.25 : 1) });
       });
     }
-    this.el.pickedFlow.addEventListener("input", () => (this.el.pickedFlowValue.textContent = this.el.pickedFlow.value));
-    this.el.pickedFlow.addEventListener("change", () => this.detail?.changeSource({ flow: Number(this.el.pickedFlow.value) }));
-    this.el.sourceFree.addEventListener("click", () => this.detail?.changeSource({ free: true }));
-    this.el.sourceRemove.addEventListener("click", () => this.detail?.removeSource());
-    for (const input of [this.el.detailRadius, this.el.detailFalloff, this.el.detailStrength, this.el.detailErosion, this.el.detailTalus, this.el.trailKind, this.el.trailState, this.el.trailWidth, this.el.channelWidth, this.el.channelDepth, this.el.sourceFlow]) {
+    this.el.pourKeep.addEventListener("click", () => this.keepProposal());
+    this.el.pourDrop.addEventListener("click", () => this.dropProposal());
+    for (const input of [this.el.detailRadius, this.el.detailFalloff, this.el.detailStrength, this.el.detailErosion, this.el.detailTalus, this.el.trailKind, this.el.trailState, this.el.trailWidth, this.el.channelWidth, this.el.channelDepth, this.el.pourWidth]) {
       input.addEventListener("input", () => this.applyDetailBrush());
     }
     this.applyDetailBrush();
