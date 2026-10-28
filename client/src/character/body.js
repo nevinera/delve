@@ -20,17 +20,17 @@ const JOINTS = [
   ["spine_03", "spine_02", [0, 4.4, 0]],
   ["neck_01", "spine_03", [0, 4.95, 0]],
   ["head", "neck_01", [0, 5.22, 0]],
-  ["clavicle_l", "spine_03", [0.15, 4.75, 0]],
-  ["upperarm_l", "clavicle_l", [0.74, 4.72, 0]],
-  ["lowerarm_l", "upperarm_l", [0.86, 3.68, -0.02]],
-  ["hand_l", "lowerarm_l", [0.94, 2.76, 0.03]],
+  ["clavicle_l", "spine_03", [0.15, 4.75, 0.05]],
+  ["upperarm_l", "clavicle_l", [0.74, 4.72, 0.12]],
+  ["lowerarm_l", "upperarm_l", [0.86, 3.68, 0.1]],
+  ["hand_l", "lowerarm_l", [0.94, 2.76, 0.15]],
   ["thigh_l", "pelvis", [0.32, 3.05, 0]],
   ["calf_l", "thigh_l", [0.34, 1.68, 0.04]],
   ["foot_l", "calf_l", [0.35, 0.32, 0]],
   ["ball_l", "foot_l", [0.36, 0.08, 0.48]],
 ];
 // Where bones with no child end, for their direction.
-export const ENDS = { head: [0, 6, 0], hand_l: [0.97, 2.18, 0.05], ball_l: [0.36, 0.06, 0.75] };
+export const ENDS = { head: [0, 6, 0], hand_l: [0.97, 2.18, 0.17], ball_l: [0.36, 0.06, 0.75] };
 const TRUNK_SIDES = 32;
 // The bust's middle on each side (height in feet for a 6ft body, angle from the front), how far it
 // spreads toward the middle of the chest and out toward the arm, above and below its middle, and
@@ -209,7 +209,7 @@ export function bodyMesh(look) {
       const depth = under.depth * 0.5 * (1 + Math.cos(Math.PI * under.down));
       leg[0].push = (angle) => (Math.abs(angle) < 1.4 ? depth * 0.5 * (1 + Math.cos((Math.PI * angle) / 1.4)) : 0);
     }
-    parts[`leg_${side}`] = { rings: leg, sides: 8, color: (band) => (band < 5 ? c.secondary : boots), opts: {} };
+    parts[`leg_${side}`] = { rings: leg, sides: 8, color: (band) => (band < 5 ? c.secondary : boots), opts: { capStart: true } };
     // Foot, heel to toe, its rings standing upright.
     const [fx, , fz] = at(n("foot_l"));
     const fwd = [0, 0, 1];
