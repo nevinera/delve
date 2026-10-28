@@ -23,6 +23,11 @@ module Delve3d
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 8.1
 
+    # Encrypts GitHub tokens at rest. Development and test set fixed keys of their own.
+    config.active_record.encryption.primary_key = ENV.string("AR_ENCRYPTION_PRIMARY_KEY", default: nil)
+    config.active_record.encryption.deterministic_key = ENV.string("AR_ENCRYPTION_DETERMINISTIC_KEY", default: nil)
+    config.active_record.encryption.key_derivation_salt = ENV.string("AR_ENCRYPTION_KEY_DERIVATION_SALT", default: nil)
+
     # Please, add to the `ignore` list any other `lib` subdirectories that do
     # not contain `.rb` files, or that should not be reloaded or eager loaded.
     # Common ones are `templates`, `generators`, or `middleware`, for example.

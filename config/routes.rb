@@ -17,6 +17,14 @@ Rails.application.routes.draw do
     delete "/logout", to: "sessions#destroy", as: :destroy_user_session
   end
 
+  namespace :github do
+    get "connect", to: "connections#show"
+    get "reauth", to: "connections#reauth"
+    get "callback", to: "connections#callback"
+    get "token", to: "connections#token"
+    delete "disconnect", to: "connections#disconnect"
+  end
+
   if Rails.env.local?
     post "/dev_session", to: "dev_sessions#create", as: :dev_session
   end
