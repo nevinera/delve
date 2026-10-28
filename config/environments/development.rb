@@ -1,5 +1,15 @@
 require "active_support/core_ext/integer/time"
 
+# Settings kept out of git, such as the GitHub App's keys, as KEY=value lines. The environment
+# wins over the file.
+local_env = File.expand_path("../../.env.development.local", __dir__)
+if File.exist?(local_env)
+  File.foreach(local_env) do |line|
+    key, value = line.strip.split("=", 2)
+    ENV[key] ||= value if value && !key.start_with?("#")
+  end
+end
+
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
 
