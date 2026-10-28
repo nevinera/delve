@@ -77,13 +77,18 @@ function gloveFingers(parts, side, color, thick = 0) {
   }
 }
 
+// The knee's height, in feet for a 6ft body.
+const KNEE_FT = 1.68;
+
 // A skirt hanging from the belt, `heights` down, its lower rings following the thigh on their side
-// so it sways with the legs without tearing, up to `follow` of the way at the hem.
+// so it sways with the legs without tearing, up to `follow` of the way at the hem. Below the knee
+// it follows the shin more and more, so a bent knee bends the skirt too. Its inside is shaded.
 function skirt(out, ctx, heights, widths, color, mail = false, follow = 0.45) {
   const { s, trunk, hips } = ctx;
   const top = heights[0];
   const rings = heights.map((y, i) => {
     const sway = ((top - y) / (top - heights[heights.length - 1])) * follow;
+    const shin = Math.min(1, Math.max(0, (KNEE_FT - y) / (KNEE_FT - 0.55))) * 0.8;
     const ring = ctx.level(y, {
       rx: widths[i][0] * hips * trunk,
       rz: widths[i][1] * trunk,
@@ -92,9 +97,14 @@ function skirt(out, ctx, heights, widths, color, mail = false, follow = 0.45) {
         const left = 0.5 + 0.5 * Math.sin(angle);
         return [
           ["pelvis", 1 - sway],
-          ["thigh_l", sway * left],
-          ["thigh_r", sway * (1 - left)],
-        ].filter(([, w]) => w > 0);
+          ["thigh_l", sway * left * (1 - shin)],
+          ["thigh_r", sway * (1 - left) * (1 - shin)],
+          ["calf_l", sway * left * shin],
+          ["calf_r", sway * (1 - left) * shin],
+        ]
+          .filter(([, w]) => w > 0)
+          // A corner takes four bones at most: the strongest.
+          .sort((a, b) => b[1] - a[1]);
       },
     });
     // Out over anything the trunk pushes past it (the rear) between the rings either side.
@@ -108,6 +118,8 @@ function skirt(out, ctx, heights, widths, color, mail = false, follow = 0.45) {
   });
   out.mail = mail;
   out.tube(rings, 16, color, {});
+  const lining = rings.map((r) => ({ ...r, rx: r.rx - 0.01 * s, rz: r.rz - 0.01 * s }));
+  out.tube(lining, 16, (band, angle) => color(band, angle).map((v) => v * 0.55), { inward: true });
   out.mail = false;
   return rings;
 }

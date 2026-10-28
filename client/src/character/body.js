@@ -718,12 +718,12 @@ export class MeshOut {
     this.mail = false;
   }
 
-  // A triangle, turned to face away from `inside`.
-  face(corners, color, bones, inside, cornerBones = null) {
+  // A triangle, turned to face away from `inside`, or toward it when `toward`.
+  face(corners, color, bones, inside, cornerBones = null, toward = false) {
     const normal = cross(sub(corners[1], corners[0]), sub(corners[2], corners[0]));
     const middle = mul(add(add(corners[0], corners[1]), corners[2]), 1 / 3);
     let order = [0, 1, 2];
-    if (dot(normal, sub(middle, inside)) < 0) order = [0, 2, 1];
+    if (dot(normal, sub(middle, inside)) < 0 !== toward) order = [0, 2, 1];
     for (const k of order) {
       this.positions.push(...corners[k]);
       this.colors.push(...color);
@@ -741,8 +741,9 @@ export class MeshOut {
   // facing the ring's front. Caps close the first or last ring to a point; skip(band, angle) leaves
   // faces out. A ring's weights(angle), where it has one, weights each corner by its angle instead
   // of the ring's bones. With `carry`, each ring after the first takes its side from the ring
-  // before, so a tube that bends round toward +x doesn't turn its rings over partway.
-  tube(rings, sides, color, { capStart = false, capEnd = false, endColor = null, skip = null, carry = false } = {}) {
+  // before, so a tube that bends round toward +x doesn't turn its rings over partway. With `inward`,
+  // the faces look in, for the inside of something open, like a skirt.
+  tube(rings, sides, color, { capStart = false, capEnd = false, endColor = null, skip = null, carry = false, inward = false } = {}) {
     let last = null;
     const points = rings.map((r) => {
       // The ring's side axis is +x where it can be; its front is square to that and the bone.
@@ -772,8 +773,8 @@ export class MeshOut {
         const col = color(i, mid);
         const [a, b, cc, d] = [points[i][k], points[i][k1], points[i + 1][k1], points[i + 1][k]];
         const [wa, wb, wc, wd] = [cornerBones[i][k], cornerBones[i][k1], cornerBones[i + 1][k1], cornerBones[i + 1][k]];
-        this.face([a, b, cc], col, wa, inside, [wa, wb, wc]);
-        this.face([a, cc, d], col, wa, inside, [wa, wc, wd]);
+        this.face([a, b, cc], col, wa, inside, [wa, wb, wc], inward);
+        this.face([a, cc, d], col, wa, inside, [wa, wc, wd], inward);
       }
     }
     const cap = (i, outward, capColor) => {
