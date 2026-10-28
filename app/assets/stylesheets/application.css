@@ -200,6 +200,48 @@ input[type="submit"].secondary:hover {
   color: #e8d5a0;
 }
 
-.world-list a {
+.world-list a:first-of-type {
   margin-left: auto;
+}
+
+/* A world's page (/worlds/:id): its published versions, and what importing each found. */
+.versions button.small {
+  margin: 0;
+  padding: 0.2rem 0.7rem;
+  font-size: 0.85rem;
+}
+
+.versions .moved {
+  color: #e0a040;
+}
+
+.import-list {
+  padding: 0;
+}
+
+.import-list > li {
+  list-style: none;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--pico-muted-border-color);
+}
+
+.import-list p {
+  margin: 0 0 0.3rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  align-items: baseline;
+}
+
+.status-passed {
+  color: #8c8;
+}
+
+.status-failed,
+.status-error {
+  color: #e88;
+}
+
+.problems li.warning {
+  color: #db8;
 }

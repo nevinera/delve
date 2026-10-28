@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_28_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_29_000000) do
   create_table "characters", force: :cascade do |t|
     t.integer "user_id", null: false
     t.string "name", null: false
@@ -50,6 +50,26 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_28_180000) do
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
   end
 
+  create_table "world_imports", force: :cascade do |t|
+    t.integer "world_id", null: false
+    t.string "tag", null: false
+    t.string "sha"
+    t.string "status", default: "queued", null: false
+    t.boolean "private_repo"
+    t.json "problems"
+    t.json "files"
+    t.integer "file_count"
+    t.bigint "bytes"
+    t.text "error"
+    t.datetime "started_at"
+    t.datetime "finished_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["world_id", "sha"], name: "index_world_imports_on_world_id_and_sha"
+    t.index ["world_id", "tag"], name: "index_world_imports_on_world_id_and_tag"
+    t.index ["world_id"], name: "index_world_imports_on_world_id"
+  end
+
   create_table "worlds", force: :cascade do |t|
     t.integer "user_id", null: false
     t.string "repo", null: false
@@ -65,5 +85,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_28_180000) do
 
   add_foreign_key "characters", "users"
   add_foreign_key "github_connections", "users"
+  add_foreign_key "world_imports", "worlds"
   add_foreign_key "worlds", "users"
 end

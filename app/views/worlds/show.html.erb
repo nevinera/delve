@@ -1,0 +1,79 @@
+<% content_for :title, "#{@world.display_name} - Delve" %>
+<% if @imports.any? { |i| !i.done? } %>
+  <% content_for :head do %><meta http-equiv="refresh" content="5"><% end %>
+<% end %>
+<h1><%= @world.display_name %></h1>
+<p class="section-links">
+  <span class="muted"><%= link_to @world.repo, "https://github.com/#{@world.repo}" %></span>
+  <%= link_to "edit", editor_path(from: @world.source) %>
+  <%= link_to "your worlds", worlds_path %>
+</p>
+
+<h2>Published versions</h2>
+<% if @github.nil? %>
+  <p><%= link_to "Connect GitHub", github_connect_path %> to see this world's versions.</p>
+<% elsif @tags_error %>
+  <p>Couldn't list the versions: <%= @tags_error %></p>
+<% elsif @tags.empty? %>
+  <p>Nothing's published yet. Publish a version from the editor's publish step.</p>
+<% else %>
+  <p class="muted">A version is a tag on a commit. Importing one checks it and keeps its commit, so moving the tag later changes nothing that was imported.</p>
+  <table class="versions">
+    <thead><tr><th>tag</th><th>commit</th><th>last import</th><th></th></tr></thead>
+    <tbody>
+      <% @tags.each do |name, sha| %>
+        <% last = @imports.find { |i| i.tag == name } %>
+        <tr>
+          <td><strong><%= name %></strong></td>
+          <td><code><%= sha.first(7) %></code></td>
+          <td>
+            <% if last.nil? %>
+              <span class="muted">not imported</span>
+            <% else %>
+              <%= last.status %><% if last.sha && last.sha != sha %>, <span class="moved">but the tag's moved since (was <code><%= last.sha.first(7) %></code>)</span><% end %>
+            <% end %>
+          </td>
+          <td>
+            <% unless last && !last.done? %>
+              <%= button_to(last ? "import again" : "import", world_imports_path(@world), params: {tag: name}, class: "secondary outline small") %>
+            <% end %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% end %>
+
+<h2>Imports</h2>
+<% if @imports.empty? %>
+  <p>Nothing's been imported yet.</p>
+<% else %>
+  <ul class="import-list">
+    <% @imports.each do |import| %>
+      <li>
+        <p>
+          <strong><%= import.tag %></strong>
+          <% if import.sha %><code><%= import.sha.first(7) %></code><% end %>
+          <span class="status status-<%= import.status %>"><%= import.status %></span>
+          <span class="muted">
+            <%= time_ago_in_words(import.finished_at || import.created_at) %> ago
+            <% if import.file_count %>· <%= pluralize(import.file_count, "file") %>, <%= number_to_human_size(import.bytes) %><% end %>
+            <% if import.private_repo %>· private repo, so it can't be released<% end %>
+          </span>
+        </p>
+        <% if import.error %><p class="alert"><%= import.error %></p><% end %>
+        <% if import.problems.present? %>
+          <details>
+            <summary><%= pluralize(import.errors_found.size, "problem") %>, <%= pluralize(import.warnings_found.size, "warning") %></summary>
+            <ol class="problems">
+              <% (import.errors_found + import.warnings_found).first(50).each do |problem| %>
+                <li class="<%= "warning" if problem["warning"] %>"><code><%= problem["path"] %></code>: <%= problem["message"] %></li>
+              <% end %>
+            </ol>
+            <% if import.problems.size > 50 %><p class="muted">and <%= import.problems.size - 50 %> more</p><% end %>
+          </details>
+        <% end %>
+      </li>
+    <% end %>
+  </ul>
+<% end %>

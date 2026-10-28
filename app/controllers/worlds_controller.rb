@@ -11,6 +11,16 @@ class WorldsController < ApplicationController
     @repos_error = e.message
   end
 
+  # One of your worlds: its published versions on GitHub, and what importing each found.
+  def show
+    @world = current_user.worlds.find(params[:id])
+    @imports = @world.imports.latest_first.to_a
+    @github = current_user.github_connection
+    @tags = @github&.api&.tags(@world.repo)&.sort_by { |name, _| version_order(name) }&.reverse
+  rescue Github::OauthError => e
+    @tags_error = e.message
+  end
+
   def create
     repo = @github.api.repo(params.require(:repo))
     return render json: {error: "not_found"}, status: :not_found if repo.nil?
@@ -26,6 +36,12 @@ class WorldsController < ApplicationController
   end
 
   private
+
+  # v10 after v9, then other tags by name.
+  def version_order(name)
+    number = name[/\Av(\d+)\z/, 1]
+    number ? [1, number.to_i, ""] : [0, 0, name]
+  end
 
   def require_github
     @github = current_user.github_connection

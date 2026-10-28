@@ -82,4 +82,36 @@ RSpec.describe "Worlds", type: :request do
       expect(response).to have_http_status(:unauthorized)
     end
   end
+
+  describe "a world's page" do
+    before { sign_in user }
+
+    let(:world) { create(:world, user:, repo: "me/thorn", name: "Thornwood") }
+
+    it "lists the published versions with what importing each found" do
+      create(:github_connection, user:)
+      create(:world_import, world:, tag: "v1", sha: "b" * 40, status: "passed")
+      stub_github("/repos/me/thorn/git/matching-refs/tags/", [
+        {ref: "refs/tags/v1", object: {sha: "c" * 40, type: "commit"}},
+        {ref: "refs/tags/v10", object: {sha: "d" * 40, type: "commit"}},
+        {ref: "refs/tags/v9", object: {sha: "e" * 40, type: "commit"}}
+      ])
+      get world_path(world)
+      expect(response.body.scan(/<strong>(v\d+)<\/strong>/).flatten.first(3)).to eq(%w[v10 v9 v1])
+      expect(response.body).to include("the tag's moved since")
+    end
+
+    it "is only for the world's owner" do
+      theirs = create(:world)
+      get world_path(theirs)
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "starts an import, once at a time per tag" do
+      expect { post world_imports_path(world), params: {tag: "v3"} }.to have_enqueued_job(ImportWorldJob)
+      expect(world.imports.sole).to have_attributes(tag: "v3", status: "queued")
+      expect { post world_imports_path(world), params: {tag: "v3"} }.not_to have_enqueued_job(ImportWorldJob)
+      expect(response).to redirect_to(world_path(world))
+    end
+  end
 end

@@ -1,5 +1,6 @@
 <li>
   <strong><%= world.display_name %></strong>
   <span class="muted"><%= world.repo %>, opened <%= time_ago_in_words(world.opened_at) %> ago</span>
+  <%= link_to "versions", world_path(world) %>
   <%= link_to "edit", editor_path(from: world.source) %>
 </li>

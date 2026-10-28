@@ -56,6 +56,17 @@ The editor opens a world from a zip or a GitHub repo, and saves to a zip or to G
 
 Opening splits plates into tile files on a few workers. Saving packs them again, remaking only plates whose tiles or object sizes changed, so an edit to one tile changes one plate.
 
+## Importing versions
+
+A published version is a tag. The world's page (`/worlds/:id`) lists its tags for the owner, with an import button for each. Importing (`ImportWorldJob`, on the SolidQueue worker):
+
+1. finds the commit the tag points at, once, and keeps its sha;
+2. downloads that commit as a zip from GitHub, by sha;
+3. runs `node script/validate.mjs --manifest` on it;
+4. records a `WorldImport`: passed or failed, the problems, and each file's blob sha and size.
+
+Nothing after step 1 reads the tag again, so moving or rewriting a tag can't change an import. The page shows when a tag has moved since it was imported.
+
 ## Docs
 
 - `docs/formats/`: file formats and protocols.
