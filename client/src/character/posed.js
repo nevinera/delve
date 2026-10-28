@@ -12,8 +12,9 @@ import { HELD } from "./weapons.js";
 //   a right one in. Bones left out stay at rest.
 // - reach: places for the hands, which the arms bend to reach, overriding their bones' turns.
 //   { item, grip, dir, front } puts the grip of a held item (weapons.js) at `grip`, the item
-//   pointing along `dir` with its front toward `front`. { along: hand, back } grips the other
-//   hand's item `back` feet further down. { wrist } puts the wrist there, the hand straight on
+//   pointing along `dir` with its front toward `front`. { along: hand, back, roll } grips the other
+//   hand's item `back` feet further down, the hand turned `roll` radians round it from the way the
+//   other hand faces. { wrist } puts the wrist there, the hand straight on
 //   the forearm. `elbow` is the way the elbow points.
 // - feet: where the ankles go, the legs bending to reach them and the feet kept flat.
 // - feetYaw: how far each foot (and its knee) is turned about the vertical, toward the left, in
@@ -65,7 +66,7 @@ const twoHanded = (bones, grip, dir, front, elbows = ARMS_DOWN) => ({
   bones,
   reach: {
     hand_r: { item: "greatsword", grip, dir, front, elbow: elbows.hand_r },
-    hand_l: { along: "hand_r", back: 0.5, elbow: elbows.hand_l },
+    hand_l: { along: "hand_r", back: 0.5, roll: 0, elbow: elbows.hand_l },
   },
 });
 const READY = twoHanded({ spine_01: [0.08, -0.15, 0], head: [0, 0.15, 0] }, [-0.1, 3.4, 1.05], [0.15, 0.75, 0.55], [0, 0, 1]);
@@ -106,7 +107,7 @@ const SWEEP = [
     bones: { pelvis: [0.25, -0.62, 0.23], spine_01: [0.01, -0.03, -0.01], spine_02: [0.02, -0.03, -0.01], spine_03: [0.02, -0.01, 0], neck_01: [-0.07, 0.16, -0.03], head: [-0.22, 0.19, 0], clavicle_l: [0.1, -0.25, 0.69], clavicle_r: [0.09, 0.02, -0.49] },
     reach: {
       hand_r: { item: "greatsword", grip: [-1.56, 5.65, 0.61], dir: [0.41, 0.33, -0.85], front: [0.05, 0.92, 0.38], elbow: [-0.79, -0.61, -0.07] },
-      hand_l: { along: "hand_r", back: 0.5, elbow: [0.01, -0.17, 0.99] },
+      hand_l: { along: "hand_r", back: 0.5, roll: 0, elbow: [0.01, -0.17, 0.99] },
     },
     feet: { foot_l: [1.1, 0.37, -0.14], foot_r: [-0.23, 0.56, -0.08] },
     feetYaw: { foot_l: -0.48, foot_r: -0.76 },
@@ -117,7 +118,7 @@ const SWEEP = [
     bones: { pelvis: [0.03, -0.66, 0.12], spine_01: [0.13, -0.03, 0], spine_02: [0.12, -0.02, -0.01], spine_03: [0.06, 0, -0.01], neck_01: [-0.17, 0.19, -0.04], head: [-0.23, 0.24, 0], clavicle_l: [0.26, -0.64, 0.46], clavicle_r: [0.14, 0.34, -0.3] },
     reach: {
       hand_r: { item: "greatsword", grip: [-2.29, 4.1, 1.34], dir: [-0.32, 0.47, -0.83], front: [-0.66, 0.45, 0.5], elbow: [0.05, -0.98, -0.2] },
-      hand_l: { along: "hand_r", back: 0.5, elbow: [0.44, -0.59, 0.68] },
+      hand_l: { along: "hand_r", back: 0.5, roll: 0, elbow: [0.44, -0.59, 0.68] },
     },
     feet: { foot_l: [1.13, 0.34, -0.14], foot_r: [-0.23, 0.55, -0.1] },
     feetYaw: { foot_l: -0.39, foot_r: -0.64 },
@@ -128,7 +129,7 @@ const SWEEP = [
     bones: { pelvis: [0.19, -0.6, 0.13], spine_01: [0.04, -0.05, 0], spine_02: [0.04, -0.05, 0], spine_03: [0.03, -0.01, 0], neck_01: [-0.05, 0.1, -0.01], head: [-0.12, 0.16, 0], clavicle_l: [0.16, -0.35, 0.13], clavicle_r: [0.21, 0.27, -0.16] },
     reach: {
       hand_r: { item: "greatsword", grip: [-1.89, 3.32, 1.76], dir: [-0.76, 0.64, -0.11], front: [-0.13, -0.05, 0.92], elbow: [-0.17, -0.78, -0.6] },
-      hand_l: { along: "hand_r", back: 0.5, elbow: [0.62, -0.73, 0.29] },
+      hand_l: { along: "hand_r", back: 0.5, roll: 0, elbow: [0.62, -0.73, 0.29] },
     },
     feet: { foot_l: [1.11, 0.37, -0.13], foot_r: [-0.47, 0.42, 0.53] },
     feetYaw: { foot_l: -0.37, foot_r: -0.67 },
@@ -139,7 +140,7 @@ const SWEEP = [
     bones: { pelvis: [0.42, -0.25, 0.07], spine_01: [0, -0.02, -0.01], spine_02: [0.03, -0.02, -0.01], spine_03: [0.03, 0, -0.01], neck_01: [-0.11, -0.07, 0.03], head: [-0.23, -0.06, 0.01], clavicle_l: [0.21, -0.12, 0.19], clavicle_r: [0.2, 0.13, -0.08] },
     reach: {
       hand_r: { item: "greatsword", grip: [-0.84, 2.94, 2.03], dir: [-0.5, 0.57, 0.65], front: [0.57, -0.35, 0.7], elbow: [-0.5, -0.5, -0.71] },
-      hand_l: { along: "hand_r", back: 0.5, elbow: [0.58, -0.56, -0.59] },
+      hand_l: { along: "hand_r", back: 0.5, roll: -0.4, elbow: [0.58, -0.56, -0.59] },
     },
     feet: { foot_l: [1.11, 0.39, -0.13], foot_r: [-0.42, 0.39, 0.54] },
     feetYaw: { foot_l: -0.31, foot_r: -0.67 },
@@ -150,7 +151,7 @@ const SWEEP = [
     bones: { pelvis: [0.35, 0.07, -0.01], spine_01: [0.17, -0.02, 0.02], spine_02: [0.13, -0.01, 0.01], spine_03: [0.05, 0, 0], neck_01: [-0.24, -0.03, 0.03], head: [-0.27, -0.13, 0], clavicle_l: [0.04, -0.06, 0.26], clavicle_r: [0.09, 0.12, -0.08] },
     reach: {
       hand_r: { item: "greatsword", grip: [0.09, 2.53, 2.41], dir: [-0.08, 0.35, 0.93], front: [0.91, -0.28, 0.17], elbow: [-0.65, -0.58, -0.49] },
-      hand_l: { along: "hand_r", back: 0.5, elbow: [0.3, -0.37, -0.88] },
+      hand_l: { along: "hand_r", back: 0.5, roll: -1.4, elbow: [0.3, -0.37, -0.88] },
     },
     feet: { foot_l: [1.08, 0.4, -0.13], foot_r: [-0.48, 0.37, 0.48] },
     feetYaw: { foot_l: -0.08, foot_r: -0.38 },
@@ -161,7 +162,7 @@ const SWEEP = [
     bones: { pelvis: [0.37, 0.2, -0.06], spine_01: [0.14, 0.02, 0.07], spine_02: [0.11, 0.02, 0.05], spine_03: [0.05, 0, 0.02], neck_01: [-0.23, 0.01, -0.05], head: [-0.19, -0.07, -0.02], clavicle_l: [0, -0.2, 0.32], clavicle_r: [0.16, 0.24, -0.13] },
     reach: {
       hand_r: { item: "greatsword", grip: [0.77, 2.3, 2.48], dir: [0.34, 0.1, 0.94], front: [0.91, 0.07, -0.35], elbow: [-0.62, -0.72, -0.3] },
-      hand_l: { along: "hand_r", back: 0.5, elbow: [0.3, -0.27, -0.91] },
+      hand_l: { along: "hand_r", back: 0.5, roll: -2.3, elbow: [0.3, -0.27, -0.91] },
     },
     feet: { foot_l: [1.08, 0.38, -0.12], foot_r: [-0.52, 0.4, 0.49] },
     feetYaw: { foot_l: 0.08, foot_r: -0.04 },
@@ -172,7 +173,7 @@ const SWEEP = [
     bones: { pelvis: [0.4, 0.17, -0.06], spine_01: [0.1, 0.2, 0.06], spine_02: [0.07, 0.25, 0.07], spine_03: [0.03, 0.05, 0.05], neck_01: [-0.18, -0.17, -0.16], head: [-0.09, -0.3, -0.03], clavicle_l: [0.05, -0.76, 0.38], clavicle_r: [0.21, 0.12, -0.07] },
     reach: {
       hand_r: { item: "greatsword", grip: [1.2, 2.21, 2.15], dir: [0.65, -0.17, 0.75], front: [0.76, 0.26, -0.6], elbow: [-0.67, -0.73, -0.11] },
-      hand_l: { along: "hand_r", back: 0.5, elbow: [0.22, -0.11, -0.97] },
+      hand_l: { along: "hand_r", back: 0.5, roll: -2.8, elbow: [0.22, -0.11, -0.97] },
     },
     feet: { foot_l: [1.02, 0.4, -0.12], foot_r: [-0.5, 0.44, 0.53] },
     feetYaw: { foot_l: 0.36, foot_r: 0.14 },
@@ -350,7 +351,7 @@ function blend(from, to, u) {
   const reach = {};
   for (const hand of Object.keys(to.reach ?? {})) {
     const [a, b] = [from.reach?.[hand] ?? to.reach[hand], to.reach[hand]];
-    reach[hand] = Object.fromEntries(Object.entries(b).map(([key, value]) => [key, Array.isArray(value) ? lerp(a[key] ?? value, value) : value]));
+    reach[hand] = Object.fromEntries(Object.entries(b).map(([key, value]) => [key, Array.isArray(value) ? lerp(a[key] ?? value, value) : typeof value === "number" ? lerp([a[key] ?? value], [value])[0] : value]));
   }
   const feet = {};
   for (const foot of Object.keys(to.feet ?? {})) feet[foot] = lerp(from.feet?.[foot] ?? to.feet[foot], to.feet[foot]);
@@ -449,7 +450,8 @@ function poseRig(rig, pose, s) {
     const held = place.along ? grips[place.along] : { item: place.item, turn: frame(place.dir, place.front), grip: v3(place.grip).multiplyScalar(s) };
     const grip = place.along ? held.grip.clone().addScaledVector(UP.clone().applyQuaternion(held.turn), -place.back * s) : held.grip;
     const { turn: inHand, at } = holding(held.item);
-    const handTurn = held.turn.clone().multiply(inHand.clone().invert());
+    const roll = new THREE.Quaternion().setFromAxisAngle(UP.clone().applyQuaternion(held.turn), place.roll ?? 0);
+    const handTurn = roll.multiply(held.turn).multiply(inHand.clone().invert());
     const wrist = grip.clone().sub(at.clone().applyQuaternion(handTurn));
     reachFor(ARM(side), wrist, place.elbow ?? defaultBend, handTurn);
     grips[hand] = { ...held, grip };

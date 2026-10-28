@@ -64,7 +64,7 @@ for (const f of (framesArg ?? "6,10,14,18,22,26,30").split(",").map(Number)) {
   bones: { ${Object.entries(bones).map(([k, v]) => `${k}: ${v}`).join(", ")} },
   reach: {
     hand_r: { item: "greatsword", grip: ${arr(grips[f].toArray())}, dir: ${arr(dir.toArray())}, front: ${arr(fronts[f].toArray())}, elbow: ${arr(bend("upperarm_r", "lowerarm_r", "hand_r", f))} },
-    hand_l: { along: "hand_r", back: 0.5, elbow: ${arr(bend("upperarm_l", "lowerarm_l", "hand_l", f))} },
+    hand_l: { along: "hand_r", back: 0.5, roll: 0, elbow: ${arr(bend("upperarm_l", "lowerarm_l", "hand_l", f))} },
   },
   feet: { foot_l: ${arr(pos("foot_l", f).toArray())}, foot_r: ${arr(pos("foot_r", f).toArray())} },
   feetYaw: { foot_l: ${r(yawOf("foot_l", f))}, foot_r: ${r(yawOf("foot_r", f))} },
