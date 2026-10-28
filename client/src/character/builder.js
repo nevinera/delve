@@ -4,7 +4,7 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { characterClips, loadAnimations } from "./animations.js";
 import { characterMesh, disposeCharacter } from "./characterMesh.js";
 import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_SWATCHES, ARMOR_TYPES } from "./armor.js";
-import { BEARD, CLOTH, EYES, FACE, HAIR, HAIR_COLORS, JEWELRY, METAL, PAINT, SKIN, appearance, randomLook, resolveRecipe } from "./recipe.js";
+import { BEARD, CLOTH, MOUTH, EYES, FACE, HAIR, HAIR_COLORS, JEWELRY, METAL, PAINT, SKIN, appearance, randomLook, resolveRecipe } from "./recipe.js";
 
 // The character builder page: one character on a patch of ground, with a control for each part of
 // its appearance and its name. It makes a new character or changes one of yours. A set of armor
@@ -273,6 +273,7 @@ function buildControls() {
   heading("Face and hair");
   choose("hair", HAIR, look.hair, (value) => (look.hair = value));
   choose("beard", BEARD, look.beard, (value) => (look.beard = value));
+  choose("mouth", MOUTH, look.mouth, (value) => (look.mouth = value));
   // A checkbox for each item of jewelry and each face marking.
   for (const [key, items] of [
     ["jewelry", JEWELRY],

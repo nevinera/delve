@@ -627,6 +627,51 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
     out.path(points, radii, 6, () => c.hair, () => bones, { capStart: true, capEnd: true, carry: true });
   }
 
+  // The mouth, lying on the face between the chin and cheek rings: strips along `x`, each point
+  // [x, dy, height].
+  const lower = (dy, x) => {
+    const t = (dy - 0.02) / 0.23;
+    const rx = 0.28 * jaw + (0.37 - 0.28 * jaw) * t;
+    const [rz, dz] = [0.34 + 0.06 * t, 0.05 - 0.02 * t];
+    const across = Math.sqrt(Math.max(0, 1 - (x / rx) ** 2));
+    // Out over a full beard as far as it pushes the chin out here.
+    const beard = bearded ? 0.05 * (1 - t) * across : 0;
+    return [hx + x * s, hy + dy * s, hz + (dz + (rz + beard) * across) * s];
+  };
+  const lipStrip = (points, color, proud) => {
+    const edges = points.map(([x, dy, h]) => [add(lower(dy + h / 2, x), [0, 0, proud * s]), add(lower(dy - h / 2, x), [0, 0, proud * s])]);
+    for (let i = 0; i < edges.length - 1; i++) {
+      out.face([edges[i][0], edges[i][1], edges[i + 1][1]], color, bones, inside);
+      out.face([edges[i][0], edges[i + 1][1], edges[i + 1][0]], color, bones, inside);
+    }
+  };
+  const MOUTH_Y = 0.12;
+  const across = (half, dy, h, n = 7) => Array.from({ length: n }, (_, i) => {
+    const x = -half + (2 * half * i) / (n - 1);
+    const end = 1 - (x / half) ** 2;
+    return [x, MOUTH_Y + dy(x), h * (0.35 + 0.65 * end)];
+  });
+  const line = [c.skin[0] * 0.45, c.skin[1] * 0.28, c.skin[2] * 0.28];
+  const lip = [Math.min(1, c.skin[0] * 0.95), c.skin[1] * 0.68, c.skin[2] * 0.66];
+  const flat = () => 0;
+  const shapes = {
+    neutral: () => lipStrip(across(0.1, flat, 0.022), line, 0.012),
+    thin: () => lipStrip(across(0.08, flat, 0.012), line, 0.012),
+    smile: () => lipStrip(across(0.11, (x) => 1.6 * x * x, 0.022), line, 0.012),
+    frown: () => lipStrip(across(0.1, (x) => -1.4 * x * x, 0.022), line, 0.012),
+    smirk: () => lipStrip(across(0.1, (x) => Math.max(0, x) * 0.2 - 0.004, 0.022), line, 0.012),
+    grin: () => {
+      lipStrip(across(0.12, (x) => 1.4 * x * x - 0.006, 0.055), line, 0.01);
+      lipStrip(across(0.1, (x) => 1.4 * x * x - 0.004, 0.032), [0.92, 0.9, 0.84], 0.016);
+    },
+    full: () => {
+      lipStrip(across(0.1, (x) => 0.016 - 0.3 * x * x, 0.03), lip, 0.012);
+      lipStrip(across(0.09, (x) => -0.022 + 0.6 * x * x, 0.04), lip, 0.012);
+      lipStrip(across(0.1, flat, 0.012), line, 0.018);
+    },
+  };
+  (shapes[look.mouth] ?? shapes.neutral)();
+
   // Face markings and wear, laid a little proud of the face.
   const on = (dy, x, proud) => add(front(dy, x), [0, 0, proud * s]);
   const marked = (name) => look.face?.includes(name);

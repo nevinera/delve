@@ -15,7 +15,7 @@ import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 // - shoulders, waist, hips, jaw: 0 narrow to 1 broad.
 // - bust: 0 to 1.
 // - rear: 0 flat to 1 full.
-// - hair: a HAIR style; beard: a BEARD style; jewelry: a list of JEWELRY; face: a list of FACE
+// - hair: a HAIR style; beard: a BEARD style; mouth: a MOUTH style; jewelry: a list of JEWELRY; face: a list of FACE
 //   markings and wear.
 // - weapon: one of weapons.js's WEAPONS, held in hand.
 // - offhand: one of weapons.js's OFFHANDS, a shield, orb or second weapon; none with a
@@ -30,6 +30,7 @@ import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 
 export const HAIR = ["bald", "short", "receding", "spiky", "topknot", "bun", "ponytail", "pigtails", "bob", "mullet", "long", "braids", "dreadlocks", "mohawk", "afro"];
 export const BEARD = ["none", "goatee", "handlebar", "full", "long"];
+export const MOUTH = ["neutral", "thin", "smile", "grin", "smirk", "frown", "full"];
 export const JEWELRY = ["earrings", "necklace"];
 export const FACE = ["glasses", "sideburns", "scar", "eyepatch", "warpaint"];
 
@@ -46,6 +47,7 @@ export const DEFAULT_LOOK = {
   rear: 0.3,
   hair: "short",
   beard: "none",
+  mouth: "neutral",
   jewelry: [],
   face: [],
   weapon: "none",
@@ -106,6 +108,7 @@ export function resolveRecipe(recipe = {}, random = Math.random) {
   }
   if (!HAIR.includes(look.hair)) look.hair = DEFAULT_LOOK.hair;
   if (!BEARD.includes(look.beard)) look.beard = DEFAULT_LOOK.beard;
+  if (!MOUTH.includes(look.mouth)) look.mouth = DEFAULT_LOOK.mouth;
   if (!WEAPONS.includes(look.weapon)) look.weapon = DEFAULT_LOOK.weapon;
   if (!OFFHANDS.includes(look.offhand) || HELD[look.weapon]?.twoHanded) look.offhand = DEFAULT_LOOK.offhand;
   return look;
@@ -151,6 +154,7 @@ export function randomLook(random = Math.random) {
       rear: [0, 0.8],
       hair: HAIR,
       beard: chance(0.5) ? "none" : BEARD,
+      mouth: MOUTH,
       jewelry: some(JEWELRY, 0.25),
       face: some(FACE, 0.12),
       weapon: WEAPONS.filter((w) => w !== "none"),
