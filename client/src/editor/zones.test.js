@@ -42,7 +42,17 @@ describe("zones", () => {
   });
 
   it("starts with an empty sketch", () => {
-    expect(loadSketch(World.empty(), "main")).toEqual({ version: 4, pins: [], paths: [], watercourses: { key: null, rivers: [], pools: [] } });
+    expect(loadSketch(World.empty(), "main")).toEqual({ version: 5, pins: [], paths: [], water: { rivers: [], lakes: [] } });
+  });
+
+  it("turns older sketches' watercourses into water bodies", () => {
+    const world = World.empty();
+    const region = [[[[0, 0], [2, 0], [2, 2], [0, 2]]]];
+    world.writeJson(sketchPath("main"), { version: 4, pins: [], paths: [], watercourses: { key: "k", rivers: [{ points: [[0, 0], [1, 1]], width: 12 }], pools: [{ region, level: 30 }] } });
+    const sketch = loadSketch(world, "main");
+    expect(sketch.watercourses).toBeUndefined();
+    expect(sketch.water.rivers).toEqual([{ id: "w1", points: [[0, 0], [1, 1]], width: 12 }]);
+    expect(sketch.water.lakes).toEqual([{ id: "l1", seed: [1, 1], level: 30 }]);
   });
 
   it("moves zones' own pins into the sketch, renumbering clashes and dropping their lines", () => {
@@ -62,10 +72,10 @@ describe("zones", () => {
   it("drops rivers and roads kept as lines, counting them", () => {
     const drawn = { version: 1, pins: [], strokes: [{ id: "s1", kind: "river", points: [] }, { id: "s2", kind: "road", points: [] }] };
     expect(upgradeSketch(drawn)).toEqual({ rivers: 1, roads: 1 });
-    expect(drawn).toEqual({ version: 4, pins: [] });
+    expect(drawn).toEqual({ version: 5, pins: [] });
     expect(upgradeSketch(drawn)).toEqual({ rivers: 0, roads: 0 });
     const confirmed = { version: 2, pins: [{ id: "p1", kind: "source", confirmed: "1" }], strokes: [{ id: "s1", kind: "river", points: [] }], pools: [{}] };
     expect(upgradeSketch(confirmed)).toEqual({ rivers: 0, roads: 0 });
-    expect(confirmed).toEqual({ version: 4, pins: [{ id: "p1", kind: "source" }] });
+    expect(confirmed).toEqual({ version: 5, pins: [{ id: "p1", kind: "source" }] });
   });
 });

@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import { changedTiles } from "./changes.js";
 import { LandGrid, PER_TILE } from "../world/landGrid.js";
 
-// 20×20 tiles of land 10ft up, with a point raised at each of `raised` ([gx, gz, h]).
+// 20×20 tiles of land 10ft up, with a point raised (or sunk) at each of `raised` ([gx, gz, h]).
 function landOf(raised = []) {
   const land = new LandGrid();
   for (let gz = 0; gz <= 20 * PER_TILE; gz++) for (let gx = 0; gx <= 20 * PER_TILE; gx++) land.set(gx, gz, 10);
@@ -11,8 +11,8 @@ function landOf(raised = []) {
 }
 const flat = landOf();
 const all = flat.tiles();
-// A continent on that land, with whatever pins, paths, rivers and pools.
-const continent = ({ land = flat, pins = [], paths = [], rivers = [], pools = [] } = {}) => ({ land, pins, paths, watercourses: { rivers, pools } });
+// A continent on that land, with whatever pins, paths, rivers and lakes.
+const continent = ({ land = flat, pins = [], paths = [], rivers = [], lakes = [] } = {}) => ({ land, pins, paths, water: { rivers, lakes } });
 const changed = (before, after) => changedTiles(before, after, all);
 const has = (tiles, tx, tz) => tiles.has(`${tx},${tz}`);
 
@@ -71,19 +71,26 @@ describe("changedTiles", () => {
   });
 });
 
-describe("pool changes", () => {
-  const pool = { region: [[[[2.2, 2.2], [2.8, 2.2], [2.8, 2.8], [2.2, 2.8]]]], level: 40 };
-  const base = { land: flat, pins: [], paths: [] };
-  const withPools = (pools) => ({ ...base, watercourses: { rivers: [], pools } });
+describe("lake changes", () => {
+  // A hollow 2ft deep around grid point (gx, gz) in tile (2, 2).
+  const g = 2.5 * PER_TILE;
+  const hollow = landOf([[g, g, 8]]);
+  const lake = { id: "l1", seed: [2.5, 2.5], level: 9.5 };
 
-  it("marks the tiles round a new pool", () => {
-    const tiles = changed(withPools([]), withPools([pool]));
+  it("marks the tiles round a new lake", () => {
+    const tiles = changed(continent({ land: hollow }), continent({ land: hollow, lakes: [lake] }));
     expect(tiles.has("2,2")).toBe(true);
     expect(tiles.has("3,3")).toBe(true);
     expect(tiles.has("5,5")).toBe(false);
   });
 
-  it("ignores pools that didn't change", () => {
-    expect(changed(withPools([pool]), withPools([structuredClone(pool)])).size).toBe(0);
+  it("ignores lakes that didn't change", () => {
+    expect(changed(continent({ land: hollow, lakes: [lake] }), continent({ land: hollow, lakes: [structuredClone(lake)] })).size).toBe(0);
+  });
+
+  it("marks a lake whose shape the land changed", () => {
+    const deeper = landOf([[g, g, 8], [g + 1, g, 8]]);
+    const tiles = changed(continent({ land: hollow, lakes: [lake] }), continent({ land: deeper, lakes: [lake] }));
+    expect(tiles.has("2,2")).toBe(true);
   });
 });

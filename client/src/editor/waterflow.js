@@ -1,4 +1,5 @@
 import { TILE_FT } from "../world/constants.js";
+import { LAKE_STEP_FT, outline } from "../world/lakes.js";
 import { fbm, hashString } from "../world/noise.js";
 import { simplify } from "../world/polyline.js";
 
@@ -16,7 +17,7 @@ import { simplify } from "../world/polyline.js";
 //
 // River courses are smoothed out of the lattice's zig-zags, and meander where the ground is flat.
 
-const STEP_FT = 16;
+const STEP_FT = LAKE_STEP_FT;
 export const POOL_ACROSS = 40;
 const MIN_POOL_DEPTH_FT = 1; // shallower hollows are waded through, not kept as pools
 const MAX_STEPS = 500000; // across every source, so a bad case still ends
@@ -31,7 +32,8 @@ const SLOPE_REACH = 4; // cells either side for a river's local slope
 // sources: [{ id, at: [x, z] tile units, width }]. heightAt(xFt, zFt): the ground. isWater(xFt,
 // zFt): whether there's water there already. seed: for the meanders. Returns { rivers, pools,
 // ends }: rivers as { points ([x, z] tile units), width }, split where their width changes; pools
-// as { region, level }, region as polygons of rings in tile units and level in ft; and how each
+// as { seed, level, region }, seed being the pool's lowest point in tile units, level in ft and
+// region the polygons of rings in tile units it covers (world/lakes.js); and how each
 // source's water ends up, by id, following it through rivers it joins and pools it spills from:
 // "water" (it reaches water), "pool" (it stops in a pool at its size limit), "flat" (it spreads
 // out over level ground) or "lost" (it ran out of steps).
@@ -172,7 +174,9 @@ export function simulateWater({ sources, heightAt, isWater, seed = 0 }) {
   }));
   return {
     rivers: rivers.filter((r) => r.points.length >= 2),
-    pools: pools.filter((p) => p.level - p.bottom >= MIN_POOL_DEPTH_FT).map((p) => ({ region: outline(p.cells), level: Math.round(p.level * 10) / 10 })),
+    pools: pools
+      .filter((p) => p.level - p.bottom >= MIN_POOL_DEPTH_FT)
+      .map((p) => ({ seed: p.cells[0].map((v) => round((v * STEP_FT) / TILE_FT)), level: Math.round(p.level * 10) / 10, region: outline(p.cells) })),
     ends,
   };
 }
@@ -295,85 +299,11 @@ function smooth(points, passes) {
 }
 
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const round = (v) => Math.round(v * 1000) / 1000;
 const smoothstep = (a, b, x) => {
   const t = clamp((x - a) / (b - a), 0, 1);
   return t * t * (3 - 2 * t);
 };
-
-// The outline of a set of lattice cells (each a STEP_FT square round its point), as polygons of
-// rings in tile units: an outer ring, then any islands, each rounded off a little.
-export function outline(cells) {
-  const key = (i, j) => `${i},${j}`;
-  const inside = new Set(cells.map(([i, j]) => key(i, j)));
-  // Each cell side with open ground beyond it, running clockwise round the cells (x east, z
-  // south), from corner to corner. Corner (i, j) is the cell's top-left.
-  const edges = new Map();
-  const add = (a, b) => {
-    const k = key(...a);
-    if (!edges.has(k)) edges.set(k, []);
-    edges.get(k).push(b);
-  };
-  for (const [i, j] of cells) {
-    if (!inside.has(key(i, j - 1))) add([i, j], [i + 1, j]);
-    if (!inside.has(key(i + 1, j))) add([i + 1, j], [i + 1, j + 1]);
-    if (!inside.has(key(i, j + 1))) add([i + 1, j + 1], [i, j + 1]);
-    if (!inside.has(key(i - 1, j))) add([i, j + 1], [i, j]);
-  }
-  const rings = [];
-  for (const [start, ends] of edges) {
-    while (ends.length) {
-      const ring = [];
-      let at = start.split(",").map(Number);
-      do {
-        ring.push(at);
-        const out = edges.get(key(...at));
-        at = out.pop();
-      } while (key(...at) !== start);
-      rings.push(ring);
-    }
-  }
-  const toTiles = (ring) => smoothRing(dropStraights(ring)).map(([x, z]) => [round(((x - 0.5) * STEP_FT) / TILE_FT), round(((z - 0.5) * STEP_FT) / TILE_FT)]);
-  // Clockwise on screen (positive area with z south) goes round the outside of the cells.
-  const outers = rings.filter((r) => area(r) > 0);
-  const holes = rings.filter((r) => area(r) < 0);
-  return outers.map((outer) => [toTiles(outer), ...holes.filter((h) => inRing(h[0], outer)).map(toTiles)]);
-}
-
-function dropStraights(ring) {
-  return ring.filter((p, k) => {
-    const a = ring[(k + ring.length - 1) % ring.length];
-    const b = ring[(k + 1) % ring.length];
-    return (p[0] - a[0]) * (b[1] - p[1]) !== (p[1] - a[1]) * (b[0] - p[0]);
-  });
-}
-
-function smoothRing(ring) {
-  return ring.flatMap((a, k) => {
-    const b = ring[(k + 1) % ring.length];
-    return [[0.75 * a[0] + 0.25 * b[0], 0.75 * a[1] + 0.25 * b[1]], [0.25 * a[0] + 0.75 * b[0], 0.25 * a[1] + 0.75 * b[1]]];
-  });
-}
-
-function area(ring) {
-  let sum = 0;
-  ring.forEach(([x0, z0], k) => {
-    const [x1, z1] = ring[(k + 1) % ring.length];
-    sum += x0 * z1 - x1 * z0;
-  });
-  return sum / 2;
-}
-
-function inRing([x, z], ring) {
-  let inside = false;
-  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
-    const [xi, zi] = ring[i];
-    const [xj, zj] = ring[j];
-    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
-  }
-  return inside;
-}
-
-const round = (v) => Math.round(v * 1000) / 1000;
 
 // A min-heap of [priority, value].
 class Heap {

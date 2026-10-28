@@ -19,6 +19,7 @@
 import { BIOMES, biomesNear, climateAt, prepareBiomes } from "./biomes.js";
 import { CELLS, CELL_FT, TILE_FT, WATER_KINDS, gradeCap } from "./constants.js";
 import { LandGrid } from "./landGrid.js";
+import { fillLake } from "./lakes.js";
 import { facets, fbm, hash2, hashString } from "./noise.js";
 import { TREE_KINDS, plantTree } from "./trees.js";
 import { scatterObjects } from "./objects.js";
@@ -72,9 +73,9 @@ const BOG = { gridFt: 64, stepFt: 8, rays: 12, reachFt: 150, rayStepFt: 8, below
 // under the lowest ground around it, a bed that deepens from the shore, and a rim that holds it. A
 // lake only goes where the ground's fairly level and well away from the sea.
 const LAKES = { gridFt: 900, chance: 0.7, minFt: 40, maxFt: 300, wobble: 0.35, belowFt: 1, shelfFt: 1, depthFt: [2, 12], rimFt: 1, rimWidthFt: 30, maxDropFt: 15, damFt: 80 };
-// Pools the editor's water flow filled (editor/waterflow.js): flat water at their level, over a
-// bed that deepens from the shore by up to `depthFt` (more for wider pools, up to `wideFt`
-// across), with a rim `rimWidthFt` wide that holds the water in.
+// The sketch's lakes (lakes.js): flat water at their level, over a bed that deepens from the shore
+// by up to `depthFt` (more for wider lakes, up to `wideFt` across), with a rim `rimWidthFt` wide
+// that holds the water in.
 const PONDS = { shelfFt: 1, depthFt: [2, 12], wideFt: 2000, rimFt: 1, rimWidthFt: 30, slopeFt: 60 };
 const RAVINE = { depth: 40, width: 0.04, wavelength: 1400, wander: 250, floor: 1.5 };
 const TREE_GRID = 4; // cells per side of a tree planting square
@@ -147,16 +148,16 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 const toFt = ([x, z]) => [x * TILE_FT, z * TILE_FT];
 
-// The continent as { land, pins, paths, watercourses }: the land grid (landGrid.js, or what was sent
-// a worker of it), and the sketch's pins, road paths and watercourses ({ rivers, pools },
-// editor/waterflow.js), in continent tile units. seedKey (the continent's key) seeds the noise.
+// The continent as { land, pins, paths, water }: the land grid (landGrid.js, or what was sent a
+// worker of it), and the sketch's pins, road paths and water ({ rivers, lakes }, plans/water.md), in
+// continent tile units. seedKey (the continent's key) seeds the noise.
 export function prepareWorld(continent, seedKey) {
   const ctx = prepareShape(continent, seedKey);
   ctx.lakeSites = new Map(); // "gi,gj" -> lake or null, filled as tiles need them
   ctx.bogSites = new Map(); // "gi,gj" -> swamp pool or null, the same way
   ctx.bogs = new Map(); // hollow "x,z" -> swamp pool or null
   const { pins } = continent;
-  const rivers = (continent.watercourses?.rivers ?? []).filter((r) => r.points.length >= 2);
+  const rivers = (continent.water?.rivers ?? []).filter((r) => r.points.length >= 2);
 
   ctx.biomes = prepareBiomes({
     pins: pins
@@ -200,19 +201,22 @@ export function prepareWorld(continent, seedKey) {
   ctx.falls = ctx.rivers.flatMap(fallsOf);
   ctx.roads = (continent.paths ?? []).filter((p) => p.route?.points?.length >= 2).map((p) => prepareRoad(p, (x, z) => land(ctx, x, z, ctx.biomes).h));
 
-  ctx.ponds = (continent.watercourses?.pools ?? []).map(({ region, level }) => {
+  // A lake fills the land grid's hollows, as the editor's water flow sees the ground.
+  ctx.ponds = (continent.water?.lakes ?? []).flatMap(({ seed, level }) => {
+    const { region } = fillLake(ctx.heightAt, { seed, level });
+    if (!region.length) return [];
     const ft = region.map((polygon) => polygon.map((ring) => ring.map(toFt)));
     const xs = ft.flat(2).map(([x]) => x);
     const zs = ft.flat(2).map(([, z]) => z);
     const reach = PONDS.rimWidthFt;
     const across = Math.max(Math.max(...xs) - Math.min(...xs), Math.max(...zs) - Math.min(...zs));
-    return {
+    return [{
       region: ft,
       edges: edgesOf(ft),
       box: [Math.min(...xs) - reach, Math.min(...zs) - reach, Math.max(...xs) + reach, Math.max(...zs) + reach],
       level,
       depth: lerp(...PONDS.depthFt, Math.min(1, across / PONDS.wideFt)),
-    };
+    }];
   });
 
   return ctx;
@@ -240,7 +244,7 @@ export function shapeHeight(ctx, x, z, relief = 0) {
 
 // The ground roads are routed over (editor/roads.js), from prepareWorld's ctx: the broad shape with
 // the biomes' hills and ridges, leaving out the crags and smaller bumps a road's cut and fill
-// smooths away. `water` is "sea", "lake" (lakes and the watercourses' pools) or null; rivers
+// smooths away. `water` is "sea", "lake" (the biomes' lakes and the sketch's) or null; rivers
 // aren't counted, since roads cross them.
 export function routeGround(ctx, x, z) {
   const h = shapeHeight(ctx, x, z, biomeRelief(ctx, x, z, climateAt(ctx.biomes, x, z).profile));
@@ -659,7 +663,7 @@ function bogAt(ctx, x, z, ground) {
   return bog;
 }
 
-// A pool from the water flow: flat water inside its outline, and a rim just outside.
+// A sketch lake: flat water inside its outline, and a rim just outside.
 function pond(out, x, z, p) {
   const [x0, z0, x1, z1] = p.box;
   if (x < x0 || x > x1 || z < z0 || z > z1) return;

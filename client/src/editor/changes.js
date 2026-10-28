@@ -3,6 +3,7 @@ import { PER_TILE, changedPoints } from "../world/landGrid.js";
 import { riverReachFt, roadReachFt } from "../world/generator.js";
 import { RIVER_PULL_FT } from "../world/biomes.js";
 import { tilesTouched } from "./region.js";
+import { fillLake } from "../world/lakes.js";
 
 // Which tiles an edit changes, so the editor can highlight them and regenerate just those. Each
 // kind of change reaches as far as the generator lets it: a changed land height reshapes the
@@ -16,13 +17,13 @@ import { tilesTouched } from "./region.js";
 const key = (tx, tz) => `${tx},${tz}`;
 
 // Tile keys ("x,z") that differ between two versions of a continent, each { land, pins, paths,
-// watercourses } with land a LandGrid (landGrid.js) and the sketch's pins and watercourses.
+// water } with land a LandGrid (landGrid.js) and the sketch's pins, paths and water.
 // `tiles` is every tile with land, after the edit.
 export function changedTiles(before, after, tiles) {
   const out = new Set();
   const changed = (x, y) => JSON.stringify(x) !== JSON.stringify(y);
   const pinsOf = (c, kind) => c.pins.filter((p) => p.kind === kind);
-  const rivers = (c) => c.watercourses?.rivers ?? [];
+  const rivers = (c) => c.water?.rivers ?? [];
 
   const hasBiomes = [...before.pins, ...after.pins].some((p) => p.kind === "biome");
   if (changed(pinsOf(before, "biome"), pinsOf(after, "biome"))) for (const k of tiles) out.add(k);
@@ -40,9 +41,16 @@ export function changedTiles(before, after, tiles) {
   const roads = (c) => (c.paths ?? []).filter((p) => p.route?.points).map((p) => ({ points: p.route.points, width: p.width, tags: p.tags }));
   for (const road of unmatched(roads(before), roads(after))) addNearLine(out, road.points, roadReachFt(road.width) / TILE_FT);
 
-  // A pool's rim reaches a little past its shore, well within the neighbours added below.
-  const pools = (c) => c.watercourses?.pools ?? [];
-  for (const pool of unmatched(pools(before), pools(after))) for (const [tx, tz] of tilesTouched(pool.region)) out.add(key(tx, tz));
+  // A lake's shape follows the land, so any lake whose shape changed, from the land or its own
+  // seed and level. Its rim reaches a little past its shore, well within the neighbours added below.
+  const lakes = (c) => new Map((c.water?.lakes ?? []).map((lake) => [lake.id, lake]));
+  const [was, now] = [lakes(before), lakes(after)];
+  const shape = (c, lake) => (lake ? fillLake((x, z) => c.land.heightAt(x, z), lake).region : []);
+  for (const id of new Set([...was.keys(), ...now.keys()])) {
+    const [a, b] = [shape(before, was.get(id)), shape(after, now.get(id))];
+    if (JSON.stringify(a) === JSON.stringify(b)) continue;
+    for (const region of [a, b]) for (const [tx, tz] of tilesTouched(region)) out.add(key(tx, tz));
+  }
 
   for (const k of [...out]) {
     const [tx, tz] = k.split(",").map(Number);

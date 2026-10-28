@@ -1,5 +1,5 @@
 import { changedTiles } from "./changes.js";
-import { FEATURE_HINTS, Features, PINS, ROADS, nextId } from "./features.js";
+import { FEATURE_HINTS, Features, PINS, ROADS, nextId, nextWaterId } from "./features.js";
 import { MapView } from "./mapView.js";
 import { keyNav } from "./keyNav.js";
 import { TileGenerator } from "./generation.js";
@@ -23,6 +23,7 @@ import { ShapePreview } from "./shapePreview.js";
 import { WaterSimulator } from "./waterflow.js";
 import { ROUTE_VERSION, RoadRouter, findCrossing, gradeCap } from "./roads.js";
 import { hashString } from "../world/noise.js";
+import { fillLake } from "../world/lakes.js";
 import { LandGrid, landBounds, loadLand, saveLand } from "../world/landGrid.js";
 import { BLENDS, EROSIONS, SHAPES, TOOLS as SCULPT_TOOLS } from "./sculptTools.js";
 import { DETAIL_TOOLS } from "./detailTools.js";
@@ -84,7 +85,7 @@ const HINT_PICK_DETAIL = "click the middle of where to edit in detail · F or th
 // out from the land (shapePreview.js), or the generated tiles.
 const STEPS = {
   heights: { tools: SCULPT_TOOLS, kinds: [] },
-  water: { tools: ["select", "source"], kinds: ["source"], map: "heights" },
+  water: { tools: ["select", "source"], kinds: ["source", "river", "lake"], map: "heights" },
   biomes: { tools: ["select", "biome"], kinds: ["biome"], map: "biomes" },
   civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
   zones: { tools: [], kinds: [], map: "heights" },
@@ -146,7 +147,7 @@ export class Editor {
     this.previews = new ShapePreview((grid) => this.showPreview(grid));
     this.preview = null; // the latest heights or biomes picture: { step, canvas, grid }
     this.water = new WaterSimulator((key, result) => this.showWater(key, result));
-    this.waterKey = null; // what the latest watercourses asked for were worked out from
+    this.proposal = null; // { pin, key, result }: what pouring a source would add (pour)
     this.roads = new RoadRouter((id, key, route) => this.showRoute(id, key, route));
     this.roadLand = null; // what the paths' routes are worked out over, as a key
     this.roadAsk = null; // the latest routes asked for
@@ -315,14 +316,14 @@ export class Editor {
 
   // The continent as the generator takes it (generator.js prepareWorld).
   continentState() {
-    const { pins, paths, watercourses } = this.sketch;
-    return { land: this.land.data, pins, paths, watercourses };
+    const { pins, paths, water } = this.sketch;
+    return { land: this.land.data, pins, paths, water };
   }
 
   // The continent as last stored, from the world's files.
   storedState() {
-    const { pins, paths, watercourses } = loadSketch(this.world, this.continent);
-    return { land: loadLand(this.world.files, this.continent), pins, paths, watercourses };
+    const { pins, paths, water } = loadSketch(this.world, this.continent);
+    return { land: loadLand(this.world.files, this.continent), pins, paths, water };
   }
 
   reload() {
@@ -403,55 +404,106 @@ export class Editor {
 
   // --- water ---
 
-  // Works out the watercourses again when the land or the water sources changed since they were
-  // last worked out. They're kept in the sketch when they arrive, unless something's being dragged,
-  // in which case they're kept when the drag ends.
-  updateWater() {
-    const sources = this.sketch.pins.filter((p) => p.kind === "source").map(({ id, at, width }) => ({ id, at, width }));
+  // Pours water from a source pin (waterflow.js), proposing the rivers and lakes it would make.
+  // Water stops at the sea and at the sketch's water already there. The answer comes to showWater.
+  pour(pin) {
+    const sources = [{ id: pin.id, at: pin.at, width: pin.width }];
     const landKey = String(this.landHash());
-    const key = String(hashString(JSON.stringify([landKey, sources, this.continent])));
-    if (key === this.waterKey) return;
-    this.waterKey = key;
-    this.water.request({ key, landKey, continent: { land: this.land.data }, seedKey: this.continent, sources });
+    const water = this.waterShapes();
+    const key = String(hashString(JSON.stringify([landKey, sources, water, this.continent])));
+    this.proposal = { pin: pin.id, key, result: null };
+    this.water.request({ key, landKey, continent: { land: this.land.data }, seedKey: this.continent, sources, water });
+    this.renderProps();
   }
 
-  showWater(key, { rivers, pools, ends }) {
-    if (key !== this.waterKey) return;
-    this.waterEnds = ends;
-    this.renderWaterStatus();
-    if (this.sketch.watercourses.key === key) return;
-    this.sketch.watercourses = { key, rivers, pools };
-    if (this.features.dragging) this.map.render();
-    else this.saveSketch();
+  showWater(key, result) {
+    if (key !== this.proposal?.key) return;
+    this.proposal.result = result;
+    this.renderProps();
+    this.map.render();
   }
 
-  // A line under a water source's settings saying where its water ends up.
-  sourceStatus(pin) {
-    this.waterStatus = { pin, el: document.createElement("p") };
-    this.renderWaterStatus();
-    return this.waterStatus.el;
+  // Adds the proposal's rivers and lakes to the sketch.
+  keepProposal() {
+    const { rivers, pools } = this.proposal?.result ?? {};
+    if (!rivers) return;
+    const water = this.sketch.water;
+    for (const { points, width } of rivers) water.rivers.push({ id: nextWaterId(water, "w"), points, width });
+    for (const { seed, level } of pools) water.lakes.push({ id: nextWaterId(water, "l"), seed, level });
+    this.proposal = null;
+    this.saveSketch();
+    this.renderProps();
   }
 
-  renderWaterStatus() {
-    const { pin, el } = this.waterStatus ?? {};
-    if (!el) return;
+  dropProposal() {
+    this.proposal = null;
+    this.renderProps();
+    this.map.render();
+  }
+
+  // The sketch's water as the water flow sees it, in ft: rivers' lines and half widths, and lakes'
+  // outlines.
+  waterShapes() {
+    const ft = (p) => p.map((v) => v * TILE_FT);
+    return {
+      rivers: this.sketch.water.rivers.map((r) => ({ points: r.points.map(ft), half: r.width / 2 })),
+      lakes: this.sketch.water.lakes.map((lake) => this.lakeShape(lake).region.map((polygon) => polygon.map((ring) => ring.map(ft)))),
+    };
+  }
+
+  // A lake's shape over the land as it is (world/lakes.js fillLake), kept until the land or the lake
+  // changes.
+  lakeShape(lake) {
+    const key = JSON.stringify([this.landHash(), lake.seed, lake.level]);
+    this.lakeShapes ??= new Map();
+    if (!this.lakeShapes.has(key)) {
+      if (this.lakeShapes.size > 200) this.lakeShapes.clear();
+      this.lakeShapes.set(key, fillLake((x, z) => this.land.heightAt(x, z), lake));
+    }
+    return this.lakeShapes.get(key);
+  }
+
+  // How deep a river cuts below the land as it is: its surface only ever goes down, so where the
+  // land rises in its way it runs through a cut. The deepest, in ft.
+  riverCut(river) {
+    let low = Infinity;
+    let deepest = 0;
+    for (const [x, z] of river.points) {
+      const h = this.land.heightAt(x * TILE_FT, z * TILE_FT);
+      low = Math.min(low, h);
+      deepest = Math.max(deepest, h - low);
+    }
+    return Math.round(deepest);
+  }
+
+  // A line saying where a poured source's water ended up, and what it would add.
+  pourStatus(pin) {
+    const el = document.createElement("p");
+    const { result } = this.proposal?.pin === pin.id ? this.proposal : {};
+    if (!this.proposal || this.proposal.pin !== pin.id) return el;
+    if (!result) {
+      el.textContent = "Working out where its water goes…";
+      return el;
+    }
     const ends = {
-      water: "Its water reaches the sea.",
-      pool: "Its water fills a pool as far as its flow allows, and stops there.",
+      water: "Its water reaches the sea or other water.",
+      pool: "Its water fills a lake as far as its flow allows, and stops there.",
       flat: "Its water spreads out over flat ground.",
       lost: "Its water wanders too far, and has been cut short.",
     };
-    el.textContent = ends[this.waterEnds?.[pin.id]] ?? "Working out where its water goes…";
+    const count = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    el.textContent = `${ends[result.ends[pin.id]] ?? ""} It would add ${count(result.rivers.length, "river")} and ${count(result.pools.length, "lake")}.`;
+    return el;
   }
 
   // --- roads ---
 
   // Asks for routes for the paths whose route is missing or was worked out for other pins, widths
-  // or land. The land they're routed over is the land grid, biome pins and watercourses.
+  // or land. The land they're routed over is the land grid, biome pins and water.
   updateRoads() {
-    const { pins, watercourses } = this.sketch;
-    const land = { land: this.land.data, pins: pins.filter((p) => p.kind === "biome"), watercourses: { rivers: watercourses.rivers, pools: watercourses.pools } };
-    this.roadLand = String(hashString(JSON.stringify([this.landHash(), land.pins, land.watercourses, this.continent])));
+    const { pins, water } = this.sketch;
+    const land = { land: this.land.data, pins: pins.filter((p) => p.kind === "biome"), water };
+    this.roadLand = String(hashString(JSON.stringify([this.landHash(), land.pins, land.water, this.continent])));
     const jobs = this.sketch.paths.flatMap((path) => {
       const key = this.routeKey(path);
       if (!key || path.route?.key === key) return [];
@@ -1078,7 +1130,6 @@ export class Editor {
   // Asks for a fresh heights or biomes map of what's in sight, from the zones as they are now,
   // mid-drag included.
   updatePreview() {
-    this.updateWater();
     this.updateRoads();
     const kind = this.previewKind();
     if (!kind) return;
@@ -1335,7 +1386,7 @@ export class Editor {
       b.classList.toggle("active", b.dataset.tool === this.toolName);
       b.disabled = b.parentElement.dataset.tools !== "heights" && !this.hasLand();
     }
-    hint.textContent = this.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : this.detailPicking ? HINT_PICK_DETAIL : HINTS[this.mode()];
+    hint.textContent = this.walking ? HINT_WALK : this.walkPicking ? HINT_PICK_WALK : this.detailPicking ? HINT_PICK_DETAIL : HINTS[this.step === "water" && this.mode() === "select" ? "water" : this.mode()];
     this.el.graphicsButton.hidden = !this.walking;
     this.el.timeButton.hidden = !this.walking && this.step !== "detail";
     this.el.scaleBar.hidden = this.walking || IN_3D.has(this.step);

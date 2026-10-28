@@ -438,7 +438,7 @@ export class RoadRouter {
     this.next = null;
   }
 
-  // message: { landKey, continent: { land, pins, watercourses }, seedKey, jobs: [{ id, key,
+  // message: { landKey, continent: { land, pins, water }, seedKey, jobs: [{ id, key,
   // from, to, width }] }, from and to in tile units.
   request(message) {
     this.next = structuredClone(message);

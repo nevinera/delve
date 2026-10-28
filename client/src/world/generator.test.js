@@ -23,7 +23,7 @@ function island([tx0, tz0, tx1, tz1], top, slope = 0.25) {
     return Math.max(-50, Math.min(top, inside * slope - 20));
   });
 }
-const prepareWorld = (land, { pins = [], rivers = [], pools = [], paths = [] } = {}) => prepareContinent({ land, pins, paths, watercourses: { rivers, pools } }, "test");
+const prepareWorld = (land, { pins = [], rivers = [], lakes = [], paths = [] } = {}) => prepareContinent({ land, pins, paths, water: { rivers, lakes } }, "test");
 
 // A 6×4-tile island at (10, -4), 100ft high, with a river flowing west into the sea.
 const land = island([10, -4, 16, 0], 100);
@@ -130,14 +130,18 @@ describe("generator", () => {
     expect(edges).toBeGreaterThan(20);
   });
 
-  it("floods a kept pool flat at its level, below the ground around it", () => {
-    // A square pool over the middle of tile (12, -2), whose cells run 0-63 across it.
-    const pool = { region: [[[[12.25, -1.75], [12.75, -1.75], [12.75, -1.25], [12.25, -1.25]]]], level: 96 };
-    const tile = generateTile(prepareWorld(land, { pools: [pool] }), 12, -2);
-    // The ground there is about 90 to 100ft; the rim just outside holds the water in.
-    expect(cell(tile, 32, 32, "water")).toBe(96);
-    expect(cell(tile, 32, 32, "height")).toBeLessThan(95);
-    expect(cell(tile, 15, 32, "height")).toBeGreaterThan(96);
+  it("fills a lake flat at its level over the hollow its seed is in, below the ground around it", () => {
+    // A hollow in the middle of tile (12, -2), whose cells run 0-63 across it: 80ft at the middle,
+    // rising to the island's 100ft 200ft out, so under 90ft within 100ft of the middle.
+    const middle = [12.5 * TILE_FT, -1.5 * TILE_FT];
+    const hollow = landOf([10, -4, 16, 0], (x, z) => {
+      const inside = Math.min(x - 10 * TILE_FT, 16 * TILE_FT - x, z + 4 * TILE_FT, -z);
+      const d = Math.hypot(x - middle[0], z - middle[1]);
+      return Math.max(-50, Math.min(100, inside * 0.25 - 20, 80 + d / 10));
+    });
+    const tile = generateTile(prepareWorld(hollow, { lakes: [{ id: "l1", seed: [12.5, -1.5], level: 90 }] }), 12, -2);
+    expect(cell(tile, 32, 32, "water")).toBe(90);
+    expect(cell(tile, 32, 32, "height")).toBeLessThan(89);
     expect(Number.isNaN(cell(tile, 4, 32, "water"))).toBe(true);
   });
 

@@ -12,7 +12,7 @@ self.onmessage = ({ data }) => {
   const { landKey, continent, seedKey, jobs } = data;
   if (land?.key !== landKey) {
     const ctx = prepareWorld(continent, seedKey);
-    const rivers = (continent.watercourses?.rivers ?? []).map((r) => ({ points: r.points.map(toFt), width: r.width ?? 30 }));
+    const rivers = (continent.water?.rivers ?? []).map((r) => ({ points: r.points.map(toFt), width: r.width ?? 30 }));
     land = { key: landKey, ctx, riverAt: riverLookup(rivers), routes: new Map() };
   }
   for (const { id, key, from, to, width } of jobs) {

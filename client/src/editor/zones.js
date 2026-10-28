@@ -1,16 +1,17 @@
 import { nextId } from "./features.js";
+import { interiorPoint } from "../world/lakes.js";
 
 // Zones live at places/continents/<continent>/zones/<key>.json, each a name and a region. The key
 // is fixed when the zone is made; the name can change. Everything drawn on the land, pins and
 // paths alike, lives in the continent's sketch at places/continents/<continent>/sketch.json,
 // since the land is generated as one piece and features cross zone edges. The sketch also keeps
-// its watercourses, the rivers and pools its water sources make (waterflow.js), for the
-// generator, and its road paths between road pins (roads.js). Older sketches hold rivers drawn by
-// hand (format 1) or confirmed one source at a time (format 2), and roads drawn as lines (formats
-// 1 to 3), which the editor drops.
+// its water (plans/water.md), rivers and lakes, and its road paths between road pins (roads.js).
+// Older sketches hold rivers drawn by hand (format 1) or confirmed one source at a time (format
+// 2), and roads drawn as lines (formats 1 to 3), which the editor drops. Formats up to 4 kept the
+// rivers and pools their water sources made as `watercourses`, which become water bodies.
 
 export const ZONE_VERSION = 3;
-export const SKETCH_VERSION = 4;
+export const SKETCH_VERSION = 5;
 const SKETCH_ZONES = 2; // the zone format that held its own pins and lines
 const ZONE_PATH = /^places\/continents\/([\w-]+)\/zones\/([\w-]+)\.json$/;
 
@@ -65,17 +66,27 @@ export function sketchPath(continent) {
   return `places/continents/${continent}/sketch.json`;
 }
 
-// The continent's pins, paths and watercourses: { version, pins, paths, watercourses }. Paths are
-// { id, from, to, width, route, ... }, from and to the ids of road pins, and route { key, points,
-// lengthFt, grade } (roads.js), key saying what it was worked out from. Watercourses are { key,
-// rivers, pools } (waterflow.js simulateWater), the same way.
+// The continent's pins, paths and water: { version, pins, paths, water }. Paths are { id, from, to,
+// width, route, ... }, from and to the ids of road pins, and route { key, points, lengthFt, grade }
+// (roads.js), key saying what it was worked out from. Water is { rivers, lakes }: rivers { id,
+// points, width } with points in tile units, and lakes { id, seed, level } (world/lakes.js).
 export function loadSketch(world, continent) {
   const sketch = world.readJson(sketchPath(continent)) ?? { version: SKETCH_VERSION, pins: [], paths: [] };
   sketch.paths ??= [];
   // Height pins shaped the land before the land grid; the grid's sculpted from scratch.
   sketch.pins = sketch.pins.filter((p) => p.kind !== "height");
-  sketch.watercourses ??= { key: null, rivers: [], pools: [] };
+  sketch.water ??= waterFrom(sketch.watercourses);
+  delete sketch.watercourses;
   return sketch;
+}
+
+// Water bodies from the watercourses older sketches kept: rivers as they were, and each pool a lake
+// seeded inside it at its level.
+function waterFrom({ rivers = [], pools = [] } = {}) {
+  return {
+    rivers: rivers.map(({ points, width }, k) => ({ id: `w${k + 1}`, points, width })),
+    lakes: pools.map(({ region, level }, k) => ({ id: `l${k + 1}`, seed: interiorPoint(region), level })),
+  };
 }
 
 // Brings an older sketch up to date, dropping the lines it kept rivers and roads in. Returns how

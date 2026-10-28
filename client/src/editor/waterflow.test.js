@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { outline, simulateWater } from "./waterflow.js";
+import { simulateWater } from "./waterflow.js";
 import { TILE_FT } from "../world/constants.js";
 
 const ft = (tiles) => tiles * TILE_FT;
@@ -123,19 +123,5 @@ describe("river courses", () => {
       return Math.acos(Math.min(1, (u[0] * v[0] + u[1] * v[1]) / (Math.hypot(...u) * Math.hypot(...v))));
     });
     expect(Math.max(...turns)).toBeLessThan(Math.PI / 6);
-  });
-});
-
-describe("pool outlines", () => {
-  it("goes round a block of cells, with islands as holes", () => {
-    const cells = [];
-    for (let i = 0; i < 5; i++) for (let j = 0; j < 5; j++) if (i !== 2 || j !== 2) cells.push([i, j]);
-    const region = outline(cells);
-    expect(region).toHaveLength(1);
-    expect(region[0]).toHaveLength(2);
-  });
-
-  it("gives separate pieces separate polygons", () => {
-    expect(outline([[0, 0], [5, 5]])).toHaveLength(2);
   });
 });

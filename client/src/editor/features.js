@@ -1,13 +1,15 @@
 import { snapToCell } from "./region.js";
 import { CART_WIDTH_FT, gradeCap, splitRoute } from "./roads.js";
 import { TILE_FT } from "../world/constants.js";
+import { LAKE_STEP_FT } from "../world/lakes.js";
 
 // The continent's sketch (zones.js loadSketch): pins ({ id, kind, at, ... }) and road paths ({ id,
 // from, to, width, ... }) anywhere on its land, in continent tile units with sizes in feet. Biome
 // pins claim the land around them for a biome,
 // adjusted by their tags; info pins carry a name, notes and tags for people and LLMs and don't
-// affect generation. Water source pins send water downhill, making the sketch's watercourses
-// (waterflow.js). Road pins are joined by paths, each routed over the land between its two pins
+// affect generation. The sketch's water is rivers and lakes (plans/water.md); pouring from a water
+// source pin proposes some (waterflow.js), which you keep or drop. Road pins are joined by paths,
+// each routed over the land between its two pins
 // (roads.js); a road is a run of paths. The generator digs roads in and surfaces them (tags faint
 // and disused wear them away); hubs don't shape the ground yet. The land itself is the land grid
 // (world/landGrid.js), sculpted on the heights step.
@@ -20,6 +22,9 @@ export const PINS = {
   source: { color: "#3fb6ff", label: "water source" },
 };
 const RIVER_COLOR = "#4a90d9";
+const PROBLEM_COLOR = "#ff6a3a"; // a lake that spills or is dry, or a river in a deep cut
+const PROPOSAL_COLOR = "rgba(160, 220, 255, 0.85)";
+const DEEP_CUT_FT = 40; // a river cutting this far below the land is flagged
 const PATH = { color: "#c8a26a", none: "#ff4a4a", pending: "rgba(255, 255, 255, 0.6)", between: "rgba(20, 24, 30, 0.9)", label: "road path" };
 // The kinds of road, each with its own tool. A path's kind is the first of its tags that names one
 // (plain road without). New paths get the kind's width and tag. On the map, each kind is drawn
@@ -40,6 +45,7 @@ const POOL_COLOR = "rgba(74, 144, 217, 0.8)";
 export const FEATURE_HINTS = {
   select: "click a pin or road to select it · drag pins, and a selected hub's edge to size it · delete removes the selection",
   pin: "click on land to place · click a pin to select or drag it · drag a selected hub's edge to size it",
+  water: "click a source, river or lake to select it · drag a lake's seed to move it · delete removes the selection · pour a selected source to propose the water it makes",
   road: "click on land to place a road pin, joined to the selected one · click a road pin to join it, or drag it · click a road to branch off it · esc starts a new road · set the width under the selected pin, or select a single path with the select tool",
 };
 
@@ -47,6 +53,14 @@ const DEFAULT_HUB_RADIUS_FT = 200;
 const MIN_HUB_RADIUS_FT = 16;
 const DEFAULT_SOURCE_WIDTH_FT = 12;
 const SHAPE_PINS = ["biome"];
+
+// The next free id for a river ("w") or lake ("l") in the sketch's water.
+export function nextWaterId(water, prefix) {
+  const used = new Set([...water.rivers, ...water.lakes].map((f) => f.id));
+  let n = 1;
+  while (used.has(`${prefix}${n}`)) n++;
+  return `${prefix}${n}`;
+}
 
 export function nextId(sketch, prefix) {
   const used = new Set([...sketch.pins, ...sketch.paths].map((f) => f.id));
@@ -61,7 +75,7 @@ export function nextId(sketch, prefix) {
 export class Features {
   constructor(editor) {
     this.editor = editor;
-    this.selected = null; // { type: "pin" | "path", id }
+    this.selected = null; // { type: "pin" | "path" | "river" | "lake", id }
     this.kinds = []; // what the current tool can pick
   }
 
@@ -72,8 +86,13 @@ export class Features {
   // The selected feature.
   find(sketch) {
     if (!this.selected) return null;
-    const list = this.selected.type === "pin" ? sketch.pins : sketch.paths;
-    return list.find((f) => f.id === this.selected.id) ?? null;
+    return this.listOf(sketch, this.selected.type).find((f) => f.id === this.selected.id) ?? null;
+  }
+
+  listOf(sketch, type) {
+    if (type === "pin") return sketch.pins;
+    if (type === "path") return sketch.paths;
+    return type === "river" ? sketch.water.rivers : sketch.water.lakes;
   }
 
   select(sketch, type, id) {
@@ -89,6 +108,13 @@ export class Features {
   remove(sketch) {
     const feature = this.find(sketch);
     if (!feature) return;
+    if (this.selected.type === "river" || this.selected.type === "lake") {
+      const list = this.listOf(sketch, this.selected.type);
+      list.splice(list.indexOf(feature), 1);
+      this.select(null);
+      this.editor.saveSketch();
+      return;
+    }
     const gone = this.selected.type === "pin" ? sketch.paths.filter((p) => p.from === feature.id || p.to === feature.id) : [feature];
     if (this.selected.type === "pin") sketch.pins.splice(sketch.pins.indexOf(feature), 1);
     sketch.paths = sketch.paths.filter((p) => !gone.includes(p));
@@ -218,6 +244,20 @@ export class Features {
         if (this.grabHandle(sketch, tile)) return true;
         const pin = this.pinAt(sketch, tile);
         if (pin) return this.grabPin(sketch, pin);
+        if (this.kinds.includes("lake")) {
+          const seeded = sketch.water.lakes.find((lake) => this.editor.nearScreen(lake.seed, tile));
+          if (seeded) {
+            this.select(sketch, "lake", seeded.id);
+            this.dragging = { target: seeded, key: "seed", kind: "lake" };
+            return true;
+          }
+        }
+        const river = this.kinds.includes("river") ? this.riverAt(sketch, tile) : null;
+        const lake = !river && this.kinds.includes("lake") ? this.lakeAt(sketch, tile) : null;
+        if (river || lake) {
+          this.select(sketch, river ? "river" : "lake", (river ?? lake).id);
+          return true;
+        }
         const path = this.kinds.includes("road") ? this.pathAt(sketch, tile) : null;
         this.select(sketch, path ? "path" : null, path?.id);
         return Boolean(path);
@@ -264,13 +304,26 @@ export class Features {
       target.radius = Math.max(MIN_HUB_RADIUS_FT, Math.round(ft));
       return;
     }
-    const point = snapToCell(tile);
+    const point = key === "seed" ? tile.map((v) => Math.round(v * 1000) / 1000) : snapToCell(tile);
     if (!this.editor.onLand(point)) return;
     this.dragging.target[this.dragging.key] = point;
   }
 
   pinAt(sketch, tile, kinds = this.kinds) {
     return [...sketch.pins].reverse().find((p) => kinds.includes(p.kind) && this.editor.nearScreen(p.at, tile)) ?? null;
+  }
+
+  riverAt(sketch, tile) {
+    return (
+      [...sketch.water.rivers].reverse().find((r) => {
+        const reach = Math.max(6 * this.map.dpr, (r.width / 2 / TILE_FT) * this.map.view.scale);
+        return nearestOnStroke(r.points, tile).dist * this.map.view.scale < reach;
+      }) ?? null
+    );
+  }
+
+  lakeAt(sketch, tile) {
+    return [...sketch.water.lakes].reverse().find((lake) => inRegion(tile, this.editor.lakeShape(lake).region)) ?? null;
   }
 
   pathAt(sketch, tile) {
@@ -311,9 +364,9 @@ export class Features {
   // --- drawing ---
 
   // Draws the sketch's features of the given kinds (paths with road pins), and its rivers and
-  // pools when `water` is set.
+  // lakes when `water` is set.
   draw(ctx, sketch, { kinds, water = false }) {
-    if (water) this.drawWater(ctx, sketch.watercourses);
+    if (water) this.drawWater(ctx, sketch, kinds.includes("lake"));
     if (kinds.includes("road")) for (const path of sketch.paths) this.drawPath(ctx, sketch, path);
     for (const pin of sketch.pins) {
       if (kinds.includes(pin.kind)) this.drawPin(ctx, pin, this.isSelected(pin));
@@ -335,21 +388,48 @@ export class Features {
     }
   }
 
-  // The watercourses' pools and rivers.
-  drawWater(ctx, { rivers, pools }) {
-    ctx.fillStyle = POOL_COLOR;
-    ctx.strokeStyle = POOL_COLOR;
-    ctx.lineWidth = this.map.dpr;
-    for (const { region } of pools) {
+  // The sketch's lakes and rivers, with what pouring a source would add over them. Lakes that
+  // spill or are dry, and rivers in deep cuts, are marked; `editing` also marks each lake's seed.
+  drawWater(ctx, sketch, editing) {
+    const dpr = this.map.dpr;
+    for (const lake of sketch.water.lakes) {
+      const { region, status } = this.editor.lakeShape(lake);
+      const problem = status !== "ok";
+      this.drawRegion(ctx, region, POOL_COLOR, problem ? PROBLEM_COLOR : POOL_COLOR, this.isSelected(lake) ? 2 : 1);
+      if (!editing) continue;
+      const [x, y] = this.map.toScreen(lake.seed);
+      ctx.fillStyle = problem ? PROBLEM_COLOR : "#fff";
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = dpr;
       ctx.beginPath();
-      for (const ring of region.flat()) {
-        ring.forEach((p, i) => (i ? ctx.lineTo(...this.map.toScreen(p)) : ctx.moveTo(...this.map.toScreen(p))));
-        ctx.closePath();
-      }
-      ctx.fill("evenodd");
+      ctx.arc(x, y, 4 * dpr, 0, Math.PI * 2);
+      ctx.fill();
       ctx.stroke();
     }
-    for (const river of rivers) this.drawLine(ctx, river.points, river.width, RIVER_COLOR);
+    for (const river of sketch.water.rivers) {
+      const color = editing && this.editor.riverCut(river) >= DEEP_CUT_FT ? PROBLEM_COLOR : RIVER_COLOR;
+      if (this.isSelected(river)) this.drawLine(ctx, river.points, river.width, "#fff", Math.max(2 * dpr, (river.width / TILE_FT) * this.map.view.scale) + 4 * dpr);
+      this.drawLine(ctx, river.points, river.width, color);
+    }
+    const proposal = this.editor.proposal?.result;
+    if (!proposal) return;
+    ctx.setLineDash([5 * dpr, 4 * dpr]);
+    for (const { region } of proposal.pools) this.drawRegion(ctx, region, "rgba(160, 220, 255, 0.35)", PROPOSAL_COLOR, 2);
+    for (const river of proposal.rivers) this.drawLine(ctx, river.points, river.width, PROPOSAL_COLOR);
+    ctx.setLineDash([]);
+  }
+
+  drawRegion(ctx, region, fill, stroke, px) {
+    ctx.fillStyle = fill;
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = px * this.map.dpr;
+    ctx.beginPath();
+    for (const ring of region.flat()) {
+      ring.forEach((p, i) => (i ? ctx.lineTo(...this.map.toScreen(p)) : ctx.moveTo(...this.map.toScreen(p))));
+      ctx.closePath();
+    }
+    ctx.fill("evenodd");
+    ctx.stroke();
   }
 
   // A path along its route; while it's worked out, its old route faded or a dashed line between
@@ -475,6 +555,7 @@ export class Features {
     }
     box.hidden = false;
     const path = this.selected.type === "path";
+    if (this.selected.type === "river" || this.selected.type === "lake") return this.renderWaterProps(box, sketch, feature);
     const label = path ? PATH.label : PINS[feature.kind].label;
     const heading = document.createElement("h2");
     heading.textContent = `${label} · ${feature.id}`;
@@ -488,7 +569,14 @@ export class Features {
     fields.push("notes");
     for (const key of fields) box.append(this.field(sketch, feature, key));
     if (feature.kind === "road") box.append(this.roadWidthField(sketch, feature));
-    if (feature.kind === "source") box.append(this.editor.sourceStatus(feature));
+    if (feature.kind === "source") {
+      const pour = document.createElement("div");
+      pour.className = "editor-row";
+      const proposal = this.editor.proposal?.pin === feature.id ? this.editor.proposal : null;
+      pour.append(button(proposal ? "pour again" : "pour", () => this.editor.pour(feature)));
+      if (proposal?.result) pour.append(button("keep", () => this.editor.keepProposal()), button("drop", () => this.editor.dropProposal()));
+      box.append(pour, this.editor.pourStatus(feature));
+    }
     if (path) {
       this.status = { path: feature, el: document.createElement("p") };
       box.append(this.status.el);
@@ -499,6 +587,49 @@ export class Features {
     row.className = "editor-row";
     row.append(button(`delete ${label}`, () => this.remove(sketch)));
     box.append(row);
+  }
+
+  // A river's width or a lake's level, how it sits on the land, and a delete button.
+  renderWaterProps(box, sketch, feature) {
+    const river = this.selected.type === "river";
+    const heading = document.createElement("h2");
+    heading.textContent = `${river ? "river" : "lake"} · ${feature.id}`;
+    const key = river ? "width" : "level";
+    const label = document.createElement("label");
+    label.className = "editor-field";
+    label.textContent = river ? "width (ft)" : "water level (ft)";
+    const input = document.createElement("input");
+    input.type = "number";
+    input.value = feature[key];
+    const status = document.createElement("p");
+    const describe = () => {
+      if (river) {
+        const cut = this.editor.riverCut(feature);
+        status.textContent = cut >= DEEP_CUT_FT ? `The land rises up to ${cut} ft above where it runs, so it cuts a gorge there. Pour again, or delete it, if the land's changed under it.` : "";
+        return;
+      }
+      const { cells, status: state } = this.editor.lakeShape(feature);
+      const sqFt = cells.length * LAKE_STEP_FT * LAKE_STEP_FT;
+      const size = sqFt < 43560 ? `${sqFt.toLocaleString()} square feet` : `${Math.round(sqFt / 43560).toLocaleString()} acres`;
+      status.textContent = {
+        ok: `Covers about ${size}.`,
+        spills: "It spills: at this level it runs into the sea, or past its size limit. Lower its level, or move its seed.",
+        dry: "It's dry: the ground round its seed is above its level. Raise its level, or move its seed lower.",
+      }[state];
+    };
+    input.addEventListener("input", () => {
+      const value = Number(input.value);
+      if (!input.value.trim() || !Number.isFinite(value) || (river && !(value > 0))) return;
+      feature[key] = value;
+      this.editor.saveSketch();
+      describe();
+    });
+    label.append(input);
+    describe();
+    const row = document.createElement("div");
+    row.className = "editor-row";
+    row.append(button(`delete ${river ? "river" : "lake"}`, () => this.remove(sketch)));
+    box.append(heading, label, status, row);
   }
 
   // A line under a path's settings saying how its route went.
@@ -595,6 +726,19 @@ export function nearestOnStroke(points, [x, z]) {
     if (dist < best.dist) best = { index: i - 1, dist };
   }
   return best;
+}
+
+function inRegion([x, z], region) {
+  const inRing = (ring) => {
+    let inside = false;
+    for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+      const [xi, zi] = ring[i];
+      const [xj, zj] = ring[j];
+      if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+    }
+    return inside;
+  };
+  return region.some(([outer, ...holes]) => inRing(outer) && !holes.some(inRing));
 }
 
 function closestOnSegment([ax, az], [bx, bz], [x, z]) {
