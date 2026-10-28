@@ -228,11 +228,12 @@ export function bodyMesh(look) {
     const above = trunkRings.findIndex((r) => r.center[1] >= y);
     if (above < 1) return null;
     const reach = (ring) => {
-      if (Math.abs(x) >= ring.rx) return ring.center[2];
       const angle = Math.asin(x / ring.rx);
       return ring.center[2] + Math.cos(angle) * (ring.rz + (ring.push?.(angle) ?? 0));
     };
     const [lower, upper] = [trunkRings[above - 1], trunkRings[above]];
+    // Out past the sides of the trunk, as beside the neck, there's no front to lie on.
+    if (Math.abs(x) >= Math.min(lower.rx, upper.rx)) return null;
     const t = (y - lower.center[1]) / (upper.center[1] - lower.center[1]);
     return reach(lower) + (reach(upper) - reach(lower)) * t;
   };
@@ -560,13 +561,14 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
   if (hair === "braids") {
     // Two braids from behind the ears down over the shoulders, swelling and pinching like plaits.
     for (const side of [-1, 1]) {
+      // An even arc from behind the ear forward over the shoulder, then straight down the chest.
       const knots = [
         [0.33, 0.22, -0.2],
-        [0.37, 0.0, -0.1],
-        [0.38, -0.25, 0.14],
-        [0.37, -0.5, 0.32],
-        [0.34, -0.8, 0.46],
-        [0.31, -1.05, 0.5],
+        [0.37, 0.0, -0.13],
+        [0.38, -0.25, 0.0],
+        [0.37, -0.5, 0.2],
+        [0.34, -0.8, 0.4],
+        [0.31, -1.05, 0.48],
       ];
       const points = [];
       for (let i = 0; i < knots.length - 1; i++) {
@@ -574,7 +576,17 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
       }
       points.push(knots[knots.length - 1]);
       const radii = points.map((_, i) => (i % 2 ? 0.045 : 0.07) * s * (i === points.length - 1 ? 0.6 : 1));
-      const along = (i) => (i < 3 ? bones : i < 6 ? neck : [["spine_03", 1]]);
+      // Each point hands over from the head to the neck to the chest a little at a time, so the
+      // braid bends smoothly when the head turns or tips instead of kinking below the ear.
+      const HANDOVER = [
+        [["head", 1]],
+        [["head", 1]],
+        [["head", 0.75], ["neck_01", 0.25]],
+        [["head", 0.45], ["neck_01", 0.3], ["spine_03", 0.25]],
+        [["head", 0.2], ["neck_01", 0.4], ["spine_03", 0.4]],
+        [["head", 0.05], ["neck_01", 0.35], ["spine_03", 0.6]],
+      ];
+      const along = (i) => HANDOVER[i] ?? [["spine_03", 1]];
       // Over the chest, each knot lies on the outside of it, however full the bust.
       const laid = points.map(([x, dy, z], i) => {
         const point = p(side * x, dy, z);
