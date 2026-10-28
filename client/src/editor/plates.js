@@ -1,5 +1,5 @@
 import { gunzipSync, gzipSync, strFromU8, strToU8 } from "fflate";
-import { decodePlateTile, encodePlate, plateOf, platePath, readHeader, splitPlate } from "../world/plateCodec.js";
+import { decodePlateTile, encodePlate, plateHash, plateOf, platePath, readHeader, splitPlate } from "../world/plateCodec.js";
 import { decodeTile, encodeTile } from "../world/tileCodec.js";
 import { kindSizes } from "../world/objects.js";
 import { isPlatePath, isPlatesIndex, plateAt, platesIndexPath, tileAt, tilePath } from "../world/paths.js";
@@ -10,7 +10,7 @@ import { isPlatePath, isPlatesIndex, plateAt, platesIndexPath, tileAt, tilePath 
 
 export const PLATES_INDEX_VERSION = 1;
 
-export { isPlatePath, plateAt, platesIndexPath };
+export { isPlatePath, plateAt, plateHash, platesIndexPath };
 
 // The tile files (paths to gzipped tiles) that belong in a plate.
 export function tilesInPlate(files, { continent, layer, coords: [px, pz] }) {
@@ -165,17 +165,4 @@ export class PlatePool {
       slot.worker.postMessage(this.queue.shift());
     }
   }
-}
-
-// A 64-bit hash of a plate's text, as hex: what clients key their caches by.
-export function plateHash(text) {
-  let [h1, h2] = [0xdeadbeef, 0x41c6ce57];
-  for (let i = 0; i < text.length; i++) {
-    const c = text.charCodeAt(i);
-    h1 = Math.imul(h1 ^ c, 2654435761);
-    h2 = Math.imul(h2 ^ c, 1597334677);
-  }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  return (h2 >>> 0).toString(16).padStart(8, "0") + (h1 >>> 0).toString(16).padStart(8, "0");
 }

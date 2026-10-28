@@ -45,6 +45,10 @@ The editor builds a continent in steps, each writing its own files:
 
 Tiles are the heavy part. The editor holds each as a binary [tile file](formats/tile-file.md) while a world is open, and stores them 256 to a text [plate](formats/plates.md). Each plate carries the sizes of the objects in it, so a reader such as the game server can block movement without the world's object library.
 
+## Checking a world
+
+`client/src/world/validate.js` checks a stored world's files and lists what's wrong. Problems stop a world being played; warnings don't. Run it with `node script/validate.mjs <world directory or zip>`, which exits 1 when there are problems (`--json` prints them as JSON).
+
 ## Loading and saving
 
 The editor opens a world from a zip or a GitHub repo, and saves to a zip or to GitHub as one commit. [Opening and saving worlds on GitHub](formats/github-sync.md) covers the protocol.

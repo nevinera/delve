@@ -27,15 +27,8 @@ export class World {
   // Accepts the world directory zipped as-is, or inside one top-level folder (as GitHub's "download
   // ZIP" does).
   static fromZip(bytes) {
-    let entries = Object.entries(unzipSync(bytes)).filter(([path]) => !path.endsWith("/"));
-    if (!entries.length) throw new Error("the zip is empty");
-    const tops = new Set(entries.map(([path]) => path.split("/")[0]));
-    const [top] = tops;
-    const looksLikeWorld = (paths) => paths.some((path) => path === WORLD_PATH || path.startsWith("places/"));
-    const stripped = entries.map(([path, data]) => [path.slice(top.length + 1), data]);
-    const wrapped = tops.size === 1 && !looksLikeWorld(entries.map(([p]) => p)) && looksLikeWorld(stripped.map(([p]) => p));
-    if (wrapped) entries = stripped;
-    return World.fromFiles(new Map(entries), wrapped ? top : "World");
+    const { files, top } = unzipWorld(bytes);
+    return World.fromFiles(files, top ?? "World");
   }
 
   // A world from its files. One without world.json gets one named `name`, with the continents
@@ -85,4 +78,17 @@ export class World {
     const sorted = [...files.keys()].sort();
     return zipSync(Object.fromEntries(sorted.map((path) => [path, files.get(path)])));
   }
+}
+
+// A zipped world's files, as a Map of path -> bytes. A zip with everything in one top-level folder
+// (as GitHub's "download ZIP" gives) has that folder taken off, and its name given as `top`.
+export function unzipWorld(bytes) {
+  const entries = Object.entries(unzipSync(bytes)).filter(([path]) => !path.endsWith("/"));
+  if (!entries.length) throw new Error("the zip is empty");
+  const tops = new Set(entries.map(([path]) => path.split("/")[0]));
+  const [top] = tops;
+  const looksLikeWorld = (paths) => paths.some((path) => path === WORLD_PATH || path.startsWith("places/"));
+  const stripped = entries.map(([path, data]) => [path.slice(top.length + 1), data]);
+  const wrapped = tops.size === 1 && !looksLikeWorld(entries.map(([p]) => p)) && looksLikeWorld(stripped.map(([p]) => p));
+  return wrapped ? { files: new Map(stripped), top } : { files: new Map(entries), top: null };
 }

@@ -22,6 +22,8 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 
 `<c>` is a continent key from `world.json`. Ids are 8 lowercase base-36 characters.
 
+`node script/validate.mjs <world directory or zip>` checks a world against these formats.
+
 The editor also holds tiles as [tile files](tile-file.md) at `places/continents/<c>/tiles/<layer>/<tx>/<tz>.dlt.gz` while a world is open. It never stores them.
 
 ## Coordinates
