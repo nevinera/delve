@@ -134,17 +134,18 @@ export function bodyMesh(look) {
     return r < 1 ? look.bust * BUST.depth * s * 0.5 * (1 + Math.cos(Math.PI * Math.sqrt(r))) : 0;
   };
   // The chest has extra rings, and the trunk extra sides, so the bust rounds off rather than
-  // coming to a point. The bust follows the chest's bone, since rings blending two would bend it
-  // out of shape as the spine moves. The shoulder ring reaches out over the top of the arms.
+  // coming to a point. The bust follows the chest's bone alone, and the stomach bends from the
+  // bones below it a little at a time under the bust, so the spine bending doesn't fold the bust
+  // under, pull it to a point or leave a ledge below it. The shoulder ring reaches out over the top of the arms.
   const trunkRings = [
     level(2.92, { rx: 0.5 * hips * trunk, rz: 0.36 * trunk, bones: [["pelvis", 1]] }),
     level(3.18, { rx: 0.62 * hips * trunk, rz: 0.42 * trunk, bones: [["pelvis", 1]] }),
     level(3.32, { rx: 0.6 * hips * trunk, rz: 0.41 * trunk, bones: [["pelvis", 0.6], ["spine_01", 0.4]] }),
     level(3.44, { rx: 0.56 * waist * trunk, rz: 0.39 * trunk, bones: [["spine_01", 1]] }),
-    level(3.65, { rx: 0.52 * waist * trunk, rz: 0.37 * trunk, bones: [["spine_01", 1]] }),
-    level(3.92, { rx: 0.57 * shoulders * trunk, rz: 0.4 * trunk, push: bust(3.92), bones: [["spine_01", 0.4], ["spine_02", 0.6]] }),
-    level(3.99, { rx: 0.585 * shoulders * trunk, rz: 0.41 * trunk, push: bust(3.99), bones: [["spine_02", 0.6], ["spine_03", 0.4]] }),
-    level(4.06, { rx: 0.6 * shoulders * trunk, rz: 0.42 * trunk, push: bust(4.06), bones: [["spine_03", 1]] }),
+    level(3.65, { rx: 0.52 * waist * trunk, rz: 0.37 * trunk, bones: [["spine_01", 0.6], ["spine_02", 0.4]] }),
+    level(3.92, { rx: 0.57 * shoulders * trunk, rz: 0.4 * trunk, push: bust(3.92), bones: [["spine_02", 0.7], ["spine_03", 0.3]] }),
+    level(3.99, { rx: 0.585 * shoulders * trunk, rz: 0.41 * trunk, push: bust(3.99), bones: [["spine_02", 0.45], ["spine_03", 0.55]] }),
+    level(4.06, { rx: 0.6 * shoulders * trunk, rz: 0.42 * trunk, push: bust(4.06), bones: [["spine_02", 0.2], ["spine_03", 0.8]] }),
     level(4.12, { rx: 0.61 * shoulders * trunk, rz: 0.425 * trunk, push: bust(4.12), bones: [["spine_03", 1]] }),
     level(4.18, { rx: 0.62 * shoulders * trunk, rz: 0.43 * trunk, push: bust(4.18), bones: [["spine_03", 1]] }),
     level(4.24, { rx: 0.63 * shoulders * trunk, rz: 0.43 * trunk, push: bust(4.24), bones: [["spine_03", 1]] }),
