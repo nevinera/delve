@@ -501,6 +501,29 @@ export class Editor {
     };
   }
 
+  // How many of the sketch's rivers and lakes run into each of them: rivers into the lakes they end
+  // in and the rivers they carry on as, and lakes into the rivers running out of them.
+  inflows() {
+    const { rivers, lakes } = this.sketch.water;
+    const near = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]) * TILE_FT < 2 * LAKE_STEP_FT;
+    const cells = new Map(lakes.map((lake) => [lake, new Set(this.lakeShape(lake).cells.map(([i, j]) => `${i},${j}`))]));
+    const inLake = (lake, [x, z]) => {
+      const [i0, j0] = [Math.round((x * TILE_FT) / LAKE_STEP_FT), Math.round((z * TILE_FT) / LAKE_STEP_FT)];
+      for (let dj = -2; dj <= 2; dj++) for (let di = -2; di <= 2; di++) if (cells.get(lake).has(`${i0 + di},${j0 + dj}`)) return true;
+      return false;
+    };
+    const fed = new Map([...rivers, ...lakes].map((body) => [body, 0]));
+    for (const river of rivers) {
+      const [start, end] = [river.points[0], river.points.at(-1)];
+      for (const lake of lakes) {
+        if (inLake(lake, end)) fed.set(lake, fed.get(lake) + 1);
+        if (inLake(lake, start)) fed.set(river, fed.get(river) + 1);
+      }
+      for (const other of rivers) if (other !== river && near(end, other.points[0])) fed.set(other, fed.get(other) + 1);
+    }
+    return fed;
+  }
+
   // Pours the sketch's water again where the detail step changed the ground beside it (cells:
   // [ci, cj] continent cells), so it runs the way the ground now sends it. A river touched is cut
   // where it was touched and poured on from there; a lake touched is poured again from its seed,
@@ -533,6 +556,7 @@ export class Editor {
       }
     }
     if (!lakes.length && !cuts.size) return null;
+    const fedBefore = this.inflows();
 
     const sources = [];
     const cutAt = new Map(); // river -> the point it's poured on from
@@ -576,6 +600,14 @@ export class Editor {
     }
     for (const { points, width } of fresh) water.rivers.push({ id: nextWaterId(water, "w"), points, width });
     for (const { seed, level } of pools) water.lakes.push({ id: nextWaterId(water, "l"), seed, level });
+    // Water that was fed before and isn't now dries up, and so on down the line.
+    for (;;) {
+      const fed = this.inflows();
+      const dry = new Set([...fed.keys()].filter((body) => fedBefore.get(body) && !fed.get(body)));
+      if (!dry.size) break;
+      water.rivers = water.rivers.filter((r) => !dry.has(r));
+      water.lakes = water.lakes.filter((l) => !dry.has(l));
+    }
     this.saveSketch();
     const edited = this.editedTiles();
     return this.detail.keys().filter((key) => edited.has(key));
