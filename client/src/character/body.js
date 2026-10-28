@@ -39,9 +39,9 @@ const TRUNK_SIDES = 32;
 // 1955), each side's inner edge stops short of the middle of the chest and its outer edge reaches
 // the front of the armpit (Westreich 1997), and the nipple is 45% of the way down (Mallucci and
 // Branford 2012). The fullest point drops by `drop` and the upper slope grows `longer` as it gets
-// larger, the shirt across the middle is pulled up to `tight` of the way to flat, and below it
-// hangs as far as `hang` before meeting the stomach.
-const BUST = { y: 4.27, angle: 0.62, inner: 0.5, outer: 0.62, above: 0.36, below: 0.29, depth: 0.32, drop: 0.1, longer: 0.1, tight: 0.6, hang: 0.4 };
+// larger, the shirt across the middle is pulled up to `tight` of the way to flat, and below a full
+// bust it hangs as far as `hang` past the bust's underside before meeting the stomach.
+const BUST = { y: 4.27, angle: 0.62, inner: 0.5, outer: 0.62, above: 0.36, below: 0.29, depth: 0.32, drop: 0.1, longer: 0.1, tight: 0.6, hang: 0.35 };
 const ARM = ["clavicle_l", "upperarm_l", "lowerarm_l", "hand_l"];
 const LEG = ["thigh_l", "calf_l", "foot_l", "ball_l"];
 
@@ -248,7 +248,7 @@ function bustPush(look, ring, s) {
       const r = across * across + down * down;
       if (r >= 1) return 0;
       const bell = 0.5 * (1 + Math.cos(Math.PI * Math.sqrt(r)));
-      return depth * (y > middle ? bell : bell + (Math.sqrt(1 - r) - bell) * droop);
+      return depth * (y > middle ? bell : bell ** (1 - 0.5 * droop));
     };
     const off = Math.abs(angle) - BUST.angle;
     const push = swell(off);
@@ -258,7 +258,9 @@ function bustPush(look, ring, s) {
     return Math.max(push, push + (flat - push) * tight);
   };
   const y = ring.center[1] / s;
-  const hang = y < middle ? Math.max(0, 1 - (middle - y) / BUST.hang) ** 2 * look.bust : 0;
+  // How much of the fullest point's push the shirt keeps this far below it, easing to none.
+  const below = (middle - y) / (BUST.below + BUST.hang * look.bust);
+  const hang = y < middle && below < 1 ? 0.5 * (1 + Math.cos(Math.PI * below)) * look.bust : 0;
   return (angle) => Math.max(lying(y, angle), lying(middle, angle) * hang);
 }
 
