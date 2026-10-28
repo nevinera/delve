@@ -21,12 +21,11 @@ export const SURFACE_LAYERS = [
   { name: "biome", type: "u8" },
   { name: "forest", type: "u8" },
   { name: "clutter", type: "u8", optional: true }, // ground clutter density, 100 = normal
-  { name: "flowDir", type: "u8", optional: true }, // which way running water goes (generator.js)
-  { name: "flowSlope", type: "u8", optional: true }, // how steeply it falls (generator.js)
 ];
 
 // tile: { coords: [tx, tz], layer, cells, cellFt, palettes, objects, generator, layers: { name: array } },
-// and optionally falls, roads and sources (editor/detailView.js: water placed by hand).
+// and optionally falls, roads, rivers and sources (editor/detailView.js: water placed by hand).
+// Layers a tile has that aren't listed, such as the flow layers older tiles kept, are left out.
 export function encodeTile(tile, layerSpecs = SURFACE_LAYERS) {
   const count = tile.cells * tile.cells;
   let offset = 0;
@@ -47,6 +46,7 @@ export function encodeTile(tile, layerSpecs = SURFACE_LAYERS) {
     objects: tile.objects ?? [],
     ...(tile.falls?.length ? { falls: tile.falls } : {}),
     ...(tile.roads?.length ? { roads: tile.roads } : {}),
+    ...(tile.rivers?.length ? { rivers: tile.rivers } : {}),
     ...(tile.sources?.length ? { sources: tile.sources } : {}),
     generator: tile.generator,
   };

@@ -1,6 +1,5 @@
 import { describe, it, expect } from "vitest";
 import { groundCells, terrainMesh, waterMesh } from "./terrainMesh.js";
-import { FLOW_NONE, encodeFlowDir, encodeFlowSlope } from "../world/generator.js";
 
 // A 4×4-cell tile with every cell at `height`, river water down column 1 when wet.
 function tile(tx, tz, height, wet = false) {
@@ -84,19 +83,45 @@ describe("waterMesh", () => {
     expect(waterMesh(pool, {}, [0, 0], "fresh").indices.length).toBe(4 * 4 * 6);
   });
 
-  it("gives fresh water its flow, spreading it to the shore", () => {
+  // Column 1's water falls 1ft per cell southward.
+  function sloping() {
     const river = tile(0, 0, 5, true);
-    // Column 1 runs south, falling 1 in 25.
-    river.layers.flowDir = Uint8Array.from({ length: 16 }, (_, k) => (k % 4 === 1 ? encodeFlowDir(0, 1) : FLOW_NONE));
-    river.layers.flowSlope = Uint8Array.from({ length: 16 }, (_, k) => (k % 4 === 1 ? encodeFlowSlope(0.04) : 0));
-    const { flows } = waterMesh(river, {}, [0, 0]);
-    const at = (a, b) => Array.from(flows.slice((b * 5 + a) * 3, (b * 5 + a) * 3 + 3));
-    const [vx, vz, steep] = at(1, 1);
-    expect(Math.abs(vx)).toBeLessThan(0.1);
+    river.layers.water = river.layers.water.map((w, k) => w - Math.floor(k / 4));
+    return river;
+  }
+  const flowAt = (water, a, b) => Array.from(water.flows.slice((b * 5 + a) * 3, (b * 5 + a) * 3 + 3));
+
+  it("runs a river's water down its course, as steeply as its surface falls", () => {
+    const river = sloping();
+    river.rivers = [{ half: 4, segments: [[12, 0, 12, 32]] }];
+    const water = waterMesh(river, {}, [0, 0]);
+    const [vx, vz, steep] = flowAt(water, 1, 2);
+    expect(Math.abs(vx)).toBeLessThan(0.01);
     expect(vz).toBeGreaterThan(5);
-    expect(steep).toBeCloseTo(0.2, 1);
-    expect(at(2, 1)[1]).toBeCloseTo(vz, 1); // the bank beside it
-    expect(at(4, 1)).toEqual([0, 0, 0]); // too far from any flow
+    expect(steep).toBeCloseTo(Math.sqrt(3 / 32), 2); // 3ft over the 32ft it's judged across
+    expect(flowAt(water, 2, 2)[1]).toBeGreaterThan(5); // the bank beside it takes its neighbours'
+    expect(flowAt(water, 4, 2)).toEqual([0, 0, 0]); // too far from any flow
+  });
+
+  it("follows the river's course, not the surface, where they differ", () => {
+    const river = tile(0, 0, 5, true); // level water
+    river.rivers = [{ half: 4, segments: [[12, 32, 12, 0]] }]; // running north
+    const [vx, vz, steep] = flowAt(waterMesh(river, {}, [0, 0]), 1, 2);
+    expect([vx, steep]).toEqual([0, 0]);
+    expect(vz).toBeLessThan(-1); // slowly
+  });
+
+  it("runs water outside rivers down its surface, and leaves level water still", () => {
+    const [vx, vz] = flowAt(waterMesh(sloping(), {}, [0, 0]), 1, 2);
+    expect(Math.abs(vx)).toBeLessThan(0.01);
+    expect(vz).toBeGreaterThan(5);
+    expect(flowAt(waterMesh(tile(0, 0, 5, true), {}, [0, 0]), 1, 2)).toEqual([0, 0, 0]);
+  });
+
+  it("churns the water below falls", () => {
+    const river = sloping();
+    river.falls = [{ top: [12, 20, -8], bottom: [12, 7, 4], width: 8, pool: 10 }];
+    expect(flowAt(waterMesh(river, {}, [0, 0]), 1, 0)[2]).toBeCloseTo(Math.sqrt(0.3), 3);
   });
 
   it("keeps the sea and fresh water apart", () => {

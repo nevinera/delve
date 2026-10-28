@@ -1,9 +1,13 @@
 import { groundRgb } from "../world/tileImage.js";
-import { decodeFlowDir, decodeFlowSlope } from "../world/generator.js";
 
-// How fast running water moves, in ft/s: `still` where it has no flow, and from `base` up by
-// `perRootSlope` times the square root of its surface's slope.
+// How fast running water moves, in ft/s: from `base` up by `perRootSlope` times the square root of
+// its surface's slope.
 const FLOW_SPEED = { base: 1.5, perRootSlope: 30 };
+// Which way water runs, worked out when a tile's drawn. In a river (tile.rivers), down its course,
+// as steeply as its surface falls over `probeCells` either way. Elsewhere, down its surface where
+// that slopes more than `stillSlope`. Plunge pools below falls (tile.falls) churn as if falling
+// `churnSlope`.
+const FLOW = { probeCells: 2, stillSlope: 0.01, churnSlope: 0.3 };
 
 // How far below the ground a shore vertex of water sits at most, so the bank hides the water's edge.
 const SHORE_SINK_FT = 0.5;
@@ -93,7 +97,7 @@ function kindOf(tile, k) {
 // at the water surface over the cells holding that kind. The sheet runs on half a cell into the
 // dry ground beside it, at the water's level there, so the ground itself cuts the shoreline. Null
 // when the tile has none. Fresh water's vertices also get `flows`: its velocity (x, z, in ft/s) and
-// how steeply it falls (0-1, from the tile's flowSlope), for rushing water (waterMaterial.js).
+// how steeply it falls (0-1), for rushing water (waterMaterial.js).
 export function waterMesh(tile, neighbours, origin, kind = "fresh") {
   const grid = sampler(tile, neighbours);
   const side = tile.cells + 1;
@@ -146,23 +150,46 @@ export function waterMesh(tile, neighbours, origin, kind = "fresh") {
       depths[b * side + a] = positions[(b * side + a) * 3 + 1] - t.layers.height[k];
     }
   }
-  return { positions, indices, flows: waterFlows(grid, side, level), depths };
+  return { positions, indices, flows: waterFlows(tile, neighbours, side, level), depths };
 }
 
-// Each vertex's flow, as [vx, vz, steepness]. A vertex without a flow of its own (still water, or
-// dry ground at the shore) takes the mean of the ones around it.
-function waterFlows(grid, side, level) {
+// Each vertex's flow, as [vx, vz, steepness] (FLOW). A vertex without a flow of its own (still
+// water, or dry ground at the shore) takes the mean of the ones around it.
+function waterFlows(tile, neighbours = {}, side, level) {
   const flows = new Float32Array(side * side * 3);
   const has = new Uint8Array(side * side);
+  const ft = tile.cellFt;
+  const near = [tile, neighbours.east, neighbours.south, neighbours.southEast].filter(Boolean);
+  const rivers = near.flatMap((t) => t.rivers ?? []);
+  const falls = near.flatMap((t) => t.falls ?? []);
+  // The water's level at a vertex, or at the nearest one in range; NaN where it's dry.
+  const levelAt = (a, b) => level[Math.max(0, Math.min(side - 1, Math.round(b))) * side + Math.max(0, Math.min(side - 1, Math.round(a)))];
   for (let b = 0; b < side; b++) {
     for (let a = 0; a < side; a++) {
-      const { t, k } = grid(a, b);
       const v = b * side + a;
-      const dir = !Number.isNaN(level[v]) && t.layers.flowDir ? decodeFlowDir(t.layers.flowDir[k]) : null;
+      const here = level[v];
+      if (Number.isNaN(here)) continue;
+      const [x, z] = position(tile, a, b, [0, 0]);
+      const surface = (da, db) => {
+        const w = levelAt(a + da, b + db);
+        return Number.isNaN(w) ? here : w;
+      };
+      let dir = null;
+      let slope = 0;
+      const river = riverAt(rivers, x, z, ft);
+      if (river) {
+        dir = river;
+        const p = FLOW.probeCells;
+        slope = Math.max(0, surface(-dir[0] * p, -dir[1] * p) - surface(dir[0] * p, dir[1] * p)) / (2 * p * ft);
+      } else {
+        const [gx, gz] = [(surface(1, 0) - surface(-1, 0)) / (2 * ft), (surface(0, 1) - surface(0, -1)) / (2 * ft)];
+        const g = Math.hypot(gx, gz);
+        if (g > FLOW.stillSlope) [dir, slope] = [[-gx / g, -gz / g], g];
+      }
+      if (falls.some((f) => Math.hypot(x - f.bottom[0], z - f.bottom[2]) < f.pool)) slope = Math.max(slope, FLOW.churnSlope);
       if (!dir) continue;
-      const slope = decodeFlowSlope(t.layers.flowSlope[k]);
       const speed = FLOW_SPEED.base + FLOW_SPEED.perRootSlope * Math.sqrt(slope);
-      flows.set([dir[0] * speed, dir[1] * speed, Math.sqrt(slope)], v * 3);
+      flows.set([dir[0] * speed, dir[1] * speed, Math.sqrt(Math.min(1, slope))], v * 3);
       has[v] = 1;
     }
   }
@@ -184,6 +211,25 @@ function waterFlows(grid, side, level) {
     }
   }
   return flows;
+}
+
+// The way the river at (x, z) runs, as a unit [dx, dz], or null when no river's there: the
+// direction of the nearest segment of any river (tile.rivers) whose channel the point is in, give
+// or take a cell.
+function riverAt(rivers, x, z, cellFt) {
+  let best = null;
+  let bestDist = Infinity;
+  for (const { half, segments } of rivers) {
+    for (const [ax, az, bx, bz] of segments) {
+      const [dx, dz] = [bx - ax, bz - az];
+      const len = Math.hypot(dx, dz);
+      if (!len) continue;
+      const t = Math.max(0, Math.min(len, ((x - ax) * dx + (z - az) * dz) / len));
+      const dist = Math.hypot(x - (ax + (dx / len) * t), z - (az + (dz / len) * t));
+      if (dist <= half + cellFt && dist < bestDist) [best, bestDist] = [[dx / len, dz / len], dist];
+    }
+  }
+  return best;
 }
 
 function position(tile, i, j, origin) {

@@ -129,13 +129,14 @@ export function roadReachFt(width) {
   return Math.max(width / 2, ROAD.minHalfFt) + ROAD.maxShoulderFt;
 }
 const STEEP = 0.7; // rise over run that turns into rock
-const FLOW_PROBE_FT = 16; // how far up and down a river its flow is judged over
 // Waterfalls: where a river's surface drops at least `minDropFt` from one PROFILE_STEP to the
 // next, carrying on while each step still drops `keepDropFt`, and falls at least `minSteep` times
 // as far as it runs (steeper than that is a fall; gentler, rapids). A plunge pool `widths` river widths
 // across (at least minPoolFt) is cut below each, deeper for taller falls, and the water churns
 // there as if it fell `churnSlope`.
-const FALLS = { minDropFt: 6, keepDropFt: 3, minSteep: 1, widths: 1.2, minPoolFt: 16, depthFt: [3, 14], depthPerDrop: 0.25, churnSlope: 0.3 };
+const FALLS = { minDropFt: 6, keepDropFt: 3, minSteep: 1, widths: 1.2, minPoolFt: 16, depthFt: [3, 14], depthPerDrop: 0.25 };
+// Tiles list the rivers within this of them (tile.rivers), for working out the water's flow.
+const RIVER_TILE_MARGIN_FT = 24;
 const PROFILE_STEP = 16;
 
 const smoothstep = (a, b, x) => {
@@ -172,7 +173,8 @@ export function prepareWorld(continent, seedKey) {
 
   // Rivers always descend: the surface follows the lowest ground seen so far from the source.
   ctx.rivers = rivers.map((s) => {
-    const line = makePolyline(simplify(s.points.map(toFt), CHANNEL_TOLERANCE_FT));
+    const points = simplify(s.points.map(toFt), CHANNEL_TOLERANCE_FT);
+    const line = makePolyline(points);
     const width = s.width ?? 30;
     // The lowest ground across the channel at each step down it.
     const across = width / 2 + RIVER.besideFt;
@@ -186,6 +188,7 @@ export function prepareWorld(continent, seedKey) {
     let low = Infinity;
     return {
       line,
+      points,
       width,
       half: width / 2,
       bank: Math.max(RIVER.minBankFt, width),
@@ -257,31 +260,6 @@ export function biomeRelief(ctx, x, z, { amp, rough }) {
   return h;
 }
 
-// Running water's flow, in two byte layers. flowDir is the way it runs, as an angle in 255ths of a
-// turn from east toward south, or FLOW_NONE where it's still or dry. flowSlope is how steeply its
-// surface falls, as 255 * sqrt(slope), so gentle slopes keep their detail and 1 (45°) or more is
-// 255.
-export const FLOW_NONE = 255;
-
-export function encodeFlowDir(dx, dz) {
-  const turn = Math.atan2(dz, dx) / (2 * Math.PI);
-  return Math.round((turn - Math.floor(turn)) * 255) % 255;
-}
-
-export function decodeFlowDir(byte) {
-  if (byte === FLOW_NONE) return null;
-  const angle = (byte / 255) * 2 * Math.PI;
-  return [Math.cos(angle), Math.sin(angle)];
-}
-
-export function encodeFlowSlope(slope) {
-  return Math.round(Math.min(1, Math.sqrt(Math.max(0, slope))) * 255);
-}
-
-export function decodeFlowSlope(byte) {
-  return (byte / 255) ** 2;
-}
-
 // One tile's layers. tx and tz are continent tile coordinates.
 export function generateTile(ctx, tx, tz) {
   const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];
@@ -305,8 +283,6 @@ export function generateTile(ctx, tx, tz) {
     biome: new Uint8Array(count),
     forest: new Uint8Array(count),
     clutter: new Uint8Array(count),
-    flowDir: new Uint8Array(count).fill(FLOW_NONE),
-    flowSlope: new Uint8Array(count),
   };
   for (let j = 0; j < CELLS; j++) {
     for (let i = 0; i < CELLS; i++) {
@@ -323,10 +299,6 @@ export function generateTile(ctx, tx, tz) {
       // Nothing grows on roads in use.
       layers.clutter[k] = s.road?.traffic ? 0 : Math.min(255, Math.round(s.climate.profile.clutter * 100));
       layers.waterKind[k] = WATER_KINDS.indexOf(s.sea ? "sea" : "fresh");
-      if (s.flow) {
-        layers.flowDir[k] = encodeFlowDir(s.flow.dx, s.flow.dz);
-        layers.flowSlope[k] = encodeFlowSlope(s.flow.slope);
-      }
     }
   }
 
@@ -345,6 +317,7 @@ export function generateTile(ctx, tx, tz) {
   const round = (v) => Math.round(v * 10) / 10;
   tile.falls = ctx.falls.filter((f) => inTile(f.top)).map((f) => ({ top: f.top.map(round), bottom: f.bottom.map(round), width: f.width, pool: round(f.pool) }));
   tile.roads = roadsNear(ctx.roads, x0, z0);
+  tile.rivers = riversNear(ctx.rivers, x0, z0);
   plantTrees(ctx, tile, (i, j) => samples[(j + 1) * N + (i + 1)]);
   // Objects keep off roads, by the cell they stand in.
   const onRoad = ([x, z]) => samples[(Math.floor((z - z0) / CELL_FT) + 1) * N + Math.floor((x - x0) / CELL_FT) + 1]?.road;
@@ -458,10 +431,7 @@ function sample(ctx, x, z, biomes) {
     if (n.dist < r.half) {
       const t = n.dist / r.half;
       out.h = Math.min(out.h, surface - depth * (1 - t * t));
-      if (!(out.water >= surface)) {
-        out.water = surface;
-        out.flow = flowAt(r, n.along);
-      }
+      if (!(out.water >= surface)) out.water = surface;
       out.river = true;
     } else {
       // The bank keeps rising at the bed's slope through the waterline, up to the levee, so the
@@ -588,26 +558,30 @@ export function fallsOf(r) {
   return falls;
 }
 
-// The plunge pools below waterfalls: a bowl cut under the water, which churns.
+// The plunge pools below waterfalls: a bowl cut under the water.
 function plunge(ctx, out, x, z) {
   if (Number.isNaN(out.water)) return;
   for (const f of ctx.falls) {
     const d = Math.hypot(x - f.bottom[0], z - f.bottom[2]);
     if (d >= f.pool) continue;
     out.h = Math.min(out.h, f.bottom[1] - f.depth * (1 - (d / f.pool) ** 2));
-    if (out.flow) out.flow = { ...out.flow, slope: Math.max(out.flow.slope, FALLS.churnSlope) };
   }
 }
 
-// Which way a river runs at `along` ft down its line, and how steeply its surface falls there, as
-// { dx, dz, slope } with (dx, dz) a unit vector and slope in ft per ft.
-function flowAt(r, along) {
-  const d = FLOW_PROBE_FT;
-  const [ax, az] = pointAt(r.line, Math.max(0, along - d));
-  const [bx, bz] = pointAt(r.line, Math.min(r.line.length, along + d));
-  const len = Math.hypot(bx - ax, bz - az) || 1;
-  const slope = Math.max(0, profileAt(r.surface, along - d) - profileAt(r.surface, along + d)) / (2 * d);
-  return { dx: (bx - ax) / len, dz: (bz - az) / len, slope };
+// The rivers near a tile, so a client can work out which way its water runs: { half, segments }
+// with each segment [ax, az, bx, bz] in continent ft, running downstream.
+export function riversNear(rivers, x0, z0) {
+  const round = (v) => Math.round(v * 10) / 10;
+  return rivers.flatMap((r) => {
+    const m = r.half + RIVER_TILE_MARGIN_FT;
+    const segments = [];
+    for (let k = 1; k < r.points.length; k++) {
+      const [[ax, az], [bx, bz]] = [r.points[k - 1], r.points[k]];
+      if (Math.max(ax, bx) < x0 - m || Math.min(ax, bx) > x0 + TILE_FT + m || Math.max(az, bz) < z0 - m || Math.min(az, bz) > z0 + TILE_FT + m) continue;
+      segments.push([ax, az, bx, bz].map(round));
+    }
+    return segments.length ? [{ half: r.half, segments }] : [];
+  });
 }
 
 // Swamp pools: water over the ground here when it's in a hollow's pool, below its level and

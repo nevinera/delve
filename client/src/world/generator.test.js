@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { CELLS, TILE_FT } from "./constants.js";
-import { fallsOf, decodeFlowDir, decodeFlowSlope, encodeFlowDir, encodeFlowSlope, generateTile, prepareWorld as prepareContinent } from "./generator.js";
+import { fallsOf, generateTile, prepareWorld as prepareContinent } from "./generator.js";
 import { findTrees } from "./trees.js";
 import { fbm } from "./noise.js";
 import { makePolyline } from "./polyline.js";
@@ -82,26 +82,13 @@ describe("generator", () => {
     }
   });
 
-  it("marks which way river water runs, and nowhere else", () => {
+  it("lists the rivers near each tile, running downstream, and stores no flow", () => {
     const tile = generateTile(ctx, 12, -3);
-    let wet = 0;
-    for (let k = 0; k < CELLS * CELLS; k++) {
-      const dir = decodeFlowDir(tile.layers.flowDir[k]);
-      if (!dir) continue;
-      wet++;
-      expect(Number.isNaN(tile.layers.water[k])).toBe(false);
-      expect(dir[0]).toBeLessThan(-0.8); // the river runs west
-    }
-    expect(wet).toBeGreaterThan(50);
-  });
-
-  it("round-trips flow directions and slopes through their bytes", () => {
-    for (const angle of [0, 1, 2.5, -2, Math.PI]) {
-      const [dx, dz] = decodeFlowDir(encodeFlowDir(Math.cos(angle), Math.sin(angle)));
-      expect(Math.hypot(dx - Math.cos(angle), dz - Math.sin(angle))).toBeLessThan(0.03);
-    }
-    expect(decodeFlowSlope(encodeFlowSlope(0.04))).toBeCloseTo(0.04, 2);
-    expect(decodeFlowSlope(encodeFlowSlope(3))).toBe(1);
+    expect(tile.rivers).toHaveLength(1);
+    expect(tile.rivers[0].half).toBe(20);
+    for (const [ax, , bx] of tile.rivers[0].segments) expect(bx).toBeLessThan(ax); // the river runs west
+    expect(tile.layers.flowDir).toBeUndefined();
+    expect(generateTile(ctx, 13, -1).rivers).toEqual([]);
   });
 
   it("finds waterfalls where a river's surface drops sharply, one per drop", () => {

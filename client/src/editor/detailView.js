@@ -6,7 +6,6 @@ import { decodeTile } from "../world/tileCodec.js";
 import { detailBrush } from "./detailTools.js";
 import { stampTrail } from "./detailTrails.js";
 import { carveChannel, traceSource } from "./detailWater.js";
-import { FLOW_NONE, encodeFlowDir, encodeFlowSlope } from "../world/generator.js";
 import { fellTree, paletteIndex, parseTree } from "../world/trees.js";
 import { footprintOf, makeObject, reachOf, specOf, tileOf } from "../world/objects.js";
 import { CELL_FT as STRUCTURE_CELL_FT, bakeWalk, placedWalk, pushGround, quartersOf } from "../world/structures.js";
@@ -469,7 +468,7 @@ export class DetailView {
       return tile.palettes.water.indexOf("fresh");
     };
     const changed = new Set();
-    for (const [cell, { surface, dir, slope }] of cells) {
+    for (const [cell, { surface }] of cells) {
       const [ci, cj] = cell.split(",").map(Number);
       const [tx, tz] = [Math.floor(ci / CELLS), Math.floor(cj / CELLS)];
       const key = `${tx},${tz}`;
@@ -485,14 +484,10 @@ export class DetailView {
         const freshKind = fresh(tile);
         layers.waterKind = Uint8Array.from(layers.water, (w) => (w === 0 ? sea : freshKind));
       }
-      layers.flowDir ??= new Uint8Array(CELLS * CELLS).fill(FLOW_NONE);
-      layers.flowSlope ??= new Uint8Array(CELLS * CELLS);
       (source.wet[key] ??= []).push([k, palettes.terrain[layers.terrain[k]]]);
       layers.water[k] = Math.round(surface * 4) / 4;
       layers.waterKind[k] = fresh(tile);
       layers.terrain[k] = paletteIndex(tile, "mud");
-      layers.flowDir[k] = dir ? encodeFlowDir(...dir) : FLOW_NONE;
-      layers.flowSlope[k] = dir ? encodeFlowSlope(slope) : 0;
       changed.add(key);
     }
     this.changed(changed);
@@ -508,8 +503,6 @@ export class DetailView {
       for (const [k, terrain] of list) {
         tile.layers.water[k] = NaN;
         tile.layers.terrain[k] = paletteIndex(tile, terrain);
-        if (tile.layers.flowDir) tile.layers.flowDir[k] = FLOW_NONE;
-        if (tile.layers.flowSlope) tile.layers.flowSlope[k] = 0;
       }
       changed.add(key);
     }
