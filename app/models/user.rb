@@ -3,6 +3,7 @@ class User < ApplicationRecord
     :omniauthable, omniauth_providers: [:google_oauth2]
 
   has_many :characters, dependent: :destroy
+  has_one :github_connection, dependent: :destroy
 
   def self.from_omniauth(auth)
     find_or_create_by(provider: auth.provider, uid: auth.uid) do |user|
