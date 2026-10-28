@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_LOOK, randomLook, resolveRecipe } from "./recipe.js";
+import { DEFAULT_LOOK, appearance, randomLook, resolveRecipe } from "./recipe.js";
 
 describe("resolveRecipe", () => {
   it("fills in the defaults", () => {
@@ -44,3 +44,17 @@ describe("resolveRecipe", () => {
     }
   });
 });
+
+describe("appearance", () => {
+  it("leaves out the gear a character only tries on", () => {
+    const look = resolveRecipe({ weapon: "sword", armor: { chest: { type: "plate", colors: ["#888888", "#444444"] } }, hair: "long" });
+    const kept = appearance(look);
+    expect(kept).not.toHaveProperty("weapon");
+    expect(kept).not.toHaveProperty("offhand");
+    expect(kept).not.toHaveProperty("sheathed");
+    expect(kept).not.toHaveProperty("armor");
+    expect(kept.hair).toBe("long");
+    expect(resolveRecipe(kept)).toEqual({ ...look, weapon: "none", offhand: "none", sheathed: false, armor: {} });
+  });
+});
+

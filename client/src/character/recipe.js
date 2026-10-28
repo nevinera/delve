@@ -143,51 +143,11 @@ export function randomLook(random = Math.random) {
   );
 }
 
-// The look saved by the character builder page, which walk mode uses too, or the default.
-// Saved looks and recipes load through resolveRecipe, so a recipe saved before a setting existed
-// takes its default, and one naming a choice since removed falls back to the default too.
-const SAVED = "characterBuilder.look";
+// The settings a character only tries on in the builder: what it wears and holds comes from what
+// it has in each world, so a saved character keeps only its appearance.
+export const GEAR = ["weapon", "offhand", "sheathed", "armor"];
 
-export function savedLook() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(SAVED));
-    if (saved) return resolveRecipe(saved);
-  } catch {
-    // Falls back to the default.
-  }
-  return resolveRecipe();
-}
-
-export function saveLook(look) {
-  try {
-    localStorage.setItem(SAVED, JSON.stringify(look));
-  } catch {
-    // Not saved; the look still shows.
-  }
-}
-
-// Characters saved by name on the builder page, in this browser: { name: look }.
-const NAMED = "characterBuilder.saved";
-
-export function namedLooks() {
-  try {
-    const saved = JSON.parse(localStorage.getItem(NAMED));
-    if (saved && typeof saved === "object") return saved;
-  } catch {
-    // None saved, or unreadable.
-  }
-  return {};
-}
-
-// Saves a look by name, or forgets the name when look is null. False when it couldn't be saved.
-export function nameLook(name, look) {
-  const saved = namedLooks();
-  if (look) saved[name] = look;
-  else delete saved[name];
-  try {
-    localStorage.setItem(NAMED, JSON.stringify(saved));
-    return true;
-  } catch {
-    return false;
-  }
+// A look without its gear, as a character saves it.
+export function appearance(look) {
+  return Object.fromEntries(Object.entries(look).filter(([key]) => !GEAR.includes(key)));
 }

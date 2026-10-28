@@ -1,0 +1,19 @@
+<% content_for :title, "Your characters - Delve" %>
+<main class="home characters">
+  <h1>Your characters</h1>
+  <% if @characters.any? %>
+    <ul class="character-list">
+      <% @characters.each do |character| %>
+        <li>
+          <strong><%= character.name %></strong>
+          <%= link_to "edit", edit_character_path(character) %>
+          <%= button_to "delete", character_path(character), method: :delete, form: {style: "display: inline", data: {turbo_confirm: "Delete #{character.name}? This can't be undone."}} %>
+        </li>
+      <% end %>
+    </ul>
+  <% else %>
+    <p>You don't have any characters yet.</p>
+  <% end %>
+  <p><%= link_to "New character", new_character_path %></p>
+  <p><%= link_to "Home", root_path %></p>
+</main>

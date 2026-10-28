@@ -4,11 +4,12 @@ import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { characterClips, clipNames, loadAnimations } from "./animations.js";
 import { characterMesh, disposeCharacter } from "./characterMesh.js";
 import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_TYPES } from "./armor.js";
-import { BEARD, DEFAULT_LOOK, FACE, HAIR, JEWELRY, nameLook, namedLooks, resolveRecipe, saveLook, savedLook } from "./recipe.js";
+import { BEARD, DEFAULT_LOOK, FACE, HAIR, JEWELRY, appearance, randomLook, resolveRecipe } from "./recipe.js";
 import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 
 // The character builder page: one character on a patch of ground, with a control for each setting
-// of its look, and the look as recipe JSON to copy. Walk mode uses the look made here. A button
+// of its look, and the look as recipe JSON to copy. It makes a new character or changes one of
+// yours, saving its name and appearance; the armor and weapons it tries on aren't saved. A button
 // for each animation clip plays it: loops until another is picked, one-shots then back to idle.
 // Dragging the time slider pauses the clip there.
 
@@ -33,7 +34,10 @@ const SLIDERS = [
 ];
 
 const $ = (id) => document.getElementById(id);
-let look = savedLook();
+const page = $("builder").dataset;
+const saved = JSON.parse(page.character);
+// A new character starts as someone random, in no gear.
+let look = saved.id ? resolveRecipe(saved.look) : resolveRecipe(appearance(randomLook()));
 
 const canvas = $("stage");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -71,7 +75,6 @@ function rebuild() {
   clips = baked ? characterClips(character, baked) : new Map();
   if (playing) play(playing, 0);
   $("recipe").textContent = JSON.stringify(look, null, 2);
-  saveLook(look);
 }
 
 // Plays a clip, fading from the one playing; null stands still in the bind pose.
@@ -159,36 +162,27 @@ function buildControls() {
     row(key, input, value);
   }
 
-  heading("Parts");
-  for (const [key, options] of [
-    ["hair", HAIR],
-    ["beard", BEARD],
-    ["weapon", WEAPONS],
-    ["offhand", OFFHANDS],
-  ]) {
+  const choose = (key, options) => {
     const select = document.createElement("select");
     select.id = key;
     for (const option of options) select.add(new Option(option, option, false, option === look[key]));
     select.addEventListener("change", () => {
       look[key] = select.value;
-      showOffhand();
+      if (key === "weapon") showOffhand();
       rebuild();
     });
     row(key, select);
-  }
+  };
   // Two-handed weapons leave no hand free.
   const showOffhand = () => {
     const free = !HELD[look.weapon]?.twoHanded;
     $("offhand").disabled = !free;
     if (!free) $("offhand").value = look.offhand = "none";
   };
-  showOffhand();
-  const sheathed = Object.assign(document.createElement("input"), { type: "checkbox", checked: look.sheathed });
-  sheathed.addEventListener("change", () => {
-    look.sheathed = sheathed.checked;
-    rebuild();
-  });
-  row("sheathed", sheathed);
+
+  heading("Parts");
+  choose("hair", HAIR);
+  choose("beard", BEARD);
   // A checkbox for each item of jewelry and each face marking.
   for (const [key, items] of [
     ["jewelry", JEWELRY],
@@ -204,8 +198,18 @@ function buildControls() {
     }
   }
 
-  // Each armor slot: its type, and its main and trim colors beside.
-  heading("Armor");
+  // Gear to try on, which isn't saved: weapons, and each armor slot's type with its main and trim
+  // colors beside.
+  heading("Try on (not saved)");
+  choose("weapon", WEAPONS);
+  choose("offhand", OFFHANDS);
+  showOffhand();
+  const sheathed = Object.assign(document.createElement("input"), { type: "checkbox", checked: look.sheathed });
+  sheathed.addEventListener("change", () => {
+    look.sheathed = sheathed.checked;
+    rebuild();
+  });
+  row("sheathed", sheathed);
   for (const slot of ARMOR_SLOTS) {
     const select = document.createElement("select");
     for (const option of ["none", ...ARMOR_TYPES]) select.add(new Option(option, option, false, option === (look.armor[slot]?.type ?? "none")));
@@ -255,31 +259,43 @@ function show(next) {
   rebuild();
 }
 
-$("reset").addEventListener("click", () => show(resolveRecipe()));
+// Reset goes back to the saved character, or for a new one, the default look.
+$("reset").addEventListener("click", () => show(resolveRecipe(saved.look)));
 
-// Saved characters, by name, in this browser.
-function listSaved(selected = null) {
-  const names = Object.keys(namedLooks()).sort((a, b) => a.localeCompare(b));
-  $("saved").replaceChildren(...(names.length ? names.map((name) => new Option(name, name, false, name === selected)) : [new Option("none saved yet", "")]));
-  for (const id of ["saved", "load", "delete"]) $(id).disabled = !names.length;
+// Saves the name and appearance: a new character is made, and the page becomes its edit page.
+async function save() {
+  const note = $("saveNote");
+  note.textContent = "saving…";
+  $("save").disabled = true;
+  try {
+    const response = await fetch(page.saveUrl, {
+      method: page.saveMethod,
+      headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRF-Token": document.querySelector("meta[name=csrf-token]")?.content },
+      body: JSON.stringify({ character: { name: $("name").value, look: appearance(look) } }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      note.textContent = body.errors?.join(". ") ?? `Couldn't save: the server said ${response.status}.`;
+      return;
+    }
+    Object.assign(saved, { id: body.id, name: body.name, look: appearance(look) });
+    $("name").value = body.name;
+    document.querySelector("#builder h1").textContent = body.name;
+    document.title = `${body.name} - Delve`;
+    if (page.saveMethod === "POST") {
+      page.saveUrl = body.edit_url.replace(/\/edit$/, "");
+      page.saveMethod = "PATCH";
+      history.replaceState(null, "", body.edit_url);
+    }
+    note.textContent = "saved";
+  } catch (err) {
+    note.textContent = `Couldn't save: ${err.message}`;
+  } finally {
+    $("save").disabled = false;
+  }
 }
-$("save").addEventListener("click", () => {
-  const name = prompt("Name this character:", $("saved").value || "")?.trim();
-  if (!name) return;
-  if (namedLooks()[name] && !confirm(`Replace the saved "${name}"?`)) return;
-  if (!nameLook(name, look)) alert("Couldn't save in this browser.");
-  listSaved(name);
-});
-$("load").addEventListener("click", () => {
-  const saved = namedLooks()[$("saved").value];
-  if (saved) show(resolveRecipe(saved));
-});
-$("delete").addEventListener("click", () => {
-  const name = $("saved").value;
-  if (name && confirm(`Delete "${name}"?`)) nameLook(name, null);
-  listSaved();
-});
-listSaved();
+$("save").addEventListener("click", save);
+$("name").addEventListener("keydown", (e) => e.key === "Enter" && save());
 
 // A pasted recipe, read the same way as a saved one.
 $("loadPaste").addEventListener("click", () => {

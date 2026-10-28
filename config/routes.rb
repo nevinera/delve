@@ -25,5 +25,6 @@ Rails.application.routes.draw do
   get "editor" => "editor#show"
   get "objects" => "objects#show"
   get "structures" => "objects#structures"
-  get "character_builder" => "character_builder#show"
+  get "character_builder", to: redirect("/characters/new")
+  resources :characters, except: [:show]
 end

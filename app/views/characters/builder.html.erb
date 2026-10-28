@@ -1,0 +1,30 @@
+<% content_for :title, @character.persisted? ? "#{@character.name} - Delve" : "New character - Delve" %>
+<canvas id="stage" class="builder-stage"></canvas>
+<aside class="builder-panel" id="builder"
+  data-character="<%= {id: @character.id, name: @character.name, look: @character.look}.to_json %>"
+  data-save-url="<%= @character.persisted? ? character_path(@character) : characters_path %>"
+  data-save-method="<%= @character.persisted? ? "PATCH" : "POST" %>">
+  <h1><%= @character.persisted? ? @character.name : "New character" %></h1>
+  <label class="builder-row builder-name">
+    <span>name</span>
+    <input id="name" type="text" maxlength="16" autocomplete="off" value="<%= @character.name %>">
+  </label>
+  <div class="builder-buttons">
+    <button id="save" type="button">save</button>
+    <%= link_to "your characters", characters_path %>
+  </div>
+  <p id="saveNote" class="builder-note"></p>
+  <div id="animations"></div>
+  <div id="controls"></div>
+  <div class="builder-buttons">
+    <button id="copy" type="button">copy recipe</button>
+    <button id="reset" type="button">reset</button>
+  </div>
+  <h2>Load a recipe</h2>
+  <textarea id="paste" class="builder-paste" rows="4" placeholder="paste a copied recipe here"></textarea>
+  <div class="builder-buttons">
+    <button id="loadPaste" type="button">load recipe</button>
+    <span id="pasteNote" class="builder-note"></span>
+  </div>
+  <pre id="recipe" class="builder-recipe"></pre>
+</aside>
