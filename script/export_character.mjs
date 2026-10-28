@@ -45,37 +45,45 @@ mesh.name = "character";
 mesh.geometry.deleteAttribute("mail");
 mesh.geometry.scale(FT, FT, FT);
 complete(mesh.geometry);
+// Each held item gets a joint of its own at its grip, on the bone that holds it, pointing along
+// it, as animation tools rig a weapon: weapon_r in the right hand, weapon_l in the left.
 const held = [];
-for (const bone of mesh.skeleton.bones) {
+for (const bone of [...mesh.skeleton.bones]) {
   bone.position.multiplyScalar(FT);
   for (const item of bone.children.filter((child) => child.isMesh)) {
     item.position.multiplyScalar(FT);
     item.geometry.scale(FT, FT, FT);
-    held.push({ item, bone });
+    const grip = new THREE.Bone();
+    grip.name = bone.name.endsWith("_r") ? "weapon_r" : "weapon_l";
+    grip.position.copy(item.position);
+    grip.quaternion.copy(item.quaternion);
+    bone.remove(item);
+    bone.add(grip);
+    held.push({ item, grip });
   }
 }
+const skeleton = new THREE.Skeleton([...mesh.skeleton.bones, ...held.map(({ grip }) => grip)]);
 const scene = new THREE.Scene();
 const armature = new THREE.Group();
 armature.name = "armature";
-armature.add(mesh.skeleton.bones.find((bone) => bone.name === "root"));
+armature.add(skeleton.bones.find((bone) => bone.name === "root"));
 scene.add(armature, mesh);
 scene.updateMatrixWorld(true);
-mesh.skeleton.calculateInverses();
-mesh.bind(mesh.skeleton, mesh.matrixWorld);
-// Each held item as a mesh of its own skinned wholly to the bone that holds it: some tools drop a
-// mesh hung on a joint.
-for (const { item, bone } of held) {
-  const geometry = item.geometry.clone().applyMatrix4(item.matrixWorld);
+skeleton.calculateInverses();
+mesh.bind(skeleton, mesh.matrixWorld);
+// Each held item as a mesh of its own skinned wholly to its joint: some tools drop a mesh hung on
+// a joint.
+for (const { item, grip } of held) {
+  const geometry = item.geometry.clone().applyMatrix4(grip.matrixWorld);
   const { count } = geometry.attributes.position;
-  const joint = mesh.skeleton.bones.indexOf(bone);
+  const joint = skeleton.bones.indexOf(grip);
   geometry.setAttribute("skinIndex", new THREE.Uint16BufferAttribute(new Uint16Array(count * 4).map((_, i) => (i % 4 ? 0 : joint)), 4));
   geometry.setAttribute("skinWeight", new THREE.BufferAttribute(new Float32Array(count * 4).map((_, i) => (i % 4 ? 0 : 1)), 4));
   complete(geometry);
   const skinned = new THREE.SkinnedMesh(geometry, item.material);
   skinned.name = `held_${weapon}`;
-  bone.remove(item);
   scene.add(skinned);
-  skinned.bind(mesh.skeleton, skinned.matrixWorld);
+  skinned.bind(skeleton, skinned.matrixWorld);
 }
 const glb = await new GLTFExporter().parseAsync(scene, { binary: true, trs: true });
 fs.writeFileSync(out, Buffer.from(glb));
