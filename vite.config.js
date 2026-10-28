@@ -23,6 +23,7 @@ export default defineConfig(({command}) => ({
         editor: resolve(__dirname, "client/src/editor/main.js"),
         objects: resolve(__dirname, "client/src/objects/main.js"),
         characterBuilder: resolve(__dirname, "client/src/character/builder.js"),
+        characterList: resolve(__dirname, "client/src/character/list.js"),
       },
       output: {
         entryFileNames: "[name]-[hash].js",

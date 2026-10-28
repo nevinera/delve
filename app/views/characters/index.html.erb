@@ -1,13 +1,21 @@
 <% content_for :title, "Your characters - Delve" %>
+<% content_for :head do %>
+  <%= vite_script_tags "src/character/list.js", "/client/characterList.js" %>
+<% end %>
 <main class="home characters">
   <h1>Your characters</h1>
   <% if @characters.any? %>
     <ul class="character-list">
       <% @characters.each do |character| %>
         <li>
-          <strong><%= character.name %></strong>
-          <%= link_to "edit", edit_character_path(character) %>
-          <%= button_to "delete", character_path(character), method: :delete, form: {style: "display: inline", data: {turbo_confirm: "Delete #{character.name}? This can't be undone."}} %>
+          <canvas class="character-picture" data-look="<%= character.look.to_json %>"></canvas>
+          <div class="character-about">
+            <strong><%= character.name %></strong>
+            <div class="character-actions">
+              <%= link_to "edit", edit_character_path(character) %>
+              <%= button_to "delete", character_path(character), method: :delete, form: {style: "display: inline", data: {turbo_confirm: "Delete #{character.name}? This can't be undone."}} %>
+            </div>
+          </div>
         </li>
       <% end %>
     </ul>
