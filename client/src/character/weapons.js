@@ -9,10 +9,10 @@ import { MeshOut } from "./body.js";
 // own frame), and the way +y points from it when the arm hangs down. A fist grips across the hand
 // bone, front to back, so held weapons run through it that way, tipped down ahead; a bow is held
 // upright. A polearm is tipped less, to clear the ground. A fist weapon's handle runs through the
-// fist with its claws jutting past the knuckles, along the hand; a shield straps to the outside of
-// the forearm.
+// fist with its claws jutting past the knuckles, along the hand; an orb's cup sits square to the
+// hand; a shield straps across the outside of the forearm, its point back and a little down.
 const IN_HAND = [0, -0.3, 0.02];
-const DOWN_AHEAD = [0, -0.6, 0.8];
+const DOWN_AHEAD = [0, -0.38, 0.92];
 const UP_AHEAD = [0, 0.8, 0.6];
 export const HELD = {
   sword: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
@@ -30,8 +30,8 @@ export const HELD = {
   gun: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD, twoHanded: true },
   wand: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
   thrown: { bone: "hand_r", at: IN_HAND, toward: DOWN_AHEAD },
-  shield: { bone: "lowerarm_l", at: [0.17, -0.5, 0], toward: [0, 1, 0] },
-  orb: { bone: "hand_l", at: IN_HAND, toward: UP_AHEAD },
+  shield: { bone: "lowerarm_l", at: [0.17, -0.5, 0], toward: [0, 0.17, 0.98] },
+  orb: { bone: "hand_l", at: IN_HAND, toward: [0, 0, 1] },
 };
 
 // What a look can hold in its main hand, and in its off hand alongside a one-handed weapon.
