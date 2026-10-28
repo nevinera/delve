@@ -32,8 +32,7 @@ class Github::ConnectionsController < ApplicationController
     return render json: {error: "not_connected", connect_url: github_connect_path}, status: :unauthorized if connection.nil?
     return render json: {error: "reauth_required", reauth_url: github_reauth_path}, status: :unauthorized if connection.refresh_token_expired?
 
-    connection.update_tokens!(Github::OauthClient.refresh(connection.refresh_token)) if connection.access_token_expired?
-    render json: {token: connection.access_token, expires_at: connection.access_token_expires_at.iso8601, login: connection.login}
+    render json: {token: connection.fresh_access_token!, expires_at: connection.access_token_expires_at.iso8601, login: connection.login}
   end
 
   def disconnect

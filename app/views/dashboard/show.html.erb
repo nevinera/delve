@@ -28,20 +28,15 @@
     <p>Worlds are kept in GitHub repos. <%= link_to "Connect GitHub", github_connect_path %> to make and edit them.</p>
   <% elsif @worlds.any? %>
     <ul class="world-list">
-      <% @worlds.each do |world| %>
-        <li>
-          <strong><%= world.name %></strong>
-          <span class="muted"><%= world.repo %>, edited <%= time_ago_in_words(world.edited_at) %> ago</span>
-          <%= link_to "edit", editor_path %>
-        </li>
-      <% end %>
+      <%= render partial: "worlds/world", collection: @worlds %>
     </ul>
   <% else %>
     <p>You haven't opened any worlds yet.</p>
   <% end %>
   <% if @github %>
     <p class="section-links">
-      <%= link_to "World editor", editor_path, role: "button" %>
+      <%= link_to "All worlds", worlds_path, role: "button" %>
+      <%= link_to "World editor", editor_path %>
       <%= link_to "Object library", objects_path %>
       <%= link_to "GitHub: #{@github.login}", github_connect_path %>
     </p>

@@ -1,0 +1,32 @@
+<% content_for :title, "Your worlds - Delve" %>
+<h1>Your worlds</h1>
+<% if @worlds.any? %>
+  <ul class="world-list">
+    <%= render partial: "worlds/world", collection: @worlds %>
+  </ul>
+<% else %>
+  <p>You haven't opened any worlds yet.</p>
+<% end %>
+
+<h2>Open a repo</h2>
+<% if @github.nil? %>
+  <p>Worlds are kept in GitHub repos. <%= link_to "Connect GitHub", github_connect_path %> to make and edit them.</p>
+<% elsif @repos_error %>
+  <p>Couldn't list your repos: <%= @repos_error %></p>
+<% elsif @repos.any? %>
+  <p>Opening a repo in the editor adds it to your worlds. An empty repo starts a new world.</p>
+  <ul class="world-list">
+    <% @repos.each do |repo| %>
+      <li>
+        <strong><%= repo["name"] %></strong>
+        <span class="muted"><%= repo["full_name"] %><%= ", private" if repo["private"] %></span>
+        <%= link_to "open", editor_path(from: "github/#{repo["full_name"]}") %>
+      </li>
+    <% end %>
+  </ul>
+<% else %>
+  <p>The app can't see any other repos.</p>
+<% end %>
+<% if @github %>
+  <p><%= link_to "Choose which repos the app can see", github_connect_path %></p>
+<% end %>

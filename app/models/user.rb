@@ -3,6 +3,7 @@ class User < ApplicationRecord
     :omniauthable, omniauth_providers: [:google_oauth2]
 
   has_many :characters, dependent: :destroy
+  has_many :worlds, dependent: :destroy
   has_one :github_connection, dependent: :destroy
 
   def self.from_omniauth(auth)

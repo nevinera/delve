@@ -32,6 +32,7 @@ Rails.application.routes.draw do
   root "home#show"
   get "home" => "dashboard#show", :as => :home
   get "editor" => "editor#show"
+  resources :worlds, only: [:index, :create]
   get "objects" => "objects#show"
   get "structures" => "objects#structures"
   get "character_builder", to: redirect("/characters/new")

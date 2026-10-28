@@ -20,7 +20,7 @@ export class World {
   }
 
   // Accepts the world directory zipped as-is, or inside one top-level folder (as GitHub's "download
-  // ZIP" does). A world without world.json gets one, with the continents found in places/.
+  // ZIP" does).
   static fromZip(bytes) {
     let entries = Object.entries(unzipSync(bytes)).filter(([path]) => !path.endsWith("/"));
     if (!entries.length) throw new Error("the zip is empty");
@@ -30,13 +30,19 @@ export class World {
     const stripped = entries.map(([path, data]) => [path.slice(top.length + 1), data]);
     const wrapped = tops.size === 1 && !looksLikeWorld(entries.map(([p]) => p)) && looksLikeWorld(stripped.map(([p]) => p));
     if (wrapped) entries = stripped;
-    const world = new World(new Map(entries));
+    return World.fromFiles(new Map(entries), wrapped ? top : "World");
+  }
+
+  // A world from its files. One without world.json gets one named `name`, with the continents
+  // found in places/.
+  static fromFiles(files, name) {
+    const world = new World(files);
     if (!world.files.has("world.json")) {
-      const keys = [...new Set(entries.map(([path]) => path.match(/^places\/continents\/([\w-]+)\//)?.[1]).filter(Boolean))];
-      if (!keys.length) throw new Error("no world.json and no places/continents/ in the zip");
+      const keys = [...new Set([...files.keys()].map((path) => path.match(/^places\/continents\/([\w-]+)\//)?.[1]).filter(Boolean))];
+      if (!keys.length) throw new Error("no world.json and no places/continents/");
       world.writeJson("world.json", {
         version: 1,
-        name: wrapped ? top : "World",
+        name,
         continents: keys.sort().map((key) => ({ key, name: key[0].toUpperCase() + key.slice(1) })),
         dungeons: [],
       });

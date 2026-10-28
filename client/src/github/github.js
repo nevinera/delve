@@ -6,8 +6,9 @@
 const GITHUB_API = "https://api.github.com";
 // A token is fetched again this long before it expires.
 const TOKEN_MARGIN_MS = 60_000;
-// Blob uploads run a few at a time: a save can carry many tiles.
+// Blobs go up and come down a few at a time: a world can have hundreds of tiles.
 const BLOB_CONCURRENCY = 4;
+const READ_CONCURRENCY = 8;
 
 // Thrown when /github/token says you aren't connected or must authorize again. `redirectUrl` is
 // where to send you.
@@ -39,6 +40,23 @@ export function fromBase64(base64) {
   return Uint8Array.from(atob(base64.replace(/\n/g, "")), (c) => c.charCodeAt(0));
 }
 
+// Runs act(item) on every item, `limit` at a time, telling onProgress({ done, total }) as each
+// finishes. Resolves with the results in order.
+export async function pool(items, limit, act, onProgress) {
+  const results = new Array(items.length);
+  let next = 0;
+  let done = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await act(items[index]);
+      onProgress?.({ done: ++done, total: items.length });
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
 // A file already in git, by blob sha: committed at a path without uploading it again.
 export class ExistingBlob {
   constructor(sha) {
@@ -58,7 +76,8 @@ export class GithubClient {
     return this._auth.token;
   }
 
-  // GitHub's answer to one request, or null for a 404. `no-store`: GitHub lets the browser
+  // GitHub's answer to one request. A GET gives null for a 404, and for the 409 GitHub gives
+  // for anything in a repo with no commits. `no-store`: GitHub lets the browser
   // cache some of these for a minute, and a stale branch head breaks the next commit.
   async _request(path, { method = "GET", body } = {}) {
     const res = await fetch(`${GITHUB_API}/repos/${this.repo}${path}`, {
@@ -72,7 +91,7 @@ export class GithubClient {
       },
       body: body && JSON.stringify(body),
     });
-    if (res.status === 404 && method === "GET") return null;
+    if (method === "GET" && (res.status === 404 || res.status === 409)) return null;
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
       throw new Error(`GitHub ${method} ${path} failed (${res.status}): ${error.message ?? res.statusText}`);
@@ -90,9 +109,10 @@ export class GithubClient {
     return (await this._get("", "The repo")).default_branch;
   }
 
-  // The commit a branch points at.
+  // The commit a branch points at, or null when there's no such branch, as in a repo with no
+  // commits yet.
   async headSha(branch) {
-    return (await this._get(`/git/ref/heads/${encodeURIComponent(branch)}`, `Branch ${branch}`)).object.sha;
+    return (await this._request(`/git/ref/heads/${encodeURIComponent(branch)}`))?.object.sha ?? null;
   }
 
   // Every file under `dir` at a commit, as { path: { sha, size } } with repo-relative paths. The
@@ -125,6 +145,11 @@ export class GithubClient {
     return new TextDecoder().decode(await this.readBytes(blobSha));
   }
 
+  // Several blobs' bytes, in order.
+  readAll(blobShas, onProgress) {
+    return pool(blobShas, READ_CONCURRENCY, (sha) => this.readBytes(sha), onProgress);
+  }
+
   // One tree entry. null deletes the path, an ExistingBlob reuses its sha, bytes are uploaded as
   // a blob first, and text goes into the tree as it is.
   async _entry(path, content) {
@@ -137,21 +162,6 @@ export class GithubClient {
     return { ...entry, sha: blob.sha };
   }
 
-  async _entries(files, onProgress) {
-    const paths = Object.keys(files);
-    const entries = new Array(paths.length);
-    let next = 0;
-    let done = 0;
-    const worker = async () => {
-      while (next < paths.length) {
-        const index = next++;
-        entries[index] = await this._entry(paths[index], files[paths[index]]);
-        onProgress?.({ done: ++done, total: paths.length });
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(BLOB_CONCURRENCY, paths.length) }, worker));
-    return entries;
-  }
 
   // Commits `files`, { path: content }, to `branch` as one commit on `parentSha` and moves the
   // branch to it. Content is text, bytes (Uint8Array or Blob), an ExistingBlob, or null to
@@ -160,7 +170,8 @@ export class GithubClient {
   async commit(files, { message, branch, parentSha, onProgress }) {
     if (Object.keys(files).length === 0) throw new Error("Nothing to commit");
     const base = await this._get(`/git/commits/${parentSha}`, `Commit ${parentSha}`);
-    const tree = await this._request("/git/trees", { method: "POST", body: { base_tree: base.tree.sha, tree: await this._entries(files, onProgress) } });
+    const entries = await pool(Object.keys(files), BLOB_CONCURRENCY, (path) => this._entry(path, files[path]), onProgress);
+    const tree = await this._request("/git/trees", { method: "POST", body: { base_tree: base.tree.sha, tree: entries } });
     const commit = await this._request("/git/commits", { method: "POST", body: { message, tree: tree.sha, parents: [parentSha] } });
     await this._request(`/git/refs/heads/${encodeURIComponent(branch)}`, { method: "PATCH", body: { sha: commit.sha } });
     return commit.sha;

@@ -1,12 +1,14 @@
 import "./editor.css";
 import { updateIndexes } from "./continentIndex.js";
 import { Editor } from "./editor.js";
+import { fromRepo, loadFromGithub, recordOpened, sameRepo } from "./githubWorld.js";
 import { exportHeightmap, importHeightmap, needsRange } from "./heightmap.js";
 import { LibrarySync } from "./libraryStore.js";
 import { loadLocal, saveLocal } from "./localSave.js";
 import { World } from "./world.js";
 import { slug } from "./zones.js";
 import { LAND_FT, LandGrid } from "../world/landGrid.js";
+import { GithubAuthError, GithubClient } from "../github/github.js";
 
 // Editor entry (plans/roadmap.md, "World editor").
 
@@ -223,8 +225,14 @@ const library = new LibrarySync(editor.world, () => {
   editor.loadBuiltObjects();
 });
 
-// Starts on a new or uploaded world, its library replacing the one kept in this browser.
-function startWorld(world) {
+// Where the world came from (githubWorld.js), or null for a new or uploaded one.
+let source = null;
+// The world kept in this browser had changes that weren't saved.
+let keptUnsaved = false;
+
+// Starts on a new, uploaded or opened world, its library replacing the one kept in this browser.
+function startWorld(world, from = null) {
+  source = from;
   editor.setWorld(world);
   $("worldName").textContent = editor.world.info.name;
   library.replace(editor.world).catch((err) => editor.say(`Couldn't keep the object library in this browser: ${err.message}`));
@@ -279,7 +287,7 @@ async function keep() {
   keepTimer = null;
   try {
     await library.push();
-    await saveLocal({ zip: editor.world.toZip(), pending: [...editor.pending], dirty: editor.dirty });
+    await saveLocal({ zip: editor.world.toZip(), pending: [...editor.pending], dirty: editor.dirty, source });
     keeping = keepTimer !== null;
   } catch (err) {
     editor.say(`Couldn't keep the world in this browser: ${err.message}`);
@@ -303,6 +311,8 @@ try {
   const saved = await loadLocal();
   if (saved) {
     editor.setWorld(World.fromZip(saved.zip));
+    source = saved.source ?? null;
+    keptUnsaved = Boolean(saved.dirty);
     for (const key of saved.pending ?? []) editor.pending.add(key);
     editor.unsaved = Boolean(saved.dirty);
     editor.renderPanel();
@@ -321,4 +331,40 @@ try {
   await library.push();
 } catch (err) {
   editor.say(`Couldn't load the object library kept in this browser: ${err.message}`);
+}
+
+// Opens the repo named by ?from=github/owner/repo. Unsaved changes to this same world are kept;
+// unsaved changes to another are dropped only if you agree, and otherwise the editor stays on it.
+// Opening the same world again downloads only what changed.
+async function openRepo(repo) {
+  const same = sameRepo(source?.repo, repo);
+  if (same && keptUnsaved) return opened(repo, `Picked up your unsaved changes to ${repo}.`);
+  if (!same && keptUnsaved && !window.confirm(`Drop your unsaved changes to ${editor.world.info.name} and open ${repo}?`)) {
+    window.history.replaceState(window.history.state, "", window.location.pathname);
+    return;
+  }
+  editor.say(`Opening ${repo}...`, { info: true });
+  try {
+    const client = new GithubClient(repo);
+    if (same && source.commitSha && (await client.headSha(source.branch)) === source.commitSha) return opened(repo, `Opened ${repo}.`);
+    const onProgress = ({ done, total }) => editor.say(`Opening ${repo}: ${done} of ${total} files...`, { info: true });
+    const loaded = await loadFromGithub(client, { kept: { world: editor.world, source }, onProgress });
+    startWorld(loaded.world, loaded.source);
+    opened(repo, loaded.source.commitSha ? `Opened ${repo}.` : `${repo} is empty, so this is a new world.`);
+  } catch (err) {
+    if (err instanceof GithubAuthError) editor.say("Connect GitHub to open worlds from it, on your home page.");
+    else editor.say(`Couldn't open ${repo}: ${err.message}`);
+  }
+}
+
+function opened(repo, message) {
+  editor.say(message, { info: true });
+  recordOpened(repo, editor.world.info.name).catch((err) => editor.say(`Opened ${repo}, but couldn't add it to your worlds: ${err.message}`));
+}
+
+const from = new URLSearchParams(window.location.search).get("from");
+if (from) {
+  const repo = fromRepo(from);
+  if (repo) await openRepo(repo);
+  else editor.say(`Can't open ${from}: give it as github/owner/repo.`);
 }

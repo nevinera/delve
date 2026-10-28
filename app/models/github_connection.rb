@@ -13,6 +13,14 @@ class GithubConnection < ApplicationRecord
 
   def refresh_token_expired? = refresh_token_expires_at <= Time.current
 
+  # The access token, refreshed first when it has expired.
+  def fresh_access_token!
+    update_tokens!(Github::OauthClient.refresh(refresh_token)) if access_token_expired?
+    access_token
+  end
+
+  def api = Github::ApiClient.new(fresh_access_token!)
+
   def update_tokens!(tokens)
     update!(
       access_token: tokens["access_token"],

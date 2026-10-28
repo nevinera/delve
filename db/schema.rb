@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_28_030000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_28_180000) do
   create_table "characters", force: :cascade do |t|
     t.integer "user_id", null: false
     t.string "name", null: false
@@ -50,6 +50,20 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_28_030000) do
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
   end
 
+  create_table "worlds", force: :cascade do |t|
+    t.integer "user_id", null: false
+    t.string "repo", null: false
+    t.string "name"
+    t.string "default_branch", null: false
+    t.string "released_sha"
+    t.datetime "opened_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["repo"], name: "index_worlds_on_repo", unique: true
+    t.index ["user_id"], name: "index_worlds_on_user_id"
+  end
+
   add_foreign_key "characters", "users"
   add_foreign_key "github_connections", "users"
+  add_foreign_key "worlds", "users"
 end
