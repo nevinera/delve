@@ -90,21 +90,20 @@ const FOLLOWED = {
   ...twoHanded({ pelvis: [0.25, 0.2, 0], spine_01: [0.4, 0.25, 0], spine_02: [0.2, 0.1, 0], head: [-0.45, -0.25, 0] }, [0.6, 2.0, 2.15], [0.35, -0.85, 0.35], [0, -0.5, -0.85]),
   ...CHOP_STANCE(0.4),
 };
-// The sweep: the hips and spine wound round to the right, the blade cocked back at the right
-// shoulder; then they uncoil to the left, the arms out nearly straight as the blade passes level
-// across the front, and round to the left.
-const SWEEP_FROM = twoHanded({ pelvis: [0, -0.35, 0], spine_01: [0, -0.5, 0], spine_02: [0, -0.25, 0], head: [0, 1.0, 0] }, [-1.2, 4.1, -0.1], [-1, 0.2, 0.35], [0.35, 0, 1], {
-  hand_r: [-0.4, -0.9, -0.3],
-  hand_l: [0.3, -0.9, 0.3],
-});
-const SWEEP_MID = twoHanded({ pelvis: [0, 0.05, 0], spine_01: [0.05, 0.05, 0], head: [0, -0.1, 0] }, [-0.1, 3.9, 1.6], [0.35, 0.05, 1], [1, 0, -0.35], {
-  hand_r: [-0.5, -0.85, 0],
-  hand_l: [0.5, -0.85, 0],
-});
-const SWEEP_TO = twoHanded({ pelvis: [0, 0.35, 0], spine_01: [0.05, 0.5, 0], spine_02: [0, 0.25, 0], head: [0, -1.0, 0] }, [1.3, 3.8, 0.1], [1, 0.05, -0.35], [-0.35, 0, -1], {
-  hand_r: [-0.3, -0.9, 0.3],
-  hand_l: [0.4, -0.9, -0.3],
-});
+// The sweep, swung round the body rather than from the hands, as heavy as it is: it starts
+// pointing out behind on the right at shoulder height, with the hips and spine wound round to the
+// right. Leaning left, they haul it in a wide arc across the front and a little down, the blade
+// out from the body all the way, until it points down, left and back toward the ground, with the
+// right shoulder thrown forward.
+const ARC_ELBOWS = { hand_r: [-0.4, -0.9, -0.2], hand_l: [0.4, -0.9, -0.2] };
+// A blade's edge leads round the arc, square to the way it points.
+const leading = ([x, , z]) => [-z, 0, x];
+const sweep = (bones, grip, dir) => twoHanded(bones, grip, dir, leading(dir), ARC_ELBOWS);
+const SWEEP_FROM = sweep({ pelvis: [0, -0.4, 0], spine_01: [-0.05, -0.45, 0.08], spine_02: [0, -0.25, 0], head: [0, 1.0, 0] }, [-0.95, 4.05, -0.25], [-0.6, 0.15, -0.8]);
+const SWEEP_IN = sweep({ pelvis: [0, -0.2, 0], spine_01: [0, -0.25, -0.05], spine_02: [0, -0.1, 0], head: [0, 0.5, 0] }, [-0.75, 3.85, 0.75], [-0.7, 0.02, 0.72]);
+const SWEEP_MID = sweep({ pelvis: [0.05, 0.1, 0], spine_01: [0.08, 0.1, -0.15], spine_02: [0.05, 0.05, -0.05], head: [0, -0.2, 0.15] }, [0.05, 3.6, 1.25], [0.05, -0.15, 1]);
+const SWEEP_OUT = sweep({ pelvis: [0.1, 0.3, 0], spine_01: [0.15, 0.4, -0.15], spine_02: [0.08, 0.2, -0.05], head: [-0.05, -0.7, 0.15] }, [0.7, 3.25, 0.85], [0.75, -0.35, 0.55]);
+const SWEEP_TO = sweep({ pelvis: [0.15, 0.45, 0], spine_01: [0.22, 0.55, -0.1], spine_02: [0.1, 0.35, 0], head: [-0.1, -1.1, 0.1] }, [0.75, 2.85, 0.15], [0.55, -0.6, -0.6]);
 
 // A bow: turned side-on, the left arm holding the bow out ahead and the right hand drawing the
 // string back to the jaw.
@@ -238,10 +237,12 @@ export const POSED = {
   ],
   TwoHand_Sweep: [
     [0, READY],
-    [0.35, SWEEP_FROM],
-    [0.55, SWEEP_MID],
-    [0.72, SWEEP_TO],
-    [1.25, READY],
+    [0.4, SWEEP_FROM],
+    [0.5, SWEEP_IN],
+    [0.58, SWEEP_MID],
+    [0.66, SWEEP_OUT],
+    [0.78, SWEEP_TO],
+    [1.35, READY],
   ],
   Bow_Shoot: [
     [0, BOW_LOW],
