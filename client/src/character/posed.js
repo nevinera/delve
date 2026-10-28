@@ -92,8 +92,8 @@ const FOLLOWED = {
 };
 // The sweep, swung round the body as heavy as it is, the hips leading and the torso, arms and
 // blade following each a little behind (as a batter swings). It loads like a bat, the hands by
-// the right side of the head and the blade out behind, the body wound round to the right with
-// its weight back. The hips open first; leaning left, the body hauls the blade out from it in a
+// the right side of the head and the blade out behind, the hips and still more the shoulders
+// wound round to the right, the left shoulder under the chin, the weight back. The hips open first; leaning left, the body hauls the blade out from it in a
 // wide arc across the front and down, until its tip meets the ground behind on the left (for a
 // blade 3.9ft from the grip), the right shoulder thrown forward. It holds there a moment.
 const ARC_ELBOWS = { hand_r: [-0.4, -0.9, -0.2], hand_l: [0.4, -0.9, -0.2] };
@@ -101,13 +101,13 @@ const ARC_ELBOWS = { hand_r: [-0.4, -0.9, -0.2], hand_l: [0.4, -0.9, -0.2] };
 const leading = ([x, , z]) => [-z, 0, x];
 const sweep = (bones, grip, dir, elbows = ARC_ELBOWS) => twoHanded(bones, grip, dir, leading(dir), elbows);
 const SWEEP_LOADED = {
-  ...sweep({ pelvis: [0, -0.3, 0.04], spine_01: [-0.05, -0.3, 0.06], spine_02: [0, -0.15, 0], head: [0, 0.75, 0] }, [-0.5, 5.05, 0.05], [-0.25, 0.35, -0.9], {
+  ...sweep({ pelvis: [0, -0.4, 0.04], spine_01: [-0.05, -0.55, 0.06], spine_02: [0, -0.4, 0], head: [0, 1.2, 0] }, [-0.5, 5.05, 0.05], [-0.25, 0.35, -0.9], {
     hand_r: [-1, -0.2, -0.3],
     hand_l: [0.3, -1, 0.2],
   }),
   pelvis: [0, -0.2, -0.05],
 };
-const SWEEP_IN = sweep({ pelvis: [0, 0.25, 0], spine_01: [0, -0.25, 0], spine_02: [0, -0.15, 0], head: [0, 0.2, 0] }, [-0.85, 4.3, 0.45], [-0.8, 0.15, -0.55], {
+const SWEEP_IN = sweep({ pelvis: [0, 0.2, 0], spine_01: [0, -0.5, 0], spine_02: [0, -0.3, 0], head: [0, 0.6, 0] }, [-0.85, 4.3, 0.45], [-0.8, 0.15, -0.55], {
   hand_r: [-0.8, -0.6, -0.2],
   hand_l: [0.3, -1, 0.2],
 });
