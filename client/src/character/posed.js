@@ -70,21 +70,41 @@ const twoHanded = (bones, grip, dir, front, elbows = ARMS_DOWN) => ({
 });
 const READY = twoHanded({ spine_01: [0.08, -0.15, 0], head: [0, 0.15, 0] }, [-0.1, 3.4, 1.05], [0.15, 0.75, 0.55], [0, 0, 1]);
 const READY_BREATH = twoHanded({ spine_01: [0.06, -0.15, 0], spine_02: [-0.03, 0, 0], head: [0, 0.15, 0] }, [-0.1, 3.47, 1.03], [0.15, 0.75, 0.55], [0, 0, 1]);
-// The overhead chop: back over the right shoulder, up over the head, and down ahead to the left.
-const WOUND = twoHanded({ spine_01: [0, -0.5, 0], spine_02: [-0.05, -0.2, 0], head: [0, 0.6, 0] }, [-0.65, 5.6, -0.15], [-0.3, 0.4, -0.85], [0, 1, 0], {
-  hand_r: [-1, 0.2, -0.2],
-  hand_l: [0.4, -0.5, 0.6],
+// The overhead chop: leaning back with the blade over the right shoulder, up over the head, then
+// bending forward from the hips, knees giving, arms out straight as it comes down ahead, and on
+// down to the left.
+const CHOP_STANCE = (drop) => ({ ...STANCE, pelvis: [0, STANCE.pelvis[1] - drop, STANCE.pelvis[2]] });
+const WOUND = twoHanded({ pelvis: [-0.08, -0.15, 0], spine_01: [-0.12, -0.3, 0], spine_02: [-0.1, -0.15, 0], head: [0.15, 0.4, 0] }, [-0.4, 5.55, -0.15], [-0.25, 0.25, -0.95], [0, 1, 0], {
+  hand_r: [-1, 0.1, -0.3],
+  hand_l: [0.6, -0.4, 0.5],
 });
-const OVERHEAD = twoHanded({ spine_01: [0, -0.2, 0], spine_02: [-0.05, 0, 0], head: [0, 0.2, 0] }, [-0.15, 5.95, 0.45], [0, 1, 0.2], [0, 0, 1], {
-  hand_r: [-1, 0, 0.2],
-  hand_l: [1, 0, 0.2],
+const OVERHEAD = twoHanded({ pelvis: [-0.04, 0, 0], spine_01: [-0.08, -0.1, 0], spine_02: [-0.05, 0, 0], head: [0.1, 0.1, 0] }, [-0.15, 6.05, 0.55], [0, 0.55, -0.85], [0, 1, 0.3], {
+  hand_r: [-1, 0, 0.1],
+  hand_l: [1, 0, 0.1],
 });
-const CHOPPED = twoHanded({ spine_01: [0.25, 0.35, 0], spine_02: [0.1, 0.15, 0], head: [-0.1, -0.45, 0] }, [0.25, 3.0, 1.2], [0.35, -0.35, 0.85], [0, -1, 0]);
-const FOLLOWED = twoHanded({ spine_01: [0.3, 0.5, 0], spine_02: [0.05, 0.1, 0], head: [-0.1, -0.55, 0] }, [0.65, 2.7, 0.7], [0.55, -0.7, 0.35], [0, -0.6, -0.8]);
-// The sweep: from the right, level across the front, to the left.
-const SWEEP_FROM = twoHanded({ spine_01: [0, -0.55, 0], spine_02: [0, -0.15, 0], head: [0, 0.65, 0] }, [-0.85, 3.9, 0.2], [-0.85, 0.3, -0.4], [1, 0, 0]);
-const SWEEP_MID = twoHanded({ spine_01: [0.05, 0, 0], head: [0, 0, 0] }, [0, 3.8, 1.25], [0, 0.15, 1], [1, 0, 0]);
-const SWEEP_TO = twoHanded({ spine_01: [0.05, 0.6, 0], spine_02: [0, 0.15, 0], head: [0, -0.7, 0] }, [0.85, 3.7, 0.2], [0.85, 0.2, -0.3], [1, 0, 0]);
+const CHOPPED = {
+  ...twoHanded({ pelvis: [0.2, 0.08, 0], spine_01: [0.35, 0.08, 0], spine_02: [0.22, 0, 0], head: [-0.4, 0, 0] }, [0.05, 2.85, 2.7], [0.1, -0.45, 0.9], [0, -1, 0]),
+  ...CHOP_STANCE(0.35),
+};
+const FOLLOWED = {
+  ...twoHanded({ pelvis: [0.25, 0.2, 0], spine_01: [0.4, 0.25, 0], spine_02: [0.2, 0.1, 0], head: [-0.45, -0.25, 0] }, [0.6, 2.0, 2.15], [0.35, -0.85, 0.35], [0, -0.5, -0.85]),
+  ...CHOP_STANCE(0.4),
+};
+// The sweep: the hips and spine wound round to the right, the blade cocked back at the right
+// shoulder; then they uncoil to the left, the arms out nearly straight as the blade passes level
+// across the front, and round to the left.
+const SWEEP_FROM = twoHanded({ pelvis: [0, -0.35, 0], spine_01: [0, -0.5, 0], spine_02: [0, -0.25, 0], head: [0, 1.0, 0] }, [-1.2, 4.1, -0.1], [-1, 0.2, 0.35], [0.35, 0, 1], {
+  hand_r: [-0.4, -0.9, -0.3],
+  hand_l: [0.3, -0.9, 0.3],
+});
+const SWEEP_MID = twoHanded({ pelvis: [0, 0.05, 0], spine_01: [0.05, 0.05, 0], head: [0, -0.1, 0] }, [-0.1, 3.9, 1.6], [0.35, 0.05, 1], [1, 0, -0.35], {
+  hand_r: [-0.5, -0.85, 0],
+  hand_l: [0.5, -0.85, 0],
+});
+const SWEEP_TO = twoHanded({ pelvis: [0, 0.35, 0], spine_01: [0.05, 0.5, 0], spine_02: [0, 0.25, 0], head: [0, -1.0, 0] }, [1.3, 3.8, 0.1], [1, 0.05, -0.35], [-0.35, 0, -1], {
+  hand_r: [-0.3, -0.9, 0.3],
+  hand_l: [0.4, -0.9, -0.3],
+});
 
 // A bow: turned side-on, the left arm holding the bow out ahead and the right hand drawing the
 // string back to the jaw.
