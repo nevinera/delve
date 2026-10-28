@@ -44,4 +44,10 @@ describe("plate files", () => {
     expect(second.get("places/continents/main/plates/surface/0_0.plate")).toEqual(first.get("places/continents/main/plates/surface/0_0.plate"));
     expect(cache.get("places/continents/main/plates/surface/1_0.plate").sources[0]).toBe(changed.get("places/continents/main/tiles/surface/16/0.dlt.gz"));
   });
+
+  it("packs the same plates again from tiles it unpacked", async () => {
+    const once = await packPlates(files);
+    const twice = await packPlates(await unpackPlates(once));
+    for (const [path, bytes] of once) expect(strFromU8(twice.get(path))).toBe(strFromU8(bytes));
+  });
 });

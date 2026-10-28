@@ -1,7 +1,7 @@
 import "./editor.css";
 import { updateIndexes } from "./continentIndex.js";
 import { Editor } from "./editor.js";
-import { fromRepo, loadFromGithub, recordOpened, sameRepo } from "./githubWorld.js";
+import { BranchMoved, fromRepo, loadFromGithub, recordOpened, sameRepo, saveToGithub } from "./githubWorld.js";
 import { exportHeightmap, importHeightmap, needsRange } from "./heightmap.js";
 import { LibrarySync } from "./libraryStore.js";
 import { loadLocal, saveLocal } from "./localSave.js";
@@ -241,9 +241,40 @@ let source = null;
 // The world kept in this browser had changes that weren't saved.
 let keptUnsaved = false;
 
+function setSource(from) {
+  source = from;
+  $("saveGithub").hidden = !source;
+  $("saveGithub").title = source ? `Commits your changes to ${source.repo}` : "";
+}
+
+$("saveGithub").addEventListener("click", async () => {
+  const message = window.prompt(`Describe what you changed, for the commit to ${source.repo}:`, `Edit ${editor.world.info.name}`);
+  if (message === null) return;
+  const button = $("saveGithub");
+  button.disabled = true;
+  try {
+    updateIndexes(editor.world);
+    const onProgress = ({ stage, done, total }) => editor.say(stage === "packing" ? `Packing: ${done} of ${total} plates...` : `Saving to ${source.repo}: ${done} of ${total} files...`, { info: true });
+    const saved = await saveToGithub(new GithubClient(source.repo), editor.world, source, { message: message.trim() || "Edit the world", pool: plates, onProgress });
+    if (saved) setSource(saved);
+    keptUnsaved = false;
+    editor.markSaved();
+    keep();
+    editor.say(saved ? `Saved to ${source.repo}.` : "Nothing's changed since it was last saved.", { info: true });
+  } catch (err) {
+    if (err instanceof BranchMoved) {
+      editor.say(`${err.message}, so saving would drop what's there.`);
+      if (window.confirm(`${err.message}. Open it again from GitHub? Changes here that aren't saved will be lost; download the world first to keep them.`)) await openRepo(source.repo, { fresh: true });
+    } else if (err instanceof GithubAuthError) editor.say("Connect GitHub to save, on your home page.");
+    else editor.say(`Couldn't save to ${source.repo}: ${err.message}`);
+  } finally {
+    button.disabled = false;
+  }
+});
+
 // Starts on a new, uploaded or opened world, its library replacing the one kept in this browser.
 function startWorld(world, from = null) {
-  source = from;
+  setSource(from);
   editor.setWorld(world);
   $("worldName").textContent = editor.world.info.name;
   library.replace(editor.world).catch((err) => editor.say(`Couldn't keep the object library in this browser: ${err.message}`));
@@ -322,7 +353,7 @@ try {
   const saved = await loadLocal();
   if (saved) {
     editor.setWorld(World.fromZip(saved.zip));
-    source = saved.source ?? null;
+    setSource(saved.source ?? null);
     keptUnsaved = Boolean(saved.dirty);
     for (const key of saved.pending ?? []) editor.pending.add(key);
     editor.unsaved = Boolean(saved.dirty);
@@ -347,10 +378,11 @@ try {
 // Opens the repo named by ?from=github/owner/repo. Unsaved changes to this same world are kept;
 // unsaved changes to another are dropped only if you agree, and otherwise the editor stays on it.
 // Opening the same world again downloads only what changed.
-async function openRepo(repo) {
-  const same = sameRepo(source?.repo, repo);
+// Opens a repo's world, `fresh` from GitHub, ignoring what's kept in this browser, if asked.
+async function openRepo(repo, { fresh = false } = {}) {
+  const same = !fresh && sameRepo(source?.repo, repo);
   if (same && keptUnsaved) return opened(repo, `Picked up your unsaved changes to ${repo}.`);
-  if (!same && keptUnsaved && !window.confirm(`Drop your unsaved changes to ${editor.world.info.name} and open ${repo}?`)) {
+  if (!fresh && !same && keptUnsaved && !window.confirm(`Drop your unsaved changes to ${editor.world.info.name} and open ${repo}?`)) {
     window.history.replaceState(window.history.state, "", window.location.pathname);
     return;
   }
@@ -359,7 +391,7 @@ async function openRepo(repo) {
     const client = new GithubClient(repo);
     if (same && source.commitSha && (await client.headSha(source.branch)) === source.commitSha) return opened(repo, `Opened ${repo}.`);
     const onProgress = ({ done, total }) => editor.say(`Opening ${repo}: ${done} of ${total} files...`, { info: true });
-    const loaded = await loadFromGithub(client, { kept: { world: editor.world, source }, onProgress, pool: plates });
+    const loaded = await loadFromGithub(client, { kept: fresh ? null : { world: editor.world, source }, onProgress, pool: plates });
     startWorld(loaded.world, loaded.source);
     opened(repo, loaded.source.commitSha ? `Opened ${repo}.` : `${repo} is empty, so this is a new world.`);
   } catch (err) {

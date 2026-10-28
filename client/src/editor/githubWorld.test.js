@@ -1,6 +1,7 @@
 import { strToU8 } from "fflate";
 import { describe, expect, it } from "vitest";
-import { fromRepo, loadFromGithub } from "./githubWorld.js";
+import { blobSha } from "../github/github.js";
+import { BranchMoved, fromRepo, loadFromGithub, saveToGithub } from "./githubWorld.js";
 import { World } from "./world.js";
 
 // A fake GithubClient over { path: [sha, text] }, counting the blobs it reads.
@@ -64,5 +65,31 @@ describe("worlds from GitHub", () => {
     const { world } = await loadFromGithub(client, { kept: { world: kept, source: { repo: "me/thorn", shas: { "places/continents/main/plates/surface/0_0.plate": "p1" } } } });
     expect(client.read).toEqual(["w1"]);
     expect(world.files.get(tile)).toEqual(new Uint8Array([1, 2, 3]));
+  });
+
+  describe("saving", () => {
+    // A world of two files, opened at c1 with "same.json" as it is now, and "gone.json" since removed.
+    async function opened() {
+      const world = new World(new Map([["same.json", strToU8("{}")], ["changed.json", strToU8('{"a":2}')], ["land.f32", new Uint8Array([1, 2])]]));
+      const source = { repo: "me/thorn", branch: "main", commitSha: "c1", shas: { "same.json": await blobSha(strToU8("{}")), "changed.json": "old", "gone.json": "x" } };
+      const client = { repo: "me/thorn", head: "c1", headSha: async () => client.head, commit: async (files, options) => ((client.committed = { files, options }), (client.head = "c2")) };
+      return { world, source, client };
+    }
+
+    it("commits what changed, as text or bytes, and deletes what's gone", async () => {
+      const { world, source, client } = await opened();
+      const saved = await saveToGithub(client, world, source, { message: "Save" });
+      expect(client.committed.files).toEqual({ "changed.json": '{"a":2}', "land.f32": new Uint8Array([1, 2]), "gone.json": null });
+      expect(client.committed.options).toMatchObject({ message: "Save", branch: "main", parentSha: "c1" });
+      expect(saved.commitSha).toBe("c2");
+      expect(Object.keys(saved.shas).sort()).toEqual(["changed.json", "land.f32", "same.json"]);
+      expect(await saveToGithub(client, world, saved, { message: "Again" })).toBeNull();
+    });
+
+    it("refuses when the branch has moved on", async () => {
+      const { world, source, client } = await opened();
+      client.head = "c9";
+      await expect(saveToGithub(client, world, source)).rejects.toBeInstanceOf(BranchMoved);
+    });
   });
 });

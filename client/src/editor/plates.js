@@ -77,8 +77,8 @@ export async function unpackPlates(files, { library, pool = new PlatePool(), onP
 }
 
 // The files as a world stores them: tile files grouped into plates, and each continent's plate
-// index. `cache` (a Map, kept between calls) holds each plate's text with the tile files it came
-// from, so a plate whose tiles are the same files as last time isn't made again.
+// index. `cache` (a Map, kept between calls) holds each plate with the tile files it came from, so
+// a plate whose tiles are the same files as last time isn't made again, and is the same bytes.
 export async function packPlates(files, { cache = new Map(), pool = new PlatePool(), onProgress } = {}) {
   const out = new Map();
   const plates = new Map(); // plate path -> { continent, layer, coords, members: [tile path] }
@@ -101,13 +101,13 @@ export async function packPlates(files, { cache = new Map(), pool = new PlatePoo
     const kept = cache.get(path);
     if (!kept || kept.sources.length !== sources.length || kept.sources.some((s, i) => s !== sources[i])) {
       const text = await pool.pack(coords, layer, sources);
-      cache.set(path, { sources, text, hash: plateHash(text) });
+      cache.set(path, { sources, bytes: strToU8(text), hash: plateHash(text) });
     }
     onProgress?.({ done: ++done, total: sorted.length });
   }));
   const indexes = new Map(); // continent -> { "layer/px_pz": hash }
   for (const [path, { continent, layer, coords }] of sorted) {
-    out.set(path, strToU8(cache.get(path).text));
+    out.set(path, cache.get(path).bytes);
     if (!indexes.has(continent)) indexes.set(continent, {});
     indexes.get(continent)[`${layer}/${coords.join("_")}`] = cache.get(path).hash;
   }

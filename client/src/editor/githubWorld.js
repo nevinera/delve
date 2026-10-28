@@ -1,3 +1,5 @@
+import { strFromU8 } from "fflate";
+import { blobSha } from "../github/github.js";
 import { plateAt, tilesInPlate } from "./plates.js";
 import { World } from "./world.js";
 
@@ -40,6 +42,41 @@ export async function loadFromGithub(client, { kept = null, onProgress, pool } =
   const world = World.fromFiles(files, client.repo.split("/")[1]);
   await world.unpack({ pool });
   return { world, source };
+}
+
+// Thrown when the branch has moved on since the world was opened, so saving would drop what's
+// there.
+export class BranchMoved extends Error {
+  constructor(repo, branch) {
+    super(`${repo} has changed on GitHub since you opened it`);
+    this.name = "BranchMoved";
+    this.branch = branch;
+  }
+}
+
+// Files GitHub keeps as text, which go inline in the commit's tree; the rest go up as blobs.
+const TEXT = /\.(plate|json|md|txt)$/;
+const shas = new WeakMap(); // file bytes -> blob sha
+
+// Saves the world to the branch it was opened from (source, as loadFromGithub gives it) as one
+// commit: the files that differ from what was there, and deletions of files no longer in it.
+// Refuses with BranchMoved if the branch has moved on. Returns the new source, or null when
+// nothing changed. onProgress({ stage, done, total }) hears how packing and sending go.
+export async function saveToGithub(client, world, source, { message, pool, onProgress } = {}) {
+  if (!source.commitSha) throw new Error(`${client.repo} has no commits yet: add one on GitHub (a README will do), then open it again`);
+  if ((await client.headSha(source.branch)) !== source.commitSha) throw new BranchMoved(client.repo, source.branch);
+  const stored = await world.stored({ pool, onProgress: (p) => onProgress?.({ stage: "packing", ...p }) });
+  const next = {};
+  const files = {};
+  for (const [path, bytes] of stored) {
+    if (!shas.has(bytes)) shas.set(bytes, await blobSha(bytes));
+    next[path] = shas.get(bytes);
+    if (source.shas[path] !== next[path]) files[path] = TEXT.test(path) ? strFromU8(bytes) : bytes;
+  }
+  for (const path of Object.keys(source.shas)) if (!(path in next)) files[path] = null;
+  if (!Object.keys(files).length) return null;
+  const commitSha = await client.commit(files, { message, branch: source.branch, parentSha: source.commitSha, onProgress: (p) => onProgress?.({ stage: "sending", ...p }) });
+  return { ...source, commitSha, shas: next };
 }
 
 // Adds the world to your list on the server, or marks it opened again.

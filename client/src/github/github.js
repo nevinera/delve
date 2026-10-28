@@ -9,6 +9,11 @@ const TOKEN_MARGIN_MS = 60_000;
 // Blobs go up and come down a few at a time: a world can have hundreds of tiles.
 const BLOB_CONCURRENCY = 4;
 const READ_CONCURRENCY = 8;
+// A commit's tree goes in requests of at most this much inline text and this many files, each
+// building on the last: GitHub refuses one over about 40 MB, and times one out after about 10 s
+// (#32).
+const TREE_BYTES = 10_000_000;
+const TREE_FILES = 500;
 
 // Thrown when /github/token says you aren't connected or must authorize again. `redirectUrl` is
 // where to send you.
@@ -62,6 +67,34 @@ export class ExistingBlob {
   constructor(sha) {
     this.sha = sha;
   }
+}
+
+// The paths in groups of at most TREE_FILES, with at most TREE_BYTES of text in each.
+function treeParts(paths, files) {
+  const parts = [];
+  let part = [];
+  let bytes = 0;
+  for (const path of paths) {
+    const size = typeof files[path] === "string" ? files[path].length : 0;
+    if (part.length && (part.length >= TREE_FILES || bytes + size > TREE_BYTES)) {
+      parts.push(part);
+      [part, bytes] = [[], 0];
+    }
+    part.push(path);
+    bytes += size;
+  }
+  if (part.length) parts.push(part);
+  return parts;
+}
+
+// A file's git blob sha, as GitHub lists it: the SHA-1 of "blob <length>\0" and its bytes.
+export async function blobSha(bytes) {
+  const head = new TextEncoder().encode(`blob ${bytes.length}\0`);
+  const all = new Uint8Array(head.length + bytes.length);
+  all.set(head);
+  all.set(bytes, head.length);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-1", all));
+  return [...digest].map((b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 // One repo, `owner/name`.
@@ -165,14 +198,25 @@ export class GithubClient {
 
   // Commits `files`, { path: content }, to `branch` as one commit on `parentSha` and moves the
   // branch to it. Content is text, bytes (Uint8Array or Blob), an ExistingBlob, or null to
-  // delete the path. Fails without touching the branch if it has moved past `parentSha`, so a
-  // save never silently drops someone else's commit. Returns the new commit's sha.
+  // delete the path. Text goes inline in the tree, and the tree goes up in parts (TREE_BYTES,
+  // TREE_FILES). Fails without touching the branch if it has moved past `parentSha`, so a save
+  // never silently drops someone else's commit. onProgress({ done, total }) hears as each file is
+  // in. Returns the new commit's sha.
   async commit(files, { message, branch, parentSha, onProgress }) {
-    if (Object.keys(files).length === 0) throw new Error("Nothing to commit");
+    const paths = Object.keys(files);
+    if (paths.length === 0) throw new Error("Nothing to commit");
     const base = await this._get(`/git/commits/${parentSha}`, `Commit ${parentSha}`);
-    const entries = await pool(Object.keys(files), BLOB_CONCURRENCY, (path) => this._entry(path, files[path]), onProgress);
-    const tree = await this._request("/git/trees", { method: "POST", body: { base_tree: base.tree.sha, tree: entries } });
-    const commit = await this._request("/git/commits", { method: "POST", body: { message, tree: tree.sha, parents: [parentSha] } });
+    const binary = paths.filter((path) => files[path] !== null && typeof files[path] !== "string" && !(files[path] instanceof ExistingBlob));
+    let done = 0;
+    const report = (n) => onProgress?.({ done: (done += n), total: paths.length });
+    const uploaded = new Map(await pool(binary, BLOB_CONCURRENCY, async (path) => [path, await this._entry(path, files[path])], () => report(1)));
+    let treeSha = base.tree.sha;
+    for (const part of treeParts(paths, files)) {
+      const entries = await Promise.all(part.map((path) => uploaded.get(path) ?? this._entry(path, files[path])));
+      treeSha = (await this._request("/git/trees", { method: "POST", body: { base_tree: treeSha, tree: entries } })).sha;
+      report(part.filter((path) => !uploaded.has(path)).length);
+    }
+    const commit = await this._request("/git/commits", { method: "POST", body: { message, tree: treeSha, parents: [parentSha] } });
     await this._request(`/git/refs/heads/${encodeURIComponent(branch)}`, { method: "PATCH", body: { sha: commit.sha } });
     return commit.sha;
   }

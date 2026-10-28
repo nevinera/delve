@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { ExistingBlob, GithubAuthError, GithubClient, fromBase64, toBase64 } from "./github.js";
+import { ExistingBlob, GithubAuthError, GithubClient, blobSha, fromBase64, toBase64 } from "./github.js";
 
 const API = "https://api.github.com/repos/me/world";
 const json = (body, status = 200) => new Response(JSON.stringify(body), { status });
@@ -107,5 +107,27 @@ describe("GithubClient", () => {
     });
     const client = new GithubClient("me/world");
     await expect(client.commit({ "a.json": "{}" }, { message: "m", branch: "main", parentSha: "c1" })).rejects.toThrow(/not a fast forward/);
+  });
+
+  it("sends a big tree in parts, each building on the last", async () => {
+    let n = 0;
+    const calls = fakeGithub({
+      [`GET ${API}/git/commits/c1`]: { tree: { sha: "root" } },
+      [`POST ${API}/git/trees`]: () => json({ sha: `tree${++n}` }),
+      [`POST ${API}/git/commits`]: { sha: "c2" },
+      [`PATCH ${API}/git/refs/heads/main`]: { object: { sha: "c2" } },
+    });
+    const files = Object.fromEntries(Array.from({ length: 1200 }, (_, k) => [`f${k}.txt`, "x"]));
+    files["big.plate"] = "y".repeat(10_000_000);
+    await new GithubClient("me/world").commit(files, { message: "m", branch: "main", parentSha: "c1" });
+    const trees = calls.filter((c) => c.url.endsWith("/git/trees")).map((c) => c.body);
+    expect(trees.map((t) => [t.base_tree, t.tree.length])).toEqual([["root", 500], ["tree1", 500], ["tree2", 200], ["tree3", 1]]);
+    expect(calls.find((c) => c.url.endsWith("/git/commits")).body.tree).toBe("tree4");
+  });
+});
+
+describe("blobSha", () => {
+  it("is git's sha for the bytes", async () => {
+    expect(await blobSha(new TextEncoder().encode("hello\n"))).toBe("ce013625030ba8dba906f756967f9e9ca394464a");
   });
 });

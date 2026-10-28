@@ -67,8 +67,8 @@ export function encodePlate([px, pz], layer, tiles) {
   for (const tile of sorted) {
     for (const kind of PALETTES) for (const name of paletteOf(tile, kind)) if (!palettes[kind].includes(name)) palettes[kind].push(name);
   }
-  const kinds = [];
-  for (const tile of sorted) for (const o of tile.objects ?? []) if (!kinds.includes(o.type)) kinds.push(o.type);
+  // Kinds by name, so the table doesn't change with the order objects are listed in.
+  const kinds = [...new Set(sorted.flatMap((tile) => (tile.objects ?? []).map((o) => o.type)))].sort();
   const idWidth = widthFor(kinds.length);
   const clutters = sorted.map((tile) => mostCommon(clutterOf(tile)));
   const plateClutter = mostCommon(clutters);
