@@ -224,18 +224,20 @@ export function bodyMesh(look) {
 
   // How far forward the trunk's front reaches at a point's x and height, where it's in front of
   // the trunk: between the rings above and below it, bust and all.
+  // Armor over the chest or shoulders stands this far proud of the trunk.
+  const armored = look.armor?.chest || look.armor?.shoulders ? 0.065 * s : 0;
   const chestFront = (x, y) => {
     const above = trunkRings.findIndex((r) => r.center[1] >= y);
     if (above < 1) return null;
-    const reach = (ring) => {
-      const angle = Math.asin(x / ring.rx);
-      return ring.center[2] + Math.cos(angle) * (ring.rz + (ring.push?.(angle) ?? 0));
-    };
     const [lower, upper] = [trunkRings[above - 1], trunkRings[above]];
-    // Out past the sides of the trunk, as beside the neck, there's no front to lie on.
-    if (Math.abs(x) >= Math.min(lower.rx, upper.rx)) return null;
     const t = (y - lower.center[1]) / (upper.center[1] - lower.center[1]);
-    return reach(lower) + (reach(upper) - reach(lower)) * t;
+    const mix = (a, b) => a + (b - a) * t;
+    // The trunk's width here, between the rings: past it, as beside the neck, there's no front.
+    const rx = mix(lower.rx, upper.rx);
+    if (Math.abs(x) >= rx) return null;
+    const angle = Math.asin(x / rx);
+    const reach = (ring) => ring.center[2] + Math.cos(angle) * (ring.rz + (ring.push?.(angle) ?? 0));
+    return mix(reach(lower), reach(upper)) + armored;
   };
   parts.head = head(out, look, at("head"), s, c, chestFront);
   // How far the trunk reaches from its middle at a height and angle round it, or 0 off its ends.
@@ -600,8 +602,8 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
 
   if (look.beard === "goatee") {
     // A small tuft from under the lower lip, down over the point of the chin.
-    const tuft = [p(0, 0.11, 0.42), p(0, 0.02, 0.42), p(0, -0.08, 0.37)];
-    out.path(tuft, [0.05, 0.055, 0.02].map((r) => r * s), 6, () => c.hair, () => bones, { capStart: true, capEnd: true, depth: [0.03, 0.04, 0.02].map((r) => r * s) });
+    const tuft = [p(0, 0.075, 0.41), p(0, 0.01, 0.41), p(0, -0.07, 0.37)];
+    out.path(tuft, [0.032, 0.038, 0.014].map((r) => r * s), 6, () => c.hair, () => bones, { capStart: true, capEnd: true, depth: [0.018, 0.026, 0.014].map((r) => r * s) });
   }
   if (look.beard === "long") {
     // A beard hanging to the chest.
