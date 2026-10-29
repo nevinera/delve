@@ -56,6 +56,10 @@ describe("validateWorld", () => {
     expect(changed((f) => f.set("shapes.json", json({ version: 1, kinds: { boulder: box } })))).toEqual([]);
     expect(changed((f) => f.delete("shapes.json"))).toEqual(["warning: shapes.json: is missing, so nothing blocks line of sight: saving the world in the editor writes it"]);
     expect(changed((f) => f.set("shapes.json", json({ version: 2, kinds: {} })))).toEqual(["shapes.json: should be version 1, with kinds"]);
+    const busy = { points: box.points, faces: Array.from({ length: 1001 }, (_, i) => box.faces[i % 4]) };
+    expect(changed((f) => f.set("shapes.json", json({ version: 1, kinds: { boulder: busy } })))).toEqual([
+      "warning: shapes.json: boulder has 1001 faces, more than 1000, which makes line of sight slower near it: fewer holes cut through it would help",
+    ]);
     expect(changed((f) => f.set("shapes.json", json({ version: 1, kinds: { boulder: { ...box, faces: [[0, 1, 9], ...box.faces.slice(1)] } } })))).toEqual(["shapes.json: boulder needs points and faces"]);
   });
 

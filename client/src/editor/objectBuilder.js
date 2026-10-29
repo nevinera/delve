@@ -15,7 +15,7 @@ import { randomLook } from "../character/recipe.js";
 // heavier every 5 ft), the object's axes, a ring where they must stay within, the footprint the
 // game will use, and on asking, a person for scale and the outline the game tests line of sight
 // against. "cut" cuts a hole through that outline: click its corners as you see the object, and
-// Enter sweeps it right through along the view. Clicking a piece picks it and fades the rest; handles
+// Enter cuts it right through, the way it looked from there. Clicking a piece picks it and fades the rest; handles
 // move, turn or size it along its own axes, sizing from the face opposite the handle, and the panel
 // sets its type, color, taper, whether it's a hole and, as a last resort, exact numbers. Holes show
 // as red glass while a piece is picked; with none picked the object shows as the game draws it,
@@ -154,7 +154,8 @@ export class ObjectBuilder {
     const handles = div("ob-row", ...this.handleButtons, el("label", { className: "ob-check" }, this.snap, el("span", { textContent: "snap" })), el("label", { className: "ob-check", title: "move along the world's axes, not the piece's (W)" }, this.worldBox, el("span", { textContent: "world" })), el("label", { className: "ob-check ob-person", title: "a random character beside the object, for scale" }, this.personBox, el("span", { textContent: "person" })));
     this.cutButton = el("button", { type: "button", className: "ob-edit", textContent: "cut", title: "cut a hole through the sight outline: click its corners as you see the object", onclick: () => this.startCut() });
     const clearCuts = el("button", { type: "button", className: "ob-edit", textContent: "clear cuts", onclick: () => this.change((o) => delete o.sightCuts) });
-    this.sightRow = div("ob-row", el("label", { className: "ob-check", title: "the outline the game tests line of sight against" }, this.hullBox, el("span", { textContent: "sight outline" })), this.cutButton, clearCuts);
+    this.faceCount = el("span", { className: "ob-info", title: "how many faces the game tests line of sight against" });
+    this.sightRow = div("ob-row", el("label", { className: "ob-check", title: "the outline the game tests line of sight against" }, this.hullBox, el("span", { textContent: "sight outline" })), this.cutButton, clearCuts, this.faceCount);
 
     this.list = el("select", { size: 8, className: "ob-list", onchange: () => this.pick(this.list.value === "" ? null : Number(this.list.value)) });
 
@@ -886,21 +887,26 @@ export class ObjectBuilder {
       line.renderOrder = 1;
       this.marks.add(line);
     }
+    this.faceCount.textContent = "";
     const mesh = !this.hullBox.checked || this.object.blocksSight === false ? null : objectMesh(this.object);
     if (!mesh) return;
     const points = mesh.points.map((p) => new THREE.Vector3(...p));
     const edges = mesh.faces.flatMap((loop) => loop.flatMap((a, i) => [points[a], points[loop[(i + 1) % loop.length]]]));
     this.marks.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(edges), new THREE.LineBasicMaterial({ color: COLORS.sight, transparent: true, opacity: 0.8 })));
+    // A faint skin, so holes show as holes.
+    const skin = mesh.faces.flatMap((loop) => loop.slice(1, -1).flatMap((_, i) => [points[loop[0]], points[loop[i + 1]], points[loop[i + 2]]]));
+    this.marks.add(new THREE.Mesh(new THREE.BufferGeometry().setFromPoints(skin), new THREE.MeshBasicMaterial({ color: COLORS.sight, transparent: true, opacity: 0.15, side: THREE.DoubleSide, depthWrite: false })));
+    this.faceCount.textContent = `${mesh.faces.length} faces`;
   }
 
   // Cutting a hole through the sight outline: corners clicked on the plane across the view through
-  // the object's middle, swept along the view when Enter ends it.
+  // the object's middle, and when Enter ends it, a cone out from the camera through them.
   startCut() {
     if (this.readOnly || this.object.blocksSight === false) return;
     this.hullBox.checked = true;
     this.cutting = [];
     this.cutButton.classList.add("active");
-    this.hint.textContent = "click the corners of the hole as you see the object · enter cuts it right through · backspace drops a corner · esc stops · right-drag still turns the view, shift-right-drag pans";
+    this.hint.textContent = "click the corners of the hole as you see the object · enter cuts it right through as you see it · backspace drops a corner · esc stops · right-drag still turns the view, shift-right-drag pans";
     this.canvas.focus();
     this.drawMarks();
   }
@@ -911,7 +917,7 @@ export class ObjectBuilder {
     const at = ray.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(view, middle), new THREE.Vector3());
     if (!at) return;
     this.cutting.push(at);
-    this.cutView = view;
+    this.cutFrom = this.camera.position.clone();
     this.drawMarks();
   }
 
@@ -921,7 +927,7 @@ export class ObjectBuilder {
     this.cutButton.classList.remove("active");
     this.hint.textContent = HINT;
     if (keep && corners.length >= 3) {
-      const cut = { along: this.cutView.toArray().map((v) => round(v, 0.001)), outline: corners.map((p) => p.toArray().map((v) => tidy(v))) };
+      const cut = { from: this.cutFrom.toArray().map((v) => tidy(v)), outline: corners.map((p) => p.toArray().map((v) => tidy(v))) };
       this.change((o) => (o.sightCuts = [...(o.sightCuts ?? []), cut]));
     } else this.drawMarks();
   }

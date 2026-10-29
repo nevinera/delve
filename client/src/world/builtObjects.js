@@ -13,9 +13,9 @@ import { OLD_IMAGES, imagePath, objectPath } from "./paths.js";
 // - blocksSight: false for an object you see through, such as a fence or a lamp post; it blocks
 //   line of sight when absent (editor/shapes.js).
 // - sightCuts: holes through what blocks sight, such as an arch's or a window's, up to MAX_CUTS,
-//   each { along: [x, y, z], outline: [[x, y, z], ...] }: the outline, 3 to MAX_CUT_CORNERS points
-//   in feet from the centre, swept both ways along `along` right through the object
-//   (editor/sightCuts.js).
+//   each { along: [x, y, z], outline } or { from: [x, y, z], outline }: the outline, 3 to
+//   MAX_CUT_CORNERS points in feet from the centre, swept right through the object both ways along
+//   `along`, or out from the point of view `from` as a cone (editor/sightCuts.js).
 // - palette: the colors its pieces use, each { color: "#rrggbb", param, name }. Up to MAX_PARAMS of
 //   them are parameters, which a placement can override; their colors are the defaults. The first
 //   colors added are parameters until there are MAX_PARAMS of them.
@@ -216,8 +216,9 @@ export function problems(object) {
   if (object.blocksSight !== undefined && object.blocksSight !== false) out.push("blocksSight should be false, or left out");
   if (object.sightCuts !== undefined) {
     const point = (p) => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite);
-    const cutOk = (c) => point(c?.along) && c.along.some((v) => v !== 0) && Array.isArray(c.outline) && c.outline.length >= 3 && c.outline.length <= MAX_CUT_CORNERS && c.outline.every(point);
-    if (!(Array.isArray(object.sightCuts) && object.sightCuts.length <= MAX_CUTS && object.sightCuts.every(cutOk))) out.push(`its sightCuts should be up to ${MAX_CUTS}, each a direction and 3 to ${MAX_CUT_CORNERS} points`);
+    const way = (c) => (c?.along !== undefined) !== (c?.from !== undefined) && (c.from ? point(c.from) : point(c.along) && c.along.some((v) => v !== 0));
+    const cutOk = (c) => way(c) && Array.isArray(c.outline) && c.outline.length >= 3 && c.outline.length <= MAX_CUT_CORNERS && c.outline.every(point);
+    if (!(Array.isArray(object.sightCuts) && object.sightCuts.length <= MAX_CUTS && object.sightCuts.every(cutOk))) out.push(`its sightCuts should be up to ${MAX_CUTS}, each a direction or a point of view, and 3 to ${MAX_CUT_CORNERS} points`);
   }
   if (object.tags !== undefined && !(Array.isArray(object.tags) && object.tags.every((t) => typeof t === "string"))) out.push("its tags should be a list of words");
   object.pieces.forEach((piece, n) => {

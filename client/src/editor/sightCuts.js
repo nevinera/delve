@@ -2,8 +2,9 @@ import * as THREE from "three";
 import { Brush, Evaluator, SUBTRACTION } from "three-bvh-csg";
 
 // Holes cut by hand through a built object's line of sight mesh (world/builtObjects.js
-// `sightCuts`). A cut is a polygon swept along a direction through the whole object, taken out of
-// the mesh as builtMeshes.js takes holes out of pieces.
+// `sightCuts`). A cut is a polygon swept through the whole object: along a direction, or out from
+// a point of view as a cone, the way it looked from there. It's taken out of the mesh as
+// builtMeshes.js takes holes out of pieces.
 
 const evaluator = new Evaluator();
 evaluator.attributes = ["position"];
@@ -18,7 +19,7 @@ export function cutMesh(mesh, cuts = []) {
   const reach = geometry.boundingSphere.center.length() + geometry.boundingSphere.radius + 1;
   let brush = new Brush(geometry);
   for (const cut of cuts) {
-    brush = evaluator.evaluate(brush, new Brush(prism(cut, reach)), SUBTRACTION);
+    brush = evaluator.evaluate(brush, new Brush(cut.from ? cone(cut, geometry.boundingSphere) : prism(cut, reach)), SUBTRACTION);
   }
   return fromGeometry(brush.geometry);
 }
@@ -36,6 +37,30 @@ function prism({ along, outline }, reach) {
   geometry.deleteAttribute("uv");
   geometry.deleteAttribute("normal");
   return geometry;
+}
+
+// A cut's outline seen from its point of view, as a closed cone from there out past the far side of
+// the object (bounded by `sphere`).
+function cone({ from, outline }, sphere) {
+  const eye = new THREE.Vector3(...from);
+  const corners = outline.map((p) => new THREE.Vector3(...p));
+  const middle = corners.reduce((m, p) => m.add(p), new THREE.Vector3()).divideScalar(corners.length);
+  const axis = middle.clone().sub(eye).normalize();
+  const far = eye.distanceTo(sphere.center) + sphere.radius + 1;
+  // Each corner pushed out along its line from the eye until it's past the object.
+  let rim = corners.map((p) => {
+    const ray = p.clone().sub(eye);
+    return eye.clone().addScaledVector(ray, far / Math.max(1e-6, ray.dot(axis)));
+  });
+  // Flat across the axis, u × w = axis; counterclockwise there, the far cap faces along the axis.
+  const u = new THREE.Vector3().crossVectors(axis, Math.abs(axis.y) < 0.9 ? new THREE.Vector3(0, 1, 0) : new THREE.Vector3(1, 0, 0)).normalize();
+  const w = new THREE.Vector3().crossVectors(axis, u);
+  const flat = (p) => new THREE.Vector2(u.dot(p), w.dot(p));
+  if (THREE.ShapeUtils.isClockWise(rim.map(flat))) rim = rim.reverse();
+  const cap = THREE.ShapeUtils.triangulateShape(rim.map(flat), []).map((t) => (THREE.ShapeUtils.isClockWise(t.map((i) => flat(rim[i]))) ? [t[0], t[2], t[1]] : t));
+  // The sides, each from the eye back along an edge, face out.
+  const triangles = [...cap.map(([a, b, c]) => [rim[a], rim[b], rim[c]]), ...rim.map((p, i) => [eye, rim[(i + 1) % rim.length], p])];
+  return new THREE.BufferGeometry().setAttribute("position", new THREE.Float32BufferAttribute(triangles.flat().flatMap((p) => p.toArray()), 3));
 }
 
 // A mesh as a geometry of triangles, each face fanned from its first corner.

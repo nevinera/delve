@@ -39,6 +39,7 @@ const ZONE_VERSION = 3;
 const INDEX_VERSION = 2;
 const PLATES_INDEX_VERSION = 1;
 const SPAWN_WATER_FT = 3; // deeper water than this at the spawn point is a problem
+const MAX_SIGHT_FACES = 1000; // more than this on a kind's line of sight mesh is a warning
 
 export function validateWorld(files) {
   const out = [];
@@ -92,6 +93,7 @@ function checkShapes(files, json, problem, warning) {
       mesh.faces.length >= 4 &&
       mesh.faces.every((f) => Array.isArray(f) && f.length >= 3 && f.every((v) => Number.isInteger(v) && v >= 0 && v < mesh.points.length));
     if (!ok) problem(SHAPES_PATH, `${kind} needs points and faces`);
+    else if (mesh.faces.length > MAX_SIGHT_FACES) warning(SHAPES_PATH, `${kind} has ${mesh.faces.length} faces, more than ${MAX_SIGHT_FACES}, which makes line of sight slower near it: fewer holes cut through it would help`);
   }
 }
 

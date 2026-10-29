@@ -38,4 +38,4 @@ The editor wraps those corners in a convex hull of at most 32 corners, the way P
 
 Every cut is a face of the exact hull, pushed out to touch the object, so the hull holds the whole object. `client/src/editor/limitedHull.js` has the details.
 
-Then the object's `sightCuts` are taken out of the hull, so you can see through an arch or a window. Each is an outline swept both ways along a direction, right through the object; the object builder draws them along the way you're looking. The cut mesh may have T-junctions, where one face's edge meets another's corner, which don't let sight through.
+Then the object's `sightCuts` are taken out of the hull, so you can see through an arch or a window. Each is an outline swept right through the object, either both ways along a direction (`along`) or out from a point of view as a cone (`from`). The object builder cuts from where its camera is, so a hole goes where you traced it. The cut mesh may have T-junctions, where one face's edge meets another's corner, which don't let sight through.

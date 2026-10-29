@@ -56,6 +56,18 @@ describe("cutMesh", () => {
     expect(blocks(cut, [10, 1, 1], [-10, 1, 1])).toBe(true);
   });
 
+  it("cuts out from a point of view, as it looked from there", () => {
+    // Seen from 10 ft out on z, a 1 ft square traced on the plane through the middle covers more
+    // of the far face than of the near one.
+    const window = { from: [0, 2, 10], outline: [[-0.5, 1.5, 0], [0.5, 1.5, 0], [0.5, 2.5, 0], [-0.5, 2.5, 0]] };
+    const cut = cutMesh(cube, [window]);
+    expect(blocks(cut, [0, 2, 10], [0, 2, -10])).toBe(false);
+    // Along the cone's edge, through the far face's wider hole.
+    expect(blocks(cut, [0, 2, 10], [0.55, 2, -2.1])).toBe(false);
+    // Straight along z past the near face's narrower hole.
+    expect(blocks(cut, [0.55, 2, 10], [0.55, 2, -10])).toBe(true);
+  });
+
   it("is nothing when a cut takes all of it", () => {
     expect(cutMesh(cube, [{ along: [0, 1, 0], outline: [[-5, 0, -5], [5, 0, -5], [5, 0, 5], [-5, 0, 5]] }])).toBeNull();
   });

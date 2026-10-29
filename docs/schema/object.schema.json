@@ -39,12 +39,23 @@
     "sightCuts": {
       "type": "array",
       "maxItems": 16,
-      "description": "holes through what blocks sight: each outline swept both ways along its direction",
+      "description": "holes through what blocks sight: each outline swept right through, along a direction or out from a point of view",
       "items": {
         "type": "object",
         "required": [
-          "along",
           "outline"
+        ],
+        "oneOf": [
+          {
+            "required": [
+              "along"
+            ]
+          },
+          {
+            "required": [
+              "from"
+            ]
+          }
         ],
         "properties": {
           "along": {
@@ -53,7 +64,17 @@
               "type": "number"
             },
             "minItems": 3,
-            "maxItems": 3
+            "maxItems": 3,
+            "description": "swept straight through both ways along this direction"
+          },
+          "from": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3,
+            "description": "swept out from this point of view as a cone, feet from the object's centre"
           },
           "outline": {
             "type": "array",
