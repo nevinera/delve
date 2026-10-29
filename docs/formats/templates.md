@@ -1,6 +1,6 @@
 # Templates
 
-A template is a group of [slabs](slabs.md) and objects saved together, to place into the world as copies. A world keeps its templates as `templates/<id>.json`, each in one of the collections `template-collections.json` lists, as its objects are. The world never holds a template itself: placing one copies its slabs and objects into the tiles. Code: `client/src/world/templates.js`. [Schema](../schema/template.schema.json).
+A template is a group of [slabs](slabs.md) and objects saved together, to place into the world as copies. A world keeps its templates as `templates/<id>.json`, each in one of the collections `template-collections.json` lists, as its objects are. The world never holds a template itself: placing one copies its slabs and objects into the tiles. The game ships built-in templates in read-only collections (`client/src/world/builtin/templates.json`); `node script/templates.mjs` writes them from the built-in structures. Code: `client/src/world/templates.js`. [Schema](../schema/template.schema.json).
 
 ```json
 {
