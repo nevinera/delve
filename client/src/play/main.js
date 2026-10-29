@@ -19,8 +19,9 @@ const $ = (id) => document.getElementById(id);
 const config = JSON.parse($("playConfig").textContent); // { repo, sha, paths, look, game: { url, token } }
 const status = (text) => ($("playStatus").textContent = text);
 const STREAM_MS = 1000; // how often to look for plates coming into reach
-// Lighter graphics for phones: no extra pixel density, less ground clutter, and simple tree crowns.
-const PHONE_GRAPHICS = { resolution: 1, clutterRadiusFt: 120, clutterDensity: 0.5, solidCanopies: true };
+// Lighter graphics for phones: no extra pixel density, 30 frames a second to save the battery, less
+// ground clutter, and simple tree crowns.
+const PHONE_GRAPHICS = { resolution: 1, maxFps: 30, clutterRadiusFt: 120, clutterDensity: 0.5, solidCanopies: true };
 
 // Enters the game server, and resolves with the welcome: where it puts you.
 function enter(on) {
