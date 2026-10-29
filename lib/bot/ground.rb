@@ -4,8 +4,8 @@ require "net/http"
 module Bot
   # The ground of a continent, read from its surface plates (docs/formats/plates.md) as the play
   # page fetches them, and sampled as the browser's walker samples it (client/src/editor/walker.js
-  # groundAt), so the bot stands where the server expects. Heights, water and slabs: structures,
-  # objects and trees don't get in its way.
+  # groundAt), so the bot stands where the server expects. Heights, water and slabs: objects and
+  # trees don't get in its way.
   class Ground
     CELL_FT = 8.0
     TILE_CELLS = 64
@@ -48,7 +48,7 @@ module Bot
 
     # Where the feet rest at (x, z), for feet at `feet`, as [height, swimming]: the ground, or a
     # swimming depth under water too deep to stand in, or a slab's top, whichever is highest within
-    # a step of the feet (client/src/world/walkIndex.js standOn). Nil where the continent has no
+    # a step of the feet (client/src/editor/walker.js standOn). Nil where the continent has no
     # tile.
     def stand(x, z, feet = Float::INFINITY)
       sample = at(x, z) or return nil

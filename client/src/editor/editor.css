@@ -951,66 +951,6 @@
   min-width: 0;
 }
 
-/* The structure builder (structureBuilder.js), in the object builder's dialog. */
-.sb-settings {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.sb-settings input[type="number"] {
-  width: 56px;
-}
-
-.sb-material-box {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.sb-tiles {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  padding-left: 40px;
-}
-
-.sb-tiles input[type="range"] {
-  width: 70px;
-}
-
-.sb-material {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.sb-material > span:first-of-type {
-  flex: 1;
-}
-
-.sb-components {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.sb-component {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid #3a3a3a;
-  border-radius: 4px;
-}
-
-.sb-component-type {
-  flex-basis: 100%;
-  color: #aaa;
-}
-
 /* The detail step's place pickers (placePicker.js): collections, one opened to its thumbnails,
    filling the lower half of the panel. */
 .place-picker {
@@ -1068,4 +1008,10 @@
 .editor .picker-tile.armed {
   border-color: #f0c850;
   box-shadow: 0 0 0 1px #f0c850;
+}
+
+.group-info {
+  margin: 0;
+  color: #888;
+  line-height: 1.4;
 }

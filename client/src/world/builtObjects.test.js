@@ -122,11 +122,11 @@ describe("built objects", () => {
 
   it("reads an object or a collection, recording where it came from", () => {
     const one = table();
-    expect(readCollection(JSON.stringify(one))).toEqual({ name: null, objects: [one], images: [], structures: [] });
-    // A lone structure, and a collection of only structures.
-    const hut = { id: "hut00001", name: "hut", storeys: [], components: [] };
-    expect(readCollection(JSON.stringify(hut))).toEqual({ name: null, objects: [], images: [], structures: [hut] });
-    expect(readCollection(JSON.stringify({ collection: "huts", structures: [hut] })).objects).toEqual([]);
+    expect(readCollection(JSON.stringify(one))).toEqual({ name: null, objects: [one], images: [], templates: [] });
+    // A lone template, and a collection of only templates.
+    const hut = { id: "hut00001", name: "hut", slabs: [], objects: [] };
+    expect(readCollection(JSON.stringify(hut))).toEqual({ name: null, objects: [], images: [], templates: [hut] });
+    expect(readCollection(JSON.stringify({ collection: "huts", templates: [hut] })).objects).toEqual([]);
     const read = readCollection(collectionJson("furniture", [{ ...one, collection: "abcdefgh" }, table()]), "https://example.com/furniture.json");
     expect(read.name).toBe("furniture");
     expect(read.objects).toHaveLength(2);

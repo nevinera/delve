@@ -54,7 +54,6 @@
       <button type="button" class="editor-step-head" data-step="3d">3d</button>
       <button type="button" class="editor-step-head" data-step="publish">publish</button>
       <button id="openLibrary" type="button" class="editor-step-head" title="the world's object library (also on its own at /objects)">objects</button>
-      <button id="openStructures" type="button" class="editor-step-head" title="the world's structure library (also on its own at /structures)">structures</button>
     </nav>
     <hr class="editor-divider">
     <div class="editor-steps">
@@ -146,6 +145,11 @@
         <div class="editor-step-body">
           <label class="editor-field">window <select id="detailSize"></select></label>
           <p id="detailInfo"></p>
+          <div id="templateEditRow" class="editor-stack" hidden>
+            <label class="editor-field">name <input id="templateEditName" type="text" maxlength="60"></label>
+            <label class="editor-check" title="keep the shape of the ground under it, to put back where it's placed"><input id="templateEditGround" type="checkbox"><span>with the ground</span></label>
+            <div class="editor-row"><button id="templateEditSave" type="button">save template</button><button id="templateEditCancel" type="button">stop editing</button></div>
+          </div>
           <button id="detailPick" type="button" title="pick where on the map to edit (F)">move to another spot</button>
           <div class="editor-tools" data-tools="detail"></div>
           <label class="editor-range" data-for="raise lower flatten smooth noise erode">brush <input id="detailRadius" type="range" min="0" max="256" step="4" value="32"><output id="detailRadiusValue"></output></label>
@@ -172,19 +176,33 @@
           <label id="treeKindRow" class="editor-field" data-for="paint">kind <select id="treeKind"></select></label>
           <label id="treeSizeRow" class="editor-field" data-for="paint">size <select id="treeSize"></select></label>
           <label class="editor-range" data-for="paint">brush <input id="paintRadius" type="range" min="0" max="48" step="4" value="0"><output id="paintRadiusValue"></output></label>
-          <div data-for="objects structures">
+          <div data-for="objects">
             <div id="objectPanel" class="editor-stack" hidden>
               <p id="objectInfo"></p>
               <label class="editor-range">turn <input id="objectYaw" type="range" min="0" max="355" step="5" value="0"><output id="objectYawValue"></output></label>
               <label id="objectSizeRow" class="editor-range">size <input id="objectScale" type="range" min="1" max="100" step="0.5" value="5"><output id="objectScaleValue"></output></label>
-              <div id="objectBaseRow" class="editor-row" hidden title="shift-click for a quarter foot">ground floor <button id="objectLower" type="button">▼</button><output id="objectBaseValue"></output><button id="objectRaise" type="button">▲</button></div>
               <div id="objectColors" class="editor-row editor-wrap"></div>
               <div id="objectTexts" class="editor-stack"></div>
               <button id="objectDelete" type="button">delete</button>
             </div>
           </div>
           <div id="objectPicker" class="place-picker" data-for="objects"></div>
-          <div id="structurePicker" class="place-picker" data-for="structures"></div>
+          <div id="templatePicker" class="place-picker" data-for="templates"></div>
+          <div id="templatePlaceRow" class="editor-stack" data-for="templates" hidden>
+            <div class="editor-row">turn <output id="templateTurnValue">0°</output> <span class="group-info">Q E</span></div>
+            <label class="editor-check" title="turn it a quarter at a time, so its ground lands cell for cell"><input id="templateQuarter" type="checkbox" checked><span>quarter turns</span></label>
+            <label class="editor-check" title="set the ground under it to the shape it was saved with"><input id="templateReshape" type="checkbox"><span>reshape the ground</span></label>
+            <label class="editor-check" title="fell the trees, clear the clutter and take away the objects under it"><input id="templateClear" type="checkbox" checked><span>clear what's under it</span></label>
+            <button id="templateEdit" type="button" title="change it on bare ground of its own, with every detail tool">edit this template</button>
+          </div>
+          <div class="editor-stack" data-for="templates">
+            <p id="groupInfo" class="group-info">with nothing to place, click slabs and objects to pick them, or drag a box round them (shift adds)</p>
+            <div id="templateSaveRow" class="editor-stack" hidden>
+              <label class="editor-field">name <input id="templateName" type="text" maxlength="60" placeholder="new template"></label>
+              <label class="editor-check" title="keep the shape of the ground under them, to put back where it's placed"><input id="templateGround" type="checkbox"><span>with the ground</span></label>
+              <button id="templateSave" type="button">save as template</button>
+            </div>
+          </div>
           <div class="editor-row" data-for="objects"><button id="replaceOpen" type="button">replace every…</button></div>
           <div class="editor-stack" data-for="slabs">
             <div class="editor-row slab-modes"><button id="slabSelect" type="button" title="click a slab to pick it, shift-click for more, or drag a box round them">select</button><button id="slabFloor" type="button">draw floor</button><button id="slabWall" type="button">draw wall</button><button id="slabRoom" type="button" title="drag a rectangle for a floor with four walls round it">draw room</button><button id="slabRoof" type="button" title="drag a rectangle for a roof, its eaves at the level you start on; the walls under it rise to meet it">draw roof</button><label id="slabKeepRow" class="editor-check" title="start each wall where the last one ended"><input id="slabKeep" type="checkbox"><span>keep walling</span></label></div>
@@ -253,10 +271,6 @@
   <label class="editor-field">texture <select id="slabTexture"></select></label>
   <label class="editor-field">texture width (ft) <input id="slabTileEvery" type="number" min="0.25" max="64" step="0.25" value="4"></label>
   <div class="editor-row"><button id="slabCustomUse" type="button">use it</button><button id="slabCustomCancel" type="button">cancel</button></div>
-</dialog>
-<dialog id="structurePopover" class="library-popover">
-  <div class="library-bar"><h2>Structures</h2><a href="/structures" target="_blank">open on its own</a><span class="library-spacer"></span><p class="editor-message library-message"></p><button type="button" class="library-close">close</button></div>
-  <div id="structureGallery" class="editor-gallery"></div>
 </dialog>
 <dialog id="libraryPopover" class="library-popover">
   <div class="library-bar"><h2>Objects</h2><a href="/objects" target="_blank">open on its own</a><span class="library-spacer"></span><p class="editor-message library-message"></p><button type="button" class="library-close">close</button></div>

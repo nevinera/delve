@@ -11,9 +11,6 @@ import { waterfallMeshes } from "./waterfalls.js";
 import { setTreeSight, treeMeshes, treeStage } from "./treeMeshes.js";
 import { clutterMeshes, gatherClutter, setClutterFocus, setClutterRadius } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
-import { structureCover } from "../world/objects.js";
-import { tileWalk } from "../world/walkIndex.js";
-import { CELL_FT as STRUCTURE_CELL_FT } from "../world/structures.js";
 import { objectMeshes, setObjectSight } from "./objectMeshes.js";
 import { slabMeshes } from "./slabMeshes.js";
 import { Walker } from "./walker.js";
@@ -332,14 +329,10 @@ export class RenderView {
     const tileAt = (x, z) => this.decoded.get(`${x},${z}`);
     const near = [];
     for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (tileAt(tx + dx, tz + dz)) near.push(`${tx + dx},${tz + dz}`);
-    // None grows on structures' ground floors.
-    const covered = structureCover(near.flatMap((k) => this.decoded.get(k).objects ?? []));
-    const cell = STRUCTURE_CELL_FT;
     const instances = [];
     for (const k of near) {
       if (!this.clutterTiles.has(k)) this.clutterTiles.set(k, clutterForTile(this.decoded.get(k), tileAt));
-      const list = this.clutterTiles.get(k);
-      instances.push(...(covered.size ? list.filter((c) => !covered.has(`${Math.floor(c.x / cell)},${Math.floor(c.z / cell)}`)) : list));
+      instances.push(...this.clutterTiles.get(k));
     }
     if (instances.length) this.clutter.add(...clutterMeshes(instances, this.origin));
     this.gatherClutter(focus);
@@ -389,19 +382,7 @@ export class RenderView {
       south: decoded.get(`${tx},${tz + 1}`),
       southEast: decoded.get(`${tx + 1},${tz + 1}`),
     };
-    // Where structures' cellars open up, the ground's cut away.
-    const cuts = [];
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        for (const key of tileWalk(decoded.get(`${tx + dx},${tz + dz}`)?.objects).cut) {
-          const [x, z] = key.split(",").map((v) => Number(v) * STRUCTURE_CELL_FT);
-          // The tile's mesh reaches a cell past its east and south edges, to close the seams.
-          const within = (v, t) => v >= t * TILE_FT - STRUCTURE_CELL_FT && v < (t + 1) * TILE_FT + tile.cellFt;
-          if (within(x, tx) && within(z, tz)) cuts.push([x - this.origin[0], z - this.origin[1]]);
-        }
-      }
-    }
-    const material = groundMaterial(this.renderer, { tile, neighbours, origin: this.origin, cuts, cutFt: STRUCTURE_CELL_FT });
+    const material = groundMaterial(this.renderer, { tile, neighbours, origin: this.origin });
     const terrain = new THREE.Mesh(geometry(terrainMesh(tile, neighbours, this.origin, 1)), material);
     terrain.userData.tile = [tx, tz];
     terrain.userData.ground = true;
@@ -539,11 +520,7 @@ export class RenderView {
   addObjects(tile) {
     if (!tile.objects?.length) return;
     const tileAt = (x, z) => this.decoded.get(`${x},${z}`);
-    // The structures around, for the objects inside them to stand on.
-    const [tx, tz] = tile.coords;
-    const near = [];
-    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) near.push(...(tileAt(tx + dx, tz + dz)?.objects ?? []));
-    for (const mesh of objectMeshes(tile.objects, tileAt, this.origin, tileWalk(near))) {
+    for (const mesh of objectMeshes(tile.objects, tileAt, this.origin)) {
       mesh.userData.tile = tile.coords;
       this.objects.add(mesh);
     }

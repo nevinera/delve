@@ -1,6 +1,7 @@
 import { CELL_FT, TILE_FT } from "./constants.js";
 import { platePath } from "./paths.js";
-import { STRUCTURE_PREFIX } from "./structures.js";
+
+const BUILT_PREFIX = "built:"; // as objects.js has it, kept here so plates read without the object library
 import { SURFACE_LAYERS } from "./tileCodec.js";
 
 // Plates: tiles kept as text, 16×16 tiles to a file (docs/formats/plates.md). A plate is a header, then
@@ -252,7 +253,11 @@ export function decodePlateTile(header, text) {
     } else if (word === "chunks") {
       chunks = [];
       while (n + 1 < lines.length && /^\d+,\d+ /.test(lines[n + 1])) chunks.push(lines[++n]);
-    } else if (word === "place") tile.objects.push(readPlace(rest, header, [x0, z0], tile.objects.length, coords));
+    } else if (word === "place") {
+      const object = readPlace(rest, header, [x0, z0], tile.objects.length, coords);
+      // Structures, placed before templates replaced them, are dropped.
+      if (!object.type.startsWith("structure:")) tile.objects.push(object);
+    }
     else if (word === "fall" || word === "road" || word === "river" || word === "slab") (tile[`${word}s`] ??= []).push(JSON.parse(rest));
   }
   tile.layers.clutter = new Uint8Array(count).fill(clutter);
@@ -283,7 +288,8 @@ function readPlace(rest, header, [x0, z0], n, [tx, tz]) {
     yaw: (decode(position.slice(6, 8)) / YAW_STEPS) * 2 * Math.PI,
     scale: decode(position.slice(8, 10)) / SCALE_STEPS,
   };
-  if (colorText) object.colors = colorText.match(/.{6}/g).map((h) => [0, 2, 4].map((k) => parseInt(h.slice(k, k + 2), 16) / 255));
+  // A built object's colors are "#rrggbb", as the editor sets them; other kinds' [r, g, b] (0-1).
+  if (colorText) object.colors = colorText.match(/.{6}/g).map((h) => (type.startsWith(BUILT_PREFIX) ? `#${h}` : [0, 2, 4].map((k) => parseInt(h.slice(k, k + 2), 16) / 255)));
   Object.assign(object, extra);
   const size = header.sizes[kind];
   if (size?.footprint) object.footprint = scaleFootprint(size.footprint, object.scale);
@@ -369,9 +375,10 @@ function mostCommon(values) {
 
 const widthFor = (size) => (size > 64 ? 2 : 1);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const hex = (rgb) => rgb.map((c) => clamp(Math.round(c * 255), 0, 255).toString(16).padStart(2, "0")).join("");
+// A color as six hex digits: from [r, g, b] (0-1), or "#rrggbb" as the editor sets a built object's.
+const hex = (color) => (typeof color === "string" ? color.slice(1).toLowerCase() : color.map((c) => clamp(Math.round(c * 255), 0, 255).toString(16).padStart(2, "0")).join(""));
 
-// A footprint at a scale. Open footprints (structures') don't scale.
+// A footprint at a scale. Open footprints, which old plates' structures had, don't scale.
 function scaleFootprint(footprint, scale) {
   if (footprint.open) return { open: footprint.open };
   if (footprint.circle) return { circle: footprint.circle * scale };
@@ -380,12 +387,11 @@ function scaleFootprint(footprint, scale) {
 }
 
 // A kind's size from its objects, for a kind the caller didn't size: the first one with a size, back
-// at scale 1. Structures' heights don't scale.
+// at scale 1.
 function sizeFrom(tiles, type) {
   const object = tiles.flatMap((tile) => tile.objects ?? []).find((o) => o.type === type && SHAPES.some((s) => o.footprint?.[s] !== undefined) && o.height !== undefined);
   if (!object) return null;
-  const fixed = type.startsWith(STRUCTURE_PREFIX);
-  return { footprint: scaleFootprint(object.footprint, 1 / object.scale), height: fixed ? object.height : object.height / object.scale, fixed };
+  return { footprint: scaleFootprint(object.footprint, 1 / object.scale), height: object.height / object.scale };
 }
 
 const SHAPES = ["rect", "circle", "capsule", "open"];

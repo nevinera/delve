@@ -184,6 +184,16 @@ describe("roofPieces", () => {
     expect(under(roof("hip"), 2, 10)).toBeCloseTo(10 + 2 * tan, 2);
   });
 
+  it("runs a gable's ridge, or slopes a shed, the way it's told", () => {
+    // Ridge along v (z): the slopes rise from the x edges.
+    expect(under(roof("gable", [30, 10, 20], { ridge: 1 }), 14.9, 10)).toBeCloseTo(10 + 14.9 * tan, 2);
+    // A shed rising north: highest along z = 0.
+    const shed = roof("shed", [30, 10, 20], { rising: [0, -1] });
+    expect(under(shed, 15, 0.1)).toBeCloseTo(10 + 19.9 * tan, 2);
+    expect(under(shed, 15, 19.9)).toBeCloseTo(10 + 0.1 * tan, 2);
+    expect(under(roof("shed", [30, 10, 20], { rising: [1, 0] }), 29.9, 10)).toBeCloseTo(10 + 29.9 * tan, 2);
+  });
+
   it("cuts a big roof into pieces", () => {
     const pieces = roof("gable", [100, 10, 60]);
     expect(pieces.length).toBeGreaterThan(4);

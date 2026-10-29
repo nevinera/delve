@@ -33,15 +33,16 @@ import { TRAIL_KINDS, TRAIL_STATES } from "./detailTrails.js";
 import { BUILT_PREFIX, builtOf, makeObject, setBuiltObjects, specOf, tiledImages } from "../world/objects.js";
 import { SLAB_PATTERNS, SLAB_PRESETS } from "../world/slabs.js";
 import { presetPixels } from "./slabTextures.js";
-import { paletteColors, textsOf } from "../world/builtObjects.js";
+import { newObjectId, paletteColors, textsOf } from "../world/builtObjects.js";
+import { TEMPLATE_PREFIX, templateProblems } from "../world/templates.js";
 import { MAX_TEXT, signText } from "../world/pixelFont.js";
-import { adoptStrays, allCollections, builtObjects, builtStructures, images } from "../objects/collections.js";
+import { adoptStrays, allCollections, builtObjects, images, keepTemplate, ownCollections } from "../objects/collections.js";
+import { scratchTemplate, scratchWorld } from "./templateEdit.js";
 import { placedCount } from "../objects/placed.js";
 import { decodeTile, encodeTile } from "../world/tileCodec.js";
 import { gunzipSync, gzipSync } from "fflate";
 import { CELL_FT, TILE_FT } from "../world/constants.js";
 import { TREE_KINDS, TREE_SIZES, treeTerrain } from "../world/trees.js";
-import { STRUCTURE_PREFIX } from "../world/structures.js";
 import { PlacePicker } from "./placePicker.js";
 import { TERRAIN, prepareShape, prepareWorld } from "../world/generator.js";
 import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
@@ -63,7 +64,7 @@ const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 // Steps drawn in 3d instead of on the map.
 const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
-  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it) · with water, click to pour from there, then keep or drop the rivers and lakes it would make · with objects or structures, click a thumbnail, then the ground to place it (esc lets it go); click one placed to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
+  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it) · with water, click to pour from there, then keep or drop the rivers and lakes it would make · with objects, click a thumbnail, then the ground to place it (esc lets it go); click one placed to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with templates, click a template's thumbnail, then the ground to place it (Q E turn it), or with nothing to place, click slabs and objects or drag a box to pick them, then save them as a template · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
@@ -97,7 +98,7 @@ const STEPS = {
   civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info", "spawn"], kinds: ["road", "hub", "info", "spawn"] },
   zones: { tools: [], kinds: [], map: "heights" },
   tiles: { tools: [], kinds: [], map: "tiles" },
-  detail: { tools: [...DETAIL_TOOLS, "trails", "channel", "water", "objects", "structures", "paint", "slabs"], kinds: [] },
+  detail: { tools: [...DETAIL_TOOLS, "trails", "channel", "water", "objects", "templates", "paint", "slabs"], kinds: [] },
   "3d": { tools: [], kinds: [] },
   publish: { tools: [], kinds: [], map: "tiles" },
 };
@@ -178,8 +179,8 @@ export class Editor {
     keyNav((dt, move) => {
       if (this.step === "3d") this.overview?.nudge(dt, move);
       else if (this.step === "heights") this.sculpt?.nudge(dt, move);
-      // Q and E turn a picked object instead (detailKey).
-      else if (this.step === "detail") this.detail?.nudge(dt, this.detail.selected ? { ...move, turn: 0 } : move);
+      // Q and E turn a picked object, or a template being placed, instead (detailKey).
+      else if (this.step === "detail") this.detail?.nudge(dt, this.detail.selected || this.detail.templatePlace.template ? { ...move, turn: 0 } : move);
       else if (!this.walking) this.map.nudge(dt, move);
     });
     this.showContinent();
@@ -197,11 +198,14 @@ export class Editor {
   // window, and the 3d views' cameras.
   placeState() {
     const cameras = { ...this.cameras };
-    if (this.shownSince.has("detail")) cameras.detail = cameraPlace(this.detail.view.camera, this.detail.view.controls, this.detail.view.origin);
+    // While a template's being edited, the detail camera kept is the one over the world's tiles.
+    const away = this.templateEditing && this.detail.away;
+    if (away) cameras.detail = cameraPlace({ position: away.position }, { target: away.target }, away.origin);
+    else if (this.shownSince.has("detail")) cameras.detail = cameraPlace(this.detail.view.camera, this.detail.view.controls, this.detail.view.origin);
     if (this.shownSince.has("3d")) cameras["3d"] = cameraPlace(this.overview.camera, this.overview.controls);
     if (this.shownSince.has("heights")) cameras.heights = cameraPlace(this.sculpt.camera, this.sculpt.controls);
     const { x, z, scale } = this.map.view;
-    return { continent: this.continent, step: this.step, tool: this.toolName, map: { x, z, scale }, detailWindow: this.detailWindow ?? null, cameras };
+    return { continent: this.continent, step: this.step, tool: this.toolName, map: { x, z, scale }, detailWindow: this.templateEditing?.window ?? this.detailWindow ?? null, cameras };
   }
 
   // Keeps where you are, when it's changed.
@@ -260,6 +264,7 @@ export class Editor {
 
   // Swaps in a different world, such as an uploaded one.
   setWorld(world) {
+    this.endTemplateEdit({ show: false });
     this.world = world;
     this.continent = world.info.continents[0]?.key;
     this.active = null;
@@ -909,6 +914,10 @@ export class Editor {
 
   // Opens a step, with its first tool.
   setStep(step) {
+    if (step !== "detail" && this.templateEditing) {
+      if (this.templateEditing.changed && !window.confirm("Stop editing this template? Changes you haven't saved to it will be lost.")) return;
+      this.endTemplateEdit({ show: false });
+    }
     this.step = step;
     this.detailPicking = false;
     if (!IN_3D.has(step)) this.mapStep = step;
@@ -969,6 +978,7 @@ export class Editor {
       if (!this.showTime) this.buildTime();
       this.detail = new DetailView(this.el.detail, {
         onMove: (dx, dz) => {
+          if (this.templateEditing) return;
           this.detailWindow.tx0 += dx;
           this.detailWindow.tz0 += dz;
           this.showDetail();
@@ -976,14 +986,16 @@ export class Editor {
         onEdit: (keys) => this.saveDetail(keys),
         onPointer: (hit) => this.showCursor(hit),
         onSelect: (object) => this.showObject(object),
-        onPour: ([x, z]) => this.pour({ id: DETAIL_POUR, at: [x / TILE_FT, z / TILE_FT].map((v) => Math.round(v * 1000) / 1000), width: Number(this.el.pourWidth.value) }),
+        onPour: ([x, z]) => (this.templateEditing ? this.say("Water can't be poured on a template.") : this.pour({ id: DETAIL_POUR, at: [x / TILE_FT, z / TILE_FT].map((v) => Math.round(v * 1000) / 1000), width: Number(this.el.pourWidth.value) })),
         bodies: () => this.bodies(),
-        onReflow: (cells) => this.reflowWater(cells),
+        onReflow: (cells) => this.templateEditing || this.reflowWater(cells),
         onSlab: (slabs) => this.showSlab(slabs),
+        onGroup: (counts) => this.showGroup(counts),
         onProblem: (message, options) => this.say(message, options),
         water: {
-          get: () => this.sketch.water,
+          get: () => (this.templateEditing ? { rivers: [], lakes: [] } : this.sketch.water),
           set: (water) => {
+            if (this.templateEditing) return;
             this.sketch.water = water;
             this.saveSketch();
           },
@@ -1001,10 +1013,14 @@ export class Editor {
     }
     const { tx0, tz0, size } = this.detailWindow;
     this.el.detailSize.value = size;
-    this.detail.show({ world: this.world, continent: this.continent }, [tx0, tz0], size);
+    const editing = this.templateEditing;
+    this.el.templateEditRow.hidden = !editing;
+    this.el.detailPick.hidden = Boolean(editing);
+    this.detail.show(editing?.state ?? { world: this.world, continent: this.continent }, [tx0, tz0], size);
     this.shownView("detail", this.detail.view.camera, this.detail.view.controls, this.detail.view.origin);
     const loaded = this.detail.keys().filter((k) => this.detail.view.decoded.has(k)).length;
-    this.el.detailInfo.textContent = `tiles ${tx0},${tz0} to ${tx0 + size - 1},${tz0 + size - 1} · ${loaded} of ${size * size} generated`;
+    if (editing) this.el.detailInfo.textContent = `editing the template "${editing.entry.name}" on bare ground, apart from the world`;
+    else this.el.detailInfo.textContent = `tiles ${tx0},${tz0} to ${tx0 + size - 1},${tz0 + size - 1} · ${loaded} of ${size * size} generated`;
   }
 
   // Where the pointer is on a 3d view's ground, [x, y, z] in continent feet, or null.
@@ -1029,7 +1045,15 @@ export class Editor {
     if (this.toolName === "channel") return this.detail?.setBrush({ tool: "channel", width: Number(channelWidth.value), depth: Number(channelDepth.value) });
     if (this.toolName === "water") return this.detail?.setBrush({ tool: "water" });
     if (this.toolName === "objects") return this.detail?.setBrush({ tool: "objects", type: this.pickers.objects.armed });
-    if (this.toolName === "structures") return this.detail?.setBrush({ tool: "structures", type: this.pickers.structures.armed });
+    if (this.toolName === "templates") {
+      const type = this.pickers.templates.armed;
+      const template = this.templateEntry(type)?.template;
+      this.el.templatePlaceRow.hidden = !template;
+      if (this.el.templateQuarter.checked) this.templateTurn = (Math.round(this.templateTurn / 90) * 90) % 360;
+      this.el.templateTurnValue.textContent = `${this.templateTurn}°`;
+      const placing = { turn: this.templateTurn, reshape: this.el.templateReshape.checked, clear: this.el.templateClear.checked };
+      return this.detail?.setBrush({ tool: "templates", type, template, placing });
+    }
     if (this.toolName === "slabs") {
       this.fillSlabSwatches();
       return this.detail?.setBrush({ tool: "slabs", settings: this.slabSettings() });
@@ -1056,19 +1080,11 @@ export class Editor {
     });
   }
 
-  // A library's popover and gallery, for "objects" or "structures".
-  libraryParts(kind) {
-    return kind === "objects" ? [this.el.libraryPopover, this.el.libraryGallery] : [this.el.structurePopover, this.el.structureGallery];
-  }
-
-  // The object or structure library (objects/library.js) in a popover over the editor.
-  async openLibrary(kind = "objects") {
-    const [popover, gallery] = this.libraryParts(kind);
-    this.libraries ??= {};
-    this.libraryLoading ??= {};
-    this.libraryLoading[kind] ??= import("../objects/library.js").then(({ ObjectLibrary }) => {
-      this.libraries[kind] = new ObjectLibrary(gallery, {
-        kind,
+  // The object library (objects/library.js) in a popover over the editor.
+  async openLibrary() {
+    const { libraryPopover: popover, libraryGallery: gallery } = this.el;
+    this.libraryLoading ??= import("../objects/library.js").then(({ ObjectLibrary }) => {
+      this.library = new ObjectLibrary(gallery, {
         getWorld: () => this.world,
         onChange: (choose) => {
           this.dirty = true;
@@ -1083,9 +1099,9 @@ export class Editor {
         },
       });
     });
-    await this.libraryLoading[kind];
+    await this.libraryLoading;
     popover.showModal();
-    this.libraries[kind].show();
+    this.library.show();
   }
 
   // Registers the world's built objects (world/objects.js) and lists them to place, choosing
@@ -1093,20 +1109,20 @@ export class Editor {
   // changed.
   loadBuiltObjects(choose) {
     adoptStrays(this.world);
-    setBuiltObjects(builtObjects(this.world), images(this.world), builtStructures(this.world));
+    setBuiltObjects(builtObjects(this.world), images(this.world));
     this.fillObjectTypes(choose);
     if (this.step === "detail" && this.detail) this.showDetail();
-    for (const kind of ["objects", "structures"]) if (this.libraryParts(kind)[0].open) this.libraries?.[kind]?.show();
+    if (this.el.libraryPopover.open) this.library?.show();
   }
 
-  // The objects and structures tools' pickers, `choose` armed if given; and the object types to
-  // replace, by collection, builtins first.
+  // The objects tool's picker of objects, `choose` armed if given, and the templates tool's of
+  // templates; and the object types to replace, by collection, builtins first.
   fillObjectTypes(choose) {
     if (!this.pickers) return;
     const objects = allCollections(this.world, "objects");
     this.pickers.objects.show(objects);
-    this.pickers.structures.show(allCollections(this.world, "structures"));
-    if (choose) this.pickers[choose.startsWith(STRUCTURE_PREFIX) ? "structures" : "objects"].arm(choose);
+    this.pickers.templates.show(allCollections(this.world, "templates"));
+    if (choose) this.pickers.objects.arm(choose);
     for (const select of [this.el.replaceFrom, this.el.replaceTo]) {
       const collections = objects;
       const was = select.value;
@@ -1127,18 +1143,16 @@ export class Editor {
   // objects.
   scaleSlider(input, output, type, value) {
     const spec = specOf(type);
-    const [least, most] = spec?.built || spec?.structure ? spec.size : (spec?.size ?? [1, 1]).map((v, i) => v * [0.5, 2][i]);
-    [input.min, input.max, input.step] = [least, most, spec?.built || spec?.structure ? 0.05 : 0.5];
+    const [least, most] = spec?.built ? spec.size : (spec?.size ?? [1, 1]).map((v, i) => v * [0.5, 2][i]);
+    [input.min, input.max, input.step] = [least, most, spec?.built ? 0.05 : 0.5];
     input.value = value;
-    output.textContent = spec?.built || spec?.structure ? `×${value}` : `${value} ft`;
+    output.textContent = spec?.built ? `×${value}` : `${value} ft`;
   }
 
   // Swaps every placed object of type `from` for type `to`, in every continent's tiles, keeping
   // where each stands and which way it faces. Changed tiles are marked edited by hand.
   replaceInstances(from, to) {
     if (!from || !to || from === to) return this.say("Pick two different types.");
-    // A structure's placement keeps the ground it pushed down, which nothing else would put back.
-    if ([from, to].some((type) => specOf(type)?.structure)) return this.say("Structures can't be swapped this way.");
     const name = (type) => builtOf(type)?.name ?? type;
     if (!window.confirm(`Replace every placed ${name(from)} with ${name(to)}?`)) return;
     const sameKind = from.startsWith(BUILT_PREFIX) === to.startsWith(BUILT_PREFIX);
@@ -1232,20 +1246,103 @@ export class Editor {
     this.setSlabSurface(this.slabSurface, { change: false });
   }
 
+  // How many slabs and objects the templates tool has picked, and saving them as a template once
+  // there are two or more.
+  showGroup({ slabs, objects }) {
+    const count = slabs + objects;
+    const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    this.el.groupInfo.textContent = count ? `${plural(slabs, "slab")} and ${plural(objects, "object")} picked · esc lets them go` : "with nothing to place, click slabs and objects to pick them, or drag a box round them (shift adds)";
+    this.el.templateSaveRow.hidden = count < 2;
+  }
+
+  // Saves what the templates tool has picked as a template in the world's library.
+  saveTemplate() {
+    const name = this.el.templateName.value.trim() || "new template";
+    const template = this.detail?.group.template({ id: newObjectId(), name, withGround: this.el.templateGround.checked });
+    if (!template) return;
+    const problems = templateProblems(template);
+    if (problems.length) return this.say(`That template ${problems[0]}.`);
+    keepTemplate(this.world, template);
+    this.dirty = true;
+    this.el.templateName.value = "";
+    this.say(`Saved template "${name}": ${template.slabs.length} slabs and ${template.objects.length} objects${template.ground ? `, with ${template.ground.length} cells of ground` : ""}.`, { info: true });
+  }
+
+  // The templates picker's entry for a type, or undefined.
+  templateEntry(type) {
+    return type ? allCollections(this.world, "templates").flatMap((c) => c.entries).find((e) => e.type === type) : undefined;
+  }
+
+  // Opens the armed template on bare tiles of a world of its own (templateEdit.js), for the
+  // detail step's tools to change, away from this world and its saving.
+  editTemplate() {
+    const entry = this.templateEntry(this.pickers.templates.armed);
+    if (!entry) return;
+    const unknown = entry.template.objects.find((o) => !specOf(o.type));
+    if (unknown) return this.say(`This world has no ${unknown.type} for it.`);
+    const { world, continent, size } = scratchWorld(entry.template);
+    this.templateEditing = { entry, state: { world, continent }, window: this.detailWindow, changed: false };
+    this.detailWindow = { tx0: 0, tz0: 0, size };
+    this.el.templateEditName.value = entry.name;
+    this.el.templateEditGround.checked = Boolean(entry.template.ground);
+    this.pickers.templates.arm(null);
+    this.showDetail();
+  }
+
+  // The scratch tiles changed: they're kept in its world, so moving its window keeps them.
+  keepScratch(keys) {
+    const { state } = this.templateEditing;
+    for (const key of keys) {
+      const tile = this.detail.tile(key);
+      state.world.files.set(surfacePath(state.continent, ...tile.coords), gzipSync(encodeTile(tile)));
+    }
+    this.templateEditing.changed = true;
+  }
+
+  // Saves the template being edited into this world's library: over it when it's in one of the
+  // world's own collections, and otherwise, as for a builtin, as a new one in "my templates".
+  saveEditedTemplate() {
+    const { entry } = this.templateEditing;
+    const own = ownCollections(this.world, "templates").some((c) => c.id === entry.template.collection);
+    const name = this.el.templateEditName.value.trim() || entry.name;
+    const tiles = this.detail.keys().map((key) => this.detail.view.decoded.get(key)).filter(Boolean);
+    const captured = scratchTemplate(tiles, this.detail.cells().height, { id: own ? entry.template.id : newObjectId(), name, withGround: this.el.templateEditGround.checked });
+    if (!captured) return this.say("A template needs at least two slabs or objects.");
+    const template = { ...captured, ...(entry.template.tags ? { tags: entry.template.tags } : {}), ...(own ? { collection: entry.template.collection } : {}) };
+    const problems = templateProblems(template);
+    if (problems.length) return this.say(`That template ${problems[0]}.`);
+    keepTemplate(this.world, template);
+    this.dirty = true;
+    this.endTemplateEdit();
+    this.fillObjectTypes();
+    this.pickers.templates.arm(`${TEMPLATE_PREFIX}${template.id}`);
+    this.say(`Saved template "${name}"${own ? "" : " in my templates"}: ${template.slabs.length} slabs and ${template.objects.length} objects.`, { info: true });
+  }
+
+  // Stops editing a template, back to the world's tiles where the detail window was.
+  endTemplateEdit({ show = true } = {}) {
+    if (!this.templateEditing) return;
+    this.detailWindow = this.templateEditing.window;
+    this.templateEditing = null;
+    this.el.templateEditRow.hidden = true;
+    this.el.detailPick.hidden = false;
+    if (show && this.step === "detail") this.showDetail();
+  }
+
+  // Asks before dropping changes to the template being edited.
+  cancelTemplateEdit() {
+    if (this.templateEditing?.changed && !window.confirm("Drop your changes to this template?")) return;
+    this.endTemplateEdit();
+  }
+
   // The detail step's picked object in the panel, or none.
   showObject(object) {
     const { objectPanel, objectInfo, objectYaw, objectYawValue, objectScale, objectScaleValue } = this.el;
     objectPanel.hidden = !object;
     if (!object) return;
     const spec = specOf(object.type);
-    objectInfo.textContent = `${spec?.built?.name ?? spec?.structure?.name ?? object.type} at ${object.at.map(Math.round).join(", ")}`;
+    objectInfo.textContent = `${spec?.built?.name ?? object.type} at ${object.at.map(Math.round).join(", ")}`;
     const degrees = Math.round((object.yaw * 180) / Math.PI) % 360;
-    // Structures turn in quarter turns, and rise and sink instead of growing.
-    const structure = Boolean(spec?.structure);
-    [objectYaw.step, objectYaw.max] = structure ? [90, 270] : [5, 355];
-    this.el.objectSizeRow.hidden = structure;
-    this.el.objectBaseRow.hidden = !structure;
-    if (structure) this.el.objectBaseValue.textContent = `${object.base} ft`;
     objectYaw.value = degrees;
     objectYawValue.textContent = `${degrees}°`;
     this.scaleSlider(objectScale, objectScaleValue, object.type, object.scale);
@@ -1404,6 +1501,7 @@ export class Editor {
 
   // Writes tiles changed in the detail step back into the world, and marks them edited by hand.
   saveDetail(keys) {
+    if (this.templateEditing) return this.keepScratch(keys);
     for (const key of keys) {
       const tile = this.detail.tile(key);
       const [tx, tz] = tile.coords;
@@ -1426,6 +1524,14 @@ export class Editor {
     };
     const tools = STEPS.detail.tools;
     if (this.toolName === "slabs" && this.detail?.slabTool.key(e)) return true;
+    if (this.toolName === "templates" && !this.pickers.templates.armed && this.detail?.group.key(e)) return true;
+    if (this.toolName === "templates" && this.pickers.templates.armed && (e.key === "q" || e.key === "e")) {
+      // A quarter turn at a time, or with quarter turns off, 15 degrees (1 with shift).
+      const step = this.el.templateQuarter.checked ? 90 : e.shiftKey ? 1 : 15;
+      this.templateTurn = (((this.templateTurn + (e.key === "e" ? step : -step)) % 360) + 360) % 360;
+      this.applyDetailBrush();
+      return true;
+    }
     const picked = this.detail?.selected?.object;
     if (/^[0-9]$/.test(e.key) && tools[(Number(e.key) + 9) % 10]) this.setTool(tools[(Number(e.key) + 9) % 10]);
     else if (picked && (e.key === "Delete" || e.key === "Backspace")) this.detail.deleteSelected();
@@ -1577,14 +1683,17 @@ export class Editor {
     });
     for (const tab of this.el.stepTabs) tab.addEventListener("click", () => (tab.dataset.step === "detail" ? this.pickDetail() : this.setStep(tab.dataset.step)));
     this.el.openLibrary.addEventListener("click", () => this.openLibrary());
-    this.el.openStructures.addEventListener("click", () => this.openLibrary("structures"));
-    for (const kind of ["objects", "structures"]) {
-      const [popover] = this.libraryParts(kind);
-      // Keys stay in the library, away from the editor behind it.
-      popover.addEventListener("keydown", (e) => e.stopPropagation());
-      popover.querySelector(".library-close").addEventListener("click", () => popover.close());
-      popover.addEventListener("close", () => this.libraries?.[kind]?.hide());
-    }
+    this.el.templateSave.addEventListener("click", () => this.saveTemplate());
+    this.el.templateEdit.addEventListener("click", () => this.editTemplate());
+    this.el.templateEditSave.addEventListener("click", () => this.saveEditedTemplate());
+    this.el.templateEditCancel.addEventListener("click", () => this.cancelTemplateEdit());
+    this.templateTurn = 0;
+    for (const input of [this.el.templateQuarter, this.el.templateReshape, this.el.templateClear]) input.addEventListener("change", () => this.applyDetailBrush());
+    const popover = this.el.libraryPopover;
+    // Keys stay in the library, away from the editor behind it.
+    popover.addEventListener("keydown", (e) => e.stopPropagation());
+    popover.querySelector(".library-close").addEventListener("click", () => popover.close());
+    popover.addEventListener("close", () => this.library?.hide());
     this.el.detailPick.addEventListener("click", () => this.pickDetail());
     for (const section of this.el.steps) {
       for (const input of section.querySelectorAll("[data-option]")) {
@@ -1633,10 +1742,10 @@ export class Editor {
     this.el.treeSize.value = 2;
     for (const input of [this.el.paintTerrain, this.el.treeKind, this.el.treeSize]) input.addEventListener("change", () => this.applyDetailBrush());
     this.el.paintRadius.addEventListener("input", () => this.applyDetailBrush());
-    // What the objects and structures tools place, picked from their libraries' thumbnails.
+    // What the objects and templates tools place, picked from their thumbnails.
     this.pickers = {
       objects: new PlacePicker(this.el.objectPicker, { onArm: () => this.applyDetailBrush() }),
-      structures: new PlacePicker(this.el.structurePicker, { onArm: () => this.applyDetailBrush() }),
+      templates: new PlacePicker(this.el.templatePicker, { onArm: () => this.applyDetailBrush() }),
     };
     this.fillObjectTypes();
     this.el.replaceOpen.addEventListener("click", () => this.el.replaceDialog.showModal());
@@ -1659,12 +1768,6 @@ export class Editor {
     }
     this.el.objectDelete.addEventListener("click", () => this.detail?.deleteSelected());
     this.buildSlabPanel();
-    for (const [button, way] of [[this.el.objectLower, -1], [this.el.objectRaise, 1]]) {
-      button.addEventListener("click", (e) => {
-        const object = this.detail?.selected?.object;
-        if (object?.base !== undefined) this.detail.changeSelected({ base: object.base + way * (e.shiftKey ? 0.25 : 1) });
-      });
-    }
     this.el.pourKeep.addEventListener("click", () => this.keepProposal());
     this.el.pourDrop.addEventListener("click", () => this.dropProposal());
     for (const input of [this.el.detailRadius, this.el.detailFalloff, this.el.detailStrength, this.el.detailErosion, this.el.detailTalus, this.el.trailKind, this.el.trailState, this.el.trailWidth, this.el.channelWidth, this.el.channelDepth, this.el.pourWidth]) {

@@ -6,10 +6,10 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 | --- | --- | --- |
 | `world.json` | name, level cap, continents and dungeons | [schema](../schema/world.schema.json) |
 | `collections.json` | the world's object collections | [schema](../schema/collections.schema.json) |
-| `structure-collections.json` | the world's structure collections | [schema](../schema/collections.schema.json) |
+| `template-collections.json` | the world's template collections | [schema](../schema/collections.schema.json) |
 | `objects/<id>.json` | a built object | [schema](../schema/object.schema.json) |
-| `structures/<id>.json` | a structure | [schema](../schema/structure.schema.json) |
-| `textures/<id>.json` | an image objects and structures wear | [schema](../schema/image.schema.json) |
+| `templates/<id>.json` | a [template](templates.md): slabs and objects placed together | [schema](../schema/template.schema.json) |
+| `textures/<id>.json` | an image objects and slabs wear | [schema](../schema/image.schema.json) |
 | `shapes.json` | the hulls line of sight tests against, written by the editor | [shapes](shapes.md) |
 | `classes/`, `abilities/`, `statuses/`, `items/`, `item-templates/`, `creatures/`, `npcs/`, `dialogues/` | game data, each `<id>.json` | [game data](game-data.md) |
 | `places/continents/<c>/sketch.json` | pins, road paths, rivers and lakes | [schema](../schema/sketch.schema.json) |
@@ -25,7 +25,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 
 `<c>` is a continent key from `world.json`. Ids are 8 lowercase base-36 characters.
 
-The JSON files that describe things (the world, zones, sketches, objects, structures and [game data](game-data.md)) can have `notes`: free-form text on what a thing is for and its backstory, for whoever changes it later. The game never reads them.
+The JSON files that describe things (the world, zones, sketches, objects, templates and [game data](game-data.md)) can have `notes`: free-form text on what a thing is for and its backstory, for whoever changes it later. The game never reads them.
 
 `node script/validate.mjs <world directory or zip>` checks a world against these formats.
 

@@ -3,13 +3,12 @@ import { LibrarySync } from "../editor/libraryStore.js";
 import { loadLocal } from "../editor/localSave.js";
 import { World } from "../editor/world.js";
 import { setBuiltObjects } from "../world/objects.js";
-import { adoptStrays, builtObjects, builtStructures, images } from "./collections.js";
+import { adoptStrays, builtObjects, images } from "./collections.js";
 import { ObjectLibrary } from "./library.js";
 import { placedCount } from "./placed.js";
 
-// The objects and structures pages: a library of the world kept in this browser, on its own (the
-// gallery's data-kind says which). Changes go straight to the browser's library store, which the
-// world editor shares, open or not.
+// The objects page: the object library of the world kept in this browser, on its own. Changes go
+// straight to the browser's library store, which the world editor shares, open or not.
 
 const $ = (id) => document.getElementById(id);
 
@@ -27,17 +26,17 @@ async function keptWorld() {
 let world = await keptWorld();
 $("worldName").textContent = world.info.name;
 const sync = new LibrarySync(world, async () => {
-  setBuiltObjects(builtObjects(world), images(world), builtStructures(world));
+  setBuiltObjects(builtObjects(world), images(world));
   library.show();
   $("worldName").textContent = (await keptWorld()).info.name;
 });
 await sync.pull();
-// Images kept the old way move to the world's (adoptStrays), which the store should hear about.
+// Images kept the old way move to the world's, and structures go (adoptStrays), which the store
+// should hear about.
 if (adoptStrays(world)) await sync.push();
-setBuiltObjects(builtObjects(world), images(world), builtStructures(world));
+setBuiltObjects(builtObjects(world), images(world));
 
 const library = new ObjectLibrary($("gallery"), {
-  kind: $("gallery").dataset.kind,
   getWorld: () => world,
   onChange: () => sync.push().catch((err) => say(`Couldn't keep the library in this browser: ${err.message}`)),
   // From the world's latest keeping, which the world editor makes a moment after each change.

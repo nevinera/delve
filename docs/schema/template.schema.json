@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "template.schema.json",
+  "title": "Template",
+  "description": "A group of slabs and objects saved together, to place into the world as copies (templates/<id>.json); see docs/formats/templates.md. Everything in it is in feet from its anchor, a corner of the world's 8 ft cell grid at the height the template stands on.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "slabs",
+    "objects"
+  ],
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-z]{8}$"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "collection": {
+      "type": "string",
+      "pattern": "^[0-9a-z]{8}$",
+      "description": "the template collection it's in, from template-collections.json"
+    },
+    "notes": {
+      "type": "string"
+    },
+    "slabs": {
+      "type": "array",
+      "items": {
+        "$ref": "slab.schema.json"
+      },
+      "description": "slabs, their at in feet from the anchor"
+    },
+    "objects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "at",
+          "yaw",
+          "scale"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "description": "a built-in kind, or built:<id>; not a template"
+          },
+          "at": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "[x, z] feet from the anchor"
+          },
+          "y": {
+            "type": "number",
+            "description": "feet up from the anchor; without it, the object stands on whatever's under it"
+          },
+          "yaw": {
+            "type": "number",
+            "description": "radians"
+          },
+          "scale": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "colors": {
+            "type": "array",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "string",
+                  "pattern": "^#[0-9a-f]{6}$"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "texts": {
+            "type": "object"
+          }
+        }
+      },
+      "description": "placed objects, as tiles hold them, their at and y from the anchor"
+    },
+    "ground": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "prefixItems": [
+          {
+            "type": "integer",
+            "minimum": -128,
+            "maximum": 128
+          },
+          {
+            "type": "integer",
+            "minimum": -128,
+            "maximum": 128
+          },
+          {
+            "type": "number"
+          }
+        ],
+        "minItems": 3,
+        "maxItems": 3
+      },
+      "description": "the ground under it, when saved with it: [i, j, height], cell (i, j) covering i to i + 1 and j to j + 1 cells from the anchor, its height up from the anchor"
+    }
+  }
+}

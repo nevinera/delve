@@ -1,7 +1,7 @@
 import "./play.css";
 import { graphicsPanel } from "../editor/graphicsPanel.js";
 import { RenderView, SIGHT } from "../editor/renderView.js";
-import { builtObjects, builtStructures, images } from "../objects/collections.js";
+import { builtObjects, images } from "../objects/collections.js";
 import { resolveRecipe } from "../character/recipe.js";
 import { TILE_FT } from "../world/constants.js";
 import { setBuiltObjects } from "../world/objects.js";
@@ -53,7 +53,7 @@ async function play() {
   status("Loading the world...");
   await loader.open();
   const { world } = loader;
-  setBuiltObjects(builtObjects(world), images(world), builtStructures(world));
+  setBuiltObjects(builtObjects(world), images(world));
 
   let others = null;
   const early = []; // what the server says before the view is ready, as [method, argument]

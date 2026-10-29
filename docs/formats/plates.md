@@ -35,7 +35,6 @@ palette water sea fresh
 clutter 100
 object 0 circle:0.45 0.8 boulder
 object 1 capsule:0.07,0.5 0.14 driftLog
-object 2 open:24 =18 structure:k2m9x0aa
 tile 0,16 64
 generator 23 3935363592
 layer height
@@ -87,10 +86,12 @@ An object line gives the kind's size at scale 1. Placed objects scale it by thei
   - `circle:<r>` is a circle of radius r.
   - `rect:<w>,<d>` is a rectangle, w along the object's own x.
   - `capsule:<r>,<half>` is a capsule of radius r, reaching `half` each way along the object's own x.
-  - `open:<reach>` blocks nothing, and doesn't scale. Structures use it, since you walk into them. `reach` is how far the structure reaches from its anchor.
+  - `open:<reach>` blocks nothing, and doesn't scale.
   - `-` means the size isn't known.
-- `<height>` is the height in feet. A leading `=` means it doesn't scale with the object (structures). `-` means it isn't known.
-- `<kind>` is the rest of the line: a built-in kind such as `boulder`, `built:<id>` for one of the world's objects, or `structure:<id>` for one of its structures.
+- `<height>` is the height in feet. A leading `=` means it doesn't scale with the object. `-` means it isn't known.
+- `<kind>` is the rest of the line: a built-in kind such as `boulder`, or `built:<id>` for one of the world's objects.
+
+Old plates can place structures, `structure:<id>`, with `open` footprints and `=` heights. Readers drop those places.
 
 Version 1 plates have `object <id> <kind>`, with no sizes. Readers accept both.
 
@@ -126,7 +127,7 @@ The third word packs four fixed-width values with no spaces:
 | yaw | 2 | turns, in 1/4096 of a turn |
 | scale | 2 | in 1/64ths |
 
-The first word after `place` is the object id. `<colors>` is the object's color overrides, each 6 hex digits, run together. `<json>` holds every other field the object has, such as `base`, `pushed` or `texts`. It also holds `at` or `scale` when they don't fit the packed fields.
+The first word after `place` is the object id. `<colors>` is the object's color overrides, each 6 hex digits, run together. Readers give a built object's as `"#rrggbb"` and other kinds' as `[r, g, b]` from 0 to 1. `<json>` holds every other field the object has, such as `base`, `pushed` or `texts`. It also holds `at` or `scale` when they don't fit the packed fields.
 
 Plates don't store an object's `id`. Readers number each tile's objects `<tx>.<tz>.<n>` in line order. A reader works out `footprint` and `height` from the object table.
 

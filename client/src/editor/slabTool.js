@@ -1002,18 +1002,24 @@ export const ROOF_STYLES = ["flat", "shed", "gable", "hip"];
 // A roof over a rectangle from corner `a` to the opposite `b` ([x, y, z] continent feet), square
 // to `yaw`, as slabs: its underside at a's level along the rectangle's edges, sloping up `pitch`
 // degrees, and running on `overhang` feet past them. A gable's ridge and a hip's run along the
-// longer side; a shed rises across the shorter one. Slopes too big for one slab are cut up, their
+// longer side, or a gable's along `ridge` (0 along the yaw's u, 1 along its v); a shed rises
+// across the shorter one, or toward `rising` ([x, z] across the ground). Slopes too big for one slab are cut up, their
 // pieces sharing an `at`, so their pictures run on over the joins.
-export function roofPieces(a, b, yaw, { style, pitch, overhang, thickness, surface }) {
+export function roofPieces(a, b, yaw, { style, pitch, overhang, thickness, surface, ridge, rising }) {
   const r = (yaw * Math.PI) / 180;
   const axes = [[Math.cos(r), -Math.sin(r)], [Math.sin(r), Math.cos(r)]];
   const [dx, dz] = [b[0] - a[0], b[2] - a[2]];
   const [w, d] = axes.map(([x, z]) => dx * x + dz * z);
   if (Math.abs(w) < 1 || Math.abs(d) < 1) return [];
-  // The rectangle's own frame: x along the longer side, from its corner, y up.
+  // The rectangle's own frame: x along the ridge (the longer side, unless said), from its corner,
+  // y up.
   const corner = [a[0] + Math.min(0, w) * axes[0][0] + Math.min(0, d) * axes[1][0], a[2] + Math.min(0, w) * axes[0][1] + Math.min(0, d) * axes[1][1]];
-  const [along, across] = Math.abs(w) >= Math.abs(d) ? axes : [axes[1], axes[0]];
-  const [W, D] = Math.abs(w) >= Math.abs(d) ? [Math.abs(w), Math.abs(d)] : [Math.abs(d), Math.abs(w)];
+  let first = Math.abs(w) >= Math.abs(d) ? 0 : 1;
+  if (style === "gable" && ridge !== undefined) first = ridge;
+  if (style === "shed" && rising) first = Math.abs(rising[0] * axes[0][0] + rising[1] * axes[0][1]) > 0.5 ? 1 : 0;
+  const [along, across] = first === 0 ? axes : [axes[1], axes[0]];
+  const [W, D] = first === 0 ? [Math.abs(w), Math.abs(d)] : [Math.abs(d), Math.abs(w)];
+  const falling = style === "shed" && rising && rising[0] * across[0] + rising[1] * across[1] < 0;
   const world = ([x, z]) => [corner[0] + x * along[0] + z * across[0], corner[1] + x * along[1] + z * across[1]];
   const o = overhang;
   const h = D / 2;
@@ -1024,7 +1030,7 @@ export function roofPieces(a, b, yaw, { style, pitch, overhang, thickness, surfa
   const s = [0, -1];
   const facets = {
     flat: [{ plan: [[-o, -o], [W + o, -o], [W + o, D + o], [-o, D + o]], up: n, eave: [0, 0] }],
-    shed: [{ plan: [[-o, -o], [W + o, -o], [W + o, D + o], [-o, D + o]], up: n, eave: [0, 0] }],
+    shed: [{ plan: [[-o, -o], [W + o, -o], [W + o, D + o], [-o, D + o]], up: falling ? s : n, eave: [0, falling ? D : 0] }],
     gable: [
       { plan: [[-o, -o], [W + o, -o], [W + o, h], [-o, h]], up: n, eave: [0, 0] },
       { plan: [[-o, h], [W + o, h], [W + o, D + o], [-o, D + o]], up: s, eave: [0, D] },

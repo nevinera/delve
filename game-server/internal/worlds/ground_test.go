@@ -67,20 +67,12 @@ func TestGroundMatchesTheClient(t *testing.T) {
 	}
 }
 
-func TestGroundFindsStructures(t *testing.T) {
-	g := groundWorld(t).Ground("main")
-	// The dock stands at (672.5, 160.25), reaching 24 ft; the boulder at (700, 400) isn't one.
-	for _, c := range []struct {
-		x, z float64
-		want bool
-	}{{672.5, 160.25, true}, {700, 175, true}, {710, 160, false}, {700, 400, false}} {
-		s, ok, err := g.At(c.x, c.z)
-		if err != nil || !ok {
-			t.Fatalf("(%v, %v): ok %v, %v", c.x, c.z, ok, err)
-		}
-		if s.Structure != c.want {
-			t.Errorf("(%v, %v): structure = %v, want %v", c.x, c.z, s.Structure, c.want)
-		}
+func TestGroundReadsOldStructures(t *testing.T) {
+	// The plate still places a dock, a structure from before templates, at (672.5, 160.25): the
+	// ground there reads as ground.
+	s, ok, err := groundWorld(t).Ground("main").At(672.5, 160.25)
+	if err != nil || !ok || len(s.Footholds) != 0 {
+		t.Errorf("sample %+v, ok %v, %v", s, ok, err)
 	}
 }
 
@@ -100,7 +92,6 @@ func TestReadPlateRefusesBadPlates(t *testing.T) {
 		"plate 2 0,0 surface\ntile 0,0 64\nlayer height\n000\n",
 		"plate 2 0,0 surface\ntile 0,0 64\nlayer height =0!0\n",
 		"plate 2 0,0 surface\ntile 0,0 64\nlayer water =000\n",
-		"plate 2 0,0 surface\nobject 0 circle:1 1 rock\ntile 0,0 64\nlayer height =000\nplace 5 0000000000\n",
 	} {
 		if _, err := readPlate(strings.NewReader(text)); err == nil {
 			t.Errorf("read %q", text)
