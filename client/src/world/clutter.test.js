@@ -82,3 +82,23 @@ describe("meshHeightAt", () => {
     expect(meshHeightAt(tileAt(t), 12, 12)).toBeCloseTo(3);
   });
 });
+
+describe("clutter under slabs", () => {
+  const floor = (y) => ({ at: [0, y, 0], turn: [0, 0, 0], outline: [[0, 0], [16, 0], [16, 32], [0, 32]], thickness: 1, surface: "stone" });
+
+  it("grows nowhere a slab's within its height over it", () => {
+    const t = tile();
+    const all = clutterForTile(t, tileAt(t));
+    t.slabs = [floor(11)];
+    const left = clutterForTile(t, tileAt(t));
+    expect(left.length).toBeLessThan(all.length);
+    expect(left.every((c) => c.x >= 16)).toBe(true);
+  });
+
+  it("grows under a slab high over it", () => {
+    const t = tile();
+    const all = clutterForTile(t, tileAt(t));
+    t.slabs = [floor(40)];
+    expect(clutterForTile(t, tileAt(t))).toHaveLength(all.length);
+  });
+});

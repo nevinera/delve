@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TILE_FT } from "./constants.js";
-import { cutSlab, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
+import { cutSlab, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
 
 // A 10 ft square floor, and a wall: the same square stood up on its south edge.
 const floor = { at: [100, 40, 200], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "floorboards" };
@@ -83,5 +83,30 @@ describe("cutSlab", () => {
     const pieces = cutSlab(wall, [[8, -1], [12, -1], [12, 11], [8, 11]]);
     expect(pieces.map((p) => area(p.outline)).sort()).toEqual([80, 80]);
     expect(pieces.every((p) => p.at === wall.at || p.at.join() === wall.at.join())).toBe(true);
+  });
+});
+
+describe("slabSpanAt", () => {
+  const floor = { at: [100, 41, 200], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], holes: [[[4, 4], [6, 4], [6, 6], [4, 6]]], thickness: 1, surface: "stone" };
+
+  it("finds a floor over a point, and not past its edge or in its holes", () => {
+    expect(slabSpanAt(floor, 102, 202)).toEqual([40, 41]);
+    expect(slabSpanAt(floor, 99, 202)).toBeNull();
+    expect(slabSpanAt(floor, 105, 205)).toBeNull();
+  });
+
+  it("follows a turned and tilted slab", () => {
+    const ramp = { ...floor, holes: undefined, turn: [90, 0, 0] };
+    // Yawed a quarter turn, its outline's u runs north.
+    expect(slabSpanAt(ramp, 102, 195)).toEqual([40, 41]);
+    expect(slabSpanAt(ramp, 102, 205)).toBeNull();
+    const tilted = { ...floor, holes: undefined, turn: [0, 0, 30] };
+    const [low, high] = slabSpanAt(tilted, 100 + 5 * Math.cos(Math.PI / 6), 205);
+    expect(high).toBeCloseTo(41 + 5 * Math.sin(Math.PI / 6));
+    expect(high - low).toBeCloseTo(1 / Math.cos(Math.PI / 6));
+  });
+
+  it("passes by a wall", () => {
+    expect(slabSpanAt({ ...floor, holes: undefined, turn: [0, -90, 0] }, 102, 200)).toBeNull();
   });
 });

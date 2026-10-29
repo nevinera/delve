@@ -70,6 +70,26 @@ export function slabFace(slab, points) {
   return points.map(([u, v]) => add(slab.at, turn([u, 0, v])));
 }
 
+// Where the upright line through continent [x, z] passes through the slab, as [low, high] feet, or
+// null where it misses, or the slab stands near enough upright that it hardly would.
+export function slabSpanAt(slab, x, z) {
+  const deg = Math.PI / 180;
+  const n = turnPoint([0, 1, 0], slab.turn);
+  if (Math.abs(n[1]) < 0.05) return null;
+  // The top face's height over [x, z], then where that is across the face.
+  const [ax, ay, az] = slab.at;
+  const y = ay - (n[0] * (x - ax) + n[2] * (z - az)) / n[1];
+  const [yaw, pitch, roll] = slab.turn.map((v) => -v);
+  // Turning back: yaw, then pitch, then roll, each undone.
+  let [u, h, v] = [x - ax, y - ay, z - az];
+  [u, v] = [u * Math.cos(yaw * deg) + v * Math.sin(yaw * deg), -u * Math.sin(yaw * deg) + v * Math.cos(yaw * deg)];
+  [h, v] = [h * Math.cos(pitch * deg) - v * Math.sin(pitch * deg), h * Math.sin(pitch * deg) + v * Math.cos(pitch * deg)];
+  [u, h] = [u * Math.cos(roll * deg) - h * Math.sin(roll * deg), u * Math.sin(roll * deg) + h * Math.cos(roll * deg)];
+  if (!inPolygon(slab.outline, [u, v]) || (slab.holes ?? []).some((hole) => inPolygon(hole, [u, v]))) return null;
+  const bottom = y - slab.thickness / n[1];
+  return [Math.min(y, bottom), Math.max(y, bottom)];
+}
+
 // The slab with `hole` ([u, v] points) taken out of it: what's left, as slabs. A hole inside it
 // joins its holes; one reaching its edge cuts a notch, and one across it splits it in pieces.
 export function cutSlab(slab, hole) {

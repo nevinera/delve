@@ -11,6 +11,7 @@
 
 import { TILE_FT } from "./constants.js";
 import { fbm, hash2 } from "./noise.js";
+import { slabSpanAt } from "./slabs.js";
 import { parseTree } from "./trees.js";
 
 // Color ranges are [[h0, h1], [s0, s1], [l0, l1]] in HSL, 0-1. A part with several picks one.
@@ -123,7 +124,8 @@ const PATCH_FT = 60;
 
 // One tile's clutter: [{ kind, x, z, y, yaw, scale, normal, colors: [[r, g, b] per part, or null
 // where the part is left out] }], colors 0-1. tileAt(tx, tz) finds loaded tiles, for heights at the
-// tile's edge. density scales every count (graphics tiers).
+// tile's edge and the slabs (slabs.js) around it: none grows where a slab's within its height over
+// it. density scales every count (graphics tiers).
 export function clutterForTile(tile, tileAt, { density = 1 } = {}) {
   const [tx, tz] = tile.coords;
   const n = tile.cells;
@@ -135,6 +137,14 @@ export function clutterForTile(tile, tileAt, { density = 1 } = {}) {
   const kindAt = (k) => (Number.isNaN(water[k]) ? null : waterKinds && tile.layers.waterKind ? waterKinds[tile.layers.waterKind[k]] : water[k] === 0 ? "sea" : "fresh");
   const h = (i, j) => height[Math.min(n - 1, Math.max(0, j)) * n + Math.min(n - 1, Math.max(0, i))];
   const out = [];
+  // Slabs reach from their own tiles into the ones beside them.
+  const slabs = [];
+  for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) slabs.push(...((dx || dz ? tileAt(tx + dx, tz + dz) : tile)?.slabs ?? []));
+  const covered = (x, z, y, tall) =>
+    slabs.some((slab) => {
+      const span = slabSpanAt(slab, x, z);
+      return span && span[1] >= y && span[0] <= y + tall;
+    });
 
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
@@ -173,11 +183,13 @@ export function clutterForTile(tile, tileAt, { density = 1 } = {}) {
           const onWater = rule.at === "pond";
           const underwater = rule.at === "seaBed" || rule.at === "freshBed";
           const size = spec.size[0] + (spec.size[1] - spec.size[0]) * roll(m, 4);
+          const y = onWater ? water[k] : (meshHeightAt(tileAt, x, z) ?? height[k]);
+          if (slabs.length && covered(x, z, y, size)) continue;
           out.push({
             kind: rule.kind,
             x,
             z,
-            y: onWater ? water[k] : meshHeightAt(tileAt, x, z) ?? height[k],
+            y,
             yaw: roll(m, 3) * Math.PI * 2,
             scale: underwater ? Math.min(size, (water[k] - height[k]) * 0.85) : size,
             normal: spec.lie && !onWater ? normal : [0, 1, 0],

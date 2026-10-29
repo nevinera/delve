@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
-import { CELL_FT } from "../world/constants.js";
+import { CELL_FT, CELLS } from "../world/constants.js";
 import { MAX_SLAB_CORNERS, SLAB_REACH_FT, cutSlab, slabBottom, slabFace, slabProblems, slabTile, slabTop } from "../world/slabs.js";
 import { slabAt, slabGeometry, slabMeshes } from "./slabMeshes.js";
 import { repeatFt } from "./slabTextures.js";
@@ -28,7 +28,7 @@ import { repeatFt } from "./slabTextures.js";
 // Copied slabs (copy) can be pasted (paste): they follow the pointer, their lowest point on what's
 // under it, till a click puts them down.
 // With conform, the ground under a new floor begun on the ground, and just past its edges, is set
-// to its bottom.
+// to its bottom, with no clutter.
 // Corners on the level snap to other slabs' top corners nearby. What would be made shows as it's
 // drawn, red where it can't be: too big, say, or belonging outside the window. Escape drops a slab
 // half drawn, Backspace its last corner.
@@ -334,7 +334,14 @@ export class SlabTool {
     const conform = this.settings.mode === "floor" && this.settings.conform && onGround;
     if (conform) {
       const cells = detail.cells();
-      detail.setHeights(conformedCells(slabs, CELL_FT).filter(([ci, cj]) => cells.editable(ci, cj)));
+      const under = conformedCells(slabs, CELL_FT).filter(([ci, cj]) => cells.editable(ci, cj));
+      detail.setHeights(under);
+      // Nothing grows there either.
+      for (const [ci, cj] of under) {
+        const tile = detail.view.decoded.get(`${Math.floor(ci / CELLS)},${Math.floor(cj / CELLS)}`);
+        tile.layers.clutter ??= new Uint8Array(CELLS * CELLS).fill(100);
+        tile.layers.clutter[(cj - tile.coords[1] * CELLS) * CELLS + ci - tile.coords[0] * CELLS] = 0;
+      }
       detail.rework();
     }
     detail.endEdit({ reflow: conform });

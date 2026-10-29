@@ -380,7 +380,7 @@ export class DetailView {
       if (this.undos.length > UNDO_KEEP) this.undos.shift();
       this.redos = [];
     }
-    this.freshClutter(edit.keys());
+    this.freshClutter(clutterReach(edit, (key) => this.tile(key)));
     this.onEdit?.([...edit.keys()]);
     if (wet.length) this.reflow(wet);
   }
@@ -421,7 +421,7 @@ export class DetailView {
     for (const [key, state] of entry[side]) restore(this.tile(key), state);
     if (entry.water) this.water?.set(JSON.parse(entry.water[side]));
     this.changed(entry[side].keys());
-    this.freshClutter(entry[side].keys());
+    this.freshClutter(clutterReach(entry[side], (key) => this.tile(key), entry[side === "before" ? "after" : "before"]));
     this.onEdit?.([...entry[side].keys()]);
   }
 
@@ -920,6 +920,20 @@ function wetCells(edit, tileOf) {
     }
   }
   return cells;
+}
+
+// The tiles whose clutter an edit can change: those it changed, and where their slabs changed, the
+// tiles beside them, which slabs reach over. edit maps "tx,tz" to each tile's state before (or
+// `other`'s) and tileOf(key) gives the tile now.
+function clutterReach(edit, tileOf, other = null) {
+  const keys = new Set(edit.keys());
+  for (const [key, state] of edit) {
+    const now = other ? other.get(key)?.slabs : tileOf(key)?.slabs;
+    if (JSON.stringify(state.slabs ?? []) === JSON.stringify(now ?? [])) continue;
+    const [tx, tz] = key.split(",").map(Number);
+    for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) keys.add(`${tx + dx},${tz + dz}`);
+  }
+  return keys;
 }
 
 // A tile's changeable state, copied, for undoing.
