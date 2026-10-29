@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TILE_FT } from "./constants.js";
-import { cutSlab, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
+import { cutSlab, slabHitsTrunk, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
 
 // A 10 ft square floor, and a wall: the same square stood up on its south edge.
 const floor = { at: [100, 40, 200], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "floorboards" };
@@ -108,5 +108,29 @@ describe("slabSpanAt", () => {
 
   it("passes by a wall", () => {
     expect(slabSpanAt({ ...floor, holes: undefined, turn: [0, -90, 0] }, 102, 200)).toBeNull();
+  });
+});
+
+describe("slabHitsTrunk", () => {
+  const trunk = (x, z, ground = 0, top = 60) => ({ x, z, radius: 2.5, ground, top });
+
+  it("finds a trunk through a floor, or brushing its edge", () => {
+    expect(slabHitsTrunk(floor, trunk(105, 205))).toBe(true);
+    expect(slabHitsTrunk(floor, trunk(111, 205))).toBe(true);
+    expect(slabHitsTrunk(floor, trunk(114, 205))).toBe(false);
+  });
+
+  it("misses a tree too short to reach a floor, or standing in its hole", () => {
+    expect(slabHitsTrunk(floor, trunk(105, 205, 0, 30))).toBe(false);
+    const holed = { ...floor, outline: [[-10, -10], [20, -10], [20, 20], [-10, 20]], holes: [[[0, 0], [10, 0], [10, 10], [0, 10]]] };
+    expect(slabHitsTrunk(holed, trunk(105, 205))).toBe(false);
+    expect(slabHitsTrunk(holed, trunk(108, 205))).toBe(true);
+  });
+
+  it("finds a trunk against a wall's face", () => {
+    // The wall stands on z 200, 1 ft thick to the south.
+    expect(slabHitsTrunk(wall, trunk(105, 203))).toBe(true);
+    expect(slabHitsTrunk(wall, trunk(105, 197))).toBe(false);
+    expect(slabHitsTrunk(wall, trunk(105, 204))).toBe(false);
   });
 });

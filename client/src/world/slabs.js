@@ -73,21 +73,58 @@ export function slabFace(slab, points) {
 // Where the upright line through continent [x, z] passes through the slab, as [low, high] feet, or
 // null where it misses, or the slab stands near enough upright that it hardly would.
 export function slabSpanAt(slab, x, z) {
-  const deg = Math.PI / 180;
   const n = turnPoint([0, 1, 0], slab.turn);
   if (Math.abs(n[1]) < 0.05) return null;
   // The top face's height over [x, z], then where that is across the face.
   const [ax, ay, az] = slab.at;
   const y = ay - (n[0] * (x - ax) + n[2] * (z - az)) / n[1];
-  const [yaw, pitch, roll] = slab.turn.map((v) => -v);
-  // Turning back: yaw, then pitch, then roll, each undone.
-  let [u, h, v] = [x - ax, y - ay, z - az];
-  [u, v] = [u * Math.cos(yaw * deg) + v * Math.sin(yaw * deg), -u * Math.sin(yaw * deg) + v * Math.cos(yaw * deg)];
-  [h, v] = [h * Math.cos(pitch * deg) - v * Math.sin(pitch * deg), h * Math.sin(pitch * deg) + v * Math.cos(pitch * deg)];
-  [u, h] = [u * Math.cos(roll * deg) - h * Math.sin(roll * deg), u * Math.sin(roll * deg) + h * Math.cos(roll * deg)];
+  const [u, , v] = unturned(slab, [x, y, z]);
   if (!inPolygon(slab.outline, [u, v]) || (slab.holes ?? []).some((hole) => inPolygon(hole, [u, v]))) return null;
   const bottom = y - slab.thickness / n[1];
   return [Math.min(y, bottom), Math.max(y, bottom)];
+}
+
+// Whether the slab runs into a tree's trunk: an upright cylinder { x, z, radius } in continent
+// feet, from `ground` up to `top`.
+export function slabHitsTrunk(slab, { x, z, radius, ground, top }) {
+  const corners = [...slabTop(slab), ...slabBottom(slab)];
+  const [low, high] = [Math.min(...corners.map((p) => p[1])), Math.max(...corners.map((p) => p[1]))];
+  if (corners.every((p) => p[0] < x - radius) || corners.every((p) => p[0] > x + radius)) return false;
+  if (corners.every((p) => p[2] < z - radius) || corners.every((p) => p[2] > z + radius)) return false;
+  // Up the trunk where it's beside the slab, how near the slab comes.
+  const step = 0.25;
+  for (let y = Math.max(ground, low - radius); y <= Math.min(top, high + radius); y += step) {
+    const [u, h, v] = unturned(slab, [x, y, z]);
+    const hole = (slab.holes ?? []).find((hole) => inPolygon(hole, [u, v]));
+    const across = hole ? edgeDistance(hole, [u, v]) : inPolygon(slab.outline, [u, v]) ? 0 : edgeDistance(slab.outline, [u, v]);
+    const through = Math.max(0, h, -slab.thickness - h);
+    if (Math.hypot(across, through) < radius) return true;
+  }
+  return false;
+}
+
+// A continent point as [u, h, v]: across the slab's top face from `at`, and up from it.
+function unturned(slab, [x, y, z]) {
+  const deg = Math.PI / 180;
+  const [yaw, pitch, roll] = slab.turn.map((v) => -v);
+  // Turning back: yaw, then pitch, then roll, each undone.
+  let [u, h, v] = [x - slab.at[0], y - slab.at[1], z - slab.at[2]];
+  [u, v] = [u * Math.cos(yaw * deg) + v * Math.sin(yaw * deg), -u * Math.sin(yaw * deg) + v * Math.cos(yaw * deg)];
+  [h, v] = [h * Math.cos(pitch * deg) - v * Math.sin(pitch * deg), h * Math.sin(pitch * deg) + v * Math.cos(pitch * deg)];
+  [u, h] = [u * Math.cos(roll * deg) - h * Math.sin(roll * deg), u * Math.sin(roll * deg) + h * Math.cos(roll * deg)];
+  return [u, h, v];
+}
+
+// How far a point [u, v] is from the nearest edge of a polygon.
+function edgeDistance(polygon, [u, v]) {
+  let best = Infinity;
+  polygon.forEach((a, i) => {
+    const b = polygon[(i + 1) % polygon.length];
+    const [dx, dv] = [b[0] - a[0], b[1] - a[1]];
+    const t = Math.max(0, Math.min(1, ((u - a[0]) * dx + (v - a[1]) * dv) / (dx * dx + dv * dv || 1)));
+    best = Math.min(best, Math.hypot(u - a[0] - t * dx, v - a[1] - t * dv));
+  });
+  return best;
 }
 
 // The slab with `hole` ([u, v] points) taken out of it: what's left, as slabs. A hole inside it

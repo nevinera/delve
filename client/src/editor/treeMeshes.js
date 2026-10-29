@@ -201,6 +201,11 @@ export function trunkRadius(kind, size) {
   return SIZES[size].trunk * (KINDS[kind] ?? KINDS.oak).trunk;
 }
 
+// How tall a tree stands over its ground, in feet.
+export function treeHeight(kind, size) {
+  return SIZES[size].height * (KINDS[kind] ?? KINDS.oak).height;
+}
+
 // trees: [{ x, z, ground, size, kind }] in scene feet. Unknown kinds draw as oaks. `far` draws
 // them as cheap stand-ins: a trunk and a crown of a few flat faces each.
 export function treeMeshes(trees, { far = false } = {}) {

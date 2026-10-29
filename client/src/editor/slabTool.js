@@ -1,9 +1,10 @@
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { CELL_FT, CELLS } from "../world/constants.js";
-import { MAX_SLAB_CORNERS, SLAB_REACH_FT, cutSlab, slabBottom, slabFace, slabProblems, slabTile, slabTop } from "../world/slabs.js";
+import { MAX_SLAB_CORNERS, SLAB_REACH_FT, cutSlab, slabBottom, slabFace, slabHitsTrunk, slabProblems, slabTile, slabTop } from "../world/slabs.js";
 import { slabAt, slabGeometry, slabMeshes } from "./slabMeshes.js";
 import { repeatFt } from "./slabTextures.js";
+import { treeHeight, trunkRadius } from "./treeMeshes.js";
 
 // The detail step's slabs tool (world/slabs.js), working on a DetailView's tiles. Its mode is one
 // of:
@@ -44,6 +45,7 @@ const MOVE_STEP_FT = 0.25;
 const MAX_RECTANGLE_FT = 2048;
 const MAX_PIECE_FT = 40; // the most a piece of a cut-up rectangle is along each side
 const CLICK_PX = 5; // a press moving less than this before it's let go is a click
+const TREE_PROBLEM = "That slab would run into a tree.";
 
 export class SlabTool {
   // detail: the DetailView. onPick(slabs) hears what's picked, and when it changes;
@@ -306,9 +308,26 @@ export class SlabTool {
     return Math.floor(foot * 4) / 4;
   }
 
-  // Whether a slab can be made: nothing wrong with it, in a tile of the window.
+  // Whether a slab can be made: nothing wrong with it, in a tile of the window, clear of trees.
   fits(slabs) {
-    return slabs.length > 0 && slabs.every((slab) => !slabProblems(slab).length && this.detail.editable(slabTile(slab).join(",")));
+    return slabs.length > 0 && slabs.every((slab) => !slabProblems(slab).length && this.detail.editable(slabTile(slab).join(",")) && !this.hitsTree(slab));
+  }
+
+  // Whether the slab runs into a tree's trunk, in its tile or the tiles around.
+  hitsTree(slab) {
+    const { decoded, origin } = this.detail.view;
+    const [tx, tz] = slabTile(slab);
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const tile = decoded.get(`${tx + dx},${tz + dz}`);
+        if (!tile) continue;
+        for (const { x, z, ground, size, kind } of this.detail.view.treesOf(tile)) {
+          const trunk = { x: x + origin[0], z: z + origin[1], ground, top: ground + treeHeight(kind, size), radius: trunkRadius(kind, size) };
+          if (slabHitsTrunk(slab, trunk)) return true;
+        }
+      }
+    }
+    return false;
   }
 
   // Which way the camera faces across the ground, as a slab's yaw: a slab turned so has its u
@@ -378,6 +397,7 @@ export class SlabTool {
     for (const { slab } of picks) {
       const problems = slabProblems({ ...slab, ...changes });
       if (problems.length) return this.onProblem?.(`That slab would ${problems[0].replace(/^has /, "have ").replace(/^needs /, "need ").replace(/^reaches /, "reach ")}.`);
+      if (this.hitsTree({ ...slab, ...changes })) return this.onProblem?.(TREE_PROBLEM);
     }
     const own = !detail.edit;
     if (own) detail.beginEdit();
@@ -434,6 +454,7 @@ export class SlabTool {
     if (!picks.length) return;
     const { origin } = this.detail.view;
     const p = this.proxy.position;
+    const last = picks.map((pick) => structuredClone(pick.slab));
     if (picked) {
       picked.slab.at = [p.x + origin[0], p.y, p.z + origin[1]].map(tidy);
       const r = new THREE.Euler().setFromQuaternion(this.proxy.quaternion, "YXZ");
@@ -441,6 +462,12 @@ export class SlabTool {
     } else {
       const by = p.clone().sub(this.dragFrom);
       for (const pick of picks) pick.slab.at = this.before.get(pick).at.map((v, i) => tidy(v + by.getComponent(i)));
+    }
+    // Trees stop them where they were.
+    if (picks.some((pick) => this.hitsTree(pick.slab))) {
+      picks.forEach((pick, i) => Object.assign(pick.slab, last[i]));
+      this.showHandles();
+      return;
     }
     this.rehome();
     this.drawMarks();
@@ -601,7 +628,7 @@ export class SlabTool {
     const at = this.snap([hit.x + origin[0], hit.y, hit.z + origin[1]], null);
     const local = this.scene(at).sub(point).applyQuaternion(quaternionOf(slab.turn).invert());
     const outline = slab.outline.map((p, i) => (i === this.corner ? [tidy(local.x), tidy(local.z)] : p));
-    if (slabProblems({ ...slab, outline }).length) return;
+    if (slabProblems({ ...slab, outline }).length || this.hitsTree({ ...slab, outline })) return;
     slab.outline = outline;
     this.rehome();
     this.drawMarks();
