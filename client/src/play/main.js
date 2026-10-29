@@ -78,7 +78,13 @@ async function play() {
   const view = new RenderView($("scene"), { onGraphics: (graphics) => showGraphics?.(graphics) });
   const touch = isTouch();
   if (touch) view.setGraphics(PHONE_GRAPHICS);
-  showGraphics = graphicsPanel(menu.querySelector(".play-graphics"), view, { check: "play-check", range: "play-range" });
+  // Players get the settings that trade looks for speed, not the editor's switch for each part.
+  showGraphics = graphicsPanel(menu.querySelector(".play-graphics"), view, {
+    check: "play-check",
+    range: "play-range",
+    parts: { "far ring": "distant land" },
+    solid: "simple tree crowns",
+  });
   menu.querySelector('[data-open="playGraphics"]').disabled = false;
   others = new Others(view);
   for (const [method, arg] of early) others[method](arg);
