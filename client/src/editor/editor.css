@@ -201,7 +201,9 @@
   gap: 6px;
 }
 
-.editor-row[hidden] {
+.editor-row[hidden],
+.editor-field[hidden],
+.editor-check[hidden] {
   display: none;
 }
 
@@ -372,6 +374,10 @@
   display: grid;
   grid-template-columns: repeat(5, 36px);
   gap: 4px;
+}
+
+.slab-swatches[hidden] {
+  display: none;
 }
 
 .editor .slab-swatch {

@@ -169,7 +169,10 @@ export class SlabTool {
       return true;
     }
     if (!this.picked) return false;
-    if (e.key === "g" || e.key === "r") this.setHandle(e.key === "g" ? "move" : "turn");
+    if (e.key === "g" || e.key === "r") {
+      this.setHandle(e.key === "g" ? "move" : "turn");
+      this.onPick?.(this.picked.slab);
+    }
     else if (e.key === "Delete" || e.key === "Backspace") this.remove();
     else if (e.key === "Escape") this.pick(null);
     else return false;

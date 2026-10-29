@@ -1125,11 +1125,12 @@ export class Editor {
       this.applyDetailBrush();
       tool()?.change({ thickness: Number(this.el.slabThickness.value) });
     });
-    const numbers = (inputs) => inputs.map((input) => Number(input.value) || 0);
-    for (const input of [this.el.slabX, this.el.slabY, this.el.slabZ]) input.addEventListener("change", () => tool()?.change({ at: numbers([this.el.slabX, this.el.slabY, this.el.slabZ]) }));
-    for (const input of [this.el.slabYaw, this.el.slabPitch, this.el.slabRoll]) input.addEventListener("change", () => tool()?.change({ turn: numbers([this.el.slabYaw, this.el.slabPitch, this.el.slabRoll]) }));
-    this.el.slabMove.addEventListener("click", () => tool()?.setHandle("move"));
-    this.el.slabTurn.addEventListener("click", () => tool()?.setHandle("turn"));
+    for (const [button, handle] of [[this.el.slabMove, "move"], [this.el.slabTurn, "turn"]]) {
+      button.addEventListener("click", () => {
+        tool()?.setHandle(handle);
+        this.showSlabRows();
+      });
+    }
     this.el.slabDelete.addEventListener("click", () => tool()?.remove());
   }
 
@@ -1206,11 +1207,32 @@ export class Editor {
     return { mode: this.slabMode, shape: this.slabShape, thickness: Number(slabThickness.value) || 1, height: Number(slabHeight.value) || 10, keepWalling: slabKeep.checked, conform: this.el.slabConform.checked, surface: structuredClone(this.slabSurface) };
   }
 
+  // Shows only the slabs tool's settings that matter for what it's doing: drawing floors or walls,
+  // or picking, with a slab picked or not.
+  showSlabRows() {
+    const mode = this.slabMode;
+    const tool = this.detail?.slabTool;
+    const picked = Boolean(tool?.picked);
+    const rectangleWall = mode === "wall" && this.slabShape === "rectangle";
+    this.el.slabKeepRow.hidden = !rectangleWall;
+    this.el.slabHeightRow.hidden = !rectangleWall;
+    this.el.slabShapeRow.hidden = mode === "pick";
+    this.el.slabConformRow.hidden = mode !== "floor";
+    this.el.slabHandleRow.hidden = !picked;
+    this.el.slabMove.classList.toggle("active", tool?.handle === "move");
+    this.el.slabTurn.classList.toggle("active", tool?.handle === "turn");
+    // Picking with nothing picked, the slab settings change nothing.
+    const idle = mode === "pick" && !picked;
+    this.el.slabThickness.closest(".editor-row").hidden = idle;
+    this.el.slabSwatches.hidden = idle;
+  }
+
   // Draws floors or walls, or with neither, picks slabs.
   setSlabMode(mode) {
     this.slabMode = mode;
     this.el.slabFloor.classList.toggle("active", mode === "floor");
     this.el.slabWall.classList.toggle("active", mode === "wall");
+    this.showSlabRows();
     this.applyDetailBrush();
   }
 
@@ -1219,6 +1241,7 @@ export class Editor {
     this.slabShape = shape;
     this.el.slabRect.classList.toggle("active", shape === "rectangle");
     this.el.slabPoly.classList.toggle("active", shape === "polygon");
+    this.showSlabRows();
     this.applyDetailBrush();
   }
 
@@ -1267,11 +1290,10 @@ export class Editor {
   showSlab(slab) {
     const { slabPanel, slabInfo } = this.el;
     slabPanel.hidden = !slab;
+    this.showSlabRows();
     if (!slab) return;
-    const [x, y, z] = slab.at;
+    const [x, , z] = slab.at;
     slabInfo.textContent = `slab of ${slab.outline.length} corners, tile ${Math.floor(x / TILE_FT)}, ${Math.floor(z / TILE_FT)}`;
-    [this.el.slabX.value, this.el.slabY.value, this.el.slabZ.value] = [x, y, z];
-    [this.el.slabYaw.value, this.el.slabPitch.value, this.el.slabRoll.value] = slab.turn;
     this.el.slabThickness.value = slab.thickness;
     this.setSlabSurface(structuredClone(slab.surface), { change: false });
     this.detail?.slabTool.setSettings({ thickness: slab.thickness, surface: structuredClone(slab.surface) });
