@@ -36,8 +36,7 @@
       ]
     },
     "range": {
-      "type": "number",
-      "minimum": 0
+      "$ref": "common.schema.json#/$defs/distance"
     },
     "minRange": {
       "type": "number",
@@ -45,6 +44,20 @@
     },
     "facing": {
       "type": "boolean"
+    },
+    "requires": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/condition"
+      }
+    },
+    "creatureTypes": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/creatureType"
+      },
+      "minItems": 1,
+      "uniqueItems": true
     },
     "castTime": {
       "type": "number",

@@ -91,6 +91,92 @@
         }
       ]
     },
+    "distance": {
+      "description": "feet, or \"melee\"",
+      "oneOf": [
+        {
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "const": "melee"
+        }
+      ]
+    },
+    "condition": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "health"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "health": {
+              "enum": [
+                "self",
+                "target"
+              ]
+            },
+            "below": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "above": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "below"
+              ]
+            },
+            {
+              "required": [
+                "above"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "status",
+            "on"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "status": {
+              "$ref": "#/$defs/id"
+            },
+            "on": {
+              "enum": [
+                "self",
+                "target"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "creatureType": {
+      "enum": [
+        "beast",
+        "humanoid",
+        "undead",
+        "elemental",
+        "demon",
+        "dragonkin",
+        "giant",
+        "mechanical",
+        "aberration",
+        "critter"
+      ]
+    },
     "school": {
       "enum": [
         "physical",
@@ -136,6 +222,7 @@
         "spellPower",
         "maxHealth",
         "critChance",
+        "critDamage",
         "haste",
         "mastery",
         "versatility",
@@ -267,7 +354,8 @@
             "resource",
             "status",
             "interrupt",
-            "taunt"
+            "taunt",
+            "move"
           ]
         },
         "affects": {
@@ -286,6 +374,10 @@
           ]
         },
         "radius": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "height": {
           "type": "number",
           "exclusiveMinimum": 0
         },
@@ -315,6 +407,23 @@
           "exclusiveMinimum": 0
         },
         "lockout": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "kind": {
+          "enum": [
+            "charge",
+            "leap",
+            "knockback",
+            "pull",
+            "blink"
+          ]
+        },
+        "distance": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "speed": {
           "type": "number",
           "exclusiveMinimum": 0
         }
@@ -347,6 +456,10 @@
         },
         "colors": {
           "$ref": "#/$defs/colors"
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0
         }
       }
     },
@@ -374,6 +487,14 @@
             "target",
             "ground"
           ]
+        },
+        "volume": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "pitch": {
+          "type": "number",
+          "exclusiveMinimum": 0
         }
       }
     }

@@ -49,6 +49,15 @@
                   "type": "number",
                   "exclusiveMinimum": 0
                 },
+                "pack": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer",
+                    "minimum": 1
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
                 "levels": {
                   "$ref": "common.schema.json#/$defs/levels"
                 },
@@ -105,6 +114,32 @@
           "wander": {
             "type": "number",
             "minimum": 0
+          },
+          "pack": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "patrol": {
+            "type": "object",
+            "required": [
+              "points"
+            ],
+            "properties": {
+              "points": {
+                "type": "array",
+                "items": {
+                  "type": "array",
+                  "items": {
+                    "type": "number"
+                  },
+                  "minItems": 2,
+                  "maxItems": 2
+                },
+                "minItems": 2
+              },
+              "loop": {
+                "type": "boolean"
+              }
+            }
           }
         },
         "oneOf": [

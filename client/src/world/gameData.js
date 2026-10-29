@@ -15,20 +15,22 @@ export const MAX_RESOURCES = 3;
 export const SCHOOLS = ["physical", "holy", "fire", "nature", "frost", "shadow", "arcane"];
 export const PRIMARY_STATS = ["strength", "agility", "intellect"];
 export const GEAR_STATS = [...PRIMARY_STATS, "stamina", "armor", "critRating", "hasteRating", "masteryRating", "versatilityRating", "leechRating", "avoidanceRating", "speedRating"];
-export const DERIVED_STATS = ["attackPower", "spellPower", "maxHealth", "critChance", "haste", "mastery", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed", "damageDone", "healingDone", "damageTaken", "healingTaken", "threat"];
+export const DERIVED_STATS = ["attackPower", "spellPower", "maxHealth", "critChance", "critDamage", "haste", "mastery", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed", "damageDone", "healingDone", "damageTaken", "healingTaken", "threat"];
 export const RESOURCE_KINDS = ["mana", "energy", "rage", "points"];
 export const TARGETS = ["enemy", "ally", "self", "ground", "none"];
-export const EFFECT_TYPES = ["damage", "heal", "resource", "status", "interrupt", "taunt"];
+export const EFFECT_TYPES = ["damage", "heal", "resource", "status", "interrupt", "taunt", "move"];
+export const MOVES = ["charge", "leap", "knockback", "pull", "blink"];
 export const AFFECTS = ["target", "self", "enemies", "allies"];
 export const STATUS_KINDS = ["buff", "debuff", "hidden"];
 export const STACKING = ["refresh", "replace", "stack"];
-export const DISPELS = ["magic", "curse", "poison", "disease"];
-export const CONTROLS = ["stun", "root", "silence", "incapacitate", "fear"];
-export const TRIGGERS = ["dealDamage", "takeDamage", "heal", "crit", "cast", "dodge", "parry", "block"];
+export const DISPELS = ["magic", "curse", "poison", "disease", "enrage"];
+export const CONTROLS = ["stun", "root", "silence", "incapacitate", "disorient", "fear", "disarm"];
+export const TRIGGERS = ["dealDamage", "takeDamage", "heal", "crit", "cast", "dodge", "parry", "block", "healthBelow"];
 export const QUALITIES = ["poor", "common", "uncommon", "rare", "epic"];
 export const ITEM_SLOTS = ["head", "neck", "shoulders", "back", "chest", "wrists", "hands", "waist", "legs", "feet", "finger", "trinket", "oneHand", "mainHand", "offHand", "twoHand", "ranged"];
 export const WEAPON_SLOTS = ["oneHand", "mainHand", "offHand", "twoHand", "ranged"];
 export const BODIES = ["humanoid", "goblin", "trog", "wolf", "bobcat", "bear", "slime"];
+export const CREATURE_TYPES = ["beast", "humanoid", "undead", "elemental", "demon", "dragonkin", "giant", "mechanical", "aberration", "critter"];
 export const CLASSIFICATIONS = ["trivial", "normal", "elite", "rare", "rareElite", "boss"];
 const WHEN = ["cast", "launch", "impact", "channel"];
 const ON = ["caster", "target", "ground"];
@@ -118,10 +120,15 @@ export function abilityProblems(ability, ctx) {
   const out = named(ability);
   if (!TARGETS.includes(ability.target)) out.push(`needs a target, one of ${TARGETS.join(", ")}`);
   if (ability.school !== undefined && !SCHOOLS.includes(ability.school)) out.push(`has school ${JSON.stringify(ability.school)}, not one of ${SCHOOLS.join(", ")}`);
-  for (const key of ["range", "minRange", "castTime", "gcd", "cooldown"]) if (ability[key] !== undefined && !(ability[key] >= 0)) out.push(`needs a ${key} of 0 or more`);
+  if (ability.icon !== undefined && typeof ability.icon !== "string") out.push("needs an icon name");
+  if (ability.range !== undefined && !isDistance(ability.range)) out.push('needs a range of 0 or more, or "melee"');
+  for (const key of ["minRange", "castTime", "gcd", "cooldown"]) if (ability[key] !== undefined && !(ability[key] >= 0)) out.push(`needs a ${key} of 0 or more`);
   for (const key of ["speed"]) if (ability[key] !== undefined && !(ability[key] > 0)) out.push(`needs a ${key} above 0`);
   if (["enemy", "ally", "ground"].includes(ability.target) && ability.range === undefined) out.push(`needs a range, to target ${ability.target === "ground" ? "the ground" : `an ${ability.target}`}`);
-  if (ability.minRange > ability.range) out.push("has a minRange past its range");
+  if (ability.minRange !== undefined && (ability.range === "melee" || ability.minRange > ability.range)) out.push("has a minRange past its range");
+  if (ability.requires !== undefined && !Array.isArray(ability.requires)) out.push("needs requires to be a list");
+  list(ability.requires).forEach((c, n) => conditionProblems(c, ctx).forEach((m) => out.push(`requirement ${n + 1} ${m}`)));
+  if (ability.creatureTypes !== undefined && !(nonEmpty(ability.creatureTypes) && ability.creatureTypes.every((t) => CREATURE_TYPES.includes(t)))) out.push(`needs creatureTypes from ${CREATURE_TYPES.join(", ")}`);
   if (ability.charges !== undefined && !(Number.isInteger(ability.charges) && ability.charges >= 1)) out.push("needs whole charges, 1 or more");
   if (ability.channel !== undefined && !(isObject(ability.channel) && ability.channel.duration > 0 && Number.isInteger(ability.channel.ticks) && ability.channel.ticks >= 1)) out.push("needs a channel of { duration, ticks }");
   if (ability.channel !== undefined && ability.castTime > 0) out.push("can't have both a cast time and a channel");
@@ -148,10 +155,11 @@ export function effectProblems(effect, { has }, trigger = false) {
   if (!affects.includes(effect.affects)) out.push(`needs affects, one of ${affects.join(", ")}`);
   if (["enemies", "allies"].includes(effect.affects)) {
     if (!(effect.radius > 0)) out.push(`needs a radius, affecting ${effect.affects}`);
+    if (effect.height !== undefined && !(effect.height > 0)) out.push("needs a height above 0");
     if (effect.around !== undefined && !AROUND.includes(effect.around)) out.push("has around that isn't self, target or ground");
     if (effect.cone !== undefined && !(effect.cone > 0 && effect.cone <= 360 && (effect.around ?? "self") === "self")) out.push("needs a cone of up to 360 degrees, around self");
     if (effect.max !== undefined && !(Number.isInteger(effect.max) && effect.max >= 1)) out.push("needs a whole max, 1 or more");
-  } else if (["around", "radius", "cone", "max"].some((k) => effect[k] !== undefined)) out.push("can't have around, radius, cone or max unless it affects enemies or allies");
+  } else if (["around", "radius", "cone", "max"].some((k) => effect[k] !== undefined) || (effect.height !== undefined && effect.type !== "move")) out.push("can't have around, radius, height, cone or max unless it affects enemies or allies");
   if (["damage", "heal", "resource"].includes(effect.type) && !isAmount(effect.amount, effect.type === "resource")) out.push("needs an amount");
   if (effect.school !== undefined && !SCHOOLS.includes(effect.school)) out.push(`has school ${JSON.stringify(effect.school)}`);
   if (effect.type === "resource" && typeof effect.resource !== "string") out.push("needs a resource");
@@ -159,11 +167,38 @@ export function effectProblems(effect, { has }, trigger = false) {
   if (effect.type === "interrupt" && !(effect.lockout > 0)) out.push("needs a lockout in seconds");
   if (effect.type === "taunt" && !(effect.duration > 0)) out.push("needs a duration in seconds");
   if (effect.duration !== undefined && !(effect.duration > 0)) out.push("needs a duration above 0");
+  if (effect.type === "move") out.push(...moveProblems(effect));
   return out;
+}
+
+// A move effect: you move yourself (charge, leap, blink), or move others (knockback, pull).
+function moveProblems(effect) {
+  const out = [];
+  if (!MOVES.includes(effect.kind)) return [`needs a kind, one of ${MOVES.join(", ")}`];
+  const self = ["charge", "leap", "blink"].includes(effect.kind);
+  if (self !== (effect.affects === "self")) out.push(self ? `needs to affect self, to ${effect.kind}` : `can't affect self, to ${effect.kind}`);
+  if (["knockback", "blink"].includes(effect.kind) && !(effect.distance > 0)) out.push(`needs a distance above 0, to ${effect.kind}`);
+  for (const key of ["distance", "speed"]) if (effect[key] !== undefined && !(effect[key] > 0)) out.push(`needs a ${key} above 0`);
+  if (effect.height !== undefined && !(["leap", "knockback"].includes(effect.kind) && effect.height > 0)) out.push("has a height, which only a leap or knockback takes, above 0");
+  return out;
+}
+
+// One of an ability's requires, or a status effect's when: { health, below or above } or { status, on }.
+function conditionProblems(c, { has }) {
+  if (isObject(c) && c.health !== undefined) {
+    const pct = (v) => Number.isFinite(v) && v >= 0 && v <= 100;
+    return ["self", "target"].includes(c.health) && (c.below === undefined) !== (c.above === undefined) && pct(c.below ?? c.above) ? [] : ["needs health (self or target), and below or above, a percent"];
+  }
+  if (isObject(c) && c.status !== undefined) {
+    if (!["self", "target"].includes(c.on)) return ["needs on, self or target"];
+    return has("statuses", c.status) ? [] : [`needs status ${c.status}, which the world doesn't have`];
+  }
+  return ["needs { health, below or above } or { status, on }"];
 }
 
 export function statusProblems(status, ctx) {
   const out = named(status);
+  if (status.icon !== undefined && typeof status.icon !== "string") out.push("needs an icon name");
   if (!STATUS_KINDS.includes(status.kind)) out.push(`needs a kind, one of ${STATUS_KINDS.join(", ")}`);
   if (status.dispel !== undefined && !DISPELS.includes(status.dispel)) out.push(`has dispel ${JSON.stringify(status.dispel)}, not one of ${DISPELS.join(", ")}`);
   if (status.duration !== undefined && !(status.duration > 0)) out.push("needs a duration above 0");
@@ -182,6 +217,8 @@ export function statusProblems(status, ctx) {
 function statusEffectProblems(e, ctx) {
   if (!isObject(e)) return ["should be an object"];
   const out = [];
+  if (e.when !== undefined && !Array.isArray(e.when)) out.push("needs when to be a list");
+  list(e.when).forEach((c, n) => conditionProblems(c, ctx).forEach((m) => out.push(`condition ${n + 1} ${m}`)));
   switch (e.type) {
     case "stat":
       if (![...GEAR_STATS, ...DERIVED_STATS].includes(e.stat)) out.push(`changes ${JSON.stringify(e.stat)}, which isn't a stat`);
@@ -204,6 +241,7 @@ function statusEffectProblems(e, ctx) {
       break;
     case "trigger":
       if (!TRIGGERS.includes(e.on)) out.push(`needs on, one of ${TRIGGERS.join(", ")}`);
+      if ((e.on === "healthBelow") !== (e.threshold !== undefined) || (e.threshold !== undefined && !(e.threshold > 0 && e.threshold <= 100))) out.push("needs a threshold percent with healthBelow, and only then");
       if (e.chance !== undefined && !(e.chance > 0 && e.chance <= 1)) out.push("needs a chance above 0, up to 1");
       if (e.cooldown !== undefined && !(e.cooldown >= 0)) out.push("needs a cooldown of 0 or more");
       for (const m of effectProblems(e.effect, ctx, true)) out.push(`'s effect ${m}`);
@@ -216,8 +254,9 @@ function statusEffectProblems(e, ctx) {
   return out;
 }
 
-const visualProblems = (v) => (isObject(v) && typeof v.effect === "string" && WHEN.includes(v.when) && (v.on === undefined || ON.includes(v.on)) && (v.colors === undefined || isColors(v.colors)) ? [] : [`needs an effect, when (${WHEN.join(", ")}), and maybe on (${ON.join(", ")}) and colors`]);
-const soundProblems = (s) => (isObject(s) && typeof s.sound === "string" && WHEN.includes(s.when) && (s.on === undefined || ON.includes(s.on)) ? [] : [`needs a sound, when (${WHEN.join(", ")}), and maybe on (${ON.join(", ")})`]);
+const positive = (v) => v === undefined || v > 0;
+const visualProblems = (v) => (isObject(v) && typeof v.effect === "string" && WHEN.includes(v.when) && (v.on === undefined || ON.includes(v.on)) && (v.colors === undefined || isColors(v.colors)) && positive(v.scale) ? [] : [`needs an effect, when (${WHEN.join(", ")}), and maybe on (${ON.join(", ")}), colors and scale`]);
+const soundProblems = (s) => (isObject(s) && typeof s.sound === "string" && WHEN.includes(s.when) && (s.on === undefined || ON.includes(s.on)) && positive(s.volume) && positive(s.pitch) ? [] : [`needs a sound, when (${WHEN.join(", ")}), and maybe on (${ON.join(", ")}), volume and pitch`]);
 
 // What an item and an item template share: where it's worn and what it is.
 function gearProblems(thing, out) {
@@ -231,6 +270,7 @@ function gearProblems(thing, out) {
 
 export function itemProblems(item, { has }) {
   const out = named(item);
+  if (item.icon !== undefined && typeof item.icon !== "string") out.push("needs an icon name");
   if (!QUALITIES.includes(item.quality)) out.push(`needs a quality, one of ${QUALITIES.join(", ")}`);
   if (!isLevel(item.itemLevel)) out.push("needs a whole itemLevel, 1 or more");
   gearProblems(item, out);
@@ -261,19 +301,24 @@ export function creatureProblems(creature, { has }) {
   const out = named(creature);
   if (!isObject(creature.look)) out.push("needs a look, a character recipe");
   else if (!BODIES.includes(creature.look.body ?? "humanoid")) out.push(`has body ${JSON.stringify(creature.look.body)}, not one of ${BODIES.join(", ")}`);
+  if (creature.creatureType !== undefined && !CREATURE_TYPES.includes(creature.creatureType)) out.push(`has creatureType ${JSON.stringify(creature.creatureType)}, not one of ${CREATURE_TYPES.join(", ")}`);
   if (creature.classification !== undefined && !CLASSIFICATIONS.includes(creature.classification)) out.push(`has classification ${JSON.stringify(creature.classification)}, not one of ${CLASSIFICATIONS.join(", ")}`);
   if (creature.reaction !== undefined && !["hostile", "neutral"].includes(creature.reaction)) out.push("has a reaction other than hostile or neutral");
-  for (const key of ["health", "damage", "speed"]) if (creature[key] !== undefined && !(creature[key] > 0)) out.push(`needs a ${key} above 0`);
+  for (const key of ["health", "damage", "speed", "reach"]) if (creature[key] !== undefined && !(creature[key] > 0)) out.push(`needs a ${key} above 0`);
   for (const key of ["armor", "aggroRadius"]) if (creature[key] !== undefined && !(creature[key] >= 0)) out.push(`needs ${key} of 0 or more`);
   const attack = creature.attack;
-  if (attack !== undefined && !(isObject(attack) && [attack.speed, attack.range].every((v) => v === undefined || v > 0) && (attack.school === undefined || SCHOOLS.includes(attack.school)))) out.push("needs an attack of { speed, range, school }");
+  if (attack !== undefined && !(isObject(attack) && positive(attack.speed) && (attack.range === undefined || isDistance(attack.range)) && (attack.school === undefined || SCHOOLS.includes(attack.school)))) out.push("needs an attack of { speed, range, school }");
   if (creature.resource !== undefined) for (const m of resourceProblems(creature.resource)) out.push(`'s resource ${m}`);
   for (const id of list(creature.abilities)) if (!has("abilities", id)) out.push(`has ability ${id}, which the world doesn't have`);
+  if (creature.onDeath !== undefined && !has("abilities", creature.onDeath)) out.push(`uses ability ${creature.onDeath} as it dies, which the world doesn't have`);
   const tactics = creature.tactics;
   if (tactics !== undefined) {
     if (!(isObject(tactics) && ["random", "priority", "rotation"].includes(tactics.type))) out.push("needs tactics of random, priority or rotation");
     else if (tactics.type !== "random" && !nonEmpty(tactics.abilities)) out.push(`needs ${tactics.type} tactics to list abilities`);
-    else for (const id of list(tactics.abilities)) if (!list(creature.abilities).includes(id)) out.push(`uses ${id} in its tactics, but doesn't have it`);
+    else for (const id of list(tactics.abilities)) {
+      if (id === creature.onDeath) out.push(`uses ${id} in its tactics, but that's what it does as it dies`);
+      else if (!list(creature.abilities).includes(id)) out.push(`uses ${id} in its tactics, but doesn't have it`);
+    }
   }
   const loot = creature.loot;
   if (loot !== undefined) {
@@ -353,6 +398,7 @@ export function spawnsProblems(spawns, { has, levelCap = MAX_LEVEL }) {
       if (!isObject(s)) return out.push(`${where} should be an object`);
       if (!has("creatures", s.creature)) out.push(`${where} is creature ${s.creature}, which the world doesn't have`);
       if (!(s.density > 0)) out.push(`${where} needs a density above 0`);
+      if (s.pack !== undefined && !(Array.isArray(s.pack) && s.pack.length === 2 && s.pack.every(isLevel) && s.pack[0] <= s.pack[1])) out.push(`${where} needs a pack of [min, max], whole numbers`);
       levels(s.levels, where);
       timing(s, where);
     });
@@ -369,11 +415,16 @@ export function spawnsProblems(spawns, { has, levelCap = MAX_LEVEL }) {
     if ((p.creature === undefined) === (p.npc === undefined)) out.push(`${what} needs a creature or an npc`);
     else if (p.npc !== undefined) {
       if (!has("npcs", p.npc)) out.push(`${what} is npc ${p.npc}, which the world doesn't have`);
-      if (["levels", "respawn", "wander"].some((k) => p[k] !== undefined)) out.push(`${what} is an npc, which doesn't take levels, respawn or wander`);
+      if (["levels", "respawn", "wander", "pack", "patrol"].some((k) => p[k] !== undefined)) out.push(`${what} is an npc, which doesn't take levels, respawn, wander, pack or patrol`);
     } else {
       if (!has("creatures", p.creature)) out.push(`${what} is creature ${p.creature}, which the world doesn't have`);
       levels(p.levels, what);
       timing(p, what);
+      if (p.pack !== undefined && !isId(p.pack)) out.push(`${what} needs a pack id`);
+      if (p.patrol !== undefined) {
+        if (!(isObject(p.patrol) && Array.isArray(p.patrol.points) && p.patrol.points.length >= 2 && p.patrol.points.every(isPoint))) out.push(`${what} needs a patrol of { points }, two or more [x, z]`);
+        if (p.wander !== undefined) out.push(`${what} patrols, so it can't wander`);
+      }
     }
   }
   return out;
@@ -391,6 +442,7 @@ const isColor = (v) => COLOR.test(v ?? "");
 const isColors = (v) => Array.isArray(v) && v.length === 2 && v.every(isColor);
 const isLevel = (v) => Number.isInteger(v) && v >= 1;
 const isLevels = (v) => isLevel(v) || (Array.isArray(v) && v.length === 2 && v.every(isLevel) && v[0] <= v[1]);
+const isDistance = (v) => v === "melee" || (Number.isFinite(v) && v >= 0);
 const isRange = (v) => Array.isArray(v) && v.length === 2 && v.every(Number.isFinite) && v[0] <= v[1];
 const isPoint = (p) => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite);
 const isRegion = (r) => Array.isArray(r) && r.length > 0 && r.every((poly) => Array.isArray(poly) && poly.every((ring) => Array.isArray(ring) && ring.length >= 3 && ring.every(isPoint)));

@@ -15,9 +15,9 @@ function world() {
     classes: by(klass),
     abilities: by(
       ability,
-      stub("jab00001", { target: "enemy", range: 5, cost: [{ resource: "energy", amount: 40 }], effects: [effect] }),
-      stub("kick0001", { target: "enemy", range: 5, effects: [{ type: "interrupt", affects: "target", lockout: 4 }] }),
-      stub("bite0001", { target: "enemy", range: 5, effects: [effect] }),
+      stub("jab00001", { target: "enemy", range: "melee", cost: [{ resource: "energy", amount: 40 }], effects: [effect] }),
+      stub("kick0001", { target: "enemy", range: "melee", effects: [{ type: "interrupt", affects: "target", lockout: 4 }] }),
+      stub("bite0001", { target: "enemy", range: "melee", effects: [effect] }),
     ),
     statuses: by(status, stub("flow0001", { kind: "hidden", effects: [] }), stub("cntr0001", { kind: "hidden", effects: [] })),
     items: by(item, stub("fist0001", { quality: "common", itemLevel: 5, slot: "mainHand", weaponType: "fist" }), stub("pelt0001", { quality: "poor", itemLevel: 1, price: 30, stack: 10 }), stub("brd00001", { quality: "common", itemLevel: 1, price: 25, stack: 20 }), stub("watr0001", { quality: "common", itemLevel: 1, price: 25, stack: 20 })),
@@ -73,11 +73,37 @@ describe("checkGameData", () => {
     expect(changed((d) => (d.abilities.get("frst0001").cost = [{ resource: "energy", percent: 5 }]))).toEqual([`${at}: costs a percent of energy; only mana costs a percent`]);
     expect(changed((d) => (d.abilities.get("frst0001").effects[0].amount = { spellpower: 1 }))).toEqual([`${at}: effect 1 needs an amount`]);
     expect(changed((d) => (d.abilities.get("frst0001").effects[0].affects = "enemies"))).toEqual([`${at}: effect 1 needs a radius, affecting enemies`]);
-    expect(changed((d) => (d.abilities.get("frst0001").effects[0].radius = 8))).toEqual([`${at}: effect 1 can't have around, radius, cone or max unless it affects enemies or allies`]);
+    expect(changed((d) => (d.abilities.get("frst0001").effects[0].radius = 8))).toEqual([`${at}: effect 1 can't have around, radius, height, cone or max unless it affects enemies or allies`]);
     expect(changed((d) => Object.assign(d.abilities.get("frst0001").effects[0], { affects: "enemies", radius: 8, around: "ground" }))).toEqual([`${at}: effect 1 is around the ground, but the ability doesn't target it`]);
     expect(changed((d) => d.statuses.delete("chil0001"))).toEqual([`${at}: effect 2 applies status chil0001, which the world doesn't have`]);
-    expect(changed((d) => (d.abilities.get("frst0001").visuals[0].when = "later"))).toEqual([`${at}: visual 1 needs an effect, when (cast, launch, impact, channel), and maybe on (caster, target, ground) and colors`]);
+    expect(changed((d) => (d.abilities.get("frst0001").visuals[0].when = "later"))).toEqual([`${at}: visual 1 needs an effect, when (cast, launch, impact, channel), and maybe on (caster, target, ground), colors and scale`]);
     expect(changed((d) => (d.abilities.get("frst0001").target = "self"))).toEqual([`${at}: effect 1 affects the target, but the ability has none`, `${at}: effect 2 affects the target, but the ability has none`]);
+    expect(changed((d) => (d.abilities.get("frst0001").range = "far"))).toEqual([`${at}: needs a range of 0 or more, or "melee"`]);
+    expect(changed((d) => Object.assign(d.abilities.get("frst0001"), { range: "melee", minRange: 8 }))).toEqual([`${at}: has a minRange past its range`]);
+    expect(changed((d) => (d.abilities.get("frst0001").creatureTypes = ["beast", "fish"]))).toEqual([expect.stringMatching(/needs creatureTypes from beast/)]);
+  });
+
+  it("checks requirements and conditions", () => {
+    const at = "abilities/frst0001.json";
+    const requires = (...r) => (d) => (d.abilities.get("frst0001").requires = r);
+    expect(changed(requires({ health: "target", below: 20 }, { status: "chil0001", on: "target" }))).toEqual([]);
+    expect(changed(requires({ health: "target", below: 20, above: 5 }))).toEqual([`${at}: requirement 1 needs health (self or target), and below or above, a percent`]);
+    expect(changed(requires({ status: "gone0001", on: "self" }))).toEqual([`${at}: requirement 1 needs status gone0001, which the world doesn't have`]);
+    expect(changed(requires({ status: "chil0001" }))).toEqual([`${at}: requirement 1 needs on, self or target`]);
+    expect(changed((d) => (d.statuses.get("chil0001").effects[0].when = [{ health: "self", above: 150 }]))).toEqual(["statuses/chil0001.json: effect 1 condition 1 needs health (self or target), and below or above, a percent"]);
+  });
+
+  it("checks move effects and areas", () => {
+    const at = "abilities/frst0001.json";
+    const effect = (e) => (d) => (d.abilities.get("frst0001").effects[0] = e);
+    expect(changed(effect({ type: "move", kind: "charge", affects: "self", speed: 80 }))).toEqual([]);
+    expect(changed(effect({ type: "move", kind: "knockback", affects: "enemies", radius: 10, height: 6, distance: 20 }))).toEqual([]);
+    expect(changed(effect({ type: "move", kind: "charge", affects: "target" }))).toEqual([`${at}: effect 1 needs to affect self, to charge`]);
+    expect(changed(effect({ type: "move", kind: "pull", affects: "self" }))).toEqual([`${at}: effect 1 can't affect self, to pull`]);
+    expect(changed(effect({ type: "move", kind: "blink", affects: "self" }))).toEqual([`${at}: effect 1 needs a distance above 0, to blink`]);
+    expect(changed(effect({ type: "move", kind: "teleport", affects: "self" }))).toEqual([`${at}: effect 1 needs a kind, one of charge, leap, knockback, pull, blink`]);
+    expect(changed(effect({ type: "damage", affects: "enemies", radius: 8, height: 0, amount: 1 }))).toEqual([`${at}: effect 1 needs a height above 0`]);
+    expect(changed(effect({ type: "damage", affects: "target", height: 4, amount: 1 }))).toEqual([`${at}: effect 1 can't have around, radius, height, cone or max unless it affects enemies or allies`]);
   });
 
   it("checks statuses", () => {
@@ -87,7 +113,8 @@ describe("checkGameData", () => {
     expect(changed((d) => (d.statuses.get("chil0001").maxStacks = 3))).toEqual([`${at}: needs stacking of stack, and a whole maxStacks of 1 or more`]);
     expect(changed((d) => d.statuses.get("chil0001").effects.push({ type: "periodic", every: 2, does: "damage", amount: { spellPower: 0.1 }, school: "frost" }))).toEqual([]);
     expect(changed((d) => d.statuses.get("chil0001").effects.push({ type: "trigger", on: "takeDamage", effect: { type: "damage", affects: "enemies", radius: 5, amount: 1 } }))).toEqual([`${at}: effect 2 's effect needs affects, one of self, target`]);
-    expect(changed((d) => d.statuses.get("chil0001").effects.push({ type: "control", control: "sleep" }))).toEqual([`${at}: effect 2 needs control, one of stun, root, silence, incapacitate, fear`]);
+    expect(changed((d) => d.statuses.get("chil0001").effects.push({ type: "control", control: "sleep" }))).toEqual([`${at}: effect 2 needs control, one of stun, root, silence, incapacitate, disorient, fear, disarm`]);
+    expect(changed((d) => d.statuses.get("chil0001").effects.push({ type: "trigger", on: "healthBelow", effect: { type: "heal", affects: "self", amount: 1 } }))).toEqual([`${at}: effect 2 needs a threshold percent with healthBelow, and only then`]);
   });
 
   it("checks items and templates", () => {
@@ -102,6 +129,9 @@ describe("checkGameData", () => {
   it("checks creatures, NPCs and dialogue", () => {
     expect(changed((d) => (d.creatures.get("wolf0001").look.body = "dragon"))).toEqual(['creatures/wolf0001.json: has body "dragon", not one of humanoid, goblin, trog, wolf, bobcat, bear, slime']);
     expect(changed((d) => (d.creatures.get("wolf0001").tactics = { type: "priority", abilities: ["kick0001"] }))).toEqual(["creatures/wolf0001.json: uses kick0001 in its tactics, but doesn't have it"]);
+    expect(changed((d) => Object.assign(d.creatures.get("wolf0001"), { onDeath: "bite0001", tactics: { type: "rotation", abilities: ["bite0001"] } }))).toEqual(["creatures/wolf0001.json: uses bite0001 in its tactics, but that's what it does as it dies"]);
+    expect(changed((d) => (d.creatures.get("wolf0001").creatureType = "wolf"))).toEqual([expect.stringMatching(/has creatureType "wolf", not one of beast/)]);
+    expect(changed((d) => (d.creatures.get("wolf0001").attack.range = -1))).toEqual(["creatures/wolf0001.json: needs an attack of { speed, range, school }"]);
     expect(changed((d) => d.items.delete("pelt0001"))).toEqual(["creatures/wolf0001.json: drops item pelt0001, which the world doesn't have"]);
     expect(changed((d) => d.items.delete("brd00001"))).toEqual(["npcs/vend0001.json: sells item brd00001, which the world doesn't have"]);
     expect(changed((d) => (d.dialogues.get("danl0001").lines.place.choices[0].next = "nowhere"))).toEqual(['dialogues/danl0001.json: line place goes to "nowhere", which isn\'t one of its lines']);
@@ -114,9 +144,13 @@ describe("checkGameData", () => {
     expect(changed((d) => (spawnsOf(d).regions[0].spawns[0].creature = "bear0001"))).toEqual([`${at}: region Wolf Den's spawn 1 is creature bear0001, which the world doesn't have`]);
     expect(changed((d) => (spawnsOf(d).regions[0].spawns[0].levels = [4, 3]))).toEqual([`${at}: region Wolf Den's spawn 1 needs levels, a level or [min, max]`]);
     expect(changed((d) => (spawnsOf(d).placed[1].levels = 12), 10)).toEqual([`warning: ${at}: placed p2b7c3dd is past the level cap of 10`]);
-    expect(changed((d) => (spawnsOf(d).placed[0].levels = 3))).toEqual([`${at}: placed p1x9z2aa is an npc, which doesn't take levels, respawn or wander`]);
+    expect(changed((d) => (spawnsOf(d).placed[0].levels = 3))).toEqual([`${at}: placed p1x9z2aa is an npc, which doesn't take levels, respawn, wander, pack or patrol`]);
     expect(changed((d) => (spawnsOf(d).placed[1].id = "r8k2m1qa"))).toEqual([`${at}: has id r8k2m1qa twice`]);
     expect(changed((d) => (spawnsOf(d).placed[1].npc = "vend0001"))).toEqual([`${at}: placed p2b7c3dd needs a creature or an npc`]);
     expect(changed((d) => (spawnsOf(d).regions[0].area = [[[[0, 0], [1, 1]]]]))).toEqual([`${at}: region Wolf Den needs an area: polygons of rings of [x, z] points`]);
+    expect(changed((d) => (spawnsOf(d).regions[0].spawns[0].pack = [3, 1]))).toEqual([`${at}: region Wolf Den's spawn 1 needs a pack of [min, max], whole numbers`]);
+    expect(changed((d) => (spawnsOf(d).placed[3].wander = 10))).toEqual([`${at}: placed p4d9e5ff patrols, so it can't wander`]);
+    expect(changed((d) => (spawnsOf(d).placed[3].patrol.points = [[1, 2]]))).toEqual([`${at}: placed p4d9e5ff needs a patrol of { points }, two or more [x, z]`]);
+    expect(changed((d) => (spawnsOf(d).placed[0].pack = "den00001"))).toEqual([`${at}: placed p1x9z2aa is an npc, which doesn't take levels, respawn, wander, pack or patrol`]);
   });
 });

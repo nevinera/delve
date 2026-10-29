@@ -25,6 +25,13 @@
     "family": {
       "type": "string"
     },
+    "creatureType": {
+      "$ref": "common.schema.json#/$defs/creatureType"
+    },
+    "reach": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
     "look": {
       "type": "object",
       "description": "a character recipe (client/src/character/recipe.js)"
@@ -70,13 +77,15 @@
           "exclusiveMinimum": 0
         },
         "range": {
-          "type": "number",
-          "exclusiveMinimum": 0
+          "$ref": "common.schema.json#/$defs/distance"
         },
         "school": {
           "$ref": "common.schema.json#/$defs/school"
         }
       }
+    },
+    "onDeath": {
+      "$ref": "common.schema.json#/$defs/id"
     },
     "speed": {
       "type": "number",

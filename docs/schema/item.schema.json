@@ -20,6 +20,9 @@
     "description": {
       "type": "string"
     },
+    "icon": {
+      "type": "string"
+    },
     "quality": {
       "$ref": "common.schema.json#/$defs/quality"
     },
