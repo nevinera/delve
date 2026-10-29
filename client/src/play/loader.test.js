@@ -44,6 +44,13 @@ describe("playing a released world", () => {
     const plateUrls = () => fetched.filter((u) => u.endsWith(".plate"));
     expect(plateUrls()).toEqual(["https://raw.githubusercontent.com/me/w/c0ffee/places/continents/main/plates/surface/0_0.plate"]);
 
+    // Walking far off drops the plate's tiles; coming back gets them from the cache.
+    expect(await play.platesAround("main", [100, 100], 3)).toEqual([]);
+    expect(play.world.files.has("places/continents/main/tiles/surface/0/0.dlt.gz")).toBe(false);
+    expect(await play.platesAround("main", [0, 0], 3)).toEqual(["0,0"]);
+    expect(play.world.files.has("places/continents/main/tiles/surface/0/0.dlt.gz")).toBe(true);
+    expect(plateUrls()).toHaveLength(1);
+
     // Played again (a reload, say), the plate comes from the cache, by its hash.
     const again = new PlayWorld({ repo: "me/w", sha: "c0ffee", paths: [...files.keys()], fetchFn, cache });
     await again.open();

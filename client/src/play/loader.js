@@ -10,6 +10,9 @@ import { MemoryStore, PlateCache } from "./plateCache.js";
 // isn't downloaded again.
 
 const FETCHES = 8; // at once
+// Plates stay loaded this many tiles beyond the reach they're loaded for, so walking back and forth
+// across a plate's edge doesn't load and drop it each time.
+const KEEP_BEYOND = 8;
 
 export const rawUrl = (repo, sha, path) => `https://raw.githubusercontent.com/${repo}/${sha}/${path}`;
 
@@ -75,8 +78,10 @@ export class PlayWorld {
   }
 
   // Loads the plates around tile (tx, tz) that haven't been, from the cache or GitHub, into tile
-  // files in the world. Resolves with the "tx,tz" keys of the tiles that came.
+  // files in the world, and drops the tile files of plates left well behind (the cache keeps them).
+  // Resolves with the "tx,tz" keys of the tiles that came.
   async platesAround(continent, tile, reach) {
+    this.dropBeyond(continent, tile, reach + KEEP_BEYOND);
     const fresh = platesAround(continent, tile, reach).filter((path) => this.paths.has(path) && !this.plates.has(path));
     for (const path of fresh) {
       const { layer } = plateAt(path);
@@ -94,5 +99,22 @@ export class PlayWorld {
     }
     const added = await Promise.all(fresh.map((path) => this.plates.get(path).catch((err) => (this.plates.delete(path), Promise.reject(err)))));
     return added.flat();
+  }
+
+  // Drops the loaded plates on the continent with no tile within reach of (tx, tz), or on another.
+  dropBeyond(continent, tile, reach) {
+    const keep = new Set(platesAround(continent, tile, reach));
+    for (const [path, loading] of this.plates) {
+      if (keep.has(path)) continue;
+      this.plates.delete(path);
+      const plate = plateAt(path);
+      loading.then(
+        (keys) => {
+          if (this.plates.has(path)) return; // loaded again since
+          for (const key of keys) this.world.files.delete(tilePath(plate.continent, plate.layer, ...key.split(",").map(Number)));
+        },
+        () => {},
+      );
+    }
   }
 }
