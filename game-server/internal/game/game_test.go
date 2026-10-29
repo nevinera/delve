@@ -1,9 +1,13 @@
 package game
 
 import (
+	"archive/zip"
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -276,5 +280,72 @@ func TestEnteringAgainKeepsWhereItIs(t *testing.T) {
 	again := enter(t, h, 1)
 	if at := next(t, again)["you"].(map[string]any)["at"]; fmt.Sprint(at) != "[6000 0 6000]" {
 		t.Errorf("entered again at %v", at)
+	}
+}
+
+// zipWorlds loads worlds from a zip on disk, as worlds.Store does once it has one.
+type zipWorlds struct{ path string }
+
+func (z zipWorlds) Load(_ context.Context, repo, sha string) (*worlds.World, error) {
+	w, err := worlds.Read(z.path)
+	if err != nil {
+		return nil, err
+	}
+	w.Repo, w.Sha = repo, sha
+	return w, nil
+}
+
+// plateWorld is a world whose spawn point is on the plate in ../worlds/testdata, at (256, 51.2) on
+// ground sloping gently east.
+func plateWorld(t *testing.T) zipWorlds {
+	t.Helper()
+	plate, err := os.ReadFile("../worlds/testdata/surface_0_0.plate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(t.TempDir(), "world.zip")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	z := zip.NewWriter(f)
+	for name, body := range map[string]string{
+		"world.json":                                      `{"version":1,"name":"Vale","continents":[{"key":"main","name":"Main"}]}`,
+		"places/continents/main/sketch.json":              `{"pins":[{"kind":"spawn","at":[0.5,0.1]}]}`,
+		"places/continents/main/plates/surface/0_0.plate": string(plate),
+	} {
+		w, err := z.Create("them-vale-0123456/" + name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = w.Write([]byte(body))
+	}
+	if err := z.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return zipWorlds{path}
+}
+
+func TestSpawnsOnTheGround(t *testing.T) {
+	h := NewHub(plateWorld(t), characters(nil))
+	c := clockOf(h)
+	p := enter(t, h, 1)
+	at := next(t, p)["you"].(map[string]any)["at"].([]any)
+	// The cells round (256, 51.2) are 10 + 0.25 i + 0.1 j ft high, to the quarter foot: halfway
+	// between cells 31 and 32 east, and 0.5 ft for rows 5 and 6 south.
+	if y := at[1].(float64); math.Abs(y-(10+0.25*31.5+0.5)) > 1e-9 {
+		t.Errorf("spawned at %v", at)
+	}
+	next(t, p)
+	// And the ground holds it there: a report from under it is put back.
+	*c += 0.5
+	if err := p.Handle([]byte(`{"type":"move","t":500,"at":[256,5,51.2],"yaw":0,"move":{"gait":"run"}}`)); err != nil {
+		t.Fatal(err)
+	}
+	if m := next(t, p); m["type"] != "correct" {
+		t.Errorf("got %v", m)
 	}
 }

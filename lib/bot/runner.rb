@@ -73,6 +73,7 @@ module Bot
     end
 
     def entered
+      @controls.ground = Ground.new(repo: @world.repo, sha: @world.released_sha, continent: @state.me["continent"])
       @controls.adopt(@state.me)
       x, y, z = @state.me["at"]
       @log.info(format("Entered %s as %s, on %s at (%.0f, %.0f, %.0f)", @world.display_name, @character.name, @state.me["continent"], x, y, z))

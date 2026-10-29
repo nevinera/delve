@@ -24,9 +24,10 @@ const TileFt = 64 * 8
 
 // World is what the game server knows of a released world.
 type World struct {
-	Repo, Sha  string
-	Continents []string
-	Spawn      Spawn
+	Repo, Sha    string
+	Continents   []string
+	Spawn        Spawn
+	path, prefix string // the zip it was read from, and its top directory
 }
 
 // Spawn is the world's spawn pin: a continent and a place in tile units.
@@ -124,9 +125,11 @@ func Read(path string) (*World, error) {
 	}
 	defer z.Close()
 	files := map[string]*zip.File{}
+	prefix := ""
 	for _, f := range z.File {
-		if _, rest, ok := strings.Cut(f.Name, "/"); ok && rest != "" {
+		if top, rest, ok := strings.Cut(f.Name, "/"); ok && rest != "" {
 			files[rest] = f
+			prefix = top + "/"
 		}
 	}
 	var info struct {
@@ -135,7 +138,7 @@ func Read(path string) (*World, error) {
 	if err := readJSON(files, "world.json", &info); err != nil {
 		return nil, err
 	}
-	w := &World{}
+	w := &World{path: path, prefix: prefix}
 	found := 0
 	for _, c := range info.Continents {
 		w.Continents = append(w.Continents, c.Key)

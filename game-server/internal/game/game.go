@@ -65,10 +65,13 @@ type Layer struct {
 	worldID int64
 	number  int
 	world   *worlds.World
-	mu      sync.Mutex
-	players map[int64]*Player
-	unload  *time.Timer
-	gone    bool // unloaded, so no one joins it
+	grounds map[string]*worlds.Ground // by continent, as they're needed
+	// groundsMu guards grounds, apart from mu, since entering reads the ground without the layer.
+	groundsMu sync.Mutex
+	mu        sync.Mutex
+	players   map[int64]*Player
+	unload    *time.Timer
+	gone      bool // unloaded, so no one joins it
 }
 
 // Player is a connected character. Its connection reads Send until Gone closes.
@@ -132,6 +135,19 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 		state.Continent, state.At, state.Yaw = pos.Continent, pos.At, pos.Yaw
 	} else {
 		state.Continent, state.At = layer.world.Spawn.Continent, layer.world.SpawnAt()
+		// Standing on the ground there, or on the water if it's deep.
+		if g := layer.ground(state.Continent); g != nil {
+			if s, ok, err := g.At(state.At[0], state.At[2]); ok && err == nil {
+				state.At[1] = s.Ground
+				if !math.IsNaN(s.Water) && s.Water-swimDepth > s.Ground {
+					state.At[1] = s.Water - swimDepth
+				}
+			}
+		}
+	}
+	// Reading the plate it's on now spares the layer the wait when the first report comes.
+	if g := layer.ground(state.Continent); g != nil {
+		_, _, _ = g.At(state.At[0], state.At[2])
 	}
 	h.mu.Lock()
 	old := h.playing[state.ID]
@@ -172,7 +188,7 @@ func (h *Hub) layer(ctx context.Context, c token.Claims) (*Layer, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.layers[key] == nil {
-		h.layers[key] = &Layer{hub: h, key: key, worldID: c.World, number: 1, world: world, players: map[int64]*Player{}}
+		h.layers[key] = &Layer{hub: h, key: key, worldID: c.World, number: 1, world: world, grounds: map[string]*worlds.Ground{}, players: map[int64]*Player{}}
 	}
 	return h.layers[key], nil
 }
@@ -272,7 +288,7 @@ func (l *Layer) moved(p *Player, m incoming) {
 	if l.players[p.ID()] != p {
 		return
 	}
-	switch verdict, why := p.motion.check(m, p.state.At, l.hub.now()); verdict {
+	switch verdict, why := p.motion.check(m, p.state.At, l.hub.now(), l.ground(p.state.Continent)); verdict {
 	case ignore:
 		return
 	case correct:
@@ -363,6 +379,21 @@ func (l *Layer) save(p *Player) {
 
 func (p *Player) position() rails.Position {
 	return rails.Position{Continent: p.state.Continent, At: p.state.At, Yaw: p.state.Yaw}
+}
+
+// ground is a continent's ground, or nil where it isn't known.
+func (l *Layer) ground(continent string) Ground {
+	l.groundsMu.Lock()
+	defer l.groundsMu.Unlock()
+	g, read := l.grounds[continent]
+	if !read {
+		g = l.world.Ground(continent)
+		l.grounds[continent] = g
+	}
+	if g == nil {
+		return nil
+	}
+	return g
 }
 
 func plateOf(at [3]float64) [2]int {

@@ -2,13 +2,18 @@ package game
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"time"
+
+	"github.com/delve-mmo/delve3d/game-server/internal/worlds"
 )
 
 // Movement checks: each report a client sends has to follow from the one before, at the speeds a
-// character can move, by the clocks of both. None of this needs the world's ground, so it can't
-// tell walking uphill from floating, only that a character rose or fell further than it could.
+// character can move, by the clocks of both. Where the world's ground is known, the character also
+// has to keep to it: not under it, not floating over it or over deep water, not swimming out of
+// water, and not up slopes too steep to climb. Near structures, whose floors and walls the server
+// doesn't know, only the first checks apply.
 
 // Speeds and jumping, feet and seconds, as client/src/editor/walker.js moves characters.
 const (
@@ -21,6 +26,12 @@ const (
 	gravity = 48.0
 )
 
+// The ground, as client/src/editor/walker.js keeps to it.
+const (
+	maxClimb  = 1.2 // rise over run of the steepest ground a character walks up
+	swimDepth = 4.5 // how far below the water's surface a swimming character's feet are
+)
+
 // Leeway for what a client reports, for timing between its frames and its reports.
 const (
 	speedLeeway  = 1.15 // on top of the speed it's moving at
@@ -29,6 +40,8 @@ const (
 	clockAhead   = 0.5  // seconds a client's clock can run ahead of the server's
 	calibrate    = 5.0  // seconds after entering that the client's clock is measured against the server's
 	airAfterJump = 1.5  // seconds after a jump that a character can still be rising
+	underFt      = 2.0  // how far below the ground the feet can be
+	aloftGrace   = 0.5  // seconds off the ground before it has to be falling
 )
 
 // A client corrected more than maxCorrections times in correctionWindow is dropped.
@@ -59,6 +72,12 @@ type motion struct {
 	lag     float64   // server time less client time, the least seen while calibrating
 	jumped  float64   // client time of the last jump, or -inf
 
+	// Where the last report it took stood, and since when it's been off the ground without a jump.
+	footing footing
+	aloft   bool
+	aloftT  float64 // client time it left the ground
+	aloftY  float64 // and how high it was then
+
 	descending bool
 	peak       [3]float64 // where a descent started
 	peakT      float64
@@ -67,6 +86,20 @@ type motion struct {
 	correcting  bool // waiting for the client to take a correction
 	correctedAt time.Time
 	corrections []time.Time
+}
+
+// footing is how a report stood on the ground.
+type footing struct {
+	known  bool    // the ground was known there, away from structures
+	ground float64 // the ground's height
+	stand  float64 // where the feet rest: the ground, or a swimming depth in deep water
+	deep   bool    // water too deep to stand in
+	on     bool    // the feet were where they rest
+}
+
+// Ground is the ground of the continent a character is on (worlds.Ground).
+type Ground interface {
+	At(x, z float64) (worlds.Sample, bool, error)
 }
 
 // verdict is what to do with a report.
@@ -80,8 +113,8 @@ const (
 )
 
 // check decides what to do with a report that came at server time now, from a character at
-// `from` (where the server last had it).
-func (m *motion) check(r incoming, from [3]float64, now time.Time) (verdict, string) {
+// `from` (where the server last had it), on ground g (nil where it isn't known).
+func (m *motion) check(r incoming, from [3]float64, now time.Time, g Ground) (verdict, string) {
 	t := r.T / 1000
 	if r.T == 0 {
 		t = secondsOf(now) // a client that doesn't send its time is timed by the server's clock
@@ -95,9 +128,13 @@ func (m *motion) check(r incoming, from [3]float64, now time.Time) (verdict, str
 		if moved := horizontal(from, r.At); moved > allowed {
 			return m.violation(now, fmt.Sprintf("first report is %.0f ft from where you entered", moved))
 		}
-		// The ground under the character is the client's to know: take its height.
+		// Without the ground, the height is the client's to know: take it.
 		m.at[1], m.peak[1] = r.At[1], r.At[1]
-		return m.take(r, t), ""
+		f, why := m.onGround(r, t, g)
+		if why != "" {
+			return m.violation(now, why)
+		}
+		return m.take(r, t, f), ""
 	}
 
 	if m.correcting {
@@ -152,11 +189,84 @@ func (m *motion) check(r incoming, from [3]float64, now time.Time) (verdict, str
 			return m.violation(now, fmt.Sprintf("fell %.0f ft in %.2f s, faster than falling", -rise, dt))
 		}
 	}
-	return m.take(r, t), ""
+	f, why := m.onGround(r, t, g)
+	if why != "" {
+		return m.violation(now, why)
+	}
+	return m.take(r, t, f), ""
 }
 
-// take keeps a report that passed, and follows its falls.
-func (m *motion) take(r incoming, t float64) verdict {
+// onGround checks a report against the ground, and says how it stood.
+func (m *motion) onGround(r incoming, t float64, g Ground) (footing, string) {
+	if g == nil {
+		return footing{}, ""
+	}
+	s, ok, err := g.At(r.At[0], r.At[2])
+	if err != nil {
+		log.Printf("movement: reading the ground: %v", err)
+		return footing{}, ""
+	}
+	if !ok {
+		return footing{}, "went off the land"
+	}
+	if s.Structure {
+		return footing{}, ""
+	}
+	f := footing{known: true, ground: s.Ground, stand: s.Ground}
+	f.deep = !math.IsNaN(s.Water) && s.Water-swimDepth > s.Ground
+	if f.deep {
+		f.stand = s.Water - swimDepth
+	}
+	y := r.At[1]
+	f.on = y <= f.stand+slackFt
+	jumping := (r.Move != nil && r.Move.Jump) || t-m.jumped < airAfterJump
+	swimming := m.move.Swim
+	if r.Move != nil {
+		swimming = r.Move.Swim
+	}
+	last := m.footing
+
+	if y < s.Ground-underFt {
+		return f, fmt.Sprintf("went %.0f ft under the ground", s.Ground-y)
+	}
+	if swimming && !f.deep && !(last.known && last.deep) {
+		return f, "swam where there's no deep water"
+	}
+	// Off the ground without a jump, it has to be falling: from where it left the ground, as far
+	// as it would have fallen from standing still, after a moment's grace.
+	if !f.on && !jumping {
+		t0, y0 := m.aloftT, m.aloftY
+		if !m.aloft {
+			t0, y0 = m.t, math.Max(m.at[1], y)
+		}
+		fall := math.Max(0, t-t0-aloftGrace)
+		if y > y0-gravity*fall*fall/2+slackFt && fall > 0 {
+			if f.deep {
+				return f, "walked on water"
+			}
+			return f, fmt.Sprintf("floated %.0f ft over the ground", y-f.stand)
+		}
+	}
+	// Walking, from ground to ground, it can't climb more steeply than the walker lets it.
+	if last.known && last.on && f.on && !f.deep && !last.deep && !jumping {
+		across := horizontal(m.at, r.At)
+		if climb := f.ground - last.ground; climb > maxClimb*across*1.25+underFt {
+			return f, fmt.Sprintf("climbed %.0f ft in %.0f ft, steeper than you can walk", climb, across)
+		}
+	}
+	return f, ""
+}
+
+// take keeps a report that passed, and follows its falls and footing.
+func (m *motion) take(r incoming, t float64, f footing) verdict {
+	jumping := (r.Move != nil && r.Move.Jump) || t-m.jumped < airAfterJump
+	switch {
+	case !f.known || f.on || jumping:
+		m.aloft = false
+	case !m.aloft:
+		m.aloft, m.aloftT, m.aloftY = true, m.t, math.Max(m.at[1], r.At[1])
+	}
+	m.footing = f
 	if r.At[1] < m.at[1]-0.5 {
 		if !m.descending {
 			m.descending, m.peak, m.peakT = true, m.at, m.t

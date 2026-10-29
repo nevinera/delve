@@ -1,9 +1,12 @@
 package game
 
 import (
+	"math"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/delve-mmo/delve3d/game-server/internal/worlds"
 )
 
 // reporter sends motion reports as a client would, keeping the client's clock and the server's
@@ -16,6 +19,7 @@ type reporter struct {
 	t0    float64 // the client's clock at the start, in ms
 	ahead float64 // seconds the client's clock is ahead of the server's
 	at    [3]float64
+	g     Ground // nil: the ground isn't known
 }
 
 func newReporter(t *testing.T) *reporter {
@@ -31,7 +35,7 @@ func (r *reporter) report(dt float64, x, y, z float64, mv *Move) (verdict, strin
 	if mv == nil {
 		msg.Type = "heartbeat"
 	}
-	v, why := r.m.check(msg, r.at, r.start.Add(time.Duration(r.s*float64(time.Second))))
+	v, why := r.m.check(msg, r.at, r.start.Add(time.Duration(r.s*float64(time.Second))), r.g)
 	if v == accept {
 		r.at = msg.At
 	}
@@ -221,4 +225,143 @@ func TestHubCorrectsAndDoesntPassItOn(t *testing.T) {
 	if b.state.At[0] != 5376 {
 		t.Errorf("b is at %v", b.state.At)
 	}
+}
+
+// groundOf is ground worked out from where you are: its height, and the water's (NaN for none).
+type groundOf func(x, z float64) (ground, water float64)
+
+func (f groundOf) At(x, z float64) (worlds.Sample, bool, error) {
+	if x < 0 {
+		return worlds.Sample{}, false, nil // off the land
+	}
+	g, w := f(x, z)
+	return worlds.Sample{Ground: g, Water: w, Structure: x >= 5000}, true, nil
+}
+
+var (
+	level = groundOf(func(x, z float64) (float64, float64) { return 50, math.NaN() })
+	// A cliff: 300 ft up west of x = 200, 50 ft below it.
+	cliff = groundOf(func(x, z float64) (float64, float64) {
+		if x < 200 {
+			return 300, math.NaN()
+		}
+		return 50, math.NaN()
+	})
+	// A lake 15 ft deep east of x = 300, with dry ground at 50 west of it.
+	lake = groundOf(func(x, z float64) (float64, float64) {
+		if x < 300 {
+			return 50, math.NaN()
+		}
+		return 40, 55
+	})
+)
+
+func onGround(t *testing.T, g Ground, y float64) *reporter {
+	r := newReporter(t)
+	r.g, r.at[1] = g, y
+	return r
+}
+
+func TestUnderTheGround(t *testing.T) {
+	r := onGround(t, level, 50)
+	r.want(accept, 0.1, 100, 50, 100, still)
+	r.want(accept, 0.5, 100, 48.5, 100, nil)
+	if why := r.want(correct, 0.5, 100, 45, 100, nil); !strings.Contains(why, "5 ft under the ground") {
+		t.Errorf("why = %q", why)
+	}
+}
+
+func TestOffTheLand(t *testing.T) {
+	r := onGround(t, level, 50)
+	r.at[0] = 5
+	r.want(accept, 0.1, 5, 50, 100, running)
+	if why := r.want(correct, 0.5, -5, 50, 100, nil); why != "went off the land" {
+		t.Errorf("why = %q", why)
+	}
+}
+
+func TestFloating(t *testing.T) {
+	r := onGround(t, level, 50)
+	r.want(accept, 0.1, 100, 50, 100, still)
+	r.want(accept, 0.1, 100, 50, 100, &Move{Gait: "run", Jump: true})
+	// It jumps, and stays up: a moment past the jump, it has to be coming down.
+	r.want(accept, 0.3, 100, 55, 100, nil)
+	for i := 0; i < 3; i++ {
+		r.want(accept, 0.5, 100, 55, 100, nil)
+	}
+	if why := r.want(correct, 0.5, 100, 55, 100, nil); !strings.Contains(why, "floated 5 ft over the ground") {
+		t.Errorf("why = %q", why)
+	}
+}
+
+func TestOffACliff(t *testing.T) {
+	r := onGround(t, cliff, 300)
+	r.at[0] = 190
+	r.want(accept, 0.1, 190, 300, 100, running)
+	r.want(accept, 0.5, 200.5, 300, 100, nil)
+	// Off the edge it falls as gravity takes it, and lands.
+	y := 300.0
+	for i := 1; i <= 7; i++ {
+		y = math.Max(50, 300-gravity*math.Pow(0.5*float64(i), 2)/2)
+		r.want(accept, 0.5, 200.5+10.5*float64(i), y, 100, nil)
+	}
+	if y != 50 {
+		t.Fatalf("hasn't landed: %v", y)
+	}
+	r.want(accept, 0.5, 200.5+10.5*8, 50, 100, nil)
+	if f := r.m.lastFall; f == nil || f.Ft != 250 {
+		t.Errorf("fall = %+v", f)
+	}
+}
+
+func TestStructuresHoldYouUp(t *testing.T) {
+	r := onGround(t, level, 50)
+	r.at[0] = 5000
+	r.want(accept, 0.1, 5000, 50, 100, still)
+	r.want(accept, 0.5, 5000, 53, 100, nil)
+	for i := 0; i < 6; i++ {
+		r.want(accept, 0.5, 5000, 53, 100, nil) // on a balcony
+	}
+}
+
+func TestWater(t *testing.T) {
+	// Swimming, the feet are 4.5 ft under the surface.
+	r := onGround(t, lake, 50)
+	r.want(accept, 0.1, 100, 50, 100, running)
+	r.want(accept, 0.5, 110.5, 50, 100, nil)
+	r = onGround(t, lake, 50.5)
+	r.at[0] = 310
+	r.want(accept, 0.1, 310, 50.5, 100, swimming)
+	r.want(accept, 0.5, 317, 50.5, 100, nil)
+
+	// Standing on the surface isn't.
+	r = onGround(t, lake, 55)
+	r.at[0] = 310
+	r.want(accept, 0.1, 310, 55, 100, still)
+	r.want(accept, 0.5, 310, 55, 100, nil)
+	if why := r.want(correct, 0.5, 310, 55, 100, nil); why != "walked on water" {
+		t.Errorf("why = %q", why)
+	}
+
+	// Nor is swimming on dry land.
+	r = onGround(t, lake, 50)
+	if why := r.want(correct, 0.1, 100, 50, 100, swimming); why != "swam where there's no deep water" {
+		t.Errorf("why = %q", why)
+	}
+}
+
+func TestTooSteep(t *testing.T) {
+	// Ground rising 1.76 ft a foot east: within what the checks without ground allow, but steeper
+	// than walking climbs.
+	hill := groundOf(func(x, z float64) (float64, float64) { return 50 + 1.76*(x-100), math.NaN() })
+	r := onGround(t, hill, 50)
+	r.want(accept, 0.1, 100, 50, 100, running)
+	if why := r.want(correct, 0.5, 110.5, 50+1.76*10.5, 100, nil); !strings.Contains(why, "steeper than you can walk") {
+		t.Errorf("why = %q", why)
+	}
+	// 1.2 is fine.
+	hill = groundOf(func(x, z float64) (float64, float64) { return 50 + 1.2*(x-100), math.NaN() })
+	r = onGround(t, hill, 50)
+	r.want(accept, 0.1, 100, 50, 100, running)
+	r.want(accept, 0.5, 110.5, 50+1.2*10.5, 100, nil)
 }

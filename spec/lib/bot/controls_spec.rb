@@ -44,6 +44,52 @@ RSpec.describe Bot::Controls do
     expect(sent.last).to include(type: "move", move: include(forward: 0))
   end
 
+  context "on the ground" do
+    # Ground rising 1 ft a foot east of x = 10, a lake 10 ft deep west of x = -10, and the land
+    # ending at x = 100. Stand gives [height, swimming] like Bot::Ground's.
+    let(:ground) do
+      Class.new do
+        def initialize(slope) = @slope = slope
+
+        def stand(x, _z)
+          return nil if x > 100
+          return [5.5, true] if x < -10
+          [10 + @slope * [x - 10, 0].max, false]
+        end
+      end
+    end
+    let(:controls) { described_class.new(->(msg) { sent << msg }, ground: ground.new(1)).tap { |c| c.adopt("at" => [0, 10, 0], "yaw" => 0) } }
+
+    it "keeps to the ground's height, whatever height it's told" do
+      controls.move_toward(50, 0, y: 500)
+      controls.advance(1)
+      expect(controls.at[0..1]).to eq([21.0, 21.0])
+    end
+
+    it "stops at the end of the land, or a slope too steep to walk" do
+      controls.move_toward(200, 0)
+      6.times { controls.advance(1) }
+      expect(controls.at[0]).to be <= 100
+      expect(controls.forward).to eq(0)
+
+      steep = described_class.new(->(msg) {}, ground: ground.new(2)).tap { |c| c.adopt("at" => [0, 10, 0], "yaw" => 0) }
+      steep.move_toward(50, 0)
+      3.times { steep.advance(0.25) }
+      expect(steep.at[0]).to be < 15
+      expect(steep.forward).to eq(0)
+    end
+
+    it "swims in deep water, at swimming speed" do
+      controls.move_toward(-100, 0)
+      controls.advance(0.5)
+      controls.advance(1)
+      expect(controls.at[1]).to eq(5.5)
+      expect(controls.at[0]).to be_within(1e-9).of(-10.5 - 14.2)
+      controls.report(0)
+      expect(sent.last[:move]).to include(swim: true)
+    end
+  end
+
   it "stops short of a goal by stop_within" do
     controls.move_toward(100, 0, stop_within: 5)
     50.times { controls.advance(0.1) }

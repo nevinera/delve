@@ -1,0 +1,114 @@
+[
+ {
+  "at": [
+   3,
+   3
+  ],
+  "ground": 10,
+  "water": null
+ },
+ {
+  "at": [
+   100.3,
+   77.7
+  ],
+  "ground": 14.009375,
+  "water": null
+ },
+ {
+  "at": [
+   319,
+   200
+  ],
+  "ground": 33.59375,
+  "water": null
+ },
+ {
+  "at": [
+   330.5,
+   12
+  ],
+  "ground": 74.578125,
+  "water": null
+ },
+ {
+  "at": [
+   511.9,
+   40
+  ],
+  "ground": 383.91562500000214,
+  "water": null
+ },
+ {
+  "at": [
+   512.1,
+   40
+  ],
+  "ground": 365.33437499999786,
+  "water": 5
+ },
+ {
+  "at": [
+   516,
+   516
+  ],
+  "ground": null,
+  "water": null
+ },
+ {
+  "at": [
+   600,
+   100
+  ],
+  "ground": -10,
+  "water": 5
+ },
+ {
+  "at": [
+   530,
+   8
+  ],
+  "ground": 3,
+  "water": 5
+ },
+ {
+  "at": [
+   700,
+   400
+  ],
+  "ground": 7.25,
+  "water": null
+ },
+ {
+  "at": [
+   1020,
+   300
+  ],
+  "ground": 9.25,
+  "water": null
+ },
+ {
+  "at": [
+   1023.9,
+   3
+  ],
+  "ground": 9.25,
+  "water": null
+ },
+ {
+  "at": [
+   1030,
+   10
+  ],
+  "ground": null,
+  "water": null
+ },
+ {
+  "at": [
+   -5,
+   10
+  ],
+  "ground": null,
+  "water": null
+ }
+]

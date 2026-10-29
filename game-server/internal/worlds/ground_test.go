@@ -1,0 +1,109 @@
+package worlds
+
+import (
+	"encoding/json"
+	"math"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// groundWorld is vale with testdata/surface_0_0.plate (written by testdata/plate.mjs) on its main
+// continent, read from a zip on disk.
+func groundWorld(t *testing.T) *World {
+	t.Helper()
+	plate, err := os.ReadFile("testdata/surface_0_0.plate")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files := map[string]string{"places/continents/main/plates/surface/0_0.plate": string(plate)}
+	for k, v := range vale {
+		files[k] = v
+	}
+	path := filepath.Join(t.TempDir(), "world.zip")
+	if err := os.WriteFile(path, worldZip(t, files), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	w, err := Read(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return w
+}
+
+func TestGroundMatchesTheClient(t *testing.T) {
+	raw, err := os.ReadFile("testdata/ground.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var points []struct {
+		At     [2]float64
+		Ground *float64
+		Water  *float64
+	}
+	if err := json.Unmarshal(raw, &points); err != nil {
+		t.Fatal(err)
+	}
+	g := groundWorld(t).Ground("main")
+	for _, p := range points {
+		s, ok, err := g.At(p.At[0], p.At[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ok != (p.Ground != nil) {
+			t.Errorf("%v: ok = %v, want %v", p.At, ok, p.Ground != nil)
+			continue
+		}
+		if !ok {
+			continue
+		}
+		if math.Abs(s.Ground-*p.Ground) > 1e-6 {
+			t.Errorf("%v: ground = %v, want %v", p.At, s.Ground, *p.Ground)
+		}
+		if (p.Water == nil) != math.IsNaN(s.Water) || (p.Water != nil && s.Water != *p.Water) {
+			t.Errorf("%v: water = %v, want %v", p.At, s.Water, p.Water)
+		}
+	}
+}
+
+func TestGroundFindsStructures(t *testing.T) {
+	g := groundWorld(t).Ground("main")
+	// The dock stands at (672.5, 160.25), reaching 24 ft; the boulder at (700, 400) isn't one.
+	for _, c := range []struct {
+		x, z float64
+		want bool
+	}{{672.5, 160.25, true}, {700, 175, true}, {710, 160, false}, {700, 400, false}} {
+		s, ok, err := g.At(c.x, c.z)
+		if err != nil || !ok {
+			t.Fatalf("(%v, %v): ok %v, %v", c.x, c.z, ok, err)
+		}
+		if s.Structure != c.want {
+			t.Errorf("(%v, %v): structure = %v, want %v", c.x, c.z, s.Structure, c.want)
+		}
+	}
+}
+
+func TestGroundWithoutPlates(t *testing.T) {
+	g := groundWorld(t).Ground("isle")
+	if _, ok, err := g.At(10, 10); ok || err != nil {
+		t.Errorf("ok %v, err %v; want no ground", ok, err)
+	}
+	if (&World{}).Ground("main") != nil {
+		t.Error("a world not read from a zip has ground")
+	}
+}
+
+func TestReadPlateRefusesBadPlates(t *testing.T) {
+	for _, text := range []string{
+		"plate 2 0,0 surface\ntile 0,0 32\n",
+		"plate 2 0,0 surface\ntile 0,0 64\nlayer height\n000\n",
+		"plate 2 0,0 surface\ntile 0,0 64\nlayer height =0!0\n",
+		"plate 2 0,0 surface\ntile 0,0 64\nlayer water =000\n",
+		"plate 2 0,0 surface\nobject 0 circle:1 1 rock\ntile 0,0 64\nlayer height =000\nplace 5 0000000000\n",
+	} {
+		if _, err := readPlate(strings.NewReader(text)); err == nil {
+			t.Errorf("read %q", text)
+		}
+	}
+}

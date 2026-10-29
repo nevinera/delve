@@ -48,8 +48,8 @@ layer biome
 layer forest =00
 chunks clutter
 3,5 =0o
-place 0 0A3k0r1V0w10
-place 1 1x01Ku3Ab10F 6b4a2c
+place 0 0A30r1V010
+place 1 1x0Ku3Ab10 6b4a2c
 tile 1,16 64
 …
 ```
@@ -114,10 +114,10 @@ A chunk line is `<cx>,<cz> =<value>` when all 64 cells share a value, or `<cx>,<
 ### Place lines
 
 ```
-place <id><x><z><yaw><scale> [<colors>] [<json>]
+place <id> <x><z><yaw><scale> [<colors>] [<json>]
 ```
 
-The second word packs five fixed-width values with no spaces:
+The third word packs four fixed-width values with no spaces:
 
 | Field | Width | Meaning |
 | --- | --- | --- |
