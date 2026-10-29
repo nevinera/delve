@@ -24,6 +24,8 @@ Everything in a template is in feet from its anchor: a corner of the world's 8 f
 
 The editor's templates tool saves what you've picked as a template (`captureTemplate`). It puts the anchor on the cell corner nearest the middle of what's picked, at the mean height of the ground under it. Placing one (`placedTemplate`) anchors it on a cell corner at the mean height of the ground under it there, turned about the anchor. Each slab and object it puts in the tiles has a `template` field naming the template. Turned off a quarter turn, its ground is read between its cells' middles.
 
+Editing a template (`client/src/editor/templateEdit.js`) opens it in the detail step on flat, bare tiles of a scratch world, apart from the real one, so every detail tool works on it. Saving captures everything on those tiles. A template in one of the world's own collections is saved over; a builtin or imported one is saved as a new template in "my templates".
+
 ## Fields
 
 - `slabs` are slabs as tiles hold them, their `at` from the anchor.

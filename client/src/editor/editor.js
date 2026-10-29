@@ -34,9 +34,10 @@ import { BUILT_PREFIX, builtOf, makeObject, setBuiltObjects, specOf, tiledImages
 import { SLAB_PATTERNS, SLAB_PRESETS } from "../world/slabs.js";
 import { presetPixels } from "./slabTextures.js";
 import { newObjectId, paletteColors, textsOf } from "../world/builtObjects.js";
-import { templateProblems } from "../world/templates.js";
+import { TEMPLATE_PREFIX, templateProblems } from "../world/templates.js";
 import { MAX_TEXT, signText } from "../world/pixelFont.js";
-import { adoptStrays, allCollections, builtObjects, images, keepTemplate } from "../objects/collections.js";
+import { adoptStrays, allCollections, builtObjects, images, keepTemplate, ownCollections } from "../objects/collections.js";
+import { scratchTemplate, scratchWorld } from "./templateEdit.js";
 import { placedCount } from "../objects/placed.js";
 import { decodeTile, encodeTile } from "../world/tileCodec.js";
 import { gunzipSync, gzipSync } from "fflate";
@@ -201,7 +202,7 @@ export class Editor {
     if (this.shownSince.has("3d")) cameras["3d"] = cameraPlace(this.overview.camera, this.overview.controls);
     if (this.shownSince.has("heights")) cameras.heights = cameraPlace(this.sculpt.camera, this.sculpt.controls);
     const { x, z, scale } = this.map.view;
-    return { continent: this.continent, step: this.step, tool: this.toolName, map: { x, z, scale }, detailWindow: this.detailWindow ?? null, cameras };
+    return { continent: this.continent, step: this.step, tool: this.toolName, map: { x, z, scale }, detailWindow: this.templateEditing?.window ?? this.detailWindow ?? null, cameras };
   }
 
   // Keeps where you are, when it's changed.
@@ -260,6 +261,7 @@ export class Editor {
 
   // Swaps in a different world, such as an uploaded one.
   setWorld(world) {
+    this.endTemplateEdit({ show: false });
     this.world = world;
     this.continent = world.info.continents[0]?.key;
     this.active = null;
@@ -909,6 +911,10 @@ export class Editor {
 
   // Opens a step, with its first tool.
   setStep(step) {
+    if (step !== "detail" && this.templateEditing) {
+      if (this.templateEditing.changed && !window.confirm("Stop editing this template? Changes you haven't saved to it will be lost.")) return;
+      this.endTemplateEdit({ show: false });
+    }
     this.step = step;
     this.detailPicking = false;
     if (!IN_3D.has(step)) this.mapStep = step;
@@ -969,6 +975,7 @@ export class Editor {
       if (!this.showTime) this.buildTime();
       this.detail = new DetailView(this.el.detail, {
         onMove: (dx, dz) => {
+          if (this.templateEditing) return;
           this.detailWindow.tx0 += dx;
           this.detailWindow.tz0 += dz;
           this.showDetail();
@@ -976,15 +983,16 @@ export class Editor {
         onEdit: (keys) => this.saveDetail(keys),
         onPointer: (hit) => this.showCursor(hit),
         onSelect: (object) => this.showObject(object),
-        onPour: ([x, z]) => this.pour({ id: DETAIL_POUR, at: [x / TILE_FT, z / TILE_FT].map((v) => Math.round(v * 1000) / 1000), width: Number(this.el.pourWidth.value) }),
+        onPour: ([x, z]) => (this.templateEditing ? this.say("Water can't be poured on a template.") : this.pour({ id: DETAIL_POUR, at: [x / TILE_FT, z / TILE_FT].map((v) => Math.round(v * 1000) / 1000), width: Number(this.el.pourWidth.value) })),
         bodies: () => this.bodies(),
-        onReflow: (cells) => this.reflowWater(cells),
+        onReflow: (cells) => this.templateEditing || this.reflowWater(cells),
         onSlab: (slabs) => this.showSlab(slabs),
         onGroup: (counts) => this.showGroup(counts),
         onProblem: (message, options) => this.say(message, options),
         water: {
-          get: () => this.sketch.water,
+          get: () => (this.templateEditing ? { rivers: [], lakes: [] } : this.sketch.water),
           set: (water) => {
+            if (this.templateEditing) return;
             this.sketch.water = water;
             this.saveSketch();
           },
@@ -1002,10 +1010,14 @@ export class Editor {
     }
     const { tx0, tz0, size } = this.detailWindow;
     this.el.detailSize.value = size;
-    this.detail.show({ world: this.world, continent: this.continent }, [tx0, tz0], size);
+    const editing = this.templateEditing;
+    this.el.templateEditRow.hidden = !editing;
+    this.el.detailPick.hidden = Boolean(editing);
+    this.detail.show(editing?.state ?? { world: this.world, continent: this.continent }, [tx0, tz0], size);
     this.shownView("detail", this.detail.view.camera, this.detail.view.controls, this.detail.view.origin);
     const loaded = this.detail.keys().filter((k) => this.detail.view.decoded.has(k)).length;
-    this.el.detailInfo.textContent = `tiles ${tx0},${tz0} to ${tx0 + size - 1},${tz0 + size - 1} · ${loaded} of ${size * size} generated`;
+    if (editing) this.el.detailInfo.textContent = `editing the template "${editing.entry.name}" on bare ground, apart from the world`;
+    else this.el.detailInfo.textContent = `tiles ${tx0},${tz0} to ${tx0 + size - 1},${tz0 + size - 1} · ${loaded} of ${size * size} generated`;
   }
 
   // Where the pointer is on a 3d view's ground, [x, y, z] in continent feet, or null.
@@ -1032,7 +1044,7 @@ export class Editor {
     if (this.toolName === "objects") return this.detail?.setBrush({ tool: "objects", type: this.pickers.objects.armed });
     if (this.toolName === "templates") {
       const type = this.pickers.templates.armed;
-      const template = type && allCollections(this.world, "templates").flatMap((c) => c.entries).find((e) => e.type === type)?.template;
+      const template = this.templateEntry(type)?.template;
       this.el.templatePlaceRow.hidden = !template;
       if (this.el.templateQuarter.checked) this.templateTurn = (Math.round(this.templateTurn / 90) * 90) % 360;
       this.el.templateTurnValue.textContent = `${this.templateTurn}°`;
@@ -1253,6 +1265,73 @@ export class Editor {
     this.say(`Saved template "${name}": ${template.slabs.length} slabs and ${template.objects.length} objects${template.ground ? `, with ${template.ground.length} cells of ground` : ""}.`, { info: true });
   }
 
+  // The templates picker's entry for a type, or undefined.
+  templateEntry(type) {
+    return type ? allCollections(this.world, "templates").flatMap((c) => c.entries).find((e) => e.type === type) : undefined;
+  }
+
+  // Opens the armed template on bare tiles of a world of its own (templateEdit.js), for the
+  // detail step's tools to change, away from this world and its saving.
+  editTemplate() {
+    const entry = this.templateEntry(this.pickers.templates.armed);
+    if (!entry) return;
+    const unknown = entry.template.objects.find((o) => !specOf(o.type));
+    if (unknown) return this.say(`This world has no ${unknown.type} for it.`);
+    const { world, continent, size } = scratchWorld(entry.template);
+    this.templateEditing = { entry, state: { world, continent }, window: this.detailWindow, changed: false };
+    this.detailWindow = { tx0: 0, tz0: 0, size };
+    this.el.templateEditName.value = entry.name;
+    this.el.templateEditGround.checked = Boolean(entry.template.ground);
+    this.pickers.templates.arm(null);
+    this.showDetail();
+  }
+
+  // The scratch tiles changed: they're kept in its world, so moving its window keeps them.
+  keepScratch(keys) {
+    const { state } = this.templateEditing;
+    for (const key of keys) {
+      const tile = this.detail.tile(key);
+      state.world.files.set(surfacePath(state.continent, ...tile.coords), gzipSync(encodeTile(tile)));
+    }
+    this.templateEditing.changed = true;
+  }
+
+  // Saves the template being edited into this world's library: over it when it's in one of the
+  // world's own collections, and otherwise, as for a builtin, as a new one in "my templates".
+  saveEditedTemplate() {
+    const { entry } = this.templateEditing;
+    const own = ownCollections(this.world, "templates").some((c) => c.id === entry.template.collection);
+    const name = this.el.templateEditName.value.trim() || entry.name;
+    const tiles = this.detail.keys().map((key) => this.detail.view.decoded.get(key)).filter(Boolean);
+    const captured = scratchTemplate(tiles, this.detail.cells().height, { id: own ? entry.template.id : newObjectId(), name, withGround: this.el.templateEditGround.checked });
+    if (!captured) return this.say("A template needs at least two slabs or objects.");
+    const template = { ...captured, ...(entry.template.tags ? { tags: entry.template.tags } : {}), ...(own ? { collection: entry.template.collection } : {}) };
+    const problems = templateProblems(template);
+    if (problems.length) return this.say(`That template ${problems[0]}.`);
+    keepTemplate(this.world, template);
+    this.dirty = true;
+    this.endTemplateEdit();
+    this.fillObjectTypes();
+    this.pickers.templates.arm(`${TEMPLATE_PREFIX}${template.id}`);
+    this.say(`Saved template "${name}"${own ? "" : " in my templates"}: ${template.slabs.length} slabs and ${template.objects.length} objects.`, { info: true });
+  }
+
+  // Stops editing a template, back to the world's tiles where the detail window was.
+  endTemplateEdit({ show = true } = {}) {
+    if (!this.templateEditing) return;
+    this.detailWindow = this.templateEditing.window;
+    this.templateEditing = null;
+    this.el.templateEditRow.hidden = true;
+    this.el.detailPick.hidden = false;
+    if (show && this.step === "detail") this.showDetail();
+  }
+
+  // Asks before dropping changes to the template being edited.
+  cancelTemplateEdit() {
+    if (this.templateEditing?.changed && !window.confirm("Drop your changes to this template?")) return;
+    this.endTemplateEdit();
+  }
+
   // The detail step's picked object in the panel, or none.
   showObject(object) {
     const { objectPanel, objectInfo, objectYaw, objectYawValue, objectScale, objectScaleValue } = this.el;
@@ -1419,6 +1498,7 @@ export class Editor {
 
   // Writes tiles changed in the detail step back into the world, and marks them edited by hand.
   saveDetail(keys) {
+    if (this.templateEditing) return this.keepScratch(keys);
     for (const key of keys) {
       const tile = this.detail.tile(key);
       const [tx, tz] = tile.coords;
@@ -1601,6 +1681,9 @@ export class Editor {
     for (const tab of this.el.stepTabs) tab.addEventListener("click", () => (tab.dataset.step === "detail" ? this.pickDetail() : this.setStep(tab.dataset.step)));
     this.el.openLibrary.addEventListener("click", () => this.openLibrary());
     this.el.templateSave.addEventListener("click", () => this.saveTemplate());
+    this.el.templateEdit.addEventListener("click", () => this.editTemplate());
+    this.el.templateEditSave.addEventListener("click", () => this.saveEditedTemplate());
+    this.el.templateEditCancel.addEventListener("click", () => this.cancelTemplateEdit());
     this.templateTurn = 0;
     for (const input of [this.el.templateQuarter, this.el.templateReshape, this.el.templateClear]) input.addEventListener("change", () => this.applyDetailBrush());
     const popover = this.el.libraryPopover;

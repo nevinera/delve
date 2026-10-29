@@ -145,6 +145,11 @@
         <div class="editor-step-body">
           <label class="editor-field">window <select id="detailSize"></select></label>
           <p id="detailInfo"></p>
+          <div id="templateEditRow" class="editor-stack" hidden>
+            <label class="editor-field">name <input id="templateEditName" type="text" maxlength="60"></label>
+            <label class="editor-check" title="keep the shape of the ground under it, to put back where it's placed"><input id="templateEditGround" type="checkbox"><span>with the ground</span></label>
+            <div class="editor-row"><button id="templateEditSave" type="button">save template</button><button id="templateEditCancel" type="button">stop editing</button></div>
+          </div>
           <button id="detailPick" type="button" title="pick where on the map to edit (F)">move to another spot</button>
           <div class="editor-tools" data-tools="detail"></div>
           <label class="editor-range" data-for="raise lower flatten smooth noise erode">brush <input id="detailRadius" type="range" min="0" max="256" step="4" value="32"><output id="detailRadiusValue"></output></label>
@@ -188,6 +193,7 @@
             <label class="editor-check" title="turn it a quarter at a time, so its ground lands cell for cell"><input id="templateQuarter" type="checkbox" checked><span>quarter turns</span></label>
             <label class="editor-check" title="set the ground under it to the shape it was saved with"><input id="templateReshape" type="checkbox"><span>reshape the ground</span></label>
             <label class="editor-check" title="fell the trees, clear the clutter and take away the objects under it"><input id="templateClear" type="checkbox" checked><span>clear what's under it</span></label>
+            <button id="templateEdit" type="button" title="change it on bare ground of its own, with every detail tool">edit this template</button>
           </div>
           <div class="editor-stack" data-for="templates">
             <p id="groupInfo" class="group-info">with nothing to place, click slabs and objects to pick them, or drag a box round them (shift adds)</p>

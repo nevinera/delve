@@ -66,11 +66,12 @@ export function addCollection(world, name, source, kind = "objects") {
   return collection;
 }
 
-// Keeps a template in the world's library, in its own "my templates" collection, made when
-// needed. Returns it as kept.
+// Keeps a template in the world's library: in the world's own collection it names, or else in
+// "my templates", made when needed. Returns it as kept.
 export function keepTemplate(world, template) {
   const { home, thingPath } = KINDS.templates;
-  const collection = ownCollections(world, "templates").find((c) => c.name === home) ?? addCollection(world, home, undefined, "templates");
+  const own = ownCollections(world, "templates");
+  const collection = own.find((c) => c.id === template.collection) ?? own.find((c) => c.name === home) ?? addCollection(world, home, undefined, "templates");
   const kept = { ...template, collection: collection.id };
   world.writeJson(thingPath(kept.id), kept);
   return kept;

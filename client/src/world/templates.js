@@ -99,7 +99,7 @@ export function captureTemplate({ id, name, slabs, objects, height, withGround =
   return {
     id,
     name,
-    slabs: slabs.map(({ at, ...slab }) => ({ at: at.map((v, i) => round(v - anchor[i])), ...structuredClone(slab) })),
+    slabs: slabs.map(({ at, template: _, ...slab }) => ({ at: at.map((v, i) => round(v - anchor[i])), ...structuredClone(slab) })),
     objects: objects.map(({ type, at, yaw, scale, y, colors, texts }) => ({
       type,
       at: [round(at[0] - anchor[0]), round(at[1] - anchor[2])],
