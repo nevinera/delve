@@ -30,7 +30,8 @@ import { LandGrid, landBounds, loadLand, saveLand } from "../world/landGrid.js";
 import { BLENDS, EROSIONS, SHAPES, TOOLS as SCULPT_TOOLS } from "./sculptTools.js";
 import { DETAIL_TOOLS } from "./detailTools.js";
 import { TRAIL_KINDS, TRAIL_STATES } from "./detailTrails.js";
-import { BUILT_PREFIX, builtOf, makeObject, setBuiltObjects, specOf } from "../world/objects.js";
+import { BUILT_PREFIX, builtOf, makeObject, setBuiltObjects, specOf, tiledImages } from "../world/objects.js";
+import { SLAB_PATTERNS, SLAB_PRESETS } from "../world/slabs.js";
 import { paletteColors, textsOf } from "../world/builtObjects.js";
 import { MAX_TEXT, signText } from "../world/pixelFont.js";
 import { adoptStrays, allCollections, builtObjects, builtStructures, images } from "../objects/collections.js";
@@ -94,7 +95,7 @@ const STEPS = {
   civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info", "spawn"], kinds: ["road", "hub", "info", "spawn"] },
   zones: { tools: [], kinds: [], map: "heights" },
   tiles: { tools: [], kinds: [], map: "tiles" },
-  detail: { tools: [...DETAIL_TOOLS, "trails", "channel", "water", "objects", "structures", "paint"], kinds: [] },
+  detail: { tools: [...DETAIL_TOOLS, "trails", "channel", "water", "objects", "structures", "paint", "slabs"], kinds: [] },
   "3d": { tools: [], kinds: [] },
   publish: { tools: [], kinds: [], map: "tiles" },
 };
@@ -102,6 +103,8 @@ const STEPS = {
 const DETAIL_MAX_TILES = 128;
 // Past this many screen pixels per pixel of the small thumbnails, tiles draw their full ones.
 const FULL_THUMB_ZOOM = 1.5;
+// The slab surface choice that opens up a color, a pattern and a texture.
+const ADVANCED = "advanced";
 // The detail step's pours stand in for a source pin with this id.
 const DETAIL_POUR = "detail";
 const PREVIEW_DELAY_MS = 80; // after panning or zooming stops, before the preview is redone
@@ -909,6 +912,8 @@ export class Editor {
         onPour: ([x, z]) => this.pour({ id: DETAIL_POUR, at: [x / TILE_FT, z / TILE_FT].map((v) => Math.round(v * 1000) / 1000), width: Number(this.el.pourWidth.value) }),
         bodies: () => this.bodies(),
         onReflow: (cells) => this.reflowWater(cells),
+        onSlab: (slab) => this.showSlab(slab),
+        onProblem: (message) => this.say(message),
         water: {
           get: () => this.sketch.water,
           set: (water) => {
@@ -957,6 +962,7 @@ export class Editor {
     if (this.toolName === "water") return this.detail?.setBrush({ tool: "water" });
     if (this.toolName === "objects") return this.detail?.setBrush({ tool: "objects", type: this.pickers.objects.armed });
     if (this.toolName === "structures") return this.detail?.setBrush({ tool: "structures", type: this.pickers.structures.armed });
+    if (this.toolName === "slabs") return this.detail?.setBrush({ tool: "slabs", settings: this.slabSettings() });
     if (this.toolName === "paint") {
       const { paintTerrain, treeKind, treeSize, paintRadius, paintRadiusValue } = this.el;
       const tree = paintTerrain.value === "tree";
@@ -1090,6 +1096,36 @@ export class Editor {
     this.say(`Replaced ${count} placed ${name(from)} with ${name(to)}.`, { info: true });
   }
 
+  // The slabs tool's panel: its settings, which also change a picked slab, and the picked slab's
+  // place and turn.
+  buildSlabPanel() {
+    const words = (name) => name.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`);
+    this.el.slabSurface.replaceChildren(...Object.keys(SLAB_PRESETS).map((name) => new Option(words(name), name)), new Option("advanced…", ADVANCED));
+    this.el.slabPattern.replaceChildren(new Option("none", ""), ...SLAB_PATTERNS.map((name) => new Option(name, name)));
+    this.fillSlabTextures();
+    const tool = () => this.detail?.slabTool;
+    for (const input of [this.el.slabMode, this.el.slabHeight, this.el.slabKeep]) input.addEventListener("change", () => this.applyDetailBrush());
+    this.el.slabThickness.addEventListener("change", () => {
+      this.applyDetailBrush();
+      tool()?.change({ thickness: Number(this.el.slabThickness.value) });
+    });
+    for (const input of [this.el.slabSurface, this.el.slabColor, this.el.slabPattern, this.el.slabTexture, this.el.slabTileEvery]) {
+      input.addEventListener("change", () => {
+        if (input === this.el.slabSurface && input.value === ADVANCED) this.fillSlabTextures();
+        if (input === this.el.slabTexture && input.value) this.el.slabPattern.value = "";
+        if (input === this.el.slabPattern && input.value) this.el.slabTexture.value = "";
+        this.applyDetailBrush();
+        tool()?.change({ surface: this.slabSurface() });
+      });
+    }
+    const numbers = (inputs) => inputs.map((input) => Number(input.value) || 0);
+    for (const input of [this.el.slabX, this.el.slabY, this.el.slabZ]) input.addEventListener("change", () => tool()?.change({ at: numbers([this.el.slabX, this.el.slabY, this.el.slabZ]) }));
+    for (const input of [this.el.slabYaw, this.el.slabPitch, this.el.slabRoll]) input.addEventListener("change", () => tool()?.change({ turn: numbers([this.el.slabYaw, this.el.slabPitch, this.el.slabRoll]) }));
+    this.el.slabMove.addEventListener("click", () => tool()?.setHandle("move"));
+    this.el.slabTurn.addEventListener("click", () => tool()?.setHandle("turn"));
+    this.el.slabDelete.addEventListener("click", () => tool()?.remove());
+  }
+
   // The detail step's picked object in the panel, or none.
   showObject(object) {
     const { objectPanel, objectInfo, objectYaw, objectYawValue, objectScale, objectScaleValue } = this.el;
@@ -1138,6 +1174,55 @@ export class Editor {
     );
   }
 
+  // The slabs tool's settings from the panel: what it does, and what new slabs are like.
+  slabSettings() {
+    const { slabMode, slabThickness, slabHeight, slabKeep } = this.el;
+    this.el.slabAdvanced.hidden = this.el.slabSurface.value !== ADVANCED;
+    return { mode: slabMode.value, thickness: Number(slabThickness.value) || 1, height: Number(slabHeight.value) || 10, keepWalling: slabKeep.checked, surface: this.slabSurface() };
+  }
+
+  // The surface the panel shows: a preset's name, or an advanced one.
+  slabSurface() {
+    const { slabSurface, slabColor, slabPattern, slabTexture, slabTileEvery } = this.el;
+    if (slabSurface.value !== ADVANCED) return slabSurface.value;
+    const surface = { color: slabColor.value };
+    if (slabTexture.value) surface.tile = { image: slabTexture.value, every: Number(slabTileEvery.value) || 4, jitter: 0.1 };
+    else if (slabPattern.value) surface.pattern = slabPattern.value;
+    return surface;
+  }
+
+  // The world's tiled textures, for an advanced slab surface to wear.
+  fillSlabTextures() {
+    const { slabTexture } = this.el;
+    const was = slabTexture.value;
+    slabTexture.replaceChildren(new Option("none", ""), ...tiledImages().map((image) => new Option(image.name ?? image.id, image.id)));
+    slabTexture.value = was;
+  }
+
+  // The picked slab in the panel, or none. Its thickness and surface show in the settings, where
+  // changing them changes it.
+  showSlab(slab) {
+    const { slabPanel, slabInfo } = this.el;
+    slabPanel.hidden = !slab;
+    if (!slab) return;
+    const [x, y, z] = slab.at;
+    slabInfo.textContent = `slab of ${slab.outline.length} corners, tile ${Math.floor(x / TILE_FT)}, ${Math.floor(z / TILE_FT)}`;
+    [this.el.slabX.value, this.el.slabY.value, this.el.slabZ.value] = [x, y, z];
+    [this.el.slabYaw.value, this.el.slabPitch.value, this.el.slabRoll.value] = slab.turn;
+    this.el.slabThickness.value = slab.thickness;
+    if (typeof slab.surface === "string") this.el.slabSurface.value = slab.surface;
+    else {
+      this.el.slabSurface.value = ADVANCED;
+      this.el.slabColor.value = slab.surface.color;
+      this.el.slabPattern.value = slab.surface.pattern ?? "";
+      this.fillSlabTextures();
+      this.el.slabTexture.value = slab.surface.tile?.image ?? "";
+      if (slab.surface.tile) this.el.slabTileEvery.value = slab.surface.tile.every;
+    }
+    this.el.slabAdvanced.hidden = this.el.slabSurface.value !== ADVANCED;
+    this.detail?.slabTool.setSettings({ thickness: slab.thickness, surface: structuredClone(slab.surface) });
+  }
+
   // What pouring in the detail step would add, with keep and drop, while there's such a proposal.
   showPour() {
     const { pourPanel, pourInfo } = this.el;
@@ -1169,6 +1254,7 @@ export class Editor {
       this.applyDetailBrush();
     };
     const tools = STEPS.detail.tools;
+    if (this.toolName === "slabs" && this.detail?.slabTool.key(e)) return true;
     const picked = this.detail?.selected?.object;
     if (/^[0-9]$/.test(e.key) && tools[(Number(e.key) + 9) % 10]) this.setTool(tools[(Number(e.key) + 9) % 10]);
     else if (picked && (e.key === "Delete" || e.key === "Backspace")) this.detail.deleteSelected();
@@ -1400,6 +1486,7 @@ export class Editor {
       input.addEventListener("change", () => this.detail?.endEdit());
     }
     this.el.objectDelete.addEventListener("click", () => this.detail?.deleteSelected());
+    this.buildSlabPanel();
     for (const [button, way] of [[this.el.objectLower, -1], [this.el.objectRaise, 1]]) {
       button.addEventListener("click", (e) => {
         const object = this.detail?.selected?.object;

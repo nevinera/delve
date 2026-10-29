@@ -10,7 +10,7 @@
 // worked out from the type when placed, so the game server never needs the types.
 
 import { shapeOf } from "./builtObjects.js";
-import { builtinImage } from "./builtinImages.js";
+import { BUILTIN_IMAGES, builtinImage } from "./builtinImages.js";
 import { BUILTIN_OBJECTS } from "./builtinObjects.js";
 import { BUILTIN_STRUCTURES } from "./builtinStructures.js";
 import { CELL_FT, TILE_FT } from "./constants.js";
@@ -141,6 +141,8 @@ export function furnishingsOf(placed) {
 
 // An image built objects wear, by id, or undefined.
 export const imageOf = (id) => images.get(id) ?? builtinImage(id);
+// The images that tile over a surface: the built-in ones, then the world's.
+export const tiledImages = () => [...BUILTIN_IMAGES, ...images.values()].filter((image) => image.kind !== "decal");
 
 // The built object a type names, or undefined.
 export function builtOf(type) {

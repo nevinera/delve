@@ -12,6 +12,7 @@ import { footprintOf, makeObject, reachOf, specOf, tileOf } from "../world/objec
 import { CELL_FT as STRUCTURE_CELL_FT, bakeWalk, placedWalk, pushGround, quartersOf } from "../world/structures.js";
 import { meshHeightAt } from "../world/clutter.js";
 import { RenderView, boundary, groundSampler } from "./renderView.js";
+import { SlabTool } from "./slabTool.js";
 import { surfacePath } from "./thumbnails.js";
 
 // The detail step's 3d view (plans/design.md, "Editor"): a window of generated tiles, `size` a side,
@@ -22,7 +23,8 @@ import { surfacePath } from "./thumbnails.js";
 // Left-dragging works the brush (detailTools.js) on the window's tiles, a little each frame, or draws
 // a trail (detailTrails.js), stamped when it's let go. The objects tool picks an object to drag,
 // turn, size or delete, and the place tool puts new ones down. The channel tool digs along a drawn
-// line (detailWater.js), and the water tool pours water from where it's clicked (onPour).
+// line (detailWater.js), and the water tool pours water from where it's clicked (onPour). The slabs
+// tool draws, picks and changes slabs (slabTool.js).
 //
 // Water comes from the sketch's rivers and lakes (plans/water.md). Whenever the ground changes, the
 // changed tiles' water is worked out again from them, over the ground as it is (rework).
@@ -51,8 +53,9 @@ export class DetailView {
   // feet. bodies() gives the generator's view of the continent (generator.js prepareWorld), for
   // working out water. onReflow(cells) hears of ground changed beside water ([ci, cj] continent
   // cells), and answers with tiles whose water to work out again, or null. water { get, set } is
-  // the sketch's water, undone with the edits that change it.
-  constructor(canvas, { onMove, onEdit, onPointer, onSelect, onPour, bodies, onReflow, water } = {}) {
+  // the sketch's water, undone with the edits that change it. onSlab hears the slab picked, or
+  // null, and onProblem why the slabs tool couldn't do something.
+  constructor(canvas, { onMove, onEdit, onPointer, onSelect, onPour, bodies, onReflow, water, onSlab, onProblem } = {}) {
     this.canvas = canvas;
     this.view = new RenderView(canvas);
     const { controls } = this.view;
@@ -75,6 +78,7 @@ export class DetailView {
     this.selected = null; // { object, key }: the object picked and the tile listing it
     this.dragging = false;
     this.dirtyObjects = new Set(); // "tx,tz" whose objects alone need making again
+    this.dirtySlabs = new Set(); // "tx,tz" whose slabs alone need making again
     this.shown = false;
     this.brush = null;
     this.stroke = null; // a brush being dragged
@@ -84,10 +88,15 @@ export class DetailView {
     this.dirty = new Set(); // "tx,tz" of meshes to make again
     this.undos = [];
     this.redos = [];
+    this.slabTool = new SlabTool(this, { onPick: (slab) => onSlab?.(slab), onProblem: (message) => onProblem?.(message) });
     canvas.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
       const side = this.arrowAt(e);
       if (side) return this.onMove?.(...SIDES[side]);
+      if (this.brush?.tool === "slabs") {
+        canvas.setPointerCapture(e.pointerId);
+        return this.slabTool.pointerDown(e);
+      }
       const at = this.pointAt(e);
       if (!at || !this.brush) return;
       canvas.setPointerCapture(e.pointerId);
@@ -127,6 +136,7 @@ export class DetailView {
       if (this.trail && at && Math.hypot(at[0] - this.trail.at(-1)[0], at[1] - this.trail.at(-1)[1]) >= TRAIL_STEP_FT) this.trail.push(at);
       if (this.dragging && at) this.moveSelected([at[0] + this.dragging.dx, at[1] + this.dragging.dz]);
       if (this.painting && at) this.paint(at);
+      if (this.brush?.tool === "slabs") this.slabTool.pointerMove(e);
       this.hover(over ? null : this.groundAt(e));
     });
     canvas.addEventListener("pointerleave", () => this.stroke || this.trail || this.dragging || this.hover(null));
@@ -137,6 +147,8 @@ export class DetailView {
   // tool, { tool: "trails", kind, state, width } (detailTrails.js).
   setBrush(brush) {
     this.brush = brush;
+    this.slabTool.active(brush?.tool === "slabs");
+    if (brush?.tool === "slabs") this.slabTool.setSettings(brush.settings);
     if (this.pointer) this.hover(this.groundAt(this.pointer));
   }
 
@@ -148,6 +160,7 @@ export class DetailView {
 
   // The left button's let go: a brush stroke ends, and a trail's stamped (or dropped, if `cancel`).
   release(cancel = false) {
+    this.slabTool.pointerUp();
     if (this.painting) {
       this.painting = false;
       this.endEdit();
@@ -207,6 +220,9 @@ export class DetailView {
     this.extra = new Map();
     this.dirty.clear();
     this.dirtyObjects.clear();
+    this.dirtySlabs.clear();
+    this.slabTool.pick(null);
+    this.slabTool.drawing = null;
     // Undoing reaches only tiles still loaded, so moving the window starts afresh.
     this.undos = [];
     this.redos = [];
@@ -397,8 +413,9 @@ export class DetailView {
   }
 
   replay(from, to, side) {
-    if (this.stroke || this.trail || this.dragging || this.painting || !from.length) return;
+    if (this.stroke || this.trail || this.dragging || this.painting || this.slabTool.corner !== null || !from.length) return;
     this.select(null);
+    this.slabTool.pick(null);
     const entry = from.pop();
     to.push(entry);
     for (const [key, state] of entry[side]) restore(this.tile(key), state);
@@ -726,6 +743,23 @@ export class DetailView {
     this.dirtyObjects.clear();
   }
 
+  // Makes the slabs of tiles whose ground hasn't changed again.
+  rebuildSlabs() {
+    const { view } = this;
+    for (const key of this.dirtySlabs) {
+      if (this.dirty.has(key)) continue;
+      const [tx, tz] = key.split(",").map(Number);
+      for (const child of [...view.slabs.children]) {
+        const at = child.userData.tile;
+        if (!at || at[0] !== tx || at[1] !== tz) continue;
+        view.slabs.remove(child);
+        child.geometry.dispose();
+      }
+      if (view.decoded.has(key)) view.addSlabs(view.decoded.get(key));
+    }
+    this.dirtySlabs.clear();
+  }
+
   // Makes the changed tiles' meshes again.
   rebuild() {
     const { view } = this;
@@ -779,7 +813,7 @@ export class DetailView {
         return [hit.x + origin[0] + Math.cos(a) * radius, hit.z + origin[1] + Math.sin(a) * radius];
       });
     if (this.brush.tool === "paint") return add(ring(Math.max(CELL_FT / 2, this.brush.radius)), CURSOR.trail);
-    if (["objects", "structures", "water"].includes(this.brush.tool)) return;
+    if (["objects", "structures", "water", "slabs"].includes(this.brush.tool)) return;
     const rings = DRAWN.has(this.brush.tool) ? [[Math.max(CELL_FT / 2, this.brush.width / 2), CURSOR.trail]] : [[this.brush.radius, CURSOR.inner], [this.brush.radius + this.brush.falloff, CURSOR.outer]];
     for (const [r, color] of rings) if (r > 0) add(ring(r), color);
   }
@@ -852,6 +886,7 @@ export class DetailView {
       const now = performance.now();
       if (this.stroke) this.work(now);
       if (this.dirtyObjects.size) this.rebuildObjects();
+      if (this.dirtySlabs.size) this.rebuildSlabs();
       if (this.dirty.size) {
         this.rebuild();
         if (this.pointer) this.hover(this.groundAt(this.pointer));
@@ -894,12 +929,13 @@ function snapshot(tile) {
     palettes: structuredClone(tile.palettes),
     objects: structuredClone(tile.objects ?? []),
     roads: structuredClone(tile.roads ?? []),
+    slabs: structuredClone(tile.slabs ?? []),
   };
 }
 
 function restore(tile, state) {
   const copy = snapshot(state);
-  Object.assign(tile, { layers: copy.layers, palettes: copy.palettes, objects: copy.objects, roads: copy.roads });
+  Object.assign(tile, { layers: copy.layers, palettes: copy.palettes, objects: copy.objects, roads: copy.roads, slabs: copy.slabs });
 }
 
 // The index of a kind of water ("sea" or "fresh") in a tile's palette, adding the kinds, and the

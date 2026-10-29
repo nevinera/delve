@@ -11,19 +11,26 @@ import { slabTexture } from "./slabTextures.js";
 
 const materials = new Map(); // surface key -> material
 
-// A tile's slabs as meshes.
+// A tile's slabs as meshes. Each mesh's userData.slabs lists the slabs in it, { slab, start,
+// count } in its vertices, for slabAt.
 export function slabMeshes(slabs = [], origin) {
-  const groups = new Map(); // surface key -> { surface, geometries }
+  const groups = new Map(); // surface key -> { surface, geometries, slabs }
   for (const slab of slabs) {
     const key = JSON.stringify(slab.surface);
-    if (!groups.has(key)) groups.set(key, { surface: slab.surface, geometries: [] });
-    groups.get(key).geometries.push(slabGeometry(slab, origin));
+    if (!groups.has(key)) groups.set(key, { surface: slab.surface, geometries: [], slabs: [] });
+    const group = groups.get(key);
+    const geometry = slabGeometry(slab, origin);
+    const start = group.slabs.reduce((n, s) => n + s.count, 0);
+    group.geometries.push(geometry);
+    group.slabs.push({ slab, start, count: geometry.attributes.position.count });
   }
   const meshes = [];
-  for (const [key, { surface, geometries }] of groups) {
+  for (const [key, { surface, geometries, slabs: parts }] of groups) {
     const geometry = mergeGeometries(geometries);
     const base = typeof surface === "string" || !surface.tile ? slabTexture(surface) : { feet: 1 };
-    meshes.push(new THREE.Mesh(scaled(geometry, base.feet), materialFor(key, surface, base)));
+    const mesh = new THREE.Mesh(scaled(geometry, base.feet), materialFor(key, surface, base));
+    mesh.userData.slabs = parts;
+    meshes.push(mesh);
     if (typeof surface === "object" && surface.tile) {
       const image = imageOf(surface.tile.image);
       if (!image) continue;
@@ -34,6 +41,12 @@ export function slabMeshes(slabs = [], origin) {
     }
   }
   return meshes;
+}
+
+// The slab a raycast hit on one of slabMeshes' meshes, or null.
+export function slabAt(hit) {
+  const vertex = hit.faceIndex * 3;
+  return hit.object.userData.slabs?.find(({ start, count }) => vertex >= start && vertex < start + count)?.slab ?? null;
 }
 
 function materialFor(key, surface, { texture }) {
