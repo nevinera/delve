@@ -1,4 +1,4 @@
-import { box, color, object, post, rod, sphere, tiled, wedge, wheel } from "./pieces.js";
+import { box, color, object, post, rod, sphere, throughX, throughZ, tiled, wedge, wheel, withCuts } from "./pieces.js";
 
 // Market props: stalls, baskets, meat and cloth, scales, a fruit cart, an awning and pots.
 
@@ -21,16 +21,20 @@ export const MARKET = {
   id: "market",
   name: "market",
   objects: [
-    object("bmark001", "market stall", ["stall", "shop"], [color(RED, "awning"), color(STRIPE, "stripes"), color(WOOD, "wood"), color(APPLE), color(WICKER)], [
-      ...[[-3.6, -2], [3.6, -2], [-3.6, 2], [3.6, 2]].map(([x, z]) => box([0.4, z < 0 ? 8 : 7, 0.4], [x, z < 0 ? 4 : 3.5, z], 2)),
-      tiled(box([7.8, 0.3, 2.4], [0, 3, 1], 2), "planks", 1.5),
-      box([7.8, 2.8, 0.2], [0, 1.5, 2.1], 2),
-      ...[-3, -1, 1, 3].map((x, n) => wedge([2, 1.4, 5.4], [x, 7.6, 0], n % 2 ? 1 : 0, [180, 0, 0])),
-      ...basket(-2.4, 1, 1.6, 3, 3.15),
-      ...basket(0, 1, 1.6, 3, 3.15),
-      ...basket(2.4, 1, 1.6, 3, 3.15),
-      tiled(box([7.6, 0.25, 1], [0, 5, -1.8], 2), "planks", 1.5),
-    ]),
+    withCuts(
+      object("bmark001", "market stall", ["stall", "shop"], [color(RED, "awning"), color(STRIPE, "stripes"), color(WOOD, "wood"), color(APPLE), color(WICKER)], [
+        ...[[-3.6, -2], [3.6, -2], [-3.6, 2], [3.6, 2]].map(([x, z]) => box([0.4, z < 0 ? 8 : 7, 0.4], [x, z < 0 ? 4 : 3.5, z], 2)),
+        tiled(box([7.8, 0.3, 2.4], [0, 3, 1], 2), "planks", 1.5),
+        box([7.8, 2.8, 0.2], [0, 1.5, 2.1], 2),
+        ...[-3, -1, 1, 3].map((x, n) => wedge([2, 1.4, 5.4], [x, 7.6, 0], n % 2 ? 1 : 0, [180, 0, 0])),
+        ...basket(-2.4, 1, 1.6, 3, 3.15),
+        ...basket(0, 1, 1.6, 3, 3.15),
+        ...basket(2.4, 1, 1.6, 3, 3.15),
+        tiled(box([7.6, 0.25, 1], [0, 5, -1.8], 2), "planks", 1.5),
+      ]),
+      throughZ(-3.4, 3.4, 3.3, 6.8),
+      throughX(-1.8, 1.8, 3.3, 6.8),
+    ),
     object("bmark002", "produce baskets", ["food", "container"], [color(WICKER, "wicker"), color(APPLE, "apples"), color(PEAR, "pears"), color("#d88a30")], [
       ...basket(0, 0, 2, 1),
       ...basket(2.2, 0.4, 1.8, 2),
@@ -74,12 +78,16 @@ export const MARKET = {
       ...basket(-0.6, 0.7, 1.4, 4, 2.15),
       ...basket(1.4, 0.6, 1.4, 3, 2.15),
     ]),
-    object("bmark007", "awning", ["shade", "stall"], [color("#3a6a5a", "cloth"), color(WOOD, "poles")], [
-      post(0.35, 7, [-3.6, 3.5, 3], 1),
-      post(0.35, 7, [3.6, 3.5, 3], 1),
-      box([8, 0.15, 6.4], [0, 7.6, 0], 0, [0, -12, 0]),
-      wedge([8, 0.8, 0.15], [0, 6.6, 3.15], 0, [0, 0, 180]),
-    ]),
+    withCuts(
+      object("bmark007", "awning", ["shade", "stall"], [color("#3a6a5a", "cloth"), color(WOOD, "poles")], [
+        post(0.35, 7, [-3.6, 3.5, 3], 1),
+        post(0.35, 7, [3.6, 3.5, 3], 1),
+        box([8, 0.15, 6.4], [0, 7.6, 0], 0, [0, -12, 0]),
+        wedge([8, 0.8, 0.15], [0, 6.6, 3.15], 0, [0, 0, 180]),
+      ]),
+      throughZ(-3.4, 3.4, -1, 6.2),
+      throughX(-3, 2.8, -1, 6.2),
+    ),
     object("bmark008", "fish basket", ["food", "fishing"], [color(WICKER, "wicker"), color("#a8a8a0", "fish")], [
       ...basket(0, 0, 2.4, 1).slice(0, 1),
       ...[[-0.4, 0.2, 20], [0.3, -0.3, -30], [0.1, 0.5, 70], [-0.2, -0.5, 110]].map(([x, z, yaw]) => sphere([1.6, 0.35, 0.45], [x, 1.25, z], 1, [yaw, 0, 8])),

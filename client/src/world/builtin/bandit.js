@@ -1,4 +1,4 @@
-import { box, color, cone, fire, gable, object, post, ring, rod, sack, sign, sphere, tiled, wedge, wheel } from "./pieces.js";
+import { box, color, cone, fire, gable, object, post, ring, rod, sack, sign, sphere, throughX, throughZ, tiled, wedge, wheel, withCuts } from "./pieces.js";
 
 // Bandit camp props: tents, a fire, bedrolls, racks, loot, barricades and a lookout.
 
@@ -69,18 +69,24 @@ export const BANDIT = {
       box([8.2, 0.4, 1.1], [0, 2, 0], 1),
       box([8.2, 0.4, 1.1], [0, 6, 0], 1),
     ]),
-    object("bband010", "lookout post", ["lookout", "defence"], [color(WOOD, "wood"), color("#8a7a50", "roof")], [
-      ...[[-2, -2], [2, -2], [-2, 2], [2, 2]].map(([x, z]) => box([0.5, 14, 0.5], [x, 7, z], 0)),
-      tiled(box([5.4, 0.4, 5.4], [0, 10, 0], 0), "planks", 1.5),
-      ...[-2.5, 2.5].map((z) => box([5.4, 1.6, 0.25], [0, 11, z], 0)),
-      box([0.25, 1.6, 5.4], [2.5, 11, 0], 0),
-      box([0.25, 1.6, 5.4], [-2.5, 11, 0], 0),
-      ...gable([5.8, 2, 5.8], 14, 1, "thatch"),
-      box([1.4, 0.2, 0.2], [0, 1.5, 2.6], 0),
-      ...[3, 4.5, 6, 7.5, 9].map((y) => box([1.4, 0.2, 0.2], [0, y, 2.6], 0)),
-      box([0.2, 10, 0.2], [-0.7, 5, 2.65], 0),
-      box([0.2, 10, 0.2], [0.7, 5, 2.65], 0),
-    ]),
+    withCuts(
+      object("bband010", "lookout post", ["lookout", "defence"], [color(WOOD, "wood"), color("#8a7a50", "roof")], [
+        ...[[-2, -2], [2, -2], [-2, 2], [2, 2]].map(([x, z]) => box([0.5, 14, 0.5], [x, 7, z], 0)),
+        tiled(box([5.4, 0.4, 5.4], [0, 10, 0], 0), "planks", 1.5),
+        ...[-2.5, 2.5].map((z) => box([5.4, 1.6, 0.25], [0, 11, z], 0)),
+        box([0.25, 1.6, 5.4], [2.5, 11, 0], 0),
+        box([0.25, 1.6, 5.4], [-2.5, 11, 0], 0),
+        ...gable([5.8, 2, 5.8], 14, 1, "thatch"),
+        box([1.4, 0.2, 0.2], [0, 1.5, 2.6], 0),
+        ...[3, 4.5, 6, 7.5, 9].map((y) => box([1.4, 0.2, 0.2], [0, y, 2.6], 0)),
+        box([0.2, 10, 0.2], [-0.7, 5, 2.65], 0),
+        box([0.2, 10, 0.2], [0.7, 5, 2.65], 0),
+      ]),
+      throughZ(-1.75, 1.75, -1, 9.7),
+      throughX(-1.75, 1.75, -1, 9.7),
+      throughZ(-1.75, 1.75, 11.9, 13.9),
+      throughX(-1.75, 1.75, 11.9, 13.9),
+    ),
     object("bband011", "wanted poster", ["sign"], [color(WOOD, "wood"), color("#e0d4b0", "paper")], [
       post(0.4, 6, [-1.4, 3, 0], 0),
       post(0.4, 6, [1.4, 3, 0], 0),

@@ -1,10 +1,12 @@
 import { BUILT_PREFIX, OBJECT_TYPES, builtOf, specOf } from "../world/objects.js";
 import { pieceGeometry } from "./builtMeshes.js";
 import { limitedHull } from "./limitedHull.js";
+import { cutMesh } from "./sightCuts.js";
 
-// The shapes file (docs/formats/shapes.md): for each kind of object that blocks line of sight, the
-// convex hulls that stand in for it, so the game server and the client test sight against a few
-// planes and not the object's pieces. Baked whenever the world is stored.
+// The shapes file (docs/formats/shapes.md): for each kind of object that blocks line of sight, a
+// closed mesh of a few dozen faces standing in for it, so the game server and the client test sight
+// against that and not the object's pieces: the convex hull of its pieces, with any holes cut
+// through it by hand (sightCuts.js). Baked whenever the world is stored.
 
 export const SHAPES_VERSION = 1;
 const ROUND = 100; // points are kept to 1/100 ft
@@ -19,14 +21,14 @@ export function blocksSight(type) {
   return OBJECT_TYPES[type] ? OBJECT_TYPES[type].blocksSight !== false : false;
 }
 
-// The shapes file for these kinds, as { version, kinds: { type: { hulls: [hull, ...] } } }, with
-// only the kinds that block sight, sorted.
+// The shapes file for these kinds, as { version, kinds: { type: mesh } }, with only the kinds
+// that block sight, sorted.
 export function shapesFile(types) {
   const kinds = {};
   for (const type of [...new Set(types)].sort()) {
     if (!blocksSight(type)) continue;
-    const hull = hullOf(type);
-    if (hull) kinds[type] = { hulls: [hull] };
+    const mesh = meshOf(type);
+    if (mesh) kinds[type] = mesh;
   }
   return { version: SHAPES_VERSION, kinds };
 }
@@ -37,19 +39,20 @@ export function shapesText({ version, kinds }) {
   return `{\n  "version": ${version},\n  "kinds": {${lines.length ? `\n${lines.join(",\n")}\n  ` : ""}}\n}\n`;
 }
 
-// A kind's hull at scale 1, { points: [[x, y, z], ...], faces: [[a, b, c], ...] }, in the kind's own
-// axes with y = 0 where it's seated on the ground, faces wound counterclockwise seen from outside.
-// Null for a kind with nothing to wrap.
-export function hullOf(type) {
-  return type.startsWith(BUILT_PREFIX) ? objectHull(builtOf(type)) : hullAround(prismPoints(specOf(type)));
+// A kind's mesh at scale 1, { points: [[x, y, z], ...], faces: [[a, b, c, ...], ...] }, in the
+// kind's own axes with y = 0 where it's seated on the ground, faces wound counterclockwise seen
+// from outside. Null for a kind with nothing to wrap.
+export function meshOf(type) {
+  return type.startsWith(BUILT_PREFIX) ? objectMesh(builtOf(type)) : hullAround(prismPoints(specOf(type)));
 }
 
-// A built object's hull, as hullOf gives it, whether or not it blocks sight.
-export function objectHull(object) {
-  return hullAround(builtPoints(object));
+// A built object's mesh, as meshOf gives it, whether or not it blocks sight.
+export function objectMesh(object) {
+  const hull = hullAround(builtPoints(object));
+  return hull && cutMesh(hull, object.sightCuts);
 }
 
-// The hull around points, as hullOf gives it.
+// The convex hull around points, at most MAX_CORNERS corners.
 export function hullAround(points) {
   const hull = limitedHull(points, MAX_CORNERS);
   return hull && { ...hull, points: hull.points.map((p) => p.map((v) => Math.round(v * ROUND) / ROUND + 0)) };

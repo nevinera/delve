@@ -1,4 +1,4 @@
-import { box, color, cone, cut, gable, object, post, rod, sphere, tiled, wedge, wheel } from "./pieces.js";
+import { box, color, cone, cut, gable, object, post, rod, sphere, throughX, throughZ, tiled, wedge, wheel, withCuts } from "./pieces.js";
 
 // Farm props: hay, carts, tools, fences, crops and animals' things.
 
@@ -78,17 +78,21 @@ export const FARM = {
       tiled(box([6, 1.6, 2], [0, 0.8, 0], 0), "planks", 1.5),
       cut(box([5.6, 1.3, 1.6], [0, 1.15, 0], 0)),
     ]),
-    object("bfarm009", "well", ["water"], [color(STONE, "stone"), color(WOOD, "wood"), color("#8a5040", "roof"), color("#1a2a38"), color(DARK_WOOD)], [
-      tiled(post(5, 2.6, [0, 1.3, 0], 0), "stone", 2),
-      cut(post(3.6, 2, [0, 1.8, 0], 0)),
-      post(3.6, 0.1, [0, 0.75, 0], 3),
-      box([0.4, 6, 0.4], [-2.2, 3, 0], 1),
-      box([0.4, 6, 0.4], [2.2, 3, 0], 1),
-      rod(0.3, 5, [0, 4.6, 0], 1),
-      ...gable([5.6, 1.6, 4], 6, 2),
-      post(0.1, 0.6, [0, 4.15, 0], 4),
-      post(0.8, 0.8, [0, 3.5, 0], 4),
-    ]),
+    withCuts(
+      object("bfarm009", "well", ["water"], [color(STONE, "stone"), color(WOOD, "wood"), color("#8a5040", "roof"), color("#1a2a38"), color(DARK_WOOD)], [
+        tiled(post(5, 2.6, [0, 1.3, 0], 0), "stone", 2),
+        cut(post(3.6, 2, [0, 1.8, 0], 0)),
+        post(3.6, 0.1, [0, 0.75, 0], 3),
+        box([0.4, 6, 0.4], [-2.2, 3, 0], 1),
+        box([0.4, 6, 0.4], [2.2, 3, 0], 1),
+        rod(0.3, 5, [0, 4.6, 0], 1),
+        ...gable([5.6, 1.6, 4], 6, 2),
+        post(0.1, 0.6, [0, 4.15, 0], 4),
+        post(0.8, 0.8, [0, 3.5, 0], 4),
+      ]),
+      throughZ(-2, 2, 2.7, 5.9),
+      throughX(-1.9, 1.9, 2.7, 5.9),
+    ),
     object("bfarm010", "chicken coop", ["animals"], [color(WOOD, "wood"), color("#8a5040", "roof"), color(DARK_WOOD)], [
       box([0.3, 1.5, 0.3], [-1.8, 0.75, -1.3], 2),
       box([0.3, 1.5, 0.3], [1.8, 0.75, -1.3], 2),

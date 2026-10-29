@@ -5,7 +5,7 @@ import { GRAY_INKS, MAX_PIECES, newObjectId, MIN_SIZE_FT, PIECE_TYPES, REACH_FT,
 import { MAX_TEXT, TEXT_PLACEHOLDER, signText } from "../world/pixelFont.js";
 import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, faceFrame, faceIdOf, faceSpot, objectGeometry, primitive, textGeometry, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
 import { ImagePainter, drawImage } from "./imagePainter.js";
-import { objectHull } from "./shapes.js";
+import { objectMesh } from "./shapes.js";
 import { characterClips, loadAnimations } from "../character/animations.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
 import { randomLook } from "../character/recipe.js";
@@ -14,7 +14,8 @@ import { randomLook } from "../character/recipe.js";
 // (world/builtObjects.js) together from pieces. The 3D view shows the pieces on a ground grid (1 ft,
 // heavier every 5 ft), the object's axes, a ring where they must stay within, the footprint the
 // game will use, and on asking, a person for scale and the outline the game tests line of sight
-// against. Clicking a piece picks it and fades the rest; handles
+// against. "cut" cuts a hole through that outline: click its corners as you see the object, and
+// Enter sweeps it right through along the view. Clicking a piece picks it and fades the rest; handles
 // move, turn or size it along its own axes, sizing from the face opposite the handle, and the panel
 // sets its type, color, taper, whether it's a hole and, as a last resort, exact numbers. Holes show
 // as red glass while a piece is picked; with none picked the object shows as the game draws it,
@@ -43,7 +44,7 @@ const LABEL_FT = 10; // how far out along each axis its label sits
 const FADED = 0.25; // how much of the unpicked pieces shows while one is picked
 const HOLE = { color: 0xff4040, opacity: 0.3 };
 const AXES = { x: { color: 0xe05a5a, label: "x east" }, y: { color: 0x6ad06a, label: "y up" }, z: { color: 0x5a8ae0, label: "z south" } };
-const COLORS = { grid: 0x626a58, gridMajor: 0x9aa48c, reach: 0x8fc4ff, footprint: 0xf0c850, sight: 0xff8a5c, picked: 0xffe066, ground: 0x4a5040, background: 0x20242a };
+const COLORS = { grid: 0x626a58, gridMajor: 0x9aa48c, reach: 0x8fc4ff, footprint: 0xf0c850, sight: 0xff8a5c, cut: 0xff4060, picked: 0xffe066, ground: 0x4a5040, background: 0x20242a };
 const HINT = "click a piece to pick it · G moves, R turns, S sizes, all along the piece's own axes · W toggles moving along the world's · F frames the object · right-drag turns the view · middle-drag pans · wheel zooms · delete removes the piece · ctrl-d copies it · ctrl-z undoes, ctrl-shift-z redoes";
 
 // An element with properties and children.
@@ -98,6 +99,7 @@ export class ObjectBuilder {
   // copy asked for. images(): the images it can wear, the world's and the builtins.
   open(object, { collections = [], readOnly = false, onCopy, images = () => [] } = {}) {
     this.placing = null;
+    this.cutting = null;
     this.readOnly = readOnly;
     this.images = images;
     this.onCopy = onCopy;
@@ -149,7 +151,10 @@ export class ObjectBuilder {
     this.personBox = el("input", { type: "checkbox", onchange: () => (this.canvas.focus(), this.showPerson(this.personBox.checked)) });
     this.worldBox = el("input", { type: "checkbox", onchange: () => ((this.worldMoves = this.worldBox.checked), this.setHandle(this.handle)) });
     this.hullBox = el("input", { type: "checkbox", onchange: () => (this.canvas.focus(), this.drawMarks()) });
-    const handles = div("ob-row", ...this.handleButtons, el("label", { className: "ob-check" }, this.snap, el("span", { textContent: "snap" })), el("label", { className: "ob-check", title: "move along the world's axes, not the piece's (W)" }, this.worldBox, el("span", { textContent: "world" })), el("label", { className: "ob-check ob-person", title: "a random character beside the object, for scale" }, this.personBox, el("span", { textContent: "person" })), el("label", { className: "ob-check", title: "the outline the game tests line of sight against" }, this.hullBox, el("span", { textContent: "sight outline" })));
+    const handles = div("ob-row", ...this.handleButtons, el("label", { className: "ob-check" }, this.snap, el("span", { textContent: "snap" })), el("label", { className: "ob-check", title: "move along the world's axes, not the piece's (W)" }, this.worldBox, el("span", { textContent: "world" })), el("label", { className: "ob-check ob-person", title: "a random character beside the object, for scale" }, this.personBox, el("span", { textContent: "person" })));
+    this.cutButton = el("button", { type: "button", className: "ob-edit", textContent: "cut", title: "cut a hole through the sight outline: click its corners as you see the object", onclick: () => this.startCut() });
+    const clearCuts = el("button", { type: "button", className: "ob-edit", textContent: "clear cuts", onclick: () => this.change((o) => delete o.sightCuts) });
+    this.sightRow = div("ob-row", el("label", { className: "ob-check", title: "the outline the game tests line of sight against" }, this.hullBox, el("span", { textContent: "sight outline" })), this.cutButton, clearCuts);
 
     this.list = el("select", { size: 8, className: "ob-list", onchange: () => this.pick(this.list.value === "" ? null : Number(this.list.value)) });
 
@@ -231,6 +236,7 @@ export class ObjectBuilder {
     const panel = div(
       "ob-panel",
       this.details,
+      this.sightRow,
       el("h3", { className: "ob-edit", textContent: "add a piece" }),
       add,
       el("h3", { textContent: "pieces" }),
@@ -246,12 +252,13 @@ export class ObjectBuilder {
       this.problems,
       footer,
     );
-    this.dialog = el("dialog", { className: "ob" }, div("ob-main", div("ob-view", this.canvas, el("p", { className: "ob-hint", textContent: HINT })), panel));
+    this.dialog = el("dialog", { className: "ob" }, div("ob-main", div("ob-view", this.canvas, (this.hint = el("p", { className: "ob-hint", textContent: HINT }))), panel));
     document.body.append(this.dialog);
     // Escape asks before throwing changes away.
     this.dialog.addEventListener("cancel", (e) => {
       e.preventDefault();
       if (this.placing) return this.startPlacing(null);
+      if (this.cutting) return this.endCut(false);
       this.cancel();
     });
     // Keys stay in the builder, away from the editor behind it.
@@ -268,6 +275,12 @@ export class ObjectBuilder {
     if (this.readOnly) {
       if (!ctrl && e.key.toLowerCase() === "f") this.frameObject();
       return;
+    }
+    if (this.cutting && (e.key === "Enter" || e.key === "Backspace")) {
+      e.preventDefault();
+      if (e.key === "Enter") return this.endCut(true);
+      this.cutting.pop();
+      return this.drawMarks();
     }
     if (ctrl && e.key.toLowerCase() === "z") e.shiftKey ? this.redo() : this.undo();
     else if (ctrl && e.key.toLowerCase() === "d") this.copyPiece();
@@ -750,6 +763,7 @@ export class ObjectBuilder {
       const ray = new THREE.Raycaster();
       ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), this.camera);
       const hit = ray.intersectObjects(this.pieces.children, false)[0];
+      if (this.cutting) return this.addCutCorner(ray);
       if (this.placing) return this.placeDecal(hit);
       this.pick(hit ? hit.object.userData.index : null);
     });
@@ -862,13 +876,53 @@ export class ObjectBuilder {
     }
   }
 
-  // The outline the game tests line of sight against, when asked for and the object blocks it.
+  // The outline the game tests line of sight against, when asked for and the object blocks it, and
+  // a hole being cut.
   drawHull() {
-    const hull = !this.hullBox.checked || this.object.blocksSight === false ? null : objectHull(this.object);
-    if (!hull) return;
-    const points = hull.points.map((p) => new THREE.Vector3(...p));
-    const edges = hull.faces.flatMap((loop) => loop.flatMap((a, i) => [points[a], points[loop[(i + 1) % loop.length]]]));
+    // The hole being drawn, over everything.
+    if (this.cutting?.length) {
+      const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(this.cutting), new THREE.LineBasicMaterial({ color: COLORS.cut, depthTest: false }));
+      line.renderOrder = 1;
+      this.marks.add(line);
+    }
+    const mesh = !this.hullBox.checked || this.object.blocksSight === false ? null : objectMesh(this.object);
+    if (!mesh) return;
+    const points = mesh.points.map((p) => new THREE.Vector3(...p));
+    const edges = mesh.faces.flatMap((loop) => loop.flatMap((a, i) => [points[a], points[loop[(i + 1) % loop.length]]]));
     this.marks.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(edges), new THREE.LineBasicMaterial({ color: COLORS.sight, transparent: true, opacity: 0.8 })));
+  }
+
+  // Cutting a hole through the sight outline: corners clicked on the plane across the view through
+  // the object's middle, swept along the view when Enter ends it.
+  startCut() {
+    if (this.readOnly || this.object.blocksSight === false) return;
+    this.hullBox.checked = true;
+    this.cutting = [];
+    this.cutButton.classList.add("active");
+    this.hint.textContent = "click the corners of the hole as you see the object · enter cuts it right through · backspace drops a corner · esc stops · right-drag still turns the view";
+    this.canvas.focus();
+    this.drawMarks();
+  }
+
+  addCutCorner(ray) {
+    const view = this.camera.getWorldDirection(new THREE.Vector3());
+    const middle = new THREE.Box3().setFromObject(this.pieces).getCenter(new THREE.Vector3());
+    const at = ray.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(view, middle), new THREE.Vector3());
+    if (!at) return;
+    this.cutting.push(at);
+    this.cutView = view;
+    this.drawMarks();
+  }
+
+  endCut(keep) {
+    const corners = this.cutting;
+    this.cutting = null;
+    this.cutButton.classList.remove("active");
+    this.hint.textContent = HINT;
+    if (keep && corners.length >= 3) {
+      const cut = { along: this.cutView.toArray().map((v) => round(v, 0.001)), outline: corners.map((p) => p.toArray().map((v) => tidy(v))) };
+      this.change((o) => (o.sightCuts = [...(o.sightCuts ?? []), cut]));
+    } else this.drawMarks();
   }
 
   // Looks at the whole object, or at where one would stand.

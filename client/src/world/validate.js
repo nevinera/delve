@@ -82,16 +82,16 @@ function checkShapes(files, json, problem, warning) {
   }
   if (shapes === null) return;
   if (!isObject(shapes) || shapes.version !== 1 || !isObject(shapes.kinds)) return problem(SHAPES_PATH, "should be version 1, with kinds");
-  for (const [kind, shape] of Object.entries(shapes.kinds)) {
-    const hullOk = (hull) =>
-      isObject(hull) &&
-      Array.isArray(hull.points) &&
-      hull.points.length >= 4 &&
-      hull.points.every((p) => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite)) &&
-      Array.isArray(hull.faces) &&
-      hull.faces.length >= 4 &&
-      hull.faces.every((f) => Array.isArray(f) && f.length >= 3 && f.every((v) => Number.isInteger(v) && v >= 0 && v < hull.points.length));
-    if (!(isObject(shape) && Array.isArray(shape.hulls) && shape.hulls.length && shape.hulls.every(hullOk))) problem(SHAPES_PATH, `${kind} needs hulls, each points and faces`);
+  for (const [kind, mesh] of Object.entries(shapes.kinds)) {
+    const ok =
+      isObject(mesh) &&
+      Array.isArray(mesh.points) &&
+      mesh.points.length >= 4 &&
+      mesh.points.every((p) => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite)) &&
+      Array.isArray(mesh.faces) &&
+      mesh.faces.length >= 4 &&
+      mesh.faces.every((f) => Array.isArray(f) && f.length >= 3 && f.every((v) => Number.isInteger(v) && v >= 0 && v < mesh.points.length));
+    if (!ok) problem(SHAPES_PATH, `${kind} needs points and faces`);
   }
 }
 

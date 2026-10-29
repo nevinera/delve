@@ -18,7 +18,7 @@ describe("builtin objects", () => {
   });
 
   it("block line of sight but for the ones you see through", () => {
-    expect(BUILTIN_OBJECTS.filter((o) => o.blocksSight === false)).toHaveLength(57);
+    expect(BUILTIN_OBJECTS.filter((o) => o.blocksSight === false)).toHaveLength(51);
   });
 
   it("are placeable types in every world", () => {

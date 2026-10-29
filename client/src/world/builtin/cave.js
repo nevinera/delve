@@ -1,4 +1,4 @@
-import { box, color, cone, cut, object, post, rod, sphere, tiled, wheel } from "./pieces.js";
+import { box, color, cone, cut, object, post, rod, sphere, throughZ, tiled, wheel, withCuts } from "./pieces.js";
 
 // Kobold and troglodyte den props, for caves and mines: candles, stone spikes, totems, bones,
 // mushrooms, mine carts, rails and timbering.
@@ -77,13 +77,16 @@ export const CAVE = {
       box([8, 0.3, 0.25], [0, 0.45, 1.2], 0),
       ...[-3.4, -1.7, 0, 1.7, 3.4].map((x) => box([0.6, 0.3, 3.4], [x, 0.15, 0], 1)),
     ]),
-    object("bcave010", "mine timbering", ["mine"], [color(WOOD, "wood")], [
-      post(1, 9, [-4, 4.5, 0], 0),
-      post(1, 9, [4, 4.5, 0], 0),
-      tiled(box([10, 1, 1.1], [0, 9.4, 0], 0), "planks", 2),
-      box([2, 0.8, 0.8], [-3.2, 8.4, 0], 0, [0, 0, -45]),
-      box([2, 0.8, 0.8], [3.2, 8.4, 0], 0, [0, 0, 45]),
-    ]),
+    withCuts(
+      object("bcave010", "mine timbering", ["mine"], [color(WOOD, "wood")], [
+        post(1, 9, [-4, 4.5, 0], 0),
+        post(1, 9, [4, 4.5, 0], 0),
+        tiled(box([10, 1, 1.1], [0, 9.4, 0], 0), "planks", 2),
+        box([2, 0.8, 0.8], [-3.2, 8.4, 0], 0, [0, 0, -45]),
+        box([2, 0.8, 0.8], [3.2, 8.4, 0], 0, [0, 0, 45]),
+      ]),
+      throughZ(-3.5, 3.5, -1, 7.4),
+    ),
     object("bcave011", "pickaxe", ["mine", "tool"], [color(WOOD, "handle"), color(IRON, "head")], [
       rod(0.2, 3.4, [0, 0.15, 0], 0),
       { type: "cylinder", size: [0.3, 1.2, 0.3], at: [1.7, 0.15, 0.6], turn: [0, 90, 0], color: 1, taper: 0.3 },

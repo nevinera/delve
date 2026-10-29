@@ -1,4 +1,4 @@
-import { box, color, cone, cut, object, post, rod, sphere, tiled, wedge, wheel } from "./pieces.js";
+import { box, color, cone, cut, object, post, rod, sphere, throughZ, tiled, wedge, wheel, withCuts } from "./pieces.js";
 
 // Graveyard and ruin props: gravestones, tombs, broken pillars and walls, statues, dead trees, iron
 // fences and an arch.
@@ -76,14 +76,17 @@ export const RUINS = {
       tiled(rod(2.2, 3.2, [4.2, 1.1, 0.2], 0, 8), "stone", 1.5),
       tiled(box([3, 1, 3], [7, 0.5, -1], 0, [30, 0, 0]), "stone", 1.5),
     ]),
-    object("bruin012", "ruined arch", ["ruin"], [color(STONE, "stone"), color(MOSS, "moss")], [
-      tiled(box([2.4, 10, 2.4], [-4, 5, 0], 0), "stone", 1.5),
-      tiled(box([2.4, 10, 2.4], [4, 5, 0], 0), "stone", 1.5),
-      tiled(box([10.4, 3, 2.4], [0, 11.5, 0], 0), "stone", 1.5),
-      cut(wheel(5.6, 3, [0, 9, 0], 0)),
-      cut(box([3, 4, 3], [3.8, 13.4, 0], 0, [0, 0, -30])),
-      sphere([3, 0.6, 2.4], [-3.4, 13, 0], 1),
-      box([1.4, 1, 1.2], [5.8, 0.5, 1.4], 0, [20, 0, 0]),
-    ]),
+    withCuts(
+      object("bruin012", "ruined arch", ["ruin"], [color(STONE, "stone"), color(MOSS, "moss")], [
+        tiled(box([2.4, 10, 2.4], [-4, 5, 0], 0), "stone", 1.5),
+        tiled(box([2.4, 10, 2.4], [4, 5, 0], 0), "stone", 1.5),
+        tiled(box([10.4, 3, 2.4], [0, 11.5, 0], 0), "stone", 1.5),
+        cut(wheel(5.6, 3, [0, 9, 0], 0)),
+        cut(box([3, 4, 3], [3.8, 13.4, 0], 0, [0, 0, -30])),
+        sphere([3, 0.6, 2.4], [-3.4, 13, 0], 1),
+        box([1.4, 1, 1.2], [5.8, 0.5, 1.4], 0, [20, 0, 0]),
+      ]),
+      throughZ(-2.8, 2.8, -1, 10),
+    ),
   ],
 };

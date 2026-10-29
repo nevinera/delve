@@ -4,7 +4,7 @@ import { generateTile, prepareWorld } from "../world/generator.js";
 import { LandGrid, PER_TILE } from "../world/landGrid.js";
 import { makeObject, setBuiltObjects } from "../world/objects.js";
 import { encodeTile } from "../world/tileCodec.js";
-import { blocksSight, hullOf, shapesFile, shapesText } from "./shapes.js";
+import { blocksSight, meshOf, objectMesh, shapesFile, shapesText } from "./shapes.js";
 import { World } from "./world.js";
 
 // A crate of six boards, and a lamp post you see through.
@@ -23,6 +23,27 @@ const crate = {
 };
 const lamp = { id: "lamp0001", name: "lamp", blocksSight: false, palette: [{ color: "#333333" }], pieces: [{ type: "cylinder", size: [0.3, 8, 0.3], at: [0, 4, 0], turn: [0, 0, 0], color: 0 }] };
 
+// Whether the segment from a to b crosses one of the mesh's faces.
+function crosses({ points, faces }, a, b) {
+  const sub = (p, q) => p.map((v, i) => v - q[i]);
+  const cross = (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
+  const dot = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+  const dir = sub(b, a);
+  return faces.some((loop) =>
+    loop.slice(1, -1).some((_, i) => {
+      const [p0, p1, p2] = [points[loop[0]], points[loop[i + 1]], points[loop[i + 2]]];
+      const [e1, e2] = [sub(p1, p0), sub(p2, p0)];
+      const h = cross(dir, e2);
+      const det = dot(e1, h);
+      if (Math.abs(det) < 1e-12) return false;
+      const s = sub(a, p0);
+      const q = cross(s, e1);
+      const [u, v, t] = [dot(s, h) / det, dot(dir, q) / det, dot(e2, q) / det];
+      return u >= 0 && v >= 0 && u + v <= 1 && t >= 0 && t <= 1;
+    }),
+  );
+}
+
 describe("shapes", () => {
   setBuiltObjects([crate, lamp]);
 
@@ -35,16 +56,32 @@ describe("shapes", () => {
   });
 
   it("wraps a built object's boards in one box", () => {
-    const hull = hullOf("built:crate001");
+    const hull = meshOf("built:crate001");
     expect(hull.points).toHaveLength(8);
     expect(hull.faces).toHaveLength(6);
     expect(Math.min(...hull.points.map((p) => p[1]))).toBe(0);
     expect(Math.max(...hull.points.map((p) => p[1]))).toBe(2);
   });
 
+  it("cuts holes through it by hand", () => {
+    const window = { along: [0, 0, -1], outline: [[-0.5, 0.5, 0], [0.5, 0.5, 0], [0.5, 1.5, 0], [-0.5, 1.5, 0]] };
+    const mesh = objectMesh({ ...crate, sightCuts: [window] });
+    expect(mesh.faces.length).toBeGreaterThan(6);
+    expect(mesh.faces.every((f) => f.length === 3)).toBe(true);
+  });
+
+  it("sees through the built-in arch's opening, not its pillars", () => {
+    setBuiltObjects([]);
+    const arch = meshOf("built:bruin012");
+    expect(crosses(arch, [0, 5, 20], [0, 5, -20])).toBe(false);
+    expect(crosses(arch, [4, 5, 20], [4, 5, -20])).toBe(true);
+    expect(crosses(arch, [0, 12, 20], [0, 12, -20])).toBe(true);
+    setBuiltObjects([crate, lamp]);
+  });
+
   it("stands a code-made kind up as a prism over its footprint, sunk as it's drawn", () => {
     // A boulder at scale 1 is 0.8 tall and sinks a tenth of that.
-    const ys = hullOf("boulder").points.map((p) => p[1]);
+    const ys = meshOf("boulder").points.map((p) => p[1]);
     expect(Math.min(...ys)).toBe(-0.08);
     expect(Math.max(...ys)).toBe(0.72);
   });

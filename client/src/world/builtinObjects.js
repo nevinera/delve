@@ -17,22 +17,23 @@ import { WOODLAND } from "./builtin/woodland.js";
 // format, placed as "built:<id>" as a world's own are. Copying one into a world's collection makes
 // it editable. Each id starts with "b", and the files under builtin/ write them.
 
-// The ones you see through or over, which don't block line of sight: open frames, posts, arches,
-// and things lying low.
+// The ones you see through or over, which don't block line of sight: open frames, posts, and
+// things lying low. Arches, wells and stalls block it, with holes cut through (builtin/pieces.js
+// throughZ and throughX).
 const SEE_THROUGH = new Set([
-  ...["bfarm005", "bfarm006", "bfarm007", "bfarm009", "bfarm011", "bfarm013"], // wheelbarrow, plough, scarecrow, well, split-rail fence, farm gate
+  ...["bfarm005", "bfarm006", "bfarm007", "bfarm011", "bfarm013"], // wheelbarrow, plough, scarecrow, split-rail fence, farm gate
   ...["bvill010", "bvill012", "bvill013", "bvill014", "bvill015"], // stool, wagon wheel, lamp post, signpost, hanging sign
   ...["bhome008", "bhome009", "bhome010", "bhome011", "bhome013", "bhome014", "bhome015"], // pot on tripod, rug, candlestick, chair, table setting, loom, spinning wheel
   ...["bmill004", "bmill008"], // sawhorse, timber crane
   ...["bcoas004", "bcoas010", "bcoas012"], // net rack, fish drying rack, harbour lamp
-  ...["bband005", "bband006", "bband010", "bband012"], // bedroll, weapon rack, lookout post, cook spit
-  ...["bcave001", "bcave002", "bcave007", "bcave009", "bcave010", "bcave011"], // candles, glowing mushrooms, mine rails, mine timbering, pickaxe
+  ...["bband005", "bband006", "bband012"], // bedroll, weapon rack, cook spit
+  ...["bcave001", "bcave002", "bcave007", "bcave009", "bcave011"], // candles, glowing mushrooms, mine rails, pickaxe
   ...["bgobl008", "bgobl010", "bgobl013"], // pipes, scaffold, goblin lamp
   ...["bwood001", "bwood003", "bwood004", "bwood005", "bwood006", "bwood007", "bwood013"], // mushroom ring, fern, wildflowers, berry bush, reeds, lily pads, spider web
   ...["bfort001", "bfort006", "bfort009", "bfort011"], // banner pole, ballista, weapon rack, portcullis
   ...["broad003", "broad006", "broad008"], // cobble patch, hitching post, stepping stones
-  ...["bruin010", "bruin012"], // iron fence, ruined arch
-  ...["bmark001", "bmark003", "bmark005", "bmark007"], // market stall, meat rack, weighing scale, awning
+  "bruin010", // iron fence
+  ...["bmark003", "bmark005"], // meat rack, weighing scale
   "bques004", // lectern with scroll
 ]);
 

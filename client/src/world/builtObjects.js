@@ -10,8 +10,12 @@ import { OLD_IMAGES, imagePath, objectPath } from "./paths.js";
 // - collection: the id of the world's collection it's in (the editor's collections.json); left
 //   out of exports.
 // - source: where it was copied from (a collection's URL or file), or absent.
-// - blocksSight: false for an object you see through, such as a fence, a lamp post or an arch; it
-//   blocks line of sight when absent (editor/shapes.js).
+// - blocksSight: false for an object you see through, such as a fence or a lamp post; it blocks
+//   line of sight when absent (editor/shapes.js).
+// - sightCuts: holes through what blocks sight, such as an arch's or a window's, up to MAX_CUTS,
+//   each { along: [x, y, z], outline: [[x, y, z], ...] }: the outline, 3 to MAX_CUT_CORNERS points
+//   in feet from the centre, swept both ways along `along` right through the object
+//   (editor/sightCuts.js).
 // - palette: the colors its pieces use, each { color: "#rrggbb", param, name }. Up to MAX_PARAMS of
 //   them are parameters, which a placement can override; their colors are the defaults. The first
 //   colors added are parameters until there are MAX_PARAMS of them.
@@ -52,6 +56,8 @@ export const MAX_PIECES = 32;
 export const MAX_PARAMS = 3;
 export const REACH_FT = 32;
 export const MIN_SIZE_FT = 0.1;
+export const MAX_CUTS = 16;
+export const MAX_CUT_CORNERS = 32;
 // Pieces reaching below this are what a character bumps into.
 const BLOCK_BELOW_FT = 6;
 
@@ -208,6 +214,11 @@ export function problems(object) {
   if (object.palette.filter((p) => p.param).length > MAX_PARAMS) out.push(`more than ${MAX_PARAMS} of its colors are parameters`);
   for (const p of object.palette) if (!/^#[0-9a-f]{6}$/i.test(p.color ?? "")) out.push(`${JSON.stringify(p.color)} isn't a #rrggbb color`);
   if (object.blocksSight !== undefined && object.blocksSight !== false) out.push("blocksSight should be false, or left out");
+  if (object.sightCuts !== undefined) {
+    const point = (p) => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite);
+    const cutOk = (c) => point(c?.along) && c.along.some((v) => v !== 0) && Array.isArray(c.outline) && c.outline.length >= 3 && c.outline.length <= MAX_CUT_CORNERS && c.outline.every(point);
+    if (!(Array.isArray(object.sightCuts) && object.sightCuts.length <= MAX_CUTS && object.sightCuts.every(cutOk))) out.push(`its sightCuts should be up to ${MAX_CUTS}, each a direction and 3 to ${MAX_CUT_CORNERS} points`);
+  }
   if (object.tags !== undefined && !(Array.isArray(object.tags) && object.tags.every((t) => typeof t === "string"))) out.push("its tags should be a list of words");
   object.pieces.forEach((piece, n) => {
     const name = `piece ${n + 1}`;

@@ -33,6 +33,12 @@ export const color = (hex, name) => (name ? { color: hex, param: true, name } : 
 
 export const object = (id, name, tags, palette, pieces) => ({ id, name, tags, palette, pieces });
 
+// Holes through what an object's line of sight shape fills in (builtObjects.js sightCuts): a
+// rectangle seen along z, x0 to x1 across and y0 to y1 up, or seen along x, z0 to z1 across.
+export const throughZ = (x0, x1, y0, y1) => ({ along: [0, 0, 1], outline: [[x0, y0, 0], [x1, y0, 0], [x1, y1, 0], [x0, y1, 0]] });
+export const throughX = (z0, z1, y0, y1) => ({ along: [1, 0, 0], outline: [[0, y0, z0], [0, y0, z1], [0, y1, z1], [0, y1, z0]] });
+export const withCuts = (made, ...sightCuts) => ({ ...made, sightCuts });
+
 // Words on a piece's face (named by its outward normal, "0,0,1" its south face), `size` feet.
 export const sign = (piece, name, text, size, face = "0,0,1", ink = "7") => ({ ...piece, texts: [...(piece.texts ?? []), { name, text, ink, face, at: [0.5, 0.5], size, turn: 0 }] });
 
