@@ -5,6 +5,7 @@ import { BranchMoved, fromRepo, loadFromGithub, recordOpened, sameRepo, saveToGi
 import { exportHeightmap, importHeightmap, needsRange } from "./heightmap.js";
 import { LibrarySync } from "./libraryStore.js";
 import { loadLocal, saveLocal } from "./localSave.js";
+import { placeKey } from "./place.js";
 import { PlatePool } from "./plates.js";
 import { PublishPanel } from "./publish.js";
 import { World } from "./world.js";
@@ -373,10 +374,12 @@ editor.onStep = (step) => {
   if (step === "publish") publish.refresh();
 };
 
-// Starts on a new, uploaded or opened world, its library replacing the one kept in this browser.
-function startWorld(world, from = null) {
+// Starts on a new, uploaded or opened world, its library replacing the one kept in this browser,
+// back where you were in it unless it's `fresh`.
+function startWorld(world, from = null, { fresh = false } = {}) {
   setSource(from);
   editor.setWorld(world);
+  editor.resume(placeKey(world, from), { fresh });
   $("worldName").textContent = editor.world.info.name;
   library.replace(editor.world).catch((err) => editor.say(`Couldn't keep the object library in this browser: ${err.message}`));
   keep();
@@ -384,7 +387,7 @@ function startWorld(world, from = null) {
 
 $("newWorld").addEventListener("click", () => {
   if (editor.dirty && !window.confirm("Start a new world? Changes you haven't downloaded will be lost.")) return;
-  startWorld(World.empty());
+  startWorld(World.empty(), null, { fresh: true });
 });
 
 $("upload").addEventListener("click", () => {
@@ -451,6 +454,7 @@ document.addEventListener("visibilitychange", () => {
   if (document.hidden && keepTimer) keep();
 });
 
+let resumeKey = null; // the kept world's place, gone back to once its library's in
 try {
   const saved = await loadLocal();
   if (saved) {
@@ -461,6 +465,7 @@ try {
     editor.unsaved = Boolean(saved.dirty);
     editor.renderPanel();
     $("worldName").textContent = editor.world.info.name;
+    resumeKey = placeKey(editor.world, source);
     editor.say(`Picked up where you left off (kept ${new Date(saved.savedAt).toLocaleString()}).`, { info: true });
   }
 } catch (err) {
@@ -476,6 +481,7 @@ try {
 } catch (err) {
   editor.say(`Couldn't load the object library kept in this browser: ${err.message}`);
 }
+if (resumeKey) editor.resume(resumeKey);
 
 // Opens the repo named by ?from=github/owner/repo. Unsaved changes to this same world are kept;
 // unsaved changes to another are dropped only if you agree, and otherwise the editor stays on it.

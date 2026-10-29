@@ -45,6 +45,7 @@ import { STRUCTURE_PREFIX } from "../world/structures.js";
 import { PlacePicker } from "./placePicker.js";
 import { TERRAIN, prepareShape, prepareWorld } from "../world/generator.js";
 import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
+import { cameraPlace, loadPlace, placeCamera, savePlace } from "./place.js";
 
 const HIT_PX = 8;
 const COLORS = {
@@ -115,6 +116,7 @@ const PREVIEW_PX = 3; // screen pixels per preview sample
 const ROUTE_SAVE_DELAY_MS = 100; // routes arriving together are kept together
 const MAX_CROSSINGS = 50; // joined at once
 const CROSSING_GAP_FT = 16; // nearer a route's end than this, a crossing is left alone
+const PLACE_EVERY_MS = 1000; // how often where you are is kept, when it's changed
 
 // Ties the map, the side panel and the in-memory world together. The side panel lists the steps,
 // with only the one you're on open.
@@ -182,6 +184,67 @@ export class Editor {
     });
     this.showContinent();
     this.setStep(this.step);
+    this.placeKey = null; // the world's name for place.js, once it's known
+    this.cameras = {}; // the 3d views' cameras to put back as each is next shown, by step
+    this.shownSince = new Set(); // the 3d views shown since resume, whose cameras are this world's
+    setInterval(() => this.keepPlace(), PLACE_EVERY_MS);
+    document.addEventListener("visibilitychange", () => this.keepPlace());
+  }
+
+  // --- where you were ---
+
+  // Where you are in the world: its continent, the step and tool, the map's view, the detail
+  // window, and the 3d views' cameras.
+  placeState() {
+    const cameras = { ...this.cameras };
+    if (this.shownSince.has("detail")) cameras.detail = cameraPlace(this.detail.view.camera, this.detail.view.controls, this.detail.view.origin);
+    if (this.shownSince.has("3d")) cameras["3d"] = cameraPlace(this.overview.camera, this.overview.controls);
+    if (this.shownSince.has("heights")) cameras.heights = cameraPlace(this.sculpt.camera, this.sculpt.controls);
+    const { x, z, scale } = this.map.view;
+    return { continent: this.continent, step: this.step, tool: this.toolName, map: { x, z, scale }, detailWindow: this.detailWindow ?? null, cameras };
+  }
+
+  // Keeps where you are, when it's changed.
+  keepPlace() {
+    if (!this.placeKey) return;
+    const place = this.placeState();
+    const text = JSON.stringify(place);
+    if (text === this.keptPlace) return;
+    this.keptPlace = text;
+    savePlace(this.placeKey, place);
+  }
+
+  // Takes the world as `key` (place.js placeKey), and goes back to where you were in it, if you've
+  // been there before and it isn't `fresh`.
+  resume(key, { fresh = false } = {}) {
+    this.placeKey = key;
+    this.cameras = {};
+    this.shownSince.clear();
+    this.keptPlace = null;
+    const place = fresh ? null : loadPlace(key);
+    if (!place) return;
+    if (place.continent && place.continent !== this.continent && this.world.info.continents.some((c) => c.key === place.continent)) {
+      this.continent = place.continent;
+      this.el.continent.value = place.continent;
+      this.showContinent();
+    }
+    if (place.map) {
+      Object.assign(this.map.view, place.map);
+      this.fitWhenShown = false;
+      this.map.changed();
+    }
+    this.detailWindow = place.detailWindow ?? null;
+    this.cameras = place.cameras ?? {};
+    const step = STEPS[place.step] ? place.step : this.step;
+    this.setStep(step);
+    if (place.tool && place.tool !== this.toolName && STEPS[step].tools.includes(place.tool)) this.setTool(place.tool);
+  }
+
+  // A 3d view's just been shown: its camera goes back where it was, the first time.
+  shownView(step, camera, controls, origin) {
+    if (this.cameras[step]) placeCamera(this.cameras[step], camera, controls, origin);
+    delete this.cameras[step];
+    this.shownSince.add(step);
   }
 
   // Whether the world changed since the last download. Setting it runs onEdit, so the world can be
@@ -885,7 +948,9 @@ export class Editor {
       });
     });
     await this.overviewLoading;
-    if (this.step === "3d") this.overview.show(this.world, this.continent, [this.map.view.x, this.map.view.z]);
+    if (this.step !== "3d") return;
+    this.overview.show(this.world, this.continent, [this.map.view.x, this.map.view.z]);
+    this.shownView("3d", this.overview.camera, this.overview.controls);
   }
 
   // The detail step: a window of generated tiles in 3d, `detailSize` a side, first round the
@@ -937,6 +1002,7 @@ export class Editor {
     const { tx0, tz0, size } = this.detailWindow;
     this.el.detailSize.value = size;
     this.detail.show({ world: this.world, continent: this.continent }, [tx0, tz0], size);
+    this.shownView("detail", this.detail.view.camera, this.detail.view.controls, this.detail.view.origin);
     const loaded = this.detail.keys().filter((k) => this.detail.view.decoded.has(k)).length;
     this.el.detailInfo.textContent = `tiles ${tx0},${tz0} to ${tx0 + size - 1},${tz0 + size - 1} · ${loaded} of ${size * size} generated`;
   }
@@ -1390,6 +1456,7 @@ export class Editor {
     this.sculpt.setLayers({ heat: this.option("heat"), contours: this.option("contours"), grid: this.option("grid") });
     const [x, z] = [this.map.view.x * TILE_FT, this.map.view.z * TILE_FT];
     this.sculpt.show(this.land, [x, z]);
+    this.shownView("heights", this.sculpt.camera, this.sculpt.controls);
   }
 
   // The sculpting settings from the heights step's panel.
