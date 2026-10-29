@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "collections.schema.json",
   "title": "collections.json",
-  "description": "The world's collections of objects (collections.json) or structures (structure-collections.json). A collection with a source was imported and is read-only.",
+  "description": "The world's collections of objects (collections.json), structures (structure-collections.json) or templates (template-collections.json). A collection with a source was imported and is read-only.",
   "type": "array",
   "items": {
     "type": "object",

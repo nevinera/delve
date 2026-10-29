@@ -4,19 +4,21 @@ import { BUILTIN_STRUCTURE_COLLECTIONS } from "../world/builtinStructures.js";
 import { OLD_IMAGES, imagePath, newObjectId, objectPath } from "../world/builtObjects.js";
 import { BUILT_PREFIX } from "../world/objects.js";
 import { STRUCTURE_PREFIX, structurePath } from "../world/structures.js";
-import { COLLECTIONS_PATH, STRUCTURE_COLLECTIONS_PATH } from "../editor/libraryStore.js";
-import { IMAGE_PATH, OBJECT_PATH, STRUCTURE_PATH } from "../world/paths.js";
+import { COLLECTIONS_PATH, STRUCTURE_COLLECTIONS_PATH, TEMPLATE_COLLECTIONS_PATH } from "../editor/libraryStore.js";
+import { IMAGE_PATH, OBJECT_PATH, STRUCTURE_PATH, TEMPLATE_PATH, templatePath } from "../world/paths.js";
+import { TEMPLATE_PREFIX } from "../world/templates.js";
 
-// A world's libraries, one of objects and one of structures, each its own collections
-// (collections.json and structure-collections.json, [{ id, name, source }], one with a source
-// imported and read-only) holding its things (objects/<id>.json and structures/<id>.json, each
-// naming its collection). The images they wear (textures/<id>.json) are the whole world's. The
-// game's builtin collections, all objects, are listed first. `world` is an editor World; `kind` is
-// "objects" or "structures".
+// A world's libraries, of objects, structures and templates, each its own collections
+// (collections.json, structure-collections.json and template-collections.json, [{ id, name,
+// source }], one with a source imported and read-only) holding its things (objects/<id>.json,
+// structures/<id>.json and templates/<id>.json, each naming its collection). The images they wear
+// (textures/<id>.json) are the whole world's. The game's builtin collections, all objects, are
+// listed first. `world` is an editor World; `kind` is "objects", "structures" or "templates".
 
 export const KINDS = {
   objects: { path: COLLECTIONS_PATH, home: "my objects", prefix: BUILT_PREFIX, things: (world) => builtObjects(world), thingPath: objectPath },
   structures: { path: STRUCTURE_COLLECTIONS_PATH, home: "my structures", prefix: STRUCTURE_PREFIX, things: (world) => builtStructures(world), thingPath: structurePath },
+  templates: { path: TEMPLATE_COLLECTIONS_PATH, home: "my templates", prefix: TEMPLATE_PREFIX, things: (world) => builtTemplates(world), thingPath: templatePath },
 };
 
 // The world's built objects, by name.
@@ -31,6 +33,14 @@ export function builtObjects(world) {
 export function builtStructures(world) {
   return [...world.files.keys()]
     .filter((path) => STRUCTURE_PATH.test(path))
+    .map((path) => world.readJson(path))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// The world's templates, by name.
+export function builtTemplates(world) {
+  return [...world.files.keys()]
+    .filter((path) => TEMPLATE_PATH.test(path))
     .map((path) => world.readJson(path))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
@@ -98,10 +108,10 @@ export function adoptStrays(world) {
   return moved;
 }
 
-// Every collection of a kind with what's in it, builtins first (objects only): [{ id, name, kind:
-// "builtin" | "imported" | "own", source, entries }], each entry { key, type, name, tags, object,
-// structure }. key changes when the thing does; object is the built object and structure the
-// structure, both absent for builtins.
+// Every collection of a kind with what's in it, builtins first: [{ id, name, kind: "builtin" |
+// "imported" | "own", source, entries }], each entry { key, type, name, tags, object, structure,
+// template }. key changes when the thing does; object is the built object, structure the
+// structure and template the template, absent for builtin kinds of object.
 export function allCollections(world, kind = "objects") {
   const builtins =
     kind === "objects"
@@ -114,15 +124,17 @@ export function allCollections(world, kind = "objects") {
             entries: objects.map((o) => ({ key: `builtin:${o.id}`, type: `${BUILT_PREFIX}${o.id}`, name: o.name, tags: o.tags ?? [], object: o })),
           })),
         ]
-      : BUILTIN_STRUCTURE_COLLECTIONS.map(({ id, name, structures }) => ({
-          id: `builtin:${id}`,
-          name,
-          kind: "builtin",
-          entries: structures.map((s) => ({ key: `builtin:${s.id}`, type: `${STRUCTURE_PREFIX}${s.id}`, name: s.name, tags: s.tags ?? [], structure: s })),
-        }));
+      : kind === "structures"
+        ? BUILTIN_STRUCTURE_COLLECTIONS.map(({ id, name, structures }) => ({
+            id: `builtin:${id}`,
+            name,
+            kind: "builtin",
+            entries: structures.map((s) => ({ key: `builtin:${s.id}`, type: `${STRUCTURE_PREFIX}${s.id}`, name: s.name, tags: s.tags ?? [], structure: s })),
+          }))
+        : [];
   const { prefix, things } = KINDS[kind];
   const all = things(world);
-  const field = kind === "objects" ? "object" : "structure";
+  const field = { objects: "object", structures: "structure", templates: "template" }[kind];
   const ours = collections(world, kind).map((c) => ({
     ...c,
     kind: c.source ? "imported" : "own",

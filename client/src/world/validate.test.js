@@ -85,6 +85,22 @@ describe("validateWorld", () => {
     expect(plateErrors("layer biome", "layer nonsense")[0]).toMatch(/tile 0,0: unknown layer nonsense/);
   });
 
+  it("checks templates", () => {
+    const PATH = "templates/hut00001.json";
+    const floor = { at: [0, 1, 0], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "floorboards" };
+    const hut = { id: "hut00001", name: "Hut", collection: "tmpl0001", slabs: [floor], objects: [{ type: "rock", at: [5, 5], yaw: 0, scale: 1 }], ground: [[0, 0, 0], [1, 0, 0.5]] };
+    const withTemplate = (template, collections = [{ id: "tmpl0001", name: "my templates" }]) =>
+      changed((f) => {
+        f.set(PATH, json(template));
+        f.set("template-collections.json", json(collections));
+      }).filter((m) => m.includes("templat"));
+    expect(withTemplate(hut)).toEqual([]);
+    expect(withTemplate({ ...hut, id: "other001" })).toEqual([`${PATH}: has id "other001", not hut00001 as its name says`]);
+    expect(withTemplate({ ...hut, objects: [{ type: "nothing", at: [0, 0], yaw: 0, scale: 1 }] })).toEqual([`${PATH}: places nothing, which isn't a kind of object the world has`]);
+    expect(withTemplate({ ...hut, slabs: [{ ...floor, surface: { color: "#336699", tile: { image: "nothing1", every: 4, jitter: 0 } } }] })).toEqual([`${PATH}: has slab 0, which wears image nothing1, which the world doesn't have`]);
+    expect(withTemplate(hut, [])).toEqual([`warning: ${PATH}: is in collection tmpl0001, which template-collections.json doesn't list`]);
+  });
+
   it("checks slabs", () => {
     const text = strFromU8(world.get(PLATE));
     const withSlab = (slab) =>

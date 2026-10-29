@@ -12,6 +12,8 @@ import {
   OBJECT_PATH,
   STRUCTURE_COLLECTIONS_PATH,
   STRUCTURE_PATH,
+  TEMPLATE_COLLECTIONS_PATH,
+  TEMPLATE_PATH,
   WORLD_PATH,
   continentOf,
   editedPath,
@@ -29,6 +31,7 @@ import {
 import { BUILT_PREFIX, OBJECT_TYPES } from "./objects.js";
 import { slabProblems, slabTile } from "./slabs.js";
 import { STRUCTURE_PREFIX, problems as structureProblems } from "./structures.js";
+import { templateProblems } from "./templates.js";
 
 // Checks a stored world (docs/formats/world-files.md): its files as a Map of path -> bytes. Returns
 // what's wrong as [{ path, message, warning }], empty when nothing is. A warning doesn't stop a
@@ -115,11 +118,12 @@ function checkWorld(world, problem) {
   return keys;
 }
 
-// The world's objects, structures, images and collections. Returns the ids of its objects and
-// structures, for plates' object tables.
+// The world's objects, structures, templates, images and collections. Returns the ids of its
+// objects, structures and images, for plates' object tables and slabs.
 function checkLibrary(files, json, problem, warning) {
   const collectionIds = {};
-  for (const [path, kind] of [[COLLECTIONS_PATH, "objects"], [STRUCTURE_COLLECTIONS_PATH, "structures"]]) {
+  const collectionPaths = { objects: COLLECTIONS_PATH, structures: STRUCTURE_COLLECTIONS_PATH, templates: TEMPLATE_COLLECTIONS_PATH };
+  for (const [kind, path] of Object.entries(collectionPaths)) {
     const list = json(path);
     collectionIds[kind] = new Set();
     if (list === undefined || list === null) continue;
@@ -137,14 +141,17 @@ function checkLibrary(files, json, problem, warning) {
   const structures = new Set(BUILTIN_STRUCTURES.map((s) => s.id));
   const images = new Set(BUILTIN_IMAGES.map((i) => i.id));
   const worn = []; // [path, image id]
+  const templates = []; // [path, template], checked once the images and objects are all known
   for (const path of files.keys()) {
     const [pattern, kind, check] = OBJECT_PATH.test(path)
       ? [OBJECT_PATH, "objects", objectProblems]
       : STRUCTURE_PATH.test(path)
         ? [STRUCTURE_PATH, "structures", structureProblems]
-        : IMAGE_PATH.test(path)
-          ? [IMAGE_PATH, "images", imageProblems]
-          : [];
+        : TEMPLATE_PATH.test(path)
+          ? [TEMPLATE_PATH, "templates", () => []]
+          : IMAGE_PATH.test(path)
+            ? [IMAGE_PATH, "images", imageProblems]
+            : [];
     if (!pattern) continue;
     const thing = json(path);
     if (!isObject(thing)) {
@@ -157,11 +164,18 @@ function checkLibrary(files, json, problem, warning) {
     if (kind === "objects") objects.add(id);
     if (kind === "structures") structures.add(id);
     if (kind === "images") images.add(id);
-    if (kind !== "images" && thing.collection !== undefined && !collectionIds[kind].has(thing.collection)) warning(path, `is in collection ${thing.collection}, which ${kind === "objects" ? COLLECTIONS_PATH : STRUCTURE_COLLECTIONS_PATH} doesn't list`);
+    if (kind === "templates") templates.push([path, thing]);
+    if (kind !== "images" && thing.collection !== undefined && !collectionIds[kind].has(thing.collection)) warning(path, `is in collection ${thing.collection}, which ${collectionPaths[kind]} doesn't list`);
     if (kind === "objects") for (const p of thing.pieces ?? []) for (const image of [...(p.decals ?? []).map((d) => d.image), p.tile?.image]) if (image) worn.push([path, image]);
     if (kind === "structures") for (const m of Object.values(thing.materials ?? {})) for (const image of [m?.tile?.image, m?.inside?.image]) if (image) worn.push([path, image]);
   }
   for (const [path, image] of worn) if (!images.has(image)) problem(path, `wears image ${image}, which the world doesn't have`);
+  for (const [path, template] of templates) {
+    for (const message of templateProblems(template, images)) problem(path, message);
+    for (const object of Array.isArray(template.objects) ? template.objects : []) {
+      if (typeof object?.type === "string" && !knownKind(object.type, { objects, structures })) problem(path, `places ${object.type}, which isn't a kind of object the world has`);
+    }
+  }
   return { objects, structures, images };
 }
 
