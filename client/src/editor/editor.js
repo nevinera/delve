@@ -64,7 +64,7 @@ const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 // Steps drawn in 3d instead of on the map.
 const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
-  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it) · with water, click to pour from there, then keep or drop the rivers and lakes it would make · with objects or structures, click a thumbnail, then the ground to place it (esc lets it go); click one placed to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with structures and nothing to place, click slabs and objects or drag a box to pick them, then save them as a template · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
+  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it) · with water, click to pour from there, then keep or drop the rivers and lakes it would make · with objects or structures, click a thumbnail, then the ground to place it (esc lets it go); click one placed to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with structures, click a template's thumbnail, then the ground to place it (Q E turn it), or with nothing to place, click slabs and objects or drag a box to pick them, then save them as a template · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
@@ -179,8 +179,8 @@ export class Editor {
     keyNav((dt, move) => {
       if (this.step === "3d") this.overview?.nudge(dt, move);
       else if (this.step === "heights") this.sculpt?.nudge(dt, move);
-      // Q and E turn a picked object instead (detailKey).
-      else if (this.step === "detail") this.detail?.nudge(dt, this.detail.selected ? { ...move, turn: 0 } : move);
+      // Q and E turn a picked object, or a template being placed, instead (detailKey).
+      else if (this.step === "detail") this.detail?.nudge(dt, this.detail.selected || this.detail.templatePlace.template ? { ...move, turn: 0 } : move);
       else if (!this.walking) this.map.nudge(dt, move);
     });
     this.showContinent();
@@ -1031,7 +1031,15 @@ export class Editor {
     if (this.toolName === "channel") return this.detail?.setBrush({ tool: "channel", width: Number(channelWidth.value), depth: Number(channelDepth.value) });
     if (this.toolName === "water") return this.detail?.setBrush({ tool: "water" });
     if (this.toolName === "objects") return this.detail?.setBrush({ tool: "objects", type: this.pickers.objects.armed });
-    if (this.toolName === "structures") return this.detail?.setBrush({ tool: "structures", type: this.pickers.structures.armed });
+    if (this.toolName === "structures") {
+      const type = this.pickers.structures.armed;
+      const template = type && allCollections(this.world, "templates").flatMap((c) => c.entries).find((e) => e.type === type)?.template;
+      this.el.templatePlaceRow.hidden = !template;
+      if (this.el.templateQuarter.checked) this.templateTurn = (Math.round(this.templateTurn / 90) * 90) % 360;
+      this.el.templateTurnValue.textContent = `${this.templateTurn}°`;
+      const placing = { turn: this.templateTurn, reshape: this.el.templateReshape.checked, clear: this.el.templateClear.checked };
+      return this.detail?.setBrush({ tool: "structures", type, template, placing });
+    }
     if (this.toolName === "slabs") {
       this.fillSlabSwatches();
       return this.detail?.setBrush({ tool: "slabs", settings: this.slabSettings() });
@@ -1107,7 +1115,7 @@ export class Editor {
     if (!this.pickers) return;
     const objects = allCollections(this.world, "objects");
     this.pickers.objects.show(objects);
-    this.pickers.structures.show(allCollections(this.world, "structures"));
+    this.pickers.structures.show(allCollections(this.world, "templates"));
     if (choose) this.pickers[choose.startsWith(STRUCTURE_PREFIX) ? "structures" : "objects"].arm(choose);
     for (const select of [this.el.replaceFrom, this.el.replaceTo]) {
       const collections = objects;
@@ -1451,6 +1459,13 @@ export class Editor {
     const tools = STEPS.detail.tools;
     if (this.toolName === "slabs" && this.detail?.slabTool.key(e)) return true;
     if (this.toolName === "structures" && !this.pickers.structures.armed && this.detail?.group.key(e)) return true;
+    if (this.toolName === "structures" && this.pickers.structures.armed && (e.key === "q" || e.key === "e")) {
+      // A quarter turn at a time, or with quarter turns off, 15 degrees (1 with shift).
+      const step = this.el.templateQuarter.checked ? 90 : e.shiftKey ? 1 : 15;
+      this.templateTurn = (((this.templateTurn + (e.key === "e" ? step : -step)) % 360) + 360) % 360;
+      this.applyDetailBrush();
+      return true;
+    }
     const picked = this.detail?.selected?.object;
     if (/^[0-9]$/.test(e.key) && tools[(Number(e.key) + 9) % 10]) this.setTool(tools[(Number(e.key) + 9) % 10]);
     else if (picked && (e.key === "Delete" || e.key === "Backspace")) this.detail.deleteSelected();
@@ -1604,6 +1619,8 @@ export class Editor {
     this.el.openLibrary.addEventListener("click", () => this.openLibrary());
     this.el.openStructures.addEventListener("click", () => this.openLibrary("structures"));
     this.el.templateSave.addEventListener("click", () => this.saveTemplate());
+    this.templateTurn = 0;
+    for (const input of [this.el.templateQuarter, this.el.templateReshape, this.el.templateClear]) input.addEventListener("change", () => this.applyDetailBrush());
     for (const kind of ["objects", "structures"]) {
       const [popover] = this.libraryParts(kind);
       // Keys stay in the library, away from the editor behind it.

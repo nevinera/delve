@@ -14,6 +14,7 @@ import { meshHeightAt } from "../world/clutter.js";
 import { RenderView, boundary, groundSampler } from "./renderView.js";
 import { GroupPick } from "./groupPick.js";
 import { SlabTool } from "./slabTool.js";
+import { TemplatePlace } from "./templatePlace.js";
 import { surfacePath } from "./thumbnails.js";
 
 // The detail step's 3d view (plans/design.md, "Editor"): a window of generated tiles, `size` a side,
@@ -26,7 +27,8 @@ import { surfacePath } from "./thumbnails.js";
 // turn, size or delete, and the place tool puts new ones down. The channel tool digs along a drawn
 // line (detailWater.js), and the water tool pours water from where it's clicked (onPour). The slabs
 // tool draws, picks and changes slabs (slabTool.js). The structures tool, with nothing to place,
-// picks slabs and objects together to save as a template (groupPick.js).
+// picks slabs and objects together to save as a template (groupPick.js), and with a template to
+// place, places it (templatePlace.js).
 //
 // Water comes from the sketch's rivers and lakes (plans/water.md). Whenever the ground changes, the
 // changed tiles' water is worked out again from them, over the ground as it is (rework).
@@ -93,6 +95,7 @@ export class DetailView {
     this.redos = [];
     this.slabTool = new SlabTool(this, { onPick: (slabs) => onSlab?.(slabs), onProblem: (message) => onProblem?.(message), onNote: (message) => onProblem?.(message, { info: true }) });
     this.group = new GroupPick(this, { onPick: (counts) => onGroup?.(counts) });
+    this.templatePlace = new TemplatePlace(this, { onProblem: (message) => onProblem?.(message) });
     canvas.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
       const side = this.arrowAt(e);
@@ -101,6 +104,7 @@ export class DetailView {
         canvas.setPointerCapture(e.pointerId);
         return this.slabTool.pointerDown(e);
       }
+      if (this.brush?.tool === "structures" && this.brush.template) return this.templatePlace.place(e);
       if (this.brush?.tool === "structures" && !this.brush.type) {
         canvas.setPointerCapture(e.pointerId);
         return this.group.pointerDown(e);
@@ -146,6 +150,7 @@ export class DetailView {
       if (this.painting && at) this.paint(at);
       if (this.brush?.tool === "slabs") this.slabTool.pointerMove(e);
       if (this.brush?.tool === "structures") this.group.pointerMove(e);
+      if (this.brush?.template) this.templatePlace.draw(e);
       this.hover(over ? null : this.groundAt(e));
     });
     canvas.addEventListener("pointerleave", () => this.stroke || this.trail || this.dragging || this.hover(null));
@@ -153,12 +158,14 @@ export class DetailView {
   }
 
   // brush: { tool, radius, falloff, strength, erosion, talus } (detailTools.js), or for the trail
-  // tool, { tool: "trails", kind, state, width } (detailTrails.js).
+  // tool, { tool: "trails", kind, state, width } (detailTrails.js), or for the structures tool,
+  // { tool: "structures", type, template, placing } (templatePlace.js).
   setBrush(brush) {
     this.brush = brush;
     this.slabTool.active(brush?.tool === "slabs");
     if (brush?.tool === "slabs") this.slabTool.setSettings(brush.settings);
     this.group.active(brush?.tool === "structures" && !brush.type);
+    this.templatePlace.set(brush?.tool === "structures" ? (brush.template ?? null) : null, brush?.placing);
     if (this.pointer) this.hover(this.groundAt(this.pointer));
   }
 

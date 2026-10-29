@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { captureTemplate, convexHull, hullCells, templateProblems } from "./templates.js";
+import { captureTemplate, convexHull, hullCells, placedTemplate, templateProblems } from "./templates.js";
 
 const floor = { at: [0, 1, 0], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "floorboards" };
 const hut = { id: "hut00001", name: "Hut", slabs: [floor], objects: [{ type: "rock", at: [5, 5], yaw: 0, scale: 1, y: 1 }], ground: [[0, 0, 0], [1, 0, 0.5]] };
@@ -60,5 +60,41 @@ describe("captureTemplate", () => {
 describe("hullCells", () => {
   it("takes the cells a triangle overlaps, not those it only touches", () => {
     expect(hullCells(convexHull([[0, 0], [16, 0], [0, 16]]))).toEqual([[0, 0], [1, 0], [0, 1]]);
+  });
+});
+
+describe("placedTemplate", () => {
+  const template = {
+    id: "abcd1234",
+    name: "pad",
+    slabs: [{ at: [0, 1, 0], turn: [0, 0, 0], outline: [[0, 0], [16, 0], [16, 8], [0, 8]], thickness: 1, surface: "floorboards" }],
+    objects: [{ type: "stool", at: [8, 4], y: 1, yaw: 0, scale: 1, colors: ["#ff0000", null] }],
+    ground: [[0, 0, 0], [1, 0, 2]],
+  };
+
+  it("puts it at the anchor, naming the template, with tiles' colors", () => {
+    const placed = placedTemplate(template, [800, 10, 1600]);
+    expect(placed.slabs[0]).toMatchObject({ at: [800, 11, 1600], turn: [0, 0, 0], template: "abcd1234" });
+    expect(placed.objects).toEqual([{ type: "stool", at: [808, 1604], y: 11, yaw: 0, scale: 1, colors: [[1, 0, 0], null], template: "abcd1234" }]);
+    expect(placed.cells).toEqual([[100, 200], [101, 200]]);
+    expect(placed.ground).toEqual([[100, 200, 10], [101, 200, 12]]);
+  });
+
+  it("turns it a quarter turn about the anchor, its ground landing on whole cells", () => {
+    const placed = placedTemplate(template, [800, 10, 1600], 90);
+    // A quarter turn takes east to north: u runs up -z, v along +x.
+    expect(placed.slabs[0].at).toEqual([800, 11, 1600]);
+    expect(placed.slabs[0].turn[0]).toBe(90);
+    expect(placed.objects[0].at).toEqual([804, 1592]);
+    expect(placed.objects[0].yaw).toBeCloseTo(Math.PI / 2);
+    expect(placed.ground).toEqual([[100, 198, 12], [100, 199, 10]]);
+  });
+
+  it("reads the ground between its cells when it's turned off the grid", () => {
+    const placed = placedTemplate({ ...template, ground: [[0, 0, 0], [1, 0, 4], [0, 1, 0], [1, 1, 4]] }, [800, 0, 1600], 45);
+    const heights = placed.ground.map(([, , h]) => h);
+    expect(Math.min(...heights)).toBeGreaterThanOrEqual(0);
+    expect(Math.max(...heights)).toBeLessThanOrEqual(4);
+    expect(new Set(heights).size).toBeGreaterThan(2);
   });
 });

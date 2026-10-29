@@ -366,8 +366,10 @@ function own(mesh) {
 export function disposePreview(group) {
   group.traverse((m) => {
     if (!m.isMesh) return;
-    m.material.map?.dispose();
-    m.material.dispose();
+    if (!m.userData.sharedMaterial) {
+      m.material.map?.dispose();
+      m.material.dispose();
+    }
     if (m.userData.ownGeometry) m.geometry.dispose();
   });
 }

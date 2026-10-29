@@ -106,11 +106,66 @@ export function captureTemplate({ id, name, slabs, objects, height, withGround =
       ...(Number.isFinite(y) ? { y: round(y - base) } : {}),
       yaw,
       scale,
-      ...(colors ? { colors: [...colors] } : {}),
+      ...(colors ? { colors: colors.map((c) => (c ? hexColor(c) : null)) } : {}),
       ...(texts ? { texts: structuredClone(texts) } : {}),
     })),
     ...(withGround ? { ground: cells.map(([ci, cj], n) => [ci - ai, cj - aj, round(heights[n] - base)]) } : {}),
   };
+}
+
+// A template placed with its anchor at [x, y, z] continent feet (x and z on the cell grid), turned
+// `turn` degrees about it (as a slab's yaw turns), as { slabs, objects, cells, ground }: slabs and
+// objects as tiles hold them, colors as tiles hold them, each slab and object naming the
+// template it came from; cells, the continent cells [ci, cj] under it; ground, when the template
+// has some, [ci, cj, height] for the cells whose middles land on it, its heights read between its
+// cells' middles where it's turned off the grid.
+export function placedTemplate(template, [x, y, z], turn = 0) {
+  const r = (turn * Math.PI) / 180;
+  const [c, s] = [Math.cos(r), Math.sin(r)];
+  // As turnPoint turns by yaw, and back.
+  const there = ([u, v]) => [x + u * c + v * s, z - u * s + v * c];
+  const back = ([px, pz]) => [(px - x) * c - (pz - z) * s, (px - x) * s + (pz - z) * c];
+  const slabs = template.slabs.map((slab) => {
+    const [ax, az] = there([slab.at[0], slab.at[2]]);
+    return { ...structuredClone(slab), at: [ax, slab.at[1] + y, az].map((v) => round(v)), turn: [round(slab.turn[0] + turn), slab.turn[1], slab.turn[2]], template: template.id };
+  });
+  const objects = template.objects.map(({ at, y: up, colors, ...object }) => ({
+    ...structuredClone(object),
+    at: there(at).map((v) => round(v)),
+    yaw: object.yaw + r,
+    ...(Number.isFinite(up) ? { y: round(up + y) } : {}),
+    // A built object's colors stay "#rrggbb", as the editor sets them.
+    ...(colors ? { colors: object.type.startsWith("built:") ? [...colors] : colors.map((c) => (c ? rgbColor(c) : c)) } : {}),
+    template: template.id,
+  }));
+  const points = [...slabs.flatMap((slab) => [...slabTop(slab), ...slabBottom(slab)].map(([px, , pz]) => [px, pz])), ...objects.map((o) => o.at)];
+  const heights = new Map((template.ground ?? []).map(([i, j, h]) => [`${i},${j}`, h]));
+  const groundCorners = (template.ground ?? []).flatMap(([i, j]) => [[i, j], [i + 1, j], [i + 1, j + 1], [i, j + 1]].map(([a, b]) => there([a * CELL_FT, b * CELL_FT])));
+  const cells = hullCells(convexHull([...points, ...groundCorners]));
+  const ground = template.ground
+    ? cells.flatMap(([ci, cj]) => {
+        const [u, v] = back([(ci + 0.5) * CELL_FT, (cj + 0.5) * CELL_FT]).map((w) => w / CELL_FT - 0.5);
+        const h = groundAt(heights, u, v);
+        return h === null ? [] : [[ci, cj, round(h + y)]];
+      })
+    : undefined;
+  return { slabs, objects, cells, ...(ground ? { ground } : {}) };
+}
+
+// The ground's height at (u, v), in cells from the middle of cell (0, 0): read between the four
+// cells' middles round it, those it has, or null if it's on none of its cells.
+function groundAt(heights, u, v) {
+  if (!heights.has(`${Math.round(u)},${Math.round(v)}`)) return null;
+  const [i, j] = [Math.floor(u), Math.floor(v)];
+  const [fu, fv] = [u - i, v - j];
+  let [sum, weight] = [0, 0];
+  for (const [di, dj, w] of [[0, 0, (1 - fu) * (1 - fv)], [1, 0, fu * (1 - fv)], [0, 1, (1 - fu) * fv], [1, 1, fu * fv]]) {
+    const h = heights.get(`${i + di},${j + dj}`);
+    if (h === undefined || w <= 0) continue;
+    sum += h * w;
+    weight += w;
+  }
+  return weight ? sum / weight : heights.get(`${Math.round(u)},${Math.round(v)}`);
 }
 
 // The convex hull of [x, z] points, counter-clockwise, without repeats.
@@ -161,4 +216,6 @@ function overlaps(a, b) {
   return true;
 }
 
+const hexColor = (color) => (typeof color === "string" ? color.toLowerCase() : `#${color.map((v) => Math.max(0, Math.min(255, Math.round(v * 255))).toString(16).padStart(2, "0")).join("")}`);
+const rgbColor = (hex) => [1, 3, 5].map((k) => parseInt(hex.slice(k, k + 2), 16) / 255);
 const round = (v, per = 100) => Math.round(v * per) / per + 0;
