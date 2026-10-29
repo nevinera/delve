@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { slabBottom, slabProblems, slabTop } from "../world/slabs.js";
-import { SlabTool, conformedCells, faceSlab, roomPieces, floorSlab, rectanglePieces, rectangleSlab, wallPieces, wallSlab } from "./slabTool.js";
+import { slabBottom, slabProblems, slabSpanAt, slabTop } from "../world/slabs.js";
+import { SlabTool, conformedCells, faceSlab, roofPieces, roomPieces, floorSlab, rectanglePieces, rectangleSlab, wallPieces, wallSlab } from "./slabTool.js";
 
 const near = (points) => points.map((p) => p.map((v) => Math.round(v * 100) / 100 + 0));
 
@@ -145,5 +145,38 @@ describe("roomPieces", () => {
 
   it("makes nothing from a line", () => {
     expect(room([0, 40, 0], [20, 40, 0])).toEqual([]);
+  });
+});
+
+describe("roofPieces", () => {
+  // Over a 30 by 20 ft room whose walls' tops are at 10 ft.
+  const roof = (style, b = [30, 10, 20], options = {}) => roofPieces([0, 10, 0], b, 0, { style, pitch: 30, overhang: 1, thickness: 1, surface: "slateTiles", ...options });
+  const under = (pieces, x, z) => Math.min(...pieces.map((p) => slabSpanAt(p, x, z)).filter(Boolean).map(([low]) => low));
+  const tan = Math.tan(Math.PI / 6);
+
+  for (const style of ["flat", "shed", "gable", "hip"]) {
+    it(`makes a ${style} roof of good slabs, its underside at the walls' tops along their edges`, () => {
+      const pieces = roof(style);
+      expect(pieces.length).toBeGreaterThan(0);
+      for (const piece of pieces) expect(slabProblems(piece)).toEqual([]);
+      expect(under(pieces, 15, 0)).toBeCloseTo(10, 2);
+      if (style !== "shed") expect(under(pieces, 15, 20)).toBeCloseTo(10, 2);
+      if (style === "hip") expect(under(pieces, 0, 10)).toBeCloseTo(10, 2);
+    });
+  }
+
+  it("rises to a ridge along the longer side", () => {
+    expect(under(roof("gable"), 15, 9.9)).toBeCloseTo(10 + 9.9 * tan, 2);
+    expect(under(roof("gable"), 0.5, 10.1)).toBeCloseTo(10 + 9.9 * tan, 2);
+    // Drawn the other way round, the ridge still runs the long way.
+    expect(under(roof("gable", [-20, 10, -30]), -10.1, -15)).toBeCloseTo(10 + 9.9 * tan, 2);
+    expect(under(roof("hip"), 2, 10)).toBeCloseTo(10 + 2 * tan, 2);
+  });
+
+  it("cuts a big roof into pieces", () => {
+    const pieces = roof("gable", [100, 10, 60]);
+    expect(pieces.length).toBeGreaterThan(4);
+    for (const piece of pieces) expect(slabProblems(piece)).toEqual([]);
+    expect(under(pieces, 50, 29.9)).toBeCloseTo(10 + 29.9 * tan, 2);
   });
 });

@@ -1,3 +1,4 @@
+import polygonClipping from "polygon-clipping";
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { CELL_FT, CELLS } from "../world/constants.js";
@@ -58,7 +59,7 @@ export class SlabTool {
     this.onPick = onPick;
     this.onProblem = onProblem;
     this.onNote = onNote;
-    this.settings = { mode: "pick", shape: "rectangle", thickness: 1, height: 10, keepWalling: false, conform: false, surface: "floorboards" };
+    this.settings = { mode: "pick", shape: "rectangle", thickness: 1, height: 10, keepWalling: false, conform: false, surface: "floorboards", roof: "gable", pitch: 30, overhang: 1 };
     this.drawing = null; // { points: [[x, y, z] continent feet], height, pressed: [x, y] while dragging }
     this.picks = []; // [{ slab, key }]: the slabs picked, and the tiles listing them
     this.box = null; // a box being dragged to pick slabs in: { from: [x, y] client pixels, adding }
@@ -257,7 +258,7 @@ export class SlabTool {
 
   // Whether what's drawn is a rectangle: a room always is.
   get rectangle() {
-    return this.settings.mode === "room" || this.settings.shape === "rectangle";
+    return this.settings.mode === "room" || this.settings.mode === "roof" || this.settings.shape === "rectangle";
   }
 
   // A rectangle's far end: it's made, and with keepWalling, a wall's end starts the next.
@@ -293,6 +294,10 @@ export class SlabTool {
     const { mode, shape, thickness, surface } = this.settings;
     const [a, b] = points;
     const one = (slab) => (slab ? [slab] : []);
+    if (mode === "roof") {
+      const { roof, pitch, overhang } = this.settings;
+      return points.length >= 2 ? roofPieces(a, b, this.drawing.yaw, { style: roof, pitch, overhang, thickness, surface }) : [];
+    }
     if (mode === "room") {
       return points.length >= 2 ? roomPieces(a, b, this.drawing.yaw, { height: this.settings.height, thickness, surface, footUnder: (p, q) => this.footUnder(p, q) }) : [];
     }
@@ -356,6 +361,7 @@ export class SlabTool {
     detail.beginEdit();
     for (const slab of slabs) this.put(slab);
     const added = this.fitFloors(slabs);
+    if (this.settings.mode === "roof") this.raiseUnder(added);
     const conform = ["floor", "room"].includes(this.settings.mode) && this.settings.conform && onGround;
     if (conform) {
       const cells = detail.cells();
@@ -406,6 +412,26 @@ export class SlabTool {
       if (fresh.has(floor)) added.splice(added.indexOf(floor), 1, ...pieces);
     }
     return added;
+  }
+
+  // Raises the walls under a new roof to meet it: those whose tops reach its lowest edge or higher.
+  raiseUnder(roofs) {
+    const { detail } = this;
+    const eaves = Math.min(...roofs.flatMap((roof) => slabBottom(roof).map((p) => p[1])));
+    const upright = (slab) => Math.abs(turned(slab, [0, 1, 0]).y) < 0.05;
+    const walls = new Set(roofs.flatMap((roof) => this.nearSlabs(roof)).filter((slab) => upright(slab) && Math.max(...slabTop(slab).map((p) => p[1])) >= eaves - 0.5));
+    for (const wall of walls) {
+      const { wall: raised } = raiseWall(wall, roofs);
+      const key = slabTile(wall).join(",");
+      if (!raised || this.hitsTree(raised) || !detail.editable(slabTile(raised).join(","))) continue;
+      detail.touch(key);
+      detail.dirtySlabs.add(key);
+      const tile = detail.view.decoded.get(key);
+      tile.slabs = tile.slabs.filter((s) => s !== wall);
+      delete wall.holes;
+      Object.assign(wall, raised);
+      this.put(wall);
+    }
   }
 
   // The slabs in the slab's tile and the tiles around it.
@@ -960,6 +986,87 @@ export function roomPieces(a, b, yaw, { height, thickness, surface, footUnder })
     return wallPieces(from, to, { foot: footUnder(from, to), height, thickness, surface });
   });
   return [...floor, ...walls];
+}
+
+export const ROOF_STYLES = ["flat", "shed", "gable", "hip"];
+
+// A roof over a rectangle from corner `a` to the opposite `b` ([x, y, z] continent feet), square
+// to `yaw`, as slabs: its underside at a's level along the rectangle's edges, sloping up `pitch`
+// degrees, and running on `overhang` feet past them. A gable's ridge and a hip's run along the
+// longer side; a shed rises across the shorter one. Slopes too big for one slab are cut up, their
+// pieces sharing an `at`, so their pictures run on over the joins.
+export function roofPieces(a, b, yaw, { style, pitch, overhang, thickness, surface }) {
+  const r = (yaw * Math.PI) / 180;
+  const axes = [[Math.cos(r), -Math.sin(r)], [Math.sin(r), Math.cos(r)]];
+  const [dx, dz] = [b[0] - a[0], b[2] - a[2]];
+  const [w, d] = axes.map(([x, z]) => dx * x + dz * z);
+  if (Math.abs(w) < 1 || Math.abs(d) < 1) return [];
+  // The rectangle's own frame: x along the longer side, from its corner, y up.
+  const corner = [a[0] + Math.min(0, w) * axes[0][0] + Math.min(0, d) * axes[1][0], a[2] + Math.min(0, w) * axes[0][1] + Math.min(0, d) * axes[1][1]];
+  const [along, across] = Math.abs(w) >= Math.abs(d) ? axes : [axes[1], axes[0]];
+  const [W, D] = Math.abs(w) >= Math.abs(d) ? [Math.abs(w), Math.abs(d)] : [Math.abs(d), Math.abs(w)];
+  const world = ([x, z]) => [corner[0] + x * along[0] + z * across[0], corner[1] + x * along[1] + z * across[1]];
+  const o = overhang;
+  const h = D / 2;
+  const angle = style === "flat" ? 0 : (pitch * Math.PI) / 180;
+  // Each slope: its outline across the ground in the frame, which way it rises, and a point on
+  // the edge it rises from.
+  const n = [0, 1];
+  const s = [0, -1];
+  const facets = {
+    flat: [{ plan: [[-o, -o], [W + o, -o], [W + o, D + o], [-o, D + o]], up: n, eave: [0, 0] }],
+    shed: [{ plan: [[-o, -o], [W + o, -o], [W + o, D + o], [-o, D + o]], up: n, eave: [0, 0] }],
+    gable: [
+      { plan: [[-o, -o], [W + o, -o], [W + o, h], [-o, h]], up: n, eave: [0, 0] },
+      { plan: [[-o, h], [W + o, h], [W + o, D + o], [-o, D + o]], up: s, eave: [0, D] },
+    ],
+    hip: [
+      { plan: [[-o, -o], [W + o, -o], [W - h, h], [h, h]], up: n, eave: [0, 0] },
+      { plan: [[-o, D + o], [h, h], [W - h, h], [W + o, D + o]], up: s, eave: [0, D] },
+      { plan: [[-o, -o], [h, h], [-o, D + o]], up: [1, 0], eave: [0, 0] },
+      { plan: [[W + o, -o], [W + o, D + o], [W - h, h]], up: [-1, 0], eave: [W, 0] },
+    ],
+  }[style];
+  if (!facets) return [];
+  // Square pieces, small enough that every corner's within reach of every other.
+  const side = Math.min(MAX_PIECE_FT, (SLAB_REACH_FT - thickness - 1) / Math.sqrt(2 + Math.tan(angle) ** 2));
+  const pieces = [];
+  for (const { plan, up, eave } of facets) {
+    const ring = plan.filter((p, i) => i === 0 || Math.hypot(p[0] - plan[i - 1][0], p[1] - plan[i - 1][1]) > 1e-6);
+    if (ring.length < 3) continue;
+    // Up the slope across the ground, in the world, and the slab's yaw that way.
+    const [ux, uz] = [up[0] * along[0] + up[1] * across[0], up[0] * along[1] + up[1] * across[1]];
+    const turn = [tidy((Math.atan2(ux, uz) * 180) / Math.PI), tidy((-angle * 180) / Math.PI), 0];
+    const height = ([x, z]) => a[1] + thickness / Math.cos(angle) + Math.tan(angle) * ((x - eave[0]) * up[0] + (z - eave[1]) * up[1]);
+    const start = ring[0];
+    const at = [...world(start)];
+    const top = [at[0], height(start), at[1]].map(tidy);
+    const outlineOf = (points) =>
+      points.map((p) => {
+        const [x, z] = world(p);
+        const [ex, ez] = [x - at[0], z - at[1]];
+        return [tidy(ex * uz - ez * ux), tidy((ex * ux + ez * uz) / Math.cos(angle))];
+      });
+    const xs = ring.map((p) => p[0]);
+    const zs = ring.map((p) => p[1]);
+    for (let x0 = Math.min(...xs); x0 < Math.max(...xs) - 1e-6; x0 += side) {
+      for (let z0 = Math.min(...zs); z0 < Math.max(...zs) - 1e-6; z0 += side) {
+        const cell = [[x0, z0], [x0 + side, z0], [x0 + side, z0 + side], [x0, z0 + side], [x0, z0]];
+        for (const [part] of polygonClipping.intersection([[...ring, ring[0]]], [cell])) {
+          const outline = outlineOf(part.slice(0, -1));
+          if (Math.abs(ringArea(outline)) > 0.01) pieces.push({ at: top, turn, outline, thickness, surface });
+        }
+      }
+    }
+  }
+  return pieces;
+}
+
+function ringArea(points) {
+  return points.reduce((sum, [x0, z0], i) => {
+    const [x1, z1] = points[(i + 1) % points.length];
+    return sum + (x0 * z1 - x1 * z0) / 2;
+  }, 0);
 }
 
 // The ground cells a floor's slabs sit on, [[ci, cj, height], ...] continent cells: those whose

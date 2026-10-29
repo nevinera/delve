@@ -201,6 +201,10 @@
   gap: 6px;
 }
 
+.slab-modes {
+  flex-wrap: wrap;
+}
+
 .editor-row[hidden],
 .editor-field[hidden],
 .editor-check[hidden] {
