@@ -292,7 +292,7 @@ function foundation(structure, surface) {
 
 const tidy = (v) => Math.round(v * 100) / 100 + 0;
 
-// The built-in structures' collections as templates, as builtin/templates.json holds them: [{ id,
+// The built-in structures' collections as templates, but for those dug into the ground, as builtin/templates.json holds them: [{ id,
 // name, templates }], one slab or object a line.
 export function builtinTemplatesJson() {
   const line = (v) => JSON.stringify(v);
@@ -301,6 +301,9 @@ export function builtinTemplatesJson() {
     `      {\n${Object.entries(rest)
       .map(([k, v]) => `        ${line(k)}: ${line(v)},\n`)
       .join("")}        "slabs": ${list(slabs, "        ")},\n        "objects": ${list(objects, "        ")}\n      }`;
-  const collections = BUILTIN_STRUCTURE_COLLECTIONS.map(({ id, name, structures }) => `  {\n    "id": ${line(id)},\n    "name": ${line(name)},\n    "templates": [\n${structures.map((s) => template(structureTemplate(s))).join(",\n")}\n    ]\n  }`);
+  // Structures with storeys underground are left out: a template can't dig into the ground.
+  const collections = BUILTIN_STRUCTURE_COLLECTIONS.map(({ structures, ...c }) => ({ ...c, structures: structures.filter((s) => s.storeys.every((storey) => storey.level >= 0)) }))
+    .filter((c) => c.structures.length)
+    .map(({ id, name, structures }) => `  {\n    "id": ${line(id)},\n    "name": ${line(name)},\n    "templates": [\n${structures.map((s) => template(structureTemplate(s))).join(",\n")}\n    ]\n  }`);
   return `[\n${collections.join(",\n")}\n]\n`;
 }
