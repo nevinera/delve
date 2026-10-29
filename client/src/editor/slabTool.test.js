@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { slabBottom, slabTop } from "../world/slabs.js";
-import { faceSlab, floorSlab, rectangleSlab, wallSlab } from "./slabTool.js";
+import { slabBottom, slabProblems, slabTop } from "../world/slabs.js";
+import { faceSlab, floorSlab, rectanglePieces, rectangleSlab, wallPieces, wallSlab } from "./slabTool.js";
 
 const near = (points) => points.map((p) => p.map((v) => Math.round(v * 100) / 100 + 0));
 
@@ -44,5 +44,32 @@ describe("rectangleSlab", () => {
     const floor = rectangleSlab([0, 0, 0], [3, 0, 9], 30, { thickness: 1, surface: "stone" });
     expect(floor.turn).toEqual([30, 0, 0]);
     expect(near(slabTop(floor))[2]).toEqual([3, 1, 9]);
+  });
+});
+
+describe("cutting up long rectangles", () => {
+  it("cuts a big floor into pieces a whole number of repeats across, meeting edge to edge", () => {
+    // Brick repeats every 4 ft, so the pieces are 40 ft, and what's left.
+    const pieces = rectanglePieces([0, 0, 0], [100, 0, 30], 0, { thickness: 1, surface: "brick" });
+    expect(pieces.map((p) => p.outline[2])).toEqual([[40, 30], [40, 30], [20, 30]]);
+    expect(pieces.map((p) => p.at[0])).toEqual([0, 40, 80]);
+    for (const piece of pieces) expect(slabProblems(piece)).toEqual([]);
+  });
+
+  it("cuts a turned floor along its own sides", () => {
+    const pieces = rectanglePieces([0, 0, 0], [100, 0, 0], 45, { thickness: 2, surface: "stone" });
+    expect(pieces.length).toBeGreaterThan(1);
+    for (const piece of pieces) expect(slabProblems(piece)).toEqual([]);
+  });
+
+  it("cuts a long wall along its length", () => {
+    const pieces = wallPieces([0, 0, 0], [0, 0, 130], { foot: 0, height: 12, thickness: 1, surface: "stoneBlocks" });
+    expect(pieces.map((p) => p.outline[1][0])).toEqual([40, 40, 40, 10]);
+    expect(near(pieces.map((p) => slabTop(p)[0]))).toEqual([[0, 0, 0], [0, 0, 40], [0, 0, 80], [0, 0, 120]]);
+    for (const piece of pieces) expect(slabProblems(piece)).toEqual([]);
+  });
+
+  it("leaves one past the limit whole, to show red", () => {
+    expect(rectanglePieces([0, 0, 0], [3000, 0, 10], 0, { thickness: 1, surface: "brick" })).toHaveLength(1);
   });
 });

@@ -32,6 +32,13 @@ export const PRESET_FT = {
 
 const kept = new Map(); // surface key -> { texture, feet }
 
+// How many feet a surface's picture spans before it repeats.
+export function repeatFt(surface) {
+  if (typeof surface === "string") return PRESET_FT[surface] ?? 1;
+  if (surface.tile) return surface.tile.every;
+  return surface.pattern ? PATTERN_FT[surface.pattern] : 1;
+}
+
 // The picture for a preset's name, or a { color, pattern } surface: { texture, feet }.
 export function slabTexture(surface) {
   const key = typeof surface === "string" ? surface : `${surface.color}/${surface.pattern}`;
