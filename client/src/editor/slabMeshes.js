@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { imageOf } from "../world/objects.js";
-import { slabBottom, slabTop } from "../world/slabs.js";
+import { slabBottom, slabFace } from "../world/slabs.js";
 import { tileTexture, tiledMaterial } from "./builtMeshes.js";
 import { slabTexture } from "./slabTextures.js";
 
@@ -68,10 +68,11 @@ function scaled(geometry, feet) {
 // from the top.
 export function slabGeometry(slab, origin) {
   const local = ([x, y, z]) => new THREE.Vector3(x - origin[0], y, z - origin[1]);
-  const top = slabTop(slab).map(local);
-  const bottom = slabBottom(slab).map(local);
   // The top face's normal: an unturned slab's (0, 1, 0), turned with it.
   const n = new THREE.Vector3(...slabBottom({ ...slab, at: [0, 0, 0], outline: [[0, 0]], thickness: -1 })[0]);
+  const down = n.clone().multiplyScalar(-slab.thickness);
+  const loops = [slab.outline, ...(slab.holes ?? [])];
+  const tops = loops.map((loop) => slabFace(slab, loop).map(local));
   const positions = [];
   const uvs = [];
   const add = (corners, flat, facing) => {
@@ -83,24 +84,31 @@ export function slabGeometry(slab, origin) {
       uvs.push(...flat[i]);
     }
   };
-  const outline = slab.outline;
-  for (const tri of THREE.ShapeUtils.triangulateShape(outline.map(([u, v]) => new THREE.Vector2(u, v)), [])) {
-    add(tri.map((i) => top[i]), tri.map((i) => outline[i]), n);
-    add(tri.map((i) => bottom[i]), tri.map((i) => outline[i]), n.clone().negate());
+  // The faces, holes left out: the triangles' corners count on through the holes' corners.
+  const flat = loops.flat();
+  const top = tops.flat();
+  const bottom = top.map((p) => p.clone().add(down));
+  const shape = (loop) => loop.map(([u, v]) => new THREE.Vector2(u, v));
+  for (const tri of THREE.ShapeUtils.triangulateShape(shape(slab.outline), (slab.holes ?? []).map(shape))) {
+    add(tri.map((i) => top[i]), tri.map((i) => flat[i]), n);
+    add(tri.map((i) => bottom[i]), tri.map((i) => flat[i]), n.clone().negate());
   }
-  // Which way round the outline goes about the top face's normal, so each side faces out.
-  const turning = new THREE.Vector3();
-  top.forEach((p, i) => turning.add(new THREE.Vector3().crossVectors(p, top[(i + 1) % top.length])));
-  const sign = turning.dot(n) >= 0 ? 1 : -1;
-  let along = 0;
-  top.forEach((p, i) => {
-    const j = (i + 1) % top.length;
-    const length = p.distanceTo(top[j]);
-    const facing = new THREE.Vector3().subVectors(top[j], p).cross(n).multiplyScalar(sign);
-    const [s0, s1, t] = [along, along + length, slab.thickness];
-    add([p, top[j], bottom[j]], [[s0, 0], [s1, 0], [s1, -t]], facing);
-    add([p, bottom[j], bottom[i]], [[s0, 0], [s1, -t], [s0, -t]], facing);
-    along += length;
+  // The sides round the outline face out, and round each hole, into it.
+  tops.forEach((ring, k) => {
+    const turning = new THREE.Vector3();
+    ring.forEach((p, i) => turning.add(new THREE.Vector3().crossVectors(p, ring[(i + 1) % ring.length])));
+    const sign = (turning.dot(n) >= 0 ? 1 : -1) * (k ? -1 : 1);
+    let along = 0;
+    ring.forEach((p, i) => {
+      const j = (i + 1) % ring.length;
+      const length = p.distanceTo(ring[j]);
+      const facing = new THREE.Vector3().subVectors(ring[j], p).cross(n).multiplyScalar(sign);
+      const [pb, qb] = [p.clone().add(down), ring[j].clone().add(down)];
+      const [s0, s1, t] = [along, along + length, slab.thickness];
+      add([p, ring[j], qb], [[s0, 0], [s1, 0], [s1, -t]], facing);
+      add([p, qb, pb], [[s0, 0], [s1, -t], [s0, -t]], facing);
+      along += length;
+    });
   });
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));

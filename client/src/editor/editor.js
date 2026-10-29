@@ -1130,6 +1130,8 @@ export class Editor {
       });
     }
     this.el.slabDelete.addEventListener("click", () => tool()?.remove());
+    this.el.slabCut.addEventListener("click", () => (tool()?.cutting ? tool().stopCut() : tool()?.startCut()));
+    this.el.slabClearHoles.addEventListener("click", () => tool()?.clearHoles());
   }
 
   // A swatch for each preset, painted as it looks, and a gear for a custom surface; painted when
@@ -1214,13 +1216,16 @@ export class Editor {
     const rectangleWall = mode === "wall" && this.slabShape === "rectangle";
     this.el.slabKeepRow.hidden = !rectangleWall;
     this.el.slabHeightRow.hidden = !rectangleWall;
-    this.el.slabShapeRow.hidden = mode === "pick";
+    this.el.slabShapeRow.hidden = mode === "pick" && !tool?.cutting;
     this.el.slabConformRow.hidden = mode !== "floor";
     this.el.slabHandleRow.hidden = !picked;
     this.el.slabMove.classList.toggle("active", tool?.handle === "move");
     this.el.slabTurn.classList.toggle("active", tool?.handle === "turn");
     // Several slabs picked together only move.
     this.el.slabTurn.disabled = (tool?.picks.length ?? 0) > 1;
+    this.el.slabCut.disabled = !tool?.picked;
+    this.el.slabCut.classList.toggle("active", Boolean(tool?.cutting));
+    this.el.slabClearHoles.disabled = !tool?.picked?.slab.holes;
     // Picking with nothing picked, the slab settings change nothing.
     const idle = mode === "pick" && !picked;
     this.el.slabThickness.closest(".editor-row").hidden = idle;

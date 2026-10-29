@@ -1,3 +1,4 @@
+import polygonClipping from "polygon-clipping";
 import { turnPoint } from "./builtObjects.js";
 import { TILE_FT } from "./constants.js";
 
@@ -11,6 +12,9 @@ import { TILE_FT } from "./constants.js";
 //   object piece's is. Unturned, the top face is level and faces up.
 // - outline: the top face, 3 to MAX_SLAB_CORNERS [u, v] points in feet from `at`, u along x and v
 //   along z before turning. It may be concave, but its edges don't cross.
+// - holes: up to MAX_HOLES polygons in the outline's [u, v], each 3 to MAX_SLAB_CORNERS corners,
+//   right through the slab, for doors and windows. They're inside the outline, and touch neither
+//   it nor each other. Absent when there are none.
 // - thickness: feet down from the top face, more than 0 and at most MAX_THICKNESS_FT.
 // - surface: one of SLAB_PRESETS by name, or { color, pattern, tile, palette }: a "#rrggbb" color,
 //   shaded by one of SLAB_PATTERNS the way the ground is, or with a world texture tiled over it
@@ -21,6 +25,7 @@ import { TILE_FT } from "./constants.js";
 // those. Every corner, top and bottom, is within SLAB_REACH_FT of it.
 
 export const MAX_SLAB_CORNERS = 32;
+export const MAX_HOLES = 16;
 export const MAX_THICKNESS_FT = 16;
 export const DEFAULT_THICKNESS_FT = 1;
 export const SLAB_REACH_FT = 64;
@@ -56,8 +61,27 @@ const HEX = /^#[0-9a-f]{6}$/;
 
 // The slab's top corners in continent feet, [x, y, z] each, in outline order.
 export function slabTop(slab) {
+  return slabFace(slab, slab.outline);
+}
+
+// Points [u, v] of the slab's top face in continent feet, [x, y, z] each.
+export function slabFace(slab, points) {
   const turn = turner(slab.turn);
-  return slab.outline.map(([u, v]) => add(slab.at, turn([u, 0, v])));
+  return points.map(([u, v]) => add(slab.at, turn([u, 0, v])));
+}
+
+// The slab with `hole` ([u, v] points) taken out of it: what's left, as slabs. A hole inside it
+// joins its holes; one reaching its edge cuts a notch, and one across it splits it in pieces.
+export function cutSlab(slab, hole) {
+  const close = (ring) => [...ring, ring[0]];
+  const tidy = (v) => Math.round(v * 100) / 100 + 0;
+  // polygon-clipping repeats each ring's first corner at the end.
+  const open = (ring) => ring.slice(0, -1).map((p) => p.map(tidy));
+  const left = polygonClipping.difference([close(slab.outline), ...(slab.holes ?? []).map(close)], [close(hole)]);
+  return left.map(([outline, ...holes]) => {
+    const { holes: _, ...rest } = slab;
+    return holes.length ? { ...rest, outline: open(outline), holes: holes.map(open) } : { ...rest, outline: open(outline) };
+  });
 }
 
 // Its bottom corners, under the top ones.
@@ -88,6 +112,7 @@ export function slabProblems(slab, images) {
   if (!(Array.isArray(outline) && outline.length >= 3 && outline.length <= MAX_SLAB_CORNERS && outline.every((p) => numbers(p, 2)))) out.push(`needs an outline of 3 to ${MAX_SLAB_CORNERS} [u, v] points`);
   else if (crosses(outline)) out.push("has an outline whose edges cross");
   else if (Math.abs(area(outline)) < 1e-6) out.push("has an outline with no area");
+  if (!out.length) out.push(...holeProblems(outline, slab.holes));
   if (!(Number.isFinite(slab?.thickness) && slab.thickness > 0 && slab.thickness <= MAX_THICKNESS_FT)) out.push(`needs a thickness over 0 and at most ${MAX_THICKNESS_FT} ft`);
   out.push(...surfaceProblems(slab?.surface, images));
   if (!out.length) {
@@ -95,6 +120,21 @@ export function slabProblems(slab, images) {
     if ([...slabTop(slab), ...slabBottom(slab)].some((p) => Math.hypot(...sub(p, home)) > SLAB_REACH_FT + 1e-6)) out.push(`reaches more than ${SLAB_REACH_FT} ft from its home corner`);
   }
   return out;
+}
+
+function holeProblems(outline, holes) {
+  if (holes === undefined) return [];
+  const loop = (h) => Array.isArray(h) && h.length >= 3 && h.length <= MAX_SLAB_CORNERS && h.every((p) => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite));
+  if (!(Array.isArray(holes) && holes.length <= MAX_HOLES && holes.every(loop))) return [`needs holes as up to ${MAX_HOLES} lists of 3 to ${MAX_SLAB_CORNERS} [u, v] points`];
+  for (const [n, hole] of holes.entries()) {
+    const name = `hole ${n + 1}`;
+    if (crosses(hole) || Math.abs(area(hole)) < 1e-6) return [`has ${name} whose edges cross, or with no area`];
+    if (!hole.every((p) => inPolygon(outline, p)) || edgesTouch(hole, outline)) return [`has ${name} reaching outside its outline`];
+    for (const other of holes.slice(0, n)) {
+      if (edgesTouch(hole, other) || inPolygon(other, hole[0]) || inPolygon(hole, other[0])) return [`has ${name} overlapping another`];
+    }
+  }
+  return [];
 }
 
 function surfaceProblems(surface, images) {
@@ -128,16 +168,29 @@ function area(points) {
   return sum / 2;
 }
 
+// Whether [u, v] is inside a loop of [u, v] points.
+export function inPolygon(polygon, [x, z]) {
+  let into = false;
+  polygon.forEach(([x0, z0], i) => {
+    const [x1, z1] = polygon[(i + 1) % polygon.length];
+    if (z0 > z !== z1 > z && x < x0 + ((z - z0) * (x1 - x0)) / (z1 - z0)) into = !into;
+  });
+  return into;
+}
+
+const side = (a, b, c) => Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
+const between = (a, b, c) => Math.min(a[0], b[0]) <= c[0] && c[0] <= Math.max(a[0], b[0]) && Math.min(a[1], b[1]) <= c[1] && c[1] <= Math.max(a[1], b[1]);
+
+// Whether the segments a-b and c-d touch.
+function touch(a, b, c, d) {
+  const [d1, d2, d3, d4] = [side(c, d, a), side(c, d, b), side(a, b, c), side(a, b, d)];
+  if (d1 !== d2 && d3 !== d4 && d1 && d2 && d3 && d4) return true;
+  return (!d1 && between(c, d, a)) || (!d2 && between(c, d, b)) || (!d3 && between(a, b, c)) || (!d4 && between(a, b, d));
+}
+
 // Whether two edges of the loop that don't share a corner touch.
 function crosses(points) {
   const n = points.length;
-  const side = (a, b, c) => Math.sign((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]));
-  const between = (a, b, c) => Math.min(a[0], b[0]) <= c[0] && c[0] <= Math.max(a[0], b[0]) && Math.min(a[1], b[1]) <= c[1] && c[1] <= Math.max(a[1], b[1]);
-  const touch = (a, b, c, d) => {
-    const [d1, d2, d3, d4] = [side(c, d, a), side(c, d, b), side(a, b, c), side(a, b, d)];
-    if (d1 !== d2 && d3 !== d4 && d1 && d2 && d3 && d4) return true;
-    return (!d1 && between(c, d, a)) || (!d2 && between(c, d, b)) || (!d3 && between(a, b, c)) || (!d4 && between(a, b, d));
-  };
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
       if (j === i + 1 || (i === 0 && j === n - 1)) continue;
@@ -145,4 +198,9 @@ function crosses(points) {
     }
   }
   return false;
+}
+
+// Whether an edge of one loop touches an edge of another.
+function edgesTouch(a, b) {
+  return a.some((p, i) => b.some((q, j) => touch(p, a[(i + 1) % a.length], q, b[(j + 1) % b.length])));
 }

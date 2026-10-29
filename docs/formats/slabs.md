@@ -16,6 +16,7 @@ Slabs are flat pieces placed in the detail editor to walk on and to block moveme
 
 - `at` is a point on the slab's top face, `[x, y, z]` in continent feet.
 - `outline` is the top face: 3 to 32 corners `[u, v]` in feet from `at`, u along x (east) and v along z (south) before the slab turns. It may be concave, but its edges don't cross.
+- `holes`, when there are any, are up to 16 polygons in the outline's `[u, v]`, each 3 to 32 corners, going right through the slab, for doors and windows. Each is inside the outline, and touches neither it nor another hole.
 - `thickness` is how far the slab goes down from its top face, more than 0 and at most 16 ft.
 - `turn` is `[yaw, pitch, roll]` in degrees, applied roll, pitch, yaw, as an object piece's turn. Unturned, the top face is level and faces up. Pitch -90° stands a slab up into a wall, its outline's v pointing up and its thickness going south.
 

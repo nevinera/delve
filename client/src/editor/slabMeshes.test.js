@@ -85,3 +85,23 @@ describe("slab presets", () => {
     }
   });
 });
+
+describe("slabs with holes", () => {
+  it("leaves a hole open, its sides facing into it", () => {
+    const slab = { at: [0, 0, 0], turn: [0, 0, 0], outline: square, holes: [[[3, 3], [7, 3], [7, 7], [3, 7]]], thickness: 1 };
+    const g = slabGeometry(slab, [0, 0]);
+    // Top and bottom: 8 triangles each round the hole; 4 sides each round the outline and the hole.
+    expect(g.attributes.position.count / 3).toBe(8 + 8 + 8 + 8);
+    const p = g.attributes.position;
+    for (let i = 0; i < p.count; i += 3) {
+      const [a, b, c] = [0, 1, 2].map((k) => new THREE.Vector3().fromBufferAttribute(p, i + k));
+      const normal = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3().subVectors(c, a)).normalize();
+      if (Math.abs(normal.y) > 0.5) continue;
+      // Just past each side, there's no slab.
+      const outside = a.clone().add(b).add(c).divideScalar(3).addScaledVector(normal, 0.1);
+      const inHole = outside.x > 3 && outside.x < 7 && outside.z > 3 && outside.z < 7;
+      const off = outside.x < 0 || outside.x > 10 || outside.z < 0 || outside.z > 10;
+      expect(inHole || off).toBe(true);
+    }
+  });
+});

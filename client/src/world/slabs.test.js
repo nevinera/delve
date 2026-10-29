@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TILE_FT } from "./constants.js";
-import { slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
+import { cutSlab, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
 
 // A 10 ft square floor, and a wall: the same square stood up on its south edge.
 const floor = { at: [100, 40, 200], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "floorboards" };
@@ -40,5 +40,48 @@ describe("slabs", () => {
     expect(slabProblems({ ...floor, surface: { color: "#fff" } })).toEqual(["needs a surface: a preset's name, or { color }"]);
     expect(slabProblems({ ...floor, surface: { color: "#ffffff", pattern: "lava" } })).toEqual(['has pattern "lava", which isn\'t one of grass, dirt, sand, rock, path, shore, mud, moss, litter']);
     expect(slabProblems({ ...floor, thickness: 16, outline: [[0, 0], [60, 0], [60, 20]] })).toEqual(["reaches more than 64 ft from its home corner"]);
+  });
+});
+
+describe("slab holes", () => {
+  const wall = { at: [0, 0, 0], turn: [0, -90, 0], outline: [[0, 0], [20, 0], [20, 10], [0, 10]], thickness: 1, surface: "brick" };
+  const door = [[2, 0.5], [5, 0.5], [5, 7], [2, 7]];
+  const window = [[10, 4], [13, 4], [13, 7], [10, 7]];
+
+  it("takes holes inside the outline", () => {
+    expect(slabProblems({ ...wall, holes: [door, window] })).toEqual([]);
+  });
+
+  it("won't have a hole reaching outside, or overlapping another", () => {
+    expect(slabProblems({ ...wall, holes: [[[2, -1], [5, -1], [5, 7], [2, 7]]] })).toEqual(["has hole 1 reaching outside its outline"]);
+    expect(slabProblems({ ...wall, holes: [door, [[4, 1], [8, 1], [8, 3], [4, 3]]] })).toEqual(["has hole 2 overlapping another"]);
+    expect(slabProblems({ ...wall, holes: [door, [[2.5, 1], [3, 1], [3, 2]]] })).toEqual(["has hole 2 overlapping another"]);
+    expect(slabProblems({ ...wall, holes: [[[1, 1], [2, 1]]] })).toEqual(["needs holes as up to 16 lists of 3 to 32 [u, v] points"]);
+  });
+});
+
+describe("cutSlab", () => {
+  const wall = { at: [0, 0, 0], turn: [0, -90, 0], outline: [[0, 0], [20, 0], [20, 10], [0, 10]], thickness: 1, surface: "brick" };
+  const area = (ring) => Math.abs(ring.reduce((sum, [x0, y0], i) => sum + x0 * ring[(i + 1) % ring.length][1] - ring[(i + 1) % ring.length][0] * y0, 0)) / 2;
+
+  it("makes a hole inside it", () => {
+    const [cut] = cutSlab(wall, [[10, 4], [13, 4], [13, 7], [10, 7]]);
+    expect(cut.holes).toHaveLength(1);
+    expect(area(cut.outline)).toBe(200);
+    expect(slabProblems(cut)).toEqual([]);
+  });
+
+  it("cuts a notch for a door reaching its edge", () => {
+    const pieces = cutSlab(wall, [[2, -1], [5, -1], [5, 7], [2, 7]]);
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].holes).toBeUndefined();
+    expect(area(pieces[0].outline)).toBe(200 - 21);
+    expect(slabProblems(pieces[0])).toEqual([]);
+  });
+
+  it("splits it where a cut goes right across", () => {
+    const pieces = cutSlab(wall, [[8, -1], [12, -1], [12, 11], [8, 11]]);
+    expect(pieces.map((p) => area(p.outline)).sort()).toEqual([80, 80]);
+    expect(pieces.every((p) => p.at === wall.at || p.at.join() === wall.at.join())).toBe(true);
   });
 });

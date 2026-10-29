@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { CELL_FT } from "../world/constants.js";
-import { MAX_SLAB_CORNERS, SLAB_REACH_FT, slabBottom, slabProblems, slabTile, slabTop } from "../world/slabs.js";
+import { MAX_SLAB_CORNERS, SLAB_REACH_FT, cutSlab, slabBottom, slabFace, slabProblems, slabTile, slabTop } from "../world/slabs.js";
 import { slabAt, slabGeometry, slabMeshes } from "./slabMeshes.js";
 import { repeatFt } from "./slabTextures.js";
 
@@ -10,7 +10,10 @@ import { repeatFt } from "./slabTextures.js";
 // - "pick": a click picks a slab, shift-click adds or takes away one, and dragging a box from
 //   where there's none picks those whose middles are in it. A slab picked alone has handles:
 //   arrows to move it along the world's axes, or rings to turn it in its own (setHandle), and a
-//   dot on each top corner to drag across its face. Several picked together only move.
+//   dot on each top corner to drag across its face. Several picked together only move. A slab
+//   picked alone can have a hole cut in it (startCut), drawn on its face as a rectangle or a
+//   polygon, as slabs are drawn: a hole reaching its edge cuts a notch, as for a door, and one right
+//   across splits it in two.
 // - "floor": a slab lying on what's pressed first, the ground or a slab, the rest of its corners on
 //   a level plane there. A rectangle goes from one corner to the other, square to the camera as it
 //   was at the first: dragged, or clicked at each end. A polygon is a click for each corner,
@@ -51,6 +54,7 @@ export class SlabTool {
     this.drawing = null; // { points: [[x, y, z] continent feet], height, pressed: [x, y] while dragging }
     this.picks = []; // [{ slab, key }]: the slabs picked, and the tiles listing them
     this.box = null; // a box being dragged to pick slabs in: { from: [x, y] client pixels, adding }
+    this.cutting = null; // a hole being drawn: { points: [[u, v]] on the picked slab, pressed }
     this.corner = null; // the index of a corner being dragged
     this.handle = "move";
     const { view } = detail;
@@ -81,7 +85,7 @@ export class SlabTool {
   // Whether the tool's in use: its handles and marks show only then.
   active(on) {
     this.on = on;
-    if (!on) this.drawing = null;
+    if (!on) this.drawing = this.cutting = null;
     this.showHandles();
     this.drawMarks();
   }
@@ -91,6 +95,7 @@ export class SlabTool {
     const { mode, shape } = this.settings;
     Object.assign(this.settings, changes);
     if (this.settings.mode !== mode || this.settings.shape !== shape) this.drawing = null;
+    if (this.settings.mode !== mode && this.cutting) this.stopCut();
     this.drawMarks();
   }
 
@@ -111,6 +116,7 @@ export class SlabTool {
 
   // A left button press; true when the tool's taken it.
   pointerDown(e) {
+    if (this.cutting) return this.cutDown(e);
     if (this.transform.dragging || this.transform.axis) return true;
     const ray = this.ray(e);
     if (this.picked) {
@@ -150,6 +156,7 @@ export class SlabTool {
   }
 
   pointerMove(e) {
+    if (this.cutting) return this.drawMarks(e);
     if (this.box) return this.drawBox(e);
     if (this.corner !== null) return this.dragCorner(e);
     if (this.drawing) this.drawMarks(e);
@@ -161,6 +168,13 @@ export class SlabTool {
     const pressed = this.drawing?.pressed;
     const pointer = this.detail.pointer;
     if (this.box) this.endBox(pointer);
+    const cutPressed = this.cutting?.pressed;
+    if (cutPressed) {
+      this.cutting.pressed = null;
+      const moved = pointer && Math.hypot(pointer.clientX - cutPressed[0], pointer.clientY - cutPressed[1]) > CLICK_PX;
+      const end = moved && this.faceAt(this.ray(pointer));
+      if (end) this.endCut(boxOf(this.cutting.points[0], end));
+    }
     if (pressed) {
       this.drawing.pressed = null;
       const moved = pointer && Math.hypot(pointer.clientX - pressed[0], pointer.clientY - pressed[1]) > CLICK_PX;
@@ -176,6 +190,14 @@ export class SlabTool {
   // and R pick its handles, Delete and Backspace take it away, Escape lets it go. True when the
   // key was one of them.
   key(e) {
+    if (this.cutting) {
+      if (e.key === "Enter" && this.cutting.points.length >= 3) this.endCut(this.cutting.points);
+      else if (e.key === "Backspace") this.cutting.points.pop();
+      else if (e.key === "Escape") this.stopCut();
+      else return false;
+      this.drawMarks();
+      return true;
+    }
     if (this.drawing) {
       if (e.key === "Enter") this.finish();
       else if (e.key === "Backspace") {
@@ -312,6 +334,7 @@ export class SlabTool {
   // Picks slabs, [{ slab, key }], or none.
   pick(picks) {
     this.picks = picks ?? [];
+    if (this.picks.length !== 1) this.cutting = null;
     this.setHandle(this.handle);
     this.showHandles();
     this.drawMarks();
@@ -404,6 +427,79 @@ export class SlabTool {
     this.told();
   }
 
+  // --- holes ---
+
+  // Starts drawing a hole in the slab picked alone.
+  startCut() {
+    if (!this.picked) return;
+    this.transform.detach();
+    this.cutting = { points: [], pressed: null };
+    this.drawMarks();
+    this.told();
+  }
+
+  stopCut() {
+    this.cutting = null;
+    this.showHandles();
+    this.drawMarks();
+    this.told();
+  }
+
+  // A press while cutting: a rectangle's corners, dragged or clicked, or a polygon's next corner.
+  cutDown(e) {
+    const at = this.faceAt(this.ray(e));
+    if (!at) return true;
+    const { points } = this.cutting;
+    if (this.settings.shape === "rectangle") {
+      if (!points.length) Object.assign(this.cutting, { points: [at], pressed: [e.clientX, e.clientY] });
+      else this.endCut(boxOf(points[0], at));
+    } else if (points.length >= 3 && Math.hypot(at[0] - points[0][0], at[1] - points[0][1]) < this.snapFt()) this.endCut(points);
+    else if (points.length < MAX_SLAB_CORNERS) points.push(at);
+    this.drawMarks(e);
+    return true;
+  }
+
+  // Cuts the hole out of the picked slab, which becomes what's left of it, picked.
+  endCut(hole) {
+    const { picked, detail } = this;
+    const pieces = cutSlab(picked.slab, hole);
+    const problem = pieces.flatMap((slab) => slabProblems(slab))[0];
+    if (problem) return this.onProblem?.(`That cut would leave a slab that ${problem}.`);
+    if (pieces.some((slab) => !detail.editable(slabTile(slab).join(",")))) return this.onProblem?.("That cut would leave a slab outside the window.");
+    detail.beginEdit();
+    detail.touch(picked.key);
+    const tile = detail.view.decoded.get(picked.key);
+    tile.slabs = [...tile.slabs.filter((s) => s !== picked.slab), ...pieces];
+    this.picks = pieces.map((slab) => ({ slab, key: picked.key }));
+    this.before = null;
+    this.rehome();
+    detail.endEdit();
+    this.cutting = null;
+    this.pick(this.picks);
+  }
+
+  // Takes every hole out of the slab picked alone.
+  clearHoles() {
+    const { picked, detail } = this;
+    if (!picked?.slab.holes) return;
+    detail.beginEdit();
+    detail.touch(picked.key);
+    delete picked.slab.holes;
+    detail.dirtySlabs.add(picked.key);
+    detail.endEdit();
+    this.pick(this.picks);
+  }
+
+  // Where a ray meets the picked slab's top face, as [u, v], or null.
+  faceAt(ray) {
+    const { slab } = this.picked;
+    const point = this.scene(slab.at);
+    const hit = ray.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(turned(slab, [0, 1, 0]), point), new THREE.Vector3());
+    if (!hit) return null;
+    const local = hit.sub(point).applyQuaternion(quaternionOf(slab.turn).invert());
+    return [tidy(local.x), tidy(local.z)];
+  }
+
   // The box being dragged to pick slabs in, from where it started to the pointer.
   drawBox(e) {
     this.boxMark ??= Object.assign(document.createElement("div"), { className: "slab-box" });
@@ -458,7 +554,7 @@ export class SlabTool {
   // The handles sit on a slab picked alone, or amid several, while the tool's in use.
   showHandles() {
     const { picks, picked } = this;
-    if (!this.on || !picks.length) return this.transform.detach();
+    if (!this.on || !picks.length || this.cutting) return this.transform.detach();
     if (picked) {
       this.proxy.position.copy(this.scene(picked.slab.at));
       this.proxy.quaternion.copy(quaternionOf(picked.slab.turn));
@@ -498,13 +594,21 @@ export class SlabTool {
       }
       if (this.settings.shape === "polygon" && corners.length >= 2) line(corners.map((p) => this.scene(p)), MARK.drawing, corners.length >= 3);
     }
+    if (this.cutting && this.picked) {
+      const { slab } = this.picked;
+      const pointer = e ?? this.detail.pointer;
+      const next = pointer && this.faceAt(this.ray(pointer));
+      const { points } = this.cutting;
+      const hole = this.settings.shape === "rectangle" ? (points.length && next ? boxOf(points[0], next) : []) : next ? [...points, next] : points;
+      if (hole.length >= 2) line(slabFace(slab, hole).map((p) => this.scene(p)), MARK.drawing, hole.length >= 3);
+    }
     for (const { slab } of this.picks) {
       const top = slabTop(slab).map((p) => this.scene(p));
       const down = turned(slab, [0, -slab.thickness, 0]);
       line(top, MARK.picked, true);
       line(top.map((p) => p.clone().add(down)), MARK.picked, true);
     }
-    if (this.picked) {
+    if (this.picked && !this.cutting) {
       const { slab } = this.picked;
       const top = slabTop(slab).map((p) => this.scene(p));
       const size = this.camera().distanceTo(top[0]) * DOT_SHARE;
@@ -718,6 +822,9 @@ export function rectangleSlab(a, b, yaw, { thickness, surface }) {
   if (Math.abs(w) < 0.1 || Math.abs(d) < 0.1) return null;
   return { at: [a[0], a[1] + thickness, a[2]].map(tidy), turn: [yaw, 0, 0], outline: [[0, 0], [w, 0], [w, d], [0, d]], thickness, surface };
 }
+
+// The rectangle from one [u, v] corner to the other, along the slab's own axes.
+const boxOf = ([u0, v0], [u1, v1]) => [[u0, v0], [u1, v0], [u1, v1], [u0, v1]];
 
 const tidy = (v) => Math.round(v * ROUND) / ROUND + 0;
 const flatDistance = (a, b) => Math.hypot(a[0] - b[0], a[2] - b[2]);
