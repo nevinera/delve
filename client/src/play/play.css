@@ -15,26 +15,108 @@ body.play {
   height: 100vh;
 }
 
-.play-hud {
+/* Loading and connection news, over the top middle while there's any. */
+.play-status {
   position: fixed;
   top: 10px;
-  left: 12px;
-  padding: 6px 10px;
-  background: rgba(0, 0, 0, 0.55);
+  left: 50%;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.6);
   border-radius: 4px;
 }
 
-.play-hud a {
-  color: #e0c070;
-  margin-left: 0.75em;
-}
-
-.play-hud p:empty {
+.play-status:empty {
   display: none;
 }
 
-.play-hud p {
-  margin: 4px 0 0;
+/* The menu button in the bottom right; on a phone, menu and chat along the bottom middle. */
+.play-bar {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  gap: 8px;
+}
+
+.play-bar button,
+.play-menu button,
+.play-menu-leave {
+  font: inherit;
+  color: #eee;
+  background: rgba(20, 18, 24, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+  padding: 4px 14px;
+}
+
+.play-chat {
+  display: none;
+}
+
+body.touch .play-bar {
+  right: auto;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+}
+
+body.touch .play-bar button {
+  display: block;
+  padding: 2px 22px;
+}
+
+/* The menu: a column of buttons, and pages it opens in its place. It scrolls when it's taller than
+   the screen, as it will be on a phone. */
+.play-menu {
+  margin: auto;
+  width: min(320px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 14px 16px;
+  background: rgba(20, 18, 24, 0.95);
+  color: #ddd;
+  border: 1px solid #555;
+  border-radius: 6px;
+}
+
+.play-menu-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.play-menu-main[hidden] {
+  display: none;
+}
+
+.play-menu-title {
+  margin: 0 0 4px;
+}
+
+.play-menu-leave {
+  text-align: center;
+  text-decoration: none;
+}
+
+.play-menu h3 {
+  margin: 12px 0 4px;
+  font-size: 13px;
+  color: #aaa;
+}
+
+.play-check,
+.play-range {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.play-range input {
+  flex: 1;
 }
 
 .play-paused {

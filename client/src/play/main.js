@@ -1,4 +1,5 @@
 import "./play.css";
+import { graphicsPanel } from "../editor/graphicsPanel.js";
 import { RenderView, SIGHT } from "../editor/renderView.js";
 import { builtObjects, builtStructures, images } from "../objects/collections.js";
 import { resolveRecipe } from "../character/recipe.js";
@@ -34,6 +35,18 @@ function enter(on) {
   });
 }
 
+// The menu: its buttons open pages in its place, and each page's back button returns.
+const menu = $("playMenu");
+const main = menu.querySelector(".play-menu-main");
+const showPage = (page) => {
+  for (const el of menu.querySelectorAll(".play-menu-page")) el.hidden = el !== page;
+  main.hidden = Boolean(page);
+};
+for (const button of menu.querySelectorAll("[data-open]")) button.addEventListener("click", () => showPage($(button.dataset.open)));
+for (const button of menu.querySelectorAll("[data-back]")) button.addEventListener("click", () => showPage(null));
+menu.addEventListener("toggle", (e) => e.newState === "closed" && showPage(null));
+menu.querySelector('[data-open="playGraphics"]').disabled = true; // until there's a view
+
 async function play() {
   const loader = new PlayWorld({ ...config, cache: new PlateCache(await openStore()) });
   status("Loading the world...");
@@ -61,9 +74,12 @@ async function play() {
   await loader.platesAround(you.continent, tile, SIGHT.farTiles + 1);
   status("");
 
-  const view = new RenderView($("scene"));
+  let showGraphics = null;
+  const view = new RenderView($("scene"), { onGraphics: (graphics) => showGraphics?.(graphics) });
   const touch = isTouch();
   if (touch) view.setGraphics(PHONE_GRAPHICS);
+  showGraphics = graphicsPanel(menu.querySelector(".play-graphics"), view, { check: "play-check", range: "play-range" });
+  menu.querySelector('[data-open="playGraphics"]').disabled = false;
   others = new Others(view);
   for (const [method, arg] of early) others[method](arg);
   view.onWalkFrame = (dt) => others.frame(dt);

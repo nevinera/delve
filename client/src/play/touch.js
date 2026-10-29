@@ -26,6 +26,7 @@ export class TouchControls {
   constructor(view, root) {
     this.view = view;
     this.pressed = new Set(); // the stick's keys, held on the walker
+    document.body.classList.add("touch");
     root.insertAdjacentHTML(
       "beforeend",
       `<div class="touch-stick"><div class="touch-knob"></div></div><button type="button" class="touch-jump">jump</button>`,

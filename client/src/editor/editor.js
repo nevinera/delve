@@ -753,9 +753,9 @@ export class Editor {
       return;
     }
     if (!this.view3d) {
-      const { RenderView, SCENE_PARTS, RESOLUTIONS, CLUTTER_RADIUS_FT } = await import("./renderView.js");
+      const [{ RenderView }, { graphicsPanel }] = await Promise.all([import("./renderView.js"), import("./graphicsPanel.js")]);
       this.view3d = new RenderView(this.el.scene, { onGraphics: (graphics) => this.showGraphics?.(graphics), onTime: (clock) => this.showTime?.(clock) });
-      this.buildGraphics(SCENE_PARTS, RESOLUTIONS, CLUTTER_RADIUS_FT);
+      this.buildGraphics(graphicsPanel);
       if (!this.showTime) this.buildTime();
     }
     this.el.map.hidden = true;
@@ -770,46 +770,9 @@ export class Editor {
     this.renderPanel();
   }
 
-  // The graphics popover: a radio button for each resolution, a checkbox for each part of the
-  // scene, solid canopies, and sliders for ground clutter's radius and density. They change the 3D
-  // view's settings, and follow changes made elsewhere, like the stats overlay's keys.
-  buildGraphics(parts, resolutions, clutterRadiusFt) {
-    const { graphicsResolution, graphicsParts, solidCanopies, clutterRadius, clutterDensity } = this.el;
-    const check = (type, name, label) => {
-      const el = document.createElement("label");
-      el.className = "editor-check";
-      el.innerHTML = `<input type="${type}" name="${name}"><span></span>`;
-      el.querySelector("span").textContent = label;
-      return el;
-    };
-    for (const r of resolutions) graphicsResolution.append(check("radio", "graphicsResolution", r === "full" ? "full" : `${r}x`));
-    for (const p of parts) graphicsParts.append(check("checkbox", "graphicsPart", p));
-    const inputs = (el) => [...el.querySelectorAll("input")];
-    inputs(graphicsResolution).forEach((input, i) => input.addEventListener("change", () => this.view3d.setGraphics({ resolution: resolutions[i] })));
-    inputs(graphicsParts).forEach((input, i) =>
-      input.addEventListener("change", () => {
-        const { hidden } = this.view3d.graphics;
-        if (input.checked) hidden.delete(parts[i]);
-        else hidden.add(parts[i]);
-        this.view3d.setGraphics({ hidden });
-      }),
-    );
-    solidCanopies.addEventListener("change", () => this.view3d.setGraphics({ solidCanopies: solidCanopies.checked }));
-    Object.assign(clutterRadius, clutterRadiusFt);
-    clutterRadius.addEventListener("input", () => this.view3d.setGraphics({ clutterRadiusFt: Number(clutterRadius.value) }));
-    clutterDensity.addEventListener("input", () => this.view3d.setGraphics({ clutterDensity: Number(clutterDensity.value) / 100 }));
-    this.showGraphics = ({ resolution, hidden }) => {
-      inputs(graphicsResolution).forEach((input, i) => (input.checked = resolutions[i] === resolution));
-      inputs(graphicsParts).forEach((input, i) => (input.checked = !hidden.has(parts[i])));
-      solidCanopies.checked = this.view3d.graphics.solidCanopies;
-      clutterRadius.value = this.view3d.graphics.clutterRadiusFt;
-      clutterDensity.value = Math.round(this.view3d.graphics.clutterDensity * 100);
-      this.el.clutterRadiusValue.textContent = `${clutterRadius.value} ft`;
-      this.el.clutterDensityValue.textContent = `${clutterDensity.value}%`;
-    };
-    this.showGraphics(this.view3d.graphics);
-    // So keys go back to walking and the stats overlay.
-    this.el.graphics.addEventListener("change", (e) => e.target.blur());
+  // The graphics popover (graphicsPanel.js), under its button.
+  buildGraphics(graphicsPanel) {
+    this.showGraphics = graphicsPanel(this.el.graphics, this.view3d);
     placeUnder(this.el.graphics, this.el.graphicsButton);
   }
 
