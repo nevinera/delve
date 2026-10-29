@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { blocks, furnishingsOf } from "../world/objects.js";
+import { slabFootholds, slabHitsTrunk } from "../world/slabs.js";
 import { BLOCKING, edgeDistance, edgesNear, floorAt, standOn, surfaceAt, tileWalk } from "../world/walkIndex.js";
 import { CELL_FT as STRUCTURE_CELL_FT } from "../world/structures.js";
 import { characterClips, loadAnimations } from "../character/animations.js";
@@ -324,7 +325,7 @@ export class Walker {
   canStep(x, z) {
     const here = this.standHeight(this.pos.x, this.pos.z);
     const there = this.stand(x, z);
-    if (there === null || this.trunkAt(x, z) || this.objectAt(x, z) || this.wallAt(x, z)) return false;
+    if (there === null || this.trunkAt(x, z) || this.objectAt(x, z) || this.wallAt(x, z) || this.slabInWay(x, z)) return false;
     const rise = there.height - (here ?? there.height);
     if (there.structure) return rise <= STEP_FT || this.pos.y >= there.height - 0.01;
     const run = Math.hypot(x - this.pos.x, z - this.pos.z);
@@ -337,15 +338,17 @@ export class Walker {
   }
 
   // Where the feet rest at (x, z), as { height, structure }: the ground, or a swimming depth below
-  // the water's surface where it's deeper than that, or a structure's surface (structure true),
-  // whichever is highest within a step of `feet` (walkIndex.js standOn). Null off the tiles drawn
-  // in full.
+  // the water's surface where it's deeper than that, or a structure's or slab's surface (structure
+  // true), whichever is highest within a step of `feet` (walkIndex.js standOn). Null off the tiles
+  // drawn in full.
   stand(x, z, feet = this.pos?.y ?? Infinity) {
     const groundY = this.groundAt(x, z);
     if (groundY === null) return null;
     const water = this.cell(x, z)?.water;
     const swim = Number.isFinite(water) && water - SWIM_DEPTH > groundY;
     const { surfaces, under } = this.structuresAt(x, z);
+    const { origin } = this.view;
+    for (const slab of this.slabsNear(x, z)) surfaces.push(...slabFootholds(slab, x + origin[0], z + origin[1], MAX_CLIMB));
     const ground = under ? null : swim ? water - SWIM_DEPTH : groundY;
     const height = standOn(surfaces, ground, feet, STEP_FT);
     if (height === null) return null;
@@ -418,6 +421,29 @@ export class Walker {
       }
     }
     return false;
+  }
+
+  // The slabs on the tile at scene (x, z) and those beside it.
+  slabsNear(x, z) {
+    const any = this.view.decoded.values().next().value;
+    if (!any) return [];
+    const size = any.cells * any.cellFt;
+    const { origin } = this.view;
+    const [tx, tz] = [Math.floor((x + origin[0]) / size), Math.floor((z + origin[1]) / size)];
+    const out = [];
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) out.push(...(this.view.decoded.get(`${tx + dx},${tz + dz}`)?.slabs ?? []));
+    }
+    return out;
+  }
+
+  // Whether a slab is in the way of a move to scene (x, z): one the body, from a step over its
+  // feet up to its eyes, would run into there. Like trunks, one it's already in doesn't hold it.
+  slabInWay(x, z) {
+    const { origin } = this.view;
+    const body = (bx, bz) => ({ x: bx + origin[0], z: bz + origin[1], radius: BODY_FT, ground: this.pos.y + STEP_FT, top: this.pos.y + EYE_FT });
+    const [there, here] = [body(x, z), body(this.pos.x, this.pos.z)];
+    return this.slabsNear(x, z).some((slab) => slabHitsTrunk(slab, there) && !slabHitsTrunk(slab, here));
   }
 
   // Ground height at a scene position, smoothly between cell centers, or null off the full tiles.

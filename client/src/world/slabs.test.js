@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TILE_FT } from "./constants.js";
-import { cutSlab, fitFloor, raiseWall, slabHitsTrunk, wallFootprint, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
+import { cutSlab, fitFloor, raiseWall, slabFootholds, slabHitsTrunk, wallFootprint, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
 
 // A 10 ft square floor, and a wall: the same square stood up on its south edge.
 const floor = { at: [100, 40, 200], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "floorboards" };
@@ -211,5 +211,29 @@ describe("raiseWall", () => {
 
   it("won't reach past the roof's edge", () => {
     expect(raiseWall({ ...wall, at: [0, 0, 40] }, [flat(14)]).problem).toMatch(/under the roof/);
+  });
+});
+
+describe("slabFootholds", () => {
+  const steepest = 1.2;
+  const tilted = (degrees) => ({ ...floor, turn: [0, 0, degrees] });
+
+  it("stands you on a floor's top, and not past it or in its holes", () => {
+    expect(slabFootholds(floor, 105, 205, steepest)).toEqual([40]);
+    expect(slabFootholds(floor, 115, 205, steepest)).toEqual([]);
+    const holed = { ...floor, holes: [[[2, 2], [8, 2], [8, 8], [2, 8]]] };
+    expect(slabFootholds(holed, 105, 205, steepest)).toEqual([]);
+  });
+
+  it("stands you on a gentle slope, not a steep one", () => {
+    const [top] = slabFootholds(tilted(30), 105, 205, steepest);
+    expect(top).toBeCloseTo(40 + 5 * Math.tan(Math.PI / 6), 5);
+    expect(slabFootholds(tilted(60), 101, 205, steepest)).toEqual([]);
+  });
+
+  it("stands you on a wall's top edge", () => {
+    const [top] = slabFootholds(wall, 105, 200.5, steepest);
+    expect(top).toBeCloseTo(50, 5);
+    expect(slabFootholds(wall, 105, 202, steepest)).toEqual([]);
   });
 });

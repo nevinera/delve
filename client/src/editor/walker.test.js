@@ -95,3 +95,43 @@ describe("the frame rate cap", () => {
     expect(frameDue(1000, 1032, 30)).toBe(true);
   });
 });
+
+describe("walker on slabs", () => {
+  // Flat ground at 100 ft with a 20 ft floor at (300, 300), its top at 101, a wall along its north
+  // edge with a 4 ft doorway in the middle, and a 30° ramp up to 111 off its east side.
+  function slabbed() {
+    const w = walker();
+    const tile = w.view.decoded.get("0,0");
+    const surface = "stone";
+    tile.slabs = [
+      { at: [300, 101, 300], turn: [0, 0, 0], outline: [[0, 0], [20, 0], [20, 20], [0, 20]], thickness: 1, surface },
+      { at: [300, 101, 299], turn: [0, -90, 0], outline: [[0, 0], [8, 0], [8, 7], [12, 7], [12, 0], [20, 0], [20, 10], [0, 10]], thickness: 1, surface },
+      { at: [320, 101, 300], turn: [0, 0, 30], outline: [[0, 0], [20, 0], [20, 20], [0, 20]], thickness: 1, surface },
+    ];
+    return w;
+  }
+
+  it("stands on a floor, and steps up onto it", () => {
+    expect(slabbed().stand(310, 310, 101)).toEqual({ height: 101, structure: true, swim: false });
+    expect(at(slabbed(), 310, 100, 320.4).canStep(310, 319.6)).toBe(true);
+  });
+
+  it("walks up a ramp", () => {
+    const w = at(slabbed(), 321, 101, 310);
+    expect(w.standHeight(321, 310)).toBeCloseTo(101 + Math.tan(Math.PI / 6), 2);
+    expect(w.canStep(321.5, 310)).toBe(true);
+  });
+
+  it("can't walk through a wall, but can through its doorway", () => {
+    expect(at(slabbed(), 304, 101, 301.2).canStep(304, 300.8)).toBe(false);
+    expect(at(slabbed(), 310, 101, 301.2).canStep(310, 300.8)).toBe(true);
+    expect(at(slabbed(), 310, 101, 301.5).canStep(310, 299)).toBe(true);
+  });
+
+  it("walks under a floor high enough overhead", () => {
+    const w = slabbed();
+    w.view.decoded.get("0,0").slabs.push({ at: [340, 110, 340], turn: [0, 0, 0], outline: [[0, 0], [20, 0], [20, 20], [0, 20]], thickness: 1, surface: "stone" });
+    expect(at(w, 338, 100, 350).canStep(338.5, 350)).toBe(true);
+    expect(w.standHeight(345, 350, 100)).toBeCloseTo(100);
+  });
+});

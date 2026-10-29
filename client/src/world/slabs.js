@@ -84,6 +84,69 @@ export function slabSpanAt(slab, x, z) {
   return [Math.min(y, bottom), Math.max(y, bottom)];
 }
 
+// The tops of the slab you could stand on along the upright line through continent [x, z]: each
+// stretch of the line inside it ends at a face, and that face counts when it tilts no more than
+// `steepest` (rise over run). Heights in feet, lowest first. Holes go right through.
+export function slabFootholds(slab, x, z, steepest) {
+  const least = 1 / Math.hypot(1, steepest); // the least upward share of a face's normal
+  const p = unturned(slab, [x, 0, z]);
+  const q = unturned(slab, [x, 1, z]);
+  const d = sub(q, p); // [u, h, v] for each foot up
+  // Where the line's between the slab's faces, then where it's inside its outline.
+  let [from, to] = [-1e5, 1e5];
+  if (Math.abs(d[1]) > 1e-9) {
+    const [a, b] = [(-slab.thickness - p[1]) / d[1], -p[1] / d[1]];
+    [from, to] = [Math.min(a, b), Math.max(a, b)];
+  } else if (p[1] > 0 || p[1] < -slab.thickness) return [];
+  const at = (t) => [p[0] + d[0] * t, p[2] + d[2] * t];
+  const inside = (point) => inPolygon(slab.outline, point) && !(slab.holes ?? []).some((hole) => inPolygon(hole, point));
+  const rings = [slab.outline, ...(slab.holes ?? [])];
+  const cuts = [from, to];
+  if (Math.hypot(d[0], d[2]) > 1e-9) {
+    for (const ring of rings) {
+      ring.forEach((a, i) => {
+        const b = ring[(i + 1) % ring.length];
+        const t = crossing([p[0], 0, p[2]], [d[0], 0, d[2]], a, b);
+        if (t !== null && t > from && t < to) cuts.push(t);
+      });
+    }
+  }
+  cuts.sort((a, b) => a - b);
+  const tops = [];
+  for (let i = 0; i + 1 < cuts.length; i++) {
+    const [t0, t1] = [cuts[i], cuts[i + 1]];
+    if (t1 - t0 < 1e-6 || !inside(at((t0 + t1) / 2))) continue;
+    if (i + 2 < cuts.length && inside(at((t1 + cuts[i + 2]) / 2)) && cuts[i + 2] - t1 > 1e-6) continue;
+    // The face it comes out through: the top or bottom face, or a side.
+    let up;
+    if (Math.abs(t1 - to) < 1e-6 && Math.abs(d[1]) > 1e-9) up = Math.abs(d[1]);
+    else {
+      const point = at(t1);
+      const [a, b] = nearestEdge(rings, point);
+      const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      let normal = [(b[1] - a[1]) / length, -(b[0] - a[0]) / length];
+      if (inside([point[0] + normal[0] * 0.01, point[1] + normal[1] * 0.01])) normal = normal.map((v) => -v);
+      up = turnPoint([normal[0], 0, normal[1]], slab.turn)[1];
+    }
+    if (up >= least - 1e-9 && t1 < 1e5) tops.push(t1);
+  }
+  return tops;
+}
+
+// The edge, [a, b], of any of the rings nearest a point.
+function nearestEdge(rings, [u, v]) {
+  let best = null;
+  let near = Infinity;
+  for (const ring of rings) {
+    ring.forEach((a, i) => {
+      const b = ring[(i + 1) % ring.length];
+      const distance = edgeDistance([a, b], [u, v]);
+      if (distance < near) [best, near] = [[a, b], distance];
+    });
+  }
+  return best;
+}
+
 // Whether the slab runs into a tree's trunk: an upright cylinder { x, z, radius } in continent
 // feet, from `ground` up to `top`.
 export function slabHitsTrunk(slab, { x, z, radius, ground, top }) {
