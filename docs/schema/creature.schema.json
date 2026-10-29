@@ -87,6 +87,9 @@
     "onDeath": {
       "$ref": "common.schema.json#/$defs/id"
     },
+    "stealthed": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
     "speed": {
       "type": "number",
       "exclusiveMinimum": 0

@@ -15,7 +15,7 @@ export const MAX_RESOURCES = 3;
 export const SCHOOLS = ["physical", "holy", "fire", "nature", "frost", "shadow", "arcane"];
 export const PRIMARY_STATS = ["strength", "agility", "intellect"];
 export const GEAR_STATS = [...PRIMARY_STATS, "stamina", "armor", "critRating", "hasteRating", "masteryRating", "versatilityRating", "leechRating", "avoidanceRating", "speedRating"];
-export const DERIVED_STATS = ["attackPower", "spellPower", "maxHealth", "critChance", "critDamage", "haste", "mastery", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed", "damageDone", "healingDone", "damageTaken", "healingTaken", "threat"];
+export const DERIVED_STATS = ["attackPower", "spellPower", "maxHealth", "critChance", "critDamage", "haste", "mastery", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed", "stealth", "detection", "damageDone", "healingDone", "damageTaken", "healingTaken", "threat"];
 export const RESOURCE_KINDS = ["mana", "energy", "rage", "points"];
 export const TARGETS = ["enemy", "ally", "self", "ground", "none"];
 export const EFFECT_TYPES = ["damage", "heal", "resource", "status", "interrupt", "taunt", "move"];
@@ -41,7 +41,7 @@ const COLOR = /^#[0-9a-f]{6}$/;
 export function checkGameData(data, levelCap, problem, warning) {
   const has = (kind, id) => data[kind]?.has(id) ?? false;
   const at = gameDataPath;
-  const ctx = { has, levelCap };
+  const ctx = { has, levelCap, statuses: data.statuses ?? new Map() };
   const each = (kind, check) => {
     for (const [id, thing] of data[kind] ?? []) {
       const path = at(kind, id);
@@ -183,7 +183,8 @@ function moveProblems(effect) {
   return out;
 }
 
-// One of an ability's requires, or a status effect's when: { health, below or above } or { status, on }.
+// One of an ability's requires, or a status effect's when: { health, below or above }, { status, on },
+// { stealthed } or { inCombat }.
 function conditionProblems(c, { has }) {
   if (isObject(c) && c.health !== undefined) {
     const pct = (v) => Number.isFinite(v) && v >= 0 && v <= 100;
@@ -193,7 +194,8 @@ function conditionProblems(c, { has }) {
     if (!["self", "target"].includes(c.on)) return ["needs on, self or target"];
     return has("statuses", c.status) ? [] : [`needs status ${c.status}, which the world doesn't have`];
   }
-  return ["needs { health, below or above } or { status, on }"];
+  for (const key of ["stealthed", "inCombat"]) if (isObject(c) && c[key] !== undefined) return typeof c[key] === "boolean" ? [] : [`needs ${key} true or false`];
+  return ["needs { health, below or above }, { status, on }, { stealthed } or { inCombat }"];
 }
 
 export function statusProblems(status, ctx) {
@@ -246,10 +248,11 @@ function statusEffectProblems(e, ctx) {
       if (e.cooldown !== undefined && !(e.cooldown >= 0)) out.push("needs a cooldown of 0 or more");
       for (const m of effectProblems(e.effect, ctx, true)) out.push(`'s effect ${m}`);
       break;
+    case "stealth":
     case "none":
       break;
     default:
-      out.push(`has type ${JSON.stringify(e.type)}, not stat, periodic, absorb, control, trigger or none`);
+      out.push(`has type ${JSON.stringify(e.type)}, not stat, periodic, absorb, control, trigger, stealth or none`);
   }
   return out;
 }
@@ -297,7 +300,7 @@ export function templateProblems(template) {
   return out;
 }
 
-export function creatureProblems(creature, { has }) {
+export function creatureProblems(creature, { has, statuses }) {
   const out = named(creature);
   if (!isObject(creature.look)) out.push("needs a look, a character recipe");
   else if (!BODIES.includes(creature.look.body ?? "humanoid")) out.push(`has body ${JSON.stringify(creature.look.body)}, not one of ${BODIES.join(", ")}`);
@@ -310,6 +313,7 @@ export function creatureProblems(creature, { has }) {
   if (attack !== undefined && !(isObject(attack) && positive(attack.speed) && (attack.range === undefined || isDistance(attack.range)) && (attack.school === undefined || SCHOOLS.includes(attack.school)))) out.push("needs an attack of { speed, range, school }");
   if (creature.resource !== undefined) for (const m of resourceProblems(creature.resource)) out.push(`'s resource ${m}`);
   for (const id of list(creature.abilities)) if (!has("abilities", id)) out.push(`has ability ${id}, which the world doesn't have`);
+  if (creature.stealthed !== undefined && !(has("statuses", creature.stealthed) && list(statuses.get(creature.stealthed)?.effects).some((e) => e?.type === "stealth"))) out.push(`spawns stealthed with ${creature.stealthed}, which isn't a stealth status the world has`);
   if (creature.onDeath !== undefined && !has("abilities", creature.onDeath)) out.push(`uses ability ${creature.onDeath} as it dies, which the world doesn't have`);
   const tactics = creature.tactics;
   if (tactics !== undefined) {

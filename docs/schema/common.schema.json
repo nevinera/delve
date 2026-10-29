@@ -160,6 +160,30 @@
               ]
             }
           }
+        },
+        {
+          "type": "object",
+          "required": [
+            "stealthed"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "stealthed": {
+              "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "inCombat"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "inCombat": {
+              "type": "boolean"
+            }
+          }
         }
       ]
     },
@@ -233,6 +257,8 @@
         "block",
         "movementSpeed",
         "attackSpeed",
+        "stealth",
+        "detection",
         "damageDone",
         "healingDone",
         "damageTaken",

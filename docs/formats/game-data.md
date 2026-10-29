@@ -100,7 +100,7 @@ Every class has auto-attack from its weapons. The UI shows at most 12 of its abi
 - `target`: what you need targeted to use it. `enemy` or `ally`, or `self`, `ground` (you pick a place within range) or `none`. An `ally` ability with no friendly target lands on you.
 - `icon`: its action bar icon, from the stock set the core world ships.
 - `range`: how far the target can be, a number or `"melee"` (see Distance and areas). `minRange` is how near it can be.
-- `requires`: conditions to use it, each `{ health, below or above }` (`health` is `self` or `target`, in percent) or `{ status, on }` (a status `on` `self` or `target`). An execute needs `{ "health": "target", "below": 20 }`.
+- `requires`: conditions to use it, each `{ health, below or above }` (`health` is `self` or `target`, in percent) or `{ status, on }` (a status `on` `self` or `target`), or `{ stealthed }` or `{ inCombat }` (true or false, about you). An execute needs `{ "health": "target", "below": 20 }`.
 - `creatureTypes`: the creature types it can target, for an ability that only works on beasts, say.
 - `facing`: you must face the target within 90° either side. True by default for `enemy` abilities.
 - `castTime`: 0 is instant. Moving or jumping cancels a cast unless `castWhileMoving` is true.
@@ -160,7 +160,7 @@ A creature's ability uses the same format. An ability doesn't say who gets it: a
 - `dispel`: `magic`, `curse`, `poison`, `disease` or `enrage`, or left out if it can't be dispelled.
 - `duration`: how long it lasts, unless whatever applies it says otherwise. Leave it out for one that lasts until something removes it.
 - `stacking`: what happens when it lands again. `refresh` resets the duration (and keeps up to 30% of what was left), `replace` starts it over, and `stack` adds a stack up to `maxStacks`, refreshing the duration. Effects scale with stacks.
-- `breaksOn`: any of `move`, `damage` and `action` (using an ability or attacking). Food and drink break on `move` and `damage`.
+- `breaksOn`: any of `move`, `damage` and `action` (using an ability or attacking). Food and drink break on `move` and `damage`, and stealth on `damage` and `action`.
 - `pose`: `sit` sits you down while it lasts.
 - `aura`: a visual on the unit while it lasts, `{ effect, colors }`.
 
@@ -170,12 +170,13 @@ Any effect can have `when`, conditions written as an ability's `requires`, check
 
 - `stat`: changes `stat` by `add` or `multiply`. `school` limits a damage or healing stat to one school. Stats:
   - from gear: `strength`, `agility`, `intellect`, `stamina`, `armor`, `critRating`, `hasteRating`, `masteryRating`, `versatilityRating`, `leechRating`, `avoidanceRating` and `speedRating`;
-  - worked out from those: `attackPower`, `spellPower`, `maxHealth`, `critChance`, `critDamage`, `haste`, `mastery`, `versatility`, `leech`, `avoidance`, `dodge`, `parry`, `block`, `movementSpeed` and `attackSpeed`, where percentages add in points;
+  - worked out from those: `attackPower`, `spellPower`, `maxHealth`, `critChance`, `critDamage`, `haste`, `mastery`, `versatility`, `leech`, `avoidance`, `dodge`, `parry`, `block`, `movementSpeed`, `attackSpeed`, `stealth` and `detection` (in levels), where percentages add in points;
   - outcomes: `damageDone`, `healingDone`, `damageTaken`, `healingTaken` and `threat`, which multiply.
 - `periodic`: every `every` seconds (shorter with the caster's haste), does `damage`, `heal` or `resource` by `amount`. `school` and `resource` as for ability effects.
 - `absorb`: soaks up `amount` of damage, of `schools` if it lists them, then ends.
 - `control`: one of `stun`, `root`, `silence`, `incapacitate`, `disorient`, `fear` and `disarm`. Damage breaks incapacitate, disorient and fear.
 - `trigger`: when the holder does something (`on`: `dealDamage`, `takeDamage`, `heal`, `crit`, `cast`, `dodge`, `parry` or `block`, or `healthBelow` when its health drops below `threshold` percent), with `chance` (0 to 1, 1 by default), at most once each `cooldown` seconds, applies `effect`, an ability effect that `affects` `self` or `target`.
+- `stealth`: hides the holder. Others see it only when they detect it, which depends on how near it is, whether they face it, and the gap between its level plus its `stealth` stat and their level plus their `detection` stat. Undetected, it can't be targeted, but areas still hit it. Entering combat, or being hit, ends the status. Stealth's slower movement is a `movementSpeed` stat effect beside it.
 - `none`: nothing, for a status other things look for by name.
 
 ## Items
@@ -255,6 +256,7 @@ The rest is as for items.
 - `classification`: `normal` by default, or `trivial`, `elite`, `rare`, `rareElite` or `boss`. With the level, it sets health, damage and armor, and `health`, `damage` and `armor` multiply those (1 by default).
 - `reaction`: `hostile` attacks you on sight, `neutral` only when attacked.
 - `aggroRadius`: how near you get before it notices, 60 ft by default, longer when it outlevels you and shorter when you outlevel it. It's measured in 3D, and it has to see you.
+- `stealthed`: it spawns stealthed, and stealths again when it resets, with the `stealth` status this names.
 - `attack`: auto-attack `{ speed, range, school }`, by default 2 s, melee, physical.
 - `speed`: a multiplier on run speed, 1 by default.
 - `resource`: one resource, as a class has, for abilities that cost something.

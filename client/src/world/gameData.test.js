@@ -90,6 +90,8 @@ describe("checkGameData", () => {
     expect(changed(requires({ health: "target", below: 20, above: 5 }))).toEqual([`${at}: requirement 1 needs health (self or target), and below or above, a percent`]);
     expect(changed(requires({ status: "gone0001", on: "self" }))).toEqual([`${at}: requirement 1 needs status gone0001, which the world doesn't have`]);
     expect(changed(requires({ status: "chil0001" }))).toEqual([`${at}: requirement 1 needs on, self or target`]);
+    expect(changed(requires({ stealthed: true }, { inCombat: false }))).toEqual([]);
+    expect(changed(requires({ stealthed: "yes" }))).toEqual([`${at}: requirement 1 needs stealthed true or false`]);
     expect(changed((d) => (d.statuses.get("chil0001").effects[0].when = [{ health: "self", above: 150 }]))).toEqual(["statuses/chil0001.json: effect 1 condition 1 needs health (self or target), and below or above, a percent"]);
   });
 
@@ -130,6 +132,8 @@ describe("checkGameData", () => {
     expect(changed((d) => (d.creatures.get("wolf0001").look.body = "dragon"))).toEqual(['creatures/wolf0001.json: has body "dragon", not one of humanoid, goblin, trog, wolf, bobcat, bear, slime']);
     expect(changed((d) => (d.creatures.get("wolf0001").tactics = { type: "priority", abilities: ["kick0001"] }))).toEqual(["creatures/wolf0001.json: uses kick0001 in its tactics, but doesn't have it"]);
     expect(changed((d) => Object.assign(d.creatures.get("wolf0001"), { onDeath: "bite0001", tactics: { type: "rotation", abilities: ["bite0001"] } }))).toEqual(["creatures/wolf0001.json: uses bite0001 in its tactics, but that's what it does as it dies"]);
+    expect(changed((d) => (d.creatures.get("wolf0001").stealthed = "chil0001"))).toEqual(["creatures/wolf0001.json: spawns stealthed with chil0001, which isn't a stealth status the world has"]);
+    expect(changed((d) => d.statuses.get("chil0001").effects.push({ type: "stealth" }) && (d.creatures.get("wolf0001").stealthed = "chil0001"))).toEqual([]);
     expect(changed((d) => (d.creatures.get("wolf0001").creatureType = "wolf"))).toEqual([expect.stringMatching(/has creatureType "wolf", not one of beast/)]);
     expect(changed((d) => (d.creatures.get("wolf0001").attack.range = -1))).toEqual(["creatures/wolf0001.json: needs an attack of { speed, range, school }"]);
     expect(changed((d) => d.items.delete("pelt0001"))).toEqual(["creatures/wolf0001.json: drops item pelt0001, which the world doesn't have"]);
