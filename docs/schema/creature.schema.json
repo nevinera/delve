@@ -185,6 +185,10 @@
       "items": {
         "type": "string"
       }
+    },
+    "notes": {
+      "type": "string",
+      "description": "free-form notes on intent and backstory; the game never reads them"
     }
   }
 }

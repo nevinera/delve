@@ -14,7 +14,7 @@ What a world defines for combat: classes, abilities, statuses, items, creatures,
 | `dialogues/<id>.json` | a dialogue tree | [dialogue](../schema/dialogue.schema.json) |
 | `places/continents/<c>/spawns.json` | the continent's spawn regions, placed mobs and NPCs | [spawns](../schema/spawns.schema.json) |
 
-Ids are 8 lowercase base-36 characters, and a file's id matches its name. Files point at each other by id. Distances are feet, times are seconds, angles are degrees, and money is copper (100 copper make a silver, 100 silver a gold).
+Ids are 8 lowercase base-36 characters, and a file's id matches its name. Files point at each other by id. Every file, and each spawn region and placed mob or NPC, can have `notes`: what it's for and its backstory. The game never reads them. Distances are feet, times are seconds, angles are degrees, and money is copper (100 copper make a silver, 100 silver a gold).
 
 `world.json` sets `levelCap`, 1 to 20 for now. A zone can set `levels`, the `[min, max]` it's built for.
 

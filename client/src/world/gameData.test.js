@@ -123,6 +123,8 @@ describe("checkGameData", () => {
     expect(changed((d) => (d.items.get("wrap0001").slot = "finger"))).toEqual(['items/wrap0001.json: has armorType "leather": it needs one of cloth, leather, chain, plate, in one of head, shoulders, chest, hands, legs, feet']);
     expect(changed((d) => (d.items.get("wrap0001").stats.spirit = 3))).toEqual([expect.stringMatching(/^items\/wrap0001.json: needs stats from strength/)]);
     expect(changed((d) => (d.items.get("fist0001").weaponType = undefined))).toEqual(["items/fist0001.json: needs a weaponType, in mainHand"]);
+    expect(changed((d) => (d.items.get("wrap0001").notes = "Monks start in these; plain on purpose."))).toEqual([]);
+    expect(changed((d) => (d.items.get("wrap0001").notes = 5))).toEqual(["items/wrap0001.json: needs notes to be text"]);
     expect(changed((d) => (d.items.get("wrap0001").stack = 5))).toEqual(["items/wrap0001.json: stacks, but gear can't"]);
     expect(changed((d) => (d.itemTemplates.get("swrd0001").levels = [12, 1]))).toEqual(["item-templates/swrd0001.json: needs levels, [min, max]"]);
     expect(changed((d) => (d.itemTemplates.get("swrd0001").stats.spirit = 1))).toEqual(["item-templates/swrd0001.json: needs stats, weights for primary, secondary or gear stats"]);
@@ -152,6 +154,7 @@ describe("checkGameData", () => {
     expect(changed((d) => (spawnsOf(d).placed[1].id = "r8k2m1qa"))).toEqual([`${at}: has id r8k2m1qa twice`]);
     expect(changed((d) => (spawnsOf(d).placed[1].npc = "vend0001"))).toEqual([`${at}: placed p2b7c3dd needs a creature or an npc`]);
     expect(changed((d) => (spawnsOf(d).regions[0].area = [[[[0, 0], [1, 1]]]]))).toEqual([`${at}: region Wolf Den needs an area: polygons of rings of [x, z] points`]);
+    expect(changed((d) => (spawnsOf(d).regions[0].notes = ["den"]))).toEqual([`${at}: region Wolf Den needs notes to be text`]);
     expect(changed((d) => (spawnsOf(d).regions[0].spawns[0].pack = [3, 1]))).toEqual([`${at}: region Wolf Den's spawn 1 needs a pack of [min, max], whole numbers`]);
     expect(changed((d) => (spawnsOf(d).placed[3].wander = 10))).toEqual([`${at}: placed p4d9e5ff patrols, so it can't wander`]);
     expect(changed((d) => (spawnsOf(d).placed[3].patrol.points = [[1, 2]]))).toEqual([`${at}: placed p4d9e5ff needs a patrol of { points }, two or more [x, z]`]);

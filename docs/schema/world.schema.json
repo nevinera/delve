@@ -43,6 +43,10 @@
       "minimum": 1,
       "maximum": 20,
       "description": "the highest level characters reach here, 20 by default"
+    },
+    "notes": {
+      "type": "string",
+      "description": "free-form notes on intent and backstory, for whoever builds the world; the game never reads them"
     }
   }
 }

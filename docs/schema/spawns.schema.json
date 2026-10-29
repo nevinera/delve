@@ -32,6 +32,10 @@
           "area": {
             "$ref": "common.schema.json#/$defs/region"
           },
+          "notes": {
+            "type": "string",
+            "description": "free-form notes on intent and backstory; the game never reads them"
+          },
           "spawns": {
             "type": "array",
             "items": {
@@ -115,6 +119,10 @@
             "type": "number",
             "minimum": 0
           },
+          "notes": {
+            "type": "string",
+            "description": "free-form notes on intent and backstory; the game never reads them"
+          },
           "pack": {
             "$ref": "common.schema.json#/$defs/id"
           },
@@ -155,6 +163,10 @@
           }
         ]
       }
+    },
+    "notes": {
+      "type": "string",
+      "description": "free-form notes on intent and backstory; the game never reads them"
     }
   }
 }

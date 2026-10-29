@@ -45,7 +45,7 @@ export function checkGameData(data, levelCap, problem, warning) {
   const each = (kind, check) => {
     for (const [id, thing] of data[kind] ?? []) {
       const path = at(kind, id);
-      for (const m of check(thing, ctx)) (m.warning ? warning : problem)(path, m.message ?? m);
+      for (const m of [...notesProblems(thing), ...check(thing, ctx)]) (m.warning ? warning : problem)(path, m.message ?? m);
     }
   };
   each("classes", classProblems);
@@ -56,7 +56,7 @@ export function checkGameData(data, levelCap, problem, warning) {
   each("creatures", creatureProblems);
   each("npcs", npcProblems);
   each("dialogues", dialogueProblems);
-  for (const [path, spawns] of data.spawns ?? []) for (const m of spawnsProblems(spawns, ctx)) (m.warning ? warning : problem)(path, m.message ?? m);
+  for (const [path, spawns] of data.spawns ?? []) for (const m of [...notesProblems(spawns), ...spawnsProblems(spawns, ctx)]) (m.warning ? warning : problem)(path, m.message ?? m);
 
   // An ability a class gets should only cost resources the class has.
   for (const [id, klass] of data.classes ?? []) {
@@ -395,6 +395,7 @@ export function spawnsProblems(spawns, { has, levelCap = MAX_LEVEL }) {
     }
     once(region.id, "region");
     const what = `region ${region.name ?? region.id}`;
+    for (const m of notesProblems(region)) out.push(`${what} ${m}`);
     if (!isRegion(region.area)) out.push(`${what} needs an area: polygons of rings of [x, z] points`);
     if (!Array.isArray(region.spawns)) out.push(`${what} needs a list of spawns`);
     list(region.spawns).forEach((s, n) => {
@@ -414,6 +415,7 @@ export function spawnsProblems(spawns, { has, levelCap = MAX_LEVEL }) {
     }
     once(p.id, "placed one");
     const what = `placed ${p.id}`;
+    for (const m of notesProblems(p)) out.push(`${what} ${m}`);
     if (!(Array.isArray(p.at) && p.at.length === 3 && p.at.every(Number.isFinite))) out.push(`${what} needs at, [x, y, z] in feet`);
     if (p.yaw !== undefined && !Number.isFinite(p.yaw)) out.push(`${what} needs a yaw in degrees`);
     if ((p.creature === undefined) === (p.npc === undefined)) out.push(`${what} needs a creature or an npc`);
@@ -433,6 +435,9 @@ export function spawnsProblems(spawns, { has, levelCap = MAX_LEVEL }) {
   }
   return out;
 }
+
+// notes are free-form text the game never reads.
+const notesProblems = (thing) => (isObject(thing) && thing.notes !== undefined && typeof thing.notes !== "string" ? ["needs notes to be text"] : []);
 
 function named(thing) {
   return typeof thing.name === "string" && thing.name ? [] : ["needs a name"];
