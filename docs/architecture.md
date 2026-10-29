@@ -85,7 +85,7 @@ The game server (`game-server/`) holds every character in a world. Browsers conn
 - `internal/token` checks entry tokens, which Rails signs (`Game::EntryToken`).
 - `internal/worlds` downloads each released commit's zip once, keeps it on disk, and reads the continents and spawn pin.
 - `internal/game` places characters on a layer, works out who's near whom (the 3×3 tiles around each), and passes on their movement. It checks nothing about where a character can go yet.
-- `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token. The server never writes to the database itself.
+- `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token, and writes their positions back to it (`WorldCharacter`, one per character per world). The server never writes to the database itself.
 
 ## Docs
 

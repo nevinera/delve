@@ -40,6 +40,8 @@ func (anyone) Character(_ context.Context, _, id int64) (rails.Character, error)
 	return rails.Character{ID: id, Name: "Arwen", Look: json.RawMessage(`{}`)}, nil
 }
 
+func (anyone) SavePosition(context.Context, int64, int64, rails.Position) error { return nil }
+
 func dial(t *testing.T, url, tok string) (*websocket.Conn, *http.Response, error) {
 	t.Helper()
 	return websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(url, "http")+"/play?token="+tok, nil)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
@@ -19,10 +20,38 @@ func (f *fakeWorlds) Load(_ context.Context, repo, sha string) (*worlds.World, e
 	return &worlds.World{Repo: repo, Sha: sha, Continents: []string{"main"}, Spawn: worlds.Spawn{Continent: "main", At: [2]float64{10.5, 10.5}}}, nil
 }
 
-type fakeCharacters map[int64]*rails.Position
+// fakeCharacters gives characters at the positions it has for them, and keeps those saved.
+type fakeCharacters struct {
+	mu    sync.Mutex
+	at    map[int64]*rails.Position
+	saves []rails.Position
+}
 
-func (f fakeCharacters) Character(_ context.Context, _, id int64) (rails.Character, error) {
-	return rails.Character{ID: id, Name: fmt.Sprintf("C%d", id), Look: json.RawMessage(`{"skin":1}`), Position: f[id]}, nil
+func characters(at map[int64]*rails.Position) *fakeCharacters {
+	if at == nil {
+		at = map[int64]*rails.Position{}
+	}
+	return &fakeCharacters{at: at}
+}
+
+func (f *fakeCharacters) Character(_ context.Context, _, id int64) (rails.Character, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return rails.Character{ID: id, Name: fmt.Sprintf("C%d", id), Look: json.RawMessage(`{"skin":1}`), Position: f.at[id]}, nil
+}
+
+func (f *fakeCharacters) SavePosition(_ context.Context, _, id int64, pos rails.Position) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.at[id] = &pos
+	f.saves = append(f.saves, pos)
+	return nil
+}
+
+func (f *fakeCharacters) saved() []rails.Position {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]rails.Position(nil), f.saves...)
 }
 
 func enter(t *testing.T, h *Hub, id int64) *Player {
@@ -67,7 +96,7 @@ func move(t *testing.T, p *Player, x, z float64) {
 }
 
 func TestEnterAtTheSpawnPointOrWhereItWas(t *testing.T) {
-	h := NewHub(&fakeWorlds{}, fakeCharacters{2: {Continent: "main", At: [3]float64{1, 2, 3}, Yaw: 0.5}})
+	h := NewHub(&fakeWorlds{}, characters(map[int64]*rails.Position{2: {Continent: "main", At: [3]float64{1, 2, 3}, Yaw: 0.5}}))
 	a := enter(t, h, 1)
 	w := next(t, a)
 	if w["type"] != "welcome" || w["layer"] != 1.0 {
@@ -89,7 +118,7 @@ func TestEnterAtTheSpawnPointOrWhereItWas(t *testing.T) {
 }
 
 func TestNearbyCharactersSeeEachOther(t *testing.T) {
-	h := NewHub(&fakeWorlds{}, fakeCharacters{})
+	h := NewHub(&fakeWorlds{}, characters(nil))
 	a := enter(t, h, 1)
 	next(t, a)
 	next(t, a)
@@ -134,7 +163,7 @@ func TestNearbyCharactersSeeEachOther(t *testing.T) {
 }
 
 func TestEnteringAgainDropsTheOldConnection(t *testing.T) {
-	h := NewHub(&fakeWorlds{}, fakeCharacters{})
+	h := NewHub(&fakeWorlds{}, characters(nil))
 	old := enter(t, h, 1)
 	again := enter(t, h, 1)
 	select {
@@ -149,7 +178,7 @@ func TestEnteringAgainDropsTheOldConnection(t *testing.T) {
 }
 
 func TestBadMessages(t *testing.T) {
-	h := NewHub(&fakeWorlds{}, fakeCharacters{})
+	h := NewHub(&fakeWorlds{}, characters(nil))
 	p := enter(t, h, 1)
 	for _, raw := range []string{`nope`, `{"type":"fly"}`, `{"type":"move","at":[1,2,3],"yaw":"x"}`} {
 		if p.Handle([]byte(raw)) == nil {
@@ -160,7 +189,7 @@ func TestBadMessages(t *testing.T) {
 
 func TestLayersUnloadWhenEmpty(t *testing.T) {
 	loads := &fakeWorlds{}
-	h := NewHub(loads, fakeCharacters{})
+	h := NewHub(loads, characters(nil))
 	h.idle = 10 * time.Millisecond
 	h.Leave(enter(t, h, 1))
 	time.Sleep(50 * time.Millisecond)
@@ -177,5 +206,58 @@ func TestCleanMove(t *testing.T) {
 	got := Move{Forward: 5, Strafe: -3, Turn: 1, Gait: "fly"}.clean()
 	if got != (Move{Forward: 1, Strafe: -1, Turn: 1, Gait: "run"}) {
 		t.Errorf("clean = %+v", got)
+	}
+}
+
+func TestSavingPositions(t *testing.T) {
+	chars := characters(nil)
+	h := NewHub(&fakeWorlds{}, chars)
+	p := enter(t, h, 1)
+	flush := func() []rails.Position {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if err := h.Flush(ctx); err != nil {
+			t.Fatal(err)
+		}
+		return chars.saved()
+	}
+
+	// Moving within a plate saves nothing until the regular save, which saves only what changed.
+	move(t, p, 5400, 5400)
+	if got := flush(); len(got) != 0 {
+		t.Fatalf("saved %v", got)
+	}
+	h.SaveAll()
+	h.SaveAll()
+	if got := flush(); len(got) != 1 || got[0].At != [3]float64{5400, 0, 5400} {
+		t.Fatalf("saved %v", got)
+	}
+
+	// Crossing into another plate (8192 ft a side) saves at once.
+	move(t, p, 8200, 5400)
+	if got := flush(); len(got) != 2 || got[1].At[0] != 8200 {
+		t.Fatalf("saved %v", got)
+	}
+
+	// So does leaving, and entering again starts there.
+	move(t, p, 8300, 5400)
+	h.Leave(p)
+	if got := flush(); len(got) != 3 || got[2].At[0] != 8300 || got[2].Continent != "main" {
+		t.Fatalf("saved %v", got)
+	}
+	again := enter(t, h, 1)
+	if at := next(t, again)["you"].(map[string]any)["at"]; fmt.Sprint(at) != "[8300 0 5400]" {
+		t.Errorf("entered again at %v", at)
+	}
+}
+
+func TestEnteringAgainKeepsWhereItIs(t *testing.T) {
+	h := NewHub(&fakeWorlds{}, characters(nil))
+	old := enter(t, h, 1)
+	move(t, old, 6000, 6000)
+	again := enter(t, h, 1)
+	if at := next(t, again)["you"].(map[string]any)["at"]; fmt.Sprint(at) != "[6000 0 6000]" {
+		t.Errorf("entered again at %v", at)
 	}
 }

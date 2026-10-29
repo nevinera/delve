@@ -3,6 +3,7 @@
 package rails
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -44,20 +45,39 @@ func (c *Client) Character(ctx context.Context, world, id int64) (Character, err
 	return out, err
 }
 
+// SavePosition keeps where a character is in a world.
+func (c *Client) SavePosition(ctx context.Context, world, id int64, pos Position) error {
+	body, err := json.Marshal(pos)
+	if err != nil {
+		return err
+	}
+	return c.do(ctx, http.MethodPut, fmt.Sprintf("/internal/worlds/%d/characters/%d/position", world, id), body, nil)
+}
+
 func (c *Client) get(ctx context.Context, path string, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+path, nil)
+	return c.do(ctx, http.MethodGet, path, nil, out)
+}
+
+func (c *Client) do(ctx context.Context, method, path string, body []byte, out any) error {
+	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, bytes.NewReader(body))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("X-Internal-Token", c.token)
 	req.Header.Set("Accept", "application/json")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
 	res, err := c.http.Do(req)
 	if err != nil {
 		return err
 	}
 	defer res.Body.Close()
-	if res.StatusCode != http.StatusOK {
-		return fmt.Errorf("rails: GET %s: %s", path, res.Status)
+	if res.StatusCode/100 != 2 {
+		return fmt.Errorf("rails: %s %s: %s", method, path, res.Status)
+	}
+	if out == nil {
+		return nil
 	}
 	return json.NewDecoder(res.Body).Decode(out)
 }

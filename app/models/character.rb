@@ -6,6 +6,7 @@ class Character < ApplicationRecord
   LOOK_BYTES = 8.kilobytes
 
   belongs_to :user
+  has_many :world_characters, dependent: :destroy
 
   # Names are letters only and stored capitalized, as WoW's are, so "aRwen" and "Arwen" are the
   # same name, and unique across every account.

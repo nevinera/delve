@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -21,14 +22,22 @@ const SendQueue = 256
 // IdleUnload is how long a layer stays loaded after its last player leaves.
 const IdleUnload = 5 * time.Minute
 
+// SaveEvery is how often positions that have changed are saved, besides on leaving and on
+// crossing into another plate.
+const SaveEvery = 30 * time.Second
+
+// plateFt is a plate's width: 16 tiles (client/src/world/plateCodec.js).
+const plateFt = 16 * worlds.TileFt
+
 // WorldLoader gives a released world (worlds.Store).
 type WorldLoader interface {
 	Load(ctx context.Context, repo, sha string) (*worlds.World, error)
 }
 
-// Characters gives a character entering a world (rails.Client).
+// Characters gives a character entering a world, and keeps where it is (rails.Client).
 type Characters interface {
 	Character(ctx context.Context, world, id int64) (rails.Character, error)
+	Positions
 }
 
 // Hub holds every loaded layer.
@@ -36,6 +45,7 @@ type Hub struct {
 	worlds     WorldLoader
 	characters Characters
 	idle       time.Duration
+	saver      *saver
 
 	mu      sync.Mutex
 	layers  map[string]*Layer // by world id and sha
@@ -43,13 +53,14 @@ type Hub struct {
 }
 
 func NewHub(w WorldLoader, c Characters) *Hub {
-	return &Hub{worlds: w, characters: c, idle: IdleUnload, layers: map[string]*Layer{}, playing: map[int64]*Player{}}
+	return &Hub{worlds: w, characters: c, idle: IdleUnload, saver: newSaver(c), layers: map[string]*Layer{}, playing: map[int64]*Player{}}
 }
 
 // Layer is one copy of a world's open land and the characters in it.
 type Layer struct {
 	hub     *Hub
 	key     string
+	worldID int64
 	number  int
 	world   *worlds.World
 	mu      sync.Mutex
@@ -64,6 +75,7 @@ type Player struct {
 	Gone  chan struct{}
 	layer *Layer
 	state Character
+	saved rails.Position // the position last saved
 	once  sync.Once
 }
 
@@ -118,10 +130,19 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 	} else {
 		state.Continent, state.At = layer.world.Spawn.Continent, layer.world.SpawnAt()
 	}
-	p := &Player{Send: make(chan []byte, SendQueue), Gone: make(chan struct{}), layer: layer, state: state}
-
 	h.mu.Lock()
 	old := h.playing[state.ID]
+	h.mu.Unlock()
+	// Still playing here: where it is now is newer than what Rails has.
+	if old != nil && old.layer == layer {
+		layer.mu.Lock()
+		state.Continent, state.At, state.Yaw = old.state.Continent, old.state.At, old.state.Yaw
+		layer.mu.Unlock()
+	}
+	p := &Player{Send: make(chan []byte, SendQueue), Gone: make(chan struct{}), layer: layer, state: state}
+	p.saved = p.position()
+
+	h.mu.Lock()
 	h.playing[state.ID] = p
 	h.mu.Unlock()
 	if old != nil {
@@ -148,12 +169,12 @@ func (h *Hub) layer(ctx context.Context, c token.Claims) (*Layer, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.layers[key] == nil {
-		h.layers[key] = &Layer{hub: h, key: key, number: 1, world: world, players: map[int64]*Player{}}
+		h.layers[key] = &Layer{hub: h, key: key, worldID: c.World, number: 1, world: world, players: map[int64]*Player{}}
 	}
 	return h.layers[key], nil
 }
 
-// Leave takes a player out of the game, telling those near it.
+// Leave takes a player out of the game, telling those near it, and saves where it was.
 func (h *Hub) Leave(p *Player) {
 	p.Drop("")
 	h.mu.Lock()
@@ -205,6 +226,7 @@ func (l *Layer) leave(p *Player) {
 		o.send(encode(vanish{"vanish", p.ID()}))
 	}
 	delete(l.players, p.ID())
+	l.save(p)
 	if len(l.players) == 0 {
 		l.unload = time.AfterFunc(l.hub.idle, l.unloadIfEmpty)
 	}
@@ -251,7 +273,11 @@ func (l *Layer) moved(p *Player, m incoming) {
 	for _, o := range l.near(p) {
 		before[o.ID()] = o
 	}
+	plate := plateOf(p.state.At)
 	p.state.At, p.state.Yaw = m.At, m.Yaw
+	if plateOf(p.state.At) != plate {
+		l.save(p)
+	}
 	if m.Move != nil {
 		p.state.Move = m.Move.clean()
 	}
@@ -271,6 +297,61 @@ func (l *Layer) moved(p *Player, m incoming) {
 	}
 	// The jump is news once; after it the character is just in the air.
 	p.state.Move.Jump = false
+}
+
+// Run saves the positions that have changed every SaveEvery, until ctx ends.
+func (h *Hub) Run(ctx context.Context) {
+	tick := time.NewTicker(SaveEvery)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-tick.C:
+			h.SaveAll()
+		}
+	}
+}
+
+// SaveAll saves every player's position that has changed since it was last saved.
+func (h *Hub) SaveAll() {
+	h.mu.Lock()
+	layers := make([]*Layer, 0, len(h.layers))
+	for _, l := range h.layers {
+		layers = append(layers, l)
+	}
+	h.mu.Unlock()
+	for _, l := range layers {
+		l.mu.Lock()
+		for _, p := range l.players {
+			l.save(p)
+		}
+		l.mu.Unlock()
+	}
+}
+
+// Flush waits for the positions given to be saved, or for ctx to end.
+func (h *Hub) Flush(ctx context.Context) error {
+	return h.saver.flush(ctx)
+}
+
+// save hands a player's position to the saver, if it's changed since it was last saved. The
+// layer's lock is held.
+func (l *Layer) save(p *Player) {
+	pos := p.position()
+	if pos == p.saved {
+		return
+	}
+	p.saved = pos
+	l.hub.saver.save(l.worldID, p.ID(), pos)
+}
+
+func (p *Player) position() rails.Position {
+	return rails.Position{Continent: p.state.Continent, At: p.state.At, Yaw: p.state.Yaw}
+}
+
+func plateOf(at [3]float64) [2]int {
+	return [2]int{int(math.Floor(at[0] / plateFt)), int(math.Floor(at[2] / plateFt))}
 }
 
 // near is everyone else in the 3×3 tiles around p, on its continent. It looks at every player in

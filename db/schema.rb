@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_010000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_29_020000) do
   create_table "characters", force: :cascade do |t|
     t.integer "user_id", null: false
     t.string "name", null: false
@@ -50,6 +50,21 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_010000) do
     t.index ["provider", "uid"], name: "index_users_on_provider_and_uid", unique: true
   end
 
+  create_table "world_characters", force: :cascade do |t|
+    t.integer "world_id", null: false
+    t.integer "character_id", null: false
+    t.string "continent", null: false
+    t.float "x", null: false
+    t.float "y", null: false
+    t.float "z", null: false
+    t.float "yaw", default: 0.0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["character_id"], name: "index_world_characters_on_character_id"
+    t.index ["world_id", "character_id"], name: "index_world_characters_on_world_id_and_character_id", unique: true
+    t.index ["world_id"], name: "index_world_characters_on_world_id"
+  end
+
   create_table "world_imports", force: :cascade do |t|
     t.integer "world_id", null: false
     t.string "tag", null: false
@@ -87,6 +102,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_010000) do
 
   add_foreign_key "characters", "users"
   add_foreign_key "github_connections", "users"
+  add_foreign_key "world_characters", "characters"
+  add_foreign_key "world_characters", "worlds"
   add_foreign_key "world_imports", "worlds"
   add_foreign_key "worlds", "users"
 end

@@ -4,6 +4,7 @@
 class World < ApplicationRecord
   belongs_to :user
   has_many :imports, class_name: "WorldImport", dependent: :destroy
+  has_many :world_characters, dependent: :destroy
 
   validates :repo, presence: true, uniqueness: true, format: {with: %r{\A[\w.-]+/[\w.-]+\z}}
   validates :default_branch, :opened_at, presence: true

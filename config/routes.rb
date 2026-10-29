@@ -46,7 +46,9 @@ Rails.application.routes.draw do
   # For the game server (docs/formats/game-protocol.md).
   namespace :internal_api, path: "internal" do
     resources :worlds, only: [] do
-      resources :characters, only: [:show]
+      resources :characters, only: [:show] do
+        put :position, on: :member
+      end
     end
   end
 end

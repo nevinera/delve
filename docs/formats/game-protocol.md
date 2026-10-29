@@ -23,7 +23,7 @@ A token is `<payload>.<signature>`, both base64url without padding. The payload 
 ## Placing a character
 
 - The game server keeps each released commit's zip on disk, keyed by repo and sha, and downloads it from GitHub the first time someone enters it. A world stays in memory while it has players, and unloads a few minutes after the last one leaves.
-- Rails gives the character's last position in the world, or none. With none, the character starts at the world's spawn pin.
+- Rails gives the character's last position in the world, or none. With none, the character starts at the world's spawn pin. A character still connected elsewhere in the same layer keeps where it is there.
 - The open world runs as layers (copies). The server puts each entering character on a layer. For now each world has one.
 
 ## Messages
@@ -65,5 +65,17 @@ A character is `{ id, name, look, continent, at, yaw, move }`. `look` is the cha
 They call each other with fixed shared tokens in an `X-Internal-Token` header. Rails accepts the ones in `INTERNAL_API_TOKENS`, and the game server sends `RAILS_INTERNAL_TOKEN`.
 
 - `GET /internal/worlds/:world/characters/:character` gives `{ id, name, look, position }`, `position` being `{ continent, at, yaw }` or null.
+- `PUT /internal/worlds/:world/characters/:character/position` with `{ continent, at, yaw }` keeps where the character is in that world (a `WorldCharacter`), and answers 204.
 
 The game server never writes to the database directly.
+
+## Saving positions
+
+The game server keeps positions in memory, and saves one when it has changed:
+
+- when the character leaves the game;
+- when it crosses into another plate (16 tiles a side);
+- every 30 s;
+- when the server stops, for everyone.
+
+Saves go to Rails in the background, one at a time, keeping only each character's latest position.
