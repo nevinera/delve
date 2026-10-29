@@ -27,6 +27,9 @@ import { treeHeight, trunkRadius } from "./treeMeshes.js";
 //   floor is.
 // - "room": a rectangle floor, as drawn in "floor", with four walls standing round its edges on it,
 //   `height` feet over its top. The walls' thickness goes inward, and the floor fits inside them.
+//   With roomRoof, a roof goes over it as "roof" draws one, and the walls rise to meet it.
+// - "roof": a rectangle's roof, flat, shed, gable or hip (roofPieces), its eaves at the level it's
+//   begun on. The walls under it rise to meet it.
 // A rectangle up to MAX_RECTANGLE_FT a side is cut into as many slabs as it takes, each a whole
 // number of its picture's repeats across where it can be, so the picture runs on over the joins.
 // Copied slabs (copy) can be pasted (paste): they follow the pointer, their lowest point on what's
@@ -59,7 +62,7 @@ export class SlabTool {
     this.onPick = onPick;
     this.onProblem = onProblem;
     this.onNote = onNote;
-    this.settings = { mode: "pick", shape: "rectangle", thickness: 1, height: 10, keepWalling: false, conform: false, surface: "floorboards", roof: "gable", pitch: 30, overhang: 1 };
+    this.settings = { mode: "pick", shape: "rectangle", thickness: 1, height: 10, keepWalling: false, conform: false, surface: "floorboards", roof: "gable", pitch: 30, overhang: 1, roomRoof: false };
     this.drawing = null; // { points: [[x, y, z] continent feet], height, pressed: [x, y] while dragging }
     this.picks = []; // [{ slab, key }]: the slabs picked, and the tiles listing them
     this.box = null; // a box being dragged to pick slabs in: { from: [x, y] client pixels, adding }
@@ -299,7 +302,9 @@ export class SlabTool {
       return points.length >= 2 ? roofPieces(a, b, this.drawing.yaw, { style: roof, pitch, overhang, thickness, surface }) : [];
     }
     if (mode === "room") {
-      return points.length >= 2 ? roomPieces(a, b, this.drawing.yaw, { height: this.settings.height, thickness, surface, footUnder: (p, q) => this.footUnder(p, q) }) : [];
+      const { roof, pitch, overhang, roomRoof } = this.settings;
+      const options = { height: this.settings.height, thickness, surface, footUnder: (p, q) => this.footUnder(p, q), roof: roomRoof ? { style: roof, pitch, overhang } : null };
+      return points.length >= 2 ? roomPieces(a, b, this.drawing.yaw, options) : [];
     }
     if (mode === "floor") {
       if (shape === "polygon") return points.length >= 3 ? [floorSlab(points, { thickness, surface })] : [];
@@ -960,8 +965,9 @@ export function wallPieces(from, to, options) {
 // A room from one corner of its floor to the opposite (as rectanglePieces): the floor's pieces,
 // then a wall along each edge, standing `height` over the floor's top, its thickness inward. The
 // walls along the first and third edges run the whole length; the others fit between them.
-// footUnder(from, to) gives a wall's foot.
-export function roomPieces(a, b, yaw, { height, thickness, surface, footUnder }) {
+// footUnder(from, to) gives a wall's foot. With `roof` ({ style, pitch, overhang }), a roof goes
+// over it (roofPieces), its eaves on the walls' tops, and the walls rise to meet it.
+export function roomPieces(a, b, yaw, { height, thickness, surface, footUnder, roof }) {
   const floor = rectanglePieces(a, b, yaw, { thickness, surface });
   if (!floor.length) return [];
   const r = (yaw * Math.PI) / 180;
@@ -985,7 +991,10 @@ export function roomPieces(a, b, yaw, { height, thickness, surface, footUnder })
     }
     return wallPieces(from, to, { foot: footUnder(from, to), height, thickness, surface });
   });
-  return [...floor, ...walls];
+  if (!roof) return [...floor, ...walls];
+  const eaves = top + height;
+  const roofs = roofPieces([a[0], eaves, a[2]], [b[0], eaves, b[2]], yaw, { ...roof, thickness, surface });
+  return [...floor, ...walls.map((wall) => raiseWall(wall, roofs).wall ?? wall), ...roofs];
 }
 
 export const ROOF_STYLES = ["flat", "shed", "gable", "hip"];

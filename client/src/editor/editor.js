@@ -1125,7 +1125,12 @@ export class Editor {
     });
     this.el.slabCustomCancel.addEventListener("click", () => this.el.slabCustom.close());
     this.setSlabSurface("floorboards", { change: false });
-    for (const input of [this.el.slabHeight, this.el.slabKeep, this.el.slabConform, this.el.slabPitch, this.el.slabOverhang]) input.addEventListener("change", () => this.applyDetailBrush());
+    for (const input of [this.el.slabHeight, this.el.slabKeep, this.el.slabConform, this.el.slabPitch, this.el.slabOverhang, this.el.slabRoomRoof]) {
+      input.addEventListener("change", () => {
+        this.showSlabRows();
+        this.applyDetailBrush();
+      });
+    }
     this.el.slabThickness.addEventListener("change", () => {
       this.applyDetailBrush();
       tool()?.change({ thickness: Number(this.el.slabThickness.value) });
@@ -1212,7 +1217,7 @@ export class Editor {
   // The slabs tool's settings from the panel: what it does, and what new slabs are like.
   slabSettings() {
     const { slabThickness, slabHeight, slabKeep } = this.el;
-    return { mode: this.slabMode, shape: this.slabShape, thickness: Number(slabThickness.value) || 1, height: Number(slabHeight.value) || 10, keepWalling: slabKeep.checked, conform: this.el.slabConform.checked, surface: structuredClone(this.slabSurface), roof: this.roofStyle ?? "gable", pitch: Number(this.el.slabPitch.value) || 30, overhang: Number(this.el.slabOverhang.value) || 0 };
+    return { mode: this.slabMode, shape: this.slabShape, thickness: Number(slabThickness.value) || 1, height: Number(slabHeight.value) || 10, keepWalling: slabKeep.checked, conform: this.el.slabConform.checked, surface: structuredClone(this.slabSurface), roof: this.roofStyle ?? "gable", pitch: Number(this.el.slabPitch.value) || 30, overhang: Number(this.el.slabOverhang.value) || 0, roomRoof: this.el.slabRoomRoof.checked };
   }
 
   // Shows only the slabs tool's settings that matter for what it's doing: drawing floors or walls,
@@ -1225,8 +1230,10 @@ export class Editor {
     this.el.slabKeepRow.hidden = !rectangleWall;
     this.el.slabHeightRow.hidden = !rectangleWall && mode !== "room";
     this.el.slabShapeRow.hidden = ["pick", "room", "roof"].includes(mode) && !tool?.cutting;
-    this.el.slabRoofRow.hidden = mode !== "roof";
-    this.el.slabPitchRow.hidden = mode !== "roof";
+    const roofing = mode === "roof" || (mode === "room" && this.el.slabRoomRoof.checked);
+    this.el.slabRoomRoofRow.hidden = mode !== "room";
+    this.el.slabRoofRow.hidden = !roofing;
+    this.el.slabPitchRow.hidden = !roofing;
     for (const [button, style] of [[this.el.slabRoofFlat, "flat"], [this.el.slabRoofShed, "shed"], [this.el.slabRoofGable, "gable"], [this.el.slabRoofHip, "hip"]]) button.classList.toggle("active", (this.roofStyle ?? "gable") === style);
     this.el.slabPitch.closest("label").hidden = (this.roofStyle ?? "gable") === "flat";
     this.el.slabConformRow.hidden = mode !== "floor" && mode !== "room";

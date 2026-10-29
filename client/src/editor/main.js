@@ -119,6 +119,8 @@ const editor = new Editor(World.empty(), {
   slabRoom: $("slabRoom"),
   slabRoof: $("slabRoof"),
   slabRoofRow: $("slabRoofRow"),
+  slabRoomRoofRow: $("slabRoomRoofRow"),
+  slabRoomRoof: $("slabRoomRoof"),
   slabRoofFlat: $("slabRoofFlat"),
   slabRoofShed: $("slabRoofShed"),
   slabRoofGable: $("slabRoofGable"),

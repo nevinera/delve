@@ -146,6 +146,17 @@ describe("roomPieces", () => {
   it("makes nothing from a line", () => {
     expect(room([0, 40, 0], [20, 40, 0])).toEqual([]);
   });
+
+  it("puts a roof over it, the walls risen to meet it", () => {
+    const slabs = roomPieces([0, 40, 0], [20, 40, 30], 0, { height: 10, thickness: 1, surface: "brick", footUnder: () => 38, roof: { style: "gable", pitch: 30, overhang: 1 } });
+    const walls = slabs.filter((s) => s.turn[1] === -90);
+    expect(walls).toHaveLength(4);
+    const peaks = walls.map((wall) => Math.max(...slabTop(wall).map((p) => p[1])));
+    // The gable ends peak under the ridge; the others stay at the eaves, a little over the floor's top and height.
+    expect(peaks.filter((y) => y > 55)).toHaveLength(2);
+    expect(peaks.filter((y) => y < 52)).toHaveLength(2);
+    expect(slabs.filter((s) => s.turn[1] && s.turn[1] !== -90).length).toBeGreaterThanOrEqual(2);
+  });
 });
 
 describe("roofPieces", () => {
