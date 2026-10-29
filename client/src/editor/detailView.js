@@ -220,6 +220,11 @@ export class DetailView {
   show(state, [tx0, tz0], size) {
     const view = this.view;
     const before = view.origin;
+    // Showing another world, such as a template's scratch one, frames it afresh, and coming back
+    // puts the camera where it was.
+    const away = this.window && this.window.world !== state.world;
+    const back = away && this.away?.world === state.world ? this.away : null;
+    this.away = away ? { world: this.window.world, origin: before, target: view.controls.target.clone(), position: view.camera.position.clone() } : this.away;
     view.stopWalk();
     view.streaming = null;
     view.clear();
@@ -271,7 +276,11 @@ export class DetailView {
     this.drawFrame();
 
     const { controls, camera } = view;
-    if (!before) {
+    if (back) {
+      const [dx, dz] = [back.origin[0] - view.origin[0], back.origin[1] - view.origin[1]];
+      controls.target.copy(back.target).add({ x: dx, y: 0, z: dz });
+      camera.position.copy(back.position).add({ x: dx, y: 0, z: dz });
+    } else if (!before || away) {
       const y = view.ground(0, 0) || 0;
       controls.target.set(0, y, 0);
       // Far enough back that the whole window and its arrows show.
