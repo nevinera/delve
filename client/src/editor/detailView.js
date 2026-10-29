@@ -24,7 +24,7 @@ import { surfacePath } from "./thumbnails.js";
 // a trail (detailTrails.js), stamped when it's let go. The objects tool picks an object to drag,
 // turn, size or delete, and the place tool puts new ones down. The channel tool digs along a drawn
 // line (detailWater.js), and the water tool pours water from where it's clicked (onPour). The slabs
-// tool draws, picks and changes slabs (slabTool.js). The structures tool places templates
+// tool draws, picks and changes slabs (slabTool.js). The templates tool places templates
 // (templatePlace.js), and with none to place, picks slabs and objects together to save as one
 // (groupPick.js).
 //
@@ -56,7 +56,7 @@ export class DetailView {
   // working out water. onReflow(cells) hears of ground changed beside water ([ci, cj] continent
   // cells), and answers with tiles whose water to work out again, or null. water { get, set } is
   // the sketch's water, undone with the edits that change it. onSlab hears the slabs picked, onGroup
-// how many slabs and objects the structures tool has picked ({ slabs, objects }), and
+// how many slabs and objects the templates tool has picked ({ slabs, objects }), and
   // onProblem why the slabs tool couldn't do something, or with { info: true }, what it did.
   constructor(canvas, { onMove, onEdit, onPointer, onSelect, onPour, bodies, onReflow, water, onSlab, onGroup, onProblem } = {}) {
     this.canvas = canvas;
@@ -102,8 +102,8 @@ export class DetailView {
         canvas.setPointerCapture(e.pointerId);
         return this.slabTool.pointerDown(e);
       }
-      if (this.brush?.tool === "structures" && this.brush.template) return this.templatePlace.place(e);
-      if (this.brush?.tool === "structures") {
+      if (this.brush?.tool === "templates" && this.brush.template) return this.templatePlace.place(e);
+      if (this.brush?.tool === "templates") {
         canvas.setPointerCapture(e.pointerId);
         return this.group.pointerDown(e);
       }
@@ -112,13 +112,14 @@ export class DetailView {
       canvas.setPointerCapture(e.pointerId);
       if (this.brush.tool === "objects") {
         const picked = this.objectAt(e);
-        // Clicking the ground places what's armed, if anything.
-        if (!picked && this.brush.type) return this.place(at);
+        const under = this.surfaceAt(e) ?? { at };
+        // Clicking the ground or a slab places what's armed, if anything.
+        if (!picked && this.brush.type) return this.place(under.at, under.y);
         this.select(picked);
         if (picked) {
           this.beginEdit();
           const [x, z] = picked.object.at;
-          this.dragging = { dx: x - at[0], dz: z - at[1] };
+          this.dragging = { dx: x - under.at[0], dz: z - under.at[1] };
         }
         return;
       }
@@ -142,10 +143,11 @@ export class DetailView {
       canvas.style.cursor = over ? "pointer" : "";
       const at = !over && this.pointAt(e);
       if (this.trail && at && Math.hypot(at[0] - this.trail.at(-1)[0], at[1] - this.trail.at(-1)[1]) >= TRAIL_STEP_FT) this.trail.push(at);
-      if (this.dragging && at) this.moveSelected([at[0] + this.dragging.dx, at[1] + this.dragging.dz]);
+      const under = this.dragging && this.surfaceAt(e);
+      if (under) this.moveSelected([under.at[0] + this.dragging.dx, under.at[1] + this.dragging.dz], under.y);
       if (this.painting && at) this.paint(at);
       if (this.brush?.tool === "slabs") this.slabTool.pointerMove(e);
-      if (this.brush?.tool === "structures") this.group.pointerMove(e);
+      if (this.brush?.tool === "templates") this.group.pointerMove(e);
       if (this.brush?.template) this.templatePlace.draw(e);
       this.hover(over ? null : this.groundAt(e));
     });
@@ -154,14 +156,14 @@ export class DetailView {
   }
 
   // brush: { tool, radius, falloff, strength, erosion, talus } (detailTools.js), or for the trail
-  // tool, { tool: "trails", kind, state, width } (detailTrails.js), or for the structures tool,
-  // { tool: "structures", type, template, placing } (templatePlace.js).
+  // tool, { tool: "trails", kind, state, width } (detailTrails.js), or for the templates tool,
+  // { tool: "templates", type, template, placing } (templatePlace.js).
   setBrush(brush) {
     this.brush = brush;
     this.slabTool.active(brush?.tool === "slabs");
     if (brush?.tool === "slabs") this.slabTool.setSettings(brush.settings);
-    this.group.active(brush?.tool === "structures" && !brush.template);
-    this.templatePlace.set(brush?.tool === "structures" ? (brush.template ?? null) : null, brush?.placing);
+    this.group.active(brush?.tool === "templates" && !brush.template);
+    this.templatePlace.set(brush?.tool === "templates" ? (brush.template ?? null) : null, brush?.placing);
     if (this.pointer) this.hover(this.groundAt(this.pointer));
   }
 
@@ -539,6 +541,13 @@ export class DetailView {
     return null;
   }
 
+  // Where a pointer event first meets the window's ground or a slab, as { at: [x, z] continent
+  // feet, y: the slab's height there, absent on the ground }, or null.
+  surfaceAt(e) {
+    const hit = this.slabTool.surfaceUnder(this.slabTool.ray(e));
+    return hit && { at: [hit.at[0], hit.at[2]], ...(hit.ground ? {} : { y: hit.at[1] }) };
+  }
+
   select(picked) {
     this.selected = picked;
     this.drawSelection();
@@ -578,14 +587,15 @@ export class DetailView {
   }
 
   // Puts a new object of the armed type down at [x, z]: as built, or in the middle of its sizes.
-  place(at) {
+  // On a slab, it stands at `y`.
+  place(at, y) {
     const key = tileOf(at).join(",");
     if (!this.editable(key)) return;
     const { type } = this.brush;
     const spec = specOf(type);
     if (!spec) return;
     const scale = spec.built ? 1 : (spec.size[0] + spec.size[1]) / 2;
-    const object = { ...makeObject(type, at, Math.random() * Math.PI * 2, scale), id: `${key.replace(",", ".")}.${Math.random().toString(36).slice(2, 8)}` };
+    const object = { ...makeObject(type, at, Math.random() * Math.PI * 2, scale), ...(y === undefined ? {} : { y: Math.round(y * 100) / 100 }), id: `${key.replace(",", ".")}.${Math.random().toString(36).slice(2, 8)}` };
     this.beginEdit();
     this.touch(key);
     const tile = this.view.decoded.get(key);
@@ -595,9 +605,9 @@ export class DetailView {
     this.select({ object, key });
   }
 
-  // Moves the selected object to [x, z], into another tile's list if it crosses into one. It
-  // won't leave the window.
-  moveSelected(at) {
+  // Moves the selected object to [x, z], into another tile's list if it crosses into one, standing
+  // at `y` on a slab, or on the ground without. It won't leave the window.
+  moveSelected(at, y) {
     const { selected } = this;
     const key = tileOf(at).join(",");
     if (!selected || !this.editable(key)) return;
@@ -612,6 +622,8 @@ export class DetailView {
       selected.key = key;
     }
     selected.object.at = at.map((v) => Math.round(v * 10) / 10);
+    if (y === undefined) delete selected.object.y;
+    else selected.object.y = Math.round(y * 100) / 100;
     this.dirtyObjects.add(key);
     this.drawSelection();
     this.onSelect?.(selected.object);
@@ -766,7 +778,7 @@ export class DetailView {
         return [hit.x + origin[0] + Math.cos(a) * radius, hit.z + origin[1] + Math.sin(a) * radius];
       });
     if (this.brush.tool === "paint") return add(ring(Math.max(CELL_FT / 2, this.brush.radius)), CURSOR.trail);
-    if (["objects", "structures", "water", "slabs"].includes(this.brush.tool)) return;
+    if (["objects", "templates", "water", "slabs"].includes(this.brush.tool)) return;
     const rings = DRAWN.has(this.brush.tool) ? [[Math.max(CELL_FT / 2, this.brush.width / 2), CURSOR.trail]] : [[this.brush.radius, CURSOR.inner], [this.brush.radius + this.brush.falloff, CURSOR.outer]];
     for (const [r, color] of rings) if (r > 0) add(ring(r), color);
   }

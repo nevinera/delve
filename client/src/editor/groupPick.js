@@ -6,7 +6,7 @@ import { captureTemplate } from "../world/templates.js";
 import { boundary } from "./renderView.js";
 import { slabAt } from "./slabMeshes.js";
 
-// The detail step's structures tool picking slabs and objects together, to save as a template
+// The detail step's templates tool picking slabs and objects together, to save as a template
 // (world/templates.js), working on a DetailView's tiles. A click on a slab or an object adds it,
 // or takes it away if it's picked. Dragging a box from where there's none picks what's in it: the
 // slabs whose middles and the objects whose places are inside, with those picked before when

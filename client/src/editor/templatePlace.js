@@ -7,7 +7,7 @@ import { fellTree, parseTree } from "../world/trees.js";
 import { boundary } from "./renderView.js";
 import { disposeTemplateGroup, templateGroup } from "./templateMeshes.js";
 
-// The detail step's structures tool placing a template (world/templates.js) on a DetailView's
+// The detail step's templates tool placing a template (world/templates.js) on a DetailView's
 // tiles. The template follows the pointer, its anchor on the cell corner nearest it, standing at
 // the ground's mean height over the cells under it. An outline round those cells shows where it
 // goes, red where it can't: reaching outside the window, or into a tree unless it clears them. A

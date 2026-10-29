@@ -63,7 +63,7 @@ const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 // Steps drawn in 3d instead of on the map.
 const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
-  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it) · with water, click to pour from there, then keep or drop the rivers and lakes it would make · with objects, click a thumbnail, then the ground to place it (esc lets it go); click one placed to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with structures, click a template's thumbnail, then the ground to place it (Q E turn it), or with nothing to place, click slabs and objects or drag a box to pick them, then save them as a template · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
+  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it) · with water, click to pour from there, then keep or drop the rivers and lakes it would make · with objects, click a thumbnail, then the ground to place it (esc lets it go); click one placed to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with templates, click a template's thumbnail, then the ground to place it (Q E turn it), or with nothing to place, click slabs and objects or drag a box to pick them, then save them as a template · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
@@ -97,7 +97,7 @@ const STEPS = {
   civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info", "spawn"], kinds: ["road", "hub", "info", "spawn"] },
   zones: { tools: [], kinds: [], map: "heights" },
   tiles: { tools: [], kinds: [], map: "tiles" },
-  detail: { tools: [...DETAIL_TOOLS, "trails", "channel", "water", "objects", "structures", "paint", "slabs"], kinds: [] },
+  detail: { tools: [...DETAIL_TOOLS, "trails", "channel", "water", "objects", "templates", "paint", "slabs"], kinds: [] },
   "3d": { tools: [], kinds: [] },
   publish: { tools: [], kinds: [], map: "tiles" },
 };
@@ -1030,14 +1030,14 @@ export class Editor {
     if (this.toolName === "channel") return this.detail?.setBrush({ tool: "channel", width: Number(channelWidth.value), depth: Number(channelDepth.value) });
     if (this.toolName === "water") return this.detail?.setBrush({ tool: "water" });
     if (this.toolName === "objects") return this.detail?.setBrush({ tool: "objects", type: this.pickers.objects.armed });
-    if (this.toolName === "structures") {
-      const type = this.pickers.structures.armed;
+    if (this.toolName === "templates") {
+      const type = this.pickers.templates.armed;
       const template = type && allCollections(this.world, "templates").flatMap((c) => c.entries).find((e) => e.type === type)?.template;
       this.el.templatePlaceRow.hidden = !template;
       if (this.el.templateQuarter.checked) this.templateTurn = (Math.round(this.templateTurn / 90) * 90) % 360;
       this.el.templateTurnValue.textContent = `${this.templateTurn}°`;
       const placing = { turn: this.templateTurn, reshape: this.el.templateReshape.checked, clear: this.el.templateClear.checked };
-      return this.detail?.setBrush({ tool: "structures", type, template, placing });
+      return this.detail?.setBrush({ tool: "templates", type, template, placing });
     }
     if (this.toolName === "slabs") {
       this.fillSlabSwatches();
@@ -1100,13 +1100,13 @@ export class Editor {
     if (this.el.libraryPopover.open) this.library?.show();
   }
 
-  // The objects tool's picker of objects, `choose` armed if given, and the structures tool's of
+  // The objects tool's picker of objects, `choose` armed if given, and the templates tool's of
   // templates; and the object types to replace, by collection, builtins first.
   fillObjectTypes(choose) {
     if (!this.pickers) return;
     const objects = allCollections(this.world, "objects");
     this.pickers.objects.show(objects);
-    this.pickers.structures.show(allCollections(this.world, "templates"));
+    this.pickers.templates.show(allCollections(this.world, "templates"));
     if (choose) this.pickers.objects.arm(choose);
     for (const select of [this.el.replaceFrom, this.el.replaceTo]) {
       const collections = objects;
@@ -1231,7 +1231,7 @@ export class Editor {
     this.setSlabSurface(this.slabSurface, { change: false });
   }
 
-  // How many slabs and objects the structures tool has picked, and saving them as a template once
+  // How many slabs and objects the templates tool has picked, and saving them as a template once
   // there are two or more.
   showGroup({ slabs, objects }) {
     const count = slabs + objects;
@@ -1240,7 +1240,7 @@ export class Editor {
     this.el.templateSaveRow.hidden = count < 2;
   }
 
-  // Saves what the structures tool has picked as a template in the world's library.
+  // Saves what the templates tool has picked as a template in the world's library.
   saveTemplate() {
     const name = this.el.templateName.value.trim() || "new template";
     const template = this.detail?.group.template({ id: newObjectId(), name, withGround: this.el.templateGround.checked });
@@ -1441,8 +1441,8 @@ export class Editor {
     };
     const tools = STEPS.detail.tools;
     if (this.toolName === "slabs" && this.detail?.slabTool.key(e)) return true;
-    if (this.toolName === "structures" && !this.pickers.structures.armed && this.detail?.group.key(e)) return true;
-    if (this.toolName === "structures" && this.pickers.structures.armed && (e.key === "q" || e.key === "e")) {
+    if (this.toolName === "templates" && !this.pickers.templates.armed && this.detail?.group.key(e)) return true;
+    if (this.toolName === "templates" && this.pickers.templates.armed && (e.key === "q" || e.key === "e")) {
       // A quarter turn at a time, or with quarter turns off, 15 degrees (1 with shift).
       const step = this.el.templateQuarter.checked ? 90 : e.shiftKey ? 1 : 15;
       this.templateTurn = (((this.templateTurn + (e.key === "e" ? step : -step)) % 360) + 360) % 360;
@@ -1656,10 +1656,10 @@ export class Editor {
     this.el.treeSize.value = 2;
     for (const input of [this.el.paintTerrain, this.el.treeKind, this.el.treeSize]) input.addEventListener("change", () => this.applyDetailBrush());
     this.el.paintRadius.addEventListener("input", () => this.applyDetailBrush());
-    // What the objects and structures tools place, picked from their thumbnails.
+    // What the objects and templates tools place, picked from their thumbnails.
     this.pickers = {
       objects: new PlacePicker(this.el.objectPicker, { onArm: () => this.applyDetailBrush() }),
-      structures: new PlacePicker(this.el.structurePicker, { onArm: () => this.applyDetailBrush() }),
+      templates: new PlacePicker(this.el.templatePicker, { onArm: () => this.applyDetailBrush() }),
     };
     this.fillObjectTypes();
     this.el.replaceOpen.addEventListener("click", () => this.el.replaceDialog.showModal());

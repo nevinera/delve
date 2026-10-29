@@ -22,7 +22,7 @@ A template is a group of [slabs](slabs.md) and objects saved together, to place 
 
 Everything in a template is in feet from its anchor: a corner of the world's 8 ft cell grid, at the height the template stands on. x runs east and z south. Keeping the anchor on the grid means a template's ground lands on whole cells.
 
-The editor's structures tool saves what you've picked as a template (`captureTemplate`). It puts the anchor on the cell corner nearest the middle of what's picked, at the mean height of the ground under it. Placing one (`placedTemplate`) anchors it on a cell corner at the mean height of the ground under it there, turned about the anchor. Each slab and object it puts in the tiles has a `template` field naming the template. Turned off a quarter turn, its ground is read between its cells' middles.
+The editor's templates tool saves what you've picked as a template (`captureTemplate`). It puts the anchor on the cell corner nearest the middle of what's picked, at the mean height of the ground under it. Placing one (`placedTemplate`) anchors it on a cell corner at the mean height of the ground under it there, turned about the anchor. Each slab and object it puts in the tiles has a `template` field naming the template. Turned off a quarter turn, its ground is read between its cells' middles.
 
 ## Fields
 

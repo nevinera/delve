@@ -86,7 +86,7 @@ const editor = new Editor(World.empty(), {
   replaceTo: $("replaceTo"),
   replaceObjects: $("replaceObjects"),
   objectPicker: $("objectPicker"),
-  structurePicker: $("structurePicker"),
+  templatePicker: $("templatePicker"),
   groupInfo: $("groupInfo"),
   templatePlaceRow: $("templatePlaceRow"),
   templateTurnValue: $("templateTurnValue"),

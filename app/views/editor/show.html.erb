@@ -182,14 +182,14 @@
             </div>
           </div>
           <div id="objectPicker" class="place-picker" data-for="objects"></div>
-          <div id="structurePicker" class="place-picker" data-for="structures"></div>
-          <div id="templatePlaceRow" class="editor-stack" data-for="structures" hidden>
+          <div id="templatePicker" class="place-picker" data-for="templates"></div>
+          <div id="templatePlaceRow" class="editor-stack" data-for="templates" hidden>
             <div class="editor-row">turn <output id="templateTurnValue">0°</output> <span class="group-info">Q E</span></div>
             <label class="editor-check" title="turn it a quarter at a time, so its ground lands cell for cell"><input id="templateQuarter" type="checkbox" checked><span>quarter turns</span></label>
             <label class="editor-check" title="set the ground under it to the shape it was saved with"><input id="templateReshape" type="checkbox"><span>reshape the ground</span></label>
             <label class="editor-check" title="fell the trees, clear the clutter and take away the objects under it"><input id="templateClear" type="checkbox" checked><span>clear what's under it</span></label>
           </div>
-          <div class="editor-stack" data-for="structures">
+          <div class="editor-stack" data-for="templates">
             <p id="groupInfo" class="group-info">with nothing to place, click slabs and objects to pick them, or drag a box round them (shift adds)</p>
             <div id="templateSaveRow" class="editor-stack" hidden>
               <label class="editor-field">name <input id="templateName" type="text" maxlength="60" placeholder="new template"></label>
