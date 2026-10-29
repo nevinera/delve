@@ -1069,3 +1069,9 @@
   border-color: #f0c850;
   box-shadow: 0 0 0 1px #f0c850;
 }
+
+.group-info {
+  margin: 0;
+  color: #888;
+  line-height: 1.4;
+}

@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { World } from "../editor/world.js";
-import { adoptStrays, allCollections, collections, images, wornImages } from "./collections.js";
+import { adoptStrays, allCollections, collections, images, keepTemplate, wornImages } from "./collections.js";
 
 describe("collections", () => {
+  it("keeps templates in my templates, making it the first time, and lists them after the builtins", () => {
+    const world = World.empty();
+    const first = keepTemplate(world, { id: "tmpl0001", name: "hut", slabs: [], objects: [] });
+    keepTemplate(world, { id: "tmpl0002", name: "shed", slabs: [], objects: [] });
+    expect(collections(world, "templates")).toEqual([{ id: first.collection, name: "my templates" }]);
+    const listed = allCollections(world, "templates");
+    expect(listed.at(-1).entries.map((e) => [e.name, e.type])).toEqual([["hut", "template:tmpl0001"], ["shed", "template:tmpl0002"]]);
+    expect(listed.slice(0, -1).every((c) => c.kind === "builtin")).toBe(true);
+  });
+
   it("moves images kept with a collection to the world's", () => {
     const world = World.empty();
     world.writeJson("images/abcd1234.json", { id: "abcd1234", name: "bricks", kind: "tiled", collection: "c0000001", rows: [] });

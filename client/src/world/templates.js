@@ -1,5 +1,5 @@
 import { CELL_FT } from "./constants.js";
-import { slabProblems } from "./slabs.js";
+import { slabBottom, slabProblems, slabTop } from "./slabs.js";
 
 // Templates: groups of slabs and objects saved together, to place into the world as copies
 // (docs/formats/templates.md). A world keeps its templates as templates/<id>.json, in collections
@@ -80,3 +80,85 @@ function groundProblems(ground) {
 
 // The kinds of object a template places, for checking the world has them.
 export const templateKinds = (template) => new Set((template.objects ?? []).map((o) => o.type));
+
+// A template of slabs and objects picked in the world, as { id, name, slabs, objects, ground }:
+// slabs as tiles hold them, objects { type, at: [x, z], yaw, scale, y, colors, texts } in continent
+// feet. Its anchor is the cell corner nearest the middle of what's picked, at the ground's mean
+// height over the cells under it: those inside the convex hull of the slabs' corners and the
+// objects' places. With `withGround`, it keeps those cells' heights. height(ci, cj) gives a
+// continent cell's ground height.
+export function captureTemplate({ id, name, slabs, objects, height, withGround = false }) {
+  const points = [...slabs.flatMap((slab) => [...slabTop(slab), ...slabBottom(slab)].map(([x, , z]) => [x, z])), ...objects.map((o) => o.at)];
+  const xs = points.map((p) => p[0]);
+  const zs = points.map((p) => p[1]);
+  const [ai, aj] = [Math.round((Math.min(...xs) + Math.max(...xs)) / 2 / CELL_FT), Math.round((Math.min(...zs) + Math.max(...zs)) / 2 / CELL_FT)];
+  const cells = hullCells(convexHull(points));
+  const heights = cells.map(([ci, cj]) => height(ci, cj));
+  const base = round(heights.length ? heights.reduce((s, h) => s + h, 0) / heights.length : height(ai, aj), 4);
+  const anchor = [ai * CELL_FT, base, aj * CELL_FT];
+  return {
+    id,
+    name,
+    slabs: slabs.map(({ at, ...slab }) => ({ at: at.map((v, i) => round(v - anchor[i])), ...structuredClone(slab) })),
+    objects: objects.map(({ type, at, yaw, scale, y, colors, texts }) => ({
+      type,
+      at: [round(at[0] - anchor[0]), round(at[1] - anchor[2])],
+      ...(Number.isFinite(y) ? { y: round(y - base) } : {}),
+      yaw,
+      scale,
+      ...(colors ? { colors: [...colors] } : {}),
+      ...(texts ? { texts: structuredClone(texts) } : {}),
+    })),
+    ...(withGround ? { ground: cells.map(([ci, cj], n) => [ci - ai, cj - aj, round(heights[n] - base)]) } : {}),
+  };
+}
+
+// The convex hull of [x, z] points, counter-clockwise, without repeats.
+export function convexHull(points) {
+  const sorted = [...new Map(points.map((p) => [p.join(","), p])).values()].sort((a, b) => a[0] - b[0] || a[1] - b[1]);
+  if (sorted.length < 3) return sorted;
+  const cross = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+  const half = (list) => {
+    const out = [];
+    for (const p of list) {
+      while (out.length >= 2 && cross(out.at(-2), out.at(-1), p) <= 0) out.pop();
+      out.push(p);
+    }
+    return out.slice(0, -1);
+  };
+  return [...half(sorted), ...half([...sorted].reverse())];
+}
+
+// The cells [ci, cj] a convex polygon overlaps, more than touching: those no edge of it or the
+// cell's sides separate from it. A polygon of one or two points overlaps the cells it's on.
+export function hullCells(hull) {
+  if (!hull.length) return [];
+  const xs = hull.map((p) => p[0]);
+  const zs = hull.map((p) => p[1]);
+  const [i0, i1, j0, j1] = [Math.floor(Math.min(...xs) / CELL_FT), Math.ceil(Math.max(...xs) / CELL_FT), Math.floor(Math.min(...zs) / CELL_FT), Math.ceil(Math.max(...zs) / CELL_FT)];
+  const flat = hull.length < 3;
+  const out = [];
+  for (let cj = j0; cj < Math.max(j1, j0 + 1); cj++) {
+    for (let ci = i0; ci < Math.max(i1, i0 + 1); ci++) {
+      const corners = [[ci, cj], [ci + 1, cj], [ci + 1, cj + 1], [ci, cj + 1]].map(([i, j]) => [i * CELL_FT, j * CELL_FT]);
+      if (flat ? hull.every(([x, z]) => x >= corners[0][0] && x <= corners[2][0] && z >= corners[0][1] && z <= corners[2][1]) : overlaps(hull, corners)) out.push([ci, cj]);
+    }
+  }
+  return out;
+}
+
+// Whether two convex polygons overlap by more than touching.
+function overlaps(a, b) {
+  for (const poly of [a, b]) {
+    for (let n = 0; n < poly.length; n++) {
+      const [p, q] = [poly[n], poly[(n + 1) % poly.length]];
+      const axis = [q[1] - p[1], p[0] - q[0]];
+      const span = (list) => list.map(([x, z]) => x * axis[0] + z * axis[1]);
+      const [sa, sb] = [span(a), span(b)];
+      if (Math.max(...sa) <= Math.min(...sb) + 1e-9 || Math.max(...sb) <= Math.min(...sa) + 1e-9) return false;
+    }
+  }
+  return true;
+}
+
+const round = (v, per = 100) => Math.round(v * per) / per + 0;

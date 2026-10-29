@@ -12,6 +12,7 @@ import { footprintOf, makeObject, reachOf, specOf, tileOf } from "../world/objec
 import { CELL_FT as STRUCTURE_CELL_FT, bakeWalk, placedWalk, pushGround, quartersOf } from "../world/structures.js";
 import { meshHeightAt } from "../world/clutter.js";
 import { RenderView, boundary, groundSampler } from "./renderView.js";
+import { GroupPick } from "./groupPick.js";
 import { SlabTool } from "./slabTool.js";
 import { surfacePath } from "./thumbnails.js";
 
@@ -24,7 +25,8 @@ import { surfacePath } from "./thumbnails.js";
 // a trail (detailTrails.js), stamped when it's let go. The objects tool picks an object to drag,
 // turn, size or delete, and the place tool puts new ones down. The channel tool digs along a drawn
 // line (detailWater.js), and the water tool pours water from where it's clicked (onPour). The slabs
-// tool draws, picks and changes slabs (slabTool.js).
+// tool draws, picks and changes slabs (slabTool.js). The structures tool, with nothing to place,
+// picks slabs and objects together to save as a template (groupPick.js).
 //
 // Water comes from the sketch's rivers and lakes (plans/water.md). Whenever the ground changes, the
 // changed tiles' water is worked out again from them, over the ground as it is (rework).
@@ -53,9 +55,10 @@ export class DetailView {
   // feet. bodies() gives the generator's view of the continent (generator.js prepareWorld), for
   // working out water. onReflow(cells) hears of ground changed beside water ([ci, cj] continent
   // cells), and answers with tiles whose water to work out again, or null. water { get, set } is
-  // the sketch's water, undone with the edits that change it. onSlab hears the slabs picked, and
+  // the sketch's water, undone with the edits that change it. onSlab hears the slabs picked, onGroup
+// how many slabs and objects the structures tool has picked ({ slabs, objects }), and
   // onProblem why the slabs tool couldn't do something, or with { info: true }, what it did.
-  constructor(canvas, { onMove, onEdit, onPointer, onSelect, onPour, bodies, onReflow, water, onSlab, onProblem } = {}) {
+  constructor(canvas, { onMove, onEdit, onPointer, onSelect, onPour, bodies, onReflow, water, onSlab, onGroup, onProblem } = {}) {
     this.canvas = canvas;
     this.view = new RenderView(canvas);
     const { controls } = this.view;
@@ -89,6 +92,7 @@ export class DetailView {
     this.undos = [];
     this.redos = [];
     this.slabTool = new SlabTool(this, { onPick: (slabs) => onSlab?.(slabs), onProblem: (message) => onProblem?.(message), onNote: (message) => onProblem?.(message, { info: true }) });
+    this.group = new GroupPick(this, { onPick: (counts) => onGroup?.(counts) });
     canvas.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
       const side = this.arrowAt(e);
@@ -96,6 +100,10 @@ export class DetailView {
       if (this.brush?.tool === "slabs") {
         canvas.setPointerCapture(e.pointerId);
         return this.slabTool.pointerDown(e);
+      }
+      if (this.brush?.tool === "structures" && !this.brush.type) {
+        canvas.setPointerCapture(e.pointerId);
+        return this.group.pointerDown(e);
       }
       const at = this.pointAt(e);
       if (!at || !this.brush) return;
@@ -137,6 +145,7 @@ export class DetailView {
       if (this.dragging && at) this.moveSelected([at[0] + this.dragging.dx, at[1] + this.dragging.dz]);
       if (this.painting && at) this.paint(at);
       if (this.brush?.tool === "slabs") this.slabTool.pointerMove(e);
+      if (this.brush?.tool === "structures") this.group.pointerMove(e);
       this.hover(over ? null : this.groundAt(e));
     });
     canvas.addEventListener("pointerleave", () => this.stroke || this.trail || this.dragging || this.hover(null));
@@ -149,6 +158,7 @@ export class DetailView {
     this.brush = brush;
     this.slabTool.active(brush?.tool === "slabs");
     if (brush?.tool === "slabs") this.slabTool.setSettings(brush.settings);
+    this.group.active(brush?.tool === "structures" && !brush.type);
     if (this.pointer) this.hover(this.groundAt(this.pointer));
   }
 
@@ -161,6 +171,7 @@ export class DetailView {
   // The left button's let go: a brush stroke ends, and a trail's stamped (or dropped, if `cancel`).
   release(cancel = false) {
     this.slabTool.pointerUp();
+    this.group.pointerUp();
     if (this.painting) {
       this.painting = false;
       this.endEdit();
@@ -223,6 +234,7 @@ export class DetailView {
     this.dirtySlabs.clear();
     this.slabTool.pick(null);
     this.slabTool.drawing = null;
+    this.group.clear();
     // Undoing reaches only tiles still loaded, so moving the window starts afresh.
     this.undos = [];
     this.redos = [];
@@ -416,6 +428,7 @@ export class DetailView {
     if (this.stroke || this.trail || this.dragging || this.painting || this.slabTool.corner !== null || !from.length) return;
     this.select(null);
     this.slabTool.pick(null);
+    this.group.clear();
     const entry = from.pop();
     to.push(entry);
     for (const [key, state] of entry[side]) restore(this.tile(key), state);

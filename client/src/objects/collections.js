@@ -78,6 +78,16 @@ export function addCollection(world, name, source, kind = "objects") {
   return collection;
 }
 
+// Keeps a template in the world's library, in its own "my templates" collection, made when
+// needed. Returns it as kept.
+export function keepTemplate(world, template) {
+  const { home, thingPath } = KINDS.templates;
+  const collection = ownCollections(world, "templates").find((c) => c.name === home) ?? addCollection(world, home, undefined, "templates");
+  const kept = { ...template, collection: collection.id };
+  world.writeJson(thingPath(kept.id), kept);
+  return kept;
+}
+
 // Puts things in no collection of their kind into one: structures kept with objects, as they once
 // were, into a structure collection of the same name, and the rest into "my objects" or "my
 // structures", each made when needed. Moves images kept with a collection (OLD_IMAGES) to the

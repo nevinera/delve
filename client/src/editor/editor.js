@@ -33,9 +33,10 @@ import { TRAIL_KINDS, TRAIL_STATES } from "./detailTrails.js";
 import { BUILT_PREFIX, builtOf, makeObject, setBuiltObjects, specOf, tiledImages } from "../world/objects.js";
 import { SLAB_PATTERNS, SLAB_PRESETS } from "../world/slabs.js";
 import { presetPixels } from "./slabTextures.js";
-import { paletteColors, textsOf } from "../world/builtObjects.js";
+import { newObjectId, paletteColors, textsOf } from "../world/builtObjects.js";
+import { templateProblems } from "../world/templates.js";
 import { MAX_TEXT, signText } from "../world/pixelFont.js";
-import { adoptStrays, allCollections, builtObjects, builtStructures, images } from "../objects/collections.js";
+import { adoptStrays, allCollections, builtObjects, builtStructures, images, keepTemplate } from "../objects/collections.js";
 import { placedCount } from "../objects/placed.js";
 import { decodeTile, encodeTile } from "../world/tileCodec.js";
 import { gunzipSync, gzipSync } from "fflate";
@@ -63,7 +64,7 @@ const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 // Steps drawn in 3d instead of on the map.
 const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
-  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it) · with water, click to pour from there, then keep or drop the rivers and lakes it would make · with objects or structures, click a thumbnail, then the ground to place it (esc lets it go); click one placed to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
+  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it) · with water, click to pour from there, then keep or drop the rivers and lakes it would make · with objects or structures, click a thumbnail, then the ground to place it (esc lets it go); click one placed to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with structures and nothing to place, click slabs and objects or drag a box to pick them, then save them as a template · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
@@ -980,6 +981,7 @@ export class Editor {
         bodies: () => this.bodies(),
         onReflow: (cells) => this.reflowWater(cells),
         onSlab: (slabs) => this.showSlab(slabs),
+        onGroup: (counts) => this.showGroup(counts),
         onProblem: (message, options) => this.say(message, options),
         water: {
           get: () => this.sketch.water,
@@ -1232,6 +1234,28 @@ export class Editor {
     this.setSlabSurface(this.slabSurface, { change: false });
   }
 
+  // How many slabs and objects the structures tool has picked, and saving them as a template once
+  // there are two or more.
+  showGroup({ slabs, objects }) {
+    const count = slabs + objects;
+    const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+    this.el.groupInfo.textContent = count ? `${plural(slabs, "slab")} and ${plural(objects, "object")} picked · esc lets them go` : "with nothing to place, click slabs and objects to pick them, or drag a box round them (shift adds)";
+    this.el.templateSaveRow.hidden = count < 2;
+  }
+
+  // Saves what the structures tool has picked as a template in the world's library.
+  saveTemplate() {
+    const name = this.el.templateName.value.trim() || "new template";
+    const template = this.detail?.group.template({ id: newObjectId(), name, withGround: this.el.templateGround.checked });
+    if (!template) return;
+    const problems = templateProblems(template);
+    if (problems.length) return this.say(`That template ${problems[0]}.`);
+    keepTemplate(this.world, template);
+    this.dirty = true;
+    this.el.templateName.value = "";
+    this.say(`Saved template "${name}": ${template.slabs.length} slabs and ${template.objects.length} objects${template.ground ? `, with ${template.ground.length} cells of ground` : ""}.`, { info: true });
+  }
+
   // The detail step's picked object in the panel, or none.
   showObject(object) {
     const { objectPanel, objectInfo, objectYaw, objectYawValue, objectScale, objectScaleValue } = this.el;
@@ -1426,6 +1450,7 @@ export class Editor {
     };
     const tools = STEPS.detail.tools;
     if (this.toolName === "slabs" && this.detail?.slabTool.key(e)) return true;
+    if (this.toolName === "structures" && !this.pickers.structures.armed && this.detail?.group.key(e)) return true;
     const picked = this.detail?.selected?.object;
     if (/^[0-9]$/.test(e.key) && tools[(Number(e.key) + 9) % 10]) this.setTool(tools[(Number(e.key) + 9) % 10]);
     else if (picked && (e.key === "Delete" || e.key === "Backspace")) this.detail.deleteSelected();
@@ -1578,6 +1603,7 @@ export class Editor {
     for (const tab of this.el.stepTabs) tab.addEventListener("click", () => (tab.dataset.step === "detail" ? this.pickDetail() : this.setStep(tab.dataset.step)));
     this.el.openLibrary.addEventListener("click", () => this.openLibrary());
     this.el.openStructures.addEventListener("click", () => this.openLibrary("structures"));
+    this.el.templateSave.addEventListener("click", () => this.saveTemplate());
     for (const kind of ["objects", "structures"]) {
       const [popover] = this.libraryParts(kind);
       // Keys stay in the library, away from the editor behind it.

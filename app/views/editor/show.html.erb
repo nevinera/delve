@@ -185,6 +185,14 @@
           </div>
           <div id="objectPicker" class="place-picker" data-for="objects"></div>
           <div id="structurePicker" class="place-picker" data-for="structures"></div>
+          <div class="editor-stack" data-for="structures">
+            <p id="groupInfo" class="group-info">with nothing to place, click slabs and objects to pick them, or drag a box round them (shift adds)</p>
+            <div id="templateSaveRow" class="editor-stack" hidden>
+              <label class="editor-field">name <input id="templateName" type="text" maxlength="60" placeholder="new template"></label>
+              <label class="editor-check" title="keep the shape of the ground under them, to put back where it's placed"><input id="templateGround" type="checkbox"><span>with the ground</span></label>
+              <button id="templateSave" type="button">save as template</button>
+            </div>
+          </div>
           <div class="editor-row" data-for="objects"><button id="replaceOpen" type="button">replace every…</button></div>
           <div class="editor-stack" data-for="slabs">
             <div class="editor-row slab-modes"><button id="slabSelect" type="button" title="click a slab to pick it, shift-click for more, or drag a box round them">select</button><button id="slabFloor" type="button">draw floor</button><button id="slabWall" type="button">draw wall</button><button id="slabRoom" type="button" title="drag a rectangle for a floor with four walls round it">draw room</button><button id="slabRoof" type="button" title="drag a rectangle for a roof, its eaves at the level you start on; the walls under it rise to meet it">draw roof</button><label id="slabKeepRow" class="editor-check" title="start each wall where the last one ended"><input id="slabKeep" type="checkbox"><span>keep walling</span></label></div>
