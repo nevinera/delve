@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { slabBottom, slabProblems, slabTop } from "../world/slabs.js";
-import { conformedCells, faceSlab, floorSlab, rectanglePieces, rectangleSlab, wallPieces, wallSlab } from "./slabTool.js";
+import { SlabTool, conformedCells, faceSlab, floorSlab, rectanglePieces, rectangleSlab, wallPieces, wallSlab } from "./slabTool.js";
 
 const near = (points) => points.map((p) => p.map((v) => Math.round(v * 100) / 100 + 0));
 
@@ -85,5 +85,43 @@ describe("conformedCells", () => {
     expect(keys).toContain("2,2");
     expect(keys).toContain("1,1");
     expect(keys).not.toContain("0,0");
+  });
+});
+
+describe("fitting floors inside walls", () => {
+  // A tool over one tile, 0,0, with no view: just enough for fitFloors.
+  function tool(slabs) {
+    const tile = { slabs };
+    const t = Object.create(SlabTool.prototype);
+    t.detail = { view: { decoded: new Map([["0,0", tile]]) }, editable: () => true, touch() {}, dirtySlabs: new Set() };
+    return { t, tile };
+  }
+  const walls = [
+    wallSlab([10, 0, 10], [30, 0, 10], { foot: 0, height: 10, thickness: 1, surface: "brick" }),
+    wallSlab([10, 0, 30], [10, 0, 10], { foot: 0, height: 10, thickness: 1, surface: "brick" }),
+  ];
+  const floor = () => floorSlab([[10, 0, 10], [30, 0, 10], [30, 0, 30], [10, 0, 30]], { thickness: 1, surface: "stone" });
+  const extent = (slab) => {
+    const top = slabTop(slab);
+    return [Math.min(...top.map((p) => p[0])), Math.max(...top.map((p) => p[0])), Math.min(...top.map((p) => p[2])), Math.max(...top.map((p) => p[2]))];
+  };
+
+  it("fits a new floor inside the walls there", () => {
+    const { t, tile } = tool([...walls]);
+    const f = floor();
+    tile.slabs.push(f);
+    const [fitted] = t.fitFloors([f]);
+    // Both walls' thickness goes into the room.
+    expect(near([extent(fitted)])[0]).toEqual([11, 30, 11, 30]);
+    expect(tile.slabs).not.toContain(f);
+    expect(tile.slabs).toContain(fitted);
+  });
+
+  it("fits an old floor inside a new wall", () => {
+    const f = floor();
+    const { t, tile } = tool([f, walls[0]]);
+    expect(t.fitFloors([walls[0]])).toEqual([walls[0]]);
+    expect(tile.slabs).not.toContain(f);
+    expect(tile.slabs).toHaveLength(2);
   });
 });

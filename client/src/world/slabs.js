@@ -127,18 +127,70 @@ function edgeDistance(polygon, [u, v]) {
   return best;
 }
 
-// The slab with `hole` ([u, v] points) taken out of it: what's left, as slabs. A hole inside it
+// The slab with each cut ([u, v] points) taken out of it: what's left, as slabs. A cut inside it
 // joins its holes; one reaching its edge cuts a notch, and one across it splits it in pieces.
-export function cutSlab(slab, hole) {
+export function cutSlab(slab, ...cuts) {
   const close = (ring) => [...ring, ring[0]];
   const tidy = (v) => Math.round(v * 100) / 100 + 0;
   // polygon-clipping repeats each ring's first corner at the end.
   const open = (ring) => ring.slice(0, -1).map((p) => p.map(tidy));
-  const left = polygonClipping.difference([close(slab.outline), ...(slab.holes ?? []).map(close)], [close(hole)]);
+  const left = polygonClipping.difference([close(slab.outline), ...(slab.holes ?? []).map(close)], ...cuts.map((hole) => [close(hole)]));
   return left.map(([outline, ...holes]) => {
     const { holes: _, ...rest } = slab;
     return holes.length ? { ...rest, outline: open(outline), holes: holes.map(open) } : { ...rest, outline: open(outline) };
   });
+}
+
+// A floor fitted inside the walls it runs into: what's left of it once each wall's footprint, at
+// the floor's height, is cut out. A floor is a slab facing nearly straight up, and a wall one
+// standing upright. Strips under NARROW_FT wide left outside the walls go too. Returns null when
+// no wall reaches it, or what's left would be no good.
+export function fitFloor(floor, walls) {
+  if (turnPoint([0, 1, 0], floor.turn)[1] < 0.95) return null;
+  const ys = [...slabTop(floor), ...slabBottom(floor)].map((p) => p[1]);
+  const [low, high] = [Math.min(...ys) + 0.01, Math.max(...ys) - 0.01];
+  const y = floor.at[1];
+  const cuts = walls
+    .flatMap((wall) => wallFootprint(wall, low, high))
+    .map((ring) => ring.map(([x, z]) => unturned(floor, [x, y, z])).map(([u, , v]) => [u, v]));
+  if (!cuts.length) return null;
+  const pieces = cutSlab(floor, ...cuts).filter(({ outline }) => Math.abs(area(outline)) / perimeter(outline) >= NARROW_FT / 2);
+  const before = slabArea(floor);
+  if (Math.abs(pieces.reduce((sum, piece) => sum + slabArea(piece), 0) - before) < 0.01) return null;
+  return pieces.some((piece) => slabProblems(piece).length) ? null : pieces;
+}
+
+const NARROW_FT = 1;
+
+// Where an upright slab stands between heights low and high, as [x, z] rectangles, one for each
+// stretch of it at those heights. A doorway reaching down to them leaves a gap between two.
+export function wallFootprint(wall, low, high) {
+  const n = turnPoint([0, 1, 0], wall.turn);
+  if (Math.abs(n[1]) >= 0.05) return [];
+  const across = Math.hypot(n[0], n[2]);
+  const along = [-n[2] / across, n[0] / across];
+  const flat = (ring) => {
+    const points = slabFace(wall, ring).map(([x, y, z]) => [(x - wall.at[0]) * along[0] + (z - wall.at[2]) * along[1], y]);
+    return [...points, points[0]];
+  };
+  const s = slabTop(wall).map((p) => (p[0] - wall.at[0]) * along[0] + (p[2] - wall.at[2]) * along[1]);
+  const [s0, s1] = [Math.min(...s) - 1, Math.max(...s) + 1];
+  const band = [[[s0, low], [s1, low], [s1, high], [s0, high], [s0, low]]];
+  const face = [flat(wall.outline), ...(wall.holes ?? []).map(flat)];
+  const down = turner(wall.turn)([0, -wall.thickness, 0]);
+  return polygonClipping.intersection(face, band).map(([ring]) => {
+    const [from, to] = [Math.min(...ring.map((p) => p[0])), Math.max(...ring.map((p) => p[0]))];
+    const at = (t) => [wall.at[0] + along[0] * t, wall.at[2] + along[1] * t];
+    return [at(from), at(to), [at(to)[0] + down[0], at(to)[1] + down[2]], [at(from)[0] + down[0], at(from)[1] + down[2]]];
+  });
+}
+
+function slabArea(slab) {
+  return Math.abs(area(slab.outline)) - (slab.holes ?? []).reduce((sum, hole) => sum + Math.abs(area(hole)), 0);
+}
+
+function perimeter(points) {
+  return points.reduce((sum, p, i) => sum + Math.hypot(...sub(points[(i + 1) % points.length], p)), 0);
 }
 
 // Its bottom corners, under the top ones.

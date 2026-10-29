@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { CELL_FT, CELLS } from "../world/constants.js";
-import { MAX_SLAB_CORNERS, SLAB_REACH_FT, cutSlab, slabBottom, slabFace, slabHitsTrunk, slabProblems, slabTile, slabTop } from "../world/slabs.js";
+import { MAX_SLAB_CORNERS, SLAB_REACH_FT, cutSlab, fitFloor, slabBottom, slabFace, slabHitsTrunk, slabProblems, slabTile, slabTop } from "../world/slabs.js";
 import { slabAt, slabGeometry, slabMeshes } from "./slabMeshes.js";
 import { repeatFt } from "./slabTextures.js";
 import { treeHeight, trunkRadius } from "./treeMeshes.js";
@@ -339,17 +339,13 @@ export class SlabTool {
   }
 
   // Puts new slabs in the tiles they belong to, as one edit, and picks a lone one unless more's
-  // being drawn. A floor begun `onGround` conforms the ground to it, when that's asked for.
+  // being drawn. Floors fit inside the walls they run into, new or old. A floor begun `onGround`
+  // conforms the ground to it, when that's asked for. Returns the new slabs as they ended up.
   add(slabs, { onGround = false } = {}) {
     const { detail } = this;
     detail.beginEdit();
-    for (const slab of slabs) {
-      const key = slabTile(slab).join(",");
-      detail.touch(key);
-      const tile = detail.view.decoded.get(key);
-      tile.slabs = [...(tile.slabs ?? []), slab];
-      detail.dirtySlabs.add(key);
-    }
+    for (const slab of slabs) this.put(slab);
+    const added = this.fitFloors(slabs);
     const conform = this.settings.mode === "floor" && this.settings.conform && onGround;
     if (conform) {
       const cells = detail.cells();
@@ -365,7 +361,51 @@ export class SlabTool {
     }
     detail.endEdit({ reflow: conform });
     // A wall chained on from it isn't picked, so its handles don't get in the way.
-    this.pick(slabs.length === 1 && !this.drawing ? [{ slab: slabs[0], key: slabTile(slabs[0]).join(",") }] : []);
+    this.pick(added.length === 1 && !this.drawing ? [{ slab: added[0], key: slabTile(added[0]).join(",") }] : []);
+    return added;
+  }
+
+  // Puts a slab in the tile it belongs to.
+  put(slab) {
+    const { detail } = this;
+    const key = slabTile(slab).join(",");
+    detail.touch(key);
+    const tile = detail.view.decoded.get(key);
+    tile.slabs = [...(tile.slabs ?? []), slab];
+    detail.dirtySlabs.add(key);
+  }
+
+  // Fits the new floors inside the walls near them, and the floors near new walls inside those.
+  // Returns the new slabs, with each fitted floor's pieces in its place.
+  fitFloors(slabs) {
+    const { detail } = this;
+    const fresh = new Set(slabs);
+    const added = [...slabs];
+    const floors = new Set(slabs);
+    for (const slab of slabs) for (const near of this.nearSlabs(slab)) if (!fresh.has(near)) floors.add(near);
+    for (const floor of floors) {
+      const walls = fresh.has(floor) ? this.nearSlabs(floor) : slabs;
+      const pieces = fitFloor(floor, walls.filter((wall) => wall !== floor));
+      const key = slabTile(floor).join(",");
+      if (!pieces || ![key, ...pieces.map((piece) => slabTile(piece).join(","))].every((k) => detail.editable(k))) continue;
+      detail.touch(key);
+      const tile = detail.view.decoded.get(key);
+      tile.slabs = tile.slabs.filter((s) => s !== floor);
+      detail.dirtySlabs.add(key);
+      for (const piece of pieces) this.put(piece);
+      if (fresh.has(floor)) added.splice(added.indexOf(floor), 1, ...pieces);
+    }
+    return added;
+  }
+
+  // The slabs in the slab's tile and the tiles around it.
+  nearSlabs(slab) {
+    const [tx, tz] = slabTile(slab);
+    const near = [];
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) near.push(...(this.detail.view.decoded.get(`${tx + dx},${tz + dz}`)?.slabs ?? []));
+    }
+    return near;
   }
 
   // --- the picked slabs ---
@@ -507,8 +547,8 @@ export class SlabTool {
     const slabs = this.pasted(this.ray(e));
     if (!this.fits(slabs)) return true;
     this.pasting = null;
-    this.add(slabs);
-    this.pick(slabs.map((slab) => ({ slab, key: slabTile(slab).join(",") })));
+    const added = this.add(slabs);
+    this.pick(added.map((slab) => ({ slab, key: slabTile(slab).join(",") })));
     return true;
   }
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TILE_FT } from "./constants.js";
-import { cutSlab, slabHitsTrunk, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
+import { cutSlab, fitFloor, slabHitsTrunk, wallFootprint, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
 
 // A 10 ft square floor, and a wall: the same square stood up on its south edge.
 const floor = { at: [100, 40, 200], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "floorboards" };
@@ -132,5 +132,43 @@ describe("slabHitsTrunk", () => {
     expect(slabHitsTrunk(wall, trunk(105, 203))).toBe(true);
     expect(slabHitsTrunk(wall, trunk(105, 197))).toBe(false);
     expect(slabHitsTrunk(wall, trunk(105, 204))).toBe(false);
+  });
+});
+
+describe("fitFloor", () => {
+  // A 20 ft room's floor, 1 ft thick, with its top at 1 ft; walls stand on 0, 1 ft thick inward.
+  const square = (n) => [[0, 0], [n, 0], [n, n], [0, n]];
+  const room = { at: [0, 1, 0], turn: [0, 0, 0], outline: square(20), thickness: 1, surface: "floorboards" };
+  const north = { at: [0, 0, 0], turn: [0, -90, 0], outline: [[0, 0], [20, 0], [20, 10], [0, 10]], thickness: 1, surface: "brick" };
+  const west = { ...north, at: [0, 0, 20], turn: [90, -90, 0] };
+
+  it("finds where a wall stands at a height", () => {
+    expect(wallFootprint(north, 0, 1)).toEqual([[[0, 0], [20, 0], [20, 1], [0, 1]]]);
+    expect(wallFootprint(north, 11, 12)).toEqual([]);
+    expect(wallFootprint(room, 0, 1)).toEqual([]);
+  });
+
+  it("leaves a gap where a doorway reaches down", () => {
+    const door = { ...north, outline: [[0, 0], [8, 0], [8, 7], [12, 7], [12, 0], [20, 0], [20, 10], [0, 10]] };
+    expect(wallFootprint(door, 0, 1).map((r) => [r[0][0], r[1][0]])).toEqual([[0, 8], [12, 20]]);
+  });
+
+  it("cuts the walls out of a floor", () => {
+    const [piece] = fitFloor(room, [north, west]);
+    const xs = piece.outline.map((p) => p[0]);
+    const zs = piece.outline.map((p) => p[1]);
+    expect([Math.min(...xs), Math.max(...xs), Math.min(...zs), Math.max(...zs)]).toEqual([1, 20, 1, 20]);
+  });
+
+  it("drops a thin strip left outside a wall", () => {
+    const over = { ...room, at: [0, 1, -0.5], outline: [[0, 0], [20, 0], [20, 20.5], [0, 20.5]] };
+    const pieces = fitFloor(over, [north]);
+    expect(pieces).toHaveLength(1);
+    expect(Math.min(...pieces[0].outline.map((p) => p[1]))).toBe(1.5);
+  });
+
+  it("leaves a floor alone that no wall reaches, or that rests on top of one", () => {
+    expect(fitFloor(room, [{ ...north, at: [0, 0, 40] }])).toBeNull();
+    expect(fitFloor({ ...room, at: [0, 11, 0] }, [north])).toBeNull();
   });
 });
