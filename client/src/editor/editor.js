@@ -915,7 +915,7 @@ export class Editor {
         bodies: () => this.bodies(),
         onReflow: (cells) => this.reflowWater(cells),
         onSlab: (slabs) => this.showSlab(slabs),
-        onProblem: (message) => this.say(message),
+        onProblem: (message, options) => this.say(message, options),
         water: {
           get: () => this.sketch.water,
           set: (water) => {
@@ -1951,6 +1951,13 @@ export class Editor {
       const target = this.step === "heights" ? this.sculpt : this.detail;
       if (e.shiftKey) target?.redo();
       else target?.undo();
+      return;
+    }
+    // Ctrl or cmd and C copy the picked slabs, and V pastes them.
+    if (this.step === "detail" && this.toolName === "slabs" && (e.ctrlKey || e.metaKey) && ["c", "v"].includes(e.key.toLowerCase())) {
+      e.preventDefault();
+      if (e.key.toLowerCase() === "c") this.detail?.slabTool.copy();
+      else this.detail?.slabTool.paste();
       return;
     }
     if (this.step === "detail" && !e.ctrlKey && !e.metaKey && !e.altKey && this.detailKey(e)) {

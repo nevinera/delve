@@ -25,6 +25,8 @@ import { repeatFt } from "./slabTextures.js";
 //   floor is.
 // A rectangle up to MAX_RECTANGLE_FT a side is cut into as many slabs as it takes, each a whole
 // number of its picture's repeats across where it can be, so the picture runs on over the joins.
+// Copied slabs (copy) can be pasted (paste): they follow the pointer, their lowest point on what's
+// under it, till a click puts them down.
 // With conform, the ground under a new floor begun on the ground, and just past its edges, is set
 // to its bottom.
 // Corners on the level snap to other slabs' top corners nearby. What would be made shows as it's
@@ -45,16 +47,20 @@ const CLICK_PX = 5; // a press moving less than this before it's let go is a cli
 
 export class SlabTool {
   // detail: the DetailView. onPick(slabs) hears what's picked, and when it changes;
-  // onProblem(message) when a slab can't be made or changed as asked.
-  constructor(detail, { onPick, onProblem } = {}) {
+  // onProblem(message) when a slab can't be made or changed as asked, and onNote(message) to say
+  // what it's done.
+  constructor(detail, { onPick, onProblem, onNote } = {}) {
     this.detail = detail;
     this.onPick = onPick;
     this.onProblem = onProblem;
+    this.onNote = onNote;
     this.settings = { mode: "pick", shape: "rectangle", thickness: 1, height: 10, keepWalling: false, conform: false, surface: "floorboards" };
     this.drawing = null; // { points: [[x, y, z] continent feet], height, pressed: [x, y] while dragging }
     this.picks = []; // [{ slab, key }]: the slabs picked, and the tiles listing them
     this.box = null; // a box being dragged to pick slabs in: { from: [x, y] client pixels, adding }
     this.cutting = null; // a hole being drawn: { points: [[u, v]] on the picked slab, pressed }
+    this.copied = []; // slabs copied, to paste
+    this.pasting = null; // copied slabs following the pointer: { slabs, anchor: [x, y, z] }
     this.corner = null; // the index of a corner being dragged
     this.handle = "move";
     const { view } = detail;
@@ -85,7 +91,7 @@ export class SlabTool {
   // Whether the tool's in use: its handles and marks show only then.
   active(on) {
     this.on = on;
-    if (!on) this.drawing = this.cutting = null;
+    if (!on) this.drawing = this.cutting = this.pasting = null;
     this.showHandles();
     this.drawMarks();
   }
@@ -116,6 +122,7 @@ export class SlabTool {
 
   // A left button press; true when the tool's taken it.
   pointerDown(e) {
+    if (this.pasting) return this.putDown(e);
     if (this.cutting) return this.cutDown(e);
     if (this.transform.dragging || this.transform.axis) return true;
     const ray = this.ray(e);
@@ -156,7 +163,7 @@ export class SlabTool {
   }
 
   pointerMove(e) {
-    if (this.cutting) return this.drawMarks(e);
+    if (this.cutting || this.pasting) return this.drawMarks(e);
     if (this.box) return this.drawBox(e);
     if (this.corner !== null) return this.dragCorner(e);
     if (this.drawing) this.drawMarks(e);
@@ -190,6 +197,12 @@ export class SlabTool {
   // and R pick its handles, Delete and Backspace take it away, Escape lets it go. True when the
   // key was one of them.
   key(e) {
+    if (this.pasting && e.key === "Escape") {
+      this.pasting = null;
+      this.showHandles();
+      this.drawMarks();
+      return true;
+    }
     if (this.cutting) {
       if (e.key === "Enter" && this.cutting.points.length >= 3) this.endCut(this.cutting.points);
       else if (e.key === "Backspace") this.cutting.points.pop();
@@ -427,6 +440,44 @@ export class SlabTool {
     this.told();
   }
 
+  // --- copying ---
+
+  copy() {
+    if (!this.picks.length) return;
+    this.copied = this.picks.map(({ slab }) => structuredClone(slab));
+    this.onNote?.(`Copied ${this.copied.length === 1 ? "a slab" : `${this.copied.length} slabs`}; paste to put ${this.copied.length === 1 ? "it" : "them"} down.`);
+  }
+
+  // The copied slabs follow the pointer: their middle across the ground, and their lowest point,
+  // go to what's under it.
+  paste() {
+    if (!this.copied.length) return;
+    this.drawing = this.cutting = null;
+    const corners = this.copied.flatMap((slab) => [...slabTop(slab), ...slabBottom(slab)]);
+    const middle = (i) => (Math.min(...corners.map((p) => p[i])) + Math.max(...corners.map((p) => p[i]))) / 2;
+    this.pasting = { slabs: this.copied, anchor: [middle(0), Math.min(...corners.map((p) => p[1])), middle(2)] };
+    this.transform.detach();
+    this.drawMarks();
+  }
+
+  // The copied slabs moved to where a ray meets the ground or a slab, or none.
+  pasted(ray) {
+    const hit = this.surfaceUnder(ray);
+    if (!hit) return [];
+    const by = hit.at.map((v, i) => v - this.pasting.anchor[i]);
+    return this.pasting.slabs.map((slab) => ({ ...structuredClone(slab), at: slab.at.map((v, i) => tidy(v + by[i])) }));
+  }
+
+  // A click while pasting puts the copies down, and picks them.
+  putDown(e) {
+    const slabs = this.pasted(this.ray(e));
+    if (!this.fits(slabs)) return true;
+    this.pasting = null;
+    this.add(slabs);
+    this.pick(slabs.map((slab) => ({ slab, key: slabTile(slab).join(",") })));
+    return true;
+  }
+
   // --- holes ---
 
   // Starts drawing a hole in the slab picked alone.
@@ -554,7 +605,7 @@ export class SlabTool {
   // The handles sit on a slab picked alone, or amid several, while the tool's in use.
   showHandles() {
     const { picks, picked } = this;
-    if (!this.on || !picks.length || this.cutting) return this.transform.detach();
+    if (!this.on || !picks.length || this.cutting || this.pasting) return this.transform.detach();
     if (picked) {
       this.proxy.position.copy(this.scene(picked.slab.at));
       this.proxy.quaternion.copy(quaternionOf(picked.slab.turn));
@@ -593,6 +644,16 @@ export class SlabTool {
         this.marks.add(mesh);
       }
       if (this.settings.shape === "polygon" && corners.length >= 2) line(corners.map((p) => this.scene(p)), MARK.drawing, corners.length >= 3);
+    }
+    if (this.pasting) {
+      const pointer = e ?? this.detail.pointer;
+      const slabs = pointer ? this.pasted(this.ray(pointer)) : [];
+      const { origin } = this.detail.view;
+      const shown = !slabs.length ? [] : this.fits(slabs) ? slabMeshes(slabs, origin) : slabs.map((slab) => new THREE.Mesh(slabGeometry(slab, origin), WRONG));
+      for (const mesh of shown) {
+        mesh.userData.preview = true;
+        this.marks.add(mesh);
+      }
     }
     if (this.cutting && this.picked) {
       const { slab } = this.picked;

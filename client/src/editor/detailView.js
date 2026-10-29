@@ -53,8 +53,8 @@ export class DetailView {
   // feet. bodies() gives the generator's view of the continent (generator.js prepareWorld), for
   // working out water. onReflow(cells) hears of ground changed beside water ([ci, cj] continent
   // cells), and answers with tiles whose water to work out again, or null. water { get, set } is
-  // the sketch's water, undone with the edits that change it. onSlab hears the slab picked, or
-  // null, and onProblem why the slabs tool couldn't do something.
+  // the sketch's water, undone with the edits that change it. onSlab hears the slabs picked, and
+  // onProblem why the slabs tool couldn't do something, or with { info: true }, what it did.
   constructor(canvas, { onMove, onEdit, onPointer, onSelect, onPour, bodies, onReflow, water, onSlab, onProblem } = {}) {
     this.canvas = canvas;
     this.view = new RenderView(canvas);
@@ -88,7 +88,7 @@ export class DetailView {
     this.dirty = new Set(); // "tx,tz" of meshes to make again
     this.undos = [];
     this.redos = [];
-    this.slabTool = new SlabTool(this, { onPick: (slab) => onSlab?.(slab), onProblem: (message) => onProblem?.(message) });
+    this.slabTool = new SlabTool(this, { onPick: (slabs) => onSlab?.(slabs), onProblem: (message) => onProblem?.(message), onNote: (message) => onProblem?.(message, { info: true }) });
     canvas.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
       const side = this.arrowAt(e);
