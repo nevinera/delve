@@ -55,3 +55,66 @@ body.play {
   font: inherit;
   padding: 4px 16px;
 }
+
+/* Phones: the view takes every touch, with a thumbstick and a jump button over it. */
+.play-scene {
+  touch-action: none;
+}
+
+.touch-stick {
+  position: fixed;
+  left: 28px;
+  bottom: 28px;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.25);
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  touch-action: none;
+}
+
+.touch-knob {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.45);
+  pointer-events: none;
+}
+
+.touch-jump {
+  position: fixed;
+  right: 32px;
+  bottom: 40px;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  background: rgba(0, 0, 0, 0.3);
+  color: #eee;
+  font: 600 15px system-ui, sans-serif;
+  touch-action: none;
+  user-select: none;
+}
+
+/* Phones play sideways. */
+.play-turn {
+  display: none;
+}
+
+@media (orientation: portrait) and (pointer: coarse) {
+  .play-turn {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    background: #0e0c12;
+    font-size: 18px;
+    text-align: center;
+    z-index: 10;
+  }
+}

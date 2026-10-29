@@ -575,7 +575,9 @@ export class Walker {
 
   onDown(e) {
     e.stopImmediatePropagation();
-    this.drag = { x: e.clientX, y: e.clientY, button: e.button };
+    // A finger drags as the right button does, turning the character with the camera, since a
+    // phone has no other way to turn.
+    this.drag = { x: e.clientX, y: e.clientY, button: e.pointerType === "touch" ? 2 : e.button };
     this.view.canvas.setPointerCapture(e.pointerId);
   }
 

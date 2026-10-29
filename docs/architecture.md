@@ -77,6 +77,7 @@ Released worlds are listed for everyone signed in, on `/worlds`. A world's owner
 2. It enters the game server with an entry token from the page, and the server says where your character is. A character new to the world starts at its spawn pin, placed on the editor's civilization step. The validator rejects a world without exactly one, on a generated tile, out of deep water.
 3. It loads the plates around you, and more as you walk toward them, and walks your character there with the editor's walk mode (`RenderView`, `Walker`). It reads each plate as it streams in, and keeps its tiles in IndexedDB by the plate's hash from `plates.json` (`client/src/play/plateCache.js`), so a plate already there isn't downloaded again. The cache holds the 16 plates used last. Plates you've walked well away from leave memory, and come back from the cache.
 4. It reports how you move, and draws the characters near you as the server reports theirs (`client/src/play/game.js`, `others.js`).
+5. On a phone (`client/src/play/touch.js`) it plays in landscape only, with a thumbstick, a jump button, and drags that turn you with the camera, on lighter graphics.
 
 ## The game server
 

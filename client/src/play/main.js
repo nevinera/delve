@@ -8,6 +8,7 @@ import { GameConnection } from "./game.js";
 import { PlayWorld } from "./loader.js";
 import { PlateCache, openStore } from "./plateCache.js";
 import { Others } from "./others.js";
+import { TouchControls, isTouch } from "./touch.js";
 
 // The play page: your character in a released world, where the game server puts it. Tiles come
 // from the world's plates on raw GitHub, at the released commit, fetched as you walk toward them.
@@ -17,6 +18,8 @@ const $ = (id) => document.getElementById(id);
 const config = JSON.parse($("playConfig").textContent); // { repo, sha, paths, look, game: { url, token } }
 const status = (text) => ($("playStatus").textContent = text);
 const STREAM_MS = 1000; // how often to look for plates coming into reach
+// Lighter graphics for phones: no extra pixel density, less ground clutter, and simple tree crowns.
+const PHONE_GRAPHICS = { resolution: 1, clutterRadiusFt: 120, clutterDensity: 0.5, solidCanopies: true };
 
 // Enters the game server, and resolves with the welcome: where it puts you.
 function enter(on) {
@@ -59,6 +62,8 @@ async function play() {
   status("");
 
   const view = new RenderView($("scene"));
+  const touch = isTouch();
+  if (touch) view.setGraphics(PHONE_GRAPHICS);
   others = new Others(view);
   for (const [method, arg] of early) others[method](arg);
   view.onWalkFrame = (dt) => others.frame(dt);
@@ -66,6 +71,7 @@ async function play() {
   view.walkFrom({ world, continent: you.continent, zones: [], look: resolveRecipe(config.look) }, [you.at[0], you.at[2]], paused);
   view.walker.yaw = you.yaw;
   connection.report(view);
+  if (touch) new TouchControls(view, document.body);
   $("playResume").addEventListener("click", () => {
     $("playPaused").hidden = true;
     view.startWalk(paused, [view.walker.pos.x, view.walker.pos.z]);
