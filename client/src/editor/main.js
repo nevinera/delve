@@ -116,6 +116,7 @@ const editor = new Editor(World.empty(), {
   slabSelect: $("slabSelect"),
   slabFloor: $("slabFloor"),
   slabWall: $("slabWall"),
+  slabRoom: $("slabRoom"),
   slabRect: $("slabRect"),
   slabPoly: $("slabPoly"),
   slabSwatches: $("slabSwatches"),

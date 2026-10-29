@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { slabBottom, slabProblems, slabTop } from "../world/slabs.js";
-import { SlabTool, conformedCells, faceSlab, floorSlab, rectanglePieces, rectangleSlab, wallPieces, wallSlab } from "./slabTool.js";
+import { SlabTool, conformedCells, faceSlab, roomPieces, floorSlab, rectanglePieces, rectangleSlab, wallPieces, wallSlab } from "./slabTool.js";
 
 const near = (points) => points.map((p) => p.map((v) => Math.round(v * 100) / 100 + 0));
 
@@ -123,5 +123,27 @@ describe("fitting floors inside walls", () => {
     expect(t.fitFloors([walls[0]])).toEqual([walls[0]]);
     expect(tile.slabs).not.toContain(f);
     expect(tile.slabs).toHaveLength(2);
+  });
+});
+
+describe("roomPieces", () => {
+  const room = (a, b, yaw = 0) => roomPieces(a, b, yaw, { height: 10, thickness: 1, surface: "brick", footUnder: () => 38 });
+  const footprint = (slab) => {
+    const corners = [...slabTop(slab), ...slabBottom(slab)];
+    return near([[Math.min(...corners.map((p) => p[0])), Math.max(...corners.map((p) => p[0])), Math.min(...corners.map((p) => p[2])), Math.max(...corners.map((p) => p[2]))]])[0];
+  };
+
+  it("stands four walls round the floor, inside its edges, over its top", () => {
+    for (const [a, b] of [[[0, 40, 0], [20, 40, 30]], [[20, 40, 30], [0, 40, 0]], [[20, 40, 0], [0, 40, 30]]]) {
+      const slabs = room(a, b);
+      const walls = slabs.filter((s) => s.turn[1]);
+      expect(walls.map(footprint).sort()).toEqual([[0, 1, 1, 29], [0, 20, 0, 1], [0, 20, 29, 30], [19, 20, 1, 29]].sort());
+      for (const wall of walls) expect(Math.max(...slabTop(wall).map((p) => p[1]))).toBe(51);
+      expect(slabs.filter((s) => !s.turn[1]).map(footprint)).toEqual([[0, 20, 0, 30]]);
+    }
+  });
+
+  it("makes nothing from a line", () => {
+    expect(room([0, 40, 0], [20, 40, 0])).toEqual([]);
   });
 });

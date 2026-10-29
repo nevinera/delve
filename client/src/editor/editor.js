@@ -1105,7 +1105,7 @@ export class Editor {
   buildSlabPanel() {
     const tool = () => this.detail?.slabTool;
     this.setSlabMode("pick");
-    for (const [button, mode] of [[this.el.slabSelect, "pick"], [this.el.slabFloor, "floor"], [this.el.slabWall, "wall"]]) button.addEventListener("click", () => this.setSlabMode(mode));
+    for (const [button, mode] of [[this.el.slabSelect, "pick"], [this.el.slabFloor, "floor"], [this.el.slabWall, "wall"], [this.el.slabRoom, "room"]]) button.addEventListener("click", () => this.setSlabMode(mode));
     this.el.slabRect.addEventListener("click", () => this.setSlabShape("rectangle"));
     this.el.slabPoly.addEventListener("click", () => this.setSlabShape("polygon"));
     this.setSlabShape("rectangle");
@@ -1215,9 +1215,9 @@ export class Editor {
     const picked = Boolean(tool?.picks.length);
     const rectangleWall = mode === "wall" && this.slabShape === "rectangle";
     this.el.slabKeepRow.hidden = !rectangleWall;
-    this.el.slabHeightRow.hidden = !rectangleWall;
-    this.el.slabShapeRow.hidden = mode === "pick" && !tool?.cutting;
-    this.el.slabConformRow.hidden = mode !== "floor";
+    this.el.slabHeightRow.hidden = !rectangleWall && mode !== "room";
+    this.el.slabShapeRow.hidden = (mode === "pick" || mode === "room") && !tool?.cutting;
+    this.el.slabConformRow.hidden = mode !== "floor" && mode !== "room";
     this.el.slabHandleRow.hidden = !picked;
     this.el.slabMove.classList.toggle("active", tool?.handle === "move");
     this.el.slabTurn.classList.toggle("active", tool?.handle === "turn");
@@ -1238,6 +1238,7 @@ export class Editor {
     this.el.slabSelect.classList.toggle("active", mode === "pick");
     this.el.slabFloor.classList.toggle("active", mode === "floor");
     this.el.slabWall.classList.toggle("active", mode === "wall");
+    this.el.slabRoom.classList.toggle("active", mode === "room");
     this.showSlabRows();
     this.applyDetailBrush();
   }

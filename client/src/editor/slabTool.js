@@ -24,6 +24,8 @@ import { treeHeight, trunkRadius } from "./treeMeshes.js";
 //   ground under the line, and with keepWalling the next wall goes on from where it ended. A
 //   polygon is the line's two clicks, then corners up its face, as for a gable end, finished as a
 //   floor is.
+// - "room": a rectangle floor, as drawn in "floor", with four walls standing round its edges on it,
+//   `height` feet over its top. The walls' thickness goes inward, and the floor fits inside them.
 // A rectangle up to MAX_RECTANGLE_FT a side is cut into as many slabs as it takes, each a whole
 // number of its picture's repeats across where it can be, so the picture runs on over the joins.
 // Copied slabs (copy) can be pasted (paste): they follow the pointer, their lowest point on what's
@@ -149,7 +151,7 @@ export class SlabTool {
       }
       return true;
     }
-    const rectangle = this.settings.shape === "rectangle";
+    const { rectangle } = this;
     if (!this.drawing) {
       const hit = this.surfaceUnder(ray);
       if (hit) this.drawing = { points: [this.snap(hit.at, hit.at[1])], height: hit.at[1], onGround: hit.ground, pressed: rectangle ? [e.clientX, e.clientY] : null, yaw: this.cameraYaw() };
@@ -253,6 +255,11 @@ export class SlabTool {
     return at && this.snap(at, height);
   }
 
+  // Whether what's drawn is a rectangle: a room always is.
+  get rectangle() {
+    return this.settings.mode === "room" || this.settings.shape === "rectangle";
+  }
+
   // A rectangle's far end: it's made, and with keepWalling, a wall's end starts the next.
   endRectangle(end) {
     const slabs = this.slabFrom([this.drawing.points[0], end]);
@@ -273,7 +280,7 @@ export class SlabTool {
 
   // Makes the polygon drawn so far.
   finish() {
-    const slabs = this.drawing && this.settings.shape === "polygon" ? this.slabFrom(this.drawing.points) : [];
+    const slabs = this.drawing && !this.rectangle ? this.slabFrom(this.drawing.points) : [];
     if (!this.fits(slabs)) return;
     const { onGround } = this.drawing;
     this.drawing = null;
@@ -286,6 +293,9 @@ export class SlabTool {
     const { mode, shape, thickness, surface } = this.settings;
     const [a, b] = points;
     const one = (slab) => (slab ? [slab] : []);
+    if (mode === "room") {
+      return points.length >= 2 ? roomPieces(a, b, this.drawing.yaw, { height: this.settings.height, thickness, surface, footUnder: (p, q) => this.footUnder(p, q) }) : [];
+    }
     if (mode === "floor") {
       if (shape === "polygon") return points.length >= 3 ? [floorSlab(points, { thickness, surface })] : [];
       return points.length >= 2 ? rectanglePieces(a, b, this.drawing.yaw, { thickness, surface }) : [];
@@ -346,10 +356,10 @@ export class SlabTool {
     detail.beginEdit();
     for (const slab of slabs) this.put(slab);
     const added = this.fitFloors(slabs);
-    const conform = this.settings.mode === "floor" && this.settings.conform && onGround;
+    const conform = ["floor", "room"].includes(this.settings.mode) && this.settings.conform && onGround;
     if (conform) {
       const cells = detail.cells();
-      const under = conformedCells(slabs, CELL_FT).filter(([ci, cj]) => cells.editable(ci, cj));
+      const under = conformedCells(slabs.filter((slab) => !slab.turn[1] && !slab.turn[2]), CELL_FT).filter(([ci, cj]) => cells.editable(ci, cj));
       detail.setHeights(under);
       // Nothing grows there either.
       for (const [ci, cj] of under) {
@@ -717,7 +727,7 @@ export class SlabTool {
         mesh.userData.preview = true;
         this.marks.add(mesh);
       }
-      if (this.settings.shape === "polygon" && corners.length >= 2) line(corners.map((p) => this.scene(p)), MARK.drawing, corners.length >= 3);
+      if (!this.rectangle && corners.length >= 2) line(corners.map((p) => this.scene(p)), MARK.drawing, corners.length >= 3);
     }
     if (this.pasting) {
       const pointer = e ?? this.detail.pointer;
@@ -884,6 +894,37 @@ export function wallPieces(from, to, options) {
   if (length > MAX_RECTANGLE_FT || step < 1) return [whole];
   const [ux, uz] = [(to[0] - from[0]) / length, (to[2] - from[2]) / length];
   return cuts(length, step).map(([s, ds]) => ({ ...whole, at: [from[0] + ux * s, whole.at[1], from[2] + uz * s].map(tidy), outline: [[0, 0], [ds, 0], [ds, tall], [0, tall]] }));
+}
+
+// A room from one corner of its floor to the opposite (as rectanglePieces): the floor's pieces,
+// then a wall along each edge, standing `height` over the floor's top, its thickness inward. The
+// walls along the first and third edges run the whole length; the others fit between them.
+// footUnder(from, to) gives a wall's foot.
+export function roomPieces(a, b, yaw, { height, thickness, surface, footUnder }) {
+  const floor = rectanglePieces(a, b, yaw, { thickness, surface });
+  if (!floor.length) return [];
+  const r = (yaw * Math.PI) / 180;
+  const [w, d] = [(b[0] - a[0]) * Math.cos(r) - (b[2] - a[2]) * Math.sin(r), (b[0] - a[0]) * Math.sin(r) + (b[2] - a[2]) * Math.cos(r)];
+  const top = a[1] + thickness;
+  const corner = (u, v) => [a[0] + u * Math.cos(r) + v * Math.sin(r), top, a[2] - u * Math.sin(r) + v * Math.cos(r)].map(tidy);
+  let ring = [corner(0, 0), corner(w, 0), corner(w, d), corner(0, d)];
+  // A wall's thickness goes to the right of its line, seen from above with north up: round the
+  // ring the way that puts the middle there.
+  const [p, q] = ring;
+  const middle = corner(w / 2, d / 2);
+  if ((middle[0] - p[0]) * -(q[2] - p[2]) + (middle[2] - p[2]) * (q[0] - p[0]) < 0) ring = ring.reverse();
+  const walls = ring.flatMap((from, i) => {
+    let to = ring[(i + 1) % 4];
+    if (i % 2) {
+      // Short of the long walls at each end.
+      const length = flatDistance(from, to);
+      if (length <= 2 * thickness + 0.1) return [];
+      const [ux, uz] = [(to[0] - from[0]) / length, (to[2] - from[2]) / length];
+      [from, to] = [[from[0] + ux * thickness, top, from[2] + uz * thickness].map(tidy), [to[0] - ux * thickness, top, to[2] - uz * thickness].map(tidy)];
+    }
+    return wallPieces(from, to, { foot: footUnder(from, to), height, thickness, surface });
+  });
+  return [...floor, ...walls];
 }
 
 // The ground cells a floor's slabs sit on, [[ci, cj, height], ...] continent cells: those whose
