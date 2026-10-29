@@ -106,6 +106,7 @@ Version 1 plates have `object <id> <kind>`, with no sizes. Readers accept both.
 | `chunks clutter` then chunk lines | Clutter for each 8×8-cell chunk that has a cell off the tile's default. |
 | `place …` | A placed object, one per line, sorted by their position field. |
 | `fall <json>`, `road <json>`, `river <json>` | Waterfalls, roads and river channels, as the tile file holds them. |
+| `slab <json>` | A [slab](slabs.md), one per line. |
 
 Layers come in the order the tile file lists them (`SURFACE_LAYERS` in `tileCodec.js`), minus clutter: `height`, `water`, `waterKind`, `terrain`, `biome`, `forest`.
 

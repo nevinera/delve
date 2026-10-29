@@ -85,6 +85,23 @@ describe("validateWorld", () => {
     expect(plateErrors("layer biome", "layer nonsense")[0]).toMatch(/tile 0,0: unknown layer nonsense/);
   });
 
+  it("checks slabs", () => {
+    const text = strFromU8(world.get(PLATE));
+    const withSlab = (slab) =>
+      changed((f) => {
+        f.set(PLATE, strToU8(text.replace("tile 1,0 ", `slab ${JSON.stringify(slab)}\ntile 1,0 `)));
+        f.delete(INDEX);
+      }).filter((m) => m.startsWith(PLATE));
+    const floor = { at: [100, 40, 100], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "plaster" };
+    expect(withSlab(floor)).toEqual([]);
+    expect(withSlab({ ...floor, surface: { color: "#336699", pattern: "rock" } })).toEqual([]);
+    expect(withSlab({ ...floor, at: [600, 40, 100] })).toEqual([`${PLATE}: tile 0,0's slab 1 belongs in tile 1,0, which holds its home corner`]);
+    expect(withSlab({ ...floor, outline: [[0, 0], [10, 10], [10, 0], [0, 10]] })).toEqual([`${PLATE}: tile 0,0's slab 1 has an outline whose edges cross`]);
+    expect(withSlab({ ...floor, outline: [[0, 0], [80, 0], [80, 10]] })).toEqual([`${PLATE}: tile 0,0's slab 1 reaches more than 64 ft from its home corner`]);
+    expect(withSlab({ ...floor, thickness: 20, surface: "tarmac" })).toEqual([`${PLATE}: tile 0,0's slab 1 needs a thickness over 0 and at most 16 ft`, `${PLATE}: tile 0,0's slab 1 has surface "tarmac", which isn't a preset`]);
+    expect(withSlab({ ...floor, surface: { color: "#336699", tile: { image: "nothing1", every: 4, jitter: 0 } } })).toEqual([`${PLATE}: tile 0,0's slab 1 wears image nothing1, which the world doesn't have`]);
+  });
+
   it("checks the continent index against the plates", () => {
     const index = "places/continents/main/index.json";
     expect(changed((f) => f.set(index, json({ version: 2, tiles: { "0,0": { zones: [], layers: ["surface"] } } })))).toEqual([`${index}: doesn't list tile 1,0's surface layer`]);

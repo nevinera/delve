@@ -39,7 +39,7 @@ const fill = (name, i, j) =>
 
 describe("plates", () => {
   const rock = { id: "x", type: "rock", at: [16 * TILE_FT + 100.5, 300.25], yaw: 1.25, scale: 2.5, colors: [[0.2, 0.4, 0.6]], footprint: {}, height: 1 };
-  const a = tileAt([16, 0], { fill, objects: [rock], falls: [{ top: [1, 2, 3], bottom: [4, 5, 6], width: 9, pool: 3 }], rivers: [{ half: 6, segments: [[[0, 0], [1, 1]]] }] });
+  const a = tileAt([16, 0], { fill, objects: [rock], falls: [{ top: [1, 2, 3], bottom: [4, 5, 6], width: 9, pool: 3 }], rivers: [{ half: 6, segments: [[[0, 0], [1, 1]]] }], slabs: [{ at: [16 * TILE_FT + 10, 40, 20], turn: [0, 0, 0], outline: [[0, 0], [8, 0], [8, 8]], thickness: 1, surface: "brick" }] });
   // Another tile whose terrain palette is in another order, with a tree.
   const b = tileAt([17, 0], { terrain: ["rock", "tree_oak_2", "grass"], fill: (name, i, j) => (name === "terrain" ? (i + j) % 3 : fill(name, i, j)) });
   const sizes = { rock: { footprint: { circle: 1.5 }, height: 2, fixed: false } };
@@ -55,6 +55,7 @@ describe("plates", () => {
     expect(ta.generator).toEqual({ version: 23, seed: 99 });
     expect(ta.falls).toEqual(a.falls);
     expect(ta.rivers).toEqual(a.rivers);
+    expect(ta.slabs).toEqual(a.slabs);
   });
 
   it("reads a plate as it arrives, tile by tile, however the text is cut", async () => {

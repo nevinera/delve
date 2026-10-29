@@ -17,7 +17,7 @@ import { SURFACE_LAYERS } from "./tileCodec.js";
 //   chunks clutter                   the 8×8-cell chunks with a cell off the tile's default:
 //   3,5 =0                           as one value for all the chunk's cells, or all 64
 //   place 0 <x z yaw scale> <colors> <extra>   one placed object a line, sorted by position
-//   fall {...}, road {...}, river {...}
+//   fall {...}, road {...}, river {...}, slab {...}
 //
 // Values are fixed width in a 64-symbol alphabet. Heights and water are quarter feet above
 // HEIGHT_BASE_FT in 3 symbols (`~~~` for no water); palette indices are 1 symbol, or 2 when the
@@ -128,7 +128,7 @@ function encodeTileInto(lines, tile, { palettes, kinds, idWidth, clutter, plateC
   const byPosition = (line) => line.split(" ")[2];
   const places = (tile.objects ?? []).map((o) => placeLine(o, kinds.indexOf(o.type), idWidth, origin)).sort((a, b) => (byPosition(a) < byPosition(b) ? -1 : byPosition(a) > byPosition(b) ? 1 : 0));
   lines.push(...places);
-  for (const [word, list] of [["fall", tile.falls], ["road", tile.roads], ["river", tile.rivers]]) for (const item of list ?? []) lines.push(`${word} ${JSON.stringify(item)}`);
+  for (const [word, list] of [["fall", tile.falls], ["road", tile.roads], ["river", tile.rivers], ["slab", tile.slabs]]) for (const item of list ?? []) lines.push(`${word} ${JSON.stringify(item)}`);
 }
 
 function placeLine(object, kind, idWidth, [x0, z0]) {
@@ -253,7 +253,7 @@ export function decodePlateTile(header, text) {
       chunks = [];
       while (n + 1 < lines.length && /^\d+,\d+ /.test(lines[n + 1])) chunks.push(lines[++n]);
     } else if (word === "place") tile.objects.push(readPlace(rest, header, [x0, z0], tile.objects.length, coords));
-    else if (word === "fall" || word === "road" || word === "river") (tile[`${word}s`] ??= []).push(JSON.parse(rest));
+    else if (word === "fall" || word === "road" || word === "river" || word === "slab") (tile[`${word}s`] ??= []).push(JSON.parse(rest));
   }
   tile.layers.clutter = new Uint8Array(count).fill(clutter);
   for (const line of chunks ?? []) {

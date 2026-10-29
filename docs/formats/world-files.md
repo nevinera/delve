@@ -18,7 +18,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 | `places/continents/<c>/edited.json` | tiles changed by hand, which generating leaves alone | [schema](../schema/edited.schema.json) |
 | `places/continents/<c>/land/<bx>_<bz>.f32` | a block of the land grid | [land grid](land-grid.md) |
 | `places/continents/<c>/plates.json` | the continent's plates and their hashes | [schema](../schema/plates-index.schema.json) |
-| `places/continents/<c>/plates/<layer>/<px>_<pz>.plate` | 16×16 tiles of a layer | [plates](plates.md) |
+| `places/continents/<c>/plates/<layer>/<px>_<pz>.plate` | 16×16 tiles of a layer, with their objects and [slabs](slabs.md) | [plates](plates.md) |
 | `places/continents/<c>/index.json` | which tiles exist, their layers and the zones touching them | [schema](../schema/continent-index.schema.json) |
 | `places/continents/<c>/thumbs/<cx>/<cz>.png` | small pictures of 16×16 tiles, 16 px a tile | PNG |
 | `places/continents/<c>/thumbs/index.json` | what each tile's picture was drawn from | [schema](../schema/thumbs-index.schema.json) |

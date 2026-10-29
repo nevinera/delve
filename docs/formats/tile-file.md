@@ -35,7 +35,7 @@ The file is gzipped. Inside, all numbers are little-endian:
 }
 ```
 
-- `layers` gives each dense layer's name, type and byte offset from the end of the padding. `falls`, `roads` and `rivers` appear only when the tile has some.
+- `layers` gives each dense layer's name, type and byte offset from the end of the padding. `falls`, `roads`, `rivers` and `slabs` appear only when the tile has some. See [slabs](slabs.md) for theirs.
 - Each layer is `cells * cells` values in row order: north to south, each row west to east.
 
 ## Layers

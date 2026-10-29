@@ -27,6 +27,7 @@ import {
   zoneAt,
 } from "./paths.js";
 import { BUILT_PREFIX, OBJECT_TYPES } from "./objects.js";
+import { slabProblems, slabTile } from "./slabs.js";
 import { STRUCTURE_PREFIX, problems as structureProblems } from "./structures.js";
 
 // Checks a stored world (docs/formats/world-files.md): its files as a Map of path -> bytes. Returns
@@ -161,7 +162,7 @@ function checkLibrary(files, json, problem, warning) {
     if (kind === "structures") for (const m of Object.values(thing.materials ?? {})) for (const image of [m?.tile?.image, m?.inside?.image]) if (image) worn.push([path, image]);
   }
   for (const [path, image] of worn) if (!images.has(image)) problem(path, `wears image ${image}, which the world doesn't have`);
-  return { objects, structures };
+  return { objects, structures, images };
 }
 
 // The world's game data (gameData.js): its classes, abilities and the rest, and each continent's
@@ -286,6 +287,11 @@ function checkPlates(files, continent, library, spawn, json, problem, warning) {
       if (tiles.get(tileKey)?.has(layer)) problem(path, `has tile ${tileKey} twice`);
       try {
         const decoded = decodePlateTile(header, tileText);
+        (decoded.slabs ?? []).forEach((slab, n) => {
+          const messages = slabProblems(slab, library.images);
+          for (const message of messages) problem(path, `tile ${tileKey}'s slab ${n + 1} ${message}`);
+          if (!messages.length && slabTile(slab).join() !== tileKey) problem(path, `tile ${tileKey}'s slab ${n + 1} belongs in tile ${slabTile(slab)}, which holds its home corner`);
+        });
         if (spawn && layer === "surface" && tileKey === spawn.at.map(Math.floor).join(",")) checkSpawn(decoded, spawn, problem);
       } catch (err) {
         problem(path, `tile ${tileKey}: ${err.message}`);

@@ -1,0 +1,148 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "slab.schema.json",
+  "title": "Slab",
+  "description": "A flat piece to walk on and to block movement and sight, as a tile's slabs and plates' slab lines hold it; see docs/formats/slabs.md.",
+  "type": "object",
+  "required": [
+    "at",
+    "turn",
+    "outline",
+    "thickness",
+    "surface"
+  ],
+  "properties": {
+    "at": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "a point on the top face, [x, y, z] continent feet"
+    },
+    "turn": {
+      "type": "array",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 3,
+      "maxItems": 3,
+      "description": "[yaw, pitch, roll] degrees, applied roll, pitch, yaw"
+    },
+    "outline": {
+      "type": "array",
+      "minItems": 3,
+      "maxItems": 32,
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "number"
+        },
+        "minItems": 2,
+        "maxItems": 2
+      },
+      "description": "the top face, [u, v] feet from at, u along x and v along z before turning; edges don't cross"
+    },
+    "thickness": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 16,
+      "description": "feet down from the top face"
+    },
+    "surface": {
+      "oneOf": [
+        {
+          "enum": [
+            "woodgrain",
+            "floorboards",
+            "logs",
+            "shingles",
+            "stone",
+            "stoneBlocks",
+            "brick",
+            "roughRock",
+            "dirtyStone",
+            "cobblestone",
+            "flagstones",
+            "marble",
+            "sandstone",
+            "thatch",
+            "slateTiles",
+            "clayTiles",
+            "plaster",
+            "packedEarth",
+            "ironPlate",
+            "rustyIronPlate"
+          ],
+          "description": "a preset, its colours baked in"
+        },
+        {
+          "type": "object",
+          "required": [
+            "color"
+          ],
+          "not": {
+            "required": [
+              "pattern",
+              "tile"
+            ]
+          },
+          "properties": {
+            "color": {
+              "type": "string",
+              "pattern": "^#[0-9a-f]{6}$"
+            },
+            "pattern": {
+              "enum": [
+                "grass",
+                "dirt",
+                "sand",
+                "rock",
+                "path",
+                "shore",
+                "mud",
+                "moss",
+                "litter"
+              ],
+              "description": "shades the colour as the ground's pattern does"
+            },
+            "tile": {
+              "type": "object",
+              "required": [
+                "image",
+                "every",
+                "jitter"
+              ],
+              "properties": {
+                "image": {
+                  "type": "string",
+                  "description": "one of the world's textures"
+                },
+                "every": {
+                  "type": "number",
+                  "exclusiveMinimum": 0,
+                  "description": "feet one copy spans"
+                },
+                "jitter": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              }
+            },
+            "palette": {
+              "type": "array",
+              "maxItems": 26,
+              "items": {
+                "type": "string",
+                "pattern": "^#[0-9a-f]{6}$"
+              },
+              "description": "the tiled texture's letter inks, in turn"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

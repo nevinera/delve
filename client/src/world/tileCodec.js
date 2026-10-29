@@ -24,7 +24,8 @@ export const SURFACE_LAYERS = [
 ];
 
 // tile: { coords: [tx, tz], layer, cells, cellFt, palettes, objects, generator, layers: { name: array } },
-// and optionally falls, roads, rivers and sources (editor/detailView.js: water placed by hand).
+// and optionally falls, roads, rivers, sources (editor/detailView.js: water placed by hand) and slabs
+// (slabs.js).
 // Layers a tile has that aren't listed, such as the flow layers older tiles kept, are left out.
 export function encodeTile(tile, layerSpecs = SURFACE_LAYERS) {
   const count = tile.cells * tile.cells;
@@ -48,6 +49,7 @@ export function encodeTile(tile, layerSpecs = SURFACE_LAYERS) {
     ...(tile.roads?.length ? { roads: tile.roads } : {}),
     ...(tile.rivers?.length ? { rivers: tile.rivers } : {}),
     ...(tile.sources?.length ? { sources: tile.sources } : {}),
+    ...(tile.slabs?.length ? { slabs: tile.slabs } : {}),
     generator: tile.generator,
   };
   const json = new TextEncoder().encode(JSON.stringify(manifest));
