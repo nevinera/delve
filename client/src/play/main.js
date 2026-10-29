@@ -6,6 +6,7 @@ import { TILE_FT } from "../world/constants.js";
 import { setBuiltObjects } from "../world/objects.js";
 import { GameConnection } from "./game.js";
 import { PlayWorld } from "./loader.js";
+import { PlateCache, openStore } from "./plateCache.js";
 import { Others } from "./others.js";
 
 // The play page: your character in a released world, where the game server puts it. Tiles come
@@ -31,7 +32,7 @@ function enter(on) {
 }
 
 async function play() {
-  const loader = new PlayWorld(config);
+  const loader = new PlayWorld({ ...config, cache: new PlateCache(await openStore()) });
   status("Loading the world...");
   await loader.open();
   const { world } = loader;

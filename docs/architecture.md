@@ -75,7 +75,7 @@ Released worlds are listed for everyone signed in, on `/worlds`. Playing one (`/
 
 1. It reads `world.json`, the continents' sketches and the object library from `raw.githubusercontent.com/<repo>/<released sha>/`. The page lists the commit's files from its import, so nothing is probed for.
 2. It enters the game server with an entry token from the page, and the server says where your character is. A character new to the world starts at its spawn pin, placed on the editor's civilization step. The validator rejects a world without exactly one, on a generated tile, out of deep water.
-3. It fetches the plates around you, and more as you walk toward them, and walks your character there with the editor's walk mode (`RenderView`, `Walker`).
+3. It loads the plates around you, and more as you walk toward them, and walks your character there with the editor's walk mode (`RenderView`, `Walker`). It reads each plate as it streams in, and keeps its tiles in IndexedDB by the plate's hash from `plates.json` (`client/src/play/plateCache.js`), so a plate already there isn't downloaded again. The cache holds the 16 plates used last.
 4. It reports how you move, and draws the characters near you as the server reports theirs (`client/src/play/game.js`, `others.js`).
 
 ## The game server

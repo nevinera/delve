@@ -1,10 +1,11 @@
-import { gzipSync, strToU8 } from "fflate";
+import { gunzipSync, gzipSync, strFromU8, strToU8 } from "fflate";
 import { describe, expect, it } from "vitest";
 import { packPlates } from "../editor/plates.js";
 import { generateTile, prepareWorld } from "../world/generator.js";
 import { LandGrid, PER_TILE } from "../world/landGrid.js";
-import { encodeTile } from "../world/tileCodec.js";
+import { decodeTile, encodeTile } from "../world/tileCodec.js";
 import { PlayWorld, platesAround, rawUrl } from "./loader.js";
+import { MemoryStore, PlateCache } from "./plateCache.js";
 
 describe("playing a released world", () => {
   it("lists the plates around a tile", () => {
@@ -31,13 +32,24 @@ describe("playing a released world", () => {
       const path = url.replace(rawUrl("me/w", "c0ffee", ""), "");
       return files.has(path) ? new Response(files.get(path)) : new Response("", { status: 404 });
     };
-    const play = new PlayWorld({ repo: "me/w", sha: "c0ffee", paths: [...files.keys()], fetchFn });
+    const cache = new PlateCache(new MemoryStore());
+    const play = new PlayWorld({ repo: "me/w", sha: "c0ffee", paths: [...files.keys()], fetchFn, cache });
     await play.open();
     expect(play.world.files.has("places/continents/main/sketch.json")).toBe(true);
     expect(play.world.files.has("objects/abcd1234.json")).toBe(true);
     expect(await play.platesAround("main", [0, 0], 3)).toEqual(["0,0"]);
-    expect(play.world.files.has("places/continents/main/tiles/surface/0/0.dlt.gz")).toBe(true);
+    const tile = play.world.files.get("places/continents/main/tiles/surface/0/0.dlt.gz");
+    expect(decodeTile(gunzipSync(tile)).coords).toEqual([0, 0]);
     expect(await play.platesAround("main", [1, 1], 3)).toEqual([]);
-    expect(fetched.filter((u) => u.endsWith(".plate"))).toEqual(["https://raw.githubusercontent.com/me/w/c0ffee/places/continents/main/plates/surface/0_0.plate"]);
+    const plateUrls = () => fetched.filter((u) => u.endsWith(".plate"));
+    expect(plateUrls()).toEqual(["https://raw.githubusercontent.com/me/w/c0ffee/places/continents/main/plates/surface/0_0.plate"]);
+
+    // Played again (a reload, say), the plate comes from the cache, by its hash.
+    const again = new PlayWorld({ repo: "me/w", sha: "c0ffee", paths: [...files.keys()], fetchFn, cache });
+    await again.open();
+    expect(await again.platesAround("main", [0, 0], 3)).toEqual(["0,0"]);
+    expect(plateUrls()).toHaveLength(1);
+    const hash = JSON.parse(strFromU8(files.get("places/continents/main/plates.json"))).plates["surface/0_0"];
+    expect(await cache.store.plate(hash)).toMatchObject({ tiles: ["0,0"] });
   });
 });

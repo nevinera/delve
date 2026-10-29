@@ -1,11 +1,13 @@
 import { pool } from "../github/github.js";
-import { unpackPlate } from "../editor/plates.js";
 import { World } from "../editor/world.js";
 import { plateOf } from "../world/plateCodec.js";
-import { COLLECTIONS_PATH, IMAGE_PATH, OBJECT_PATH, STRUCTURE_COLLECTIONS_PATH, STRUCTURE_PATH, WORLD_PATH, platePath, sketchPath, tileAt } from "../world/paths.js";
+import { COLLECTIONS_PATH, IMAGE_PATH, OBJECT_PATH, STRUCTURE_COLLECTIONS_PATH, STRUCTURE_PATH, WORLD_PATH, plateAt, platePath, platesIndexPath, sketchPath, tilePath } from "../world/paths.js";
+import { MemoryStore, PlateCache } from "./plateCache.js";
 
 // A released world, read straight from raw GitHub at its commit: no API calls and no token. The
-// page knows the commit's files (its import's list), so nothing has to be probed for.
+// page knows the commit's files (its import's list), so nothing has to be probed for. Plates are
+// streamed in and kept in the browser by their hashes (plateCache.js), so a plate already there
+// isn't downloaded again.
 
 const FETCHES = 8; // at once
 
@@ -21,28 +23,50 @@ export function platesAround(continent, [tx, tz], reach) {
 }
 
 export class PlayWorld {
-  // paths: every file at the commit. fetchFn: fetch, or a stand-in.
-  constructor({ repo, sha, paths, fetchFn = (...args) => fetch(...args) }) {
-    Object.assign(this, { repo, sha, fetchFn });
+  // paths: every file at the commit. fetchFn: fetch, or a stand-in. cache: a PlateCache.
+  constructor({ repo, sha, paths, fetchFn = (...args) => fetch(...args), cache = new PlateCache(new MemoryStore()) }) {
+    Object.assign(this, { repo, sha, fetchFn, cache });
     this.paths = new Set(paths);
     this.world = new World();
     this.plates = new Map(); // plate path -> a promise of the tile keys it held
+    this.hashes = new Map(); // plate path -> its hash, from its continent's plates.json
+  }
+
+  async response(path) {
+    const res = await this.fetchFn(rawUrl(this.repo, this.sha, path));
+    if (!res.ok) throw new Error(`couldn't fetch ${path} (${res.status})`);
+    return res;
   }
 
   async bytes(path) {
-    const res = await this.fetchFn(rawUrl(this.repo, this.sha, path));
-    if (!res.ok) throw new Error(`couldn't fetch ${path} (${res.status})`);
-    return new Uint8Array(await res.arrayBuffer());
+    return new Uint8Array(await (await this.response(path)).arrayBuffer());
   }
 
-  // Fetches the files the world needs before any tiles: world.json, the continents' sketches, and
-  // its object library.
+  // A file's text as it arrives, in pieces.
+  async *text(path) {
+    const reader = (await this.response(path)).body.pipeThrough(new TextDecoderStream()).getReader();
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) return;
+      yield value;
+    }
+  }
+
+  // Fetches the files the world needs before any tiles: world.json, the continents' sketches and
+  // plate indexes, and its object library.
   async open() {
     const want = (path) => this.paths.has(path);
     await this.fetchAll([WORLD_PATH]);
     const continents = this.world.info.continents.map((c) => c.key);
     const library = [...this.paths].filter((p) => p === COLLECTIONS_PATH || p === STRUCTURE_COLLECTIONS_PATH || OBJECT_PATH.test(p) || STRUCTURE_PATH.test(p) || IMAGE_PATH.test(p));
-    await this.fetchAll([...continents.map(sketchPath).filter(want), ...library]);
+    await this.fetchAll([...continents.flatMap((c) => [sketchPath(c), platesIndexPath(c)]).filter(want), ...library]);
+    for (const continent of continents) {
+      const index = this.paths.has(platesIndexPath(continent)) && this.world.readJson(platesIndexPath(continent));
+      for (const [key, hash] of Object.entries(index?.plates ?? {})) {
+        const [layer, coords] = key.split("/");
+        this.hashes.set(platePath(continent, layer, ...coords.split("_").map(Number)), hash);
+      }
+    }
   }
 
   async fetchAll(paths) {
@@ -50,18 +74,20 @@ export class PlayWorld {
     paths.forEach((path, i) => this.world.files.set(path, bytes[i]));
   }
 
-  // Fetches the plates around tile (tx, tz) that haven't been, and splits them into tile files in
-  // the world. Resolves with the "tx,tz" keys of the tiles that came.
+  // Loads the plates around tile (tx, tz) that haven't been, from the cache or GitHub, into tile
+  // files in the world. Resolves with the "tx,tz" keys of the tiles that came.
   async platesAround(continent, tile, reach) {
     const fresh = platesAround(continent, tile, reach).filter((path) => this.paths.has(path) && !this.plates.has(path));
     for (const path of fresh) {
+      const { layer } = plateAt(path);
+      // A plate missing from plates.json is known by the commit it's in instead.
+      const hash = this.hashes.get(path) ?? `${this.sha} ${path}`;
       this.plates.set(
         path,
-        this.bytes(path).then((bytes) =>
-          unpackPlate(path, bytes).map(([tilePath, gz]) => {
-            this.world.files.set(tilePath, gz);
-            const { tx, tz } = tileAt(tilePath);
-            return `${tx},${tz}`;
+        this.cache.tiles(hash, () => this.text(path)).then((tiles) =>
+          tiles.map(([key, file]) => {
+            this.world.files.set(tilePath(continent, layer, ...key.split(",").map(Number)), file);
+            return key;
           }),
         ),
       );

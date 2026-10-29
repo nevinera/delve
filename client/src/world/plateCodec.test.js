@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { CELLS, TILE_FT } from "./constants.js";
-import { decodePlate, encodePlate, plateOf, splitPlate } from "./plateCodec.js";
+import { decodePlate, decodePlateTile, encodePlate, plateOf, splitPlate, streamPlate } from "./plateCodec.js";
 
 // A tile at (tx, tz) with every layer filled from fill(layer, i, j).
 function tileAt([tx, tz], { terrain = ["grass", "dirt", "rock"], fill = () => 0, objects = [], ...rest } = {}) {
@@ -55,6 +55,20 @@ describe("plates", () => {
     expect(ta.generator).toEqual({ version: 23, seed: 99 });
     expect(ta.falls).toEqual(a.falls);
     expect(ta.rivers).toEqual(a.rivers);
+  });
+
+  it("reads a plate as it arrives, tile by tile, however the text is cut", async () => {
+    async function* pieces(size) {
+      for (let at = 0; at < text.length; at += size) yield text.slice(at, at + size);
+    }
+    for (const size of [1, 7, 1000, text.length]) {
+      const read = [];
+      for await (const part of streamPlate(pieces(size))) read.push(part);
+      const [streamed, ...streamedTiles] = read;
+      expect(streamed).toEqual(header);
+      expect(streamedTiles.map((t) => t.coords)).toEqual([[16, 0], [17, 0]]);
+      expect(streamedTiles.map((t) => decodePlateTile(streamed, t.text))).toEqual(tiles);
+    }
   });
 
   it("keeps placed objects, working out their ids and sizes", () => {

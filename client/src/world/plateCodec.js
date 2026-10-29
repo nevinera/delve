@@ -160,6 +160,31 @@ export function splitPlate(text) {
   return { header: readHeader(header), tiles };
 }
 
+// A plate's text as it arrives, in pieces (an async iterable of strings): yields its header
+// (readHeader), then each tile's coords and text as the tile completes, as splitPlate has them.
+export async function* streamPlate(pieces) {
+  let header = null;
+  let lines = []; // the lines of the part being read: the header, or a tile
+  let rest = ""; // a line not yet ended
+  const finish = () => {
+    const text = lines.join("\n");
+    const first = lines[0];
+    lines = [];
+    if (header === null) return (header = readHeader(text));
+    return { coords: first.split(" ")[1].split(",").map(Number), text };
+  };
+  for await (const piece of pieces) {
+    const split = (rest + piece).split("\n");
+    rest = split.pop();
+    for (const line of split) {
+      if (line.startsWith("tile ") && (header === null || lines.length)) yield finish();
+      lines.push(line);
+    }
+  }
+  if (rest) lines.push(rest);
+  if (lines.length) yield finish();
+}
+
 // A plate's header: { version, coords, layer, palettes, clutter, kinds, sizes }, sizes by kind id.
 export function readHeader(text) {
   const header = { palettes: {}, kinds: [], sizes: [], clutter: 100 };
