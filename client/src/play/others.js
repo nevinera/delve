@@ -6,11 +6,16 @@ import { resolveRecipe } from "../character/recipe.js";
 import { BACK_FT, GAITS, GRAVITY, JUMP_FT, RUN_FT, SPRINT, SWIM_FT, WALK_FT } from "../editor/walker.js";
 
 // The other characters near you, as the game server reports them. Each carries on moving as it
-// last said it was, between messages, and eases toward where each message says it is.
+// last said it was, between messages, and eases toward where each message says it is. Each has its
+// name over its head, the same size on screen however far off, out to NAME_FT.
 
 const CATCH_UP = 8; // how fast a drawn character closes the gap to where it should be, per second
-const SNAP_FT = 40; // further off than this, it jumps there
+const SNAP_FT = 40; // further off than this across the ground, it jumps there
 const FADE_S = 0.2;
+const NAME_FT = 300; // names show out to this far from the camera
+const NAME_ABOVE_FT = 0.6; // how far over the head
+const NAME_SCREEN = 0.035; // a name's height, as a share of the view's height
+const NAME_PX = 48; // the name's drawn text size
 
 // How fast a `move` goes, in feet per second.
 export function speedOf(move) {
@@ -40,6 +45,35 @@ function seeded(seed) {
   };
 }
 
+// A name to hang over a character's head: white with a dark edge, readable over sky or ground,
+// and not dimmed by fog.
+function nameplate(name) {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  const font = `600 ${NAME_PX}px system-ui, sans-serif`;
+  ctx.font = font;
+  const pad = NAME_PX / 4;
+  canvas.width = Math.ceil(ctx.measureText(name).width + pad * 2);
+  canvas.height = Math.ceil(NAME_PX * 1.3);
+  ctx.font = font; // resizing the canvas resets it
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  ctx.lineJoin = "round";
+  ctx.lineWidth = NAME_PX / 6;
+  ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
+  ctx.strokeText(name, canvas.width / 2, canvas.height / 2);
+  ctx.fillStyle = "#ffffff";
+  ctx.fillText(name, canvas.width / 2, canvas.height / 2);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  const material = new THREE.SpriteMaterial({ map: texture, sizeAttenuation: false, fog: false, depthWrite: false });
+  const sprite = new THREE.Sprite(material);
+  sprite.center.set(0.5, 0);
+  sprite.scale.set((NAME_SCREEN * canvas.width) / canvas.height, NAME_SCREEN, 1);
+  return sprite;
+}
+
 export class Others {
   // view: the RenderView you walk in.
   constructor(view) {
@@ -50,11 +84,14 @@ export class Others {
   // Characters as the server sends them: { id, name, look, continent, at, yaw, move }.
   appear(character) {
     this.vanish(character.id);
-    const model = characterMesh({ ...resolveRecipe(character.look, seeded(character.id)), sheathed: true });
+    const look = resolveRecipe(character.look, seeded(character.id));
+    const model = characterMesh({ ...look, sheathed: true });
     const drawn = {
       id: character.id,
       name: character.name,
       model,
+      nameplate: nameplate(character.name),
+      height: look.height,
       mixer: new THREE.AnimationMixer(model),
       clips: null,
       playing: null,
@@ -66,7 +103,7 @@ export class Others {
       if (this.characters.get(drawn.id) === drawn) drawn.clips = characterClips(model, baked);
     });
     this.characters.set(drawn.id, drawn);
-    this.view.scene.add(model);
+    this.view.scene.add(model, drawn.nameplate);
   }
 
   moved(message) {
@@ -79,14 +116,17 @@ export class Others {
     drawn.yaw = yaw;
     drawn.move = move;
     if (move.jump) drawn.vy = JUMP_FT;
-    if (drawn.shown.distanceTo(drawn.at) > SNAP_FT) drawn.shown.copy(drawn.at);
+    // Across the ground only: a height that's off (a bot's, say) is put right each frame.
+    if (Math.hypot(drawn.shown.x - drawn.at.x, drawn.shown.z - drawn.at.z) > SNAP_FT) drawn.shown.copy(drawn.at);
   }
 
   vanish(id) {
     const drawn = this.characters.get(id);
     if (!drawn) return;
-    this.view.scene.remove(drawn.model);
+    this.view.scene.remove(drawn.model, drawn.nameplate);
     disposeCharacter(drawn.model);
+    drawn.nameplate.material.map.dispose();
+    drawn.nameplate.material.dispose();
     this.characters.delete(id);
   }
 
@@ -119,6 +159,8 @@ export class Others {
       drawn.shown.lerp(drawn.at, Math.min(1, CATCH_UP * dt));
       drawn.model.position.set(drawn.shown.x - origin[0], drawn.shown.y, drawn.shown.z - origin[1]);
       drawn.model.rotation.y = drawn.yaw;
+      drawn.nameplate.position.copy(drawn.model.position).y += drawn.height + NAME_ABOVE_FT;
+      drawn.nameplate.visible = drawn.nameplate.position.distanceTo(this.view.camera.position) < NAME_FT;
       this.animate(drawn, dt);
     }
   }
