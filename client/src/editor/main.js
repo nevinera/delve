@@ -142,6 +142,7 @@ const editor = new Editor(World.empty(), {
   slabTurn: $("slabTurn"),
   slabCut: $("slabCut"),
   slabClearHoles: $("slabClearHoles"),
+  slabRaise: $("slabRaise"),
   slabDelete: $("slabDelete"),
   brushSize: $("brushSize"),
   brushSizeValue: $("brushSizeValue"),

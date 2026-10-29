@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TILE_FT } from "./constants.js";
-import { cutSlab, fitFloor, slabHitsTrunk, wallFootprint, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
+import { cutSlab, fitFloor, raiseWall, slabHitsTrunk, wallFootprint, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
 
 // A 10 ft square floor, and a wall: the same square stood up on its south edge.
 const floor = { at: [100, 40, 200], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "floorboards" };
@@ -170,5 +170,46 @@ describe("fitFloor", () => {
   it("leaves a floor alone that no wall reaches, or that rests on top of one", () => {
     expect(fitFloor(room, [{ ...north, at: [0, 0, 40] }])).toBeNull();
     expect(fitFloor({ ...room, at: [0, 11, 0] }, [north])).toBeNull();
+  });
+});
+
+describe("raiseWall", () => {
+  // A 20 ft wall along x on z = 0, 10 ft tall, 1 ft thick to the south.
+  const wall = { at: [0, 0, 0], turn: [0, -90, 0], outline: [[0, 0], [20, 0], [20, 10], [0, 10]], thickness: 1, surface: "brick" };
+  const flat = (y) => ({ at: [-5, y, -5], turn: [0, 0, 0], outline: [[0, 0], [30, 0], [30, 10], [0, 10]], thickness: 1, surface: "thatch" });
+  // A gable over it: two slopes rising 1 ft in 2 from each end to a ridge at x = 10, 25 ft up.
+  const pitch = (Math.atan(0.5) * 180) / Math.PI;
+  const slope = (side) => ({
+    at: [10, 25, -5],
+    turn: [0, 0, side < 0 ? pitch : -pitch],
+    outline: [[0, 0], [17 * side, 0], [17 * side, 10], [0, 10]],
+    thickness: 1,
+    surface: "thatch",
+  });
+
+  it("raises a wall to a flat roof, or cuts it down to one", () => {
+    const tops = (r) => Math.max(...r.wall.outline.map((p) => p[1]));
+    expect(tops(raiseWall(wall, [flat(14)]))).toBe(13);
+    expect(tops(raiseWall(wall, [flat(8)]))).toBe(7);
+  });
+
+  it("gives a wall under a gable end its peak", () => {
+    const { wall: raised, problem } = raiseWall(wall, [slope(-1), slope(1)]);
+    expect(problem).toBeUndefined();
+    const peak = raised.outline.reduce((best, p) => (p[1] > best[1] ? p : best));
+    expect(peak[0]).toBeCloseTo(10, 1);
+    expect(peak[1]).toBeGreaterThan(20);
+    expect(raised.outline.filter((p) => p[1] === 0)).toHaveLength(2);
+  });
+
+  it("keeps a doorway", () => {
+    const door = { ...wall, outline: [[0, 0], [8, 0], [8, 7], [12, 7], [12, 0], [20, 0], [20, 10], [0, 10]] };
+    const { wall: raised } = raiseWall(door, [flat(14)]);
+    expect(raised.outline).toContainEqual([8, 7]);
+    expect(raised.outline).toContainEqual([12, 0]);
+  });
+
+  it("won't reach past the roof's edge", () => {
+    expect(raiseWall({ ...wall, at: [0, 0, 40] }, [flat(14)]).problem).toMatch(/under the roof/);
   });
 });

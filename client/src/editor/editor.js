@@ -1132,6 +1132,7 @@ export class Editor {
     this.el.slabDelete.addEventListener("click", () => tool()?.remove());
     this.el.slabCut.addEventListener("click", () => (tool()?.cutting ? tool().stopCut() : tool()?.startCut()));
     this.el.slabClearHoles.addEventListener("click", () => tool()?.clearHoles());
+    this.el.slabRaise.addEventListener("click", () => tool()?.raiseToRoof());
   }
 
   // A swatch for each preset, painted as it looks, and a gear for a custom surface; painted when
@@ -1226,6 +1227,7 @@ export class Editor {
     this.el.slabCut.disabled = !tool?.picked;
     this.el.slabCut.classList.toggle("active", Boolean(tool?.cutting));
     this.el.slabClearHoles.disabled = !tool?.picked?.slab.holes;
+    this.el.slabRaise.disabled = !tool?.raising().walls.length;
     // Picking with nothing picked, the slab settings change nothing.
     const idle = mode === "pick" && !picked;
     this.el.slabThickness.closest(".editor-row").hidden = idle;

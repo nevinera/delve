@@ -185,6 +185,125 @@ export function wallFootprint(wall, low, high) {
   });
 }
 
+// A wall raised, or cut down, to meet the undersides of roofs over it: its top edge follows the
+// lowest roof over each point along it, whichever of its two faces meets that higher. Its foot,
+// doorways and windows stay. Returns { wall } or { problem }, saying why it can't.
+export function raiseWall(wall, roofs) {
+  const n = turnPoint([0, 1, 0], wall.turn);
+  const up = turnPoint([0, 0, 1], wall.turn)[1];
+  if (Math.abs(n[1]) >= 0.05 || Math.abs(Math.abs(up) - 1) > 1e-6) return { problem: "isn't standing straight up" };
+  // Along the wall, u; up it, w feet over `at`.
+  const [u0, u1] = [Math.min(...wall.outline.map((p) => p[0])), Math.max(...wall.outline.map((p) => p[0]))];
+  const toW = ([u, v]) => [u, v * up];
+  const outline = wall.outline.map(toW);
+  const lowestTop = Math.min(...outline.map(([u]) => topAt(outline, u)));
+  const base = slabFace(wall, [[0, 0]])[0];
+  const along = sub(slabFace(wall, [[1, 0]])[0], base);
+  const down = turner(wall.turn)([0, -wall.thickness, 0]);
+  const faces = [base, add(base, down)];
+  // Each roof's underside: its outline across the ground, and its height along each face, a + b u.
+  const undersides = roofs.map((roof) => {
+    const bottom = slabBottom(roof);
+    const m = turnPoint([0, 1, 0], roof.turn);
+    const [x0, y0, z0] = bottom[0];
+    const height = ([x, , z]) => y0 - (m[0] * (x - x0) + m[2] * (z - z0)) / m[1];
+    return {
+      ground: bottom.map(([x, , z]) => [x, z]),
+      lines: faces.map((face) => {
+        const a = height(face);
+        return [a - wall.at[1], height(add(face, along)) - a];
+      }),
+    };
+  });
+  const point = (k, u) => add(faces[k], along.map((v) => v * u));
+  // Where what's over the wall can change: its ends, roof edges crossing it, and roofs crossing.
+  const breaks = new Set([u0, u1]);
+  for (let k = 0; k < 2; k++) {
+    for (const { ground } of undersides) {
+      ground.forEach((a, i) => {
+        const u = crossing(point(k, 0), along, a, ground[(i + 1) % ground.length]);
+        if (u > u0 && u < u1) breaks.add(u);
+      });
+    }
+    for (let i = 0; i < undersides.length; i++) {
+      for (let j = i + 1; j < undersides.length; j++) {
+        const [[a, b], [c, d]] = [undersides[i].lines[k], undersides[j].lines[k]];
+        if (Math.abs(b - d) > 1e-9 && (c - a) / (b - d) > u0 && (c - a) / (b - d) < u1) breaks.add((c - a) / (b - d));
+      }
+    }
+  }
+  const sorted = [...breaks].sort((a, b) => a - b);
+  const curve = [];
+  for (let i = 0; i + 1 < sorted.length; i++) {
+    const [from, to] = [sorted[i], sorted[i + 1]];
+    if (to - from < 1e-6) continue;
+    const middle = (from + to) / 2;
+    // The lowest roof over each face here.
+    const lines = [0, 1].map((k) => {
+      const [x, , z] = point(k, middle);
+      const over = undersides.filter(({ ground }) => inPolygon(ground, [x, z])).map(({ lines }) => lines[k]);
+      return over.length ? over.reduce((low, line) => (line[0] + line[1] * middle < low[0] + low[1] * middle ? line : low)) : null;
+    });
+    if (lines.includes(null)) return { problem: "isn't under the roof all along" };
+    const at = (u) => Math.max(...lines.map(([a, b]) => a + b * u));
+    const [[a, b], [c, d]] = lines;
+    const meet = Math.abs(b - d) > 1e-9 ? (c - a) / (b - d) : null;
+    if (!curve.length) curve.push([from, at(from)]);
+    if (meet !== null && meet > from + 1e-6 && meet < to - 1e-6) curve.push([meet, at(meet)]);
+    curve.push([to, at(to)]);
+  }
+  const roofLine = straightened(curve);
+  if (roofLine.some(([, w]) => w < 0.5)) return { problem: "would be under half a foot tall somewhere" };
+  // What's below the roof line, cut from the wall with everything over its lowest top added.
+  const close = (ring) => [...ring, ring[0]];
+  const below = [close([[u0, -1e4], [u1, -1e4], ...roofLine.slice().reverse()])];
+  const above = [close([[u0, lowestTop - 0.01], [u1, lowestTop - 0.01], [u1, 1e4], [u0, 1e4]])];
+  const raised = polygonClipping.intersection(polygonClipping.union([close(outline)], above), below);
+  const holes = (wall.holes ?? []).map((hole) => [close(hole.map(toW))]);
+  const left = holes.length ? polygonClipping.difference(raised, ...holes) : raised;
+  if (left.length !== 1) return { problem: "would come apart" };
+  const back = (ring) => ring.slice(0, -1).map(([u, w]) => [Math.round(u * 100) / 100 + 0, Math.round(w * up * 100) / 100 + 0]);
+  const [ring, ...holesLeft] = left[0];
+  const { holes: _, ...rest } = wall;
+  const raisedWall = holesLeft.length ? { ...rest, outline: back(ring), holes: holesLeft.map(back) } : { ...rest, outline: back(ring) };
+  const problem = slabProblems(raisedWall)[0];
+  return problem ? { problem: `would be a slab that ${problem}` } : { wall: raisedWall };
+}
+
+// How high a polygon reaches over u, in its second coordinate.
+function topAt(polygon, u) {
+  let top = -Infinity;
+  polygon.forEach((a, i) => {
+    const b = polygon[(i + 1) % polygon.length];
+    if (Math.min(a[0], b[0]) <= u && u <= Math.max(a[0], b[0])) top = Math.max(top, a[0] === b[0] ? Math.max(a[1], b[1]) : a[1] + ((u - a[0]) * (b[1] - a[1])) / (b[0] - a[0]));
+  });
+  return top;
+}
+
+// How far along a line from `from` in direction `along` ([x, y, z]) it crosses the ground edge a
+// to b ([x, z]), or null.
+function crossing(from, along, a, b) {
+  const [dx, dz] = [along[0], along[2]];
+  const [ex, ez] = [b[0] - a[0], b[1] - a[1]];
+  const cross = dx * ez - dz * ex;
+  if (Math.abs(cross) < 1e-12) return null;
+  const [fx, fz] = [a[0] - from[0], a[1] - from[2]];
+  const t = (fx * ez - fz * ex) / cross;
+  const s = (fx * dz - fz * dx) / cross;
+  return s >= -1e-9 && s <= 1 + 1e-9 ? t : null;
+}
+
+// Points along a line with those in a straight run between their neighbours left out.
+function straightened(points) {
+  const out = [points[0]];
+  for (let i = 1; i < points.length - 1; i++) {
+    const [a, b, c] = [out[out.length - 1], points[i], points[i + 1]];
+    if (Math.abs((b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0])) > 1e-6) out.push(b);
+  }
+  out.push(points[points.length - 1]);
+  return out;
+}
+
 function slabArea(slab) {
   return Math.abs(area(slab.outline)) - (slab.holes ?? []).reduce((sum, hole) => sum + Math.abs(area(hole)), 0);
 }

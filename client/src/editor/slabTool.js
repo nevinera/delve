@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { CELL_FT, CELLS } from "../world/constants.js";
-import { MAX_SLAB_CORNERS, SLAB_REACH_FT, cutSlab, fitFloor, slabBottom, slabFace, slabHitsTrunk, slabProblems, slabTile, slabTop } from "../world/slabs.js";
+import { MAX_SLAB_CORNERS, SLAB_REACH_FT, cutSlab, fitFloor, raiseWall, slabBottom, slabFace, slabHitsTrunk, slabProblems, slabTile, slabTop } from "../world/slabs.js";
 import { slabAt, slabGeometry, slabMeshes } from "./slabMeshes.js";
 import { repeatFt } from "./slabTextures.js";
 import { treeHeight, trunkRadius } from "./treeMeshes.js";
@@ -614,6 +614,41 @@ export class SlabTool {
   }
 
   // Takes every hole out of the slab picked alone.
+  // The picked walls and the picked roofs they'd rise to: slabs standing up, and the others whose
+  // highest corner is over a wall's lowest top. No walls without a roof.
+  raising() {
+    const upright = (slab) => Math.abs(turned(slab, [0, 1, 0]).y) < 0.05;
+    const walls = this.picks.filter((pick) => upright(pick.slab));
+    const roofs = this.picks.filter((pick) => !upright(pick.slab)).map((pick) => pick.slab);
+    const lowestTop = Math.min(...walls.map(({ slab }) => Math.min(...slabTop(slab).map((p) => p[1]))));
+    const over = roofs.filter((roof) => Math.max(...slabTop(roof).map((p) => p[1])) > lowestTop);
+    return over.length ? { walls, roofs: over } : { walls: [], roofs: [] };
+  }
+
+  // Raises or cuts down each picked wall to meet the picked roofs, as one edit. A wall that can't
+  // stays as it was.
+  raiseToRoof() {
+    const { walls, roofs } = this.raising();
+    if (!walls.length) return;
+    const raised = walls.map((pick) => ({ pick, ...raiseWall(pick.slab, roofs) }));
+    const problems = raised.filter(({ wall }) => !wall).map(({ problem }) => problem);
+    const done = raised.filter(({ wall }) => wall && !this.hitsTree(wall));
+    if (done.length < raised.length - problems.length) problems.push("would run into a tree");
+    const { detail } = this;
+    detail.beginEdit();
+    for (const pick of this.picks) detail.touch(pick.key);
+    this.keepBefore();
+    for (const { pick, wall } of done) {
+      delete pick.slab.holes;
+      Object.assign(pick.slab, wall);
+    }
+    this.rehome();
+    detail.endEdit();
+    this.pick(this.picks);
+    const which = problems.length === walls.length ? "None of the walls could" : `${problems.length} of the walls couldn't`;
+    if (problems.length) this.onProblem?.(`${which} be raised: one ${problems[0]}.`);
+  }
+
   clearHoles() {
     const { picked, detail } = this;
     if (!picked?.slab.holes) return;
