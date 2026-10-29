@@ -72,6 +72,14 @@ describe("plates", () => {
     }
   });
 
+  it("keeps built objects' colors as the editor sets them, and other kinds' as [r, g, b]", () => {
+    const built = { id: "16.0.0", type: "built:abcd1234", at: [16 * TILE_FT + 5, 5], yaw: 0, scale: 1, colors: ["#ff8000"] };
+    const rock = { id: "16.0.1", type: "rock", at: [16 * TILE_FT + 9, 5], yaw: 0, scale: 1, colors: [[1, 0, 0]] };
+    const text = encodePlate([1, 0], "surface", [tileAt([16, 0], { objects: [built, rock] })]);
+    const [tile] = decodePlate(text).tiles;
+    expect(tile.objects.map((o) => o.colors)).toEqual([["#ff8000"], [[1, 0, 0]]]);
+  });
+
   it("keeps placed objects, working out their ids and sizes", () => {
     const [object] = tiles[0].objects;
     expect(object).toMatchObject({ id: "16.0.0", type: "rock", at: rock.at, yaw: expect.closeTo(1.25, 3), scale: 2.5 });

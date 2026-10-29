@@ -1,6 +1,8 @@
 import { CELL_FT, TILE_FT } from "./constants.js";
 import { platePath } from "./paths.js";
 import { STRUCTURE_PREFIX } from "./structures.js";
+
+const BUILT_PREFIX = "built:"; // as objects.js has it, kept here so plates read without the object library
 import { SURFACE_LAYERS } from "./tileCodec.js";
 
 // Plates: tiles kept as text, 16×16 tiles to a file (docs/formats/plates.md). A plate is a header, then
@@ -283,7 +285,8 @@ function readPlace(rest, header, [x0, z0], n, [tx, tz]) {
     yaw: (decode(position.slice(6, 8)) / YAW_STEPS) * 2 * Math.PI,
     scale: decode(position.slice(8, 10)) / SCALE_STEPS,
   };
-  if (colorText) object.colors = colorText.match(/.{6}/g).map((h) => [0, 2, 4].map((k) => parseInt(h.slice(k, k + 2), 16) / 255));
+  // A built object's colors are "#rrggbb", as the editor sets them; other kinds' [r, g, b] (0-1).
+  if (colorText) object.colors = colorText.match(/.{6}/g).map((h) => (type.startsWith(BUILT_PREFIX) ? `#${h}` : [0, 2, 4].map((k) => parseInt(h.slice(k, k + 2), 16) / 255)));
   Object.assign(object, extra);
   const size = header.sizes[kind];
   if (size?.footprint) object.footprint = scaleFootprint(size.footprint, object.scale);
@@ -369,7 +372,8 @@ function mostCommon(values) {
 
 const widthFor = (size) => (size > 64 ? 2 : 1);
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
-const hex = (rgb) => rgb.map((c) => clamp(Math.round(c * 255), 0, 255).toString(16).padStart(2, "0")).join("");
+// A color as six hex digits: from [r, g, b] (0-1), or "#rrggbb" as the editor sets a built object's.
+const hex = (color) => (typeof color === "string" ? color.slice(1).toLowerCase() : color.map((c) => clamp(Math.round(c * 255), 0, 255).toString(16).padStart(2, "0")).join(""));
 
 // A footprint at a scale. Open footprints (structures') don't scale.
 function scaleFootprint(footprint, scale) {

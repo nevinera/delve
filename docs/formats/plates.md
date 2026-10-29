@@ -126,7 +126,7 @@ The third word packs four fixed-width values with no spaces:
 | yaw | 2 | turns, in 1/4096 of a turn |
 | scale | 2 | in 1/64ths |
 
-The first word after `place` is the object id. `<colors>` is the object's color overrides, each 6 hex digits, run together. `<json>` holds every other field the object has, such as `base`, `pushed` or `texts`. It also holds `at` or `scale` when they don't fit the packed fields.
+The first word after `place` is the object id. `<colors>` is the object's color overrides, each 6 hex digits, run together. Readers give a built object's as `"#rrggbb"` and other kinds' as `[r, g, b]` from 0 to 1. `<json>` holds every other field the object has, such as `base`, `pushed` or `texts`. It also holds `at` or `scale` when they don't fit the packed fields.
 
 Plates don't store an object's `id`. Readers number each tile's objects `<tx>.<tz>.<n>` in line order. A reader works out `footprint` and `height` from the object table.
 
