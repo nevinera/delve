@@ -1,3 +1,4 @@
+import { turnPoint } from "./builtObjects.js";
 import { TILE_FT } from "./constants.js";
 
 // Slabs: flat pieces placed in the detail editor to walk on and to block movement and sight
@@ -109,16 +110,10 @@ function surfaceProblems(surface, images) {
   return out;
 }
 
-// A function turning [x, y, z] by [yaw, pitch, roll] degrees: roll about z, then pitch about x,
-// then yaw about y.
-function turner([yaw, pitch, roll]) {
-  const [cy, sy, cp, sp, cr, sr] = [yaw, pitch, roll].flatMap((d) => [Math.cos((d * Math.PI) / 180), Math.sin((d * Math.PI) / 180)]);
-  return ([x, y, z]) => {
-    [x, y] = [x * cr - y * sr, x * sr + y * cr];
-    [y, z] = [y * cp - z * sp, y * sp + z * cp];
-    [x, z] = [x * cy + z * sy, -x * sy + z * cy];
-    return [x, y, z].map((v) => Math.round(v * 1e6) / 1e6 + 0);
-  };
+// A function turning [x, y, z] by [yaw, pitch, roll] degrees, as a piece turns, rounded so a
+// right angle gives whole numbers.
+function turner(turn) {
+  return (p) => turnPoint(p, turn).map((v) => Math.round(v * 1e6) / 1e6 + 0);
 }
 
 const add = (p, q) => p.map((v, i) => v + q[i]);

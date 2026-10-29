@@ -14,12 +14,13 @@ import { groundCells } from "./terrainMesh.js";
 // hoof and foot prints, paler and more trodden on highways.
 
 const SIZE = 256;
+export const PATTERN_PX = SIZE;
 const SCALES_FT = [9, 48, 210]; // how far each layer's texture stretches
 const PATTERN_FADE_FT = [500, 1100];
 // A pattern for each kind of ground the generator paints (world/generator.js's TERRAIN), and leaf
 // litter for under trees.
 // Each stretches this many feet before it repeats.
-const PATTERN_FT = { grass: 12, dirt: 14, sand: 16, rock: 30, path: 12, shore: 16, mud: 24, moss: 16, litter: 12 };
+export const PATTERN_FT = { grass: 12, dirt: 14, sand: 16, rock: 30, path: 12, shore: 16, mud: 24, moss: 16, litter: 12 };
 const PATTERNS = Object.keys(PATTERN_FT);
 const LITTER = PATTERNS.indexOf("litter");
 const PATH = PATTERNS.indexOf("path");
@@ -259,12 +260,9 @@ function patternTexture(renderer) {
   const px = SIZE * SIZE;
   const data = new Uint8Array(px * 4 * PATTERNS.length);
   PATTERNS.forEach((name, layer) => {
-    const rgb = PAINT[name](new Canvas(SIZE, layer + 1));
-    let sum = 0;
-    for (let k = 0; k < px; k++) sum += 0.3 * rgb[k * 3] + 0.59 * rgb[k * 3 + 1] + 0.11 * rgb[k * 3 + 2];
-    const scale = px / sum;
+    const rgb = patternFactors(name);
     for (let k = 0; k < px; k++) {
-      for (let c = 0; c < 3; c++) data[(layer * px + k) * 4 + c] = Math.min(255, Math.round(rgb[k * 3 + c] * scale * 127.5));
+      for (let c = 0; c < 3; c++) data[(layer * px + k) * 4 + c] = Math.min(255, Math.round(rgb[k * 3 + c] * 127.5));
       data[(layer * px + k) * 4 + 3] = 255;
     }
   });
@@ -278,8 +276,18 @@ function patternTexture(renderer) {
   return texture;
 }
 
-// A square of RGB factors that wraps at its edges, to paint the patterns on.
-class Canvas {
+// One ground pattern's RGB factors on a PATTERN_PX square spanning its PATTERN_FT, averaging 1 in
+// brightness.
+export function patternFactors(name) {
+  const rgb = PAINT[name](new Canvas(SIZE, PATTERNS.indexOf(name) + 1));
+  let sum = 0;
+  for (let k = 0; k < SIZE * SIZE; k++) sum += 0.3 * rgb[k * 3] + 0.59 * rgb[k * 3 + 1] + 0.11 * rgb[k * 3 + 2];
+  const scale = (SIZE * SIZE) / sum;
+  return rgb.map((v) => v * scale);
+}
+
+// A square of RGB factors that wraps at its edges, to paint patterns on.
+export class Canvas {
   constructor(size, seed) {
     this.size = size;
     this.rgb = new Float32Array(size * size * 3).fill(1);

@@ -15,6 +15,7 @@ import { structureCover } from "../world/objects.js";
 import { tileWalk } from "../world/walkIndex.js";
 import { CELL_FT as STRUCTURE_CELL_FT } from "../world/structures.js";
 import { objectMeshes, setObjectSight } from "./objectMeshes.js";
+import { slabMeshes } from "./slabMeshes.js";
 import { Walker } from "./walker.js";
 import { surfacePath } from "./thumbnails.js";
 import { disposeGround, groundMaterial } from "./groundMaterial.js";
@@ -99,9 +100,10 @@ export class RenderView {
     this.trees = new THREE.Group();
     this.clutter = new THREE.Group();
     this.objects = new THREE.Group();
+    this.slabs = new THREE.Group();
     this.far = new THREE.Group(); // the far ring while walking: "tx,tz" tiles' cheap meshes
     this.farTiles = new Map(); // "tx,tz" -> that tile's far meshes
-    this.scene.add(this.content, this.marks, this.trees, this.clutter, this.objects, this.far);
+    this.scene.add(this.content, this.marks, this.trees, this.clutter, this.objects, this.slabs, this.far);
     this.clutterTiles = new Map(); // "tx,tz" -> that tile's clutter, worked out when first needed
     this.clutterAround = null; // the tile clutter is drawn around
     this.decoded = new Map(); // "tx,tz" -> decoded tile, for the tiles drawn in full
@@ -499,6 +501,7 @@ export class RenderView {
       this.buildGround(k);
       this.addTrees(this.decoded.get(k));
       this.addObjects(this.decoded.get(k));
+      this.addSlabs(this.decoded.get(k));
       s.built.add(k);
     }
     this.buildOcean([...s.built]);
@@ -521,7 +524,7 @@ export class RenderView {
   // Takes a tile's meshes out of the scene.
   dropTile(key) {
     const [tx, tz] = key.split(",").map(Number);
-    for (const group of [this.content, this.trees, this.objects]) {
+    for (const group of [this.content, this.trees, this.objects, this.slabs]) {
       for (const child of [...group.children]) {
         const at = child.userData.tile;
         if (!at || at[0] !== tx || at[1] !== tz) continue;
@@ -543,6 +546,13 @@ export class RenderView {
     for (const mesh of objectMeshes(tile.objects, tileAt, this.origin, tileWalk(near))) {
       mesh.userData.tile = tile.coords;
       this.objects.add(mesh);
+    }
+  }
+
+  addSlabs(tile) {
+    for (const mesh of slabMeshes(tile.slabs, this.origin)) {
+      mesh.userData.tile = tile.coords;
+      this.slabs.add(mesh);
     }
   }
 
@@ -591,9 +601,10 @@ export class RenderView {
     this.farDecoded = null;
     empty(this.content);
     this.ocean = null;
-    for (const group of [this.trees, this.objects]) {
+    for (const group of [this.trees, this.objects, this.slabs]) {
       for (const child of [...group.children]) {
-        child.dispose();
+        if (child.isInstancedMesh) child.dispose();
+        else child.geometry.dispose();
         group.remove(child);
       }
     }

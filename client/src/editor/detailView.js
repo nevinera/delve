@@ -231,6 +231,7 @@ export class DetailView {
       view.buildGround(key);
       view.addTrees(view.decoded.get(key));
       view.addObjects(view.decoded.get(key));
+      view.addSlabs(view.decoded.get(key));
     }
     view.materials();
     view.buildOcean(keys);
@@ -733,6 +734,7 @@ export class DetailView {
       view.buildGround(key);
       view.addTrees(view.decoded.get(key));
       view.addObjects(view.decoded.get(key));
+      view.addSlabs(view.decoded.get(key));
     }
     this.dirty.clear();
   }
