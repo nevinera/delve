@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { slabBottom, slabTop } from "../world/slabs.js";
-import { faceSlab, floorSlab, wallSlab } from "./slabTool.js";
+import { faceSlab, floorSlab, rectangleSlab, wallSlab } from "./slabTool.js";
 
 const near = (points) => points.map((p) => p.map((v) => Math.round(v * 100) / 100 + 0));
 
@@ -31,5 +31,18 @@ describe("faceSlab", () => {
   it("stands up through its corners, as a gable end", () => {
     const gable = faceSlab([[0, 10, 0], [12, 10, 0], [6, 16, 0]], { thickness: 1, surface: "plaster" });
     expect(near(slabTop(gable))).toEqual([[0, 10, 0], [12, 10, 0], [6, 16, 0]]);
+  });
+});
+
+describe("rectangleSlab", () => {
+  it("runs along the world's axes for a camera looking north", () => {
+    const floor = rectangleSlab([0, 5, 0], [10, 5, 6], 0, { thickness: 1, surface: "stone" });
+    expect(near(slabTop(floor))).toEqual([[0, 6, 0], [10, 6, 0], [10, 6, 6], [0, 6, 6]]);
+  });
+
+  it("squares up to a turned camera, its far corner where it was dragged to", () => {
+    const floor = rectangleSlab([0, 0, 0], [3, 0, 9], 30, { thickness: 1, surface: "stone" });
+    expect(floor.turn).toEqual([30, 0, 0]);
+    expect(near(slabTop(floor))[2]).toEqual([3, 1, 9]);
   });
 });

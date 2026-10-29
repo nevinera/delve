@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { MAX_SLAB_CORNERS, slabProblems, slabTile, slabTop } from "../world/slabs.js";
-import { slabAt, slabMeshes } from "./slabMeshes.js";
+import { slabAt, slabGeometry, slabMeshes } from "./slabMeshes.js";
 
 // The detail step's slabs tool (world/slabs.js), working on a DetailView's tiles. Its mode is one
 // of:
@@ -9,8 +9,8 @@ import { slabAt, slabMeshes } from "./slabMeshes.js";
 //   axes, or rings to turn it in its own (setHandle), and a dot on each top corner to drag across
 //   its face.
 // - "floor": a slab lying on what's pressed first, the ground or a slab, the rest of its corners on
-//   a level plane there. A rectangle goes from one corner to the other, along the world's axes:
-//   dragged, or clicked at each end. A polygon is a click for each corner, finished by clicking the
+//   a level plane there. A rectangle goes from one corner to the other, square to the camera as it
+//   was at the first: dragged, or clicked at each end. A polygon is a click for each corner, finished by clicking the
 //   first again, or Enter.
 // - "wall": a slab standing up from a line on that level plane. A rectangle is the line, dragged or
 //   clicked at each end; it stands `height` feet over its start, its foot dropped to the lowest
@@ -18,9 +18,10 @@ import { slabAt, slabMeshes } from "./slabMeshes.js";
 //   polygon is the line's two clicks, then corners up its face, as for a gable end, finished as a
 //   floor is.
 // Corners on the level snap to other slabs' top corners nearby. What would be made shows as it's
-// drawn. Escape drops a slab half drawn, Backspace its last corner.
+// drawn, red where it can't be: too big, say, or belonging outside the window. Escape drops a slab half drawn, Backspace its last corner.
 
-const MARK = { drawing: 0x3fb6ff, picked: 0xffe066, dot: 0xffe066 };
+const MARK = { drawing: 0x3fb6ff, picked: 0xffe066, dot: 0xffe066, wrong: 0xe04040 };
+const WRONG = new THREE.MeshBasicMaterial({ color: MARK.wrong, transparent: true, opacity: 0.6 });
 const SNAP_SHARE = 0.012; // of the camera's distance: how near a corner snaps
 const MIN_SNAP_FT = 0.5;
 const DOT_SHARE = 0.006; // of the camera's distance: how big a corner dot is
@@ -111,7 +112,7 @@ export class SlabTool {
     const rectangle = this.settings.shape === "rectangle";
     if (!this.drawing) {
       const hit = this.surfaceUnder(ray);
-      if (hit) this.drawing = { points: [this.snap(hit, hit[1])], height: hit[1], pressed: rectangle ? [e.clientX, e.clientY] : null };
+      if (hit) this.drawing = { points: [this.snap(hit, hit[1])], height: hit[1], pressed: rectangle ? [e.clientX, e.clientY] : null, yaw: this.cameraYaw() };
     } else if (rectangle) {
       const at = this.nextCorner(ray);
       if (at) this.endRectangle(at);
@@ -188,9 +189,9 @@ export class SlabTool {
   // A rectangle's far end: it's made, and with keepWalling, a wall's end starts the next.
   endRectangle(end) {
     const slab = this.slabFrom([this.drawing.points[0], end]);
-    if (!slab) return;
-    const { height } = this.drawing;
-    this.drawing = this.settings.mode === "wall" && this.settings.keepWalling ? { points: [end], height, pressed: null } : null;
+    if (!this.fits(slab)) return;
+    const { height, yaw } = this.drawing;
+    this.drawing = this.settings.mode === "wall" && this.settings.keepWalling ? { points: [end], height, pressed: null, yaw } : null;
     this.add(slab);
   }
 
@@ -206,7 +207,7 @@ export class SlabTool {
   // Makes the polygon drawn so far.
   finish() {
     const slab = this.drawing && this.settings.shape === "polygon" && this.slabFrom(this.drawing.points);
-    if (!slab) return;
+    if (!this.fits(slab)) return;
     this.drawing = null;
     this.add(slab);
   }
@@ -217,8 +218,7 @@ export class SlabTool {
     const [a, b] = points;
     if (mode === "floor") {
       if (shape === "polygon") return points.length >= 3 ? floorSlab(points, { thickness, surface }) : null;
-      if (points.length < 2 || Math.abs(b[0] - a[0]) < 0.1 || Math.abs(b[2] - a[2]) < 0.1) return null;
-      return floorSlab([a, [b[0], a[1], a[2]], [b[0], a[1], b[2]], [a[0], a[1], b[2]]], { thickness, surface });
+      return points.length >= 2 ? rectangleSlab(a, b, this.drawing.yaw, { thickness, surface }) : null;
     }
     if (points.length < 2 || flatDistance(a, b) < 0.5) return null;
     if (shape === "rectangle") return wallSlab(a, b, { foot: this.footUnder(a, b), height: this.settings.height, thickness, surface });
@@ -236,6 +236,19 @@ export class SlabTool {
       if (Number.isFinite(h)) foot = Math.min(foot, h);
     }
     return Math.floor(foot * 4) / 4;
+  }
+
+  // Whether a slab can be made: nothing wrong with it, in a tile of the window.
+  fits(slab) {
+    return Boolean(slab) && !slabProblems(slab).length && this.detail.editable(slabTile(slab).join(","));
+  }
+
+  // Which way the camera faces across the ground, as a slab's yaw: a slab turned so has its u
+  // running to the right of the view and its v towards the camera.
+  cameraYaw() {
+    const { camera, controls } = this.detail.view;
+    const [fx, fz] = [controls.target.x - camera.position.x, controls.target.z - camera.position.z];
+    return Math.round(((Math.atan2(-fx, -fz) * 180) / Math.PI) * 10) / 10 + 0;
   }
 
   // Puts a new slab in the tile it belongs to, and picks it unless more's being drawn.
@@ -381,11 +394,10 @@ export class SlabTool {
       const next = pointer && this.nextCorner(this.ray(pointer));
       const corners = next ? [...this.drawing.points, next] : this.drawing.points;
       const slab = this.slabFrom(corners);
-      if (slab && !slabProblems(slab).length) {
-        for (const mesh of slabMeshes([slab], this.detail.view.origin)) {
-          mesh.userData.preview = true;
-          this.marks.add(mesh);
-        }
+      const shown = !slab ? [] : this.fits(slab) ? slabMeshes([slab], this.detail.view.origin) : [new THREE.Mesh(slabGeometry(slab, this.detail.view.origin), WRONG)];
+      for (const mesh of shown) {
+        mesh.userData.preview = true;
+        this.marks.add(mesh);
       }
       if (this.settings.shape === "polygon" && corners.length >= 2) line(corners.map((p) => this.scene(p)), MARK.drawing, corners.length >= 3);
     }
@@ -503,6 +515,17 @@ export function faceSlab(corners, { thickness, surface }) {
   const yaw = Math.round(((Math.atan2(-dz, dx) * 180) / Math.PI) * 10) / 10 + 0;
   const outline = corners.map(([x, y, z]) => [tidy((x - a[0]) * ux + (z - a[2]) * uz), tidy(y - a[1])]);
   return { at: a.map(tidy), turn: [yaw, -90, 0], outline, thickness, surface };
+}
+
+// A floor from one corner to the opposite, `a` to `b` ([x, y, z] continent feet), its sides square
+// to `yaw`, lying on a's level.
+export function rectangleSlab(a, b, yaw, { thickness, surface }) {
+  const r = (yaw * Math.PI) / 180;
+  // Turned by yaw, u points along (cos, -sin) and v along (sin, cos), across the ground.
+  const [dx, dz] = [b[0] - a[0], b[2] - a[2]];
+  const [w, d] = [tidy(dx * Math.cos(r) - dz * Math.sin(r)), tidy(dx * Math.sin(r) + dz * Math.cos(r))];
+  if (Math.abs(w) < 0.1 || Math.abs(d) < 0.1) return null;
+  return { at: [a[0], a[1] + thickness, a[2]].map(tidy), turn: [yaw, 0, 0], outline: [[0, 0], [w, 0], [w, d], [0, d]], thickness, surface };
 }
 
 const tidy = (v) => Math.round(v * ROUND) / ROUND + 0;
