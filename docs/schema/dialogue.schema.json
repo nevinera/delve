@@ -1,0 +1,69 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "dialogue.schema.json",
+  "title": "dialogues/<id>.json",
+  "description": "A dialogue tree an NPC speaks.",
+  "type": "object",
+  "required": [
+    "id",
+    "start",
+    "lines"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "start": {
+      "type": "string"
+    },
+    "lines": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "text"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "choices": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "text"
+              ],
+              "properties": {
+                "text": {
+                  "type": "string"
+                },
+                "next": {
+                  "type": "string"
+                },
+                "do": {
+                  "enum": [
+                    "vendor",
+                    "close"
+                  ]
+                }
+              },
+              "oneOf": [
+                {
+                  "required": [
+                    "next"
+                  ]
+                },
+                {
+                  "required": [
+                    "do"
+                  ]
+                }
+              ]
+            }
+          }
+        }
+      }
+    }
+  }
+}

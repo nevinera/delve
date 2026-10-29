@@ -1,0 +1,44 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "npc.schema.json",
+  "title": "npcs/<id>.json",
+  "description": "A friendly character who talks or sells.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "look"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "name": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "look": {
+      "type": "object",
+      "description": "a character recipe (client/src/character/recipe.js)"
+    },
+    "dialogue": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "vendor": {
+      "type": "object",
+      "required": [
+        "sells"
+      ],
+      "properties": {
+        "sells": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/id"
+          }
+        }
+      }
+    }
+  }
+}

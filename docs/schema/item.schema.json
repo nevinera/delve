@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "item.schema.json",
+  "title": "items/<id>.json",
+  "description": "An item, written by hand.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "quality",
+    "itemLevel"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "quality": {
+      "$ref": "common.schema.json#/$defs/quality"
+    },
+    "itemLevel": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "slot": {
+      "$ref": "common.schema.json#/$defs/slot"
+    },
+    "armorType": {
+      "$ref": "common.schema.json#/$defs/armorType"
+    },
+    "weaponType": {
+      "type": "string",
+      "description": "a type from weapons.js's HELD"
+    },
+    "speed": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "requiredLevel": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "damage": {
+      "$ref": "common.schema.json#/$defs/range"
+    },
+    "stats": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "common.schema.json#/$defs/stat"
+      },
+      "additionalProperties": {
+        "type": "number"
+      }
+    },
+    "colors": {
+      "$ref": "common.schema.json#/$defs/colors"
+    },
+    "price": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "copper"
+    },
+    "stack": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "use": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "consumed": {
+      "type": "boolean"
+    }
+  }
+}

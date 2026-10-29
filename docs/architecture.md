@@ -44,6 +44,8 @@ The editor builds a continent in steps, each writing its own files:
 5. **Detail**: change tiles by hand. Edited tiles are listed in `edited.json`, and generating leaves them alone. Digging beside water makes the water flow again over the edited ground.
 6. **Publish**: validate the saved world and tag it as a version.
 
+A world also defines what you fight and meet: classes, abilities, statuses, items, creatures, NPCs, dialogue, and each continent's spawns. [Game data](formats/game-data.md) describes them, and `client/src/world/gameData.js` checks them. Nothing reads them yet.
+
 Tiles are the heavy part. The editor holds each as a binary [tile file](formats/tile-file.md) while a world is open, and stores them 256 to a text [plate](formats/plates.md). Each plate carries the sizes of the objects in it, so a reader such as the game server can block movement without the world's object library.
 
 ## Checking a world

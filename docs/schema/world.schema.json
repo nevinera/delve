@@ -37,6 +37,12 @@
     },
     "dungeons": {
       "type": "array"
+    },
+    "levelCap": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 20,
+      "description": "the highest level characters reach here, 20 by default"
     }
   }
 }

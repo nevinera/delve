@@ -1,0 +1,381 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "common.schema.json",
+  "title": "common definitions",
+  "description": "Types the game data files share (docs/formats/game-data.md).",
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[0-9a-z]{8}$"
+    },
+    "color": {
+      "type": "string",
+      "pattern": "^#[0-9a-f]{6}$"
+    },
+    "colors": {
+      "type": "array",
+      "description": "[main, trim]",
+      "items": {
+        "$ref": "#/$defs/color"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "range": {
+      "type": "array",
+      "description": "[min, max]",
+      "items": {
+        "type": "number"
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "numberOrRange": {
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "$ref": "#/$defs/range"
+        }
+      ]
+    },
+    "levels": {
+      "description": "a level, or [min, max]",
+      "oneOf": [
+        {
+          "type": "integer",
+          "minimum": 1
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "minItems": 2,
+          "maxItems": 2
+        }
+      ]
+    },
+    "amount": {
+      "description": "a number, [min, max], or parts that add up",
+      "oneOf": [
+        {
+          "type": "number"
+        },
+        {
+          "$ref": "#/$defs/range"
+        },
+        {
+          "type": "object",
+          "minProperties": 1,
+          "additionalProperties": false,
+          "properties": {
+            "base": {
+              "$ref": "#/$defs/numberOrRange"
+            },
+            "attackPower": {
+              "type": "number"
+            },
+            "spellPower": {
+              "type": "number"
+            },
+            "weapon": {
+              "type": "number"
+            },
+            "mastery": {
+              "type": "number"
+            }
+          }
+        }
+      ]
+    },
+    "school": {
+      "enum": [
+        "physical",
+        "holy",
+        "fire",
+        "nature",
+        "frost",
+        "shadow",
+        "arcane"
+      ]
+    },
+    "stat": {
+      "enum": [
+        "strength",
+        "agility",
+        "intellect",
+        "stamina",
+        "armor",
+        "critRating",
+        "hasteRating",
+        "masteryRating",
+        "versatilityRating",
+        "leechRating",
+        "avoidanceRating",
+        "speedRating"
+      ]
+    },
+    "anyStat": {
+      "enum": [
+        "strength",
+        "agility",
+        "intellect",
+        "stamina",
+        "armor",
+        "critRating",
+        "hasteRating",
+        "masteryRating",
+        "versatilityRating",
+        "leechRating",
+        "avoidanceRating",
+        "speedRating",
+        "attackPower",
+        "spellPower",
+        "maxHealth",
+        "critChance",
+        "haste",
+        "mastery",
+        "versatility",
+        "leech",
+        "avoidance",
+        "dodge",
+        "parry",
+        "block",
+        "movementSpeed",
+        "attackSpeed",
+        "damageDone",
+        "healingDone",
+        "damageTaken",
+        "healingTaken",
+        "threat"
+      ]
+    },
+    "quality": {
+      "enum": [
+        "poor",
+        "common",
+        "uncommon",
+        "rare",
+        "epic"
+      ]
+    },
+    "slot": {
+      "enum": [
+        "head",
+        "neck",
+        "shoulders",
+        "back",
+        "chest",
+        "wrists",
+        "hands",
+        "waist",
+        "legs",
+        "feet",
+        "finger",
+        "trinket",
+        "oneHand",
+        "mainHand",
+        "offHand",
+        "twoHand",
+        "ranged"
+      ]
+    },
+    "armorType": {
+      "enum": [
+        "cloth",
+        "leather",
+        "chain",
+        "plate"
+      ]
+    },
+    "region": {
+      "type": "array",
+      "description": "A multipolygon in tile units: polygons, each a list of rings (outline first, then holes), each ring a list of [x, z] corners, implicitly closed.",
+      "items": {
+        "type": "array",
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          }
+        }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "required": [
+        "key",
+        "name",
+        "kind",
+        "color"
+      ],
+      "properties": {
+        "key": {
+          "type": "string",
+          "pattern": "^[a-z][a-z0-9_]*$"
+        },
+        "name": {
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "mana",
+            "energy",
+            "rage",
+            "points"
+          ]
+        },
+        "color": {
+          "$ref": "#/$defs/color"
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "points only"
+        },
+        "regen": {
+          "type": "number",
+          "minimum": 0,
+          "description": "points a second, points only"
+        },
+        "decay": {
+          "type": "number",
+          "minimum": 0,
+          "description": "points a second out of combat, points only"
+        }
+      }
+    },
+    "effect": {
+      "type": "object",
+      "required": [
+        "type",
+        "affects"
+      ],
+      "properties": {
+        "type": {
+          "enum": [
+            "damage",
+            "heal",
+            "resource",
+            "status",
+            "interrupt",
+            "taunt"
+          ]
+        },
+        "affects": {
+          "enum": [
+            "target",
+            "self",
+            "enemies",
+            "allies"
+          ]
+        },
+        "around": {
+          "enum": [
+            "self",
+            "target",
+            "ground"
+          ]
+        },
+        "radius": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "cone": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 360
+        },
+        "max": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "amount": {
+          "$ref": "#/$defs/amount"
+        },
+        "school": {
+          "$ref": "#/$defs/school"
+        },
+        "resource": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/id"
+        },
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "lockout": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        }
+      }
+    },
+    "visual": {
+      "type": "object",
+      "required": [
+        "effect",
+        "when"
+      ],
+      "properties": {
+        "effect": {
+          "type": "string"
+        },
+        "when": {
+          "enum": [
+            "cast",
+            "launch",
+            "impact",
+            "channel"
+          ]
+        },
+        "on": {
+          "enum": [
+            "caster",
+            "target",
+            "ground"
+          ]
+        },
+        "colors": {
+          "$ref": "#/$defs/colors"
+        }
+      }
+    },
+    "sound": {
+      "type": "object",
+      "required": [
+        "sound",
+        "when"
+      ],
+      "properties": {
+        "sound": {
+          "type": "string"
+        },
+        "when": {
+          "enum": [
+            "cast",
+            "launch",
+            "impact",
+            "channel"
+          ]
+        },
+        "on": {
+          "enum": [
+            "caster",
+            "target",
+            "ground"
+          ]
+        }
+      }
+    }
+  }
+}

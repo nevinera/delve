@@ -1,0 +1,173 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "status.schema.json",
+  "title": "statuses/<id>.json",
+  "description": "A buff, debuff or hidden effect on a unit.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "kind",
+    "effects"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "kind": {
+      "enum": [
+        "buff",
+        "debuff",
+        "hidden"
+      ]
+    },
+    "dispel": {
+      "enum": [
+        "magic",
+        "curse",
+        "poison",
+        "disease"
+      ]
+    },
+    "duration": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "stacking": {
+      "enum": [
+        "refresh",
+        "replace",
+        "stack"
+      ]
+    },
+    "maxStacks": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "breaksOn": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "move",
+          "damage",
+          "action"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "pose": {
+      "enum": [
+        "sit"
+      ]
+    },
+    "aura": {
+      "type": "object",
+      "required": [
+        "effect"
+      ],
+      "properties": {
+        "effect": {
+          "type": "string"
+        },
+        "colors": {
+          "$ref": "common.schema.json#/$defs/colors"
+        }
+      }
+    },
+    "effects": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "enum": [
+              "stat",
+              "periodic",
+              "absorb",
+              "control",
+              "trigger",
+              "none"
+            ]
+          },
+          "stat": {
+            "$ref": "common.schema.json#/$defs/anyStat"
+          },
+          "add": {
+            "type": "number"
+          },
+          "multiply": {
+            "type": "number"
+          },
+          "school": {
+            "$ref": "common.schema.json#/$defs/school"
+          },
+          "every": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "does": {
+            "enum": [
+              "damage",
+              "heal",
+              "resource"
+            ]
+          },
+          "amount": {
+            "$ref": "common.schema.json#/$defs/amount"
+          },
+          "resource": {
+            "type": "string"
+          },
+          "schools": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/school"
+            }
+          },
+          "control": {
+            "enum": [
+              "stun",
+              "root",
+              "silence",
+              "incapacitate",
+              "fear"
+            ]
+          },
+          "on": {
+            "enum": [
+              "dealDamage",
+              "takeDamage",
+              "heal",
+              "crit",
+              "cast",
+              "dodge",
+              "parry",
+              "block"
+            ]
+          },
+          "chance": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "cooldown": {
+            "type": "number",
+            "minimum": 0
+          },
+          "effect": {
+            "$ref": "common.schema.json#/$defs/effect"
+          }
+        }
+      }
+    }
+  }
+}

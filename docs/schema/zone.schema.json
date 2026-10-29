@@ -33,6 +33,16 @@
           }
         }
       }
+    },
+    "levels": {
+      "type": "array",
+      "description": "[min, max], the levels it is built for",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 2,
+      "maxItems": 2
     }
   }
 }

@@ -118,5 +118,24 @@ describe("validateWorld", () => {
     const zone = "places/continents/main/zones/vale.json";
     expect(changed((f) => f.set(zone, json({ version: 3, name: "Vale", region: [[[[0, 0], [1, 0], [1, 1]]]] })))).toEqual([]);
     expect(changed((f) => f.set(zone, json({ version: 3, name: "Vale", region: [[[0, 0]]] })))).toEqual([`${zone}: needs a region: polygons of rings of [x, z] points`]);
+    expect(changed((f) => f.set(zone, json({ version: 3, name: "Vale", levels: [10, 1], region: [[[[0, 0], [1, 0], [1, 1]]]] })))).toEqual([`${zone}: needs levels as [min, max]`]);
+  });
+
+  it("checks the level cap and game data", () => {
+    const world = { version: 1, name: "Small", continents: [{ key: "main", name: "Main" }], dungeons: [] };
+    expect(changed((f) => f.set("world.json", json({ ...world, levelCap: 30 })))).toEqual(["world.json: needs a whole levelCap from 1 to 20"]);
+    const status = { id: "chil0001", name: "Chilled", kind: "debuff", effects: [] };
+    expect(changed((f) => f.set("statuses/chil0001.json", json(status)))).toEqual([]);
+    expect(changed((f) => f.set("statuses/chil0002.json", json(status)))).toEqual(['statuses/chil0002.json: has id "chil0001", not chil0002 as its name says']);
+    const spawns = "places/continents/main/spawns.json";
+    const placed = { version: 1, regions: [], placed: [{ id: "p1x9z2aa", creature: "wolf0001", at: [0, 0, 0], levels: 12 }] };
+    expect(changed((f) => f.set(spawns, json(placed)))).toEqual([`${spawns}: placed p1x9z2aa is creature wolf0001, which the world doesn't have`]);
+    expect(
+      changed((f) => {
+        f.set("world.json", json({ ...world, levelCap: 10 }));
+        f.set("creatures/wolf0001.json", json({ id: "wolf0001", name: "Wolf", look: { body: "wolf" } }));
+        f.set(spawns, json(placed));
+      }),
+    ).toEqual([`warning: ${spawns}: placed p1x9z2aa is past the level cap of 10`]);
   });
 });

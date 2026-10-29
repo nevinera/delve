@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "creature.schema.json",
+  "title": "creatures/<id>.json",
+  "description": "A kind of mob.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "look"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "name": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "family": {
+      "type": "string"
+    },
+    "look": {
+      "type": "object",
+      "description": "a character recipe (client/src/character/recipe.js)"
+    },
+    "classification": {
+      "enum": [
+        "trivial",
+        "normal",
+        "elite",
+        "rare",
+        "rareElite",
+        "boss"
+      ]
+    },
+    "health": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "damage": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "armor": {
+      "type": "number",
+      "minimum": 0
+    },
+    "reaction": {
+      "enum": [
+        "hostile",
+        "neutral"
+      ]
+    },
+    "aggroRadius": {
+      "type": "number",
+      "minimum": 0
+    },
+    "attack": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "speed": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "range": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "school": {
+          "$ref": "common.schema.json#/$defs/school"
+        }
+      }
+    },
+    "speed": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "resource": {
+      "$ref": "common.schema.json#/$defs/resource"
+    },
+    "abilities": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/id"
+      }
+    },
+    "tactics": {
+      "oneOf": [
+        {
+          "type": "object",
+          "required": [
+            "type"
+          ],
+          "properties": {
+            "type": {
+              "const": "random"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "type",
+            "abilities"
+          ],
+          "properties": {
+            "type": {
+              "enum": [
+                "priority",
+                "rotation"
+              ]
+            },
+            "abilities": {
+              "type": "array",
+              "items": {
+                "$ref": "common.schema.json#/$defs/id"
+              },
+              "minItems": 1
+            }
+          }
+        }
+      ]
+    },
+    "loot": {
+      "type": "object",
+      "required": [],
+      "properties": {
+        "gold": {
+          "type": "number",
+          "minimum": 0
+        },
+        "junk": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "gear": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "items": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "item",
+              "chance"
+            ],
+            "properties": {
+              "item": {
+                "$ref": "common.schema.json#/$defs/id"
+              },
+              "chance": {
+                "type": "number",
+                "exclusiveMinimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

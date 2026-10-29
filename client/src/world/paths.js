@@ -15,10 +15,25 @@ export const OBJECT_PATH = /^objects\/[0-9a-z]{8}\.json$/;
 export const STRUCTURE_PATH = /^structures\/[0-9a-z]{8}\.json$/;
 export const IMAGE_PATH = /^textures\/[0-9a-z]{8}\.json$/;
 
+// Game data (docs/formats/game-data.md): each kind's directory, holding <id>.json files.
+export const GAME_DATA_DIRS = {
+  classes: "classes",
+  abilities: "abilities",
+  statuses: "statuses",
+  items: "items",
+  itemTemplates: "item-templates",
+  creatures: "creatures",
+  npcs: "npcs",
+  dialogues: "dialogues",
+};
+export const gameDataPath = (kind, id) => `${GAME_DATA_DIRS[kind]}/${id}.json`;
+const GAME_DATA = /^([\w-]+)\/([0-9a-z]{8})\.json$/;
+
 export const sketchPath = (continent) => `${CONTINENT(continent)}/sketch.json`;
 export const editedPath = (continent) => `${CONTINENT(continent)}/edited.json`;
 export const indexPath = (continent) => `${CONTINENT(continent)}/index.json`;
 export const platesIndexPath = (continent) => `${CONTINENT(continent)}/plates.json`;
+export const spawnsPath = (continent) => `${CONTINENT(continent)}/spawns.json`;
 export const zonePath = (continent, key) => `${CONTINENT(continent)}/zones/${key}.json`;
 export const landPath = (continent, bx, bz) => `${CONTINENT(continent)}/land/${bx}_${bz}.f32`;
 export const platePath = (continent, layer, px, pz) => `${CONTINENT(continent)}/plates/${layer}/${px}_${pz}.plate`;
@@ -57,6 +72,13 @@ export function landBlockAt(path) {
 export function zoneAt(path) {
   const m = path.match(ZONE);
   return m && { continent: m[1], key: m[2] };
+}
+
+// { kind, id } for a game data file, kind a key of GAME_DATA_DIRS.
+export function gameDataAt(path) {
+  const m = path.match(GAME_DATA);
+  const kind = m && Object.keys(GAME_DATA_DIRS).find((k) => GAME_DATA_DIRS[k] === m[1]);
+  return kind ? { kind, id: m[2] } : null;
 }
 
 export const isPlatePath = (path) => PLATE.test(path);

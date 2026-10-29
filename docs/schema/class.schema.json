@@ -1,0 +1,166 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "class.schema.json",
+  "title": "classes/<id>.json",
+  "description": "A class players can pick.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "colors",
+    "primaryStats",
+    "resources",
+    "armor",
+    "weapons",
+    "abilities",
+    "mastery"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "colors": {
+      "type": "object",
+      "required": [
+        "major",
+        "minor"
+      ],
+      "properties": {
+        "major": {
+          "$ref": "common.schema.json#/$defs/color"
+        },
+        "minor": {
+          "$ref": "common.schema.json#/$defs/color"
+        }
+      }
+    },
+    "primaryStats": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "strength",
+          "agility",
+          "intellect"
+        ]
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "resources": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/resource"
+      },
+      "minItems": 1,
+      "maxItems": 3,
+      "description": "the first is the primary resource"
+    },
+    "armor": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "type",
+          "level"
+        ],
+        "properties": {
+          "type": {
+            "$ref": "common.schema.json#/$defs/armorType"
+          },
+          "level": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "weapons": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "description": "weapon types from weapons.js's HELD"
+    },
+    "offhands": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "abilities": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "ability",
+          "level"
+        ],
+        "properties": {
+          "ability": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "level": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "passives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "status",
+          "level"
+        ],
+        "properties": {
+          "status": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "level": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      }
+    },
+    "mastery": {
+      "type": "object",
+      "required": [
+        "name",
+        "status"
+      ],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "common.schema.json#/$defs/id"
+        }
+      }
+    },
+    "startingGear": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/id"
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

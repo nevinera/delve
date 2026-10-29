@@ -1,0 +1,97 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "item-template.schema.json",
+  "title": "item-templates/<id>.json",
+  "description": "A pattern the server rolls generated gear from.",
+  "type": "object",
+  "required": [
+    "id",
+    "names",
+    "slot",
+    "levels",
+    "qualities",
+    "stats"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "names": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1
+    },
+    "slot": {
+      "$ref": "common.schema.json#/$defs/slot"
+    },
+    "armorType": {
+      "$ref": "common.schema.json#/$defs/armorType"
+    },
+    "weaponType": {
+      "type": "string",
+      "description": "a type from weapons.js's HELD"
+    },
+    "speed": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "requiredLevel": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "levels": {
+      "type": "array",
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      },
+      "minItems": 2,
+      "maxItems": 2
+    },
+    "qualities": {
+      "type": "object",
+      "propertyNames": {
+        "$ref": "common.schema.json#/$defs/quality"
+      },
+      "additionalProperties": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "minProperties": 1
+    },
+    "stats": {
+      "type": "object",
+      "propertyNames": {
+        "enum": [
+          "primary",
+          "secondary",
+          "strength",
+          "agility",
+          "intellect",
+          "stamina",
+          "armor",
+          "critRating",
+          "hasteRating",
+          "masteryRating",
+          "versatilityRating",
+          "leechRating",
+          "avoidanceRating",
+          "speedRating"
+        ]
+      },
+      "additionalProperties": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "minProperties": 1
+    },
+    "colors": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/colors"
+      }
+    }
+  }
+}

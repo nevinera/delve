@@ -1,0 +1,125 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "spawns.schema.json",
+  "title": "places/continents/<c>/spawns.json",
+  "description": "A continent's spawn regions, and the mobs and NPCs placed one at a time.",
+  "type": "object",
+  "required": [
+    "version",
+    "regions",
+    "placed"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "regions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "area",
+          "spawns"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "name": {
+            "type": "string"
+          },
+          "area": {
+            "$ref": "common.schema.json#/$defs/region"
+          },
+          "spawns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": [
+                "creature",
+                "density",
+                "levels"
+              ],
+              "properties": {
+                "creature": {
+                  "$ref": "common.schema.json#/$defs/id"
+                },
+                "density": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "levels": {
+                  "$ref": "common.schema.json#/$defs/levels"
+                },
+                "respawn": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "wander": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "placed": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "at"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "creature": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "npc": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "at": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 3,
+            "maxItems": 3
+          },
+          "yaw": {
+            "type": "number"
+          },
+          "levels": {
+            "$ref": "common.schema.json#/$defs/levels"
+          },
+          "respawn": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "wander": {
+            "type": "number",
+            "minimum": 0
+          }
+        },
+        "oneOf": [
+          {
+            "required": [
+              "creature"
+            ]
+          },
+          {
+            "required": [
+              "npc"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

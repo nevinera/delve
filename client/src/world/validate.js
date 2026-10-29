@@ -3,6 +3,7 @@ import { imageProblems, problems as objectProblems } from "./builtObjects.js";
 import { BUILTIN_IMAGES } from "./builtinImages.js";
 import { BUILTIN_OBJECTS } from "./builtinObjects.js";
 import { BUILTIN_STRUCTURES } from "./builtinStructures.js";
+import { MAX_LEVEL, checkGameData } from "./gameData.js";
 import { BLOCK } from "./landGrid.js";
 import { PLATE_TILES, decodePlateTile, plateHash, plateOf, splitPlate } from "./plateCodec.js";
 import {
@@ -14,11 +15,13 @@ import {
   WORLD_PATH,
   continentOf,
   editedPath,
+  gameDataAt,
   indexPath,
   landBlockAt,
   plateAt,
   platesIndexPath,
   sketchPath,
+  spawnsPath,
   tileAt,
   zoneAt,
 } from "./paths.js";
@@ -51,8 +54,10 @@ export function validateWorld(files) {
     }
   };
 
-  const continents = checkWorld(json(WORLD_PATH), problem);
+  const world = json(WORLD_PATH);
+  const continents = checkWorld(world, problem);
   const library = checkLibrary(files, json, problem, warning);
+  checkData(files, continents, Number.isInteger(world?.levelCap) ? world.levelCap : MAX_LEVEL, json, problem, warning);
   for (const path of files.keys()) {
     const continent = continentOf(path);
     if (continent && continents && !continents.has(continent)) {
@@ -72,6 +77,7 @@ function checkWorld(world, problem) {
   if (!isObject(world)) return world !== null && problem(WORLD_PATH, "should be an object"), null;
   if (world.version !== 1) problem(WORLD_PATH, `has version ${JSON.stringify(world.version)}, not 1`);
   if (typeof world.name !== "string" || !world.name) problem(WORLD_PATH, "needs a name");
+  if (world.levelCap !== undefined && !(Number.isInteger(world.levelCap) && world.levelCap >= 1 && world.levelCap <= MAX_LEVEL)) problem(WORLD_PATH, `needs a whole levelCap from 1 to ${MAX_LEVEL}`);
   if (!Array.isArray(world.continents)) return problem(WORLD_PATH, "needs a list of continents"), null;
   const keys = new Set();
   for (const c of world.continents) {
@@ -132,6 +138,28 @@ function checkLibrary(files, json, problem, warning) {
   return { objects, structures };
 }
 
+// The world's game data (gameData.js): its classes, abilities and the rest, and each continent's
+// spawns.
+function checkData(files, continents, levelCap, json, problem, warning) {
+  const data = { spawns: new Map() };
+  for (const path of files.keys()) {
+    const at = gameDataAt(path);
+    if (!at) continue;
+    const thing = json(path);
+    if (!isObject(thing)) {
+      if (thing !== null) problem(path, "should be an object");
+      continue;
+    }
+    if (thing.id !== at.id) problem(path, `has id ${JSON.stringify(thing.id)}, not ${at.id} as its name says`);
+    (data[at.kind] ??= new Map()).set(at.id, thing);
+  }
+  for (const continent of continents ?? []) {
+    const spawns = json(spawnsPath(continent));
+    if (spawns !== undefined && spawns !== null) data.spawns.set(spawnsPath(continent), spawns);
+  }
+  checkGameData(data, levelCap, problem, warning);
+}
+
 // The world's spawn point, where players enter: the one spawn pin in its continents' sketches, as
 // { continent, at, path }. A world needs exactly one.
 function findSpawn(continents, json, problem) {
@@ -165,6 +193,8 @@ function checkContinent(files, continent, library, spawn, json, problem, warning
     if (data.version !== ZONE_VERSION) warning(path, `is zone version ${data.version}; the editor brings it up to ${ZONE_VERSION}`);
     if (typeof data.name !== "string") problem(path, "needs a name");
     if (data.version === ZONE_VERSION && !isRegion(data.region)) problem(path, "needs a region: polygons of rings of [x, z] points");
+    const levels = data.levels;
+    if (levels !== undefined && !(Array.isArray(levels) && levels.length === 2 && levels.every((l) => Number.isInteger(l) && l >= 1) && levels[0] <= levels[1])) problem(path, "needs levels as [min, max]");
   }
 
   for (const [path, bytes] of files) {

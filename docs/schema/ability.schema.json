@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "ability.schema.json",
+  "title": "abilities/<id>.json",
+  "description": "Something a class or creature can do.",
+  "type": "object",
+  "required": [
+    "id",
+    "name",
+    "target",
+    "effects"
+  ],
+  "properties": {
+    "id": {
+      "$ref": "common.schema.json#/$defs/id"
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "icon": {
+      "type": "string"
+    },
+    "school": {
+      "$ref": "common.schema.json#/$defs/school"
+    },
+    "target": {
+      "enum": [
+        "enemy",
+        "ally",
+        "self",
+        "ground",
+        "none"
+      ]
+    },
+    "range": {
+      "type": "number",
+      "minimum": 0
+    },
+    "minRange": {
+      "type": "number",
+      "minimum": 0
+    },
+    "facing": {
+      "type": "boolean"
+    },
+    "castTime": {
+      "type": "number",
+      "minimum": 0
+    },
+    "castWhileMoving": {
+      "type": "boolean"
+    },
+    "channel": {
+      "type": "object",
+      "required": [
+        "duration",
+        "ticks"
+      ],
+      "properties": {
+        "duration": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "ticks": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "gcd": {
+      "type": "number",
+      "minimum": 0
+    },
+    "gcdHasted": {
+      "type": "boolean"
+    },
+    "cooldown": {
+      "type": "number",
+      "minimum": 0
+    },
+    "charges": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "cooldownHasted": {
+      "type": "boolean"
+    },
+    "cost": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "resource"
+        ],
+        "properties": {
+          "resource": {
+            "type": "string"
+          },
+          "amount": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "percent": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        },
+        "oneOf": [
+          {
+            "required": [
+              "amount"
+            ]
+          },
+          {
+            "required": [
+              "percent"
+            ]
+          }
+        ]
+      }
+    },
+    "speed": {
+      "type": "number",
+      "exclusiveMinimum": 0
+    },
+    "effects": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/effect"
+      }
+    },
+    "visuals": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/visual"
+      }
+    },
+    "sounds": {
+      "type": "array",
+      "items": {
+        "$ref": "common.schema.json#/$defs/sound"
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

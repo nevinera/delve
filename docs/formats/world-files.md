@@ -4,14 +4,16 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 
 | Path | What it is | Format |
 | --- | --- | --- |
-| `world.json` | name, continents and dungeons | [schema](../schema/world.schema.json) |
+| `world.json` | name, level cap, continents and dungeons | [schema](../schema/world.schema.json) |
 | `collections.json` | the world's object collections | [schema](../schema/collections.schema.json) |
 | `structure-collections.json` | the world's structure collections | [schema](../schema/collections.schema.json) |
 | `objects/<id>.json` | a built object | [schema](../schema/object.schema.json) |
 | `structures/<id>.json` | a structure | [schema](../schema/structure.schema.json) |
 | `textures/<id>.json` | an image objects and structures wear | [schema](../schema/image.schema.json) |
+| `classes/`, `abilities/`, `statuses/`, `items/`, `item-templates/`, `creatures/`, `npcs/`, `dialogues/` | game data, each `<id>.json` | [game data](game-data.md) |
 | `places/continents/<c>/sketch.json` | pins, road paths, rivers and lakes | [schema](../schema/sketch.schema.json) |
 | `places/continents/<c>/zones/<key>.json` | a zone: a name and a region | [schema](../schema/zone.schema.json) |
+| `places/continents/<c>/spawns.json` | spawn regions, and mobs and NPCs placed one at a time | [game data](game-data.md#spawns) |
 | `places/continents/<c>/edited.json` | tiles changed by hand, which generating leaves alone | [schema](../schema/edited.schema.json) |
 | `places/continents/<c>/land/<bx>_<bz>.f32` | a block of the land grid | [land grid](land-grid.md) |
 | `places/continents/<c>/plates.json` | the continent's plates and their hashes | [schema](../schema/plates-index.schema.json) |
