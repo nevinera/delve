@@ -52,6 +52,8 @@ const BOUNDARY_STEP_FT = 32;
 // the display's own pixel density, up to 2.
 export const SCENE_PARTS = ["clutter", "near trees", "far ring", "objects", "ground and water", "sky"];
 export const RESOLUTIONS = ["full", 1.5, 1];
+// The frame rate caps on offer, in frames a second.
+export const FRAME_RATES = [60, 30];
 // Ground clutter's radius ranges up to the least distance from the focus to the edge of the tiles
 // it's made for.
 export const CLUTTER_RADIUS_FT = { min: 100, max: 480 };
@@ -71,7 +73,7 @@ export class RenderView {
     // the browser has it, and a logarithmic one elsewhere.
     const reversed = hasClipControl();
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, reversedDepthBuffer: reversed, logarithmicDepthBuffer: !reversed });
-    this.graphics = { hidden: new Set(), resolution: "full", solidCanopies: false, clutterRadiusFt: 240, clutterDensity: 1 };
+    this.graphics = { hidden: new Set(), resolution: "full", maxFps: 60, solidCanopies: false, clutterRadiusFt: 240, clutterDensity: 1 };
     setClutterRadius(this.graphics.clutterRadiusFt);
     this.renderer.setPixelRatio(pixelRatio(this.graphics.resolution));
     this.scene = new THREE.Scene();
@@ -108,7 +110,7 @@ export class RenderView {
   }
 
   // Changes any of the graphics settings: hidden (a set of SCENE_PARTS), resolution (one of
-  // RESOLUTIONS), solidCanopies (draws every crown as its cheapest stage), clutterRadiusFt and
+  // RESOLUTIONS), maxFps (one of FRAME_RATES), solidCanopies (draws every crown as its cheapest stage), clutterRadiusFt and
   // clutterDensity (the share of clutter drawn, 0-1).
   setGraphics(changes) {
     Object.assign(this.graphics, changes);

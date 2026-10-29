@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { setBuiltObjects } from "../world/objects.js";
 import { emptyStructure, withWalk } from "../world/structures.js";
-import { Walker } from "./walker.js";
+import { Walker, frameDue } from "./walker.js";
 
 // A 3 by 3 cell house, walled round with a door in the middle of its south side, over a cellar
 // whose stair climbs north in its south-east cell, open above.
@@ -83,5 +83,15 @@ describe("walker on structures", () => {
     expect(at(walker({ others: [placed] }), 203, 100.6, 210).canStep(204.5, 210)).toBe(false);
     // Down in the cellar, the crate upstairs isn't in the way.
     expect(at(walker({ furnished: true }), 203, 90.6, 206).canStep(204.5, 206)).toBe(true);
+  });
+});
+
+describe("the frame rate cap", () => {
+  it("draws a frame once its share of a second has nearly passed", () => {
+    expect(frameDue(null, 5, 60)).toBe(true);
+    expect(frameDue(1000, 1014, 60)).toBe(false);
+    expect(frameDue(1000, 1015, 60)).toBe(true);
+    expect(frameDue(1000, 1020, 30)).toBe(false);
+    expect(frameDue(1000, 1032, 30)).toBe(true);
   });
 });

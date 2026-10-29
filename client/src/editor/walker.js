@@ -48,9 +48,10 @@ const DRAG = 0.006; // radians per pixel
 // radians per second, so the last of it doesn't crawl.
 const CAMERA_FOLLOW = { rate: 2, least: 0.8 };
 
-// Frames are drawn at most this often, so a fast display doesn't keep the GPU (shared with the rest
-// of the screen) flat out. A little under the 60fps interval, so 60Hz displays don't drop frames.
-const MIN_FRAME_MS = 1000 / 60 - 2;
+// Frames are drawn at most the view's frame rate cap a second (60 unless the graphics settings say
+// less), so a fast display doesn't keep the GPU (shared with the rest of the screen) flat out. The
+// interval is a little under the cap's, so a display at that rate doesn't drop frames.
+export const frameDue = (last, now, fps) => last === null || now - last >= 1000 / fps - 2;
 const UP = new THREE.Vector3(0, 1, 0);
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " "]);
 const TOGGLES = new Set(["/", "x", "z"]);
@@ -159,7 +160,7 @@ export class Walker {
 
   frame(now) {
     if (!this.active) return;
-    if (this.last !== null && now - this.last < MIN_FRAME_MS) {
+    if (!frameDue(this.last, now, this.view.graphics?.maxFps ?? 60)) {
       requestAnimationFrame((t) => this.frame(t));
       return;
     }
