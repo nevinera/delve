@@ -398,6 +398,15 @@
   outline-offset: 1px;
 }
 
+/* The box dragged to pick slabs in (slabTool.js). */
+.slab-box {
+  position: fixed;
+  border: 1px dashed #ffe066;
+  background: rgba(255, 224, 102, 0.1);
+  pointer-events: none;
+  z-index: 10;
+}
+
 /* The replace dialog, a small modal in the middle of the page. */
 .replace-dialog {
   inset: 0;

@@ -914,7 +914,7 @@ export class Editor {
         onPour: ([x, z]) => this.pour({ id: DETAIL_POUR, at: [x / TILE_FT, z / TILE_FT].map((v) => Math.round(v * 1000) / 1000), width: Number(this.el.pourWidth.value) }),
         bodies: () => this.bodies(),
         onReflow: (cells) => this.reflowWater(cells),
-        onSlab: (slab) => this.showSlab(slab),
+        onSlab: (slabs) => this.showSlab(slabs),
         onProblem: (message) => this.say(message),
         water: {
           get: () => this.sketch.water,
@@ -1101,13 +1101,11 @@ export class Editor {
     this.say(`Replaced ${count} placed ${name(from)} with ${name(to)}.`, { info: true });
   }
 
-  // The slabs tool's panel: its settings, which also change a picked slab, and the picked slab's
-  // place and turn.
+  // The slabs tool's panel: what it's doing, and its settings, which also change the picked slabs.
   buildSlabPanel() {
     const tool = () => this.detail?.slabTool;
-    this.slabMode = "pick";
-    this.el.slabFloor.addEventListener("click", () => this.setSlabMode(this.slabMode === "floor" ? "pick" : "floor"));
-    this.el.slabWall.addEventListener("click", () => this.setSlabMode(this.slabMode === "wall" ? "pick" : "wall"));
+    this.setSlabMode("pick");
+    for (const [button, mode] of [[this.el.slabSelect, "pick"], [this.el.slabFloor, "floor"], [this.el.slabWall, "wall"]]) button.addEventListener("click", () => this.setSlabMode(mode));
     this.el.slabRect.addEventListener("click", () => this.setSlabShape("rectangle"));
     this.el.slabPoly.addEventListener("click", () => this.setSlabShape("polygon"));
     this.setSlabShape("rectangle");
@@ -1212,7 +1210,7 @@ export class Editor {
   showSlabRows() {
     const mode = this.slabMode;
     const tool = this.detail?.slabTool;
-    const picked = Boolean(tool?.picked);
+    const picked = Boolean(tool?.picks.length);
     const rectangleWall = mode === "wall" && this.slabShape === "rectangle";
     this.el.slabKeepRow.hidden = !rectangleWall;
     this.el.slabHeightRow.hidden = !rectangleWall;
@@ -1221,15 +1219,18 @@ export class Editor {
     this.el.slabHandleRow.hidden = !picked;
     this.el.slabMove.classList.toggle("active", tool?.handle === "move");
     this.el.slabTurn.classList.toggle("active", tool?.handle === "turn");
+    // Several slabs picked together only move.
+    this.el.slabTurn.disabled = (tool?.picks.length ?? 0) > 1;
     // Picking with nothing picked, the slab settings change nothing.
     const idle = mode === "pick" && !picked;
     this.el.slabThickness.closest(".editor-row").hidden = idle;
     this.el.slabSwatches.hidden = idle;
   }
 
-  // Draws floors or walls, or with neither, picks slabs.
+  // Picks slabs, or draws floors or walls.
   setSlabMode(mode) {
     this.slabMode = mode;
+    this.el.slabSelect.classList.toggle("active", mode === "pick");
     this.el.slabFloor.classList.toggle("active", mode === "floor");
     this.el.slabWall.classList.toggle("active", mode === "wall");
     this.showSlabRows();
@@ -1285,15 +1286,16 @@ export class Editor {
     return surface;
   }
 
-  // The picked slab in the panel, or none. Its thickness and surface show in the settings, where
-  // changing them changes it.
-  showSlab(slab) {
+  // The picked slabs in the panel, or none. The first's thickness and surface show in the
+  // settings, where changing them changes them all.
+  showSlab(slabs) {
     const { slabPanel, slabInfo } = this.el;
-    slabPanel.hidden = !slab;
+    slabPanel.hidden = !slabs.length;
     this.showSlabRows();
-    if (!slab) return;
+    if (!slabs.length) return;
+    const [slab] = slabs;
     const [x, , z] = slab.at;
-    slabInfo.textContent = `slab of ${slab.outline.length} corners, tile ${Math.floor(x / TILE_FT)}, ${Math.floor(z / TILE_FT)}`;
+    slabInfo.textContent = slabs.length > 1 ? `${slabs.length} slabs` : `slab of ${slab.outline.length} corners, tile ${Math.floor(x / TILE_FT)}, ${Math.floor(z / TILE_FT)}`;
     this.el.slabThickness.value = slab.thickness;
     this.setSlabSurface(structuredClone(slab.surface), { change: false });
     this.detail?.slabTool.setSettings({ thickness: slab.thickness, surface: structuredClone(slab.surface) });

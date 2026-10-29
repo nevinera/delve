@@ -7,13 +7,14 @@ import { repeatFt } from "./slabTextures.js";
 
 // The detail step's slabs tool (world/slabs.js), working on a DetailView's tiles. Its mode is one
 // of:
-// - "pick": a click picks a slab. A picked one has handles: arrows to move it along the world's
-//   axes, or rings to turn it in its own (setHandle), and a dot on each top corner to drag across
-//   its face.
+// - "pick": a click picks a slab, shift-click adds or takes away one, and dragging a box from
+//   where there's none picks those whose middles are in it. A slab picked alone has handles:
+//   arrows to move it along the world's axes, or rings to turn it in its own (setHandle), and a
+//   dot on each top corner to drag across its face. Several picked together only move.
 // - "floor": a slab lying on what's pressed first, the ground or a slab, the rest of its corners on
 //   a level plane there. A rectangle goes from one corner to the other, square to the camera as it
-//   was at the first: dragged, or clicked at each end. A polygon is a click for each corner, finished by clicking the
-//   first again, or Enter.
+//   was at the first: dragged, or clicked at each end. A polygon is a click for each corner,
+//   finished by clicking the first again, or Enter.
 // - "wall": a slab standing up from a line on that level plane. A rectangle is the line, dragged or
 //   clicked at each end; it stands `height` feet over its start, its foot dropped to the lowest
 //   ground under the line, and with keepWalling the next wall goes on from where it ended. A
@@ -24,7 +25,8 @@ import { repeatFt } from "./slabTextures.js";
 // With conform, the ground under a new floor begun on the ground, and just past its edges, is set
 // to its bottom.
 // Corners on the level snap to other slabs' top corners nearby. What would be made shows as it's
-// drawn, red where it can't be: too big, say, or belonging outside the window. Escape drops a slab half drawn, Backspace its last corner.
+// drawn, red where it can't be: too big, say, or belonging outside the window. Escape drops a slab
+// half drawn, Backspace its last corner.
 
 const MARK = { drawing: 0x3fb6ff, picked: 0xffe066, dot: 0xffe066, wrong: 0xe04040 };
 const WRONG = new THREE.MeshBasicMaterial({ color: MARK.wrong, transparent: true, opacity: 0.6 });
@@ -39,7 +41,7 @@ const MAX_PIECE_FT = 40; // the most a piece of a cut-up rectangle is along each
 const CLICK_PX = 5; // a press moving less than this before it's let go is a click
 
 export class SlabTool {
-  // detail: the DetailView. onPick(slab or null) hears what's picked, and when it changes;
+  // detail: the DetailView. onPick(slabs) hears what's picked, and when it changes;
   // onProblem(message) when a slab can't be made or changed as asked.
   constructor(detail, { onPick, onProblem } = {}) {
     this.detail = detail;
@@ -47,7 +49,8 @@ export class SlabTool {
     this.onProblem = onProblem;
     this.settings = { mode: "pick", shape: "rectangle", thickness: 1, height: 10, keepWalling: false, conform: false, surface: "floorboards" };
     this.drawing = null; // { points: [[x, y, z] continent feet], height, pressed: [x, y] while dragging }
-    this.picked = null; // { slab, key }
+    this.picks = []; // [{ slab, key }]: the slabs picked, and the tiles listing them
+    this.box = null; // a box being dragged to pick slabs in: { from: [x, y] client pixels, adding }
     this.corner = null; // the index of a corner being dragged
     this.handle = "move";
     const { view } = detail;
@@ -63,9 +66,10 @@ export class SlabTool {
     this.transform.addEventListener("dragging-changed", (e) => {
       view.controls.enabled = !e.value;
       if (e.value) {
-        this.before = structuredClone(this.picked.slab);
+        this.keepBefore();
+        this.dragFrom = this.proxy.position.clone();
         detail.beginEdit();
-        detail.touch(this.picked.key);
+        for (const pick of this.picks) detail.touch(pick.key);
       } else detail.endEdit();
     });
     this.transform.addEventListener("objectChange", () => this.readHandles());
@@ -90,10 +94,17 @@ export class SlabTool {
     this.drawMarks();
   }
 
+  // The slab picked alone, as { slab, key }, or null.
+  get picked() {
+    return this.picks.length === 1 ? this.picks[0] : null;
+  }
+
+  // Moves or turns with the handles; several slabs picked together only move.
   setHandle(name) {
     this.handle = name;
-    this.transform.setMode(name === "turn" ? "rotate" : "translate");
-    this.transform.setSpace(name === "turn" ? "local" : "world");
+    const turning = name === "turn" && this.picks.length <= 1;
+    this.transform.setMode(turning ? "rotate" : "translate");
+    this.transform.setSpace(turning ? "local" : "world");
   }
 
   // --- pointer ---
@@ -106,7 +117,7 @@ export class SlabTool {
       const dot = ray.intersectObjects(this.marks.children.filter((m) => m.userData.corner !== undefined), false)[0];
       if (dot) {
         this.corner = dot.object.userData.corner;
-        this.before = structuredClone(this.picked.slab);
+        this.keepBefore();
         this.detail.beginEdit();
         this.detail.touch(this.picked.key);
         return true;
@@ -114,7 +125,13 @@ export class SlabTool {
     }
     const { mode } = this.settings;
     if (mode === "pick") {
-      this.pick(this.slabUnder(ray));
+      const under = this.slabUnder(ray);
+      if (!under) this.box = { from: [e.clientX, e.clientY], adding: e.shiftKey };
+      else if (!e.shiftKey) this.pick([under]);
+      else {
+        const others = this.picks.filter((p) => p.slab !== under.slab);
+        this.pick(others.length < this.picks.length ? others : [...this.picks, under]);
+      }
       return true;
     }
     const rectangle = this.settings.shape === "rectangle";
@@ -133,6 +150,7 @@ export class SlabTool {
   }
 
   pointerMove(e) {
+    if (this.box) return this.drawBox(e);
     if (this.corner !== null) return this.dragCorner(e);
     if (this.drawing) this.drawMarks(e);
   }
@@ -142,6 +160,7 @@ export class SlabTool {
   pointerUp() {
     const pressed = this.drawing?.pressed;
     const pointer = this.detail.pointer;
+    if (this.box) this.endBox(pointer);
     if (pressed) {
       this.drawing.pressed = null;
       const moved = pointer && Math.hypot(pointer.clientX - pressed[0], pointer.clientY - pressed[1]) > CLICK_PX;
@@ -168,13 +187,13 @@ export class SlabTool {
       this.drawMarks();
       return true;
     }
-    if (!this.picked) return false;
+    if (!this.picks.length) return false;
     if (e.key === "g" || e.key === "r") {
       this.setHandle(e.key === "g" ? "move" : "turn");
-      this.onPick?.(this.picked.slab);
+      this.told();
     }
     else if (e.key === "Delete" || e.key === "Backspace") this.remove();
-    else if (e.key === "Escape") this.pick(null);
+    else if (e.key === "Escape") this.pick([]);
     else return false;
     return true;
   }
@@ -285,84 +304,137 @@ export class SlabTool {
     }
     detail.endEdit({ reflow: conform });
     // A wall chained on from it isn't picked, so its handles don't get in the way.
-    this.pick(slabs.length === 1 && !this.drawing ? { slab: slabs[0], key: slabTile(slabs[0]).join(",") } : null);
+    this.pick(slabs.length === 1 && !this.drawing ? [{ slab: slabs[0], key: slabTile(slabs[0]).join(",") }] : []);
   }
 
-  // --- the picked slab ---
+  // --- the picked slabs ---
 
-  pick(picked) {
-    this.picked = picked;
+  // Picks slabs, [{ slab, key }], or none.
+  pick(picks) {
+    this.picks = picks ?? [];
+    this.setHandle(this.handle);
     this.showHandles();
     this.drawMarks();
-    this.onPick?.(picked?.slab ?? null);
+    this.told();
   }
 
-  // Changes the picked slab: any of { at, turn, thickness, surface }. Undone together between
+  told() {
+    this.onPick?.(this.picks.map((p) => p.slab));
+  }
+
+  // Keeps the picked slabs as they are, to go back to if a change takes one out of the window.
+  keepBefore() {
+    this.before = new Map(this.picks.map((pick) => [pick, structuredClone(pick.slab)]));
+  }
+
+  // Changes the picked slabs: any of { at, turn, thickness, surface }. Undone together between
   // beginEdit and endEdit; without, each change is its own edit.
   change(changes) {
-    const { picked, detail } = this;
-    if (!picked) return;
-    const next = { ...picked.slab, ...changes };
-    const problems = slabProblems(next);
-    if (problems.length) return this.onProblem?.(`That slab would ${problems[0].replace(/^has /, "have ").replace(/^needs /, "need ").replace(/^reaches /, "reach ")}.`);
+    const { picks, detail } = this;
+    if (!picks.length) return;
+    for (const { slab } of picks) {
+      const problems = slabProblems({ ...slab, ...changes });
+      if (problems.length) return this.onProblem?.(`That slab would ${problems[0].replace(/^has /, "have ").replace(/^needs /, "need ").replace(/^reaches /, "reach ")}.`);
+    }
     const own = !detail.edit;
     if (own) detail.beginEdit();
-    detail.touch(picked.key);
-    this.before = structuredClone(picked.slab);
-    Object.assign(picked.slab, changes);
+    for (const pick of picks) detail.touch(pick.key);
+    this.keepBefore();
+    for (const { slab } of picks) Object.assign(slab, structuredClone(changes));
     this.rehome();
     if (own) detail.endEdit();
     this.showHandles();
     this.drawMarks();
-    this.onPick?.(picked.slab);
+    this.told();
   }
 
   remove() {
-    const { picked, detail } = this;
-    if (!picked) return;
+    const { picks, detail } = this;
+    if (!picks.length) return;
     detail.beginEdit();
-    detail.touch(picked.key);
-    const tile = detail.view.decoded.get(picked.key);
-    tile.slabs = tile.slabs.filter((s) => s !== picked.slab);
-    detail.dirtySlabs.add(picked.key);
+    for (const { slab, key } of picks) {
+      detail.touch(key);
+      const tile = detail.view.decoded.get(key);
+      tile.slabs = tile.slabs.filter((s) => s !== slab);
+      detail.dirtySlabs.add(key);
+    }
     detail.endEdit();
-    this.pick(null);
+    this.pick([]);
   }
 
-  // Moves the picked slab into the tile its home corner's now in. If that's outside the window, it
-  // goes back to where it was before the drag.
+  // Moves each picked slab into the tile its home corner's now in. If one would leave the window,
+  // they all go back to how they were before.
   rehome() {
-    const { picked, detail } = this;
-    detail.dirtySlabs.add(picked.key);
-    const key = slabTile(picked.slab).join(",");
-    if (key === picked.key) return;
-    if (!detail.editable(key)) {
-      if (this.before) Object.assign(picked.slab, structuredClone(this.before));
+    const { picks, detail } = this;
+    if (picks.some(({ slab }) => !detail.editable(slabTile(slab).join(",")))) {
+      for (const pick of picks) if (this.before?.has(pick)) Object.assign(pick.slab, structuredClone(this.before.get(pick)));
       this.onProblem?.("A slab can't leave the window.");
       this.showHandles();
-      return this.rehome();
     }
-    detail.touch(key);
-    const from = detail.view.decoded.get(picked.key);
-    from.slabs = from.slabs.filter((s) => s !== picked.slab);
-    const to = detail.view.decoded.get(key);
-    to.slabs = [...(to.slabs ?? []), picked.slab];
-    picked.key = key;
-    detail.dirtySlabs.add(key);
+    for (const pick of picks) {
+      detail.dirtySlabs.add(pick.key);
+      const key = slabTile(pick.slab).join(",");
+      if (key === pick.key) continue;
+      detail.touch(key);
+      const from = detail.view.decoded.get(pick.key);
+      from.slabs = from.slabs.filter((s) => s !== pick.slab);
+      const to = detail.view.decoded.get(key);
+      to.slabs = [...(to.slabs ?? []), pick.slab];
+      pick.key = key;
+      detail.dirtySlabs.add(key);
+    }
   }
 
-  // The handles moved: the slab follows them.
+  // The handles moved: the slabs follow them. One alone turns with them too.
   readHandles() {
-    const { picked } = this;
-    if (!picked) return;
+    const { picks, picked } = this;
+    if (!picks.length) return;
     const { origin } = this.detail.view;
     const p = this.proxy.position;
-    picked.slab.at = [p.x + origin[0], p.y, p.z + origin[1]].map(tidy);
-    const r = new THREE.Euler().setFromQuaternion(this.proxy.quaternion, "YXZ");
-    picked.slab.turn = [r.y, r.x, r.z].map((v) => Math.round(THREE.MathUtils.radToDeg(v) * 10) / 10 + 0);
+    if (picked) {
+      picked.slab.at = [p.x + origin[0], p.y, p.z + origin[1]].map(tidy);
+      const r = new THREE.Euler().setFromQuaternion(this.proxy.quaternion, "YXZ");
+      picked.slab.turn = [r.y, r.x, r.z].map((v) => Math.round(THREE.MathUtils.radToDeg(v) * 10) / 10 + 0);
+    } else {
+      const by = p.clone().sub(this.dragFrom);
+      for (const pick of picks) pick.slab.at = this.before.get(pick).at.map((v, i) => tidy(v + by.getComponent(i)));
+    }
     this.rehome();
     this.drawMarks();
-    this.onPick?.(picked.slab);
+    this.told();
+  }
+
+  // The box being dragged to pick slabs in, from where it started to the pointer.
+  drawBox(e) {
+    this.boxMark ??= Object.assign(document.createElement("div"), { className: "slab-box" });
+    if (!this.boxMark.isConnected) document.body.append(this.boxMark);
+    const [x0, y0] = this.box.from;
+    Object.assign(this.boxMark.style, { left: `${Math.min(x0, e.clientX)}px`, top: `${Math.min(y0, e.clientY)}px`, width: `${Math.abs(e.clientX - x0)}px`, height: `${Math.abs(e.clientY - y0)}px` });
+  }
+
+  // The box let go: it picks the window's slabs whose middles are in it, with those picked before
+  // when adding. A box hardly dragged is a click on nothing, and picks none.
+  endBox(pointer) {
+    const { from, adding } = this.box;
+    this.box = null;
+    this.boxMark?.remove();
+    const [x1, y1] = pointer ? [pointer.clientX, pointer.clientY] : from;
+    if (Math.hypot(x1 - from[0], y1 - from[1]) <= CLICK_PX) return adding || this.pick([]);
+    const [left, right, top, bottom] = [Math.min(from[0], x1), Math.max(from[0], x1), Math.min(from[1], y1), Math.max(from[1], y1)];
+    const r = this.detail.canvas.getBoundingClientRect();
+    const { camera } = this.detail.view;
+    const picks = adding ? [...this.picks] : [];
+    for (const key of this.detail.keys()) {
+      for (const slab of this.detail.view.decoded.get(key)?.slabs ?? []) {
+        if (picks.some((p) => p.slab === slab)) continue;
+        const corners = [...slabTop(slab), ...slabBottom(slab)].map((p) => this.scene(p));
+        const middle = corners.reduce((m, p) => m.add(p), new THREE.Vector3()).divideScalar(corners.length).project(camera);
+        if (middle.z > 1) continue;
+        const [x, y] = [r.left + ((middle.x + 1) / 2) * r.width, r.top + ((1 - middle.y) / 2) * r.height];
+        if (x >= left && x <= right && y >= top && y <= bottom) picks.push({ slab, key });
+      }
+    }
+    this.pick(picks);
   }
 
   dragCorner(e) {
@@ -383,12 +455,17 @@ export class SlabTool {
 
   // --- marks ---
 
-  // The handles sit on the picked slab while the tool's in use.
+  // The handles sit on a slab picked alone, or amid several, while the tool's in use.
   showHandles() {
-    const { picked } = this;
-    if (!this.on || !picked) return this.transform.detach();
-    this.proxy.position.copy(this.scene(picked.slab.at));
-    this.proxy.quaternion.copy(quaternionOf(picked.slab.turn));
+    const { picks, picked } = this;
+    if (!this.on || !picks.length) return this.transform.detach();
+    if (picked) {
+      this.proxy.position.copy(this.scene(picked.slab.at));
+      this.proxy.quaternion.copy(quaternionOf(picked.slab.turn));
+    } else {
+      this.proxy.position.copy(picks.reduce((m, { slab }) => m.add(this.scene(slab.at)), new THREE.Vector3()).divideScalar(picks.length));
+      this.proxy.quaternion.identity();
+    }
     this.transform.attach(this.proxy);
   }
 
@@ -421,12 +498,15 @@ export class SlabTool {
       }
       if (this.settings.shape === "polygon" && corners.length >= 2) line(corners.map((p) => this.scene(p)), MARK.drawing, corners.length >= 3);
     }
-    if (this.picked) {
-      const { slab } = this.picked;
+    for (const { slab } of this.picks) {
       const top = slabTop(slab).map((p) => this.scene(p));
       const down = turned(slab, [0, -slab.thickness, 0]);
       line(top, MARK.picked, true);
       line(top.map((p) => p.clone().add(down)), MARK.picked, true);
+    }
+    if (this.picked) {
+      const { slab } = this.picked;
+      const top = slabTop(slab).map((p) => this.scene(p));
       const size = this.camera().distanceTo(top[0]) * DOT_SHARE;
       top.forEach((p, corner) => {
         const dot = new THREE.Mesh(new THREE.SphereGeometry(Math.max(0.15, size), 10, 8), new THREE.MeshBasicMaterial({ color: MARK.dot, depthTest: false }));
@@ -491,7 +571,7 @@ export class SlabTool {
     let best = null;
     for (const key of this.detail.keys()) {
       for (const slab of this.detail.view.decoded.get(key)?.slabs ?? []) {
-        if (slab === this.picked?.slab) continue;
+        if (this.picks.some((p) => p.slab === slab)) continue;
         for (const corner of slabTop(slab)) {
           const d = flatDistance(corner, at);
           if (d < reach && (!best || d < best.d)) best = { corner, d };

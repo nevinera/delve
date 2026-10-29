@@ -113,6 +113,7 @@ const editor = new Editor(World.empty(), {
   objectDelete: $("objectDelete"),
   objectColors: $("objectColors"),
   objectTexts: $("objectTexts"),
+  slabSelect: $("slabSelect"),
   slabFloor: $("slabFloor"),
   slabWall: $("slabWall"),
   slabRect: $("slabRect"),
