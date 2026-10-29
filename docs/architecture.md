@@ -87,6 +87,8 @@ The game server (`game-server/`) holds every character in a world. Browsers conn
 - `internal/game` places characters on a layer, works out who's near whom (the 3×3 tiles around each), and passes on their movement. It checks nothing about where a character can go yet.
 - `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token, and writes their positions back to it (`WorldCharacter`, one per character per world). The server never writes to the database itself.
 
+Bots play characters, so you can test with others around: `script/game/bot` (code in `lib/bot/`) enters a released world as a character, the way the play page does, and runs a strategy. `null` stands still, and `follow` runs after a named character.
+
 ## Docs
 
 - `docs/formats/`: file formats and protocols.

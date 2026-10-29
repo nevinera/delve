@@ -1,0 +1,69 @@
+#!/usr/bin/env ruby
+
+# Plays a character as a bot (lib/bot/): enters the game server as the play page would, and runs a
+# strategy until it quits or is interrupted, then leaves. The world has to be released. A bot
+# playing a character you're playing in a browser takes it over.
+#
+# Usage:
+#   script/game/bot --character <id|name> --world <id|name|repo> [--strategy <name>] [--config <json|file>] [-v]
+#
+# Strategies: null (stands still, the default), follow ({"target": "<character name>",
+# "notice_feet": 100, "stop_feet": 5}).
+#
+# It connects to GAME_SERVER_PUBLIC_URL, as browsers do (http://localhost:8090 when unset), with a
+# token signed with GAME_TOKEN_SECRET. On the droplet, run it with the Rails env:
+#   sudo -u deploy bash -c 'set -a; . /etc/delve/rails.env; cd ~/delve && script/game/bot ...'
+
+require "optparse"
+
+options = {verbosity: 0, strategy: "null", config: "{}"}
+OptionParser.new do |opts|
+  opts.banner = "Usage: script/game/bot --character <id|name> --world <id|name|repo> [--strategy <name>] [--config <json|file>]"
+  opts.on("-C", "--character ID_OR_NAME", "Character id or name") { |v| options[:character] = v }
+  opts.on("-W", "--world ID_OR_NAME_OR_REPO", "World id, name, or repo (owner/name)") { |v| options[:world] = v }
+  opts.on("-s", "--strategy NAME", "Strategy (default: null)") { |v| options[:strategy] = v }
+  opts.on("-c", "--config JSON_OR_FILE", "The strategy's config, as JSON or a JSON file") { |v| options[:config] = v }
+  opts.on("-v", "--verbose", "Log what's sent and heard (-vv: others' movement too)") { options[:verbosity] += 1 }
+end.parse!
+
+abort "Error: --character is required" unless options[:character]
+abort "Error: --world is required" unless options[:world]
+
+require_relative "../../config/environment"
+
+def find_character(key)
+  character = /\A\d+\z/.match?(key) ? Character.find_by(id: key) : Character.find_by(name: key.strip.capitalize)
+  character or abort "Character not found: #{key}"
+end
+
+def find_world(key)
+  world = /\A\d+\z/.match?(key) ? World.find_by(id: key) : World.find_by(repo: key) || World.find_by(name: key)
+  world or abort "World not found: #{key}"
+  world.released? or abort "#{world.display_name} isn't released"
+  world
+end
+
+def read_config(arg)
+  json = arg.lstrip.start_with?("{") ? arg : File.read(arg)
+  JSON.parse(json).tap { |c| abort "Error: --config must be a JSON object" unless c.is_a?(Hash) }
+rescue Errno::ENOENT
+  abort "Config file not found: #{arg}"
+rescue JSON::ParserError => e
+  abort "Config isn't valid JSON: #{e.message}"
+end
+
+log = Bot::Log.new(verbosity: options[:verbosity])
+strategy = begin
+  Bot::Strategies.build(options[:strategy], read_config(options[:config]))
+rescue Bot::Strategy::ConfigError => e
+  abort "Error: #{e.message}"
+end
+
+runner = Bot::Runner.new(character: find_character(options[:character]), world: find_world(options[:world]), strategy:, log:)
+%w[INT TERM].each { |signal| trap(signal) { runner.interrupt! } }
+
+begin
+  runner.run
+rescue SystemCallError, OpenSSL::SSL::SSLError => e
+  abort "Couldn't reach the game server: #{e.message}"
+end

@@ -105,7 +105,10 @@ export class Others {
       drawn.at.x += dx;
       drawn.at.z += dz;
       // Up in the air after a jump, then down to whatever's under them.
-      const ground = walker?.standHeight(drawn.at.x - origin[0], drawn.at.z - origin[1], drawn.at.y + 2);
+      // What's under them near the height they said, or the top of what's there when that's off
+      // (a bot that doesn't know the ground, say).
+      const [sx, sz] = [drawn.at.x - origin[0], drawn.at.z - origin[1]];
+      const ground = walker?.standHeight(sx, sz, drawn.at.y + 2) ?? walker?.standHeight(sx, sz, Infinity);
       if (ground === null || ground === undefined) drawn.vy = 0; // off the land drawn: as they said
       else {
         drawn.vy -= GRAVITY * dt;
