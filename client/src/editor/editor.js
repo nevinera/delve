@@ -198,7 +198,10 @@ export class Editor {
   // window, and the 3d views' cameras.
   placeState() {
     const cameras = { ...this.cameras };
-    if (this.shownSince.has("detail")) cameras.detail = cameraPlace(this.detail.view.camera, this.detail.view.controls, this.detail.view.origin);
+    // While a template's being edited, the detail camera kept is the one over the world's tiles.
+    const away = this.templateEditing && this.detail.away;
+    if (away) cameras.detail = cameraPlace({ position: away.position }, { target: away.target }, away.origin);
+    else if (this.shownSince.has("detail")) cameras.detail = cameraPlace(this.detail.view.camera, this.detail.view.controls, this.detail.view.origin);
     if (this.shownSince.has("3d")) cameras["3d"] = cameraPlace(this.overview.camera, this.overview.controls);
     if (this.shownSince.has("heights")) cameras.heights = cameraPlace(this.sculpt.camera, this.sculpt.controls);
     const { x, z, scale } = this.map.view;
