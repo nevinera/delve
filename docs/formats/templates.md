@@ -30,6 +30,6 @@ Everything in a template is in feet from its anchor: a corner of the world's 8 f
 
 ## Limits
 
-- Up to 512 slabs and objects together, none more than 256 ft (32 cells) from the anchor.
+- Up to 1024 slabs and objects together, none more than 1024 ft (128 cells) from the anchor.
 - Each slab keeps a slab's own limits.
 - At least one slab or object.

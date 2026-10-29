@@ -104,13 +104,13 @@
         "prefixItems": [
           {
             "type": "integer",
-            "minimum": -32,
-            "maximum": 32
+            "minimum": -128,
+            "maximum": 128
           },
           {
             "type": "integer",
-            "minimum": -32,
-            "maximum": 32
+            "minimum": -128,
+            "maximum": 128
           },
           {
             "type": "number"

@@ -19,7 +19,7 @@ describe("templateProblems", () => {
 
   it("checks its slabs and objects", () => {
     expect(templateProblems({ ...hut, slabs: [{ ...floor, thickness: 0 }] })).toEqual(["has slab 0, which needs a thickness over 0 and at most 16 ft"]);
-    expect(templateProblems({ ...hut, slabs: [{ ...floor, at: [300, 0, 0] }] })).toEqual(["has slab 0 more than 256 ft from its anchor"]);
+    expect(templateProblems({ ...hut, slabs: [{ ...floor, at: [1100, 0, 0] }] })).toEqual(["has slab 0 more than 1024 ft from its anchor"]);
     expect(templateProblems({ ...hut, objects: [{ type: "template:abc", at: [0, 0], yaw: 0, scale: 0 }] })).toEqual([
       "has object 0, which is template:abc, which can't go in a template",
       "has object 0, which needs a scale over 0",
@@ -28,9 +28,9 @@ describe("templateProblems", () => {
 
   it("checks its ground", () => {
     expect(templateProblems({ ...hut, ground: [[0, 0, 1], [0, 0, 2]] })).toEqual(["has ground cell 0,0 twice"]);
-    expect(templateProblems({ ...hut, ground: [[0.5, 0, 1], [40, 0, 0]] })).toEqual([
+    expect(templateProblems({ ...hut, ground: [[0.5, 0, 1], [140, 0, 0]] })).toEqual([
       "has a ground cell that isn't [i, j, height]: [0.5,0,1]",
-      "has ground cell 40,0, more than 32 cells from the anchor",
+      "has ground cell 140,0, more than 128 cells from the anchor",
     ]);
   });
 });

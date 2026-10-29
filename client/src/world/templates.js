@@ -17,8 +17,8 @@ import { slabProblems } from "./slabs.js";
 //   covering i to i + 1 and j to j + 1 cells from the anchor, its height up from the anchor.
 
 export const TEMPLATE_PREFIX = "template:";
-export const MAX_TEMPLATE_PARTS = 512; // slabs and objects together
-export const TEMPLATE_REACH_CELLS = 32; // so a template reaches at most 256 ft from its anchor
+export const MAX_TEMPLATE_PARTS = 1024; // slabs and objects together
+export const TEMPLATE_REACH_CELLS = 128; // so a template reaches at most 1024 ft from its anchor
 const REACH_FT = TEMPLATE_REACH_CELLS * CELL_FT;
 
 const ID = /^[0-9a-z]{8}$/;
