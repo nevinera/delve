@@ -71,7 +71,7 @@ The owner releases an import that passed from the same page. Releasing checks th
 
 ## Playing
 
-Released worlds are listed for everyone signed in, on `/worlds`. Playing one (`/play/:id`) asks which of your characters to enter as, then loads `client/src/play/main.js`:
+Released worlds are listed for everyone signed in, on `/worlds`. A world's owner can also preview an import that passed, before releasing it, from the world's page (`/play/:id?import=`); the game server keeps it on a layer of its own, by its commit. Playing one (`/play/:id`) asks which of your characters to enter as, then loads `client/src/play/main.js`:
 
 1. It reads `world.json`, the continents' sketches and the object library from `raw.githubusercontent.com/<repo>/<released sha>/`. The page lists the commit's files from its import, so nothing is probed for.
 2. It enters the game server with an entry token from the page, and the server says where your character is. A character new to the world starts at its spawn pin, placed on the editor's civilization step. The validator rejects a world without exactly one, on a generated tile, out of deep water.

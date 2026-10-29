@@ -67,6 +67,9 @@
             <% if import.file_count %>· <%= pluralize(import.file_count, "file") %>, <%= number_to_human_size(import.bytes) %><% end %>
             <% if import.private_repo %>· private repo, so it can't be released<% end %>
           </span>
+          <% if import.passed? && !import.private_repo %>
+            <%= link_to "preview", play_path(@world, import: import.id), class: "small" %>
+          <% end %>
           <% if import.sha.present? && import.sha == @world.released_sha %>
             <span class="status status-passed">released</span>
           <% elsif import.passed? && !import.private_repo %>

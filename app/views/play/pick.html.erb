@@ -1,12 +1,16 @@
 <% content_for :title, "Play #{@world.display_name} - Delve" %>
 <h1><%= @world.display_name %></h1>
-<p class="muted">Released as <%= @world.released_tag %>. Pick who to play.</p>
+<% if @preview %>
+  <p class="muted">Previewing <%= @preview.tag %> (<code><%= @preview.sha.first(7) %></code>), which isn't released. Only you can play it. Pick who to play.</p>
+<% else %>
+  <p class="muted">Released as <%= @world.released_tag %>. Pick who to play.</p>
+<% end %>
 <% if @characters.any? %>
   <ul class="world-list">
     <% @characters.each do |character| %>
       <li>
         <strong><%= character.name %></strong>
-        <%= link_to "enter", play_path(@world, character: character.id), data: {turbo: false} %>
+        <%= link_to "enter", play_path(@world, character: character.id, import: @preview&.id), data: {turbo: false} %>
       </li>
     <% end %>
   </ul>

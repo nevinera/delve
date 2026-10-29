@@ -45,4 +45,36 @@ RSpec.describe "Playing a world", type: :request do
     get play_path(world, character: create(:character, name: "Other").id)
     expect(response).to have_http_status(:not_found)
   end
+
+  describe "previewing an import" do
+    let(:owned) { create(:world, user:, repo: "me/draft") }
+    let!(:draft) { create(:world_import, world: owned, tag: "v2", sha: "d" * 40, status: "passed", files: {"world.json" => {"sha" => "s", "size" => 9}}) }
+
+    it "lets the owner play an import that passed before it's released" do
+      get play_path(owned, import: draft.id)
+      expect(response.body).to include("Previewing v2")
+      expect(response.body).to include(%(href="/play/#{owned.id}?character=#{character.id}&amp;import=#{draft.id}"))
+
+      get play_path(owned, character: character.id, import: draft.id)
+      config = JSON.parse(response.body[%r{<script type="application/json" id="playConfig">(.*?)</script>}m, 1])
+      expect(config).to include("repo" => "me/draft", "sha" => "d" * 40, "paths" => ["world.json"])
+      expect(JSON.parse(Base64.urlsafe_decode64(config["game"]["token"].split(".").first))).to include("sha" => "d" * 40)
+    end
+
+    it "won't preview someone else's world" do
+      get play_path(world, import: import.id)
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "won't preview an import that didn't pass" do
+      failed = create(:world_import, world: owned, tag: "v3", sha: "e" * 40, status: "failed")
+      get play_path(owned, import: failed.id)
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "is offered on the world's page" do
+      get world_path(owned)
+      expect(response.body).to include(%(href="/play/#{owned.id}?import=#{draft.id}"))
+    end
+  end
 end

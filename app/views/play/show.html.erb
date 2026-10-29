@@ -1,6 +1,6 @@
 <canvas id="scene" class="play-scene"></canvas>
 <div class="play-hud">
-  <strong><%= @character.name %></strong> in <%= @world.display_name %>
+  <strong><%= @character.name %></strong> in <%= @world.display_name %><% if @preview %>, previewing <%= @preview.tag %><% end %>
   <%= link_to "leave", worlds_path %>
   <p id="playStatus"></p>
 </div>

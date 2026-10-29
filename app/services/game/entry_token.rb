@@ -6,8 +6,9 @@ module Game
     # Rails and the game server's shared secret; local runs get a fixed one.
     LOCAL_SECRET = "local-game-token-secret"
 
-    def self.issue(character:, world:, now: Time.current)
-      payload = {user: character.user_id, character: character.id, world: world.id, repo: world.repo, sha: world.released_sha, exp: (now + LIFETIME).to_i}
+    # sha: the commit to play, the world's release unless it's a preview of another.
+    def self.issue(character:, world:, sha: world.released_sha, now: Time.current)
+      payload = {user: character.user_id, character: character.id, world: world.id, repo: world.repo, sha:, exp: (now + LIFETIME).to_i}
       body = Base64.urlsafe_encode64(payload.to_json, padding: false)
       "#{body}.#{Base64.urlsafe_encode64(OpenSSL::HMAC.digest("SHA256", secret, body), padding: false)}"
     end
