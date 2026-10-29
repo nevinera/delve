@@ -4,7 +4,7 @@ import { speedOf, stepOf } from "./others.js";
 const move = (m) => ({ forward: 0, strafe: 0, turn: 0, gait: "run", swim: false, jump: false, ...m });
 
 describe("speedOf", () => {
-  it("goes at WoW's speeds", () => {
+  it("goes at the game's speeds", () => {
     expect(speedOf(move({}))).toBe(0);
     expect(speedOf(move({ forward: 1 }))).toBe(21);
     expect(speedOf(move({ forward: 1, gait: "walk" }))).toBe(7.5);

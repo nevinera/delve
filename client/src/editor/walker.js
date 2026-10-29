@@ -9,9 +9,8 @@ import { randomLook } from "../character/recipe.js";
 import { trunkRadius } from "./treeMeshes.js";
 
 // Walk mode for the 3D view: a person-sized character on the generated ground, with a third-person
-// camera, to get a feel for the land at eye level. Controls follow WoW: W/S run forward and back,
-// A/D turn, Q/E strafe, space jumps, / toggles walking, X sits; Z toggles sprinting, which WoW
-// doesn't have.
+// camera, to get a feel for the land at eye level. Controls: W/S run forward and back,
+// A/D turn, Q/E strafe, space jumps, / toggles walking, X sits; Z toggles sprinting.
 // Left-drag swings the camera around the character, right-drag turns the character with it, and
 // the wheel zooms. Escape stops.
 //
@@ -26,7 +25,7 @@ import { trunkRadius } from "./treeMeshes.js";
 // its feet, steps up at most STEP_FT, and can't pass walls, windows or railings. Over a storey
 // below ground the ground doesn't count, so it can go down into cellars. Positions are scene feet.
 
-// Speeds in feet per second, WoW's.
+// Speeds in feet per second.
 export const RUN_FT = 21;
 export const WALK_FT = 7.5;
 export const BACK_FT = 13.5; // backing up at a run
@@ -43,8 +42,8 @@ const WALL_HALF_FT = 0.5; // how near a wall's middle line the body's edge can c
 const SWIM_DEPTH = 4.5; // how deep the feet go in water too deep to stand in
 const CAMERA = { near: 0.5, distance: 22, min: 4, max: 90, pitch: 0.35, minPitch: -1.3, maxPitch: 1.3 };
 const DRAG = 0.006; // radians per pixel
-// While the character moves, a camera swung round by left-dragging drifts back behind it, as WoW's
-// does: it closes the gap at an exponential rate per second, and never slower than a least speed in
+// While the character moves, a camera swung round by left-dragging drifts back behind it: it
+// closes the gap at an exponential rate per second, and never slower than a least speed in
 // radians per second, so the last of it doesn't crawl.
 const CAMERA_FOLLOW = { rate: 2, least: 0.8 };
 

@@ -1,7 +1,7 @@
 import { DOOR, boards, color, drop, gable, leanTo, open, outline, plain, plaster, put, railing, rect, shingles, stairs, stone, storey, structure, thatch, timber, walls, window_ } from "./build.js";
 
 // Farm and village buildings: a farmhouse, barn and shed; a cottage, inn, chapel, smithy and
-// lumber mill. Elwynn-style: stone below, plaster above, dark slate roofs.
+// lumber mill. Stone below, plaster above, dark slate roofs.
 
 const STONE = "#8c8a84";
 const PLASTER = "#d8ccb0";

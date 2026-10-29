@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { HELD } from "./weapons.js";
 
 // Hand-posed clips, for what the animation library lacks: sitting on the ground, two-handed
-// weapons, bows, and running, strafing, backing up and turning at WoW's pace. Each is a list of
+// weapons, bows, and running, strafing, backing up and turning at the game's pace. Each is a list of
 // [time, pose] keyframes, eased from one to the next, or a gait (below) that gives the pose at
 // any time through its cycle. A pose gives:
 // - pelvis: how far the pelvis moves from rest, in feet for a 6ft body.

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { PATH_TILT } from "../world/dayNight.js";
 
-// The sky, the way vanilla WoW drew it: a dome colored in bands from the horizon up, two layers of
+// The sky: a dome colored in bands from the horizon up, two layers of
 // drifting clouds, and the sun with a glow round it. By night it darkens, the stars come out and
 // wheel round the pole, and the moon shows its phase, lit from where the sun is. The dome follows
 // the camera and draws behind everything.
