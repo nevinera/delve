@@ -1,9 +1,9 @@
 import { run } from "./localSave.js";
-import { COLLECTIONS_PATH, IMAGE_PATH, OBJECT_PATH, OLD_IMAGES, STRUCTURE_COLLECTIONS_PATH, STRUCTURE_PATH, TEMPLATE_COLLECTIONS_PATH, TEMPLATE_PATH } from "../world/paths.js";
+import { COLLECTIONS_PATH, IMAGE_PATH, OBJECT_PATH, OLD_IMAGES, OLD_STRUCTURES, TEMPLATE_COLLECTIONS_PATH, TEMPLATE_PATH } from "../world/paths.js";
 
-// The world's object library (its collections.json, objects/, structures/, templates/ and textures/ files, see objects/collections.js)
-// kept in the browser apart from the rest of the world, so the world editor and the objects page
-// can both change it, even open at once. Each page holds the library in its World's files and
+// The world's object library (its collections.json, objects/, templates/ and textures/ files, see
+// objects/collections.js) kept in the browser apart from the rest of the world, so the world
+// editor and the objects page can both change it, even open at once. Each page holds the library in its World's files and
 // keeps them in step with the store: pull reads the store over them, push writes what changed,
 // and a change pushed in one tab is pulled in the others.
 
@@ -12,9 +12,9 @@ const CHANNEL = "delve3d-library";
 // Kept with every write, so an empty library can be told from one never kept.
 const MARKER = "#kept";
 
-export { COLLECTIONS_PATH, STRUCTURE_COLLECTIONS_PATH, TEMPLATE_COLLECTIONS_PATH };
+export { COLLECTIONS_PATH, TEMPLATE_COLLECTIONS_PATH };
 export const isLibraryPath = (path) =>
-  [COLLECTIONS_PATH, STRUCTURE_COLLECTIONS_PATH, TEMPLATE_COLLECTIONS_PATH].includes(path) || [OBJECT_PATH, STRUCTURE_PATH, TEMPLATE_PATH, IMAGE_PATH, OLD_IMAGES].some((re) => re.test(path));
+  [COLLECTIONS_PATH, TEMPLATE_COLLECTIONS_PATH].includes(path) || [OBJECT_PATH, TEMPLATE_PATH, IMAGE_PATH, OLD_IMAGES, OLD_STRUCTURES].some((re) => re.test(path));
 
 // The store's records as a Map of path -> JSON text, or null when nothing was ever kept.
 const readStore = () =>

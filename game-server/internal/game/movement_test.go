@@ -235,7 +235,7 @@ func (f groundOf) At(x, z float64) (worlds.Sample, bool, error) {
 		return worlds.Sample{}, false, nil // off the land
 	}
 	g, w := f(x, z)
-	return worlds.Sample{Ground: g, Water: w, Structure: x >= 5000}, true, nil
+	return worlds.Sample{Ground: g, Water: w}, true, nil
 }
 
 func (f groundOf) Enters(from, to [3]float64) (bool, error) { return false, nil }
@@ -329,16 +329,6 @@ func TestOffACliff(t *testing.T) {
 	r.want(accept, 0.5, 200.5+10.5*8, 50, 100, nil)
 	if f := r.m.lastFall; f == nil || f.Ft != 250 {
 		t.Errorf("fall = %+v", f)
-	}
-}
-
-func TestStructuresHoldYouUp(t *testing.T) {
-	r := onGround(t, level, 50)
-	r.at[0] = 5000
-	r.want(accept, 0.1, 5000, 50, 100, still)
-	r.want(accept, 0.5, 5000, 53, 100, nil)
-	for i := 0; i < 6; i++ {
-		r.want(accept, 0.5, 5000, 53, 100, nil) // on a balcony
 	}
 }
 

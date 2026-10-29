@@ -1,5 +1,5 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
-import { builtObjects, builtStructures, images } from "../objects/collections.js";
+import { builtObjects, images } from "../objects/collections.js";
 import { packPlates, unpackPlates } from "./plates.js";
 import { SHAPES_PATH, WORLD_PATH, continentOf } from "../world/paths.js";
 import { kindSizes, setBuiltObjects } from "../world/objects.js";
@@ -73,7 +73,7 @@ export class World {
   // when it has plates, the shapes file for the kinds they place.
   async stored({ pool, onProgress } = {}) {
     this.plateCache ??= new Map();
-    setBuiltObjects(builtObjects(this), images(this), builtStructures(this));
+    setBuiltObjects(builtObjects(this), images(this));
     const files = await packPlates(this.files, { cache: this.plateCache, pool, sizes: kindSizes(), onProgress });
     const plates = [...this.plateCache].filter(([path]) => files.has(path));
     if (plates.length) files.set(SHAPES_PATH, strToU8(shapesText(shapesFile(plates.flatMap(([, plate]) => plate.kinds)))));

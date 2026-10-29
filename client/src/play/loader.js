@@ -1,7 +1,7 @@
 import { pool } from "../github/github.js";
 import { World } from "../editor/world.js";
 import { plateOf } from "../world/plateCodec.js";
-import { COLLECTIONS_PATH, IMAGE_PATH, OBJECT_PATH, STRUCTURE_COLLECTIONS_PATH, STRUCTURE_PATH, WORLD_PATH, plateAt, platePath, platesIndexPath, sketchPath, tilePath } from "../world/paths.js";
+import { COLLECTIONS_PATH, IMAGE_PATH, OBJECT_PATH, WORLD_PATH, plateAt, platePath, platesIndexPath, sketchPath, tilePath } from "../world/paths.js";
 import { MemoryStore, PlateCache } from "./plateCache.js";
 
 // A released world, read straight from raw GitHub at its commit: no API calls and no token. The
@@ -61,7 +61,7 @@ export class PlayWorld {
     const want = (path) => this.paths.has(path);
     await this.fetchAll([WORLD_PATH]);
     const continents = this.world.info.continents.map((c) => c.key);
-    const library = [...this.paths].filter((p) => p === COLLECTIONS_PATH || p === STRUCTURE_COLLECTIONS_PATH || OBJECT_PATH.test(p) || STRUCTURE_PATH.test(p) || IMAGE_PATH.test(p));
+    const library = [...this.paths].filter((p) => p === COLLECTIONS_PATH || OBJECT_PATH.test(p) || IMAGE_PATH.test(p));
     await this.fetchAll([...continents.flatMap((c) => [sketchPath(c), platesIndexPath(c)]).filter(want), ...library]);
     for (const continent of continents) {
       const index = this.paths.has(platesIndexPath(continent)) && this.world.readJson(platesIndexPath(continent));

@@ -13,8 +13,7 @@ import (
 // character can move, by the clocks of both. Where the world's ground is known, the character also
 // has to keep to it: not under it, not floating over it or over deep water, not swimming out of
 // water, and not up slopes too steep to climb. Slabs are ground too, to stand on, and it can't
-// move into one. Near structures, whose floors and walls the server doesn't know, only the first
-// checks apply.
+// move into one.
 
 // Speeds and jumping, feet and seconds, as client/src/editor/walker.js moves characters.
 const (
@@ -91,7 +90,7 @@ type motion struct {
 
 // footing is how a report stood on the ground.
 type footing struct {
-	known  bool    // the ground was known there, away from structures
+	known  bool    // the ground was known there
 	ground float64 // the ground's height
 	stand  float64 // where the feet rest: the ground, a swimming depth in deep water, or a slab
 	slab   bool    // they rest on a slab
@@ -230,9 +229,6 @@ func (m *motion) onGround(r incoming, t float64, g Ground) (footing, string) {
 	}
 	if !ok {
 		return footing{}, "went off the land"
-	}
-	if s.Structure {
-		return footing{}, ""
 	}
 	f := footing{known: true, ground: s.Ground, stand: s.Ground}
 	f.deep = !math.IsNaN(s.Water) && s.Water-swimDepth > s.Ground

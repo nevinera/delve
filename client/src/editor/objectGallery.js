@@ -1,14 +1,13 @@
 import { matches } from "../world/builtObjects.js";
 import { Thumbnails } from "./thumbnailRenderer.js";
 
-// A library's gallery: every object type in the world's collections and the game's builtins, or
-// every structure in the world's structure collections, as rendered thumbnails grouped by
-// collection, filtered by a search. Your own collections start with a "+" tile for a new one.
+// A library's gallery: every object type in the world's collections and the game's builtins, as
+// rendered thumbnails grouped by collection, filtered by a search. Your own collections start with a "+" tile for a new one.
 // Thumbnails (thumbnailRenderer.js) draws them.
 //
 // show(collections) takes [{ id, name, kind: "builtin" | "imported" | "own", source, entries }],
-// each entry { key, type, name, tags, structure }: key is unique across the gallery and changes
-// when the object does, type is what typePreview draws; a structure is drawn as itself.
+// each entry { key, type, name, tags }: key is unique across the gallery and changes when the
+// object does, type is what typePreview draws.
 
 const THUMB_PX = 140;
 const KIND_LABELS = { builtin: "builtin", imported: "imported, read-only", own: "" };
@@ -20,7 +19,7 @@ function el(tag, props = {}, ...children) {
 }
 
 export class ObjectGallery {
-  // what: "object" or "structure", what the "+" tiles make. builtins: whether there are builtin
+  // what: what the "+" tiles make, "object". builtins: whether there are builtin
   // collections to leave out. onOpen(collection, entry), onNew(collection) for a "+" tile,
   // onNewCollection(), and onAction(collection, action) for a collection heading's buttons:
   // "rename", "export" or "delete". tools: more elements for the bar at the top.

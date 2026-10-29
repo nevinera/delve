@@ -9,8 +9,6 @@ import { carveChannel } from "./detailWater.js";
 import { waterOver } from "../world/generator.js";
 import { fellTree, paletteIndex, parseTree } from "../world/trees.js";
 import { footprintOf, makeObject, reachOf, specOf, tileOf } from "../world/objects.js";
-import { CELL_FT as STRUCTURE_CELL_FT, bakeWalk, placedWalk, pushGround, quartersOf } from "../world/structures.js";
-import { meshHeightAt } from "../world/clutter.js";
 import { RenderView, boundary, groundSampler } from "./renderView.js";
 import { GroupPick } from "./groupPick.js";
 import { SlabTool } from "./slabTool.js";
@@ -26,9 +24,9 @@ import { surfacePath } from "./thumbnails.js";
 // a trail (detailTrails.js), stamped when it's let go. The objects tool picks an object to drag,
 // turn, size or delete, and the place tool puts new ones down. The channel tool digs along a drawn
 // line (detailWater.js), and the water tool pours water from where it's clicked (onPour). The slabs
-// tool draws, picks and changes slabs (slabTool.js). The structures tool, with nothing to place,
-// picks slabs and objects together to save as a template (groupPick.js), and with a template to
-// place, places it (templatePlace.js).
+// tool draws, picks and changes slabs (slabTool.js). The structures tool places templates
+// (templatePlace.js), and with none to place, picks slabs and objects together to save as one
+// (groupPick.js).
 //
 // Water comes from the sketch's rivers and lakes (plans/water.md). Whenever the ground changes, the
 // changed tiles' water is worked out again from them, over the ground as it is (rework).
@@ -105,19 +103,17 @@ export class DetailView {
         return this.slabTool.pointerDown(e);
       }
       if (this.brush?.tool === "structures" && this.brush.template) return this.templatePlace.place(e);
-      if (this.brush?.tool === "structures" && !this.brush.type) {
+      if (this.brush?.tool === "structures") {
         canvas.setPointerCapture(e.pointerId);
         return this.group.pointerDown(e);
       }
       const at = this.pointAt(e);
       if (!at || !this.brush) return;
       canvas.setPointerCapture(e.pointerId);
-      if (this.brush.tool === "objects" || this.brush.tool === "structures") {
-        // The objects tool reaches past structures, to put things on their floors.
-        const objects = this.brush.tool === "objects";
-        const picked = this.objectAt(e, objects);
-        // Clicking the ground, or a structure's floor, places what's armed, if anything.
-        if (!picked && this.brush.type) return this.place((objects && this.objectAt(e)?.point) || at);
+      if (this.brush.tool === "objects") {
+        const picked = this.objectAt(e);
+        // Clicking the ground places what's armed, if anything.
+        if (!picked && this.brush.type) return this.place(at);
         this.select(picked);
         if (picked) {
           this.beginEdit();
@@ -164,7 +160,7 @@ export class DetailView {
     this.brush = brush;
     this.slabTool.active(brush?.tool === "slabs");
     if (brush?.tool === "slabs") this.slabTool.setSettings(brush.settings);
-    this.group.active(brush?.tool === "structures" && !brush.type);
+    this.group.active(brush?.tool === "structures" && !brush.template);
     this.templatePlace.set(brush?.tool === "structures" ? (brush.template ?? null) : null, brush?.placing);
     if (this.pointer) this.hover(this.groundAt(this.pointer));
   }
@@ -417,7 +413,7 @@ export class DetailView {
   }
 
 
-  // Clutter for changed tiles is worked out again, for their heights and the structures on them.
+  // Clutter for changed tiles is worked out again, for their heights.
   freshClutter(keys) {
     for (const key of keys) this.view.clutterTiles.delete(key);
     this.view.clutterAround = null;
@@ -529,8 +525,8 @@ export class DetailView {
   // --- objects ---
 
   // The object under a pointer event, as { object, key, point: [x, z] continent feet where the
-  // pointer meets it }, or null. `pastStructures` passes over structures.
-  objectAt(e, pastStructures = false) {
+  // pointer meets it }, or null.
+  objectAt(e) {
     const r = this.canvas.getBoundingClientRect();
     const ray = new THREE.Raycaster();
     ray.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), this.view.camera);
@@ -538,7 +534,6 @@ export class DetailView {
     for (const hit of ray.intersectObjects(this.view.objects.children, false)) {
       const object = hit.object.userData.objects?.[hit.instanceId];
       const key = hit.object.userData.tile?.join(",");
-      if (pastStructures && object && specOf(object.type)?.structure) continue;
       if (object && shown.has(key)) return { object, key, point: [hit.point.x + this.view.origin[0], hit.point.z + this.view.origin[1]] };
     }
     return null;
@@ -589,18 +584,13 @@ export class DetailView {
     const { type } = this.brush;
     const spec = specOf(type);
     if (!spec) return;
-    const { structure } = spec;
-    const scale = spec.built || structure ? 1 : (spec.size[0] + spec.size[1]) / 2;
-    const object = { ...makeObject(type, at, structure ? 0 : Math.random() * Math.PI * 2, scale), id: `${key.replace(",", ".")}.${Math.random().toString(36).slice(2, 8)}` };
+    const scale = spec.built ? 1 : (spec.size[0] + spec.size[1]) / 2;
+    const object = { ...makeObject(type, at, Math.random() * Math.PI * 2, scale), id: `${key.replace(",", ".")}.${Math.random().toString(36).slice(2, 8)}` };
     this.beginEdit();
     this.touch(key);
     const tile = this.view.decoded.get(key);
     tile.objects = [...(tile.objects ?? []), object];
     this.dirtyObjects.add(key);
-    if (structure) {
-      object.base = this.highestUnder(object, structure);
-      this.settle(object, structure);
-    }
     this.endEdit();
     this.select({ object, key });
   }
@@ -621,21 +611,15 @@ export class DetailView {
       this.dirtyObjects.add(selected.key);
       selected.key = key;
     }
-    const structure = specOf(selected.object.type)?.structure;
-    if (structure) {
-      const snapped = at.map((v) => Math.round(v / STRUCTURE_CELL_FT) * STRUCTURE_CELL_FT);
-      const moved = snapped.some((v, i) => v !== selected.object.at[i]);
-      selected.object.at = snapped;
-      if (moved) this.settle(selected.object, structure);
-    } else selected.object.at = at.map((v) => Math.round(v * 10) / 10);
+    selected.object.at = at.map((v) => Math.round(v * 10) / 10);
     this.dirtyObjects.add(key);
     this.drawSelection();
     this.onSelect?.(selected.object);
   }
 
   // Changes the selected object: { yaw } in radians, { scale } in feet (a factor for built
-  // objects), { colors } (a built object's parameter colors), { texts } (what its signs say),
-  // { base } (a structure's ground floor height, pushing the ground down under it), or several. Changes made between beginEdit and endEdit undo together; without, each is its own
+  // objects), { colors } (a built object's parameter colors), { texts } (what its signs say), or
+  // several. Changes made between beginEdit and endEdit undo together; without, each is its own
   // edit.
   changeSelected(changes) {
     const { selected } = this;
@@ -648,12 +632,7 @@ export class DetailView {
     if (changes.texts !== undefined) object.texts = changes.texts;
     if (object.texts && !Object.keys(object.texts).length) delete object.texts;
     if (changes.yaw !== undefined) object.yaw = ((changes.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
-    const structure = specOf(object.type)?.structure;
-    if (structure) {
-      object.yaw = quartersOf(object.yaw) * (Math.PI / 2);
-      if (changes.base !== undefined) object.base = Math.round(changes.base * 4) / 4;
-      if (changes.yaw !== undefined || changes.base !== undefined) this.settle(object, structure);
-    } else if (changes.scale !== undefined) {
+    if (changes.scale !== undefined) {
       const spec = specOf(object.type);
       const [least, most] = spec.built ? spec.size : spec.size.map((v, i) => v * [0.5, 2][i]);
       object.scale = Math.round(Math.max(least, Math.min(most, changes.scale)) * 100) / 100;
@@ -671,9 +650,6 @@ export class DetailView {
     if (!selected) return;
     this.beginEdit();
     this.touch(selected.key);
-    const structure = specOf(selected.object.type)?.structure;
-    // Taken away, a structure puts back the ground it pushed down: no base is low enough to push.
-    if (structure) this.settle({ ...selected.object, base: Infinity }, structure);
     const tile = this.view.decoded.get(selected.key);
     tile.objects = tile.objects.filter((o) => o !== selected.object);
     this.dirtyObjects.add(selected.key);
@@ -681,33 +657,7 @@ export class DetailView {
     this.select(null);
   }
 
-  // Pushes the ground down under a placed structure as far as its base needs, putting back what it
-  // pushed before (pushGround), within the edit under way.
-  settle(object, structure) {
-    const { changes, pushed } = pushGround(structure, object, this.cells(), CELL_FT);
-    object.pushed = pushed;
-    this.setHeights(changes);
-    // The ground's drawn again where a cellar opens up, to cut it away there.
-    if ((structure.walk ?? bakeWalk(structure)).cut.length) {
-      const [tx, tz] = tileOf(object.at);
-      const near = [];
-      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) near.push(`${tx + dx},${tz + dz}`);
-      this.changed(near);
-    }
-  }
-
-  // The height of the highest ground under a structure's ground floor, rounded up to a foot.
-  highestUnder(object, structure) {
-    const tileAt = (tx, tz) => this.view.decoded.get(`${tx},${tz}`);
-    const half = STRUCTURE_CELL_FT / 2;
-    const heights = placedWalk(structure, { at: object.at, yaw: quartersOf(object.yaw), base: 0 })
-      .cells.filter((c) => c.level === 0)
-      .map(({ cell: [x, z] }) => meshHeightAt(tileAt, x * STRUCTURE_CELL_FT + half, z * STRUCTURE_CELL_FT + half) ?? -Infinity);
-    const top = Math.max(...heights);
-    return Number.isFinite(top) ? Math.ceil(top) : Math.ceil(meshHeightAt(tileAt, ...object.at) ?? 0);
-  }
-
-  // A ring round the selected object's footprint; round a structure, a box round its cells.
+  // A ring round the selected object's footprint.
   drawSelection() {
     this.selectionRing ??= new THREE.Group();
     this.view.scene.add(this.selectionRing);
@@ -718,17 +668,6 @@ export class DetailView {
     }
     if (!this.selected) return;
     const { object } = this.selected;
-    const structure = specOf(object.type)?.structure;
-    if (structure) {
-      const cells = placedWalk(structure, { at: object.at, yaw: quartersOf(object.yaw), base: 0 }).cells.map((c) => c.cell);
-      const [x0, z0] = [0, 1].map((a) => Math.min(...cells.map((c) => c[a])) * STRUCTURE_CELL_FT - 1);
-      const [x1, z1] = [0, 1].map((a) => (Math.max(...cells.map((c) => c[a])) + 1) * STRUCTURE_CELL_FT + 1);
-      const line = boundary([[x0, z0], [x1, z0], [x1, z1], [x0, z1]].map(([x, z]) => [x / TILE_FT, z / TILE_FT]), this.view.ground, this.view.origin, CURSOR.selected);
-      line.material.depthTest = false;
-      line.renderOrder = 4;
-      this.selectionRing.add(line);
-      return;
-    }
     const r = reachOf(object) + 1;
     const points = Array.from({ length: CURSOR.points }, (_, n) => {
       const a = (n / CURSOR.points) * Math.PI * 2;
@@ -743,12 +682,6 @@ export class DetailView {
   // Makes the objects of tiles whose ground hasn't changed again.
   rebuildObjects() {
     const { view } = this;
-    // A structure changing moves what stands in it, in the tiles around too.
-    for (const key of [...this.dirtyObjects]) {
-      if (!view.decoded.get(key)?.objects?.some((o) => specOf(o.type)?.structure)) continue;
-      const [tx, tz] = key.split(",").map(Number);
-      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (view.decoded.has(`${tx + dx},${tz + dz}`)) this.dirtyObjects.add(`${tx + dx},${tz + dz}`);
-    }
     for (const key of this.dirtyObjects) {
       if (this.dirty.has(key)) continue;
       const [tx, tz] = key.split(",").map(Number);

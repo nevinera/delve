@@ -24,22 +24,18 @@ describe("collections", () => {
 
   it("lists the images things wear", () => {
     const object = { pieces: [{ tile: { image: "t1" }, decals: [{ image: "d1" }] }, {}] };
-    const structure = { materials: { stone: { tile: { image: "t2" }, inside: { image: "t3" } }, wood: {} } };
-    expect([...wornImages([object], [structure])].sort()).toEqual(["d1", "t1", "t2", "t3"]);
+    const template = { slabs: [{ surface: { color: "#ffffff", tile: { image: "t2" } } }, { surface: "floorboards" }] };
+    expect([...wornImages([object], [template])].sort()).toEqual(["d1", "t1", "t2"]);
   });
 
-  it("moves structures kept with objects into structure collections named alike", () => {
+  it("drops structures, which templates replaced, and puts stray objects in my objects", () => {
     const world = World.empty();
-    world.writeJson("collections.json", [{ id: "farm0001", name: "farm" }]);
-    world.writeJson("objects/obj00001.json", { id: "obj00001", name: "crate", collection: "farm0001", pieces: [] });
-    for (const id of ["barn0001", "shed0001"]) world.writeJson(`structures/${id}.json`, { id, name: id, collection: "farm0001", storeys: [], components: [], materials: {} });
-    world.writeJson("structures/lost0001.json", { id: "lost0001", name: "lost", collection: "gone0001", storeys: [], components: [], materials: {} });
+    world.writeJson("structure-collections.json", [{ id: "farm0001", name: "farm" }]);
+    world.writeJson("structures/barn0001.json", { id: "barn0001", name: "barn", collection: "farm0001" });
+    world.writeJson("objects/obj00001.json", { id: "obj00001", name: "crate", collection: "gone0001", pieces: [] });
     expect(adoptStrays(world)).toBe(true);
-    const names = collections(world, "structures").map((c) => c.name).sort();
-    expect(names).toEqual(["farm", "my structures"]);
-    const farm = allCollections(world, "structures").find((c) => c.name === "farm");
-    expect(farm.entries.map((e) => e.name)).toEqual(["barn0001", "shed0001"]);
-    expect(allCollections(world, "objects").find((c) => c.name === "farm" && c.kind !== "builtin").entries.map((e) => e.name)).toEqual(["crate"]);
+    expect([...world.files.keys()].filter((p) => p.includes("structure"))).toEqual([]);
+    expect(allCollections(world, "objects").find((c) => c.kind === "own")).toMatchObject({ name: "my objects", entries: [{ name: "crate" }] });
     expect(adoptStrays(world)).toBe(false);
   });
 });

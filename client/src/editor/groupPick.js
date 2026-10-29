@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { TILE_FT } from "../world/constants.js";
-import { reachOf, specOf } from "../world/objects.js";
+import { reachOf } from "../world/objects.js";
 import { slabBottom, slabTop } from "../world/slabs.js";
 import { captureTemplate } from "../world/templates.js";
 import { boundary } from "./renderView.js";
@@ -10,7 +10,7 @@ import { slabAt } from "./slabMeshes.js";
 // (world/templates.js), working on a DetailView's tiles. A click on a slab or an object adds it,
 // or takes it away if it's picked. Dragging a box from where there's none picks what's in it: the
 // slabs whose middles and the objects whose places are inside, with those picked before when
-// shift's held. A click on nothing lets them all go, as Escape does. Structures can't be picked.
+// shift's held. A click on nothing lets them all go, as Escape does.
 
 const COLOR = 0xffe066;
 const CLICK_PX = 5; // a press moving less than this before it's let go is a click
@@ -101,7 +101,7 @@ export class GroupPick {
       const key = hit.object.userData.tile?.join(",");
       if (!shown.has(key)) continue;
       const object = hit.object.userData.objects?.[hit.instanceId];
-      if (object && !specOf(object.type)?.structure) return { object, key };
+      if (object) return { object, key };
       const slab = !object && slabAt(hit);
       if (slab) return { slab, key };
     }
@@ -137,7 +137,7 @@ export class GroupPick {
         if (inside(middle)) this.slabs.push({ slab, key });
       }
       for (const object of tile?.objects ?? []) {
-        if (specOf(object.type)?.structure || this.objects.some((p) => p.object === object)) continue;
+        if (this.objects.some((p) => p.object === object)) continue;
         const [x, z] = [object.at[0] - origin[0], object.at[1] - origin[1]];
         if (inside(new THREE.Vector3(x, ground(x, z), z))) this.objects.push({ object, key });
       }

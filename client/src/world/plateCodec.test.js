@@ -93,15 +93,19 @@ describe("plates", () => {
     expect(header.sizes[0]).toEqual({ footprint: { circle: 1.5 }, height: 2, fixed: false });
   });
 
-  it("sizes a kind it isn't given from its objects, and keeps structures' heights fixed", () => {
+  it("sizes a kind it isn't given from its objects", () => {
+    const big = { type: "boulder", at: [16 * TILE_FT + 30, 8], yaw: 0, scale: 2, footprint: { rect: [4, 6] }, height: 8 };
+    const plate = encodePlate([1, 0], "surface", [tileAt([16, 0], { objects: [big] })]);
+    expect(plate).toContain("rect:2,3 4 boulder");
+    expect(decodePlate(plate).tiles[0].objects[0]).toMatchObject({ footprint: { rect: [4, 6] }, height: 8 });
+  });
+
+  it("drops structures, placed before templates replaced them", () => {
     const hut = { type: "structure:abcd1234", at: [16 * TILE_FT + 8, 8], yaw: 0, scale: 1, footprint: { open: 12 }, height: 9 };
     const big = { type: "boulder", at: [16 * TILE_FT + 30, 8], yaw: 0, scale: 2, footprint: { rect: [4, 6] }, height: 8 };
-    const plate = encodePlate([1, 0], "surface", [tileAt([16, 0], { objects: [hut, big] })]);
-    expect(plate).toContain("rect:2,3 4 boulder");
+    const plate = encodePlate([1, 0], "surface", [tileAt([16, 0], { objects: [hut, big] })], { "structure:abcd1234": { footprint: { open: 12 }, height: 9, fixed: true } });
     expect(plate).toContain("open:12 =9 structure:abcd1234");
-    const objects = decodePlate(plate).tiles[0].objects;
-    expect(objects.find((o) => o.type === "boulder")).toMatchObject({ footprint: { rect: [4, 6] }, height: 8 });
-    expect(objects.find((o) => o.type === hut.type)).toMatchObject({ footprint: { open: 12 }, height: 9 });
+    expect(decodePlate(plate).tiles[0].objects.map((o) => o.type)).toEqual(["boulder"]);
   });
 
   it("reads version 1 plates, whose objects have no sizes", () => {

@@ -12,7 +12,7 @@
 }
 ```
 
-Each kind is keyed as plates name it: a built-in kind such as `boulder`, or `built:<id>` for a built object. Structures have no shapes.
+Each kind is keyed as plates name it: a built-in kind such as `boulder`, or `built:<id>` for a built object.
 
 ## Meshes
 

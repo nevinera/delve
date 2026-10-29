@@ -1,13 +1,10 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { furnishingsOf, imageOf, makeObject, specOf } from "../world/objects.js";
+import { imageOf, makeObject, specOf } from "../world/objects.js";
 import { paletteColors } from "../world/builtObjects.js";
 import { TEXT_PLACEHOLDER } from "../world/pixelFont.js";
 import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, objectGeometry, textGeometry, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
 import { meshHeightAt } from "../world/clutter.js";
-import { CELL_FT as STRUCTURE_CELL_FT, placedWalk, quartersOf } from "../world/structures.js";
-import { floorAt } from "../world/walkIndex.js";
-import { structureGeometries } from "./structureMeshes.js";
 
 // Objects for the 3D view (world/objects.js says what they are and where), as instanced meshes:
 // one per part shape and variant. Shapes are for scale 1, standing on y = 0 and matching their
@@ -103,35 +100,6 @@ function signsOf(object, colors = [], texts = {}) {
     kept.set(key, signs && { geometry: signs.geometry, small: limited(sight.small, false, decalMaterial(texture)), large: limited(sight.large, false, decalMaterial(texture)) });
   }
   return kept.get(key);
-}
-
-// A structure's meshes with its parameters' colors and its foundation `depthFt` deep, as { base,
-// overlays: [{ geometry, material }] } (one overlay per image), kept as built objects' are.
-const builtStructures = new WeakMap(); // structure -> Map(colors and depth -> meshes)
-function structureOf(structure, colors = [], depthFt) {
-  if (!builtStructures.has(structure)) builtStructures.set(structure, new Map());
-  const kept = builtStructures.get(structure);
-  const key = `${colors.join(",")}/${depthFt}`;
-  if (!kept.has(key)) {
-    const storeys = [...structureGeometries(structure, { params: colors, depthFt, imageOf }).values()];
-    const byImage = new Map(); // image -> [geometry]
-    for (const { image, geometry } of storeys.flatMap((s) => s.overlays)) byImage.set(image, [...(byImage.get(image) ?? []), geometry]);
-    const wearer = paletteColors(structure, colors);
-    kept.set(key, {
-      base: storeys.length ? mergeGeometries(storeys.map((s) => s.base)) : null,
-      overlays: [...byImage].map(([image, list]) => ({ geometry: mergeGeometries(list), material: limited(sight.large, false, tiledMaterial(tileTexture(image, wearer))) })),
-    });
-  }
-  return kept.get(key);
-}
-
-// How deep a placed structure's foundation reaches: from its base to a foot under the lowest
-// ground beneath its ground floor, in whole feet.
-function foundationDepth(object, structure, tileAt) {
-  const half = STRUCTURE_CELL_FT / 2;
-  const cells = placedWalk(structure, { at: object.at, yaw: quartersOf(object.yaw), base: object.base }).cells.filter((c) => c.level === 0);
-  const low = Math.min(...cells.map(({ cell: [x, z] }) => meshHeightAt(tileAt, x * STRUCTURE_CELL_FT + half, z * STRUCTURE_CELL_FT + half) ?? object.base));
-  return Number.isFinite(low) ? Math.max(1, Math.ceil(object.base - low + 1)) : 2;
 }
 
 // A kit type's object at scale 1, white where its parameter is, for its color to tint.
@@ -243,26 +211,16 @@ function variants(name) {
 }
 
 // objects: from tiles' objects lists. tileAt(tx, tz): a decoded tile, for the ground under them.
-// origin: the continent position of the scene's origin. walk: the walk (walkIndex.js tileWalk) of
-// the structures around them, so objects inside one sit on its floor.
-export function objectMeshes(objects, tileAt, origin, walk) {
+// origin: the continent position of the scene's origin.
+export function objectMeshes(objects, tileAt, origin) {
   const groups = new Map(); // key -> { geometry, material, list: [{ object, p }] }
   const join = (key, geometry, material, item) => {
     if (!groups.has(key)) groups.set(key, { geometry, material, list: [] });
     groups.get(key).list.push(item);
   };
-  const all = objects.flatMap((object) => [object, ...furnishingsOf(object)]);
-  for (const object of all) {
+  for (const object of objects) {
     const spec = specOf(object.type);
     if (!spec) continue;
-    if (spec.structure) {
-      const depth = foundationDepth(object, spec.structure, tileAt);
-      const made = structureOf(spec.structure, object.colors, depth);
-      const key = `${object.type}/${(object.colors ?? []).join(",")}/${depth}`;
-      if (made.base) join(key, made.base, materials.builtLarge, { object, p: -1 });
-      made.overlays.forEach(({ geometry, material }, n) => join(`${key}/tiles${n}`, geometry, material, { object, p: -1 }));
-      continue;
-    }
     if (spec.kit) {
       join(`kit:${object.type}/${spec.large ? "large" : "small"}`, kitGeometry(spec), materials[spec.large ? "builtLarge" : "builtSmall"], { object, p: 0 });
       continue;
@@ -293,8 +251,8 @@ export function objectMeshes(objects, tileAt, origin, walk) {
   for (const { geometry, material, list } of groups.values()) {
     const mesh = new THREE.InstancedMesh(geometry, material, list.length);
     list.forEach(({ object, p }, n) => {
-      // Structures stand at their base, upright, and the objects in them where they're put.
-      const { y, pitch } = object.base !== undefined ? { y: object.base, pitch: 0 } : object.y !== undefined ? { y: object.y, pitch: 0 } : seat(object, tileAt, walk);
+      // Objects with a height stand there, upright.
+      const { y, pitch } = object.y !== undefined ? { y: object.y, pitch: 0 } : seat(object, tileAt);
       q.setFromAxisAngle(UP, object.yaw).multiply(tilt.setFromAxisAngle(AXIS_Z, pitch));
       m.compose(new THREE.Vector3(object.at[0] - origin[0], y, object.at[1] - origin[1]), q, new THREE.Vector3(object.scale, object.scale, object.scale));
       mesh.setMatrixAt(n, m);
@@ -375,15 +333,12 @@ export function disposePreview(group) {
 }
 
 // Where an object sits: long ones rest on the ground at both ends and tilt between them, others
-// on the lowest ground under them, so nothing floats. Each sinks in a little. One whose middle is
-// on a structure's floor stands on that floor.
-function seat(object, tileAt, walk) {
+// on the lowest ground under them, so nothing floats. Each sinks in a little.
+function seat(object, tileAt) {
   const spec = specOf(object.type);
   const [x, z] = object.at;
   const ground = (dx, dz) => meshHeightAt(tileAt, x + dx, z + dz) ?? 0;
   const sink = (spec.sink ?? 0.1) * object.height;
-  const floor = floorAt(walk, x, z, ground(0, 0));
-  if (floor !== ground(0, 0)) return { y: floor - sink, pitch: 0 };
   const { footprint } = object;
   if (footprint.capsule) {
     const half = footprint.capsule[1];

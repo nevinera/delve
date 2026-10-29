@@ -3,7 +3,6 @@ package worlds
 import (
 	"archive/zip"
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"io"
 	"math"
@@ -20,18 +19,12 @@ const (
 	tileCells = 64 // cells a tile side
 
 	plateFt = 16 * TileFt
-	// structureMargin is how far past a structure's reach its floors and walls might hold a
-	// character.
-	structureMargin = 8.0
 )
 
 // Sample is the ground at a point.
 type Sample struct {
 	Ground float64 // feet, smoothly between cell centers
 	Water  float64 // the water's surface over the cell, or NaN
-	// Structure is whether a structure stands near enough that its floors, stairs and walls,
-	// rather than the ground, may hold the character.
-	Structure bool
 	// Footholds are the heights of slab faces there gentle enough to stand on (Slab.Footholds).
 	Footholds []float64
 }
@@ -48,21 +41,12 @@ type Ground struct {
 }
 
 type plate struct {
-	tiles      map[[2]int]*tileGround
-	structures []structure
-	slabs      []*Slab
+	tiles map[[2]int]*tileGround
+	slabs []*Slab
 }
 
 type tileGround struct {
 	height, water []float32 // tileCells × tileCells, row by row; water NaN where there's none
-}
-
-type structure struct{ x, z, reach float64 }
-
-// objectKind is a line of a plate's object table, as far as the ground needs it.
-type objectKind struct {
-	structure bool
-	reach     float64
 }
 
 // Ground is the ground of one of the world's continents, or nil for a world not read from a zip.
@@ -123,9 +107,6 @@ func (g *Ground) At(x, z float64) (s Sample, ok bool, err error) {
 		return s, false, err
 	}
 	s.Water = float64(t.water[k])
-	if s.Structure, err = g.nearStructure(x, z); err != nil {
-		return s, false, err
-	}
 	slabs, err := g.slabsNear(x, z, 0)
 	for _, slab := range slabs {
 		s.Footholds = append(s.Footholds, slab.Footholds(x, z, MaxClimb)...)
@@ -187,33 +168,6 @@ func (g *Ground) slabsNear(x, z, by float64) ([]*Slab, error) {
 	return out, nil
 }
 
-// nearStructure is whether a structure reaches near (x, z), in its plate or the ones beside it.
-func (g *Ground) nearStructure(x, z float64) (bool, error) {
-	px, pz := int(math.Floor(x/plateFt)), int(math.Floor(z/plateFt))
-	for dz := -1; dz <= 1; dz++ {
-		for dx := -1; dx <= 1; dx++ {
-			// A plate beside this one matters only near the edge they share.
-			if (dx < 0 && x-float64(px)*plateFt > 256) || (dx > 0 && float64(px+1)*plateFt-x > 256) ||
-				(dz < 0 && z-float64(pz)*plateFt > 256) || (dz > 0 && float64(pz+1)*plateFt-z > 256) {
-				continue
-			}
-			p, err := g.plate(px+dx, pz+dz)
-			if err != nil {
-				return false, err
-			}
-			if p == nil {
-				continue
-			}
-			for _, st := range p.structures {
-				if math.Hypot(x-st.x, z-st.z) <= st.reach+structureMargin {
-					return true, nil
-				}
-			}
-		}
-	}
-	return false, nil
-}
-
 // plate reads a plate the first time it's asked for. The lock is held.
 func (g *Ground) plate(px, pz int) (*plate, error) {
 	key := [2]int{px, pz}
@@ -245,12 +199,9 @@ func (g *Ground) plate(px, pz int) (*plate, error) {
 	return p, nil
 }
 
-// readPlate reads the height and water layers of a plate's tiles, where its structures stand, and
-// its slabs.
+// readPlate reads the height and water layers of a plate's tiles, and its slabs.
 func readPlate(r io.Reader) (*plate, error) {
 	p := &plate{tiles: map[[2]int]*tileGround{}}
-	var kinds []objectKind
-	var origin [2]float64
 	var tile *tileGround
 	var cells int
 	lines := bufio.NewScanner(r)
@@ -264,27 +215,6 @@ func readPlate(r io.Reader) (*plate, error) {
 	for line, more := next(); more; line, more = next() {
 		word, rest, _ := strings.Cut(line, " ")
 		switch word {
-		case "plate":
-			f := strings.Fields(rest)
-			if len(f) < 2 {
-				return nil, fmt.Errorf("bad plate line %q", line)
-			}
-			x, z, err := pair(f[1])
-			if err != nil {
-				return nil, err
-			}
-			origin = [2]float64{float64(x) * plateFt, float64(z) * plateFt}
-		case "object":
-			// object <id> <footprint> <height> <kind>, or in version 1 plates object <id> <kind>.
-			f := strings.Fields(rest)
-			k := objectKind{}
-			if len(f) >= 4 {
-				k.structure = strings.HasPrefix(f[3], "structure:")
-				if open, ok := strings.CutPrefix(f[1], "open:"); ok {
-					k.reach, _ = strconv.ParseFloat(open, 64)
-				}
-			}
-			kinds = append(kinds, k)
 		case "tile":
 			f := strings.Fields(rest)
 			if len(f) != 2 {
@@ -347,14 +277,6 @@ func readPlate(r io.Reader) (*plate, error) {
 				return nil, fmt.Errorf("bad slab line %q: %w", line, err)
 			}
 			p.slabs = append(p.slabs, slab)
-		case "place":
-			st, ok, err := placed(rest, kinds, origin)
-			if err != nil {
-				return nil, err
-			}
-			if ok {
-				p.structures = append(p.structures, st)
-			}
 		}
 	}
 	if err := lines.Err(); err != nil {
@@ -372,40 +294,6 @@ func readPlate(r io.Reader) (*plate, error) {
 		}
 	}
 	return p, nil
-}
-
-// placed reads a place line, for a structure: place <id> <x z yaw scale> [<colors>] [<json>].
-// Its position is x and z within the plate in 1/32 ft (3 symbols each), then yaw and scale; JSON
-// at the end holds `at` when the object lies outside the plate.
-func placed(rest string, kinds []objectKind, origin [2]float64) (structure, bool, error) {
-	text, extra, _ := strings.Cut(rest, " {")
-	f := strings.Fields(text)
-	if len(f) < 2 || len(f[1]) != 10 {
-		return structure{}, false, fmt.Errorf("bad place line %q", rest)
-	}
-	id, err := decode(f[0])
-	if err != nil || id >= len(kinds) {
-		return structure{}, false, fmt.Errorf("place line %q names no object", rest)
-	}
-	if !kinds[id].structure {
-		return structure{}, false, nil
-	}
-	x, err1 := decode(f[1][0:3])
-	z, err2 := decode(f[1][3:6])
-	if err1 != nil || err2 != nil {
-		return structure{}, false, fmt.Errorf("bad place line %q", rest)
-	}
-	st := structure{x: origin[0] + float64(x)/32, z: origin[1] + float64(z)/32, reach: kinds[id].reach}
-	if extra != "" {
-		var fields struct{ At []float64 }
-		if err := json.Unmarshal([]byte("{"+extra), &fields); err != nil {
-			return structure{}, false, fmt.Errorf("place line %q: %w", rest, err)
-		}
-		if len(fields.At) == 2 {
-			st.x, st.z = fields.At[0], fields.At[1]
-		}
-	}
-	return st, true, nil
 }
 
 const alphabet = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_"

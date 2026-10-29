@@ -51,7 +51,7 @@ export function templateProblems(template, images) {
 function objectProblems(object) {
   const out = [];
   if (typeof object?.type !== "string" || !object.type) return ["needs a type"];
-  if (object.type.startsWith(TEMPLATE_PREFIX) || object.type.startsWith("structure:")) out.push(`is ${object.type}, which can't go in a template`);
+  if (object.type.startsWith(TEMPLATE_PREFIX)) out.push(`is ${object.type}, which can't go in a template`);
   if (!(Array.isArray(object.at) && object.at.length === 2 && object.at.every(Number.isFinite))) out.push("needs at: [x, z]");
   else if (object.at.some((v) => Math.abs(v) > REACH_FT)) out.push(`is more than ${REACH_FT} ft from the anchor`);
   if (!Number.isFinite(object.yaw)) out.push("needs a yaw");

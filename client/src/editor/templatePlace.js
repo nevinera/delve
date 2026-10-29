@@ -117,7 +117,7 @@ export class TemplatePlace {
       }
       for (const key of changed) {
         const tile = decoded.get(key);
-        const kept = (tile.objects ?? []).filter((o) => specOf(o.type)?.structure || !under.has(o.at.map((v) => Math.floor(v / CELL_FT)).join(",")));
+        const kept = (tile.objects ?? []).filter((o) => !under.has(o.at.map((v) => Math.floor(v / CELL_FT)).join(",")));
         if (kept.length !== (tile.objects ?? []).length) {
           tile.objects = kept;
           detail.dirtyObjects.add(key);

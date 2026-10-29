@@ -97,7 +97,9 @@ export function decodeTile(bytes) {
     }
     layers[entry.name] = values;
   }
-  return { ...manifest, layers };
+  // Structures, placed before templates replaced them, are dropped.
+  const objects = (manifest.objects ?? []).filter((o) => !o.type?.startsWith("structure:"));
+  return { ...manifest, objects, layers };
 }
 
 function encodeInt(value, scale, { none, max }) {

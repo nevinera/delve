@@ -15,7 +15,7 @@ The client has one entry point per page (`vite.config.js`):
 | Page | Entry | What it is |
 | --- | --- | --- |
 | `/editor` | `client/src/editor/main.js` | the world editor |
-| `/objects`, `/structures` | `client/src/objects/main.js` | the object and structure builders |
+| `/objects` | `client/src/objects/main.js` | the object builder |
 | `/characters/new` | `client/src/character/builder.js` | the character builder |
 | `/characters`, `/home` | `client/src/character/list.js` | your characters |
 | `/animation_lab` | `client/src/character/lab.js` | the animation lab |
@@ -24,7 +24,7 @@ The client has one entry point per page (`vite.config.js`):
 
 ## Client code
 
-- `client/src/world/` is shared by every page and has no DOM: world scale (`constants.js`), file formats (`tileCodec.js`, `plateCodec.js`, `landGrid.js`), paths (`paths.js`), the generator, and object, structure and water rules.
+- `client/src/world/` is shared by every page and has no DOM: world scale (`constants.js`), file formats (`tileCodec.js`, `plateCodec.js`, `landGrid.js`), paths (`paths.js`), the generator, and object, slab, template and water rules.
 - `client/src/editor/` is the editor: its views and tools, workers for heavy jobs, and loading and saving.
 - `client/src/objects/` is the object library: collections, and the builder pages.
 - `client/src/github/github.js` is the browser's only route to GitHub.
@@ -87,7 +87,7 @@ Released worlds are listed for everyone signed in, on `/worlds`. A world's owner
 The game server (`game-server/`) holds every character in a world. Browsers connect over a websocket, and send what their player does; the server tells each one what the characters near them do. [The game protocol](formats/game-protocol.md) covers entry tokens, the messages and the internal API.
 
 - `internal/token` checks entry tokens, which Rails signs (`Game::EntryToken`).
-- `internal/worlds` downloads each released commit's zip once, keeps it on disk, and reads the continents and spawn pin. It reads a continent's surface plates as characters reach them, for the ground's heights, water and structures.
+- `internal/worlds` downloads each released commit's zip once, keeps it on disk, and reads the continents and spawn pin. It reads a continent's surface plates as characters reach them, for the ground's heights, water and slabs.
 - `internal/game` places characters on a layer, works out who's near whom (the 3×3 tiles around each), checks that their movement adds up (speed, clocks, rising and falling, the ground and slabs under them, and not walking into slabs), and passes it on.
 - `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token, and writes their positions back to it (`WorldCharacter`, one per character per world). The server never writes to the database itself.
 

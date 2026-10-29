@@ -144,7 +144,7 @@ describe("validateWorld", () => {
     expect(changed((f) => f.set("objects/abcd1234.json", json({ id: "abcd1234", name: "x", collection: "nope0000", palette: [], pieces: [] })))).toEqual([
       "warning: objects/abcd1234.json: is in collection nope0000, which collections.json doesn't list",
     ]);
-    expect(changed((f) => f.set("structures/abcd1234.json", json({ id: "abcd1234" })))).toEqual(["structures/abcd1234.json: it needs a palette, materials, storeys, components and objects"]);
+    expect(changed((f) => f.set("structures/abcd1234.json", json({ id: "abcd1234" })))).toEqual(["warning: structures/abcd1234.json: is a structure's, which templates replaced: saving the world in the editor drops it"]);
   });
 
   it("needs one spawn point, on a generated tile, out of deep water", () => {

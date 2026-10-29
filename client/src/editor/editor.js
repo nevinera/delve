@@ -36,13 +36,12 @@ import { presetPixels } from "./slabTextures.js";
 import { newObjectId, paletteColors, textsOf } from "../world/builtObjects.js";
 import { templateProblems } from "../world/templates.js";
 import { MAX_TEXT, signText } from "../world/pixelFont.js";
-import { adoptStrays, allCollections, builtObjects, builtStructures, images, keepTemplate } from "../objects/collections.js";
+import { adoptStrays, allCollections, builtObjects, images, keepTemplate } from "../objects/collections.js";
 import { placedCount } from "../objects/placed.js";
 import { decodeTile, encodeTile } from "../world/tileCodec.js";
 import { gunzipSync, gzipSync } from "fflate";
 import { CELL_FT, TILE_FT } from "../world/constants.js";
 import { TREE_KINDS, TREE_SIZES, treeTerrain } from "../world/trees.js";
-import { STRUCTURE_PREFIX } from "../world/structures.js";
 import { PlacePicker } from "./placePicker.js";
 import { TERRAIN, prepareShape, prepareWorld } from "../world/generator.js";
 import { CYCLE_MS, LUNAR_DAYS, PHASES, cyclesAt, moonAge, phaseAt } from "../world/dayNight.js";
@@ -64,7 +63,7 @@ const NAV = "drag or W A S D to pan · wheel or C/V to zoom";
 // Steps drawn in 3d instead of on the map.
 const IN_3D = new Set(["heights", "detail", "3d"]);
 const HINTS = {
-  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it) · with water, click to pour from there, then keep or drop the rivers and lakes it would make · with objects or structures, click a thumbnail, then the ground to place it (esc lets it go); click one placed to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with structures, click a template's thumbnail, then the ground to place it (Q E turn it), or with nothing to place, click slabs and objects or drag a box to pick them, then save them as a template · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
+  detail: "left-drag to work the brush, or draw a trail or channel (esc drops it) · with water, click to pour from there, then keep or drop the rivers and lakes it would make · with objects, click a thumbnail, then the ground to place it (esc lets it go); click one placed to pick it, drag to move it, Q E turn it, [ ] size it, delete removes it · with structures, click a template's thumbnail, then the ground to place it (Q E turn it), or with nothing to place, click slabs and objects or drag a box to pick them, then save them as a template · with paint, drag to paint the ground or trees cell by cell (painting over a tree fells it there) · the arrows off the window's sides move the window a strip that way · W A S D pan · C V zoom · Q E turn the view (or the picked object) · 1-9 and 0 pick a tool · [ ] size · - = strength · right-drag turns · middle-drag pans · wheel zooms · ctrl-z undoes, ctrl-shift-z redoes",
   none: `pick a zone in the list or on the map to edit its region, or make a new one · ${NAV}`,
   empty: "draw the zone's region first",
   noLand: "raise some land on the heights step first",
@@ -1066,19 +1065,11 @@ export class Editor {
     });
   }
 
-  // A library's popover and gallery, for "objects" or "structures".
-  libraryParts(kind) {
-    return kind === "objects" ? [this.el.libraryPopover, this.el.libraryGallery] : [this.el.structurePopover, this.el.structureGallery];
-  }
-
-  // The object or structure library (objects/library.js) in a popover over the editor.
-  async openLibrary(kind = "objects") {
-    const [popover, gallery] = this.libraryParts(kind);
-    this.libraries ??= {};
-    this.libraryLoading ??= {};
-    this.libraryLoading[kind] ??= import("../objects/library.js").then(({ ObjectLibrary }) => {
-      this.libraries[kind] = new ObjectLibrary(gallery, {
-        kind,
+  // The object library (objects/library.js) in a popover over the editor.
+  async openLibrary() {
+    const { libraryPopover: popover, libraryGallery: gallery } = this.el;
+    this.libraryLoading ??= import("../objects/library.js").then(({ ObjectLibrary }) => {
+      this.library = new ObjectLibrary(gallery, {
         getWorld: () => this.world,
         onChange: (choose) => {
           this.dirty = true;
@@ -1093,9 +1084,9 @@ export class Editor {
         },
       });
     });
-    await this.libraryLoading[kind];
+    await this.libraryLoading;
     popover.showModal();
-    this.libraries[kind].show();
+    this.library.show();
   }
 
   // Registers the world's built objects (world/objects.js) and lists them to place, choosing
@@ -1103,20 +1094,20 @@ export class Editor {
   // changed.
   loadBuiltObjects(choose) {
     adoptStrays(this.world);
-    setBuiltObjects(builtObjects(this.world), images(this.world), builtStructures(this.world));
+    setBuiltObjects(builtObjects(this.world), images(this.world));
     this.fillObjectTypes(choose);
     if (this.step === "detail" && this.detail) this.showDetail();
-    for (const kind of ["objects", "structures"]) if (this.libraryParts(kind)[0].open) this.libraries?.[kind]?.show();
+    if (this.el.libraryPopover.open) this.library?.show();
   }
 
-  // The objects and structures tools' pickers, `choose` armed if given; and the object types to
-  // replace, by collection, builtins first.
+  // The objects tool's picker of objects, `choose` armed if given, and the structures tool's of
+  // templates; and the object types to replace, by collection, builtins first.
   fillObjectTypes(choose) {
     if (!this.pickers) return;
     const objects = allCollections(this.world, "objects");
     this.pickers.objects.show(objects);
     this.pickers.structures.show(allCollections(this.world, "templates"));
-    if (choose) this.pickers[choose.startsWith(STRUCTURE_PREFIX) ? "structures" : "objects"].arm(choose);
+    if (choose) this.pickers.objects.arm(choose);
     for (const select of [this.el.replaceFrom, this.el.replaceTo]) {
       const collections = objects;
       const was = select.value;
@@ -1137,18 +1128,16 @@ export class Editor {
   // objects.
   scaleSlider(input, output, type, value) {
     const spec = specOf(type);
-    const [least, most] = spec?.built || spec?.structure ? spec.size : (spec?.size ?? [1, 1]).map((v, i) => v * [0.5, 2][i]);
-    [input.min, input.max, input.step] = [least, most, spec?.built || spec?.structure ? 0.05 : 0.5];
+    const [least, most] = spec?.built ? spec.size : (spec?.size ?? [1, 1]).map((v, i) => v * [0.5, 2][i]);
+    [input.min, input.max, input.step] = [least, most, spec?.built ? 0.05 : 0.5];
     input.value = value;
-    output.textContent = spec?.built || spec?.structure ? `×${value}` : `${value} ft`;
+    output.textContent = spec?.built ? `×${value}` : `${value} ft`;
   }
 
   // Swaps every placed object of type `from` for type `to`, in every continent's tiles, keeping
   // where each stands and which way it faces. Changed tiles are marked edited by hand.
   replaceInstances(from, to) {
     if (!from || !to || from === to) return this.say("Pick two different types.");
-    // A structure's placement keeps the ground it pushed down, which nothing else would put back.
-    if ([from, to].some((type) => specOf(type)?.structure)) return this.say("Structures can't be swapped this way.");
     const name = (type) => builtOf(type)?.name ?? type;
     if (!window.confirm(`Replace every placed ${name(from)} with ${name(to)}?`)) return;
     const sameKind = from.startsWith(BUILT_PREFIX) === to.startsWith(BUILT_PREFIX);
@@ -1270,14 +1259,8 @@ export class Editor {
     objectPanel.hidden = !object;
     if (!object) return;
     const spec = specOf(object.type);
-    objectInfo.textContent = `${spec?.built?.name ?? spec?.structure?.name ?? object.type} at ${object.at.map(Math.round).join(", ")}`;
+    objectInfo.textContent = `${spec?.built?.name ?? object.type} at ${object.at.map(Math.round).join(", ")}`;
     const degrees = Math.round((object.yaw * 180) / Math.PI) % 360;
-    // Structures turn in quarter turns, and rise and sink instead of growing.
-    const structure = Boolean(spec?.structure);
-    [objectYaw.step, objectYaw.max] = structure ? [90, 270] : [5, 355];
-    this.el.objectSizeRow.hidden = structure;
-    this.el.objectBaseRow.hidden = !structure;
-    if (structure) this.el.objectBaseValue.textContent = `${object.base} ft`;
     objectYaw.value = degrees;
     objectYawValue.textContent = `${degrees}°`;
     this.scaleSlider(objectScale, objectScaleValue, object.type, object.scale);
@@ -1617,17 +1600,14 @@ export class Editor {
     });
     for (const tab of this.el.stepTabs) tab.addEventListener("click", () => (tab.dataset.step === "detail" ? this.pickDetail() : this.setStep(tab.dataset.step)));
     this.el.openLibrary.addEventListener("click", () => this.openLibrary());
-    this.el.openStructures.addEventListener("click", () => this.openLibrary("structures"));
     this.el.templateSave.addEventListener("click", () => this.saveTemplate());
     this.templateTurn = 0;
     for (const input of [this.el.templateQuarter, this.el.templateReshape, this.el.templateClear]) input.addEventListener("change", () => this.applyDetailBrush());
-    for (const kind of ["objects", "structures"]) {
-      const [popover] = this.libraryParts(kind);
-      // Keys stay in the library, away from the editor behind it.
-      popover.addEventListener("keydown", (e) => e.stopPropagation());
-      popover.querySelector(".library-close").addEventListener("click", () => popover.close());
-      popover.addEventListener("close", () => this.libraries?.[kind]?.hide());
-    }
+    const popover = this.el.libraryPopover;
+    // Keys stay in the library, away from the editor behind it.
+    popover.addEventListener("keydown", (e) => e.stopPropagation());
+    popover.querySelector(".library-close").addEventListener("click", () => popover.close());
+    popover.addEventListener("close", () => this.library?.hide());
     this.el.detailPick.addEventListener("click", () => this.pickDetail());
     for (const section of this.el.steps) {
       for (const input of section.querySelectorAll("[data-option]")) {
@@ -1676,7 +1656,7 @@ export class Editor {
     this.el.treeSize.value = 2;
     for (const input of [this.el.paintTerrain, this.el.treeKind, this.el.treeSize]) input.addEventListener("change", () => this.applyDetailBrush());
     this.el.paintRadius.addEventListener("input", () => this.applyDetailBrush());
-    // What the objects and structures tools place, picked from their libraries' thumbnails.
+    // What the objects and structures tools place, picked from their thumbnails.
     this.pickers = {
       objects: new PlacePicker(this.el.objectPicker, { onArm: () => this.applyDetailBrush() }),
       structures: new PlacePicker(this.el.structurePicker, { onArm: () => this.applyDetailBrush() }),
@@ -1702,12 +1682,6 @@ export class Editor {
     }
     this.el.objectDelete.addEventListener("click", () => this.detail?.deleteSelected());
     this.buildSlabPanel();
-    for (const [button, way] of [[this.el.objectLower, -1], [this.el.objectRaise, 1]]) {
-      button.addEventListener("click", (e) => {
-        const object = this.detail?.selected?.object;
-        if (object?.base !== undefined) this.detail.changeSelected({ base: object.base + way * (e.shiftKey ? 0.25 : 1) });
-      });
-    }
     this.el.pourKeep.addEventListener("click", () => this.keepProposal());
     this.el.pourDrop.addEventListener("click", () => this.dropProposal());
     for (const input of [this.el.detailRadius, this.el.detailFalloff, this.el.detailStrength, this.el.detailErosion, this.el.detailTalus, this.el.trailKind, this.el.trailState, this.el.trailWidth, this.el.channelWidth, this.el.channelDepth, this.el.pourWidth]) {

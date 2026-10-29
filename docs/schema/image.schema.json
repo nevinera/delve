@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "image.schema.json",
   "title": "textures/<id>.json",
-  "description": "An image objects and structures wear, as a decal on one face or tiled over a piece.",
+  "description": "An image objects and slabs wear, as a decal on one face or tiled over a piece or slab.",
   "type": "object",
   "required": [
     "id",

@@ -8,7 +8,7 @@ import fs from "fs";
 import path from "path";
 import { packPlates, unpackPlates } from "../client/src/editor/plates.js";
 import { World } from "../client/src/editor/world.js";
-import { builtObjects, builtStructures, images } from "../client/src/objects/collections.js";
+import { builtObjects, images } from "../client/src/objects/collections.js";
 import { setBuiltObjects } from "../client/src/world/objects.js";
 import { isPlatePath, tileAt } from "../client/src/world/paths.js";
 
@@ -28,11 +28,11 @@ const tiles = await unpackPlates(found);
 
 // The world's own kinds of objects, so plates can give their sizes.
 const library = new World();
-for (const dir of ["objects", "structures", "textures", "images"]) {
+for (const dir of ["objects", "textures", "images"]) {
   if (!fs.existsSync(path.join(root, dir))) continue;
   for (const file of fs.readdirSync(path.join(root, dir))) library.files.set(`${dir}/${file}`, new Uint8Array(fs.readFileSync(path.join(root, dir, file))));
 }
-setBuiltObjects(builtObjects(library), images(library), builtStructures(library));
+setBuiltObjects(builtObjects(library), images(library));
 if (!tiles.size) {
   console.log("no tiles to put in plates");
   process.exit(0);

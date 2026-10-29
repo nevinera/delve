@@ -19,9 +19,9 @@ const SLABS = [
 ];
 
 // Tile 0,0 slopes gently east, then climbs a cliff past cell 40. Tile 1,0 has a lake in its west
-// half, with a shallow rim, a dock (a structure) on its shore, and a boulder. Past it, slabs: a 20
-// ft floor at 10 ft, a wall along its north edge with a doorway, a ramp rising 30° off its east
-// edge, and a platform with a hole in it.
+// half, with a shallow rim, a dock (a structure, from before templates) on its shore, and a
+// boulder. Past it, slabs: a 20 ft floor at 10 ft, a wall along its north edge with a doorway, a
+// ramp rising 30° off its east edge, and a platform with a hole in it.
 function tile(tx) {
   const height = new Float64Array(CELLS * CELLS);
   const water = new Float64Array(CELLS * CELLS).fill(NaN);

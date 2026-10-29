@@ -1,8 +1,6 @@
 import * as THREE from "three";
-import { blocks, furnishingsOf } from "../world/objects.js";
+import { blocks } from "../world/objects.js";
 import { slabFootholds, slabHitsTrunk } from "../world/slabs.js";
-import { BLOCKING, edgeDistance, edgesNear, floorAt, standOn, surfaceAt, tileWalk } from "../world/walkIndex.js";
-import { CELL_FT as STRUCTURE_CELL_FT } from "../world/structures.js";
 import { characterClips, loadAnimations } from "../character/animations.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
 import { TURN_RATE } from "../character/posed.js";
@@ -21,10 +19,9 @@ import { trunkRadius } from "./treeMeshes.js";
 // the other way.
 //
 // The character keeps to the tiles drawn in full, can't climb slopes steeper than MAX_CLIMB or walk
-// through tree trunks, and wades or swims where the water's deep. On structures it walks their
-// walk data (world/walkIndex.js): it stands on the highest floor, stair or roof within a step of
-// its feet, steps up at most STEP_FT, and can't pass walls, windows or railings. Over a storey
-// below ground the ground doesn't count, so it can go down into cellars. Positions are scene feet.
+// through tree trunks, and wades or swims where the water's deep. It stands on the highest slab
+// face gentle enough to climb within a step of its feet, steps up onto one at most STEP_FT, and
+// can't walk into slabs. Positions are scene feet.
 
 // Speeds in feet per second.
 export const RUN_FT = 21;
@@ -38,8 +35,7 @@ export const GRAVITY = 48;
 const MAX_CLIMB = 1.2; // rise over run
 const EYE_FT = 5.5;
 const BODY_FT = 1; // the character's radius, for bumping into objects
-const STEP_FT = 1.5; // how high it steps up onto a structure's floor without jumping
-const WALL_HALF_FT = 0.5; // how near a wall's middle line the body's edge can come
+const STEP_FT = 1.5; // how high it steps up onto a slab without jumping
 const SWIM_DEPTH = 4.5; // how deep the feet go in water too deep to stand in
 const CAMERA = { near: 0.5, distance: 22, min: 4, max: 90, pitch: 0.35, minPitch: -1.3, maxPitch: 1.3 };
 const DRAG = 0.006; // radians per pixel
@@ -320,14 +316,14 @@ export class Walker {
   }
 
   // Whether the character may move to (x, z): on a tile drawn in full, not into a tree trunk, an
-  // object or a structure's wall, and not up a slope too steep to climb. Onto a structure it steps
-  // up at most STEP_FT, or lands from above.
+  // object or a slab, and not up a slope too steep to climb. Onto a slab it steps up at most
+  // STEP_FT, or lands from above.
   canStep(x, z) {
     const here = this.standHeight(this.pos.x, this.pos.z);
     const there = this.stand(x, z);
-    if (there === null || this.trunkAt(x, z) || this.objectAt(x, z) || this.wallAt(x, z) || this.slabInWay(x, z)) return false;
+    if (there === null || this.trunkAt(x, z) || this.objectAt(x, z) || this.slabInWay(x, z)) return false;
     const rise = there.height - (here ?? there.height);
-    if (there.structure) return rise <= STEP_FT || this.pos.y >= there.height - 0.01;
+    if (there.slab) return rise <= STEP_FT || this.pos.y >= there.height - 0.01;
     const run = Math.hypot(x - this.pos.x, z - this.pos.z);
     return here === null || run === 0 || rise / run <= MAX_CLIMB || this.pos.y > there.height + 2;
   }
@@ -337,90 +333,19 @@ export class Walker {
     return this.stand(x, z, feet)?.height ?? null;
   }
 
-  // Where the feet rest at (x, z), as { height, structure }: the ground, or a swimming depth below
-  // the water's surface where it's deeper than that, or a structure's or slab's surface (structure
-  // true), whichever is highest within a step of `feet` (walkIndex.js standOn). Null off the tiles
-  // drawn in full.
+  // Where the feet rest at (x, z), as { height, slab, swim }: the ground, or a swimming depth below
+  // the water's surface where it's deeper than that, or a slab's face (slab true), whichever is
+  // highest within a step of `feet` (standOn). Null off the tiles drawn in full.
   stand(x, z, feet = this.pos?.y ?? Infinity) {
     const groundY = this.groundAt(x, z);
     if (groundY === null) return null;
     const water = this.cell(x, z)?.water;
     const swim = Number.isFinite(water) && water - SWIM_DEPTH > groundY;
-    const { surfaces, under } = this.structuresAt(x, z);
     const { origin } = this.view;
-    for (const slab of this.slabsNear(x, z)) surfaces.push(...slabFootholds(slab, x + origin[0], z + origin[1], MAX_CLIMB));
-    const ground = under ? null : swim ? water - SWIM_DEPTH : groundY;
+    const surfaces = this.slabsNear(x, z).flatMap((slab) => slabFootholds(slab, x + origin[0], z + origin[1], MAX_CLIMB));
+    const ground = swim ? water - SWIM_DEPTH : groundY;
     const height = standOn(surfaces, ground, feet, STEP_FT);
-    if (height === null) return null;
-    return { height, structure: height !== ground, swim: swim && height === ground };
-  }
-
-  // The walk data of the structures on the tiles round scene (x, z): their surfaces' heights
-  // there, and whether a storey below ground is under it.
-  structuresAt(x, z) {
-    const { origin } = this.view;
-    const [cx, cz] = [x + origin[0], z + origin[1]];
-    const key = `${Math.floor(cx / STRUCTURE_CELL_FT)},${Math.floor(cz / STRUCTURE_CELL_FT)}`;
-    const surfaces = [];
-    let under = false;
-    for (const walk of this.walksNear(x, z)) {
-      for (const cell of walk.cells.get(key) ?? []) surfaces.push(surfaceAt(cell, cx, cz));
-      under ||= walk.under.has(key);
-    }
-    return { surfaces, under };
-  }
-
-  // The walk data (walkIndex.js tileWalk) of the tile at scene (x, z) and those beside it, each
-  // worked out again when its objects change.
-  // What's worked out from a tile's objects, kept while they stay the same: { objects, walk, all },
-  // all being its objects with the ones in its structures. Undefined for a tile without objects.
-  keptOf(tile) {
-    if (!tile?.objects?.length) return undefined;
-    this.walks ??= new WeakMap(); // decoded tile -> kept
-    let kept = this.walks.get(tile);
-    if (kept?.objects !== tile.objects) {
-      kept = { objects: tile.objects, walk: tileWalk(tile.objects), all: tile.objects.flatMap((o) => [o, ...furnishingsOf(o)]) };
-      this.walks.set(tile, kept);
-    }
-    return kept;
-  }
-
-  walksNear(x, z) {
-    const any = this.view.decoded.values().next().value;
-    if (!any) return [];
-    const size = any.cells * any.cellFt;
-    const { origin } = this.view;
-    const [tx, tz] = [Math.floor((x + origin[0]) / size), Math.floor((z + origin[1]) / size)];
-    const out = [];
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const kept = this.keptOf(this.view.decoded.get(`${tx + dx},${tz + dz}`));
-        if (kept?.walk.cells.size) out.push(kept.walk);
-      }
-    }
-    return out;
-  }
-
-  // Whether a structure's wall, window or railing at the character's height is in the way of a
-  // move to scene (x, z): one the body would come nearer than its edge allows. A wall it's
-  // already too near doesn't stop it moving away.
-  wallAt(x, z) {
-    const walks = this.walksNear(x, z);
-    if (!walks.length) return false;
-    const { origin } = this.view;
-    const [cx, cz] = [x + origin[0], z + origin[1]];
-    const [hx, hz] = [this.pos.x + origin[0], this.pos.z + origin[1]];
-    const feet = this.pos.y;
-    for (const key of edgesNear(cx, cz)) {
-      for (const walk of walks) {
-        for (const edge of walk.edges.get(key) ?? []) {
-          if (!BLOCKING.has(edge.kind) || edge.heights[0] >= feet + EYE_FT || edge.heights[1] <= feet + 0.5) continue;
-          const near = edgeDistance(key, cx, cz);
-          if (near < BODY_FT + WALL_HALF_FT && near < edgeDistance(key, hx, hz)) return true;
-        }
-      }
-    }
-    return false;
+    return { height, slab: height !== ground, swim: swim && height === ground };
   }
 
   // The slabs on the tile at scene (x, z) and those beside it.
@@ -466,9 +391,9 @@ export class Walker {
     return top + (bottom - top) * fv;
   }
 
-  // An object in the way of a character at scene (x, z), on that tile or the ones beside it,
-  // structures' objects too. One the character is already inside (one placed on them, say)
-  // doesn't hold them in, a jump clears low ones, and ones on another storey don't count.
+  // An object in the way of a character at scene (x, z), on that tile or the ones beside it. One
+  // the character is already inside (one placed on them, say) doesn't hold them in, a jump clears
+  // low ones, and ones on another storey don't count.
   objectAt(x, z) {
     const { origin } = this.view;
     const any = this.view.decoded.values().next().value;
@@ -479,7 +404,7 @@ export class Walker {
     const [tx, tz] = [Math.floor(cx / size), Math.floor(cz / size)];
     for (let dz = -1; dz <= 1; dz++) {
       for (let dx = -1; dx <= 1; dx++) {
-        for (const object of this.keptOf(this.view.decoded.get(`${tx + dx},${tz + dz}`))?.all ?? []) {
+        for (const object of this.view.decoded.get(`${tx + dx},${tz + dz}`)?.objects ?? []) {
           if (!blocks(object, cx, cz, BODY_FT) || blocks(object, hx, hz, BODY_FT)) continue;
           const bottom = object.y ?? this.seatOf(object);
           if (this.pos.y > bottom + object.height * 0.9 || this.pos.y + EYE_FT < bottom) continue;
@@ -490,16 +415,10 @@ export class Walker {
     return null;
   }
 
-  // How high a world object stands: on the structure floor under its middle, or the ground.
+  // How high a world object without a height stands: on the ground.
   seatOf(object) {
     const { origin } = this.view;
-    const [x, z] = [object.at[0] - origin[0], object.at[1] - origin[1]];
-    const ground = this.groundAt(x, z) ?? 0;
-    for (const walk of this.walksNear(x, z)) {
-      const floor = floorAt(walk, ...object.at, ground);
-      if (floor !== ground) return floor;
-    }
-    return ground;
+    return this.groundAt(object.at[0] - origin[0], object.at[1] - origin[1]) ?? 0;
   }
 
   // Whether a tree trunk is in the way of a character at scene (x, z), on that tile or the ones
@@ -561,10 +480,9 @@ export class Walker {
     this.ray.far = distance;
     const hit = this.ray.intersectObjects([...this.view.trees.children, ...this.view.objects.children], false)[0];
     camera.position.copy(head).addScaledVector(away, hit ? Math.max(1, hit.distance - 1) : distance);
-    // Kept above the ground, or in a cellar its floor; a structure's floor far above (a roof
-    // overhead, say) doesn't push it up.
+    // Kept above the ground; a slab far above (a roof overhead, say) doesn't push it up.
     const floor = this.stand(camera.position.x, camera.position.z, camera.position.y);
-    if (floor && (!floor.structure || floor.height <= camera.position.y + STEP_FT)) camera.position.y = Math.max(camera.position.y, floor.height + 1.5);
+    if (floor && (!floor.slab || floor.height <= camera.position.y + STEP_FT)) camera.position.y = Math.max(camera.position.y, floor.height + 1.5);
     // Look the way the pitch says even when the ground has pushed the camera up, so from low down
     // you look up past the character at the sky.
     camera.lookAt(camera.position.clone().sub(away));
@@ -634,4 +552,13 @@ export class Walker {
     e.stopImmediatePropagation();
     this.cam.distance = Math.max(CAMERA.min, Math.min(CAMERA.max, this.cam.distance * Math.exp(e.deltaY * 0.001)));
   }
+}
+
+// Where a walker with its feet at `feet` stands, from the slab faces there and the ground: the
+// highest within `step` above the feet, or with none that low, the lowest (too high to step onto,
+// which a move up to it can tell).
+export function standOn(surfaces, ground, feet, step) {
+  const heights = [...surfaces, ground];
+  const reachable = heights.filter((h) => h <= feet + step);
+  return reachable.length ? Math.max(...reachable) : Math.min(...heights);
 }

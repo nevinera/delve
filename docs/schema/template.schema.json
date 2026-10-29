@@ -53,7 +53,7 @@
         "properties": {
           "type": {
             "type": "string",
-            "description": "a built-in kind, or built:<id>; not a structure or a template"
+            "description": "a built-in kind, or built:<id>; not a template"
           },
           "at": {
             "type": "array",

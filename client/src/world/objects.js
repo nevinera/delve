@@ -12,11 +12,9 @@
 import { shapeOf } from "./builtObjects.js";
 import { BUILTIN_IMAGES, builtinImage } from "./builtinImages.js";
 import { BUILTIN_OBJECTS } from "./builtinObjects.js";
-import { BUILTIN_STRUCTURES } from "./builtinStructures.js";
 import { CELL_FT, TILE_FT } from "./constants.js";
 import { KIT_OBJECTS } from "./kitObjects.js";
 import { hash2 } from "./noise.js";
-import { CELL_FT as STRUCTURE_CELL_FT, STRUCTURE_PREFIX, placedWalk, quartersOf, structureCells } from "./structures.js";
 import { parseTree } from "./trees.js";
 
 const GREY = [[0.07, 0.12], [0.03, 0.1], [0.4, 0.55]];
@@ -62,81 +60,26 @@ export const BUILT_PREFIX = "built:";
 export const BUILT_SCALES = [0.25, 4];
 const built = new Map(); // id -> { object, footprint, height }
 const images = new Map(); // id -> the image, as built objects' pieces wear them
-const structures = new Map(); // id -> { structure, reach, height }
 
-// Structures (structures.js) are types too, named "structure:<id>". A placed one is { id, type,
-// at, yaw, scale: 1, base, pushed, footprint, height }: at is a corner of the world's 4 ft grid
-// (the structure's own 0, 0), yaw a multiple of a quarter turn, base the height of its ground
-// floor, and pushed the ground cells it pushed down, [[ci, cj, height before], ...], to put back
-// when it moves or rises. Its footprint is { open: reach }, which blocks nothing: walking on and
-// into structures goes by their walk data.
 
-export function setBuiltObjects(objects, wornImages = [], worldStructures = []) {
+
+export function setBuiltObjects(objects, wornImages = []) {
   built.clear();
   for (const object of [...BUILTIN_OBJECTS, ...objects]) built.set(object.id, { object, ...shapeOf(object) });
-  structures.clear();
-  for (const structure of [...BUILTIN_STRUCTURES, ...worldStructures]) {
-    const cells = structureCells(structure);
-    const reach = Math.max(4, ...cells.flatMap(([x, z]) => [x, x + 1].flatMap((cx) => [z, z + 1].map((cz) => Math.hypot(cx, cz) * STRUCTURE_CELL_FT))));
-    const top = Math.max(1, ...structure.storeys.map((s) => s.level + 1), ...structure.components.map((c) => c.level + 1));
-    structures.set(structure.id, { structure, reach, height: top * structure.storeyFt });
-  }
   images.clear();
   for (const image of wornImages) images.set(image.id, image);
 }
 
-// Every kind of object's size at scale 1, { type: { footprint, height, fixed } }, fixed for a height
-// that doesn't scale with the object. Plates keep these (plateCodec.js).
+// Every kind of object's size at scale 1, { type: { footprint, height } }. Plates keep these
+// (plateCodec.js).
 export function kindSizes() {
   const sizes = {};
-  const types = [...Object.keys(OBJECT_TYPES), ...[...built.keys()].map((id) => BUILT_PREFIX + id), ...[...structures.keys()].map((id) => STRUCTURE_PREFIX + id)];
+  const types = [...Object.keys(OBJECT_TYPES), ...[...built.keys()].map((id) => BUILT_PREFIX + id)];
   for (const type of types) {
     const spec = specOf(type);
-    if (spec?.footprint) sizes[type] = { footprint: spec.footprint, height: spec.height, fixed: !!spec.structure };
+    if (spec?.footprint) sizes[type] = { footprint: spec.footprint, height: spec.height };
   }
   return sizes;
-}
-
-// The structure a type names, or undefined.
-export function structureOf(type) {
-  return type?.startsWith(STRUCTURE_PREFIX) ? structures.get(type.slice(STRUCTURE_PREFIX.length))?.structure : undefined;
-}
-
-// The world's 4 ft cells ("x,z") the ground floors of placed structures among `objects` cover.
-export function structureCover(objects) {
-  const covered = new Set();
-  for (const object of objects) {
-    const structure = structureOf(object.type);
-    if (!structure) continue;
-    for (const { cell, level } of placedWalk(structure, { at: object.at, yaw: quartersOf(object.yaw), base: object.base }).cells) {
-      if (level === 0) covered.add(cell.join(","));
-    }
-  }
-  return covered;
-}
-
-// The objects placed in a placed structure, as world objects standing at a fixed height (y), each
-// with the structure as its owner, so they're drawn and bump walkers as others do. Missing ones
-// are left out.
-export function furnishingsOf(placed) {
-  const structure = structureOf(placed.type);
-  if (!structure) return [];
-  const [c, s] = [Math.cos(placed.yaw), Math.sin(placed.yaw)];
-  return structure.objects
-    .filter((object) => specOf(object.type)?.built)
-    .map((object) => {
-      const [x, y, z] = object.at;
-      // Turned as three.js's rotation.y turns the structure.
-      return {
-        ...object,
-        at: [placed.at[0] + x * c + z * s, placed.at[1] - x * s + z * c],
-        y: placed.base + y,
-        yaw: placed.yaw + object.yaw,
-        footprint: footprintOf(object.type, object.scale),
-        height: specOf(object.type).height * object.scale,
-        owner: placed,
-      };
-    });
 }
 
 // An image built objects wear, by id, or undefined.
@@ -152,10 +95,6 @@ export function builtOf(type) {
 // What a type is, as OBJECT_TYPES gives it, for built objects too: { size, footprint, height,
 // built }. Undefined for a type that isn't known.
 export function specOf(type) {
-  if (type?.startsWith(STRUCTURE_PREFIX)) {
-    const s = structures.get(type.slice(STRUCTURE_PREFIX.length));
-    return s && { size: [1, 1], footprint: { open: s.reach }, height: s.height, structure: s.structure, sink: 0 };
-  }
   if (!type?.startsWith(BUILT_PREFIX)) return OBJECT_TYPES[type];
   const b = built.get(type.slice(BUILT_PREFIX.length));
   return b && { size: BUILT_SCALES, footprint: b.footprint, height: b.height, built: b.object, sink: 0 };
@@ -240,10 +179,6 @@ export function scatterObjects(tile) {
 // A new object of `type`, its colors picked by roll(q) in [0, 1).
 export function makeObject(type, at, yaw, scale, roll = Math.random) {
   const spec = specOf(type);
-  if (spec.structure) {
-    const snap = (v) => Math.round(v / STRUCTURE_CELL_FT) * STRUCTURE_CELL_FT;
-    return { id: null, type, at: at.map(snap), yaw: quartersOf(yaw) * (Math.PI / 2), scale: 1, base: 0, pushed: [], footprint: footprintOf(type, 1), height: spec.height };
-  }
   if (spec.built) return { id: null, type, at, yaw, scale, footprint: footprintOf(type, scale), height: spec.height * scale };
   return {
     id: null,

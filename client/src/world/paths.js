@@ -5,17 +5,16 @@ const CONTINENT = (continent) => `places/continents/${continent}`;
 
 export const WORLD_PATH = "world.json";
 export const COLLECTIONS_PATH = "collections.json";
-export const STRUCTURE_COLLECTIONS_PATH = "structure-collections.json";
 export const TEMPLATE_COLLECTIONS_PATH = "template-collections.json";
 export const SHAPES_PATH = "shapes.json";
 
 export const objectPath = (id) => `objects/${id}.json`;
-export const structurePath = (id) => `structures/${id}.json`;
 export const templatePath = (id) => `templates/${id}.json`;
 export const imagePath = (id) => `textures/${id}.json`;
 export const OLD_IMAGES = /^images\/[0-9a-z]{8}\.json$/;
+// Structures, which templates replaced: worlds that still have them drop them.
+export const OLD_STRUCTURES = /^structures\/[0-9a-z]{8}\.json$|^structure-collections\.json$/;
 export const OBJECT_PATH = /^objects\/[0-9a-z]{8}\.json$/;
-export const STRUCTURE_PATH = /^structures\/[0-9a-z]{8}\.json$/;
 export const TEMPLATE_PATH = /^templates\/[0-9a-z]{8}\.json$/;
 export const IMAGE_PATH = /^textures\/[0-9a-z]{8}\.json$/;
 

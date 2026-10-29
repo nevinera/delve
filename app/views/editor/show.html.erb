@@ -54,7 +54,6 @@
       <button type="button" class="editor-step-head" data-step="3d">3d</button>
       <button type="button" class="editor-step-head" data-step="publish">publish</button>
       <button id="openLibrary" type="button" class="editor-step-head" title="the world's object library (also on its own at /objects)">objects</button>
-      <button id="openStructures" type="button" class="editor-step-head" title="the world's structure library (also on its own at /structures)">structures</button>
     </nav>
     <hr class="editor-divider">
     <div class="editor-steps">
@@ -172,12 +171,11 @@
           <label id="treeKindRow" class="editor-field" data-for="paint">kind <select id="treeKind"></select></label>
           <label id="treeSizeRow" class="editor-field" data-for="paint">size <select id="treeSize"></select></label>
           <label class="editor-range" data-for="paint">brush <input id="paintRadius" type="range" min="0" max="48" step="4" value="0"><output id="paintRadiusValue"></output></label>
-          <div data-for="objects structures">
+          <div data-for="objects">
             <div id="objectPanel" class="editor-stack" hidden>
               <p id="objectInfo"></p>
               <label class="editor-range">turn <input id="objectYaw" type="range" min="0" max="355" step="5" value="0"><output id="objectYawValue"></output></label>
               <label id="objectSizeRow" class="editor-range">size <input id="objectScale" type="range" min="1" max="100" step="0.5" value="5"><output id="objectScaleValue"></output></label>
-              <div id="objectBaseRow" class="editor-row" hidden title="shift-click for a quarter foot">ground floor <button id="objectLower" type="button">▼</button><output id="objectBaseValue"></output><button id="objectRaise" type="button">▲</button></div>
               <div id="objectColors" class="editor-row editor-wrap"></div>
               <div id="objectTexts" class="editor-stack"></div>
               <button id="objectDelete" type="button">delete</button>
@@ -267,10 +265,6 @@
   <label class="editor-field">texture <select id="slabTexture"></select></label>
   <label class="editor-field">texture width (ft) <input id="slabTileEvery" type="number" min="0.25" max="64" step="0.25" value="4"></label>
   <div class="editor-row"><button id="slabCustomUse" type="button">use it</button><button id="slabCustomCancel" type="button">cancel</button></div>
-</dialog>
-<dialog id="structurePopover" class="library-popover">
-  <div class="library-bar"><h2>Structures</h2><a href="/structures" target="_blank">open on its own</a><span class="library-spacer"></span><p class="editor-message library-message"></p><button type="button" class="library-close">close</button></div>
-  <div id="structureGallery" class="editor-gallery"></div>
 </dialog>
 <dialog id="libraryPopover" class="library-popover">
   <div class="library-bar"><h2>Objects</h2><a href="/objects" target="_blank">open on its own</a><span class="library-spacer"></span><p class="editor-message library-message"></p><button type="button" class="library-close">close</button></div>

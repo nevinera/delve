@@ -38,8 +38,8 @@ import { OLD_IMAGES, imagePath, objectPath } from "./paths.js";
 //
 // Every piece stays within REACH_FT of the centre.
 //
-// A collection is { collection: name, objects: [object, ...], images: [image, ...], structures:
-// [structure, ...] } (structures.js), structures absent when there are none.
+// A collection is { collection: name, objects: [object, ...], images: [image, ...], templates:
+// [template, ...] } (templates.js), templates absent when there are none.
 //
 // An image is { id, name, kind, collection, rows }, belonging to a collection, for its objects'
 // pieces to wear:
@@ -62,7 +62,7 @@ export const MAX_CUT_CORNERS = 32;
 const BLOCK_BELOW_FT = 6;
 
 export { objectPath, imagePath, OLD_IMAGES };
-// Images (textures) belong to the whole world, not a collection: any object or structure can
+// Images (textures) belong to the whole world, not a collection: any object or template can
 // wear any of them. Worlds kept before that have them in images/, each naming a collection;
 // adoptStrays (objects/collections.js) moves them.
 
@@ -276,15 +276,15 @@ export function shapeOf(object) {
   return { footprint, height: round(height) };
 }
 
-// An object or collection read from JSON text, as { name, objects, images, structures }: name is
-// the collection's, or null for a lone object. Each object and image is checked, and records
-// `source` when given; structures come as they are, for structures.js to check. Throws with what's
-// wrong when something is.
+// An object or collection read from JSON text, as { name, objects, images, templates }: name is
+// the collection's, or null for a lone object or template. Each object and image is checked, and
+// records `source` when given; templates come as they are, for templates.js to check. Throws with
+// what's wrong when something is.
 export function readCollection(text, source) {
   const data = JSON.parse(text);
-  // A lone structure has storeys; a lone object doesn't.
-  const lone = !Array.isArray(data.objects) && !Array.isArray(data.structures);
-  const list = Array.isArray(data.objects) ? data.objects : lone && !Array.isArray(data.storeys) ? [data] : [];
+  // A lone template has slabs, and a lone object no list of objects.
+  const template = Array.isArray(data.slabs);
+  const list = template ? [] : Array.isArray(data.objects) ? data.objects : Array.isArray(data.templates) ? [] : [data];
   for (const object of list) {
     const wrong = problems(object);
     if (wrong.length) throw new Error(`${object.name ?? object.id ?? "an object"}: ${wrong.join("; ")}`);
@@ -295,14 +295,14 @@ export function readCollection(text, source) {
     if (wrong.length) throw new Error(`image ${image.name ?? image.id ?? ""}: ${wrong.join("; ")}`);
   }
   const sourced = ({ collection, ...thing }) => (source ? { ...thing, source } : thing);
-  const structures = Array.isArray(data.structures) ? data.structures : lone && Array.isArray(data.storeys) ? [data] : [];
-  return { name: typeof data.collection === "string" ? data.collection : null, objects: list.map(sourced), images: images.map(sourced), structures: structures.map(sourced) };
+  const templates = template ? [data] : Array.isArray(data.templates) ? data.templates : [];
+  return { name: typeof data.collection === "string" ? data.collection : null, objects: list.map(sourced), images: images.map(sourced), templates: templates.map(sourced) };
 }
 
-// A collection of objects and their images, as JSON text to share.
-export function collectionJson(name, objects, images = [], structures = []) {
+// A collection of objects or templates and their images, as JSON text to share.
+export function collectionJson(name, objects, images = [], templates = []) {
   const bare = ({ collection, ...thing }) => thing;
-  return JSON.stringify({ collection: name, objects: objects.map(bare), images: images.map(bare), ...(structures.length ? { structures: structures.map(bare) } : {}) }, null, 2);
+  return JSON.stringify({ collection: name, objects: objects.map(bare), images: images.map(bare), ...(templates.length ? { templates: templates.map(bare) } : {}) }, null, 2);
 }
 
 // Whether an object, in a collection named `collectionName`, matches a search: its collection's

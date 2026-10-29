@@ -1,6 +1,6 @@
 # Templates
 
-A template is a group of [slabs](slabs.md) and objects saved together, to place into the world as copies. A world keeps its templates as `templates/<id>.json`, each in one of the collections `template-collections.json` lists, as its objects are. The world never holds a template itself: placing one copies its slabs and objects into the tiles. The game ships built-in templates in read-only collections (`client/src/world/builtin/templates.json`); `node script/templates.mjs` writes them from the built-in structures, leaving out those dug into the ground. Code: `client/src/world/templates.js`. [Schema](../schema/template.schema.json).
+A template is a group of [slabs](slabs.md) and objects saved together, to place into the world as copies. A world keeps its templates as `templates/<id>.json`, each in one of the collections `template-collections.json` lists, as its objects are. The world never holds a template itself: placing one copies its slabs and objects into the tiles. The game ships built-in templates in read-only collections (`client/src/world/builtin/templates.json`). Code: `client/src/world/templates.js`. [Schema](../schema/template.schema.json).
 
 ```json
 {
@@ -27,7 +27,7 @@ The editor's structures tool saves what you've picked as a template (`captureTem
 ## Fields
 
 - `slabs` are slabs as tiles hold them, their `at` from the anchor.
-- `objects` are placed objects as tiles hold them, `{ type, at: [x, z], yaw, scale, colors, texts }`, with `at` from the anchor. `y`, when there is one, is feet up from the anchor; an object without it stands on whatever's under it. A template can't hold a structure or another template.
+- `objects` are placed objects as tiles hold them, `{ type, at: [x, z], yaw, scale, colors, texts }`, with `at` from the anchor. `y`, when there is one, is feet up from the anchor; an object without it stands on whatever's under it. A template can't hold another template.
 - `ground`, when the template was saved with it, is the ground under it: `[i, j, height]` for each cell, cell `(i, j)` covering `i` to `i + 1` and `j` to `j + 1` cells from the anchor, its height in feet up from the anchor. It covers the cells inside the convex hull of the template's slabs and objects.
 
 ## Limits
