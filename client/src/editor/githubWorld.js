@@ -15,8 +15,8 @@ export function fromRepo(from) {
 
 export const sameRepo = (a, b) => Boolean(a && b) && a.toLowerCase() === b.toLowerCase();
 
-// The world at the head of the repo's default branch, with its source. A repo with no commits
-// gives an empty world. Files the kept world ({ world, source }) already holds at the same blob
+// The world at the head of the repo's default branch, with its source. A repo with no commits, or
+// none of a world's files, gives an empty world. Files the kept world ({ world, source }) already holds at the same blob
 // sha aren't downloaded again; for a plate, that's the kept world's tiles in it. Plates are split
 // into tiles (world.js unpack), on `pool` if given.
 export async function loadFromGithub(client, { kept = null, onProgress, pool } = {}) {
@@ -39,7 +39,8 @@ export async function loadFromGithub(client, { kept = null, onProgress, pool } =
   }
   const bytes = await client.readAll(missing.map((path) => listed[path].sha), onProgress);
   missing.forEach((path, i) => files.set(path, bytes[i]));
-  const world = World.fromFiles(files, client.repo.split("/")[1]);
+  // A repo with no world in it yet (only a README, say) opens as a new world beside its files.
+  const world = World.fromFiles(files, client.repo.split("/")[1], { orNew: true });
   await world.unpack({ pool });
   return { world, source };
 }

@@ -15,6 +15,8 @@ The browser gets a GitHub App user token from Rails at `GET /github/token`, as `
 3. Download each file's blob, a few at a time. Reads go through the blob API, pinned to the commit, so a branch that moves during the load doesn't mix commits.
 4. Split plates into tile files (see [plates](plates.md)), on a few workers.
 
+A repo with files but none of a world's (only a README or a LICENSE, say) opens as a new world named after the repo, and keeps those files.
+
 The world remembers where it came from: `{ repo, branch, commitSha, shas }`, where `shas` maps each path to its blob sha. Opening the same repo again skips files whose sha hasn't changed. For a plate, the editor reuses the tiles it already holds.
 
 ## Saving

@@ -13,11 +13,12 @@ export class World {
     this.files = files;
   }
 
-  static empty() {
-    const world = new World();
+  // A new world with one continent, keeping `files` (a repo's README, say).
+  static empty(name = "New world", files = new Map()) {
+    const world = new World(files);
     world.writeJson(WORLD_PATH, {
       version: 1,
-      name: "New world",
+      name,
       continents: [{ key: "main", name: "Main" }],
       dungeons: [],
     });
@@ -32,11 +33,12 @@ export class World {
   }
 
   // A world from its files. One without world.json gets one named `name`, with the continents
-  // found in places/.
-  static fromFiles(files, name) {
+  // found in places/. Files with no world at all are refused, or with orNew, start a new world.
+  static fromFiles(files, name, { orNew = false } = {}) {
     const world = new World(files);
     if (!world.files.has(WORLD_PATH)) {
       const keys = [...new Set([...files.keys()].map((path) => continentOf(path)).filter(Boolean))];
+      if (!keys.length && orNew) return World.empty(name, files);
       if (!keys.length) throw new Error("no world.json and no places/continents/");
       world.writeJson(WORLD_PATH, {
         version: 1,

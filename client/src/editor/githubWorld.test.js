@@ -1,4 +1,4 @@
-import { strToU8 } from "fflate";
+import { strFromU8, strToU8 } from "fflate";
 import { describe, expect, it } from "vitest";
 import { blobSha } from "../github/github.js";
 import { BranchMoved, delta, fromRepo, latestVersion, loadFromGithub, nextVersion, saveToGithub } from "./githubWorld.js";
@@ -55,6 +55,14 @@ describe("worlds from GitHub", () => {
   it("names a world without world.json after its repo", async () => {
     const { world } = await loadFromGithub(fakeClient({ "places/continents/main/sketch.json": ["s1", "{}"] }));
     expect(world.info).toMatchObject({ name: "thorn", continents: [{ key: "main" }] });
+  });
+
+  it("opens a repo with files but no world as a new world, keeping its files", async () => {
+    const { world, source } = await loadFromGithub(fakeClient({ "README.md": ["r1", "# Vale"], LICENSE: ["l1", "MIT"] }));
+    expect(world.info).toMatchObject({ name: "thorn", continents: [{ key: "main", name: "Main" }] });
+    expect(strFromU8(world.files.get("README.md"))).toBe("# Vale");
+    expect(world.files.has("LICENSE")).toBe(true);
+    expect(source.shas).toEqual({ "README.md": "r1", LICENSE: "l1" });
   });
 
   it("keeps the kept world's tiles for a plate that hasn't changed", async () => {
