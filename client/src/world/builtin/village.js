@@ -72,8 +72,8 @@ export const VILLAGE = {
     ]),
     object("bvill014", "signpost", ["sign"], [color(WOOD, "wood"), color("#d8c8a0", "boards")], [
       post(0.4, 8, [0, 4, 0], 0),
-      sign(box([3.6, 0.8, 0.15], [1.7, 6.8, 0], 1), "east", "GOLDSHIRE", [3, 0.5]),
-      sign(box([3.6, 0.8, 0.15], [-1.7, 5.7, 0], 1, [0, 0, 0]), "west", "STORMWIND", [3, 0.5]),
+      sign(box([3.6, 0.8, 0.15], [1.7, 6.8, 0], 1), "east", "MILLBROOK", [3, 0.5]),
+      sign(box([3.6, 0.8, 0.15], [-1.7, 5.7, 0], 1, [0, 0, 0]), "west", "KINGSHOLD", [3, 0.5]),
       wedge([0.8, 0.8, 0.15], [3.9, 6.8, 0], 1, [0, 0, 90]),
       wedge([0.8, 0.8, 0.15], [-3.9, 5.7, 0], 1, [0, 0, -90]),
     ]),

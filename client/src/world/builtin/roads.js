@@ -13,7 +13,7 @@ export const ROADS = {
   name: "roads",
   objects: [
     object("broad001", "milestone", ["sign", "road"], [color(STONE, "stone")], [
-      sign(tiled(box([1.8, 2.6, 0.9], [0, 1.3, 0], 0), "stone", 1.5, 0.1), "says", "GOLDSHIRE 2", [1.5, 0.8]),
+      sign(tiled(box([1.8, 2.6, 0.9], [0, 1.3, 0], 0), "stone", 1.5, 0.1), "says", "MILLBROOK 2", [1.5, 0.8]),
       tiled(rod(1.8, 0.9, [0, 2.6, 0], 0, 90), "stone", 1.5, 0.1),
     ]),
     object("broad002", "wayside shrine", ["shrine", "road"], [color(STONE, "stone"), color("#8a5040", "roof"), color("#e8dcc0", "statue"), color("#2a2420")], [
