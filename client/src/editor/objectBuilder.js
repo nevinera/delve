@@ -45,7 +45,7 @@ const FADED = 0.25; // how much of the unpicked pieces shows while one is picked
 const HOLE = { color: 0xff4040, opacity: 0.3 };
 const AXES = { x: { color: 0xe05a5a, label: "x east" }, y: { color: 0x6ad06a, label: "y up" }, z: { color: 0x5a8ae0, label: "z south" } };
 const COLORS = { grid: 0x626a58, gridMajor: 0x9aa48c, reach: 0x8fc4ff, footprint: 0xf0c850, sight: 0xff8a5c, cut: 0xff4060, picked: 0xffe066, ground: 0x4a5040, background: 0x20242a };
-const HINT = "click a piece to pick it · G moves, R turns, S sizes, all along the piece's own axes · W toggles moving along the world's · F frames the object · right-drag turns the view · middle-drag pans · wheel zooms · delete removes the piece · ctrl-d copies it · ctrl-z undoes, ctrl-shift-z redoes";
+const HINT = "click a piece to pick it · G moves, R turns, S sizes, all along the piece's own axes · W toggles moving along the world's · F frames the object · right-drag turns the view · middle-drag, shift-right-drag or the arrow keys pan · wheel zooms · delete removes the piece · ctrl-d copies it · ctrl-z undoes, ctrl-shift-z redoes";
 
 // An element with properties and children.
 function el(tag, props = {}, ...children) {
@@ -739,6 +739,7 @@ export class ObjectBuilder {
     this.orbit = new OrbitControls(this.camera, this.canvas);
     this.orbit.mouseButtons = { LEFT: null, MIDDLE: THREE.MOUSE.PAN, RIGHT: THREE.MOUSE.ROTATE };
     this.orbit.screenSpacePanning = false;
+    this.orbit.listenToKeyEvents(this.canvas);
     this.transform = new TransformControls(this.camera, this.canvas);
     this.transform.setSize(0.9);
     this.scene.add(this.transform.getHelper());
@@ -899,7 +900,7 @@ export class ObjectBuilder {
     this.hullBox.checked = true;
     this.cutting = [];
     this.cutButton.classList.add("active");
-    this.hint.textContent = "click the corners of the hole as you see the object · enter cuts it right through · backspace drops a corner · esc stops · right-drag still turns the view";
+    this.hint.textContent = "click the corners of the hole as you see the object · enter cuts it right through · backspace drops a corner · esc stops · right-drag still turns the view, shift-right-drag pans";
     this.canvas.focus();
     this.drawMarks();
   }
