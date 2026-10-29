@@ -1,20 +1,24 @@
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { MAX_SLAB_CORNERS, slabProblems, slabTile, slabTop } from "../world/slabs.js";
-import { slabAt } from "./slabMeshes.js";
+import { slabAt, slabMeshes } from "./slabMeshes.js";
 
 // The detail step's slabs tool (world/slabs.js), working on a DetailView's tiles. Its mode is one
 // of:
 // - "pick": a click picks a slab. A picked one has handles: arrows to move it along the world's
 //   axes, or rings to turn it in its own (setHandle), and a dot on each top corner to drag across
 //   its face.
-// - "floor": clicks put down corners. The first lands on the ground or a slab, and sets the height;
-//   the rest land on a level plane there. Clicking the first corner again, or Enter, finishes it.
-// - "wall": two clicks draw a line, at the height of the first; the wall stands `height` feet over
-//   that, its foot dropped to the lowest ground under the line. With keepWalling, the next wall
-//   starts where it ended.
-// Corners snap to other slabs' top corners nearby. Escape drops a slab half drawn, Backspace its
-// last corner.
+// - "floor": a slab lying on what's pressed first, the ground or a slab, the rest of its corners on
+//   a level plane there. A rectangle goes from one corner to the other, along the world's axes:
+//   dragged, or clicked at each end. A polygon is a click for each corner, finished by clicking the
+//   first again, or Enter.
+// - "wall": a slab standing up from a line on that level plane. A rectangle is the line, dragged or
+//   clicked at each end; it stands `height` feet over its start, its foot dropped to the lowest
+//   ground under the line, and with keepWalling the next wall goes on from where it ended. A
+//   polygon is the line's two clicks, then corners up its face, as for a gable end, finished as a
+//   floor is.
+// Corners on the level snap to other slabs' top corners nearby. What would be made shows as it's
+// drawn. Escape drops a slab half drawn, Backspace its last corner.
 
 const MARK = { drawing: 0x3fb6ff, picked: 0xffe066, dot: 0xffe066 };
 const SNAP_SHARE = 0.012; // of the camera's distance: how near a corner snaps
@@ -23,6 +27,7 @@ const DOT_SHARE = 0.006; // of the camera's distance: how big a corner dot is
 const ROUND = 100; // positions to a hundredth of a foot
 const TURN_STEP = 5; // degrees the turning rings snap to
 const MOVE_STEP_FT = 0.25;
+const CLICK_PX = 5; // a press moving less than this before it's let go is a click
 
 export class SlabTool {
   // detail: the DetailView. onPick(slab or null) hears what's picked, and when it changes;
@@ -31,8 +36,8 @@ export class SlabTool {
     this.detail = detail;
     this.onPick = onPick;
     this.onProblem = onProblem;
-    this.settings = { mode: "pick", thickness: 1, height: 10, keepWalling: false, surface: "floorboards" };
-    this.drawing = null; // { points: [[x, y, z] continent feet], height }
+    this.settings = { mode: "pick", shape: "rectangle", thickness: 1, height: 10, keepWalling: false, surface: "floorboards" };
+    this.drawing = null; // { points: [[x, y, z] continent feet], height, pressed: [x, y] while dragging }
     this.picked = null; // { slab, key }
     this.corner = null; // the index of a corner being dragged
     this.handle = "move";
@@ -68,10 +73,11 @@ export class SlabTool {
     this.drawMarks();
   }
 
-  // settings: any of { mode, thickness, height, keepWalling, surface }.
+  // settings: any of { mode, shape, thickness, height, keepWalling, surface }.
   setSettings(changes) {
+    const { mode, shape } = this.settings;
     Object.assign(this.settings, changes);
-    if (changes.mode && changes.mode !== "pick") this.drawing = null;
+    if (this.settings.mode !== mode || this.settings.shape !== shape) this.drawing = null;
     this.drawMarks();
   }
 
@@ -102,11 +108,15 @@ export class SlabTool {
       this.pick(this.slabUnder(ray));
       return true;
     }
+    const rectangle = this.settings.shape === "rectangle";
     if (!this.drawing) {
       const hit = this.surfaceUnder(ray);
-      if (hit) this.drawing = { points: [this.snap(hit, hit[1])], height: hit[1] };
+      if (hit) this.drawing = { points: [this.snap(hit, hit[1])], height: hit[1], pressed: rectangle ? [e.clientX, e.clientY] : null };
+    } else if (rectangle) {
+      const at = this.nextCorner(ray);
+      if (at) this.endRectangle(at);
     } else {
-      const at = this.onLevel(ray, this.drawing.height);
+      const at = this.nextCorner(ray);
       if (at) this.addCorner(at);
     }
     this.drawMarks(e);
@@ -118,7 +128,17 @@ export class SlabTool {
     if (this.drawing) this.drawMarks(e);
   }
 
+  // A rectangle dragged ends where it's let go; one only clicked follows the pointer till the
+  // next click.
   pointerUp() {
+    const pressed = this.drawing?.pressed;
+    const pointer = this.detail.pointer;
+    if (pressed) {
+      this.drawing.pressed = null;
+      const moved = pointer && Math.hypot(pointer.clientX - pressed[0], pointer.clientY - pressed[1]) > CLICK_PX;
+      const end = moved && this.nextCorner(this.ray(pointer));
+      if (end) this.endRectangle(end);
+    }
     if (this.corner === null) return;
     this.corner = null;
     this.detail.endEdit();
@@ -129,7 +149,7 @@ export class SlabTool {
   // key was one of them.
   key(e) {
     if (this.drawing) {
-      if (e.key === "Enter") this.finishFloor();
+      if (e.key === "Enter") this.finish();
       else if (e.key === "Backspace") {
         this.drawing.points.pop();
         if (!this.drawing.points.length) this.drawing = null;
@@ -149,31 +169,65 @@ export class SlabTool {
 
   // --- drawing ---
 
-  addCorner(at) {
+  // Where the next corner goes for a ray, [x, y, z] continent feet, or null: on the level plane,
+  // or up a polygon wall's face once its line's drawn.
+  nextCorner(ray) {
     const { points, height } = this.drawing;
-    const snapped = this.snap(at, height);
-    if (this.settings.mode === "wall") {
-      this.makeWall(points[0], snapped);
-      this.drawing = this.settings.keepWalling ? { points: [snapped], height } : null;
-      return;
+    if (this.settings.mode === "wall" && this.settings.shape === "polygon" && points.length >= 2) {
+      const [a, b] = points.map((p) => this.scene(p));
+      const across = new THREE.Vector3().subVectors(b, a).cross(new THREE.Vector3(0, 1, 0));
+      if (across.lengthSq() < 1e-6) return null;
+      const hit = ray.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(across.normalize(), a), new THREE.Vector3());
+      const { origin } = this.detail.view;
+      return hit ? [hit.x + origin[0], hit.y, hit.z + origin[1]].map(tidy) : null;
     }
-    if (points.length >= 3 && flatDistance(snapped, points[0]) < this.snapFt()) return this.finishFloor();
+    const at = this.onLevel(ray, height);
+    return at && this.snap(at, height);
+  }
+
+  // A rectangle's far end: it's made, and with keepWalling, a wall's end starts the next.
+  endRectangle(end) {
+    const slab = this.slabFrom([this.drawing.points[0], end]);
+    if (!slab) return;
+    const { height } = this.drawing;
+    this.drawing = this.settings.mode === "wall" && this.settings.keepWalling ? { points: [end], height, pressed: null } : null;
+    this.add(slab);
+  }
+
+  // A polygon's next corner, or its first again to finish it.
+  addCorner(at) {
+    const { points } = this.drawing;
+    const near = this.settings.mode === "wall" ? distance(at, points[0]) : flatDistance(at, points[0]);
+    if (points.length >= 3 && near < this.snapFt()) return this.finish();
     if (points.length >= MAX_SLAB_CORNERS) return this.onProblem?.(`A slab has at most ${MAX_SLAB_CORNERS} corners.`);
-    points.push(snapped);
+    points.push(at);
   }
 
-  finishFloor() {
-    const { points } = this.drawing ?? {};
-    if (!points || points.length < 3) return;
-    const [x0, y0, z0] = points[0];
+  // Makes the polygon drawn so far.
+  finish() {
+    const slab = this.drawing && this.settings.shape === "polygon" && this.slabFrom(this.drawing.points);
+    if (!slab) return;
     this.drawing = null;
-    this.add({ at: [x0, y0, z0], turn: [0, 0, 0], outline: points.map(([x, , z]) => [tidy(x - x0), tidy(z - z0)]), thickness: this.settings.thickness, surface: this.settings.surface });
+    this.add(slab);
   }
 
-  // A wall from `from` to `to`, at `from`'s height, its foot on the lowest ground under the line.
-  makeWall(from, to) {
+  // The slab the corners drawn so far would make ([x, y, z] continent feet each), or null.
+  slabFrom(points) {
+    const { mode, shape, thickness, surface } = this.settings;
+    const [a, b] = points;
+    if (mode === "floor") {
+      if (shape === "polygon") return points.length >= 3 ? floorSlab(points, { thickness, surface }) : null;
+      if (points.length < 2 || Math.abs(b[0] - a[0]) < 0.1 || Math.abs(b[2] - a[2]) < 0.1) return null;
+      return floorSlab([a, [b[0], a[1], a[2]], [b[0], a[1], b[2]], [a[0], a[1], b[2]]], { thickness, surface });
+    }
+    if (points.length < 2 || flatDistance(a, b) < 0.5) return null;
+    if (shape === "rectangle") return wallSlab(a, b, { foot: this.footUnder(a, b), height: this.settings.height, thickness, surface });
+    return points.length >= 3 ? faceSlab(points, { thickness, surface }) : null;
+  }
+
+  // The lowest ground under a line, to a quarter foot, and no higher than its start.
+  footUnder(from, to) {
     const length = flatDistance(from, to);
-    if (length < 0.5) return;
     const [dx, dz] = [to[0] - from[0], to[2] - from[2]];
     let foot = from[1];
     const { ground, origin } = this.detail.view;
@@ -181,11 +235,10 @@ export class SlabTool {
       const h = ground(from[0] + (dx * s) / length - origin[0], from[2] + (dz * s) / length - origin[1]);
       if (Number.isFinite(h)) foot = Math.min(foot, h);
     }
-    const { height, thickness, surface } = this.settings;
-    this.add(wallSlab(from, to, { foot: Math.floor(foot * 4) / 4, height, thickness, surface }));
+    return Math.floor(foot * 4) / 4;
   }
 
-  // Puts a new slab in the tile it belongs to, and picks it.
+  // Puts a new slab in the tile it belongs to, and picks it unless more's being drawn.
   add(slab) {
     slab.at = slab.at.map(tidy);
     const problems = slabProblems(slab);
@@ -199,7 +252,8 @@ export class SlabTool {
     tile.slabs = [...(tile.slabs ?? []), slab];
     detail.dirtySlabs.add(key);
     detail.endEdit();
-    this.pick({ slab, key });
+    // A wall chained on from it isn't picked, so its handles don't get in the way.
+    this.pick(this.drawing ? null : { slab, key });
   }
 
   // --- the picked slab ---
@@ -311,7 +365,8 @@ export class SlabTool {
   drawMarks(e) {
     for (const child of [...this.marks.children]) {
       child.geometry.dispose();
-      child.material.dispose();
+      // Previews wear the slabs' shared materials.
+      if (!child.userData.preview) child.material.dispose();
       this.marks.remove(child);
     }
     if (!this.on) return;
@@ -322,11 +377,17 @@ export class SlabTool {
       this.marks.add(mark);
     };
     if (this.drawing) {
-      const points = this.drawing.points.map((p) => this.scene(p));
       const pointer = e ?? this.detail.pointer;
-      const next = pointer && this.onLevel(this.ray(pointer), this.drawing.height);
-      if (next) points.push(this.scene(this.snap(next, this.drawing.height)));
-      if (points.length >= 2) line(points, MARK.drawing, this.settings.mode === "floor" && points.length >= 3);
+      const next = pointer && this.nextCorner(this.ray(pointer));
+      const corners = next ? [...this.drawing.points, next] : this.drawing.points;
+      const slab = this.slabFrom(corners);
+      if (slab && !slabProblems(slab).length) {
+        for (const mesh of slabMeshes([slab], this.detail.view.origin)) {
+          mesh.userData.preview = true;
+          this.marks.add(mesh);
+        }
+      }
+      if (this.settings.shape === "polygon" && corners.length >= 2) line(corners.map((p) => this.scene(p)), MARK.drawing, corners.length >= 3);
     }
     if (this.picked) {
       const { slab } = this.picked;
@@ -426,8 +487,27 @@ export function wallSlab(from, to, { foot, height, thickness, surface }) {
   return { at: [from[0], foot, from[2]], turn: [yaw, -90, 0], outline: [[0, 0], [length, 0], [length, tall], [0, tall]], thickness, surface };
 }
 
+// A floor lying on the level its corners are on: its top `thickness` over them.
+export function floorSlab(corners, { thickness, surface }) {
+  const [x0, y0, z0] = corners[0];
+  return { at: [x0, y0 + thickness, z0].map(tidy), turn: [0, 0, 0], outline: corners.map(([x, , z]) => [tidy(x - x0), tidy(z - z0)]), thickness, surface };
+}
+
+// A slab standing up along the line from its first corner to its second, its face through all its
+// corners.
+export function faceSlab(corners, { thickness, surface }) {
+  const [a, b] = corners;
+  const [dx, dz] = [b[0] - a[0], b[2] - a[2]];
+  const length = Math.hypot(dx, dz);
+  const [ux, uz] = [dx / length, dz / length];
+  const yaw = Math.round(((Math.atan2(-dz, dx) * 180) / Math.PI) * 10) / 10 + 0;
+  const outline = corners.map(([x, y, z]) => [tidy((x - a[0]) * ux + (z - a[2]) * uz), tidy(y - a[1])]);
+  return { at: a.map(tidy), turn: [yaw, -90, 0], outline, thickness, surface };
+}
+
 const tidy = (v) => Math.round(v * ROUND) / ROUND + 0;
 const flatDistance = (a, b) => Math.hypot(a[0] - b[0], a[2] - b[2]);
+const distance = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 
 // A slab's turn as a quaternion: roll, then pitch, then yaw, as object pieces turn.
 function quaternionOf([yaw, pitch, roll]) {

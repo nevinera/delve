@@ -186,19 +186,12 @@
           <div id="objectPicker" class="place-picker" data-for="objects"></div>
           <div id="structurePicker" class="place-picker" data-for="structures"></div>
           <div class="editor-row" data-for="objects"><button id="replaceOpen" type="button">replace every…</button></div>
-          <label class="editor-field" data-for="slabs" title="pick slabs, or draw a floor or a wall">do <select id="slabMode"><option value="pick">pick</option><option value="floor">draw floors</option><option value="wall">draw walls</option></select></label>
+          <div class="editor-row" data-for="slabs" title="click again to stop drawing and pick slabs instead"><button id="slabFloor" type="button">draw floor</button><button id="slabWall" type="button">draw wall</button></div>
+          <div class="editor-row" data-for="slabs" title="a rectangle goes from corner to corner, dragged or clicked at each end; a polygon is a click for each corner"><button id="slabRect" type="button">rectangle</button><button id="slabPoly" type="button">polygon</button></div>
           <label class="editor-field" data-for="slabs">thickness (ft) <input id="slabThickness" type="number" min="0.25" max="16" step="0.25" value="1"></label>
           <label class="editor-field" data-for="slabs" title="how far a wall stands over where you start drawing it">wall height (ft) <input id="slabHeight" type="number" min="1" max="60" step="1" value="10"></label>
           <label class="editor-check" data-for="slabs" title="start each wall where the last one ended"><input id="slabKeep" type="checkbox"><span>keep walling</span></label>
-          <label class="editor-field" data-for="slabs">surface <select id="slabSurface"></select></label>
-          <div data-for="slabs">
-            <div id="slabAdvanced" class="editor-stack" hidden>
-              <label class="editor-field">color <input id="slabColor" type="color" value="#8a8a8a"></label>
-              <label class="editor-field">pattern <select id="slabPattern"></select></label>
-              <label class="editor-field">texture <select id="slabTexture"></select></label>
-              <label class="editor-field">texture width (ft) <input id="slabTileEvery" type="number" min="0.25" max="64" step="0.25" value="4"></label>
-            </div>
-          </div>
+          <div id="slabSwatches" class="slab-swatches" data-for="slabs"></div>
           <div data-for="slabs">
             <div id="slabPanel" class="editor-stack" hidden>
               <p id="slabInfo"></p>
@@ -246,6 +239,14 @@
   <label class="editor-field">replace every placed <select id="replaceFrom"></select></label>
   <label class="editor-field">with <select id="replaceTo"></select></label>
   <div class="editor-row"><button id="replaceObjects" type="button">replace them</button><button id="replaceCancel" type="button">cancel</button></div>
+</dialog>
+<dialog id="slabCustom" class="editor-popover replace-dialog">
+  <h3>Custom surface</h3>
+  <label class="editor-field">color <input id="slabColor" type="color" value="#8a8a8a"></label>
+  <label class="editor-field">pattern <select id="slabPattern"></select></label>
+  <label class="editor-field">texture <select id="slabTexture"></select></label>
+  <label class="editor-field">texture width (ft) <input id="slabTileEvery" type="number" min="0.25" max="64" step="0.25" value="4"></label>
+  <div class="editor-row"><button id="slabCustomUse" type="button">use it</button><button id="slabCustomCancel" type="button">cancel</button></div>
 </dialog>
 <dialog id="structurePopover" class="library-popover">
   <div class="library-bar"><h2>Structures</h2><a href="/structures" target="_blank">open on its own</a><span class="library-spacer"></span><p class="editor-message library-message"></p><button type="button" class="library-close">close</button></div>

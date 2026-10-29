@@ -32,6 +32,7 @@ import { DETAIL_TOOLS } from "./detailTools.js";
 import { TRAIL_KINDS, TRAIL_STATES } from "./detailTrails.js";
 import { BUILT_PREFIX, builtOf, makeObject, setBuiltObjects, specOf, tiledImages } from "../world/objects.js";
 import { SLAB_PATTERNS, SLAB_PRESETS } from "../world/slabs.js";
+import { presetPixels } from "./slabTextures.js";
 import { paletteColors, textsOf } from "../world/builtObjects.js";
 import { MAX_TEXT, signText } from "../world/pixelFont.js";
 import { adoptStrays, allCollections, builtObjects, builtStructures, images } from "../objects/collections.js";
@@ -103,8 +104,9 @@ const STEPS = {
 const DETAIL_MAX_TILES = 128;
 // Past this many screen pixels per pixel of the small thumbnails, tiles draw their full ones.
 const FULL_THUMB_ZOOM = 1.5;
-// The slab surface choice that opens up a color, a pattern and a texture.
-const ADVANCED = "advanced";
+// The swatch for a slab surface of your own: a color, with a pattern or a texture.
+const CUSTOM = "custom";
+const SWATCH_PX = 36;
 // The detail step's pours stand in for a source pin with this id.
 const DETAIL_POUR = "detail";
 const PREVIEW_DELAY_MS = 80; // after panning or zooming stops, before the preview is redone
@@ -962,7 +964,10 @@ export class Editor {
     if (this.toolName === "water") return this.detail?.setBrush({ tool: "water" });
     if (this.toolName === "objects") return this.detail?.setBrush({ tool: "objects", type: this.pickers.objects.armed });
     if (this.toolName === "structures") return this.detail?.setBrush({ tool: "structures", type: this.pickers.structures.armed });
-    if (this.toolName === "slabs") return this.detail?.setBrush({ tool: "slabs", settings: this.slabSettings() });
+    if (this.toolName === "slabs") {
+      this.fillSlabSwatches();
+      return this.detail?.setBrush({ tool: "slabs", settings: this.slabSettings() });
+    }
     if (this.toolName === "paint") {
       const { paintTerrain, treeKind, treeSize, paintRadius, paintRadiusValue } = this.el;
       const tree = paintTerrain.value === "tree";
@@ -1099,31 +1104,52 @@ export class Editor {
   // The slabs tool's panel: its settings, which also change a picked slab, and the picked slab's
   // place and turn.
   buildSlabPanel() {
-    const words = (name) => name.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`);
-    this.el.slabSurface.replaceChildren(...Object.keys(SLAB_PRESETS).map((name) => new Option(words(name), name)), new Option("advanced…", ADVANCED));
-    this.el.slabPattern.replaceChildren(new Option("none", ""), ...SLAB_PATTERNS.map((name) => new Option(name, name)));
-    this.fillSlabTextures();
     const tool = () => this.detail?.slabTool;
-    for (const input of [this.el.slabMode, this.el.slabHeight, this.el.slabKeep]) input.addEventListener("change", () => this.applyDetailBrush());
+    this.slabMode = "pick";
+    this.el.slabFloor.addEventListener("click", () => this.setSlabMode(this.slabMode === "floor" ? "pick" : "floor"));
+    this.el.slabWall.addEventListener("click", () => this.setSlabMode(this.slabMode === "wall" ? "pick" : "wall"));
+    this.el.slabRect.addEventListener("click", () => this.setSlabShape("rectangle"));
+    this.el.slabPoly.addEventListener("click", () => this.setSlabShape("polygon"));
+    this.setSlabShape("rectangle");
+    this.el.slabPattern.replaceChildren(new Option("none", ""), ...SLAB_PATTERNS.map((name) => new Option(name, name)));
+    this.el.slabTexture.addEventListener("change", () => this.el.slabTexture.value && (this.el.slabPattern.value = ""));
+    this.el.slabPattern.addEventListener("change", () => this.el.slabPattern.value && (this.el.slabTexture.value = ""));
+    this.el.slabCustomUse.addEventListener("click", () => {
+      this.el.slabCustom.close();
+      this.setSlabSurface(this.customSlabSurface());
+    });
+    this.el.slabCustomCancel.addEventListener("click", () => this.el.slabCustom.close());
+    this.setSlabSurface("floorboards", { change: false });
+    for (const input of [this.el.slabHeight, this.el.slabKeep]) input.addEventListener("change", () => this.applyDetailBrush());
     this.el.slabThickness.addEventListener("change", () => {
       this.applyDetailBrush();
       tool()?.change({ thickness: Number(this.el.slabThickness.value) });
     });
-    for (const input of [this.el.slabSurface, this.el.slabColor, this.el.slabPattern, this.el.slabTexture, this.el.slabTileEvery]) {
-      input.addEventListener("change", () => {
-        if (input === this.el.slabSurface && input.value === ADVANCED) this.fillSlabTextures();
-        if (input === this.el.slabTexture && input.value) this.el.slabPattern.value = "";
-        if (input === this.el.slabPattern && input.value) this.el.slabTexture.value = "";
-        this.applyDetailBrush();
-        tool()?.change({ surface: this.slabSurface() });
-      });
-    }
     const numbers = (inputs) => inputs.map((input) => Number(input.value) || 0);
     for (const input of [this.el.slabX, this.el.slabY, this.el.slabZ]) input.addEventListener("change", () => tool()?.change({ at: numbers([this.el.slabX, this.el.slabY, this.el.slabZ]) }));
     for (const input of [this.el.slabYaw, this.el.slabPitch, this.el.slabRoll]) input.addEventListener("change", () => tool()?.change({ turn: numbers([this.el.slabYaw, this.el.slabPitch, this.el.slabRoll]) }));
     this.el.slabMove.addEventListener("click", () => tool()?.setHandle("move"));
     this.el.slabTurn.addEventListener("click", () => tool()?.setHandle("turn"));
     this.el.slabDelete.addEventListener("click", () => tool()?.remove());
+  }
+
+  // A swatch for each preset, painted as it looks, and a gear for a custom surface; painted when
+  // the tool's first used.
+  fillSlabSwatches() {
+    if (this.el.slabSwatches.children.length) return;
+    const words = (name) => name.replace(/[A-Z]/g, (c) => ` ${c.toLowerCase()}`);
+    const swatches = Object.keys(SLAB_PRESETS).map((name) => {
+      const button = Object.assign(document.createElement("button"), { type: "button", className: "slab-swatch", title: words(name) });
+      button.dataset.surface = name;
+      button.append(swatchCanvas(name));
+      button.addEventListener("click", () => this.setSlabSurface(name));
+      return button;
+    });
+    const gear = Object.assign(document.createElement("button"), { type: "button", className: "slab-swatch", title: "custom: a color, with a pattern or a texture", textContent: "⚙" });
+    gear.dataset.surface = CUSTOM;
+    gear.addEventListener("click", () => this.openSlabCustom());
+    this.el.slabSwatches.replaceChildren(...swatches, gear);
+    this.setSlabSurface(this.slabSurface, { change: false });
   }
 
   // The detail step's picked object in the panel, or none.
@@ -1176,27 +1202,64 @@ export class Editor {
 
   // The slabs tool's settings from the panel: what it does, and what new slabs are like.
   slabSettings() {
-    const { slabMode, slabThickness, slabHeight, slabKeep } = this.el;
-    this.el.slabAdvanced.hidden = this.el.slabSurface.value !== ADVANCED;
-    return { mode: slabMode.value, thickness: Number(slabThickness.value) || 1, height: Number(slabHeight.value) || 10, keepWalling: slabKeep.checked, surface: this.slabSurface() };
+    const { slabThickness, slabHeight, slabKeep } = this.el;
+    return { mode: this.slabMode, shape: this.slabShape, thickness: Number(slabThickness.value) || 1, height: Number(slabHeight.value) || 10, keepWalling: slabKeep.checked, surface: structuredClone(this.slabSurface) };
   }
 
-  // The surface the panel shows: a preset's name, or an advanced one.
-  slabSurface() {
-    const { slabSurface, slabColor, slabPattern, slabTexture, slabTileEvery } = this.el;
-    if (slabSurface.value !== ADVANCED) return slabSurface.value;
-    const surface = { color: slabColor.value };
-    if (slabTexture.value) surface.tile = { image: slabTexture.value, every: Number(slabTileEvery.value) || 4, jitter: 0.1 };
-    else if (slabPattern.value) surface.pattern = slabPattern.value;
-    return surface;
+  // Draws floors or walls, or with neither, picks slabs.
+  setSlabMode(mode) {
+    this.slabMode = mode;
+    this.el.slabFloor.classList.toggle("active", mode === "floor");
+    this.el.slabWall.classList.toggle("active", mode === "wall");
+    this.applyDetailBrush();
   }
 
-  // The world's tiled textures, for an advanced slab surface to wear.
+  // Draws rectangles, dragged corner to corner, or polygons, clicked corner by corner.
+  setSlabShape(shape) {
+    this.slabShape = shape;
+    this.el.slabRect.classList.toggle("active", shape === "rectangle");
+    this.el.slabPoly.classList.toggle("active", shape === "polygon");
+    this.applyDetailBrush();
+  }
+
+  // Sets the surface new slabs wear, and the picked slab's, marking its swatch.
+  setSlabSurface(surface, { change = true } = {}) {
+    this.slabSurface = surface;
+    for (const swatch of this.el.slabSwatches.children) swatch.classList.toggle("active", typeof surface === "string" ? swatch.dataset.surface === surface : swatch.dataset.surface === CUSTOM);
+    if (!change) return;
+    this.applyDetailBrush();
+    this.detail?.slabTool.change({ surface: structuredClone(surface) });
+  }
+
+  // The world's tiled textures, for a custom slab surface to wear.
   fillSlabTextures() {
     const { slabTexture } = this.el;
     const was = slabTexture.value;
     slabTexture.replaceChildren(new Option("none", ""), ...tiledImages().map((image) => new Option(image.name ?? image.id, image.id)));
     slabTexture.value = was;
+  }
+
+  // The custom surface dialog, showing the surface in use when it's custom.
+  openSlabCustom() {
+    const { slabColor, slabPattern, slabTexture, slabTileEvery } = this.el;
+    this.fillSlabTextures();
+    const surface = this.slabSurface;
+    if (typeof surface === "object") {
+      slabColor.value = surface.color;
+      slabPattern.value = surface.pattern ?? "";
+      slabTexture.value = surface.tile?.image ?? "";
+      if (surface.tile) slabTileEvery.value = surface.tile.every;
+    }
+    this.el.slabCustom.showModal();
+  }
+
+  // The surface the custom dialog describes.
+  customSlabSurface() {
+    const { slabColor, slabPattern, slabTexture, slabTileEvery } = this.el;
+    const surface = { color: slabColor.value };
+    if (slabTexture.value) surface.tile = { image: slabTexture.value, every: Number(slabTileEvery.value) || 4, jitter: 0.1 };
+    else if (slabPattern.value) surface.pattern = slabPattern.value;
+    return surface;
   }
 
   // The picked slab in the panel, or none. Its thickness and surface show in the settings, where
@@ -1210,16 +1273,7 @@ export class Editor {
     [this.el.slabX.value, this.el.slabY.value, this.el.slabZ.value] = [x, y, z];
     [this.el.slabYaw.value, this.el.slabPitch.value, this.el.slabRoll.value] = slab.turn;
     this.el.slabThickness.value = slab.thickness;
-    if (typeof slab.surface === "string") this.el.slabSurface.value = slab.surface;
-    else {
-      this.el.slabSurface.value = ADVANCED;
-      this.el.slabColor.value = slab.surface.color;
-      this.el.slabPattern.value = slab.surface.pattern ?? "";
-      this.fillSlabTextures();
-      this.el.slabTexture.value = slab.surface.tile?.image ?? "";
-      if (slab.surface.tile) this.el.slabTileEvery.value = slab.surface.tile.every;
-    }
-    this.el.slabAdvanced.hidden = this.el.slabSurface.value !== ADVANCED;
+    this.setSlabSurface(structuredClone(slab.surface), { change: false });
     this.detail?.slabTool.setSettings({ thickness: slab.thickness, surface: structuredClone(slab.surface) });
   }
 
@@ -2134,4 +2188,14 @@ function noContextMenu(stage) {
   window.addEventListener("pointerup", (e) => {
     if (e.button === 2) setTimeout(() => (dragged = false), 300);
   });
+}
+
+// A preset slab surface's picture, small, for its swatch.
+function swatchCanvas(name) {
+  const { size, rgba } = presetPixels(name);
+  const full = Object.assign(document.createElement("canvas"), { width: size, height: size });
+  full.getContext("2d").putImageData(new ImageData(new Uint8ClampedArray(rgba), size, size), 0, 0);
+  const canvas = Object.assign(document.createElement("canvas"), { width: SWATCH_PX, height: SWATCH_PX });
+  canvas.getContext("2d").drawImage(full, 0, 0, SWATCH_PX, SWATCH_PX);
+  return canvas;
 }
