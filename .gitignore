@@ -46,3 +46,6 @@ node_modules/
 
 # Local-only allow-list restricting Google login (see config/allow_only.yml.example).
 /config/allow_only.yml
+
+# Released worlds the game server has downloaded.
+/game-server/tmp/

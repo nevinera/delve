@@ -4,14 +4,9 @@ import { packPlates } from "../editor/plates.js";
 import { generateTile, prepareWorld } from "../world/generator.js";
 import { LandGrid, PER_TILE } from "../world/landGrid.js";
 import { encodeTile } from "../world/tileCodec.js";
-import { PlayWorld, findSpawn, platesAround, rawUrl } from "./loader.js";
+import { PlayWorld, platesAround, rawUrl } from "./loader.js";
 
 describe("playing a released world", () => {
-  it("finds the spawn point in the continents' sketches", () => {
-    expect(findSpawn({ main: { pins: [{ kind: "hub" }] }, isle: { pins: [{ kind: "spawn", at: [3.5, 4] }] } })).toEqual({ continent: "isle", at: [3.5, 4] });
-    expect(findSpawn({ main: { pins: [] } })).toBeNull();
-  });
-
   it("lists the plates around a tile", () => {
     expect(platesAround("main", [20, 3], 2)).toEqual(["places/continents/main/plates/surface/1_0.plate"]);
     expect(platesAround("main", [1, 1], 3)).toEqual([
@@ -37,7 +32,8 @@ describe("playing a released world", () => {
       return files.has(path) ? new Response(files.get(path)) : new Response("", { status: 404 });
     };
     const play = new PlayWorld({ repo: "me/w", sha: "c0ffee", paths: [...files.keys()], fetchFn });
-    expect(await play.open()).toEqual({ continent: "main", at: [0.5, 0.5] });
+    await play.open();
+    expect(play.world.files.has("places/continents/main/sketch.json")).toBe(true);
     expect(play.world.files.has("objects/abcd1234.json")).toBe(true);
     expect(await play.platesAround("main", [0, 0], 3)).toEqual(["0,0"]);
     expect(play.world.files.has("places/continents/main/tiles/surface/0/0.dlt.gz")).toBe(true);

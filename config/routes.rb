@@ -42,4 +42,11 @@ Rails.application.routes.draw do
   get "character_builder", to: redirect("/characters/new")
   resources :characters, except: [:show]
   get "animation_lab" => "animation_lab#show"
+
+  # For the game server (docs/formats/game-protocol.md).
+  namespace :internal_api, path: "internal" do
+    resources :worlds, only: [] do
+      resources :characters, only: [:show]
+    end
+  end
 end

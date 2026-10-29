@@ -27,14 +27,14 @@ import { trunkRadius } from "./treeMeshes.js";
 // below ground the ground doesn't count, so it can go down into cellars. Positions are scene feet.
 
 // Speeds in feet per second, WoW's.
-const RUN_FT = 21;
-const WALK_FT = 7.5;
-const BACK_FT = 13.5; // backing up at a run
-const SWIM_FT = 14.2;
-const SPRINT = 2;
+export const RUN_FT = 21;
+export const WALK_FT = 7.5;
+export const BACK_FT = 13.5; // backing up at a run
+export const SWIM_FT = 14.2;
+export const SPRINT = 2;
 const TURN = TURN_RATE; // radians per second, as the turning clips step round at
-const JUMP_FT = 16; // upward speed at takeoff, per second
-const GRAVITY = 48;
+export const JUMP_FT = 16; // upward speed at takeoff, per second
+export const GRAVITY = 48;
 const MAX_CLIMB = 1.2; // rise over run
 const EYE_FT = 5.5;
 const BODY_FT = 1; // the character's radius, for bumping into objects
@@ -57,7 +57,7 @@ const TOGGLES = new Set(["/", "x", "z"]);
 
 // The clips for moving at each gait, ahead, to the left and right and back, and how far one
 // stretches to match the character's speed before its feet are left to slide.
-const GAITS = {
+export const GAITS = {
   walk: { ahead: "Walk_Loop", left: "Walk_Left_Loop", right: "Walk_Right_Loop", back: "Walk_Back_Loop" },
   run: { ahead: "Run_Fwd_Loop", left: "Run_Left_Loop", right: "Run_Right_Loop", back: "Run_Back_Loop" },
   sprint: { ahead: "Sprint_Loop", left: "Run_Left_Loop", right: "Run_Right_Loop", back: "Run_Back_Loop" },
@@ -168,6 +168,7 @@ export class Walker {
     if (dt > 0) {
       this.step(dt);
       this.animate(dt);
+      this.view.onWalkFrame?.(dt);
     }
     this.place();
     this.view.render();

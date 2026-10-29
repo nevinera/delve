@@ -28,9 +28,12 @@ RSpec.describe "Playing a world", type: :request do
 
   it "enters with the released commit, its files and your character's look" do
     character.update!(look: {"skin" => 3})
-    get play_path(world, character: character.id)
+    with_env("GAME_SERVER_PUBLIC_URL" => nil) { get play_path(world, character: character.id) }
     config = JSON.parse(response.body[%r{<script type="application/json" id="playConfig">(.*?)</script>}m, 1])
+    game = config.delete("game")
     expect(config).to eq("repo" => "them/vale", "sha" => "c" * 40, "paths" => import.files.keys, "look" => {"skin" => 3})
+    expect(game["url"]).to eq("ws://localhost:8090")
+    expect(JSON.parse(Base64.urlsafe_decode64(game["token"].split(".").first))).to include("character" => character.id, "world" => world.id)
   end
 
   it "won't play a world that isn't released" do

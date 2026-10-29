@@ -13,7 +13,10 @@ class PlayController < ApplicationController
     import = @world.imports.find_by(sha: @world.released_sha, status: "passed")
     return redirect_to play_path(@world), alert: "#{@world.display_name}'s release can't be found." if import.nil?
 
-    @config = {repo: @world.repo, sha: @world.released_sha, paths: import.files.keys, look: @character.look}
+    @config = {
+      repo: @world.repo, sha: @world.released_sha, paths: import.files.keys, look: @character.look,
+      game: {url: Game::EntryToken.server_url, token: Game::EntryToken.issue(character: @character, world: @world)}
+    }
     render :show, layout: "play"
   end
 end

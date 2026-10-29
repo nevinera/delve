@@ -1,0 +1,192 @@
+// Package worlds downloads released worlds and reads what the game server needs from them. Each
+// released commit's zip is kept on disk, keyed by repo and sha, so it's downloaded once.
+package worlds
+
+import (
+	"archive/zip"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"math"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"sync"
+	"time"
+)
+
+// TileFt is a tile's width in feet (client/src/world/constants.js).
+const TileFt = 64 * 8
+
+// World is what the game server knows of a released world.
+type World struct {
+	Repo, Sha  string
+	Continents []string
+	Spawn      Spawn
+}
+
+// Spawn is the world's spawn pin: a continent and a place in tile units.
+type Spawn struct {
+	Continent string
+	At        [2]float64
+}
+
+// Store downloads worlds into a directory, one download per world at a time.
+type Store struct {
+	dir       string
+	githubURL string
+	http      *http.Client
+	mu        sync.Mutex
+	loading   map[string]*sync.Mutex
+}
+
+func NewStore(dir, githubURL string) *Store {
+	return &Store{dir: dir, githubURL: strings.TrimRight(githubURL, "/"), http: &http.Client{Timeout: 5 * time.Minute}, loading: map[string]*sync.Mutex{}}
+}
+
+var (
+	repoPattern = regexp.MustCompile(`^[\w.-]+/[\w.-]+$`)
+	shaPattern  = regexp.MustCompile(`^[0-9a-f]{40}$`)
+)
+
+// Load reads a world at a commit, downloading it first if it isn't on disk.
+func (s *Store) Load(ctx context.Context, repo, sha string) (*World, error) {
+	if !repoPattern.MatchString(repo) || !shaPattern.MatchString(sha) {
+		return nil, fmt.Errorf("worlds: bad repo or sha %q@%q", repo, sha)
+	}
+	path := filepath.Join(s.dir, strings.ReplaceAll(repo, "/", "__"), sha+".zip")
+	lock := s.lockFor(path)
+	lock.Lock()
+	defer lock.Unlock()
+	if _, err := os.Stat(path); errors.Is(err, os.ErrNotExist) {
+		if err := s.download(ctx, repo, sha, path); err != nil {
+			return nil, err
+		}
+	}
+	w, err := Read(path)
+	if err != nil {
+		return nil, err
+	}
+	w.Repo, w.Sha = repo, sha
+	return w, nil
+}
+
+func (s *Store) lockFor(path string) *sync.Mutex {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.loading[path] == nil {
+		s.loading[path] = &sync.Mutex{}
+	}
+	return s.loading[path]
+}
+
+// download fetches a commit's zip from GitHub (a released world's repo is public) into path.
+func (s *Store) download(ctx context.Context, repo, sha, path string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/repos/%s/zipball/%s", s.githubURL, repo, sha), nil)
+	if err != nil {
+		return err
+	}
+	res, err := s.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+	if res.StatusCode != http.StatusOK {
+		return fmt.Errorf("worlds: downloading %s@%s: %s", repo, sha, res.Status)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), "download-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := io.Copy(tmp, res.Body); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+// Read reads a world from a zip of its repo. GitHub's zips put everything in one top directory.
+func Read(path string) (*World, error) {
+	z, err := zip.OpenReader(path)
+	if err != nil {
+		return nil, err
+	}
+	defer z.Close()
+	files := map[string]*zip.File{}
+	for _, f := range z.File {
+		if _, rest, ok := strings.Cut(f.Name, "/"); ok && rest != "" {
+			files[rest] = f
+		}
+	}
+	var info struct {
+		Continents []struct{ Key string } `json:"continents"`
+	}
+	if err := readJSON(files, "world.json", &info); err != nil {
+		return nil, err
+	}
+	w := &World{}
+	found := 0
+	for _, c := range info.Continents {
+		w.Continents = append(w.Continents, c.Key)
+		var sketch struct {
+			Pins []struct {
+				Kind string    `json:"kind"`
+				At   []float64 `json:"at"`
+			} `json:"pins"`
+		}
+		path := fmt.Sprintf("places/continents/%s/sketch.json", c.Key)
+		if files[path] == nil {
+			continue
+		}
+		if err := readJSON(files, path, &sketch); err != nil {
+			return nil, err
+		}
+		for _, pin := range sketch.Pins {
+			if pin.Kind == "spawn" && len(pin.At) == 2 {
+				w.Spawn = Spawn{Continent: c.Key, At: [2]float64{pin.At[0], pin.At[1]}}
+				found++
+			}
+		}
+	}
+	if found != 1 {
+		return nil, fmt.Errorf("worlds: %s has %d spawn points, not 1", path, found)
+	}
+	return w, nil
+}
+
+// SpawnAt is the spawn point in continent feet [x, y, z]; y is 0 until the server knows the ground.
+func (w *World) SpawnAt() [3]float64 {
+	return [3]float64{w.Spawn.At[0] * TileFt, 0, w.Spawn.At[1] * TileFt}
+}
+
+// TileOf is the tile holding continent feet (x, z).
+func TileOf(x, z float64) [2]int {
+	return [2]int{int(math.Floor(x / TileFt)), int(math.Floor(z / TileFt))}
+}
+
+func readJSON(files map[string]*zip.File, path string, out any) error {
+	f := files[path]
+	if f == nil {
+		return fmt.Errorf("worlds: no %s", path)
+	}
+	r, err := f.Open()
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	if err := json.NewDecoder(r).Decode(out); err != nil {
+		return fmt.Errorf("worlds: %s: %w", path, err)
+	}
+	return nil
+}

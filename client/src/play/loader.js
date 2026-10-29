@@ -11,16 +11,6 @@ const FETCHES = 8; // at once
 
 export const rawUrl = (repo, sha, path) => `https://raw.githubusercontent.com/${repo}/${sha}/${path}`;
 
-// The spawn point in the continents' sketches ({ continent: sketch }), as { continent, at } with
-// at in tile units, or null.
-export function findSpawn(sketches) {
-  for (const [continent, sketch] of Object.entries(sketches)) {
-    const pin = sketch?.pins?.find((p) => p.kind === "spawn");
-    if (pin) return { continent, at: pin.at };
-  }
-  return null;
-}
-
 // The plates holding the surface tiles within `reach` tiles of (tx, tz) on a continent, as paths.
 export function platesAround(continent, [tx, tz], reach) {
   const [x0, z0] = plateOf(tx - reach, tz - reach);
@@ -46,16 +36,13 @@ export class PlayWorld {
   }
 
   // Fetches the files the world needs before any tiles: world.json, the continents' sketches, and
-  // its object library. Returns the spawn point.
+  // its object library.
   async open() {
     const want = (path) => this.paths.has(path);
     await this.fetchAll([WORLD_PATH]);
     const continents = this.world.info.continents.map((c) => c.key);
     const library = [...this.paths].filter((p) => p === COLLECTIONS_PATH || p === STRUCTURE_COLLECTIONS_PATH || OBJECT_PATH.test(p) || STRUCTURE_PATH.test(p) || IMAGE_PATH.test(p));
     await this.fetchAll([...continents.map(sketchPath).filter(want), ...library]);
-    const spawn = findSpawn(Object.fromEntries(continents.map((c) => [c, this.world.readJson(sketchPath(c))])));
-    if (!spawn) throw new Error("this world has no spawn point");
-    return spawn;
   }
 
   async fetchAll(paths) {

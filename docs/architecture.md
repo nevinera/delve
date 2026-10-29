@@ -8,7 +8,7 @@ Delve is a browser-based 3D MMO in a tiled, height-mapped world. People build wo
 | --- | --- | --- |
 | Rails app | `app/`, `config/` | accounts, characters, GitHub connections, the list of worlds; serves the pages and the built client |
 | Client | `client/src/` | three.js pages, built by vite into `public/client` |
-| Game server | `game-server/` | Go; a health check so far |
+| Game server | `game-server/` | Go; owns where characters are in each world, and tells each player who's near them |
 
 The client has one entry point per page (`vite.config.js`):
 
@@ -74,8 +74,18 @@ The owner releases an import that passed from the same page. Releasing checks th
 Released worlds are listed for everyone signed in, on `/worlds`. Playing one (`/play/:id`) asks which of your characters to enter as, then loads `client/src/play/main.js`:
 
 1. It reads `world.json`, the continents' sketches and the object library from `raw.githubusercontent.com/<repo>/<released sha>/`. The page lists the commit's files from its import, so nothing is probed for.
-2. It finds the spawn point: the one spawn pin, placed on the editor's civilization step. The validator rejects a world without exactly one, on a generated tile, out of deep water.
-3. It fetches the plates around the spawn point, and more as you walk toward them, and walks your character there with the editor's walk mode (`RenderView`, `Walker`).
+2. It enters the game server with an entry token from the page, and the server says where your character is. A character new to the world starts at its spawn pin, placed on the editor's civilization step. The validator rejects a world without exactly one, on a generated tile, out of deep water.
+3. It fetches the plates around you, and more as you walk toward them, and walks your character there with the editor's walk mode (`RenderView`, `Walker`).
+4. It reports how you move, and draws the characters near you as the server reports theirs (`client/src/play/game.js`, `others.js`).
+
+## The game server
+
+The game server (`game-server/`) holds every character in a world. Browsers connect over a websocket, and send what their player does; the server tells each one what the characters near them do. [The game protocol](formats/game-protocol.md) covers entry tokens, the messages and the internal API.
+
+- `internal/token` checks entry tokens, which Rails signs (`Game::EntryToken`).
+- `internal/worlds` downloads each released commit's zip once, keeps it on disk, and reads the continents and spawn pin.
+- `internal/game` places characters on a layer, works out who's near whom (the 3×3 tiles around each), and passes on their movement. It checks nothing about where a character can go yet.
+- `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token. The server never writes to the database itself.
 
 ## Docs
 
