@@ -1044,13 +1044,8 @@ export class Editor {
     if (this.toolName === "objects") return this.detail?.setBrush({ tool: "objects", type: this.pickers.objects.armed });
     if (this.toolName === "templates") {
       const type = this.pickers.templates.armed;
-      const entry = this.templateEntry(type);
-      const template = entry?.template;
+      const template = this.templateEntry(type)?.template;
       this.el.templatePlaceRow.hidden = !template;
-      // Builtins can't be edited.
-      const builtin = Boolean(entry?.key.startsWith("builtin:"));
-      this.el.templateEdit.disabled = builtin;
-      this.el.templateEdit.title = builtin ? "builtin templates can't be edited" : "change it on bare ground of its own, with every detail tool";
       if (this.el.templateQuarter.checked) this.templateTurn = (Math.round(this.templateTurn / 90) * 90) % 360;
       this.el.templateTurnValue.textContent = `${this.templateTurn}°`;
       const placing = { turn: this.templateTurn, reshape: this.el.templateReshape.checked, clear: this.el.templateClear.checked };
@@ -1279,7 +1274,7 @@ export class Editor {
   // detail step's tools to change, away from this world and its saving.
   editTemplate() {
     const entry = this.templateEntry(this.pickers.templates.armed);
-    if (!entry || entry.key.startsWith("builtin:")) return;
+    if (!entry) return;
     const unknown = entry.template.objects.find((o) => !specOf(o.type));
     if (unknown) return this.say(`This world has no ${unknown.type} for it.`);
     const { world, continent, size } = scratchWorld(entry.template);
