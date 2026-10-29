@@ -32,7 +32,8 @@
               "road",
               "hub",
               "info",
-              "source"
+              "source",
+              "spawn"
             ]
           },
           "at": {
@@ -61,7 +62,8 @@
             "type": "number",
             "description": "source pins, feet"
           }
-        }
+        },
+        "description": "A pin. The world has exactly one spawn pin, across all its continents: where players enter."
       }
     },
     "paths": {

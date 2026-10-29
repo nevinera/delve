@@ -34,6 +34,7 @@ const TILE_KEY = /^-?\d+,-?\d+$/;
 const ZONE_VERSION = 3;
 const INDEX_VERSION = 2;
 const PLATES_INDEX_VERSION = 1;
+const SPAWN_WATER_FT = 3; // deeper water than this at the spawn point is a problem
 
 export function validateWorld(files) {
   const out = [];
@@ -60,7 +61,8 @@ export function validateWorld(files) {
     }
     if (tileAt(path)) problem(path, "is a tile file: a stored world keeps its tiles in plates");
   }
-  for (const continent of continents ?? []) checkContinent(files, continent, library, json, problem, warning);
+  const spawn = findSpawn(continents, json, problem);
+  for (const continent of continents ?? []) checkContinent(files, continent, library, spawn?.continent === continent ? spawn : null, json, problem, warning);
   return out;
 }
 
@@ -130,7 +132,23 @@ function checkLibrary(files, json, problem, warning) {
   return { objects, structures };
 }
 
-function checkContinent(files, continent, library, json, problem, warning) {
+// The world's spawn point, where players enter: the one spawn pin in its continents' sketches, as
+// { continent, at, path }. A world needs exactly one.
+function findSpawn(continents, json, problem) {
+  if (!continents) return null;
+  const spawns = [];
+  for (const continent of continents) {
+    const sketch = json(sketchPath(continent));
+    for (const pin of Array.isArray(sketch?.pins) ? sketch.pins : []) if (pin?.kind === "spawn") spawns.push({ continent, at: pin.at, path: sketchPath(continent) });
+  }
+  if (!spawns.length) return problem(WORLD_PATH, "has no spawn point: place one on the editor's civilization step"), null;
+  if (spawns.length > 1) return problem(spawns[1].path, `has a spawn point, but the world has ${spawns.length}: keep one`), null;
+  const [spawn] = spawns;
+  if (!(Array.isArray(spawn.at) && spawn.at.length === 2 && spawn.at.every(Number.isFinite))) return problem(spawn.path, "has a spawn point without a place"), null;
+  return spawn;
+}
+
+function checkContinent(files, continent, library, spawn, json, problem, warning) {
   const sketch = json(sketchPath(continent));
   if (sketch !== undefined && sketch !== null && !(isObject(sketch) && Array.isArray(sketch.pins))) problem(sketchPath(continent), "should have a list of pins");
 
@@ -154,7 +172,8 @@ function checkContinent(files, continent, library, json, problem, warning) {
     if (block?.continent === continent && bytes.length !== BLOCK * BLOCK * 4) problem(path, `is ${bytes.length} bytes, not ${BLOCK * BLOCK * 4}`);
   }
 
-  const tiles = checkPlates(files, continent, library, json, problem, warning);
+  const tiles = checkPlates(files, continent, library, spawn, json, problem, warning);
+  if (spawn && !tiles.get(spawn.at.map(Math.floor).join(","))?.has("surface")) problem(spawn.path, `has the spawn point on tile ${spawn.at.map(Math.floor)}, which hasn't been generated`);
 
   const index = json(indexPath(continent));
   if (index === undefined) {
@@ -174,7 +193,7 @@ function checkContinent(files, continent, library, json, problem, warning) {
 }
 
 // The continent's plates, and its plates.json. Returns the tiles they hold, as "tx,tz" -> layers.
-function checkPlates(files, continent, library, json, problem, warning) {
+function checkPlates(files, continent, library, spawn, json, problem, warning) {
   const tiles = new Map();
   const plates = [...files.keys()].filter((path) => plateAt(path)?.continent === continent).sort();
   const indexFile = platesIndexPath(continent);
@@ -210,7 +229,8 @@ function checkPlates(files, continent, library, json, problem, warning) {
       if (plateOf(...tile).join() !== coords.join()) problem(path, `has tile ${tileKey}, which belongs in another plate`);
       if (tiles.get(tileKey)?.has(layer)) problem(path, `has tile ${tileKey} twice`);
       try {
-        decodePlateTile(header, tileText);
+        const decoded = decodePlateTile(header, tileText);
+        if (spawn && layer === "surface" && tileKey === spawn.at.map(Math.floor).join(",")) checkSpawn(decoded, spawn, problem);
       } catch (err) {
         problem(path, `tile ${tileKey}: ${err.message}`);
       }
@@ -220,6 +240,14 @@ function checkPlates(files, continent, library, json, problem, warning) {
   }
   for (const key of Object.keys(hashes ?? {})) if (!named.has(key)) problem(indexFile, `lists plate ${key}, which isn't there`);
   return tiles;
+}
+
+// Where players enter, they should be on their feet.
+function checkSpawn(tile, spawn, problem) {
+  const [i, j] = spawn.at.map((v) => Math.min(tile.cells - 1, Math.floor((v - Math.floor(v)) * tile.cells)));
+  const k = j * tile.cells + i;
+  const depth = tile.layers.water[k] - tile.layers.height[k];
+  if (depth > SPAWN_WATER_FT) problem(spawn.path, `has the spawn point in water ${Math.round(depth)} ft deep`);
 }
 
 function knownKind(kind, { objects, structures }) {

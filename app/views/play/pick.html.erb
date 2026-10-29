@@ -1,0 +1,16 @@
+<% content_for :title, "Play #{@world.display_name} - Delve" %>
+<h1><%= @world.display_name %></h1>
+<p class="muted">Released as <%= @world.released_tag %>. Pick who to play.</p>
+<% if @characters.any? %>
+  <ul class="world-list">
+    <% @characters.each do |character| %>
+      <li>
+        <strong><%= character.name %></strong>
+        <%= link_to "enter", play_path(@world, character: character.id), data: {turbo: false} %>
+      </li>
+    <% end %>
+  </ul>
+<% else %>
+  <p>You don't have a character yet. <%= link_to "Make one", new_character_path %>, then come back.</p>
+<% end %>
+<p><%= link_to "back to the worlds", worlds_path %></p>

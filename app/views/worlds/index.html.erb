@@ -1,4 +1,19 @@
-<% content_for :title, "Your worlds - Delve" %>
+<% content_for :title, "Worlds - Delve" %>
+<h1>Play</h1>
+<% if @released.any? %>
+  <ul class="world-list">
+    <% @released.each do |world| %>
+      <li>
+        <strong><%= world.display_name %></strong>
+        <span class="muted"><%= world.repo %>, <%= world.released_tag %></span>
+        <%= link_to "play", play_path(world) %>
+      </li>
+    <% end %>
+  </ul>
+<% else %>
+  <p>No worlds are released yet.</p>
+<% end %>
+
 <h1>Your worlds</h1>
 <% if @worlds.any? %>
   <ul class="world-list">

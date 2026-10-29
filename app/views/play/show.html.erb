@@ -1,0 +1,11 @@
+<canvas id="scene" class="play-scene"></canvas>
+<div class="play-hud">
+  <strong><%= @character.name %></strong> in <%= @world.display_name %>
+  <%= link_to "leave", worlds_path %>
+  <p id="playStatus"></p>
+</div>
+<div id="playPaused" class="play-paused" hidden>
+  <p>Paused.</p>
+  <button id="playResume" type="button">resume</button>
+</div>
+<script type="application/json" id="playConfig"><%= raw json_escape(@config.to_json) %></script>

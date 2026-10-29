@@ -1,0 +1,57 @@
+/* The play page: the 3D view fills the window, with a little writing over its top left. */
+html,
+body.play {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #0e0c12;
+  color: #ddd;
+  font: 14px/1.4 system-ui, sans-serif;
+}
+
+.play-scene {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
+.play-hud {
+  position: fixed;
+  top: 10px;
+  left: 12px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.55);
+  border-radius: 4px;
+}
+
+.play-hud a {
+  color: #e0c070;
+  margin-left: 0.75em;
+}
+
+.play-hud p:empty {
+  display: none;
+}
+
+.play-hud p {
+  margin: 4px 0 0;
+}
+
+.play-paused {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: max-content;
+  height: max-content;
+  padding: 16px 20px;
+  background: rgba(20, 18, 24, 0.9);
+  border: 1px solid #555;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.play-paused button {
+  margin-top: 10px;
+  font: inherit;
+  padding: 4px 16px;
+}

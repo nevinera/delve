@@ -15,9 +15,10 @@ import { trunkRadius } from "./treeMeshes.js";
 // Left-drag swings the camera around the character, right-drag turns the character with it, and
 // the wheel zooms. Escape stops.
 //
-// Each walk is a new random character, weapons put away, animated to match how it moves. Strafing
-// and running on the diagonal turn the legs part way toward the going and twist the chest back
-// toward the front; backing up while strafing turns the other way.
+// Each walk is as `look` (a resolved character recipe), or else a new random character, weapons
+// put away, animated to match how it moves. Strafing and running on the diagonal turn the legs part
+// way toward the going and twist the chest back toward the front; backing up while strafing turns
+// the other way.
 //
 // The character keeps to the tiles drawn in full, can't climb slopes steeper than MAX_CLIMB or walk
 // through tree trunks, and wades or swims where the water's deep. On structures it walks their
@@ -112,7 +113,7 @@ export class Walker {
     camera.near = CAMERA.near;
     camera.updateProjectionMatrix();
     if (this.model) disposeCharacter(this.model);
-    this.model = characterMesh({ ...randomLook(), sheathed: true });
+    this.model = characterMesh({ ...(this.look ?? randomLook()), sheathed: true });
     this.view.scene.add(this.model);
     this.mixer = new THREE.AnimationMixer(this.model);
     this.bones = null;

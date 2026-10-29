@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title><%= @world.display_name %> - Delve</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <link rel="icon" href="/icon.png" type="image/png">
+    <%= vite_stylesheet_tags "src/play/main.js" %>
+    <%= vite_script_tags "src/play/main.js", "/client/play.js" %>
+  </head>
+
+  <body class="play">
+    <%= yield %>
+  </body>
+</html>

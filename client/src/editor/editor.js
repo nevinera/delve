@@ -91,7 +91,7 @@ const STEPS = {
   heights: { tools: SCULPT_TOOLS, kinds: [] },
   water: { tools: ["select", "source"], kinds: ["source", "river", "lake"], map: "heights" },
   biomes: { tools: ["select", "biome"], kinds: ["biome"], map: "biomes" },
-  civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info"], kinds: ["road", "hub", "info"] },
+  civilization: { tools: ["select", ...Object.keys(ROADS), "hub", "info", "spawn"], kinds: ["road", "hub", "info", "spawn"] },
   zones: { tools: [], kinds: [], map: "heights" },
   tiles: { tools: [], kinds: [], map: "tiles" },
   detail: { tools: [...DETAIL_TOOLS, "trails", "channel", "water", "objects", "structures", "paint"], kinds: [] },
@@ -380,6 +380,17 @@ export class Editor {
   // Stores the sketch, the same way.
   saveSketch() {
     this.store(() => saveSketch(this.world, this.continent, this.sketch));
+  }
+
+  // Takes the spawn point off the other continents, for one placed on this one.
+  dropSpawns() {
+    for (const { key } of this.world.info.continents) {
+      if (key === this.continent) continue;
+      const sketch = loadSketch(this.world, key);
+      if (!sketch.pins.some((p) => p.kind === "spawn")) continue;
+      sketch.pins = sketch.pins.filter((p) => p.kind !== "spawn");
+      saveSketch(this.world, key, sketch);
+    }
   }
 
   // The land's been sculpted: the water and roads follow it, but tiles wait for a commit.

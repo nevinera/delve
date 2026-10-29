@@ -38,7 +38,7 @@ A world is a directory of files: JSON, plain-text plates, and a few binary files
 The editor builds a continent in steps, each writing its own files:
 
 1. **Heights**: sculpt the [land grid](formats/land-grid.md).
-2. **Biomes**, **water** and **civilization**: pins, rivers, lakes and roads in the sketch ([schema](schema/sketch.schema.json)).
+2. **Biomes**, **water** and **civilization**: pins, rivers, lakes, roads and the spawn point in the sketch ([schema](schema/sketch.schema.json)).
 3. **Zones**: named regions ([schema](schema/zone.schema.json)).
 4. **Tiles**: the generator makes 512 ft tiles from the land and the sketch.
 5. **Detail**: change tiles by hand. Edited tiles are listed in `edited.json`, and generating leaves them alone. Digging beside water makes the water flow again over the edited ground.
@@ -68,6 +68,14 @@ A published version is a tag. The world's page (`/worlds/:id`) lists its tags fo
 Nothing after step 1 reads the tag again, so moving or rewriting a tag can't change an import. The page shows when a tag has moved since it was imported.
 
 The owner releases an import that passed from the same page. Releasing checks that the repo is public right then, and sets the world's `released_sha` to the import's sha (with `released_tag` and `released_at`). Players get that commit the next time they enter.
+
+## Playing
+
+Released worlds are listed for everyone signed in, on `/worlds`. Playing one (`/play/:id`) asks which of your characters to enter as, then loads `client/src/play/main.js`:
+
+1. It reads `world.json`, the continents' sketches and the object library from `raw.githubusercontent.com/<repo>/<released sha>/`. The page lists the commit's files from its import, so nothing is probed for.
+2. It finds the spawn point: the one spawn pin, placed on the editor's civilization step. The validator rejects a world without exactly one, on a generated tile, out of deep water.
+3. It fetches the plates around the spawn point, and more as you walk toward them, and walks your character there with the editor's walk mode (`RenderView`, `Walker`).
 
 ## Docs
 

@@ -20,6 +20,7 @@ export const PINS = {
   hub: { color: "#e05a5a", label: "hub" },
   info: { color: "#b08ae0", label: "info pin" },
   source: { color: "#3fb6ff", label: "water source" },
+  spawn: { color: "#ffffff", label: "spawn point" },
 };
 const RIVER_COLOR = "#4a90d9";
 const PROBLEM_COLOR = "#ff6a3a"; // a lake that spills or is dry, or a river in a deep cut
@@ -166,6 +167,11 @@ export class Features {
     const pin = { id: nextId(sketch, "p"), kind, at, ...props };
     if (kind === "hub") pin.radius ??= DEFAULT_HUB_RADIUS_FT;
     if (kind === "source") pin.width ??= DEFAULT_SOURCE_WIDTH_FT;
+    // A world has one spawn point, where players enter: placing one moves it here.
+    if (kind === "spawn") {
+      sketch.pins = sketch.pins.filter((p) => p.kind !== "spawn");
+      this.editor.dropSpawns?.();
+    }
     sketch.pins.push(pin);
     this.select(sketch, SHAPE_PINS.includes(kind) ? null : "pin", pin.id);
     this.editor.saveSketch();

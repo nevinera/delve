@@ -9,6 +9,7 @@ import { validateWorld } from "./validate.js";
 const json = (data) => strToU8(JSON.stringify(data));
 const PLATE = "places/continents/main/plates/surface/0_0.plate";
 const INDEX = "places/continents/main/plates.json";
+const SKETCH = "places/continents/main/sketch.json";
 
 // A small stored world: two tiles in one plate, with its indexes.
 async function smallWorld() {
@@ -19,6 +20,7 @@ async function smallWorld() {
   for (const [tx, tz] of [[0, 0], [1, 0]]) tiles.set(`places/continents/main/tiles/surface/${tx}/${tz}.dlt.gz`, gzipSync(encodeTile(generateTile(ctx, tx, tz))));
   const files = await packPlates(tiles);
   files.set("world.json", json({ version: 1, name: "Small", continents: [{ key: "main", name: "Main" }], dungeons: [] }));
+  files.set(SKETCH, json({ version: 5, pins: [{ id: "p1", kind: "spawn", at: [0.5, 0.5] }], paths: [] }));
   files.set("places/continents/main/index.json", json({ version: 2, tiles: { "0,0": { zones: [], layers: ["surface"] }, "1,0": { zones: [], layers: ["surface"] } } }));
   return files;
 }
@@ -97,6 +99,19 @@ describe("validateWorld", () => {
       "warning: objects/abcd1234.json: is in collection nope0000, which collections.json doesn't list",
     ]);
     expect(changed((f) => f.set("structures/abcd1234.json", json({ id: "abcd1234" })))).toEqual(["structures/abcd1234.json: it needs a palette, materials, storeys, components and objects"]);
+  });
+
+  it("needs one spawn point, on a generated tile, out of deep water", () => {
+    const pins = (list) => (f) => f.set(SKETCH, json({ version: 5, pins: list, paths: [] }));
+    expect(changed(pins([]))).toEqual(["world.json: has no spawn point: place one on the editor's civilization step"]);
+    expect(changed(pins([{ id: "p1", kind: "spawn", at: [0.5, 0.5] }, { id: "p2", kind: "spawn", at: [1.5, 0.5] }]))).toEqual([`${SKETCH}: has a spawn point, but the world has 2: keep one`]);
+    expect(changed(pins([{ id: "p1", kind: "spawn", at: [7.5, 7.5] }]))).toEqual([`${SKETCH}: has the spawn point on tile 7,7, which hasn't been generated`]);
+    // Water at 60 ft over tile 0,0, the first in the plate.
+    const flooded = (f) => {
+      f.set(PLATE, strToU8(strFromU8(world.get(PLATE)).replace(/^layer water .*$/m, "layer water =0Jm")));
+      f.delete(INDEX);
+    };
+    expect(changed(flooded).filter((m) => m.startsWith(SKETCH))).toEqual([expect.stringMatching(/has the spawn point in water \d+ ft deep$/)]);
   });
 
   it("checks zones", () => {

@@ -1,9 +1,11 @@
-# Your worlds, each kept in a GitHub repo: the ones you've opened, and the repos you've granted
-# the app that you could open. The editor records a world each time it opens one.
+# The worlds anyone can play, then yours, each kept in a GitHub repo: the ones you've opened, and
+# the repos you've granted the app that you could open. The editor records a world each time it
+# opens one.
 class WorldsController < ApplicationController
   before_action :require_github, only: :create
 
   def index
+    @released = World.where.not(released_sha: nil).order(:name, :repo)
     @worlds = current_user.worlds.order(opened_at: :desc)
     @github = current_user.github_connection
     @repos = other_repos if @github

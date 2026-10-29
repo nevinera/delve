@@ -351,6 +351,7 @@ export class RenderView {
   // runs when it ends, however it ends.
   startWalk(onStop, at) {
     this.walker ??= new Walker(this, { onStop: () => this.walkStopped?.() });
+    this.walker.look = this.look;
     this.walkStopped = onStop;
     this.controls.enabled = false;
     this.walker.start(at);
@@ -441,6 +442,8 @@ export class RenderView {
     this.origin = [(tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT];
     this.ground = groundSampler(this.decoded, this.origin);
     [this.world, this.continent] = [state.world, state.continent];
+    // state.look: the character to walk as (character/recipe.js), or a new random one each walk.
+    this.look = state.look ?? null;
     this.streaming = { world: state.world, continent: state.continent, at: null, built: new Set() };
     this.streamAround(tx, tz);
     this.showOutlines(state.zones);
@@ -499,6 +502,18 @@ export class RenderView {
     this.buildOcean([...s.built]);
     this.clutterAround = null;
     this.sightTile = null;
+  }
+
+  // Tiles that have come into the world's files since they were looked for, as "tx,tz" keys (the
+  // play page fetches them as you go): they're no longer missing, so they're drawn.
+  tilesArrived(keys) {
+    for (const key of keys) {
+      if (this.farTiles.get(key)?.length === 0) this.farTiles.delete(key);
+      if (this.farDecoded?.get(key) === null) this.farDecoded.delete(key);
+    }
+    if (this.streaming) this.streaming.at = null;
+    this.sightTile = null;
+    this.render();
   }
 
   // Takes a tile's meshes out of the scene.

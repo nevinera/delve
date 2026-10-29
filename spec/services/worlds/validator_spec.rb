@@ -10,10 +10,10 @@ RSpec.describe Worlds::Validator do
     dir
   end
 
-  it "lists each file's blob sha and size, and no problems for a good world" do
+  it "lists each file's blob sha and size" do
     world = {version: 1, name: "Small", continents: [{key: "main", name: "Main"}], dungeons: []}.to_json
     result = described_class.call(world_dir("world.json" => world))
-    expect(result["problems"]).to eq([])
+    expect(result["problems"].map { |p| p["message"] }).to eq(["has no spawn point: place one on the editor's civilization step"])
     expect(result["files"]).to eq("world.json" => {"sha" => Digest::SHA1.hexdigest("blob #{world.bytesize}\0#{world}"), "size" => world.bytesize})
   end
 

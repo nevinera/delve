@@ -36,6 +36,7 @@ Rails.application.routes.draw do
     resources :imports, only: [:create], controller: "world_imports"
     resource :release, only: [:create], controller: "world_releases"
   end
+  get "play/:id" => "play#show", :as => :play
   get "objects" => "objects#show"
   get "structures" => "objects#structures"
   get "character_builder", to: redirect("/characters/new")
