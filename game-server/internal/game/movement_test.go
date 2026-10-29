@@ -238,6 +238,24 @@ func (f groundOf) At(x, z float64) (worlds.Sample, bool, error) {
 	return worlds.Sample{Ground: g, Water: w, Structure: x >= 5000}, true, nil
 }
 
+func (f groundOf) Enters(from, to [3]float64) (bool, error) { return false, nil }
+
+// slabbed is level ground at 50 with a floor over it, its top at 60, from x = 100 to 200, and a
+// wall standing across x = 300.
+type slabbed struct{}
+
+func (slabbed) At(x, z float64) (worlds.Sample, bool, error) {
+	s := worlds.Sample{Ground: 50, Water: math.NaN()}
+	if x >= 100 && x <= 200 {
+		s.Footholds = []float64{60}
+	}
+	return s, true, nil
+}
+
+func (slabbed) Enters(from, to [3]float64) (bool, error) {
+	return (from[0] < 300) != (to[0] < 300) && math.Min(from[1], to[1]) < 70, nil
+}
+
 var (
 	level = groundOf(func(x, z float64) (float64, float64) { return 50, math.NaN() })
 	// A cliff: 300 ft up west of x = 200, 50 ft below it.
@@ -364,4 +382,47 @@ func TestTooSteep(t *testing.T) {
 	r = onGround(t, hill, 50)
 	r.want(accept, 0.1, 100, 50, 100, running)
 	r.want(accept, 0.5, 110.5, 50+1.2*10.5, 100, nil)
+}
+
+func TestSlabsHoldYouUp(t *testing.T) {
+	r := onGround(t, slabbed{}, 60)
+	r.at[0] = 150
+	r.want(accept, 0.1, 150, 60, 100, still)
+	for i := 0; i < 6; i++ {
+		r.want(accept, 0.5, 150, 60, 100, nil) // on the floor
+	}
+	// Off its edge, back on the ground.
+	r.want(accept, 0.1, 150, 60, 100, running)
+	for x := 160.0; x <= 200; x += 10 {
+		r.want(accept, 0.5, x, 60, 100, nil)
+	}
+	y := 60.0
+	for i := 1; y > 50; i++ {
+		y = math.Max(50, 60-gravity*math.Pow(0.5*float64(i), 2)/2)
+		r.want(accept, 0.5, 200+10*float64(i), y, 100, nil)
+	}
+}
+
+func TestFloatingOverASlab(t *testing.T) {
+	r := onGround(t, slabbed{}, 60)
+	r.at[0] = 150
+	r.want(accept, 0.1, 150, 60, 100, still)
+	r.want(accept, 0.1, 150, 60, 100, &Move{Gait: "run", Jump: true})
+	r.want(accept, 0.3, 150, 65, 100, nil)
+	for i := 0; i < 3; i++ {
+		r.want(accept, 0.5, 150, 65, 100, nil)
+	}
+	if why := r.want(correct, 0.5, 150, 65, 100, nil); !strings.Contains(why, "floated 5 ft") {
+		t.Errorf("why = %q", why)
+	}
+}
+
+func TestWalkingIntoASlab(t *testing.T) {
+	r := onGround(t, slabbed{}, 50)
+	r.at[0] = 290
+	r.want(accept, 0.1, 290, 50, 100, running)
+	r.want(accept, 0.4, 298, 50, 100, nil)
+	if why := r.want(correct, 0.2, 302, 50, 100, nil); why != "walked into a slab" {
+		t.Errorf("why = %q", why)
+	}
 }

@@ -213,3 +213,7 @@ layer biome =0
 layer forest =00
 place 1 5GG1G80010
 place 0 5U03800010
+slab {"at":[800,10,400],"turn":[0,0,0],"outline":[[0,0],[20,0],[20,20],[0,20]],"thickness":1,"surface":"floorboards"}
+slab {"at":[800,10,399],"turn":[0,-90,0],"outline":[[0,0],[8,0],[8,7],[12,7],[12,0],[20,0],[20,10],[0,10]],"thickness":1,"surface":"brick"}
+slab {"at":[820,10,400],"turn":[0,0,30],"outline":[[0,0],[20,0],[20,20],[0,20]],"thickness":1,"surface":"stone"}
+slab {"at":[900,30,400],"turn":[15,0,0],"outline":[[0,0],[20,0],[20,20],[0,20]],"holes":[[[5,5],[10,5],[10,10],[5,10]]],"thickness":2,"surface":"marble"}

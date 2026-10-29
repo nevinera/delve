@@ -46,16 +46,22 @@ RSpec.describe Bot::Controls do
 
   context "on the ground" do
     # Ground rising 1 ft a foot east of x = 10, a lake 10 ft deep west of x = -10, and the land
-    # ending at x = 100. Stand gives [height, swimming] like Bot::Ground's.
+    # ending at x = 100, with a slab standing across x = `wall` if there's one. Stand gives
+    # [height, swimming] like Bot::Ground's.
     let(:ground) do
       Class.new do
-        def initialize(slope) = @slope = slope
+        def initialize(slope, wall: nil)
+          @slope = slope
+          @wall = wall
+        end
 
-        def stand(x, _z)
+        def stand(x, _z, _feet = nil)
           return nil if x > 100
           return [5.5, true] if x < -10
           [10 + @slope * [x - 10, 0].max, false]
         end
+
+        def enters?(a, b) = !@wall.nil? && (a[0] < @wall) != (b[0] < @wall)
       end
     end
     let(:controls) { described_class.new(->(msg) { sent << msg }, ground: ground.new(1)).tap { |c| c.adopt("at" => [0, 10, 0], "yaw" => 0) } }
@@ -77,6 +83,14 @@ RSpec.describe Bot::Controls do
       3.times { steep.advance(0.25) }
       expect(steep.at[0]).to be < 15
       expect(steep.forward).to eq(0)
+    end
+
+    it "stops at a slab in the way" do
+      walled = described_class.new(->(msg) {}, ground: ground.new(0, wall: 30)).tap { |c| c.adopt("at" => [0, 10, 0], "yaw" => 0) }
+      walled.move_toward(50, 0)
+      10.times { walled.advance(0.25) }
+      expect(walled.at[0]).to be < 30
+      expect(walled.forward).to eq(0)
     end
 
     it "swims in deep water, at swimming speed" do

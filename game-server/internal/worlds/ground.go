@@ -32,7 +32,13 @@ type Sample struct {
 	// Structure is whether a structure stands near enough that its floors, stairs and walls,
 	// rather than the ground, may hold the character.
 	Structure bool
+	// Footholds are the heights of slab faces there gentle enough to stand on (Slab.Footholds).
+	Footholds []float64
 }
+
+// MaxClimb is the rise over run of the steepest ground or slab a character walks up, as
+// client/src/editor/walker.js has it.
+const MaxClimb = 1.2
 
 // Ground reads one continent's ground, a plate at a time as it's needed, and keeps what it's read.
 type Ground struct {
@@ -44,6 +50,7 @@ type Ground struct {
 type plate struct {
 	tiles      map[[2]int]*tileGround
 	structures []structure
+	slabs      []*Slab
 }
 
 type tileGround struct {
@@ -116,8 +123,68 @@ func (g *Ground) At(x, z float64) (s Sample, ok bool, err error) {
 		return s, false, err
 	}
 	s.Water = float64(t.water[k])
-	s.Structure, err = g.nearStructure(x, z)
+	if s.Structure, err = g.nearStructure(x, z); err != nil {
+		return s, false, err
+	}
+	slabs, err := g.slabsNear(x, z, 0)
+	for _, slab := range slabs {
+		s.Footholds = append(s.Footholds, slab.Footholds(x, z, MaxClimb)...)
+	}
 	return s, err == nil, err
+}
+
+// Enters is whether the straight move from a to b (continent feet, the feet's height) runs into a
+// slab at a character's body height, as client/src/editor/walker.js stops it: from a step over
+// its feet up to its eyes. A slab it starts in doesn't stop it moving.
+func (g *Ground) Enters(a, b [3]float64) (bool, error) {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	reach := math.Hypot(b[0]-a[0], b[2]-a[2])
+	slabs, err := g.slabsNear((a[0]+b[0])/2, (a[2]+b[2])/2, reach/2)
+	if err != nil {
+		return false, err
+	}
+	for _, slab := range slabs {
+		for _, up := range bodyHeights {
+			if slab.Enters([3]float64{a[0], a[1] + up, a[2]}, [3]float64{b[0], b[1] + up, b[2]}) {
+				return true, nil
+			}
+		}
+	}
+	return false, nil
+}
+
+// bodyHeights are the heights over the feet a move is checked against slabs at: over a step, up
+// to the eyes.
+var bodyHeights = []float64{2, 3.5, 5}
+
+// slabsNear are the slabs whose corners come within `by` feet of (x, z) across the ground, from
+// its plate and those beside it. The lock is held.
+func (g *Ground) slabsNear(x, z, by float64) ([]*Slab, error) {
+	px, pz := int(math.Floor(x/plateFt)), int(math.Floor(z/plateFt))
+	edge := slabReachFt*2 + by
+	var out []*Slab
+	for dz := -1; dz <= 1; dz++ {
+		for dx := -1; dx <= 1; dx++ {
+			if (dx < 0 && x-float64(px)*plateFt > edge) || (dx > 0 && float64(px+1)*plateFt-x > edge) ||
+				(dz < 0 && z-float64(pz)*plateFt > edge) || (dz > 0 && float64(pz+1)*plateFt-z > edge) {
+				continue
+			}
+			p, err := g.plate(px+dx, pz+dz)
+			if err != nil {
+				return nil, err
+			}
+			if p == nil {
+				continue
+			}
+			for _, slab := range p.slabs {
+				if slab.near(x, z, by) {
+					out = append(out, slab)
+				}
+			}
+		}
+	}
+	return out, nil
 }
 
 // nearStructure is whether a structure reaches near (x, z), in its plate or the ones beside it.
@@ -178,7 +245,8 @@ func (g *Ground) plate(px, pz int) (*plate, error) {
 	return p, nil
 }
 
-// readPlate reads the height and water layers of a plate's tiles, and where its structures stand.
+// readPlate reads the height and water layers of a plate's tiles, where its structures stand, and
+// its slabs.
 func readPlate(r io.Reader) (*plate, error) {
 	p := &plate{tiles: map[[2]int]*tileGround{}}
 	var kinds []objectKind
@@ -273,6 +341,12 @@ func readPlate(r io.Reader) (*plate, error) {
 			} else if tile != nil && name == "water" {
 				tile.water = values
 			}
+		case "slab":
+			slab, err := readSlab(rest)
+			if err != nil {
+				return nil, fmt.Errorf("bad slab line %q: %w", line, err)
+			}
+			p.slabs = append(p.slabs, slab)
 		case "place":
 			st, ok, err := placed(rest, kinds, origin)
 			if err != nil {

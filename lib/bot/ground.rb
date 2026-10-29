@@ -1,15 +1,19 @@
+require "json"
 require "net/http"
 
 module Bot
   # The ground of a continent, read from its surface plates (docs/formats/plates.md) as the play
   # page fetches them, and sampled as the browser's walker samples it (client/src/editor/walker.js
-  # groundAt), so the bot stands where the server expects. Only heights and water: structures,
+  # groundAt), so the bot stands where the server expects. Heights, water and slabs: structures,
   # objects and trees don't get in its way.
   class Ground
     CELL_FT = 8.0
     TILE_CELLS = 64
     PLATE_FT = 16 * TILE_CELLS * CELL_FT
     SWIM_DEPTH = 4.5
+    STEP_FT = 1.5 # how high the walker steps up onto a slab
+    MAX_CLIMB = 1.2 # rise over run of the steepest slab it walks up
+    BODY_HEIGHTS = [2, 3.5, 5].freeze # over the feet, where a move is checked against slabs
     VALUES = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-_".chars.each_with_index.to_h
 
     # fetch takes a URL and gives the body, or nil when there's nothing there.
@@ -42,13 +46,28 @@ module Bot
       {ground:, water: here[1]}
     end
 
-    # Where the feet rest at (x, z), as [height, swimming]: the ground, or a swimming depth under
-    # water too deep to stand in. Nil where the continent has no tile.
-    def stand(x, z)
+    # Where the feet rest at (x, z), for feet at `feet`, as [height, swimming]: the ground, or a
+    # swimming depth under water too deep to stand in, or a slab's top, whichever is highest within
+    # a step of the feet (client/src/world/walkIndex.js standOn). Nil where the continent has no
+    # tile.
+    def stand(x, z, feet = Float::INFINITY)
       sample = at(x, z) or return nil
       water = sample[:water]
-      return [water - SWIM_DEPTH, true] if water && water - SWIM_DEPTH > sample[:ground]
-      [sample[:ground], false]
+      swim = !water.nil? && water - SWIM_DEPTH > sample[:ground]
+      ground = swim ? water - SWIM_DEPTH : sample[:ground]
+      heights = [ground, *slabs_near(x, z, 0).flat_map { _1.footholds(x, z, MAX_CLIMB) }]
+      reachable = heights.select { _1 <= feet + STEP_FT }
+      height = reachable.any? ? reachable.max : heights.min
+      [height, swim && height == ground]
+    end
+
+    # Whether the straight move from a to b ([x, y, z], the feet's height) runs into a slab at the
+    # bot's body height. A slab it starts in doesn't stop it.
+    def enters?(a, b)
+      reach = Math.hypot(b[0] - a[0], b[2] - a[2])
+      slabs_near((a[0] + b[0]) / 2, (a[2] + b[2]) / 2, reach / 2).any? do |slab|
+        BODY_HEIGHTS.any? { |up| slab.enters?([a[0], a[1] + up, a[2]], [b[0], b[1] + up, b[2]]) }
+      end
     end
 
     private
@@ -57,19 +76,32 @@ module Bot
     def cell(ci, cj)
       tx = ci.div(TILE_CELLS)
       tz = cj.div(TILE_CELLS)
-      tile = plate(tx.div(16), tz.div(16))&.dig(tx, tz) or return nil
+      tile = plate(tx.div(16), tz.div(16))&.dig(:tiles, tx, tz) or return nil
       k = (cj - tz * TILE_CELLS) * TILE_CELLS + (ci - tx * TILE_CELLS)
       [tile[:height][k], tile[:water][k]]
+    end
+
+    # The slabs whose corners come within `by` feet of (x, z) across the ground, from its plate
+    # and those beside it.
+    def slabs_near(x, z, by)
+      px, pz = (x / PLATE_FT).floor, (z / PLATE_FT).floor
+      edge = Slab::REACH_FT * 2 + by
+      [-1, 0, 1].product([-1, 0, 1]).flat_map do |dx, dz|
+        next [] if (dx < 0 && x - px * PLATE_FT > edge) || (dx > 0 && (px + 1) * PLATE_FT - x > edge) ||
+          (dz < 0 && z - pz * PLATE_FT > edge) || (dz > 0 && (pz + 1) * PLATE_FT - z > edge)
+        (plate(px + dx, pz + dz)&.dig(:slabs) || []).select { _1.near?(x, z, by) }
+      end
     end
 
     def plate(px, pz)
       return @plates[[px, pz]] if @plates.key?([px, pz])
       text = @fetch.call("#{@base}/#{px}_#{pz}.plate")
-      @plates[[px, pz]] = text && Hash.new { |h, tx| h[tx] = {} }.tap { |tiles| read(text, tiles) }
+      @plates[[px, pz]] = text && {tiles: Hash.new { |h, tx| h[tx] = {} }, slabs: []}.tap { read(text, _1) }
     end
 
-    # Reads each tile's height and water layers into tiles[tx][tz].
-    def read(text, tiles)
+    # Reads each tile's height and water layers into plate[:tiles][tx][tz], and its slabs.
+    def read(text, plate)
+      tiles = plate[:tiles]
       lines = text.each_line(chomp: true)
       tile = nil
       loop do
@@ -85,6 +117,8 @@ module Bot
           rows = all ? nil : Array.new(TILE_CELLS) { lines.next }
           next unless tile && %w[height water].include?(name)
           tile[name.to_sym] = all ? Array.new(TILE_CELLS**2, level(all)) : rows.flat_map { |row| row.scan(/.../).map { level(_1) } }
+        when "slab"
+          plate[:slabs] << Slab.new(JSON.parse(rest))
         end
       end
       tiles.each_value { |column| column.each { |at, t| raise ArgumentError, "tile #{at} has no heights" unless t[:height] } }

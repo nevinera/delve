@@ -4,13 +4,24 @@
 //   node game-server/internal/worlds/testdata/plate.mjs
 import fs from "fs";
 import { decodePlate, encodePlate } from "../../../../client/src/world/plateCodec.js";
+import { slabFootholds } from "../../../../client/src/world/slabs.js";
 
 const CELLS = 64;
 const CELL_FT = 8;
 const here = new URL(".", import.meta.url);
 
+const square = (n) => [[0, 0], [n, 0], [n, n], [0, n]];
+const SLABS = [
+  { at: [800, 10, 400], turn: [0, 0, 0], outline: square(20), thickness: 1, surface: "floorboards" },
+  { at: [800, 10, 399], turn: [0, -90, 0], outline: [[0, 0], [8, 0], [8, 7], [12, 7], [12, 0], [20, 0], [20, 10], [0, 10]], thickness: 1, surface: "brick" },
+  { at: [820, 10, 400], turn: [0, 0, 30], outline: square(20), thickness: 1, surface: "stone" },
+  { at: [900, 30, 400], turn: [15, 0, 0], outline: square(20), holes: [[[5, 5], [10, 5], [10, 10], [5, 10]]], thickness: 2, surface: "marble" },
+];
+
 // Tile 0,0 slopes gently east, then climbs a cliff past cell 40. Tile 1,0 has a lake in its west
-// half, with a shallow rim, a dock (a structure) on its shore, and a boulder.
+// half, with a shallow rim, a dock (a structure) on its shore, and a boulder. Past it, slabs: a 20
+// ft floor at 10 ft, a wall along its north edge with a doorway, a ramp rising 30° off its east
+// edge, and a platform with a hole in it.
 function tile(tx) {
   const height = new Float64Array(CELLS * CELLS);
   const water = new Float64Array(CELLS * CELLS).fill(NaN);
@@ -33,6 +44,7 @@ function tile(tx) {
       { type: "boulder", at: [700, 400], yaw: 0, scale: 1, footprint: { circle: 2 }, height: 3 },
       { type: "structure:dock0001", at: [672.5, 160.25], yaw: 0, scale: 1, footprint: { open: 24 }, height: 6 },
     ] : [],
+    slabs: tx === 1 ? SLABS : undefined,
   };
 }
 
@@ -72,3 +84,8 @@ const expected = points.map(([x, z]) => {
   return { at: [x, z], ground: groundAt(x, z), water: cell?.water ?? null };
 });
 fs.writeFileSync(new URL("ground.json", here), `${JSON.stringify(expected, null, 1)}\n`);
+
+// The walker's footholds on the slabs (client/src/world/slabs.js slabFootholds).
+const slabPoints = [[810, 410], [810, 399.5], [810, 398], [825, 410], [839, 410], [905, 412], [909.2, 405.3], [915, 415], [850, 410]];
+const footholds = slabPoints.map(([x, z]) => ({ at: [x, z], footholds: SLABS.flatMap((slab) => slabFootholds(slab, x, z, 1.2)) }));
+fs.writeFileSync(new URL("slabs.json", here), `${JSON.stringify(footholds, null, 1)}\n`);

@@ -3,7 +3,7 @@ module Bot
   # movement, as the browser's walker does, and reports it: a move when the movement changes, and
   # heartbeats between (client/src/play/game.js). The server checks the reports add up, and puts the
   # bot back when they don't. Given the ground (Ground), it keeps to it as the walker does: on the
-  # ground, swimming in deep water, and not up slopes too steep to walk.
+  # ground or slabs, swimming in deep water, not up slopes too steep to walk, and not into slabs.
   # Yaw is radians, 0 facing +z (south); x is east.
   class Controls
     RUN_FT = 21.0
@@ -91,9 +91,11 @@ module Bot
 
     private
 
-    # Steps onto the ground at (x, z), unless it's off the land or too steep to climb.
+    # Steps onto the ground at (x, z), or a slab, unless it's off the land, too steep to climb, or
+    # a slab's in the way.
     def step_onto(x, z, step)
-      height, swimming = @ground.stand(x, z)
+      return stop if @ground.enters?(@at, [x, @at[1], z])
+      height, swimming = @ground.stand(x, z, @at[1])
       return stop if height.nil?
       return stop if !swimming && !@swimming && height - @at[1] > MAX_CLIMB * step
       @at = [x, height, z]

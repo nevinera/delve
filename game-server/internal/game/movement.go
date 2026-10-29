@@ -12,8 +12,9 @@ import (
 // Movement checks: each report a client sends has to follow from the one before, at the speeds a
 // character can move, by the clocks of both. Where the world's ground is known, the character also
 // has to keep to it: not under it, not floating over it or over deep water, not swimming out of
-// water, and not up slopes too steep to climb. Near structures, whose floors and walls the server
-// doesn't know, only the first checks apply.
+// water, and not up slopes too steep to climb. Slabs are ground too, to stand on, and it can't
+// move into one. Near structures, whose floors and walls the server doesn't know, only the first
+// checks apply.
 
 // Speeds and jumping, feet and seconds, as client/src/editor/walker.js moves characters.
 const (
@@ -28,8 +29,8 @@ const (
 
 // The ground, as client/src/editor/walker.js keeps to it.
 const (
-	maxClimb  = 1.2 // rise over run of the steepest ground a character walks up
-	swimDepth = 4.5 // how far below the water's surface a swimming character's feet are
+	maxClimb  = worlds.MaxClimb // rise over run of the steepest ground a character walks up
+	swimDepth = 4.5             // how far below the water's surface a swimming character's feet are
 )
 
 // Leeway for what a client reports, for timing between its frames and its reports.
@@ -92,7 +93,8 @@ type motion struct {
 type footing struct {
 	known  bool    // the ground was known there, away from structures
 	ground float64 // the ground's height
-	stand  float64 // where the feet rest: the ground, or a swimming depth in deep water
+	stand  float64 // where the feet rest: the ground, a swimming depth in deep water, or a slab
+	slab   bool    // they rest on a slab
 	deep   bool    // water too deep to stand in
 	on     bool    // the feet were where they rest
 }
@@ -100,6 +102,7 @@ type footing struct {
 // Ground is the ground of the continent a character is on (worlds.Ground).
 type Ground interface {
 	At(x, z float64) (worlds.Sample, bool, error)
+	Enters(from, to [3]float64) (bool, error)
 }
 
 // verdict is what to do with a report.
@@ -189,11 +192,30 @@ func (m *motion) check(r incoming, from [3]float64, now time.Time, g Ground) (ve
 			return m.violation(now, fmt.Sprintf("fell %.0f ft in %.2f s, faster than falling", -rise, dt))
 		}
 	}
+	if why := m.intoSlab(r, g); why != "" {
+		return m.violation(now, why)
+	}
 	f, why := m.onGround(r, t, g)
 	if why != "" {
 		return m.violation(now, why)
 	}
 	return m.take(r, t, f), ""
+}
+
+// intoSlab checks a report's move from the last one doesn't run into a slab.
+func (m *motion) intoSlab(r incoming, g Ground) string {
+	if g == nil {
+		return ""
+	}
+	into, err := g.Enters(m.at, r.At)
+	if err != nil {
+		log.Printf("movement: reading the slabs: %v", err)
+		return ""
+	}
+	if into {
+		return "walked into a slab"
+	}
+	return ""
 }
 
 // onGround checks a report against the ground, and says how it stood.
@@ -218,6 +240,17 @@ func (m *motion) onGround(r incoming, t float64, g Ground) (footing, string) {
 		f.stand = s.Water - swimDepth
 	}
 	y := r.At[1]
+	// The highest slab within reach of the feet holds them, when it's over the ground or they're
+	// under it.
+	best := math.Inf(-1)
+	for _, top := range s.Footholds {
+		if top <= y+slackFt {
+			best = math.Max(best, top)
+		}
+	}
+	if best > f.stand || (!math.IsInf(best, -1) && y < s.Ground-underFt) {
+		f.stand, f.slab, f.deep = best, true, false
+	}
 	f.on = y <= f.stand+slackFt
 	jumping := (r.Move != nil && r.Move.Jump) || t-m.jumped < airAfterJump
 	swimming := m.move.Swim
@@ -226,7 +259,7 @@ func (m *motion) onGround(r incoming, t float64, g Ground) (footing, string) {
 	}
 	last := m.footing
 
-	if y < s.Ground-underFt {
+	if y < s.Ground-underFt && !f.slab {
 		return f, fmt.Sprintf("went %.0f ft under the ground", s.Ground-y)
 	}
 	if swimming && !f.deep && !(last.known && last.deep) {
@@ -250,7 +283,11 @@ func (m *motion) onGround(r incoming, t float64, g Ground) (footing, string) {
 	// Walking, from ground to ground, it can't climb more steeply than the walker lets it.
 	if last.known && last.on && f.on && !f.deep && !last.deep && !jumping {
 		across := horizontal(m.at, r.At)
-		if climb := f.ground - last.ground; climb > maxClimb*across*1.25+underFt {
+		climb := f.ground - last.ground
+		if f.slab || last.slab {
+			climb = f.stand - last.stand
+		}
+		if climb > maxClimb*across*1.25+underFt {
 			return f, fmt.Sprintf("climbed %.0f ft in %.0f ft, steeper than you can walk", climb, across)
 		}
 	}

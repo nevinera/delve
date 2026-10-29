@@ -33,4 +33,22 @@ RSpec.describe Bot::Ground do
     expect(ground.stand(530, 8)).to eq([3.0, false])
     expect(ground.stand(1030, 10)).to be_nil
   end
+
+  it "finds the slab footholds the browser's walker finds, and stands on the highest within a step" do
+    JSON.parse(testdata.join("slabs.json").read).each do |point|
+      x, z = point["at"]
+      height, = ground.stand(x, z, 100)
+      expect(height).to be_within(1e-6).of([ground.at(x, z)[:ground], *point["footholds"]].max), "at #{point["at"]}"
+    end
+    # On the ground beside the floor, it steps up onto it; well under the platform, it stays down.
+    expect(ground.stand(810, 410, 9)).to eq([10, false])
+    expect(ground.stand(905, 412, 8)[0]).to be < 10
+  end
+
+  it "won't walk into a slab, but will through a doorway or out of one it's in" do
+    expect(ground.enters?([804, 10, 402], [804, 10, 396])).to be(true)
+    expect(ground.enters?([810, 10, 402], [810, 10, 396])).to be(false)
+    expect(ground.enters?([804, 10, 399.5], [804, 10, 402])).to be(false)
+    expect(ground.enters?([895, 27, 410], [905, 27, 410])).to be(true)
+  end
 end

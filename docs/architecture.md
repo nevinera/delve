@@ -88,10 +88,10 @@ The game server (`game-server/`) holds every character in a world. Browsers conn
 
 - `internal/token` checks entry tokens, which Rails signs (`Game::EntryToken`).
 - `internal/worlds` downloads each released commit's zip once, keeps it on disk, and reads the continents and spawn pin. It reads a continent's surface plates as characters reach them, for the ground's heights, water and structures.
-- `internal/game` places characters on a layer, works out who's near whom (the 3×3 tiles around each), checks that their movement adds up (speed, clocks, rising and falling, and the ground under them), and passes it on.
+- `internal/game` places characters on a layer, works out who's near whom (the 3×3 tiles around each), checks that their movement adds up (speed, clocks, rising and falling, the ground and slabs under them, and not walking into slabs), and passes it on.
 - `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token, and writes their positions back to it (`WorldCharacter`, one per character per world). The server never writes to the database itself.
 
-Bots play characters, so you can test with others around: `script/game/bot` (code in `lib/bot/`) enters a released world as a character, the way the play page does, and runs a strategy. A bot fetches the surface plates from GitHub and walks on the ground they describe. `null` stands still, and `follow` runs after a named character.
+Bots play characters, so you can test with others around: `script/game/bot` (code in `lib/bot/`) enters a released world as a character, the way the play page does, and runs a strategy. A bot fetches the surface plates from GitHub and walks on the ground and slabs they describe, stopping at slabs in its way. `null` stands still, and `follow` runs after a named character.
 
 ## Docs
 

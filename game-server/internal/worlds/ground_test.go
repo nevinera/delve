@@ -107,3 +107,58 @@ func TestReadPlateRefusesBadPlates(t *testing.T) {
 		}
 	}
 }
+
+func TestGroundFindsSlabFootholdsAsTheClientDoes(t *testing.T) {
+	raw, err := os.ReadFile("testdata/slabs.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var points []struct {
+		At        [2]float64
+		Footholds []float64
+	}
+	if err := json.Unmarshal(raw, &points); err != nil {
+		t.Fatal(err)
+	}
+	g := groundWorld(t).Ground("main")
+	for _, p := range points {
+		s, ok, err := g.At(p.At[0], p.At[1])
+		if err != nil || !ok {
+			t.Fatalf("%v: ok = %v, err = %v", p.At, ok, err)
+		}
+		if len(s.Footholds) != len(p.Footholds) {
+			t.Errorf("%v: footholds = %v, want %v", p.At, s.Footholds, p.Footholds)
+			continue
+		}
+		for i := range p.Footholds {
+			if math.Abs(s.Footholds[i]-p.Footholds[i]) > 1e-6 {
+				t.Errorf("%v: footholds = %v, want %v", p.At, s.Footholds, p.Footholds)
+			}
+		}
+	}
+}
+
+func TestGroundStopsMovesIntoSlabs(t *testing.T) {
+	g := groundWorld(t).Ground("main")
+	for _, c := range []struct {
+		name     string
+		from, to [3]float64
+		want     bool
+	}{
+		{"through the wall", [3]float64{804, 10, 402}, [3]float64{804, 10, 396}, true},
+		{"through the doorway", [3]float64{810, 10, 402}, [3]float64{810, 10, 396}, false},
+		{"across the floor", [3]float64{802, 10, 402}, [3]float64{818, 10, 418}, false},
+		{"up the ramp", [3]float64{821, 10.6, 410}, [3]float64{830, 15.8, 410}, false},
+		{"under the platform", [3]float64{895, 8, 410}, [3]float64{905, 8, 410}, false},
+		{"into the platform's side", [3]float64{895, 27, 410}, [3]float64{905, 27, 410}, true},
+		{"out of a wall it's in", [3]float64{804, 10, 399.5}, [3]float64{804, 10, 402}, false},
+	} {
+		got, err := g.Enters(c.from, c.to)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != c.want {
+			t.Errorf("%s: Enters = %v, want %v", c.name, got, c.want)
+		}
+	}
+}
