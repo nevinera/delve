@@ -5,6 +5,7 @@ import { GRAY_INKS, MAX_PIECES, newObjectId, MIN_SIZE_FT, PIECE_TYPES, REACH_FT,
 import { MAX_TEXT, TEXT_PLACEHOLDER, signText } from "../world/pixelFont.js";
 import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, faceFrame, faceIdOf, faceSpot, objectGeometry, primitive, textGeometry, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
 import { ImagePainter, drawImage } from "./imagePainter.js";
+import { objectHull } from "./shapes.js";
 import { characterClips, loadAnimations } from "../character/animations.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
 import { randomLook } from "../character/recipe.js";
@@ -12,7 +13,8 @@ import { randomLook } from "../character/recipe.js";
 // The object builder: a dialog over most of the page for putting a built object
 // (world/builtObjects.js) together from pieces. The 3D view shows the pieces on a ground grid (1 ft,
 // heavier every 5 ft), the object's axes, a ring where they must stay within, the footprint the
-// game will use, and on asking, a person for scale. Clicking a piece picks it and fades the rest; handles
+// game will use, the outline it tests line of sight against (unless "blocks sight" is off), and on
+// asking, a person for scale. Clicking a piece picks it and fades the rest; handles
 // move, turn or size it along its own axes, sizing from the face opposite the handle, and the panel
 // sets its type, color, taper, whether it's a hole and, as a last resort, exact numbers. Holes show
 // as red glass while a piece is picked; with none picked the object shows as the game draws it,
@@ -41,7 +43,7 @@ const LABEL_FT = 10; // how far out along each axis its label sits
 const FADED = 0.25; // how much of the unpicked pieces shows while one is picked
 const HOLE = { color: 0xff4040, opacity: 0.3 };
 const AXES = { x: { color: 0xe05a5a, label: "x east" }, y: { color: 0x6ad06a, label: "y up" }, z: { color: 0x5a8ae0, label: "z south" } };
-const COLORS = { grid: 0x626a58, gridMajor: 0x9aa48c, reach: 0x8fc4ff, footprint: 0xf0c850, picked: 0xffe066, ground: 0x4a5040, background: 0x20242a };
+const COLORS = { grid: 0x626a58, gridMajor: 0x9aa48c, reach: 0x8fc4ff, footprint: 0xf0c850, sight: 0xff8a5c, picked: 0xffe066, ground: 0x4a5040, background: 0x20242a };
 const HINT = "click a piece to pick it · G moves, R turns, S sizes, all along the piece's own axes · W toggles moving along the world's · F frames the object · right-drag turns the view · middle-drag pans · wheel zooms · delete removes the piece · ctrl-d copies it · ctrl-z undoes, ctrl-shift-z redoes";
 
 // An element with properties and children.
@@ -137,7 +139,9 @@ export class ObjectBuilder {
       }),
     );
     this.collection = el("select", { title: "the collection it's in", onchange: () => this.change((o) => (o.collection = this.collection.value)) });
-    this.details = div("ob-details", this.name, this.tags, el("label", { className: "ob-field" }, "collection", this.collection));
+    this.sight = el("input", { type: "checkbox", onchange: () => this.change((o) => (this.sight.checked ? delete o.blocksSight : (o.blocksSight = false))) });
+    const sight = el("label", { className: "ob-check", title: "whether it blocks line of sight: the game uses the outline drawn around it" }, this.sight, el("span", { textContent: "blocks sight" }));
+    this.details = div("ob-details", this.name, this.tags, el("label", { className: "ob-field" }, "collection", this.collection), sight);
 
     const add = div("ob-row", ...PIECE_TYPES.map((type) => el("button", { type: "button", textContent: type, onclick: () => this.addPiece(type) })));
     this.handleButtons = Object.keys(HANDLES).map((name) => el("button", { type: "button", textContent: name, onclick: () => this.setHandle(name) }));
@@ -423,6 +427,7 @@ export class ObjectBuilder {
     this.name.value = object.name;
     this.tags.value = (object.tags ?? []).join(", ");
     this.collection.value = object.collection ?? "";
+    this.sight.checked = object.blocksSight !== false;
     for (const b of this.handleButtons) b.classList.toggle("active", b.textContent === this.handle);
     this.worldBox.checked = this.worldMoves;
 
@@ -837,7 +842,7 @@ export class ObjectBuilder {
     this.person.rotation.y = Math.atan2(-PERSON.toward.x, -PERSON.toward.y);
   }
 
-  // The footprint the game will use, on the ground.
+  // The footprint the game will use, on the ground, and the line of sight outline.
   drawMarks() {
     this.placePerson();
     for (const child of [...this.marks.children]) {
@@ -846,6 +851,7 @@ export class ObjectBuilder {
       this.marks.remove(child);
     }
     if (!this.object.pieces.length) return;
+    this.drawHull();
     const { footprint } = shapeOf(this.object);
     if (footprint.circle !== undefined) this.marks.add(ring(footprint.circle, COLORS.footprint));
     else {
@@ -853,6 +859,15 @@ export class ObjectBuilder {
       const points = [[-w, -d], [w, -d], [w, d], [-w, d], [-w, -d]].map(([x, z]) => new THREE.Vector3(x, 0.03, z));
       this.marks.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: COLORS.footprint })));
     }
+  }
+
+  // The outline the game tests line of sight against, when the object blocks it.
+  drawHull() {
+    const hull = this.object.blocksSight === false ? null : objectHull(this.object);
+    if (!hull) return;
+    const points = hull.points.map((p) => new THREE.Vector3(...p));
+    const edges = hull.faces.flatMap((loop) => loop.flatMap((a, i) => [points[a], points[loop[(i + 1) % loop.length]]]));
+    this.marks.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(edges), new THREE.LineBasicMaterial({ color: COLORS.sight, transparent: true, opacity: 0.8 })));
   }
 
   // Looks at the whole object, or at where one would stand.

@@ -1,8 +1,9 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { builtObjects, builtStructures, images } from "../objects/collections.js";
 import { packPlates, unpackPlates } from "./plates.js";
-import { WORLD_PATH, continentOf } from "../world/paths.js";
+import { SHAPES_PATH, WORLD_PATH, continentOf } from "../world/paths.js";
 import { kindSizes, setBuiltObjects } from "../world/objects.js";
+import { shapesFile, shapesText } from "./shapes.js";
 
 // A whole world directory held in memory, keyed by path within the world (no leading slash). The
 // editor reads and writes files here and downloads the lot as a zip that unzips straight over a
@@ -68,11 +69,15 @@ export class World {
     this.files = await unpackPlates(this.files, { pool, onProgress });
   }
 
-  // The files as the world stores them, with its tiles in plates, sized by its own library.
-  stored({ pool, onProgress } = {}) {
+  // The files as the world stores them, with its tiles in plates, sized by its own library, and
+  // when it has plates, the shapes file for the kinds they place.
+  async stored({ pool, onProgress } = {}) {
     this.plateCache ??= new Map();
     setBuiltObjects(builtObjects(this), images(this), builtStructures(this));
-    return packPlates(this.files, { cache: this.plateCache, pool, sizes: kindSizes(), onProgress });
+    const files = await packPlates(this.files, { cache: this.plateCache, pool, sizes: kindSizes(), onProgress });
+    const plates = [...this.plateCache].filter(([path]) => files.has(path));
+    if (plates.length) files.set(SHAPES_PATH, strToU8(shapesText(shapesFile(plates.flatMap(([, plate]) => plate.kinds)))));
+    return files;
   }
 
   // The world's files zipped, these files by default, or others such as stored() gives.

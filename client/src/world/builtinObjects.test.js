@@ -17,6 +17,10 @@ describe("builtin objects", () => {
     }
   });
 
+  it("block line of sight but for the ones you see through", () => {
+    expect(BUILTIN_OBJECTS.filter((o) => o.blocksSight === false)).toHaveLength(57);
+  });
+
   it("are placeable types in every world", () => {
     setBuiltObjects([]);
     for (const object of BUILTIN_OBJECTS) expect(specOf(`built:${object.id}`)?.built, object.name).toBe(object);

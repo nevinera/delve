@@ -10,6 +10,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 | `objects/<id>.json` | a built object | [schema](../schema/object.schema.json) |
 | `structures/<id>.json` | a structure | [schema](../schema/structure.schema.json) |
 | `textures/<id>.json` | an image objects and structures wear | [schema](../schema/image.schema.json) |
+| `shapes.json` | the hulls line of sight tests against, written by the editor | [shapes](shapes.md) |
 | `classes/`, `abilities/`, `statuses/`, `items/`, `item-templates/`, `creatures/`, `npcs/`, `dialogues/` | game data, each `<id>.json` | [game data](game-data.md) |
 | `places/continents/<c>/sketch.json` | pins, road paths, rivers and lakes | [schema](../schema/sketch.schema.json) |
 | `places/continents/<c>/zones/<key>.json` | a zone: a name and a region | [schema](../schema/zone.schema.json) |

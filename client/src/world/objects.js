@@ -33,15 +33,16 @@ const MOSS = [[0.2, 0.26], [0.4, 0.55], [0.3, 0.4]];
 // parts: a shape each (objectMeshes.js) and the color ranges to pick from, HSL 0-1.
 // kit: instead of parts' shapes, a built object made of pieces (kitObjects.js), unitFt of its feet
 // to one of the type's; its first part's color tints the whole of it.
+// blocksSight: false for a type you see through; others block line of sight (editor/shapes.js).
 export const OBJECT_TYPES = {
   boulder: { size: [3, 8], footprint: { circle: 0.45 }, height: 0.8, parts: [{ shape: "boulder", colors: [GREY] }] },
   outcrop: { size: [2.5, 4], footprint: { rect: [2.6, 1.6] }, height: 1, parts: [{ shape: "outcrop", colors: [GREY] }] },
-  bush: { size: [3, 5], footprint: { circle: 0.42 }, height: 0.95, parts: [{ shape: "bush", colors: [BUSH] }] },
-  fence: { size: [3.5, 4.5], footprint: { rect: [2.6, 0.2] }, height: 1, kit: KIT_OBJECTS.fence, unitFt: 4, parts: [{ colors: [BLEACHED] }] },
+  bush: { blocksSight: false, size: [3, 5], footprint: { circle: 0.42 }, height: 0.95, parts: [{ shape: "bush", colors: [BUSH] }] },
+  fence: { blocksSight: false, size: [3.5, 4.5], footprint: { rect: [2.6, 0.2] }, height: 1, kit: KIT_OBJECTS.fence, unitFt: 4, parts: [{ colors: [BLEACHED] }] },
   log: { size: [25, 50], footprint: { capsule: [0.1, 0.5] }, height: 0.2, kit: KIT_OBJECTS.log, unitFt: 30, parts: [{ colors: [BARK] }] },
   stump: { size: [3, 6], footprint: { circle: 0.8 }, height: 1, parts: [{ shape: "stump", colors: [BARK] }] },
   mossyBoulder: { size: [3, 6], footprint: { circle: 0.45 }, height: 0.85, parts: [{ shape: "boulder", colors: [DARK_GREY] }, { shape: "mossCap", colors: [MOSS] }] },
-  thicket: { size: [4, 6], footprint: { circle: 0.7 }, height: 0.95, parts: [{ shape: "thicket", colors: [BUSH] }] },
+  thicket: { blocksSight: false, size: [4, 6], footprint: { circle: 0.7 }, height: 0.95, parts: [{ shape: "thicket", colors: [BUSH] }] },
   uprooted: { size: [60, 110], footprint: { capsule: [0.045, 0.5] }, height: 0.24, parts: [{ shape: "trunk", colors: [BARK] }, { shape: "roots", colors: [[[0.06, 0.09], [0.25, 0.4], [0.18, 0.26]]] }] },
   rock: { size: [4, 15], footprint: { circle: 0.45 }, height: 0.8, parts: [{ shape: "rock", colors: [GREY] }] },
   spire: { size: [10, 25], footprint: { circle: 0.15 }, height: 1, parts: [{ shape: "spire", colors: [GREY] }] },
@@ -49,7 +50,7 @@ export const OBJECT_TYPES = {
   deadStump: { size: [3, 6], footprint: { circle: 0.8 }, height: 1, parts: [{ shape: "stump", colors: [BLEACHED] }] },
   rottingLog: { size: [20, 45], footprint: { capsule: [0.1, 0.5] }, height: 0.2, sink: 0.3, kit: KIT_OBJECTS.log, unitFt: 30, parts: [{ colors: [ROTTEN] }] },
   hollowStump: { size: [4, 7], footprint: { circle: 0.8 }, height: 1, parts: [{ shape: "hollowStump", colors: [ROTTEN] }] },
-  rootTangle: { size: [4, 7], footprint: { circle: 0.55 }, height: 0.7, parts: [{ shape: "rootArches", colors: [ROTTEN] }] },
+  rootTangle: { blocksSight: false, size: [4, 7], footprint: { circle: 0.55 }, height: 0.7, parts: [{ shape: "rootArches", colors: [ROTTEN] }] },
   hummock: { size: [2, 3.5], footprint: { circle: 1.1 }, height: 1, parts: [{ shape: "hummock", colors: [MOSS] }] },
   driftLog: { size: [15, 35], footprint: { capsule: [0.07, 0.5] }, height: 0.14, kit: KIT_OBJECTS.driftLog, unitFt: 30, parts: [{ colors: [BLEACHED] }] },
 };

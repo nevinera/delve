@@ -1,0 +1,75 @@
+import { gzipSync, strFromU8 } from "fflate";
+import { describe, expect, it } from "vitest";
+import { generateTile, prepareWorld } from "../world/generator.js";
+import { LandGrid, PER_TILE } from "../world/landGrid.js";
+import { makeObject, setBuiltObjects } from "../world/objects.js";
+import { encodeTile } from "../world/tileCodec.js";
+import { blocksSight, hullOf, shapesFile, shapesText } from "./shapes.js";
+import { World } from "./world.js";
+
+// A crate of six boards, and a lamp post you see through.
+const crate = {
+  id: "crate001",
+  name: "crate",
+  palette: [{ color: "#8a6a44" }],
+  pieces: [
+    { type: "box", size: [2, 0.1, 2], at: [0, 0.05, 0], turn: [0, 0, 0], color: 0 },
+    { type: "box", size: [2, 0.1, 2], at: [0, 1.95, 0], turn: [0, 0, 0], color: 0 },
+    { type: "box", size: [0.1, 2, 2], at: [-0.95, 1, 0], turn: [0, 0, 0], color: 0 },
+    { type: "box", size: [0.1, 2, 2], at: [0.95, 1, 0], turn: [0, 0, 0], color: 0 },
+    { type: "box", size: [2, 2, 0.1], at: [0, 1, -0.95], turn: [0, 0, 0], color: 0 },
+    { type: "box", size: [2, 2, 0.1], at: [0, 1, 0.95], turn: [0, 0, 0], color: 0 },
+  ],
+};
+const lamp = { id: "lamp0001", name: "lamp", blocksSight: false, palette: [{ color: "#333333" }], pieces: [{ type: "cylinder", size: [0.3, 8, 0.3], at: [0, 4, 0], turn: [0, 0, 0], color: 0 }] };
+
+describe("shapes", () => {
+  setBuiltObjects([crate, lamp]);
+
+  it("knows which kinds block sight", () => {
+    expect(blocksSight("built:crate001")).toBe(true);
+    expect(blocksSight("built:lamp0001")).toBe(false);
+    expect(blocksSight("boulder")).toBe(true);
+    expect(blocksSight("bush")).toBe(false);
+    expect(blocksSight("nothing")).toBe(false);
+  });
+
+  it("wraps a built object's boards in one box", () => {
+    const hull = hullOf("built:crate001");
+    expect(hull.points).toHaveLength(8);
+    expect(hull.faces).toHaveLength(6);
+    expect(Math.min(...hull.points.map((p) => p[1]))).toBe(0);
+    expect(Math.max(...hull.points.map((p) => p[1]))).toBe(2);
+  });
+
+  it("stands a code-made kind up as a prism over its footprint, sunk as it's drawn", () => {
+    // A boulder at scale 1 is 0.8 tall and sinks a tenth of that.
+    const ys = hullOf("boulder").points.map((p) => p[1]);
+    expect(Math.min(...ys)).toBe(-0.08);
+    expect(Math.max(...ys)).toBe(0.72);
+  });
+
+  it("keeps the kinds that block sight, sorted, a line each", () => {
+    const file = shapesFile(["boulder", "built:lamp0001", "bush", "built:crate001", "boulder"]);
+    expect(Object.keys(file.kinds)).toEqual(["boulder", "built:crate001"]);
+    const text = shapesText(file);
+    expect(JSON.parse(text)).toEqual(file);
+    expect(text.split("\n")).toHaveLength(8);
+    expect(shapesText(shapesFile([]))).toBe('{\n  "version": 1,\n  "kinds": {}\n}\n');
+  });
+
+  it("is written with the plates, for the kinds they place", async () => {
+    const land = new LandGrid();
+    for (let gz = -PER_TILE; gz <= 2 * PER_TILE; gz++) for (let gx = -PER_TILE; gx <= 2 * PER_TILE; gx++) land.set(gx, gz, 40);
+    const ctx = prepareWorld({ land: land.data, pins: [], paths: [], water: { rivers: [], lakes: [] } }, "t");
+    const tile = generateTile(ctx, 0, 0);
+    tile.objects = [makeObject("built:crate001", [100, 100], 0, 1), makeObject("bush", [200, 200], 0, 4)].map((o, n) => ({ ...o, id: `0.0.${n}` }));
+    const world = World.empty();
+    world.files.set("places/continents/main/tiles/surface/0/0.dlt.gz", gzipSync(encodeTile(tile)));
+    world.writeJson("objects/crate001.json", crate);
+    world.writeJson("collections.json", { collections: [] });
+    const stored = await world.stored();
+    const { kinds } = JSON.parse(strFromU8(stored.get("shapes.json")));
+    expect(Object.keys(kinds)).toEqual(["built:crate001"]);
+  });
+});

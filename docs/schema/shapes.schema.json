@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "shapes.schema.json",
+  "title": "shapes.json",
+  "description": "The convex hulls line of sight tests against, for each kind of object that blocks it. The editor writes it; see docs/formats/shapes.md.",
+  "type": "object",
+  "required": [
+    "version",
+    "kinds"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "kinds": {
+      "type": "object",
+      "description": "kind of object, as plates name it -> its hulls",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "hulls"
+        ],
+        "properties": {
+          "hulls": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "required": [
+                "points",
+                "faces"
+              ],
+              "properties": {
+                "points": {
+                  "type": "array",
+                  "minItems": 4,
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "number"
+                    },
+                    "minItems": 3,
+                    "maxItems": 3
+                  },
+                  "description": "corners, [x, y, z] feet in the kind's own axes at scale 1, y = 0 where it's seated"
+                },
+                "faces": {
+                  "type": "array",
+                  "minItems": 4,
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 0
+                    },
+                    "minItems": 3
+                  },
+                  "description": "loops of indices into points, counterclockwise seen from outside"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

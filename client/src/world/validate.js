@@ -20,6 +20,7 @@ import {
   landBlockAt,
   plateAt,
   platesIndexPath,
+  SHAPES_PATH,
   sketchPath,
   spawnsPath,
   tileAt,
@@ -66,9 +67,32 @@ export function validateWorld(files) {
     }
     if (tileAt(path)) problem(path, "is a tile file: a stored world keeps its tiles in plates");
   }
+  checkShapes(files, json, problem, warning);
   const spawn = findSpawn(continents, json, problem);
   for (const continent of continents ?? []) checkContinent(files, continent, library, spawn?.continent === continent ? spawn : null, json, problem, warning);
   return out;
+}
+
+// shapes.json (docs/formats/shapes.md), which the editor writes with the plates.
+function checkShapes(files, json, problem, warning) {
+  const shapes = json(SHAPES_PATH);
+  if (shapes === undefined) {
+    if ([...files.keys()].some((path) => plateAt(path))) warning(SHAPES_PATH, "is missing, so nothing blocks line of sight: saving the world in the editor writes it");
+    return;
+  }
+  if (shapes === null) return;
+  if (!isObject(shapes) || shapes.version !== 1 || !isObject(shapes.kinds)) return problem(SHAPES_PATH, "should be version 1, with kinds");
+  for (const [kind, shape] of Object.entries(shapes.kinds)) {
+    const hullOk = (hull) =>
+      isObject(hull) &&
+      Array.isArray(hull.points) &&
+      hull.points.length >= 4 &&
+      hull.points.every((p) => Array.isArray(p) && p.length === 3 && p.every(Number.isFinite)) &&
+      Array.isArray(hull.faces) &&
+      hull.faces.length >= 4 &&
+      hull.faces.every((f) => Array.isArray(f) && f.length >= 3 && f.every((v) => Number.isInteger(v) && v >= 0 && v < hull.points.length));
+    if (!(isObject(shape) && Array.isArray(shape.hulls) && shape.hulls.length && shape.hulls.every(hullOk))) problem(SHAPES_PATH, `${kind} needs hulls, each points and faces`);
+  }
 }
 
 // world.json. Returns its continents' keys, or null when there's no telling.

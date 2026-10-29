@@ -21,6 +21,7 @@ async function smallWorld() {
   const files = await packPlates(tiles);
   files.set("world.json", json({ version: 1, name: "Small", continents: [{ key: "main", name: "Main" }], dungeons: [] }));
   files.set(SKETCH, json({ version: 5, pins: [{ id: "p1", kind: "spawn", at: [0.5, 0.5] }], paths: [] }));
+  files.set("shapes.json", json({ version: 1, kinds: {} }));
   files.set("places/continents/main/index.json", json({ version: 2, tiles: { "0,0": { zones: [], layers: ["surface"] }, "1,0": { zones: [], layers: ["surface"] } } }));
   return files;
 }
@@ -48,6 +49,14 @@ describe("validateWorld", () => {
     expect(changed((f) => f.set("places/continents/other/sketch.json", json({ pins: [] })))).toEqual([
       "places/continents/other/sketch.json: is in continent other, which world.json doesn't list",
     ]);
+  });
+
+  it("checks shapes.json", () => {
+    const box = { points: [[0, 0, 0], [1, 0, 0], [0, 1, 0], [0, 0, 1]], faces: [[0, 2, 1], [0, 1, 3], [0, 3, 2], [1, 2, 3]] };
+    expect(changed((f) => f.set("shapes.json", json({ version: 1, kinds: { boulder: { hulls: [box] } } })))).toEqual([]);
+    expect(changed((f) => f.delete("shapes.json"))).toEqual(["warning: shapes.json: is missing, so nothing blocks line of sight: saving the world in the editor writes it"]);
+    expect(changed((f) => f.set("shapes.json", json({ version: 2, kinds: {} })))).toEqual(["shapes.json: should be version 1, with kinds"]);
+    expect(changed((f) => f.set("shapes.json", json({ version: 1, kinds: { boulder: { hulls: [{ ...box, faces: [[0, 1, 9]] }] } } })))).toEqual(["shapes.json: boulder needs hulls, each points and faces"]);
   });
 
   it("checks plates against plates.json", () => {

@@ -32,6 +32,10 @@
     "source": {
       "type": "string"
     },
+    "blocksSight": {
+      "const": false,
+      "description": "false for an object you see through; it blocks line of sight when absent"
+    },
     "palette": {
       "type": "array",
       "items": {

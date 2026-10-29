@@ -10,6 +10,8 @@ import { OLD_IMAGES, imagePath, objectPath } from "./paths.js";
 // - collection: the id of the world's collection it's in (the editor's collections.json); left
 //   out of exports.
 // - source: where it was copied from (a collection's URL or file), or absent.
+// - blocksSight: false for an object you see through, such as a fence, a lamp post or an arch; it
+//   blocks line of sight when absent (editor/shapes.js).
 // - palette: the colors its pieces use, each { color: "#rrggbb", param, name }. Up to MAX_PARAMS of
 //   them are parameters, which a placement can override; their colors are the defaults. The first
 //   colors added are parameters until there are MAX_PARAMS of them.
@@ -205,6 +207,7 @@ export function problems(object) {
   if (object.pieces.length > MAX_PIECES) out.push(`it has ${object.pieces.length} pieces, more than ${MAX_PIECES}`);
   if (object.palette.filter((p) => p.param).length > MAX_PARAMS) out.push(`more than ${MAX_PARAMS} of its colors are parameters`);
   for (const p of object.palette) if (!/^#[0-9a-f]{6}$/i.test(p.color ?? "")) out.push(`${JSON.stringify(p.color)} isn't a #rrggbb color`);
+  if (object.blocksSight !== undefined && object.blocksSight !== false) out.push("blocksSight should be false, or left out");
   if (object.tags !== undefined && !(Array.isArray(object.tags) && object.tags.every((t) => typeof t === "string"))) out.push("its tags should be a list of words");
   object.pieces.forEach((piece, n) => {
     const name = `piece ${n + 1}`;

@@ -6,6 +6,7 @@ const CONTINENT = (continent) => `places/continents/${continent}`;
 export const WORLD_PATH = "world.json";
 export const COLLECTIONS_PATH = "collections.json";
 export const STRUCTURE_COLLECTIONS_PATH = "structure-collections.json";
+export const SHAPES_PATH = "shapes.json";
 
 export const objectPath = (id) => `objects/${id}.json`;
 export const structurePath = (id) => `structures/${id}.json`;
