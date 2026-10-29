@@ -9,7 +9,22 @@ RSpec.describe Bot::Controls do
     controls.report(0.5)
     controls.report(1)
     expect(sent.map { |m| m[:type] }).to eq(%w[move heartbeat])
-    expect(sent.first).to include(at: [0.0, 10.0, 0.0], yaw: 0.5, move: include(forward: 0, gait: "run"))
+    expect(sent.first).to include(t: 0, at: [0.0, 10.0, 0.0], yaw: 0.5, move: include(forward: 0, gait: "run"))
+    expect(sent.last).to include(t: 1000)
+  end
+
+  it "climbs toward a goal's height no faster than it moves across" do
+    controls.move_toward(0, 100, y: 100)
+    controls.advance(1)
+    expect(controls.at).to eq([0.0, 31.0, 21.0])
+  end
+
+  it "reports a move afresh from where the server puts it back" do
+    controls.report(0)
+    controls.adopt("at" => [5, 10, 5], "yaw" => 1)
+    controls.report(0.1)
+    expect(sent.map { |m| m[:type] }).to eq(%w[move move])
+    expect(sent.last).to include(at: [5.0, 10.0, 5.0], yaw: 1.0)
   end
 
   it "runs to a goal, twice a second reporting where it is, and stops there" do

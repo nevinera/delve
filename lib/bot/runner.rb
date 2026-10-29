@@ -68,6 +68,7 @@ module Bot
       @log.warn("server: #{msg["message"]}") if msg["type"] == "error"
       @state.apply(msg)
       entered if msg["type"] == "welcome"
+      corrected(msg) if msg["type"] == "correct"
       @log.info("#{msg["character"]["name"]} came near") if msg["type"] == "appear"
     end
 
@@ -75,6 +76,11 @@ module Bot
       @controls.adopt(@state.me)
       x, y, z = @state.me["at"]
       @log.info(format("Entered %s as %s, on %s at (%.0f, %.0f, %.0f)", @world.display_name, @character.name, @state.me["continent"], x, y, z))
+    end
+
+    def corrected(msg)
+      @controls.adopt(msg)
+      @log.warn(format("The server put the bot back at (%.0f, %.0f, %.0f)", *msg["at"]))
     end
 
     def done?

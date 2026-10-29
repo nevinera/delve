@@ -34,8 +34,10 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 
 | type | fields | sent |
 |---|---|---|
-| `move` | `at`, `yaw`, `move` | whenever its movement changes: starting, stopping, turning, jumping, changing gait |
-| `heartbeat` | `at`, `yaw` | twice a second while moving or turning, once a second otherwise |
+| `move` | `t`, `at`, `yaw`, `move` | whenever its movement changes: starting, stopping, turning, jumping, changing gait |
+| `heartbeat` | `t`, `at`, `yaw` | twice a second while moving or turning, once a second otherwise |
+
+`t` is the client's clock in milliseconds when it sent the message, from a clock that only goes forward (`performance.now()` in a browser). Without it, the server times the message by when it arrived.
 
 `move` is how the character is moving, so others can carry it on between messages:
 
@@ -54,11 +56,26 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `appear` | `character` | someone comes near you |
 | `vanish` | `id` | someone leaves your area, or the game |
 | `moved` | `id`, `at`, `yaw`, `move` | someone near you sent `move` or `heartbeat` |
+| `correct` | `at`, `yaw` | your last report didn't add up: you're back at `at` |
 | `error` | `message` | before the server closes the connection |
 
 A character is `{ id, name, look, continent, at, yaw, move }`. `look` is the character builder's look.
 
 "Near you" is the 3×3 tiles around your tile, on your continent and layer.
+
+## Movement checks
+
+The game server checks that each report follows from the last one it took, the way the genre's servers do. It doesn't know the ground yet, so it checks speeds and clocks, not where you can stand.
+
+- **Speed:** how far you went across the ground since the last report, against how fast you were moving: run 21 ft/s, walk 7.5, back up 13.5, swim 14.2, and sprint doubles running. That allows 15% and 4 ft extra for timing. Standing still, you can't move. A report far away is a teleport and fails the same way.
+- **Clock:** for the first 5 s, the server measures how far your clock is behind its own. After that, a report whose clock is more than half a second further ahead fails, since a fast clock would give you more time to move in. A clock that goes backward fails too.
+- **Rising:** you can climb 1.5 ft for each foot you move across, plus 4 ft, and a jump's height (about 2.7 ft) within 1.5 s of jumping.
+- **Falling:** you can drop as fast as gravity (48 ft/s²) takes you since you started down, plus 1.5 ft for each foot across.
+- **Entering:** your first report has to be near where the server put you, allowing for moving at a sprint since then. Its height is taken as it is, since the client knows the ground.
+
+The server keeps each fall's height and time when you land, for fall damage later.
+
+A report that fails isn't passed on. The server sends `correct`, and the client puts you back there and reports afresh. Reports that arrive before the client has taken the correction are dropped quietly for up to 2 s. More than 10 corrections in a minute drops the connection.
 
 ## Rails and the game server
 

@@ -88,9 +88,26 @@ func quiet(t *testing.T, p *Player) {
 	}
 }
 
+// clocks are the test clocks of the hubs that have them: seconds since each one started.
+var clocks = map[*Hub]*float64{}
+
+// clockOf gives the hub a test clock, if it hasn't one, and returns it.
+func clockOf(h *Hub) *float64 {
+	if c := clocks[h]; c != nil {
+		return c
+	}
+	start, c := time.Now(), new(float64)
+	clocks[h] = c
+	h.now = func() time.Time { return start.Add(time.Duration(*c * float64(time.Second))) }
+	return c
+}
+
+// move walks p to (x, z), taking as long as walking there takes, by the hub's clock and p's.
 func move(t *testing.T, p *Player, x, z float64) {
 	t.Helper()
-	if err := p.Handle([]byte(fmt.Sprintf(`{"type":"move","at":[%v,0,%v],"yaw":1,"move":{"forward":1,"gait":"walk","jump":true}}`, x, z))); err != nil {
+	c := clockOf(p.layer.hub)
+	*c += horizontal(p.state.At, [3]float64{x, 0, z})/walkFt + 0.1
+	if err := p.Handle([]byte(fmt.Sprintf(`{"type":"move","t":%v,"at":[%v,0,%v],"yaw":1,"move":{"forward":1,"gait":"walk","jump":true}}`, 1000+*c*1000, x, z))); err != nil {
 		t.Fatal(err)
 	}
 }

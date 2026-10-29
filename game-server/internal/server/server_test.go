@@ -82,12 +82,13 @@ func TestPlay(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	receive(t, b)
+	at := receive(t, b)["you"].(map[string]any)["at"]
 	receive(t, b)
 	if m := receive(t, a); m["type"] != "appear" {
 		t.Fatalf("a got %v", m)
 	}
-	_ = b.WriteJSON(map[string]any{"type": "heartbeat", "at": []float64{600, 0, 600}, "yaw": 2})
+	// Turning where it stands.
+	_ = b.WriteJSON(map[string]any{"type": "heartbeat", "at": at, "yaw": 2})
 	if m := receive(t, a); m["type"] != "moved" || m["yaw"] != 2.0 {
 		t.Fatalf("a got %v", m)
 	}

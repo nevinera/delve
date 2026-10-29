@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"math"
 	"sync"
 	"time"
@@ -46,6 +47,7 @@ type Hub struct {
 	characters Characters
 	idle       time.Duration
 	saver      *saver
+	now        func() time.Time
 
 	mu      sync.Mutex
 	layers  map[string]*Layer // by world id and sha
@@ -53,7 +55,7 @@ type Hub struct {
 }
 
 func NewHub(w WorldLoader, c Characters) *Hub {
-	return &Hub{worlds: w, characters: c, idle: IdleUnload, saver: newSaver(c), layers: map[string]*Layer{}, playing: map[int64]*Player{}}
+	return &Hub{worlds: w, characters: c, idle: IdleUnload, saver: newSaver(c), now: time.Now, layers: map[string]*Layer{}, playing: map[int64]*Player{}}
 }
 
 // Layer is one copy of a world's open land and the characters in it.
@@ -71,12 +73,13 @@ type Layer struct {
 
 // Player is a connected character. Its connection reads Send until Gone closes.
 type Player struct {
-	Send  chan []byte
-	Gone  chan struct{}
-	layer *Layer
-	state Character
-	saved rails.Position // the position last saved
-	once  sync.Once
+	Send   chan []byte
+	Gone   chan struct{}
+	layer  *Layer
+	state  Character
+	saved  rails.Position // the position last saved
+	motion motion
+	once   sync.Once
 }
 
 // ID is the player's character id.
@@ -139,7 +142,7 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 		state.Continent, state.At, state.Yaw = old.state.Continent, old.state.At, old.state.Yaw
 		layer.mu.Unlock()
 	}
-	p := &Player{Send: make(chan []byte, SendQueue), Gone: make(chan struct{}), layer: layer, state: state}
+	p := &Player{Send: make(chan []byte, SendQueue), Gone: make(chan struct{}), layer: layer, state: state, motion: motion{joined: h.now()}}
 	p.saved = p.position()
 
 	h.mu.Lock()
@@ -254,7 +257,7 @@ func (p *Player) Handle(raw []byte) error {
 	if m.Type != "move" && m.Type != "heartbeat" {
 		return fmt.Errorf("%w: unknown type %q", errBadMessage, m.Type)
 	}
-	if !finite(m.At, m.Yaw) {
+	if !finite(m.At, m.Yaw, m.T) {
 		return errBadMessage
 	}
 	p.layer.moved(p, m)
@@ -267,6 +270,18 @@ func (l *Layer) moved(p *Player, m incoming) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.players[p.ID()] != p {
+		return
+	}
+	switch verdict, why := p.motion.check(m, p.state.At, l.hub.now()); verdict {
+	case ignore:
+		return
+	case correct:
+		log.Printf("character %d: corrected: %s", p.ID(), why)
+		p.send(encode(correction{"correct", p.state.At, p.state.Yaw}))
+		return
+	case drop:
+		log.Printf("character %d: dropped: %s", p.ID(), why)
+		p.Drop("your movement didn't add up, so the server let you go")
 		return
 	}
 	before := map[int64]*Player{}
