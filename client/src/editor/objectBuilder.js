@@ -13,8 +13,8 @@ import { randomLook } from "../character/recipe.js";
 // The object builder: a dialog over most of the page for putting a built object
 // (world/builtObjects.js) together from pieces. The 3D view shows the pieces on a ground grid (1 ft,
 // heavier every 5 ft), the object's axes, a ring where they must stay within, the footprint the
-// game will use, the outline it tests line of sight against (unless "blocks sight" is off), and on
-// asking, a person for scale. Clicking a piece picks it and fades the rest; handles
+// game will use, and on asking, a person for scale and the outline the game tests line of sight
+// against. Clicking a piece picks it and fades the rest; handles
 // move, turn or size it along its own axes, sizing from the face opposite the handle, and the panel
 // sets its type, color, taper, whether it's a hole and, as a last resort, exact numbers. Holes show
 // as red glass while a piece is picked; with none picked the object shows as the game draws it,
@@ -148,7 +148,8 @@ export class ObjectBuilder {
     this.snap = el("input", { type: "checkbox", checked: true, onchange: () => this.applySnap() });
     this.personBox = el("input", { type: "checkbox", onchange: () => (this.canvas.focus(), this.showPerson(this.personBox.checked)) });
     this.worldBox = el("input", { type: "checkbox", onchange: () => ((this.worldMoves = this.worldBox.checked), this.setHandle(this.handle)) });
-    const handles = div("ob-row", ...this.handleButtons, el("label", { className: "ob-check" }, this.snap, el("span", { textContent: "snap" })), el("label", { className: "ob-check", title: "move along the world's axes, not the piece's (W)" }, this.worldBox, el("span", { textContent: "world" })), el("label", { className: "ob-check ob-person", title: "a random character beside the object, for scale" }, this.personBox, el("span", { textContent: "person" })));
+    this.hullBox = el("input", { type: "checkbox", onchange: () => (this.canvas.focus(), this.drawMarks()) });
+    const handles = div("ob-row", ...this.handleButtons, el("label", { className: "ob-check" }, this.snap, el("span", { textContent: "snap" })), el("label", { className: "ob-check", title: "move along the world's axes, not the piece's (W)" }, this.worldBox, el("span", { textContent: "world" })), el("label", { className: "ob-check ob-person", title: "a random character beside the object, for scale" }, this.personBox, el("span", { textContent: "person" })), el("label", { className: "ob-check", title: "the outline the game tests line of sight against" }, this.hullBox, el("span", { textContent: "sight outline" })));
 
     this.list = el("select", { size: 8, className: "ob-list", onchange: () => this.pick(this.list.value === "" ? null : Number(this.list.value)) });
 
@@ -861,9 +862,9 @@ export class ObjectBuilder {
     }
   }
 
-  // The outline the game tests line of sight against, when the object blocks it.
+  // The outline the game tests line of sight against, when asked for and the object blocks it.
   drawHull() {
-    const hull = this.object.blocksSight === false ? null : objectHull(this.object);
+    const hull = !this.hullBox.checked || this.object.blocksSight === false ? null : objectHull(this.object);
     if (!hull) return;
     const points = hull.points.map((p) => new THREE.Vector3(...p));
     const edges = hull.faces.flatMap((loop) => loop.flatMap((a, i) => [points[a], points[loop[(i + 1) % loop.length]]]));
