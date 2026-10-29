@@ -124,6 +124,7 @@ const editor = new Editor(World.empty(), {
   slabThickness: $("slabThickness"),
   slabHeight: $("slabHeight"),
   slabKeep: $("slabKeep"),
+  slabConform: $("slabConform"),
   slabColor: $("slabColor"),
   slabPattern: $("slabPattern"),
   slabTexture: $("slabTexture"),

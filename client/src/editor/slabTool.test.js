@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { slabBottom, slabProblems, slabTop } from "../world/slabs.js";
-import { faceSlab, floorSlab, rectanglePieces, rectangleSlab, wallPieces, wallSlab } from "./slabTool.js";
+import { conformedCells, faceSlab, floorSlab, rectanglePieces, rectangleSlab, wallPieces, wallSlab } from "./slabTool.js";
 
 const near = (points) => points.map((p) => p.map((v) => Math.round(v * 100) / 100 + 0));
 
@@ -71,5 +71,19 @@ describe("cutting up long rectangles", () => {
 
   it("leaves one past the limit whole, to show red", () => {
     expect(rectanglePieces([0, 0, 0], [3000, 0, 10], 0, { thickness: 1, surface: "brick" })).toHaveLength(1);
+  });
+});
+
+describe("conformedCells", () => {
+  it("sets the ground under a floor, and a cell past its edges, to its bottom", () => {
+    const floor = floorSlab([[16, 40, 16], [32, 40, 16], [32, 40, 32], [16, 40, 32]], { thickness: 1, surface: "stone" });
+    const cells = conformedCells([floor], 8);
+    expect(new Set(cells.map((c) => c[2]))).toEqual(new Set([40]));
+    const keys = cells.map(([ci, cj]) => `${ci},${cj}`);
+    // The 2×2 cells under it, and the ring a cell round them.
+    expect(keys).toHaveLength(16);
+    expect(keys).toContain("2,2");
+    expect(keys).toContain("1,1");
+    expect(keys).not.toContain("0,0");
   });
 });

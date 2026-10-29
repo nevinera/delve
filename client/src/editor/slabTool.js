@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
-import { MAX_SLAB_CORNERS, SLAB_REACH_FT, slabProblems, slabTile, slabTop } from "../world/slabs.js";
+import { CELL_FT } from "../world/constants.js";
+import { MAX_SLAB_CORNERS, SLAB_REACH_FT, slabBottom, slabProblems, slabTile, slabTop } from "../world/slabs.js";
 import { slabAt, slabGeometry, slabMeshes } from "./slabMeshes.js";
 import { repeatFt } from "./slabTextures.js";
 
@@ -20,6 +21,8 @@ import { repeatFt } from "./slabTextures.js";
 //   floor is.
 // A rectangle up to MAX_RECTANGLE_FT a side is cut into as many slabs as it takes, each a whole
 // number of its picture's repeats across where it can be, so the picture runs on over the joins.
+// With conform, the ground under a new floor begun on the ground, and just past its edges, is set
+// to its bottom.
 // Corners on the level snap to other slabs' top corners nearby. What would be made shows as it's
 // drawn, red where it can't be: too big, say, or belonging outside the window. Escape drops a slab half drawn, Backspace its last corner.
 
@@ -42,7 +45,7 @@ export class SlabTool {
     this.detail = detail;
     this.onPick = onPick;
     this.onProblem = onProblem;
-    this.settings = { mode: "pick", shape: "rectangle", thickness: 1, height: 10, keepWalling: false, surface: "floorboards" };
+    this.settings = { mode: "pick", shape: "rectangle", thickness: 1, height: 10, keepWalling: false, conform: false, surface: "floorboards" };
     this.drawing = null; // { points: [[x, y, z] continent feet], height, pressed: [x, y] while dragging }
     this.picked = null; // { slab, key }
     this.corner = null; // the index of a corner being dragged
@@ -79,7 +82,7 @@ export class SlabTool {
     this.drawMarks();
   }
 
-  // settings: any of { mode, shape, thickness, height, keepWalling, surface }.
+  // settings: any of { mode, shape, thickness, height, keepWalling, conform, surface }.
   setSettings(changes) {
     const { mode, shape } = this.settings;
     Object.assign(this.settings, changes);
@@ -117,7 +120,7 @@ export class SlabTool {
     const rectangle = this.settings.shape === "rectangle";
     if (!this.drawing) {
       const hit = this.surfaceUnder(ray);
-      if (hit) this.drawing = { points: [this.snap(hit, hit[1])], height: hit[1], pressed: rectangle ? [e.clientX, e.clientY] : null, yaw: this.cameraYaw() };
+      if (hit) this.drawing = { points: [this.snap(hit.at, hit.at[1])], height: hit.at[1], onGround: hit.ground, pressed: rectangle ? [e.clientX, e.clientY] : null, yaw: this.cameraYaw() };
     } else if (rectangle) {
       const at = this.nextCorner(ray);
       if (at) this.endRectangle(at);
@@ -195,9 +198,9 @@ export class SlabTool {
   endRectangle(end) {
     const slabs = this.slabFrom([this.drawing.points[0], end]);
     if (!this.fits(slabs)) return;
-    const { height, yaw } = this.drawing;
-    this.drawing = this.settings.mode === "wall" && this.settings.keepWalling ? { points: [end], height, pressed: null, yaw } : null;
-    this.add(slabs);
+    const { height, yaw, onGround } = this.drawing;
+    this.drawing = this.settings.mode === "wall" && this.settings.keepWalling ? { points: [end], height, onGround, pressed: null, yaw } : null;
+    this.add(slabs, { onGround });
   }
 
   // A polygon's next corner, or its first again to finish it.
@@ -213,8 +216,9 @@ export class SlabTool {
   finish() {
     const slabs = this.drawing && this.settings.shape === "polygon" ? this.slabFrom(this.drawing.points) : [];
     if (!this.fits(slabs)) return;
+    const { onGround } = this.drawing;
     this.drawing = null;
-    this.add(slabs);
+    this.add(slabs, { onGround });
   }
 
   // The slabs the corners drawn so far would make ([x, y, z] continent feet each): none, one, or
@@ -259,8 +263,8 @@ export class SlabTool {
   }
 
   // Puts new slabs in the tiles they belong to, as one edit, and picks a lone one unless more's
-  // being drawn.
-  add(slabs) {
+  // being drawn. A floor begun `onGround` conforms the ground to it, when that's asked for.
+  add(slabs, { onGround = false } = {}) {
     const { detail } = this;
     detail.beginEdit();
     for (const slab of slabs) {
@@ -270,7 +274,13 @@ export class SlabTool {
       tile.slabs = [...(tile.slabs ?? []), slab];
       detail.dirtySlabs.add(key);
     }
-    detail.endEdit();
+    const conform = this.settings.mode === "floor" && this.settings.conform && onGround;
+    if (conform) {
+      const cells = detail.cells();
+      detail.setHeights(conformedCells(slabs, CELL_FT).filter(([ci, cj]) => cells.editable(ci, cj)));
+      detail.rework();
+    }
+    detail.endEdit({ reflow: conform });
     // A wall chained on from it isn't picked, so its handles don't get in the way.
     this.pick(slabs.length === 1 && !this.drawing ? { slab: slabs[0], key: slabTile(slabs[0]).join(",") } : null);
   }
@@ -450,12 +460,13 @@ export class SlabTool {
     return null;
   }
 
-  // Where a ray first meets the ground or a slab, [x, y, z] continent feet, or null.
+  // Where a ray first meets the ground or a slab, as { at: [x, y, z] continent feet, ground: true
+  // for the ground }, or null.
   surfaceUnder(ray) {
     const { view } = this.detail;
     const ground = view.content.children.filter((child) => child.userData.ground);
     const hit = ray.intersectObjects([...ground, ...view.slabs.children], false)[0];
-    return hit ? [hit.point.x + view.origin[0], hit.point.y, hit.point.z + view.origin[1]].map(tidy) : null;
+    return hit ? { at: [hit.point.x + view.origin[0], hit.point.y, hit.point.z + view.origin[1]].map(tidy), ground: Boolean(hit.object.userData.ground) } : null;
   }
 
   // Where a ray crosses the level plane at `height`, [x, y, z] continent feet, or null.
@@ -551,6 +562,49 @@ export function wallPieces(from, to, options) {
   if (length > MAX_RECTANGLE_FT || step < 1) return [whole];
   const [ux, uz] = [(to[0] - from[0]) / length, (to[2] - from[2]) / length];
   return cuts(length, step).map(([s, ds]) => ({ ...whole, at: [from[0] + ux * s, whole.at[1], from[2] + uz * s].map(tidy), outline: [[0, 0], [ds, 0], [ds, tall], [0, tall]] }));
+}
+
+// The ground cells a floor's slabs sit on, [[ci, cj, height], ...] continent cells: those whose
+// middles are under one, or within a cell of its edge, at the lowest bottom over them.
+export function conformedCells(slabs, cellFt) {
+  const out = new Map(); // "ci,cj" -> [ci, cj, height]
+  for (const slab of slabs) {
+    const outline = slabTop(slab).map(([x, , z]) => [x, z]);
+    const bottom = Math.min(...slabBottom(slab).map((p) => p[1]));
+    const xs = outline.map((p) => p[0]);
+    const zs = outline.map((p) => p[1]);
+    const [ci0, ci1] = [Math.floor(Math.min(...xs) / cellFt) - 1, Math.floor(Math.max(...xs) / cellFt) + 1];
+    const [cj0, cj1] = [Math.floor(Math.min(...zs) / cellFt) - 1, Math.floor(Math.max(...zs) / cellFt) + 1];
+    for (let cj = cj0; cj <= cj1; cj++) {
+      for (let ci = ci0; ci <= ci1; ci++) {
+        const middle = [(ci + 0.5) * cellFt, (cj + 0.5) * cellFt];
+        if (!inside(outline, middle) && edgeDistance(outline, middle) > cellFt) continue;
+        const key = `${ci},${cj}`;
+        if (!out.has(key) || out.get(key)[2] > bottom) out.set(key, [ci, cj, bottom]);
+      }
+    }
+  }
+  return [...out.values()];
+}
+
+function inside(polygon, [x, z]) {
+  let into = false;
+  polygon.forEach(([x0, z0], i) => {
+    const [x1, z1] = polygon[(i + 1) % polygon.length];
+    if (z0 > z !== z1 > z && x < x0 + ((z - z0) * (x1 - x0)) / (z1 - z0)) into = !into;
+  });
+  return into;
+}
+
+function edgeDistance(polygon, [x, z]) {
+  return Math.min(
+    ...polygon.map(([x0, z0], i) => {
+      const [x1, z1] = polygon[(i + 1) % polygon.length];
+      const [dx, dz] = [x1 - x0, z1 - z0];
+      const t = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / (dx * dx + dz * dz || 1)));
+      return Math.hypot(x - x0 - dx * t, z - z0 - dz * t);
+    }),
+  );
 }
 
 // A floor lying on the level its corners are on: its top `thickness` over them.

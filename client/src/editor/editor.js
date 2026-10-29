@@ -1120,7 +1120,7 @@ export class Editor {
     });
     this.el.slabCustomCancel.addEventListener("click", () => this.el.slabCustom.close());
     this.setSlabSurface("floorboards", { change: false });
-    for (const input of [this.el.slabHeight, this.el.slabKeep]) input.addEventListener("change", () => this.applyDetailBrush());
+    for (const input of [this.el.slabHeight, this.el.slabKeep, this.el.slabConform]) input.addEventListener("change", () => this.applyDetailBrush());
     this.el.slabThickness.addEventListener("change", () => {
       this.applyDetailBrush();
       tool()?.change({ thickness: Number(this.el.slabThickness.value) });
@@ -1203,7 +1203,7 @@ export class Editor {
   // The slabs tool's settings from the panel: what it does, and what new slabs are like.
   slabSettings() {
     const { slabThickness, slabHeight, slabKeep } = this.el;
-    return { mode: this.slabMode, shape: this.slabShape, thickness: Number(slabThickness.value) || 1, height: Number(slabHeight.value) || 10, keepWalling: slabKeep.checked, surface: structuredClone(this.slabSurface) };
+    return { mode: this.slabMode, shape: this.slabShape, thickness: Number(slabThickness.value) || 1, height: Number(slabHeight.value) || 10, keepWalling: slabKeep.checked, conform: this.el.slabConform.checked, surface: structuredClone(this.slabSurface) };
   }
 
   // Draws floors or walls, or with neither, picks slabs.
