@@ -110,6 +110,10 @@ export class WaterSurfaces {
               if (!Number.isNaN(l) && !(l <= best)) [best, kind] = [l, t];
             }
           }
+          // Only where the ground rises out of it, to hide its edge; not where it falls away, as
+          // under a fall's lip, where it'd hang in the air.
+          const c = j * CORNERS + i;
+          if (Math.max(heights[c], heights[c + 1], heights[c + CORNERS], heights[c + CORNERS + 1]) < best) continue;
         }
         if (Number.isNaN(best)) continue;
         level[j * CELLS + i] = best;

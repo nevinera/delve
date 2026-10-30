@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
 import { AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, partWater } from "../v2/water.js";
-import { LEVEE_FT, courseBox, shape } from "../v2/courses.js";
+import { LEDGE_RAISE_FT, LEVEE_FT, courseBox, shape } from "../v2/courses.js";
 import { waterMaterial } from "../editor/waterMaterial.js";
 import { SHORE_FADE_FT, WATER_LOOKS } from "./waterSurface.js";
 import { PATTERNS, RUNNING, look, painted, slopeOf } from "../v2/look.js";
@@ -116,7 +116,7 @@ export class Renditions {
   // Carves `courses` into the ground within `boxes` ([x0, z0, x1, z1]): each cell corner there put
   // back by what courses cut it before, then cut down under every course there (courses.js's
   // shape), or where none cuts it, built up a little where a course's bank is lower than its
-  // water, and how far kept with its cells. Gives the "px,pz" of the plates moved.
+  // water, or more under a fall's ledge, and how far kept with its cells. Gives the "px,pz" of the plates moved.
   carve(boxes, courses) {
     const moved = new Set();
     for (const [x0, z0, x1, z1] of boxes) {
@@ -144,7 +144,7 @@ export class Renditions {
                 const made = shape(course, x, z);
                 if (!made) continue;
                 top = Math.min(top, made.top);
-                levee = Math.max(levee, Math.min(made.levee, base + LEVEE_FT));
+                levee = Math.max(levee, Math.min(made.levee, base + (made.ledge ? LEDGE_RAISE_FT : LEVEE_FT)));
               }
               if (top === base) top = levee;
               cut[k] = base - top;

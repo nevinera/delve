@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BELOW_FT, along, depthOf, fallFtOf, fallsOf, flowOf, levelAt, lengthOf, onTrack, profile, shape, surfaceAt, trackOf } from "./courses.js";
+import { BELOW_FT, along, boulders, cascadesOf, depthOf, fallFtOf, fallsOf, flowOf, levelAt, lengthOf, onTrack, profile, shape, surfaceAt, trackOf } from "./courses.js";
 
 const line = [[0, 0, 10], [100, 0, 10], [100, 100, 30]];
 
@@ -109,10 +109,38 @@ describe("courses", () => {
     expect(fallFtOf("river", 40)).toBe(8);
     expect(fallFtOf("river", 25)).toBe(5);
     expect(fallsOf({ ...stream, type: "river", points: [[0, 0, 40], [72, 0, 40]] })).toEqual([]);
-    // It steps down at the lip, not down a ramp.
+    // It holds over its ledge, then steps down at the lip, not down a ramp.
+    expect(falls[0].lip).toBe(20);
     expect(levelAt(stream, 15)).toBe(50);
-    expect(levelAt(stream, 17)).toBe(44);
-    expect(levelAt(stream, 52)).toBeCloseTo(42.5);
+    expect(levelAt(stream, 19)).toBe(50);
+    expect(levelAt(stream, 21)).toBe(44);
+    // The 3 ft drop's a cascade of one step, its pool at the level it falls to.
+    expect(levelAt(stream, 52)).toBe(41);
+  });
+
+  it("cut cascades into steps and pools where they're steep but don't fall", () => {
+    // Level at 100, then falling a foot every 4 for 100 ft, then level.
+    const surface = Array.from({ length: 60 }, (_, k) => 100 - Math.min(25, Math.max(0, k - 5) * 2));
+    const course = { type: "stream", points: [[0, 0, 6], [470, 0, 6]], surface, seed: 3 };
+    expect(fallsOf(course)).toEqual([]);
+    const [cascade] = cascadesOf(course);
+    expect(cascade.t).toBe(40);
+    expect(cascade.steps.length).toBeGreaterThan(5);
+    // Flat in each pool, at the level its stretch reaches by the next step, never over it.
+    for (const [n, step] of cascade.steps.entries()) {
+      const next = cascade.steps[n + 1]?.t ?? cascade.end;
+      expect(levelAt(course, step.t + 0.1)).toBe(step.bottom);
+      expect(levelAt(course, next - 0.1)).toBe(step.bottom);
+      expect(step.bottom).toBeLessThanOrEqual(surfaceAt(surface, next - 0.1) + 1e-9);
+      expect(step.top).toBeGreaterThan(step.bottom);
+    }
+    // Boulders across each step, near it.
+    const placed = boulders(course);
+    expect(placed.length).toBeGreaterThanOrEqual(cascade.steps.length * 2);
+    for (const { x, z, size } of placed) {
+      expect(Math.min(...cascade.steps.map((step) => Math.hypot(step.x - x, step.z - z)))).toBeLessThan(6);
+      expect(size).toBeGreaterThanOrEqual(2);
+    }
   });
 
   it("carve plunge pools under their falls", () => {

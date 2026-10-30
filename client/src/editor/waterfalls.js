@@ -15,21 +15,24 @@ const MIST = { puffs: 14, sizeFt: 30, riseFt: [12, 45], cycleS: 7 };
 
 let materials = null;
 
-// The meshes for a tile's waterfalls, positioned relative to the scene's `origin`.
+// The meshes for a tile's waterfalls, positioned relative to the scene's `origin`. A fall with
+// `mist` false has none.
 export function waterfallMeshes(falls, origin, renderer) {
   if (!falls?.length) return [];
   materials ??= makeMaterials(renderer);
   return falls.flatMap((fall) => {
     const at = ([x, y, z]) => new THREE.Vector3(x - origin[0], y, z - origin[1]);
     const [top, bottom] = [at(fall.top), at(fall.bottom)];
-    const mist = new THREE.Points(mistGeometry(fall, bottom), materials.mist);
-    mist.frustumCulled = false;
     const meshes = [
       new THREE.Mesh(curtainGeometry(fall, top, bottom, BACK), materials.curtain),
       new THREE.Mesh(curtainGeometry(fall, top, bottom), materials.curtain),
       new THREE.Mesh(foamGeometry(fall, bottom), materials.foam),
-      mist,
     ];
+    if (fall.mist !== false) {
+      const mist = new THREE.Points(mistGeometry(fall, bottom), materials.mist);
+      mist.frustumCulled = false;
+      meshes.push(mist);
+    }
     // Drawn after the water, which is see-through too, so the water's surface hides only what's
     // really under it.
     for (const mesh of meshes) mesh.renderOrder = 1;

@@ -2,7 +2,9 @@ import * as THREE from "three";
 import { objectMeshes, setObjectSight } from "../editor/objectMeshes.js";
 import { setTreeSight, treeMeshes, trunkRadius } from "../editor/treeMeshes.js";
 import { objectShape, pushOut, treeShape } from "../v2/blocking.js";
+import { boulders, courseBox } from "../v2/courses.js";
 import { fillSlots } from "../v2/fill.js";
+import { makeObject } from "../world/objects.js";
 import { RUNNING, slopeOf } from "../v2/look.js";
 import { TILE_FT } from "../v2/sizes.js";
 
@@ -61,6 +63,15 @@ export class Scatter {
         return { height, slope: slopeOf(nw, ne, sw, se, 2 * s), water };
       },
     );
+    // Boulders across courses' cascades' steps in the tile.
+    const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];
+    for (const course of r.waterFile?.courses ?? []) {
+      const b = courseBox(course);
+      if (b[0] > x0 + TILE_FT || b[2] < x0 || b[1] > z0 + TILE_FT || b[3] < z0) continue;
+      for (const { x, z, size, yaw, roll } of boulders(course)) {
+        if (x >= x0 && x < x0 + TILE_FT && z >= z0 && z < z0 + TILE_FT) filled.objects.push(makeObject(roll(0) < 0.3 ? "mossyBoulder" : "boulder", [x, z], yaw, size, roll));
+      }
+    }
     for (const tree of filled.trees) tree.ground = ground(tree.x, tree.z);
     // Standing on the lowest ground under them, sunk a little.
     for (const object of filled.objects) {
