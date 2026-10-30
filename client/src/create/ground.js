@@ -15,14 +15,15 @@ import { CELL_FT, CHUNK_CELLS, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, T
 // ground below goes coarser too. Skirts hang from where finer and coarser ground meet, to hide the
 // gaps between them.
 
-export const FULL_RADIUS_FT = 512;
-export const CHUNK_RADIUS_FT = 1024;
+export const FULL_RADIUS_FT = 1024;
+export const CHUNK_RADIUS_FT = 2048;
 export const TILE_RADIUS_FT = 4096;
 export const FAR_FT = 24576;
 const MOVE_FT = 32; // how far the builder goes before what's drawn is worked out again
 const SKIRT = 0.75; // how far a skirt hangs, as a share of a coarse part's size
 const SKIRT_SHADE = 0.6;
-const KEEP_PLATES = 16; // plate files kept decoded
+const KEEP_PLATES = 40; // plate files kept decoded
+const BUILD_MS = 6; // how long a frame spends making tiles
 
 // A continent's renditions, from its platter files, and its ground at cell scale, from its plate
 // files, decoded as they're wanted.
@@ -173,45 +174,104 @@ export const COARSE = 0;
 export const FINE = 1;
 export const FULL = 2;
 
-// A tile's flat mesh, in feet from its northwest corner: its chunks tier(i, j) says are FINE at
-// cell scale from `cells`, and those it says are COARSE from its rendition, leaving out FULL ones
-// (fullGeometry). Skirts hang from the tile's edges, and wherever chunks drawn differently meet.
-export function tileGeometry(rendition, cells, tier) {
+// A tile's cells as one grid of vertices on their corners, in feet from its northwest corner,
+// kept with the cells: each vertex the mean color of the cells round it, with normals for smooth
+// shading. The cell-scale and full chunks of a tile pick their squares out of it (gridGeometry).
+function cellGrid(cells) {
+  if (cells.grid) return cells.grid;
+  const side = CELL_CORNERS;
+  const positions = new Float32Array(side * side * 3);
+  const colors = new Float32Array(side * side * 3);
+  const normals = new Float32Array(side * side * 3);
+  const color = new THREE.Color();
+  const h = (i, j) => cells.heights[Math.max(0, Math.min(side - 1, j)) * side + Math.max(0, Math.min(side - 1, i))];
+  for (let j = 0; j < side; j++) {
+    for (let i = 0; i < side; i++) {
+      const v = (j * side + i) * 3;
+      positions.set([i * CELL_FT, h(i, j), j * CELL_FT], v);
+      const sum = [0, 0, 0];
+      let count = 0;
+      for (const [a, b] of [[i - 1, j - 1], [i, j - 1], [i - 1, j], [i, j]]) {
+        if (a < 0 || b < 0 || a >= TILE_CELLS || b >= TILE_CELLS) continue;
+        for (let m = 0; m < 3; m++) sum[m] += cells.colors[(b * TILE_CELLS + a) * 3 + m];
+        count++;
+      }
+      color.setRGB(sum[0] / count / 255, sum[1] / count / 255, sum[2] / count / 255, THREE.SRGBColorSpace);
+      colors.set([color.r, color.g, color.b], v);
+      const [nx, nz] = [(h(i - 1, j) - h(i + 1, j)) / (2 * CELL_FT), (h(i, j - 1) - h(i, j + 1)) / (2 * CELL_FT)];
+      const length = Math.hypot(nx, 1, nz);
+      normals.set([nx / length, 1 / length, nz / length], v);
+    }
+  }
+  cells.grid = {
+    position: new THREE.BufferAttribute(positions, 3),
+    color: new THREE.BufferAttribute(colors, 3),
+    normal: new THREE.BufferAttribute(normals, 3),
+  };
+  return cells.grid;
+}
+
+// The squares of a tile's cell grid in the chunks `chunks` lists ([i, j]), as a geometry sharing
+// the grid's vertices. Null for none.
+function gridGeometry(cells, chunks) {
+  if (!chunks.length) return null;
+  const side = CELL_CORNERS;
+  const indices = new Uint16Array(chunks.length * CHUNK_CELLS * CHUNK_CELLS * 6);
+  let n = 0;
+  for (const [i, j] of chunks) {
+    for (let b = j * CHUNK_CELLS; b < (j + 1) * CHUNK_CELLS; b++) {
+      for (let a = i * CHUNK_CELLS; a < (i + 1) * CHUNK_CELLS; a++) {
+        const [nw, ne, sw, se] = [b * side + a, b * side + a + 1, (b + 1) * side + a, (b + 1) * side + a + 1];
+        indices.set([nw, sw, ne, ne, sw, se], n);
+        n += 6;
+      }
+    }
+  }
+  const grid = cellGrid(cells);
+  const geometry = new THREE.BufferGeometry();
+  for (const [name, attribute] of Object.entries(grid)) geometry.setAttribute(name, attribute);
+  geometry.setIndex(new THREE.BufferAttribute(indices, 1));
+  return geometry;
+}
+
+// A tile's ground, in feet from its northwest corner, with each chunk drawn as tier(i, j) says:
+// { coarse, fine, full } geometries, each null where there's none of it. coarse has the COARSE
+// chunks from the tile's rendition, and the skirts that hang from the tile's edges and wherever
+// chunks drawn differently meet; fine and full the FINE and FULL chunks' squares from `cells`.
+// Without cells, every chunk is COARSE.
+export function tileGeometries(rendition, cells, tier) {
   const n = TILE_CHUNKS;
   const faces = new Faces();
   const depth = CHUNK_FT * SKIRT;
   const tierAt = (i, j) => (cells ? tier(i, j) : COARSE);
   const chunkCorner = (i, j) => [i * CHUNK_FT, rendition.heights[j * CORNERS + i], j * CHUNK_FT];
   const cellCorner = (i, j) => [i * CELL_FT, cells.heights[j * CELL_CORNERS + i], j * CELL_FT];
+  const lists = { [FINE]: [], [FULL]: [] };
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const here = tierAt(i, j);
-      if (here === FULL) continue;
-      const meets = (di, dj) => i + di >= 0 && j + dj >= 0 && i + di < n && j + dj < n && tierAt(i + di, j + dj) === here;
-      if (here === COARSE) {
-        const rgb = faces.rgb(rendition.colors, (j * n + i) * 3);
-        faces.square([chunkCorner(i, j), chunkCorner(i + 1, j), chunkCorner(i, j + 1), chunkCorner(i + 1, j + 1)], rgb);
-        for (const [di, dj, from, to] of SIDES) {
-          if (!meets(di, dj)) faces.skirt(chunkCorner(i + from[0], j + from[1]), chunkCorner(i + to[0], j + to[1]), depth, faces.rgb(rendition.colors, (j * n + i) * 3, SKIRT_SHADE));
-        }
+      const open = (di, dj) => !(i + di >= 0 && j + dj >= 0 && i + di < n && j + dj < n && tierAt(i + di, j + dj) === here);
+      if (here !== COARSE) {
+        lists[here].push([i, j]);
+        chunkSkirts(faces, i, j, open, cellCorner, (k) => faces.rgb(cells.colors, k * 3, SKIRT_SHADE));
         continue;
       }
-      const [ci, cj] = [i * CHUNK_CELLS, j * CHUNK_CELLS];
-      for (let b = 0; b < CHUNK_CELLS; b++) {
-        for (let a = 0; a < CHUNK_CELLS; a++) {
-          const [x, z] = [ci + a, cj + b];
-          faces.square([cellCorner(x, z), cellCorner(x + 1, z), cellCorner(x, z + 1), cellCorner(x + 1, z + 1)], faces.rgb(cells.colors, (z * TILE_CELLS + x) * 3));
-        }
+      faces.square([chunkCorner(i, j), chunkCorner(i + 1, j), chunkCorner(i, j + 1), chunkCorner(i + 1, j + 1)], faces.rgb(rendition.colors, (j * n + i) * 3));
+      for (const [di, dj, from, to] of SIDES) {
+        if (open(di, dj)) faces.skirt(chunkCorner(i + from[0], j + from[1]), chunkCorner(i + to[0], j + to[1]), depth, faces.rgb(rendition.colors, (j * n + i) * 3, SKIRT_SHADE));
       }
-      chunkSkirts(faces, cells, i, j, (di, dj) => !meets(di, dj), cellCorner, (rgbAt) => faces.rgb(cells.colors, rgbAt * 3, SKIRT_SHADE));
     }
   }
-  return faces.geometry();
+  return {
+    coarse: faces.positions.length ? faces.geometry() : null,
+    fine: cells && gridGeometry(cells, lists[FINE]),
+    full: cells && gridGeometry(cells, lists[FULL]),
+  };
 }
 
 // Skirts along a chunk's sides that `open(di, dj)` says meet other ground, a cell at a time, in
 // the color colorOf(k) gives for the cell k beside each stretch.
-function chunkSkirts(faces, cells, i, j, open, cellCorner, colorOf) {
+function chunkSkirts(faces, i, j, open, cellCorner, colorOf) {
   const depth = CHUNK_FT * SKIRT;
   const [ci, cj] = [i * CHUNK_CELLS, j * CHUNK_CELLS];
   for (const [di, dj, from, to] of SIDES) {
@@ -226,59 +286,6 @@ function chunkSkirts(faces, cells, i, j, open, cellCorner, colorOf) {
   }
 }
 
-// A tile's chunks that tier(i, j) says are FULL, in feet from its northwest corner: a grid on the
-// cell corners, sharing its vertices so it's smooth-shaded, each the mean color of the cells
-// round it, with skirts where it meets ground drawn otherwise.
-export function fullGeometry(cells, tier) {
-  const n = TILE_CHUNKS;
-  const side = CELL_CORNERS;
-  const color = new THREE.Color();
-  const positions = [];
-  const colors = [];
-  for (let j = 0; j < side; j++) {
-    for (let i = 0; i < side; i++) {
-      positions.push(i * CELL_FT, cells.heights[j * side + i], j * CELL_FT);
-      const sum = [0, 0, 0];
-      let count = 0;
-      for (const [a, b] of [[i - 1, j - 1], [i, j - 1], [i - 1, j], [i, j]]) {
-        if (a < 0 || b < 0 || a >= TILE_CELLS || b >= TILE_CELLS) continue;
-        for (let m = 0; m < 3; m++) sum[m] += cells.colors[(b * TILE_CELLS + a) * 3 + m];
-        count++;
-      }
-      color.setRGB(sum[0] / count / 255, sum[1] / count / 255, sum[2] / count / 255, THREE.SRGBColorSpace);
-      colors.push(color.r, color.g, color.b);
-    }
-  }
-  const indices = [];
-  const skirts = new Faces();
-  const cellCorner = (i, j) => [i * CELL_FT, cells.heights[j * side + i], j * CELL_FT];
-  const isFull = (i, j) => i >= 0 && j >= 0 && i < n && j < n && tier(i, j) === FULL;
-  for (let j = 0; j < n; j++) {
-    for (let i = 0; i < n; i++) {
-      if (!isFull(i, j)) continue;
-      for (let b = j * CHUNK_CELLS; b < (j + 1) * CHUNK_CELLS; b++) {
-        for (let a = i * CHUNK_CELLS; a < (i + 1) * CHUNK_CELLS; a++) {
-          const [nw, ne, sw, se] = [b * side + a, b * side + a + 1, (b + 1) * side + a, (b + 1) * side + a + 1];
-          indices.push(nw, sw, ne, ne, sw, se);
-        }
-      }
-      chunkSkirts(skirts, cells, i, j, (di, dj) => !isFull(i + di, j + dj), cellCorner, (k) => skirts.rgb(cells.colors, k * 3, SKIRT_SHADE));
-    }
-  }
-  if (!indices.length) return null;
-  // The skirts' own vertices go after the grid's, so they don't bend its shading.
-  const from = positions.length / 3;
-  positions.push(...skirts.positions);
-  colors.push(...skirts.colors);
-  for (let v = 0; v < skirts.positions.length / 3; v++) indices.push(from + v);
-  const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-  geometry.setIndex(indices);
-  geometry.computeVertexNormals();
-  return geometry;
-}
-
 // The tile-shaped stand-in groundMaterial wants for a tile's cells: the kinds of ground at each
 // cell's middle.
 function groundTile(tx, tz, cells) {
@@ -286,8 +293,9 @@ function groundTile(tx, tz, cells) {
 }
 
 // The meshes round a point: tiles within TILE_RADIUS_FT, with their chunks within
-// CHUNK_RADIUS_FT at cell scale, and plates out to FAR_FT, made as they come in range and dropped
-// as they leave it.
+// CHUNK_RADIUS_FT at cell scale and within FULL_RADIUS_FT in full, and plates out to FAR_FT.
+// Moving works out what each tile should look like; tiles are then made (or made again) a few at a
+// time, nearest first, within BUILD_MS a frame (build), each kept as it was until it's replaced.
 export class Ground {
   constructor(scene, renditions, renderer) {
     this.renditions = renditions;
@@ -297,19 +305,28 @@ export class Ground {
     this.material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
     this.meshes = new Map(); // "tx,tz" -> a tile's meshes, its userData.tiers how its chunks are drawn
     this.plates = new Map(); // "px,pz" -> a plate's mesh, its userData.hidden the tiles it leaves out
+    this.wanted = new Map(); // "tx,tz" -> how its chunks should be drawn ("index:tier,...")
+    this.pending = []; // "tx,tz" of tiles to make, nearest first
     this.at = null;
+    this.platesStale = false;
+    // Which kinds of ground are shown, each in its range (toggle).
+    this.shown = { full: true, fine: true, tile: true, plate: true };
     this.fineChunks = 0;
     this.fullChunks = 0;
   }
 
-  // Draws the ground round continent feet (x, y, z), again only once that's MOVE_FT from where it
-  // was last worked out.
+  // Works out what's to be drawn round continent feet (x, y, z), again only once that's MOVE_FT
+  // from where it was last worked out, then makes some of it.
   update(x, y, z) {
-    if (this.at && Math.hypot(x - this.at[0], y - this.at[1], z - this.at[2]) < MOVE_FT) return;
+    if (!this.at || Math.hypot(x - this.at[0], y - this.at[1], z - this.at[2]) >= MOVE_FT) this.plan(x, y, z);
+    this.build();
+  }
+
+  plan(x, y, z) {
     this.at = [x, y, z];
     const tiles = within([x, y, z], TILE_RADIUS_FT, TILE_FT, (tx, tz) => span(this.renditions.tile(tx, tz)));
-    // How the chunks near enough to draw at cell scale are drawn, by tile: "tx,tz" -> Map(chunk
-    // index in the tile -> FINE or FULL).
+    // How the chunks near enough to draw at cell scale are drawn, by tile: "tx,tz" -> [chunk index
+    // in the tile, FINE or FULL] pairs.
     const near = new Map();
     const local = (c) => c - Math.floor(c / TILE_CHUNKS) * TILE_CHUNKS;
     const chunkSpan = (cx, cz) => {
@@ -323,30 +340,39 @@ export class Ground {
     for (const key of within([x, y, z], CHUNK_RADIUS_FT, CHUNK_FT, chunkSpan)) {
       const [cx, cz] = key.split(",").map(Number);
       const tileKey = `${Math.floor(cx / TILE_CHUNKS)},${Math.floor(cz / TILE_CHUNKS)}`;
-      if (!near.has(tileKey)) near.set(tileKey, new Map());
-      near.get(tileKey).set(local(cz) * TILE_CHUNKS + local(cx), full.has(key) ? FULL : FINE);
+      if (!near.has(tileKey)) near.set(tileKey, []);
+      near.get(tileKey).push([local(cz) * TILE_CHUNKS + local(cx), full.has(key) ? FULL : FINE]);
     }
-    const tiersOf = (key) => [...(near.get(key) ?? [])].sort((a, b) => a[0] - b[0]).map(([k, t]) => `${k}:${t}`).join();
-    for (const key of tiles) if (this.meshes.has(key) && this.meshes.get(key).userData.tiers !== tiersOf(key)) this.drop(this.meshes, key);
-    this.sync(this.meshes, tiles, (key) => {
+    this.wanted = new Map([...tiles].map((key) => [key, (near.get(key) ?? []).sort((a, b) => a[0] - b[0]).map(([k, t]) => `${k}:${t}`).join()]));
+    for (const key of [...this.meshes.keys()]) if (!this.wanted.has(key)) this.drop(this.meshes, key);
+    const distance = (key) => {
       const [tx, tz] = key.split(",").map(Number);
-      const tile = this.renditions.tile(tx, tz);
-      if (!tile) return null;
-      const chunks = near.get(key) ?? new Map();
-      const cells = chunks.size ? this.renditions.cells(tx, tz) : null;
-      const tier = (i, j) => chunks.get(j * TILE_CHUNKS + i) ?? COARSE;
-      const group = new THREE.Group();
-      group.position.set(tx * TILE_FT, 0, tz * TILE_FT);
-      group.add(new THREE.Mesh(tileGeometry(tile, cells, tier), this.material));
-      const fullGround = cells && fullGeometry(cells, tier);
-      if (fullGround) group.add(new THREE.Mesh(fullGround, groundMaterial(this.renderer, { tile: groundTile(tx, tz, cells), origin: [0, 0] })));
-      const counts = [...chunks.values()];
-      group.userData = { tiers: tiersOf(key), fine: cells ? counts.filter((t) => t === FINE).length : 0, full: cells ? counts.filter((t) => t === FULL).length : 0 };
-      return group;
-    });
+      return Math.hypot((tx + 0.5) * TILE_FT - x, (tz + 0.5) * TILE_FT - z);
+    };
+    this.pending = [...this.wanted].filter(([key, tiers]) => this.meshes.get(key)?.userData.tiers !== tiers).map(([key]) => key);
+    this.pending.sort((a, b) => distance(a) - distance(b));
+    this.platesStale = true;
+  }
+
+  // Makes the tiles waiting to be made, nearest first, for up to BUILD_MS, then the plates once
+  // none are waiting.
+  build() {
+    const start = performance.now();
+    while (this.pending.length && performance.now() - start < BUILD_MS) {
+      const key = this.pending.shift();
+      const made = this.makeTile(key, this.wanted.get(key));
+      this.drop(this.meshes, key);
+      if (made) {
+        this.group.add(made);
+        this.meshes.set(key, made);
+      }
+    }
     const meshes = [...this.meshes.values()];
-    this.fineChunks = meshes.reduce((sum, group) => sum + (group.userData.fine ?? 0), 0);
-    this.fullChunks = meshes.reduce((sum, group) => sum + (group.userData.full ?? 0), 0);
+    this.fineChunks = meshes.reduce((sum, group) => sum + group.userData.fine, 0);
+    this.fullChunks = meshes.reduce((sum, group) => sum + group.userData.full, 0);
+    if (this.pending.length || !this.platesStale) return;
+    this.platesStale = false;
+    const [x, y, z] = this.at;
     const far = within([x, y, z], FAR_FT, PLATE_FT, (px, pz) => span(this.renditions.plate(px, pz)));
     // A plate made again when the tiles it leaves out change.
     for (const key of far) if (this.plates.get(key)?.userData.hidden !== this.hiddenIn(key)) this.drop(this.plates, key);
@@ -356,9 +382,45 @@ export class Ground {
       if (!plate) return null;
       const tileAt = (i, j) => [px * PLATE_TILES + i, pz * PLATE_TILES + j];
       const drawn = (i, j) => Boolean(this.renditions.tile(...tileAt(i, j))) && !this.meshes.has(tileAt(i, j).join());
-      const mesh = this.mesh(renditionGeometry(plate, TILE_FT, drawn), px * PLATE_FT, pz * PLATE_FT);
-      mesh.userData.hidden = this.hiddenIn(key);
+      const mesh = new THREE.Mesh(renditionGeometry(plate, TILE_FT, drawn), this.material);
+      mesh.position.set(px * PLATE_FT, 0, pz * PLATE_FT);
+      mesh.userData = { hidden: this.hiddenIn(key), kind: "plate" };
+      mesh.visible = this.shown.plate;
       return mesh;
+    });
+  }
+
+  // A tile's meshes, its chunks drawn as `tiers` says, or null where it has no rendition.
+  makeTile(key, tiers) {
+    const [tx, tz] = key.split(",").map(Number);
+    const tile = this.renditions.tile(tx, tz);
+    if (!tile) return null;
+    const chunks = new Map(tiers ? tiers.split(",").map((pair) => pair.split(":").map(Number)) : []);
+    const cells = chunks.size ? this.renditions.cells(tx, tz) : null;
+    const { coarse, fine, full } = tileGeometries(tile, cells, (i, j) => chunks.get(j * TILE_CHUNKS + i) ?? COARSE);
+    const group = new THREE.Group();
+    group.position.set(tx * TILE_FT, 0, tz * TILE_FT);
+    const add = (geometry, material, kind) => {
+      if (!geometry) return;
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.userData.kind = kind;
+      mesh.visible = this.shown[kind];
+      group.add(mesh);
+    };
+    add(coarse, this.material, "tile");
+    add(fine, this.material, "fine");
+    add(full, full && groundMaterial(this.renderer, { tile: groundTile(tx, tz, cells), origin: [0, 0] }), "full");
+    const counts = cells ? [...chunks.values()] : [];
+    group.userData = { tiers, fine: counts.filter((t) => t === FINE).length, full: counts.filter((t) => t === FULL).length };
+    return group;
+  }
+
+  // Shows or hides one kind of ground: "full", "fine" (chunks at cell scale), "tile" (tiles'
+  // renditions, with the skirts) or "plate", wherever it's drawn.
+  toggle(kind) {
+    this.shown[kind] = !this.shown[kind];
+    this.group.traverse((mesh) => {
+      if (mesh.isMesh && mesh.userData.kind === kind) mesh.visible = this.shown[kind];
     });
   }
 
@@ -393,12 +455,6 @@ export class Ground {
       if (mesh.material !== this.material) disposeGround(mesh.material);
     });
     meshes.delete(key);
-  }
-
-  mesh(geometry, x, z) {
-    const mesh = new THREE.Mesh(geometry, this.material);
-    mesh.position.set(x, 0, z);
-    return mesh;
   }
 }
 

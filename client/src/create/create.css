@@ -59,6 +59,10 @@ body.create {
   display: none;
 }
 
+#hud.problem {
+  color: #ff9a80;
+}
+
 #openError {
   color: #ff9a80;
 }

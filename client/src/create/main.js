@@ -1,7 +1,7 @@
 import "./create.css";
 import * as THREE from "three";
 import { strFromU8, unzipSync } from "fflate";
-import { PLATE_PATH } from "../v2/plate.js";
+import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
 import { SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { Builder } from "./builder.js";
@@ -58,6 +58,15 @@ function readWorld(bytes) {
     const plate = PLATE_PATH.exec(path);
     if (plate?.[1] === continent) renditions.addPlate([Number(plate[2]), Number(plate[3])], b);
   }
+  // Plate files are read as you come near them, so check one now, to say straight away when
+  // they're from an older converter.
+  const first = renditions.plateFiles.values().next().value;
+  if (!first) throw new Error("this world has no plate files: convert it again with script/convert-v2.mjs");
+  try {
+    decodePlate(first);
+  } catch (e) {
+    throw new Error(`this world's plate files can't be read (${e.message}): convert it again with script/convert-v2.mjs`);
+  }
   return { name: info.name, continent, renditions };
 }
 
@@ -88,6 +97,13 @@ function start({ name, continent, renditions }) {
   try {
     saved = JSON.parse(localStorage.getItem(placeKey));
   } catch {}
+  // 1 to 4 show or hide each kind of ground, finest first.
+  const KINDS = ["full", "fine", "tile", "plate"];
+  window.addEventListener("keydown", (e) => {
+    if (e.target.matches?.("input, textarea, select") || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
+    const kind = KINDS[Number(e.key) - 1];
+    if (kind) ground.toggle(kind);
+  });
   const builder = new Builder({ scene, camera, canvas, groundAt, at: renditions.middle(), state: saved ?? undefined });
 
   const resize = () => {
@@ -103,13 +119,20 @@ function start({ name, continent, renditions }) {
   let lastSave = 0;
   let lastHud = 0;
   let frames = 0;
+  let problem = null; // why the ground couldn't be drawn, shown in the HUD
   const frame = (now) => {
     const dt = last === null ? 0 : Math.min(0.05, (now - last) / 1000);
     last = now;
     frames++;
     builder.tick(dt);
     const { x, y, z } = builder.state;
-    ground.update(x, y, z);
+    try {
+      ground.update(x, y, z);
+      problem = null;
+    } catch (e) {
+      problem = e.message;
+      console.error(e);
+    }
     sea.position.set(x, SEA_LEVEL_FT - SEA_BELOW_FT, z);
     // The ground drawn ends FAR_FT from the builder, so fog closes in there.
     const back = camera.position.distanceTo(builder.model.position);
@@ -121,7 +144,9 @@ function start({ name, continent, renditions }) {
     if (now - lastHud > HUD_EVERY_MS) {
       const { flying } = builder.state;
       const fps = Math.round((frames * 1000) / (now - lastHud));
-      $("hud").textContent = `${flying ? "flying" : "walking"} · ${Math.round(builder.above)} ft up · ${Math.round(y)} ft · tile ${Math.floor(x / TILE_FT)},${Math.floor(z / TILE_FT)} · ${ground.fullChunks} full and ${ground.fineChunks} cell chunks, ${ground.meshes.size} tiles and ${ground.plates.size} plates drawn · ${fps} fps`;
+      $("hud").classList.toggle("problem", Boolean(problem));
+      const hidden = KINDS.filter((kind) => !ground.shown[kind]);
+      $("hud").textContent = problem ? `can't draw the ground: ${problem}` : `${hidden.length ? `hiding ${hidden.join(", ")} · ` : ""}${flying ? "flying" : "walking"} · ${Math.round(builder.above)} ft up · ${Math.round(y)} ft · tile ${Math.floor(x / TILE_FT)},${Math.floor(z / TILE_FT)} · ${ground.fullChunks} full and ${ground.fineChunks} cell chunks, ${ground.meshes.size} tiles and ${ground.plates.size} plates drawn · ${fps} fps`;
       lastHud = now;
       frames = 0;
     }
