@@ -19,7 +19,7 @@
       <button id="newWorld" type="button" title="an empty world, all sea">new world</button>
     </div>
     <div class="create-tools" data-work="planning" hidden>
-      <button type="button" data-tool="select" data-key="h" aria-pressed="false" title="select lines, to delete them">
+      <button type="button" data-tool="select" data-key="h" aria-pressed="false" title="select lines and pins, to move or delete them">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M3 18 C 12 4, 20 22, 30 10 S 42 6, 45 14" fill="none" stroke="#ffe14d" stroke-width="7" stroke-linecap="round"/><path d="M3 18 C 12 4, 20 22, 30 10 S 42 6, 45 14" fill="none" stroke="#ff5a36" stroke-width="3" stroke-linecap="round"/></svg>
         <span>select</span><kbd class="create-key">H</kbd>
       </button>
@@ -98,7 +98,7 @@
       </div>
     </div>
     <div data-config="select" hidden>
-      <p class="create-note">Click a line to select it, or drag a box round lines to select them. Shift selects more, or clicks fewer. Delete or backspace deletes them.</p>
+      <p class="create-note">Click a line or pin to select it, or drag a box round them. Shift selects more, or clicks fewer. Drag selected pins to move them. Double-click a pin to open it. Delete or backspace deletes what's selected.</p>
       <div class="create-way">
         <button type="button" id="marksDelete">delete</button>
       </div>

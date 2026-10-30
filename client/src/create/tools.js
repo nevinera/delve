@@ -11,8 +11,9 @@ import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 // - planning's marker: dragging draws a line on the ground (stroke.js, marks.js), its eraser
 //   cuts lines away where it's dragged, and select picks lines out, clicked or in a box dragged
 //   round them, with shift more than one, for delete or backspace to delete whole. The pin tool
-//   sticks pins in the ground. Clicking a pin's head, with no tool or with select or pin, opens
-//   its title and content to edit.
+//   sticks pins in the ground. Clicking a pin's head, with no tool or with pin, or double-clicking
+//   it with select, opens its title and content to edit. Select picks pins out too, and dragging
+//   one picked out moves those picked out.
 // - geo's brushes, raise and lower, flatten, smooth and clear: dragging on the ground works them
 //   where the pointer is, and a ring on the ground shows where they reach. [ and ] resize them, and
 //   c and v turn raise and lower's, shift+c and shift+v a little.
@@ -25,7 +26,7 @@ const PICK_LINE_PX = 8; // how near the pointer a line is picked out
 const BOX_PX = 4; // how far the pointer's dragged before select draws a box
 const BRUSHES = new Set(["raise", "flatten", "smooth", "clear", "eraser"]);
 const PLANNING = new Set(["marker", "eraser", "select"]); // tools that work on lines drawn at sea level
-const OPENS_PINS = new Set([null, "select", "pin"]); // tools with which clicking a pin opens it
+const OPENS_PINS = new Set([null, "pin"]); // tools with which clicking a pin opens it
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
 
@@ -54,6 +55,7 @@ export class Tools {
     this.drawing = null; // the Stroke being drawn with the marker
     this.marks = new Marks(scene, (x, z) => this.surface(x, z), canvas.parentElement);
     this.pinColor = "red";
+    this.moving = null; // pins being dragged, { from, pins: [[pin, x, z]], before, moved }
     this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }
     this.editing = null; // the pin open to edit, { pin, before }, before the planning file's JSON
     this.ring = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffe9a0, depthTest: false, transparent: true }));
@@ -163,6 +165,7 @@ export class Tools {
     document.body.append(this.boxEl);
     canvas.addEventListener("pointermove", (e) => {
       this.point(e);
+      if (this.moving) this.movePins();
       if (this.box) {
         const r = canvas.getBoundingClientRect();
         [this.box.x1, this.box.y1] = [e.clientX - r.left, e.clientY - r.top];
@@ -175,6 +178,12 @@ export class Tools {
       this.showStroke();
     });
     canvas.addEventListener("pointerleave", () => (this.pointer = null));
+    canvas.addEventListener("dblclick", (e) => {
+      if (this.tool !== "select") return;
+      const r = canvas.getBoundingClientRect();
+      const pin = this.marks.pins.pick(this.camera, r.width, r.height, e.clientX - r.left, e.clientY - r.top);
+      if (pin) this.openPin(pin);
+    });
     canvas.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
       this.point(e);
@@ -194,6 +203,18 @@ export class Tools {
       if (this.tool === "select") {
         const r = canvas.getBoundingClientRect();
         const [x, y] = [e.clientX - r.left, e.clientY - r.top];
+        const pin = this.marks.pins.pick(this.camera, r.width, r.height, x, y);
+        if (pin) {
+          // A pin picked out already stays so, to move with the rest.
+          if (e.shiftKey) this.marks.pins.select(pin, true);
+          else if (!this.marks.pins.selected.has(pin)) {
+            this.marks.unselect();
+            this.marks.pins.select(pin, true);
+          }
+          const from = this.hit();
+          if (from && this.marks.pins.selected.has(pin)) this.moving = { from, pins: [...this.marks.pins.selected].map((p) => [p, p.x, p.z]), before: this.marks.toJSON(), moved: false };
+          return;
+        }
         this.box = { x0: x, y0: y, x1: x, y1: y, add: e.shiftKey };
         return;
       }
@@ -220,6 +241,11 @@ export class Tools {
       }
       this.clicked = null;
       if (this.box) this.endBox();
+      if (this.moving?.moved) {
+        this.marks.undos.push(this.moving.before);
+        this.marks.version++;
+      }
+      this.moving = null;
       if (!this.drawing) return;
       this.drawing.end();
       this.marks.keep(this.drawing.points);
@@ -321,9 +347,19 @@ export class Tools {
     if (this.stroke) this.stroke.at = null;
   }
 
-  // Where a line's point [x, z] is on the canvas, in pixels, or null when it's behind.
-  onScreen([x, z]) {
-    const v = new THREE.Vector3(x, this.drawAt(x, z) + 1, z).project(this.camera);
+  // Moves the pins being dragged by as far as the pointer's moved over the ground.
+  movePins() {
+    const at = this.hit();
+    if (!at) return;
+    const { from, pins } = this.moving;
+    for (const [pin, x, z] of pins) [pin.x, pin.z] = [x + at[0] - from[0], z + at[2] - from[2]];
+    this.moving.moved = true;
+  }
+
+  // Where a line's point [x, z] is on the canvas, or the point `y` over it, in pixels, or null when
+  // it's behind.
+  onScreen([x, z], y = this.drawAt(x, z) + 1) {
+    const v = new THREE.Vector3(x, y, z).project(this.camera);
     return v.z > 1 || v.z < -1 ? null : [((v.x + 1) / 2) * this.canvas.clientWidth, ((1 - v.y) / 2) * this.canvas.clientHeight];
   }
 
@@ -345,6 +381,7 @@ export class Tools {
     if (this.boxDragged()) {
       const inside = (p) => p && p[0] >= Math.min(x0, x1) && p[0] <= Math.max(x0, x1) && p[1] >= Math.min(y0, y1) && p[1] <= Math.max(y0, y1);
       this.marks.selectAll(this.marks.kept.filter((mark) => mark.points.some((point) => inside(this.onScreen(point)))), add);
+      for (const pin of this.marks.pins.list) if (inside(this.onScreen([pin.x, pin.z], pin.top))) this.marks.pins.mark(pin, true);
     } else {
       const mark = this.pickMark();
       if (mark) this.marks.select(mark, add);

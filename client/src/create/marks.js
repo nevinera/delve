@@ -286,15 +286,18 @@ export class Marks {
     if (!this.selected.has(mark)) this.selected.set(mark, this.line(mark.points, { color: "halo", width: mark.pen.width, style: "solid" }));
   }
 
+  // Puts back the lines and pins picked out.
   unselect() {
     for (const halo of this.selected.values()) this.remove(halo);
     this.selected.clear();
+    this.pins.unselect();
   }
 
-  // Deletes the lines picked out.
+  // Deletes the lines and pins picked out.
   deleteSelected() {
-    if (!this.selected.size) return;
+    if (!this.selected.size && !this.pins.selected.size) return;
     this.save();
+    for (const pin of [...this.pins.selected]) this.pins.remove(pin);
     this.kept = this.kept.filter((mark) => {
       if (!this.selected.has(mark)) return true;
       this.remove(mark.line);

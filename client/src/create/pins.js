@@ -3,7 +3,9 @@ import * as THREE from "three";
 // Pins stuck in the ground by the planning pin tool, for notes on the map: each has a spot, a head
 // color (one of the marker's), a short title shown over it, and content, markdown of any length.
 // A pin stands taller the further it is from the camera, so it's always plain to see, and its head
-// is always about HEAD_PX across, to be clicked. Kept in the planning file beside the lines:
+// is always about HEAD_PX across, to be clicked. Ground between a pin and the camera hides it and
+// its title. Pins picked out with the select tool show a halo round their heads. Kept in the
+// planning file beside the lines:
 //
 //   "pins": [{ "x": 0, "z": 0, "color": "red", "title": "...", "content": "..." }, ...]
 
@@ -15,6 +17,9 @@ const STICK_PX = 2; // and its stick
 const PICK_PX = 4; // how far past a head's edge the pointer still picks it
 const LABEL_FT = 30000; // how far off a pin's title is shown
 const STICK = 0xd8d4cc;
+const HALO = 0xffe14d;
+const HALO_SCALE = 1.6; // how much wider than its head a picked-out pin's halo is
+const BLOCK_STEPS = 24; // how many places between the camera and a pin's head ground is looked for
 
 export class Pins {
   // surface(x, z) gives the height pins stand at; titles are shown over `stage`.
@@ -28,6 +33,8 @@ export class Pins {
     this.head = new THREE.SphereGeometry(1, 12, 8);
     this.stickMaterial = new THREE.MeshLambertMaterial({ color: STICK });
     this.headMaterials = new Map(); // color -> its heads' material
+    this.haloMaterial = new THREE.MeshBasicMaterial({ color: HALO, side: THREE.BackSide });
+    this.selected = new Set();
     this.list = []; // { x, z, color, title, content, group, stick, head, label }
   }
 
@@ -47,13 +54,17 @@ export class Pins {
     const group = new THREE.Group();
     const stick = new THREE.Mesh(this.stick, this.stickMaterial);
     const head = new THREE.Mesh(this.head, this.headMaterials.get(color));
+    const halo = new THREE.Mesh(this.head, this.haloMaterial);
+    halo.scale.setScalar(HALO_SCALE);
+    halo.visible = false;
+    head.add(halo);
     group.add(stick, head);
     this.group.add(group);
     const label = document.createElement("div");
     label.className = "create-pin-label";
     label.hidden = true;
     this.stage.append(label);
-    const pin = { x, z, color, title: title.slice(0, TITLE_MAX), content, group, stick, head, label };
+    const pin = { x, z, color, title: title.slice(0, TITLE_MAX), content, group, stick, head, halo, label };
     this.relabel(pin);
     this.list.push(pin);
     return pin;
@@ -64,6 +75,7 @@ export class Pins {
   }
 
   remove(pin) {
+    this.selected.delete(pin);
     this.group.remove(pin.group);
     pin.label.remove();
     this.list = this.list.filter((p) => p !== pin);
@@ -91,11 +103,39 @@ export class Pins {
       top.set(pin.x, y + tall, pin.z);
       const inFront = top.clone().applyMatrix4(camera.matrixWorldInverse).z < 0;
       const ndc = top.project(camera);
-      pin.label.hidden = !this.group.visible || !pin.title || !inFront || d > LABEL_FT || Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1;
+      pin.label.hidden = !this.group.visible || !pin.title || !inFront || d > LABEL_FT || Math.abs(ndc.x) > 1 || Math.abs(ndc.y) > 1 || this.blocked(eye, pin.x, y + tall, pin.z);
       if (pin.label.hidden) continue;
       const [sx, sy] = [((ndc.x + 1) / 2) * width, ((1 - ndc.y) / 2) * height - HEAD_PX];
       pin.label.style.transform = `translate(${sx}px, ${sy}px) translate(-50%, -100%)`;
     }
+  }
+
+  // Whether ground stands between `eye` and (x, y, z).
+  blocked(eye, x, y, z) {
+    for (let k = 1; k < BLOCK_STEPS; k++) {
+      const t = k / BLOCK_STEPS;
+      const [px, py, pz] = [eye.x + (x - eye.x) * t, eye.y + (y - eye.y) * t, eye.z + (z - eye.z) * t];
+      if (this.surface(px, pz) > py) return true;
+    }
+    return false;
+  }
+
+  // Picks out `pin`, or with `add`, picks it out too, or puts it back if it was.
+  select(pin, add = false) {
+    const was = this.selected.has(pin);
+    if (!add) this.unselect();
+    this.mark(pin, !(was && add));
+  }
+
+  mark(pin, on) {
+    if (on) this.selected.add(pin);
+    else this.selected.delete(pin);
+    pin.halo.visible = on;
+  }
+
+  unselect() {
+    for (const pin of this.selected) pin.halo.visible = false;
+    this.selected.clear();
   }
 
   // The pin whose head's under the canvas pixel (px, py), or null.
