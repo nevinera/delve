@@ -1,7 +1,7 @@
-import { CELL_FT, CHUNK_FT, PLATE_FT, TILE_FT } from "../v2/sizes.js";
+import { CELL_FT, CHUNK_FT, PLATE_FT, PLATTER_FT, TILE_FT } from "../v2/sizes.js";
 
-// The grid drawn over the ground (g shows or hides it): lines round cells, chunks, tiles and
-// plates, thicker the bigger the square, a fixed number of pixels wide however far off. Each
+// The grid drawn over the ground and the sea (g shows or hides it): lines round cells, chunks,
+// tiles, plates, platters and squares 8 platters across, thicker the bigger the square, a fixed number of pixels wide however far off. Each
 // ground material draws only the squares as fine as its ground is drawn, and fades out lines
 // too close together to read. Faces within about 5° of upright, like skirts, get none.
 
@@ -10,6 +10,8 @@ const LINES = [
   [CHUNK_FT, 1.5, 0.35],
   [TILE_FT, 2.5, 0.55],
   [PLATE_FT, 4, 0.75],
+  [PLATTER_FT, 6, 0.85],
+  [PLATTER_FT * 8, 9, 0.95],
 ]; // [spacing ft, width px, how dark]
 
 export const grid = { value: 0 }; // 1 while it's shown, shared by every ground material

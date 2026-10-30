@@ -3,10 +3,10 @@ import * as THREE from "three";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
-import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
+import { CHUNK_FT, PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { Builder } from "./builder.js";
 import { EMPTY_FT, FAR_FT, Ground, Renditions } from "./ground.js";
-import { grid } from "./grid.js";
+import { grid, withGrid } from "./grid.js";
 import { planningPath } from "./marks.js";
 import { Tools } from "./tools.js";
 
@@ -109,7 +109,7 @@ function start(world) {
   scene.add(sun, sun.target);
   // The open sea, a little under sea level, showing where no ground's drawn. Renditions draw the
   // water over tiles themselves.
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(FAR_FT * 2.2, FAR_FT * 2.2), new THREE.MeshLambertMaterial({ color: 0x2e608c }));
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(FAR_FT * 2.2, FAR_FT * 2.2), withGrid(new THREE.MeshLambertMaterial({ color: 0x2e608c }), CHUNK_FT));
   sea.rotation.x = -Math.PI / 2;
   scene.add(sea);
   const ground = new Ground(scene, renditions, renderer);
