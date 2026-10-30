@@ -1,0 +1,56 @@
+html,
+body.create {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: #9cc4e4;
+  font: 13px ui-monospace, Menlo, monospace;
+  color: #f0ead8;
+}
+
+#view {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+  touch-action: none;
+}
+
+.create-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 1rem;
+  padding: 6px 12px;
+  background: rgb(20 20 28 / 70%);
+  pointer-events: none;
+}
+
+.create-hint {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 6px 12px;
+  background: rgb(20 20 28 / 70%);
+  pointer-events: none;
+}
+
+#open {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  gap: 0.75rem;
+  background: rgb(20 20 28 / 85%);
+  text-align: center;
+}
+
+#open[hidden] {
+  display: none;
+}
+
+#openError {
+  color: #ff9a80;
+}
