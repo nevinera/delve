@@ -128,19 +128,9 @@ export class Biomes {
     line.geometry.dispose();
   }
 
-  // Puts an outline through `points` on the ground, with points along its edges so it follows it.
+  // Puts an outline through `points` on the ground.
   place(line, points) {
-    const along = [];
-    const ends = line.userData.closed ? [...points, points[0]] : points;
-    for (let k = 0; k < ends.length; k++) {
-      if (k === 0) {
-        along.push(ends[0]);
-        continue;
-      }
-      const [[ax, az], [bx, bz]] = [ends[k - 1], ends[k]];
-      const steps = Math.min(EDGE_MOST, Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / EDGE_STEP_FT)));
-      for (let s = 1; s <= steps; s++) along.push([ax + ((bx - ax) * s) / steps, az + ((bz - az) * s) / steps]);
-    }
+    const along = this.along(points, line.userData.closed);
     if (along.length === 1) along.push(along[0]);
     const positions = new Float32Array(along.length * 3);
     along.forEach(([x, z], k) => {
@@ -150,6 +140,44 @@ export class Biomes {
     line.geometry.dispose();
     line.geometry = new LineGeometry();
     line.geometry.setPositions(positions);
+  }
+
+  // Points along the edges of `points`, so an outline through them follows the ground.
+  along(points, closed) {
+    const along = [];
+    const ends = closed ? [...points, points[0]] : points;
+    for (let k = 0; k < ends.length; k++) {
+      if (k === 0) {
+        along.push(ends[0]);
+        continue;
+      }
+      const [[ax, az], [bx, bz]] = [ends[k - 1], ends[k]];
+      const steps = Math.min(EDGE_MOST, Math.max(1, Math.ceil(Math.hypot(bx - ax, bz - az) / EDGE_STEP_FT)));
+      for (let s = 1; s <= steps; s++) along.push([ax + ((bx - ax) * s) / steps, az + ((bz - az) * s) / steps]);
+    }
+    return along;
+  }
+
+  // An area's outline across the screen, as pixels on the canvas, null where it's behind.
+  outline(camera, width, height, area) {
+    return this.along(area.points, true).map((p) => this.screen(camera, width, height, p));
+  }
+
+  // The area whose outline passes under the canvas pixel (px, py), or null.
+  pickArea(camera, width, height, px, py) {
+    let [best, nearest] = [null, PICK_PX];
+    for (const area of this.areas) {
+      const on = this.outline(camera, width, height, area);
+      for (let k = 1; k < on.length; k++) {
+        const [a, b] = [on[k - 1], on[k]];
+        if (!a || !b) continue;
+        const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+        const t = Math.min(1, Math.max(0, ((px - a[0]) * dx + (py - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+        const d = Math.hypot(a[0] + dx * t - px, a[1] + dy * t - py);
+        if (d <= nearest) [best, nearest] = [area, d];
+      }
+    }
+    return best;
   }
 
   placeAll() {

@@ -20,9 +20,9 @@ import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 //   one picked out moves those picked out. Measure's click starts a ruler to the pointer, and its
 //   drag draws a circle (measure.js).
 // - geo's biomes: clicking corners draws an area of a biome, closed by clicking its first corner,
-//   double-clicking or Enter (biomes.js). Clicking an area picks it out; then its corners drag,
-//   shift-clicking one takes it away, dragging an edge adds one, and clicking inside it starts
-//   another area there.
+//   double-clicking or Enter, and Esc throws it away (biomes.js). Clicking an area or its outline
+//   picks it out; then its corners drag, shift-clicking one takes it away, dragging an edge adds
+//   one, clicking inside it starts another area there, and clicking outside puts it back.
 // - geo's brushes, raise and lower, flatten, smooth and clear: dragging on the ground works them
 //   where the pointer is, and a ring on the ground shows where they reach. [ and ] resize them, and
 //   c and v turn raise and lower's, shift+c and shift+v a little.
@@ -348,7 +348,8 @@ export class Tools {
     });
     window.addEventListener("keydown", (e) => {
       if (e.target.matches?.("input, textarea, select")) return;
-      if (e.key === "Escape") this.pick(null);
+      if (e.key === "Escape" && this.tool === "biomes" && this.biomes.draft) this.biomes.drop();
+      else if (e.key === "Escape") this.pick(null);
       else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "select") this.marks.deleteSelected();
       else if (e.key === "Enter" && this.tool === "draw") this.draw.grow();
       else if (e.key === "Enter" && this.tool === "biomes") this.biomes.close();
@@ -398,15 +399,20 @@ export class Tools {
       return;
     }
     if (picked && at) return this.biomes.split(picked.edge, at[0], at[2]);
+    const outlined = this.biomes.pickArea(this.camera, r.width, r.height, px, py);
+    if (outlined) return this.selectArea(outlined);
     if (!at) return;
     const area = this.biomes.at(at[0], at[2]);
-    if (area && area !== this.biomes.selected) {
-      this.biomes.select(area);
-      this.biomeButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.biome === area.biome)));
-      this.biomes.biome = area.biome;
-      return;
-    }
+    if (area && area !== this.biomes.selected) return this.selectArea(area);
+    // Clicking away from the area picked out only puts it back.
+    if (!area && this.biomes.selected) return this.biomes.unselect();
     this.biomes.addCorner(at[0], at[2]);
+  }
+
+  selectArea(area) {
+    this.biomes.select(area);
+    this.biomes.biome = area.biome;
+    this.biomeButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.biome === area.biome)));
   }
 
   // Shows the draw tool's state, and the settings of what it's growing.
