@@ -8,9 +8,10 @@ import { BIOME_NAMES } from "../v2/biomes.js";
 import { BIOMES, biomesPath } from "./biomes.js";
 import { Builder } from "./builder.js";
 import { Compass, facing } from "./compass.js";
-import { EMPTY_FT, FAR_FT, Ground, Renditions } from "./ground.js";
+import { EMPTY_FT, FAR_FT, FINE, Ground, Renditions } from "./ground.js";
 import { grid } from "./grid.js";
 import { planningPath } from "./marks.js";
+import { Scatter } from "./scatter.js";
 import { Sea } from "./sea.js";
 import { Tools } from "./tools.js";
 
@@ -136,6 +137,8 @@ function start(world, changes) {
   // Renditions draw the water over tiles themselves; the sea's round them.
   const sea = new Sea(scene, FAR_FT * 2.2, renditions);
   const ground = new Ground(scene, renditions, renderer);
+  // Trees and objects in the tiles' slots round the builder.
+  const scatter = new Scatter(scene, renditions);
   // The builder stands on the sea where it's over the ground.
   const groundAt = (x, z) => Math.max(renditions.heightAt(x, z) ?? EMPTY_FT, SEA_LEVEL_FT);
   const placeKey = `create:${name}:${continent}`;
@@ -213,7 +216,7 @@ function start(world, changes) {
     worst[part] = Math.max(worst[part], performance.now() - start);
   };
   // A handle for measuring from the browser's console or a script; paused stops the frames.
-  window.create = { ground, builder, tools, renderer, scene, camera, paused: false };
+  window.create = { ground, scatter, builder, tools, renderer, scene, camera, paused: false };
   const frame = (now) => {
     if (window.create.paused) return requestAnimationFrame(frame);
     // At most FPS frames a second, with a little slack so a 60 Hz screen draws every other frame.
@@ -235,6 +238,7 @@ function start(world, changes) {
       }
     });
     sea.tick(x, SEA_LEVEL_FT - SEA_BELOW_FT, z);
+    timed("ground", () => scatter.tick(dt, x, z, ground.finest <= FINE));
     // The ground drawn ends FAR_FT across from the builder, so fog closes in there, as far off
     // as that is from the camera, high up too.
     const back = Math.hypot(camera.position.x - x, camera.position.z - z);

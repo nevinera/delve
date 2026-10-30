@@ -19,7 +19,7 @@ self.onmessage = ({ data }) => {
   const { key, bytes } = data;
   try {
     const plate = decodePlate(bytes);
-    const buffers = [...plate.tiles.values()].flatMap((tile) => [tile.heights.buffer, tile.terrain.buffer, tile.biome.buffer]);
+    const buffers = [...plate.tiles.values()].flatMap((tile) => [tile.heights.buffer, tile.terrain.buffer, tile.biome.buffer, tile.slots.buffer]);
     self.postMessage({ key, plate }, buffers);
   } catch (err) {
     self.postMessage({ key, error: err.message });

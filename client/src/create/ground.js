@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
 import { PATTERNS, look, painted, slopeOf } from "../v2/look.js";
+import { makeSlots } from "../v2/slots.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate, platePath, tileIndexInPlate } from "../v2/plate.js";
 import { CORNERS, decodePlatter, encodePlatter, indexIn, plateIndexIn, platterOf, platterOfPlate, platterPath } from "../v2/platter.js";
 import { CELL_FT, CHUNK_CELLS, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
@@ -164,7 +165,9 @@ export class Renditions {
     for (const index of this.cleared.get(key) ?? []) plate.tiles.delete(index);
     for (const index of this.made.get(key) ?? []) {
       if (plate.tiles.has(index)) continue;
-      plate.tiles.set(index, { heights: new Float32Array(CELL_CORNERS * CELL_CORNERS).fill(EMPTY_FT), terrain: new Uint8Array(TILE_CELLS * TILE_CELLS), biome: new Uint8Array(TILE_CELLS * TILE_CELLS) });
+      const [px, pz] = key.split(",").map(Number);
+      const slots = makeSlots(px * PLATE_TILES + (index % PLATE_TILES), pz * PLATE_TILES + Math.floor(index / PLATE_TILES));
+      plate.tiles.set(index, { heights: new Float32Array(CELL_CORNERS * CELL_CORNERS).fill(EMPTY_FT), terrain: new Uint8Array(TILE_CELLS * TILE_CELLS), biome: new Uint8Array(TILE_CELLS * TILE_CELLS), slots });
     }
   }
 
@@ -212,7 +215,7 @@ export class Renditions {
         continue;
       }
       // Only what the file holds, not what's kept for drawing.
-      const tiles = new Map([...plate.tiles].map(([index, { heights, terrain }]) => [index, { heights, terrain }]));
+      const tiles = new Map([...plate.tiles].map(([index, { heights, terrain, slots }]) => [index, { heights, terrain, slots }]));
       writing.push(this.write("plate", { coords: [px, pz], palette: plate.palette, tiles }).then((bytes) => files.set(platePath(continent, [px, pz]), bytes)));
     }
     for (const key of platters) {
