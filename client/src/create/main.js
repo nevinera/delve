@@ -5,6 +5,7 @@ import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
 import { CHUNK_FT, PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { Builder } from "./builder.js";
+import { Compass, facing } from "./compass.js";
 import { EMPTY_FT, FAR_FT, Ground, Renditions } from "./ground.js";
 import { grid, withGrid } from "./grid.js";
 import { planningPath } from "./marks.js";
@@ -22,6 +23,7 @@ const FOG = { nearFt: FAR_FT * 0.5, farFt: FAR_FT * 1.02 };
 const SAVE_EVERY_MS = 2000;
 const SEA_BELOW_FT = 2;
 const HUD_EVERY_MS = 250;
+const INFO_EVERY_MS = 100;
 
 // The zip opened last, kept in IndexedDB.
 const store = {
@@ -151,6 +153,9 @@ function start(world) {
   const FPS = 30;
   let lastSave = 0;
   let lastHud = 0;
+  let lastInfo = 0;
+  const compass = new Compass(scene);
+  const feet = (ft) => `${Math.round(ft).toLocaleString()} ft`;
   let frames = 0;
   let problem = null; // why the ground couldn't be drawn, shown in the HUD
   // The slowest of each part of a frame since the HUD last showed them, in ms, and of the gaps
@@ -192,7 +197,16 @@ function start(world) {
     scene.fog.far = Math.hypot(FOG.farFt + back, high);
     sun.position.set(x + 500, 1000, z + 300);
     sun.target.position.set(x, 0, z);
+    compass.tick(camera);
     timed("render", () => renderer.render(scene, camera));
+    if (now - lastInfo > INFO_EVERY_MS) {
+      const at = tools.hit();
+      $("infoPoint").textContent = at ? feet(camera.position.distanceTo(new THREE.Vector3(...at))) : "-";
+      $("infoHeight").textContent = feet(y - SEA_LEVEL_FT);
+      $("infoGround").textContent = feet(renditions.heightAt(x, z) ?? EMPTY_FT);
+      $("infoFacing").textContent = facing(builder.state.yaw);
+      lastInfo = now;
+    }
     if (now - lastHud > HUD_EVERY_MS) {
       const { flying } = builder.state;
       const fps = Math.round((frames * 1000) / (now - lastHud));

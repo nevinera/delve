@@ -43,7 +43,8 @@ body.create {
 #bottom {
   grid-column: 1;
   grid-row: 2;
-  padding: 8px 12px;
+  display: grid;
+  grid-template-columns: 200px 1fr;
   overflow-y: auto;
   background: #22222a;
   border-top: 1px solid #44444e;
@@ -242,4 +243,26 @@ body.create {
 
 #help dd {
   margin: 0;
+}
+
+.create-info {
+  padding: 8px 12px;
+  border-right: 1px solid #44444e;
+}
+
+.create-info dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 10px;
+  margin: 0;
+}
+
+.create-info dt {
+  color: #8f8a7e;
+}
+
+.create-info dd {
+  margin: 0;
+  color: #e8e2d4;
+  font-variant-numeric: tabular-nums;
 }
