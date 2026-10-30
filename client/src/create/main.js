@@ -268,7 +268,7 @@ function start(world, changes) {
     if (tools.biomes.version !== biomesBaked && !tools.biomes.dragging) {
       renditions.setBiomes(tools.biomes.toJSON().areas);
       biomesBaked = tools.biomes.version;
-      if (ground.tint) ground.retint();
+      ground.retint();
     }
     // Saves what's changed once there's been time to finish the stroke, writing files on the worker.
     if (!saving && !tools.stroke && !tools.drawing && now - lastChangeSave > SAVE_CHANGES_MS && (renditions.unsaved.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved)) {

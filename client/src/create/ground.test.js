@@ -8,8 +8,8 @@ import { COARSE, COARSE_TILES, EMPTY_FT, FINE, FINE_TILES, FULL, FULL_TILES, Gro
 
 // Flat ground at `height` everywhere, its plate files there but never read.
 const flat = (height = 0) => {
-  const rendition = { heights: new Float32Array(81).fill(height), colors: new Uint8Array(192) };
-  return { tile: () => rendition, plate: () => rendition, hasCells: () => true, cells: () => null, heightAt: () => height };
+  const rendition = { heights: new Float32Array(81).fill(height) };
+  return { tile: () => rendition, plate: () => rendition, hasCells: () => true, cells: () => null, heightAt: () => height, biomes: { at: () => 0 }, biomeTile: () => new Uint8Array(64 * 64), looks: 0 };
 };
 
 describe("Ground tiers", () => {
@@ -167,7 +167,7 @@ describe("raising the empty sea floor", () => {
       expect(renditions.plate(-1, 0)).not.toBeNull();
       expect(renditions.hasCells(-2, 1)).toBe(true);
       expect(renditions.heightAt(-256, 256)).toBeCloseTo(EMPTY_FT + 30);
-      expect(renditions.cells(-2, 1).palette).toEqual(["sand"]);
+      expect(renditions.cells(-2, 1).kinds).toHaveLength(64 * 64);
       expect(renditions.tile(5, 5)).toBeNull();
     }
   });

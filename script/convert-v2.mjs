@@ -1,25 +1,22 @@
 // Makes a version 2 world (client/src/v2/) from a version 1 world's zip, for the /create spike:
 // its world.json, and for each continent, platter files with a rendition of each 256 ft tile and
 // each plate (v2/rendition.js), and plate files with the ground at cell scale (v2/plate.js), which
-// is each chunk's rendition: cell corners' heights smoothly between v1 cells, and each cell the
-// color of the v1 cell it's in. A v1 tile (512 ft, 8 ft cells) becomes 2×2 v2 tiles. Renditions
-// show the surface you'd see: the water's where there's water, else the ground's. A chunk
-// corner's height is the mean of the four v1 cells' round it, and a chunk's color the mean of its
-// 4×4 v1 cells', water drawn WATER_RGB.
+// is each chunk's rendition: cell corners' heights smoothly between v1 cells. A v1 tile (512 ft,
+// 8 ft cells) becomes 2×2 v2 tiles. Heights are the surface you'd see: the water's where there's
+// water, else the ground's. A chunk corner's height is the mean of the four v1 cells' round it.
+// What the ground looks like is left to its biome (v2/look.js), all plains.
 //
 //   node script/convert-v2.mjs <v1 world.zip> <v2 world.zip>
 import fs from "fs";
 import { gunzipSync, unzipSync, zipSync, strFromU8, strToU8 } from "fflate";
 import { unpackPlates } from "../client/src/editor/plates.js";
 import { decodeTile } from "../client/src/world/tileCodec.js";
-import { groundRgb } from "../client/src/world/tileImage.js";
 import { tileAt } from "../client/src/world/paths.js";
 import { CORNERS, encodePlatter, indexIn, plateIndexIn, platterOf, platterPath } from "../client/src/v2/platter.js";
 import { CELL_CORNERS, TILE_CELLS, encodePlate, platePath, tileIndexInPlate } from "../client/src/v2/plate.js";
 import { hash64, plateRendition } from "../client/src/v2/rendition.js";
 import { CELL_FT, CHUNK_FT, PLATE_TILES, PLATTER_PLATES, TILE_CHUNKS } from "../client/src/v2/sizes.js";
 
-const WATER_RGB = [46, 96, 140];
 
 const [from, to] = process.argv.slice(2);
 if (!from || !to) {
@@ -60,10 +57,8 @@ for (const { key } of info.continents) {
     const tile = v1(Math.floor(ci / n), Math.floor(cj / n));
     return tile && [tile, (cj - tile.coords[1] * n) * n + (ci - tile.coords[0] * n)];
   };
-  const perChunk = CHUNK_FT / cellFt;
   const wet = (tile, at) => tile.layers.water[at] > tile.layers.height[at];
   const surface = (tile, at) => (wet(tile, at) ? tile.layers.water[at] : tile.layers.height[at]);
-  const colorOf = (tile, at) => (wet(tile, at) ? WATER_RGB : groundRgb(tile, at));
   // The surface's height at continent feet (x, z), straight between v1 cells' middles.
   const surfaceAt = (x, z) => {
     const [u, v] = [x / cellFt - 0.5, z / cellFt - 0.5];
@@ -79,13 +74,6 @@ for (const { key } of info.continents) {
     return weight ? sum / weight : surface(...cell(Math.floor(x / cellFt), Math.floor(z / cellFt)));
   };
   const plates = new Map(); // "px,pz" -> tiles' ground at cell scale
-  // One terrain palette for every plate, for the spike.
-  const palette = [];
-  const terrainIndex = (name) => {
-    if (!palette.includes(name)) palette.push(name);
-    return palette.indexOf(name);
-  };
-
   const platters = new Map(); // "px,pz" -> tiles
   for (const [k, bytes] of sources) {
     const [otx, otz] = k.split(",").map(Number);
@@ -102,46 +90,22 @@ for (const { key } of info.continents) {
             heights[j * CORNERS + i] = round.reduce((sum, [tile, at]) => sum + surface(tile, at), 0) / round.length;
           }
         }
-        const colors = new Uint8Array(TILE_CHUNKS * TILE_CHUNKS * 3);
-        for (let j = 0; j < TILE_CHUNKS; j++) {
-          for (let i = 0; i < TILE_CHUNKS; i++) {
-            const sum = [0, 0, 0];
-            for (let dj = 0; dj < perChunk; dj++) {
-              for (let di = 0; di < perChunk; di++) {
-                const [tile, at] = cell((tx * TILE_CHUNKS + i) * perChunk + di, (tz * TILE_CHUNKS + j) * perChunk + dj);
-                colorOf(tile, at).forEach((v, m) => (sum[m] += v));
-              }
-            }
-            sum.forEach((v, m) => (colors[(j * TILE_CHUNKS + i) * 3 + m] = Math.round(v / perChunk ** 2)));
-          }
-        }
         const cellHeights = new Float32Array(CELL_CORNERS * CELL_CORNERS);
         for (let j = 0; j < CELL_CORNERS; j++) for (let i = 0; i < CELL_CORNERS; i++) cellHeights[j * CELL_CORNERS + i] = surfaceAt((tx * TILE_CELLS + i) * CELL_FT, (tz * TILE_CELLS + j) * CELL_FT);
-        const cellColors = new Uint8Array(TILE_CELLS * TILE_CELLS * 3);
-        const cellTerrain = new Uint8Array(TILE_CELLS * TILE_CELLS);
-        const cellForest = new Uint8Array(TILE_CELLS * TILE_CELLS);
-        for (let j = 0; j < TILE_CELLS; j++) {
-          for (let i = 0; i < TILE_CELLS; i++) {
-            const [tile, at] = cell(Math.floor(((tx * TILE_CELLS + i + 0.5) * CELL_FT) / cellFt), Math.floor(((tz * TILE_CELLS + j + 0.5) * CELL_FT) / cellFt));
-            cellColors.set(colorOf(tile, at), (j * TILE_CELLS + i) * 3);
-            cellTerrain[j * TILE_CELLS + i] = terrainIndex(tile.palettes.terrain[tile.layers.terrain[at]]);
-            cellForest[j * TILE_CELLS + i] = tile.layers.forest[at];
-          }
-        }
         const plateKey = [Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES)].join(",");
         if (!plates.has(plateKey)) plates.set(plateKey, new Map());
-        plates.get(plateKey).set(tileIndexInPlate(tx, tz), { heights: cellHeights, colors: cellColors, terrain: cellTerrain, forest: cellForest });
+        plates.get(plateKey).set(tileIndexInPlate(tx, tz), { heights: cellHeights });
         highest = Math.max(highest, ...heights);
         const p = platterOf(tx, tz).join(",");
         if (!platters.has(p)) platters.set(p, new Map());
-        platters.get(p).set(indexIn(tx, tz), { heights, colors, hash });
+        platters.get(p).set(indexIn(tx, tz), { heights, hash });
       }
     }
   }
   let plateBytes = 0;
   for (const [p, tiles] of plates) {
     const coords = p.split(",").map(Number);
-    out[platePath(key, coords)] = encodePlate({ coords, palette, tiles });
+    out[platePath(key, coords)] = encodePlate({ coords, palette: [], tiles });
     plateBytes += out[platePath(key, coords)].length;
   }
   let plateCount = 0;

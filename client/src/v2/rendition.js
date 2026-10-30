@@ -15,8 +15,7 @@ export function hash64(data) {
 
 // A plate's rendition from its tiles': tileAt(i, j) gives the rendition of its tile i east and j
 // south, or null where there's none. A corner's height is the tiles' that meet there, or the sea
-// floor where none do; a tile's color is the mean of its chunks', and black where there's no tile.
-// The hash is of the tiles' hashes. Null for a plate with no tiles.
+// floor where none do. The hash is of the tiles' hashes. Null for a plate with no tiles.
 export function plateRendition(tileAt) {
   const tiles = [];
   for (let j = 0; j < PLATE_TILES; j++) for (let i = 0; i < PLATE_TILES; i++) tiles.push(tileAt(i, j));
@@ -34,15 +33,6 @@ export function plateRendition(tileAt) {
       heights[j * CORNERS + i] = n ? sum / n : SEA_FLOOR_FT;
     }
   }
-  const colors = new Uint8Array(PLATE_TILES * PLATE_TILES * 3);
-  tiles.forEach((tile, k) => {
-    if (!tile) return;
-    for (let m = 0; m < 3; m++) {
-      let sum = 0;
-      for (let c = 0; c < TILE_CHUNKS * TILE_CHUNKS; c++) sum += tile.colors[c * 3 + m];
-      colors[k * 3 + m] = Math.round(sum / (TILE_CHUNKS * TILE_CHUNKS));
-    }
-  });
   const hash = hash64(tiles.map((tile) => tile?.hash ?? "0".repeat(16)).join(""));
-  return { heights, colors, hash };
+  return { heights, hash };
 }

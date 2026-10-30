@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
+import { PATTERNS, look, painted, slopeOf } from "../v2/look.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate, platePath, tileIndexInPlate } from "../v2/plate.js";
 import { CORNERS, decodePlatter, encodePlatter, indexIn, plateIndexIn, platterOf, platterOfPlate, platterPath } from "../v2/platter.js";
 import { CELL_FT, CHUNK_CELLS, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
@@ -32,7 +33,6 @@ const SKIRT_SHADE = 0.6;
 const KEEP_PLATES = 40; // plate files kept decoded
 const BUILD_MS = 6; // how long a frame spends making plates
 export const EMPTY_FT = -100; // the sea floor's height where there are no tiles
-const SEA_FLOOR = { terrain: "sand", rgb: [194, 178, 128] };
 const TINT = 0.8; // how far toward its biome's color ground's mixed, showing biomes
 const CHUNK_CELLS_HALF = CHUNK_CELLS / 2;
 
@@ -62,6 +62,7 @@ export class Renditions {
     this.biomeAreas = []; // the biome areas, as biomes.json keeps them
     this.biomes = new BiomeMap(); // and which biome is where from them, baked into plate files saved
     this.biomeCells = new Map(); // "tx,tz" -> its cells' biomes, worked out as they're wanted
+    this.looks = 0; // counts changes to the biomes, to tell when what ground looks like is stale
   }
 
   // Tile (tx, tz)'s cells' biomes, 64 × 64 indexes into BIOME_NAMES.
@@ -78,6 +79,7 @@ export class Renditions {
     this.biomeAreas = areas;
     this.biomes = new BiomeMap(areas);
     this.biomeCells.clear();
+    this.looks++;
     this.worker?.postMessage({ biomes: areas });
     const marked = new Set();
     if (!dirty) return marked;
@@ -101,11 +103,7 @@ export class Renditions {
   make(tx, tz) {
     this.layout++;
     const [px, pz] = [Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES)];
-    const floor = () => {
-      const colors = new Uint8Array(TILE_CHUNKS * TILE_CHUNKS * 3);
-      for (let k = 0; k < colors.length; k++) colors[k] = SEA_FLOOR.rgb[k % 3];
-      return { heights: new Float32Array(CORNERS * CORNERS).fill(EMPTY_FT), colors, hash: "0000000000000000" };
-    };
+    const floor = () => ({ heights: new Float32Array(CORNERS * CORNERS).fill(EMPTY_FT), hash: "0000000000000000" });
     const platterKey = platterOf(tx, tz).join(",");
     if (!this.platters.has(platterKey)) this.platters.set(platterKey, { coords: platterOf(tx, tz), tiles: new Map(), plates: new Map() });
     const platter = this.platters.get(platterKey);
@@ -166,11 +164,7 @@ export class Renditions {
     for (const index of this.cleared.get(key) ?? []) plate.tiles.delete(index);
     for (const index of this.made.get(key) ?? []) {
       if (plate.tiles.has(index)) continue;
-      if (!plate.palette.includes(SEA_FLOOR.terrain)) plate.palette.push(SEA_FLOOR.terrain);
-      const colors = new Uint8Array(TILE_CELLS * TILE_CELLS * 3);
-      for (let k = 0; k < colors.length; k++) colors[k] = SEA_FLOOR.rgb[k % 3];
-      const terrain = new Uint8Array(TILE_CELLS * TILE_CELLS).fill(plate.palette.indexOf(SEA_FLOOR.terrain));
-      plate.tiles.set(index, { heights: new Float32Array(CELL_CORNERS * CELL_CORNERS).fill(EMPTY_FT), colors, terrain, forest: new Uint8Array(TILE_CELLS * TILE_CELLS) });
+      plate.tiles.set(index, { heights: new Float32Array(CELL_CORNERS * CELL_CORNERS).fill(EMPTY_FT), terrain: new Uint8Array(TILE_CELLS * TILE_CELLS), biome: new Uint8Array(TILE_CELLS * TILE_CELLS) });
     }
   }
 
@@ -218,7 +212,7 @@ export class Renditions {
         continue;
       }
       // Only what the file holds, not what's kept for drawing.
-      const tiles = new Map([...plate.tiles].map(([index, { heights, colors, terrain, forest }]) => [index, { heights, colors, terrain, forest }]));
+      const tiles = new Map([...plate.tiles].map(([index, { heights, terrain }]) => [index, { heights, terrain }]));
       writing.push(this.write("plate", { coords: [px, pz], palette: plate.palette, tiles }).then((bytes) => files.set(platePath(continent, [px, pz]), bytes)));
     }
     for (const key of platters) {
@@ -227,7 +221,7 @@ export class Renditions {
         continue;
       }
       const { coords, tiles, plates } = this.platters.get(key);
-      const bare = (map) => new Map([...map].map(([index, { heights, colors, hash }]) => [index, { heights, colors, hash }]));
+      const bare = (map) => new Map([...map].map(([index, { heights, hash }]) => [index, { heights, hash }]));
       writing.push(this.write("platter", { coords, tiles: bare(tiles), plates: bare(plates) }).then((bytes) => files.set(platterPath(continent, coords), bytes)));
     }
     await Promise.all(writing);
@@ -345,7 +339,6 @@ export class Renditions {
           for (let k = 0; k < d.length; k++) tile.heights[k] += d[k];
           delete tile.span;
           delete tile.faces;
-          delete tile.tinted;
           moved.add(`${px},${pz}`);
           if (level === CHUNKS) add(this.offsets[CHUNKS], key, ringed);
         }
@@ -360,7 +353,10 @@ export class Renditions {
           const fine = smooth(ringed, RINGED, 0, 0, 1 / CHUNK_CELLS, CELL_CORNERS);
           for (let k = 0; k < fine.length; k++) cells.heights[k] += fine[k];
         }
-        if (cells) delete cells.grid;
+        if (cells) {
+          delete cells.grid;
+          delete cells.dressed;
+        }
       }
     }
     for (const key of moved) {
@@ -443,8 +439,8 @@ export class Renditions {
     return this.platters.get(platterOfPlate(px, pz).join(","))?.plates.get(plateIndexIn(px, pz)) ?? null;
   }
 
-  // A tile's ground at cell scale, { heights, colors, terrain, forest, palette }, or null where it's
-  // not been read (starting to read it) or there's none.
+  // A tile's ground at cell scale, { heights, terrain, biome, palette, and what it looks like
+  // (dress) }, or null where it's not been read (starting to read it) or there's none.
   cells(tx, tz) {
     const key = `${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`;
     const plate = this.decoded.get(key);
@@ -454,8 +450,35 @@ export class Renditions {
     }
     this.keep(key, plate);
     const tile = plate.tiles.get(tileIndexInPlate(tx, tz));
-    if (tile) tile.palette = plate.palette;
-    return tile ?? null;
+    if (!tile) return null;
+    tile.palette = plate.palette;
+    this.dress(tx, tz, tile);
+    return tile;
+  }
+
+  // Works out what tile (tx, tz)'s cells look like, from its heights and biomes, or where it's been
+  // painted, that: `colors`, 64 × 64 sRGB, and `kinds`, indexes into look.js's PATTERNS. Kept till
+  // its ground moves or the biomes change.
+  dress(tx, tz, cells) {
+    if (cells.dressed === this.looks) return;
+    const biomes = this.biomeTile(tx, tz);
+    const colors = new Uint8Array(TILE_CELLS * TILE_CELLS * 3);
+    const kinds = new Uint8Array(TILE_CELLS * TILE_CELLS);
+    const h = cells.heights;
+    for (let j = 0; j < TILE_CELLS; j++) {
+      for (let i = 0; i < TILE_CELLS; i++) {
+        const k = j * TILE_CELLS + i;
+        const c = j * CELL_CORNERS + i;
+        const [nw, ne, sw, se] = [h[c], h[c + 1], h[c + CELL_CORNERS], h[c + CELL_CORNERS + 1]];
+        const [x, z] = [tx * TILE_FT + (i + 0.5) * CELL_FT, tz * TILE_FT + (j + 0.5) * CELL_FT];
+        const paint = cells.terrain?.[k] ? cells.palette[cells.terrain[k] - 1] : null;
+        const { pattern, rgb } = (paint && painted(paint, x, z)) || look(biomes[k], slopeOf(nw, ne, sw, se, CELL_FT), (nw + ne + sw + se) / 4, x, z);
+        kinds[k] = pattern;
+        colors.set(rgb, k * 3);
+      }
+    }
+    Object.assign(cells, { colors, kinds, dressed: this.looks });
+    delete cells.grid;
   }
 
   // The ground's height at continent feet (x, z), straight between cell corners, or chunk corners
@@ -691,10 +714,11 @@ function gridSquares(base, out = new Uint32Array(TILE_CELLS * TILE_CELLS * 6), a
 const SQUARES = gridSquares(0);
 let plateSquares = null; // the squares of a plate's tiles' grids, one after another
 
-// The tile-shaped stand-in groundMaterial wants for a tile's cells: the kinds of ground at each
-// cell's middle.
+// The tile-shaped stand-in groundMaterial wants for a tile's cells: the pattern at each cell's
+// middle (Renditions' dress).
+const NO_FOREST = new Uint8Array(TILE_CELLS * TILE_CELLS);
 function groundTile(tx, tz, cells) {
-  return { coords: [tx, tz], cells: TILE_CELLS, cellFt: CELL_FT, palettes: { terrain: cells.palette }, layers: { terrain: cells.terrain, forest: cells.forest }, roads: [] };
+  return { coords: [tx, tz], cells: TILE_CELLS, cellFt: CELL_FT, palettes: { terrain: PATTERNS }, layers: { terrain: cells.kinds, forest: NO_FOREST }, roads: [] };
 }
 
 // The meshes round the builder, a group for each plate within FAR_FT: when the builder leaves
@@ -857,14 +881,18 @@ export class Ground {
         if (t === PLATE) {
           [n, faces, depth] = [1, far, TILE_FT * SKIRT];
           height = (a, b) => plate.heights[(j + b) * CORNERS + i + a];
-          const biome = tint && this.renditions.biomes.at((tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT);
-          color = (a, b, shade) => Faces.tinted(far.rgb(plate.colors, (j * PLATE_TILES + i) * 3, shade), tint, biome);
+          const biome = this.renditions.biomes.at((tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT);
+          const rgb = this.partRgb(biome, height, 0, 0, 1, TILE_FT, tx * TILE_FT, tz * TILE_FT);
+          color = (a, b, shade) => Faces.tinted(rgb.map((v) => v * shade), tint, biome);
         } else if (t === COARSE) {
           const tile = this.renditions.tile(tx, tz);
           [n, faces, depth] = [TILE_CHUNKS, near, CHUNK_FT * SKIRT];
           height = (a, b) => tile.heights[b * CORNERS + a];
-          const biomes = tint && this.renditions.biomeTile(tx, tz);
-          color = (a, b, shade) => Faces.tinted(near.rgb(tile.colors, (b * TILE_CHUNKS + a) * 3, shade), tint, biomes && biomes[(b * CHUNK_CELLS + CHUNK_CELLS_HALF) * TILE_CELLS + a * CHUNK_CELLS + CHUNK_CELLS_HALF]);
+          const biomes = this.renditions.biomeTile(tx, tz);
+          color = (a, b, shade) => {
+            const biome = biomes[(b * CHUNK_CELLS + CHUNK_CELLS_HALF) * TILE_CELLS + a * CHUNK_CELLS + CHUNK_CELLS_HALF];
+            return Faces.tinted(this.partRgb(biome, height, a, b, 1, CHUNK_FT, tx * TILE_FT, tz * TILE_FT).map((v) => v * shade), tint, biome);
+          };
         } else {
           [n, faces, depth] = [TILE_CELLS, near, CHUNK_FT * SKIRT];
           height = (a, b) => cells.heights[b * CELL_CORNERS + a];
@@ -876,7 +904,7 @@ export class Ground {
         const part = TILE_FT / n;
         const corner = (a, b) => [ox + a * part, height(a, b), oz + b * part];
         if (t === PLATE) faces.square(corner(0, 0), corner(1, 0), corner(0, 1), corner(1, 1), color(0, 0, 1));
-        if (t === COARSE) faces.append(tint ? this.tintedFaces(tx, tz) : tileFaces(this.renditions.tile(tx, tz)), ox, oz);
+        if (t === COARSE) faces.append(this.tileFaces(tx, tz), ox, oz);
         for (const [di, dj, from, to] of SIDES) {
           if (tierAt(i + di, j + dj) === t) continue;
           const step = [to[0] - from[0], to[1] - from[1]];
@@ -895,20 +923,33 @@ export class Ground {
     return group;
   }
 
-  // A tile's rendition's squares tinted by biome, kept with it till the tint changes.
-  tintedFaces(tx, tz) {
+  // The linear RGB of the part (a, b) of a rendition, `n` corners a side apart in height(a, b),
+  // the part `width` ft across, its rendition's corner at (x0, z0): the look of biome `biome` there.
+  partRgb(biome, height, a, b, n, width, x0, z0) {
+    const [nw, ne, sw, se] = [height(a, b), height(a + n, b), height(a, b + n), height(a + n, b + n)];
+    const { rgb } = look(biome, slopeOf(nw, ne, sw, se, width), (nw + ne + sw + se) / 4, x0 + (a + 0.5) * width, z0 + (b + 0.5) * width);
+    return [LINEAR[rgb[0]], LINEAR[rgb[1]], LINEAR[rgb[2]]];
+  }
+
+  // A tile's rendition's squares, in feet from its northwest corner, in their biomes' looks, tinted
+  // when biomes are shown, kept with it till its ground moves or how it looks changes.
+  tileFaces(tx, tz) {
     const tile = this.renditions.tile(tx, tz);
-    if (tile.tinted?.tints === this.tints) return tile.tinted.faces;
+    const key = `${this.renditions.looks},${this.tint ? this.tints : -1}`;
+    if (tile.faces?.key === key) return tile.faces;
     const biomes = this.renditions.biomeTile(tx, tz);
+    const height = (a, b) => tile.heights[b * CORNERS + a];
     const faces = new Faces();
-    const corner = (a, b) => [a * CHUNK_FT, tile.heights[b * CORNERS + a], b * CHUNK_FT];
+    const corner = (a, b) => [a * CHUNK_FT, height(a, b), b * CHUNK_FT];
     for (let b = 0; b < TILE_CHUNKS; b++) {
       for (let a = 0; a < TILE_CHUNKS; a++) {
         const biome = biomes[(b * CHUNK_CELLS + CHUNK_CELLS_HALF) * TILE_CELLS + a * CHUNK_CELLS + CHUNK_CELLS_HALF];
-        faces.square(corner(a, b), corner(a + 1, b), corner(a, b + 1), corner(a + 1, b + 1), Faces.tinted(faces.rgb(tile.colors, (b * TILE_CHUNKS + a) * 3), this.tint, biome));
+        const rgb = Faces.tinted(this.partRgb(biome, height, a, b, 1, CHUNK_FT, tx * TILE_FT, tz * TILE_FT), this.tint, biome);
+        faces.square(corner(a, b), corner(a + 1, b), corner(a, b + 1), corner(a + 1, b + 1), rgb);
       }
     }
-    tile.tinted = { tints: this.tints, faces };
+    faces.key = key;
+    tile.faces = faces;
     return faces;
   }
 
@@ -952,11 +993,13 @@ export class Ground {
     const kept = before.get(`${tx},${tz}`);
     if (kept) {
       group.add(kept);
-      // Moved ground: the same material over the ground's new shape.
+      // Moved ground, or ground that looks different: its new shape, and its patterns again.
       if (kept.userData.grid !== grid) {
         kept.geometry.dispose();
         kept.geometry = geometry();
         kept.userData.grid = grid;
+        disposeGround(kept.material);
+        kept.material = withGrid(groundMaterial(this.renderer, { tile: groundTile(tx, tz, cells), origin: [0, 0] }), CELL_FT);
       }
       return;
     }
@@ -1008,18 +1051,6 @@ export class Ground {
     });
     this.plates.delete(key);
   }
-}
-
-// A tile's rendition's squares, in feet from its northwest corner, kept with it.
-function tileFaces(tile) {
-  if (tile.faces) return tile.faces;
-  const faces = new Faces();
-  const corner = (a, b) => [a * CHUNK_FT, tile.heights[b * CORNERS + a], b * CHUNK_FT];
-  for (let b = 0; b < TILE_CHUNKS; b++) {
-    for (let a = 0; a < TILE_CHUNKS; a++) faces.square(corner(a, b), corner(a + 1, b), corner(a, b + 1), corner(a + 1, b + 1), faces.rgb(tile.colors, (b * TILE_CHUNKS + a) * 3));
-  }
-  tile.faces = faces;
-  return faces;
 }
 
 // The cell grids of the tiles drawn flat at cell scale in a plate, as one geometry, or null for

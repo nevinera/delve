@@ -7,13 +7,14 @@ import { PLATE_TILES, PLATTER_PLATES, PLATTER_TILES, TILE_CHUNKS } from "./sizes
 //   places/continents/<continent>/platters/<px>_<pz>.platter
 //
 // A rendition is a thing's ground an eighth of its size across: heights at the 9×9 corners of its
-// 8×8 parts, and each part's color, with a hash of what it was made from, to tell when it's out of
-// date. A tile's parts are its chunks, and a plate's its tiles (rendition.js).
+// 8×8 parts, with a hash of what it was made from, to tell when it's out of date. A tile's parts
+// are its chunks, and a plate's its tiles (rendition.js). What they look like is worked out where
+// they're drawn (look.js).
 //
 // The file is gzipped. Inside, numbers are little-endian:
 //
 //   0   "DLP1"
-//   4   u32 version (2)
+//   4   u32 version (3; 2 kept each part's color too, read and left out)
 //   8   i32 px, i32 pz
 //   16  the tiles: 512 bytes, a bit for each of the platter's 4,096 tiles in row order, set where
 //       it has one, then a record for each of those, in row order
@@ -21,14 +22,14 @@ import { PLATE_TILES, PLATTER_PLATES, PLATTER_TILES, TILE_CHUNKS } from "./sizes
 //
 // A record is:
 //   81 i16 corner heights in quarter feet, row order
-//   64 × 3 bytes of part color, RGB, row order
 //   8 bytes of hash
 
 export const CORNERS = TILE_CHUNKS + 1;
 const MAGIC = "DLP1";
-const VERSION = 2;
+const VERSION = 3;
 const HEADER = 16;
-const RECORD = CORNERS * CORNERS * 2 + TILE_CHUNKS * TILE_CHUNKS * 3 + 8;
+const RECORD = CORNERS * CORNERS * 2 + 8;
+const COLORS = TILE_CHUNKS * TILE_CHUNKS * 3; // in version 2
 const TILE_COUNT = PLATTER_TILES * PLATTER_TILES;
 const PLATE_COUNT = PLATTER_PLATES * PLATTER_PLATES;
 
@@ -44,7 +45,7 @@ export const platterOfPlate = (px, pz) => [Math.floor(px / PLATTER_PLATES), Math
 export const plateOf = (tx, tz) => [Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES)];
 
 // platter: { coords: [px, pz], tiles, plates }, tiles and plates each a Map(index -> rendition),
-// a rendition { heights: 81 feet, colors: 192 bytes, hash: 16 hex digits }.
+// a rendition { heights: 81 feet, hash: 16 hex digits }.
 export function encodePlatter({ coords, tiles, plates = new Map() }) {
   const sections = [
     [tiles, TILE_COUNT],
@@ -63,11 +64,9 @@ export function encodePlatter({ coords, tiles, plates = new Map() }) {
     at += count / 8;
     for (const index of [...map.keys()].sort((a, b) => a - b)) {
       bytes[bits + (index >> 3)] |= 1 << (index & 7);
-      const { heights, colors, hash } = map.get(index);
+      const { heights, hash } = map.get(index);
       for (let k = 0; k < CORNERS * CORNERS; k++) view.setInt16(at + k * 2, Math.max(-32768, Math.min(32767, Math.round(heights[k] * 4))), true);
       at += CORNERS * CORNERS * 2;
-      bytes.set(colors, at);
-      at += colors.length;
       for (let k = 0; k < 8; k++) bytes[at + k] = parseInt(hash.slice(k * 2, k * 2 + 2), 16);
       at += 8;
     }
@@ -80,7 +79,8 @@ export function decodePlatter(gzipped) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const magic = String.fromCharCode(...bytes.subarray(0, 4));
   if (magic !== MAGIC) throw new Error(`not a platter file (magic ${JSON.stringify(magic)})`);
-  if (view.getUint32(4, true) !== VERSION) throw new Error(`unsupported platter version ${view.getUint32(4, true)}`);
+  const version = view.getUint32(4, true);
+  if (version !== 2 && version !== VERSION) throw new Error(`unsupported platter version ${version}`);
   const coords = [view.getInt32(8, true), view.getInt32(12, true)];
   let at = HEADER;
   const section = (count) => {
@@ -92,11 +92,10 @@ export function decodePlatter(gzipped) {
       const heights = new Float32Array(CORNERS * CORNERS);
       for (let k = 0; k < heights.length; k++) heights[k] = view.getInt16(at + k * 2, true) / 4;
       at += CORNERS * CORNERS * 2;
-      const colors = bytes.slice(at, at + TILE_CHUNKS * TILE_CHUNKS * 3);
-      at += colors.length;
+      if (version === 2) at += COLORS;
       const hash = [...bytes.subarray(at, at + 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
       at += 8;
-      map.set(index, { heights, colors, hash });
+      map.set(index, { heights, hash });
     }
     return map;
   };
