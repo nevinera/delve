@@ -164,6 +164,7 @@ function start(world, changes) {
   };
   $("showLines").addEventListener("change", showLines);
   $("showCurtains").addEventListener("change", showLines);
+  $("showPins").addEventListener("change", () => tools.marks.pins.setShown($("showPins").checked));
   showLines();
   // Let go of the toggle clicked, so keys go back to flying and the tools.
   $("bottom").addEventListener("change", (e) => e.target.blur());

@@ -3,20 +3,22 @@ import { Line2 } from "three/addons/lines/Line2.js";
 import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
+import { Pins } from "./pins.js";
 
 // Lines marked on the ground by the planning marker. While they're being worked on (flat), they're
 // drawn at sea level, over everything. Otherwise they follow the ground as it's moved, lifted off
 // it more the further they are from the camera, so the coarser ground drawn there doesn't bury
 // them, though ground between them and the camera hides them. Then they can be hidden (shown), and
-// can stand up as curtains, see-through walls CURTAIN_FT high over the ground. Each has one of COLORS, one of four widths a few pixels wide, and a style, solid,
+// can stand up as curtains, see-through walls CURTAIN_FT high over the ground. The planning file
+// keeps the pins too (pins.js), and undo goes back over both. Each has one of COLORS, one of four widths a few pixels wide, and a style, solid,
 // dashed or dotted. Lines, dashes and dots all grow the higher the builder flies. The eraser cuts
 // lines where it passes, in two where it passes their middles. Lines picked out with the select
 // tool show a halo, and can be deleted whole. A continent's are kept in its
 // planning file:
 //
 //   places/continents/<continent>/planning.json
-//   { "version": 1, "lines": [{ "points": [[x, z], ...], "color": "red", "width": 2, "style": "solid" }, ...] },
-//   continent feet, width 1 to 4
+//   { "version": 1, "lines": [{ "points": [[x, z], ...], "color": "red", "width": 2, "style": "solid" }, ...],
+//     "pins": [...] }, continent feet, width 1 to 4
 
 export const COLORS = {
   black: 0x000000,
@@ -77,15 +79,17 @@ export function cut(points, x, z, radius) {
 
 export class Marks {
   // surface(x, z) gives the height lines are drawn at.
-  constructor(scene, surface) {
+  // Pins' titles are shown over `stage`.
+  constructor(scene, surface, stage) {
     this.surface = surface;
+    this.pins = new Pins(scene, surface, stage, COLORS);
     this.group = new THREE.Group();
     scene.add(this.group);
     this.materials = new Map(); // "color,width,style" -> its material
     this.pen = { ...PEN }; // what lines are drawn with
     this.kept = []; // { points, pen, line }
     this.live = null; // the line being drawn, { pen, line }
-    this.undos = []; // the lines kept before each change, as toJSON's lines
+    this.undos = []; // the planning file's JSON before each change
     this.erased = false; // whether the eraser's stroke has cut lines yet
     this.selected = new Map(); // a kept line -> its halo
     this.eye = new THREE.Vector3(); // where the camera is
@@ -101,12 +105,13 @@ export class Marks {
 
   // Shows the lines in a planning file's JSON, in place of any there are.
   load(json) {
-    this.show(json.lines ?? []);
+    this.show(json);
     this.undos = [];
     this.version = 0;
   }
 
-  show(lines) {
+  show({ lines = [], pins = [] }) {
+    this.pins.load(pins);
     this.unselect();
     for (const { line } of this.kept) this.remove(line);
     this.kept = [];
@@ -119,12 +124,12 @@ export class Marks {
   // The planning file's JSON for the lines there are.
   toJSON() {
     const round = (v) => Math.round(v * 10) / 10;
-    return { version: 1, lines: this.kept.map(({ points, pen }) => ({ points: points.map(([x, z]) => [round(x), round(z)]), ...pen })) };
+    return { version: 1, lines: this.kept.map(({ points, pen }) => ({ points: points.map(([x, z]) => [round(x), round(z)]), ...pen })), pins: this.pins.toJSON() };
   }
 
   // Keeps the lines as they are, for undo to go back to.
   save() {
-    this.undos.push(this.toJSON().lines);
+    this.undos.push(this.toJSON());
     if (this.undos.length > UNDOS) this.undos.shift();
   }
 
@@ -305,9 +310,9 @@ export class Marks {
   }
 
   undo() {
-    const lines = this.undos.pop();
-    if (!lines) return;
-    this.show(lines);
+    const json = this.undos.pop();
+    if (!json) return;
+    this.show(json);
     this.version++;
   }
 

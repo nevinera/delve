@@ -31,6 +31,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M3 18 C 10 8, 14 14, 18 12 M30 11 C 36 8, 42 6, 45 14" fill="none" stroke="#ff5a36" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="12" r="6" fill="none" stroke="#ddd" stroke-width="1.5"/></svg>
         <span>eraser</span><kbd class="create-key">K</kbd>
       </button>
+      <button type="button" data-tool="pin" data-key="n" aria-pressed="false" title="stick pins in the map, with notes">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><line x1="24" y1="9" x2="24" y2="23" stroke="#d8d4cc" stroke-width="2"/><circle cx="24" cy="7" r="5" fill="#e8202a"/></svg>
+        <span>pin</span><kbd class="create-key">N</kbd>
+      </button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" data-key="h" aria-pressed="false" title="raise and lower the ground">
@@ -80,6 +84,19 @@
         <button type="button" data-pen-width="4" aria-pressed="false" title="width 4"><svg width="32" height="12" viewBox="0 0 32 12" aria-hidden="true"><line x1="3" y1="6" x2="29" y2="6" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></svg></button>
       </div>
     </div>
+    <div data-config="pin" hidden>
+      <p class="create-note">Click the ground to stick a pin in it, and give it a title and notes. Click a pin's head to open it again.</p>
+      <div class="create-swatches" role="group" aria-label="head color">
+      <button type="button" data-pin-color="black" aria-pressed="false" title="black"><span style="background:#000000"></span></button>
+        <button type="button" data-pin-color="white" aria-pressed="false" title="white"><span style="background:#ffffff"></span></button>
+        <button type="button" data-pin-color="red" aria-pressed="true" title="red"><span style="background:#e8202a"></span></button>
+        <button type="button" data-pin-color="dark orange" aria-pressed="false" title="dark orange"><span style="background:#ff8c00"></span></button>
+        <button type="button" data-pin-color="bright green" aria-pressed="false" title="bright green"><span style="background:#30f030"></span></button>
+        <button type="button" data-pin-color="magenta" aria-pressed="false" title="magenta"><span style="background:#ff00ff"></span></button>
+        <button type="button" data-pin-color="gray" aria-pressed="false" title="gray"><span style="background:#808080"></span></button>
+        <button type="button" data-pin-color="pink" aria-pressed="false" title="pink"><span style="background:#ff9ec8"></span></button>
+      </div>
+    </div>
     <div data-config="select" hidden>
       <p class="create-note">Click a line to select it, or drag a box round lines to select them. Shift selects more, or clicks fewer. Delete or backspace deletes them.</p>
       <div class="create-way">
@@ -117,11 +134,11 @@
       <p class="create-note" data-only="eraser">Drag across lines to erase them. Erasing a line's middle leaves two lines. [ and ] resize. Esc puts the tool down.</p>
       <p class="create-note" data-only="clear">Drag to clear tiles away, back to empty sea: each tile whose middle is in the ring. [ and ] resize. Esc puts the tool down.</p>
     </div>
-    <div data-config="marker eraser select" hidden>
+    <div data-config="marker eraser select pin" hidden>
       <div class="create-way">
         <button type="button" id="marksUndo">undo</button>
       </div>
-      <p class="create-note">Lines are kept with the world when you download it.</p>
+      <p class="create-note">Lines and pins are kept with the world when you download it.</p>
     </div>
   </section>
 </aside>
@@ -141,6 +158,7 @@
       <label title="the grid"><input type="checkbox" id="showGrid" checked> grid</label>
       <label title="planning lines, outside planning"><input type="checkbox" id="showLines" checked> lines</label>
       <label title="planning lines as walls 100 ft high, outside planning"><input type="checkbox" id="showCurtains"> curtains</label>
+      <label title="pins and their titles"><input type="checkbox" id="showPins" checked> pins</label>
     </fieldset>
   </section>
 </footer>
@@ -148,7 +166,7 @@
   <h2>Keys</h2>
   <dl>
     <dt>T / G</dt><dd>planning or geo</dd>
-    <dt>H J K</dt><dd>pick a tool, as shown on its button</dd>
+    <dt>H J K N</dt><dd>pick a tool, as shown on its button</dd>
     <dt>W / S</dt><dd>run or fly forward and back</dd>
     <dt>A / D</dt><dd>turn</dd>
     <dt>Q / E</dt><dd>strafe</dd>
@@ -168,9 +186,16 @@
   <h2>Tools</h2>
   <dl>
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
-    <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, and select picks them out to delete whole</dd>
+    <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, and pins hold notes. Click a pin's head to open it</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, and clear it away</dd>
   </dl>
+</div>
+<div id="pinEdit" class="create-pin-edit" popover>
+  <input id="pinTitle" type="text" placeholder="title" aria-label="title">
+  <textarea id="pinContent" placeholder="notes, in markdown" aria-label="notes"></textarea>
+  <div class="create-way">
+    <button type="button" id="pinDelete">delete pin</button>
+  </div>
 </div>
 <div id="open" hidden>
   <p>Open a version 2 world zip. <code>node script/convert-v2.mjs</code> makes one from a version 1 world.</p>

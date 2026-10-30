@@ -3,13 +3,16 @@ import { SEA_LEVEL_FT } from "../v2/sizes.js";
 import { SHAPES, TURNS, pullBrush, raiseBrush } from "./geo.js";
 import { EMPTY_FT } from "./ground.js";
 import { Marks } from "./marks.js";
+import { TITLE_MAX } from "./pins.js";
 import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 
 // The tools' sidebar: the type of work and its tools above, the picked tool's settings below. A
 // picked tool takes the left button, and Esc puts it down.
 // - planning's marker: dragging draws a line on the ground (stroke.js, marks.js), its eraser
 //   cuts lines away where it's dragged, and select picks lines out, clicked or in a box dragged
-//   round them, with shift more than one, for delete or backspace to delete whole.
+//   round them, with shift more than one, for delete or backspace to delete whole. The pin tool
+//   sticks pins in the ground. Clicking a pin's head, with no tool or with select or pin, opens
+//   its title and content to edit.
 // - geo's brushes, raise and lower, flatten, smooth and clear: dragging on the ground works them
 //   where the pointer is, and a ring on the ground shows where they reach. [ and ] resize them, and
 //   c and v turn raise and lower's, shift+c and shift+v a little.
@@ -22,6 +25,7 @@ const PICK_LINE_PX = 8; // how near the pointer a line is picked out
 const BOX_PX = 4; // how far the pointer's dragged before select draws a box
 const BRUSHES = new Set(["raise", "flatten", "smooth", "clear", "eraser"]);
 const PLANNING = new Set(["marker", "eraser", "select"]); // tools that work on lines drawn at sea level
+const OPENS_PINS = new Set([null, "select", "pin"]); // tools with which clicking a pin opens it
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
 
@@ -48,7 +52,10 @@ export class Tools {
     this.pointer = null; // normalized device coordinates, or null off the view
     this.stroke = null; // { invert } while the left button's down with the brush
     this.drawing = null; // the Stroke being drawn with the marker
-    this.marks = new Marks(scene, (x, z) => this.surface(x, z));
+    this.marks = new Marks(scene, (x, z) => this.surface(x, z), canvas.parentElement);
+    this.pinColor = "red";
+    this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }
+    this.editing = null; // the pin open to edit, { pin, before }, before the planning file's JSON
     this.ring = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffe9a0, depthTest: false, transparent: true }));
     this.ring.geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(RING_POINTS * 3), 3));
     this.ring.renderOrder = 10;
@@ -111,6 +118,38 @@ export class Tools {
         pressed(widths, button);
       });
     }
+    const pinColors = [...document.querySelectorAll("[data-pin-color]")];
+    for (const button of pinColors) {
+      button.addEventListener("click", () => {
+        this.pinColor = button.dataset.pinColor;
+        pressed(pinColors, button);
+      });
+    }
+    $("pinTitle").maxLength = TITLE_MAX;
+    $("pinTitle").addEventListener("input", () => {
+      this.editing.pin.title = $("pinTitle").value;
+      this.marks.pins.relabel(this.editing.pin);
+      this.marks.version++;
+    });
+    $("pinContent").addEventListener("input", () => {
+      this.editing.pin.content = $("pinContent").value;
+      this.marks.version++;
+    });
+    $("pinDelete").addEventListener("click", () => {
+      const { pin, before } = this.editing;
+      this.editing = null;
+      this.marks.undos.push(before);
+      this.marks.pins.remove(pin);
+      this.marks.version++;
+      $("pinEdit").hidePopover();
+    });
+    // A pin's changes are undone together, once it's closed.
+    $("pinEdit").addEventListener("toggle", (e) => {
+      if (e.newState !== "closed" || !this.editing) return;
+      const { before } = this.editing;
+      this.editing = null;
+      if (JSON.stringify(before) !== JSON.stringify(this.marks.toJSON())) this.marks.undos.push(before);
+    });
     $("marksDelete").addEventListener("click", () => this.marks.deleteSelected());
     $("marksUndo").addEventListener("click", () => this.marks.undo());
     this.readSize();
@@ -137,8 +176,20 @@ export class Tools {
     });
     canvas.addEventListener("pointerleave", () => (this.pointer = null));
     canvas.addEventListener("pointerdown", (e) => {
-      if (e.button !== 0 || !this.tool) return;
+      if (e.button !== 0) return;
       this.point(e);
+      if (OPENS_PINS.has(this.tool)) {
+        const r = canvas.getBoundingClientRect();
+        const pin = this.marks.pins.pick(this.camera, r.width, r.height, e.clientX - r.left, e.clientY - r.top);
+        // Opened when the button's let go, so letting it go doesn't close it again.
+        if (pin) return (this.clicked = { pin });
+      }
+      if (!this.tool) return;
+      if (this.tool === "pin") {
+        const at = this.hit();
+        if (at) this.clicked = { at };
+        return;
+      }
       canvas.setPointerCapture(e.pointerId);
       if (this.tool === "select") {
         const r = canvas.getBoundingClientRect();
@@ -160,6 +211,14 @@ export class Tools {
     });
     canvas.addEventListener("pointerup", () => {
       this.stroke = null;
+      if (this.clicked?.pin) this.openPin(this.clicked.pin);
+      else if (this.clicked?.at) {
+        const before = this.marks.toJSON();
+        const pin = this.marks.pins.add(this.clicked.at[0], this.clicked.at[2], this.pinColor);
+        this.marks.version++;
+        this.openPin(pin, before);
+      }
+      this.clicked = null;
       if (this.box) this.endBox();
       if (!this.drawing) return;
       this.drawing.end();
@@ -184,6 +243,15 @@ export class Tools {
     });
     this.toolButtons = toolButtons;
     this.turn(0);
+  }
+
+  // Opens a pin's title and content to edit, `before` the planning file's JSON before it was made.
+  openPin(pin, before = this.marks.toJSON()) {
+    this.editing = { pin, before };
+    $("pinTitle").value = pin.title;
+    $("pinContent").value = pin.content;
+    $("pinEdit").showPopover();
+    $(pin.title ? "pinContent" : "pinTitle").focus();
   }
 
   // A type of work's key (data-key) shows its tools, and a tool's, among those shown, picks it.
@@ -351,6 +419,7 @@ export class Tools {
     const above = cy - this.surface(cx, cz);
     const ftPerPx = (Math.max(above, 50) * 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) / h;
     this.marks.tick(dt, w, h, this.camera.position, above, ftPerPx);
+    this.marks.pins.tick(this.camera, w, h);
     if (!BRUSHES.has(this.tool)) {
       this.ring.visible = false;
       return;

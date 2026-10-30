@@ -397,3 +397,56 @@ body.create {
   font: 11px monospace;
   color: #9a958a;
 }
+
+.create-pin-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  max-width: 16ch;
+  overflow-wrap: anywhere;
+  text-align: center;
+  font: 12px sans-serif;
+  color: #f4f0e6;
+  background: #14141cb0;
+  padding: 1px 4px;
+  border-radius: 3px;
+  pointer-events: none;
+}
+
+.create-pin-label[hidden] {
+  display: none;
+}
+
+.create-pin-edit {
+  width: min(480px, calc(100vw - 32px));
+  height: min(420px, calc(100vh - 32px));
+  padding: 12px;
+  background: #22222a;
+  color: #e8e2d4;
+  border: 1px solid #50505c;
+  border-radius: 6px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.create-pin-edit:popover-open {
+  display: flex;
+}
+
+.create-pin-edit input,
+.create-pin-edit textarea,
+.create-pin-edit button {
+  font: inherit;
+  color: inherit;
+  background: #30303a;
+  border: 1px solid #50505c;
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+
+.create-pin-edit textarea {
+  flex: 1;
+  resize: none;
+  overflow-y: auto;
+  font-family: monospace;
+}
