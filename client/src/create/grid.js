@@ -3,7 +3,7 @@ import { CELL_FT, CHUNK_FT, PLATE_FT, TILE_FT } from "../v2/sizes.js";
 // The grid drawn over the ground (g shows or hides it): lines round cells, chunks, tiles and
 // plates, thicker the bigger the square, a fixed number of pixels wide however far off. Each
 // ground material draws only the squares as fine as its ground is drawn, and fades out lines
-// too close together to read. Steep faces, like skirts, get none.
+// too close together to read. Faces within about 5° of upright, like skirts, get none.
 
 const LINES = [
   [CELL_FT, 1, 0.22],
@@ -49,7 +49,7 @@ export function withGrid(material, finest) {
           vec3 n = normalize(cross(dFdx(vGridAt), dFdy(vGridAt)));
           float on = 0.0;
           ${lines}
-          gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.05, 0.04, 0.03), on * smoothstep(0.3, 0.5, abs(n.y)));
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.05, 0.04, 0.03), on * smoothstep(0.05, 0.1, abs(n.y)));
         }`,
       );
   };
