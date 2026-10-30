@@ -43,6 +43,30 @@ module Github
       nil
     end
 
+    # The commit a branch points at, or nil when there's no such branch.
+    def branch_sha(full_name, branch)
+      get("/repos/#{full_name}/git/ref/heads/#{ERB::Util.url_encode(branch)}")["object"]["sha"]
+    rescue NotFound
+      nil
+    end
+
+    # Every entry in a commit's tree, all the way down, as GitHub lists them.
+    def tree(full_name, commit_sha)
+      tree_sha = get("/repos/#{full_name}/git/commits/#{commit_sha}")["tree"]["sha"]
+      tree = get("/repos/#{full_name}/git/trees/#{tree_sha}?recursive=1")
+      raise OauthError, "#{full_name} has too many files to list in one request" if tree["truncated"]
+      tree["tree"]
+    end
+
+    # Commits a tree made of `entries` on `parent_sha` and moves the branch to it. GitHub refuses
+    # to move the branch if it has moved past `parent_sha`. Returns the new commit's sha.
+    def commit(full_name, branch, entries, message:, parent_sha:)
+      tree_sha = send_json(:post, "/repos/#{full_name}/git/trees", {tree: entries})["sha"]
+      commit_sha = send_json(:post, "/repos/#{full_name}/git/commits", {message:, tree: tree_sha, parents: [parent_sha]})["sha"]
+      send_json(:patch, "/repos/#{full_name}/git/refs/heads/#{ERB::Util.url_encode(branch)}", {sha: commit_sha})
+      commit_sha
+    end
+
     # Writes the repo at a commit, zipped, to `io`. GitHub answers with a redirect to a
     # short-lived download link, which needs no token.
     def download_zip(full_name, sha, io)
@@ -61,11 +85,15 @@ module Github
 
     private
 
-    def request(uri)
-      request = Net::HTTP::Get.new(uri)
+    def request(uri, method: Net::HTTP::Get, body: nil)
+      request = method.new(uri)
       request["Authorization"] = "Bearer #{@access_token}"
       request["Accept"] = "application/vnd.github+json"
       request["X-GitHub-Api-Version"] = "2022-11-28"
+      if body
+        request["Content-Type"] = "application/json"
+        request.body = body.to_json
+      end
       Net::HTTP.start(uri.host, uri.port, use_ssl: true) { |http| http.request(request) }
     end
 
@@ -81,6 +109,13 @@ module Github
       response = request(URI("#{BASE_URL}#{path}"))
       raise NotFound, "GitHub has no #{path}" if response.is_a?(Net::HTTPNotFound)
       raise OauthError, "GitHub API error #{response.code} for #{path}" unless response.is_a?(Net::HTTPSuccess)
+      JSON.parse(response.body)
+    end
+
+    def send_json(verb, path, body)
+      method = {post: Net::HTTP::Post, patch: Net::HTTP::Patch}.fetch(verb)
+      response = request(URI("#{BASE_URL}#{path}"), method:, body:)
+      raise OauthError, "GitHub API error #{response.code} for #{verb.upcase} #{path}" unless response.is_a?(Net::HTTPSuccess)
       JSON.parse(response.body)
     end
   end

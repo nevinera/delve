@@ -92,3 +92,7 @@
     <% end %>
   </ul>
 <% end %>
+
+<h2>Start over</h2>
+<p class="muted">Emptying the world commits a new, empty world to <%= @world.repo %>. Files that aren't the world's, like a README, stay. The old world stays in the repo's history, and published versions and the released one stay where they are.</p>
+<%= button_to "Empty this world", world_reset_path(@world), class: "danger", form: {data: {turbo_confirm: "Empty #{@world.repo}? This deletes every world file on its default branch and starts a new world."}} %>

@@ -99,6 +99,7 @@ RSpec.describe "Worlds", type: :request do
       get world_path(world)
       expect(response.body.scan(/<strong>(v\d+)<\/strong>/).flatten.first(3)).to eq(%w[v10 v9 v1])
       expect(response.body).to include("the tag's moved since")
+      expect(response.body).to include("Empty this world", world_reset_path(world))
     end
 
     it "is only for the world's owner" do

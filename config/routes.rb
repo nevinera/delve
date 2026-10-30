@@ -35,6 +35,7 @@ Rails.application.routes.draw do
   resources :worlds, only: [:index, :create, :show] do
     resources :imports, only: [:create], controller: "world_imports"
     resource :release, only: [:create], controller: "world_releases"
+    resource :reset, only: [:create], controller: "world_resets"
   end
   get "play/:id" => "play#show", :as => :play
   get "objects" => "objects#show"

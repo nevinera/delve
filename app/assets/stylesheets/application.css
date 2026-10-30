@@ -246,3 +246,18 @@ input[type="submit"].secondary:hover {
 .problems li.warning {
   color: #db8;
 }
+
+/* Buttons that destroy something, red so you don't press them by mistake. */
+button.danger,
+input[type="submit"].danger {
+  width: auto;
+  --pico-background-color: #8a2a20;
+  --pico-border-color: #b84a3a;
+  --pico-color: #f5e6e0;
+}
+
+button.danger:hover,
+input[type="submit"].danger:hover {
+  --pico-background-color: #a8352a;
+  --pico-border-color: #d0604f;
+}
