@@ -8,7 +8,7 @@ import { WIDTHS, along, profile } from "../v2/courses.js";
 // another course, is drawn in OPEN's color. Arrows along each show which way it flows. They're
 // kept in the water file with the bodies (water.js):
 //
-//   { "version": 1, "bodies": [...], "courses": [{ "type": "stream", "points": [[x, z, width], ...], "surface": [ft, ...] }, ...] }
+//   { "version": 1, "bodies": [...], "courses": [{ "type": "stream", "points": [[x, z, width], ...], "surface": [ft, ...], "seed": 412 }, ...] }
 
 export const COURSES = { stream: "#5aa0d8", river: "#2f6bb0" };
 const OPEN = "#e04040";
@@ -22,16 +22,16 @@ export class Courses extends Areas {
   // baseAt(x, z) gives the ground before courses cut it, and stillAt(x, z) the level of the water
   // at (x, z) for a course to end in, besides courses, or null.
   constructor(scene, surface, stage, baseAt, stillAt) {
-    super(scene, surface, stage, { colors: { ...COURSES, open: OPEN }, kind: "stream", field: "type", list: "courses", extras: ["widths", "surface"], closed: false });
-    this.start = () => ({ widths: [WIDTHS[this.kind], WIDTHS[this.kind]], surface: null });
+    super(scene, surface, stage, { colors: { ...COURSES, open: OPEN }, kind: "stream", field: "type", list: "courses", extras: ["widths", "surface", "seed"], closed: false });
+    this.start = () => ({ widths: [WIDTHS[this.kind], WIDTHS[this.kind]], surface: null, seed: Math.floor(Math.random() * 1000) });
     Object.assign(this, { baseAt, stillAt });
   }
 
   show(json) {
     super.show({
-      courses: (json.courses ?? []).map(({ type, points, surface }) => ({ type, points: points.map(([x, z]) => [x, z]), widths: [points[0]?.[2] ?? WIDTHS.stream, points.at(-1)?.[2] ?? WIDTHS.stream], surface })),
+      courses: (json.courses ?? []).map(({ type, points, surface, seed }) => ({ type, points: points.map(([x, z]) => [x, z]), widths: [points[0]?.[2] ?? WIDTHS.stream, points.at(-1)?.[2] ?? WIDTHS.stream], surface, seed: seed ?? 0 })),
     });
-    for (const area of this.areas) area.surfaceKey = keyOf(area.points);
+    for (const area of this.areas) area.surfaceKey = keyOf(widthsOf(area), area.seed);
   }
 
   toJSON() {
@@ -40,16 +40,17 @@ export class Courses extends Areas {
       courses: this.areas.map((area) => {
         const points = area.points.map(([x, z]) => [round(x), round(z)]);
         const wide = widthsAlong(points, area.widths);
-        return { type: area.kind, points: points.map((p, k) => [...p, wide[k]]), surface: this.surfaceOf(area, points) };
+        const course = points.map((p, k) => [...p, wide[k]]);
+        return { type: area.kind, points: course, surface: this.surfaceOf(area, course), seed: area.seed };
       }),
     };
   }
 
-  // A course's surface, worked out again where its corners have moved.
+  // A course's surface, worked out again where its corners or widths have changed.
   surfaceOf(area, points) {
-    const key = keyOf(points);
+    const key = keyOf(points, area.seed);
     if (area.surfaceKey !== key || !area.surface) {
-      area.surface = profile(points, (x, z) => this.baseAt(x, z) ?? 0, this.stillAt);
+      area.surface = profile(points, (x, z) => this.baseAt(x, z) ?? 0, this.stillAt, area.seed);
       area.surfaceKey = key;
     }
     return area.surface;
@@ -98,7 +99,7 @@ export class Courses extends Areas {
   }
 }
 
-const keyOf = (points) => JSON.stringify(points.map(([x, z]) => [round(x), round(z)]));
+const keyOf = (points, seed) => JSON.stringify([seed, points.map(([x, z, w]) => [round(x), round(z), round(w)])]);
 
 // Each of `points`' widths, from `widths` at its start and end, straight between by how far along.
 function widthsAlong(points, [start, end]) {

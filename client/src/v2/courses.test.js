@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BELOW_FT, along, depthOf, lengthOf, profile, shape, surfaceAt } from "./courses.js";
+import { BELOW_FT, along, depthOf, lengthOf, onTrack, profile, shape, surfaceAt, trackOf } from "./courses.js";
 
 const line = [[0, 0, 10], [100, 0, 10], [100, 100, 30]];
 
@@ -12,15 +12,31 @@ describe("courses", () => {
     expect(along(line, 50, 40, 10)).toBeNull();
   });
 
+  it("wander either side of their line, by their width, and end where they're drawn", () => {
+    const straight = [[0, 0, 10], [600, 0, 10]];
+    const track = trackOf(straight, 7);
+    expect([track.x[0], track.z[0]]).toEqual([0, 0]);
+    expect(track.x.at(-1)).toBeCloseTo(600);
+    expect(track.z.at(-1)).toBeCloseTo(0);
+    const off = Math.max(...track.z.map(Math.abs));
+    expect(off).toBeGreaterThan(4);
+    expect(off).toBeLessThanOrEqual(12);
+    expect(track.length).toBeGreaterThan(600);
+    // Bending both ways, wider in its bends and pools.
+    expect(Math.max(...track.bend)).toBeGreaterThan(0.3);
+    expect(Math.min(...track.bend)).toBeLessThan(-0.3);
+    expect(Math.max(...track.width) - Math.min(...track.width)).toBeGreaterThan(2);
+    // Another seed wanders another way.
+    expect(trackOf(straight, 8).z[40]).not.toBeCloseTo(track.z[40]);
+    expect(onTrack(track, track.x[40], track.z[40] + 3).side).toBeCloseTo(3, 0);
+  });
+
   it("keep a surface under the ground that never rises downstream", () => {
-    // Ground falling, then rising over a lip at x = 60, then falling again.
-    const ground = (x, z) => (z > 0 ? 50 - z / 10 : x < 50 ? 100 - x : x < 70 ? 80 : 100 - x);
+    const ground = (x) => (x < 50 ? 100 - x : x < 70 ? 80 : 100 - x);
     const surface = profile(line, ground);
     expect(surface[0]).toBe(100 - BELOW_FT);
-    // Over the lip it stays where it was before it, the lowest so far, at x = 48.
-    expect(surface[8]).toBe(52 - BELOW_FT);
-    expect(surface[12]).toBe(4 - BELOW_FT);
     for (let k = 1; k < surface.length; k++) expect(surface[k]).toBeLessThanOrEqual(surface[k - 1]);
+    expect(surface.at(-1)).toBeLessThan(0);
     expect(surfaceAt([10, 8, 6], 4)).toBe(9);
     expect(surfaceAt([10, 8, 6], 100)).toBe(6);
   });
@@ -28,27 +44,35 @@ describe("courses", () => {
   it("stop at the water they run into, and ease down to it", () => {
     // Ground 20 ft up to x = 100, then a lake at 10 over a bed at 0.
     const straight = [[0, 0, 6], [200, 0, 6]];
-    const ground = (x) => (x < 100 ? 20 : 0);
     const still = (x) => (x < 100 ? null : 10);
-    const surface = profile(straight, ground, still);
-    expect(surface.at(-1)).toBe(10);
-    // 8 ft a step at most a quarter foot a foot: 2 ft a step up from the mouth.
-    expect(surface[12]).toBe(12);
-    expect(surface[11]).toBe(14);
+    const surface = profile(straight, (x) => (x < 100 ? 20 : 0), still);
     expect(surface[0]).toBe(20 - BELOW_FT);
+    expect(surface.at(-1)).toBe(10);
+    // 8 ft a step, at most a quarter foot a foot.
+    for (let k = 1; k < surface.length; k++) expect(surface[k - 1] - surface[k]).toBeLessThanOrEqual(2.05);
     // Only as far as that takes: a steep course above it stays as steep.
     const steep = profile(straight, (x) => (x < 100 ? 100 - x : 0), still);
     expect(steep[0]).toBe(100 - BELOW_FT);
-    expect(steep[11]).toBe(12 - BELOW_FT);
+    expect(steep[3]).toBeLessThan(80);
   });
 
-  it("carve a bed under their water and banks beside it", () => {
-    const course = { type: "river", points: [[0, 0, 40], [200, 0, 40]], surface: [50, 50] };
-    const middle = shape(course, 100, 0);
-    expect(middle).toEqual({ top: 50 - depthOf("river", 40), level: 50, wet: true });
-    expect(shape(course, 100, 20).top).toBeCloseTo(50);
-    expect(shape(course, 100, 26)).toMatchObject({ top: 54, wet: false });
-    expect(shape(course, 100, 60)).toBeNull();
+  it("carve a bed under their water, deepest outside their bends, and banks beside it", () => {
+    const course = { type: "river", points: [[0, 0, 40], [1200, 0, 40]], surface: [50, 50], seed: 3 };
+    const track = trackOf(course.points, 3);
+    const k = track.bend.findIndex((b) => Math.abs(b) > 0.5);
+    const [x, z, bend] = [track.x[k], track.z[k], track.bend[k]];
+    // Square to the track there, toward the inside of the bend.
+    const [dx, dz] = [track.x[k + 1] - track.x[k - 1], track.z[k + 1] - track.z[k - 1]];
+    const d = Math.hypot(dx, dz);
+    const [nx, nz] = [(-dz / d) * Math.sign(bend), (dx / d) * Math.sign(bend)];
+    const at = (o) => shape(course, x + nx * o, z + nz * o);
+    expect(at(0)).toMatchObject({ level: 50, wet: true });
+    expect(at(-10).top).toBeLessThan(at(10).top);
+    expect(at(0).top).toBeLessThan(50 - depthOf("river", 40) * 0.5);
+    // Its bank's steeper outside than in.
+    const [outer, inner] = [at(-(track.width[k] / 2 + 6)).top, at(track.width[k] / 2 + 6).top];
+    expect(outer).toBeGreaterThan(inner);
+    expect(shape(course, 600, 200)).toBeNull();
   });
 
   it("are deeper the wider they are, rivers more than streams", () => {

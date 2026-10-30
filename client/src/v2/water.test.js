@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { trackOf } from "./courses.js";
 import { AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, dryWater, partWater } from "./water.js";
 
 const square = (x, z, size) => [[x, z], [x + size, z], [x + size, z + size], [x, z + size]];
@@ -120,16 +121,25 @@ describe("partWater", () => {
 });
 
 describe("courses' water", () => {
-  it("lies along their line, as wide as they are, where the ground's lower than their surface", () => {
-    // Ground at -12 everywhere; a river 40 ft wide across the tile at z = 128, its surface at -10.
+  // The cell under a course's track where it crosses x.
+  const cellAt = (course, x) => {
+    const track = trackOf(course.points, course.seed ?? 0);
+    const k = track.x.findIndex((v) => v >= x);
+    return Math.floor(track.z[k] / 4) * 64 + Math.floor(track.x[k] / 4);
+  };
+
+  it("lies along their track, as wide as they are, where the ground's lower than their surface", () => {
+    // Ground at -12 everywhere; a river 40 ft wide across the tile round z = 128, its surface at -10.
     const heights = new Float32Array(65 * 65).fill(-12);
     const river = { type: "river", points: [[-50, 128, 40], [300, 128, 40]], surface: [-10, -10] };
     const water = new WaterMap([], [river]).tile(0, 0, heights);
-    const at = (x, z) => water.level[Math.floor(z / 4) * 64 + Math.floor(x / 4)];
-    expect(at(100, 128)).toBe(-10);
-    expect(water.type[32 * 64 + 25]).toBe(WATER_TYPES.indexOf("river"));
-    expect(at(100, 146)).toBe(-10);
-    expect(Number.isNaN(at(100, 160))).toBe(true);
+    const k = cellAt(river, 100);
+    expect(water.level[k]).toBe(-10);
+    expect(water.type[k]).toBe(WATER_TYPES.indexOf("river"));
+    // 16 ft either side of it, and none 80 ft off.
+    expect(water.level[k + 4 * 64]).toBe(-10);
+    expect(water.level[k - 4 * 64]).toBe(-10);
+    expect(Number.isNaN(water.level[k + 20 * 64])).toBe(true);
   });
 
   it("lie under the water they run into where it's higher, and the sea's over them at its level", () => {
@@ -137,15 +147,15 @@ describe("courses' water", () => {
     const lake = { type: "lake", level: -5, points: [[0, 0], [128, 0], [128, 256], [0, 256]] };
     const river = { type: "river", points: [[-50, 128, 40], [300, 128, 40]], surface: [-10, -10] };
     const water = new WaterMap([lake], [river]).tile(0, 0, heights);
-    expect(water.level[32 * 64 + 10]).toBe(-5);
-    expect(water.type[32 * 64 + 10]).toBe(WATER_TYPES.indexOf("lake"));
-    expect(water.level[32 * 64 + 50]).toBe(-10);
+    expect(water.level[cellAt(river, 60)]).toBe(-5);
+    expect(water.type[cellAt(river, 60)]).toBe(WATER_TYPES.indexOf("lake"));
+    expect(water.level[cellAt(river, 200)]).toBe(-10);
     // At the same level, the lake's, levels with tenths too.
     const level = new WaterMap([{ ...lake, level: 705.8 }], [{ ...river, surface: [705.8, 705.8] }]).tile(0, 0, heights);
-    expect(level.type[32 * 64 + 10]).toBe(WATER_TYPES.indexOf("lake"));
+    expect(level.type[cellAt(river, 60)]).toBe(WATER_TYPES.indexOf("lake"));
     const tile = { heights: new Float32Array(65 * 65).fill(-12) };
     const sea = { type: "river", points: [[-50, 128, 40], [300, 128, 40]], surface: [0, 0] };
     bakeWater({ coords: [0, 0], tiles: new Map([[0, tile]]) }, new WaterMap([], [sea]));
-    expect(tile.water.type[32 * 64 + 25]).toBe(WATER_TYPES.indexOf("sea"));
+    expect(tile.water.type[cellAt(sea, 100)]).toBe(WATER_TYPES.indexOf("sea"));
   });
 });

@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { TILE_FT } from "../v2/sizes.js";
+import { trackOf } from "../v2/courses.js";
 import { decodePlate, encodePlate } from "../v2/plate.js";
 import { decodePlatter, encodePlatter } from "../v2/platter.js";
 import { CELLS, CHUNKS, TILES } from "./geo.js";
@@ -133,18 +134,27 @@ describe("raising the ground", () => {
   it("carves courses' channels, and fills them in again when they move", () => {
     const renditions = world();
     renditions.cells(0, 0);
-    const stream = { type: "stream", points: [[0, 128, 6], [256, 128, 6]], surface: [9, 9] };
+    const stream = { type: "stream", points: [[0, 128, 6], [256, 128, 6]], surface: [9, 9], seed: 1 };
+    // Where its track crosses x = 100.
+    const on = (course) => {
+      const track = trackOf(course.points, course.seed);
+      const k = track.x.findIndex((x) => x >= 100);
+      return [track.x[k], track.z[k]];
+    };
     renditions.setWater({ bodies: [], courses: [stream] });
-    // Its bed 1.5 ft under its surface in its middle, the ground beside it as it was.
-    expect(renditions.heightAt(100, 128)).toBeCloseTo(7.5);
-    expect(renditions.baseAt(100, 128)).toBeCloseTo(10);
+    // Its bed under its surface in its middle, the ground beside it as it was.
+    const [x, z] = on(stream);
+    expect(renditions.heightAt(x, z)).toBeLessThan(8.5);
+    expect(renditions.baseAt(x, z)).toBeCloseTo(10);
     expect(renditions.heightAt(100, 200)).toBe(10);
-    renditions.setWater({ bodies: [], courses: [{ ...stream, points: [[0, 64, 6], [256, 64, 6]] }] });
-    expect(renditions.heightAt(100, 128)).toBeCloseTo(10);
-    expect(renditions.heightAt(100, 64)).toBeCloseTo(7.5);
+    const moved = { ...stream, points: [[0, 64, 6], [256, 64, 6]] };
+    renditions.setWater({ bodies: [], courses: [moved] });
+    expect(renditions.heightAt(x, z)).toBeCloseTo(10);
+    const [mx, mz] = on(moved);
+    expect(renditions.heightAt(mx, mz)).toBeLessThan(8.5);
     const { water, cut } = decodePlate(renditions.changedFiles("main").get("places/continents/main/plates/0_0.plate")).tiles.get(0);
-    expect(cut[16 * 65 + 25]).toBeCloseTo(2.5);
-    expect(water.level[16 * 64 + 25]).toBe(9);
+    expect(cut[Math.round(mz / 4) * 65 + Math.round(mx / 4)]).toBeGreaterThan(1);
+    expect(water.level[Math.floor(mz / 4) * 64 + Math.floor(mx / 4)]).toBe(9);
   });
 
   it("moves plate files read later by what was kept", () => {
