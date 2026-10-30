@@ -60,10 +60,13 @@ export class Tools {
     const pressed = (buttons, on) => buttons.forEach((b) => b.setAttribute("aria-pressed", String(b === on)));
     // Each type of work shows its own tools.
     const works = [...document.querySelectorAll(".create-work [data-work]")];
+    this.works = works;
     for (const button of works) {
       button.addEventListener("click", () => {
         pressed(works, button);
         for (const tools of document.querySelectorAll(".create-tools[data-work]")) tools.hidden = tools.dataset.work !== button.dataset.work;
+        // A tool of another type of work is put down.
+        if (this.tool && !document.querySelector(`.create-tools:not([hidden]) [data-tool="${this.tool}"]`)) this.pick(null);
       });
     }
     const toolButtons = [...document.querySelectorAll("[data-tool]")];
@@ -175,10 +178,20 @@ export class Tools {
         const size = $("brushSize");
         size.value = String(Number(size.value) + (e.key === "]" ? 50 : -50));
         this.readSize();
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat) {
+        this.hotkey(e.key.toLowerCase());
       }
     });
     this.toolButtons = toolButtons;
     this.turn(0);
+  }
+
+  // A type of work's key (data-key) shows its tools, and a tool's, among those shown, picks it.
+  hotkey(key) {
+    const work = this.works.find((b) => b.dataset.key === key);
+    if (work) return work.click();
+    const tool = document.querySelector(`.create-tools:not([hidden]) [data-tool][data-key="${key}"]`);
+    if (tool) this.pick(tool.dataset.tool);
   }
 
   // Turns the tool to `angle` radians from east toward south.

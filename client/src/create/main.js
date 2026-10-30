@@ -140,16 +140,12 @@ function start(world, changes) {
   try {
     saved = JSON.parse(localStorage.getItem(placeKey));
   } catch {}
-  // 1 to 4 show or hide each kind of ground, finest first, and g the grid.
+  // 1 to 4 show or hide each kind of ground, finest first.
   const KINDS = ["full", "fine", "tile", "plate"];
   window.addEventListener("keydown", (e) => {
     if (e.target.matches?.("input, textarea, select") || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     const kind = KINDS[Number(e.key) - 1];
     if (kind) ground.toggle(kind);
-    if (e.key.toLowerCase() === "g") {
-      grid.value = 1 - grid.value;
-      $("showGrid").checked = grid.value === 1;
-    }
   });
   // The middling height of the plate at (x, z), from its rendition's corners.
   const baseAt = (x, z) => {

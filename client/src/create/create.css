@@ -382,3 +382,18 @@ body.create {
 .create-show input {
   margin: 0;
 }
+
+.create-work button,
+.create-tools button {
+  position: relative;
+}
+
+/* A button's key, at its right end. */
+.create-key {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font: 11px monospace;
+  color: #9a958a;
+}

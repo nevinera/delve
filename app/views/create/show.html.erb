@@ -10,8 +10,8 @@
     <button type="button" class="create-help" popovertarget="help">help</button>
     <div class="create-work" role="group" aria-label="type of work">
       <button type="button" data-work="manage" aria-pressed="false">manage</button>
-      <button type="button" data-work="planning" aria-pressed="false">planning</button>
-      <button type="button" data-work="geo" aria-pressed="true">geo</button>
+      <button type="button" data-work="planning" data-key="t" aria-pressed="false">planning<kbd class="create-key">T</kbd></button>
+      <button type="button" data-work="geo" data-key="g" aria-pressed="true">geo<kbd class="create-key">G</kbd></button>
     </div>
     <div class="create-tools create-manage" data-work="manage" hidden>
       <button id="openWorld" type="button">upload world</button>
@@ -19,31 +19,31 @@
       <button id="newWorld" type="button" title="an empty world, all sea">new world</button>
     </div>
     <div class="create-tools" data-work="planning" hidden>
-      <button type="button" data-tool="marker" aria-pressed="false" title="draw lines on the ground">
-        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M3 18 C 12 4, 20 22, 30 10 S 42 6, 45 14" fill="none" stroke="#ff5a36" stroke-width="3" stroke-linecap="round"/></svg>
-        <span>marker</span>
-      </button>
-      <button type="button" data-tool="eraser" aria-pressed="false" title="erase lines">
-        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M3 18 C 10 8, 14 14, 18 12 M30 11 C 36 8, 42 6, 45 14" fill="none" stroke="#ff5a36" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="12" r="6" fill="none" stroke="#ddd" stroke-width="1.5"/></svg>
-        <span>eraser</span>
-      </button>
-      <button type="button" data-tool="select" aria-pressed="false" title="select lines, to delete them">
+      <button type="button" data-tool="select" data-key="h" aria-pressed="false" title="select lines, to delete them">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M3 18 C 12 4, 20 22, 30 10 S 42 6, 45 14" fill="none" stroke="#ffe14d" stroke-width="7" stroke-linecap="round"/><path d="M3 18 C 12 4, 20 22, 30 10 S 42 6, 45 14" fill="none" stroke="#ff5a36" stroke-width="3" stroke-linecap="round"/></svg>
-        <span>select</span>
+        <span>select</span><kbd class="create-key">H</kbd>
+      </button>
+      <button type="button" data-tool="marker" data-key="j" aria-pressed="false" title="draw lines on the ground">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M3 18 C 12 4, 20 22, 30 10 S 42 6, 45 14" fill="none" stroke="#ff5a36" stroke-width="3" stroke-linecap="round"/></svg>
+        <span>marker</span><kbd class="create-key">J</kbd>
+      </button>
+      <button type="button" data-tool="eraser" data-key="k" aria-pressed="false" title="erase lines">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M3 18 C 10 8, 14 14, 18 12 M30 11 C 36 8, 42 6, 45 14" fill="none" stroke="#ff5a36" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="12" r="6" fill="none" stroke="#ddd" stroke-width="1.5"/></svg>
+        <span>eraser</span><kbd class="create-key">K</kbd>
       </button>
     </div>
     <div class="create-tools" data-work="geo">
-      <button type="button" data-tool="raise" aria-pressed="false" title="raise and lower the ground">
+      <button type="button" data-tool="raise" data-key="h" aria-pressed="false" title="raise and lower the ground">
         <canvas width="48" height="24" data-shape="round"></canvas>
-        <span>raise/lower</span>
+        <span>raise/lower</span><kbd class="create-key">H</kbd>
       </button>
-      <button type="button" data-tool="flatten" aria-pressed="false" title="flatten the ground to where you began">
+      <button type="button" data-tool="flatten" data-key="j" aria-pressed="false" title="flatten the ground to where you began">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 16 C 8 6, 12 18, 16 10 L32 10 C 36 16, 40 4, 46 14 L46 22 Z" fill="#c8b48a"/></svg>
-        <span>flatten</span>
+        <span>flatten</span><kbd class="create-key">J</kbd>
       </button>
-      <button type="button" data-tool="smooth" aria-pressed="false" title="smooth the ground">
+      <button type="button" data-tool="smooth" data-key="k" aria-pressed="false" title="smooth the ground">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 14 C 14 6, 34 6, 46 14 L46 22 Z" fill="#c8b48a"/></svg>
-        <span>smooth</span>
+        <span>smooth</span><kbd class="create-key">K</kbd>
       </button>
       <button type="button" data-tool="clear" aria-pressed="false" title="clear the ground away, back to empty sea">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 14 C 6 8, 10 12, 14 10 L14 22 Z M34 10 C 38 12, 42 8, 46 14 L46 22 L34 22 Z" fill="#c8b48a"/><path d="M14 22 L14 18 L34 18 L34 22 Z" fill="#2e608c"/></svg>
@@ -138,7 +138,7 @@
   <section class="create-show" aria-label="show">
     <fieldset>
       <legend>planning</legend>
-      <label title="the grid (G)"><input type="checkbox" id="showGrid" checked> grid</label>
+      <label title="the grid"><input type="checkbox" id="showGrid" checked> grid</label>
       <label title="planning lines, outside planning"><input type="checkbox" id="showLines" checked> lines</label>
       <label title="planning lines as walls 100 ft high, outside planning"><input type="checkbox" id="showCurtains"> curtains</label>
     </fieldset>
@@ -147,6 +147,8 @@
 <div id="help" popover>
   <h2>Keys</h2>
   <dl>
+    <dt>T / G</dt><dd>planning or geo</dd>
+    <dt>H J K</dt><dd>pick a tool, as shown on its button</dd>
     <dt>W / S</dt><dd>run or fly forward and back</dd>
     <dt>A / D</dt><dd>turn</dd>
     <dt>Q / E</dt><dd>strafe</dd>
@@ -162,7 +164,6 @@
     <dt>Esc</dt><dd>put the tool down</dd>
     <dt>Delete</dt><dd>delete the selected lines</dd>
     <dt>1 2 3 4</dt><dd>show or hide full ground, cell chunks, tiles, plates</dd>
-    <dt>G</dt><dd>show or hide the grid</dd>
   </dl>
   <h2>Tools</h2>
   <dl>
