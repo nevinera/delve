@@ -11,7 +11,7 @@ body.create {
 /* The view, with the tools' sidebar on the right and a bar under the view. */
 body.create {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 140px;
+  grid-template-columns: minmax(0, 1fr) 210px;
   grid-template-rows: minmax(0, 1fr) 140px;
 }
 
