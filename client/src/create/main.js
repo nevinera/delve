@@ -26,7 +26,9 @@ const SEA_BELOW_FT = 2;
 const HUD_EVERY_MS = 250;
 const INFO_EVERY_MS = 100;
 
-// The zip opened last, kept in IndexedDB.
+// Kept in IndexedDB: the zip opened last ("world"), and the files changed since ("changes", path ->
+// bytes), saved a little after each change, so a reload opens the world as it was left.
+const SAVE_CHANGES_MS = 3000;
 const store = {
   db: () =>
     new Promise((resolve, reject) => {
@@ -45,18 +47,32 @@ const store = {
   },
   async set(key, value) {
     const db = await this.db();
-    db.transaction("files", "readwrite").objectStore("files").put(value, key);
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction("files", "readwrite");
+      tx.objectStore("files").put(value, key);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  },
+  async delete(key) {
+    const db = await this.db();
+    return new Promise((resolve) => {
+      const tx = db.transaction("files", "readwrite");
+      tx.objectStore("files").delete(key);
+      tx.oncomplete = tx.onerror = () => resolve();
+    });
   },
 };
 
 // A v2 world's name, its files (path -> bytes) and its first continent's renditions, from the zip's
-// bytes.
-function readWorld(bytes) {
+// bytes, with `changes` (path -> bytes) in place of its own files.
+function readWorld(bytes, changes = new Map()) {
   let files = Object.entries(unzipSync(bytes));
   if (!files.some(([path]) => path === "world.json")) {
     const top = files[0][0].split("/")[0];
     files = files.map(([path, b]) => [path.slice(top.length + 1), b]);
   }
+  files = [...new Map([...files, ...changes])];
   const info = JSON.parse(strFromU8(Object.fromEntries(files)["world.json"]));
   if (info.version !== 2) throw new Error(`this is a version ${info.version} world: convert it with script/convert-v2.mjs first`);
   const continent = info.continents[0].key;
@@ -92,7 +108,7 @@ function download({ name, files, continent, renditions }, planning) {
   setTimeout(() => URL.revokeObjectURL(link.href), 10000);
 }
 
-function start(world) {
+function start(world, changes) {
   const { name, continent, renditions } = world;
   $("downloadWorld").addEventListener("click", () => download(world, tools.marks.toJSON()));
   $("open").hidden = true;
@@ -151,6 +167,7 @@ function start(world) {
   const FPS = 30;
   let lastSave = 0;
   let lastHud = 0;
+  let [saving, lastChangeSave, marksSaved] = [false, 0, 0];
   let lastInfo = 0;
   const compass = new Compass($("stage"), document.querySelector(".create-bar"));
   const feet = (ft) => `${Math.round(ft).toLocaleString()} ft`;
@@ -217,6 +234,24 @@ function start(world) {
       lastHud = now;
       frames = 0;
     }
+    // Saves what's changed once there's been time to finish the stroke, writing files on the worker.
+    if (!saving && !tools.stroke && !tools.drawing && now - lastChangeSave > SAVE_CHANGES_MS && (renditions.unsaved.size || tools.marks.version !== marksSaved)) {
+      saving = true;
+      const version = tools.marks.version;
+      renditions
+        .unsavedFiles(continent)
+        .then(async (files) => {
+          for (const [path, bytes] of files) changes.set(path, bytes);
+          changes.set(planningPath(continent), strToU8(`${JSON.stringify(tools.marks.toJSON())}\n`));
+          await store.set("changes", changes);
+          marksSaved = version;
+        })
+        .catch((e) => console.error("couldn't save the changes", e))
+        .finally(() => {
+          saving = false;
+          lastChangeSave = performance.now();
+        });
+    }
     if (now - lastSave > SAVE_EVERY_MS) {
       try {
         localStorage.setItem(placeKey, JSON.stringify(builder.state));
@@ -228,9 +263,9 @@ function start(world) {
   requestAnimationFrame(frame);
 }
 
-async function open(bytes) {
+async function open(bytes, changes = new Map()) {
   try {
-    start(readWorld(bytes));
+    start(readWorld(bytes, changes), changes);
     showing = true;
     return true;
   } catch (e) {
@@ -253,21 +288,26 @@ $("openFile").addEventListener("change", async () => {
       return;
     }
     await store.set("world", bytes).catch(() => {});
+    await store.delete("changes");
     window.location.reload();
     return;
   }
-  if (await open(bytes)) await store.set("world", bytes).catch(() => {});
+  if (await open(bytes)) {
+    await store.set("world", bytes).catch(() => {});
+    await store.delete("changes");
+  }
 });
-// Starts an empty world in place of the one showing, after asking, since moves not downloaded are
-// lost.
+// Starts an empty world in place of the one showing, after asking, since that's lost unless it's
+// been downloaded.
 $("newWorld").addEventListener("click", async () => {
-  if (showing && !window.confirm("Start a new, empty world? Whatever you've not downloaded is lost.")) return;
+  if (showing && !window.confirm("Start a new, empty world? This one's lost unless you've downloaded it.")) return;
   const info = { version: 2, name: "New world", continents: [{ key: "main", name: "Main" }], dungeons: [] };
   const bytes = zipSync({ "world.json": strToU8(`${JSON.stringify(info, null, 2)}\n`) });
   try {
     localStorage.removeItem(`create:${info.name}:main`);
   } catch {}
   await store.set("world", bytes).catch(() => {});
+  await store.delete("changes");
   window.location.reload();
 });
 $("openWorld").addEventListener("click", () => {
@@ -277,4 +317,5 @@ $("openWorld").addEventListener("click", () => {
 });
 
 const kept = await store.get("world").catch(() => null);
-if (!kept || !(await open(kept))) $("open").hidden = false;
+const changes = await store.get("changes").catch(() => null);
+if (!kept || !(await open(kept, changes ?? new Map()))) $("open").hidden = false;

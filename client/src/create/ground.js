@@ -51,6 +51,8 @@ export class Renditions {
     // 9 × 9 chunk corners, and "px,pz" -> 9 × 9 tile corners.
     this.offsets = { [CELLS]: new Map(), [CHUNKS]: new Map(), [TILES]: new Map() };
     this.changed = new Set(); // "px,pz" of plates whose ground's been moved
+    this.unsaved = new Set(); // the same, since they were last saved (filesFor)
+    this.writes = new Map(); // id -> resolve, for files being written on the worker
     this.made = new Map(); // "px,pz" -> indexes in the plate of tiles made where there were none
   }
 
@@ -113,6 +115,52 @@ export class Renditions {
       files.set(platterPath(continent, platter.coords), encodePlatter(platter));
     }
     return files;
+  }
+
+  // The same for the plates moved since this was last asked, written on the worker.
+  async unsavedFiles(continent) {
+    const keys = [...this.unsaved];
+    this.unsaved.clear();
+    const files = new Map();
+    const platters = new Set();
+    const writing = [];
+    for (const key of keys) {
+      const [px, pz] = key.split(",").map(Number);
+      platters.add(platterOfPlate(px, pz).join(","));
+      const plate = this.decoded.get(key) ?? this.readNow(key);
+      if (!plate) continue;
+      // Only what the file holds, not what's kept for drawing.
+      const tiles = new Map([...plate.tiles].map(([index, { heights, colors, terrain, forest }]) => [index, { heights, colors, terrain, forest }]));
+      writing.push(this.write("plate", { coords: [px, pz], palette: plate.palette, tiles }).then((bytes) => files.set(platePath(continent, [px, pz]), bytes)));
+    }
+    for (const key of platters) {
+      const { coords, tiles, plates } = this.platters.get(key);
+      const bare = (map) => new Map([...map].map(([index, { heights, colors, hash }]) => [index, { heights, colors, hash }]));
+      writing.push(this.write("platter", { coords, tiles: bare(tiles), plates: bare(plates) }).then((bytes) => files.set(platterPath(continent, coords), bytes)));
+    }
+    await Promise.all(writing);
+    return files;
+  }
+
+  // Writes a plate or platter file (`kind`) on the worker, or here where there are no workers.
+  write(kind, value) {
+    if (typeof Worker === "undefined") return Promise.resolve(kind === "plate" ? encodePlate(value) : encodePlatter(value));
+    this.startWorker();
+    const id = this.writes.size ? Math.max(...this.writes.keys()) + 1 : 1;
+    return new Promise((resolve) => {
+      this.writes.set(id, resolve);
+      this.worker.postMessage({ write: kind, id, value });
+    });
+  }
+
+  startWorker() {
+    if (this.worker) return;
+    this.worker = new Worker(new URL("./plateWorker.js", import.meta.url), { type: "module" });
+    this.worker.onmessage = ({ data }) => {
+      if (data.id === undefined) return this.done(data);
+      this.writes.get(data.id)(data.bytes);
+      this.writes.delete(data.id);
+    };
   }
 
   // Moves the ground by at(x, z) feet within `bounds`, [x0, z0, x1, z1] continent feet, worked out
@@ -213,7 +261,10 @@ export class Renditions {
         if (cells) delete cells.grid;
       }
     }
-    for (const key of moved) this.changed.add(key);
+    for (const key of moved) {
+      this.changed.add(key);
+      this.unsaved.add(key);
+    }
     return moved;
   }
 
@@ -263,10 +314,7 @@ export class Renditions {
     }
     this.reading.add(key);
     if (typeof Worker === "undefined") return this.done({ key, plate: decodePlate(this.plateFiles.get(key)) });
-    if (!this.worker) {
-      this.worker = new Worker(new URL("./plateWorker.js", import.meta.url), { type: "module" });
-      this.worker.onmessage = ({ data }) => this.done(data);
-    }
+    this.startWorker();
     this.worker.postMessage({ key, bytes: this.plateFiles.get(key) });
   }
 

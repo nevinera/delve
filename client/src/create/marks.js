@@ -23,6 +23,7 @@ export class Marks {
     this.material = new LineMaterial({ color: COLOR, linewidth: WIDTH_PX, depthTest: false, transparent: true });
     this.kept = []; // { points, line }
     this.live = null; // the line being drawn
+    this.version = 0; // counts changes to the lines kept, to tell when to save them
     this.since = 0;
   }
 
@@ -30,6 +31,7 @@ export class Marks {
   load(json) {
     this.clear();
     for (const { points } of json.lines ?? []) this.kept.push({ points, line: this.line(points) });
+    this.version = 0;
   }
 
   // The planning file's JSON for the lines there are.
@@ -71,6 +73,7 @@ export class Marks {
     } else {
       this.place(this.live, points);
       this.kept.push({ points, line: this.live });
+      this.version++;
     }
     this.live = null;
   }
@@ -83,11 +86,13 @@ export class Marks {
   undo() {
     const last = this.kept.pop();
     if (last) this.remove(last.line);
+    this.version++;
   }
 
   clear() {
     for (const { line } of this.kept) this.remove(line);
     this.kept = [];
+    this.version++;
   }
 
   tick(dt, width, height) {
