@@ -28,6 +28,9 @@
         <button type="button" data-shape="round" aria-pressed="true" title="round"><canvas width="32" height="20" data-shape="round"></canvas></button>
         <button type="button" data-shape="steep" aria-pressed="false" title="steep sides"><canvas width="32" height="20" data-shape="steep"></canvas></button>
         <button type="button" data-shape="peak" aria-pressed="false" title="peak"><canvas width="32" height="20" data-shape="peak"></canvas></button>
+        <button type="button" data-shape="cylinder" aria-pressed="false" title="cylinder, a hard edge"><canvas width="32" height="20" data-shape="cylinder"></canvas></button>
+        <button type="button" data-shape="mesa" aria-pressed="false" title="mesa"><canvas width="32" height="20" data-shape="mesa"></canvas></button>
+        <button type="button" data-shape="half" aria-pressed="false" title="half, turned with c and v"><canvas width="32" height="20" data-shape="half"></canvas></button>
       </div>
       <label>size <output id="brushSizeOut"></output>
         <input id="brushSize" type="range" min="0" max="1000" value="400">
@@ -35,12 +38,13 @@
       <label>strength <output id="brushStrengthOut"></output>
         <input id="brushStrength" type="range" min="1" max="100" value="20">
       </label>
+      <p class="create-angle">angle <output id="brushAngleOut"></output></p>
       <label class="create-check"><input id="brushNoise" type="checkbox"> noise</label>
       <div class="create-way" role="group" aria-label="raise or lower">
         <button type="button" data-way="raise" aria-pressed="true">raise</button>
         <button type="button" data-way="lower" aria-pressed="false">lower</button>
       </div>
-      <p class="create-note">Drag on the ground. Ctrl or cmd does the other way. [ and ] resize. Esc puts the tool down.</p>
+      <p class="create-note">Drag on the ground. Ctrl or cmd does the other way. [ and ] resize. c and v turn, with shift a little. Esc puts the tool down.</p>
     </div>
   </section>
 </aside>

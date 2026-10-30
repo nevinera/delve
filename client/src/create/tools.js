@@ -1,19 +1,22 @@
 import * as THREE from "three";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
-import { SHAPES, raiseBrush } from "./geo.js";
+import { SHAPES, TURNS, raiseBrush } from "./geo.js";
 
 // The tools' sidebar: the type of work and its tools above, the picked tool's settings below. A
 // picked tool takes the left button: dragging on the ground works it where the pointer is, and a
-// ring on the ground shows where it reaches. Esc puts it down.
+// ring on the ground shows where it reaches. Esc puts it down. c and v turn the tool left and right,
+// shift+c and shift+v a little.
 
 const MIN_RADIUS_FT = 16;
 const MAX_RADIUS_FT = 16000;
 const RING_POINTS = 96;
 const PICK_FT = 30000; // how far off the pointer finds the ground
+const TURN_DEG = 15;
+const FINE_TURN_DEG = 2;
 
 const $ = (id) => document.getElementById(id);
 
-// Draws a shape's profile into a thumbnail.
+// Draws a shape's profile into a thumbnail, across the way it's turned.
 function drawShape(canvas, shape) {
   const g = canvas.getContext("2d");
   const { width: w, height: h } = canvas;
@@ -21,7 +24,7 @@ function drawShape(canvas, shape) {
   g.fillStyle = "#c8b48a";
   g.beginPath();
   g.moveTo(0, h);
-  for (let x = 0; x <= w; x++) g.lineTo(x, h - 2 - SHAPES[shape](Math.abs((2 * x) / w - 1)) * (h - 4));
+  for (let x = 0; x <= w; x++) g.lineTo(x, h - 2 - SHAPES[shape](Math.abs((2 * x) / w - 1), (2 * x) / w - 1) * (h - 4));
   g.lineTo(w, h);
   g.fill();
 }
@@ -30,7 +33,7 @@ export class Tools {
   constructor({ scene, camera, canvas, builder, renditions, ground }) {
     Object.assign(this, { camera, canvas, builder, renditions, ground });
     this.tool = null;
-    this.settings = { shape: "round", radius: 0, strength: 0, noise: false, lower: false };
+    this.settings = { shape: "round", radius: 0, strength: 0, noise: false, lower: false, angle: 0 };
     this.pointer = null; // normalized device coordinates, or null off the view
     this.stroke = null; // { invert } while the left button's down
     this.ring = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffe9a0, depthTest: false, transparent: true }));
@@ -77,6 +80,10 @@ export class Tools {
     window.addEventListener("keydown", (e) => {
       if (e.target.matches?.("input, textarea, select")) return;
       if (e.key === "Escape") this.pick(null);
+      else if ((e.key === "c" || e.key === "C" || e.key === "v" || e.key === "V") && this.tool && !e.ctrlKey && !e.metaKey) {
+        const step = (e.shiftKey ? FINE_TURN_DEG : TURN_DEG) * (e.key.toLowerCase() === "c" ? -1 : 1);
+        this.turn(this.settings.angle + (step * Math.PI) / 180);
+      }
       else if ((e.key === "[" || e.key === "]") && this.tool) {
         const size = $("brushSize");
         size.value = String(Number(size.value) + (e.key === "]" ? 50 : -50));
@@ -84,6 +91,13 @@ export class Tools {
       }
     });
     this.toolButtons = toolButtons;
+    this.turn(0);
+  }
+
+  // Turns the tool to `angle` radians from east toward south.
+  turn(angle) {
+    this.settings.angle = angle - Math.floor(angle / (2 * Math.PI)) * 2 * Math.PI;
+    $("brushAngleOut").textContent = `${Math.round((this.settings.angle * 180) / Math.PI) % 360}°`;
   }
 
   pick(tool) {
@@ -155,9 +169,19 @@ export class Tools {
     }
     const positions = this.ring.geometry.attributes.position;
     const lift = Math.max(1, this.camera.position.distanceTo(new THREE.Vector3(...at)) * 0.002);
+    // A turned shape's outline: half the ring, and back across the cut.
+    const half = TURNS.has(this.settings.shape);
+    const arc = half ? RING_POINTS / 2 : RING_POINTS;
+    const { angle, radius } = this.settings;
     for (let k = 0; k < RING_POINTS; k++) {
-      const a = (k / RING_POINTS) * Math.PI * 2;
-      const [px, pz] = [x + Math.cos(a) * this.settings.radius, z + Math.sin(a) * this.settings.radius];
+      let px, pz;
+      if (k <= arc) {
+        const a = half ? angle - Math.PI / 2 + (k / arc) * Math.PI : (k / RING_POINTS) * Math.PI * 2;
+        [px, pz] = [x + Math.cos(a) * radius, z + Math.sin(a) * radius];
+      } else {
+        const t = 1 - (2 * (k - arc)) / (RING_POINTS - arc);
+        [px, pz] = [x - Math.sin(angle) * radius * t, z + Math.cos(angle) * radius * t];
+      }
       positions.setXYZ(k, px, (this.renditions.heightAt(px, pz) ?? SEA_LEVEL_FT) + lift, pz);
     }
     positions.needsUpdate = true;

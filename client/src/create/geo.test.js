@@ -2,11 +2,25 @@ import { describe, expect, it } from "vitest";
 import { CELLS, CHUNKS, SHAPES, TILES, levelFor, raiseBrush } from "./geo.js";
 
 describe("raise brush", () => {
-  it("has shapes that are 1 at the middle and 0 at the edge", () => {
-    for (const shape of Object.values(SHAPES)) {
-      expect(shape(0)).toBeCloseTo(1);
-      expect(shape(1)).toBeCloseTo(0);
+  it("has shapes that are 1 at the middle and 0 at the edge, but the cylinder's hard edge", () => {
+    for (const [name, shape] of Object.entries(SHAPES)) {
+      expect(shape(0, 0)).toBeCloseTo(1);
+      expect(shape(1, 1)).toBeCloseTo(name === "cylinder" ? 1 : 0);
     }
+  });
+
+  it("holds the mesa flat, drops it fast, then eases it out", () => {
+    expect(SHAPES.mesa(0.7)).toBe(1);
+    expect(SHAPES.mesa(0.8)).toBeCloseTo(0.2);
+    expect(SHAPES.mesa(0.9)).toBeCloseTo(0.05);
+  });
+
+  it("raises half the round brush, on the side its angle points to", () => {
+    const settings = { shape: "half", radius: 100, strength: 1, noise: false, angle: Math.PI / 2 };
+    const { at } = raiseBrush(settings, 0, 0, 1);
+    expect(at(0, 30)).toBeCloseTo(100 * SHAPES.round(0.3));
+    expect(at(0, -30)).toBe(0);
+    expect(at(30, 0)).toBeCloseTo(100 * SHAPES.round(0.3));
   });
 
   it("holds the steep shape up longer than the round one, and the peak lower", () => {

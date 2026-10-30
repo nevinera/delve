@@ -181,3 +181,7 @@ body.create {
 #openError {
   color: #ff9a80;
 }
+
+.create-angle {
+  margin: 0;
+}
