@@ -79,6 +79,12 @@ for (const { key } of info.continents) {
     return weight ? sum / weight : surface(...cell(Math.floor(x / cellFt), Math.floor(z / cellFt)));
   };
   const plates = new Map(); // "px,pz" -> tiles' ground at cell scale
+  // One terrain palette for every plate, for the spike.
+  const palette = [];
+  const terrainIndex = (name) => {
+    if (!palette.includes(name)) palette.push(name);
+    return palette.indexOf(name);
+  };
 
   const platters = new Map(); // "px,pz" -> tiles
   for (const [k, bytes] of sources) {
@@ -112,15 +118,19 @@ for (const { key } of info.continents) {
         const cellHeights = new Float32Array(CELL_CORNERS * CELL_CORNERS);
         for (let j = 0; j < CELL_CORNERS; j++) for (let i = 0; i < CELL_CORNERS; i++) cellHeights[j * CELL_CORNERS + i] = surfaceAt((tx * TILE_CELLS + i) * CELL_FT, (tz * TILE_CELLS + j) * CELL_FT);
         const cellColors = new Uint8Array(TILE_CELLS * TILE_CELLS * 3);
+        const cellTerrain = new Uint8Array(TILE_CELLS * TILE_CELLS);
+        const cellForest = new Uint8Array(TILE_CELLS * TILE_CELLS);
         for (let j = 0; j < TILE_CELLS; j++) {
           for (let i = 0; i < TILE_CELLS; i++) {
-            const found = cell(Math.floor(((tx * TILE_CELLS + i + 0.5) * CELL_FT) / cellFt), Math.floor(((tz * TILE_CELLS + j + 0.5) * CELL_FT) / cellFt));
-            cellColors.set(colorOf(...found), (j * TILE_CELLS + i) * 3);
+            const [tile, at] = cell(Math.floor(((tx * TILE_CELLS + i + 0.5) * CELL_FT) / cellFt), Math.floor(((tz * TILE_CELLS + j + 0.5) * CELL_FT) / cellFt));
+            cellColors.set(colorOf(tile, at), (j * TILE_CELLS + i) * 3);
+            cellTerrain[j * TILE_CELLS + i] = terrainIndex(tile.palettes.terrain[tile.layers.terrain[at]]);
+            cellForest[j * TILE_CELLS + i] = tile.layers.forest[at];
           }
         }
         const plateKey = [Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES)].join(",");
         if (!plates.has(plateKey)) plates.set(plateKey, new Map());
-        plates.get(plateKey).set(tileIndexInPlate(tx, tz), { heights: cellHeights, colors: cellColors });
+        plates.get(plateKey).set(tileIndexInPlate(tx, tz), { heights: cellHeights, colors: cellColors, terrain: cellTerrain, forest: cellForest });
         highest = Math.max(highest, ...heights);
         const p = platterOf(tx, tz).join(",");
         if (!platters.has(p)) platters.set(p, new Map());
@@ -131,7 +141,7 @@ for (const { key } of info.continents) {
   let plateBytes = 0;
   for (const [p, tiles] of plates) {
     const coords = p.split(",").map(Number);
-    out[platePath(key, coords)] = encodePlate({ coords, tiles });
+    out[platePath(key, coords)] = encodePlate({ coords, palette, tiles });
     plateBytes += out[platePath(key, coords)].length;
   }
   let plateCount = 0;

@@ -81,7 +81,7 @@ function start({ name, continent, renditions }) {
   const sea = new THREE.Mesh(new THREE.PlaneGeometry(FAR_FT * 2.2, FAR_FT * 2.2), new THREE.MeshLambertMaterial({ color: 0x2e608c }));
   sea.rotation.x = -Math.PI / 2;
   scene.add(sea);
-  const ground = new Ground(scene, renditions);
+  const ground = new Ground(scene, renditions, renderer);
   const groundAt = (x, z) => renditions.heightAt(x, z);
   const placeKey = `create:${name}:${continent}`;
   let saved = null;
@@ -121,7 +121,7 @@ function start({ name, continent, renditions }) {
     if (now - lastHud > HUD_EVERY_MS) {
       const { flying } = builder.state;
       const fps = Math.round((frames * 1000) / (now - lastHud));
-      $("hud").textContent = `${flying ? "flying" : "walking"} · ${Math.round(builder.above)} ft up · ${Math.round(y)} ft · tile ${Math.floor(x / TILE_FT)},${Math.floor(z / TILE_FT)} · ${ground.fineChunks} chunks, ${ground.meshes.size} tiles and ${ground.plates.size} plates drawn · ${fps} fps`;
+      $("hud").textContent = `${flying ? "flying" : "walking"} · ${Math.round(builder.above)} ft up · ${Math.round(y)} ft · tile ${Math.floor(x / TILE_FT)},${Math.floor(z / TILE_FT)} · ${ground.fullChunks} full and ${ground.fineChunks} cell chunks, ${ground.meshes.size} tiles and ${ground.plates.size} plates drawn · ${fps} fps`;
       lastHud = now;
       frames = 0;
     }
