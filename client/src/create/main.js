@@ -7,6 +7,7 @@ import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { Builder } from "./builder.js";
 import { EMPTY_FT, FAR_FT, Ground, Renditions } from "./ground.js";
 import { grid } from "./grid.js";
+import { planningPath } from "./marks.js";
 import { Tools } from "./tools.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
@@ -76,8 +77,9 @@ function readWorld(bytes) {
 
 // Saves the world as a zip, its moved ground in. Its files are gzipped already, so the zip stores
 // them as they are.
-function download({ name, files, continent, renditions }) {
+function download({ name, files, continent, renditions }, planning) {
   const out = new Map(files);
+  out.set(planningPath(continent), strToU8(`${JSON.stringify(planning)}\n`));
   for (const [path, bytes] of renditions.changedFiles(continent)) out.set(path, bytes);
   const zip = zipSync(Object.fromEntries([...out].map(([path, bytes]) => [path, [bytes, { level: 0 }]])));
   const link = document.createElement("a");
@@ -89,7 +91,7 @@ function download({ name, files, continent, renditions }) {
 
 function start(world) {
   const { name, continent, renditions } = world;
-  $("downloadWorld").addEventListener("click", () => download(world));
+  $("downloadWorld").addEventListener("click", () => download(world, tools.marks.toJSON()));
   $("open").hidden = true;
   $("worldName").textContent = name;
   const canvas = $("view");
@@ -133,6 +135,8 @@ function start(world) {
   };
   const builder = new Builder({ scene, camera, canvas, groundAt, baseAt, at: renditions.middle(), state: saved ?? undefined });
   const tools = new Tools({ scene, camera, canvas, builder, renditions, ground });
+  const planning = world.files.get(planningPath(continent));
+  if (planning) tools.marks.load(JSON.parse(strFromU8(planning)));
 
   const resize = () => {
     const { clientWidth: w, clientHeight: h } = canvas;

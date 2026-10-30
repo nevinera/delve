@@ -2,11 +2,15 @@ import * as THREE from "three";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
 import { SHAPES, TURNS, raiseBrush } from "./geo.js";
 import { EMPTY_FT } from "./ground.js";
+import { Marks } from "./marks.js";
+import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 
 // The tools' sidebar: the type of work and its tools above, the picked tool's settings below. A
-// picked tool takes the left button: dragging on the ground works it where the pointer is, and a
-// ring on the ground shows where it reaches. Esc puts it down. c and v turn the tool left and right,
-// shift+c and shift+v a little.
+// picked tool takes the left button, and Esc puts it down.
+// - planning's marker: dragging draws a line on the ground (stroke.js, marks.js).
+// - geo's raise and lower brush: dragging on the ground works it where the pointer is, and a ring
+//   on the ground shows where it reaches. c and v turn it left and right, shift+c and shift+v a
+//   little, and [ and ] resize it.
 
 const MIN_RADIUS_FT = 16;
 const MAX_RADIUS_FT = 16000;
@@ -36,7 +40,9 @@ export class Tools {
     this.tool = null;
     this.settings = { shape: "round", radius: 0, strength: 0, noise: false, lower: false, angle: 0 };
     this.pointer = null; // normalized device coordinates, or null off the view
-    this.stroke = null; // { invert } while the left button's down
+    this.stroke = null; // { invert } while the left button's down with the brush
+    this.drawing = null; // the Stroke being drawn with the marker
+    this.marks = new Marks(scene, (x, z) => this.surface(x, z));
     this.ring = new THREE.LineLoop(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xffe9a0, depthTest: false, transparent: true }));
     this.ring.geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(RING_POINTS * 3), 3));
     this.ring.renderOrder = 10;
@@ -76,27 +82,50 @@ export class Tools {
     $("brushStrength").addEventListener("input", () => this.readStrength());
     $("brushAngle").addEventListener("input", () => this.turn((Number($("brushAngle").value) * Math.PI) / 180));
     $("brushNoise").addEventListener("change", () => (this.settings.noise = $("brushNoise").checked));
+    $("marksUndo").addEventListener("click", () => this.marks.undo());
+    $("marksClear").addEventListener("click", () => this.marks.clear());
     this.readSize();
     this.readStrength();
     this.settings.noise = $("brushNoise").checked;
 
-    canvas.addEventListener("pointermove", (e) => this.point(e));
+    canvas.addEventListener("pointermove", (e) => {
+      this.point(e);
+      const at = this.drawing && this.hit();
+      if (!at) return;
+      this.drawing.add(at[0], at[2]);
+      this.marks.draw(this.drawing.points);
+      this.showStroke();
+    });
     canvas.addEventListener("pointerleave", () => (this.pointer = null));
     canvas.addEventListener("pointerdown", (e) => {
       if (e.button !== 0 || !this.tool) return;
       this.point(e);
-      this.stroke = { invert: e.ctrlKey || e.metaKey };
       canvas.setPointerCapture(e.pointerId);
+      if (this.tool === "raise") {
+        this.stroke = { invert: e.ctrlKey || e.metaKey };
+        return;
+      }
+      const at = this.hit();
+      if (!at) return;
+      this.drawing = new Stroke(at[0], at[2]);
+      this.marks.draw(this.drawing.points);
+      this.showStroke();
     });
-    canvas.addEventListener("pointerup", () => (this.stroke = null));
+    canvas.addEventListener("pointerup", () => {
+      this.stroke = null;
+      if (!this.drawing) return;
+      this.drawing.end();
+      this.marks.keep(this.drawing.points);
+      this.drawing = null;
+    });
     window.addEventListener("keydown", (e) => {
       if (e.target.matches?.("input, textarea, select")) return;
       if (e.key === "Escape") this.pick(null);
-      else if ((e.key === "c" || e.key === "C" || e.key === "v" || e.key === "V") && this.tool && !e.ctrlKey && !e.metaKey) {
+      else if ((e.key === "c" || e.key === "C" || e.key === "v" || e.key === "V") && this.tool === "raise" && !e.ctrlKey && !e.metaKey) {
         const step = (e.shiftKey ? FINE_TURN_DEG : TURN_DEG) * (e.key.toLowerCase() === "c" ? -1 : 1);
         this.turn(this.settings.angle + (step * Math.PI) / 180);
       }
-      else if ((e.key === "[" || e.key === "]") && this.tool) {
+      else if ((e.key === "[" || e.key === "]") && this.tool === "raise") {
         const size = $("brushSize");
         size.value = String(Number(size.value) + (e.key === "]" ? 50 : -50));
         this.readSize();
@@ -120,6 +149,14 @@ export class Tools {
     for (const panel of document.querySelectorAll("[data-config]")) panel.hidden = panel.dataset.config !== (tool ?? "none");
     this.builder.paints = Boolean(tool);
     this.stroke = null;
+    if (this.drawing) this.marks.keep([]);
+    this.drawing = null;
+  }
+
+  // How long the line being drawn is, of how long it can be.
+  showStroke() {
+    const miles = (ft) => (ft / 5280).toFixed(2);
+    $("strokeLength").textContent = `${miles(this.drawing.length)} of ${miles(STROKE_MAX_FT)} mi`;
   }
 
   readSize() {
@@ -174,6 +211,11 @@ export class Tools {
   // neither the pointer nor the camera moves, a stroke keeps working where it was, though the
   // ground it moved now meets the pointer's ray somewhere else.
   tick(dt) {
+    this.marks.tick(dt, this.canvas.clientWidth, this.canvas.clientHeight);
+    if (this.tool !== "raise") {
+      this.ring.visible = false;
+      return;
+    }
     const view = this.camera.matrixWorld.elements.join();
     if (this.stroke?.view !== view) this.stroke &&= { ...this.stroke, view, at: null };
     const at = this.tool && (this.stroke?.at ?? this.hit());

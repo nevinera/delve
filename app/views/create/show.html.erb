@@ -10,12 +10,19 @@
     <button type="button" class="create-help" popovertarget="help">help</button>
     <div class="create-work" role="group" aria-label="type of work">
       <button type="button" data-work="manage" aria-pressed="false">manage</button>
+      <button type="button" data-work="planning" aria-pressed="false">planning</button>
       <button type="button" data-work="geo" aria-pressed="true">geo</button>
     </div>
     <div class="create-tools create-manage" data-work="manage" hidden>
       <button id="openWorld" type="button">upload world</button>
       <button id="downloadWorld" type="button">download world</button>
       <button id="newWorld" type="button" title="an empty world, all sea">new world</button>
+    </div>
+    <div class="create-tools" data-work="planning" hidden>
+      <button type="button" data-tool="marker" aria-pressed="false" title="draw lines on the ground">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M3 18 C 12 4, 20 22, 30 10 S 42 6, 45 14" fill="none" stroke="#ff5a36" stroke-width="3" stroke-linecap="round"/></svg>
+        <span>marker</span>
+      </button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" aria-pressed="false" title="raise and lower the ground">
@@ -27,6 +34,15 @@
   <section class="create-config">
     <div data-config="none">
       <p class="create-note">Pick a tool.</p>
+    </div>
+    <div data-config="marker" hidden>
+      <p class="create-note">Drag on the ground to draw a line, up to 2 miles long.</p>
+      <p class="create-note" id="strokeLength"></p>
+      <div class="create-way">
+        <button type="button" id="marksUndo">undo</button>
+        <button type="button" id="marksClear">clear</button>
+      </div>
+      <p class="create-note">Lines are kept with the world when you download it.</p>
     </div>
     <div data-config="raise" hidden>
       <div class="create-shapes" role="group" aria-label="shape">
@@ -78,6 +94,7 @@
   <h2>Tools</h2>
   <dl>
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
+    <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes</dd>
   </dl>
 </div>
