@@ -7,8 +7,9 @@ import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 
 // The tools' sidebar: the type of work and its tools above, the picked tool's settings below. A
 // picked tool takes the left button, and Esc puts it down.
-// - planning's marker: dragging draws a line on the ground (stroke.js, marks.js), and its eraser
-//   cuts lines away where it's dragged.
+// - planning's marker: dragging draws a line on the ground (stroke.js, marks.js), its eraser
+//   cuts lines away where it's dragged, and select picks lines out, with shift more than one, for
+//   delete or backspace to delete whole.
 // - geo's brushes, raise and lower, flatten, smooth and clear: dragging on the ground works them
 //   where the pointer is, and a ring on the ground shows where they reach. [ and ] resize them, and
 //   c and v turn raise and lower's, shift+c and shift+v a little.
@@ -17,6 +18,7 @@ const MIN_RADIUS_FT = 16;
 const MAX_RADIUS_FT = 16000;
 const RING_POINTS = 96;
 const PICK_FT = 30000; // how far off the pointer finds the ground
+const PICK_LINE_PX = 8; // how near the pointer a line is picked out
 const BRUSHES = new Set(["raise", "flatten", "smooth", "clear", "eraser"]);
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
@@ -104,6 +106,7 @@ export class Tools {
         pressed(widths, button);
       });
     }
+    $("marksDelete").addEventListener("click", () => this.marks.deleteSelected());
     $("marksUndo").addEventListener("click", () => this.marks.undo());
     this.readSize();
     this.readStrength();
@@ -122,6 +125,12 @@ export class Tools {
       if (e.button !== 0 || !this.tool) return;
       this.point(e);
       canvas.setPointerCapture(e.pointerId);
+      if (this.tool === "select") {
+        const mark = this.pickMark();
+        if (mark) this.marks.select(mark, e.shiftKey);
+        else if (!e.shiftKey) this.marks.unselect();
+        return;
+      }
       const at = this.hit();
       if (BRUSHES.has(this.tool)) {
         // Flatten pulls toward the ground's height where the stroke began.
@@ -144,6 +153,7 @@ export class Tools {
     window.addEventListener("keydown", (e) => {
       if (e.target.matches?.("input, textarea, select")) return;
       if (e.key === "Escape") this.pick(null);
+      else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "select") this.marks.deleteSelected();
       else if ((e.key === "c" || e.key === "C" || e.key === "v" || e.key === "V") && this.tool === "raise" && !e.ctrlKey && !e.metaKey) {
         const step = (e.shiftKey ? FINE_TURN_DEG : TURN_DEG) * (e.key.toLowerCase() === "c" ? -1 : 1);
         this.turn(this.settings.angle + (step * Math.PI) / 180);
@@ -176,6 +186,7 @@ export class Tools {
     this.builder.paints = Boolean(tool);
     this.stroke = null;
     if (this.drawing) this.marks.keep([]);
+    this.marks.unselect();
     this.drawing = null;
   }
 
@@ -211,6 +222,32 @@ export class Tools {
     const r = this.canvas.getBoundingClientRect();
     this.pointer = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
     if (this.stroke) this.stroke.at = null;
+  }
+
+  // The kept line nearest the pointer on the screen, within PICK_LINE_PX, or null.
+  pickMark() {
+    if (!this.pointer) return null;
+    const [w, h] = [this.canvas.clientWidth, this.canvas.clientHeight];
+    const [ax, ay] = [((this.pointer.x + 1) / 2) * w, ((1 - this.pointer.y) / 2) * h];
+    const onScreen = ([x, z]) => {
+      const v = new THREE.Vector3(x, this.surface(x, z) + 1, z).project(this.camera);
+      return v.z > 1 || v.z < -1 ? null : [((v.x + 1) / 2) * w, ((1 - v.y) / 2) * h];
+    };
+    let [best, nearest] = [null, PICK_LINE_PX];
+    for (const mark of this.marks.kept) {
+      let a = null;
+      for (const point of mark.points) {
+        const b = onScreen(point);
+        if (a && b) {
+          const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
+          const t = Math.min(1, Math.max(0, ((ax - a[0]) * dx + (ay - a[1]) * dy) / (dx * dx + dy * dy || 1)));
+          const d = Math.hypot(a[0] + dx * t - ax, a[1] + dy * t - ay);
+          if (d < nearest) [best, nearest] = [mark, d];
+        }
+        a = b;
+      }
+    }
+    return best;
   }
 
   // The surface the pointer finds at (x, z): the ground, or the sea over it.

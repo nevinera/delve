@@ -27,6 +27,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M3 18 C 10 8, 14 14, 18 12 M30 11 C 36 8, 42 6, 45 14" fill="none" stroke="#ff5a36" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="12" r="6" fill="none" stroke="#ddd" stroke-width="1.5"/></svg>
         <span>eraser</span>
       </button>
+      <button type="button" data-tool="select" aria-pressed="false" title="select lines, to delete them">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M3 18 C 12 4, 20 22, 30 10 S 42 6, 45 14" fill="none" stroke="#ffe14d" stroke-width="7" stroke-linecap="round"/><path d="M3 18 C 12 4, 20 22, 30 10 S 42 6, 45 14" fill="none" stroke="#ff5a36" stroke-width="3" stroke-linecap="round"/></svg>
+        <span>select</span>
+      </button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" aria-pressed="false" title="raise and lower the ground">
@@ -75,10 +79,12 @@
         <button type="button" data-pen-width="3" aria-pressed="false" title="width 3"><svg width="32" height="12" viewBox="0 0 32 12" aria-hidden="true"><line x1="3" y1="6" x2="29" y2="6" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg></button>
         <button type="button" data-pen-width="4" aria-pressed="false" title="width 4"><svg width="32" height="12" viewBox="0 0 32 12" aria-hidden="true"><line x1="3" y1="6" x2="29" y2="6" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></svg></button>
       </div>
+    </div>
+    <div data-config="select" hidden>
+      <p class="create-note">Click a line to select it, with shift to select more or fewer. Delete or backspace deletes them.</p>
       <div class="create-way">
-        <button type="button" id="marksUndo">undo</button>
+        <button type="button" id="marksDelete">delete</button>
       </div>
-      <p class="create-note">Lines are kept with the world when you download it.</p>
     </div>
     <div data-config="raise flatten smooth clear eraser" hidden>
       <div class="create-shapes" role="group" aria-label="shape" data-only="raise">
@@ -111,6 +117,12 @@
       <p class="create-note" data-only="eraser">Drag across lines to erase them. Erasing a line's middle leaves two lines. [ and ] resize. Esc puts the tool down.</p>
       <p class="create-note" data-only="clear">Drag to clear tiles away, back to empty sea: each tile whose middle is in the ring. [ and ] resize. Esc puts the tool down.</p>
     </div>
+    <div data-config="marker eraser select" hidden>
+      <div class="create-way">
+        <button type="button" id="marksUndo">undo</button>
+      </div>
+      <p class="create-note">Lines are kept with the world when you download it.</p>
+    </div>
   </section>
 </aside>
 <footer id="bottom">
@@ -140,13 +152,14 @@
     <dt>[ / ]</dt><dd>make the tool smaller or bigger</dd>
     <dt>C / V</dt><dd>turn the tool left or right, with shift a little</dd>
     <dt>Esc</dt><dd>put the tool down</dd>
+    <dt>Delete</dt><dd>delete the selected lines</dd>
     <dt>1 2 3 4</dt><dd>show or hide full ground, cell chunks, tiles, plates</dd>
     <dt>G</dt><dd>show or hide the grid</dd>
   </dl>
   <h2>Tools</h2>
   <dl>
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
-    <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, and the eraser erases them</dd>
+    <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, and select picks them out to delete whole</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, and clear it away</dd>
   </dl>
 </div>

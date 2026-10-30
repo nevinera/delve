@@ -336,6 +336,6 @@ body.create {
 
 [data-config="marker"] .create-styles,
 [data-config="marker"] .create-widths,
-[data-config="marker"] .create-way {
+[data-config="marker eraser select"] .create-way {
   margin-top: 8px;
 }

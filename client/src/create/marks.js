@@ -6,7 +6,8 @@ import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 // Lines marked on the ground by the planning marker, drawn over everything, following the ground as
 // it's moved. Each has one of COLORS, one of four widths a few pixels wide, and a style, solid,
 // dashed or dotted. Lines, dashes and dots all grow the higher the builder flies. The eraser cuts
-// lines where it passes, in two where it passes their middles. A continent's are kept in its
+// lines where it passes, in two where it passes their middles. Lines picked out with the select
+// tool show a halo, and can be deleted whole. A continent's are kept in its
 // planning file:
 //
 //   places/continents/<continent>/planning.json
@@ -30,6 +31,8 @@ const WIDEN_FT = 1024; // flying higher over the ground than this, lines widen w
 const MOST_WIDER = 4;
 const PEN = { color: "red", width: 2, style: "solid" }; // for lines kept without these
 const UNDOS = 50;
+const HALO = 0xffe14d;
+const HALO_PX = 6; // how much wider than its line a halo is
 export const planningPath = (continent) => `places/continents/${continent}/planning.json`;
 const LIFT_EVERY_S = 0.5; // how often lines are put back on the ground, should it have moved
 
@@ -76,6 +79,7 @@ export class Marks {
     this.live = null; // the line being drawn, { pen, line }
     this.undos = []; // the lines kept before each change, as toJSON's lines
     this.erased = false; // whether the eraser's stroke has cut lines yet
+    this.selected = new Map(); // a kept line -> its halo
     this.version = 0; // counts changes to the lines kept, to tell when to save them
     this.since = 0;
   }
@@ -88,6 +92,7 @@ export class Marks {
   }
 
   show(lines) {
+    this.unselect();
     for (const { line } of this.kept) this.remove(line);
     this.kept = [];
     for (const { points, color, width, style } of lines) {
@@ -111,8 +116,9 @@ export class Marks {
   material({ color, width, style }) {
     const key = `${color},${width},${style}`;
     if (!this.materials.has(key)) {
-      const material = new LineMaterial({ color: COLORS[color], linewidth: WIDTHS_PX[width - 1], depthTest: false, transparent: true, dashed: Boolean(STYLES[style]) });
-      material.userData = { width, style };
+      const halo = color === "halo";
+      const material = new LineMaterial({ color: halo ? HALO : COLORS[color], linewidth: WIDTHS_PX[width - 1], depthTest: false, transparent: true, dashed: Boolean(STYLES[style]) });
+      material.userData = { width, style, halo };
       this.materials.set(key, material);
     }
     return this.materials.get(key);
@@ -120,7 +126,7 @@ export class Marks {
 
   line(points, pen) {
     const line = new Line2(new LineGeometry(), this.material(pen));
-    line.renderOrder = 10;
+    line.renderOrder = pen.color === "halo" ? 9 : 10;
     line.frustumCulled = false;
     this.place(line, points);
     this.group.add(line);
@@ -174,9 +180,40 @@ export class Marks {
       for (const points of pieces) kept.push({ points, pen: mark.pen, line: this.line(points, mark.pen) });
     }
     if (!changed) return;
+    this.unselect();
     if (!this.erased) this.save();
     this.erased = true;
     this.kept = kept;
+    this.version++;
+  }
+
+  // Picks out `mark`, one of those kept, or with `add`, picks it out too, or puts it back if it was.
+  select(mark, add = false) {
+    const was = this.selected.has(mark);
+    if (!add) this.unselect();
+    if (was && add) {
+      this.remove(this.selected.get(mark));
+      this.selected.delete(mark);
+    } else if (!this.selected.has(mark)) {
+      this.selected.set(mark, this.line(mark.points, { color: "halo", width: mark.pen.width, style: "solid" }));
+    }
+  }
+
+  unselect() {
+    for (const halo of this.selected.values()) this.remove(halo);
+    this.selected.clear();
+  }
+
+  // Deletes the lines picked out.
+  deleteSelected() {
+    if (!this.selected.size) return;
+    this.save();
+    this.kept = this.kept.filter((mark) => {
+      if (!this.selected.has(mark)) return true;
+      this.remove(mark.line);
+      return false;
+    });
+    this.unselect();
     this.version++;
   }
 
@@ -197,7 +234,7 @@ export class Marks {
   tick(dt, width, height, above, ftPerPx) {
     const wider = Math.min(MOST_WIDER, Math.max(1, Math.sqrt(above / WIDEN_FT)));
     for (const material of this.materials.values()) {
-      const px = WIDTHS_PX[material.userData.width - 1] * wider;
+      const px = WIDTHS_PX[material.userData.width - 1] * wider + (material.userData.halo ? HALO_PX : 0);
       material.resolution.set(width, height);
       material.linewidth = px;
       const dash = STYLES[material.userData.style];
@@ -206,5 +243,6 @@ export class Marks {
     if ((this.since += dt) < LIFT_EVERY_S) return;
     this.since = 0;
     for (const { points, line } of this.kept) this.place(line, points);
+    for (const [{ points }, halo] of this.selected) this.place(halo, points);
   }
 }
