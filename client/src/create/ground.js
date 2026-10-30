@@ -215,7 +215,7 @@ export class Renditions {
         continue;
       }
       // Only what the file holds, not what's kept for drawing.
-      const tiles = new Map([...plate.tiles].map(([index, { heights, terrain, slots }]) => [index, { heights, terrain, slots }]));
+      const tiles = new Map([...plate.tiles].map(([index, { heights, terrain, slots, water }]) => [index, { heights, terrain, slots, water }]));
       writing.push(this.write("plate", { coords: [px, pz], palette: plate.palette, tiles }).then((bytes) => files.set(platePath(continent, [px, pz]), bytes)));
     }
     for (const key of platters) {
