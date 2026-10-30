@@ -5,6 +5,7 @@ import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
 import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { BIOME_NAMES } from "../v2/biomes.js";
+import { waterPath } from "../v2/water.js";
 import { BIOMES, biomesPath } from "./biomes.js";
 import { Builder } from "./builder.js";
 import { Compass, facing } from "./compass.js";
@@ -101,10 +102,11 @@ function readWorld(bytes, changes = new Map()) {
 
 // Saves the world as a zip, its moved ground in. Its files are gzipped already, so the zip stores
 // them as they are.
-function download({ name, files, continent, renditions }, planning, biomes) {
+function download({ name, files, continent, renditions }, planning, biomes, water) {
   const out = new Map(files);
   out.set(planningPath(continent), strToU8(`${JSON.stringify(planning)}\n`));
   out.set(biomesPath(continent), strToU8(`${JSON.stringify(biomes)}\n`));
+  out.set(waterPath(continent), strToU8(`${JSON.stringify(water)}\n`));
   for (const [path, bytes] of renditions.changedFiles(continent)) {
     if (bytes) out.set(path, bytes);
     else out.delete(path);
@@ -119,7 +121,7 @@ function download({ name, files, continent, renditions }, planning, biomes) {
 
 function start(world, changes) {
   const { name, continent, renditions } = world;
-  $("downloadWorld").addEventListener("click", () => download(world, tools.marks.toJSON(), tools.biomes.toJSON()));
+  $("downloadWorld").addEventListener("click", () => download(world, tools.marks.toJSON(), tools.biomes.toJSON(), water));
   $("open").hidden = true;
   $("worldName").textContent = name;
   const canvas = $("view");
@@ -188,6 +190,10 @@ function start(world, changes) {
   // Plate files are baked with the biomes, again where they change.
   renditions.setBiomes(tools.biomes.toJSON().areas, false);
   let biomesBaked = tools.biomes.version;
+  // And with the water's bodies.
+  const waterFile = world.files.get(waterPath(continent));
+  const water = waterFile ? JSON.parse(strFromU8(waterFile)) : { version: 1, bodies: [] };
+  renditions.setWater(water.bodies, false);
 
   const resize = () => {
     const { clientWidth: w, clientHeight: h } = canvas;
@@ -285,6 +291,7 @@ function start(world, changes) {
           for (const [path, bytes] of files) changes.set(path, bytes);
           changes.set(planningPath(continent), strToU8(`${JSON.stringify(tools.marks.toJSON())}\n`));
           changes.set(biomesPath(continent), strToU8(`${JSON.stringify(tools.biomes.toJSON())}\n`));
+          changes.set(waterPath(continent), strToU8(`${JSON.stringify(water)}\n`));
           await store.set("changes", changes);
           [marksSaved, biomesSaved] = [version, biomesVersion];
         })

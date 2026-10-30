@@ -121,6 +121,15 @@ describe("raising the ground", () => {
     expect(world().changedFiles("main").size).toBe(0);
   });
 
+  it("bakes water into the plates its bodies change", () => {
+    const renditions = world();
+    const pond = { type: "pond", level: 1000, points: [[10, 10], [50, 10], [50, 50], [10, 50]] };
+    expect([...renditions.setWater([pond])]).toEqual(["0,0"]);
+    const { water } = decodePlate(renditions.changedFiles("main").get("places/continents/main/plates/0_0.plate")).tiles.get(0);
+    expect(water.level[4 * 64 + 4]).toBe(1000);
+    expect(Number.isNaN(water.level[0])).toBe(true);
+  });
+
   it("moves plate files read later by what was kept", () => {
     const renditions = world();
     // up() everywhere west and north of (64, 64), the ring of corners round the tile too.

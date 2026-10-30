@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
+import { WaterMap, bakeWater, changedWaterBoxes } from "../v2/water.js";
 import { PATTERNS, look, painted, slopeOf } from "../v2/look.js";
 import { makeSlots } from "../v2/slots.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate, platePath, tileIndexInPlate } from "../v2/plate.js";
@@ -64,6 +65,8 @@ export class Renditions {
     this.biomes = new BiomeMap(); // and which biome is where from them, baked into plate files saved
     this.biomeCells = new Map(); // "tx,tz" -> its cells' biomes, worked out as they're wanted
     this.looks = 0; // counts changes to the biomes, to tell when what ground looks like is stale
+    this.waterBodies = []; // the water's bodies, as water.json keeps them
+    this.water = new WaterMap(); // and the water from them, baked into plate files saved
   }
 
   // Tile (tx, tz)'s cells' biomes, 64 × 64 indexes into BIOME_NAMES.
@@ -82,8 +85,23 @@ export class Renditions {
     this.biomeCells.clear();
     this.looks++;
     this.worker?.postMessage({ biomes: areas });
+    return dirty ? this.markBoxes(boxes) : new Set();
+  }
+
+  // Takes the water's bodies, and with `dirty`, marks the plates where the water changed, to save
+  // again. Gives their "px,pz".
+  setWater(bodies, dirty = true) {
+    const boxes = changedWaterBoxes(this.waterBodies, bodies);
+    this.waterBodies = bodies;
+    this.water = new WaterMap(bodies);
+    this.worker?.postMessage({ water: bodies });
+    return dirty ? this.markBoxes(boxes) : new Set();
+  }
+
+  // Marks the plates `boxes` ([x0, z0, x1, z1]) touch, that have ground, to save again. Gives
+  // their "px,pz".
+  markBoxes(boxes) {
     const marked = new Set();
-    if (!dirty) return marked;
     for (const [x0, z0, x1, z1] of boxes) {
       for (let pz = Math.floor(z0 / PLATE_FT); pz <= Math.floor(z1 / PLATE_FT); pz++) {
         for (let px = Math.floor(x0 / PLATE_FT); px <= Math.floor(x1 / PLATE_FT); px++) {
@@ -190,7 +208,7 @@ export class Renditions {
       const [px, pz] = key.split(",").map(Number);
       platters.add(platterOfPlate(px, pz).join(","));
       const plate = this.decoded.get(key) ?? this.readNow(key);
-      files.set(platePath(continent, [px, pz]), plate?.tiles.size ? encodePlate(bakePlate({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles }, this.biomes)) : null);
+      files.set(platePath(continent, [px, pz]), plate?.tiles.size ? encodePlate(this.bake({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles })) : null);
     }
     for (const key of platters) {
       const platter = this.platters.get(key);
@@ -233,7 +251,7 @@ export class Renditions {
 
   // Writes a plate or platter file (`kind`) on the worker, or here where there are no workers.
   write(kind, value) {
-    if (typeof Worker === "undefined") return Promise.resolve(kind === "plate" ? encodePlate(bakePlate(value, this.biomes)) : encodePlatter(value));
+    if (typeof Worker === "undefined") return Promise.resolve(kind === "plate" ? encodePlate(this.bake(value)) : encodePlatter(value));
     this.startWorker();
     const id = this.writes.size ? Math.max(...this.writes.keys()) + 1 : 1;
     return new Promise((resolve) => {
@@ -242,10 +260,16 @@ export class Renditions {
     });
   }
 
+  // Plate `plate` with its biomes and water baked in.
+  bake(plate) {
+    return bakeWater(bakePlate(plate, this.biomes), this.water);
+  }
+
   startWorker() {
     if (this.worker) return;
     this.worker = new Worker(new URL("./plateWorker.js", import.meta.url), { type: "module" });
     this.worker.postMessage({ biomes: this.biomeAreas });
+    this.worker.postMessage({ water: this.waterBodies });
     this.worker.onmessage = ({ data }) => {
       if (data.id === undefined) return this.done(data);
       this.writes.get(data.id)(data.bytes);
