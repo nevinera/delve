@@ -90,7 +90,7 @@ describe("courses", () => {
     const track = trackOf(course.points, 2);
     const at = (t) => {
       const k = track.t.findIndex((v) => v >= t);
-      return flowOf(course, track.x[k], track.z[k]);
+      return flowOf(course, track.x[k], track.z[k]).flow;
     };
     const [level, fall] = [at(100), at(400)];
     expect(level[0]).toBeGreaterThan(0);

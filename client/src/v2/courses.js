@@ -1,3 +1,5 @@
+import { fbm } from "../world/noise.js";
+
 // Courses: streams and rivers, drawn by hand as lines running downstream and kept with the bodies
 // in each continent's water.json (water.js). A course is
 //
@@ -30,6 +32,10 @@ const POOL_WIDTHS = 2.5; // how far below a fall, in widths, its plunge pool rea
 const POOL_DEEP = 0.3; // how much deeper its pool is than the course, as a share of how far it falls
 const POOL_DEEP_FT = 12; // at most
 const POOL_WIDE = 0.5; // how much wider, as a share of the course's width
+const POOL_WALL = 0.25; // how steep its walls are, as a share of a bank's run, at its foot
+const POOL_JAG_FT = [2.5, 1]; // how far its walls and its bed are broken up, either way, at its foot
+const POOL_JAG_WAVE_FT = 7;
+const SEED = 0x636f7572;
 const MOUTH_GRADE = 0.25; // how steeply, ft a foot, a course at most falls to the water it runs into
 const TRACK_STEP_FT = 4; // how far apart its track's points are
 const MEANDER = 1.2; // how far its track wanders either side of its line, in widths
@@ -235,7 +241,7 @@ export function profile(points, groundAt, stillAt = () => null, seed = 0) {
 // What a course makes of the ground at (x, z): { top, the highest the ground's left there, levee,
 // the lowest it's built up to on its banks, level, the water's surface, and wet, whether that's
 // within its water }, or null where its channel doesn't reach. Its bed's deepest toward the
-// outside of a bend, and its bank's steeper there. Its levee's a little over its water out to
+// outside of a bend, and its bank's steeper there, and under a fall, steep and broken up. Its levee's a little over its water out to
 // LEVEE_TOP_FT past its edge, falling away from there as steeply as its bank rises.
 export function shape(course, x, z) {
   if (!course.surface?.length) return null;
@@ -245,7 +251,8 @@ export function shape(course, x, z) {
   const level = levelAt(course, near.t);
   // Below a fall, its plunge pool, deepest and widest at its foot.
   const pool = poolAt(course, near.t, near.width);
-  const half = (near.width / 2) * (1 + POOL_WIDE * pool.share);
+  const jag = pool.share ? fbm(x, z, SEED, { wavelength: POOL_JAG_WAVE_FT, octaves: 2 }) * pool.share : 0;
+  const half = (near.width / 2) * (1 + POOL_WIDE * pool.share * (1 + jag));
   const out = near.d - half;
   if (out > BANK_FT) return null;
   // Its deepest line, toward the outside: right of its middle when it turns left.
@@ -253,8 +260,9 @@ export function shape(course, x, z) {
   const across = near.side >= deepest ? (near.side - deepest) / (half - deepest) : (deepest - near.side) / (half + deepest);
   const bed = Math.max(0, 1 - across * across) * (depthOf(course.type, near.width) * near.depth + pool.deeper);
   const outside = near.side * near.bend < 0;
-  const run = BANK_RUN * (outside ? 1 - 0.6 * Math.abs(near.bend) : 1 + 2 * Math.abs(near.bend));
-  const top = out <= 0 ? level - bed : level + out / run;
+  // Rocky and steep round a plunge pool.
+  const run = BANK_RUN * (outside ? 1 - 0.6 * Math.abs(near.bend) : 1 + 2 * Math.abs(near.bend)) * (1 - (1 - POOL_WALL) * pool.share);
+  const top = (out <= 0 ? level - bed : level + out / run) + jag * POOL_JAG_FT[out <= 0 ? 1 : 0];
   const levee = out <= 0 ? -Infinity : level + LEVEE_OVER_FT - Math.max(0, out - LEVEE_TOP_FT) / run;
   return { top, levee, level, wet: out <= MARGIN_FT };
 }
@@ -263,16 +271,20 @@ const SPEEDS = { stream: 1.5, river: 2.5 }; // how fast courses run on the level
 const SPEED_PER_SLOPE = 40; // and how much faster for each foot they fall a foot
 const SPEED_MAX = 14;
 
-// How a course's water runs at (x, z): [x and z ft/s, and how steep it is there, the root of its
-// fall a foot], slower toward its banks, or null where it's not in its water.
+// How a course's water runs at (x, z): { flow, [x and z ft/s, and how steep it is there, the root
+// of its fall a foot], slower toward its banks, level, its surface there, and d, how far that is
+// from its track }, or null where it's not in its water.
 export function flowOf(course, x, z) {
   if (!course.surface?.length) return null;
   const near = onTrack(trackOf(course.points, course.seed ?? 0), x, z, reachOf(course));
   if (!near || near.d > near.width / 2 + MARGIN_FT + 4) return null;
-  const slope = Math.max(0, (levelAt(course, near.t - SURFACE_STEP_FT) - levelAt(course, near.t + SURFACE_STEP_FT)) / (2 * SURFACE_STEP_FT));
+  // Its slope there, but for its falls, whose foam's drawn with them.
+  const [a, b] = [near.t - SURFACE_STEP_FT, near.t + SURFACE_STEP_FT];
+  const dropped = fallsOf(course).reduce((sum, fall) => sum + (fall.t >= a && fall.t < b ? fall.top - fall.bottom : 0), 0);
+  const slope = Math.max(0, (levelAt(course, a) - levelAt(course, b) - dropped) / (2 * SURFACE_STEP_FT));
   const middle = Math.max(0.3, 1 - (near.d / (near.width / 2 + MARGIN_FT)) ** 2);
   const speed = Math.min(SPEED_MAX, SPEEDS[course.type] + SPEED_PER_SLOPE * slope) * middle;
-  return [near.along[0] * speed, near.along[1] * speed, Math.sqrt(slope)];
+  return { flow: [near.along[0] * speed, near.along[1] * speed, Math.sqrt(slope)], level: levelAt(course, near.t), d: near.d };
 }
 
 const falls = new WeakMap(); // surface -> its course's falls

@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { setWaterTime, waterMaterial } from "../editor/waterMaterial.js";
 import { WATER_TYPES } from "../v2/water.js";
-import { COURSE_TYPES, courseBox, flowOf } from "../v2/courses.js";
+import { courseBox, flowOf } from "../v2/courses.js";
+import { RUNNING } from "../v2/look.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 
 // The water's surface (v2/water.js) on the tiles round the builder whose ground's drawn from their
@@ -17,6 +18,7 @@ const COARSE = 2; // ground.js's tier drawn from tiles' renditions
 const LOOK_S = 0.25; // how often what's drawn is looked over
 const CELLS = TILE_FT / CELL_FT;
 const CORNERS = CELLS + 1;
+const LIP_FT = 3; // a course's water this much higher or lower than a cell's is over a fall from it
 const STEP_FT = 1.5; // water this much higher or lower than a cell's isn't smoothed into it
 const DEEP_FT = 1; // water this deep at each corner of a run of cells is drawn as one quad
 export const SHORE_FADE_FT = 0.25; // how deep the water is where it's no longer faded at its shore
@@ -116,9 +118,14 @@ export class WaterSurfaces {
       }
     }
     if (!any) return [];
-    // Each corner's level, for a cell at level l: the average of the wet cells' round it within
-    // STEP_FT of l, so a sloping course's water is one surface, not steps, but a fall's lip stays one.
-    const cornerOf = (ci, cj, l) => {
+    const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];
+    const running = this.running(tx, tz);
+    // Each corner's level, for a cell at level l of type `kind`: a course's, from the course,
+    // straight down it, where that's within LIP_FT of l, so cells either side of a fall's lip each
+    // keep to their own side; else the average of the wet cells' round it within STEP_FT of l.
+    const cornerOf = (ci, cj, l, kind) => {
+      const c = (cj * CORNERS + ci) * 4;
+      if (running && RUNNING[kind] && !Number.isNaN(running[c + 3])) return Math.abs(running[c + 3] - l) <= LIP_FT ? running[c + 3] : l;
       let [sum, n] = [0, 0];
       for (const [i, j] of [[ci - 1, cj - 1], [ci, cj - 1], [ci - 1, cj], [ci, cj]]) {
         const [v] = levelAt(i, j);
@@ -128,10 +135,8 @@ export class WaterSurfaces {
     };
     // Quads along each row: deep runs at one level and type as one.
     const byType = WATER_TYPES.map(() => ({ positions: [], depths: [], flow: [] }));
-    const deep = (i, j, l) => l - heights[j * CORNERS + i] >= DEEP_FT && cornerOf(i, j, l) === l;
-    const deepCell = (i, j, l) => deep(i, j, l) && deep(i + 1, j, l) && deep(i, j + 1, l) && deep(i + 1, j + 1, l);
-    const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];
-    const flows = this.flows(tx, tz, levelAt);
+    const deep = (i, j, l, kind) => l - heights[j * CORNERS + i] >= DEEP_FT && cornerOf(i, j, l, kind) === l;
+    const deepCell = (i, j, l, kind) => deep(i, j, l, kind) && deep(i + 1, j, l, kind) && deep(i, j + 1, l, kind) && deep(i + 1, j + 1, l, kind);
     for (let j = 0; j < CELLS; j++) {
       for (let i = 0; i < CELLS; ) {
         const k = j * CELLS + i;
@@ -141,16 +146,17 @@ export class WaterSurfaces {
           continue;
         }
         let end = i + 1;
-        if (deepCell(i, j, l)) while (end < CELLS && level[j * CELLS + end] === l && type[j * CELLS + end] === type[k] && deepCell(end, j, l)) end++;
+        if (deepCell(i, j, l, type[k])) while (end < CELLS && level[j * CELLS + end] === l && type[j * CELLS + end] === type[k] && deepCell(end, j, l, type[k])) end++;
         // Running water's drawn a cell at a time, for its flow at each corner.
-        if (flows) end = i + 1;
+        if (running) end = i + 1;
         const { positions, depths, flow } = byType[type[k]];
         const corner = (ci, cj) => {
-          const at = cornerOf(ci, cj, l);
+          const at = cornerOf(ci, cj, l, type[k]);
           positions.push(x0 + ci * CELL_FT, at, z0 + cj * CELL_FT);
           depths.push(at - heights[cj * CORNERS + ci]);
-          const c = (cj * CORNERS + ci) * 3;
-          flow.push(flows?.[c] ?? 0, flows?.[c + 1] ?? 0, flows?.[c + 2] ?? 0);
+          const c = (cj * CORNERS + ci) * 4;
+          const runs = running && RUNNING[type[k]] && !Number.isNaN(running[c]);
+          flow.push(runs ? running[c] : 0, runs ? running[c + 1] : 0, runs ? running[c + 2] : 0);
         };
         for (const [ci, cj] of [[i, j], [i, j + 1], [end, j], [end, j], [i, j + 1], [end, j + 1]]) corner(ci, cj);
         i = end;
@@ -169,28 +175,27 @@ export class WaterSurfaces {
     });
   }
 
-  // How the water runs at each of tile (tx, tz)'s corners next to a course's water, as flowOf has
-  // it, 3 numbers a corner, from the course nearest; or null where none's in the tile.
-  flows(tx, tz, levelAt) {
+  // How the water runs at each of tile (tx, tz)'s corners near a course's water, and its surface
+  // there, as flowOf has them, from the course nearest: 4 numbers a corner, the flow's 3 and the
+  // level, NaN where none's near; or null where no course is near the tile.
+  running(tx, tz) {
     const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];
     const near = (this.renditions.waterFile?.courses ?? []).filter((course) => {
       const b = courseBox(course);
       return b[0] <= x0 + TILE_FT && b[2] >= x0 && b[1] <= z0 + TILE_FT && b[3] >= z0;
     });
     if (!near.length) return null;
-    const running = new Set(COURSE_TYPES.map((type) => WATER_TYPES.indexOf(type)));
-    const out = new Float32Array(CORNERS * CORNERS * 3);
+    const out = new Float32Array(CORNERS * CORNERS * 4).fill(NaN);
     let any = false;
     for (let cj = 0; cj < CORNERS; cj++) {
       for (let ci = 0; ci < CORNERS; ci++) {
-        if (![[ci - 1, cj - 1], [ci, cj - 1], [ci - 1, cj], [ci, cj]].some(([i, j]) => running.has(levelAt(i, j)[1]) && !Number.isNaN(levelAt(i, j)[0]))) continue;
         let best = null;
         for (const course of near) {
-          const flow = flowOf(course, x0 + ci * CELL_FT, z0 + cj * CELL_FT);
-          if (flow && (!best || Math.hypot(flow[0], flow[1]) > Math.hypot(best[0], best[1]))) best = flow;
+          const found = flowOf(course, x0 + ci * CELL_FT, z0 + cj * CELL_FT);
+          if (found && (!best || found.d < best.d)) best = found;
         }
         if (!best) continue;
-        out.set(best, (cj * CORNERS + ci) * 3);
+        out.set([...best.flow, best.level], (cj * CORNERS + ci) * 4);
         any = true;
       }
     }

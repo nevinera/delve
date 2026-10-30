@@ -7,6 +7,9 @@ import { waterTime } from "./waterMaterial.js";
 
 // The curtain bulges out from the lip `bulge` of the way to where it lands.
 const CURTAIN = { bulge: 0.2, segments: 14, spread: 1.15, narrow: 0.9, liftFt: 1, speedFtS: 26, streakFt: [5, 34] };
+// A second, thinner curtain behind the first, this far back toward the cliff and this much as wide,
+// its streams elsewhere.
+const BACK = { ft: 0.8, wide: 0.75, shift: 37 };
 const FOAM = { reach: 1.4, liftFt: 0.4, segments: 24, rings: 6 };
 const MIST = { puffs: 14, sizeFt: 30, riseFt: [12, 45], cycleS: 7 };
 
@@ -21,7 +24,12 @@ export function waterfallMeshes(falls, origin, renderer) {
     const [top, bottom] = [at(fall.top), at(fall.bottom)];
     const mist = new THREE.Points(mistGeometry(fall, bottom), materials.mist);
     mist.frustumCulled = false;
-    const meshes = [new THREE.Mesh(curtainGeometry(fall, top, bottom), materials.curtain), new THREE.Mesh(foamGeometry(fall, bottom), materials.foam), mist];
+    const meshes = [
+      new THREE.Mesh(curtainGeometry(fall, top, bottom, BACK), materials.curtain),
+      new THREE.Mesh(curtainGeometry(fall, top, bottom), materials.curtain),
+      new THREE.Mesh(foamGeometry(fall, bottom), materials.foam),
+      mist,
+    ];
     // Drawn after the water, which is see-through too, so the water's surface hides only what's
     // really under it.
     for (const mesh of meshes) mesh.renderOrder = 1;
@@ -30,11 +38,16 @@ export function waterfallMeshes(falls, origin, renderer) {
 }
 
 // The curtain: a strip along a curve that leaves the lip level and drops to the landing, a little
-// wider at the bottom. `fallUv` runs across it and down it, in ft.
-function curtainGeometry(fall, top, bottom) {
+// wider at the bottom. `fallUv` runs across it and down it, in ft, then across it from -1 to 1 and
+// down it from 0 to 1. With `back`, it's BACK's curtain behind.
+function curtainGeometry(fall, top, bottom, back = null) {
   const ahead = new THREE.Vector3(bottom.x - top.x, 0, bottom.z - top.z);
   if (ahead.lengthSq() < 1e-6) ahead.set(1, 0, 0);
   const side = new THREE.Vector3(-ahead.z, 0, ahead.x).normalize();
+  if (back) {
+    const toward = ahead.clone().normalize().multiplyScalar(-back.ft);
+    [top, bottom] = [top.clone().add(toward), bottom.clone().add(toward)];
+  }
   // Out over the drop at the lip's height, then down: a quadratic curve.
   const control = new THREE.Vector3().lerpVectors(top, bottom, CURTAIN.bulge).setY(top.y);
   const curve = new THREE.QuadraticBezierCurve3(top.clone().setY(top.y + CURTAIN.liftFt), control, bottom);
@@ -44,10 +57,10 @@ function curtainGeometry(fall, top, bottom) {
   let down = 0;
   points.forEach((p, k) => {
     if (k) down += p.distanceTo(points[k - 1]);
-    const half = (fall.width / 2) * CURTAIN.narrow * (1 + ((CURTAIN.spread - 1) * k) / CURTAIN.segments);
+    const half = (fall.width / 2) * CURTAIN.narrow * (back?.wide ?? 1) * (1 + ((CURTAIN.spread - 1) * k) / CURTAIN.segments);
     for (const s of [-1, 1]) {
       positions.push(p.x + side.x * half * s, p.y, p.z + side.z * half * s);
-      uvs.push(half * s, down);
+      uvs.push(half * s + (back?.shift ?? 0), down, s, k / CURTAIN.segments);
     }
   });
   const indices = [];
@@ -57,7 +70,7 @@ function curtainGeometry(fall, top, bottom) {
   }
   const g = new THREE.BufferGeometry();
   g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-  g.setAttribute("fallUv", new THREE.Float32BufferAttribute(uvs, 2));
+  g.setAttribute("fallUv", new THREE.Float32BufferAttribute(uvs, 4));
   g.setIndex(indices);
   g.computeVertexNormals();
   return g;
@@ -119,19 +132,28 @@ function makeMaterials(renderer) {
   curtain.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, { waterNoise: { value: noise }, waterTime });
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute vec2 fallUv;\nvarying vec2 vFallUv;")
+      .replace("#include <common>", "#include <common>\nattribute vec4 fallUv;\nvarying vec4 vFallUv;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFallUv = fallUv;");
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nuniform sampler2D waterNoise;\nuniform float waterTime;\nvarying vec2 vFallUv;")
+      .replace("#include <common>", "#include <common>\nuniform sampler2D waterNoise;\nuniform float waterTime;\nvarying vec4 vFallUv;")
       .replace(
         "#include <color_fragment>",
         `#include <color_fragment>
         float down = vFallUv.y - waterTime * ${f(CURTAIN.speedFtS)};
         float streak = texture2D(waterNoise, vec2(vFallUv.x / ${f(CURTAIN.streakFt[0])}, down / ${f(CURTAIN.streakFt[1])})).g;
         float speck = texture2D(waterNoise, vec2(vFallUv.x / 3.0, down / 9.0) + 0.41).r;
-        float white = smoothstep(0.38, 0.62, 0.7 * streak + 0.3 * speck);
-        diffuseColor.rgb = mix(vec3(0.36, 0.55, 0.72), diffuseColor.rgb, 0.35 + 0.65 * white);
-        diffuseColor.a *= 0.55 + 0.45 * white;`,
+        // Streams of water, with gaps between, that drift slowly across, and fray toward the foot.
+        float strands = texture2D(waterNoise, vec2(vFallUv.x / 2.3 + waterTime * 0.02, vFallUv.y / 70.0 + 0.13)).r;
+        float fine = texture2D(waterNoise, vec2(vFallUv.x / 0.8 + 0.3, down / 22.0)).g;
+        float foot = smoothstep(0.55, 1.0, vFallUv.w);
+        float glassy = 1.0 - smoothstep(0.0, 0.12, vFallUv.w);
+        float body = max(glassy, smoothstep(0.3 + 0.15 * foot, 0.52 + 0.1 * foot, 0.65 * strands + 0.35 * fine));
+        // Ragged at its edges.
+        float edge = 1.0 - smoothstep(0.5 + 0.35 * (fine - 0.5), 1.0, abs(vFallUv.z));
+        float white = max(smoothstep(0.38, 0.62, 0.7 * streak + 0.3 * speck), foot * 0.7 + 0.3 * foot * speck);
+        white *= 1.0 - 0.7 * glassy;
+        diffuseColor.rgb = mix(vec3(0.3, 0.48, 0.64), diffuseColor.rgb, 0.3 + 0.7 * white);
+        diffuseColor.a *= (0.4 + 0.6 * white) * body * edge;`,
       );
   };
 
