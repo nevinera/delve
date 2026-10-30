@@ -54,13 +54,14 @@ export class Renditions {
     this.unsaved = new Set(); // the same, since they were last saved (filesFor)
     this.writes = new Map(); // id -> resolve, for files being written on the worker
     this.made = new Map(); // "px,pz" -> indexes in the plate of tiles made where there were none
-    this.tilesMade = 0; // how many tiles have been made, to tell when there are new ones
+    this.cleared = new Map(); // "px,pz" -> indexes in the plate of tiles cleared away
+    this.layout = 0; // counts tiles made and cleared, to tell when which there are has changed
   }
 
   // Makes tile (tx, tz) where there's none, flat sea floor: its rendition, its plate's and platter's
   // when they're missing too, and its cells, put in its plate file as it's read (fill).
   make(tx, tz) {
-    this.tilesMade++;
+    this.layout++;
     const [px, pz] = [Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES)];
     const floor = () => {
       const colors = new Uint8Array(TILE_CHUNKS * TILE_CHUNKS * 3);
@@ -75,12 +76,56 @@ export class Renditions {
     const key = `${px},${pz}`;
     if (!this.made.has(key)) this.made.set(key, new Set());
     this.made.get(key).add(tileIndexInPlate(tx, tz));
+    this.cleared.get(key)?.delete(tileIndexInPlate(tx, tz));
     // Read again, to have the tile's cells.
     this.decoded.delete(key);
   }
 
-  // Puts the tiles made in plate `key` into it, read from its file or made from nothing.
+  // Clears away the tiles whose middles are within `radius` ft of (x, z), and the one there, back to
+  // empty sea, with their plates and platters where they're left with none. Gives the "px,pz" of
+  // the plates they were in.
+  clear(x, z, radius) {
+    const moved = new Set();
+    for (let tz = Math.floor((z - radius) / TILE_FT); tz <= Math.floor((z + radius) / TILE_FT); tz++) {
+      for (let tx = Math.floor((x - radius) / TILE_FT); tx <= Math.floor((x + radius) / TILE_FT); tx++) {
+        const under = tx === Math.floor(x / TILE_FT) && tz === Math.floor(z / TILE_FT);
+        if (!this.tile(tx, tz) || (!under && Math.hypot((tx + 0.5) * TILE_FT - x, (tz + 0.5) * TILE_FT - z) > radius)) continue;
+        const [px, pz] = [Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES)];
+        const key = `${px},${pz}`;
+        const index = tileIndexInPlate(tx, tz);
+        this.platters.get(platterOf(tx, tz).join(",")).tiles.delete(indexIn(tx, tz));
+        if (!this.cleared.has(key)) this.cleared.set(key, new Set());
+        this.cleared.get(key).add(index);
+        this.made.get(key)?.delete(index);
+        this.offsets[CELLS].delete(`${tx},${tz}`);
+        this.offsets[CHUNKS].delete(`${tx},${tz}`);
+        this.decoded.get(key)?.tiles.delete(index);
+        moved.add(key);
+      }
+    }
+    for (const key of moved) {
+      const [px, pz] = key.split(",").map(Number);
+      let left = false;
+      for (let j = 0; j < PLATE_TILES && !left; j++) for (let i = 0; i < PLATE_TILES && !left; i++) left = Boolean(this.tile(px * PLATE_TILES + i, pz * PLATE_TILES + j));
+      if (left) continue;
+      const platterKey = platterOfPlate(px, pz).join(",");
+      const platter = this.platters.get(platterKey);
+      platter.plates.delete(plateIndexIn(px, pz));
+      this.offsets[TILES].delete(key);
+      if (!platter.tiles.size) this.platters.delete(platterKey);
+    }
+    for (const key of moved) {
+      this.changed.add(key);
+      this.unsaved.add(key);
+    }
+    if (moved.size) this.layout++;
+    return moved;
+  }
+
+  // Puts the tiles made in plate `key` into it, read from its file or made from nothing, and takes
+  // out those cleared away.
   fill(key, plate) {
+    for (const index of this.cleared.get(key) ?? []) plate.tiles.delete(index);
     for (const index of this.made.get(key) ?? []) {
       if (plate.tiles.has(index)) continue;
       if (!plate.palette.includes(SEA_FLOOR.terrain)) plate.palette.push(SEA_FLOOR.terrain);
@@ -102,7 +147,7 @@ export class Renditions {
   }
 
   // The files of `continent` whose ground's been moved, path -> bytes: their platters, and their
-  // plate files with the moves in.
+  // plate files with the moves in, or null for those with nothing left in them.
   changedFiles(continent) {
     const files = new Map();
     const platters = new Set();
@@ -110,11 +155,11 @@ export class Renditions {
       const [px, pz] = key.split(",").map(Number);
       platters.add(platterOfPlate(px, pz).join(","));
       const plate = this.decoded.get(key) ?? this.readNow(key);
-      if (plate) files.set(platePath(continent, [px, pz]), encodePlate({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles }));
+      files.set(platePath(continent, [px, pz]), plate?.tiles.size ? encodePlate({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles }) : null);
     }
     for (const key of platters) {
       const platter = this.platters.get(key);
-      files.set(platterPath(continent, platter.coords), encodePlatter(platter));
+      files.set(platterPath(continent, key.split(",").map(Number)), platter ? encodePlatter(platter) : null);
     }
     return files;
   }
@@ -130,12 +175,19 @@ export class Renditions {
       const [px, pz] = key.split(",").map(Number);
       platters.add(platterOfPlate(px, pz).join(","));
       const plate = this.decoded.get(key) ?? this.readNow(key);
-      if (!plate) continue;
+      if (!plate?.tiles.size) {
+        files.set(platePath(continent, [px, pz]), null);
+        continue;
+      }
       // Only what the file holds, not what's kept for drawing.
       const tiles = new Map([...plate.tiles].map(([index, { heights, colors, terrain, forest }]) => [index, { heights, colors, terrain, forest }]));
       writing.push(this.write("plate", { coords: [px, pz], palette: plate.palette, tiles }).then((bytes) => files.set(platePath(continent, [px, pz]), bytes)));
     }
     for (const key of platters) {
+      if (!this.platters.has(key)) {
+        files.set(platterPath(continent, key.split(",").map(Number)), null);
+        continue;
+      }
       const { coords, tiles, plates } = this.platters.get(key);
       const bare = (map) => new Map([...map].map(([index, { heights, colors, hash }]) => [index, { heights, colors, hash }]));
       writing.push(this.write("platter", { coords, tiles: bare(tiles), plates: bare(plates) }).then((bytes) => files.set(platterPath(continent, coords), bytes)));

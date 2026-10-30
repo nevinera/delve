@@ -72,7 +72,8 @@ function readWorld(bytes, changes = new Map()) {
     const top = files[0][0].split("/")[0];
     files = files.map(([path, b]) => [path.slice(top.length + 1), b]);
   }
-  files = [...new Map([...files, ...changes])];
+  // A change of null is a file taken away.
+  files = [...new Map([...files, ...changes])].filter(([, b]) => b);
   const info = JSON.parse(strFromU8(Object.fromEntries(files)["world.json"]));
   if (info.version !== 2) throw new Error(`this is a version ${info.version} world: convert it with script/convert-v2.mjs first`);
   const continent = info.continents[0].key;
@@ -99,7 +100,10 @@ function readWorld(bytes, changes = new Map()) {
 function download({ name, files, continent, renditions }, planning) {
   const out = new Map(files);
   out.set(planningPath(continent), strToU8(`${JSON.stringify(planning)}\n`));
-  for (const [path, bytes] of renditions.changedFiles(continent)) out.set(path, bytes);
+  for (const [path, bytes] of renditions.changedFiles(continent)) {
+    if (bytes) out.set(path, bytes);
+    else out.delete(path);
+  }
   const zip = zipSync(Object.fromEntries([...out].map(([path, bytes]) => [path, [bytes, { level: 0 }]])));
   const link = document.createElement("a");
   link.href = URL.createObjectURL(new Blob([zip], { type: "application/zip" }));

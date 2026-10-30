@@ -180,3 +180,38 @@ describe("raising the empty sea floor", () => {
     expect(decodePlatter(files.get("places/continents/main/platters/0_0.platter")).tiles.get(0).heights[0]).toBe(EMPTY_FT + 30);
   });
 });
+
+describe("clearing the ground away", () => {
+  const up = () => 30;
+
+  it("takes away the tiles in reach, and their plates and platters when they're left with none", () => {
+    const renditions = new Renditions();
+    renditions.raise(up, [0, 0, 600, 100], CELLS); // tiles (0, 0) to (2, 0)
+    expect(renditions.clear(128, 128, 260)).toEqual(new Set(["0,0"]));
+    expect(renditions.tile(0, 0)).toBeNull();
+    expect(renditions.tile(1, 0)).toBeNull();
+    expect(renditions.tile(2, 0)).not.toBeNull();
+    expect(renditions.heightAt(100, 100)).toBeNull();
+    expect(renditions.cells(2, 0)).not.toBeNull();
+    expect(renditions.clear(640, 128, 1)).toEqual(new Set(["0,0"]));
+    expect(renditions.plate(0, 0)).toBeNull();
+    expect(renditions.platters.size).toBe(0);
+    const files = renditions.changedFiles("main");
+    expect(files.get("places/continents/main/plates/0_0.plate")).toBeNull();
+    expect(files.get("places/continents/main/platters/0_0.platter")).toBeNull();
+  });
+
+  it("leaves cleared tiles out of plate files read later, till they're made again", () => {
+    const renditions = new Renditions();
+    renditions.raise(up, [0, 0, 600, 100], CELLS);
+    const files = renditions.changedFiles("main");
+    const fresh = new Renditions();
+    fresh.platters.set("0,0", decodePlatter(files.get("places/continents/main/platters/0_0.platter")));
+    fresh.plateFiles.set("0,0", files.get("places/continents/main/plates/0_0.plate"));
+    fresh.clear(128, 128, 1);
+    fresh.decoded.clear();
+    expect(fresh.readNow("0,0").tiles.has(0)).toBe(false);
+    fresh.raise(up, [0, 0, 64, 64], CELLS);
+    expect(fresh.cells(0, 0)).not.toBeNull();
+  });
+});

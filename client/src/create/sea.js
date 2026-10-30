@@ -58,7 +58,7 @@ export class Sea {
     const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
     if (!this.middle || Math.abs(tx - this.middle[0]) > RECENTER || Math.abs(tz - this.middle[1]) > RECENTER) this.middle = [tx, tz];
     const r = this.renditions;
-    const key = `${this.middle},${r.platters.size},${r.tilesMade}`;
+    const key = `${this.middle},${r.platters.size},${r.layout}`;
     if (key === this.key) return;
     const now = performance.now();
     if (this.key?.startsWith(`${this.middle},${r.platters.size},`) && now - this.made < NEW_TILES_MS) return;

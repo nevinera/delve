@@ -8,15 +8,15 @@ import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 // The tools' sidebar: the type of work and its tools above, the picked tool's settings below. A
 // picked tool takes the left button, and Esc puts it down.
 // - planning's marker: dragging draws a line on the ground (stroke.js, marks.js).
-// - geo's brushes, raise and lower, flatten and smooth: dragging on the ground works them where the
-//   pointer is, and a ring on the ground shows where they reach. [ and ] resize them, and c and v
-//   turn raise and lower's, shift+c and shift+v a little.
+// - geo's brushes, raise and lower, flatten, smooth and clear: dragging on the ground works them
+//   where the pointer is, and a ring on the ground shows where they reach. [ and ] resize them, and
+//   c and v turn raise and lower's, shift+c and shift+v a little.
 
 const MIN_RADIUS_FT = 16;
 const MAX_RADIUS_FT = 16000;
 const RING_POINTS = 96;
 const PICK_FT = 30000; // how far off the pointer finds the ground
-const BRUSHES = new Set(["raise", "flatten", "smooth"]);
+const BRUSHES = new Set(["raise", "flatten", "smooth", "clear"]);
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
 
@@ -149,6 +149,7 @@ export class Tools {
     this.toolButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tool === tool)));
     for (const panel of document.querySelectorAll("[data-config]")) panel.hidden = !panel.dataset.config.split(" ").includes(tool ?? "none");
     for (const part of document.querySelectorAll("[data-only]")) part.hidden = part.dataset.only !== tool;
+    for (const part of document.querySelectorAll("[data-not]")) part.hidden = part.dataset.not === tool;
     this.showAngle();
     this.builder.paints = Boolean(tool);
     this.stroke = null;
@@ -237,7 +238,13 @@ export class Tools {
     this.ring.visible = Boolean(at);
     if (!at) return;
     const [x, , z] = at;
-    if (this.stroke && dt > 0 && (this.tool === "raise" || this.stroke.from !== null)) {
+    if (this.stroke && dt > 0 && this.tool === "clear") {
+      const cleared = this.renditions.clear(x, z, this.settings.radius);
+      if (cleared.size) {
+        this.ground.stale = true;
+        this.ground.refresh(cleared);
+      }
+    } else if (this.stroke && dt > 0 && (this.tool === "raise" || this.stroke.from !== null)) {
       const lower = this.settings.lower !== this.stroke.invert;
       const groundAt = (px, pz) => this.renditions.heightAt(px, pz) ?? EMPTY_FT;
       const brush = this.tool === "raise" ? raiseBrush({ ...this.settings, lower }, x, z, dt) : pullBrush(this.tool, this.settings, x, z, dt, groundAt, this.stroke.from);

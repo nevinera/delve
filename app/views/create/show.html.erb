@@ -37,6 +37,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 14 C 14 6, 34 6, 46 14 L46 22 Z" fill="#c8b48a"/></svg>
         <span>smooth</span>
       </button>
+      <button type="button" data-tool="clear" aria-pressed="false" title="clear the ground away, back to empty sea">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 14 C 6 8, 10 12, 14 10 L14 22 Z M34 10 C 38 12, 42 8, 46 14 L46 22 L34 22 Z" fill="#c8b48a"/><path d="M14 22 L14 18 L34 18 L34 22 Z" fill="#2e608c"/></svg>
+        <span>clear</span>
+      </button>
     </div>
   </section>
   <section class="create-config">
@@ -52,7 +56,7 @@
       </div>
       <p class="create-note">Lines are kept with the world when you download it.</p>
     </div>
-    <div data-config="raise flatten smooth" hidden>
+    <div data-config="raise flatten smooth clear" hidden>
       <div class="create-shapes" role="group" aria-label="shape" data-only="raise">
         <button type="button" data-shape="round" aria-pressed="true" title="round"><canvas width="32" height="20" data-shape="round"></canvas></button>
         <button type="button" data-shape="steep" aria-pressed="false" title="steep sides"><canvas width="32" height="20" data-shape="steep"></canvas></button>
@@ -64,7 +68,7 @@
       <label>size <output id="brushSizeOut"></output>
         <input id="brushSize" type="range" min="0" max="1000" value="400">
       </label>
-      <label>strength <output id="brushStrengthOut"></output>
+      <label data-not="clear">strength <output id="brushStrengthOut"></output>
         <input id="brushStrength" type="range" min="1" max="100" value="20">
       </label>
       <label id="brushAngleRow" hidden>angle <output id="brushAngleOut"></output>
@@ -80,6 +84,7 @@
       <p class="create-note" data-only="raise">Drag on the ground. Ctrl or cmd does the other way. [ and ] resize. c and v turn, with shift a little. Esc puts the tool down.</p>
       <p class="create-note" data-only="flatten">Drag to pull the ground toward the height where you began. [ and ] resize. Esc puts the tool down.</p>
       <p class="create-note" data-only="smooth">Drag to even the ground out. [ and ] resize. Esc puts the tool down.</p>
+      <p class="create-note" data-only="clear">Drag to clear tiles away, back to empty sea: each tile whose middle is in the ring. [ and ] resize. Esc puts the tool down.</p>
     </div>
   </section>
 </aside>
@@ -117,7 +122,7 @@
   <dl>
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground</dd>
-    <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it and smooth it</dd>
+    <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, and clear it away</dd>
   </dl>
 </div>
 <div id="open" hidden>
