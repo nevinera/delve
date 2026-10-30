@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BIOME_NAMES, BiomeMap, REACH_FT, changedBoxes, inside } from "./biomes.js";
+import { BIOME_NAMES, BiomeMap, REACH_FT, WARP_FT, changedBoxes, inside } from "./biomes.js";
 
 const square = (x0, z0, side) => [[x0, z0], [x0 + side, z0], [x0 + side, z0 + side], [x0, z0 + side]];
 const name = (map, x, z) => BIOME_NAMES[map.at(x, z)];
@@ -30,29 +30,36 @@ describe("BiomeMap", () => {
   });
 
   it("is the area on top inside them", () => {
-    expect(name(map, 100, 100)).toBe("forest");
-    expect(name(map, 700, 700)).toBe("rocky");
+    expect(name(map, 100, 1800)).toBe("forest");
+    expect(name(map, 750, 750)).toBe("rocky");
   });
 
   it("is the nearest edge's area within a quarter mile, outside them", () => {
-    expect(name(map, 1000, -REACH_FT + 10)).toBe("forest");
-    expect(name(map, 2900, 500)).toBe("forest");
-    expect(name(map, 3100, 500)).toBe("swamp");
+    expect(name(map, 1000, -REACH_FT + WARP_FT + 10)).toBe("forest");
+    expect(name(map, 2600, 500)).toBe("forest");
+    expect(name(map, 3400, 500)).toBe("swamp");
   });
 
   it("is plains past a quarter mile", () => {
-    expect(name(map, 1000, -REACH_FT - 10)).toBe("plains");
+    expect(name(map, 1000, -REACH_FT - WARP_FT - 10)).toBe("plains");
   });
 
-  it("works out a tile's cells", () => {
-    // Tile 7, 0 runs from 1792 to 2048 east: forest, then out past the edge, still forest.
-    const cells = new BiomeMap([{ biome: "forest", points: square(0, 0, 2000) }]).tile(7, 0);
-    expect(new Set(cells)).toEqual(new Set([1]));
-    // Tile 13, 0 is 1328 ft and more past the edge: forest for its first cells only.
-    const far = new BiomeMap([{ biome: "forest", points: square(0, 0, 2000) }]).tile(13, 0);
-    expect(far[0]).toBe(0);
-    expect(new BiomeMap([{ biome: "forest", points: square(0, 0, 2000) }]).tile(12, 0)[0]).toBe(1);
-    expect(new BiomeMap([{ biome: "forest", points: square(0, 0, 2000) }]).tile(12, 0)[63]).toBe(0);
+  it("wanders either side of a straight edge", () => {
+    // Along the forest's south edge, z = 2000, some places just north are outside it, and some just
+    // south inside.
+    const rocky = new BiomeMap([{ biome: "rocky", points: square(0, 0, 2000) }, { biome: "forest", points: square(0, 2000, 2000) }]);
+    const sides = new Set();
+    for (let x = 100; x < 1900; x += 20) sides.add(name(rocky, x, 1970));
+    expect(sides).toEqual(new Set(["rocky", "forest"]));
+  });
+
+  it("works out a tile's cells as it does places", () => {
+    for (const [tx, tz] of [[7, 0], [3, 3], [12, 0], [15, 2]]) {
+      const cells = map.tile(tx, tz);
+      let wrong = 0;
+      for (let k = 0; k < cells.length; k++) if (cells[k] !== map.at(tx * 256 + ((k % 64) + 0.5) * 4, tz * 256 + (Math.floor(k / 64) + 0.5) * 4)) wrong++;
+      expect(wrong / cells.length).toBeLessThan(0.02);
+    }
   });
 });
 
@@ -64,8 +71,9 @@ describe("changedBoxes", () => {
     expect(changedBoxes([a, b], [b, a])).toEqual([]);
   });
 
-  it("is the box of an area added, taken away or changed, grown by a quarter mile", () => {
-    expect(changedBoxes([a], [a, b])).toEqual([[1000 - REACH_FT, -REACH_FT, 1100 + REACH_FT, 100 + REACH_FT]]);
+  it("is the box of an area added, taken away or changed, grown by a quarter mile and how far places move", () => {
+    const grow = REACH_FT + WARP_FT;
+    expect(changedBoxes([a], [a, b])).toEqual([[1000 - grow, -grow, 1100 + grow, 100 + grow]]);
     expect(changedBoxes([a, b], [a, { ...b, biome: "swamp" }])).toHaveLength(2);
   });
 });

@@ -65,7 +65,7 @@ export function groundClass(slopeDeg, heightFt) {
 export function look(biome, slopeDeg, heightFt, x, z) {
   const [first, patch, share] = (BIOMES[biome] ?? BIOMES[0])[groundClass(slopeDeg, heightFt)];
   const name = share && fbm(x, z, SEED, { wavelength: PATCH_FT }) > past(share) ? patch : first;
-  const shade = 1 + VARY * (2 * fbm(x, z, SEED + 1, { wavelength: VARY_FT }) - 1) + 0.5 * VARY * (2 * hash2(Math.floor(x / 4), Math.floor(z / 4), SEED + 2) - 1);
+  const shade = 1 + VARY * fbm(x, z, SEED + 1, { wavelength: VARY_FT }) + 0.5 * VARY * (2 * hash2(Math.floor(x / 4), Math.floor(z / 4), SEED + 2) - 1);
   const rgb = LOOKS[name][1].map((v) => Math.max(0, Math.min(255, Math.round(v * shade))));
   return { pattern: PATTERN[name], rgb };
 }
@@ -82,6 +82,6 @@ export function slopeOf(nw, ne, sw, se, width) {
 export function painted(name, x, z) {
   const found = LOOKS[name] ?? Object.values(LOOKS).find(([pattern]) => pattern === name);
   if (!found) return null;
-  const shade = 1 + VARY * (2 * fbm(x, z, SEED + 1, { wavelength: VARY_FT }) - 1);
+  const shade = 1 + VARY * fbm(x, z, SEED + 1, { wavelength: VARY_FT });
   return { pattern: PATTERNS.indexOf(found[0]), rgb: found[1].map((v) => Math.max(0, Math.min(255, Math.round(v * shade)))) };
 }
