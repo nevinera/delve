@@ -18,7 +18,7 @@ import { SEA_LEVEL_FT } from "../v2/sizes.js";
 export const RUN_FT = 21; // a second
 export const BACK_FT = 13.5;
 export const FLY_FT = 21; // the least flying speed
-export const FLY_PER_FT = 0.4; // flying speed for each foot above the ground, a second
+export const FLY_PER_FT = 1; // flying speed for each foot above the ground, a second
 export const CLIMB_FT = 24; // the least climbing speed
 export const CLIMB_PER_FT = 0.8; // so height doubles about every 0.9 seconds
 export const FIRST_STEP_FT = 128; // the lowest step a hop stops at, over the plate's middling height

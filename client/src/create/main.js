@@ -3,12 +3,13 @@ import * as THREE from "three";
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
-import { CHUNK_FT, PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
+import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { Builder } from "./builder.js";
 import { Compass, facing } from "./compass.js";
 import { EMPTY_FT, FAR_FT, Ground, Renditions } from "./ground.js";
-import { grid, withGrid } from "./grid.js";
+import { grid } from "./grid.js";
 import { planningPath } from "./marks.js";
+import { Sea } from "./sea.js";
 import { Tools } from "./tools.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
@@ -109,11 +110,8 @@ function start(world) {
   const sun = new THREE.DirectionalLight(0xfff2dd, 1.8);
   sun.position.set(0.5, 1, 0.3);
   scene.add(sun, sun.target);
-  // The open sea, a little under sea level, showing where no ground's drawn. Renditions draw the
-  // water over tiles themselves.
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(FAR_FT * 2.2, FAR_FT * 2.2), withGrid(new THREE.MeshLambertMaterial({ color: 0x2e608c }), CHUNK_FT));
-  sea.rotation.x = -Math.PI / 2;
-  scene.add(sea);
+  // Renditions draw the water over tiles themselves; the sea's round them.
+  const sea = new Sea(scene, FAR_FT * 2.2, renditions);
   const ground = new Ground(scene, renditions, renderer);
   // The builder stands on the sea where it's over the ground.
   const groundAt = (x, z) => Math.max(renditions.heightAt(x, z) ?? EMPTY_FT, SEA_LEVEL_FT);
@@ -188,7 +186,7 @@ function start(world) {
         console.error(e);
       }
     });
-    sea.position.set(x, SEA_LEVEL_FT - SEA_BELOW_FT, z);
+    sea.tick(x, SEA_LEVEL_FT - SEA_BELOW_FT, z);
     // The ground drawn ends FAR_FT across from the builder, so fog closes in there, as far off
     // as that is from the camera, high up too.
     const back = Math.hypot(camera.position.x - x, camera.position.z - z);
