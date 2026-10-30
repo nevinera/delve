@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
+import { Biomes, PICK_PX } from "./biomes.js";
 import { SHAPES, TURNS, pullBrush, raiseBrush } from "./geo.js";
 import { EMPTY_FT } from "./ground.js";
 import { Draw } from "./draw.js";
@@ -18,6 +19,10 @@ import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 //   it with select, opens its title and content to edit. Select picks pins out too, and dragging
 //   one picked out moves those picked out. Measure's click starts a ruler to the pointer, and its
 //   drag draws a circle (measure.js).
+// - geo's biomes: clicking corners draws an area of a biome, closed by clicking its first corner,
+//   double-clicking or Enter (biomes.js). Clicking an area picks it out; then its corners drag,
+//   shift-clicking one takes it away, dragging an edge adds one, and clicking inside it starts
+//   another area there.
 // - geo's brushes, raise and lower, flatten, smooth and clear: dragging on the ground works them
 //   where the pointer is, and a ring on the ground shows where they reach. [ and ] resize them, and
 //   c and v turn raise and lower's, shift+c and shift+v a little.
@@ -72,6 +77,7 @@ export class Tools {
     this.marks = new Marks(scene, (x, z) => this.surface(x, z), canvas.parentElement);
     this.pinColor = "red";
     this.measure = new Measure(canvas.parentElement);
+    this.biomes = new Biomes(scene, (x, z) => this.surface(x, z), canvas.parentElement);
     this.draw = new Draw(scene, canvas.parentElement, renditions, ground, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, () => this.showDraw());
     // Measure's, { from, to } for a ruler, { middle, radius } for a circle, and while the button's
     // down, where it went down and whether a ruler or circle was shown before.
@@ -190,6 +196,16 @@ export class Tools {
         this.draw.dirty = true;
       });
     }
+    const biomeButtons = [...document.querySelectorAll("[data-biome]")];
+    for (const button of biomeButtons) {
+      button.addEventListener("click", () => {
+        this.biomes.setBiome(button.dataset.biome);
+        pressed(biomeButtons, button);
+      });
+    }
+    this.biomeButtons = biomeButtons;
+    $("biomesDelete").addEventListener("click", () => this.biomes.deleteSelected());
+    $("biomesUndo").addEventListener("click", () => this.biomes.undo());
     $("marksDelete").addEventListener("click", () => this.marks.deleteSelected());
     $("marksUndo").addEventListener("click", () => this.marks.undo());
     this.readSize();
@@ -204,6 +220,10 @@ export class Tools {
     canvas.addEventListener("pointermove", (e) => {
       this.point(e);
       if (this.moving) this.movePins();
+      if (this.biomes.dragging) {
+        const at = this.hit();
+        if (at) this.biomes.drag(at[0], at[2]);
+      }
       if (this.draw.state === "drawing") {
         const at = this.hit();
         if (at) this.draw.add(at[0], at[2]);
@@ -230,6 +250,7 @@ export class Tools {
     });
     canvas.addEventListener("pointerleave", () => (this.pointer = null));
     canvas.addEventListener("dblclick", (e) => {
+      if (this.tool === "biomes") return this.biomes.close();
       if (this.tool !== "select") return;
       const r = canvas.getBoundingClientRect();
       const pin = this.marks.pins.pick(this.camera, r.width, r.height, e.clientX - r.left, e.clientY - r.top);
@@ -254,6 +275,7 @@ export class Tools {
         return;
       }
       canvas.setPointerCapture(e.pointerId);
+      if (this.tool === "biomes") return this.biomesDown(e);
       if (this.tool === "draw") {
         const at = this.hit();
         if (at) this.draw.start(at[0], at[2]);
@@ -305,6 +327,7 @@ export class Tools {
         this.openPin(pin, before);
       }
       this.clicked = null;
+      this.biomes.letGo();
       if (this.box) this.endBox();
       if (this.draw.state === "drawing") this.draw.end();
       // A click leaves a ruler following the pointer, or takes away the ruler or circle there was,
@@ -328,6 +351,11 @@ export class Tools {
       if (e.key === "Escape") this.pick(null);
       else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "select") this.marks.deleteSelected();
       else if (e.key === "Enter" && this.tool === "draw") this.draw.grow();
+      else if (e.key === "Enter" && this.tool === "biomes") this.biomes.close();
+      else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "biomes") {
+        if (this.biomes.draft) this.biomes.backCorner();
+        else this.biomes.deleteSelected();
+      }
       else if ((e.key === "c" || e.key === "C" || e.key === "v" || e.key === "V") && this.tool === "raise" && !e.ctrlKey && !e.metaKey) {
         const step = (e.shiftKey ? FINE_TURN_DEG : TURN_DEG) * (e.key.toLowerCase() === "c" ? -1 : 1);
         this.turn(this.settings.angle + (step * Math.PI) / 180);
@@ -342,6 +370,43 @@ export class Tools {
     });
     this.toolButtons = toolButtons;
     this.turn(0);
+  }
+
+  // The biome tool's click: a corner for the area being drawn, or closing it at its first corner;
+  // or a picked out area's corner or edge to drag; or an area to pick out; or the first corner of
+  // a new one.
+  biomesDown(e) {
+    const r = this.canvas.getBoundingClientRect();
+    const [px, py] = [e.clientX - r.left, e.clientY - r.top];
+    const near = (p) => {
+      const s = p && this.biomes.screen(this.camera, r.width, r.height, p);
+      return s && Math.hypot(s[0] - px, s[1] - py) <= PICK_PX;
+    };
+    const at = this.hit();
+    const { draft } = this.biomes;
+    if (draft) {
+      if (draft.points.length >= 3 && near(draft.points[0])) return this.biomes.close();
+      // A double-click's second press, closed by the dblclick.
+      if (near(draft.points.at(-1))) return;
+      if (at) this.biomes.addCorner(at[0], at[2]);
+      return;
+    }
+    const picked = this.biomes.pick(this.camera, r.width, r.height, px, py);
+    if (picked?.corner !== undefined) {
+      if (e.shiftKey) this.biomes.removeCorner(picked.corner);
+      else this.biomes.grab(picked.corner);
+      return;
+    }
+    if (picked && at) return this.biomes.split(picked.edge, at[0], at[2]);
+    if (!at) return;
+    const area = this.biomes.at(at[0], at[2]);
+    if (area && area !== this.biomes.selected) {
+      this.biomes.select(area);
+      this.biomeButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.biome === area.biome)));
+      this.biomes.biome = area.biome;
+      return;
+    }
+    this.biomes.addCorner(at[0], at[2]);
   }
 
   // Shows the draw tool's state, and the settings of what it's growing.
@@ -396,6 +461,7 @@ export class Tools {
     this.marks.unselect();
     this.marks.setFlat(PLANNING.has(tool));
     if (tool !== "draw") this.draw.clear();
+    this.biomes.setShown(tool === "biomes");
     this.measuring = null;
     this.box = null;
     this.boxEl.hidden = true;
@@ -547,6 +613,8 @@ export class Tools {
     this.marks.tick(dt, w, h, this.camera.position, above, ftPerPx);
     this.marks.pins.tick(this.camera, w, h);
     this.draw.tick(this.camera, w, h);
+    const to = this.tool === "biomes" && this.biomes.draft && this.hit();
+    this.biomes.tick(dt, this.camera, w, h, to ? [to[0], to[2]] : null, this.tool === "biomes");
     $("growPassable").hidden = !this.draw.passable;
     if (this.tool === "measure" && this.measuring) {
       if (this.measuring.from && !this.measuring.radius) {

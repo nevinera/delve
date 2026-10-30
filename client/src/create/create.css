@@ -56,7 +56,7 @@ body.create {
   grid-column: 2;
   grid-row: 1 / 3;
   display: grid;
-  grid-template-rows: 1fr 2fr;
+  grid-template-rows: fit-content(50%) 1fr;
   min-height: 0;
   background: #22222a;
   border-left: 1px solid #44444e;
@@ -169,6 +169,20 @@ body.create {
   height: 14px;
   border-radius: 2px;
   outline: 1px solid #0006;
+}
+
+.create-biomes {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.create-biomes button {
+  gap: 2px;
+}
+
+[data-config="biomes"] {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .create-shapes button {

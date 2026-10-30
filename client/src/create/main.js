@@ -4,6 +4,7 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
 import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
+import { biomesPath } from "./biomes.js";
 import { Builder } from "./builder.js";
 import { Compass, facing } from "./compass.js";
 import { EMPTY_FT, FAR_FT, Ground, Renditions } from "./ground.js";
@@ -97,9 +98,10 @@ function readWorld(bytes, changes = new Map()) {
 
 // Saves the world as a zip, its moved ground in. Its files are gzipped already, so the zip stores
 // them as they are.
-function download({ name, files, continent, renditions }, planning) {
+function download({ name, files, continent, renditions }, planning, biomes) {
   const out = new Map(files);
   out.set(planningPath(continent), strToU8(`${JSON.stringify(planning)}\n`));
+  out.set(biomesPath(continent), strToU8(`${JSON.stringify(biomes)}\n`));
   for (const [path, bytes] of renditions.changedFiles(continent)) {
     if (bytes) out.set(path, bytes);
     else out.delete(path);
@@ -114,7 +116,7 @@ function download({ name, files, continent, renditions }, planning) {
 
 function start(world, changes) {
   const { name, continent, renditions } = world;
-  $("downloadWorld").addEventListener("click", () => download(world, tools.marks.toJSON()));
+  $("downloadWorld").addEventListener("click", () => download(world, tools.marks.toJSON(), tools.biomes.toJSON()));
   $("open").hidden = true;
   $("worldName").textContent = name;
   const canvas = $("view");
@@ -170,6 +172,8 @@ function start(world, changes) {
   $("bottom").addEventListener("change", (e) => e.target.blur());
   const planning = world.files.get(planningPath(continent));
   if (planning) tools.marks.load(JSON.parse(strFromU8(planning)));
+  const biomes = world.files.get(biomesPath(continent));
+  if (biomes) tools.biomes.load(JSON.parse(strFromU8(biomes)));
 
   const resize = () => {
     const { clientWidth: w, clientHeight: h } = canvas;
@@ -184,7 +188,7 @@ function start(world, changes) {
   const FPS = 30;
   let lastSave = 0;
   let lastHud = 0;
-  let [saving, lastChangeSave, marksSaved] = [false, 0, 0];
+  let [saving, lastChangeSave, marksSaved, biomesSaved] = [false, 0, 0, 0];
   let lastInfo = 0;
   const compass = new Compass($("stage"), document.querySelector(".create-bar"));
   const feet = (ft) => `${Math.round(ft).toLocaleString()} ft`;
@@ -252,16 +256,17 @@ function start(world, changes) {
       frames = 0;
     }
     // Saves what's changed once there's been time to finish the stroke, writing files on the worker.
-    if (!saving && !tools.stroke && !tools.drawing && now - lastChangeSave > SAVE_CHANGES_MS && (renditions.unsaved.size || tools.marks.version !== marksSaved)) {
+    if (!saving && !tools.stroke && !tools.drawing && now - lastChangeSave > SAVE_CHANGES_MS && (renditions.unsaved.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved)) {
       saving = true;
-      const version = tools.marks.version;
+      const [version, biomesVersion] = [tools.marks.version, tools.biomes.version];
       renditions
         .unsavedFiles(continent)
         .then(async (files) => {
           for (const [path, bytes] of files) changes.set(path, bytes);
           changes.set(planningPath(continent), strToU8(`${JSON.stringify(tools.marks.toJSON())}\n`));
+          changes.set(biomesPath(continent), strToU8(`${JSON.stringify(tools.biomes.toJSON())}\n`));
           await store.set("changes", changes);
-          marksSaved = version;
+          [marksSaved, biomesSaved] = [version, biomesVersion];
         })
         .catch((e) => console.error("couldn't save the changes", e))
         .finally(() => {

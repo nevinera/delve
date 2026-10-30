@@ -57,6 +57,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 18 C 8 16, 10 8, 16 9 C 22 10, 24 4, 30 6 C 36 8, 40 14, 46 16 L46 22 Z" fill="#c8b48a"/><path d="M3 21 C 14 19, 30 21, 45 19" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/></svg>
         <span>draw</span><kbd class="create-key">L</kbd>
       </button>
+      <button type="button" data-tool="biomes" data-key="n" aria-pressed="false" title="draw areas of each biome">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M4 20 L10 4 L24 7 L22 20 Z" fill="#2e7d32" stroke="#ffffff" stroke-width="1"/><path d="M24 7 L42 3 L45 18 L22 20 Z" fill="#9e9488" stroke="#ffffff" stroke-width="1"/></svg>
+        <span>biomes</span><kbd class="create-key">N</kbd>
+      </button>
       <button type="button" data-tool="clear" aria-pressed="false" title="clear the ground away, back to empty sea">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 14 C 6 8, 10 12, 14 10 L14 22 Z M34 10 C 38 12, 42 8, 46 14 L46 22 L34 22 Z" fill="#c8b48a"/><path d="M14 22 L14 18 L34 18 L34 22 Z" fill="#2e608c"/></svg>
         <span>clear</span>
@@ -144,6 +148,20 @@
       <p class="create-note" data-draw="drawn adjusting" hidden>Drag again for another line. Enter grows, Esc puts the tool down.</p>
       <div class="create-way">
         <button type="button" id="growUndo" disabled>undo last growth</button>
+      </div>
+    </div>
+    <div data-config="biomes" hidden>
+      <p class="create-note">Click corners to draw an area of a biome. Click its first corner, double-click or press Enter to close it. Backspace takes the last corner back.</p>
+      <div class="create-swatches create-biomes" role="group" aria-label="biome">
+        <button type="button" data-biome="plains" aria-pressed="true" title="plains"><span style="background:#a8c060"></span>plains</button>
+        <button type="button" data-biome="forest" aria-pressed="false" title="forest"><span style="background:#2e7d32"></span>forest</button>
+        <button type="button" data-biome="rocky" aria-pressed="false" title="rocky"><span style="background:#9e9488"></span>rocky</button>
+        <button type="button" data-biome="swamp" aria-pressed="false" title="swamp"><span style="background:#56704a"></span>swamp</button>
+      </div>
+      <p class="create-note">Click an area to select it, and pick a biome to change it. Drag its corners, drag an edge to add a corner, and shift-click a corner to take it away. Click inside it to draw another area there. Delete or backspace deletes it. Where areas overlap, the last drawn wins.</p>
+      <div class="create-way">
+        <button type="button" id="biomesDelete">delete</button>
+        <button type="button" id="biomesUndo">undo</button>
       </div>
     </div>
     <div data-config="measure" hidden>
@@ -239,7 +257,7 @@
   <dl>
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, and measure measures distances and circles. Click a pin's head to open it</dd>
-    <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, and clear it away</dd>
+    <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, and clear it away</dd>
   </dl>
 </div>
 <div id="pinEdit" class="create-pin-edit" popover>
