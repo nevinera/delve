@@ -17,6 +17,12 @@ const FOAM = [0.15, 0.45];
 // Water fades in over this depth at its shore (its `depth` attribute), so the waterline is soft
 // rather than showing each kink where the water meets the ground, unless a material says otherwise.
 const SHORE_FADE_FT = 1;
+// With `deep`: water darker the deeper it is, down to DEEP_FT, and see-through where it's shallow,
+// and fast shallow water foams.
+const DEEP_FT = [0.5, 8];
+const DEEP_DARK = 0.55; // how dark, at its deepest, as a share of its color
+const SHALLOW_OPACITY = 0.55; // how opaque it is, at its shallowest, as a share of its opacity
+const RUSH = [2, 6]; // ft/s where shallow water starts foaming, and where it foams most
 
 // The clock every moving water material shares (waterfalls.js too), in seconds.
 export const waterTime = { value: 0 };
@@ -27,9 +33,9 @@ export function setWaterTime(seconds) {
   time.value = seconds;
 }
 
-export function waterMaterial(renderer, { color, opacity, shoreFadeFt = SHORE_FADE_FT }) {
+export function waterMaterial(renderer, { color, opacity, shoreFadeFt = SHORE_FADE_FT, deep = false }) {
   const material = new THREE.MeshLambertMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide });
-  material.customProgramCacheKey = () => "flowing-water";
+  material.customProgramCacheKey = () => (deep ? "flowing-water-deep" : "flowing-water");
   material.onBeforeCompile = (shader) => {
     shader.uniforms.waterNoise = { value: noiseTexture(renderer) };
     shader.uniforms.waterTime = time;
@@ -66,6 +72,11 @@ export function waterMaterial(renderer, { color, opacity, shoreFadeFt = SHORE_FA
         diffuseColor.rgb += vec3(0.22) * smoothstep(0.12, 0.3, ripple); // glints on the crests
         float foamy = smoothstep(${f(FOAM[0])}, ${f(FOAM[1])}, vFlow.z);
         // Whitecaps on the highest ripples at first, and streaks over about half of a cascade.
+        ${deep ? `float shallow = 1.0 - smoothstep(${f(DEEP_FT[0])}, ${f(DEEP_FT[1])}, vDepth);
+        diffuseColor.rgb *= mix(${f(DEEP_DARK)}, 1.0, shallow);
+        diffuseColor.a *= mix(1.0, ${f(SHALLOW_OPACITY)}, shallow * shallow);
+        // Fast water over its shallows, at its edges and on its riffles, breaking white.
+        foamy = max(foamy, smoothstep(${f(RUSH[0])}, ${f(RUSH[1])}, length(vFlow.xy)) * (1.0 - smoothstep(0.3, 1.5, vDepth)) * 0.8);` : ""}
         float foam = foamy * smoothstep(0.6 - 0.12 * foamy, 0.66 - 0.12 * foamy, 0.6 * r.x + 0.4 * r.y);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.96, 1.0), foam);
         diffuseColor.a = mix(diffuseColor.a, 1.0, foam);

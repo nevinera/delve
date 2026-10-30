@@ -141,7 +141,7 @@ export function trackOf(points, seed = 0) {
 }
 
 // Where (x, z) is from a course's track: { t, how far down it the nearest point is, side, how far
-// to its left (+) or right (-), and its width, depth and bend there }, or null where it's further
+// to its left (+) or right (-), its width, depth and bend there, and along, which way it runs }, or null where it's further
 // than `reach`.
 export function onTrack(track, x, z, reach = Infinity) {
   let best = null;
@@ -154,7 +154,7 @@ export function onTrack(track, x, z, reach = Infinity) {
     if (d > reach || (best && d >= best.d)) continue;
     const mix = (v) => v[k - 1] + (v[k] - v[k - 1]) * u;
     const left = length ? (dx * (z - az) - dz * (x - ax)) / length : 0;
-    best = { d, t: mix(track.t), side: Math.sign(left) * d, width: mix(track.width), depth: mix(track.depth), bend: mix(track.bend) };
+    best = { d, t: mix(track.t), side: Math.sign(left) * d, width: mix(track.width), depth: mix(track.depth), bend: mix(track.bend), along: length ? [dx / length, dz / length] : [0, 0] };
   }
   return best;
 }
@@ -248,4 +248,20 @@ export function shape(course, x, z) {
   const top = out <= 0 ? level - bed : level + out / run;
   const levee = out <= 0 ? -Infinity : level + LEVEE_OVER_FT - Math.max(0, out - LEVEE_TOP_FT) / run;
   return { top, levee, level, wet: out <= MARGIN_FT };
+}
+
+const SPEEDS = { stream: 1.5, river: 2.5 }; // how fast courses run on the level, ft/s
+const SPEED_PER_SLOPE = 40; // and how much faster for each foot they fall a foot
+const SPEED_MAX = 14;
+
+// How a course's water runs at (x, z): [x and z ft/s, and how steep it is there, the root of its
+// fall a foot], slower toward its banks, or null where it's not in its water.
+export function flowOf(course, x, z) {
+  if (!course.surface?.length) return null;
+  const near = onTrack(trackOf(course.points, course.seed ?? 0), x, z, reachOf(course));
+  if (!near || near.d > near.width / 2 + MARGIN_FT + 4) return null;
+  const slope = Math.max(0, (surfaceAt(course.surface, near.t - SURFACE_STEP_FT) - surfaceAt(course.surface, near.t + SURFACE_STEP_FT)) / (2 * SURFACE_STEP_FT));
+  const middle = Math.max(0.3, 1 - (near.d / (near.width / 2 + MARGIN_FT)) ** 2);
+  const speed = Math.min(SPEED_MAX, SPEEDS[course.type] + SPEED_PER_SLOPE * slope) * middle;
+  return [near.along[0] * speed, near.along[1] * speed, Math.sqrt(slope)];
 }

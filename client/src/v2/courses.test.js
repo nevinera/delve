@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BELOW_FT, along, depthOf, lengthOf, onTrack, profile, shape, surfaceAt, trackOf } from "./courses.js";
+import { BELOW_FT, along, depthOf, flowOf, lengthOf, onTrack, profile, shape, surfaceAt, trackOf } from "./courses.js";
 
 const line = [[0, 0, 10], [100, 0, 10], [100, 100, 30]];
 
@@ -83,6 +83,21 @@ describe("courses", () => {
     expect(at(track.width[k] / 2 + 1).levee).toBeCloseTo(50.5);
     expect(at(track.width[k] / 2 + 10).levee).toBeLessThan(50);
     expect(at(0).levee).toBe(-Infinity);
+  });
+
+  it("run downstream, faster down a fall and in their middle", () => {
+    const course = { type: "river", points: [[0, 0, 40], [600, 0, 40]], surface: [...Array(40).fill(50), ...Array(40).fill(50).map((v, k) => v - k * 0.8)], seed: 2 };
+    const track = trackOf(course.points, 2);
+    const at = (t) => {
+      const k = track.t.findIndex((v) => v >= t);
+      return flowOf(course, track.x[k], track.z[k]);
+    };
+    const [level, fall] = [at(100), at(400)];
+    expect(level[0]).toBeGreaterThan(0);
+    expect(level[2]).toBe(0);
+    expect(Math.hypot(fall[0], fall[1])).toBeGreaterThan(Math.hypot(level[0], level[1]) * 2);
+    expect(fall[2]).toBeCloseTo(Math.sqrt(0.1));
+    expect(flowOf(course, 300, 200)).toBeNull();
   });
 
   it("are deeper the wider they are, rivers more than streams", () => {

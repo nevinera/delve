@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { setWaterTime, waterMaterial } from "../editor/waterMaterial.js";
 import { WATER_TYPES } from "../v2/water.js";
+import { COURSE_TYPES, courseBox, flowOf } from "../v2/courses.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 
 // The water's surface (v2/water.js) on the tiles round the builder whose ground's drawn from their
@@ -34,7 +35,7 @@ export class WaterSurfaces {
     this.ground = ground;
     this.group = new THREE.Group();
     scene.add(this.group);
-    this.materials = WATER_TYPES.map((type) => waterMaterial(renderer, { ...WATER_LOOKS[type], shoreFadeFt: SHORE_FADE_FT }));
+    this.materials = WATER_TYPES.map((type) => waterMaterial(renderer, { ...WATER_LOOKS[type], shoreFadeFt: SHORE_FADE_FT, deep: true }));
     this.meshes = new Map(); // "tx,tz" -> { made from, meshes }
     this.drawn = new Set(); // "tx,tz" of the tiles whose water's drawn here, wet or not
     this.version = 0; // counts changes to `drawn`
@@ -128,7 +129,7 @@ export class WaterSurfaces {
       }
     }
     // Quads along each row: deep runs at one level and type as one.
-    const byType = WATER_TYPES.map(() => ({ positions: [], depths: [] }));
+    const byType = WATER_TYPES.map(() => ({ positions: [], depths: [], flow: [] }));
     const cornerOf = (ci, cj, l) => {
       const c = corners[cj * CORNERS + ci];
       return Number.isNaN(c) ? l : c;
@@ -136,6 +137,7 @@ export class WaterSurfaces {
     const deep = (i, j, l) => l - heights[j * CORNERS + i] >= DEEP_FT && cornerOf(i, j, l) === l;
     const deepCell = (i, j, l) => deep(i, j, l) && deep(i + 1, j, l) && deep(i, j + 1, l) && deep(i + 1, j + 1, l);
     const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];
+    const flows = this.flows(tx, tz, levelAt);
     for (let j = 0; j < CELLS; j++) {
       for (let i = 0; i < CELLS; ) {
         const k = j * CELLS + i;
@@ -146,27 +148,59 @@ export class WaterSurfaces {
         }
         let end = i + 1;
         if (deepCell(i, j, l)) while (end < CELLS && level[j * CELLS + end] === l && type[j * CELLS + end] === type[k] && deepCell(end, j, l)) end++;
-        const { positions, depths } = byType[type[k]];
+        // Running water's drawn a cell at a time, for its flow at each corner.
+        if (flows) end = i + 1;
+        const { positions, depths, flow } = byType[type[k]];
         const corner = (ci, cj) => {
           const at = cornerOf(ci, cj, l);
           positions.push(x0 + ci * CELL_FT, at, z0 + cj * CELL_FT);
           depths.push(at - heights[cj * CORNERS + ci]);
+          const c = (cj * CORNERS + ci) * 3;
+          flow.push(flows?.[c] ?? 0, flows?.[c + 1] ?? 0, flows?.[c + 2] ?? 0);
         };
         for (const [ci, cj] of [[i, j], [i, j + 1], [end, j], [end, j], [i, j + 1], [end, j + 1]]) corner(ci, cj);
         i = end;
       }
     }
-    return byType.flatMap(({ positions, depths }, t) => {
+    return byType.flatMap(({ positions, depths, flow }, t) => {
       if (!positions.length) return [];
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
       g.setAttribute("depth", new THREE.Float32BufferAttribute(depths, 1));
-      g.setAttribute("flow", new THREE.Float32BufferAttribute(new Float32Array(positions.length), 3));
+      g.setAttribute("flow", new THREE.Float32BufferAttribute(flow, 3));
       g.setAttribute("normal", new THREE.Float32BufferAttribute(Float32Array.from({ length: positions.length }, (_, n) => (n % 3 === 1 ? 1 : 0)), 3));
       const mesh = new THREE.Mesh(g, this.materials[t]);
       mesh.renderOrder = 1;
       return [mesh];
     });
+  }
+
+  // How the water runs at each of tile (tx, tz)'s corners next to a course's water, as flowOf has
+  // it, 3 numbers a corner, from the course nearest; or null where none's in the tile.
+  flows(tx, tz, levelAt) {
+    const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];
+    const near = (this.renditions.waterFile?.courses ?? []).filter((course) => {
+      const b = courseBox(course);
+      return b[0] <= x0 + TILE_FT && b[2] >= x0 && b[1] <= z0 + TILE_FT && b[3] >= z0;
+    });
+    if (!near.length) return null;
+    const running = new Set(COURSE_TYPES.map((type) => WATER_TYPES.indexOf(type)));
+    const out = new Float32Array(CORNERS * CORNERS * 3);
+    let any = false;
+    for (let cj = 0; cj < CORNERS; cj++) {
+      for (let ci = 0; ci < CORNERS; ci++) {
+        if (![[ci - 1, cj - 1], [ci, cj - 1], [ci - 1, cj], [ci, cj]].some(([i, j]) => running.has(levelAt(i, j)[1]) && !Number.isNaN(levelAt(i, j)[0]))) continue;
+        let best = null;
+        for (const course of near) {
+          const flow = flowOf(course, x0 + ci * CELL_FT, z0 + cj * CELL_FT);
+          if (flow && (!best || Math.hypot(flow[0], flow[1]) > Math.hypot(best[0], best[1]))) best = flow;
+        }
+        if (!best) continue;
+        out.set(best, (cj * CORNERS + ci) * 3);
+        any = true;
+      }
+    }
+    return any ? out : null;
   }
 
   remove(key) {
