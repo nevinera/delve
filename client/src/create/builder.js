@@ -5,7 +5,7 @@ import { SEA_LEVEL_FT } from "../v2/sizes.js";
 // The builder: a person who walks on the ground and flies over it, with a camera behind them.
 //
 // On the ground: W/S run forward and back, A/D turn, Q/E strafe, and space takes off. In the air:
-// the same keys move, space rises and shift drops, and double-tapping either (holding the second
+// the same keys move, space rises and F falls, and double-tapping either (holding the second
 // press) does it fast. Touching the ground lands. Flying goes faster the higher you are, so you
 // climb, sink and cross the land in about the same time whatever the height.
 //
@@ -28,10 +28,10 @@ const CAMERA = { distance: 30, min: 4, max: 2000, pitch: 0.35, minPitch: -1.3, m
 // up.
 const ALOFT = { tilt: 0.7, tiltFt: 600 };
 const DRAG = 0.006; // radians per pixel
-const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "shift"]);
+const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "f"]);
 
 // One step of the builder's moving. state: { x, y, z, yaw, flying }, continent feet and radians.
-// input: { forward, strafe, turn } each -1, 0 or 1, rise and drop (space or shift held), fast (the
+// input: { forward, strafe, turn } each -1, 0 or 1, rise and drop (space or F held), fast (the
 // held one was double-tapped), takeoff (space was just pressed). groundAt(x, z) gives the
 // ground's height, or null off the tiles, where the sea's surface holds you up. Returns the new
 // state.
@@ -108,7 +108,7 @@ export class Builder {
       strafe: key("q") - key("e"),
       turn: key("a") - key("d"),
       rise: this.held.has(" "),
-      drop: this.held.has("shift"),
+      drop: this.held.has("f"),
       fast: Boolean(this.fastKey && this.held.has(this.fastKey)),
       takeoff: this.takeoff,
     };
@@ -147,7 +147,7 @@ export class Builder {
     if (e.repeat) return;
     this.held.add(key);
     const now = performance.now();
-    if (key === " " || key === "shift") {
+    if (key === " " || key === "f") {
       if (now - (this.taps[key] ?? -Infinity) < DOUBLE_TAP_MS) this.fastKey = key;
       this.taps[key] = now;
     }
