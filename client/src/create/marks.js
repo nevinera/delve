@@ -3,8 +3,9 @@ import { Line2 } from "three/addons/lines/Line2.js";
 import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 
-// Lines marked on the ground by the planning marker, drawn over everything, following the ground as
-// it's moved. Each has one of COLORS, one of four widths a few pixels wide, and a style, solid,
+// Lines marked on the ground by the planning marker, following the ground as it's moved, lifted
+// off it more the further they are from the camera, so the coarser ground drawn there doesn't
+// bury them, though ground between them and the camera hides them. Each has one of COLORS, one of four widths a few pixels wide, and a style, solid,
 // dashed or dotted. Lines, dashes and dots all grow the higher the builder flies. The eraser cuts
 // lines where it passes, in two where it passes their middles. Lines picked out with the select
 // tool show a halo, and can be deleted whole. A continent's are kept in its
@@ -35,6 +36,8 @@ const HALO = 0xffe14d;
 const HALO_PX = 6; // how much wider than its line a halo is
 export const planningPath = (continent) => `places/continents/${continent}/planning.json`;
 const LIFT_EVERY_S = 0.5; // how often lines are put back on the ground, should it have moved
+const LIFT_FT = 1;
+const LIFT_SHARE = 0.01; // how much higher lines are lifted, as a share of how far off they are
 
 // What's left of a line of `points` ([x, z]) with the circle `radius` round (x, z) cut out of it:
 // its pieces of two points or more, each ending where it meets the circle.
@@ -80,6 +83,7 @@ export class Marks {
     this.undos = []; // the lines kept before each change, as toJSON's lines
     this.erased = false; // whether the eraser's stroke has cut lines yet
     this.selected = new Map(); // a kept line -> its halo
+    this.eye = new THREE.Vector3(); // where the camera is
     this.version = 0; // counts changes to the lines kept, to tell when to save them
     this.since = 0;
   }
@@ -117,9 +121,7 @@ export class Marks {
     const key = `${color},${width},${style}`;
     if (!this.materials.has(key)) {
       const halo = color === "halo";
-      const material = new LineMaterial({ color: halo ? HALO : COLORS[color], linewidth: WIDTHS_PX[width - 1], depthTest: false, depthWrite: false, dashed: Boolean(STYLES[style]) });
-      // Opaque, so drawn with the ground and the builder by renderOrder: over the ground, under the
-      // builder, which still hides behind the ground.
+      const material = new LineMaterial({ color: halo ? HALO : COLORS[color], linewidth: WIDTHS_PX[width - 1], depthWrite: false, dashed: Boolean(STYLES[style]) });
       material.userData = { width, style, halo };
       this.materials.set(key, material);
     }
@@ -138,7 +140,11 @@ export class Marks {
   // Puts a line's points on the ground.
   place(line, points) {
     const positions = new Float32Array(Math.max(2, points.length) * 3);
-    points.forEach(([x, z], k) => positions.set([x, this.surface(x, z) + 1, z], k * 3));
+    points.forEach(([x, z], k) => {
+      const y = this.surface(x, z);
+      const lift = LIFT_FT + LIFT_SHARE * Math.hypot(x - this.eye.x, y - this.eye.y, z - this.eye.z);
+      positions.set([x, y + lift, z], k * 3);
+    });
     if (points.length === 1) positions.set(positions.subarray(0, 3), 3);
     line.geometry.dispose();
     line.geometry = new LineGeometry();
@@ -241,9 +247,10 @@ export class Marks {
     this.version++;
   }
 
-  // `above` is how high the builder flies over the ground, and `ftPerPx` about how many feet a
-  // pixel is across there, for dashes' lengths.
-  tick(dt, width, height, above, ftPerPx) {
+  // `eye` is where the camera is, `above` how high the builder flies over the ground, and `ftPerPx`
+  // about how many feet a pixel is across there, for dashes' lengths.
+  tick(dt, width, height, eye, above, ftPerPx) {
+    this.eye.copy(eye);
     const wider = Math.min(MOST_WIDER, Math.max(1, Math.sqrt(above / WIDEN_FT)));
     for (const material of this.materials.values()) {
       const px = WIDTHS_PX[material.userData.width - 1] * wider + (material.userData.halo ? HALO_PX : 0);

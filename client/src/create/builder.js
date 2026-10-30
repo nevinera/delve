@@ -242,8 +242,6 @@ function builderModel() {
   const nose = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.5, 8), material);
   nose.rotation.x = Math.PI / 2;
   nose.position.set(0, 4.5, 1.2);
-  // Drawn after the planning marks, which are drawn over the ground, so they're never over the builder.
-  body.renderOrder = nose.renderOrder = 20;
   group.add(body, nose);
   return group;
 }

@@ -332,7 +332,7 @@ export class Tools {
     const [w, h] = [this.canvas.clientWidth, this.canvas.clientHeight];
     const above = cy - this.surface(cx, cz);
     const ftPerPx = (Math.max(above, 50) * 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) / h;
-    this.marks.tick(dt, w, h, above, ftPerPx);
+    this.marks.tick(dt, w, h, this.camera.position, above, ftPerPx);
     if (!BRUSHES.has(this.tool)) {
       this.ring.visible = false;
       return;
