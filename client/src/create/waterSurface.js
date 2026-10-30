@@ -6,7 +6,8 @@ import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 // The water's surface (v2/water.js) on the tiles round the builder whose ground's drawn from their
 // cells (ground.js's FULL and FINE tiers; coarser, the ground draws the water too): each
 // tile's wet cells, and a cell more round them at the level of the water next to it, which the
-// ground hides where it rises out of it, so the shore's where the two meet. The water fades in
+// ground hides where it rises out of it, so the shore's where the two meet. Each corner's at the
+// average level of the wet cells round it, so sloping water's smooth. The water fades in
 // over its first SHORE_FADE_FT of depth there (editor/waterMaterial.js). Each type has its own look.
 // Farther off, and where it's not drawn, sea.js's plane stands in for the sea.
 
@@ -113,9 +114,26 @@ export class WaterSurfaces {
       }
     }
     if (!any) return [];
+    // Each corner's level: the average of the wet cells' round it, so a sloping course's water is
+    // one surface, not steps; where none's wet, the level its cell's drawn at.
+    const corners = new Float32Array(CORNERS * CORNERS);
+    for (let cj = 0; cj < CORNERS; cj++) {
+      for (let ci = 0; ci < CORNERS; ci++) {
+        let [sum, n] = [0, 0];
+        for (const [i, j] of [[ci - 1, cj - 1], [ci, cj - 1], [ci - 1, cj], [ci, cj]]) {
+          const [l] = levelAt(i, j);
+          if (!Number.isNaN(l)) [sum, n] = [sum + l, n + 1];
+        }
+        corners[cj * CORNERS + ci] = n ? sum / n : NaN;
+      }
+    }
     // Quads along each row: deep runs at one level and type as one.
     const byType = WATER_TYPES.map(() => ({ positions: [], depths: [] }));
-    const deep = (i, j, l) => l - heights[j * CORNERS + i] >= DEEP_FT;
+    const cornerOf = (ci, cj, l) => {
+      const c = corners[cj * CORNERS + ci];
+      return Number.isNaN(c) ? l : c;
+    };
+    const deep = (i, j, l) => l - heights[j * CORNERS + i] >= DEEP_FT && cornerOf(i, j, l) === l;
     const deepCell = (i, j, l) => deep(i, j, l) && deep(i + 1, j, l) && deep(i, j + 1, l) && deep(i + 1, j + 1, l);
     const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];
     for (let j = 0; j < CELLS; j++) {
@@ -130,8 +148,9 @@ export class WaterSurfaces {
         if (deepCell(i, j, l)) while (end < CELLS && level[j * CELLS + end] === l && type[j * CELLS + end] === type[k] && deepCell(end, j, l)) end++;
         const { positions, depths } = byType[type[k]];
         const corner = (ci, cj) => {
-          positions.push(x0 + ci * CELL_FT, l, z0 + cj * CELL_FT);
-          depths.push(l - heights[cj * CORNERS + ci]);
+          const at = cornerOf(ci, cj, l);
+          positions.push(x0 + ci * CELL_FT, at, z0 + cj * CELL_FT);
+          depths.push(at - heights[cj * CORNERS + ci]);
         };
         for (const [ci, cj] of [[i, j], [i, j + 1], [end, j], [end, j], [i, j + 1], [end, j + 1]]) corner(ci, cj);
         i = end;
