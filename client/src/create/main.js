@@ -9,7 +9,8 @@ import { FAR_FT, Ground, Renditions } from "./ground.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
 // The world comes from a zip you open (script/convert-v2.mjs makes one from a v1 world), kept in
-// this browser so a reload opens it again, with the builder where they were.
+// this browser so a reload opens it again, with the builder where they were. Opening another
+// replaces it.
 
 const $ = (id) => document.getElementById(id);
 const SKY = 0x9cc4e4;
@@ -138,6 +139,7 @@ function start({ name, continent, renditions }) {
 async function open(bytes) {
   try {
     start(readWorld(bytes));
+    showing = true;
     return true;
   } catch (e) {
     $("openError").textContent = e.message;
@@ -145,11 +147,29 @@ async function open(bytes) {
   }
 }
 
+// A world opened while another's showing replaces it: kept, then the page loads again with it.
+let showing = false;
 $("openFile").addEventListener("change", async () => {
   const file = $("openFile").files[0];
   if (!file) return;
   const bytes = new Uint8Array(await file.arrayBuffer());
+  if (showing) {
+    try {
+      readWorld(bytes);
+    } catch (e) {
+      $("openError").textContent = e.message;
+      return;
+    }
+    await store.set("world", bytes).catch(() => {});
+    window.location.reload();
+    return;
+  }
   if (await open(bytes)) await store.set("world", bytes).catch(() => {});
+});
+$("openWorld").addEventListener("click", () => {
+  $("openError").textContent = "";
+  $("openFile").value = "";
+  $("openFile").click();
 });
 
 const kept = await store.get("world").catch(() => null);

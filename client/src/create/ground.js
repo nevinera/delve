@@ -245,7 +245,6 @@ export class Ground {
       fine.get(tileKey).push(local(cz) * TILE_CHUNKS + local(cx));
     }
     const fineOf = (key) => (fine.get(key) ?? []).sort((a, b) => a - b).join();
-    this.fineChunks = [...fine.values()].reduce((sum, list) => sum + list.length, 0);
     for (const key of tiles) if (this.meshes.has(key) && this.meshes.get(key).userData.fine !== fineOf(key)) this.drop(this.meshes, key);
     this.sync(this.meshes, tiles, (key) => {
       const [tx, tz] = key.split(",").map(Number);
@@ -255,8 +254,10 @@ export class Ground {
       const cells = chunks.size ? this.renditions.cells(tx, tz) : null;
       const mesh = this.mesh(tileGeometry(tile, cells, (i, j) => chunks.has(j * TILE_CHUNKS + i)), tx * TILE_FT, tz * TILE_FT);
       mesh.userData.fine = fineOf(key);
+      mesh.userData.drawnFine = cells ? chunks.size : 0;
       return mesh;
     });
+    this.fineChunks = [...this.meshes.values()].reduce((sum, mesh) => sum + mesh.userData.drawnFine, 0);
     const far = within([x, y, z], FAR_FT, PLATE_FT, (px, pz) => span(this.renditions.plate(px, pz)));
     // A plate made again when the tiles it leaves out change.
     for (const key of far) if (this.plates.get(key)?.userData.hidden !== this.hiddenIn(key)) this.drop(this.plates, key);
