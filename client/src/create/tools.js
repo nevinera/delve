@@ -7,7 +7,8 @@ import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 
 // The tools' sidebar: the type of work and its tools above, the picked tool's settings below. A
 // picked tool takes the left button, and Esc puts it down.
-// - planning's marker: dragging draws a line on the ground (stroke.js, marks.js).
+// - planning's marker: dragging draws a line on the ground (stroke.js, marks.js), and its eraser
+//   cuts lines away where it's dragged.
 // - geo's brushes, raise and lower, flatten, smooth and clear: dragging on the ground works them
 //   where the pointer is, and a ring on the ground shows where they reach. [ and ] resize them, and
 //   c and v turn raise and lower's, shift+c and shift+v a little.
@@ -16,7 +17,7 @@ const MIN_RADIUS_FT = 16;
 const MAX_RADIUS_FT = 16000;
 const RING_POINTS = 96;
 const PICK_FT = 30000; // how far off the pointer finds the ground
-const BRUSHES = new Set(["raise", "flatten", "smooth", "clear"]);
+const BRUSHES = new Set(["raise", "flatten", "smooth", "clear", "eraser"]);
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
 
@@ -82,6 +83,27 @@ export class Tools {
     $("brushStrength").addEventListener("input", () => this.readStrength());
     $("brushAngle").addEventListener("input", () => this.turn((Number($("brushAngle").value) * Math.PI) / 180));
     $("brushNoise").addEventListener("input", () => this.readNoise());
+    const colors = [...document.querySelectorAll("[data-pen-color]")];
+    for (const button of colors) {
+      button.addEventListener("click", () => {
+        this.marks.pen.color = button.dataset.penColor;
+        pressed(colors, button);
+      });
+    }
+    const styles = [...document.querySelectorAll("[data-pen-style]")];
+    for (const button of styles) {
+      button.addEventListener("click", () => {
+        this.marks.pen.style = button.dataset.penStyle;
+        pressed(styles, button);
+      });
+    }
+    const widths = [...document.querySelectorAll("[data-pen-width]")];
+    for (const button of widths) {
+      button.addEventListener("click", () => {
+        this.marks.pen.width = Number(button.dataset.penWidth);
+        pressed(widths, button);
+      });
+    }
     $("marksUndo").addEventListener("click", () => this.marks.undo());
     $("marksClear").addEventListener("click", () => this.marks.clear());
     this.readSize();
@@ -105,6 +127,7 @@ export class Tools {
       if (BRUSHES.has(this.tool)) {
         // Flatten pulls toward the ground's height where the stroke began.
         this.stroke = { invert: e.ctrlKey || e.metaKey, from: at ? this.renditions.heightAt(at[0], at[2]) ?? EMPTY_FT : null };
+        this.marks.erased = false;
         return;
       }
       if (!at) return;
@@ -149,7 +172,7 @@ export class Tools {
     this.toolButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tool === tool)));
     for (const panel of document.querySelectorAll("[data-config]")) panel.hidden = !panel.dataset.config.split(" ").includes(tool ?? "none");
     for (const part of document.querySelectorAll("[data-only]")) part.hidden = part.dataset.only !== tool;
-    for (const part of document.querySelectorAll("[data-not]")) part.hidden = part.dataset.not === tool;
+    for (const part of document.querySelectorAll("[data-not]")) part.hidden = part.dataset.not.split(" ").includes(tool);
     this.showAngle();
     this.builder.paints = Boolean(tool);
     this.stroke = null;
@@ -226,7 +249,11 @@ export class Tools {
   // neither the pointer nor the camera moves, a stroke keeps working where it was, though the
   // ground it moved now meets the pointer's ray somewhere else.
   tick(dt) {
-    this.marks.tick(dt, this.canvas.clientWidth, this.canvas.clientHeight);
+    const { x: cx, y: cy, z: cz } = this.camera.position;
+    const [w, h] = [this.canvas.clientWidth, this.canvas.clientHeight];
+    const above = cy - this.surface(cx, cz);
+    const ftPerPx = (Math.max(above, 50) * 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) / h;
+    this.marks.tick(dt, w, h, above, ftPerPx);
     if (!BRUSHES.has(this.tool)) {
       this.ring.visible = false;
       return;
@@ -238,7 +265,9 @@ export class Tools {
     this.ring.visible = Boolean(at);
     if (!at) return;
     const [x, , z] = at;
-    if (this.stroke && dt > 0 && this.tool === "clear") {
+    if (this.stroke && this.tool === "eraser") {
+      this.marks.erase(x, z, this.settings.radius);
+    } else if (this.stroke && dt > 0 && this.tool === "clear") {
       const cleared = this.renditions.clear(x, z, this.settings.radius);
       if (cleared.size) {
         this.ground.stale = true;

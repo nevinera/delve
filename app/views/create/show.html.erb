@@ -23,6 +23,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M3 18 C 12 4, 20 22, 30 10 S 42 6, 45 14" fill="none" stroke="#ff5a36" stroke-width="3" stroke-linecap="round"/></svg>
         <span>marker</span>
       </button>
+      <button type="button" data-tool="eraser" aria-pressed="false" title="erase lines">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M3 18 C 10 8, 14 14, 18 12 M30 11 C 36 8, 42 6, 45 14" fill="none" stroke="#ff5a36" stroke-width="3" stroke-linecap="round"/><circle cx="24" cy="12" r="6" fill="none" stroke="#ddd" stroke-width="1.5"/></svg>
+        <span>eraser</span>
+      </button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" aria-pressed="false" title="raise and lower the ground">
@@ -50,13 +54,34 @@
     <div data-config="marker" hidden>
       <p class="create-note">Drag on the ground to draw a line, up to 2 miles long.</p>
       <p class="create-note" id="strokeLength"></p>
+      <div class="create-swatches" role="group" aria-label="color">
+        <button type="button" data-pen-color="black" aria-pressed="false" title="black"><span style="background:#000000"></span></button>
+        <button type="button" data-pen-color="white" aria-pressed="false" title="white"><span style="background:#ffffff"></span></button>
+        <button type="button" data-pen-color="red" aria-pressed="true" title="red"><span style="background:#e8202a"></span></button>
+        <button type="button" data-pen-color="dark orange" aria-pressed="false" title="dark orange"><span style="background:#ff8c00"></span></button>
+        <button type="button" data-pen-color="bright green" aria-pressed="false" title="bright green"><span style="background:#30f030"></span></button>
+        <button type="button" data-pen-color="magenta" aria-pressed="false" title="magenta"><span style="background:#ff00ff"></span></button>
+        <button type="button" data-pen-color="gray" aria-pressed="false" title="gray"><span style="background:#808080"></span></button>
+        <button type="button" data-pen-color="pink" aria-pressed="false" title="pink"><span style="background:#ff9ec8"></span></button>
+      </div>
+      <div class="create-styles" role="group" aria-label="style">
+        <button type="button" data-pen-style="solid" aria-pressed="true" title="solid"><svg width="32" height="12" viewBox="0 0 32 12" aria-hidden="true"><line x1="3" y1="6" x2="29" y2="6" stroke="currentColor" stroke-width="3"/></svg></button>
+        <button type="button" data-pen-style="dashed" aria-pressed="false" title="dashed"><svg width="32" height="12" viewBox="0 0 32 12" aria-hidden="true"><line x1="3" y1="6" x2="29" y2="6" stroke="currentColor" stroke-width="3" stroke-dasharray="7 4"/></svg></button>
+        <button type="button" data-pen-style="dotted" aria-pressed="false" title="dotted"><svg width="32" height="12" viewBox="0 0 32 12" aria-hidden="true"><line x1="3" y1="6" x2="29" y2="6" stroke="currentColor" stroke-width="3" stroke-dasharray="3 4"/></svg></button>
+      </div>
+      <div class="create-widths" role="group" aria-label="width">
+        <button type="button" data-pen-width="1" aria-pressed="false" title="width 1"><svg width="32" height="12" viewBox="0 0 32 12" aria-hidden="true"><line x1="3" y1="6" x2="29" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button>
+        <button type="button" data-pen-width="2" aria-pressed="true" title="width 2"><svg width="32" height="12" viewBox="0 0 32 12" aria-hidden="true"><line x1="3" y1="6" x2="29" y2="6" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg></button>
+        <button type="button" data-pen-width="3" aria-pressed="false" title="width 3"><svg width="32" height="12" viewBox="0 0 32 12" aria-hidden="true"><line x1="3" y1="6" x2="29" y2="6" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg></button>
+        <button type="button" data-pen-width="4" aria-pressed="false" title="width 4"><svg width="32" height="12" viewBox="0 0 32 12" aria-hidden="true"><line x1="3" y1="6" x2="29" y2="6" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></svg></button>
+      </div>
       <div class="create-way">
         <button type="button" id="marksUndo">undo</button>
         <button type="button" id="marksClear">clear</button>
       </div>
       <p class="create-note">Lines are kept with the world when you download it.</p>
     </div>
-    <div data-config="raise flatten smooth clear" hidden>
+    <div data-config="raise flatten smooth clear eraser" hidden>
       <div class="create-shapes" role="group" aria-label="shape" data-only="raise">
         <button type="button" data-shape="round" aria-pressed="true" title="round"><canvas width="32" height="20" data-shape="round"></canvas></button>
         <button type="button" data-shape="steep" aria-pressed="false" title="steep sides"><canvas width="32" height="20" data-shape="steep"></canvas></button>
@@ -68,7 +93,7 @@
       <label>size <output id="brushSizeOut"></output>
         <input id="brushSize" type="range" min="0" max="1000" value="400">
       </label>
-      <label data-not="clear">strength <output id="brushStrengthOut"></output>
+      <label data-not="clear eraser">strength <output id="brushStrengthOut"></output>
         <input id="brushStrength" type="range" min="1" max="100" value="20">
       </label>
       <label id="brushAngleRow" hidden>angle <output id="brushAngleOut"></output>
@@ -84,6 +109,7 @@
       <p class="create-note" data-only="raise">Drag on the ground. Ctrl or cmd does the other way. [ and ] resize. c and v turn, with shift a little. Esc puts the tool down.</p>
       <p class="create-note" data-only="flatten">Drag to pull the ground toward the height where you began. [ and ] resize. Esc puts the tool down.</p>
       <p class="create-note" data-only="smooth">Drag to even the ground out. [ and ] resize. Esc puts the tool down.</p>
+      <p class="create-note" data-only="eraser">Drag across lines to erase them. Erasing a line's middle leaves two lines. [ and ] resize. Esc puts the tool down.</p>
       <p class="create-note" data-only="clear">Drag to clear tiles away, back to empty sea: each tile whose middle is in the ring. [ and ] resize. Esc puts the tool down.</p>
     </div>
   </section>
@@ -121,7 +147,7 @@
   <h2>Tools</h2>
   <dl>
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
-    <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground</dd>
+    <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, and the eraser erases them</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, and clear it away</dd>
   </dl>
 </div>
