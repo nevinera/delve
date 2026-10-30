@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { TILE_FT } from "../v2/sizes.js";
-import { COARSE, COARSE_TILES, FINE, FINE_TILES, FULL, FULL_TILES, Ground, PLATE } from "./ground.js";
+import { encodePlate } from "../v2/plate.js";
+import { COARSE, COARSE_TILES, FINE, FINE_TILES, FULL, FULL_TILES, Ground, PLATE, Renditions } from "./ground.js";
 
 // Flat ground at `height` everywhere, its plate files there but never read.
 const flat = (height = 0) => {
@@ -43,5 +44,20 @@ describe("Ground tiers", () => {
     g.update(TILE_FT + 40, 10, TILE_FT / 2);
     expect(g.wanted).not.toBe(planned);
     expect(g.anchor).toEqual([1, 0, 0]);
+  });
+});
+
+describe("Renditions", () => {
+  it("reads a plate file when its cells are wanted, and says when it has", () => {
+    const renditions = new Renditions();
+    const tile = { heights: new Float32Array(65 * 65).fill(12), colors: new Uint8Array(64 * 64 * 3), terrain: new Uint8Array(64 * 64), forest: new Uint8Array(64 * 64) };
+    renditions.addPlate([0, 0], encodePlate({ coords: [0, 0], palette: ["grass"], tiles: new Map([[0, tile]]) }));
+    let reads = 0;
+    renditions.onRead = () => reads++;
+    expect(renditions.hasCells(0, 0)).toBe(true);
+    expect(reads).toBe(1);
+    expect(renditions.cells(0, 0).palette).toEqual(["grass"]);
+    expect(renditions.heightAt(10, 10)).toBe(12);
+    expect(renditions.hasCells(9, 0)).toBe(false);
   });
 });

@@ -29,12 +29,17 @@ const KEEP_PLATES = 40; // plate files kept decoded
 const BUILD_MS = 6; // how long a frame spends making plates
 
 // A continent's renditions, from its platter files, and its ground at cell scale, from its plate
-// files, decoded as they're wanted.
+// files, read on a worker (plateWorker.js) as they're wanted. onRead() is called each time a plate
+// file has been read.
 export class Renditions {
   constructor() {
     this.platters = new Map(); // "px,pz" -> { coords, tiles, plates }
     this.plateFiles = new Map(); // "px,pz" -> gzipped bytes
     this.decoded = new Map(); // "px,pz" -> decoded plate file, the latest used last
+    this.reading = new Set(); // "px,pz" of plate files being read
+    this.unreadable = new Set(); // "px,pz" of plate files that couldn't be read
+    this.worker = null;
+    this.onRead = () => {};
   }
 
   addPlatter(bytes) {
@@ -46,9 +51,41 @@ export class Renditions {
     this.plateFiles.set(coords.join(","), bytes);
   }
 
-  // Whether tile (tx, tz) has ground at cell scale, without reading it.
+  // Whether tile (tx, tz)'s ground at cell scale is ready, starting to read it when it isn't.
   hasCells(tx, tz) {
-    return this.plateFiles.has(`${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`);
+    const key = `${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`;
+    if (!this.decoded.has(key)) this.read(key);
+    return this.decoded.has(key);
+  }
+
+  // Starts reading plate file `key`, on a worker where there are workers.
+  read(key) {
+    if (!this.plateFiles.has(key) || this.reading.has(key) || this.unreadable.has(key)) return;
+    this.reading.add(key);
+    if (typeof Worker === "undefined") return this.done({ key, plate: decodePlate(this.plateFiles.get(key)) });
+    if (!this.worker) {
+      this.worker = new Worker(new URL("./plateWorker.js", import.meta.url), { type: "module" });
+      this.worker.onmessage = ({ data }) => this.done(data);
+    }
+    this.worker.postMessage({ key, bytes: this.plateFiles.get(key) });
+  }
+
+  done({ key, plate, error }) {
+    this.reading.delete(key);
+    if (error) {
+      this.unreadable.add(key);
+      console.error(`plate ${key} can't be read: ${error}`);
+      return;
+    }
+    this.keep(key, plate);
+    this.onRead();
+  }
+
+  // Keeps a read plate file, the latest used last, dropping the least lately used past KEEP_PLATES.
+  keep(key, plate) {
+    this.decoded.delete(key);
+    this.decoded.set(key, plate);
+    if (this.decoded.size > KEEP_PLATES) this.decoded.delete(this.decoded.keys().next().value);
   }
 
   tile(tx, tz) {
@@ -59,22 +96,23 @@ export class Renditions {
     return this.platters.get(platterOfPlate(px, pz).join(","))?.plates.get(plateIndexIn(px, pz)) ?? null;
   }
 
-  // A tile's ground at cell scale, { heights, colors, terrain, forest, palette }, or null.
+  // A tile's ground at cell scale, { heights, colors, terrain, forest, palette }, or null where it's
+  // not been read (starting to read it) or there's none.
   cells(tx, tz) {
     const key = `${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`;
-    let plate = this.decoded.get(key);
-    if (plate) this.decoded.delete(key);
-    else if (this.plateFiles.has(key)) plate = decodePlate(this.plateFiles.get(key));
-    if (!plate) return null;
-    this.decoded.set(key, plate);
-    if (this.decoded.size > KEEP_PLATES) this.decoded.delete(this.decoded.keys().next().value);
+    const plate = this.decoded.get(key);
+    if (!plate) {
+      this.read(key);
+      return this.decoded.has(key) ? this.cells(tx, tz) : null;
+    }
+    this.keep(key, plate);
     const tile = plate.tiles.get(tileIndexInPlate(tx, tz));
     if (tile) tile.palette = plate.palette;
     return tile ?? null;
   }
 
   // The ground's height at continent feet (x, z), straight between cell corners, or chunk corners
-  // where there are no cells, or null where there's no tile.
+  // where there are no cells or they've not been read, or null where there's no tile.
   heightAt(x, z) {
     const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
     const cells = this.cells(tx, tz);
@@ -255,7 +293,6 @@ function gridSquares(base, out = new Uint32Array(TILE_CELLS * TILE_CELLS * 6), a
 const SQUARES = gridSquares(0);
 let plateSquares = null; // the squares of a plate's tiles' grids, one after another
 
-
 // The tile-shaped stand-in groundMaterial wants for a tile's cells: the kinds of ground at each
 // cell's middle.
 function groundTile(tx, tz, cells) {
@@ -263,12 +300,14 @@ function groundTile(tx, tz, cells) {
 }
 
 // The meshes round the builder, a group for each plate within FAR_FT: when the builder leaves
-// their tile, each plate's tiles' tiers are worked out again (plan), and plates whose tiers
+// their tile, or a plate file's been read, each plate's tiles' tiers are worked out again (plan), and plates whose tiers
 // changed are made again a few at a time, nearest first, within BUILD_MS a frame (build), each
 // kept as it was until it's replaced.
 export class Ground {
   constructor(scene, renditions, renderer) {
     this.renditions = renditions;
+    // Tiles drawn coarser till their cells were read can now be drawn finer.
+    renditions.onRead = () => (this.anchor = null);
     this.group = new THREE.Group();
     scene.add(this.group);
     this.renderer = renderer;
