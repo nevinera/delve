@@ -5,7 +5,7 @@ import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
 import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { Builder } from "./builder.js";
-import { FAR_FT, Ground, Renditions } from "./ground.js";
+import { EMPTY_FT, FAR_FT, Ground, Renditions } from "./ground.js";
 import { grid } from "./grid.js";
 import { Tools } from "./tools.js";
 
@@ -111,7 +111,8 @@ function start(world) {
   sea.rotation.x = -Math.PI / 2;
   scene.add(sea);
   const ground = new Ground(scene, renditions, renderer);
-  const groundAt = (x, z) => renditions.heightAt(x, z);
+  // The builder stands on the sea where it's over the ground.
+  const groundAt = (x, z) => Math.max(renditions.heightAt(x, z) ?? EMPTY_FT, SEA_LEVEL_FT);
   const placeKey = `create:${name}:${continent}`;
   let saved = null;
   try {

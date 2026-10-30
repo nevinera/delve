@@ -194,11 +194,11 @@ body.create {
   color: #ff9a80;
 }
 
-.create-angle {
-  margin: 0;
-}
-
 #side button:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+.create-config label[hidden] {
+  display: none;
 }

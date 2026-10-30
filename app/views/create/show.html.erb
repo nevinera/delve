@@ -42,7 +42,9 @@
       <label>strength <output id="brushStrengthOut"></output>
         <input id="brushStrength" type="range" min="1" max="100" value="20">
       </label>
-      <p class="create-angle">angle <output id="brushAngleOut"></output></p>
+      <label id="brushAngleRow" hidden>angle <output id="brushAngleOut"></output>
+        <input id="brushAngle" type="range" min="0" max="359" value="0">
+      </label>
       <label class="create-check"><input id="brushNoise" type="checkbox"> noise</label>
       <div class="create-way" role="group" aria-label="raise or lower">
         <button type="button" data-way="raise" aria-pressed="true">raise</button>

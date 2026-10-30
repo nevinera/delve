@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
 import { SHAPES, TURNS, raiseBrush } from "./geo.js";
+import { EMPTY_FT } from "./ground.js";
 
 // The tools' sidebar: the type of work and its tools above, the picked tool's settings below. A
 // picked tool takes the left button: dragging on the ground works it where the pointer is, and a
@@ -59,6 +60,8 @@ export class Tools {
     for (const button of shapes) {
       button.addEventListener("click", () => {
         this.settings.shape = button.dataset.shape;
+        // Only shapes that look different turned have an angle.
+        $("brushAngleRow").hidden = !TURNS.has(this.settings.shape);
         pressed(shapes, button);
       });
     }
@@ -71,6 +74,7 @@ export class Tools {
     }
     $("brushSize").addEventListener("input", () => this.readSize());
     $("brushStrength").addEventListener("input", () => this.readStrength());
+    $("brushAngle").addEventListener("input", () => this.turn((Number($("brushAngle").value) * Math.PI) / 180));
     $("brushNoise").addEventListener("change", () => (this.settings.noise = $("brushNoise").checked));
     this.readSize();
     this.readStrength();
@@ -105,7 +109,9 @@ export class Tools {
   // Turns the tool to `angle` radians from east toward south.
   turn(angle) {
     this.settings.angle = angle - Math.floor(angle / (2 * Math.PI)) * 2 * Math.PI;
-    $("brushAngleOut").textContent = `${Math.round((this.settings.angle * 180) / Math.PI) % 360}°`;
+    const degrees = Math.round((this.settings.angle * 180) / Math.PI) % 360;
+    $("brushAngleOut").textContent = `${degrees}°`;
+    $("brushAngle").value = String(degrees);
   }
 
   pick(tool) {
@@ -133,6 +139,11 @@ export class Tools {
     if (this.stroke) this.stroke.at = null;
   }
 
+  // The surface the pointer finds at (x, z): the ground, or the sea over it.
+  surface(x, z) {
+    return Math.max(this.renditions.heightAt(x, z) ?? EMPTY_FT, SEA_LEVEL_FT);
+  }
+
   // Where the pointer meets the ground (or the sea), [x, y, z], or null.
   hit() {
     if (!this.pointer) return null;
@@ -141,7 +152,7 @@ export class Tools {
     const { origin, direction } = ray.ray;
     const above = (t) => {
       const [x, z] = [origin.x + direction.x * t, origin.z + direction.z * t];
-      return origin.y + direction.y * t - (this.renditions.heightAt(x, z) ?? SEA_LEVEL_FT);
+      return origin.y + direction.y * t - this.surface(x, z);
     };
     let [t0, t] = [0, 0];
     while (t < PICK_FT) {
@@ -190,7 +201,7 @@ export class Tools {
         const t = 1 - (2 * (k - arc)) / (RING_POINTS - arc);
         [px, pz] = [x - Math.sin(angle) * radius * t, z + Math.cos(angle) * radius * t];
       }
-      positions.setXYZ(k, px, (this.renditions.heightAt(px, pz) ?? SEA_LEVEL_FT) + lift, pz);
+      positions.setXYZ(k, px, this.surface(px, pz) + lift, pz);
     }
     positions.needsUpdate = true;
   }

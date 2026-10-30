@@ -30,11 +30,14 @@ const SKIRT = 0.75; // how far a skirt hangs, as a share of a part's size
 const SKIRT_SHADE = 0.6;
 const KEEP_PLATES = 40; // plate files kept decoded
 const BUILD_MS = 6; // how long a frame spends making plates
+export const EMPTY_FT = -100; // the sea floor's height where there are no tiles
+const SEA_FLOOR = { terrain: "sand", rgb: [194, 178, 128] };
 
 // A continent's renditions, from its platter files, and its ground at cell scale, from its plate
 // files, read on a worker (plateWorker.js) as they're wanted. onRead() is called each time a plate
 // file has been read. The ground moved by hand (raise) is moved in the renditions and the plate
-// files read, and kept as offsets, to move plate files read later.
+// files read, and kept as offsets, to move plate files read later. Where there are no tiles, the
+// sea floor's flat at EMPTY_FT, and moving it makes tiles there.
 export class Renditions {
   constructor() {
     this.platters = new Map(); // "px,pz" -> { coords, tiles, plates }
@@ -48,6 +51,50 @@ export class Renditions {
     // 9 × 9 chunk corners, and "px,pz" -> 9 × 9 tile corners.
     this.offsets = { [CELLS]: new Map(), [CHUNKS]: new Map(), [TILES]: new Map() };
     this.changed = new Set(); // "px,pz" of plates whose ground's been moved
+    this.made = new Map(); // "px,pz" -> indexes in the plate of tiles made where there were none
+  }
+
+  // Makes tile (tx, tz) where there's none, flat sea floor: its rendition, its plate's and platter's
+  // when they're missing too, and its cells, put in its plate file as it's read (fill).
+  make(tx, tz) {
+    const [px, pz] = [Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES)];
+    const floor = () => {
+      const colors = new Uint8Array(TILE_CHUNKS * TILE_CHUNKS * 3);
+      for (let k = 0; k < colors.length; k++) colors[k] = SEA_FLOOR.rgb[k % 3];
+      return { heights: new Float32Array(CORNERS * CORNERS).fill(EMPTY_FT), colors, hash: "0000000000000000" };
+    };
+    const platterKey = platterOf(tx, tz).join(",");
+    if (!this.platters.has(platterKey)) this.platters.set(platterKey, { coords: platterOf(tx, tz), tiles: new Map(), plates: new Map() });
+    const platter = this.platters.get(platterKey);
+    platter.tiles.set(indexIn(tx, tz), floor());
+    if (!platter.plates.has(plateIndexIn(px, pz))) platter.plates.set(plateIndexIn(px, pz), floor());
+    const key = `${px},${pz}`;
+    if (!this.made.has(key)) this.made.set(key, new Set());
+    this.made.get(key).add(tileIndexInPlate(tx, tz));
+    // Read again, to have the tile's cells.
+    this.decoded.delete(key);
+  }
+
+  // Puts the tiles made in plate `key` into it, read from its file or made from nothing.
+  fill(key, plate) {
+    for (const index of this.made.get(key) ?? []) {
+      if (plate.tiles.has(index)) continue;
+      if (!plate.palette.includes(SEA_FLOOR.terrain)) plate.palette.push(SEA_FLOOR.terrain);
+      const colors = new Uint8Array(TILE_CELLS * TILE_CELLS * 3);
+      for (let k = 0; k < colors.length; k++) colors[k] = SEA_FLOOR.rgb[k % 3];
+      const terrain = new Uint8Array(TILE_CELLS * TILE_CELLS).fill(plate.palette.indexOf(SEA_FLOOR.terrain));
+      plate.tiles.set(index, { heights: new Float32Array(CELL_CORNERS * CELL_CORNERS).fill(EMPTY_FT), colors, terrain, forest: new Uint8Array(TILE_CELLS * TILE_CELLS) });
+    }
+  }
+
+  // Plate `key` read now, its made tiles and moves in, or null where it has no ground.
+  readNow(key) {
+    const [px, pz] = key.split(",").map(Number);
+    const plate = this.plateFiles.has(key) ? decodePlate(this.plateFiles.get(key)) : this.made.has(key) ? { coords: [px, pz], palette: [], tiles: new Map() } : null;
+    if (!plate) return null;
+    this.fill(key, plate);
+    this.offset(key, plate);
+    return plate;
   }
 
   // The files of `continent` whose ground's been moved, path -> bytes: their platters, and their
@@ -58,11 +105,7 @@ export class Renditions {
     for (const key of this.changed) {
       const [px, pz] = key.split(",").map(Number);
       platters.add(platterOfPlate(px, pz).join(","));
-      let plate = this.decoded.get(key);
-      if (!plate && this.plateFiles.has(key)) {
-        plate = decodePlate(this.plateFiles.get(key));
-        this.offset(key, plate);
-      }
+      const plate = this.decoded.get(key) ?? this.readNow(key);
       if (plate) files.set(platePath(continent, [px, pz]), encodePlate({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles }));
     }
     for (const key of platters) {
@@ -93,6 +136,13 @@ export class Renditions {
       }
       return any ? out : null;
     };
+    // Sea floor where the brush moves it and there are no tiles is made into tiles first.
+    const [step, n] = level === CELLS ? [CELL_FT, TILE_CELLS] : level === CHUNKS ? [CHUNK_FT, TILE_CHUNKS] : [TILE_FT, 1];
+    for (let tz = Math.floor(z0 / TILE_FT); tz <= Math.floor(z1 / TILE_FT); tz++) {
+      for (let tx = Math.floor(x0 / TILE_FT); tx <= Math.floor(x1 / TILE_FT); tx++) {
+        if (!this.tile(tx, tz) && sample(tx * TILE_FT, tz * TILE_FT, step, n)) this.make(tx, tz);
+      }
+    }
     const add = (map, key, values) => {
       const kept = map.get(key);
       if (kept) for (let k = 0; k < values.length; k++) kept[k] += values[k];
@@ -192,7 +242,12 @@ export class Renditions {
 
   // Starts reading plate file `key`, on a worker where there are workers.
   read(key) {
-    if (!this.plateFiles.has(key) || this.reading.has(key) || this.unreadable.has(key)) return;
+    if (this.reading.has(key) || this.unreadable.has(key)) return;
+    if (!this.plateFiles.has(key)) {
+      // Made by hand: nothing to read.
+      if (this.made.has(key)) this.done({ key, plate: { coords: key.split(",").map(Number), palette: [], tiles: new Map() } });
+      return;
+    }
     this.reading.add(key);
     if (typeof Worker === "undefined") return this.done({ key, plate: decodePlate(this.plateFiles.get(key)) });
     if (!this.worker) {
@@ -209,6 +264,7 @@ export class Renditions {
       console.error(`plate ${key} can't be read: ${error}`);
       return;
     }
+    this.fill(key, plate);
     this.offset(key, plate);
     this.keep(key, plate);
     this.onRead();
@@ -441,7 +497,7 @@ export class Ground {
   constructor(scene, renditions, renderer) {
     this.renditions = renditions;
     // Tiles drawn coarser till their cells were read can now be drawn finer.
-    renditions.onRead = () => (this.anchor = null);
+    renditions.onRead = () => (this.stale = true);
     this.group = new THREE.Group();
     scene.add(this.group);
     this.renderer = renderer;
@@ -453,6 +509,7 @@ export class Ground {
     this.pending = []; // "px,pz" of plates to make, nearest first
     this.moved = new Set(); // "px,pz" of plates whose ground moved, made next frame whatever it takes
     this.anchor = null; // the builder's tile and height in tiles' widths, [tx, ty, tz]
+    this.stale = false; // whether what's drawn wants working out again, wherever the builder is
     this.finest = FULL; // the finest tier drawn, by how high the builder is (finestAt)
     // Which kinds of ground are shown (toggle).
     this.shown = { full: true, fine: true, tile: true, plate: true };
@@ -464,7 +521,7 @@ export class Ground {
   update(x, y, z) {
     const a = this.anchor;
     const out = (v, at) => v < at * TILE_FT - LEAVE_FT || v > (at + 1) * TILE_FT + LEAVE_FT;
-    if (!a || out(x, a[0]) || out(y, a[1]) || out(z, a[2]) || this.finestAt(x, y, z) !== this.finest) this.plan(x, y, z);
+    if (!a || this.stale || out(x, a[0]) || out(y, a[1]) || out(z, a[2]) || this.finestAt(x, y, z) !== this.finest) this.plan(x, y, z);
     this.build();
   }
 
@@ -490,6 +547,7 @@ export class Ground {
   }
 
   plan(x, y, z) {
+    this.stale = false;
     this.anchor = [Math.floor(x / TILE_FT), Math.floor(y / TILE_FT), Math.floor(z / TILE_FT)];
     this.finest = this.finestAt(x, y, z);
     const [ax, , az] = this.anchor;
@@ -647,6 +705,8 @@ export class Ground {
   // Makes plates ("px,pz") again next frame, for ground that's moved: all of them, so ground
   // moved either side of a plate's edge shows moving together.
   refresh(keys) {
+    // Plates made where there were none are worked into what's drawn.
+    if ([...keys].some((key) => !this.wanted.has(key))) this.stale = true;
     const again = [...keys].filter((key) => this.wanted.has(key));
     for (const key of again) {
       const group = this.plates.get(key);

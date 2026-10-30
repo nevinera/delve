@@ -3,8 +3,8 @@ import { describe, expect, it } from "vitest";
 import { TILE_FT } from "../v2/sizes.js";
 import { decodePlate, encodePlate } from "../v2/plate.js";
 import { decodePlatter, encodePlatter } from "../v2/platter.js";
-import { CELLS, CHUNKS } from "./geo.js";
-import { COARSE, COARSE_TILES, FINE, FINE_TILES, FULL, FULL_TILES, Ground, PLATE, Renditions } from "./ground.js";
+import { CELLS, CHUNKS, TILES } from "./geo.js";
+import { COARSE, COARSE_TILES, EMPTY_FT, FINE, FINE_TILES, FULL, FULL_TILES, Ground, PLATE, Renditions } from "./ground.js";
 
 // Flat ground at `height` everywhere, its plate files there but never read.
 const flat = (height = 0) => {
@@ -117,5 +117,33 @@ describe("raising the ground", () => {
     expect(renditions.cells(0, 0).heights[0]).toBe(15);
     expect(renditions.heightAt(16, 16)).toBe(15);
     expect(renditions.heightAt(200, 200)).toBe(10);
+  });
+});
+
+describe("raising the empty sea floor", () => {
+  const up = () => 30;
+
+  it("makes tiles of sea floor where it's moved, at every level", () => {
+    for (const level of [CELLS, CHUNKS, TILES]) {
+      const renditions = new Renditions();
+      expect(renditions.heightAt(-256, 256)).toBeNull();
+      // Round the corner where tiles (-2, 0), (-1, 0), (-2, 1) and (-1, 1) meet.
+      expect(renditions.raise(up, [-260, 250, -250, 260], level)).toEqual(new Set(["-1,0"]));
+      expect(renditions.tile(-2, 1).heights[8]).toBe(EMPTY_FT + 30);
+      expect(renditions.tile(-2, 1).heights[0]).toBe(EMPTY_FT);
+      expect(renditions.plate(-1, 0)).not.toBeNull();
+      expect(renditions.hasCells(-2, 1)).toBe(true);
+      expect(renditions.heightAt(-256, 256)).toBeCloseTo(EMPTY_FT + 30);
+      expect(renditions.cells(-2, 1).palette).toEqual(["sand"]);
+      expect(renditions.tile(5, 5)).toBeNull();
+    }
+  });
+
+  it("gives files for the tiles it made", () => {
+    const renditions = new Renditions();
+    renditions.raise(up, [0, 0, 64, 64], CELLS);
+    const files = renditions.changedFiles("main");
+    expect(decodePlate(files.get("places/continents/main/plates/0_0.plate")).tiles.get(0).heights[0]).toBe(EMPTY_FT + 30);
+    expect(decodePlatter(files.get("places/continents/main/platters/0_0.platter")).tiles.get(0).heights[0]).toBe(EMPTY_FT + 30);
   });
 });
