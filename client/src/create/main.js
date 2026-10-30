@@ -162,10 +162,12 @@ function start({ name, continent, renditions }) {
       }
     });
     sea.position.set(x, SEA_LEVEL_FT - SEA_BELOW_FT, z);
-    // The ground drawn ends FAR_FT from the builder, so fog closes in there.
-    const back = camera.position.distanceTo(builder.model.position);
-    scene.fog.near = FOG.nearFt + back;
-    scene.fog.far = FOG.farFt + back;
+    // The ground drawn ends FAR_FT across from the builder, so fog closes in there, as far off
+    // as that is from the camera, high up too.
+    const back = Math.hypot(camera.position.x - x, camera.position.z - z);
+    const high = Math.max(0, camera.position.y - (groundAt(x, z) ?? SEA_LEVEL_FT));
+    scene.fog.near = Math.hypot(FOG.nearFt + back, high);
+    scene.fog.far = Math.hypot(FOG.farFt + back, high);
     sun.position.set(x + 500, 1000, z + 300);
     sun.target.position.set(x, 0, z);
     timed("render", () => renderer.render(scene, camera));
