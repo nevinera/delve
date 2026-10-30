@@ -126,10 +126,17 @@ export class WaterSurfaces {
     const running = this.running(tx, tz);
     // Each corner's level, for a cell at level l of type `kind`: a course's, from the course,
     // straight down it, where that's within LIP_FT of l, so cells either side of a fall's lip each
-    // keep to their own side; else the average of the wet cells' round it within STEP_FT of l.
+    // keep to their own side. A corner past a lip, below the cell's, where the ground's fallen
+    // away, is brought down to the ground, or the water below if that's higher, so a lip across
+    // the cells doesn't leave squares of water hanging over it. Else the average of the wet
+    // cells' round it within STEP_FT of l.
     const cornerOf = (ci, cj, l, kind) => {
       const c = (cj * CORNERS + ci) * 4;
-      if (running && RUNNING[kind] && !Number.isNaN(running[c + 3])) return Math.abs(running[c + 3] - l) <= LIP_FT ? running[c + 3] : l;
+      if (running && RUNNING[kind] && !Number.isNaN(running[c + 3])) {
+        const at = running[c + 3];
+        if (Math.abs(at - l) <= LIP_FT) return at;
+        return at < l ? Math.max(at, Math.min(l, heights[cj * CORNERS + ci])) : l;
+      }
       let [sum, n] = [0, 0];
       for (const [i, j] of [[ci - 1, cj - 1], [ci, cj - 1], [ci - 1, cj], [ci, cj]]) {
         const [v] = levelAt(i, j);
