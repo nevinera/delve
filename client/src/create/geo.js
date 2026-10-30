@@ -1,7 +1,7 @@
 import { fbm } from "../world/noise.js";
 import { CELL_FT, PLATE_FT, TILE_FT } from "../v2/sizes.js";
 
-// Geo tools: the raise and lower brush. Dragged, it moves the ground a little each frame, most at
+// Geo tools: the raise and lower, flatten and smooth brushes. Dragged, it moves the ground a little each frame, most at
 // the brush's middle, by its shape:
 // - round eases out to nothing at the edge;
 // - steep holds most of its height out to near the edge, then drops fast;
@@ -54,4 +54,35 @@ export function raiseBrush({ shape, radius, strength, noise, lower, angle = 0 },
     return move * SHAPES[shape](d, u) * lump;
   };
   return { at, bounds: [x - radius, z - radius, x + radius, z + radius], level: levelFor(radius) };
+}
+
+// Flatten and smooth pull the ground toward a height a little each frame, most at the brush's
+// middle, easing to nothing at its edge: flatten toward `from`, the height where the stroke began,
+// and smooth toward the average of the ground round each point, about an eighth of the brush away
+// each way, in whole steps of the brush's level. `strength` sets how fast: at the middle, flatten goes FLATTEN_RATE × strength of the way
+// a second, and smooth SMOOTH_RATE × strength.
+const FLATTEN_RATE = 5;
+const SMOOTH_RATE = 15;
+const STEPS = { [CELLS]: CELL_FT, [CHUNKS]: CELL_FT * 8, [TILES]: CELL_FT * 64 };
+
+// One frame of flatten or smooth (`tool`) at (x, z), dt seconds long, heightAt(x, z) giving the
+// ground's height: like raiseBrush's. Each point's move is worked out once a frame, so points
+// shared by neighbouring tiles move alike.
+export function pullBrush(tool, { radius, strength }, x, z, dt, heightAt, from) {
+  const level = levelFor(radius);
+  const step = Math.max(1, Math.round(radius / 8 / STEPS[level])) * STEPS[level];
+  const rate = (tool === "flatten" ? FLATTEN_RATE : SMOOTH_RATE) * strength * dt;
+  const moves = new Map();
+  const at = (px, pz) => {
+    const d = Math.hypot(px - x, pz - z) / radius;
+    if (d >= 1) return 0;
+    const key = `${px},${pz}`;
+    if (moves.has(key)) return moves.get(key);
+    const h = heightAt(px, pz);
+    const to = tool === "flatten" ? from : (heightAt(px + step, pz) + heightAt(px - step, pz) + heightAt(px, pz + step) + heightAt(px, pz - step)) / 4;
+    const move = (to - h) * Math.min(1, rate * SHAPES.round(d));
+    moves.set(key, move);
+    return move;
+  };
+  return { at, bounds: [x - radius, z - radius, x + radius, z + radius], level };
 }

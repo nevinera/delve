@@ -73,6 +73,8 @@ body.create {
 }
 
 .create-pick {
+  min-height: 0;
+  overflow-y: auto;
   border-bottom: 1px solid #44444e;
 }
 
@@ -278,4 +280,26 @@ body.create {
 
 .create-compass[hidden] {
   display: none;
+}
+
+.create-tools[data-work="geo"] {
+  display: grid;
+  gap: 4px;
+}
+
+.create-config [data-only][hidden] {
+  display: none;
+}
+
+.create-tools[data-work="geo"] button {
+  flex-direction: row;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 2px 6px;
+  font-size: 11px;
+}
+
+.create-tools[data-work="geo"] :is(canvas, svg) {
+  width: 32px;
+  height: 16px;
 }

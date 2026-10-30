@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
-import { SHAPES, TURNS, raiseBrush } from "./geo.js";
+import { SHAPES, TURNS, pullBrush, raiseBrush } from "./geo.js";
 import { EMPTY_FT } from "./ground.js";
 import { Marks } from "./marks.js";
 import { STROKE_MAX_FT, Stroke } from "./stroke.js";
@@ -8,14 +8,15 @@ import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 // The tools' sidebar: the type of work and its tools above, the picked tool's settings below. A
 // picked tool takes the left button, and Esc puts it down.
 // - planning's marker: dragging draws a line on the ground (stroke.js, marks.js).
-// - geo's raise and lower brush: dragging on the ground works it where the pointer is, and a ring
-//   on the ground shows where it reaches. c and v turn it left and right, shift+c and shift+v a
-//   little, and [ and ] resize it.
+// - geo's brushes, raise and lower, flatten and smooth: dragging on the ground works them where the
+//   pointer is, and a ring on the ground shows where they reach. [ and ] resize them, and c and v
+//   turn raise and lower's, shift+c and shift+v a little.
 
 const MIN_RADIUS_FT = 16;
 const MAX_RADIUS_FT = 16000;
 const RING_POINTS = 96;
 const PICK_FT = 30000; // how far off the pointer finds the ground
+const BRUSHES = new Set(["raise", "flatten", "smooth"]);
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
 
@@ -66,9 +67,8 @@ export class Tools {
     for (const button of shapes) {
       button.addEventListener("click", () => {
         this.settings.shape = button.dataset.shape;
-        // Only shapes that look different turned have an angle.
-        $("brushAngleRow").hidden = !TURNS.has(this.settings.shape);
         pressed(shapes, button);
+        this.showAngle();
       });
     }
     const ways = [...document.querySelectorAll("[data-way]")];
@@ -101,11 +101,12 @@ export class Tools {
       if (e.button !== 0 || !this.tool) return;
       this.point(e);
       canvas.setPointerCapture(e.pointerId);
-      if (this.tool === "raise") {
-        this.stroke = { invert: e.ctrlKey || e.metaKey };
+      const at = this.hit();
+      if (BRUSHES.has(this.tool)) {
+        // Flatten pulls toward the ground's height where the stroke began.
+        this.stroke = { invert: e.ctrlKey || e.metaKey, from: at ? this.renditions.heightAt(at[0], at[2]) ?? EMPTY_FT : null };
         return;
       }
-      const at = this.hit();
       if (!at) return;
       this.drawing = new Stroke(at[0], at[2]);
       this.marks.draw(this.drawing.points);
@@ -125,7 +126,7 @@ export class Tools {
         const step = (e.shiftKey ? FINE_TURN_DEG : TURN_DEG) * (e.key.toLowerCase() === "c" ? -1 : 1);
         this.turn(this.settings.angle + (step * Math.PI) / 180);
       }
-      else if ((e.key === "[" || e.key === "]") && this.tool === "raise") {
+      else if ((e.key === "[" || e.key === "]") && BRUSHES.has(this.tool)) {
         const size = $("brushSize");
         size.value = String(Number(size.value) + (e.key === "]" ? 50 : -50));
         this.readSize();
@@ -146,11 +147,18 @@ export class Tools {
   pick(tool) {
     this.tool = tool;
     this.toolButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tool === tool)));
-    for (const panel of document.querySelectorAll("[data-config]")) panel.hidden = panel.dataset.config !== (tool ?? "none");
+    for (const panel of document.querySelectorAll("[data-config]")) panel.hidden = !panel.dataset.config.split(" ").includes(tool ?? "none");
+    for (const part of document.querySelectorAll("[data-only]")) part.hidden = part.dataset.only !== tool;
+    this.showAngle();
     this.builder.paints = Boolean(tool);
     this.stroke = null;
     if (this.drawing) this.marks.keep([]);
     this.drawing = null;
+  }
+
+  // Only raise and lower's shapes that look different turned have an angle.
+  showAngle() {
+    $("brushAngleRow").hidden = this.tool !== "raise" || !TURNS.has(this.settings.shape);
   }
 
   // How long the line being drawn is, of how long it can be.
@@ -217,7 +225,7 @@ export class Tools {
   // ground it moved now meets the pointer's ray somewhere else.
   tick(dt) {
     this.marks.tick(dt, this.canvas.clientWidth, this.canvas.clientHeight);
-    if (this.tool !== "raise") {
+    if (!BRUSHES.has(this.tool)) {
       this.ring.visible = false;
       return;
     }
@@ -228,15 +236,16 @@ export class Tools {
     this.ring.visible = Boolean(at);
     if (!at) return;
     const [x, , z] = at;
-    if (this.stroke && dt > 0) {
+    if (this.stroke && dt > 0 && (this.tool === "raise" || this.stroke.from !== null)) {
       const lower = this.settings.lower !== this.stroke.invert;
-      const { at: move, bounds, level } = raiseBrush({ ...this.settings, lower }, x, z, dt);
-      this.ground.refresh(this.renditions.raise(move, bounds, level));
+      const groundAt = (px, pz) => this.renditions.heightAt(px, pz) ?? EMPTY_FT;
+      const brush = this.tool === "raise" ? raiseBrush({ ...this.settings, lower }, x, z, dt) : pullBrush(this.tool, this.settings, x, z, dt, groundAt, this.stroke.from);
+      this.ground.refresh(this.renditions.raise(brush.at, brush.bounds, brush.level));
     }
     const positions = this.ring.geometry.attributes.position;
     const lift = Math.max(1, this.camera.position.distanceTo(new THREE.Vector3(...at)) * 0.002);
     // A turned shape's outline: half the ring, and back across the cut.
-    const half = TURNS.has(this.settings.shape);
+    const half = this.tool === "raise" && TURNS.has(this.settings.shape);
     const arc = half ? RING_POINTS / 2 : RING_POINTS;
     const { angle, radius } = this.settings;
     for (let k = 0; k < RING_POINTS; k++) {

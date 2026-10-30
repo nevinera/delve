@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CELLS, CHUNKS, SHAPES, TILES, levelFor, raiseBrush } from "./geo.js";
+import { CELLS, CHUNKS, SHAPES, TILES, levelFor, pullBrush, raiseBrush } from "./geo.js";
 
 describe("raise brush", () => {
   it("has shapes that are 1 at the middle and 0 at the edge, but the cylinder's hard edge", () => {
@@ -50,5 +50,25 @@ describe("raise brush", () => {
     expect(levelFor(64)).toBe(CELLS);
     expect(levelFor(1000)).toBe(CHUNKS);
     expect(levelFor(6000)).toBe(TILES);
+  });
+});
+
+describe("flatten and smooth", () => {
+  const brush = { radius: 100, strength: 0.2 };
+
+  it("flattens toward the height the stroke began at, most at the middle", () => {
+    const { at } = pullBrush("flatten", brush, 0, 0, 0.5, (x) => x, 0);
+    expect(at(0, 0)).toBe(0);
+    expect(at(20, 0)).toBeCloseTo(-20 * 0.5 * SHAPES.round(0.2));
+    expect(at(200, 0)).toBe(0);
+  });
+
+  it("smooths a point toward the ground round it, the same each time it's asked", () => {
+    // An eighth of 100 ft, in 4 ft cells: 12 ft away.
+    const spike = (x, z) => (x === 0 && z === 0 ? 40 : 0);
+    const { at } = pullBrush("smooth", brush, 0, 0, 0.1, spike);
+    expect(at(0, 0)).toBeCloseTo(-40 * 0.3);
+    expect(at(0, 0)).toBe(at(0, 0));
+    expect(at(12, 0)).toBeCloseTo(10 * 0.3 * SHAPES.round(0.12));
   });
 });
