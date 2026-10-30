@@ -3,7 +3,7 @@ import { objectMeshes, setObjectSight } from "../editor/objectMeshes.js";
 import { setTreeSight, treeMeshes, trunkRadius } from "../editor/treeMeshes.js";
 import { objectShape, pushOut, treeShape } from "../v2/blocking.js";
 import { fillSlots } from "../v2/fill.js";
-import { slopeOf } from "../v2/look.js";
+import { RUNNING, slopeOf } from "../v2/look.js";
 import { TILE_FT } from "../v2/sizes.js";
 
 // What fills the tiles' object slots round the builder (v2/fill.js): trees and objects, out to
@@ -52,10 +52,12 @@ export class Scatter {
         const s = SLOPE_FT;
         const [nw, ne, sw, se] = [ground(x - s, z - s), ground(x + s, z - s), ground(x - s, z + s), ground(x + s, z + s)];
         const height = (nw + ne + sw + se) / 4;
-        // The water there, or the highest near enough to make it shore.
-        const here = r.waterAt(x, z);
-        const near = Math.max(...[[0, 0], [SHORE_FT, 0], [-SHORE_FT, 0], [0, SHORE_FT], [0, -SHORE_FT]].map(([dx, dz]) => r.waterAt(x + dx, z + dz) ?? -Infinity));
-        const water = here != null && here > height ? { wet: true } : near > -Infinity ? { wet: false, level: near } : null;
+        // The water there, or the highest near enough to make it shore, and whether any near runs.
+        const here = r.waterCellAt(x, z);
+        const near = [[0, 0], [SHORE_FT, 0], [-SHORE_FT, 0], [0, SHORE_FT], [0, -SHORE_FT]].map(([dx, dz]) => r.waterCellAt(x + dx, z + dz)).filter(Boolean);
+        const running = near.some(([, type]) => RUNNING[type]);
+        const level = Math.max(...near.map(([l]) => l));
+        const water = here && here[0] > height ? { wet: true, level: here[0], type: here[1], running } : near.length ? { wet: false, level, running } : null;
         return { height, slope: slopeOf(nw, ne, sw, se, 2 * s), water };
       },
     );

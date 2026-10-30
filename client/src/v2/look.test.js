@@ -25,6 +25,14 @@ describe("ground's look", () => {
     expect(pattern(biome("plains"), 2, 51, 0, 0, lake)).toBe("sand");
   });
 
+  it("gives ground by running water a bank, darker just over the water", () => {
+    const stream = { wet: false, level: 50, type: 0, running: true };
+    expect(groundClass(5, 52, stream)).toBe("bank");
+    expect(pattern(biome("rocky"), 5, 52, 0, 0, stream)).toMatch(/rock/);
+    const [wet, dry] = [look(biome("plains"), 5, 50.1, 0, 0, stream).rgb, look(biome("plains"), 5, 52, 0, 0, stream).rgb];
+    expect(wet[0]).toBeLessThan(dry[0] * 0.8);
+  });
+
   it("works out a square's slope from its corners", () => {
     expect(slopeOf(0, 0, 0, 0, 4)).toBe(0);
     expect(slopeOf(0, 4, 0, 4, 4)).toBeCloseTo(45);

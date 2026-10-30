@@ -31,9 +31,18 @@ describe("filling slots", () => {
     expect(under.trees.length + under.objects.length).toBe(0);
   });
 
-  it("leaves steep ground and the shore empty", () => {
+  it("leaves steep ground and deeper water empty", () => {
     const steep = fillSlots(makeSlots(0, 0), 0, 0, () => 1, () => ({ height: 50, slope: 60 }));
-    const shore = fillSlots(makeSlots(0, 0), 0, 0, () => 1, () => ({ height: 1, slope: 0, water: { wet: false, level: 0 } }));
-    expect(steep.trees.length + steep.objects.length + shore.trees.length + shore.objects.length).toBe(0);
+    const deep = fillSlots(makeSlots(0, 0), 0, 0, () => 1, () => ({ height: -5, slope: 0, water: { wet: true, level: 0, running: true } }));
+    expect(steep.trees.length + steep.objects.length + deep.trees.length + deep.objects.length).toBe(0);
+  });
+
+  it("puts boulders and driftwood on banks and in shallows, more by running water, and no trees", () => {
+    const count = (water) => fillSlots(makeSlots(0, 0), 0, 0, () => 1, () => ({ height: 1, slope: 0, water }));
+    const [bank, shore, shallows] = [count({ wet: false, level: 0, running: true }), count({ wet: false, level: 0, running: false }), count({ wet: true, level: 2, running: true })];
+    for (const filled of [bank, shore, shallows]) expect(filled.trees.length).toBe(0);
+    expect(new Set(bank.objects.map((o) => o.type))).toContain("boulder");
+    expect(bank.objects.length).toBeGreaterThan(shore.objects.length * 3);
+    expect(shallows.objects.length).toBeGreaterThan(0);
   });
 });

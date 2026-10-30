@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "about": "What fills each object slot (v2/slots.js), by the biome under it and the slot's size: each entry takes `share` of the rolls, in order (rolls are split finer by the slot's place, so shares can be small), and the rest are left empty. A tree is a kind and size from editor/treeMeshes.js; an object is a type from world/objects.js.",
+  "about": "What fills each object slot (v2/slots.js), by the biome under it and the slot's size: each entry takes `share` of the rolls, in order (rolls are split finer by the slot's place, so shares can be small), and the rest are left empty. A tree is a kind and size from editor/treeMeshes.js; an object is a type from world/objects.js. Slots on banks of running water, shores of still water, or in shallows of either take theirs from `banks` instead, by whether the water runs.",
   "biomes": {
     "plains": {
       "large": [{ "tree": "oak", "size": 3, "share": 0.003 }, { "object": "rock", "share": 0.002 }],
@@ -21,6 +21,17 @@
       "large": [{ "tree": "willow", "size": 3, "share": 0.05 }, { "tree": "dead", "size": 3, "share": 0.02 }],
       "medium": [{ "tree": "willow", "size": 2, "share": 0.035 }, { "tree": "dead", "size": 2, "share": 0.02 }, { "object": "rottingLog", "share": 0.012 }],
       "small": [{ "object": "hummock", "share": 0.06 }, { "object": "rootTangle", "share": 0.02 }, { "object": "deadStump", "share": 0.02 }, { "object": "bush", "share": 0.01 }]
+    }
+  },
+  "banks": {
+    "running": {
+      "large": [{ "object": "boulder", "share": 0.06 }],
+      "medium": [{ "object": "boulder", "share": 0.07 }, { "object": "mossyBoulder", "share": 0.03 }, { "object": "driftLog", "share": 0.012 }],
+      "small": [{ "object": "boulder", "share": 0.1 }, { "object": "rubble", "share": 0.03 }]
+    },
+    "still": {
+      "medium": [{ "object": "driftLog", "share": 0.008 }, { "object": "boulder", "share": 0.01 }],
+      "small": [{ "object": "boulder", "share": 0.015 }]
     }
   }
 }

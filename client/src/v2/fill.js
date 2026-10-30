@@ -7,18 +7,28 @@ import { TILE_FT } from "./sizes.js";
 import { SEED, SLOT_BYTES, SLOT_SIZES } from "./slots.js";
 
 // What fills object slots (slots.js), by fill.json: the same for whoever reads the tile. Slots on
-// steep ground or the shore stay empty, and bigger things are placed first, so smaller ones that
-// would crowd them are left out.
+// banks, shores and in shallows take theirs from its `banks`, slots on steep ground or under
+// deeper water stay empty, and bigger things are placed first, so smaller ones that would crowd
+// them are left out.
 
 // How much room trees of each size (1 to 3) keep round them, in ft: about half their crowns.
 const TREE_ROOM = [0, 8, 12, 17];
 const ROOM_BUCKET_FT = 32;
+const SHALLOW_FT = 1.5; // how deep water can be over a slot for it to be filled
 
 // What fills a slot of `size` (an index into SLOT_SIZES) with `roll` in biome `biome` (an index
 // into BIOME_NAMES): a fill.json entry, or null. `fine`, 0 to 1, splits the roll finer, so shares
 // can be less than a roll's 1/256.
 export function fillOf(biome, size, roll, fine = 0.5) {
-  const entries = FILL.biomes[BIOME_NAMES[biome]]?.[SLOT_SIZES[size]] ?? [];
+  return pickFrom(FILL.biomes[BIOME_NAMES[biome]]?.[SLOT_SIZES[size]] ?? [], roll, fine);
+}
+
+// What fills a slot of `size` by running water, or still, with `roll` and `fine` as fillOf has them.
+export function bankFillOf(running, size, roll, fine = 0.5) {
+  return pickFrom(FILL.banks[running ? "running" : "still"]?.[SLOT_SIZES[size]] ?? [], roll, fine);
+}
+
+function pickFrom(entries, roll, fine) {
   let past = (roll + fine) / 256;
   for (const entry of entries) {
     if (past < entry.share) return entry;
@@ -30,7 +40,7 @@ export function fillOf(biome, size, roll, fine = 0.5) {
 // What stands in tile (tx, tz)'s `slots`: { trees: [{ x, z, kind, size }], objects: world/objects.js
 // objects }, continent feet. biomeAt(i, j) gives the biome of the tile's cell (i, j); groundAt(x, z)
 // the ground's { height, slope, water } there, slope in degrees and water as look.js's groundClass
-// has it. Slots under water and on the shore stay empty.
+// has it.
 export function fillSlots(slots, tx, tz, biomeAt, groundAt) {
   const trees = [];
   const objects = [];
@@ -54,11 +64,11 @@ export function fillSlots(slots, tx, tz, biomeAt, groundAt) {
     const [x, z] = [tx * TILE_FT + sx + 0.5, tz * TILE_FT + sz + 0.5];
     // The roll split finer by where the slot is.
     const fine = hash2(Math.floor(x), Math.floor(z), SEED + 32);
-    const entry = fillOf(biomeAt(sx >> 2, sz >> 2), size, roll, fine);
-    if (!entry) continue;
     const { height, slope, water } = groundAt(x, z);
     const kind = groundClass(slope, height, water);
-    if (kind === "steep" || kind === "shore" || kind === "bed") continue;
+    if (kind === "steep" || (kind === "bed" && water.level - height > SHALLOW_FT)) continue;
+    const entry = kind === "bank" || kind === "shore" || kind === "bed" ? bankFillOf(water.running, size, roll, fine) : fillOf(biomeAt(sx >> 2, sz >> 2), size, roll, fine);
+    if (!entry) continue;
     const pick = (n) => hash2(Math.floor(x), Math.floor(z), SEED + 16 + n);
     if (entry.tree) {
       const r = TREE_ROOM[entry.size];

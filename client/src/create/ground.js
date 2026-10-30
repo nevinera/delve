@@ -5,7 +5,7 @@ import { AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, partWater 
 import { LEVEE_FT, courseBox, shape } from "../v2/courses.js";
 import { waterMaterial } from "../editor/waterMaterial.js";
 import { SHORE_FADE_FT, WATER_LOOKS } from "./waterSurface.js";
-import { PATTERNS, look, painted, slopeOf } from "../v2/look.js";
+import { PATTERNS, RUNNING, look, painted, slopeOf } from "../v2/look.js";
 import { makeSlots } from "../v2/slots.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate, platePath, tileIndexInPlate } from "../v2/plate.js";
 import { CORNERS, decodePlatter, encodePlatter, indexIn, plateIndexIn, platterOf, platterOfPlate, platterPath } from "../v2/platter.js";
@@ -609,8 +609,8 @@ export class Renditions {
   dress(tx, tz, cells) {
     if (cells.dressed === this.looks && cells.dressedWater === cells.water) return;
     const biomes = this.biomeTile(tx, tz);
-    const near = this.nearWater(tx, tz, cells.water);
-    const water = { wet: false, level: 0, type: 0 };
+    const [near, runs] = this.nearWater(tx, tz, cells.water);
+    const water = { wet: false, level: 0, type: 0, running: false };
     const colors = new Uint8Array(TILE_CELLS * TILE_CELLS * 3);
     const kinds = new Uint8Array(TILE_CELLS * TILE_CELLS);
     const h = cells.heights;
@@ -622,7 +622,7 @@ export class Renditions {
         const [x, z] = [tx * TILE_FT + (i + 0.5) * CELL_FT, tz * TILE_FT + (j + 0.5) * CELL_FT];
         const paint = cells.terrain?.[k] ? cells.palette[cells.terrain[k] - 1] : null;
         const wet = cells.water && !Number.isNaN(cells.water.level[k]);
-        Object.assign(water, wet ? { wet, level: cells.water.level[k], type: cells.water.type[k] } : { wet, level: near[k] });
+        Object.assign(water, wet ? { wet, level: cells.water.level[k], type: cells.water.type[k], running: RUNNING[cells.water.type[k]] } : { wet, level: near[k], running: !Number.isNaN(runs[k]) });
         const { pattern, rgb } = (paint && painted(paint, x, z)) || look(biomes[k], slopeOf(nw, ne, sw, se, CELL_FT), (nw + ne + sw + se) / 4, x, z, wet || !Number.isNaN(near[k]) ? water : null);
         kinds[k] = pattern;
         colors.set(rgb, k * 3);
@@ -644,25 +644,28 @@ export class Renditions {
   }
 
   // For each of tile (tx, tz)'s cells, the highest water within SHORE_CELLS of it, NaN for none,
-  // with `water` the tile's, and its neighbours' as waterAt has them.
+  // and the highest running water's (look.js's RUNNING), with `water` the tile's, and its
+  // neighbours' as waterCellAt has them: [levels, running levels].
   nearWater(tx, tz, water) {
     const r = SHORE_CELLS;
     const side = TILE_CELLS + 2 * r;
     const grid = new Float32Array(side * side).fill(NaN);
+    const runs = new Float32Array(side * side).fill(NaN);
     const own = water && water.level.some((l) => !Number.isNaN(l));
     let any = own;
     for (let j = -r; j < TILE_CELLS + r; j++) {
       for (let i = -r; i < TILE_CELLS + r; i++) {
         const inside = i >= 0 && j >= 0 && i < TILE_CELLS && j < TILE_CELLS;
         if (inside && !own) continue;
-        const level = inside ? water.level[j * TILE_CELLS + i] : this.waterAt(tx * TILE_FT + (i + 0.5) * CELL_FT, tz * TILE_FT + (j + 0.5) * CELL_FT);
-        if (level == null || Number.isNaN(level)) continue;
+        const k = j * TILE_CELLS + i;
+        const [level, type] = inside ? [water.level[k], water.type[k]] : (this.waterCellAt(tx * TILE_FT + (i + 0.5) * CELL_FT, tz * TILE_FT + (j + 0.5) * CELL_FT) ?? [NaN, 0]);
+        if (Number.isNaN(level)) continue;
         grid[(j + r) * side + i + r] = level;
+        if (RUNNING[type]) runs[(j + r) * side + i + r] = level;
         any = true;
       }
     }
-    const out = new Float32Array(TILE_CELLS * TILE_CELLS).fill(NaN);
-    if (!any) return out;
+    if (!any) return [new Float32Array(TILE_CELLS * TILE_CELLS).fill(NaN), new Float32Array(TILE_CELLS * TILE_CELLS).fill(NaN)];
     // The highest along each row within r, then down each column.
     const most = (from, at, step, count) => {
       let best = NaN;
@@ -672,10 +675,14 @@ export class Renditions {
       }
       return best;
     };
-    const rows = new Float32Array(side * side).fill(NaN);
-    for (let j = 0; j < side; j++) for (let i = r; i < side - r; i++) rows[j * side + i] = most(grid, j * side + i, 1, r);
-    for (let j = 0; j < TILE_CELLS; j++) for (let i = 0; i < TILE_CELLS; i++) out[j * TILE_CELLS + i] = most(rows, (j + r) * side + i + r, side, r);
-    return out;
+    const spread = (from) => {
+      const out = new Float32Array(TILE_CELLS * TILE_CELLS).fill(NaN);
+      const rows = new Float32Array(side * side).fill(NaN);
+      for (let j = 0; j < side; j++) for (let i = r; i < side - r; i++) rows[j * side + i] = most(from, j * side + i, 1, r);
+      for (let j = 0; j < TILE_CELLS; j++) for (let i = 0; i < TILE_CELLS; i++) out[j * TILE_CELLS + i] = most(rows, (j + r) * side + i + r, side, r);
+      return out;
+    };
+    return [spread(grid), spread(runs)];
   }
 
   // Whether there's sea at (x, z): off the tiles, or a cell's water that's the sea's.
@@ -690,12 +697,17 @@ export class Renditions {
   // The water's surface at (x, z): the sea's off the tiles, a cell's water where its plate's read,
   // or null where it's dry or not read.
   waterAt(x, z) {
+    return this.waterCellAt(x, z)?.[0] ?? null;
+  }
+
+  // The water at (x, z) as waterAt has it, [level, type (an index into WATER_TYPES)], or null.
+  waterCellAt(x, z) {
     const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
-    if (!this.tile(tx, tz)) return SEA_LEVEL_FT;
+    if (!this.tile(tx, tz)) return [SEA_LEVEL_FT, SEA];
     const water = this.decoded.get(`${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`)?.tiles.get(tileIndexInPlate(tx, tz))?.water;
     if (!water) return null;
-    const level = water.level[Math.floor((z - tz * TILE_FT) / CELL_FT) * TILE_CELLS + Math.floor((x - tx * TILE_FT) / CELL_FT)];
-    return Number.isNaN(level) ? null : level;
+    const k = Math.floor((z - tz * TILE_FT) / CELL_FT) * TILE_CELLS + Math.floor((x - tx * TILE_FT) / CELL_FT);
+    return Number.isNaN(water.level[k]) ? null : [water.level[k], water.type[k]];
   }
 
   // The middle of the tiles, as continent feet [x, z]: the tile nearest the middle of them all.
