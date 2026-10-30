@@ -2,10 +2,12 @@ import * as THREE from "three";
 import { Line2 } from "three/addons/lines/Line2.js";
 import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
+import { SEA_LEVEL_FT } from "../v2/sizes.js";
 
-// Lines marked on the ground by the planning marker, following the ground as it's moved, lifted
-// off it more the further they are from the camera, so the coarser ground drawn there doesn't
-// bury them, though ground between them and the camera hides them. Each has one of COLORS, one of four widths a few pixels wide, and a style, solid,
+// Lines marked on the ground by the planning marker. While they're being worked on (flat), they're
+// drawn at sea level, over everything. Otherwise they follow the ground as it's moved, lifted off
+// it more the further they are from the camera, so the coarser ground drawn there doesn't bury
+// them, though ground between them and the camera hides them. Each has one of COLORS, one of four widths a few pixels wide, and a style, solid,
 // dashed or dotted. Lines, dashes and dots all grow the higher the builder flies. The eraser cuts
 // lines where it passes, in two where it passes their middles. Lines picked out with the select
 // tool show a halo, and can be deleted whole. A continent's are kept in its
@@ -84,6 +86,7 @@ export class Marks {
     this.erased = false; // whether the eraser's stroke has cut lines yet
     this.selected = new Map(); // a kept line -> its halo
     this.eye = new THREE.Vector3(); // where the camera is
+    this.flat = false; // whether lines are drawn at sea level, over everything
     this.version = 0; // counts changes to the lines kept, to tell when to save them
     this.since = 0;
   }
@@ -121,7 +124,7 @@ export class Marks {
     const key = `${color},${width},${style}`;
     if (!this.materials.has(key)) {
       const halo = color === "halo";
-      const material = new LineMaterial({ color: halo ? HALO : COLORS[color], linewidth: WIDTHS_PX[width - 1], depthWrite: false, dashed: Boolean(STYLES[style]) });
+      const material = new LineMaterial({ color: halo ? HALO : COLORS[color], linewidth: WIDTHS_PX[width - 1], depthTest: !this.flat, depthWrite: false, dashed: Boolean(STYLES[style]) });
       material.userData = { width, style, halo };
       this.materials.set(key, material);
     }
@@ -141,6 +144,7 @@ export class Marks {
   place(line, points) {
     const positions = new Float32Array(Math.max(2, points.length) * 3);
     points.forEach(([x, z], k) => {
+      if (this.flat) return positions.set([x, SEA_LEVEL_FT + LIFT_FT, z], k * 3);
       const y = this.surface(x, z);
       const lift = LIFT_FT + LIFT_SHARE * Math.hypot(x - this.eye.x, y - this.eye.y, z - this.eye.z);
       positions.set([x, y + lift, z], k * 3);
@@ -150,6 +154,22 @@ export class Marks {
     line.geometry = new LineGeometry();
     line.geometry.setPositions(positions);
     if (line.material.dashed) line.computeLineDistances();
+  }
+
+  // Draws lines at sea level over everything, or on the ground.
+  setFlat(flat) {
+    if (flat === this.flat) return;
+    this.flat = flat;
+    for (const material of this.materials.values()) {
+      material.depthTest = !flat;
+      material.needsUpdate = true;
+    }
+    this.placeAll();
+  }
+
+  placeAll() {
+    for (const { points, line } of this.kept) this.place(line, points);
+    for (const [{ points }, halo] of this.selected) this.place(halo, points);
   }
 
   // Draws the stroke being made.
@@ -261,7 +281,6 @@ export class Marks {
     }
     if ((this.since += dt) < LIFT_EVERY_S) return;
     this.since = 0;
-    for (const { points, line } of this.kept) this.place(line, points);
-    for (const [{ points }, halo] of this.selected) this.place(halo, points);
+    if (!this.flat) this.placeAll();
   }
 }

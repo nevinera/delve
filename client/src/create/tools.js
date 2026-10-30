@@ -21,6 +21,7 @@ const PICK_FT = 30000; // how far off the pointer finds the ground
 const PICK_LINE_PX = 8; // how near the pointer a line is picked out
 const BOX_PX = 4; // how far the pointer's dragged before select draws a box
 const BRUSHES = new Set(["raise", "flatten", "smooth", "clear", "eraser"]);
+const PLANNING = new Set(["marker", "eraser", "select"]); // tools that work on lines drawn at sea level
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
 
@@ -125,7 +126,7 @@ export class Tools {
         [this.box.x1, this.box.y1] = [e.clientX - r.left, e.clientY - r.top];
         this.showBox();
       }
-      const at = this.drawing && this.hit();
+      const at = this.drawing && this.hit(this.drawAt);
       if (!at) return;
       this.drawing.add(at[0], at[2]);
       this.marks.draw(this.drawing.points);
@@ -142,7 +143,7 @@ export class Tools {
         this.box = { x0: x, y0: y, x1: x, y1: y, add: e.shiftKey };
         return;
       }
-      const at = this.hit();
+      const at = this.hit(this.drawAt);
       if (BRUSHES.has(this.tool)) {
         // Flatten pulls toward the ground's height where the stroke began.
         this.stroke = { invert: e.ctrlKey || e.metaKey, from: at ? this.renditions.heightAt(at[0], at[2]) ?? EMPTY_FT : null };
@@ -199,6 +200,7 @@ export class Tools {
     this.stroke = null;
     if (this.drawing) this.marks.keep([]);
     this.marks.unselect();
+    this.marks.setFlat(PLANNING.has(tool));
     this.box = null;
     this.boxEl.hidden = true;
     this.drawing = null;
@@ -240,7 +242,7 @@ export class Tools {
 
   // Where a line's point [x, z] is on the canvas, in pixels, or null when it's behind.
   onScreen([x, z]) {
-    const v = new THREE.Vector3(x, this.surface(x, z) + 1, z).project(this.camera);
+    const v = new THREE.Vector3(x, this.drawAt(x, z) + 1, z).project(this.camera);
     return v.z > 1 || v.z < -1 ? null : [((v.x + 1) / 2) * this.canvas.clientWidth, ((1 - v.y) / 2) * this.canvas.clientHeight];
   }
 
@@ -298,15 +300,18 @@ export class Tools {
     return Math.max(this.renditions.heightAt(x, z) ?? EMPTY_FT, SEA_LEVEL_FT);
   }
 
-  // Where the pointer meets the ground (or the sea), [x, y, z], or null.
-  hit() {
+  // Where the tool works at (x, z): sea level for lines being worked on, or the surface.
+  drawAt = (x, z) => (this.marks.flat ? SEA_LEVEL_FT : this.surface(x, z));
+
+  // Where the pointer meets the ground (or the sea), or `surface` given, [x, y, z], or null.
+  hit(surface = (x, z) => this.surface(x, z)) {
     if (!this.pointer) return null;
     const ray = new THREE.Raycaster();
     ray.setFromCamera(this.pointer, this.camera);
     const { origin, direction } = ray.ray;
     const above = (t) => {
       const [x, z] = [origin.x + direction.x * t, origin.z + direction.z * t];
-      return origin.y + direction.y * t - this.surface(x, z);
+      return origin.y + direction.y * t - surface(x, z);
     };
     let [t0, t] = [0, 0];
     while (t < PICK_FT) {
@@ -339,7 +344,7 @@ export class Tools {
     }
     const view = this.camera.matrixWorld.elements.join();
     if (this.stroke?.view !== view) this.stroke &&= { ...this.stroke, view, at: null };
-    const at = this.tool && (this.stroke?.at ?? this.hit());
+    const at = this.tool && (this.stroke?.at ?? this.hit(this.drawAt));
     if (this.stroke) this.stroke.at = at;
     this.ring.visible = Boolean(at);
     if (!at) return;
@@ -373,7 +378,7 @@ export class Tools {
         const t = 1 - (2 * (k - arc)) / (RING_POINTS - arc);
         [px, pz] = [x - Math.sin(angle) * radius * t, z + Math.cos(angle) * radius * t];
       }
-      positions.setXYZ(k, px, this.surface(px, pz) + lift, pz);
+      positions.setXYZ(k, px, this.drawAt(px, pz) + lift, pz);
     }
     positions.needsUpdate = true;
   }
