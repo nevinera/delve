@@ -4,7 +4,8 @@ import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
 import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
-import { biomesPath } from "./biomes.js";
+import { BIOME_NAMES } from "../v2/biomes.js";
+import { BIOMES, biomesPath } from "./biomes.js";
 import { Builder } from "./builder.js";
 import { Compass, facing } from "./compass.js";
 import { EMPTY_FT, FAR_FT, Ground, Renditions } from "./ground.js";
@@ -166,6 +167,12 @@ function start(world, changes) {
   };
   $("showLines").addEventListener("change", showLines);
   $("showCurtains").addEventListener("change", showLines);
+  // Showing biomes outlines their areas and tints the ground but that drawn in full.
+  const TINT = BIOME_NAMES.map((name) => new THREE.Color(BIOMES[name]).toArray());
+  $("showBiomes").addEventListener("change", () => {
+    tools.showBiomes($("showBiomes").checked);
+    ground.setTint($("showBiomes").checked ? TINT : null);
+  });
   $("showPins").addEventListener("change", () => tools.marks.pins.setShown($("showPins").checked));
   showLines();
   // Let go of the toggle clicked, so keys go back to flying and the tools.
@@ -261,6 +268,7 @@ function start(world, changes) {
     if (tools.biomes.version !== biomesBaked && !tools.biomes.dragging) {
       renditions.setBiomes(tools.biomes.toJSON().areas);
       biomesBaked = tools.biomes.version;
+      if (ground.tint) ground.retint();
     }
     // Saves what's changed once there's been time to finish the stroke, writing files on the worker.
     if (!saving && !tools.stroke && !tools.drawing && now - lastChangeSave > SAVE_CHANGES_MS && (renditions.unsaved.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved)) {

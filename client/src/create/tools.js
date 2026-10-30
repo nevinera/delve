@@ -78,6 +78,7 @@ export class Tools {
     this.pinColor = "red";
     this.measure = new Measure(canvas.parentElement);
     this.biomes = new Biomes(scene, (x, z) => this.surface(x, z), canvas.parentElement);
+    this.biomesShown = false; // whether biome areas are shown with other tools too
     this.draw = new Draw(scene, canvas.parentElement, renditions, ground, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, () => this.showDraw());
     // Measure's, { from, to } for a ruler, { middle, radius } for a circle, and while the button's
     // down, where it went down and whether a ruler or circle was shown before.
@@ -415,6 +416,12 @@ export class Tools {
     this.biomeButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.biome === area.biome)));
   }
 
+  // Shows biome areas' outlines with every tool, or only the biome tool.
+  showBiomes(shown) {
+    this.biomesShown = shown;
+    this.biomes.setShown(shown || this.tool === "biomes");
+  }
+
   // Shows the draw tool's state, and the settings of what it's growing.
   showDraw() {
     const { state, kind } = this.draw;
@@ -467,7 +474,7 @@ export class Tools {
     this.marks.unselect();
     this.marks.setFlat(PLANNING.has(tool));
     if (tool !== "draw") this.draw.clear();
-    this.biomes.setShown(tool === "biomes");
+    this.biomes.setShown(tool === "biomes" || this.biomesShown);
     this.measuring = null;
     this.box = null;
     this.boxEl.hidden = true;

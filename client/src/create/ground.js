@@ -33,6 +33,8 @@ const KEEP_PLATES = 40; // plate files kept decoded
 const BUILD_MS = 6; // how long a frame spends making plates
 export const EMPTY_FT = -100; // the sea floor's height where there are no tiles
 const SEA_FLOOR = { terrain: "sand", rgb: [194, 178, 128] };
+const TINT = 0.8; // how far toward its biome's color ground's mixed, showing biomes
+const CHUNK_CELLS_HALF = CHUNK_CELLS / 2;
 
 // A continent's renditions, from its platter files, and its ground at cell scale, from its plate
 // files, read on a worker (plateWorker.js) as they're wanted. onRead() is called each time a plate
@@ -59,6 +61,14 @@ export class Renditions {
     this.layout = 0; // counts tiles made and cleared, to tell when which there are has changed
     this.biomeAreas = []; // the biome areas, as biomes.json keeps them
     this.biomes = new BiomeMap(); // and which biome is where from them, baked into plate files saved
+    this.biomeCells = new Map(); // "tx,tz" -> its cells' biomes, worked out as they're wanted
+  }
+
+  // Tile (tx, tz)'s cells' biomes, 64 × 64 indexes into BIOME_NAMES.
+  biomeTile(tx, tz) {
+    const key = `${tx},${tz}`;
+    if (!this.biomeCells.has(key)) this.biomeCells.set(key, this.biomes.tile(tx, tz));
+    return this.biomeCells.get(key);
   }
 
   // Takes the biome areas, and with `dirty`, marks the plates where which biome is where changed,
@@ -67,6 +77,7 @@ export class Renditions {
     const boxes = changedBoxes(this.biomeAreas, areas);
     this.biomeAreas = areas;
     this.biomes = new BiomeMap(areas);
+    this.biomeCells.clear();
     this.worker?.postMessage({ biomes: areas });
     const marked = new Set();
     if (!dirty) return marked;
@@ -334,6 +345,7 @@ export class Renditions {
           for (let k = 0; k < d.length; k++) tile.heights[k] += d[k];
           delete tile.span;
           delete tile.faces;
+          delete tile.tinted;
           moved.add(`${px},${pz}`);
           if (level === CHUNKS) add(this.offsets[CHUNKS], key, ringed);
         }
@@ -540,6 +552,13 @@ class Faces {
     return [LINEAR[bytes[k]] * shade, LINEAR[bytes[k + 1]] * shade, LINEAR[bytes[k + 2]] * shade];
   }
 
+  // `rgb` mixed toward `tint`'s color for biome `biome`, or as it is with no tint.
+  static tinted(rgb, tint, biome) {
+    if (!tint) return rgb;
+    const color = tint[biome];
+    return [0, 1, 2].map((m) => rgb[m] * (1 - TINT) + color[m] * TINT);
+  }
+
   // A square from its corners: northwest, northeast, southwest, southeast.
   square(a, b, c, d, rgb) {
     this.add(a, rgb);
@@ -703,6 +722,22 @@ export class Ground {
     // Which kinds of ground are shown (toggle).
     this.shown = { full: true, fine: true, tile: true, plate: true };
     this.counts = [0, 0, 0, 0]; // tiles drawn each way
+    this.tint = null; // showing biomes, each biome's linear RGB, by index into BIOME_NAMES
+    this.tints = 0; // counts changes to how ground's tinted, to tell tinted faces kept are stale
+  }
+
+  // Draws all but the ground in full tinted by biome, with `tint` (each biome's linear RGB), or
+  // not, with null.
+  setTint(tint) {
+    this.tint = tint;
+    this.retint();
+  }
+
+  // Makes every plate again, a few a frame, for biomes that changed.
+  retint() {
+    this.tints++;
+    for (const group of this.plates.values()) group.userData.tiers = null;
+    this.stale = true;
   }
 
   // Works out what's to be drawn round continent feet (x, y, z) when that's left the tile it was
@@ -818,26 +853,30 @@ export class Ground {
         // The tile's ground as a grid of `n` parts a side: the height at corner (a, b), and part
         // (a, b)'s color, darkened by `shade`.
         let n, height, color, faces, depth;
+        const tint = this.tint;
         if (t === PLATE) {
           [n, faces, depth] = [1, far, TILE_FT * SKIRT];
           height = (a, b) => plate.heights[(j + b) * CORNERS + i + a];
-          color = (a, b, shade) => far.rgb(plate.colors, (j * PLATE_TILES + i) * 3, shade);
+          const biome = tint && this.renditions.biomes.at((tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT);
+          color = (a, b, shade) => Faces.tinted(far.rgb(plate.colors, (j * PLATE_TILES + i) * 3, shade), tint, biome);
         } else if (t === COARSE) {
           const tile = this.renditions.tile(tx, tz);
           [n, faces, depth] = [TILE_CHUNKS, near, CHUNK_FT * SKIRT];
           height = (a, b) => tile.heights[b * CORNERS + a];
-          color = (a, b, shade) => near.rgb(tile.colors, (b * TILE_CHUNKS + a) * 3, shade);
+          const biomes = tint && this.renditions.biomeTile(tx, tz);
+          color = (a, b, shade) => Faces.tinted(near.rgb(tile.colors, (b * TILE_CHUNKS + a) * 3, shade), tint, biomes && biomes[(b * CHUNK_CELLS + CHUNK_CELLS_HALF) * TILE_CELLS + a * CHUNK_CELLS + CHUNK_CELLS_HALF]);
         } else {
           [n, faces, depth] = [TILE_CELLS, near, CHUNK_FT * SKIRT];
           height = (a, b) => cells.heights[b * CELL_CORNERS + a];
-          color = (a, b, shade) => near.rgb(cells.colors, (b * TILE_CELLS + a) * 3, shade);
-          if (t === FINE) fine.push(cellGrid(cells, ox, oz));
+          const biomes = tint && t === FINE && this.renditions.biomeTile(tx, tz);
+          color = (a, b, shade) => Faces.tinted(near.rgb(cells.colors, (b * TILE_CELLS + a) * 3, shade), biomes && tint, biomes && biomes[b * TILE_CELLS + a]);
+          if (t === FINE) fine.push(biomes ? this.tintedGrid(cells, ox, oz, biomes) : cellGrid(cells, ox, oz));
           else this.addFull(group, tx, tz, cells, ox, oz, before);
         }
         const part = TILE_FT / n;
         const corner = (a, b) => [ox + a * part, height(a, b), oz + b * part];
         if (t === PLATE) faces.square(corner(0, 0), corner(1, 0), corner(0, 1), corner(1, 1), color(0, 0, 1));
-        if (t === COARSE) faces.append(tileFaces(this.renditions.tile(tx, tz)), ox, oz);
+        if (t === COARSE) faces.append(tint ? this.tintedFaces(tx, tz) : tileFaces(this.renditions.tile(tx, tz)), ox, oz);
         for (const [di, dj, from, to] of SIDES) {
           if (tierAt(i + di, j + dj) === t) continue;
           const step = [to[0] - from[0], to[1] - from[1]];
@@ -854,6 +893,50 @@ export class Ground {
     this.add(group, near.geometry(), this.materials.tile, "tile");
     this.add(group, fineGeometry(fine), this.materials.fine, "fine");
     return group;
+  }
+
+  // A tile's rendition's squares tinted by biome, kept with it till the tint changes.
+  tintedFaces(tx, tz) {
+    const tile = this.renditions.tile(tx, tz);
+    if (tile.tinted?.tints === this.tints) return tile.tinted.faces;
+    const biomes = this.renditions.biomeTile(tx, tz);
+    const faces = new Faces();
+    const corner = (a, b) => [a * CHUNK_FT, tile.heights[b * CORNERS + a], b * CHUNK_FT];
+    for (let b = 0; b < TILE_CHUNKS; b++) {
+      for (let a = 0; a < TILE_CHUNKS; a++) {
+        const biome = biomes[(b * CHUNK_CELLS + CHUNK_CELLS_HALF) * TILE_CELLS + a * CHUNK_CELLS + CHUNK_CELLS_HALF];
+        faces.square(corner(a, b), corner(a + 1, b), corner(a, b + 1), corner(a + 1, b + 1), Faces.tinted(faces.rgb(tile.colors, (b * TILE_CHUNKS + a) * 3), this.tint, biome));
+      }
+    }
+    tile.tinted = { tints: this.tints, faces };
+    return faces;
+  }
+
+  // A tile's cell grid with its colors tinted by `biomes`, its cells' biomes, each corner by the
+  // cells round it, kept with its cells till the tint changes.
+  tintedGrid(cells, ox, oz, biomes) {
+    const grid = cellGrid(cells, ox, oz);
+    if (cells.tinted?.tints === this.tints && cells.tinted.grid === grid) return cells.tinted.tinted;
+    const side = CELL_CORNERS;
+    const color = new Float32Array(grid.color.length);
+    for (let j = 0; j < side; j++) {
+      for (let i = 0; i < side; i++) {
+        const v = (j * side + i) * 3;
+        const mixed = [0, 0, 0];
+        let count = 0;
+        for (let b = Math.max(0, j - 1); b <= Math.min(TILE_CELLS - 1, j); b++) {
+          for (let a = Math.max(0, i - 1); a <= Math.min(TILE_CELLS - 1, i); a++) {
+            const c = this.tint[biomes[b * TILE_CELLS + a]];
+            for (let m = 0; m < 3; m++) mixed[m] += c[m];
+            count++;
+          }
+        }
+        for (let m = 0; m < 3; m++) color[v + m] = grid.color[v + m] * (1 - TINT) + (mixed[m] / count) * TINT;
+      }
+    }
+    const tinted = { ...grid, color };
+    cells.tinted = { tints: this.tints, grid, tinted };
+    return tinted;
   }
 
   // A tile drawn in full into a plate's group, (ox, oz) feet into it: the mesh from `before`
