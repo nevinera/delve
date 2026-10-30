@@ -201,6 +201,7 @@ function start(world) {
       const at = tools.hit();
       // From the builder's feet, not the camera behind them.
       $("infoPoint").textContent = at ? feet(Math.hypot(at[0] - x, at[1] - y, at[2] - z)) : "-";
+      $("infoHoriz").textContent = at ? feet(Math.hypot(at[0] - x, at[2] - z)) : "-";
       $("infoHeight").textContent = feet(y - SEA_LEVEL_FT);
       $("infoGround").textContent = feet(renditions.heightAt(x, z) ?? EMPTY_FT);
       $("infoFacing").textContent = facing(builder.state.yaw);
