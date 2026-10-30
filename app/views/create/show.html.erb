@@ -61,6 +61,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M4 20 L10 4 L24 7 L22 20 Z" fill="#2e7d32" stroke="#ffffff" stroke-width="1"/><path d="M24 7 L42 3 L45 18 L22 20 Z" fill="#9e9488" stroke="#ffffff" stroke-width="1"/></svg>
         <span>biomes</span><kbd class="create-key">N</kbd>
       </button>
+      <button type="button" data-tool="water" data-key="b" aria-pressed="false" title="draw lakes, ponds and swamp pools">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 10 C 8 8, 10 14, 14 14 L34 14 C 38 14, 40 8, 46 10 L46 22 Z" fill="#c8b48a"/><path d="M12 14 L36 14 C 34 19, 14 19, 12 14 Z" fill="#3a78b8"/></svg>
+        <span>water</span><kbd class="create-key">B</kbd>
+      </button>
       <button type="button" data-tool="clear" aria-pressed="false" title="clear the ground away, back to empty sea">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 14 C 6 8, 10 12, 14 10 L14 22 Z M34 10 C 38 12, 42 8, 46 14 L46 22 L34 22 Z" fill="#c8b48a"/><path d="M14 22 L14 18 L34 18 L34 22 Z" fill="#2e608c"/></svg>
         <span>clear</span>
@@ -164,6 +168,20 @@
         <button type="button" id="biomesUndo">undo</button>
       </div>
     </div>
+    <div data-config="water" hidden>
+      <p class="create-note">Click corners to draw round a body of water. Click its first corner, double-click or press Enter to close it. It fills the ground inside lower than its level, which starts at the lowest ground round its outline. Backspace takes the last corner back, and Esc throws it away.</p>
+      <div class="create-swatches create-biomes" role="group" aria-label="type of water">
+        <button type="button" data-water="lake" aria-pressed="false" title="lake"><span style="background:#3a78b8"></span>lake</button>
+        <button type="button" data-water="pond" aria-pressed="true" title="pond"><span style="background:#3c9aa6"></span>pond</button>
+        <button type="button" data-water="swamp" aria-pressed="false" title="swamp pool"><span style="background:#6d7a3c"></span>swamp</button>
+      </div>
+      <label class="create-level">level <input type="number" id="waterLevel" step="0.5" disabled> ft</label>
+      <p class="create-note">Click a body's outline or inside it to select it, then pick a type or type its level to change it. Drag its corners, drag an edge to add a corner, and shift-click a corner to take it away. Delete or backspace deletes it. The water shows a few seconds after a change.</p>
+      <div class="create-way">
+        <button type="button" id="waterDelete">delete</button>
+        <button type="button" id="waterUndo">undo</button>
+      </div>
+    </div>
     <div data-config="measure" hidden>
       <p class="create-note">Click to start a ruler to the pointer, ticked at miles, quarter miles, 500, 100 and 10 ft, and click again to put it away. Drag to draw a circle, with its radius and area.</p>
     </div>
@@ -261,7 +279,7 @@
   <dl>
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, and measure measures distances and circles. Click a pin's head to open it</dd>
-    <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, and clear it away</dd>
+    <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, and clear it away</dd>
   </dl>
 </div>
 <div id="pinEdit" class="create-pin-edit" popover>

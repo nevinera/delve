@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
-import { Biomes, PICK_PX } from "./biomes.js";
+import { PICK_PX } from "./areas.js";
+import { Biomes } from "./biomes.js";
 import { SHAPES, TURNS, pullBrush, raiseBrush } from "./geo.js";
 import { EMPTY_FT } from "./ground.js";
 import { Draw } from "./draw.js";
@@ -8,6 +9,7 @@ import { Marks } from "./marks.js";
 import { Measure } from "./measure.js";
 import { TITLE_MAX } from "./pins.js";
 import { STROKE_MAX_FT, Stroke } from "./stroke.js";
+import { WaterBodies } from "./water.js";
 
 // The tools' sidebar: the type of work and its tools above, the picked tool's settings below. A
 // picked tool takes the left button, and Esc puts it down.
@@ -23,6 +25,8 @@ import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 //   double-clicking or Enter, and Esc throws it away (biomes.js). Clicking an area or its outline
 //   picks it out; then its corners drag, shift-clicking one takes it away, dragging an edge adds
 //   one, clicking inside it starts another area there, and clicking outside puts it back.
+// - geo's water: the same for bodies of water (water.js), and the level of the one picked out
+//   can be typed.
 // - geo's brushes, raise and lower, flatten, smooth and clear: dragging on the ground works them
 //   where the pointer is, and a ring on the ground shows where they reach. [ and ] resize them, and
 //   c and v turn raise and lower's, shift+c and shift+v a little.
@@ -79,6 +83,8 @@ export class Tools {
     this.measure = new Measure(canvas.parentElement);
     this.biomes = new Biomes(scene, (x, z) => this.surface(x, z), canvas.parentElement);
     this.biomesShown = false; // whether biome areas are shown with other tools too
+    this.water = new WaterBodies(scene, (x, z) => this.surface(x, z), canvas.parentElement, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT);
+    this.outlined = { biomes: this.biomes, water: this.water }; // each tool that draws areas, its areas
     this.draw = new Draw(scene, canvas.parentElement, renditions, ground, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, () => this.showDraw(), this.biomes);
     // Measure's, { from, to } for a ruler, { middle, radius } for a circle, and while the button's
     // down, where it went down and whether a ruler or circle was shown before.
@@ -197,16 +203,24 @@ export class Tools {
         this.draw.dirty = true;
       });
     }
-    const biomeButtons = [...document.querySelectorAll("[data-biome]")];
-    for (const button of biomeButtons) {
-      button.addEventListener("click", () => {
-        this.biomes.setBiome(button.dataset.biome);
-        pressed(biomeButtons, button);
-      });
+    // Each area tool's kinds' buttons, by tool.
+    this.kindButtons = { biomes: [...document.querySelectorAll("[data-biome]")], water: [...document.querySelectorAll("[data-water]")] };
+    for (const [tool, buttons] of Object.entries(this.kindButtons)) {
+      for (const button of buttons) {
+        button.addEventListener("click", () => {
+          this.outlined[tool].setKind(button.dataset.biome ?? button.dataset.water);
+          pressed(buttons, button);
+        });
+      }
     }
-    this.biomeButtons = biomeButtons;
     $("biomesDelete").addEventListener("click", () => this.biomes.deleteSelected());
     $("biomesUndo").addEventListener("click", () => this.biomes.undo());
+    $("waterDelete").addEventListener("click", () => this.water.deleteSelected());
+    $("waterUndo").addEventListener("click", () => this.water.undo());
+    $("waterLevel").addEventListener("change", () => {
+      const level = Number($("waterLevel").value);
+      if (Number.isFinite(level)) this.water.setExtra("level", Math.round(level * 10) / 10);
+    });
     $("marksDelete").addEventListener("click", () => this.marks.deleteSelected());
     $("marksUndo").addEventListener("click", () => this.marks.undo());
     this.readSize();
@@ -221,9 +235,10 @@ export class Tools {
     canvas.addEventListener("pointermove", (e) => {
       this.point(e);
       if (this.moving) this.movePins();
-      if (this.biomes.dragging) {
+      for (const areas of Object.values(this.outlined)) {
+        if (!areas.dragging) continue;
         const at = this.hit();
-        if (at) this.biomes.drag(at[0], at[2]);
+        if (at) areas.drag(at[0], at[2]);
       }
       if (this.draw.state === "drawing") {
         const at = this.hit();
@@ -251,7 +266,7 @@ export class Tools {
     });
     canvas.addEventListener("pointerleave", () => (this.pointer = null));
     canvas.addEventListener("dblclick", (e) => {
-      if (this.tool === "biomes") return this.biomes.close();
+      if (this.outlined[this.tool]) return this.outlined[this.tool].close();
       if (this.tool !== "select") return;
       const r = canvas.getBoundingClientRect();
       const pin = this.marks.pins.pick(this.camera, r.width, r.height, e.clientX - r.left, e.clientY - r.top);
@@ -276,7 +291,7 @@ export class Tools {
         return;
       }
       canvas.setPointerCapture(e.pointerId);
-      if (this.tool === "biomes") return this.biomesDown(e);
+      if (this.outlined[this.tool]) return this.areasDown(this.outlined[this.tool], e);
       if (this.tool === "draw") {
         const at = this.hit();
         if (at) this.draw.start(at[0], at[2]);
@@ -328,7 +343,7 @@ export class Tools {
         this.openPin(pin, before);
       }
       this.clicked = null;
-      this.biomes.letGo();
+      for (const areas of Object.values(this.outlined)) areas.letGo();
       if (this.box) this.endBox();
       if (this.draw.state === "drawing") this.draw.end();
       // A click leaves a ruler following the pointer, or takes away the ruler or circle there was,
@@ -349,14 +364,15 @@ export class Tools {
     });
     window.addEventListener("keydown", (e) => {
       if (e.target.matches?.("input, textarea, select")) return;
-      if (e.key === "Escape" && this.tool === "biomes" && this.biomes.draft) this.biomes.drop();
+      const areas = this.outlined[this.tool];
+      if (e.key === "Escape" && areas?.draft) areas.drop();
       else if (e.key === "Escape") this.pick(null);
       else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "select") this.marks.deleteSelected();
       else if (e.key === "Enter" && this.tool === "draw") this.draw.grow();
-      else if (e.key === "Enter" && this.tool === "biomes") this.biomes.close();
-      else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "biomes") {
-        if (this.biomes.draft) this.biomes.backCorner();
-        else this.biomes.deleteSelected();
+      else if (e.key === "Enter" && areas) areas.close();
+      else if ((e.key === "Delete" || e.key === "Backspace") && areas) {
+        if (areas.draft) areas.backCorner();
+        else areas.deleteSelected();
       }
       else if ((e.key === "c" || e.key === "C" || e.key === "v" || e.key === "V") && this.tool === "raise" && !e.ctrlKey && !e.metaKey) {
         const step = (e.shiftKey ? FINE_TURN_DEG : TURN_DEG) * (e.key.toLowerCase() === "c" ? -1 : 1);
@@ -374,46 +390,47 @@ export class Tools {
     this.turn(0);
   }
 
-  // The biome tool's click: a corner for the area being drawn, or closing it at its first corner;
-  // or a picked out area's corner or edge to drag; or an area to pick out; or the first corner of
-  // a new one.
-  biomesDown(e) {
+  // An area tool's click, on `areas`: a corner for the area being drawn, or closing it at its
+  // first corner; or a picked out area's corner or edge to drag; or an area to pick out; or the
+  // first corner of a new one.
+  areasDown(areas, e) {
     const r = this.canvas.getBoundingClientRect();
     const [px, py] = [e.clientX - r.left, e.clientY - r.top];
     const near = (p) => {
-      const s = p && this.biomes.screen(this.camera, r.width, r.height, p);
+      const s = p && areas.screen(this.camera, r.width, r.height, p);
       return s && Math.hypot(s[0] - px, s[1] - py) <= PICK_PX;
     };
     const at = this.hit();
-    const { draft } = this.biomes;
+    const { draft } = areas;
     if (draft) {
-      if (draft.points.length >= 3 && near(draft.points[0])) return this.biomes.close();
+      if (draft.points.length >= 3 && near(draft.points[0])) return areas.close();
       // A double-click's second press, closed by the dblclick.
       if (near(draft.points.at(-1))) return;
-      if (at) this.biomes.addCorner(at[0], at[2]);
+      if (at) areas.addCorner(at[0], at[2]);
       return;
     }
-    const picked = this.biomes.pick(this.camera, r.width, r.height, px, py);
+    const picked = areas.pick(this.camera, r.width, r.height, px, py);
     if (picked?.corner !== undefined) {
-      if (e.shiftKey) this.biomes.removeCorner(picked.corner);
-      else this.biomes.grab(picked.corner);
+      if (e.shiftKey) areas.removeCorner(picked.corner);
+      else areas.grab(picked.corner);
       return;
     }
-    if (picked && at) return this.biomes.split(picked.edge, at[0], at[2]);
-    const outlined = this.biomes.pickArea(this.camera, r.width, r.height, px, py);
-    if (outlined) return this.selectArea(outlined);
+    if (picked && at) return areas.split(picked.edge, at[0], at[2]);
+    const outlined = areas.pickArea(this.camera, r.width, r.height, px, py);
+    if (outlined) return this.selectArea(areas, outlined);
     if (!at) return;
-    const area = this.biomes.at(at[0], at[2]);
-    if (area && area !== this.biomes.selected) return this.selectArea(area);
+    const area = areas.at(at[0], at[2]);
+    if (area && area !== areas.selected) return this.selectArea(areas, area);
     // Clicking away from the area picked out only puts it back.
-    if (!area && this.biomes.selected) return this.biomes.unselect();
-    this.biomes.addCorner(at[0], at[2]);
+    if (!area && areas.selected) return areas.unselect();
+    areas.addCorner(at[0], at[2]);
   }
 
-  selectArea(area) {
-    this.biomes.select(area);
-    this.biomes.biome = area.biome;
-    this.biomeButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.biome === area.biome)));
+  selectArea(areas, area) {
+    areas.select(area);
+    areas.kind = area.kind;
+    const tool = Object.keys(this.outlined).find((t) => this.outlined[t] === areas);
+    this.kindButtons[tool].forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.biome ?? b.dataset.water) === area.kind)));
   }
 
   // Shows biome areas' outlines with every tool, or only the biome tool.
@@ -475,6 +492,7 @@ export class Tools {
     this.marks.setFlat(PLANNING.has(tool));
     if (tool !== "draw") this.draw.clear();
     this.biomes.setShown(tool === "biomes" || this.biomesShown);
+    this.water.setShown(tool === "water");
     this.measuring = null;
     this.box = null;
     this.boxEl.hidden = true;
@@ -626,8 +644,14 @@ export class Tools {
     this.marks.tick(dt, w, h, this.camera.position, above, ftPerPx);
     this.marks.pins.tick(this.camera, w, h);
     this.draw.tick(this.camera, w, h);
-    const to = this.tool === "biomes" && this.biomes.draft && this.hit();
-    this.biomes.tick(dt, this.camera, w, h, to ? [to[0], to[2]] : null, this.tool === "biomes");
+    for (const [tool, areas] of Object.entries(this.outlined)) {
+      const to = this.tool === tool && areas.draft && this.hit();
+      areas.tick(dt, this.camera, w, h, to ? [to[0], to[2]] : null, this.tool === tool);
+    }
+    // The water picked out's level, but while it's being typed.
+    const level = $("waterLevel");
+    level.disabled = !this.water.selected;
+    if (document.activeElement !== level) level.value = this.water.selected ? String(this.water.selected.level) : "";
     $("growPassable").hidden = !this.draw.passable;
     if (this.tool === "measure" && this.measuring) {
       if (this.measuring.from && !this.measuring.radius) {

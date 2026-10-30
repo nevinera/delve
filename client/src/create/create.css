@@ -179,7 +179,12 @@ body.create {
   gap: 2px;
 }
 
-[data-config="biomes"] {
+.create-level input {
+  width: 6em;
+}
+
+[data-config="biomes"],
+[data-config="water"] {
   display: flex;
   flex-direction: column;
   gap: 8px;
