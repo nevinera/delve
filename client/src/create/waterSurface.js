@@ -3,19 +3,21 @@ import { setWaterTime, waterMaterial } from "../editor/waterMaterial.js";
 import { WATER_TYPES } from "../v2/water.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 
-// The water's surface (v2/water.js) on the tiles round the builder whose cells are read: each
+// The water's surface (v2/water.js) on the tiles round the builder whose ground's drawn from their
+// cells (ground.js's FULL and FINE tiers; coarser, the ground draws the water too): each
 // tile's wet cells, and a cell more round them at the level of the water next to it, which the
 // ground hides where it rises out of it, so the shore's where the two meet. The water fades in
 // over its first foot of depth there (editor/waterMaterial.js). Each type has its own look.
 // Farther off, and where it's not drawn, sea.js's plane stands in for the sea.
 
-const REACH_TILES = 6;
+const REACH_TILES = 8; // ground.js's FINE_TILES
+const COARSE = 2; // ground.js's tier drawn from tiles' renditions
 const LOOK_S = 0.25; // how often what's drawn is looked over
 const CELLS = TILE_FT / CELL_FT;
 const CORNERS = CELLS + 1;
 const DEEP_FT = 1; // water this deep at each corner of a run of cells is drawn as one quad
 // How each type looks.
-const LOOKS = {
+export const WATER_LOOKS = {
   sea: { color: 0x1f5a85, opacity: 0.9 },
   lake: { color: 0x3a78b8, opacity: 0.85 },
   pond: { color: 0x3c7a86, opacity: 0.85 },
@@ -25,11 +27,12 @@ const LOOKS = {
 };
 
 export class WaterSurfaces {
-  constructor(scene, renditions, renderer) {
+  constructor(scene, renditions, renderer, ground) {
     this.renditions = renditions;
+    this.ground = ground;
     this.group = new THREE.Group();
     scene.add(this.group);
-    this.materials = WATER_TYPES.map((type) => waterMaterial(renderer, LOOKS[type]));
+    this.materials = WATER_TYPES.map((type) => waterMaterial(renderer, WATER_LOOKS[type]));
     this.meshes = new Map(); // "tx,tz" -> { made from, meshes }
     this.drawn = new Set(); // "tx,tz" of the tiles whose water's drawn here, wet or not
     this.version = 0; // counts changes to `drawn`
@@ -48,7 +51,7 @@ export class WaterSurfaces {
     const r = this.renditions;
     for (let tz = az - REACH_TILES; tz <= az + REACH_TILES; tz++) {
       for (let tx = ax - REACH_TILES; tx <= ax + REACH_TILES; tx++) {
-        if (!shown || !r.tile(tx, tz) || !r.hasCells(tx, tz)) continue;
+        if (!shown || !this.ground.anchor || !r.tile(tx, tz) || !r.hasCells(tx, tz) || !(this.ground.tier(tx, tz) < COARSE)) continue;
         const cells = r.cells(tx, tz);
         if (!cells) continue;
         const key = `${tx},${tz}`;

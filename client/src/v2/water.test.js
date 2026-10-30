@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, dryWater } from "./water.js";
+import { AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, dryWater, partWater } from "./water.js";
 
 const square = (x, z, size) => [[x, z], [x + size, z], [x + size, z + size], [x, z + size]];
 // 65 × 65 corner heights, a slope rising 1 ft a cell eastward from -10.
@@ -100,5 +100,19 @@ describe("the sea", () => {
     bakeWater({ coords: [0, 0], around, tiles: new Map([[0, t]]) }, new WaterMap([{ type: "lake", level: 3, points: square(0, 0, 8) }]));
     expect([t.water.level[0], t.water.type[0]]).toEqual([3, WATER_TYPES.indexOf("lake")]);
     expect(wet(t, 5, 5)).toBe(true);
+  });
+});
+
+describe("partWater", () => {
+  it("wets a chunk's part where a quarter of its cells are wet, at their mean level, of the type most are", () => {
+    const water = dryWater(4096);
+    // Part 0: 16 cells, 12 lake at 10, 4 pond at 14. Part 1: 15 cells, short of a quarter.
+    for (let k = 0; k < 16; k++) [water.level[Math.floor(k / 8) * 64 + (k % 8)], water.type[Math.floor(k / 8) * 64 + (k % 8)]] = k < 12 ? [10, 1] : [14, 2];
+    for (let k = 0; k < 15; k++) water.level[Math.floor(k / 8) * 64 + 8 + (k % 8)] = 5;
+    const parts = partWater(water);
+    expect([parts.level[0], parts.type[0]]).toEqual([11, 1]);
+    expect(Number.isNaN(parts.level[1])).toBe(true);
+    expect(partWater(dryWater(4096))).toBeNull();
+    expect(partWater(null)).toBeNull();
   });
 });

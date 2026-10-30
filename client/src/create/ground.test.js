@@ -9,7 +9,7 @@ import { COARSE, COARSE_TILES, EMPTY_FT, FINE, FINE_TILES, FULL, FULL_TILES, Gro
 // Flat ground at `height` everywhere, its plate files there but never read.
 const flat = (height = 0) => {
   const rendition = { heights: new Float32Array(81).fill(height) };
-  return { tile: () => rendition, plate: () => rendition, hasCells: () => true, cells: () => null, heightAt: () => height, biomes: { at: () => 0 }, biomeTile: () => new Uint8Array(64 * 64), looks: 0 };
+  return { tile: () => rendition, plate: () => rendition, hasCells: () => true, cells: () => null, heightAt: () => height, biomes: { at: () => 0 }, biomeTile: () => new Uint8Array(64 * 64), looks: 0, wetPlates: new Set() };
 };
 
 describe("Ground tiers", () => {

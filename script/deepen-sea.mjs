@@ -3,7 +3,7 @@
 // edges of the tiles with no tile past them, is lowered by how far it is from the nearest ground
 // that isn't: 1 ft for each 4 ft out to SHELF_FT down, then easing on down to DEEP_FT, a little
 // uneven. Then the sea is put over it (v2/water.js), and the platters' renditions of the tiles
-// moved made again. Ground the sea doesn't reach, and everything else, is left as it was.
+// moved made again, with their water. Ground the sea doesn't reach, and everything else, is left as it was.
 //
 //   node script/deepen-sea.mjs <world.zip> <out.zip>
 import fs from "fs";
@@ -13,7 +13,7 @@ import { CELL_CORNERS, PLATE_PATH, TILE_CELLS, decodePlate, encodePlate, platePa
 import { CORNERS, PLATTER_PATH, decodePlatter, encodePlatter, indexIn, plateIndexIn, platterOf, platterPath } from "../client/src/v2/platter.js";
 import { hash64, plateRendition } from "../client/src/v2/rendition.js";
 import { CELL_FT, PLATE_TILES, PLATTER_PLATES, TILE_CHUNKS } from "../client/src/v2/sizes.js";
-import { AROUND, WATER_TYPES, WaterMap, bakeWater, dryWater, waterPath } from "../client/src/v2/water.js";
+import { AROUND, WATER_TYPES, WaterMap, bakeWater, dryWater, partWater, waterPath } from "../client/src/v2/water.js";
 
 const FLAT_FT = 0.5; // ground this high or lower is taken as the sea's
 const SLOPE = 1 / 4; // ft down for each ft out, near the shore
@@ -214,7 +214,7 @@ for (const continent of continents) {
     if (!changedPlatters.has(key)) changedPlatters.set(key, decodePlatter(files.get(platterPath(continent, platterOf(tx, tz)))));
     const heights = new Float32Array(CORNERS * CORNERS);
     for (let j = 0; j < CORNERS; j++) for (let i = 0; i < CORNERS; i++) heights[j * CORNERS + i] = tile.heights[j * TILE_CHUNKS * CELL_CORNERS + i * TILE_CHUNKS];
-    changedPlatters.get(key).tiles.set(indexIn(tx, tz), { heights, hash: hash64(new Uint8Array(heights.buffer)) });
+    changedPlatters.get(key).tiles.set(indexIn(tx, tz), { heights, hash: hash64(new Uint8Array(heights.buffer)), water: partWater(tile.water) });
   }
   for (const platter of changedPlatters.values()) {
     for (let j = 0; j < PLATTER_PLATES; j++) {

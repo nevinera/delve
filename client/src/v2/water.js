@@ -1,4 +1,4 @@
-import { CELL_FT, PLATE_TILES, SEA_LEVEL_FT, TILE_FT } from "./sizes.js";
+import { CELL_FT, PLATE_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "./sizes.js";
 
 // Water: bodies (sea, lakes, ponds, swamp pools) and, later, courses (rivers, streams), drawn by
 // hand and kept in each continent's water.json, then baked into plate files (plate.js) as each
@@ -74,6 +74,37 @@ export class WaterMap {
     }
     return water;
   }
+}
+
+// A tile's water a part a chunk, for its rendition (platter.js), from its cells' (null for none):
+// a part's wet where a quarter of its cells are or more, at their mean level, of the type most of
+// them are. Null where no part's wet.
+export const PART_WET = 0.25;
+export function partWater(water) {
+  if (!water) return null;
+  const parts = TILE_CHUNKS;
+  const n = TILE_CELLS / parts; // cells a part a side
+  let out = null;
+  for (let b = 0; b < parts; b++) {
+    for (let a = 0; a < parts; a++) {
+      let [sum, wet] = [0, 0];
+      const types = new Map();
+      for (let j = b * n; j < (b + 1) * n; j++) {
+        for (let i = a * n; i < (a + 1) * n; i++) {
+          const level = water.level[j * TILE_CELLS + i];
+          if (Number.isNaN(level)) continue;
+          sum += level;
+          wet++;
+          types.set(water.type[j * TILE_CELLS + i], (types.get(water.type[j * TILE_CELLS + i]) ?? 0) + 1);
+        }
+      }
+      if (wet < PART_WET * n * n) continue;
+      out ??= dryWater(parts * parts);
+      out.level[b * parts + a] = sum / wet;
+      out.type[b * parts + a] = [...types].reduce((best, t) => (t[1] > best[1] ? t : best))[0];
+    }
+  }
+  return out;
 }
 
 // The boxes, [x0, z0, x1, z1], of bodies in `before` or `after` but not both, where the water

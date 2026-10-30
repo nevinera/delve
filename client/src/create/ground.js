@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
-import { AROUND, WaterMap, bakeWater, changedWaterBoxes } from "../v2/water.js";
+import { AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, partWater } from "../v2/water.js";
+import { waterMaterial } from "../editor/waterMaterial.js";
+import { WATER_LOOKS } from "./waterSurface.js";
 import { PATTERNS, look, painted, slopeOf } from "../v2/look.js";
 import { makeSlots } from "../v2/slots.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate, platePath, tileIndexInPlate } from "../v2/plate.js";
@@ -23,7 +25,10 @@ import { withGrid } from "./grid.js";
 // square round the builder's tile, and flying high, the ground below goes coarser too. What's drawn
 // changes only when the builder leaves their tile, and then a plate at a time: each plate's ground
 // is drawn in a few meshes, made again when how its tiles are drawn changes. Skirts hang from
-// where tiles drawn differently meet, to hide the gaps between them.
+// where tiles drawn differently meet, to hide the gaps between them. Tiles drawn from renditions
+// have their water drawn from them too, a part a chunk, but the sea, which sea.js's plane stands
+// in for there; tiles drawn from their plate's, lifted to its ground where that's higher, as it's
+// drawn coarser than the water.
 
 export const FULL_TILES = 4;
 export const FINE_TILES = 8;
@@ -69,6 +74,7 @@ export class Renditions {
     this.water = new WaterMap(); // and the water from them, baked into plate files saved
     this.waters = new Map(); // "tx,tz" -> the tile's water as last baked, over what its plate file has
     this.wet = 0; // counts changes to tiles' water
+    this.wetPlates = new Set(); // "px,pz" of plates whose renditions' water changed, to draw again
   }
 
   // Tile (tx, tz)'s cells' biomes, 64 × 64 indexes into BIOME_NAMES.
@@ -215,7 +221,12 @@ export class Renditions {
       const [px, pz] = key.split(",").map(Number);
       platters.add(platterOfPlate(px, pz).join(","));
       const plate = this.decoded.get(key) ?? this.readNow(key);
-      files.set(platePath(continent, [px, pz]), plate?.tiles.size ? encodePlate(this.bake({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles, around: this.around(px, pz) })) : null);
+      if (!plate?.tiles.size) {
+        files.set(platePath(continent, [px, pz]), null);
+        continue;
+      }
+      files.set(platePath(continent, [px, pz]), encodePlate(this.bake({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles, around: this.around(px, pz) })));
+      this.baked([px, pz], [...plate.tiles].map(([index, tile]) => [index, tile.water]));
     }
     for (const key of platters) {
       const platter = this.platters.get(key);
@@ -243,13 +254,16 @@ export class Renditions {
       const tiles = new Map([...plate.tiles].map(([index, { heights, terrain, slots, water }]) => [index, { heights, terrain, slots, water }]));
       writing.push(this.write("plate", { coords: [px, pz], palette: plate.palette, tiles, around: this.around(px, pz) }).then((bytes) => files.set(platePath(continent, [px, pz]), bytes)));
     }
+    // Platters after, with their tiles' water as the plates were baked.
+    await Promise.all(writing);
+    writing.length = 0;
     for (const key of platters) {
       if (!this.platters.has(key)) {
         files.set(platterPath(continent, key.split(",").map(Number)), null);
         continue;
       }
       const { coords, tiles, plates } = this.platters.get(key);
-      const bare = (map) => new Map([...map].map(([index, { heights, hash }]) => [index, { heights, hash }]));
+      const bare = (map) => new Map([...map].map(([index, { heights, hash, water }]) => [index, { heights, hash, water }]));
       writing.push(this.write("platter", { coords, tiles: bare(tiles), plates: bare(plates) }).then((bytes) => files.set(platterPath(continent, coords), bytes)));
     }
     await Promise.all(writing);
@@ -275,14 +289,19 @@ export class Renditions {
     });
   }
 
-  // Takes the water baked into plate (px, pz)'s tiles, [index, water], to draw.
+  // Takes the water baked into plate (px, pz)'s tiles, [index, water], to draw, and into their
+  // renditions.
   baked([px, pz], waters) {
     const plate = this.decoded.get(`${px},${pz}`);
     for (const [index, water] of waters) {
-      this.waters.set(`${px * PLATE_TILES + (index % PLATE_TILES)},${pz * PLATE_TILES + Math.floor(index / PLATE_TILES)}`, water);
+      const [tx, tz] = [px * PLATE_TILES + (index % PLATE_TILES), pz * PLATE_TILES + Math.floor(index / PLATE_TILES)];
+      this.waters.set(`${tx},${tz}`, water);
       const tile = plate?.tiles.get(index);
       if (tile) tile.water = water;
+      const rendition = this.tile(tx, tz);
+      if (rendition) rendition.water = partWater(water);
     }
+    this.wetPlates.add(`${px},${pz}`);
     this.wet++;
   }
 
@@ -815,7 +834,8 @@ export class Ground {
     this.stale = false; // whether what's drawn wants working out again, wherever the builder is
     this.finest = FULL; // the finest tier drawn, by how high the builder is (finestAt)
     // Which kinds of ground are shown (toggle).
-    this.shown = { full: true, fine: true, tile: true, plate: true };
+    this.shown = { full: true, fine: true, tile: true, plate: true, water: true };
+    this.water = null; // the material water drawn from renditions is drawn with
     this.counts = [0, 0, 0, 0]; // tiles drawn each way
     this.tint = null; // showing biomes, each biome's linear RGB, by index into BIOME_NAMES
     this.tints = 0; // counts changes to how ground's tinted, to tell tinted faces kept are stale
@@ -840,6 +860,12 @@ export class Ground {
   update(x, y, z) {
     const a = this.anchor;
     const out = (v, at) => v < at * TILE_FT - LEAVE_FT || v > (at + 1) * TILE_FT + LEAVE_FT;
+    for (const key of this.renditions.wetPlates) {
+      const group = this.plates.get(key);
+      if (group) group.userData.tiers = null;
+      this.stale = true;
+    }
+    this.renditions.wetPlates.clear();
     if (!a || this.stale || out(x, a[0]) || out(y, a[1]) || out(z, a[2]) || this.finestAt(x, y, z) !== this.finest) this.plan(x, y, z);
     this.build();
   }
@@ -933,6 +959,7 @@ export class Ground {
     const far = new Faces(); // PLATE tiles and their skirts
     const near = new Faces(); // COARSE tiles, and every finer tile's skirts
     const fine = []; // [i, j, cells] of FINE tiles
+    const water = { positions: [], depths: [], colors: [] }; // the water of tiles drawn from renditions
     // The tiles in full the plate had, to keep those still drawn in full.
     const before = new Map();
     for (const mesh of this.plates.get(key)?.children ?? []) if (mesh.userData.kind === "full") before.set(mesh.userData.tile, mesh);
@@ -975,6 +1002,12 @@ export class Ground {
         const part = TILE_FT / n;
         const corner = (a, b) => [ox + a * part, height(a, b), oz + b * part];
         if (t === PLATE) faces.square(corner(0, 0), corner(1, 0), corner(0, 1), corner(1, 1), color(0, 0, 1));
+        if (t >= COARSE) {
+          const tile = this.renditions.tile(tx, tz);
+          // Where the plate's rendition draws the ground, `u` and `v` 0 to 1 across the tile.
+          const drawn = t === PLATE && ((u, v) => (1 - v) * ((1 - u) * height(0, 0) + u * height(1, 0)) + v * ((1 - u) * height(0, 1) + u * height(1, 1)));
+          if (tile.water) addWater(water, tile, ox, oz, drawn);
+        }
         if (t === COARSE) faces.append(this.tileFaces(tx, tz), ox, oz);
         for (const [di, dj, from, to] of SIDES) {
           if (tierAt(i + di, j + dj) === t) continue;
@@ -991,6 +1024,19 @@ export class Ground {
     this.add(group, far.geometry(), this.materials.plate, "plate");
     this.add(group, near.geometry(), this.materials.tile, "tile");
     this.add(group, fineGeometry(fine), this.materials.fine, "fine");
+    if (water.positions.length) {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(water.positions, 3));
+      g.setAttribute("depth", new THREE.Float32BufferAttribute(water.depths, 1));
+      g.setAttribute("color", new THREE.Float32BufferAttribute(water.colors, 3));
+      g.setAttribute("flow", new THREE.Float32BufferAttribute(new Float32Array(water.positions.length), 3));
+      g.setAttribute("normal", new THREE.Float32BufferAttribute(Float32Array.from({ length: water.positions.length }, (_, n) => (n % 3 === 1 ? 1 : 0)), 3));
+      if (!this.water) {
+        this.water = waterMaterial(this.renderer, { color: 0xffffff, opacity: 0.88 });
+        this.water.vertexColors = true;
+      }
+      this.add(group, g, this.water, "water").renderOrder = 1;
+    }
     return group;
   }
 
@@ -1121,6 +1167,39 @@ export class Ground {
       if (mesh.userData.kind === "full") disposeGround(mesh.material);
     });
     this.plates.delete(key);
+  }
+}
+
+const SEA = WATER_TYPES.indexOf("sea");
+const PART_COLORS = WATER_TYPES.map((type) => new THREE.Color(WATER_LOOKS[type].color).toArray());
+const LIFT_FT = 1; // how far over the ground drawn from a plate's rendition its water's lifted
+
+// Adds the water of `tile`'s rendition (as platter.js has it) to `out`, but the sea: each wet part,
+// and a part more round them at the level of the water next to it, the tile's corner at (ox, oz).
+// With `drawn(u, v)`, where the ground's drawn across the tile, the water's lifted over it.
+function addWater(out, { heights, water }, ox, oz, drawn) {
+  const n = TILE_CHUNKS;
+  const at = (a, b) => (a < 0 || b < 0 || a >= n || b >= n || water.type[b * n + a] === SEA ? NaN : water.level[b * n + a]);
+  for (let b = 0; b < n; b++) {
+    for (let a = 0; a < n; a++) {
+      let [level, kind] = [at(a, b), water.type[b * n + a]];
+      if (Number.isNaN(level)) {
+        for (let db = -1; db <= 1; db++) {
+          for (let da = -1; da <= 1; da++) {
+            const l = at(a + da, b + db);
+            if (!Number.isNaN(l) && !(l <= level)) [level, kind] = [l, water.type[(b + db) * n + a + da]];
+          }
+        }
+      }
+      if (Number.isNaN(level)) continue;
+      const corner = (ca, cb) => {
+        const y = drawn ? Math.max(level, drawn(ca / n, cb / n) + LIFT_FT) : level;
+        out.positions.push(ox + ca * CHUNK_FT, y, oz + cb * CHUNK_FT);
+        out.depths.push(level - heights[cb * CORNERS + ca]);
+        out.colors.push(...PART_COLORS[kind]);
+      };
+      for (const [ca, cb] of [[a, b], [a, b + 1], [a + 1, b], [a + 1, b], [a, b + 1], [a + 1, b + 1]]) corner(ca, cb);
+    }
   }
 }
 

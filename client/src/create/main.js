@@ -138,13 +138,14 @@ function start(world, changes) {
   const sun = new THREE.DirectionalLight(0xfff2dd, 1.8);
   sun.position.set(0.5, 1, 0.3);
   scene.add(sun, sun.target);
-  // Renditions draw the water over tiles themselves; the sea's round them.
-  const surfaces = new WaterSurfaces(scene, renditions, renderer);
-  const sea = new Sea(scene, FAR_FT * 2.2, renditions, surfaces);
+  // The ground draws the water of tiles drawn from renditions, the surfaces that of nearer tiles,
+  // and the sea's plane the rest.
   const ground = new Ground(scene, renditions, renderer);
+  const surfaces = new WaterSurfaces(scene, renditions, renderer, ground);
+  const sea = new Sea(scene, FAR_FT * 2.2, renditions, surfaces);
   // Trees and objects in the tiles' slots round the builder.
   const scatter = new Scatter(scene, renditions);
-  // The builder stands on the sea where it's over the ground.
+  // The builder stands on the ground, and swims in deep water.
   const groundAt = (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT;
   const waterAt = (x, z) => renditions.waterAt(x, z);
   const placeKey = `create:${name}:${continent}`;
