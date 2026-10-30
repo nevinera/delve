@@ -1,20 +1,24 @@
-import { fbm } from "../world/noise.js";
+import { fbm, hash2 } from "../world/noise.js";
 import { CHUNK_FT } from "../v2/sizes.js";
 
 // Growths: ground grown along a line drawn with geo's draw tool. A growth has a core, as wide as
-// its width, too steep to walk up the sides of (WALK_DEG), and foothills outside it, walkable,
-// stepping down to the ground about half the width further out. Both edges wobble along the line.
-// It aims for a height over the ground under the line, smoothed along it over BASE_FT, so it
-// bridges small valleys but dips through big ones. It only ever raises the ground, so it never
-// cuts into ground already higher.
-// - hills: rounded tops, lumpy with noise, on steep sides.
+// its width, standing on sides too steep to walk up (WALK_DEG), and foothills outside it, walkable,
+// stepping down to the ground about half the width further out. The core's edge wiggles, along the
+// line and in and out, and the foothills' wobbles along it. It aims for a height over the ground
+// under the line, smoothed along it over BASE_FT, so it bridges small valleys but dips through big
+// ones. It only ever raises the ground, so it never cuts into ground already higher.
+// - hills: a field of round hills, scattered, standing on the core's raised ground and fading
+//   into the foothills, shorter the further out, with noise roughening them.
 
 export const WALK_DEG = 50; // the steepest a character walks up
 const WALL_DEG = 65; // how steep a core's sides are
 const BASE_FT = 2640; // how far either way along the line its ground's averaged, at most
-const FOOT_SHARE = 0.3; // how high foothills reach, as a share of the growth's height
-const SHOULDER_SHARE = 0.8; // how high a hill's sides reach before its top rounds over
-const WOBBLE = 0.2; // how far edges wobble in and out, as a share of the core's half width, at full noise
+const RAISED_SHARE = 0.5; // how high the core's ground is raised, before hills, as a share of the growth's height
+const HILLS_SHARE = 0.55; // how tall its hills are, at most
+const RAMP_SHARE = 0.12; // how high foothills' ground rises to the core, before hills
+const WOBBLE = 0.2; // how far edges wobble along the line, as a share of the core's half width, at full noise
+const WIGGLE = 0.25; // how far the core's edge wiggles in and out, likewise
+const HILL_CELLS = 3; // hills about a third of the width apart
 const MOST_POINTS = 600000; // how many points a growth's worked out on, at most
 const SEED = 0x6a7e11d5;
 
@@ -99,7 +103,8 @@ export function baseHeights(line, heightAt) {
 // at (x, z), and bounds [x0, z0, x1, z1] }.
 export function growth(kind, points, { width, height, noise }, heightAt) {
   const half = width / 2;
-  const line = new Line(points, half * (2 + 3 * WOBBLE));
+  const reach = half * 3;
+  const line = new Line(points, reach);
   const bases = baseHeights(line, heightAt);
   const base = (s) => {
     let k = 1;
@@ -108,44 +113,50 @@ export function growth(kind, points, { width, height, noise }, heightAt) {
     const t = Math.max(0, Math.min(1, (s - line.along[k - 1]) / span));
     return bases[k - 1] + ((bases[k] ?? bases[k - 1]) - bases[k - 1]) * t;
   };
-  // The core's and foothills' edges, from the line, s ft along it.
-  const edges = (s) => {
-    const core = half * (1 + WOBBLE * noise * fbm(s, 0, SEED, { wavelength: width * 2 }));
+  // The core's and foothills' edges at (x, z), from the line, s ft along it.
+  const edges = (x, z, s) => {
+    const wiggle = WIGGLE * (0.4 + 0.6 * noise) * fbm(x, z, SEED + 8, { wavelength: width / 4, octaves: 4 });
+    const core = half * (1 + WOBBLE * noise * fbm(s, 0, SEED, { wavelength: width * 2 }) + wiggle);
     return [core, core + half * (1 + 1.5 * WOBBLE * noise * fbm(s, 7, SEED + 1, { wavelength: width * 1.5 }))];
   };
   const near = (x, z) => {
     const hit = line.nearest(x, z);
     if (!hit) return null;
-    const [core, foot] = edges(hit.s);
+    const [core, foot] = edges(x, z, hit.s);
     return hit.d > foot ? null : { ...hit, core, foot };
   };
   const zone = (x, z) => {
     const hit = near(x, z);
     return !hit ? 0 : hit.d <= hit.core ? 2 : 1;
   };
-  const wall = Math.min(half / 2, ((SHOULDER_SHARE - FOOT_SHARE) * height) / Math.tan((WALL_DEG * Math.PI) / 180));
-  const lumps = (x, z, wavelength, seed) => noise * fbm(x, z, seed, { wavelength, octaves: 4 });
-  // How high hills' ground is over their base, at `d` from the line with the core's edge at `core`.
-  const hills = (x, z, d, core) => {
-    const top = core - wall;
-    if (d <= top) {
-      const t = d / top;
-      return height * (SHOULDER_SHARE + (1 - SHOULDER_SHARE) * (1 - t * t) + 0.6 * lumps(x, z, width / 4, SEED + 2));
+  const wall = (RAISED_SHARE * height) / Math.tan((WALL_DEG * Math.PI) / 180);
+  // Round hills, one in each square `cell` wide somewhere in it, of different sizes: how high the
+  // tallest at (x, z) is, 0 to 1.
+  const cell = width / HILL_CELLS;
+  const field = (x, z) => {
+    const [ci, cj] = [Math.floor(x / cell), Math.floor(z / cell)];
+    let top = 0;
+    for (let j = cj - 1; j <= cj + 1; j++) {
+      for (let i = ci - 1; i <= ci + 1; i++) {
+        const [hx, hz] = [(i + hash2(i, j, SEED + 4)) * cell, (j + hash2(i, j, SEED + 5)) * cell];
+        const d = Math.hypot(x - hx, z - hz) / (cell * (0.55 + 0.4 * hash2(i, j, SEED + 6)));
+        if (d < 1) top = Math.max(top, (0.5 + 0.5 * hash2(i, j, SEED + 7)) * (1 - d * d) ** 1.5);
+      }
     }
-    const shoulder = height * (SHOULDER_SHARE + 0.6 * lumps(x, z, width / 4, SEED + 2));
-    return shoulder + (FOOT_SHARE * height - shoulder) * ((d - top) / wall);
+    return top;
   };
   const raise = (x, z, ground) => {
     const hit = near(x, z);
     if (!hit) return 0;
-    const b = base(hit.s);
-    if (hit.d <= hit.core) return Math.max(0, b + hills(x, z, hit.d, hit.core) - ground);
-    // Foothills step down from the core's foot to the base, rolling, and fade out at their edge.
-    const out = smoothstep(hit.core, hit.foot, hit.d);
-    const rise = FOOT_SHARE * height * (1 - out) + 0.15 * height * lumps(x, z, width / 4, SEED + 3) * (1 - out);
-    return Math.max(0, b + rise - ground) * (1 - out);
+    const { d, core, foot } = hit;
+    // How far out into the foothills, 0 at the core's edge to 1 at theirs.
+    const out = smoothstep(core, foot, d);
+    const raised = RAISED_SHARE * height * Math.max(0, Math.min(1, (core - d) / wall));
+    const ramp = RAMP_SHARE * height * (1 - out);
+    const tall = HILLS_SHARE * height * (1 - out) ** 1.5;
+    const rough = 0.1 * height * noise * fbm(x, z, SEED + 3, { wavelength: width / 8, octaves: 4 }) * (1 - out);
+    return Math.max(0, base(hit.s) + raised + ramp + tall * field(x, z) + rough - ground) * (1 - out);
   };
-  const reach = half * (2 + 3 * WOBBLE);
   const xs = points.map(([x]) => x);
   const zs = points.map(([, z]) => z);
   const bounds = [Math.min(...xs) - reach, Math.min(...zs) - reach, Math.max(...xs) + reach, Math.max(...zs) + reach];
