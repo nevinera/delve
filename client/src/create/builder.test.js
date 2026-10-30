@@ -34,6 +34,9 @@ describe("the builder", () => {
     expect(hopTo(100, -1, 300, 100)).toBeNull();
     // On a peak over the plate's steps, up goes to the first step above it.
     expect(hopTo(900, 1, 300, 900)).toEqual({ y: 1324, land: false });
+    // Steps within 32 ft are passed by.
+    expect(hopTo(400, 1, 300, 100)).toEqual({ y: 556, land: false });
+    expect(hopTo(580, -1, 300, 100)).toEqual({ y: 428, land: false });
   });
 
   it("speeds up and slows down at each end of a hop", () => {

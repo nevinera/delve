@@ -7,8 +7,9 @@ import { SEA_LEVEL_FT } from "../v2/sizes.js";
 // On the ground: W/S run forward and back, A/D turn, Q/E strafe, and space takes off. In the air:
 // the same keys move, space rises and F falls. Double-tapping either hops quickly to the next step
 // up or down: 128 ft over the middling height of the plate below, then 256, 512 and so on
-// doubling, and down past the lowest, to the ground. Holding the second press keeps hopping, about
-// a step a second. Touching the ground lands. Flying goes faster the higher you are, so you climb,
+// doubling, and down past the lowest, to the ground, passing by any within HOP_SKIP_FT. The steps
+// move with the plate below, but the builder stays at the height a hop left them. Holding the
+// second press keeps hopping, about a step a second. Touching the ground lands. Flying goes faster the higher you are, so you climb,
 // sink and cross the land in about the same time whatever the height.
 //
 // Left-drag swings the camera round the builder, right-drag turns the builder with it, and the
@@ -25,6 +26,7 @@ export const HOP_S = 0.6; // how long a hop takes, whatever its height
 const HOP_WAIT_S = 0.4; // how long a held hop waits at each step
 const HOP_EASE = 0.25; // the share of a hop spent speeding up, and again slowing down
 const HOP_CLEAR_FT = 16; // steps nearer the ground than this are passed by on the way down
+const HOP_SKIP_FT = 32; // steps nearer the builder than this are passed by
 export const LIFT_FT = 1; // how far taking off rises at once
 export const CEILING_FT = 20000;
 const DOUBLE_TAP_MS = 300;
@@ -80,10 +82,10 @@ export function hopTo(y, way, base, ground) {
   const steps = [];
   for (let h = FIRST_STEP_FT; base + h <= CEILING_FT; h *= 2) steps.push(base + h);
   if (way > 0) {
-    const up = steps.find((s) => s > Math.max(y, ground + HOP_CLEAR_FT) + 1);
+    const up = steps.find((s) => s > Math.max(y + HOP_SKIP_FT, ground + HOP_CLEAR_FT));
     return up === undefined ? null : { y: up, land: false };
   }
-  const down = steps.filter((s) => s < y - 1 && s > ground + HOP_CLEAR_FT).at(-1);
+  const down = steps.filter((s) => s < y - HOP_SKIP_FT && s > ground + HOP_CLEAR_FT).at(-1);
   if (down !== undefined) return { y: down, land: false };
   return y > ground + 0.5 ? { y: ground, land: true } : null;
 }
