@@ -298,3 +298,44 @@ export function crossing(r) {
   }
   return null;
 }
+
+const CAP_POINTS = 12; // points round each end of a middle third's outline
+const MIDDLE_POINTS = 200; // and at most this many along each side
+
+// The outline of a growth's middle third, [[x, z], ...]: out a third of the band's edge either
+// side of the line, round its ends. Its sides go out across the line's direction smoothed over a
+// third of the band, so tight bends make fewer loops.
+export function middleOutline({ line, edge }) {
+  const r = (s) => edge(s) / 3;
+  const across = (s) => {
+    const span = r(s);
+    const [a, b] = [line.at(Math.max(0, s - span)), line.at(Math.min(line.length, s + span))];
+    const [dx, dz] = [b[0] - a[0], b[1] - a[1]];
+    const d = Math.hypot(dx, dz) || 1;
+    return [-dz / d, dx / d];
+  };
+  const steps = Math.max(1, Math.min(MIDDLE_POINTS, Math.ceil(line.length / (r(0) / 4))));
+  const left = [];
+  const right = [];
+  for (let k = 0; k <= steps; k++) {
+    const s = (line.length * k) / steps;
+    const [x, z] = line.at(s);
+    const [nx, nz] = across(s);
+    left.push([x + nx * r(s), z + nz * r(s)]);
+    right.push([x - nx * r(s), z - nz * r(s)]);
+  }
+  // Half a circle round an end, from one side to the other, out past the line's end: round its
+  // last point from the left side, its first from the right.
+  const cap = (s, from) => {
+    const [x, z] = line.at(s);
+    const [nx, nz] = across(s);
+    const a0 = Math.atan2(nz, nx) + (from > 0 ? 0 : Math.PI);
+    const out = [];
+    for (let k = 1; k < CAP_POINTS; k++) {
+      const a = a0 - (Math.PI * k) / CAP_POINTS;
+      out.push([x + Math.cos(a) * r(s), z + Math.sin(a) * r(s)]);
+    }
+    return out;
+  };
+  return [...left, ...cap(line.length, 1), ...right.reverse(), ...cap(0, -1)];
+}

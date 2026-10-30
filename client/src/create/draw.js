@@ -3,7 +3,7 @@ import { Line2 } from "three/addons/lines/Line2.js";
 import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { CHUNKS } from "./geo.js";
-import { crossing, growth, raises } from "./growth.js";
+import { crossing, growth, middleOutline, raises } from "./growth.js";
 import { Stroke } from "./stroke.js";
 
 // Geo's draw tool: a line drawn on the ground, kept till it's thrown away, to grow things along
@@ -15,7 +15,8 @@ import { Stroke } from "./stroke.js";
 //   changed: its band's thirds shaded, orange in the middle to yellow at the edge, a dot for each
 //   peak it'll grow, bigger the taller, and a line in the air at the height it aims for. Growing
 //   it moves the ground, as one step undo takes back. One that's to be impassable isn't grown
-//   when there's a way across it, and the way's drawn in red instead.
+//   when there's a way across it, and the way's drawn in red instead. A range's middle third is
+//   made rocky, a biome area on top (biomes.js), which undo takes away again.
 
 const LINE_COLOR = 0xffffff;
 const AIM_COLOR = 0x40e0ff;
@@ -34,7 +35,8 @@ export const DEFAULTS = {
 export class Draw {
   // heightAt(x, z) gives the ground's height; onChange() is called when the state changes.
   // Peaks' dots are drawn over `stage`.
-  constructor(scene, stage, renditions, ground, heightAt, onChange) {
+  constructor(scene, stage, renditions, ground, heightAt, onChange, biomes) {
+    this.biomes = biomes;
     this.dots = document.createElement("canvas");
     this.dots.className = "create-measure";
     stage.append(this.dots);
@@ -142,6 +144,7 @@ export class Draw {
       return;
     }
     this.ground.refresh(this.renditions.raise(r.at, r.bounds, CHUNKS));
+    r.area = this.kind === "range" ? this.biomes.addArea("rocky", middleOutline(grown)) : null;
     this.undos.push(r);
     this.clear();
   }
@@ -149,6 +152,7 @@ export class Draw {
   undo() {
     const r = this.undos.pop();
     if (r) this.ground.refresh(this.renditions.raise(r.undo, r.bounds, CHUNKS));
+    if (r?.area) this.biomes.removeArea(r.area);
     this.onChange();
   }
 

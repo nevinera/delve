@@ -257,6 +257,25 @@ export class Biomes {
     this.changed();
   }
 
+  // Adds an area of `biome` round `points`, on top. Gives it.
+  addArea(biome, points) {
+    this.save();
+    const area = this.area(biome, points);
+    this.areas.push(area);
+    this.changed();
+    return area;
+  }
+
+  // Takes `area` away, if it's still there.
+  removeArea(area) {
+    if (!this.areas.includes(area)) return;
+    this.save();
+    if (this.selected === area) this.unselect();
+    this.remove(area.line);
+    this.areas = this.areas.filter((a) => a !== area);
+    this.changed();
+  }
+
   deleteSelected() {
     if (!this.selected) return;
     this.save();

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Line, baseHeights, crossing, growth, raises } from "./growth.js";
+import { inside } from "../v2/biomes.js";
+import { Line, baseHeights, crossing, growth, middleOutline, raises } from "./growth.js";
 
 const straight = [
   [0, 0],
@@ -77,5 +78,21 @@ describe("a way across", () => {
 
   it("isn't found through a wall, nor round its ends", () => {
     expect(crossing(raises(walled(0), flat))).toBeNull();
+  });
+});
+
+describe("middleOutline", () => {
+  it("outlines the middle third of the band, round its ends", () => {
+    const grown = growth("range", [[0, 0], [5000, 0], [8000, 3000]], { width: 3000, height: 1000, noise: 0.6, density: 3 }, () => 0);
+    const outline = middleOutline(grown);
+    let [middle, wrong] = [0, 0];
+    for (let z = -2000; z <= 5000; z += 50) {
+      for (let x = -2000; x <= 10000; x += 50) {
+        const inMiddle = grown.zone(x, z) === 3;
+        if (inMiddle) middle++;
+        if (inMiddle !== inside(outline, x, z)) wrong++;
+      }
+    }
+    expect(wrong / middle).toBeLessThan(0.02);
   });
 });
