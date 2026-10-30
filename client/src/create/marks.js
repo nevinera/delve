@@ -196,9 +196,19 @@ export class Marks {
     if (was && add) {
       this.remove(this.selected.get(mark));
       this.selected.delete(mark);
-    } else if (!this.selected.has(mark)) {
-      this.selected.set(mark, this.line(mark.points, { color: "halo", width: mark.pen.width, style: "solid" }));
+    } else {
+      this.halo(mark);
     }
+  }
+
+  // Picks out `marks`, or with `add`, those too.
+  selectAll(marks, add = false) {
+    if (!add) this.unselect();
+    for (const mark of marks) this.halo(mark);
+  }
+
+  halo(mark) {
+    if (!this.selected.has(mark)) this.selected.set(mark, this.line(mark.points, { color: "halo", width: mark.pen.width, style: "solid" }));
   }
 
   unselect() {

@@ -339,3 +339,11 @@ body.create {
 [data-config="marker eraser select"] .create-way {
   margin-top: 8px;
 }
+
+.create-box {
+  position: fixed;
+  border: 1px dashed #ffe14d;
+  background: #ffe14d1a;
+  pointer-events: none;
+  z-index: 5;
+}

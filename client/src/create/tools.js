@@ -8,8 +8,8 @@ import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 // The tools' sidebar: the type of work and its tools above, the picked tool's settings below. A
 // picked tool takes the left button, and Esc puts it down.
 // - planning's marker: dragging draws a line on the ground (stroke.js, marks.js), its eraser
-//   cuts lines away where it's dragged, and select picks lines out, with shift more than one, for
-//   delete or backspace to delete whole.
+//   cuts lines away where it's dragged, and select picks lines out, clicked or in a box dragged
+//   round them, with shift more than one, for delete or backspace to delete whole.
 // - geo's brushes, raise and lower, flatten, smooth and clear: dragging on the ground works them
 //   where the pointer is, and a ring on the ground shows where they reach. [ and ] resize them, and
 //   c and v turn raise and lower's, shift+c and shift+v a little.
@@ -19,6 +19,7 @@ const MAX_RADIUS_FT = 16000;
 const RING_POINTS = 96;
 const PICK_FT = 30000; // how far off the pointer finds the ground
 const PICK_LINE_PX = 8; // how near the pointer a line is picked out
+const BOX_PX = 4; // how far the pointer's dragged before select draws a box
 const BRUSHES = new Set(["raise", "flatten", "smooth", "clear", "eraser"]);
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
@@ -112,8 +113,18 @@ export class Tools {
     this.readStrength();
     this.readNoise();
 
+    this.box = null; // select's box, { x0, y0, x1, y1, add } in pixels on the canvas
+    this.boxEl = document.createElement("div");
+    this.boxEl.className = "create-box";
+    this.boxEl.hidden = true;
+    document.body.append(this.boxEl);
     canvas.addEventListener("pointermove", (e) => {
       this.point(e);
+      if (this.box) {
+        const r = canvas.getBoundingClientRect();
+        [this.box.x1, this.box.y1] = [e.clientX - r.left, e.clientY - r.top];
+        this.showBox();
+      }
       const at = this.drawing && this.hit();
       if (!at) return;
       this.drawing.add(at[0], at[2]);
@@ -126,9 +137,9 @@ export class Tools {
       this.point(e);
       canvas.setPointerCapture(e.pointerId);
       if (this.tool === "select") {
-        const mark = this.pickMark();
-        if (mark) this.marks.select(mark, e.shiftKey);
-        else if (!e.shiftKey) this.marks.unselect();
+        const r = canvas.getBoundingClientRect();
+        const [x, y] = [e.clientX - r.left, e.clientY - r.top];
+        this.box = { x0: x, y0: y, x1: x, y1: y, add: e.shiftKey };
         return;
       }
       const at = this.hit();
@@ -145,6 +156,7 @@ export class Tools {
     });
     canvas.addEventListener("pointerup", () => {
       this.stroke = null;
+      if (this.box) this.endBox();
       if (!this.drawing) return;
       this.drawing.end();
       this.marks.keep(this.drawing.points);
@@ -187,6 +199,8 @@ export class Tools {
     this.stroke = null;
     if (this.drawing) this.marks.keep([]);
     this.marks.unselect();
+    this.box = null;
+    this.boxEl.hidden = true;
     this.drawing = null;
   }
 
@@ -224,20 +238,49 @@ export class Tools {
     if (this.stroke) this.stroke.at = null;
   }
 
+  // Where a line's point [x, z] is on the canvas, in pixels, or null when it's behind.
+  onScreen([x, z]) {
+    const v = new THREE.Vector3(x, this.surface(x, z) + 1, z).project(this.camera);
+    return v.z > 1 || v.z < -1 ? null : [((v.x + 1) / 2) * this.canvas.clientWidth, ((1 - v.y) / 2) * this.canvas.clientHeight];
+  }
+
+  boxDragged() {
+    const { x0, y0, x1, y1 } = this.box;
+    return Math.max(Math.abs(x1 - x0), Math.abs(y1 - y0)) >= BOX_PX;
+  }
+
+  showBox() {
+    const { x0, y0, x1, y1 } = this.box;
+    const r = this.canvas.getBoundingClientRect();
+    this.boxEl.hidden = !this.boxDragged();
+    Object.assign(this.boxEl.style, { left: `${r.left + Math.min(x0, x1)}px`, top: `${r.top + Math.min(y0, y1)}px`, width: `${Math.abs(x1 - x0)}px`, height: `${Math.abs(y1 - y0)}px` });
+  }
+
+  // Picks out the lines with a point in select's box, or when it wasn't dragged, the line clicked.
+  endBox() {
+    const { x0, y0, x1, y1, add } = this.box;
+    if (this.boxDragged()) {
+      const inside = (p) => p && p[0] >= Math.min(x0, x1) && p[0] <= Math.max(x0, x1) && p[1] >= Math.min(y0, y1) && p[1] <= Math.max(y0, y1);
+      this.marks.selectAll(this.marks.kept.filter((mark) => mark.points.some((point) => inside(this.onScreen(point)))), add);
+    } else {
+      const mark = this.pickMark();
+      if (mark) this.marks.select(mark, add);
+      else if (!add) this.marks.unselect();
+    }
+    this.box = null;
+    this.boxEl.hidden = true;
+  }
+
   // The kept line nearest the pointer on the screen, within PICK_LINE_PX, or null.
   pickMark() {
     if (!this.pointer) return null;
     const [w, h] = [this.canvas.clientWidth, this.canvas.clientHeight];
     const [ax, ay] = [((this.pointer.x + 1) / 2) * w, ((1 - this.pointer.y) / 2) * h];
-    const onScreen = ([x, z]) => {
-      const v = new THREE.Vector3(x, this.surface(x, z) + 1, z).project(this.camera);
-      return v.z > 1 || v.z < -1 ? null : [((v.x + 1) / 2) * w, ((1 - v.y) / 2) * h];
-    };
     let [best, nearest] = [null, PICK_LINE_PX];
     for (const mark of this.marks.kept) {
       let a = null;
       for (const point of mark.points) {
-        const b = onScreen(point);
+        const b = this.onScreen(point);
         if (a && b) {
           const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
           const t = Math.min(1, Math.max(0, ((ax - a[0]) * dx + (ay - a[1]) * dy) / (dx * dx + dy * dy || 1)));
