@@ -54,11 +54,13 @@ export class Renditions {
     this.unsaved = new Set(); // the same, since they were last saved (filesFor)
     this.writes = new Map(); // id -> resolve, for files being written on the worker
     this.made = new Map(); // "px,pz" -> indexes in the plate of tiles made where there were none
+    this.tilesMade = 0; // how many tiles have been made, to tell when there are new ones
   }
 
   // Makes tile (tx, tz) where there's none, flat sea floor: its rendition, its plate's and platter's
   // when they're missing too, and its cells, put in its plate file as it's read (fill).
   make(tx, tz) {
+    this.tilesMade++;
     const [px, pz] = [Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES)];
     const floor = () => {
       const colors = new Uint8Array(TILE_CHUNKS * TILE_CHUNKS * 3);
