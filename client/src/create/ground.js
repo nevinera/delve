@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, tileIndexInPlate } from "../v2/plate.js";
 import { CORNERS, decodePlatter, indexIn, plateIndexIn, platterOf, platterOfPlate } from "../v2/platter.js";
-import { CELL_FT, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
+import { CELL_FT, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
 
 // The ground round the builder, a tile at a time, finer the nearer the tile is to the builder's:
 // - within FULL_TILES, drawn in full, smooth-shaded at cell scale with the patterns of its kinds of
@@ -11,6 +11,7 @@ import { CELL_FT, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, TILE_CHUNKS, T
 // - within COARSE_TILES, from its rendition, a part a chunk (v2/platter.js)
 // - further, from its plate's rendition, a part a tile, out to plates within FAR_FT.
 // All but the full ground are flat-shaded in their parts' colors.
+// Flying higher over the ground than half a tier's square is wide, that tier isn't drawn at all.
 // A tile's distance is in tiles, the most of how far it is east or west, north or south, and up
 // or down (its ground's heights against the builder's, in tiles' widths), so each tier is a
 // square round the builder's tile, and flying high, the ground below goes coarser too. What's drawn
@@ -316,18 +317,28 @@ export class Ground {
     this.wanted = new Map(); // "px,pz" -> how its tiles should be drawn, a digit each, "-" for none
     this.pending = []; // "px,pz" of plates to make, nearest first
     this.anchor = null; // the builder's tile and height in tiles' widths, [tx, ty, tz]
+    this.finest = FULL; // the finest tier drawn, by how high the builder is (finestAt)
     // Which kinds of ground are shown (toggle).
     this.shown = { full: true, fine: true, tile: true, plate: true };
     this.counts = [0, 0, 0, 0]; // tiles drawn each way
   }
 
   // Works out what's to be drawn round continent feet (x, y, z) when that's left the tile it was
-  // last worked out for, then makes some of it.
+  // last worked out for, or the finest tier drawn there changes, then makes some of it.
   update(x, y, z) {
     const a = this.anchor;
     const out = (v, at) => v < at * TILE_FT - LEAVE_FT || v > (at + 1) * TILE_FT + LEAVE_FT;
-    if (!a || out(x, a[0]) || out(y, a[1]) || out(z, a[2])) this.plan(x, y, z);
+    if (!a || out(x, a[0]) || out(y, a[1]) || out(z, a[2]) || this.finestAt(x, y, z) !== this.finest) this.plan(x, y, z);
     this.build();
+  }
+
+  // The finest tier drawn with the builder at continent feet (x, y, z): none whose square is less
+  // than twice as wide as the builder is high over the ground.
+  finestAt(x, y, z) {
+    const above = y - (this.renditions.heightAt(x, z) ?? SEA_LEVEL_FT);
+    const wide = (tiles) => (2 * tiles + 1) * TILE_FT;
+    const finest = [FULL_TILES, FINE_TILES, COARSE_TILES].findIndex((tiles) => wide(tiles) > 2 * above);
+    return finest < 0 ? PLATE : finest;
   }
 
   // How tile (tx, tz) is drawn, or null where it has no ground.
@@ -337,13 +348,14 @@ export class Ground {
     const [ax, ay, az] = this.anchor;
     const [lo, hi] = [Math.floor(ys[0] / TILE_FT), Math.floor(ys[1] / TILE_FT)];
     const d = Math.max(Math.abs(tx - ax), Math.abs(tz - az), ay > hi ? ay - hi : ay < lo ? lo - ay : 0);
-    if (d > COARSE_TILES) return PLATE;
-    if (d > FINE_TILES || !this.renditions.hasCells(tx, tz)) return COARSE;
-    return d > FULL_TILES ? FINE : FULL;
+    let t = d > COARSE_TILES ? PLATE : d > FINE_TILES ? COARSE : d > FULL_TILES ? FINE : FULL;
+    t = Math.max(t, this.finest);
+    return t < COARSE && !this.renditions.hasCells(tx, tz) ? COARSE : t;
   }
 
   plan(x, y, z) {
     this.anchor = [Math.floor(x / TILE_FT), Math.floor(y / TILE_FT), Math.floor(z / TILE_FT)];
+    this.finest = this.finestAt(x, y, z);
     const [ax, , az] = this.anchor;
     const reach = Math.ceil(FAR_FT / PLATE_FT);
     const [cx, cz] = [Math.floor(x / PLATE_FT), Math.floor(z / PLATE_FT)];

@@ -7,7 +7,7 @@ import { COARSE, COARSE_TILES, FINE, FINE_TILES, FULL, FULL_TILES, Ground, PLATE
 // Flat ground at `height` everywhere, its plate files there but never read.
 const flat = (height = 0) => {
   const rendition = { heights: new Float32Array(81).fill(height), colors: new Uint8Array(192) };
-  return { tile: () => rendition, plate: () => rendition, hasCells: () => true, cells: () => null };
+  return { tile: () => rendition, plate: () => rendition, hasCells: () => true, cells: () => null, heightAt: () => height };
 };
 
 describe("Ground tiers", () => {
@@ -27,6 +27,18 @@ describe("Ground tiers", () => {
     ground.anchor = [0, FINE_TILES + 1, 0];
     expect(ground.tier(0, 0)).toBe(COARSE);
     ground.anchor = [0, 0, 0];
+  });
+
+  it("leaves out tiers narrower than twice the builder's height over the ground", () => {
+    const g = new Ground(new THREE.Scene(), flat(100), null);
+    const at = (above) => g.finestAt(0, 100 + above, 0);
+    expect(at(((2 * FULL_TILES + 1) * TILE_FT) / 2 - 1)).toBe(FULL);
+    expect(at(((2 * FULL_TILES + 1) * TILE_FT) / 2 + 1)).toBe(FINE);
+    expect(at(((2 * FINE_TILES + 1) * TILE_FT) / 2 + 1)).toBe(COARSE);
+    expect(at(((2 * COARSE_TILES + 1) * TILE_FT) / 2 + 1)).toBe(PLATE);
+    g.anchor = [0, 0, 0];
+    g.finest = COARSE;
+    expect(g.tier(0, 0)).toBe(COARSE);
   });
 
   it("draws ground without cells from its rendition", () => {
