@@ -1,6 +1,7 @@
 import "./create.css";
 import * as THREE from "three";
 import { strFromU8, unzipSync } from "fflate";
+import { PLATE_PATH } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
 import { SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { Builder } from "./builder.js";
@@ -51,7 +52,11 @@ function readWorld(bytes) {
   if (info.version !== 2) throw new Error(`this is a version ${info.version} world: convert it with script/convert-v2.mjs first`);
   const continent = info.continents[0].key;
   const renditions = new Renditions();
-  for (const [path, b] of files) if (PLATTER_PATH.exec(path)?.[1] === continent) renditions.add(b);
+  for (const [path, b] of files) {
+    if (PLATTER_PATH.exec(path)?.[1] === continent) renditions.addPlatter(b);
+    const plate = PLATE_PATH.exec(path);
+    if (plate?.[1] === continent) renditions.addPlate([Number(plate[2]), Number(plate[3])], b);
+  }
   return { name: info.name, continent, renditions };
 }
 
@@ -115,7 +120,7 @@ function start({ name, continent, renditions }) {
     if (now - lastHud > HUD_EVERY_MS) {
       const { flying } = builder.state;
       const fps = Math.round((frames * 1000) / (now - lastHud));
-      $("hud").textContent = `${flying ? "flying" : "walking"} · ${Math.round(builder.above)} ft up · ${Math.round(y)} ft · tile ${Math.floor(x / TILE_FT)},${Math.floor(z / TILE_FT)} · ${ground.meshes.size} tiles and ${ground.plates.size} plates drawn · ${fps} fps`;
+      $("hud").textContent = `${flying ? "flying" : "walking"} · ${Math.round(builder.above)} ft up · ${Math.round(y)} ft · tile ${Math.floor(x / TILE_FT)},${Math.floor(z / TILE_FT)} · ${ground.fineChunks} chunks, ${ground.meshes.size} tiles and ${ground.plates.size} plates drawn · ${fps} fps`;
       lastHud = now;
       frames = 0;
     }
