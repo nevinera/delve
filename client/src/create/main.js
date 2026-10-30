@@ -27,6 +27,7 @@ const FOG = { nearFt: FAR_FT * 0.5, farFt: FAR_FT * 1.02 };
 const SAVE_EVERY_MS = 2000;
 const SEA_BELOW_FT = 2;
 const HUD_EVERY_MS = 250;
+const BUILDER_RADIUS_FT = 1; // how much room the builder takes, walking among trees and objects
 const INFO_EVERY_MS = 100;
 
 // Kept in IndexedDB: the zip opened last ("world"), and the files changed since ("changes", path ->
@@ -158,7 +159,7 @@ function start(world, changes) {
     const plate = renditions.plate(Math.floor(x / PLATE_FT), Math.floor(z / PLATE_FT));
     return plate ? plate.heights.reduce((sum, h) => sum + h, 0) / plate.heights.length : null;
   };
-  const builder = new Builder({ scene, camera, canvas, groundAt, baseAt, at: renditions.middle(), state: saved ?? undefined });
+  const builder = new Builder({ scene, camera, canvas, groundAt, baseAt, at: renditions.middle(), state: saved ?? undefined, push: (x, z) => scatter.pushOut(x, z, BUILDER_RADIUS_FT) });
   const tools = new Tools({ scene, camera, canvas, builder, renditions, ground });
   // The bottom bar's display toggles.
   $("showGrid").checked = grid.value === 1;

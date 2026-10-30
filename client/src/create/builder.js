@@ -42,8 +42,9 @@ const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "f"]);
 // input: { forward, strafe, turn } each -1, 0 or 1, rise and drop (space or F held), takeoff
 // (space was just pressed), and while hopping, y (the height to be at) and land (whether this hop
 // ends on the ground). groundAt(x, z) gives the ground's height, or null off the tiles, where the
-// sea's surface holds you up. Returns the new state.
-export function moveBuilder(state, input, dt, groundAt) {
+// sea's surface holds you up. Walking, push(x, z) moves where they'd be out of what's in the way.
+// Returns the new state.
+export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z]) {
   const ground = (x, z) => groundAt(x, z) ?? SEA_LEVEL_FT;
   let { x, y, z, yaw, flying } = state;
   yaw += input.turn * TURN_RATE * dt;
@@ -59,6 +60,7 @@ export function moveBuilder(state, input, dt, groundAt) {
   if (length) {
     x += (mx / length) * speed * dt;
     z += (mz / length) * speed * dt;
+    if (!flying) [x, z] = push(x, z);
   }
   if (input.y != null) {
     flying = true;
@@ -110,7 +112,8 @@ export function cameraFor({ pitch, distance }, above) {
 export class Builder {
   // Starts at `state` (as moveBuilder takes it), or else on the ground at continent feet `at`.
   // baseAt(x, z) gives the middling height of the plate there, that hops' steps are over.
-  constructor({ scene, camera, canvas, groundAt, baseAt, at, state }) {
+  constructor({ scene, camera, canvas, groundAt, baseAt, at, state, push }) {
+    this.push = push;
     this.camera = camera;
     this.canvas = canvas;
     this.groundAt = groundAt;
@@ -162,7 +165,7 @@ export class Builder {
       land,
     };
     this.takeoff = false;
-    this.state = moveBuilder(this.state, input, dt, this.groundAt);
+    this.state = moveBuilder(this.state, input, dt, this.groundAt, this.push);
     if (!this.state.flying) this.hop = null;
     if (this.drag?.button === 2) this.cam.yaw = 0;
     this.place();

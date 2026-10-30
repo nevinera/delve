@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { objectMeshes, setObjectSight } from "../editor/objectMeshes.js";
-import { setTreeSight, treeMeshes } from "../editor/treeMeshes.js";
+import { setTreeSight, treeMeshes, trunkRadius } from "../editor/treeMeshes.js";
+import { objectShape, pushOut, treeShape } from "../v2/blocking.js";
 import { fillSlots } from "../v2/fill.js";
 import { slopeOf } from "../v2/look.js";
 import { TILE_FT } from "../v2/sizes.js";
@@ -9,6 +10,7 @@ import { TILE_FT } from "../v2/sizes.js";
 // REACH_TILES tiles from theirs, drawn with the editor's models. What fills a tile is kept till its
 // ground moves or the biomes change (its cells are dressed again), and the meshes are made again
 // when the builder leaves their tile or what fills the tiles changes, at most every REMAKE_S.
+// Walking, the builder's pushed out of their trunks and footprints (v2/blocking.js).
 
 const REACH_TILES = 6;
 const REMAKE_S = 0.5;
@@ -52,6 +54,7 @@ export class Scatter {
       const reach = object.footprint.circle ?? Math.min(...(object.footprint.rect ?? [0])) / 2;
       object.y = Math.min(ground(x, z), ground(x + reach, z), ground(x - reach, z), ground(x, z + reach), ground(x, z - reach)) - 0.1 * object.height;
     }
+    filled.shapes = [...filled.trees.map((tree) => treeShape(tree, trunkRadius(tree.kind, tree.size))), ...filled.objects.map(objectShape).filter(Boolean)];
     filled.colors = cells.colors;
     filled.id = (Scatter.ids = (Scatter.ids ?? 0) + 1);
     cells.filled = filled;
@@ -85,6 +88,20 @@ export class Scatter {
       mesh.frustumCulled = false;
       this.group.add(mesh);
     }
+  }
+
+  // (x, z) pushed out of the trees and objects round it, for a walker `radius` ft round, [x, z].
+  pushOut(x, z, radius) {
+    const [ax, az] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
+    const shapes = [];
+    for (let tz = az - 1; tz <= az + 1; tz++) {
+      for (let tx = ax - 1; tx <= ax + 1; tx++) {
+        if (!this.renditions.tile(tx, tz)) continue;
+        const filled = this.fill(tx, tz);
+        if (filled) shapes.push(...filled.shapes);
+      }
+    }
+    return pushOut(x, z, radius, shapes);
   }
 
   clear() {
