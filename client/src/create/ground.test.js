@@ -96,7 +96,19 @@ describe("raising the ground", () => {
     expect(renditions.heightAt(100, 100)).toBe(10);
     expect(renditions.tile(0, 0).heights[0]).toBe(15);
     expect(renditions.tile(0, 0).heights[3]).toBe(10);
-    expect(renditions.plate(0, 0).heights[0]).toBe(15);
+    // 13 of 17 samples each way round the plate's corner are in the raised square.
+    expect(renditions.plate(0, 0).heights[0]).toBeCloseTo(10 + 5 * (13 / 17) ** 2);
+  });
+
+  it("moves coarser renditions by the average move round each corner", () => {
+    const renditions = world();
+    // 5 ft over a circle 105 ft across round the plate's and tile's corner at (0, 0).
+    const disc = (x, z) => (Math.hypot(x, z) < 105 ? 5 : 0);
+    renditions.raise(disc, [-105, -105, 105, 105], CELLS);
+    // The circle's about half the 256 ft square round the corner.
+    expect(renditions.plate(0, 0).heights[0] - 10).toBeGreaterThan(2);
+    expect(renditions.plate(0, 0).heights[0] - 10).toBeLessThan(3.2);
+    expect(renditions.tile(0, 0).heights[0]).toBe(15);
   });
 
   it("gives the files whose ground moved, with the moves in", () => {

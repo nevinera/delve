@@ -116,26 +116,37 @@ export class Renditions {
   }
 
   // Moves the ground by at(x, z) feet within `bounds`, [x0, z0, x1, z1] continent feet, worked out
-  // on the corners of `level`'s squares (geo.js) and straight between them finer. Gives the
+  // on the corners of `level`'s squares (geo.js) and straight between them finer. Coarser
+  // renditions' corners move by the average move round them, over a square as wide as their parts,
+  // so a small brush makes a low, wide bump in them, not one as tall as it makes. Gives the
   // "px,pz" of the plates whose ground moved.
   raise(at, [x0, z0, x1, z1], level) {
     const moved = new Set();
     // at() on a grid `n` squares a side, `step` ft apart from (ox, oz), or null where it's all 0.
-    const sample = (ox, oz, step, n) => {
+    // With `half`, each corner's the average of at() over the square `half` ft either way of it,
+    // taken `every` ft.
+    const sample = (ox, oz, step, n, half = 0, every = 1) => {
       const out = new Float32Array((n + 1) * (n + 1));
+      const offsets = [];
+      for (let o = -half; o <= half; o += every) offsets.push(o);
       let any = false;
       for (let j = 0; j <= n; j++) {
         const z = oz + j * step;
-        if (z < z0 || z > z1) continue;
+        if (z < z0 - half || z > z1 + half) continue;
         for (let i = 0; i <= n; i++) {
           const x = ox + i * step;
-          if (x < x0 || x > x1) continue;
-          out[j * (n + 1) + i] = at(x, z);
+          if (x < x0 - half || x > x1 + half) continue;
+          let sum = 0;
+          for (const dz of offsets) for (const dx of offsets) sum += at(x + dx, z + dz);
+          out[j * (n + 1) + i] = sum / offsets.length ** 2;
           any ||= out[j * (n + 1) + i] !== 0;
         }
       }
       return any ? out : null;
     };
+    // How the coarser renditions are sampled: [half, every] for plates' and tiles'.
+    const plateFilter = level === TILES ? [0, 1] : level === CHUNKS ? [TILE_FT / 2, CHUNK_FT] : [TILE_FT / 2, CHUNK_FT / 2];
+    const tileFilter = level === CELLS ? [CHUNK_FT / 2, CELL_FT * 2] : [0, 1];
     // Sea floor where the brush moves it and there are no tiles is made into tiles first.
     const [step, n] = level === CELLS ? [CELL_FT, TILE_CELLS] : level === CHUNKS ? [CHUNK_FT, TILE_CHUNKS] : [TILE_FT, 1];
     for (let tz = Math.floor(z0 / TILE_FT); tz <= Math.floor(z1 / TILE_FT); tz++) {
@@ -149,10 +160,11 @@ export class Renditions {
       else map.set(key, values.slice());
     };
     const plateMoves = new Map();
-    for (let pz = Math.floor(z0 / PLATE_FT); pz <= Math.floor(z1 / PLATE_FT); pz++) {
-      for (let px = Math.floor(x0 / PLATE_FT); px <= Math.floor(x1 / PLATE_FT); px++) {
+    const [ph] = plateFilter;
+    for (let pz = Math.floor((z0 - ph) / PLATE_FT); pz <= Math.floor((z1 + ph) / PLATE_FT); pz++) {
+      for (let px = Math.floor((x0 - ph) / PLATE_FT); px <= Math.floor((x1 + ph) / PLATE_FT); px++) {
         const plate = this.plate(px, pz);
-        const d = plate && sample(px * PLATE_FT, pz * PLATE_FT, TILE_FT, PLATE_TILES);
+        const d = plate && sample(px * PLATE_FT, pz * PLATE_FT, TILE_FT, PLATE_TILES, ...plateFilter);
         if (!d) continue;
         const key = `${px},${pz}`;
         for (let k = 0; k < d.length; k++) plate.heights[k] += d[k];
@@ -166,8 +178,9 @@ export class Renditions {
         }
       }
     }
-    for (let tz = Math.floor(z0 / TILE_FT); tz <= Math.floor(z1 / TILE_FT); tz++) {
-      for (let tx = Math.floor(x0 / TILE_FT); tx <= Math.floor(x1 / TILE_FT); tx++) {
+    const [th] = tileFilter;
+    for (let tz = Math.floor((z0 - th) / TILE_FT); tz <= Math.floor((z1 + th) / TILE_FT); tz++) {
+      for (let tx = Math.floor((x0 - th) / TILE_FT); tx <= Math.floor((x1 + th) / TILE_FT); tx++) {
         const tile = this.tile(tx, tz);
         if (!tile) continue;
         const [px, pz] = [Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES)];
@@ -178,7 +191,7 @@ export class Renditions {
           if (!plateMove) continue;
           d = new Float32Array(CORNERS * CORNERS);
           for (let j = 0; j < CORNERS; j++) for (let i = 0; i < CORNERS; i++) d[j * CORNERS + i] = between(plateMove, CORNERS, i0 + i / TILE_CHUNKS, j0 + j / TILE_CHUNKS);
-        } else d = sample(tx * TILE_FT, tz * TILE_FT, CHUNK_FT, TILE_CHUNKS);
+        } else d = sample(tx * TILE_FT, tz * TILE_FT, CHUNK_FT, TILE_CHUNKS, ...tileFilter);
         const key = `${tx},${tz}`;
         if (d) {
           for (let k = 0; k < d.length; k++) tile.heights[k] += d[k];
