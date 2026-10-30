@@ -1,18 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { CORNERS, decodePlatter, encodePlatter, indexIn, platterOf } from "./platter.js";
+import { CORNERS, decodePlatter, encodePlatter, indexIn, plateIndexIn, platterOf } from "./platter.js";
 
 describe("platter files", () => {
   it("keep each tile's rendition", () => {
     const heights = Float32Array.from({ length: CORNERS * CORNERS }, (_, k) => k * 1.25 - 40);
     const colors = Uint8Array.from({ length: 192 }, (_, k) => k);
     const tiles = new Map([[indexIn(-3, 70), { heights, colors, hash: "0123456789abcdef" }]]);
-    const back = decodePlatter(encodePlatter({ coords: platterOf(-3, 70), tiles }));
+    const plates = new Map([[plateIndexIn(-1, 8), { heights, colors, hash: "fedcba9876543210" }]]);
+    const back = decodePlatter(encodePlatter({ coords: platterOf(-3, 70), tiles, plates }));
     expect(back.coords).toEqual([-1, 1]);
     expect([...back.tiles.keys()]).toEqual([indexIn(-3, 70)]);
     const tile = back.tiles.get(indexIn(-3, 70));
     expect([...tile.heights]).toEqual([...heights]);
     expect([...tile.colors]).toEqual([...colors]);
     expect(tile.hash).toBe("0123456789abcdef");
+    expect([...back.plates.keys()]).toEqual([plateIndexIn(-1, 8)]);
+    expect(back.plates.get(plateIndexIn(-1, 8)).hash).toBe("fedcba9876543210");
   });
 
   it("number tiles within their platter", () => {

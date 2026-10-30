@@ -1,5 +1,6 @@
 // Makes a version 2 world (client/src/v2/) from a version 1 world's zip, for the /create spike:
-// its world.json, and for each continent, platter files with a rendition of each 256 ft tile. A
+// its world.json, and for each continent, platter files with a rendition of each 256 ft tile and
+// each plate (v2/rendition.js). A
 // v1 tile (512 ft, 8 ft cells) becomes 2×2 v2 tiles. A chunk corner's height is the mean of the
 // four v1 cells round it, and a chunk's color the mean of its 4×4 v1 cells' ground colors.
 //
@@ -10,8 +11,9 @@ import { unpackPlates } from "../client/src/editor/plates.js";
 import { decodeTile } from "../client/src/world/tileCodec.js";
 import { groundRgb } from "../client/src/world/tileImage.js";
 import { tileAt } from "../client/src/world/paths.js";
-import { CORNERS, encodePlatter, indexIn, platterOf, platterPath } from "../client/src/v2/platter.js";
-import { CHUNK_FT, TILE_CHUNKS } from "../client/src/v2/sizes.js";
+import { CORNERS, encodePlatter, indexIn, plateIndexIn, platterOf, platterPath } from "../client/src/v2/platter.js";
+import { hash64, plateRendition } from "../client/src/v2/rendition.js";
+import { CHUNK_FT, PLATE_TILES, PLATTER_PLATES, TILE_CHUNKS } from "../client/src/v2/sizes.js";
 
 const [from, to] = process.argv.slice(2);
 if (!from || !to) {
@@ -27,13 +29,6 @@ if (!files.has("world.json")) {
 }
 files = await unpackPlates(files);
 const info = JSON.parse(strFromU8(files.get("world.json")));
-
-// FNV-1a, 64 bits, as 16 hex digits.
-function hash64(bytes) {
-  let h = 0xcbf29ce484222325n;
-  for (const b of bytes) h = BigInt.asUintN(64, (h ^ BigInt(b)) * 0x100000001b3n);
-  return h.toString(16).padStart(16, "0");
-}
 
 const out = { "world.json": strToU8(`${JSON.stringify({ ...info, version: 2 }, null, 2)}\n`) };
 let highest = -Infinity;
@@ -97,11 +92,21 @@ for (const { key } of info.continents) {
       }
     }
   }
+  let plateCount = 0;
   for (const [p, tiles] of platters) {
     const coords = p.split(",").map(Number);
-    out[platterPath(key, coords)] = encodePlatter({ coords, tiles });
+    const plates = new Map();
+    for (let j = 0; j < PLATTER_PLATES; j++) {
+      for (let i = 0; i < PLATTER_PLATES; i++) {
+        const [px, pz] = [coords[0] * PLATTER_PLATES + i, coords[1] * PLATTER_PLATES + j];
+        const plate = plateRendition((a, b) => tiles.get(indexIn(px * PLATE_TILES + a, pz * PLATE_TILES + b)) ?? null);
+        if (plate) plates.set(plateIndexIn(px, pz), plate);
+      }
+    }
+    plateCount += plates.size;
+    out[platterPath(key, coords)] = encodePlatter({ coords, tiles, plates });
   }
-  console.log(`${key}: ${sources.size} v1 tiles, ${sources.size * 4} v2 tiles in ${platters.size} platters`);
+  console.log(`${key}: ${sources.size} v1 tiles, ${sources.size * 4} v2 tiles in ${plateCount} plates and ${platters.size} platters`);
 }
 if (highest > 8191) console.warn(`the highest ground, ${highest} ft, is over what a platter holds (8,191 ft)`);
 fs.writeFileSync(to, zipSync(out));

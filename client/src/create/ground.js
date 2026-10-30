@@ -1,13 +1,15 @@
 import * as THREE from "three";
-import { CORNERS, decodePlatter, indexIn, platterOf } from "../v2/platter.js";
-import { CHUNK_FT, PLATTER_TILES, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
+import { CORNERS, decodePlatter, indexIn, plateIndexIn, platterOf, platterOfPlate } from "../v2/platter.js";
+import { CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
 
-// The ground round the builder, drawn from tiles' renditions (v2/platter.js): each tile within
-// RADIUS_FT a mesh of its 8×8 chunks, flat-shaded in their colors, with a skirt hanging from its
-// edges to hide the gaps between tiles.
+// The ground round the builder, drawn from renditions (v2/platter.js), flat-shaded in their
+// parts' colors: each tile within RADIUS_FT as a mesh of its 8×8 chunks, and past that, out to
+// FAR_FT, each plate as a mesh of its 8×8 tiles, leaving out the tiles drawn close up. Skirts hang
+// from the edges to hide the gaps between meshes.
 
 export const RADIUS_FT = 1024;
-const SKIRT_FT = 24;
+export const FAR_FT = 24576;
+const SKIRT = 0.75; // how far a skirt hangs, as a share of a part's size
 const SKIRT_SHADE = 0.6;
 
 // A continent's tile renditions, from its platter files.
@@ -23,6 +25,10 @@ export class Renditions {
 
   tile(tx, tz) {
     return this.platters.get(platterOf(tx, tz).join(","))?.tiles.get(indexIn(tx, tz)) ?? null;
+  }
+
+  plate(px, pz) {
+    return this.platters.get(platterOfPlate(px, pz).join(","))?.plates.get(plateIndexIn(px, pz)) ?? null;
   }
 
   // The ground's height at continent feet (x, z), straight between chunk corners, or null where
@@ -54,15 +60,19 @@ export class Renditions {
   }
 }
 
-// A tile's mesh, in feet from its northwest corner.
-export function tileGeometry(tile) {
+// A rendition's mesh, in feet from its northwest corner, its parts `partFt` across. drawn(i, j)
+// says whether to draw part i east and j south. Skirts hang from each drawn part's sides that
+// don't meet another drawn part.
+export function renditionGeometry(rendition, partFt, drawn = () => true) {
+  const n = TILE_CHUNKS;
+  const skirtFt = partFt * SKIRT;
   const positions = [];
   const colors = [];
   const color = new THREE.Color();
-  const corner = (i, j) => [i * CHUNK_FT, tile.heights[j * CORNERS + i], j * CHUNK_FT];
-  const chunkColor = (i, j, shade = 1) => {
-    const k = (j * TILE_CHUNKS + i) * 3;
-    color.setRGB((tile.colors[k] / 255) * shade, (tile.colors[k + 1] / 255) * shade, (tile.colors[k + 2] / 255) * shade, THREE.SRGBColorSpace);
+  const corner = (i, j) => [i * partFt, rendition.heights[j * CORNERS + i], j * partFt];
+  const partColor = (i, j, shade = 1) => {
+    const k = (j * n + i) * 3;
+    color.setRGB((rendition.colors[k] / 255) * shade, (rendition.colors[k + 1] / 255) * shade, (rendition.colors[k + 2] / 255) * shade, THREE.SRGBColorSpace);
     return [color.r, color.g, color.b];
   };
   const face = (points, rgb) => {
@@ -71,26 +81,25 @@ export function tileGeometry(tile) {
       colors.push(...rgb);
     }
   };
-  for (let j = 0; j < TILE_CHUNKS; j++) {
-    for (let i = 0; i < TILE_CHUNKS; i++) {
-      const [a, b, c, d] = [corner(i, j), corner(i + 1, j), corner(i, j + 1), corner(i + 1, j + 1)];
-      const rgb = chunkColor(i, j);
-      face([a, c, b, b, c, d], rgb);
-    }
-  }
-  // Skirts, along each edge: [the corners along it, the chunk beside each stretch].
-  const n = TILE_CHUNKS;
-  const edges = [
-    [(k) => corner(k, 0), (k) => [k, 0]],
-    [(k) => corner(n, k), (k) => [n - 1, k]],
-    [(k) => corner(n - k, n), (k) => [n - 1 - k, n - 1]],
-    [(k) => corner(0, n - k), (k) => [0, n - 1 - k]],
+  const shown = (i, j) => i >= 0 && j >= 0 && i < n && j < n && drawn(i, j);
+  // Each side of a part: the part beside it, and its two corners going clockwise seen from above.
+  const SIDES = [
+    [0, -1, [0, 0], [1, 0]],
+    [1, 0, [1, 0], [1, 1]],
+    [0, 1, [1, 1], [0, 1]],
+    [-1, 0, [0, 1], [0, 0]],
   ];
-  for (const [along, chunk] of edges) {
-    for (let k = 0; k < n; k++) {
-      const [p, q] = [along(k), along(k + 1)];
-      const [pd, qd] = [[p[0], p[1] - SKIRT_FT, p[2]], [q[0], q[1] - SKIRT_FT, q[2]]];
-      face([p, pd, q, q, pd, qd], chunkColor(...chunk(k), SKIRT_SHADE));
+  for (let j = 0; j < n; j++) {
+    for (let i = 0; i < n; i++) {
+      if (!drawn(i, j)) continue;
+      const [a, b, c, d] = [corner(i, j), corner(i + 1, j), corner(i, j + 1), corner(i + 1, j + 1)];
+      face([a, c, b, b, c, d], partColor(i, j));
+      for (const [di, dj, from, to] of SIDES) {
+        if (shown(i + di, j + dj)) continue;
+        const [p, q] = [corner(i + from[0], j + from[1]), corner(i + to[0], j + to[1])];
+        const [pd, qd] = [[p[0], p[1] - skirtFt, p[2]], [q[0], q[1] - skirtFt, q[2]]];
+        face([p, pd, q, q, pd, qd], partColor(i, j, SKIRT_SHADE));
+      }
     }
   }
   const geometry = new THREE.BufferGeometry();
@@ -100,44 +109,93 @@ export function tileGeometry(tile) {
   return geometry;
 }
 
-// The meshes of the tiles round a point, made as they come within RADIUS_FT and dropped as they
-// leave it.
+// The meshes round a point: tiles within RADIUS_FT, and plates out to FAR_FT, made as they come
+// in range and dropped as they leave it.
 export class Ground {
   constructor(scene, renditions) {
     this.renditions = renditions;
     this.group = new THREE.Group();
     scene.add(this.group);
     this.material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
-    this.meshes = new Map(); // "tx,tz" -> mesh
+    this.meshes = new Map(); // "tx,tz" -> a tile's mesh
+    this.plates = new Map(); // "px,pz" -> a plate's mesh, its userData.hidden the tiles it leaves out
+    this.at = null;
   }
 
+  // Draws the ground round continent feet (x, z), again only when that's moved to another tile.
   update(x, z) {
-    const wanted = new Set();
-    const reach = Math.ceil(RADIUS_FT / TILE_FT);
     const [cx, cz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
-    for (let tz = cz - reach; tz <= cz + reach; tz++) {
-      for (let tx = cx - reach; tx <= cx + reach; tx++) {
-        // The nearest point of the tile to (x, z).
-        const nx = Math.max(tx * TILE_FT, Math.min(x, (tx + 1) * TILE_FT));
-        const nz = Math.max(tz * TILE_FT, Math.min(z, (tz + 1) * TILE_FT));
-        if (Math.hypot(nx - x, nz - z) <= RADIUS_FT) wanted.add(`${tx},${tz}`);
-      }
-    }
-    for (const [key, mesh] of this.meshes) {
-      if (wanted.has(key)) continue;
-      this.group.remove(mesh);
-      mesh.geometry.dispose();
-      this.meshes.delete(key);
-    }
-    for (const key of wanted) {
-      if (this.meshes.has(key)) continue;
+    if (this.at === `${cx},${cz}`) return;
+    this.at = `${cx},${cz}`;
+    const middle = [(cx + 0.5) * TILE_FT, (cz + 0.5) * TILE_FT];
+    const near = within(middle, RADIUS_FT, TILE_FT);
+    this.sync(this.meshes, near, (key) => {
       const [tx, tz] = key.split(",").map(Number);
       const tile = this.renditions.tile(tx, tz);
-      if (!tile) continue;
-      const mesh = new THREE.Mesh(tileGeometry(tile), this.material);
-      mesh.position.set(tx * TILE_FT, 0, tz * TILE_FT);
+      return tile && this.mesh(renditionGeometry(tile, CHUNK_FT), tx * TILE_FT, tz * TILE_FT);
+    });
+    const far = within(middle, FAR_FT, PLATE_FT);
+    // A plate made again when the tiles it leaves out change.
+    for (const key of far) if (this.plates.get(key)?.userData.hidden !== this.hiddenIn(key)) this.drop(this.plates, key);
+    this.sync(this.plates, far, (key) => {
+      const [px, pz] = key.split(",").map(Number);
+      const plate = this.renditions.plate(px, pz);
+      if (!plate) return null;
+      const tileAt = (i, j) => [px * PLATE_TILES + i, pz * PLATE_TILES + j];
+      const drawn = (i, j) => Boolean(this.renditions.tile(...tileAt(i, j))) && !this.meshes.has(tileAt(i, j).join());
+      const mesh = this.mesh(renditionGeometry(plate, TILE_FT, drawn), px * PLATE_FT, pz * PLATE_FT);
+      mesh.userData.hidden = this.hiddenIn(key);
+      return mesh;
+    });
+  }
+
+  // Which of a plate's tiles ("px,pz") are drawn close up, so the plate leaves them out.
+  hiddenIn(key) {
+    const [px, pz] = key.split(",").map(Number);
+    const hidden = [];
+    for (let j = 0; j < PLATE_TILES; j++) for (let i = 0; i < PLATE_TILES; i++) if (this.meshes.has(`${px * PLATE_TILES + i},${pz * PLATE_TILES + j}`)) hidden.push(j * PLATE_TILES + i);
+    return hidden.join();
+  }
+
+  // Makes the meshes in `wanted` that `meshes` lacks with make(key), which may give null, and
+  // drops the ones not wanted.
+  sync(meshes, wanted, make) {
+    for (const key of [...meshes.keys()]) if (!wanted.has(key)) this.drop(meshes, key);
+    for (const key of wanted) {
+      if (meshes.has(key)) continue;
+      const mesh = make(key);
+      if (!mesh) continue;
       this.group.add(mesh);
-      this.meshes.set(key, mesh);
+      meshes.set(key, mesh);
     }
   }
+
+  drop(meshes, key) {
+    const mesh = meshes.get(key);
+    if (!mesh) return;
+    this.group.remove(mesh);
+    mesh.geometry.dispose();
+    meshes.delete(key);
+  }
+
+  mesh(geometry, x, z) {
+    const mesh = new THREE.Mesh(geometry, this.material);
+    mesh.position.set(x, 0, z);
+    return mesh;
+  }
+}
+
+// The squares `size` across ("i,j") with some of them within `radius` of continent feet [x, z].
+function within([x, z], radius, size) {
+  const out = new Set();
+  const reach = Math.ceil(radius / size);
+  const [ci, cj] = [Math.floor(x / size), Math.floor(z / size)];
+  for (let j = cj - reach; j <= cj + reach; j++) {
+    for (let i = ci - reach; i <= ci + reach; i++) {
+      const nx = Math.max(i * size, Math.min(x, (i + 1) * size));
+      const nz = Math.max(j * size, Math.min(z, (j + 1) * size));
+      if (Math.hypot(nx - x, nz - z) <= radius) out.add(`${i},${j}`);
+    }
+  }
+  return out;
 }
