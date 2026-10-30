@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CLIMB_FT, RUN_FT, hopEase, hopTo, moveBuilder } from "./builder.js";
+import { CLIMB_FT, RUN_FT, SWIM_FT, SWIM_SPEED, hopEase, hopTo, moveBuilder } from "./builder.js";
 
 const still = { forward: 0, strafe: 0, turn: 0, rise: false, drop: false, takeoff: false };
 const flat = () => 100;
@@ -61,6 +61,21 @@ describe("the builder", () => {
   it("lands on touching the ground", () => {
     const s = moveBuilder({ x: 0, y: 101, z: 0, yaw: 0, flying: true }, { ...still, drop: true }, 1, flat);
     expect(s).toMatchObject({ y: 100, flying: false });
+  });
+
+  it("wades in shallow water, and swims slower in deep water, kept under its surface", () => {
+    const [ground, water] = [() => 100, () => 103];
+    const wade = moveBuilder({ x: 0, y: 100, z: 0, yaw: 0, flying: false }, { ...still, forward: 1 }, 1, ground, undefined, water);
+    expect(wade).toMatchObject({ y: 100, swimming: false });
+    expect(wade.z).toBeCloseTo(RUN_FT);
+    const swim = moveBuilder({ x: 0, y: 100, z: 0, yaw: 0, flying: false }, { ...still, forward: 1 }, 1, () => 90, undefined, water);
+    expect(swim).toMatchObject({ y: 103 - SWIM_FT, swimming: true });
+    expect(swim.z).toBeCloseTo(RUN_FT * SWIM_SPEED);
+  });
+
+  it("lands on the water to swim, flying down into it", () => {
+    const s = moveBuilder({ x: 0, y: 101, z: 0, yaw: 0, flying: true }, { ...still, drop: true }, 1, () => 50, undefined, () => 100);
+    expect(s).toMatchObject({ y: 100 - SWIM_FT, flying: false, swimming: true });
   });
 
   it("stands on the sea off the tiles", () => {

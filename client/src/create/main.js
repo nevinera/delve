@@ -145,7 +145,8 @@ function start(world, changes) {
   // Trees and objects in the tiles' slots round the builder.
   const scatter = new Scatter(scene, renditions);
   // The builder stands on the sea where it's over the ground.
-  const groundAt = (x, z) => Math.max(renditions.heightAt(x, z) ?? EMPTY_FT, SEA_LEVEL_FT);
+  const groundAt = (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT;
+  const waterAt = (x, z) => renditions.waterAt(x, z);
   const placeKey = `create:${name}:${continent}`;
   let saved = null;
   try {
@@ -163,7 +164,7 @@ function start(world, changes) {
     const plate = renditions.plate(Math.floor(x / PLATE_FT), Math.floor(z / PLATE_FT));
     return plate ? plate.heights.reduce((sum, h) => sum + h, 0) / plate.heights.length : null;
   };
-  const builder = new Builder({ scene, camera, canvas, groundAt, baseAt, at: renditions.middle(), state: saved ?? undefined, push: (x, z) => scatter.pushOut(x, z, BUILDER_RADIUS_FT) });
+  const builder = new Builder({ scene, camera, canvas, groundAt, waterAt, baseAt, at: renditions.middle(), state: saved ?? undefined, push: (x, z) => scatter.pushOut(x, z, BUILDER_RADIUS_FT) });
   const tools = new Tools({ scene, camera, canvas, builder, renditions, ground });
   // The bottom bar's display toggles.
   $("showGrid").checked = grid.value === 1;
@@ -275,7 +276,7 @@ function start(world, changes) {
       const fps = Math.round((frames * 1000) / (now - lastHud));
       $("hud").classList.toggle("problem", Boolean(problem));
       const hidden = KINDS.filter((kind) => !ground.shown[kind]);
-      $("hud").textContent = problem ? `can't draw the ground: ${problem}` : `${hidden.length ? `hiding ${hidden.join(", ")} · ` : ""}${flying ? "flying" : "walking"} · ${Math.round(builder.above)} ft up · ${Math.round(y)} ft · tile ${Math.floor(x / TILE_FT)},${Math.floor(z / TILE_FT)} · tiles drawn ${ground.counts[0]} in full, ${ground.counts[1]} at cell scale, ${ground.counts[2]} coarse, ${ground.counts[3]} from plates · ${fps} fps, slowest ${worst.gap.toFixed(0)} ms (move ${worst.move.toFixed(1)}, tool ${worst.tool.toFixed(1)}, ground ${worst.ground.toFixed(1)}, render ${worst.render.toFixed(1)}) · ${renderer.info.render.calls} draws`;
+      $("hud").textContent = problem ? `can't draw the ground: ${problem}` : `${hidden.length ? `hiding ${hidden.join(", ")} · ` : ""}${flying ? "flying" : builder.state.swimming ? "swimming" : "walking"} · ${Math.round(builder.above)} ft up · ${Math.round(y)} ft · tile ${Math.floor(x / TILE_FT)},${Math.floor(z / TILE_FT)} · tiles drawn ${ground.counts[0]} in full, ${ground.counts[1]} at cell scale, ${ground.counts[2]} coarse, ${ground.counts[3]} from plates · ${fps} fps, slowest ${worst.gap.toFixed(0)} ms (move ${worst.move.toFixed(1)}, tool ${worst.tool.toFixed(1)}, ground ${worst.ground.toFixed(1)}, render ${worst.render.toFixed(1)}) · ${renderer.info.render.calls} draws`;
       worst = { gap: 0, move: 0, tool: 0, ground: 0, render: 0 };
       lastHud = now;
       frames = 0;

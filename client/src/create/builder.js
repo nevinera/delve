@@ -4,7 +4,8 @@ import { SEA_LEVEL_FT } from "../v2/sizes.js";
 
 // The builder: a person who walks on the ground and flies over it, with a camera behind them.
 //
-// On the ground: W/S run forward and back, A/D turn, Q/E strafe, and space takes off. In the air:
+// On the ground: W/S run forward and back, A/D turn, Q/E strafe, and space takes off. In water
+// deeper than SWIM_FT they swim, slower, kept that far under its surface. In the air:
 // the same keys move, space rises and F falls. Double-tapping either hops quickly to the next step
 // up or down: 128 ft over the middling height of the plate below, then 256, 512 and so on
 // doubling, and down past the lowest, to the ground, passing by any within HOP_SKIP_FT. The steps
@@ -17,6 +18,8 @@ import { SEA_LEVEL_FT } from "../v2/sizes.js";
 
 export const RUN_FT = 21; // a second
 export const BACK_FT = 13.5;
+export const SWIM_FT = 4; // water deeper than this is swum in
+export const SWIM_SPEED = 0.67; // swimming's share of running's speed
 export const FLY_FT = 21; // the least flying speed
 export const FLY_PER_FT = 1; // flying speed for each foot above the ground, a second
 export const CLIMB_FT = 24; // the least climbing speed
@@ -42,10 +45,11 @@ const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "f"]);
 // input: { forward, strafe, turn } each -1, 0 or 1, rise and drop (space or F held), takeoff
 // (space was just pressed), and while hopping, y (the height to be at) and land (whether this hop
 // ends on the ground). groundAt(x, z) gives the ground's height, or null off the tiles, where the
-// sea's surface holds you up. Walking, push(x, z) moves where they'd be out of what's in the way.
-// Returns the new state.
-export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z]) {
-  const ground = (x, z) => groundAt(x, z) ?? SEA_LEVEL_FT;
+// sea's surface holds you up, and waterAt(x, z) the water's surface there, or null where there's
+// none. Walking, push(x, z) moves where they'd be out of what's in the way. Returns the new state,
+// with `swimming` whether they're in water deeper than SWIM_FT.
+export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z], waterAt = () => null) {
+  const ground = (x, z) => standAt(x, z, groundAt, waterAt);
   let { x, y, z, yaw, flying } = state;
   yaw += input.turn * TURN_RATE * dt;
   const above = Math.max(0, y - ground(x, z));
@@ -53,7 +57,8 @@ export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z])
     flying = true;
     y += LIFT_FT;
   }
-  const speed = flying ? Math.max(FLY_FT, above * FLY_PER_FT) : input.forward < 0 ? BACK_FT : RUN_FT;
+  const swimming = !flying && deep(x, z, groundAt, waterAt);
+  const speed = flying ? Math.max(FLY_FT, above * FLY_PER_FT) : (input.forward < 0 ? BACK_FT : RUN_FT) * (swimming ? SWIM_SPEED : 1);
   const [fx, fz] = [Math.sin(yaw), Math.cos(yaw)];
   let [mx, mz] = [fx * input.forward + fz * input.strafe, fz * input.forward - fx * input.strafe];
   const length = Math.hypot(mx, mz);
@@ -74,7 +79,20 @@ export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z])
     y = floor;
     flying = false;
   }
-  return { x, y, z, yaw, flying };
+  return { x, y, z, yaw, flying, swimming: !flying && deep(x, z, groundAt, waterAt) };
+}
+
+// Whether the water at (x, z) is deep enough to swim in.
+function deep(x, z, groundAt, waterAt) {
+  const water = waterAt(x, z);
+  return water != null && water - (groundAt(x, z) ?? SEA_LEVEL_FT) > SWIM_FT;
+}
+
+// The height the builder stands at at (x, z): the ground's, or swimming, SWIM_FT under the water.
+export function standAt(x, z, groundAt, waterAt = () => null) {
+  const ground = groundAt(x, z) ?? SEA_LEVEL_FT;
+  const water = waterAt(x, z);
+  return water != null ? Math.max(ground, water - SWIM_FT) : ground;
 }
 
 // The next step a hop from height y stops at, `way` 1 up or -1 down, with the plate's middling
@@ -112,8 +130,9 @@ export function cameraFor({ pitch, distance }, above) {
 export class Builder {
   // Starts at `state` (as moveBuilder takes it), or else on the ground at continent feet `at`.
   // baseAt(x, z) gives the middling height of the plate there, that hops' steps are over.
-  constructor({ scene, camera, canvas, groundAt, baseAt, at, state, push }) {
+  constructor({ scene, camera, canvas, groundAt, waterAt = () => null, baseAt, at, state, push }) {
     this.push = push;
+    this.waterAt = waterAt;
     this.camera = camera;
     this.canvas = canvas;
     this.groundAt = groundAt;
@@ -138,7 +157,11 @@ export class Builder {
   }
 
   get above() {
-    return this.state.y - (this.groundAt(this.state.x, this.state.z) ?? SEA_LEVEL_FT);
+    return this.state.y - this.standAt(this.state.x, this.state.z);
+  }
+
+  standAt(x, z) {
+    return standAt(x, z, this.groundAt, this.waterAt);
   }
 
   tick(dt) {
@@ -165,7 +188,7 @@ export class Builder {
       land,
     };
     this.takeoff = false;
-    this.state = moveBuilder(this.state, input, dt, this.groundAt, this.push);
+    this.state = moveBuilder(this.state, input, dt, this.groundAt, this.push, this.waterAt);
     if (!this.state.flying) this.hop = null;
     if (this.drag?.button === 2) this.cam.yaw = 0;
     this.place();
@@ -181,7 +204,7 @@ export class Builder {
     const head = new THREE.Vector3(x, y + EYE_FT, z);
     const away = new THREE.Vector3(-Math.sin(look) * Math.cos(pitch), Math.sin(pitch), -Math.cos(look) * Math.cos(pitch));
     const at = head.clone().addScaledVector(away, distance);
-    const floor = (this.groundAt(at.x, at.z) ?? SEA_LEVEL_FT) + 2;
+    const floor = this.standAt(at.x, at.z) + 2;
     if (at.y < floor) at.y = floor;
     this.camera.position.copy(at);
     this.camera.lookAt(at.clone().sub(away));
@@ -209,7 +232,7 @@ export class Builder {
   // Hops to the next step up (space) or down (F) from where the builder is.
   startHop(key) {
     const { x, y, z } = this.state;
-    const ground = this.groundAt(x, z) ?? SEA_LEVEL_FT;
+    const ground = this.standAt(x, z);
     const to = hopTo(y, key === " " ? 1 : -1, this.baseAt(x, z) ?? ground, ground);
     this.hop = to && { from: y, to: to.y, land: to.land, t: 0, key, wait: 0 };
   }

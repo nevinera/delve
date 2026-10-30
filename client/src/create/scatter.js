@@ -10,7 +10,7 @@ import { TILE_FT } from "../v2/sizes.js";
 // REACH_TILES tiles from theirs, drawn with the editor's models as its 3D view draws them: trees
 // within NEAR_TILES in full, their crowns simpler further off, and past that cheap stand-ins, a
 // trunk and a crown of a few flat faces each. What fills a tile is kept till its
-// ground moves or the biomes change (its cells are dressed again), and the meshes are made again
+// ground moves, the biomes change (its cells are dressed again) or its water changes, and the meshes are made again
 // when the builder leaves their tile or what fills the tiles changes, at most every REMAKE_S.
 // Walking, the builder's pushed out of their trunks and footprints (v2/blocking.js).
 
@@ -39,7 +39,7 @@ export class Scatter {
     if (!r.hasCells(tx, tz)) return null;
     const cells = r.cells(tx, tz);
     if (!cells?.slots) return null;
-    if (cells.filled?.colors === cells.colors) return cells.filled;
+    if (cells.filled?.colors === cells.colors && cells.filled.water === cells.water) return cells.filled;
     const ground = (x, z) => r.heightAt(x, z) ?? 0;
     const biomes = r.biomeTile(tx, tz);
     const filled = fillSlots(
@@ -50,7 +50,8 @@ export class Scatter {
       (x, z) => {
         const s = SLOPE_FT;
         const [nw, ne, sw, se] = [ground(x - s, z - s), ground(x + s, z - s), ground(x - s, z + s), ground(x + s, z + s)];
-        return { height: (nw + ne + sw + se) / 4, slope: slopeOf(nw, ne, sw, se, 2 * s) };
+        const height = (nw + ne + sw + se) / 4;
+        return { height, slope: slopeOf(nw, ne, sw, se, 2 * s), under: Math.max(0, (r.waterAt(x, z) ?? -Infinity) - height) };
       },
     );
     for (const tree of filled.trees) tree.ground = ground(tree.x, tree.z);
@@ -62,6 +63,7 @@ export class Scatter {
     }
     filled.shapes = [...filled.trees.map((tree) => treeShape(tree, trunkRadius(tree.kind, tree.size))), ...filled.objects.map(objectShape).filter(Boolean)];
     filled.colors = cells.colors;
+    filled.water = cells.water;
     filled.id = (Scatter.ids = (Scatter.ids ?? 0) + 1);
     cells.filled = filled;
     return filled;

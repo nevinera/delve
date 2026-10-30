@@ -26,6 +26,11 @@ describe("filling slots", () => {
     expect(count("forest", 20).trees).toBeGreaterThan(8);
   });
 
+  it("leaves ground under water empty", () => {
+    const under = fillSlots(makeSlots(0, 0), 0, 0, () => 1, () => ({ height: 50, slope: 0, under: 2 }));
+    expect(under.trees.length + under.objects.length).toBe(0);
+  });
+
   it("leaves steep ground and the shore empty", () => {
     const steep = fillSlots(makeSlots(0, 0), 0, 0, () => 1, () => ({ height: 50, slope: 60 }));
     const shore = fillSlots(makeSlots(0, 0), 0, 0, () => 1, () => ({ height: 1, slope: 0 }));

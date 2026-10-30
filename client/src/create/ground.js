@@ -552,6 +552,17 @@ export class Renditions {
     return tile && between(tile.heights, CORNERS, (x - tx * TILE_FT) / CHUNK_FT, (z - tz * TILE_FT) / CHUNK_FT);
   }
 
+  // The water's surface at (x, z): the sea's off the tiles, a cell's water where its plate's read,
+  // or null where it's dry or not read.
+  waterAt(x, z) {
+    const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
+    if (!this.tile(tx, tz)) return SEA_LEVEL_FT;
+    const water = this.decoded.get(`${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`)?.tiles.get(tileIndexInPlate(tx, tz))?.water;
+    if (!water) return null;
+    const level = water.level[Math.floor((z - tz * TILE_FT) / CELL_FT) * TILE_CELLS + Math.floor((x - tx * TILE_FT) / CELL_FT)];
+    return Number.isNaN(level) ? null : level;
+  }
+
   // The middle of the tiles, as continent feet [x, z]: the tile nearest the middle of them all.
   middle() {
     const all = [];
