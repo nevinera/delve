@@ -6,7 +6,7 @@ import { waterTime } from "./waterMaterial.js";
 // streaming down; churning foam on the water where it lands; and mist rising off it.
 
 // The curtain bulges out from the lip `bulge` of the way to where it lands.
-const CURTAIN = { bulge: 0.2, segments: 14, spread: 1.15, narrow: 0.9, liftFt: 1, speedFtS: 26, streakFt: [5, 34] };
+const CURTAIN = { bulge: 0.2, segments: 14, spread: 1.15, narrow: 0.9, liftFt: 1, speedFtS: 26 };
 // A second, thinner curtain behind the first, this far back toward the cliff and this much as wide,
 // its streams elsewhere.
 const BACK = { ft: 0.8, wide: 0.75, shift: 37 };
@@ -52,6 +52,8 @@ function curtainGeometry(fall, top, bottom, back = null) {
   const control = new THREE.Vector3().lerpVectors(top, bottom, CURTAIN.bulge).setY(top.y);
   const curve = new THREE.QuadraticBezierCurve3(top.clone().setY(top.y + CURTAIN.liftFt), control, bottom);
   const points = curve.getSpacedPoints(CURTAIN.segments);
+  // Each fall's patterns from somewhere else in them.
+  const seed = (Math.abs(Math.sin(fall.top[0] * 12.9898 + fall.top[2] * 78.233)) * 43758.5453) % 200;
   const positions = [];
   const uvs = [];
   let down = 0;
@@ -60,7 +62,7 @@ function curtainGeometry(fall, top, bottom, back = null) {
     const half = (fall.width / 2) * CURTAIN.narrow * (back?.wide ?? 1) * (1 + ((CURTAIN.spread - 1) * k) / CURTAIN.segments);
     for (const s of [-1, 1]) {
       positions.push(p.x + side.x * half * s, p.y, p.z + side.z * half * s);
-      uvs.push(half * s + (back?.shift ?? 0), down, s, k / CURTAIN.segments);
+      uvs.push(half * s + (back?.shift ?? 0) + seed, down, s, k / CURTAIN.segments);
     }
   });
   const indices = [];
@@ -129,28 +131,40 @@ function makeMaterials(renderer) {
 
   const curtain = new THREE.MeshLambertMaterial({ color: 0xdfeaf4, transparent: true, opacity: 0.9, side: THREE.DoubleSide, depthWrite: false });
   curtain.customProgramCacheKey = () => "waterfall-curtain";
+  const patterns = fallTexture();
   curtain.onBeforeCompile = (shader) => {
-    Object.assign(shader.uniforms, { waterNoise: { value: noise }, waterTime });
+    Object.assign(shader.uniforms, { waterNoise: { value: noise }, fallPatterns: { value: patterns }, waterTime });
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nattribute vec4 fallUv;\nvarying vec4 vFallUv;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFallUv = fallUv;");
     shader.fragmentShader = shader.fragmentShader
-      .replace("#include <common>", "#include <common>\nuniform sampler2D waterNoise;\nuniform float waterTime;\nvarying vec4 vFallUv;")
+      .replace("#include <common>", "#include <common>\nuniform sampler2D waterNoise;\nuniform sampler2D fallPatterns;\nuniform float waterTime;\nvarying vec4 vFallUv;")
       .replace(
         "#include <color_fragment>",
         `#include <color_fragment>
         float down = vFallUv.y - waterTime * ${f(CURTAIN.speedFtS)};
-        float streak = texture2D(waterNoise, vec2(vFallUv.x / ${f(CURTAIN.streakFt[0])}, down / ${f(CURTAIN.streakFt[1])})).g;
         float speck = texture2D(waterNoise, vec2(vFallUv.x / 3.0, down / 9.0) + 0.41).r;
-        // Streams of water, with gaps between, that drift slowly across, and fray toward the foot.
-        float strands = texture2D(waterNoise, vec2(vFallUv.x / 2.3 + waterTime * 0.02, vFallUv.y / 70.0 + 0.13)).r;
-        float fine = texture2D(waterNoise, vec2(vFallUv.x / 0.8 + 0.3, down / 22.0)).g;
+        // Four patterns (fallTexture), each sliding down at its own speed, mingled by a mask that
+        // wanders across the fall and drifts slowly down it.
+        float t = waterTime * ${f(CURTAIN.speedFtS)};
+        float ropes = texture2D(fallPatterns, vec2(vFallUv.x / 9.0, (vFallUv.y - t) / 60.0)).r;
+        float sheet = texture2D(fallPatterns, vec2(vFallUv.x / 14.0 + 0.3, (vFallUv.y - t * 0.8) / 30.0)).g;
+        float spray = texture2D(fallPatterns, vec2(vFallUv.x / 6.0 + 0.6, (vFallUv.y - t * 1.25) / 12.0)).b;
+        float veil = texture2D(fallPatterns, vec2(vFallUv.x / 18.0 + 0.1, (vFallUv.y - t * 0.55) / 40.0)).a;
+        vec4 mask = vec4(
+          texture2D(fallPatterns, vec2(vFallUv.x / 31.0, vFallUv.y / 150.0 - waterTime * 0.03)).a,
+          texture2D(fallPatterns, vec2(vFallUv.x / 27.0 + 0.5, vFallUv.y / 120.0 - waterTime * 0.04 + 0.3)).a,
+          texture2D(fallPatterns, vec2(vFallUv.x / 37.0 + 0.2, vFallUv.y / 170.0 - waterTime * 0.025 + 0.6)).a,
+          texture2D(fallPatterns, vec2(vFallUv.x / 23.0 + 0.7, vFallUv.y / 110.0 - waterTime * 0.035 + 0.1)).a
+        );
+        mask = pow(mask, vec4(4.0));
+        float pattern = dot(mask, vec4(ropes, sheet, spray, veil)) / max(0.0001, dot(mask, vec4(1.0)));
         float foot = smoothstep(0.55, 1.0, vFallUv.w);
         float glassy = 1.0 - smoothstep(0.0, 0.12, vFallUv.w);
-        float body = max(glassy, smoothstep(0.3 + 0.15 * foot, 0.52 + 0.1 * foot, 0.65 * strands + 0.35 * fine));
+        float body = max(glassy, smoothstep(0.28 + 0.12 * foot, 0.5 + 0.1 * foot, pattern));
         // Ragged at its edges.
-        float edge = 1.0 - smoothstep(0.5 + 0.35 * (fine - 0.5), 1.0, abs(vFallUv.z));
-        float white = max(smoothstep(0.38, 0.62, 0.7 * streak + 0.3 * speck), foot * 0.7 + 0.3 * foot * speck);
+        float edge = 1.0 - smoothstep(0.5 + 0.4 * (spray - 0.5), 1.0, abs(vFallUv.z));
+        float white = max(smoothstep(0.45, 0.8, pattern), foot * (0.6 + 0.4 * speck));
         white *= 1.0 - 0.7 * glassy;
         diffuseColor.rgb = mix(vec3(0.3, 0.48, 0.64), diffuseColor.rgb, 0.3 + 0.7 * white);
         diffuseColor.a *= (0.4 + 0.6 * white) * body * edge;`,
@@ -215,6 +229,57 @@ function puffTexture() {
     }
   }
   const texture = new THREE.DataTexture(data, size, size);
+  texture.needsUpdate = true;
+  return texture;
+}
+
+// Falling water's four patterns, one in each channel, each wrapping round: ropes, long streams
+// straight down; sheet, smooth water torn by holes; spray, specks; and veil, soft cloud.
+function fallTexture() {
+  const size = 256;
+  const rand = (n) => {
+    const v = Math.sin(n * 12.9898) * 43758.5453;
+    return v - Math.floor(v);
+  };
+  // Value noise, 0-1, of `cells` cells across and `down` cells down, wrapping round.
+  const noise = (x, y, cells, seed, down = cells) => {
+    const [gx, gy] = [(x / size) * cells, (y / size) * down];
+    const [ix, iy] = [Math.floor(gx), Math.floor(gy)];
+    const [fx, fy] = [gx - ix, gy - iy];
+    const at = (i, j) => rand(((i % cells) + cells) % cells + (((j % down) + down) % down) * 131 + seed * 7919);
+    const [sx, sy] = [fx * fx * (3 - 2 * fx), fy * fy * (3 - 2 * fy)];
+    const top = at(ix, iy) + (at(ix + 1, iy) - at(ix, iy)) * sx;
+    const bottom = at(ix, iy + 1) + (at(ix + 1, iy + 1) - at(ix, iy + 1)) * sx;
+    return top + (bottom - top) * sy;
+  };
+  const fbm = (x, y, cells, seed, octaves) => {
+    let [sum, amp, norm] = [0, 1, 0];
+    for (let o = 0; o < octaves; o++) {
+      sum += noise(x, y, cells << o, seed + o) * amp;
+      norm += amp;
+      amp /= 2;
+    }
+    return sum / norm;
+  };
+  const data = new Uint8Array(size * size * 4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      // Ropes: noise stretched down, wobbling a little side to side.
+      const wobble = (noise(x, y, 4, 1) - 0.5) * 12;
+      const ropes = fbm(x + wobble, y, 16, 2, 3) * 0.7 + noise(x + wobble, y, 32, 3, 4) * 0.3;
+      const ropesV = Math.pow(Math.min(1, Math.max(0, (noise(x + wobble, y, 24, 4, 2) * 0.6 + ropes * 0.4 - 0.25) * 1.8)), 1.3);
+      const sheet = Math.min(1, Math.max(0, (fbm(x, y, 6, 5, 3) - 0.32) * 3));
+      const spray = Math.pow(fbm(x, y, 48, 6, 2), 3) * 2.2;
+      const veil = fbm(x, y, 4, 7, 4);
+      const k = (y * size + x) * 4;
+      data.set([ropesV, sheet, Math.min(1, spray), veil].map((v) => Math.round(255 * v)), k);
+    }
+  }
+  const texture = new THREE.DataTexture(data, size, size);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.magFilter = THREE.LinearFilter;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.generateMipmaps = true;
   texture.needsUpdate = true;
   return texture;
 }
