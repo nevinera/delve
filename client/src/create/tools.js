@@ -170,7 +170,8 @@ export class Tools {
   readSize() {
     const t = Number($("brushSize").value) / 1000;
     this.settings.radius = Math.round(MIN_RADIUS_FT * (MAX_RADIUS_FT / MIN_RADIUS_FT) ** t);
-    $("brushSizeOut").textContent = `${this.settings.radius.toLocaleString()} ft`;
+    // Shown as the brush's width.
+    $("brushSizeOut").textContent = `${(2 * this.settings.radius).toLocaleString()} ft`;
   }
 
   readNoise() {
