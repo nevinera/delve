@@ -250,7 +250,7 @@ export function meshHeightAt(tileAt, x, z) {
   return h3 + (h2 - h3) * (1 - fu) + (h1 - h3) * (1 - fv);
 }
 
-function colorIn(choices, roll) {
+export function colorIn(choices, roll) {
   const [hue, sat, light] = choices[Math.min(choices.length - 1, Math.floor(roll(0) * choices.length))];
   const lerp = ([a, b], t) => a + (b - a) * t;
   return hslToRgb(lerp(hue, roll(1)), lerp(sat, roll(2)), lerp(light, roll(3)));
