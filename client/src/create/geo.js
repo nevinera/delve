@@ -9,8 +9,8 @@ import { CELL_FT, PLATE_FT, TILE_FT } from "../v2/sizes.js";
 // - cylinder moves everything inside the edge the same, a hard edge;
 // - mesa is flat out to three quarters of the way, drops nearly straight down, then eases out flat;
 // - half is round cut in half, a cliff along the cut, turned by the brush's angle.
-// With noise on, it moves the ground in lumps about a third of the brush across, the same lumps
-// at the same place each time. Its strength is how far the middle moves a second, as a share of
+// With noise, it moves the ground in lumps about a third of the brush across, the same lumps at
+// the same place each time, going up to `noise` times the brush's move either way. Its strength is how far the middle moves a second, as a share of
 // the brush's radius, so big brushes work as fast across as small ones.
 
 // Each shape's height at d, the distance from the middle as a share of the radius, and u, how far
@@ -27,7 +27,6 @@ export const SHAPES = {
 // Shapes that look different turned.
 export const TURNS = new Set(["half"]);
 const NOISE_SEED = 0x51ed27a3;
-const NOISE = 0.9; // how far the lumps go either way, as a share of the brush's move
 
 function smoothstep(a, b, x) {
   const t = Math.max(0, Math.min(1, (x - a) / (b - a)));
@@ -50,7 +49,7 @@ export function raiseBrush({ shape, radius, strength, noise, lower, angle = 0 },
   const at = (px, pz) => {
     const d = Math.hypot(px - x, pz - z) / radius;
     if (d >= 1) return 0;
-    const lump = noise ? 1 + NOISE * fbm(px, pz, NOISE_SEED, { wavelength, octaves: 4 }) : 1;
+    const lump = noise > 0 ? 1 + noise * fbm(px, pz, NOISE_SEED, { wavelength, octaves: 4 }) : 1;
     const u = ((px - x) * Math.cos(angle) + (pz - z) * Math.sin(angle)) / radius;
     return move * SHAPES[shape](d, u) * lump;
   };

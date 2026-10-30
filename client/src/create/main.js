@@ -154,7 +154,7 @@ function start(world) {
   let lastSave = 0;
   let lastHud = 0;
   let lastInfo = 0;
-  const compass = new Compass(scene);
+  const compass = new Compass($("stage"), document.querySelector(".create-bar"));
   const feet = (ft) => `${Math.round(ft).toLocaleString()} ft`;
   let frames = 0;
   let problem = null; // why the ground couldn't be drawn, shown in the HUD

@@ -16,7 +16,7 @@ describe("raise brush", () => {
   });
 
   it("raises half the round brush, on the side its angle points to", () => {
-    const settings = { shape: "half", radius: 100, strength: 1, noise: false, angle: Math.PI / 2 };
+    const settings = { shape: "half", radius: 100, strength: 1, noise: 0, angle: Math.PI / 2 };
     const { at } = raiseBrush(settings, 0, 0, 1);
     expect(at(0, 30)).toBeCloseTo(100 * SHAPES.round(0.3));
     expect(at(0, -30)).toBe(0);
@@ -29,7 +29,7 @@ describe("raise brush", () => {
   });
 
   it("moves the middle by strength times radius a second, and nothing past the edge", () => {
-    const settings = { shape: "round", radius: 100, strength: 0.2, noise: false };
+    const settings = { shape: "round", radius: 100, strength: 0.2, noise: 0 };
     const { at, bounds } = raiseBrush(settings, 50, 50, 0.5);
     expect(at(50, 50)).toBeCloseTo(10);
     expect(at(151, 50)).toBe(0);
@@ -38,7 +38,7 @@ describe("raise brush", () => {
   });
 
   it("puts lumps in with noise, the same at the same place", () => {
-    const settings = { shape: "steep", radius: 400, strength: 0.2, noise: true };
+    const settings = { shape: "steep", radius: 400, strength: 0.2, noise: 0.9 };
     const a = raiseBrush(settings, 0, 0, 1).at;
     const b = raiseBrush(settings, 0, 0, 1).at;
     const values = [0, 40, 80, 120].map((x) => a(x, 10));

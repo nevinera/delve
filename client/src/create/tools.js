@@ -38,7 +38,7 @@ export class Tools {
   constructor({ scene, camera, canvas, builder, renditions, ground }) {
     Object.assign(this, { camera, canvas, builder, renditions, ground });
     this.tool = null;
-    this.settings = { shape: "round", radius: 0, strength: 0, noise: false, lower: false, angle: 0 };
+    this.settings = { shape: "round", radius: 0, strength: 0, noise: 0, lower: false, angle: 0 };
     this.pointer = null; // normalized device coordinates, or null off the view
     this.stroke = null; // { invert } while the left button's down with the brush
     this.drawing = null; // the Stroke being drawn with the marker
@@ -81,12 +81,12 @@ export class Tools {
     $("brushSize").addEventListener("input", () => this.readSize());
     $("brushStrength").addEventListener("input", () => this.readStrength());
     $("brushAngle").addEventListener("input", () => this.turn((Number($("brushAngle").value) * Math.PI) / 180));
-    $("brushNoise").addEventListener("change", () => (this.settings.noise = $("brushNoise").checked));
+    $("brushNoise").addEventListener("input", () => this.readNoise());
     $("marksUndo").addEventListener("click", () => this.marks.undo());
     $("marksClear").addEventListener("click", () => this.marks.clear());
     this.readSize();
     this.readStrength();
-    this.settings.noise = $("brushNoise").checked;
+    this.readNoise();
 
     canvas.addEventListener("pointermove", (e) => {
       this.point(e);
@@ -163,6 +163,11 @@ export class Tools {
     const t = Number($("brushSize").value) / 1000;
     this.settings.radius = Math.round(MIN_RADIUS_FT * (MAX_RADIUS_FT / MIN_RADIUS_FT) ** t);
     $("brushSizeOut").textContent = `${this.settings.radius.toLocaleString()} ft`;
+  }
+
+  readNoise() {
+    this.settings.noise = Number($("brushNoise").value) / 100;
+    $("brushNoiseOut").textContent = `${$("brushNoise").value}%`;
   }
 
   readStrength() {
