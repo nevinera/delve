@@ -30,7 +30,7 @@ import { dryWater } from "./water.js";
 //         mode 3: 8 × 8 i16 levels as for mode 2, then 8 × 8 u8 types
 //       levels in quarter feet, types indexes into water.js's WATER_TYPES
 //       u8 1 where courses cut the tile's ground, then 65 × 65 i16 how far down each corner's cut,
-//         in quarter feet, row order; or u8 0
+//         in quarter feet (under 0 where they're built up), row order; or u8 0
 //
 // Versions 2 and 3 are read too, without what they kept that's now worked out: cell colors,
 // terrain and forest density, all left out, and in version 2, biomes, all plains. Tiles from before

@@ -19,6 +19,10 @@ export const BELOW_FT = 1; // how far under the ground beside it a course's surf
 const BANK_RUN = 1.5; // banks rise a foot every this many feet out
 const BANK_FT = 18; // and reach this far out from the water's edge
 export const MARGIN_FT = 2; // the water reaches this far past its edge, where the ground's lower
+const EDGE_BELOW_FT = 0.25; // how far under the ground at its edges a course's surface starts
+export const LEVEE_FT = 2; // how far a course's banks are built up, at most, where they're lower than its water
+const LEVEE_OVER_FT = 0.5; // to this far over its water
+const LEVEE_TOP_FT = 6; // out to this far past its edge, wider than a cell, before falling away
 const MOUTH_GRADE = 0.25; // how steeply, ft a foot, a course at most falls to the water it runs into
 const TRACK_STEP_FT = 4; // how far apart its track's points are
 const MEANDER = 1.2; // how far its track wanders either side of its line, in widths
@@ -190,7 +194,7 @@ export function surfaceAt(surface, t) {
 }
 
 // A course's surface down its track, from its `points` and `seed`, and groundAt(x, z): BELOW_FT
-// under the ground, but never over the surface upstream of it, nor under the water it runs into,
+// under the ground in its middle and EDGE_BELOW_FT under it just past its edges, but never over the surface upstream of it, nor under the water it runs into,
 // stillAt(x, z) (a body's or the sea's level, or null), to a tenth of a foot. Where it runs into
 // that water, it falls to it no more steeply than MOUTH_GRADE, over as far as that takes from
 // where it was just before it.
@@ -208,7 +212,12 @@ export function profile(points, groundAt, stillAt = () => null, seed = 0) {
     const [x, z] = [track.x[k - 1] + (track.x[k] - track.x[k - 1]) * u, track.z[k - 1] + (track.z[k] - track.z[k - 1]) * u];
     const [ground, still] = [groundAt(x, z), stillAt(x, z)];
     if (still != null && ground < still && mouth < 0) mouth = surface.length;
-    low = Math.min(low, Math.max(ground - BELOW_FT, still ?? -Infinity));
+    // Square to it, out past each edge.
+    const [dx, dz] = [track.x[k] - track.x[k - 1], track.z[k] - track.z[k - 1]];
+    const d = Math.hypot(dx, dz) || 1;
+    const out = (track.width[k - 1] + (track.width[k] - track.width[k - 1]) * u) / 2 + MARGIN_FT;
+    const edges = Math.min(groundAt(x - (dz / d) * out, z + (dx / d) * out), groundAt(x + (dz / d) * out, z - (dx / d) * out));
+    low = Math.min(low, Math.max(Math.min(ground - BELOW_FT, edges - EDGE_BELOW_FT), still ?? -Infinity));
     surface.push(low);
   }
   const before = surface[mouth - 1];
@@ -216,9 +225,11 @@ export function profile(points, groundAt, stillAt = () => null, seed = 0) {
   return surface.map((v) => Math.round(v * 10) / 10);
 }
 
-// What a course makes of the ground at (x, z): { top, the highest the ground's left there, level,
-// the water's surface, and wet, whether that's within its water }, or null where its channel
-// doesn't reach. Its bed's deepest toward the outside of a bend, and its bank's steeper there.
+// What a course makes of the ground at (x, z): { top, the highest the ground's left there, levee,
+// the lowest it's built up to on its banks, level, the water's surface, and wet, whether that's
+// within its water }, or null where its channel doesn't reach. Its bed's deepest toward the
+// outside of a bend, and its bank's steeper there. Its levee's a little over its water out to
+// LEVEE_TOP_FT past its edge, falling away from there as steeply as its bank rises.
 export function shape(course, x, z) {
   if (!course.surface?.length) return null;
   const track = trackOf(course.points, course.seed ?? 0);
@@ -235,5 +246,6 @@ export function shape(course, x, z) {
   const outside = near.side * near.bend < 0;
   const run = BANK_RUN * (outside ? 1 - 0.6 * Math.abs(near.bend) : 1 + 2 * Math.abs(near.bend));
   const top = out <= 0 ? level - bed : level + out / run;
-  return { top, level, wet: out <= MARGIN_FT };
+  const levee = out <= 0 ? -Infinity : level + LEVEE_OVER_FT - Math.max(0, out - LEVEE_TOP_FT) / run;
+  return { top, levee, level, wet: out <= MARGIN_FT };
 }

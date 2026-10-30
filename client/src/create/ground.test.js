@@ -157,6 +157,23 @@ describe("raising the ground", () => {
     expect(water.level[Math.floor(mz / 4) * 64 + Math.floor(mx / 4)]).toBe(9);
   });
 
+  it("builds courses' banks up a little where they're lower than their water", () => {
+    const renditions = world();
+    renditions.cells(0, 0);
+    const stream = { type: "stream", points: [[0, 128, 6], [256, 128, 6]], surface: [10.2, 10.2], seed: 1 };
+    renditions.setWater({ bodies: [], courses: [stream] });
+    const track = trackOf(stream.points, 1);
+    const k = track.x.findIndex((x) => x >= 100);
+    const [dx, dz] = [track.x[k + 1] - track.x[k - 1], track.z[k + 1] - track.z[k - 1]];
+    const d = Math.hypot(dx, dz);
+    // A ridge over its water just past each edge; in its middle, cut down.
+    const ridge = (side) => Math.max(...[0, 1, 2, 3, 4, 5, 6].map((o) => renditions.heightAt(track.x[k] - (dz / d) * side * (track.width[k] / 2 + o), track.z[k] + (dx / d) * side * (track.width[k] / 2 + o))));
+    expect(ridge(1)).toBeGreaterThan(10.3);
+    expect(ridge(-1)).toBeGreaterThan(10.3);
+    expect(renditions.heightAt(track.x[k], track.z[k])).toBeLessThan(10);
+    expect(renditions.heightAt(100, 220)).toBe(10);
+  });
+
   it("moves plate files read later by what was kept", () => {
     const renditions = world();
     // up() everywhere west and north of (64, 64), the ring of corners round the tile too.

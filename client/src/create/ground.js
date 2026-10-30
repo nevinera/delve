@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
 import { AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, partWater } from "../v2/water.js";
-import { courseBox, shape } from "../v2/courses.js";
+import { LEVEE_FT, courseBox, shape } from "../v2/courses.js";
 import { waterMaterial } from "../editor/waterMaterial.js";
 import { SHORE_FADE_FT, WATER_LOOKS } from "./waterSurface.js";
 import { PATTERNS, look, painted, slopeOf } from "../v2/look.js";
@@ -114,8 +114,9 @@ export class Renditions {
   }
 
   // Carves `courses` into the ground within `boxes` ([x0, z0, x1, z1]): each cell corner there put
-  // back up by what courses cut it before, then cut down under every course there (courses.js's
-  // shape), and how far kept with its cells. Gives the "px,pz" of the plates moved.
+  // back by what courses cut it before, then cut down under every course there (courses.js's
+  // shape), or where none cuts it, built up a little where a course's bank is lower than its
+  // water, and how far kept with its cells. Gives the "px,pz" of the plates moved.
   carve(boxes, courses) {
     const moved = new Set();
     for (const [x0, z0, x1, z1] of boxes) {
@@ -138,8 +139,14 @@ export class Renditions {
               if (x < x0 || x > x1) continue;
               const k = j * CELL_CORNERS + i;
               const base = tile.heights[k] + cut[k];
-              let top = base;
-              for (const course of near) top = Math.min(top, shape(course, x, z)?.top ?? top);
+              let [top, levee] = [base, base];
+              for (const course of near) {
+                const made = shape(course, x, z);
+                if (!made) continue;
+                top = Math.min(top, made.top);
+                levee = Math.max(levee, Math.min(made.levee, base + LEVEE_FT));
+              }
+              if (top === base) top = levee;
               cut[k] = base - top;
               if (top !== tile.heights[k]) deltas.set(`${tx * TILE_CELLS + i},${tz * TILE_CELLS + j}`, top - tile.heights[k]);
             }

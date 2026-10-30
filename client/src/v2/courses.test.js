@@ -56,6 +56,12 @@ describe("courses", () => {
     expect(steep[3]).toBeLessThan(80);
   });
 
+  it("keep under the ground past their edges", () => {
+    // Ground falling away to one side, 1 ft a foot: the edge 5 ft out on that side is lower.
+    const surface = profile([[0, 0, 6], [10, 0, 6]], (x, z) => 20 - Math.max(0, z));
+    expect(Math.max(...surface)).toBeLessThanOrEqual(20 - 5 - 0.25 + 1);
+  });
+
   it("carve a bed under their water, deepest outside their bends, and banks beside it", () => {
     const course = { type: "river", points: [[0, 0, 40], [1200, 0, 40]], surface: [50, 50], seed: 3 };
     const track = trackOf(course.points, 3);
@@ -73,6 +79,10 @@ describe("courses", () => {
     const [outer, inner] = [at(-(track.width[k] / 2 + 6)).top, at(track.width[k] / 2 + 6).top];
     expect(outer).toBeGreaterThan(inner);
     expect(shape(course, 600, 200)).toBeNull();
+    // A levee just over its water past its edge, lower further out.
+    expect(at(track.width[k] / 2 + 1).levee).toBeCloseTo(50.5);
+    expect(at(track.width[k] / 2 + 10).levee).toBeLessThan(50);
+    expect(at(0).levee).toBe(-Infinity);
   });
 
   it("are deeper the wider they are, rivers more than streams", () => {
