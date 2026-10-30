@@ -15,10 +15,11 @@ const TREE_ROOM = [0, 8, 12, 17];
 const ROOM_BUCKET_FT = 32;
 
 // What fills a slot of `size` (an index into SLOT_SIZES) with `roll` in biome `biome` (an index
-// into BIOME_NAMES): a fill.json entry, or null.
-export function fillOf(biome, size, roll) {
+// into BIOME_NAMES): a fill.json entry, or null. `fine`, 0 to 1, splits the roll finer, so shares
+// can be less than a roll's 1/256.
+export function fillOf(biome, size, roll, fine = 0.5) {
   const entries = FILL.biomes[BIOME_NAMES[biome]]?.[SLOT_SIZES[size]] ?? [];
-  let past = (roll + 0.5) / 256;
+  let past = (roll + fine) / 256;
   for (const entry of entries) {
     if (past < entry.share) return entry;
     past -= entry.share;
@@ -49,9 +50,11 @@ export function fillSlots(slots, tx, tz, biomeAt, groundAt) {
   };
   for (let at = 0; at < slots.length; at += SLOT_BYTES) {
     const [sx, sz, size, roll] = [slots[at], slots[at + 1], slots[at + 2], slots[at + 3]];
-    const entry = fillOf(biomeAt(sx >> 2, sz >> 2), size, roll);
-    if (!entry) continue;
     const [x, z] = [tx * TILE_FT + sx + 0.5, tz * TILE_FT + sz + 0.5];
+    // The roll split finer by where the slot is.
+    const fine = hash2(Math.floor(x), Math.floor(z), SEED + 32);
+    const entry = fillOf(biomeAt(sx >> 2, sz >> 2), size, roll, fine);
+    if (!entry) continue;
     const { height, slope } = groundAt(x, z);
     const kind = groundClass(slope, height);
     if (kind === "steep" || kind === "shore") continue;

@@ -1,11 +1,11 @@
 {
   "version": 1,
-  "about": "What fills each object slot (v2/slots.js), by the biome under it and the slot's size: each entry takes `share` of the rolls, in order, and the rest are left empty. A tree is a kind and size from editor/treeMeshes.js; an object is a type from world/objects.js.",
+  "about": "What fills each object slot (v2/slots.js), by the biome under it and the slot's size: each entry takes `share` of the rolls, in order (rolls are split finer by the slot's place, so shares can be small), and the rest are left empty. A tree is a kind and size from editor/treeMeshes.js; an object is a type from world/objects.js.",
   "biomes": {
     "plains": {
-      "large": [{ "tree": "oak", "size": 3, "share": 0.006 }, { "object": "rock", "share": 0.004 }],
-      "medium": [{ "tree": "oak", "size": 2, "share": 0.006 }, { "object": "boulder", "share": 0.006 }, { "object": "thicket", "share": 0.004 }],
-      "small": [{ "object": "bush", "share": 0.02 }, { "object": "boulder", "share": 0.006 }, { "object": "stump", "share": 0.003 }]
+      "large": [{ "tree": "oak", "size": 3, "share": 0.003 }, { "object": "rock", "share": 0.002 }],
+      "medium": [{ "tree": "oak", "size": 2, "share": 0.0008 }, { "object": "boulder", "share": 0.003 }, { "object": "thicket", "share": 0.002 }],
+      "small": [{ "object": "bush", "share": 0.012 }, { "object": "boulder", "share": 0.004 }, { "object": "stump", "share": 0.001 }]
     },
     "forest": {
       "large": [{ "tree": "oak", "size": 3, "share": 0.09 }, { "tree": "pine", "size": 3, "share": 0.04 }],
