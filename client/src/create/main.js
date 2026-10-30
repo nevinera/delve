@@ -120,19 +120,33 @@ function start({ name, continent, renditions }) {
   let lastHud = 0;
   let frames = 0;
   let problem = null; // why the ground couldn't be drawn, shown in the HUD
+  // The slowest of each part of a frame since the HUD last showed them, in ms, and of the gaps
+  // between frames.
+  let worst = { gap: 0, move: 0, ground: 0, render: 0 };
+  const timed = (part, fn) => {
+    const start = performance.now();
+    fn();
+    worst[part] = Math.max(worst[part], performance.now() - start);
+  };
+  // A handle for measuring from the browser's console or a script; paused stops the frames.
+  window.create = { ground, builder, renderer, scene, camera, paused: false };
   const frame = (now) => {
+    if (window.create.paused) return requestAnimationFrame(frame);
     const dt = last === null ? 0 : Math.min(0.05, (now - last) / 1000);
+    if (last !== null) worst.gap = Math.max(worst.gap, now - last);
     last = now;
     frames++;
-    builder.tick(dt);
+    timed("move", () => builder.tick(dt));
     const { x, y, z } = builder.state;
-    try {
-      ground.update(x, y, z);
-      problem = null;
-    } catch (e) {
-      problem = e.message;
-      console.error(e);
-    }
+    timed("ground", () => {
+      try {
+        ground.update(x, y, z);
+        problem = null;
+      } catch (e) {
+        problem = e.message;
+        console.error(e);
+      }
+    });
     sea.position.set(x, SEA_LEVEL_FT - SEA_BELOW_FT, z);
     // The ground drawn ends FAR_FT from the builder, so fog closes in there.
     const back = camera.position.distanceTo(builder.model.position);
@@ -140,13 +154,14 @@ function start({ name, continent, renditions }) {
     scene.fog.far = FOG.farFt + back;
     sun.position.set(x + 500, 1000, z + 300);
     sun.target.position.set(x, 0, z);
-    renderer.render(scene, camera);
+    timed("render", () => renderer.render(scene, camera));
     if (now - lastHud > HUD_EVERY_MS) {
       const { flying } = builder.state;
       const fps = Math.round((frames * 1000) / (now - lastHud));
       $("hud").classList.toggle("problem", Boolean(problem));
       const hidden = KINDS.filter((kind) => !ground.shown[kind]);
-      $("hud").textContent = problem ? `can't draw the ground: ${problem}` : `${hidden.length ? `hiding ${hidden.join(", ")} · ` : ""}${flying ? "flying" : "walking"} · ${Math.round(builder.above)} ft up · ${Math.round(y)} ft · tile ${Math.floor(x / TILE_FT)},${Math.floor(z / TILE_FT)} · ${ground.fullChunks} full and ${ground.fineChunks} cell chunks, ${ground.meshes.size} tiles and ${ground.plates.size} plates drawn · ${fps} fps`;
+      $("hud").textContent = problem ? `can't draw the ground: ${problem}` : `${hidden.length ? `hiding ${hidden.join(", ")} · ` : ""}${flying ? "flying" : "walking"} · ${Math.round(builder.above)} ft up · ${Math.round(y)} ft · tile ${Math.floor(x / TILE_FT)},${Math.floor(z / TILE_FT)} · tiles drawn ${ground.counts[0]} in full, ${ground.counts[1]} at cell scale, ${ground.counts[2]} coarse, ${ground.counts[3]} from plates · ${fps} fps, slowest ${worst.gap.toFixed(0)} ms (move ${worst.move.toFixed(1)}, ground ${worst.ground.toFixed(1)}, render ${worst.render.toFixed(1)}) · ${renderer.info.render.calls} draws`;
+      worst = { gap: 0, move: 0, ground: 0, render: 0 };
       lastHud = now;
       frames = 0;
     }
