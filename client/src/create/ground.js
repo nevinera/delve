@@ -168,32 +168,36 @@ export class Renditions {
   // Moves the ground by at(x, z) feet within `bounds`, [x0, z0, x1, z1] continent feet, worked out
   // on the corners of `level`'s squares (geo.js) and straight between them finer. Coarser
   // renditions' corners move by the average move round them, over a square as wide as their parts,
-  // so a small brush makes a low, wide bump in them, not one as tall as it makes. Gives the
-  // "px,pz" of the plates whose ground moved.
+  // so a small brush makes a low, wide bump in them, not one as tall as it makes. Moves worked out
+  // on corners are kept with a ring of corners round them, for smooth() to curve between. Gives
+  // the "px,pz" of the plates whose ground moved.
   raise(at, [x0, z0, x1, z1], level) {
     const moved = new Set();
-    // at() on a grid `n` squares a side, `step` ft apart from (ox, oz), or null where it's all 0.
-    // With `half`, each corner's the average of at() over the square `half` ft either way of it,
-    // taken `every` ft.
-    const sample = (ox, oz, step, n, half = 0, every = 1) => {
-      const out = new Float32Array((n + 1) * (n + 1));
+    // at() on a grid `n` squares a side, `step` ft apart from (ox, oz), and `ring` more corners
+    // round it, or null where it's all 0. With `half`, each corner's the average of at() over the
+    // square `half` ft either way of it, taken `every` ft.
+    const sample = (ox, oz, step, n, half = 0, every = 1, ring = 0) => {
+      const side = n + 1 + 2 * ring;
+      const out = new Float32Array(side * side);
       const offsets = [];
       for (let o = -half; o <= half; o += every) offsets.push(o);
       let any = false;
-      for (let j = 0; j <= n; j++) {
+      for (let j = -ring; j <= n + ring; j++) {
         const z = oz + j * step;
         if (z < z0 - half || z > z1 + half) continue;
-        for (let i = 0; i <= n; i++) {
+        for (let i = -ring; i <= n + ring; i++) {
           const x = ox + i * step;
           if (x < x0 - half || x > x1 + half) continue;
           let sum = 0;
           for (const dz of offsets) for (const dx of offsets) sum += at(x + dx, z + dz);
-          out[j * (n + 1) + i] = sum / offsets.length ** 2;
-          any ||= out[j * (n + 1) + i] !== 0;
+          const k = (j + ring) * side + i + ring;
+          out[k] = sum / offsets.length ** 2;
+          any ||= out[k] !== 0;
         }
       }
       return any ? out : null;
     };
+    const RINGED = CORNERS + 2;
     // How the coarser renditions are sampled: [half, every] for plates' and tiles'.
     const plateFilter = level === TILES ? [0, 1] : level === CHUNKS ? [TILE_FT / 2, CHUNK_FT] : [TILE_FT / 2, CHUNK_FT / 2];
     const tileFilter = level === CELLS ? [CHUNK_FT / 2, CELL_FT * 2] : [0, 1];
@@ -214,10 +218,10 @@ export class Renditions {
     for (let pz = Math.floor((z0 - ph) / PLATE_FT); pz <= Math.floor((z1 + ph) / PLATE_FT); pz++) {
       for (let px = Math.floor((x0 - ph) / PLATE_FT); px <= Math.floor((x1 + ph) / PLATE_FT); px++) {
         const plate = this.plate(px, pz);
-        const d = plate && sample(px * PLATE_FT, pz * PLATE_FT, TILE_FT, PLATE_TILES, ...plateFilter);
+        const d = plate && sample(px * PLATE_FT, pz * PLATE_FT, TILE_FT, PLATE_TILES, ...plateFilter, 1);
         if (!d) continue;
         const key = `${px},${pz}`;
-        for (let k = 0; k < d.length; k++) plate.heights[k] += d[k];
+        for (let j = 0; j < CORNERS; j++) for (let i = 0; i < CORNERS; i++) plate.heights[j * CORNERS + i] += d[(j + 1) * RINGED + i + 1];
         delete plate.span;
         plateMoves.set(key, d);
         moved.add(key);
@@ -235,20 +239,23 @@ export class Renditions {
         if (!tile) continue;
         const [px, pz] = [Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES)];
         const [i0, j0] = [tx - px * PLATE_TILES, tz - pz * PLATE_TILES];
-        let d;
+        // The tile's chunk corners' moves, and at CHUNKS, with a ring round them.
+        let d, ringed = null;
         if (level === TILES) {
           const plateMove = plateMoves.get(`${px},${pz}`);
           if (!plateMove) continue;
-          d = new Float32Array(CORNERS * CORNERS);
-          for (let j = 0; j < CORNERS; j++) for (let i = 0; i < CORNERS; i++) d[j * CORNERS + i] = between(plateMove, CORNERS, i0 + i / TILE_CHUNKS, j0 + j / TILE_CHUNKS);
-        } else d = sample(tx * TILE_FT, tz * TILE_FT, CHUNK_FT, TILE_CHUNKS, ...tileFilter);
+          d = smooth(plateMove, RINGED, i0, j0, 1 / TILE_CHUNKS, CORNERS);
+        } else {
+          ringed = sample(tx * TILE_FT, tz * TILE_FT, CHUNK_FT, TILE_CHUNKS, ...tileFilter, 1);
+          d = ringed && Float32Array.from({ length: CORNERS * CORNERS }, (_, k) => ringed[(Math.floor(k / CORNERS) + 1) * RINGED + (k % CORNERS) + 1]);
+        }
         const key = `${tx},${tz}`;
         if (d) {
           for (let k = 0; k < d.length; k++) tile.heights[k] += d[k];
           delete tile.span;
           delete tile.faces;
           moved.add(`${px},${pz}`);
-          if (level === CHUNKS) add(this.offsets[CHUNKS], key, d);
+          if (level === CHUNKS) add(this.offsets[CHUNKS], key, ringed);
         }
         const cells = this.decoded.get(`${px},${pz}`)?.tiles.get(tileIndexInPlate(tx, tz));
         if (level === CELLS) {
@@ -257,8 +264,9 @@ export class Renditions {
           moved.add(`${px},${pz}`);
           add(this.offsets[CELLS], key, fine);
           if (cells) for (let k = 0; k < fine.length; k++) cells.heights[k] += fine[k];
-        } else if (cells && d) {
-          for (let j = 0; j < CELL_CORNERS; j++) for (let i = 0; i < CELL_CORNERS; i++) cells.heights[j * CELL_CORNERS + i] += between(d, CORNERS, i / CHUNK_CELLS, j / CHUNK_CELLS);
+        } else if (cells && ringed) {
+          const fine = smooth(ringed, RINGED, 0, 0, 1 / CHUNK_CELLS, CELL_CORNERS);
+          for (let k = 0; k < fine.length; k++) cells.heights[k] += fine[k];
         }
         if (cells) delete cells.grid;
       }
@@ -279,14 +287,9 @@ export class Renditions {
       const tileKey = `${px * PLATE_TILES + i0},${pz * PLATE_TILES + j0}`;
       const [fine, coarse] = [this.offsets[CELLS].get(tileKey), this.offsets[CHUNKS].get(tileKey)];
       if (!fine && !coarse && !plateMove) continue;
-      for (let j = 0; j < CELL_CORNERS; j++) {
-        for (let i = 0; i < CELL_CORNERS; i++) {
-          const k = j * CELL_CORNERS + i;
-          if (fine) cells.heights[k] += fine[k];
-          if (coarse) cells.heights[k] += between(coarse, CORNERS, i / CHUNK_CELLS, j / CHUNK_CELLS);
-          if (plateMove) cells.heights[k] += between(plateMove, CORNERS, i0 + i / TILE_CELLS, j0 + j / TILE_CELLS);
-        }
-      }
+      const side = CORNERS + 2;
+      const moves = [fine, coarse && smooth(coarse, side, 0, 0, 1 / CHUNK_CELLS, CELL_CORNERS), plateMove && smooth(plateMove, side, i0, j0, 1 / TILE_CELLS, CELL_CORNERS)];
+      for (const move of moves) if (move) for (let k = 0; k < move.length; k++) cells.heights[k] += move[k];
     }
   }
 
@@ -385,6 +388,49 @@ export class Renditions {
     const [tx, tz] = all.reduce((best, t) => (Math.hypot(t[0] - mean[0], t[1] - mean[1]) < Math.hypot(best[0] - mean[0], best[1] - mean[1]) ? t : best));
     return [(tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT];
   }
+}
+
+// A value `t` of the way from p1 to p2, curved through p0 to p3 round them, never past p1 or p2
+// where they're the highest or lowest round there (a monotone cubic), so a cliff gets no ditch at
+// its foot or lip at its top.
+function curve(p0, p1, p2, p3, t) {
+  const [s0, s1, s2] = [p1 - p0, p2 - p1, p3 - p2];
+  let m1 = s0 * s1 > 0 ? (s0 + s1) / 2 : 0;
+  let m2 = s1 * s2 > 0 ? (s1 + s2) / 2 : 0;
+  if (s1 !== 0) {
+    const [a, b] = [m1 / s1, m2 / s1];
+    const r = a * a + b * b;
+    if (r > 9) [m1, m2] = [(3 * a * s1) / Math.sqrt(r), (3 * b * s1) / Math.sqrt(r)];
+  }
+  const [t2, t3] = [t * t, t * t * t];
+  return (2 * t3 - 3 * t2 + 1) * p1 + (t3 - 2 * t2 + t) * m1 + (-2 * t3 + 3 * t2) * p2 + (t3 - t2) * m2;
+}
+
+// A `count` × `count` grid of values curved smoothly between a grid's corners, through each: from
+// (u0, v0) in the grid's squares, `step` squares apart. The grid has `side` corners a row, a ring
+// of them round its squares, so it curves the same across its edges as its neighbours do.
+function smooth(grid, side, u0, v0, step, count) {
+  const n = side - 3;
+  const place = (u) => {
+    const i = Math.min(n - 1, Math.max(0, Math.floor(u)));
+    return [i, u - i];
+  };
+  const across = Array.from({ length: count }, (_, i) => place(u0 + i * step));
+  // Each row of the grid curved across first, then those down.
+  const rows = new Float32Array(side * count);
+  for (let r = 0; r < side; r++) {
+    for (let c = 0; c < count; c++) {
+      const [i, t] = across[c];
+      const at = r * side + i;
+      rows[r * count + c] = curve(grid[at], grid[at + 1], grid[at + 2], grid[at + 3], t);
+    }
+  }
+  const out = new Float32Array(count * count);
+  for (let k = 0; k < count; k++) {
+    const [j, t] = place(v0 + k * step);
+    for (let c = 0; c < count; c++) out[k * count + c] = curve(rows[j * count + c], rows[(j + 1) * count + c], rows[(j + 2) * count + c], rows[(j + 3) * count + c], t);
+  }
+  return out;
 }
 
 // A height straight between a grid's corners (`side` a row), at (u, v) in grid squares.

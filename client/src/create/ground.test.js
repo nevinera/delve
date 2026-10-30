@@ -123,12 +123,33 @@ describe("raising the ground", () => {
 
   it("moves plate files read later by what was kept", () => {
     const renditions = world();
-    renditions.raise(up, [0, 0, 64, 64], CHUNKS);
+    // up() everywhere west and north of (64, 64), the ring of corners round the tile too.
+    renditions.raise(up, [-64, -64, 64, 64], CHUNKS);
     expect(renditions.heightAt(0, 0)).toBe(15);
     renditions.cells(0, 0);
     expect(renditions.cells(0, 0).heights[0]).toBe(15);
     expect(renditions.heightAt(16, 16)).toBe(15);
     expect(renditions.heightAt(200, 200)).toBe(10);
+  });
+
+  it("curves moves between corners, without creases where tiles meet", () => {
+    const renditions = world();
+    // A slope rising 1 ft a foot west to east, worked out on chunk corners, then the cells read.
+    renditions.raise((x) => x, [-64, -64, 320, 320], CHUNKS);
+    renditions.cells(0, 0);
+    const h = (x) => renditions.heightAt(x, 100) - 10;
+    // Straight between corners, a straight slope stays straight.
+    expect(h(20)).toBeCloseTo(20);
+    // A bend: up 0 to x = 64, then 1 ft a foot.
+    const bent = world();
+    bent.raise((x) => Math.max(0, x - 64), [-64, -64, 320, 320], CHUNKS);
+    bent.cells(0, 0);
+    const g = (x) => bent.heightAt(x, 100) - 10;
+    // Curved round the bend, never dipping below the flat ground before it.
+    expect(g(48)).toBe(0);
+    expect(g(56)).toBe(0);
+    expect(g(72)).toBeGreaterThan(0);
+    expect(g(72)).toBeLessThan(8);
   });
 });
 
