@@ -108,6 +108,7 @@ export class Tools {
   point(e) {
     const r = this.canvas.getBoundingClientRect();
     this.pointer = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
+    if (this.stroke) this.stroke.at = null;
   }
 
   // Where the pointer meets the ground (or the sea), [x, y, z], or null.
@@ -136,9 +137,14 @@ export class Tools {
     return [p.x, p.y, p.z];
   }
 
-  // Each frame: shows where the tool reaches, and works it while the left button's down.
+  // Each frame: shows where the tool reaches, and works it while the left button's down. While
+  // neither the pointer nor the camera moves, a stroke keeps working where it was, though the
+  // ground it moved now meets the pointer's ray somewhere else.
   tick(dt) {
-    const at = this.tool && this.hit();
+    const view = this.camera.matrixWorld.elements.join();
+    if (this.stroke?.view !== view) this.stroke &&= { ...this.stroke, view, at: null };
+    const at = this.tool && (this.stroke?.at ?? this.hit());
+    if (this.stroke) this.stroke.at = at;
     this.ring.visible = Boolean(at);
     if (!at) return;
     const [x, , z] = at;

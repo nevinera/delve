@@ -6,6 +6,7 @@ import { PLATTER_PATH } from "../v2/platter.js";
 import { SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { Builder } from "./builder.js";
 import { FAR_FT, Ground, Renditions } from "./ground.js";
+import { grid } from "./grid.js";
 import { Tools } from "./tools.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
@@ -77,7 +78,8 @@ function start({ name, continent, renditions }) {
   const canvas = $("view");
   // A logarithmic depth buffer, so ground miles off doesn't flicker where faces nearly meet.
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, logarithmicDepthBuffer: true });
-  renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+  // A pixel a CSS pixel, even on high-density screens: the editor needn't be crisp.
+  renderer.setPixelRatio(1);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(SKY);
   scene.fog = new THREE.Fog(SKY, FOG.nearFt, FOG.farFt);
@@ -98,12 +100,13 @@ function start({ name, continent, renditions }) {
   try {
     saved = JSON.parse(localStorage.getItem(placeKey));
   } catch {}
-  // 1 to 4 show or hide each kind of ground, finest first.
+  // 1 to 4 show or hide each kind of ground, finest first, and g the grid.
   const KINDS = ["full", "fine", "tile", "plate"];
   window.addEventListener("keydown", (e) => {
     if (e.target.matches?.("input, textarea, select") || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     const kind = KINDS[Number(e.key) - 1];
     if (kind) ground.toggle(kind);
+    if (e.key.toLowerCase() === "g") grid.value = 1 - grid.value;
   });
   const builder = new Builder({ scene, camera, canvas, groundAt, at: renditions.middle(), state: saved ?? undefined });
   const tools = new Tools({ scene, camera, canvas, builder, renditions, ground });
@@ -118,6 +121,7 @@ function start({ name, continent, renditions }) {
   resize();
 
   let last = null;
+  const FPS = 30;
   let lastSave = 0;
   let lastHud = 0;
   let frames = 0;
@@ -134,6 +138,8 @@ function start({ name, continent, renditions }) {
   window.create = { ground, builder, tools, renderer, scene, camera, paused: false };
   const frame = (now) => {
     if (window.create.paused) return requestAnimationFrame(frame);
+    // At most FPS frames a second, with a little slack so a 60 Hz screen draws every other frame.
+    if (last !== null && now - last < 1000 / FPS - 2) return requestAnimationFrame(frame);
     const dt = last === null ? 0 : Math.min(0.05, (now - last) / 1000);
     if (last !== null) worst.gap = Math.max(worst.gap, now - last);
     last = now;

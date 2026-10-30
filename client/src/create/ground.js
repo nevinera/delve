@@ -4,6 +4,7 @@ import { CELL_CORNERS, TILE_CELLS, decodePlate, tileIndexInPlate } from "../v2/p
 import { CORNERS, decodePlatter, indexIn, plateIndexIn, platterOf, platterOfPlate } from "../v2/platter.js";
 import { CELL_FT, CHUNK_CELLS, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
 import { CELLS, CHUNKS, TILES } from "./geo.js";
+import { withGrid } from "./grid.js";
 
 // The ground round the builder, a tile at a time, finer the nearer the tile is to the builder's:
 // - within FULL_TILES, drawn in full, smooth-shaded at cell scale with the patterns of its kinds of
@@ -420,10 +421,13 @@ export class Ground {
     this.group = new THREE.Group();
     scene.add(this.group);
     this.renderer = renderer;
-    this.material = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide });
+    // The flat-shaded ground's material by what it draws, each with the grid's squares that fine.
+    const flat = (finest) => withGrid(new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide }), finest);
+    this.materials = { plate: flat(TILE_FT), tile: flat(CHUNK_FT), fine: flat(CELL_FT) };
     this.plates = new Map(); // "px,pz" -> a plate's group, its userData.tiers how its tiles are drawn
     this.wanted = new Map(); // "px,pz" -> how its tiles should be drawn, a digit each, "-" for none
     this.pending = []; // "px,pz" of plates to make, nearest first
+    this.moved = new Set(); // "px,pz" of plates whose ground moved, made next frame whatever it takes
     this.anchor = null; // the builder's tile and height in tiles' widths, [tx, ty, tz]
     this.finest = FULL; // the finest tier drawn, by how high the builder is (finestAt)
     // Which kinds of ground are shown (toggle).
@@ -498,8 +502,9 @@ export class Ground {
   // Makes the plates waiting to be made, nearest first, for up to BUILD_MS.
   build() {
     const start = performance.now();
-    while (this.pending.length && performance.now() - start < BUILD_MS) {
+    while (this.pending.length && (this.moved.has(this.pending[0]) || performance.now() - start < BUILD_MS)) {
       const key = this.pending.shift();
+      this.moved.delete(key);
       const made = this.makePlate(key, this.wanted.get(key));
       this.drop(key);
       this.group.add(made);
@@ -574,9 +579,9 @@ export class Ground {
         }
       }
     }
-    this.add(group, far.geometry(), this.material, "plate");
-    this.add(group, near.geometry(), this.material, "tile");
-    this.add(group, fineGeometry(fine), this.material, "fine");
+    this.add(group, far.geometry(), this.materials.plate, "plate");
+    this.add(group, near.geometry(), this.materials.tile, "tile");
+    this.add(group, fineGeometry(fine), this.materials.fine, "fine");
     return group;
   }
 
@@ -601,7 +606,7 @@ export class Ground {
       }
       return;
     }
-    const mesh = this.add(group, geometry(), groundMaterial(this.renderer, { tile: groundTile(tx, tz, cells), origin: [0, 0] }), "full");
+    const mesh = this.add(group, geometry(), withGrid(groundMaterial(this.renderer, { tile: groundTile(tx, tz, cells), origin: [0, 0] }), CELL_FT), "full");
     mesh.userData.tile = `${tx},${tz}`;
     mesh.userData.grid = grid;
   }
@@ -615,12 +620,14 @@ export class Ground {
     return mesh;
   }
 
-  // Makes plates ("px,pz") again first, for ground that's moved.
+  // Makes plates ("px,pz") again next frame, for ground that's moved: all of them, so ground
+  // moved either side of a plate's edge shows moving together.
   refresh(keys) {
     const again = [...keys].filter((key) => this.wanted.has(key));
     for (const key of again) {
       const group = this.plates.get(key);
       if (group) group.userData.tiers = null;
+      this.moved.add(key);
     }
     this.pending = [...again, ...this.pending.filter((key) => !again.includes(key))];
   }
@@ -641,7 +648,7 @@ export class Ground {
     object.traverse((mesh) => {
       if (!mesh.isMesh) return;
       mesh.geometry.dispose();
-      if (mesh.material !== this.material) disposeGround(mesh.material);
+      if (mesh.userData.kind === "full") disposeGround(mesh.material);
     });
     this.plates.delete(key);
   }
