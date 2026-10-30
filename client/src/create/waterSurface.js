@@ -7,7 +7,7 @@ import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 // cells (ground.js's FULL and FINE tiers; coarser, the ground draws the water too): each
 // tile's wet cells, and a cell more round them at the level of the water next to it, which the
 // ground hides where it rises out of it, so the shore's where the two meet. The water fades in
-// over its first foot of depth there (editor/waterMaterial.js). Each type has its own look.
+// over its first SHORE_FADE_FT of depth there (editor/waterMaterial.js). Each type has its own look.
 // Farther off, and where it's not drawn, sea.js's plane stands in for the sea.
 
 const REACH_TILES = 8; // ground.js's FINE_TILES
@@ -16,6 +16,7 @@ const LOOK_S = 0.25; // how often what's drawn is looked over
 const CELLS = TILE_FT / CELL_FT;
 const CORNERS = CELLS + 1;
 const DEEP_FT = 1; // water this deep at each corner of a run of cells is drawn as one quad
+export const SHORE_FADE_FT = 0.25; // how deep the water is where it's no longer faded at its shore
 // How each type looks.
 export const WATER_LOOKS = {
   sea: { color: 0x1f5a85, opacity: 0.9 },
@@ -32,7 +33,7 @@ export class WaterSurfaces {
     this.ground = ground;
     this.group = new THREE.Group();
     scene.add(this.group);
-    this.materials = WATER_TYPES.map((type) => waterMaterial(renderer, WATER_LOOKS[type]));
+    this.materials = WATER_TYPES.map((type) => waterMaterial(renderer, { ...WATER_LOOKS[type], shoreFadeFt: SHORE_FADE_FT }));
     this.meshes = new Map(); // "tx,tz" -> { made from, meshes }
     this.drawn = new Set(); // "tx,tz" of the tiles whose water's drawn here, wet or not
     this.version = 0; // counts changes to `drawn`

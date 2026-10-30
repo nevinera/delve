@@ -15,7 +15,7 @@ const DRIFT = [0.35, 0.2]; // ft/s the ripples wander on still water, so lakes s
 // Steepness (0-1, the root of the surface's slope) where foam starts and where it covers the water.
 const FOAM = [0.15, 0.45];
 // Water fades in over this depth at its shore (its `depth` attribute), so the waterline is soft
-// rather than showing each kink where the water meets the ground.
+// rather than showing each kink where the water meets the ground, unless a material says otherwise.
 const SHORE_FADE_FT = 1;
 
 // The clock every moving water material shares (waterfalls.js too), in seconds.
@@ -27,12 +27,13 @@ export function setWaterTime(seconds) {
   time.value = seconds;
 }
 
-export function waterMaterial(renderer, { color, opacity }) {
+export function waterMaterial(renderer, { color, opacity, shoreFadeFt = SHORE_FADE_FT }) {
   const material = new THREE.MeshLambertMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide });
   material.customProgramCacheKey = () => "flowing-water";
   material.onBeforeCompile = (shader) => {
     shader.uniforms.waterNoise = { value: noiseTexture(renderer) };
     shader.uniforms.waterTime = time;
+    shader.uniforms.shoreFade = { value: shoreFadeFt };
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nattribute vec3 flow;\nattribute float depth;\nvarying vec3 vFlow;\nvarying vec2 vWaterXZ;\nvarying float vDepth;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFlow = flow;\nvDepth = depth;\nvWaterXZ = (modelMatrix * vec4(transformed, 1.0)).xz;");
@@ -43,6 +44,7 @@ export function waterMaterial(renderer, { color, opacity }) {
         `#include <common>
         uniform sampler2D waterNoise;
         uniform float waterTime;
+        uniform float shoreFade;
         varying vec3 vFlow;
         varying vec2 vWaterXZ;
         varying float vDepth;
@@ -67,7 +69,7 @@ export function waterMaterial(renderer, { color, opacity }) {
         float foam = foamy * smoothstep(0.6 - 0.12 * foamy, 0.66 - 0.12 * foamy, 0.6 * r.x + 0.4 * r.y);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.96, 1.0), foam);
         diffuseColor.a = mix(diffuseColor.a, 1.0, foam);
-        diffuseColor.a *= smoothstep(0.0, ${f(SHORE_FADE_FT)}, vDepth);`,
+        diffuseColor.a *= smoothstep(0.0, shoreFade, vDepth);`,
       );
   };
   return material;

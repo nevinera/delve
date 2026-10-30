@@ -3,7 +3,7 @@ import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
 import { AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, partWater } from "../v2/water.js";
 import { waterMaterial } from "../editor/waterMaterial.js";
-import { WATER_LOOKS } from "./waterSurface.js";
+import { SHORE_FADE_FT, WATER_LOOKS } from "./waterSurface.js";
 import { PATTERNS, look, painted, slopeOf } from "../v2/look.js";
 import { makeSlots } from "../v2/slots.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate, platePath, tileIndexInPlate } from "../v2/plate.js";
@@ -1072,7 +1072,7 @@ export class Ground {
       g.setAttribute("flow", new THREE.Float32BufferAttribute(new Float32Array(water.positions.length), 3));
       g.setAttribute("normal", new THREE.Float32BufferAttribute(Float32Array.from({ length: water.positions.length }, (_, n) => (n % 3 === 1 ? 1 : 0)), 3));
       if (!this.water) {
-        this.water = waterMaterial(this.renderer, { color: 0xffffff, opacity: 0.88 });
+        this.water = waterMaterial(this.renderer, { color: 0xffffff, opacity: 0.88, shoreFadeFt: SHORE_FADE_FT });
         this.water.vertexColors = true;
       }
       this.add(group, g, this.water, "water").renderOrder = 1;
