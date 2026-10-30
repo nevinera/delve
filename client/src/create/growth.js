@@ -20,8 +20,8 @@ const BASE_FT = 2640; // how far either way along the line its ground's averaged
 // shares of the growth's height, and how steep their sides are on average, in degrees.
 const TIERS = {
   range: [
-    { across: [0, 1 / 3], every: 0.6, tall: [0.6, 1], steep: [35, 60] },
-    { across: [0, 2 / 3], every: 0.25, tall: [0.25, 0.55], steep: [30, 50] },
+    { across: [0, 1 / 3], every: 0.6, tall: [0.6, 1], steep: [45, 70] },
+    { across: [0, 2 / 3], every: 0.25, tall: [0.25, 0.55], steep: [40, 60] },
     { across: [1 / 3, 1], every: 0.12, tall: [0.06, 0.2], steep: [12, 25] },
   ],
   hills: [

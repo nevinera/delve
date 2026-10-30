@@ -44,7 +44,7 @@ const logSlider = (key, lo, hi, show) => ({
 const GROW_SLIDERS = {
   growWidth: logSlider("width", 400, 21120, (ft) => `${ft.toLocaleString()} ft`),
   growHeight: logSlider("height", 50, 3000, (ft) => `${ft.toLocaleString()} ft`),
-  growDensity: { get: (s) => Math.round(((s.density - 0.2) / 2.8) * 1000), set: (s, v) => (s.density = 0.2 + (2.8 * v) / 1000), show: (s) => `×${s.density.toFixed(1)}` },
+  growDensity: { get: (s) => Math.round(((s.density - 0.2) / 5.8) * 1000), set: (s, v) => (s.density = 0.2 + (5.8 * v) / 1000), show: (s) => `×${s.density.toFixed(1)}` },
   growNoise: { get: (s) => Math.round(s.noise * 1000), set: (s, v) => (s.noise = v / 1000), show: (s) => `${Math.round(s.noise * 100)}%` },
 };
 

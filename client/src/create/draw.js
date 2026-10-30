@@ -24,7 +24,7 @@ const DOT_COLORS = ["#ff3b1f", "#ff9a3c", "#ffe14d"]; // each tier of peaks' dot
 const DOT_PX = [2, 9]; // how wide a dot is across, for the shortest peak to the tallest
 const PREVIEW_CELLS = 160; // how many squares the preview has along its longer side, at most
 const LIFT_FT = 2;
-export const DEFAULTS = { hills: { width: 5280, height: 300, noise: 0.6, density: 1 }, range: { width: 10560, height: 1500, noise: 0.6, density: 1 } };
+export const DEFAULTS = { hills: { width: 5280, height: 300, noise: 0.6, density: 3 }, range: { width: 10560, height: 1500, noise: 0.6, density: 3 } };
 
 export class Draw {
   // heightAt(x, z) gives the ground's height; onChange() is called when the state changes.
