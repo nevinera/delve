@@ -12,19 +12,28 @@ import { Stroke } from "./stroke.js";
 // - drawing: the line's being dragged out;
 // - drawn: the line's there, and what to grow along it is picked;
 // - adjusting: what to grow is picked, and its settings shown on the ground while they're
-//   changed: its core shaded orange, its foothills yellow, and a line in the air at the height it
-//   aims for. Growing it moves the ground, as one step undo takes back.
+//   changed: its band's thirds shaded, orange in the middle to yellow at the edge, a dot for each
+//   peak it'll grow, bigger the taller, and a line in the air at the height it aims for. Growing
+//   it moves the ground, as one step undo takes back.
 
 const LINE_COLOR = 0xffffff;
 const AIM_COLOR = 0x40e0ff;
-const ZONES = [null, { color: 0xffe9a0, opacity: 0.3 }, { color: 0xff8c00, opacity: 0.45 }]; // foothills, core
+// The band's thirds, outermost first.
+const ZONES = [null, { color: 0xffe9a0, opacity: 0.22 }, { color: 0xffb347, opacity: 0.3 }, { color: 0xff8c00, opacity: 0.4 }];
+const DOT_COLORS = ["#ff3b1f", "#ff9a3c", "#ffe14d"]; // each tier of peaks' dots, tallest first
+const DOT_PX = [2, 9]; // how wide a dot is across, for the shortest peak to the tallest
 const PREVIEW_CELLS = 160; // how many squares the preview has along its longer side, at most
 const LIFT_FT = 2;
-export const DEFAULTS = { hills: { width: 2640, height: 300, noise: 0.5 }, range: { width: 5280, height: 1000, noise: 0.5 } };
+export const DEFAULTS = { hills: { width: 5280, height: 300, noise: 0.6, density: 1 }, range: { width: 10560, height: 1500, noise: 0.6, density: 1 } };
 
 export class Draw {
   // heightAt(x, z) gives the ground's height; onChange() is called when the state changes.
-  constructor(scene, renditions, ground, heightAt, onChange) {
+  // Peaks' dots are drawn over `stage`.
+  constructor(scene, stage, renditions, ground, heightAt, onChange) {
+    this.dots = document.createElement("canvas");
+    this.dots.className = "create-measure";
+    stage.append(this.dots);
+    this.peaks = [];
     this.renditions = renditions;
     this.ground = ground;
     this.heightAt = heightAt;
@@ -102,6 +111,7 @@ export class Draw {
   }
 
   clearPreview() {
+    this.peaks = [];
     this.drop("aim");
     this.drop("zones");
   }
@@ -146,6 +156,7 @@ export class Draw {
   showPreview() {
     const grown = this.grown();
     const { height } = this.settings[this.kind];
+    this.peaks = grown.peaks.map((peak) => ({ ...peak, y: this.heightAt(peak.x, peak.z) + LIFT_FT, size: DOT_PX[0] + (DOT_PX[1] - DOT_PX[0]) * (peak.tall / height) }));
     this.fat(grown.line.points.map(([x, z], k) => [x, grown.base(grown.line.along[k]) + height, z]), this.aimMaterial, "aim");
     const [x0, z0, x1, z1] = grown.bounds;
     const step = Math.max(x1 - x0, z1 - z0) / PREVIEW_CELLS;
@@ -158,7 +169,7 @@ export class Draw {
       }
     }
     // Each square shaded by the zone at its middle, a mesh a zone.
-    const index = [[], [], []];
+    const index = [[], [], [], []];
     for (let j = 0; j < nz - 1; j++) {
       for (let i = 0; i < nx - 1; i++) {
         const k = j * nx + i;
@@ -169,7 +180,7 @@ export class Draw {
     this.zones = new THREE.Group();
     this.zones.geometry = new THREE.BufferGeometry();
     this.zones.geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
-    for (const zone of [1, 2]) {
+    for (const zone of [1, 2, 3]) {
       const geometry = this.zones.geometry.clone();
       geometry.setIndex(index[zone]);
       const mesh = new THREE.Mesh(geometry, this.zoneMaterials[zone]);
@@ -180,10 +191,33 @@ export class Draw {
     this.group.add(this.zones);
   }
 
-  tick(width, height) {
+  tick(camera, width, height) {
     this.lineMaterial.resolution.set(width, height);
     this.aimMaterial.resolution.set(width, height);
     if (this.dirty && this.state === "adjusting") this.showPreview();
     this.dirty = false;
+    this.drawDots(camera, width, height);
+  }
+
+  // A dot over each peak to be grown, tallest tiers last, on top.
+  drawDots(camera, width, height) {
+    if (this.dots.width !== width || this.dots.height !== height) [this.dots.width, this.dots.height] = [width, height];
+    const c = this.dots.getContext("2d");
+    c.clearRect(0, 0, width, height);
+    const v = new THREE.Vector3();
+    c.strokeStyle = "#14141c";
+    c.lineWidth = 1;
+    for (const tier of [2, 1, 0]) {
+      c.fillStyle = DOT_COLORS[tier];
+      for (const peak of this.peaks) {
+        if (peak.tier !== tier) continue;
+        v.set(peak.x, peak.y, peak.z).project(camera);
+        if (v.z > 1 || v.z < -1) continue;
+        c.beginPath();
+        c.arc(((v.x + 1) / 2) * width, ((1 - v.y) / 2) * height, peak.size / 2, 0, Math.PI * 2);
+        c.fill();
+        c.stroke();
+      }
+    }
   }
 }

@@ -42,8 +42,9 @@ const logSlider = (key, lo, hi, show) => ({
   show: (s) => show(s[key]),
 });
 const GROW_SLIDERS = {
-  growWidth: logSlider("width", 200, 10560, (ft) => `${ft.toLocaleString()} ft`),
+  growWidth: logSlider("width", 400, 21120, (ft) => `${ft.toLocaleString()} ft`),
   growHeight: logSlider("height", 50, 3000, (ft) => `${ft.toLocaleString()} ft`),
+  growDensity: { get: (s) => Math.round(((s.density - 0.2) / 2.8) * 1000), set: (s, v) => (s.density = 0.2 + (2.8 * v) / 1000), show: (s) => `×${s.density.toFixed(1)}` },
   growNoise: { get: (s) => Math.round(s.noise * 1000), set: (s, v) => (s.noise = v / 1000), show: (s) => `${Math.round(s.noise * 100)}%` },
 };
 
@@ -71,7 +72,7 @@ export class Tools {
     this.marks = new Marks(scene, (x, z) => this.surface(x, z), canvas.parentElement);
     this.pinColor = "red";
     this.measure = new Measure(canvas.parentElement);
-    this.draw = new Draw(scene, renditions, ground, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, () => this.showDraw());
+    this.draw = new Draw(scene, canvas.parentElement, renditions, ground, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, () => this.showDraw());
     // Measure's, { from, to } for a ruler, { middle, radius } for a circle, and while the button's
     // down, where it went down and whether a ruler or circle was shown before.
     this.measuring = null;
@@ -540,7 +541,7 @@ export class Tools {
     const ftPerPx = (Math.max(above, 50) * 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) / h;
     this.marks.tick(dt, w, h, this.camera.position, above, ftPerPx);
     this.marks.pins.tick(this.camera, w, h);
-    this.draw.tick(w, h);
+    this.draw.tick(this.camera, w, h);
     if (this.tool === "measure" && this.measuring) {
       if (this.measuring.from && !this.measuring.radius) {
         const at = this.hit(this.drawAt);

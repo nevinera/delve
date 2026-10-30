@@ -1,30 +1,37 @@
 import { fbm, hash2 } from "../world/noise.js";
 import { CHUNK_FT } from "../v2/sizes.js";
 
-// Growths: ground grown along a line drawn with geo's draw tool. A growth has a core, as wide as
-// its width, standing on sides too steep to walk up (WALK_DEG), and foothills outside it, walkable,
-// stepping down to the ground about half the width further out. The core's edge wiggles, along the
-// line and in and out, and the foothills' wobbles along it. It aims for a height over the ground
-// under the line, smoothed along it over BASE_FT, so it bridges small valleys but dips through big
-// ones. It only ever raises the ground, so it never cuts into ground already higher.
-// - hills: a field of round hills, scattered, standing on the core's raised ground and fading
-//   into the foothills, shorter the further out, with noise roughening them.
-// - range: a ridge along the line, its peaks and saddles rising and falling along it, sharp spurs
-//   off it, jagged with noise, on the core's raised ground, and rugged hills in the foothills.
+// Growths: ground grown along a line drawn with geo's draw tool, by scattering peaks along it and
+// growing each, overlapping, the way they'd be raised by hand. The band the growth covers is its
+// width across, in thirds each side of the line: its tallest peaks in the middle third, smaller
+// ones across the middle two thirds, and low hills out through the outer thirds, everything
+// shorter the further out, fading to the ground at the band's edge. Where peaks overlap, the
+// tallest stands and the rest add a share of theirs, building shoulders and saddles. It aims for a
+// height over the ground under the line, smoothed along it over BASE_FT, so it bridges small
+// valleys but dips through big ones. It only ever raises the ground, so it never cuts into ground
+// already higher.
+// - range: cones of different steepness, their sides broken into sharp ribs and crags by noise.
+// - hills: rounded domes, lumpy with noise.
 
 export const WALK_DEG = 50; // the steepest a character walks up
-const WALL_DEG = 65; // how steep a core's sides are
 const BASE_FT = 2640; // how far either way along the line its ground's averaged, at most
-// Each kind's shares of its height: how high the core's ground is raised on its steep sides, how
-// tall what stands on it is (hills, or the ridge), and how high the foothills' ground rises toward
-// the core before their hills.
-const SHARES = {
-  hills: { raised: 0.5, tall: 0.55, ramp: 0.12, foothills: 0.55 },
-  range: { raised: 0.3, tall: 0.75, ramp: 0.1, foothills: 0.3 },
+// Each kind's tiers of peaks: where across the band they're scattered, as shares of its half
+// width out from the line, how far apart along the line at density 1, likewise, how tall, as
+// shares of the growth's height, and how steep their sides are on average, in degrees.
+const TIERS = {
+  range: [
+    { across: [0, 1 / 3], every: 0.6, tall: [0.6, 1], steep: [35, 60] },
+    { across: [0, 2 / 3], every: 0.25, tall: [0.25, 0.55], steep: [30, 50] },
+    { across: [1 / 3, 1], every: 0.12, tall: [0.06, 0.2], steep: [12, 25] },
+  ],
+  hills: [
+    { across: [0, 1 / 3], every: 0.4, tall: [0.6, 1], steep: [22, 35] },
+    { across: [0, 2 / 3], every: 0.2, tall: [0.3, 0.6], steep: [18, 30] },
+    { across: [1 / 3, 1], every: 0.1, tall: [0.08, 0.25], steep: [10, 20] },
+  ],
 };
-const WOBBLE = 0.2; // how far edges wobble along the line, as a share of the core's half width, at full noise
-const WIGGLE = 0.25; // how far the core's edge wiggles in and out, likewise
-const HILL_CELLS = 3; // hills about a third of the width apart
+const OTHERS = 0.35; // how much of the peaks under the tallest at a point adds to it
+const EDGE = 0.85; // where the fade to the band's edge begins, as a share of its half width
 const MOST_POINTS = 600000; // how many points a growth's worked out on, at most
 const SEED = 0x6a7e11d5;
 
@@ -103,14 +110,14 @@ export function baseHeights(line, heightAt) {
   });
 }
 
-// A growth of `kind` along `points`, with settings { width, height, noise } (noise 0 to 1):
-// { line, base(s), the height it aims for under its top s ft along, zone(x, z), 2 in the core, 1
-// in the foothills, 0 outside, raise(x, z, ground), how far it raises ground of height `ground`
-// at (x, z), and bounds [x0, z0, x1, z1] }.
-export function growth(kind, points, { width, height, noise }, heightAt) {
+// A growth of `kind` along `points`, with settings { width, height, noise, density } (noise 0 to
+// 1): { line, base(s), the height it aims for under its top s ft along, peaks, [{ x, z, tall,
+// tier }], zone(x, z), the third out from the line it's in, 3 the middle, 0 outside,
+// raise(x, z, ground), how far it raises ground of height `ground` at (x, z), and bounds
+// [x0, z0, x1, z1] }.
+export function growth(kind, points, { width, height, noise, density = 1 }, heightAt) {
   const half = width / 2;
-  const reach = half * 3;
-  const line = new Line(points, reach);
+  const line = new Line(points, half);
   const bases = baseHeights(line, heightAt);
   const base = (s) => {
     let k = 1;
@@ -119,66 +126,80 @@ export function growth(kind, points, { width, height, noise }, heightAt) {
     const t = Math.max(0, Math.min(1, (s - line.along[k - 1]) / span));
     return bases[k - 1] + ((bases[k] ?? bases[k - 1]) - bases[k - 1]) * t;
   };
-  // The core's and foothills' edges at (x, z), from the line, s ft along it.
-  const edges = (x, z, s) => {
-    const wiggle = WIGGLE * (0.4 + 0.6 * noise) * fbm(x, z, SEED + 8, { wavelength: width / 4, octaves: 4 });
-    const core = half * (1 + WOBBLE * noise * fbm(s, 0, SEED, { wavelength: width * 2 }) + wiggle);
-    return [core, core + half * (1 + 1.5 * WOBBLE * noise * fbm(s, 7, SEED + 1, { wavelength: width * 1.5 }))];
-  };
+  // How tall a peak may be at `a`, its share of the half width out: full in the middle third,
+  // then less and less to nothing at the edge.
+  const shorter = (a) => (a <= 1 / 3 ? 1 : Math.max(0, 1 - (a - 1 / 3) / (2 / 3)));
+  const peaks = [];
+  TIERS[kind].forEach(({ across, every, tall, steep }, tier) => {
+    const count = Math.max(1, Math.ceil((line.length / (every * half)) * density));
+    for (let k = 0; k < count; k++) {
+      const r = (n) => hash2(k, tier * 8 + n, SEED);
+      const s = ((k + r(0)) / count) * line.length;
+      const a = across[0] + (across[1] - across[0]) * r(1);
+      const [p, q] = [line.at(Math.max(0, s - 10)), line.at(Math.min(line.length, s + 10))];
+      const along = Math.hypot(q[0] - p[0], q[1] - p[1]) || 1;
+      const side = r(2) < 0.5 ? -1 : 1;
+      const [at, off] = [line.at(s), side * a * half];
+      const h = height * (tall[0] + (tall[1] - tall[0]) * r(3)) * shorter(a);
+      if (h <= 0) continue;
+      const angle = ((steep[0] + (steep[1] - steep[0]) * r(4)) * Math.PI) / 180;
+      const x = at[0] - ((q[1] - p[1]) / along) * off;
+      const z = at[1] + ((q[0] - p[0]) / along) * off;
+      peaks.push({ x, z, tall: h, tier, radius: (kind === "hills" ? 1.3 : 1) * (h / Math.tan(angle)), bend: 1 + 0.5 * r(5) });
+    }
+  });
+  // Peaks bucketed in squares as wide as the widest, to find those reaching a point.
+  const cell = Math.max(1, ...peaks.map((p) => p.radius));
+  const buckets = new Map();
+  for (const peak of peaks) {
+    const key = `${Math.floor(peak.x / cell)},${Math.floor(peak.z / cell)}`;
+    if (!buckets.has(key)) buckets.set(key, []);
+    buckets.get(key).push(peak);
+  }
+  // How high a peak stands at t, its share of its radius out.
+  const shape = kind === "hills" ? (t) => (1 - t * t) ** 1.5 : (t, bend) => (1 - t) ** bend;
   const near = (x, z) => {
     const hit = line.nearest(x, z);
     if (!hit) return null;
-    const [core, foot] = edges(x, z, hit.s);
-    return hit.d > foot ? null : { ...hit, core, foot };
+    // The band's edge wobbles along the line.
+    const edge = half * (1 + 0.1 * noise * fbm(hit.s, 5, SEED + 1, { wavelength: width }));
+    return hit.d > edge ? null : { ...hit, edge };
   };
   const zone = (x, z) => {
     const hit = near(x, z);
-    return !hit ? 0 : hit.d <= hit.core ? 2 : 1;
+    return !hit ? 0 : 3 - Math.min(2, Math.floor((3 * hit.d) / hit.edge));
   };
-  const shares = SHARES[kind];
-  const wall = (shares.raised * height) / Math.tan((WALL_DEG * Math.PI) / 180);
-  // Round hills, one in each square `cell` wide somewhere in it, of different sizes: how high the
-  // tallest at (x, z) is, 0 to 1.
-  const cell = width / HILL_CELLS;
-  const field = (x, z) => {
-    const [ci, cj] = [Math.floor(x / cell), Math.floor(z / cell)];
-    let top = 0;
-    for (let j = cj - 1; j <= cj + 1; j++) {
-      for (let i = ci - 1; i <= ci + 1; i++) {
-        const [hx, hz] = [(i + hash2(i, j, SEED + 4)) * cell, (j + hash2(i, j, SEED + 5)) * cell];
-        const d = Math.hypot(x - hx, z - hz) / (cell * (0.55 + 0.4 * hash2(i, j, SEED + 6)));
-        if (d < 1) top = Math.max(top, (0.5 + 0.5 * hash2(i, j, SEED + 7)) * (1 - d * d) ** 1.5);
-      }
-    }
-    return top;
-  };
-  // Sharp ridges where noise crosses 0, 0 to 1.
-  const ridged = (x, z, wavelength, seed) => 1 - Math.abs(fbm(x, z, seed, { wavelength, octaves: 5 }));
-  // A range's ridge over the core, 0 to 1: highest along the line, peaks and saddles along it, with
-  // spurs where ridged noise runs out across it.
-  const ridge = (x, z, d, core, s) => {
-    const across = Math.max(0, 1 - d / core) ** 1.1;
-    const peaks = 0.55 + 0.45 * fbm(s, 3, SEED + 9, { wavelength: width * 0.8, octaves: 3 });
-    const spurs = ridged(x, z, width / 4, SEED + 10);
-    return across * peaks * (0.3 + 0.7 * spurs) + 0.15 * noise * (ridged(x, z, width / 14, SEED + 11) - 0.5);
-  };
+  // Sharp ribs where noise crosses 0, 0 to 1.
+  const ridged = (x, z, wavelength, seed) => 1 - Math.abs(fbm(x, z, seed, { wavelength, octaves: 4 }));
   const raise = (x, z, ground) => {
     const hit = near(x, z);
     if (!hit) return 0;
-    const { d, core, foot, s } = hit;
-    // How far out into the foothills, 0 at the core's edge to 1 at theirs.
-    const out = smoothstep(core, foot, d);
-    const raised = shares.raised * height * Math.max(0, Math.min(1, (core - d) / wall));
-    const ramp = shares.ramp * height * (1 - out);
-    const hills = shares.foothills * height * (1 - out) ** 1.5 * field(x, z);
-    const rough = 0.1 * height * noise * fbm(x, z, SEED + 3, { wavelength: width / 8, octaves: 4 }) * (1 - out);
-    const top = kind === "range" ? Math.max(hills, shares.tall * height * ridge(x, z, d, core, s)) : hills;
-    return Math.max(0, base(s) + raised + ramp + top + rough - ground) * (1 - out);
+    const [ci, cj] = [Math.floor(x / cell), Math.floor(z / cell)];
+    let [tallest, sum] = [0, 0];
+    for (let j = cj - 1; j <= cj + 1; j++) {
+      for (let i = ci - 1; i <= ci + 1; i++) {
+        for (const peak of buckets.get(`${i},${j}`) ?? []) {
+          const t = Math.hypot(x - peak.x, z - peak.z) / peak.radius;
+          if (t >= 1) continue;
+          const h = peak.tall * shape(t, peak.bend);
+          tallest = Math.max(tallest, h);
+          sum += h;
+        }
+      }
+    }
+    let top = tallest + OTHERS * (sum - tallest);
+    top *=
+      kind === "hills"
+        ? 1 + noise * 0.3 * fbm(x, z, SEED + 3, { wavelength: width / 10, octaves: 4 })
+        : 1 + noise * (0.5 * (ridged(x, z, width / 16, SEED + 10) - 0.6) + 0.2 * (ridged(x, z, width / 40, SEED + 11) - 0.6));
+    const fade = 1 - smoothstep(EDGE * hit.edge, hit.edge, hit.d);
+    return Math.max(0, base(hit.s) + top - ground) * fade;
   };
   const xs = points.map(([x]) => x);
   const zs = points.map(([, z]) => z);
+  const reach = half * 1.1;
   const bounds = [Math.min(...xs) - reach, Math.min(...zs) - reach, Math.max(...xs) + reach, Math.max(...zs) + reach];
-  return { kind, line, base, zone, raise, bounds };
+  return { kind, line, base, peaks, zone, raise, bounds };
 }
 
 // A growth's raises worked out once on a grid, CHUNK_FT apart or more, to keep to MOST_POINTS:
