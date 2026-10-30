@@ -171,7 +171,6 @@ export class Editor {
     this.sculpt = null; // the heights step's SculptView, loaded the first time it's opened
     this.land = new LandGrid(); // the continent's land grid, as it's being sculpted
     this.landKey = null; // the land grid's hash, worked out when needed
-    this.landDirty = false; // sculpted since the land was last committed
     this.bindPanel();
     this.fillContinents();
     window.addEventListener("keydown", (e) => this.onKey(e));
@@ -332,13 +331,13 @@ export class Editor {
     return this.step === "zones" ? this.activeZone : null;
   }
 
-  // Every tile with committed land above deep ocean, as a set of "tx,tz" keys.
+  // Every tile with land above deep ocean, as a set of "tx,tz" keys.
   landTiles() {
     this.landTileKeys ??= loadLand(this.world.files, this.continent).tiles();
     return this.landTileKeys;
   }
 
-  // Whether anything's been raised, committed or not.
+  // Whether anything's been raised.
   hasLand() {
     return this.land.blocks.size > 0;
   }
@@ -437,7 +436,6 @@ export class Editor {
     this.land = loadLand(this.world.files, this.continent);
     this.landTileKeys = null;
     this.landKey = null;
-    this.landDirty = false;
     if (!this.activeZone) this.active = null;
     this.renderPanel();
     this.renderProps();
@@ -466,20 +464,13 @@ export class Editor {
     }
   }
 
-  // The land's been sculpted: the water and roads follow it, but tiles wait for a commit.
+  // The land's been sculpted: it's stored, and the generated tiles it changes are out of date.
   landChanged() {
     this.landKey = null;
-    this.landDirty = true;
-    this.renderPanel();
-  }
-
-  // Stores the land grid as sculpted, and marks the generated tiles it changes as out of date.
-  commitLand() {
-    this.landDirty = false;
     this.store(() => saveLand(this.world.files, this.continent, this.land));
   }
 
-  // Swaps in land from a heightmap or a bones file, uncommitted, and looks at it.
+  // Swaps in land from a heightmap or a bones file, and looks at it.
   async replaceLand(land) {
     this.land = land;
     this.landChanged();
@@ -488,15 +479,6 @@ export class Editor {
     await this.showSculpt();
     const bounds = landBounds(land);
     if (bounds) this.sculpt.lookOver(bounds);
-  }
-
-  // Puts the land back as it was last committed.
-  discardLand() {
-    this.land = loadLand(this.world.files, this.continent);
-    this.landKey = null;
-    this.landDirty = false;
-    this.renderPanel();
-    this.showSculpt();
   }
 
   store(write) {
@@ -1774,10 +1756,6 @@ export class Editor {
       input.addEventListener("input", () => this.applyDetailBrush());
     }
     this.applyDetailBrush();
-    this.el.commitLand.addEventListener("click", () => this.commitLand());
-    this.el.discardLand.addEventListener("click", () => {
-      if (window.confirm("Discard the sculpting since the last commit?")) this.discardLand();
-    });
     // Shift and ctrl change what a sculpting tool does while they're held.
     for (const type of ["keydown", "keyup"]) window.addEventListener(type, (e) => this.sculpt?.setKeys({ shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey }));
     this.el.exaggeration.addEventListener("input", () => {
@@ -1875,10 +1853,7 @@ export class Editor {
     const { stale, missing, held } = this.outOfDate();
     const todo = stale.length + missing.length + held.length;
     const edited = this.editedTiles().size;
-    this.el.tilesInfo.textContent = `${this.landTiles().size} tiles with land · ${stale.length + held.length} out of date · ${missing.length} not generated${edited ? ` · ${edited} edited by hand${held.length ? `, ${held.length} of them out of date` : ""}` : ""}${this.landDirty ? " · land not committed yet" : ""}`;
-    this.el.landStatus.textContent = this.landDirty ? "Sculpted since the last commit. Tiles are made from committed land only." : "Everything's committed.";
-    this.el.commitLand.disabled = !this.landDirty;
-    this.el.discardLand.disabled = !this.landDirty;
+    this.el.tilesInfo.textContent = `${this.landTiles().size} tiles with land · ${stale.length + held.length} out of date · ${missing.length} not generated${edited ? ` · ${edited} edited by hand${held.length ? `, ${held.length} of them out of date` : ""}` : ""}`;
     for (const el of this.el.steps.find((s) => s.dataset.step === this.step)?.querySelectorAll("[data-for]") ?? []) el.hidden = !el.dataset.for.split(" ").includes(this.toolName);
     this.el.generate.disabled = !todo || this.generating;
     this.el.regenerateAll.disabled = !this.landTiles().size || this.generating;
