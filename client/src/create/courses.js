@@ -19,12 +19,12 @@ const JOIN_FT = 5; // how near another course's water a course's end joins it
 const round = (v) => Math.round(v * 10) / 10;
 
 export class Courses extends Areas {
-  // baseAt(x, z) gives the ground before courses cut it, and ends(x, z) whether there's water at
-  // (x, z) for a course to end in, besides courses.
-  constructor(scene, surface, stage, baseAt, ends) {
+  // baseAt(x, z) gives the ground before courses cut it, and stillAt(x, z) the level of the water
+  // at (x, z) for a course to end in, besides courses, or null.
+  constructor(scene, surface, stage, baseAt, stillAt) {
     super(scene, surface, stage, { colors: { ...COURSES, open: OPEN }, kind: "stream", field: "type", list: "courses", extras: ["widths", "surface"], closed: false });
     this.start = () => ({ widths: [WIDTHS[this.kind], WIDTHS[this.kind]], surface: null });
-    Object.assign(this, { baseAt, ends });
+    Object.assign(this, { baseAt, stillAt });
   }
 
   show(json) {
@@ -49,7 +49,7 @@ export class Courses extends Areas {
   surfaceOf(area, points) {
     const key = keyOf(points);
     if (area.surfaceKey !== key || !area.surface) {
-      area.surface = profile(points, (x, z) => this.baseAt(x, z) ?? 0);
+      area.surface = profile(points, (x, z) => this.baseAt(x, z) ?? 0, this.stillAt);
       area.surfaceKey = key;
     }
     return area.surface;
@@ -63,7 +63,7 @@ export class Courses extends Areas {
   // Whether a course's end is in water.
   ended(area) {
     const [x, z] = area.points.at(-1);
-    if (this.ends(x, z)) return true;
+    if (this.stillAt(x, z) != null) return true;
     return this.areas.some((other) => other !== area && along(widthsOf(other), x, z, Math.max(...other.widths) / 2 + JOIN_FT));
   }
 

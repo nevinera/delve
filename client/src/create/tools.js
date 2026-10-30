@@ -89,8 +89,8 @@ export class Tools {
     this.biomes = new Biomes(scene, (x, z) => this.surface(x, z), canvas.parentElement);
     this.biomesShown = false; // whether biome areas are shown with other tools too
     this.water = new WaterBodies(scene, (x, z) => this.surface(x, z), canvas.parentElement, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT);
-    const ends = (x, z) => Boolean(this.water.at(x, z)) || renditions.seaAt(x, z);
-    this.courses = new Courses(scene, (x, z) => this.surface(x, z), canvas.parentElement, (x, z) => renditions.baseAt(x, z), ends);
+    const stillAt = (x, z) => this.water.at(x, z)?.level ?? (renditions.seaAt(x, z) ? SEA_LEVEL_FT : null);
+    this.courses = new Courses(scene, (x, z) => this.surface(x, z), canvas.parentElement, (x, z) => renditions.baseAt(x, z), stillAt);
     this.outlined = { biomes: this.biomes, water: this.water, courses: this.courses }; // each tool that draws areas, its areas
     this.draw = new Draw(scene, canvas.parentElement, renditions, ground, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, () => this.showDraw(), this.biomes);
     // Measure's, { from, to } for a ruler, { middle, radius } for a circle, and while the button's

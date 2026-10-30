@@ -131,4 +131,21 @@ describe("courses' water", () => {
     expect(at(100, 146)).toBe(-10);
     expect(Number.isNaN(at(100, 160))).toBe(true);
   });
+
+  it("lie under the water they run into where it's higher, and the sea's over them at its level", () => {
+    const heights = new Float32Array(65 * 65).fill(-12);
+    const lake = { type: "lake", level: -5, points: [[0, 0], [128, 0], [128, 256], [0, 256]] };
+    const river = { type: "river", points: [[-50, 128, 40], [300, 128, 40]], surface: [-10, -10] };
+    const water = new WaterMap([lake], [river]).tile(0, 0, heights);
+    expect(water.level[32 * 64 + 10]).toBe(-5);
+    expect(water.type[32 * 64 + 10]).toBe(WATER_TYPES.indexOf("lake"));
+    expect(water.level[32 * 64 + 50]).toBe(-10);
+    // At the same level, the lake's, levels with tenths too.
+    const level = new WaterMap([{ ...lake, level: 705.8 }], [{ ...river, surface: [705.8, 705.8] }]).tile(0, 0, heights);
+    expect(level.type[32 * 64 + 10]).toBe(WATER_TYPES.indexOf("lake"));
+    const tile = { heights: new Float32Array(65 * 65).fill(-12) };
+    const sea = { type: "river", points: [[-50, 128, 40], [300, 128, 40]], surface: [0, 0] };
+    bakeWater({ coords: [0, 0], tiles: new Map([[0, tile]]) }, new WaterMap([], [sea]));
+    expect(tile.water.type[32 * 64 + 25]).toBe(WATER_TYPES.indexOf("sea"));
+  });
 });

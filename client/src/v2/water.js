@@ -1,4 +1,4 @@
-import { courseBox, shape } from "./courses.js";
+import { COURSE_TYPES, courseBox, shape } from "./courses.js";
 import { CELL_FT, PLATE_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "./sizes.js";
 
 // Water: bodies (sea, lakes, ponds, swamp pools) and, later, courses (rivers, streams), drawn by
@@ -87,9 +87,9 @@ export class WaterMap {
           const ground = (heights[at] + heights[at + 1] + heights[at + CORNERS] + heights[at + CORNERS + 1]) / 4;
           if (ground >= made.level) continue;
           water ??= dryWater(TILE_CELLS * TILE_CELLS);
-          // Where courses meet, the higher.
+          // Where it meets other water, the higher, as kept.
           const k = j * TILE_CELLS + i;
-          if (water.type[k] === type && !(made.level > water.level[k])) continue;
+          if (!(Math.fround(made.level) > water.level[k]) && !Number.isNaN(water.level[k])) continue;
           water.level[k] = made.level;
           water.type[k] = type;
         }
@@ -209,7 +209,8 @@ export function bakeWater(plate, map) {
     }
     const water = bodies ?? dryWater(CELLS);
     for (let k = 0; k < CELLS; k++) {
-      if (!wet[k] || !Number.isNaN(water.level[k])) continue;
+      // The sea's over courses running into it.
+      if (!wet[k] || (!Number.isNaN(water.level[k]) && !(COURSE_TYPES.includes(WATER_TYPES[water.type[k]]) && water.level[k] <= SEA_LEVEL_FT))) continue;
       water.level[k] = SEA_LEVEL_FT;
       water.type[k] = SEA;
     }

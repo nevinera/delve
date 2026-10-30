@@ -16,6 +16,7 @@ export const BELOW_FT = 1; // how far under the ground beside it a course's surf
 const BANK_RUN = 1.5; // banks rise a foot every this many feet out
 const BANK_FT = 18; // and reach this far out from the water's edge
 export const MARGIN_FT = 2; // the water reaches this far past its edge, where the ground's lower
+const MOUTH_GRADE = 0.25; // how steeply, ft a foot, a course at most falls to the water it runs into
 
 // How deep a course of `type` is under its middle, `width` ft wide.
 export function depthOf(type, width) {
@@ -68,11 +69,15 @@ export function surfaceAt(surface, t) {
 }
 
 // A course's surface down its line `points`, from groundAt(x, z): BELOW_FT under the ground, but
-// never over the surface upstream of it, to a tenth of a foot.
-export function profile(points, groundAt) {
+// never over the surface upstream of it, nor under the water it runs into, stillAt(x, z) (a
+// body's or the sea's level, or null), to a tenth of a foot. Where it runs into that water, it
+// falls to it no more steeply than MOUTH_GRADE, over as far as that takes from where it was
+// just before it.
+export function profile(points, groundAt, stillAt = () => null) {
   const length = lengthOf(points);
   const surface = [];
   let low = Infinity;
+  let mouth = -1; // where it first runs into still water
   let [k, start] = [1, 0];
   for (let t = 0; t <= length + SURFACE_STEP_FT; t += SURFACE_STEP_FT) {
     const at = Math.min(t, length);
@@ -83,10 +88,15 @@ export function profile(points, groundAt) {
     const [[ax, az], [bx, bz]] = [points[k - 1], points[k] ?? points[k - 1]];
     const seg = Math.hypot(bx - ax, bz - az);
     const u = seg ? (at - start) / seg : 0;
-    low = Math.min(low, groundAt(ax + (bx - ax) * u, az + (bz - az) * u) - BELOW_FT);
-    surface.push(Math.round(low * 10) / 10);
+    const [x, z] = [ax + (bx - ax) * u, az + (bz - az) * u];
+    const [ground, still] = [groundAt(x, z), stillAt(x, z)];
+    if (still != null && ground < still && mouth < 0) mouth = surface.length;
+    low = Math.min(low, Math.max(ground - BELOW_FT, still ?? -Infinity));
+    surface.push(low);
   }
-  return surface;
+  const before = surface[mouth - 1];
+  for (let n = mouth - 1; n >= 0 && surface[n + 1] + MOUTH_GRADE * SURFACE_STEP_FT < before; n--) surface[n] = Math.min(surface[n], surface[n + 1] + MOUTH_GRADE * SURFACE_STEP_FT);
+  return surface.map((v) => Math.round(v * 10) / 10);
 }
 
 // What a course makes of the ground at (x, z): { top, the highest the ground's left there, level,

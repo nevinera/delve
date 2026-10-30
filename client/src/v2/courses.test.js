@@ -25,6 +25,23 @@ describe("courses", () => {
     expect(surfaceAt([10, 8, 6], 100)).toBe(6);
   });
 
+  it("stop at the water they run into, and ease down to it", () => {
+    // Ground 20 ft up to x = 100, then a lake at 10 over a bed at 0.
+    const straight = [[0, 0, 6], [200, 0, 6]];
+    const ground = (x) => (x < 100 ? 20 : 0);
+    const still = (x) => (x < 100 ? null : 10);
+    const surface = profile(straight, ground, still);
+    expect(surface.at(-1)).toBe(10);
+    // 8 ft a step at most a quarter foot a foot: 2 ft a step up from the mouth.
+    expect(surface[12]).toBe(12);
+    expect(surface[11]).toBe(14);
+    expect(surface[0]).toBe(20 - BELOW_FT);
+    // Only as far as that takes: a steep course above it stays as steep.
+    const steep = profile(straight, (x) => (x < 100 ? 100 - x : 0), still);
+    expect(steep[0]).toBe(100 - BELOW_FT);
+    expect(steep[11]).toBe(12 - BELOW_FT);
+  });
+
   it("carve a bed under their water and banks beside it", () => {
     const course = { type: "river", points: [[0, 0, 40], [200, 0, 40]], surface: [50, 50] };
     const middle = shape(course, 100, 0);
