@@ -7,16 +7,22 @@ import { slopeOf } from "../v2/look.js";
 import { TILE_FT } from "../v2/sizes.js";
 
 // What fills the tiles' object slots round the builder (v2/fill.js): trees and objects, out to
-// REACH_TILES tiles from theirs, drawn with the editor's models. What fills a tile is kept till its
+// REACH_TILES tiles from theirs, drawn with the editor's models as its 3D view draws them: trees
+// within NEAR_TILES in full, their crowns simpler further off, and past that cheap stand-ins, a
+// trunk and a crown of a few flat faces each. What fills a tile is kept till its
 // ground moves or the biomes change (its cells are dressed again), and the meshes are made again
 // when the builder leaves their tile or what fills the tiles changes, at most every REMAKE_S.
 // Walking, the builder's pushed out of their trunks and footprints (v2/blocking.js).
 
-const REACH_TILES = 6;
+const NEAR_TILES = 3;
+const REACH_TILES = 7;
 const REMAKE_S = 0.5;
 const SLOPE_FT = 2; // how far either way the ground's slope is taken under a slot
-const TREE_STAGES = [250, 600, 1100]; // how far off crowns turn simpler (editor/treeMeshes.js)
-const OBJECT_FT = [1200, 1600]; // how far off small and large objects are drawn
+// As the editor's 3D view has them (editor/renderView.js's SIGHT): how far off crowns turn simpler,
+// the change taken across CANOPY_BAND_FT, and how far off small and large objects are drawn.
+const CANOPY_FT = [300, 450];
+const CANOPY_BAND_FT = 40;
+const OBJECT_FT = [500, 1000];
 
 export class Scatter {
   constructor(scene, renditions) {
@@ -64,27 +70,27 @@ export class Scatter {
   // Each frame, with the builder at continent feet (x, z), and `shown` whether the ground near is
   // drawn finely enough to stand things on.
   tick(dt, x, z, shown) {
-    setTreeSight(x, z, TREE_STAGES);
+    setTreeSight(x, z, CANOPY_FT, { band: CANOPY_BAND_FT });
     setObjectSight(x, z, ...OBJECT_FT);
     this.group.visible = shown;
     if (!shown || (this.since += dt) < REMAKE_S) return;
     this.since = 0;
     const [ax, az] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
-    const fills = [];
+    const [near, far] = [[], []];
     for (let tz = az - REACH_TILES; tz <= az + REACH_TILES; tz++) {
       for (let tx = ax - REACH_TILES; tx <= ax + REACH_TILES; tx++) {
         if (!this.renditions.tile(tx, tz)) continue;
         const filled = this.fill(tx, tz);
-        if (filled) fills.push(filled);
+        if (filled) (Math.max(Math.abs(tx - ax), Math.abs(tz - az)) <= NEAR_TILES ? near : far).push(filled);
       }
     }
-    const drawn = fills.map((f) => f.id).join(",");
+    const drawn = `${ax},${az}:${near.map((f) => f.id)}:${far.map((f) => f.id)}`;
     if (drawn === this.drawn) return;
     this.drawn = drawn;
     this.clear();
-    const trees = fills.flatMap((f) => f.trees);
-    const objects = fills.flatMap((f) => f.objects);
-    for (const mesh of [...treeMeshes(trees), ...objectMeshes(objects, null, [0, 0])]) {
+    const all = [...near, ...far];
+    const meshes = [...treeMeshes(near.flatMap((f) => f.trees)), ...treeMeshes(far.flatMap((f) => f.trees), { far: true }), ...objectMeshes(all.flatMap((f) => f.objects), null, [0, 0])];
+    for (const mesh of meshes) {
       mesh.frustumCulled = false;
       this.group.add(mesh);
     }
