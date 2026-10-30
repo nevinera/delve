@@ -146,7 +146,10 @@ function start(world, changes) {
     if (e.target.matches?.("input, textarea, select") || e.ctrlKey || e.metaKey || e.altKey || e.repeat) return;
     const kind = KINDS[Number(e.key) - 1];
     if (kind) ground.toggle(kind);
-    if (e.key.toLowerCase() === "g") grid.value = 1 - grid.value;
+    if (e.key.toLowerCase() === "g") {
+      grid.value = 1 - grid.value;
+      $("showGrid").checked = grid.value === 1;
+    }
   });
   // The middling height of the plate at (x, z), from its rendition's corners.
   const baseAt = (x, z) => {
@@ -155,6 +158,19 @@ function start(world, changes) {
   };
   const builder = new Builder({ scene, camera, canvas, groundAt, baseAt, at: renditions.middle(), state: saved ?? undefined });
   const tools = new Tools({ scene, camera, canvas, builder, renditions, ground });
+  // The bottom bar's display toggles.
+  $("showGrid").checked = grid.value === 1;
+  $("showGrid").addEventListener("change", () => (grid.value = $("showGrid").checked ? 1 : 0));
+  // Curtains are a way of showing lines, so only when they're shown.
+  const showLines = () => {
+    $("showCurtains").disabled = !$("showLines").checked;
+    tools.marks.showAs($("showLines").checked, $("showCurtains").checked);
+  };
+  $("showLines").addEventListener("change", showLines);
+  $("showCurtains").addEventListener("change", showLines);
+  showLines();
+  // Let go of the toggle clicked, so keys go back to flying and the tools.
+  $("bottom").addEventListener("change", (e) => e.target.blur());
   const planning = world.files.get(planningPath(continent));
   if (planning) tools.marks.load(JSON.parse(strFromU8(planning)));
 

@@ -7,7 +7,8 @@ import { SEA_LEVEL_FT } from "../v2/sizes.js";
 // Lines marked on the ground by the planning marker. While they're being worked on (flat), they're
 // drawn at sea level, over everything. Otherwise they follow the ground as it's moved, lifted off
 // it more the further they are from the camera, so the coarser ground drawn there doesn't bury
-// them, though ground between them and the camera hides them. Each has one of COLORS, one of four widths a few pixels wide, and a style, solid,
+// them, though ground between them and the camera hides them. Then they can be hidden (shown), and
+// can stand up as curtains, see-through walls CURTAIN_FT high over the ground. Each has one of COLORS, one of four widths a few pixels wide, and a style, solid,
 // dashed or dotted. Lines, dashes and dots all grow the higher the builder flies. The eraser cuts
 // lines where it passes, in two where it passes their middles. Lines picked out with the select
 // tool show a halo, and can be deleted whole. A continent's are kept in its
@@ -39,6 +40,8 @@ const HALO_PX = 6; // how much wider than its line a halo is
 export const planningPath = (continent) => `places/continents/${continent}/planning.json`;
 const LIFT_EVERY_S = 0.5; // how often lines are put back on the ground, should it have moved
 const LIFT_FT = 1;
+const CURTAIN_FT = 100;
+const CURTAIN_OPACITY = 0.3;
 const LIFT_SHARE = 0.01; // how much higher lines are lifted, as a share of how far off they are
 
 // What's left of a line of `points` ([x, z]) with the circle `radius` round (x, z) cut out of it:
@@ -87,6 +90,11 @@ export class Marks {
     this.selected = new Map(); // a kept line -> its halo
     this.eye = new THREE.Vector3(); // where the camera is
     this.flat = false; // whether lines are drawn at sea level, over everything
+    this.shown = true; // whether lines on the ground are shown
+    this.curtains = new THREE.Group(); // the lines' curtains, while they stand up
+    this.curtains.visible = false;
+    scene.add(this.curtains);
+    this.curtainMaterials = new Map(); // color -> its curtains' material
     this.version = 0; // counts changes to the lines kept, to tell when to save them
     this.since = 0;
   }
@@ -160,11 +168,47 @@ export class Marks {
   setFlat(flat) {
     if (flat === this.flat) return;
     this.flat = flat;
+    this.showWhat();
     for (const material of this.materials.values()) {
       material.depthTest = !flat;
       material.needsUpdate = true;
     }
     this.placeAll();
+  }
+
+  // Shows lines on the ground or not, and as curtains or not.
+  showAs(lines, curtains) {
+    this.shown = lines;
+    this.curtains.visible = curtains;
+    this.showWhat();
+  }
+
+  showWhat() {
+    this.group.visible = this.flat || this.shown;
+    this.hang();
+  }
+
+  // Makes the curtains again, when they're shown, for the lines there are.
+  hang() {
+    for (const curtain of this.curtains.children) curtain.geometry.dispose();
+    this.curtains.clear();
+    if (this.flat || !this.shown || !this.curtains.visible) return;
+    for (const { points, pen } of this.kept) {
+      const positions = new Float32Array(points.length * 6);
+      points.forEach(([x, z], k) => {
+        const y = this.surface(x, z);
+        positions.set([x, y, z, x, y + CURTAIN_FT, z], k * 6);
+      });
+      const index = [];
+      for (let k = 1; k < points.length; k++) index.push(2 * k - 2, 2 * k - 1, 2 * k, 2 * k - 1, 2 * k + 1, 2 * k);
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+      geometry.setIndex(index);
+      if (!this.curtainMaterials.has(pen.color)) {
+        this.curtainMaterials.set(pen.color, new THREE.MeshBasicMaterial({ color: COLORS[pen.color], transparent: true, opacity: CURTAIN_OPACITY, side: THREE.DoubleSide, depthWrite: false }));
+      }
+      this.curtains.add(new THREE.Mesh(geometry, this.curtainMaterials.get(pen.color)));
+    }
   }
 
   placeAll() {
@@ -281,6 +325,8 @@ export class Marks {
     }
     if ((this.since += dt) < LIFT_EVERY_S) return;
     this.since = 0;
-    if (!this.flat) this.placeAll();
+    if (this.flat) return;
+    this.placeAll();
+    this.hang();
   }
 }
