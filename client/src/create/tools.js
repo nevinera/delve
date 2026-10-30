@@ -187,6 +187,9 @@ export class Tools {
     canvas.addEventListener("pointerdown", (e) => {
       if (e.button !== 0) return;
       this.point(e);
+      // Clicking away from an open pin only closes it. (The canvas's own handlers keep the browser
+      // from closing it itself.)
+      if (this.editing) return $("pinEdit").hidePopover();
       if (OPENS_PINS.has(this.tool)) {
         const r = canvas.getBoundingClientRect();
         const pin = this.marks.pins.pick(this.camera, r.width, r.height, e.clientX - r.left, e.clientY - r.top);

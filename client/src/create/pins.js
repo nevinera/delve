@@ -12,7 +12,7 @@ import * as THREE from "three";
 export const TITLE_MAX = 64;
 const TALL_FT = 4; // a pin's height, near
 const TALL_SHARE = 0.15; // and further off, as a share of how far off it is
-const HEAD_PX = 9; // how wide a pin's head is
+const HEAD_PX = 18; // how wide a pin's head is
 const STICK_PX = 2; // and its stick
 const PICK_PX = 4; // how far past a head's edge the pointer still picks it
 const LABEL_FT = 30000; // how far off a pin's title is shown
