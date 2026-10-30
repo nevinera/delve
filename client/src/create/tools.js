@@ -3,6 +3,7 @@ import { SEA_LEVEL_FT } from "../v2/sizes.js";
 import { SHAPES, TURNS, pullBrush, raiseBrush } from "./geo.js";
 import { EMPTY_FT } from "./ground.js";
 import { Marks } from "./marks.js";
+import { Measure } from "./measure.js";
 import { TITLE_MAX } from "./pins.js";
 import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 
@@ -13,7 +14,8 @@ import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 //   round them, with shift more than one, for delete or backspace to delete whole. The pin tool
 //   sticks pins in the ground. Clicking a pin's head, with no tool or with pin, or double-clicking
 //   it with select, opens its title and content to edit. Select picks pins out too, and dragging
-//   one picked out moves those picked out.
+//   one picked out moves those picked out. Measure's click starts a ruler to the pointer, and its
+//   drag draws a circle (measure.js).
 // - geo's brushes, raise and lower, flatten, smooth and clear: dragging on the ground works them
 //   where the pointer is, and a ring on the ground shows where they reach. [ and ] resize them, and
 //   c and v turn raise and lower's, shift+c and shift+v a little.
@@ -25,7 +27,7 @@ const PICK_FT = 30000; // how far off the pointer finds the ground
 const PICK_LINE_PX = 8; // how near the pointer a line is picked out
 const BOX_PX = 4; // how far the pointer's dragged before select draws a box
 const BRUSHES = new Set(["raise", "flatten", "smooth", "clear", "eraser"]);
-const PLANNING = new Set(["marker", "eraser", "select"]); // tools that work on lines drawn at sea level
+const PLANNING = new Set(["marker", "eraser", "select", "measure"]); // tools that work on lines drawn at sea level
 const OPENS_PINS = new Set([null, "pin"]); // tools with which clicking a pin opens it
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
@@ -55,6 +57,8 @@ export class Tools {
     this.drawing = null; // the Stroke being drawn with the marker
     this.marks = new Marks(scene, (x, z) => this.surface(x, z), canvas.parentElement);
     this.pinColor = "red";
+    this.measure = new Measure(canvas.parentElement);
+    this.measuring = null; // measure's, { from, to } for a ruler, { middle, radius } for a circle, and down while it's dragged
     this.moving = null; // pins being dragged, { from, pins: [[pin, x, z]], before, moved }
     this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }
     this.editing = null; // the pin open to edit, { pin, before }, before the planning file's JSON
@@ -166,6 +170,15 @@ export class Tools {
     canvas.addEventListener("pointermove", (e) => {
       this.point(e);
       if (this.moving) this.movePins();
+      if (this.measuring?.down) {
+        const at = this.hit(this.drawAt);
+        const r = canvas.getBoundingClientRect();
+        const [x, y] = this.measuring.down;
+        if (at && (this.measuring.radius || Math.hypot(e.clientX - r.left - x, e.clientY - r.top - y) >= BOX_PX)) {
+          const middle = this.measuring.from;
+          this.measuring = { ...this.measuring, middle, radius: Math.hypot(at[0] - middle[0], at[2] - middle[1]) };
+        }
+      }
       if (this.box) {
         const r = canvas.getBoundingClientRect();
         [this.box.x1, this.box.y1] = [e.clientX - r.left, e.clientY - r.top];
@@ -203,6 +216,12 @@ export class Tools {
         return;
       }
       canvas.setPointerCapture(e.pointerId);
+      if (this.tool === "measure") {
+        const at = this.hit(this.drawAt);
+        const r = canvas.getBoundingClientRect();
+        if (at) this.measuring = { from: [at[0], at[2]], down: [e.clientX - r.left, e.clientY - r.top] };
+        return;
+      }
       if (this.tool === "select") {
         const r = canvas.getBoundingClientRect();
         const [x, y] = [e.clientX - r.left, e.clientY - r.top];
@@ -244,6 +263,8 @@ export class Tools {
       }
       this.clicked = null;
       if (this.box) this.endBox();
+      // A click leaves a ruler following the pointer, a drag the circle drawn.
+      if (this.measuring?.down) this.measuring = this.measuring.radius ? { middle: this.measuring.middle, radius: this.measuring.radius } : { from: this.measuring.from };
       if (this.moving?.moved) {
         this.marks.undos.push(this.moving.before);
         this.marks.version++;
@@ -311,6 +332,7 @@ export class Tools {
     if (this.drawing) this.marks.keep([]);
     this.marks.unselect();
     this.marks.setFlat(PLANNING.has(tool));
+    this.measuring = null;
     this.box = null;
     this.boxEl.hidden = true;
     this.drawing = null;
@@ -460,6 +482,15 @@ export class Tools {
     const ftPerPx = (Math.max(above, 50) * 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) / h;
     this.marks.tick(dt, w, h, this.camera.position, above, ftPerPx);
     this.marks.pins.tick(this.camera, w, h);
+    if (this.tool === "measure" && this.measuring) {
+      if (this.measuring.from && !this.measuring.radius) {
+        const at = this.hit(this.drawAt);
+        if (at) this.measuring.to = [at[0], at[2]];
+      }
+      this.measure.draw(this.camera, w, h, this.measuring);
+    } else {
+      this.measure.clear();
+    }
     if (!BRUSHES.has(this.tool)) {
       this.ring.visible = false;
       return;

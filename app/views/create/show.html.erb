@@ -35,6 +35,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><line x1="24" y1="9" x2="24" y2="23" stroke="#d8d4cc" stroke-width="2"/><circle cx="24" cy="7" r="5" fill="#e8202a"/></svg>
         <span>pin</span><kbd class="create-key">N</kbd>
       </button>
+      <button type="button" data-tool="measure" data-key="m" aria-pressed="false" title="measure distances and circles">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M4 16 L44 16 M4 10 L4 22 M24 12 L24 20 M14 14 L14 18 M34 14 L34 18 M44 10 L44 22" fill="none" stroke="#ffe9a0" stroke-width="2"/></svg>
+        <span>measure</span><kbd class="create-key">M</kbd>
+      </button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" data-key="h" aria-pressed="false" title="raise and lower the ground">
@@ -96,6 +100,9 @@
         <button type="button" data-pin-color="gray" aria-pressed="false" title="gray"><span style="background:#808080"></span></button>
         <button type="button" data-pin-color="pink" aria-pressed="false" title="pink"><span style="background:#ff9ec8"></span></button>
       </div>
+    </div>
+    <div data-config="measure" hidden>
+      <p class="create-note">Click to start a ruler to the pointer, ticked at miles, quarter miles, 500, 100 and 10 ft. Drag to draw a circle, with its radius and area.</p>
     </div>
     <div data-config="select" hidden>
       <p class="create-note">Click a line or pin to select it, or drag a box round them. Shift selects more, or clicks fewer. Drag selected pins to move them. Double-click a pin to open it. Delete or backspace deletes what's selected.</p>
@@ -166,7 +173,7 @@
   <h2>Keys</h2>
   <dl>
     <dt>T / G</dt><dd>planning or geo</dd>
-    <dt>H J K N</dt><dd>pick a tool, as shown on its button</dd>
+    <dt>H J K N M</dt><dd>pick a tool, as shown on its button</dd>
     <dt>W / S</dt><dd>run or fly forward and back</dd>
     <dt>A / D</dt><dd>turn</dd>
     <dt>Q / E</dt><dd>strafe</dd>
@@ -186,7 +193,7 @@
   <h2>Tools</h2>
   <dl>
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
-    <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, and pins hold notes. Click a pin's head to open it</dd>
+    <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, and measure measures distances and circles. Click a pin's head to open it</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, and clear it away</dd>
   </dl>
 </div>
