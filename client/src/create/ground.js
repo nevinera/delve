@@ -42,6 +42,7 @@ const BUILD_MS = 6; // how long a frame spends making plates
 export const EMPTY_FT = -100; // the sea floor's height where there are no tiles
 const TINT = 0.8; // how far toward its biome's color ground's mixed, showing biomes
 const CHUNK_CELLS_HALF = CHUNK_CELLS / 2;
+const SHORE_CELLS = 4; // how far from water ground can be shore
 
 // A continent's renditions, from its platter files, and its ground at cell scale, from its plate
 // files, read on a worker (plateWorker.js) as they're wanted. onRead() is called each time a plate
@@ -535,12 +536,14 @@ export class Renditions {
     return tile;
   }
 
-  // Works out what tile (tx, tz)'s cells look like, from its heights and biomes, or where it's been
-  // painted, that: `colors`, 64 × 64 sRGB, and `kinds`, indexes into look.js's PATTERNS. Kept till
-  // its ground moves or the biomes change.
+  // Works out what tile (tx, tz)'s cells look like, from its heights, biomes and water, or where
+  // it's been painted, that: `colors`, 64 × 64 sRGB, and `kinds`, indexes into look.js's PATTERNS.
+  // Kept till its ground moves, the biomes change or its water does.
   dress(tx, tz, cells) {
-    if (cells.dressed === this.looks) return;
+    if (cells.dressed === this.looks && cells.dressedWater === cells.water) return;
     const biomes = this.biomeTile(tx, tz);
+    const near = this.nearWater(tx, tz, cells.water);
+    const water = { wet: false, level: 0, type: 0 };
     const colors = new Uint8Array(TILE_CELLS * TILE_CELLS * 3);
     const kinds = new Uint8Array(TILE_CELLS * TILE_CELLS);
     const h = cells.heights;
@@ -551,12 +554,14 @@ export class Renditions {
         const [nw, ne, sw, se] = [h[c], h[c + 1], h[c + CELL_CORNERS], h[c + CELL_CORNERS + 1]];
         const [x, z] = [tx * TILE_FT + (i + 0.5) * CELL_FT, tz * TILE_FT + (j + 0.5) * CELL_FT];
         const paint = cells.terrain?.[k] ? cells.palette[cells.terrain[k] - 1] : null;
-        const { pattern, rgb } = (paint && painted(paint, x, z)) || look(biomes[k], slopeOf(nw, ne, sw, se, CELL_FT), (nw + ne + sw + se) / 4, x, z);
+        const wet = cells.water && !Number.isNaN(cells.water.level[k]);
+        Object.assign(water, wet ? { wet, level: cells.water.level[k], type: cells.water.type[k] } : { wet, level: near[k] });
+        const { pattern, rgb } = (paint && painted(paint, x, z)) || look(biomes[k], slopeOf(nw, ne, sw, se, CELL_FT), (nw + ne + sw + se) / 4, x, z, wet || !Number.isNaN(near[k]) ? water : null);
         kinds[k] = pattern;
         colors.set(rgb, k * 3);
       }
     }
-    Object.assign(cells, { colors, kinds, dressed: this.looks });
+    Object.assign(cells, { colors, kinds, dressed: this.looks, dressedWater: cells.water });
     delete cells.grid;
   }
 
@@ -569,6 +574,41 @@ export class Renditions {
     if (cells) return between(cells.heights, CELL_CORNERS, (x - tx * TILE_FT) / CELL_FT, (z - tz * TILE_FT) / CELL_FT);
     const tile = this.tile(tx, tz);
     return tile && between(tile.heights, CORNERS, (x - tx * TILE_FT) / CHUNK_FT, (z - tz * TILE_FT) / CHUNK_FT);
+  }
+
+  // For each of tile (tx, tz)'s cells, the highest water within SHORE_CELLS of it, NaN for none,
+  // with `water` the tile's, and its neighbours' as waterAt has them.
+  nearWater(tx, tz, water) {
+    const r = SHORE_CELLS;
+    const side = TILE_CELLS + 2 * r;
+    const grid = new Float32Array(side * side).fill(NaN);
+    const own = water && water.level.some((l) => !Number.isNaN(l));
+    let any = own;
+    for (let j = -r; j < TILE_CELLS + r; j++) {
+      for (let i = -r; i < TILE_CELLS + r; i++) {
+        const inside = i >= 0 && j >= 0 && i < TILE_CELLS && j < TILE_CELLS;
+        if (inside && !own) continue;
+        const level = inside ? water.level[j * TILE_CELLS + i] : this.waterAt(tx * TILE_FT + (i + 0.5) * CELL_FT, tz * TILE_FT + (j + 0.5) * CELL_FT);
+        if (level == null || Number.isNaN(level)) continue;
+        grid[(j + r) * side + i + r] = level;
+        any = true;
+      }
+    }
+    const out = new Float32Array(TILE_CELLS * TILE_CELLS).fill(NaN);
+    if (!any) return out;
+    // The highest along each row within r, then down each column.
+    const most = (from, at, step, count) => {
+      let best = NaN;
+      for (let n = -count; n <= count; n++) {
+        const v = from[at + n * step];
+        if (!(v <= best)) best = Number.isNaN(v) ? best : v;
+      }
+      return best;
+    };
+    const rows = new Float32Array(side * side).fill(NaN);
+    for (let j = 0; j < side; j++) for (let i = r; i < side - r; i++) rows[j * side + i] = most(grid, j * side + i, 1, r);
+    for (let j = 0; j < TILE_CELLS; j++) for (let i = 0; i < TILE_CELLS; i++) out[j * TILE_CELLS + i] = most(rows, (j + r) * side + i + r, side, r);
+    return out;
   }
 
   // The water's surface at (x, z): the sea's off the tiles, a cell's water where its plate's read,
@@ -980,7 +1020,7 @@ export class Ground {
           [n, faces, depth] = [1, far, TILE_FT * SKIRT];
           height = (a, b) => plate.heights[(j + b) * CORNERS + i + a];
           const biome = this.renditions.biomes.at((tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT);
-          const rgb = this.partRgb(biome, height, 0, 0, 1, TILE_FT, tx * TILE_FT, tz * TILE_FT);
+          const rgb = this.partRgb(biome, height, 0, 0, 1, TILE_FT, tx * TILE_FT, tz * TILE_FT, tileWater(this.renditions.tile(tx, tz)));
           color = (a, b, shade) => Faces.tinted(rgb.map((v) => v * shade), tint, biome);
         } else if (t === COARSE) {
           const tile = this.renditions.tile(tx, tz);
@@ -989,7 +1029,7 @@ export class Ground {
           const biomes = this.renditions.biomeTile(tx, tz);
           color = (a, b, shade) => {
             const biome = biomes[(b * CHUNK_CELLS + CHUNK_CELLS_HALF) * TILE_CELLS + a * CHUNK_CELLS + CHUNK_CELLS_HALF];
-            return Faces.tinted(this.partRgb(biome, height, a, b, 1, CHUNK_FT, tx * TILE_FT, tz * TILE_FT).map((v) => v * shade), tint, biome);
+            return Faces.tinted(this.partRgb(biome, height, a, b, 1, CHUNK_FT, tx * TILE_FT, tz * TILE_FT, partWaterAt(tile, a, b)).map((v) => v * shade), tint, biome);
           };
         } else {
           [n, faces, depth] = [TILE_CELLS, near, CHUNK_FT * SKIRT];
@@ -1041,10 +1081,11 @@ export class Ground {
   }
 
   // The linear RGB of the part (a, b) of a rendition, `n` corners a side apart in height(a, b),
-  // the part `width` ft across, its rendition's corner at (x0, z0): the look of biome `biome` there.
-  partRgb(biome, height, a, b, n, width, x0, z0) {
+  // the part `width` ft across, its rendition's corner at (x0, z0): the look of biome `biome` there,
+  // with `water` on or near it as look.js's groundClass has it.
+  partRgb(biome, height, a, b, n, width, x0, z0, water = null) {
     const [nw, ne, sw, se] = [height(a, b), height(a + n, b), height(a, b + n), height(a + n, b + n)];
-    const { rgb } = look(biome, slopeOf(nw, ne, sw, se, width), (nw + ne + sw + se) / 4, x0 + (a + 0.5) * width, z0 + (b + 0.5) * width);
+    const { rgb } = look(biome, slopeOf(nw, ne, sw, se, width), (nw + ne + sw + se) / 4, x0 + (a + 0.5) * width, z0 + (b + 0.5) * width, water);
     return [LINEAR[rgb[0]], LINEAR[rgb[1]], LINEAR[rgb[2]]];
   }
 
@@ -1053,7 +1094,7 @@ export class Ground {
   tileFaces(tx, tz) {
     const tile = this.renditions.tile(tx, tz);
     const key = `${this.renditions.looks},${this.tint ? this.tints : -1}`;
-    if (tile.faces?.key === key) return tile.faces;
+    if (tile.faces?.key === key && tile.faces.water === tile.water) return tile.faces;
     const biomes = this.renditions.biomeTile(tx, tz);
     const height = (a, b) => tile.heights[b * CORNERS + a];
     const faces = new Faces();
@@ -1061,11 +1102,12 @@ export class Ground {
     for (let b = 0; b < TILE_CHUNKS; b++) {
       for (let a = 0; a < TILE_CHUNKS; a++) {
         const biome = biomes[(b * CHUNK_CELLS + CHUNK_CELLS_HALF) * TILE_CELLS + a * CHUNK_CELLS + CHUNK_CELLS_HALF];
-        const rgb = Faces.tinted(this.partRgb(biome, height, a, b, 1, CHUNK_FT, tx * TILE_FT, tz * TILE_FT), this.tint, biome);
+        const rgb = Faces.tinted(this.partRgb(biome, height, a, b, 1, CHUNK_FT, tx * TILE_FT, tz * TILE_FT, partWaterAt(tile, a, b)), this.tint, biome);
         faces.square(corner(a, b), corner(a + 1, b), corner(a, b + 1), corner(a + 1, b + 1), rgb);
       }
     }
     faces.key = key;
+    faces.water = tile.water;
     tile.faces = faces;
     return faces;
   }
@@ -1168,6 +1210,35 @@ export class Ground {
     });
     this.plates.delete(key);
   }
+}
+
+// The water on or near part (a, b) of tile rendition `tile`, as look.js's groundClass has it: the
+// part's own, or the highest of the parts round it in the tile, or null.
+function partWaterAt({ water }, a, b) {
+  if (!water) return null;
+  const n = TILE_CHUNKS;
+  const k = b * n + a;
+  if (!Number.isNaN(water.level[k])) return { wet: true, level: water.level[k], type: water.type[k] };
+  let level = -Infinity;
+  for (let j = Math.max(0, b - 1); j <= Math.min(n - 1, b + 1); j++) for (let i = Math.max(0, a - 1); i <= Math.min(n - 1, a + 1); i++) if (water.level[j * n + i] > level) level = water.level[j * n + i];
+  return level > -Infinity ? { wet: false, level } : null;
+}
+
+// The same for a whole tile: wet where most of its parts are, of the type most of them are.
+function tileWater(tile) {
+  const water = tile?.water;
+  if (!water) return null;
+  const counts = new Map();
+  let [wet, level] = [0, -Infinity];
+  water.level.forEach((l, k) => {
+    if (Number.isNaN(l)) return;
+    wet++;
+    level = Math.max(level, l);
+    counts.set(water.type[k], (counts.get(water.type[k]) ?? 0) + 1);
+  });
+  if (!wet) return null;
+  const type = [...counts].reduce((best, c) => (c[1] > best[1] ? c : best))[0];
+  return { wet: wet * 2 >= water.level.length, level, type };
 }
 
 const SEA = WATER_TYPES.indexOf("sea");

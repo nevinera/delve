@@ -1,11 +1,12 @@
 import { fbm, hash2 } from "../world/noise.js";
-import { SEA_LEVEL_FT } from "./sizes.js";
+import { WATER_TYPES } from "./water.js";
 
 // What the ground looks like, worked out where it's drawn from its biome (biomes.js) and its shape,
 // never stored: its color and the pattern drawn over it up close (editor/groundMaterial.js). Ground
-// is one of these classes, by its slope and height:
-// - shore: lower than SHORE_FT over sea level, the beach, and the sea floor under the water;
+// is one of these classes, by its slope and height and the water (water.js) on or near it:
+// - bed: under water, its look by the water's type (BEDS);
 // - steep: steeper than STEEP_DEG, too steep to walk;
+// - shore: near water, lower than SHORE_FT over it;
 // - slope: steeper than SLOPE_DEG;
 // - flat: the rest.
 // Each biome gives each class two looks, the second in patches covering about `patches` of it,
@@ -29,6 +30,7 @@ const LOOKS = {
   gravel: ["rock", [158, 150, 138]],
   scree: ["dirt", [128, 120, 108]],
   mud: ["mud", [94, 82, 56]],
+  silt: ["mud", [124, 112, 86]],
   moss: ["moss", [95, 122, 58]],
   litter: ["litter", [107, 90, 58]],
 };
@@ -45,6 +47,10 @@ const BIOMES = [
   { flat: ["mud", "moss", 0.45], slope: ["mud", "grass", 0.4], steep: ["rock", "rock", 0], shore: ["mud", "mud", 0] },
 ];
 
+// The look of the bed under each of WATER_TYPES.
+const BEDS = { sea: "sand", lake: "silt", pond: "silt", swamp: "mud", river: "gravel", stream: "gravel" };
+const BED = WATER_TYPES.map((type) => BEDS[type]);
+
 // The patterns looks use, in the order kinds() gives them.
 export const PATTERNS = [...new Set(Object.values(LOOKS).map(([pattern]) => pattern))];
 const PATTERN = Object.fromEntries(Object.entries(LOOKS).map(([name, [pattern]]) => [name, PATTERNS.indexOf(pattern)]));
@@ -53,17 +59,21 @@ const PATTERN = Object.fromEntries(Object.entries(LOOKS).map(([name, [pattern]])
 const SAMPLES = Float32Array.from({ length: 4096 }, (_, k) => fbm((k % 64) * 61.3, Math.floor(k / 64) * 57.7, SEED, { wavelength: PATCH_FT })).sort();
 const past = (share) => SAMPLES[Math.min(SAMPLES.length - 1, Math.floor((1 - share) * SAMPLES.length))];
 
-// The ground's class, by its slope (degrees) and height (ft).
-export function groundClass(slopeDeg, heightFt) {
-  if (heightFt < SEA_LEVEL_FT + SHORE_FT) return "shore";
+// The ground's class, by its slope (degrees) and height (ft), and `water`: null where there's none
+// near, else { wet, whether it's under water, level, the water's there or the highest near, and
+// type, an index into WATER_TYPES, where it's wet }.
+export function groundClass(slopeDeg, heightFt, water = null) {
+  if (water?.wet) return "bed";
   if (slopeDeg >= STEEP_DEG) return "steep";
+  if (water && heightFt < water.level + SHORE_FT) return "shore";
   return slopeDeg >= SLOPE_DEG ? "slope" : "flat";
 }
 
-// The look of ground of biome `biome` (an index into BIOME_NAMES) at (x, z): { pattern, an index
-// into PATTERNS, and rgb, sRGB bytes }.
-export function look(biome, slopeDeg, heightFt, x, z) {
-  const [first, patch, share] = (BIOMES[biome] ?? BIOMES[0])[groundClass(slopeDeg, heightFt)];
+// The look of ground of biome `biome` (an index into BIOME_NAMES) at (x, z), with `water` as
+// groundClass has it: { pattern, an index into PATTERNS, and rgb, sRGB bytes }.
+export function look(biome, slopeDeg, heightFt, x, z, water = null) {
+  const kind = groundClass(slopeDeg, heightFt, water);
+  const [first, patch, share] = kind === "bed" ? [BED[water.type] ?? "silt", null, 0] : (BIOMES[biome] ?? BIOMES[0])[kind];
   const name = share && fbm(x, z, SEED, { wavelength: PATCH_FT }) > past(share) ? patch : first;
   const shade = 1 + VARY * fbm(x, z, SEED + 1, { wavelength: VARY_FT }) + 0.5 * VARY * (2 * hash2(Math.floor(x / 4), Math.floor(z / 4), SEED + 2) - 1);
   const rgb = LOOKS[name][1].map((v) => Math.max(0, Math.min(255, Math.round(v * shade))));

@@ -29,8 +29,8 @@ export function fillOf(biome, size, roll, fine = 0.5) {
 
 // What stands in tile (tx, tz)'s `slots`: { trees: [{ x, z, kind, size }], objects: world/objects.js
 // objects }, continent feet. biomeAt(i, j) gives the biome of the tile's cell (i, j); groundAt(x, z)
-// the ground's { height, slope, under } there, slope in degrees and under how deep water covers it,
-// 0 where it's dry. Slots under water stay empty.
+// the ground's { height, slope, water } there, slope in degrees and water as look.js's groundClass
+// has it. Slots under water and on the shore stay empty.
 export function fillSlots(slots, tx, tz, biomeAt, groundAt) {
   const trees = [];
   const objects = [];
@@ -56,9 +56,9 @@ export function fillSlots(slots, tx, tz, biomeAt, groundAt) {
     const fine = hash2(Math.floor(x), Math.floor(z), SEED + 32);
     const entry = fillOf(biomeAt(sx >> 2, sz >> 2), size, roll, fine);
     if (!entry) continue;
-    const { height, slope, under = 0 } = groundAt(x, z);
-    const kind = groundClass(slope, height);
-    if (kind === "steep" || kind === "shore" || under > 0) continue;
+    const { height, slope, water } = groundAt(x, z);
+    const kind = groundClass(slope, height, water);
+    if (kind === "steep" || kind === "shore" || kind === "bed") continue;
     const pick = (n) => hash2(Math.floor(x), Math.floor(z), SEED + 16 + n);
     if (entry.tree) {
       const r = TREE_ROOM[entry.size];

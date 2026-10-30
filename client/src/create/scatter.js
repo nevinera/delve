@@ -18,6 +18,7 @@ const NEAR_TILES = 3;
 const REACH_TILES = 7;
 const REMAKE_S = 0.5;
 const SLOPE_FT = 2; // how far either way the ground's slope is taken under a slot
+const SHORE_FT = 16; // how far from water a slot can be on the shore
 // As the editor's 3D view has them (editor/renderView.js's SIGHT): how far off crowns turn simpler,
 // the change taken across CANOPY_BAND_FT, and how far off small and large objects are drawn.
 const CANOPY_FT = [300, 450];
@@ -51,7 +52,11 @@ export class Scatter {
         const s = SLOPE_FT;
         const [nw, ne, sw, se] = [ground(x - s, z - s), ground(x + s, z - s), ground(x - s, z + s), ground(x + s, z + s)];
         const height = (nw + ne + sw + se) / 4;
-        return { height, slope: slopeOf(nw, ne, sw, se, 2 * s), under: Math.max(0, (r.waterAt(x, z) ?? -Infinity) - height) };
+        // The water there, or the highest near enough to make it shore.
+        const here = r.waterAt(x, z);
+        const near = Math.max(...[[0, 0], [SHORE_FT, 0], [-SHORE_FT, 0], [0, SHORE_FT], [0, -SHORE_FT]].map(([dx, dz]) => r.waterAt(x + dx, z + dz) ?? -Infinity));
+        const water = here != null && here > height ? { wet: true } : near > -Infinity ? { wet: false, level: near } : null;
+        return { height, slope: slopeOf(nw, ne, sw, se, 2 * s), water };
       },
     );
     for (const tree of filled.trees) tree.ground = ground(tree.x, tree.z);
