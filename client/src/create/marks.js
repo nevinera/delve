@@ -192,12 +192,6 @@ export class Marks {
     this.version++;
   }
 
-  clear() {
-    this.save();
-    this.show([]);
-    this.version++;
-  }
-
   // `above` is how high the builder flies over the ground, and `ftPerPx` about how many feet a
   // pixel is across there, for dashes' lengths.
   tick(dt, width, height, above, ftPerPx) {

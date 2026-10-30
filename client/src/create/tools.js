@@ -105,7 +105,6 @@ export class Tools {
       });
     }
     $("marksUndo").addEventListener("click", () => this.marks.undo());
-    $("marksClear").addEventListener("click", () => this.marks.clear());
     this.readSize();
     this.readStrength();
     this.readNoise();
