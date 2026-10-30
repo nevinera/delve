@@ -58,7 +58,9 @@ export class Tools {
     this.marks = new Marks(scene, (x, z) => this.surface(x, z), canvas.parentElement);
     this.pinColor = "red";
     this.measure = new Measure(canvas.parentElement);
-    this.measuring = null; // measure's, { from, to } for a ruler, { middle, radius } for a circle, and down while it's dragged
+    // Measure's, { from, to } for a ruler, { middle, radius } for a circle, and while the button's
+    // down, where it went down and whether a ruler or circle was shown before.
+    this.measuring = null;
     this.moving = null; // pins being dragged, { from, pins: [[pin, x, z]], before, moved }
     this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }
     this.editing = null; // the pin open to edit, { pin, before }, before the planning file's JSON
@@ -219,7 +221,7 @@ export class Tools {
       if (this.tool === "measure") {
         const at = this.hit(this.drawAt);
         const r = canvas.getBoundingClientRect();
-        if (at) this.measuring = { from: [at[0], at[2]], down: [e.clientX - r.left, e.clientY - r.top] };
+        if (at) this.measuring = { from: [at[0], at[2]], down: [e.clientX - r.left, e.clientY - r.top], shown: Boolean(this.measuring) };
         return;
       }
       if (this.tool === "select") {
@@ -263,8 +265,12 @@ export class Tools {
       }
       this.clicked = null;
       if (this.box) this.endBox();
-      // A click leaves a ruler following the pointer, a drag the circle drawn.
-      if (this.measuring?.down) this.measuring = this.measuring.radius ? { middle: this.measuring.middle, radius: this.measuring.radius } : { from: this.measuring.from };
+      // A click leaves a ruler following the pointer, or takes away the ruler or circle there was,
+      // and a drag leaves the circle drawn.
+      if (this.measuring?.down) {
+        const { from, middle, radius, shown } = this.measuring;
+        this.measuring = radius ? { middle, radius } : shown ? null : { from };
+      }
       if (this.moving?.moved) {
         this.marks.undos.push(this.moving.before);
         this.marks.version++;
