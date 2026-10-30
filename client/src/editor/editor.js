@@ -470,14 +470,18 @@ export class Editor {
     this.store(() => saveLand(this.world.files, this.continent, this.land));
   }
 
-  // Swaps in land from a heightmap or a bones file, and looks at it.
+  // Swaps in land from a heightmap or a bones file, as a change that can be undone, and looks at
+  // it.
   async replaceLand(land) {
-    this.land = land;
-    this.landChanged();
+    await this.showSculpt();
+    if (this.sculpt.grid === this.land) this.sculpt.replace(land);
+    else {
+      this.land = land;
+      this.landChanged();
+    }
     // The map's hidden on the heights step, so it's fitted to the land when it's next shown.
     this.fitWhenShown = true;
-    await this.showSculpt();
-    const bounds = landBounds(land);
+    const bounds = landBounds(this.land);
     if (bounds) this.sculpt.lookOver(bounds);
   }
 

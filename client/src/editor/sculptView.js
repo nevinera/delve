@@ -289,6 +289,14 @@ export class SculptView {
     this.stroke.before.set(key, this.grid.blocks.get(key)?.slice() ?? null);
   }
 
+  // Swaps in another land grid's blocks, as a change undone like a stroke.
+  replace(grid) {
+    const keys = new Set([...this.grid.blocks.keys(), ...grid.blocks.keys()]);
+    this.redos = [new Map([...keys].map((key) => [key, grid.blocks.get(key)?.slice() ?? null]))];
+    this.swap(this.redos, this.undos);
+    if (this.undos.length > UNDO_STROKES) this.undos.shift();
+  }
+
   undo() {
     this.swap(this.undos, this.redos);
   }

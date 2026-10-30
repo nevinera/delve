@@ -236,7 +236,7 @@ $("heightmapFile").addEventListener("change", async (e) => {
       range = answer.split(/[\s,]+/).filter(Boolean).map(Number);
       if (range.length !== 2 || !range.every(Number.isFinite)) throw new Error("give two heights, like -50 1000");
     }
-    if (editor.land.blocks.size && !window.confirm("Replace the land being sculpted with this heightmap? Discard brings back the committed land.")) return;
+    if (editor.land.blocks.size && !window.confirm("Replace the land being sculpted with this heightmap? Undo brings it back.")) return;
     editor.replaceLand(importHeightmap(bytes, { range, centre: editor.sculpt?.centre ?? [0, 0] }));
   } catch (err) {
     window.alert(`Couldn't import ${file.name}: ${err.message}`);
@@ -256,7 +256,7 @@ $("bonesFile").addEventListener("change", async (e) => {
   } catch (err) {
     return window.alert(`Couldn't read ${file.name}: ${err.message}`);
   }
-  if (editor.land.blocks.size && !window.confirm("Replace the land being sculpted with this bones file's? Discard brings back the committed land.")) return;
+  if (editor.land.blocks.size && !window.confirm("Replace the land being sculpted with this bones file's? Undo brings it back.")) return;
   editor.say(`Running ${file.name}...`, { info: true });
   const worker = new Worker(new URL("./bonesWorker.js", import.meta.url), { type: "module" });
   worker.onmessage = ({ data }) => {
@@ -266,7 +266,7 @@ $("bonesFile").addEventListener("change", async (e) => {
       return window.alert(`Couldn't run ${file.name}: ${data.error}`);
     }
     editor.replaceLand(LandGrid.from({ blocks: data.blocks }));
-    editor.say(`Ran ${file.name}. Commit to keep its land.`, { info: true });
+    editor.say(`Ran ${file.name}.`, { info: true });
   };
   worker.postMessage(bones);
 });
