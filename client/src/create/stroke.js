@@ -5,7 +5,7 @@ import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 // every other one's dropped and the rest are kept twice as far apart, up to a tile apart. It stops
 // growing once it's STROKE_MAX_FT long.
 
-export const STROKE_MAX_FT = 10560; // 2 miles
+export const STROKE_MAX_FT = 42240; // 8 miles
 export const STROKE_MAX_POINTS = 1024;
 
 export class Stroke {

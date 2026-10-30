@@ -21,15 +21,15 @@ describe("a stroke", () => {
     expect(stroke.points[1][0] - stroke.points[0][0]).toBeCloseTo(CELL_FT * 2);
   });
 
-  it("stops at two miles, ending there", () => {
+  it("stops at its longest, ending there", () => {
     const stroke = new Stroke(0, 0);
-    stroke.add(0, 8000);
-    stroke.add(8000, 8000);
+    stroke.add(0, 30000);
+    stroke.add(30000, 30000);
     expect(stroke.full).toBe(true);
     expect(stroke.length).toBeCloseTo(STROKE_MAX_FT);
-    expect(stroke.points.at(-1)[0]).toBeCloseTo(STROKE_MAX_FT - 8000);
+    expect(stroke.points.at(-1)[0]).toBeCloseTo(STROKE_MAX_FT - 30000);
     expect(stroke.points.length).toBeLessThanOrEqual(STROKE_MAX_POINTS);
-    stroke.add(9000, 9000);
+    stroke.add(31000, 31000);
     expect(stroke.length).toBeCloseTo(STROKE_MAX_FT);
   });
 });
