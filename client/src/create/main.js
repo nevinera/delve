@@ -1,6 +1,6 @@
 import "./create.css";
 import * as THREE from "three";
-import { strFromU8, unzipSync, zipSync } from "fflate";
+import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
 import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
@@ -12,7 +12,8 @@ import { Tools } from "./tools.js";
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
 // The world comes from a zip you upload (script/convert-v2.mjs makes one from a v1 world), kept in
 // this browser so a reload opens it again, with the builder where they were. Uploading another
-// replaces it. Downloading it gives a zip of it with the ground as it's been moved.
+// replaces it. Downloading it gives a zip of it with the ground as it's been moved. A new world has
+// nothing in it: no tiles, all sea.
 
 const $ = (id) => document.getElementById(id);
 const SKY = 0x9cc4e4;
@@ -64,9 +65,9 @@ function readWorld(bytes) {
   // Plate files are read as you come near them, so check one now, to say straight away when
   // they're from an older converter.
   const first = renditions.plateFiles.values().next().value;
-  if (!first) throw new Error("this world has no plate files: convert it again with script/convert-v2.mjs");
+  if (!first && renditions.platters.size) throw new Error("this world has no plate files: convert it again with script/convert-v2.mjs");
   try {
-    decodePlate(first);
+    if (first) decodePlate(first);
   } catch (e) {
     throw new Error(`this world's plate files can't be read (${e.message}): convert it again with script/convert-v2.mjs`);
   }
@@ -237,6 +238,18 @@ $("openFile").addEventListener("change", async () => {
     return;
   }
   if (await open(bytes)) await store.set("world", bytes).catch(() => {});
+});
+// Starts an empty world in place of the one showing, after asking, since moves not downloaded are
+// lost.
+$("newWorld").addEventListener("click", async () => {
+  if (showing && !window.confirm("Start a new, empty world? Whatever you've not downloaded is lost.")) return;
+  const info = { version: 2, name: "New world", continents: [{ key: "main", name: "Main" }], dungeons: [] };
+  const bytes = zipSync({ "world.json": strToU8(`${JSON.stringify(info, null, 2)}\n`) });
+  try {
+    localStorage.removeItem(`create:${info.name}:main`);
+  } catch {}
+  await store.set("world", bytes).catch(() => {});
+  window.location.reload();
 });
 $("openWorld").addEventListener("click", () => {
   $("openError").textContent = "";
