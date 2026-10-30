@@ -5,9 +5,11 @@ import { SEA_LEVEL_FT } from "../v2/sizes.js";
 // The builder: a person who walks on the ground and flies over it, with a camera behind them.
 //
 // On the ground: W/S run forward and back, A/D turn, Q/E strafe, and space takes off. In the air:
-// the same keys move, space rises and F falls, and double-tapping either (holding the second
-// press) does it fast. Touching the ground lands. Flying goes faster the higher you are, so you
-// climb, sink and cross the land in about the same time whatever the height.
+// the same keys move, space rises and F falls. Double-tapping either hops quickly to the next step
+// up or down: 128 ft over the middling height of the plate below, then 256, 512 and so on
+// doubling, and down past the lowest, to the ground. Holding the second press keeps hopping, about
+// a step a second. Touching the ground lands. Flying goes faster the higher you are, so you climb,
+// sink and cross the land in about the same time whatever the height.
 //
 // Left-drag swings the camera round the builder, right-drag turns the builder with it, and the
 // wheel zooms. The higher the builder flies, the more the camera looks down (cameraFor).
@@ -18,7 +20,11 @@ export const FLY_FT = 21; // the least flying speed
 export const FLY_PER_FT = 0.4; // flying speed for each foot above the ground, a second
 export const CLIMB_FT = 24; // the least climbing speed
 export const CLIMB_PER_FT = 0.8; // so height doubles about every 0.9 seconds
-export const FAST = 2.5; // how much faster a double-tap climbs or drops
+export const FIRST_STEP_FT = 128; // the lowest step a hop stops at, over the plate's middling height
+export const HOP_S = 0.6; // how long a hop takes, whatever its height
+const HOP_WAIT_S = 0.4; // how long a held hop waits at each step
+const HOP_EASE = 0.25; // the share of a hop spent speeding up, and again slowing down
+const HOP_CLEAR_FT = 16; // steps nearer the ground than this are passed by on the way down
 export const LIFT_FT = 1; // how far taking off rises at once
 export const CEILING_FT = 20000;
 const DOUBLE_TAP_MS = 300;
@@ -31,10 +37,10 @@ const DRAG = 0.006; // radians per pixel
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "f"]);
 
 // One step of the builder's moving. state: { x, y, z, yaw, flying }, continent feet and radians.
-// input: { forward, strafe, turn } each -1, 0 or 1, rise and drop (space or F held), fast (the
-// held one was double-tapped), takeoff (space was just pressed). groundAt(x, z) gives the
-// ground's height, or null off the tiles, where the sea's surface holds you up. Returns the new
-// state.
+// input: { forward, strafe, turn } each -1, 0 or 1, rise and drop (space or F held), takeoff
+// (space was just pressed), and while hopping, y (the height to be at) and land (whether this hop
+// ends on the ground). groundAt(x, z) gives the ground's height, or null off the tiles, where the
+// sea's surface holds you up. Returns the new state.
 export function moveBuilder(state, input, dt, groundAt) {
   const ground = (x, z) => groundAt(x, z) ?? SEA_LEVEL_FT;
   let { x, y, z, yaw, flying } = state;
@@ -52,16 +58,43 @@ export function moveBuilder(state, input, dt, groundAt) {
     x += (mx / length) * speed * dt;
     z += (mz / length) * speed * dt;
   }
-  if (flying) {
-    const climb = Math.max(CLIMB_FT, above * CLIMB_PER_FT) * (input.fast ? FAST : 1);
+  if (input.y != null) {
+    flying = true;
+    y = Math.min(CEILING_FT, input.y);
+  } else if (flying) {
+    const climb = Math.max(CLIMB_FT, above * CLIMB_PER_FT);
     y = Math.min(CEILING_FT, y + ((input.rise ? 1 : 0) - (input.drop ? 1 : 0)) * climb * dt);
   }
   const floor = ground(x, z);
-  if (!flying || y <= floor) {
+  if (!flying || y <= floor || input.land) {
     y = floor;
     flying = false;
   }
   return { x, y, z, yaw, flying };
+}
+
+// The next step a hop from height y stops at, `way` 1 up or -1 down, with the plate's middling
+// height at `base` and the ground at `ground`: { y, land }, land when it's the ground, or null
+// when there's none that way.
+export function hopTo(y, way, base, ground) {
+  const steps = [];
+  for (let h = FIRST_STEP_FT; base + h <= CEILING_FT; h *= 2) steps.push(base + h);
+  if (way > 0) {
+    const up = steps.find((s) => s > Math.max(y, ground + HOP_CLEAR_FT) + 1);
+    return up === undefined ? null : { y: up, land: false };
+  }
+  const down = steps.filter((s) => s < y - 1 && s > ground + HOP_CLEAR_FT).at(-1);
+  if (down !== undefined) return { y: down, land: false };
+  return y > ground + 0.5 ? { y: ground, land: true } : null;
+}
+
+// How far through a hop the builder is, 0 to 1, `t` through its time: speeding up steadily, then
+// at full speed, then slowing down steadily.
+export function hopEase(t) {
+  const [a, top] = [HOP_EASE, 1 / (1 - HOP_EASE)];
+  if (t < a) return (0.5 * top * t * t) / a;
+  if (t < 1 - a) return top * (t - a / 2);
+  return 1 - (0.5 * top * (1 - t) ** 2) / a;
 }
 
 // The camera's pitch and distance for the builder `above` feet over the ground, from the ones
@@ -74,15 +107,17 @@ export function cameraFor({ pitch, distance }, above) {
 // The builder in a scene, moved by the keys and followed by the camera.
 export class Builder {
   // Starts at `state` (as moveBuilder takes it), or else on the ground at continent feet `at`.
-  constructor({ scene, camera, canvas, groundAt, at, state }) {
+  // baseAt(x, z) gives the middling height of the plate there, that hops' steps are over.
+  constructor({ scene, camera, canvas, groundAt, baseAt, at, state }) {
     this.camera = camera;
     this.canvas = canvas;
     this.groundAt = groundAt;
+    this.baseAt = baseAt;
     this.state = state ?? { x: at[0], y: groundAt(...at) ?? SEA_LEVEL_FT, z: at[1], yaw: Math.PI, flying: false };
     this.cam = { yaw: 0, pitch: CAMERA.pitch, distance: CAMERA.distance };
     this.held = new Set();
     this.taps = {}; // key -> when it was last pressed
-    this.fastKey = null;
+    this.hop = null; // { from, to, land, t, key, wait } while hopping
     this.takeoff = false;
     this.paints = false; // whether a tool has the left button, leaving looking round to the right
     this.model = builderModel();
@@ -102,6 +137,17 @@ export class Builder {
   }
 
   tick(dt) {
+    let [y, land] = [null, false];
+    const hop = this.hop;
+    if (hop) {
+      hop.t = Math.min(1, hop.t + dt / HOP_S);
+      y = hop.from + (hop.to - hop.from) * hopEase(hop.t);
+      if (hop.t >= 1) {
+        land = hop.land;
+        if (land || !this.held.has(hop.key)) this.hop = null;
+        else if ((hop.wait += dt) >= HOP_WAIT_S) this.startHop(hop.key);
+      }
+    }
     const key = (k) => (this.held.has(k) ? 1 : 0);
     const input = {
       forward: key("w") - key("s"),
@@ -109,11 +155,13 @@ export class Builder {
       turn: key("a") - key("d"),
       rise: this.held.has(" "),
       drop: this.held.has("f"),
-      fast: Boolean(this.fastKey && this.held.has(this.fastKey)),
       takeoff: this.takeoff,
+      y,
+      land,
     };
     this.takeoff = false;
     this.state = moveBuilder(this.state, input, dt, this.groundAt);
+    if (!this.state.flying) this.hop = null;
     if (this.drag?.button === 2) this.cam.yaw = 0;
     this.place();
   }
@@ -141,17 +189,24 @@ export class Builder {
     e.preventDefault();
     if (!down) {
       this.held.delete(key);
-      if (key === this.fastKey) this.fastKey = null;
       return;
     }
     if (e.repeat) return;
     this.held.add(key);
     const now = performance.now();
     if (key === " " || key === "f") {
-      if (now - (this.taps[key] ?? -Infinity) < DOUBLE_TAP_MS) this.fastKey = key;
+      if (now - (this.taps[key] ?? -Infinity) < DOUBLE_TAP_MS) this.startHop(key);
       this.taps[key] = now;
     }
     if (key === " " && !this.state.flying) this.takeoff = true;
+  }
+
+  // Hops to the next step up (space) or down (F) from where the builder is.
+  startHop(key) {
+    const { x, y, z } = this.state;
+    const ground = this.groundAt(x, z) ?? SEA_LEVEL_FT;
+    const to = hopTo(y, key === " " ? 1 : -1, this.baseAt(x, z) ?? ground, ground);
+    this.hop = to && { from: y, to: to.y, land: to.land, t: 0, key, wait: 0 };
   }
 
   onDown(e) {

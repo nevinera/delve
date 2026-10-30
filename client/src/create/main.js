@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { strFromU8, unzipSync } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
-import { SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
+import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { Builder } from "./builder.js";
 import { FAR_FT, Ground, Renditions } from "./ground.js";
 import { grid } from "./grid.js";
@@ -108,7 +108,12 @@ function start({ name, continent, renditions }) {
     if (kind) ground.toggle(kind);
     if (e.key.toLowerCase() === "g") grid.value = 1 - grid.value;
   });
-  const builder = new Builder({ scene, camera, canvas, groundAt, at: renditions.middle(), state: saved ?? undefined });
+  // The middling height of the plate at (x, z), from its rendition's corners.
+  const baseAt = (x, z) => {
+    const plate = renditions.plate(Math.floor(x / PLATE_FT), Math.floor(z / PLATE_FT));
+    return plate ? plate.heights.reduce((sum, h) => sum + h, 0) / plate.heights.length : null;
+  };
+  const builder = new Builder({ scene, camera, canvas, groundAt, baseAt, at: renditions.middle(), state: saved ?? undefined });
   const tools = new Tools({ scene, camera, canvas, builder, renditions, ground });
 
   const resize = () => {
