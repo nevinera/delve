@@ -282,7 +282,7 @@ body.create {
   display: none;
 }
 
-.create-tools[data-work="geo"] {
+.create-tools[data-work="geo"]:not([hidden]) {
   display: grid;
   gap: 4px;
 }
