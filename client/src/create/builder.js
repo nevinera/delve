@@ -84,6 +84,7 @@ export class Builder {
     this.taps = {}; // key -> when it was last pressed
     this.fastKey = null;
     this.takeoff = false;
+    this.paints = false; // whether a tool has the left button, leaving looking round to the right
     this.model = builderModel();
     scene.add(this.model);
     window.addEventListener("keydown", (e) => this.onKey(e, true));
@@ -154,6 +155,7 @@ export class Builder {
   }
 
   onDown(e) {
+    if (e.button === 0 && this.paints) return;
     this.drag = { x: e.clientX, y: e.clientY, button: e.button };
     this.canvas.setPointerCapture(e.pointerId);
   }

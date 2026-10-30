@@ -6,6 +6,7 @@ import { PLATTER_PATH } from "../v2/platter.js";
 import { SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { Builder } from "./builder.js";
 import { FAR_FT, Ground, Renditions } from "./ground.js";
+import { Tools } from "./tools.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
 // The world comes from a zip you open (script/convert-v2.mjs makes one from a v1 world), kept in
@@ -105,6 +106,7 @@ function start({ name, continent, renditions }) {
     if (kind) ground.toggle(kind);
   });
   const builder = new Builder({ scene, camera, canvas, groundAt, at: renditions.middle(), state: saved ?? undefined });
+  const tools = new Tools({ scene, camera, canvas, builder, renditions, ground });
 
   const resize = () => {
     const { clientWidth: w, clientHeight: h } = canvas;
@@ -122,14 +124,14 @@ function start({ name, continent, renditions }) {
   let problem = null; // why the ground couldn't be drawn, shown in the HUD
   // The slowest of each part of a frame since the HUD last showed them, in ms, and of the gaps
   // between frames.
-  let worst = { gap: 0, move: 0, ground: 0, render: 0 };
+  let worst = { gap: 0, move: 0, tool: 0, ground: 0, render: 0 };
   const timed = (part, fn) => {
     const start = performance.now();
     fn();
     worst[part] = Math.max(worst[part], performance.now() - start);
   };
   // A handle for measuring from the browser's console or a script; paused stops the frames.
-  window.create = { ground, builder, renderer, scene, camera, paused: false };
+  window.create = { ground, builder, tools, renderer, scene, camera, paused: false };
   const frame = (now) => {
     if (window.create.paused) return requestAnimationFrame(frame);
     const dt = last === null ? 0 : Math.min(0.05, (now - last) / 1000);
@@ -137,6 +139,7 @@ function start({ name, continent, renditions }) {
     last = now;
     frames++;
     timed("move", () => builder.tick(dt));
+    timed("tool", () => tools.tick(dt));
     const { x, y, z } = builder.state;
     timed("ground", () => {
       try {
@@ -160,8 +163,8 @@ function start({ name, continent, renditions }) {
       const fps = Math.round((frames * 1000) / (now - lastHud));
       $("hud").classList.toggle("problem", Boolean(problem));
       const hidden = KINDS.filter((kind) => !ground.shown[kind]);
-      $("hud").textContent = problem ? `can't draw the ground: ${problem}` : `${hidden.length ? `hiding ${hidden.join(", ")} · ` : ""}${flying ? "flying" : "walking"} · ${Math.round(builder.above)} ft up · ${Math.round(y)} ft · tile ${Math.floor(x / TILE_FT)},${Math.floor(z / TILE_FT)} · tiles drawn ${ground.counts[0]} in full, ${ground.counts[1]} at cell scale, ${ground.counts[2]} coarse, ${ground.counts[3]} from plates · ${fps} fps, slowest ${worst.gap.toFixed(0)} ms (move ${worst.move.toFixed(1)}, ground ${worst.ground.toFixed(1)}, render ${worst.render.toFixed(1)}) · ${renderer.info.render.calls} draws`;
-      worst = { gap: 0, move: 0, ground: 0, render: 0 };
+      $("hud").textContent = problem ? `can't draw the ground: ${problem}` : `${hidden.length ? `hiding ${hidden.join(", ")} · ` : ""}${flying ? "flying" : "walking"} · ${Math.round(builder.above)} ft up · ${Math.round(y)} ft · tile ${Math.floor(x / TILE_FT)},${Math.floor(z / TILE_FT)} · tiles drawn ${ground.counts[0]} in full, ${ground.counts[1]} at cell scale, ${ground.counts[2]} coarse, ${ground.counts[3]} from plates · ${fps} fps, slowest ${worst.gap.toFixed(0)} ms (move ${worst.move.toFixed(1)}, tool ${worst.tool.toFixed(1)}, ground ${worst.ground.toFixed(1)}, render ${worst.render.toFixed(1)}) · ${renderer.info.render.calls} draws`;
+      worst = { gap: 0, move: 0, tool: 0, ground: 0, render: 0 };
       lastHud = now;
       frames = 0;
     }

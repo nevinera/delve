@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, tileIndexInPlate } from "../v2/plate.js";
 import { CORNERS, decodePlatter, indexIn, plateIndexIn, platterOf, platterOfPlate } from "../v2/platter.js";
-import { CELL_FT, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
+import { CELL_FT, CHUNK_CELLS, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
+import { CELLS, CHUNKS, TILES } from "./geo.js";
 
 // The ground round the builder, a tile at a time, finer the nearer the tile is to the builder's:
 // - within FULL_TILES, drawn in full, smooth-shaded at cell scale with the patterns of its kinds of
@@ -31,7 +32,8 @@ const BUILD_MS = 6; // how long a frame spends making plates
 
 // A continent's renditions, from its platter files, and its ground at cell scale, from its plate
 // files, read on a worker (plateWorker.js) as they're wanted. onRead() is called each time a plate
-// file has been read.
+// file has been read. The ground moved by hand (raise) is moved in the renditions and the plate
+// files read, and kept as offsets, to move plate files read later.
 export class Renditions {
   constructor() {
     this.platters = new Map(); // "px,pz" -> { coords, tiles, plates }
@@ -41,6 +43,110 @@ export class Renditions {
     this.unreadable = new Set(); // "px,pz" of plate files that couldn't be read
     this.worker = null;
     this.onRead = () => {};
+    // How far the ground's been moved, by how finely: "tx,tz" -> 65 × 65 cell corners, "tx,tz" ->
+    // 9 × 9 chunk corners, and "px,pz" -> 9 × 9 tile corners.
+    this.offsets = { [CELLS]: new Map(), [CHUNKS]: new Map(), [TILES]: new Map() };
+  }
+
+  // Moves the ground by at(x, z) feet within `bounds`, [x0, z0, x1, z1] continent feet, worked out
+  // on the corners of `level`'s squares (geo.js) and straight between them finer. Gives the
+  // "px,pz" of the plates whose ground moved.
+  raise(at, [x0, z0, x1, z1], level) {
+    const moved = new Set();
+    // at() on a grid `n` squares a side, `step` ft apart from (ox, oz), or null where it's all 0.
+    const sample = (ox, oz, step, n) => {
+      const out = new Float32Array((n + 1) * (n + 1));
+      let any = false;
+      for (let j = 0; j <= n; j++) {
+        const z = oz + j * step;
+        if (z < z0 || z > z1) continue;
+        for (let i = 0; i <= n; i++) {
+          const x = ox + i * step;
+          if (x < x0 || x > x1) continue;
+          out[j * (n + 1) + i] = at(x, z);
+          any ||= out[j * (n + 1) + i] !== 0;
+        }
+      }
+      return any ? out : null;
+    };
+    const add = (map, key, values) => {
+      const kept = map.get(key);
+      if (kept) for (let k = 0; k < values.length; k++) kept[k] += values[k];
+      else map.set(key, values.slice());
+    };
+    const plateMoves = new Map();
+    for (let pz = Math.floor(z0 / PLATE_FT); pz <= Math.floor(z1 / PLATE_FT); pz++) {
+      for (let px = Math.floor(x0 / PLATE_FT); px <= Math.floor(x1 / PLATE_FT); px++) {
+        const plate = this.plate(px, pz);
+        const d = plate && sample(px * PLATE_FT, pz * PLATE_FT, TILE_FT, PLATE_TILES);
+        if (!d) continue;
+        const key = `${px},${pz}`;
+        for (let k = 0; k < d.length; k++) plate.heights[k] += d[k];
+        delete plate.span;
+        plateMoves.set(key, d);
+        moved.add(key);
+        if (level === TILES) {
+          add(this.offsets[TILES], key, d);
+          // Too coarse to be worth moving each cell: read again when wanted, offsets and all.
+          this.decoded.delete(key);
+        }
+      }
+    }
+    for (let tz = Math.floor(z0 / TILE_FT); tz <= Math.floor(z1 / TILE_FT); tz++) {
+      for (let tx = Math.floor(x0 / TILE_FT); tx <= Math.floor(x1 / TILE_FT); tx++) {
+        const tile = this.tile(tx, tz);
+        if (!tile) continue;
+        const [px, pz] = [Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES)];
+        const [i0, j0] = [tx - px * PLATE_TILES, tz - pz * PLATE_TILES];
+        let d;
+        if (level === TILES) {
+          const plateMove = plateMoves.get(`${px},${pz}`);
+          if (!plateMove) continue;
+          d = new Float32Array(CORNERS * CORNERS);
+          for (let j = 0; j < CORNERS; j++) for (let i = 0; i < CORNERS; i++) d[j * CORNERS + i] = between(plateMove, CORNERS, i0 + i / TILE_CHUNKS, j0 + j / TILE_CHUNKS);
+        } else d = sample(tx * TILE_FT, tz * TILE_FT, CHUNK_FT, TILE_CHUNKS);
+        const key = `${tx},${tz}`;
+        if (d) {
+          for (let k = 0; k < d.length; k++) tile.heights[k] += d[k];
+          delete tile.span;
+          delete tile.faces;
+          moved.add(`${px},${pz}`);
+          if (level === CHUNKS) add(this.offsets[CHUNKS], key, d);
+        }
+        const cells = this.decoded.get(`${px},${pz}`)?.tiles.get(tileIndexInPlate(tx, tz));
+        if (level === CELLS) {
+          const fine = sample(tx * TILE_FT, tz * TILE_FT, CELL_FT, TILE_CELLS);
+          if (!fine) continue;
+          moved.add(`${px},${pz}`);
+          add(this.offsets[CELLS], key, fine);
+          if (cells) for (let k = 0; k < fine.length; k++) cells.heights[k] += fine[k];
+        } else if (cells && d) {
+          for (let j = 0; j < CELL_CORNERS; j++) for (let i = 0; i < CELL_CORNERS; i++) cells.heights[j * CELL_CORNERS + i] += between(d, CORNERS, i / CHUNK_CELLS, j / CHUNK_CELLS);
+        }
+        if (cells) delete cells.grid;
+      }
+    }
+    return moved;
+  }
+
+  // Moves a plate file just read by the offsets kept for it.
+  offset(key, plate) {
+    const [px, pz] = key.split(",").map(Number);
+    const plateMove = this.offsets[TILES].get(key);
+    for (const [index, cells] of plate.tiles) {
+      const [i0, j0] = [index % PLATE_TILES, Math.floor(index / PLATE_TILES)];
+      const tileKey = `${px * PLATE_TILES + i0},${pz * PLATE_TILES + j0}`;
+      const [fine, coarse] = [this.offsets[CELLS].get(tileKey), this.offsets[CHUNKS].get(tileKey)];
+      if (!fine && !coarse && !plateMove) continue;
+      for (let j = 0; j < CELL_CORNERS; j++) {
+        for (let i = 0; i < CELL_CORNERS; i++) {
+          const k = j * CELL_CORNERS + i;
+          if (fine) cells.heights[k] += fine[k];
+          if (coarse) cells.heights[k] += between(coarse, CORNERS, i / CHUNK_CELLS, j / CHUNK_CELLS);
+          if (plateMove) cells.heights[k] += between(plateMove, CORNERS, i0 + i / TILE_CELLS, j0 + j / TILE_CELLS);
+        }
+      }
+    }
   }
 
   addPlatter(bytes) {
@@ -78,6 +184,7 @@ export class Renditions {
       console.error(`plate ${key} can't be read: ${error}`);
       return;
     }
+    this.offset(key, plate);
     this.keep(key, plate);
     this.onRead();
   }
@@ -113,10 +220,11 @@ export class Renditions {
   }
 
   // The ground's height at continent feet (x, z), straight between cell corners, or chunk corners
-  // where there are no cells or they've not been read, or null where there's no tile.
+  // where there are no cells or they've not been read, or null where there's no tile. It reads no
+  // plate files.
   heightAt(x, z) {
     const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
-    const cells = this.cells(tx, tz);
+    const cells = this.decoded.get(`${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`)?.tiles.get(tileIndexInPlate(tx, tz));
     if (cells) return between(cells.heights, CELL_CORNERS, (x - tx * TILE_FT) / CELL_FT, (z - tz * TILE_FT) / CELL_FT);
     const tile = this.tile(tx, tz);
     return tile && between(tile.heights, CORNERS, (x - tx * TILE_FT) / CHUNK_FT, (z - tz * TILE_FT) / CHUNK_FT);
@@ -475,17 +583,27 @@ export class Ground {
   // A tile drawn in full into a plate's group, (ox, oz) feet into it: the mesh from `before`
   // ("tx,tz" -> mesh) when it's there.
   addFull(group, tx, tz, cells, ox, oz, before) {
+    const grid = cellGrid(cells, ox, oz);
+    const geometry = () => {
+      const made = new THREE.BufferGeometry();
+      for (const [name, values] of Object.entries(grid)) made.setAttribute(name, new THREE.BufferAttribute(values, 3));
+      made.setIndex(new THREE.BufferAttribute(SQUARES, 1));
+      return made;
+    };
     const kept = before.get(`${tx},${tz}`);
     if (kept) {
       group.add(kept);
+      // Moved ground: the same material over the ground's new shape.
+      if (kept.userData.grid !== grid) {
+        kept.geometry.dispose();
+        kept.geometry = geometry();
+        kept.userData.grid = grid;
+      }
       return;
     }
-    const grid = cellGrid(cells, ox, oz);
-    const geometry = new THREE.BufferGeometry();
-    for (const [name, values] of Object.entries(grid)) geometry.setAttribute(name, new THREE.BufferAttribute(values, 3));
-    geometry.setIndex(new THREE.BufferAttribute(SQUARES, 1));
-    const mesh = this.add(group, geometry, groundMaterial(this.renderer, { tile: groundTile(tx, tz, cells), origin: [0, 0] }), "full");
+    const mesh = this.add(group, geometry(), groundMaterial(this.renderer, { tile: groundTile(tx, tz, cells), origin: [0, 0] }), "full");
     mesh.userData.tile = `${tx},${tz}`;
+    mesh.userData.grid = grid;
   }
 
   add(group, geometry, material, kind) {
@@ -495,6 +613,16 @@ export class Ground {
     mesh.visible = this.shown[kind];
     group.add(mesh);
     return mesh;
+  }
+
+  // Makes plates ("px,pz") again first, for ground that's moved.
+  refresh(keys) {
+    const again = [...keys].filter((key) => this.wanted.has(key));
+    for (const key of again) {
+      const group = this.plates.get(key);
+      if (group) group.userData.tiers = null;
+    }
+    this.pending = [...again, ...this.pending.filter((key) => !again.includes(key))];
   }
 
   // Shows or hides one kind of ground: "full", "fine" (tiles at cell scale), "tile" (tiles'
