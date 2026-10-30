@@ -53,6 +53,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 14 C 14 6, 34 6, 46 14 L46 22 Z" fill="#c8b48a"/></svg>
         <span>smooth</span><kbd class="create-key">K</kbd>
       </button>
+      <button type="button" data-tool="draw" data-key="l" aria-pressed="false" title="draw a line to grow hills along">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 18 C 8 16, 10 8, 16 9 C 22 10, 24 4, 30 6 C 36 8, 40 14, 46 16 L46 22 Z" fill="#c8b48a"/><path d="M3 21 C 14 19, 30 21, 45 19" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>draw</span><kbd class="create-key">L</kbd>
+      </button>
       <button type="button" data-tool="clear" aria-pressed="false" title="clear the ground away, back to empty sea">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 14 C 6 8, 10 12, 14 10 L14 22 Z M34 10 C 38 12, 42 8, 46 14 L46 22 L34 22 Z" fill="#c8b48a"/><path d="M14 22 L14 18 L34 18 L34 22 Z" fill="#2e608c"/></svg>
         <span>clear</span>
@@ -99,6 +103,42 @@
         <button type="button" data-pin-color="magenta" aria-pressed="false" title="magenta"><span style="background:#ff00ff"></span></button>
         <button type="button" data-pin-color="gray" aria-pressed="false" title="gray"><span style="background:#808080"></span></button>
         <button type="button" data-pin-color="pink" aria-pressed="false" title="pink"><span style="background:#ff9ec8"></span></button>
+      </div>
+    </div>
+    <div data-config="draw" hidden>
+      <p class="create-note" data-draw="idle drawing">Drag on the ground to draw a line to grow things along.</p>
+      <div data-draw="drawn" hidden>
+        <p class="create-note">Grow along the line:</p>
+        <div class="create-way">
+          <button type="button" data-grow="hills">hills</button>
+          <button type="button" disabled title="coming">range</button>
+          <button type="button" disabled title="coming">cliff</button>
+        </div>
+      </div>
+      <div data-draw="adjusting" hidden>
+        <label>width <output id="growWidthOut"></output>
+          <input id="growWidth" type="range" min="0" max="1000">
+        </label>
+        <label>height <output id="growHeightOut"></output>
+          <input id="growHeight" type="range" min="0" max="1000">
+        </label>
+        <label>noise <output id="growNoiseOut"></output>
+          <input id="growNoise" type="range" min="0" max="1000">
+        </label>
+        <p class="create-note">Orange is too steep to climb, yellow the foothills. The blue line floats at the height it aims for.</p>
+        <div class="create-way">
+          <button type="button" id="growBack">back</button>
+          <button type="button" id="growGo">grow</button>
+        </div>
+      </div>
+      <div data-draw="drawn adjusting" hidden>
+        <div class="create-way">
+          <button type="button" id="growThrow">throw the line away</button>
+        </div>
+      </div>
+      <p class="create-note" data-draw="drawn adjusting" hidden>Drag again for another line. Enter grows, Esc puts the tool down.</p>
+      <div class="create-way">
+        <button type="button" id="growUndo" disabled>undo last growth</button>
       </div>
     </div>
     <div data-config="measure" hidden>
@@ -173,7 +213,7 @@
   <h2>Keys</h2>
   <dl>
     <dt>T / G</dt><dd>planning or geo</dd>
-    <dt>H J K N M</dt><dd>pick a tool, as shown on its button</dd>
+    <dt>H J K L N M</dt><dd>pick a tool, as shown on its button</dd>
     <dt>W / S</dt><dd>run or fly forward and back</dd>
     <dt>A / D</dt><dd>turn</dd>
     <dt>Q / E</dt><dd>strafe</dd>
@@ -194,7 +234,7 @@
   <dl>
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, and measure measures distances and circles. Click a pin's head to open it</dd>
-    <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, and clear it away</dd>
+    <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills along, and clear it away</dd>
   </dl>
 </div>
 <div id="pinEdit" class="create-pin-edit" popover>

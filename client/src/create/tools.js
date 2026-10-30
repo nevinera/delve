@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
 import { SHAPES, TURNS, pullBrush, raiseBrush } from "./geo.js";
 import { EMPTY_FT } from "./ground.js";
+import { Draw } from "./draw.js";
 import { Marks } from "./marks.js";
 import { Measure } from "./measure.js";
 import { TITLE_MAX } from "./pins.js";
@@ -9,6 +10,7 @@ import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 
 // The tools' sidebar: the type of work and its tools above, the picked tool's settings below. A
 // picked tool takes the left button, and Esc puts it down.
+// - geo's draw: dragging draws a line to grow hills along (draw.js, growth.js).
 // - planning's marker: dragging draws a line on the ground (stroke.js, marks.js), its eraser
 //   cuts lines away where it's dragged, and select picks lines out, clicked or in a box dragged
 //   round them, with shift more than one, for delete or backspace to delete whole. The pin tool
@@ -33,6 +35,17 @@ const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
 
 const $ = (id) => document.getElementById(id);
+// The draw tool's sliders, 0 to 1000, and the growth settings they set, some on a log scale.
+const logSlider = (key, lo, hi, show) => ({
+  get: (s) => Math.round((1000 * Math.log(s[key] / lo)) / Math.log(hi / lo)),
+  set: (s, v) => (s[key] = Math.round(lo * (hi / lo) ** (v / 1000))),
+  show: (s) => show(s[key]),
+});
+const GROW_SLIDERS = {
+  growWidth: logSlider("width", 200, 10560, (ft) => `${ft.toLocaleString()} ft`),
+  growHeight: logSlider("height", 50, 3000, (ft) => `${ft.toLocaleString()} ft`),
+  growNoise: { get: (s) => Math.round(s.noise * 1000), set: (s, v) => (s.noise = v / 1000), show: (s) => `${Math.round(s.noise * 100)}%` },
+};
 
 // Draws a shape's profile into a thumbnail, across the way it's turned.
 function drawShape(canvas, shape) {
@@ -58,6 +71,7 @@ export class Tools {
     this.marks = new Marks(scene, (x, z) => this.surface(x, z), canvas.parentElement);
     this.pinColor = "red";
     this.measure = new Measure(canvas.parentElement);
+    this.draw = new Draw(scene, renditions, ground, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, () => this.showDraw());
     // Measure's, { from, to } for a ruler, { middle, radius } for a circle, and while the button's
     // down, where it went down and whether a ruler or circle was shown before.
     this.measuring = null;
@@ -158,6 +172,19 @@ export class Tools {
       this.editing = null;
       if (JSON.stringify(before) !== JSON.stringify(this.marks.toJSON())) this.marks.undos.push(before);
     });
+    for (const button of document.querySelectorAll("[data-grow]")) button.addEventListener("click", () => this.draw.adjust(button.dataset.grow));
+    $("growBack").addEventListener("click", () => this.draw.back());
+    $("growGo").addEventListener("click", () => this.draw.grow());
+    $("growUndo").addEventListener("click", () => this.draw.undo());
+    $("growThrow").addEventListener("click", () => this.draw.clear());
+    for (const [id, read] of Object.entries(GROW_SLIDERS)) {
+      $(id).addEventListener("input", () => {
+        const settings = this.draw.settings[this.draw.kind];
+        read.set(settings, Number($(id).value));
+        $(`${id}Out`).textContent = read.show(settings);
+        this.draw.dirty = true;
+      });
+    }
     $("marksDelete").addEventListener("click", () => this.marks.deleteSelected());
     $("marksUndo").addEventListener("click", () => this.marks.undo());
     this.readSize();
@@ -172,6 +199,10 @@ export class Tools {
     canvas.addEventListener("pointermove", (e) => {
       this.point(e);
       if (this.moving) this.movePins();
+      if (this.draw.state === "drawing") {
+        const at = this.hit();
+        if (at) this.draw.add(at[0], at[2]);
+      }
       if (this.measuring?.down) {
         const at = this.hit(this.drawAt);
         const r = canvas.getBoundingClientRect();
@@ -218,6 +249,11 @@ export class Tools {
         return;
       }
       canvas.setPointerCapture(e.pointerId);
+      if (this.tool === "draw") {
+        const at = this.hit();
+        if (at) this.draw.start(at[0], at[2]);
+        return;
+      }
       if (this.tool === "measure") {
         const at = this.hit(this.drawAt);
         const r = canvas.getBoundingClientRect();
@@ -265,6 +301,7 @@ export class Tools {
       }
       this.clicked = null;
       if (this.box) this.endBox();
+      if (this.draw.state === "drawing") this.draw.end();
       // A click leaves a ruler following the pointer, or takes away the ruler or circle there was,
       // and a drag leaves the circle drawn.
       if (this.measuring?.down) {
@@ -285,6 +322,7 @@ export class Tools {
       if (e.target.matches?.("input, textarea, select")) return;
       if (e.key === "Escape") this.pick(null);
       else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "select") this.marks.deleteSelected();
+      else if (e.key === "Enter" && this.tool === "draw") this.draw.grow();
       else if ((e.key === "c" || e.key === "C" || e.key === "v" || e.key === "V") && this.tool === "raise" && !e.ctrlKey && !e.metaKey) {
         const step = (e.shiftKey ? FINE_TURN_DEG : TURN_DEG) * (e.key.toLowerCase() === "c" ? -1 : 1);
         this.turn(this.settings.angle + (step * Math.PI) / 180);
@@ -299,6 +337,19 @@ export class Tools {
     });
     this.toolButtons = toolButtons;
     this.turn(0);
+  }
+
+  // Shows the draw tool's state, and the settings of what it's growing.
+  showDraw() {
+    const { state, kind } = this.draw;
+    for (const part of document.querySelectorAll("[data-draw]")) part.hidden = !part.dataset.draw.split(" ").includes(state);
+    $("growUndo").disabled = !this.draw.undos.length;
+    if (state !== "adjusting") return;
+    const settings = this.draw.settings[kind];
+    for (const [id, read] of Object.entries(GROW_SLIDERS)) {
+      $(id).value = String(read.get(settings));
+      $(`${id}Out`).textContent = read.show(settings);
+    }
   }
 
   // Opens a pin's title and content to edit, `before` the planning file's JSON before it was made.
@@ -338,6 +389,7 @@ export class Tools {
     if (this.drawing) this.marks.keep([]);
     this.marks.unselect();
     this.marks.setFlat(PLANNING.has(tool));
+    if (tool !== "draw") this.draw.clear();
     this.measuring = null;
     this.box = null;
     this.boxEl.hidden = true;
@@ -488,6 +540,7 @@ export class Tools {
     const ftPerPx = (Math.max(above, 50) * 2 * Math.tan(THREE.MathUtils.degToRad(this.camera.fov / 2))) / h;
     this.marks.tick(dt, w, h, this.camera.position, above, ftPerPx);
     this.marks.pins.tick(this.camera, w, h);
+    this.draw.tick(w, h);
     if (this.tool === "measure" && this.measuring) {
       if (this.measuring.from && !this.measuring.radius) {
         const at = this.hit(this.drawAt);
