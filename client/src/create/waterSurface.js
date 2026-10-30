@@ -8,7 +8,7 @@ import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 // cells (ground.js's FULL and FINE tiers; coarser, the ground draws the water too): each
 // tile's wet cells, and a cell more round them at the level of the water next to it, which the
 // ground hides where it rises out of it, so the shore's where the two meet. Each corner's at the
-// average level of the wet cells round it, so sloping water's smooth. The water fades in
+// average level of the wet cells round it near its cell's, so sloping water's smooth. The water fades in
 // over its first SHORE_FADE_FT of depth there (editor/waterMaterial.js). Each type has its own look.
 // Farther off, and where it's not drawn, sea.js's plane stands in for the sea.
 
@@ -17,6 +17,7 @@ const COARSE = 2; // ground.js's tier drawn from tiles' renditions
 const LOOK_S = 0.25; // how often what's drawn is looked over
 const CELLS = TILE_FT / CELL_FT;
 const CORNERS = CELLS + 1;
+const STEP_FT = 1.5; // water this much higher or lower than a cell's isn't smoothed into it
 const DEEP_FT = 1; // water this deep at each corner of a run of cells is drawn as one quad
 export const SHORE_FADE_FT = 0.25; // how deep the water is where it's no longer faded at its shore
 // How each type looks.
@@ -115,25 +116,18 @@ export class WaterSurfaces {
       }
     }
     if (!any) return [];
-    // Each corner's level: the average of the wet cells' round it, so a sloping course's water is
-    // one surface, not steps; where none's wet, the level its cell's drawn at.
-    const corners = new Float32Array(CORNERS * CORNERS);
-    for (let cj = 0; cj < CORNERS; cj++) {
-      for (let ci = 0; ci < CORNERS; ci++) {
-        let [sum, n] = [0, 0];
-        for (const [i, j] of [[ci - 1, cj - 1], [ci, cj - 1], [ci - 1, cj], [ci, cj]]) {
-          const [l] = levelAt(i, j);
-          if (!Number.isNaN(l)) [sum, n] = [sum + l, n + 1];
-        }
-        corners[cj * CORNERS + ci] = n ? sum / n : NaN;
+    // Each corner's level, for a cell at level l: the average of the wet cells' round it within
+    // STEP_FT of l, so a sloping course's water is one surface, not steps, but a fall's lip stays one.
+    const cornerOf = (ci, cj, l) => {
+      let [sum, n] = [0, 0];
+      for (const [i, j] of [[ci - 1, cj - 1], [ci, cj - 1], [ci - 1, cj], [ci, cj]]) {
+        const [v] = levelAt(i, j);
+        if (Math.abs(v - l) <= STEP_FT) [sum, n] = [sum + v, n + 1];
       }
-    }
+      return n ? sum / n : l;
+    };
     // Quads along each row: deep runs at one level and type as one.
     const byType = WATER_TYPES.map(() => ({ positions: [], depths: [], flow: [] }));
-    const cornerOf = (ci, cj, l) => {
-      const c = corners[cj * CORNERS + ci];
-      return Number.isNaN(c) ? l : c;
-    };
     const deep = (i, j, l) => l - heights[j * CORNERS + i] >= DEEP_FT && cornerOf(i, j, l) === l;
     const deepCell = (i, j, l) => deep(i, j, l) && deep(i + 1, j, l) && deep(i, j + 1, l) && deep(i + 1, j + 1, l);
     const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];

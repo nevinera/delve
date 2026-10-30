@@ -174,8 +174,8 @@ function makeMaterials(renderer) {
       .replace("gl_PointSize = size;", "gl_PointSize = size * (0.6 + 0.8 * age);");
     shader.fragmentShader = shader.fragmentShader
       .replace("#include <common>", "#include <common>\nvarying float vMistFade;")
-      // Unlit, so dimmed by hand with the sky's light (sky.js).
-      .replace("#include <alphatest_fragment>", "diffuseColor.a *= vMistFade;\n#ifdef USE_FOG\ndiffuseColor.rgb *= skyLight;\n#endif\n#include <alphatest_fragment>");
+      // Unlit, so dimmed by hand with the sky's light, where sky.js lights the fog.
+      .replace("#include <alphatest_fragment>", "diffuseColor.a *= vMistFade;\n#if defined(USE_FOG) && defined(SKY_LIT)\ndiffuseColor.rgb *= skyLight;\n#endif\n#include <alphatest_fragment>");
   };
 
   return { curtain, foam, mist };

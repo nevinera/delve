@@ -13,6 +13,7 @@ import { EMPTY_FT, FAR_FT, FINE, Ground, Renditions } from "./ground.js";
 import { grid } from "./grid.js";
 import { planningPath } from "./marks.js";
 import { Clutter } from "./clutter.js";
+import { Falls } from "./falls.js";
 import { Scatter } from "./scatter.js";
 import { Sea } from "./sea.js";
 import { WaterSurfaces } from "./waterSurface.js";
@@ -148,6 +149,8 @@ function start(world, changes) {
   const scatter = new Scatter(scene, renditions);
   // Reeds, pebbles and the like by the water near the builder.
   const clutter = new Clutter(scene, renditions);
+  // Courses' falls near the builder.
+  const falls = new Falls(scene, renditions, renderer);
   // The builder stands on the ground, and swims in deep water.
   const groundAt = (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT;
   const waterAt = (x, z) => renditions.waterAt(x, z);
@@ -237,7 +240,7 @@ function start(world, changes) {
     worst[part] = Math.max(worst[part], performance.now() - start);
   };
   // A handle for measuring from the browser's console or a script; paused stops the frames.
-  window.create = { ground, scatter, clutter, surfaces, builder, tools, renderer, scene, camera, paused: false };
+  window.create = { ground, scatter, clutter, falls, surfaces, builder, tools, renderer, scene, camera, paused: false };
   const frame = (now) => {
     if (window.create.paused) return requestAnimationFrame(frame);
     // At most FPS frames a second, with a little slack so a 60 Hz screen draws every other frame.
@@ -261,6 +264,7 @@ function start(world, changes) {
     sea.tick(x, SEA_LEVEL_FT - SEA_BELOW_FT, z);
     timed("ground", () => scatter.tick(dt, x, z, ground.finest <= FINE));
     timed("ground", () => clutter.tick(dt, x, z, ground.finest <= FINE));
+    timed("ground", () => falls.tick(dt, x, z));
     timed("ground", () => surfaces.tick(dt, x, z, ground.finest <= FINE));
     // The ground drawn ends FAR_FT across from the builder, so fog closes in there, as far off
     // as that is from the camera, high up too.

@@ -23,6 +23,13 @@ const EDGE_BELOW_FT = 0.25; // how far under the ground at its edges a course's 
 export const LEVEE_FT = 2; // how far a course's banks are built up, at most, where they're lower than its water
 const LEVEE_OVER_FT = 0.5; // to this far over its water
 const LEVEE_TOP_FT = 6; // out to this far past its edge, wider than a cell, before falling away
+const FALL_STEEP = 0.5; // how steeply, ft a foot, a course's surface falls where it's falling
+const FALL_FT = [4, 8]; // how far it falls, at least, to be a fall, for streams and courses this many times as wide
+const FALL_WIDTHS = 5; // how wide courses are, as times FALL_FT[1], whose falls are the tallest least
+const POOL_WIDTHS = 2.5; // how far below a fall, in widths, its plunge pool reaches
+const POOL_DEEP = 0.3; // how much deeper its pool is than the course, as a share of how far it falls
+const POOL_DEEP_FT = 12; // at most
+const POOL_WIDE = 0.5; // how much wider, as a share of the course's width
 const MOUTH_GRADE = 0.25; // how steeply, ft a foot, a course at most falls to the water it runs into
 const TRACK_STEP_FT = 4; // how far apart its track's points are
 const MEANDER = 1.2; // how far its track wanders either side of its line, in widths
@@ -235,14 +242,16 @@ export function shape(course, x, z) {
   const track = trackOf(course.points, course.seed ?? 0);
   const near = onTrack(track, x, z, reachOf(course));
   if (!near) return null;
-  const half = near.width / 2;
-  const level = surfaceAt(course.surface, near.t);
+  const level = levelAt(course, near.t);
+  // Below a fall, its plunge pool, deepest and widest at its foot.
+  const pool = poolAt(course, near.t, near.width);
+  const half = (near.width / 2) * (1 + POOL_WIDE * pool.share);
   const out = near.d - half;
   if (out > BANK_FT) return null;
   // Its deepest line, toward the outside: right of its middle when it turns left.
   const deepest = -near.bend * 0.4 * half;
   const across = near.side >= deepest ? (near.side - deepest) / (half - deepest) : (deepest - near.side) / (half + deepest);
-  const bed = Math.max(0, 1 - across * across) * depthOf(course.type, near.width) * near.depth;
+  const bed = Math.max(0, 1 - across * across) * (depthOf(course.type, near.width) * near.depth + pool.deeper);
   const outside = near.side * near.bend < 0;
   const run = BANK_RUN * (outside ? 1 - 0.6 * Math.abs(near.bend) : 1 + 2 * Math.abs(near.bend));
   const top = out <= 0 ? level - bed : level + out / run;
@@ -260,8 +269,63 @@ export function flowOf(course, x, z) {
   if (!course.surface?.length) return null;
   const near = onTrack(trackOf(course.points, course.seed ?? 0), x, z, reachOf(course));
   if (!near || near.d > near.width / 2 + MARGIN_FT + 4) return null;
-  const slope = Math.max(0, (surfaceAt(course.surface, near.t - SURFACE_STEP_FT) - surfaceAt(course.surface, near.t + SURFACE_STEP_FT)) / (2 * SURFACE_STEP_FT));
+  const slope = Math.max(0, (levelAt(course, near.t - SURFACE_STEP_FT) - levelAt(course, near.t + SURFACE_STEP_FT)) / (2 * SURFACE_STEP_FT));
   const middle = Math.max(0.3, 1 - (near.d / (near.width / 2 + MARGIN_FT)) ** 2);
   const speed = Math.min(SPEED_MAX, SPEEDS[course.type] + SPEED_PER_SLOPE * slope) * middle;
   return [near.along[0] * speed, near.along[1] * speed, Math.sqrt(slope)];
+}
+
+const falls = new WeakMap(); // surface -> its course's falls
+
+// How far a course `width` ft wide falls, at least, for that to be a fall.
+export const fallFtOf = (type, width) => (type === "stream" ? FALL_FT[0] : Math.min(FALL_FT[1], Math.max(FALL_FT[0], width / FALL_WIDTHS)));
+
+// A course's falls, from its surface: where it falls more steeply than FALL_STEEP for at least
+// fallFtOf, [{ t, how far down its track the lip is, end, and its foot, top and bottom, its surface over the lip and
+// at its foot, width, how wide it is at its lip, x and z, where its lip is, and along, which way it
+// runs there }], from its source down.
+export function fallsOf(course) {
+  const { surface } = course;
+  if (!surface?.length) return [];
+  const kept = falls.get(surface);
+  if (kept?.points === course.points) return kept.falls;
+  const track = trackOf(course.points, course.seed ?? 0);
+  const found = [];
+  for (let k = 1; k < surface.length; k++) {
+    if ((surface[k - 1] - surface[k]) / SURFACE_STEP_FT < FALL_STEEP) continue;
+    let end = k;
+    while (end + 1 < surface.length && (surface[end] - surface[end + 1]) / SURFACE_STEP_FT >= FALL_STEEP) end++;
+    const t = (k - 1) * SURFACE_STEP_FT;
+    const n = Math.max(1, track.t.findIndex((v) => v >= t));
+    const width = track.width[n];
+    if (surface[k - 1] - surface[end] >= fallFtOf(course.type, width)) {
+      const length = Math.hypot(track.x[n] - track.x[n - 1], track.z[n] - track.z[n - 1]) || 1;
+      found.push({ t, end: end * SURFACE_STEP_FT, top: surface[k - 1], bottom: surface[end], width, x: track.x[n], z: track.z[n], along: [(track.x[n] - track.x[n - 1]) / length, (track.z[n] - track.z[n - 1]) / length] });
+    }
+    k = end;
+  }
+  falls.set(surface, { points: course.points, falls: found });
+  return found;
+}
+
+// A course's surface `t` ft down its track, as surfaceAt has it but for its falls, where it steps
+// down to their feet at their lips.
+export function levelAt(course, t) {
+  for (const fall of fallsOf(course)) {
+    if (t > fall.t && t <= fall.end) return fall.bottom;
+  }
+  return surfaceAt(course.surface, t);
+}
+
+// A course's plunge pool `t` ft down its track, `width` ft wide there: { share, how far into it,
+// from 1 at the fall's foot to 0 at its end, and deeper, how much deeper it is there }.
+function poolAt(course, t, width) {
+  let best = { share: 0, deeper: 0 };
+  for (const fall of fallsOf(course)) {
+    const share = 1 - (t - fall.t) / (POOL_WIDTHS * width);
+    if (t < fall.t || share <= best.share) continue;
+    const smooth = share * share * (3 - 2 * share);
+    best = { share: smooth, deeper: Math.min(POOL_DEEP_FT, POOL_DEEP * (fall.top - fall.bottom)) * smooth };
+  }
+  return best;
 }

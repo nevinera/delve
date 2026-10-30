@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BELOW_FT, along, depthOf, flowOf, lengthOf, onTrack, profile, shape, surfaceAt, trackOf } from "./courses.js";
+import { BELOW_FT, along, depthOf, fallFtOf, fallsOf, flowOf, levelAt, lengthOf, onTrack, profile, shape, surfaceAt, trackOf } from "./courses.js";
 
 const line = [[0, 0, 10], [100, 0, 10], [100, 100, 30]];
 
@@ -98,6 +98,34 @@ describe("courses", () => {
     expect(Math.hypot(fall[0], fall[1])).toBeGreaterThan(Math.hypot(level[0], level[1]) * 2);
     expect(fall[2]).toBeCloseTo(Math.sqrt(0.1));
     expect(flowOf(course, 300, 200)).toBeNull();
+  });
+
+  it("fall where their surface drops steeply far enough, by their width", () => {
+    // Level at 50, a 6 ft drop over one step, level, then a 3 ft one.
+    const surface = [50, 50, 50, 44, 44, 44, 44, 41, 41, 41];
+    const stream = { type: "stream", points: [[0, 0, 6], [72, 0, 6]], surface, seed: 1 };
+    const falls = fallsOf(stream);
+    expect(falls.map(({ t, top, bottom }) => [t, top, bottom])).toEqual([[16, 50, 44]]);
+    expect(fallFtOf("river", 40)).toBe(8);
+    expect(fallFtOf("river", 25)).toBe(5);
+    expect(fallsOf({ ...stream, type: "river", points: [[0, 0, 40], [72, 0, 40]] })).toEqual([]);
+    // It steps down at the lip, not down a ramp.
+    expect(levelAt(stream, 15)).toBe(50);
+    expect(levelAt(stream, 17)).toBe(44);
+    expect(levelAt(stream, 52)).toBeCloseTo(42.5);
+  });
+
+  it("carve plunge pools under their falls", () => {
+    const course = { type: "river", points: [[0, 0, 20], [600, 0, 20]], surface: [...Array(30).fill(80), ...Array(50).fill(50)], seed: 4 };
+    const [fall] = fallsOf(course);
+    const track = trackOf(course.points, 4);
+    const depthAt = (t) => {
+      const k = track.t.findIndex((v) => v >= t);
+      return shape(course, track.x[k], track.z[k]);
+    };
+    const [below, further] = [depthAt(fall.t + 10), depthAt(fall.t + 150)];
+    expect(below.level).toBe(50);
+    expect(50 - below.top).toBeGreaterThan(50 - further.top + 5);
   });
 
   it("are deeper the wider they are, rivers more than streams", () => {

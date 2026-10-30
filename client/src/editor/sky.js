@@ -99,6 +99,7 @@ const setVec = (target, [x, y, z]) => Object.assign(target, { x, y, z });
 // skyColor(dir): the sky's color looking along unit vector `dir`, in sRGB, without clouds, stars,
 // the sun's disc or the moon.
 export const SKY_COLOR_GLSL = `
+  #define SKY_LIT
   ${Object.keys(SKY_UNIFORMS).map((name) => `uniform vec3 ${name};`).join("\n  ")}
   vec3 skyColor(vec3 dir) {
     float up = max(dir.y, 0.0);
