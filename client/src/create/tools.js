@@ -10,7 +10,7 @@ import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 
 // The tools' sidebar: the type of work and its tools above, the picked tool's settings below. A
 // picked tool takes the left button, and Esc puts it down.
-// - geo's draw: dragging draws a line to grow hills along (draw.js, growth.js).
+// - geo's draw: dragging draws a line to grow hills or a mountain range along (draw.js, growth.js).
 // - planning's marker: dragging draws a line on the ground (stroke.js, marks.js), its eraser
 //   cuts lines away where it's dragged, and select picks lines out, clicked or in a box dragged
 //   round them, with shift more than one, for delete or backspace to delete whole. The pin tool

@@ -9,13 +9,19 @@ import { CHUNK_FT } from "../v2/sizes.js";
 // ones. It only ever raises the ground, so it never cuts into ground already higher.
 // - hills: a field of round hills, scattered, standing on the core's raised ground and fading
 //   into the foothills, shorter the further out, with noise roughening them.
+// - range: a ridge along the line, its peaks and saddles rising and falling along it, sharp spurs
+//   off it, jagged with noise, on the core's raised ground, and rugged hills in the foothills.
 
 export const WALK_DEG = 50; // the steepest a character walks up
 const WALL_DEG = 65; // how steep a core's sides are
 const BASE_FT = 2640; // how far either way along the line its ground's averaged, at most
-const RAISED_SHARE = 0.5; // how high the core's ground is raised, before hills, as a share of the growth's height
-const HILLS_SHARE = 0.55; // how tall its hills are, at most
-const RAMP_SHARE = 0.12; // how high foothills' ground rises to the core, before hills
+// Each kind's shares of its height: how high the core's ground is raised on its steep sides, how
+// tall what stands on it is (hills, or the ridge), and how high the foothills' ground rises toward
+// the core before their hills.
+const SHARES = {
+  hills: { raised: 0.5, tall: 0.55, ramp: 0.12, foothills: 0.55 },
+  range: { raised: 0.3, tall: 0.75, ramp: 0.1, foothills: 0.3 },
+};
 const WOBBLE = 0.2; // how far edges wobble along the line, as a share of the core's half width, at full noise
 const WIGGLE = 0.25; // how far the core's edge wiggles in and out, likewise
 const HILL_CELLS = 3; // hills about a third of the width apart
@@ -129,7 +135,8 @@ export function growth(kind, points, { width, height, noise }, heightAt) {
     const hit = near(x, z);
     return !hit ? 0 : hit.d <= hit.core ? 2 : 1;
   };
-  const wall = (RAISED_SHARE * height) / Math.tan((WALL_DEG * Math.PI) / 180);
+  const shares = SHARES[kind];
+  const wall = (shares.raised * height) / Math.tan((WALL_DEG * Math.PI) / 180);
   // Round hills, one in each square `cell` wide somewhere in it, of different sizes: how high the
   // tallest at (x, z) is, 0 to 1.
   const cell = width / HILL_CELLS;
@@ -145,17 +152,28 @@ export function growth(kind, points, { width, height, noise }, heightAt) {
     }
     return top;
   };
+  // Sharp ridges where noise crosses 0, 0 to 1.
+  const ridged = (x, z, wavelength, seed) => 1 - Math.abs(fbm(x, z, seed, { wavelength, octaves: 5 }));
+  // A range's ridge over the core, 0 to 1: highest along the line, peaks and saddles along it, with
+  // spurs where ridged noise runs out across it.
+  const ridge = (x, z, d, core, s) => {
+    const across = Math.max(0, 1 - d / core) ** 1.1;
+    const peaks = 0.55 + 0.45 * fbm(s, 3, SEED + 9, { wavelength: width * 0.8, octaves: 3 });
+    const spurs = ridged(x, z, width / 4, SEED + 10);
+    return across * peaks * (0.3 + 0.7 * spurs) + 0.15 * noise * (ridged(x, z, width / 14, SEED + 11) - 0.5);
+  };
   const raise = (x, z, ground) => {
     const hit = near(x, z);
     if (!hit) return 0;
-    const { d, core, foot } = hit;
+    const { d, core, foot, s } = hit;
     // How far out into the foothills, 0 at the core's edge to 1 at theirs.
     const out = smoothstep(core, foot, d);
-    const raised = RAISED_SHARE * height * Math.max(0, Math.min(1, (core - d) / wall));
-    const ramp = RAMP_SHARE * height * (1 - out);
-    const tall = HILLS_SHARE * height * (1 - out) ** 1.5;
+    const raised = shares.raised * height * Math.max(0, Math.min(1, (core - d) / wall));
+    const ramp = shares.ramp * height * (1 - out);
+    const hills = shares.foothills * height * (1 - out) ** 1.5 * field(x, z);
     const rough = 0.1 * height * noise * fbm(x, z, SEED + 3, { wavelength: width / 8, octaves: 4 }) * (1 - out);
-    return Math.max(0, base(hit.s) + raised + ramp + tall * field(x, z) + rough - ground) * (1 - out);
+    const top = kind === "range" ? Math.max(hills, shares.tall * height * ridge(x, z, d, core, s)) : hills;
+    return Math.max(0, base(s) + raised + ramp + top + rough - ground) * (1 - out);
   };
   const xs = points.map(([x]) => x);
   const zs = points.map(([, z]) => z);

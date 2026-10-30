@@ -20,7 +20,7 @@ const AIM_COLOR = 0x40e0ff;
 const ZONES = [null, { color: 0xffe9a0, opacity: 0.3 }, { color: 0xff8c00, opacity: 0.45 }]; // foothills, core
 const PREVIEW_CELLS = 160; // how many squares the preview has along its longer side, at most
 const LIFT_FT = 2;
-export const DEFAULTS = { hills: { width: 2640, height: 300, noise: 0.5 } };
+export const DEFAULTS = { hills: { width: 2640, height: 300, noise: 0.5 }, range: { width: 5280, height: 1000, noise: 0.5 } };
 
 export class Draw {
   // heightAt(x, z) gives the ground's height; onChange() is called when the state changes.
