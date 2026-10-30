@@ -10,8 +10,7 @@ import { SEA_LEVEL_FT } from "../v2/sizes.js";
 // climb, sink and cross the land in about the same time whatever the height.
 //
 // Left-drag swings the camera round the builder, right-drag turns the builder with it, and the
-// wheel zooms. The higher the builder flies, the further back the camera pulls and the more it
-// looks down (cameraFor).
+// wheel zooms. The higher the builder flies, the more the camera looks down (cameraFor).
 
 export const RUN_FT = 21; // a second
 export const BACK_FT = 13.5;
@@ -25,9 +24,9 @@ export const CEILING_FT = 20000;
 const DOUBLE_TAP_MS = 300;
 const EYE_FT = 5.5;
 const CAMERA = { distance: 30, min: 4, max: 2000, pitch: 0.35, minPitch: -1.3, maxPitch: 1.45 };
-// How the camera changes with height: pulled back by a share of it, and tipped down by up to
-// `tilt` radians, all of it by `tiltFt` up.
-const ALOFT = { back: 0.15, tilt: 0.7, tiltFt: 600 };
+// How the camera changes with height: tipped down by up to `tilt` radians, all of it by `tiltFt`
+// up.
+const ALOFT = { tilt: 0.7, tiltFt: 600 };
 const DRAG = 0.006; // radians per pixel
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "shift"]);
 
@@ -69,10 +68,7 @@ export function moveBuilder(state, input, dt, groundAt) {
 // dragging and the wheel set.
 export function cameraFor({ pitch, distance }, above) {
   const t = Math.min(1, Math.max(0, above) / ALOFT.tiltFt);
-  return {
-    pitch: Math.min(CAMERA.maxPitch, pitch + ALOFT.tilt * t * t * (3 - 2 * t)),
-    distance: distance + Math.max(0, above) * ALOFT.back,
-  };
+  return { pitch: Math.min(CAMERA.maxPitch, pitch + ALOFT.tilt * t * t * (3 - 2 * t)), distance };
 }
 
 // The builder in a scene, moved by the keys and followed by the camera.

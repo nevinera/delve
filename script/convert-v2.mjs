@@ -1,8 +1,9 @@
 // Makes a version 2 world (client/src/v2/) from a version 1 world's zip, for the /create spike:
 // its world.json, and for each continent, platter files with a rendition of each 256 ft tile and
-// each plate (v2/rendition.js). A
-// v1 tile (512 ft, 8 ft cells) becomes 2×2 v2 tiles. A chunk corner's height is the mean of the
-// four v1 cells round it, and a chunk's color the mean of its 4×4 v1 cells' ground colors.
+// each plate (v2/rendition.js). A v1 tile (512 ft, 8 ft cells) becomes 2×2 v2 tiles. Renditions
+// show the surface you'd see: the water's where there's water, else the ground's. A chunk
+// corner's height is the mean of the four v1 cells' round it, and a chunk's color the mean of its
+// 4×4 v1 cells', water drawn WATER_RGB.
 //
 //   node script/convert-v2.mjs <v1 world.zip> <v2 world.zip>
 import fs from "fs";
@@ -14,6 +15,8 @@ import { tileAt } from "../client/src/world/paths.js";
 import { CORNERS, encodePlatter, indexIn, plateIndexIn, platterOf, platterPath } from "../client/src/v2/platter.js";
 import { hash64, plateRendition } from "../client/src/v2/rendition.js";
 import { CHUNK_FT, PLATE_TILES, PLATTER_PLATES, TILE_CHUNKS } from "../client/src/v2/sizes.js";
+
+const WATER_RGB = [46, 96, 140];
 
 const [from, to] = process.argv.slice(2);
 if (!from || !to) {
@@ -55,6 +58,8 @@ for (const { key } of info.continents) {
     return tile && [tile, (cj - tile.coords[1] * n) * n + (ci - tile.coords[0] * n)];
   };
   const perChunk = CHUNK_FT / cellFt;
+  const wet = (tile, at) => tile.layers.water[at] > tile.layers.height[at];
+  const surface = (tile, at) => (wet(tile, at) ? tile.layers.water[at] : tile.layers.height[at]);
 
   const platters = new Map(); // "px,pz" -> tiles
   for (const [k, bytes] of sources) {
@@ -69,7 +74,7 @@ for (const { key } of info.continents) {
             // The v1 cells whose corners meet at this chunk corner.
             const [ci, cj] = [((tx * TILE_CHUNKS + i) * CHUNK_FT) / cellFt, ((tz * TILE_CHUNKS + j) * CHUNK_FT) / cellFt];
             const round = [cell(ci - 1, cj - 1), cell(ci, cj - 1), cell(ci - 1, cj), cell(ci, cj)].filter(Boolean);
-            heights[j * CORNERS + i] = round.reduce((sum, [tile, at]) => sum + tile.layers.height[at], 0) / round.length;
+            heights[j * CORNERS + i] = round.reduce((sum, [tile, at]) => sum + surface(tile, at), 0) / round.length;
           }
         }
         const colors = new Uint8Array(TILE_CHUNKS * TILE_CHUNKS * 3);
@@ -79,7 +84,7 @@ for (const { key } of info.continents) {
             for (let dj = 0; dj < perChunk; dj++) {
               for (let di = 0; di < perChunk; di++) {
                 const [tile, at] = cell((tx * TILE_CHUNKS + i) * perChunk + di, (tz * TILE_CHUNKS + j) * perChunk + dj);
-                groundRgb(tile, at).forEach((v, m) => (sum[m] += v));
+                (wet(tile, at) ? WATER_RGB : groundRgb(tile, at)).forEach((v, m) => (sum[m] += v));
               }
             }
             sum.forEach((v, m) => (colors[(j * TILE_CHUNKS + i) * 3 + m] = Math.round(v / perChunk ** 2)));

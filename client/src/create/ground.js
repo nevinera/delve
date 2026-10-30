@@ -4,11 +4,13 @@ import { CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, TILE_CHUNKS, TILE_FT } 
 
 // The ground round the builder, drawn from renditions (v2/platter.js), flat-shaded in their
 // parts' colors: each tile within RADIUS_FT as a mesh of its 8×8 chunks, and past that, out to
-// FAR_FT, each plate as a mesh of its 8×8 tiles, leaving out the tiles drawn close up. Skirts hang
-// from the edges to hide the gaps between meshes.
+// FAR_FT, each plate as a mesh of its 8×8 tiles, leaving out the tiles drawn close up. Distances
+// are to the nearest point of the box round each one's ground, so flying high, the ground below
+// goes to plates too. Skirts hang from the edges to hide the gaps between meshes.
 
 export const RADIUS_FT = 1024;
 export const FAR_FT = 24576;
+const MOVE_FT = 32; // how far the builder goes before what's drawn is worked out again
 const SKIRT = 0.75; // how far a skirt hangs, as a share of a part's size
 const SKIRT_SHADE = 0.6;
 
@@ -122,19 +124,19 @@ export class Ground {
     this.at = null;
   }
 
-  // Draws the ground round continent feet (x, z), again only when that's moved to another tile.
-  update(x, z) {
-    const [cx, cz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
-    if (this.at === `${cx},${cz}`) return;
-    this.at = `${cx},${cz}`;
-    const middle = [(cx + 0.5) * TILE_FT, (cz + 0.5) * TILE_FT];
-    const near = within(middle, RADIUS_FT, TILE_FT);
+  // Draws the ground round continent feet (x, y, z), again only once that's MOVE_FT from where it
+  // was last worked out.
+  update(x, y, z) {
+    if (this.at && Math.hypot(x - this.at[0], y - this.at[1], z - this.at[2]) < MOVE_FT) return;
+    this.at = [x, y, z];
+    const tileSpan = (tx, tz) => span(this.renditions.tile(tx, tz));
+    const near = within([x, y, z], RADIUS_FT, TILE_FT, tileSpan);
     this.sync(this.meshes, near, (key) => {
       const [tx, tz] = key.split(",").map(Number);
       const tile = this.renditions.tile(tx, tz);
       return tile && this.mesh(renditionGeometry(tile, CHUNK_FT), tx * TILE_FT, tz * TILE_FT);
     });
-    const far = within(middle, FAR_FT, PLATE_FT);
+    const far = within([x, y, z], FAR_FT, PLATE_FT, (px, pz) => span(this.renditions.plate(px, pz)));
     // A plate made again when the tiles it leaves out change.
     for (const key of far) if (this.plates.get(key)?.userData.hidden !== this.hiddenIn(key)) this.drop(this.plates, key);
     this.sync(this.plates, far, (key) => {
@@ -185,16 +187,28 @@ export class Ground {
   }
 }
 
-// The squares `size` across ("i,j") with some of them within `radius` of continent feet [x, z].
-function within([x, z], radius, size) {
+// The lowest and highest of a rendition's heights, or null for none.
+function span(rendition) {
+  if (!rendition) return null;
+  rendition.span ??= [Math.min(...rendition.heights), Math.max(...rendition.heights)];
+  return rendition.span;
+}
+
+// The squares `size` across ("i,j") whose ground comes within `radius` of continent feet
+// [x, y, z]: spanOf(i, j) gives the lowest and highest of a square's ground, or null where it has
+// none.
+function within([x, y, z], radius, size, spanOf) {
   const out = new Set();
   const reach = Math.ceil(radius / size);
   const [ci, cj] = [Math.floor(x / size), Math.floor(z / size)];
   for (let j = cj - reach; j <= cj + reach; j++) {
     for (let i = ci - reach; i <= ci + reach; i++) {
-      const nx = Math.max(i * size, Math.min(x, (i + 1) * size));
-      const nz = Math.max(j * size, Math.min(z, (j + 1) * size));
-      if (Math.hypot(nx - x, nz - z) <= radius) out.add(`${i},${j}`);
+      const ys = spanOf(i, j);
+      if (!ys) continue;
+      const dx = x - Math.max(i * size, Math.min(x, (i + 1) * size));
+      const dz = z - Math.max(j * size, Math.min(z, (j + 1) * size));
+      const dy = y - Math.max(ys[0], Math.min(y, ys[1]));
+      if (Math.hypot(dx, dy, dz) <= radius) out.add(`${i},${j}`);
     }
   }
   return out;
