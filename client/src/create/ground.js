@@ -67,6 +67,8 @@ export class Renditions {
     this.looks = 0; // counts changes to the biomes, to tell when what ground looks like is stale
     this.waterBodies = []; // the water's bodies, as water.json keeps them
     this.water = new WaterMap(); // and the water from them, baked into plate files saved
+    this.waters = new Map(); // "tx,tz" -> the tile's water as last baked, over what its plate file has
+    this.wet = 0; // counts changes to tiles' water
   }
 
   // Tile (tx, tz)'s cells' biomes, 64 × 64 indexes into BIOME_NAMES.
@@ -178,9 +180,14 @@ export class Renditions {
   }
 
   // Puts the tiles made in plate `key` into it, read from its file or made from nothing, and takes
-  // out those cleared away.
+  // out those cleared away, and their water as last baked.
   fill(key, plate) {
     for (const index of this.cleared.get(key) ?? []) plate.tiles.delete(index);
+    const [px, pz] = key.split(",").map(Number);
+    for (const [index, tile] of plate.tiles) {
+      const water = this.waters.get(`${px * PLATE_TILES + (index % PLATE_TILES)},${pz * PLATE_TILES + Math.floor(index / PLATE_TILES)}`);
+      if (water !== undefined) tile.water = water;
+    }
     for (const index of this.made.get(key) ?? []) {
       if (plate.tiles.has(index)) continue;
       const [px, pz] = key.split(",").map(Number);
@@ -251,13 +258,32 @@ export class Renditions {
 
   // Writes a plate or platter file (`kind`) on the worker, or here where there are no workers.
   write(kind, value) {
-    if (typeof Worker === "undefined") return Promise.resolve(kind === "plate" ? encodePlate(this.bake(value)) : encodePlatter(value));
+    if (typeof Worker === "undefined") {
+      if (kind !== "plate") return Promise.resolve(encodePlatter(value));
+      const bytes = encodePlate(this.bake(value));
+      this.baked(value.coords, [...value.tiles].map(([index, tile]) => [index, tile.water]));
+      return Promise.resolve(bytes);
+    }
     this.startWorker();
     const id = this.writes.size ? Math.max(...this.writes.keys()) + 1 : 1;
     return new Promise((resolve) => {
-      this.writes.set(id, resolve);
+      this.writes.set(id, ({ bytes, waters }) => {
+        if (waters) this.baked(value.coords, waters);
+        resolve(bytes);
+      });
       this.worker.postMessage({ write: kind, id, value });
     });
+  }
+
+  // Takes the water baked into plate (px, pz)'s tiles, [index, water], to draw.
+  baked([px, pz], waters) {
+    const plate = this.decoded.get(`${px},${pz}`);
+    for (const [index, water] of waters) {
+      this.waters.set(`${px * PLATE_TILES + (index % PLATE_TILES)},${pz * PLATE_TILES + Math.floor(index / PLATE_TILES)}`, water);
+      const tile = plate?.tiles.get(index);
+      if (tile) tile.water = water;
+    }
+    this.wet++;
   }
 
   // Which tiles there are round plate (px, pz), as water.js's bakeWater wants them.
@@ -279,7 +305,7 @@ export class Renditions {
     this.worker.postMessage({ water: this.waterBodies });
     this.worker.onmessage = ({ data }) => {
       if (data.id === undefined) return this.done(data);
-      this.writes.get(data.id)(data.bytes);
+      this.writes.get(data.id)(data);
       this.writes.delete(data.id);
     };
   }

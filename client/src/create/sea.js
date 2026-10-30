@@ -4,17 +4,20 @@ import { withGrid } from "./grid.js";
 
 // The open sea, a plane a little under sea level kept round the builder, showing where no ground's
 // drawn. Where there's nothing it's darker, the more so the bigger the nothing: darkest over a
-// platter with nothing in it, less over an empty plate, and a little over an empty tile.
+// platter with nothing in it, less over an empty plate, and a little over an empty tile. It's left
+// out over tiles whose water's drawn (waterSurface.js).
 
 const COLOR = 0x2e608c;
 const SHADES = [0.55, 0.7, 0.85, 1]; // over an empty platter, plate and tile, and over a tile
 const AROUND = 256; // tiles a side of the map of what's there, kept round the builder
 const RECENTER = 16; // how many tiles the builder goes from the map's middle before it's made again
 const NEW_TILES_MS = 500; // how long new tiles wait to be shown on the map, while a brush makes them
+const [STEP, DRAWN] = [60, 250]; // what the map has for each of SHADES, and for a tile whose water's drawn
 
 export class Sea {
-  constructor(scene, size, renditions) {
+  constructor(scene, size, renditions, surfaces) {
     this.renditions = renditions;
+    this.surfaces = surfaces;
     this.data = new Uint8Array(AROUND * AROUND);
     this.map = new THREE.DataTexture(this.data, AROUND, AROUND, THREE.RedFormat, THREE.UnsignedByteType);
     this.corner = new THREE.Vector2(); // the tile at the map's corner
@@ -42,7 +45,9 @@ export class Sea {
           `#include <color_fragment>
           vec2 tile = floor(vSeaXZ / ${TILE_FT.toFixed(1)}) - seaCorner;
           bool known = all(greaterThanEqual(tile, vec2(0.0))) && all(lessThan(tile, vec2(${AROUND}.0)));
-          int there = known ? int(texture2D(seaTiles, (tile + 0.5) / ${AROUND}.0).r * 3.0 + 0.5) : 0;
+          float mapped = known ? texture2D(seaTiles, (tile + 0.5) / ${AROUND}.0).r * 255.0 : 0.0;
+          if (mapped > ${DRAWN - 10}.0) discard;
+          int there = int(mapped / ${STEP}.0 + 0.5);
           const float SHADES[4] = float[](${SHADES.map((s) => s.toFixed(2)).join(", ")});
           diffuseColor.rgb *= SHADES[there];`,
         );
@@ -58,7 +63,7 @@ export class Sea {
     const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
     if (!this.middle || Math.abs(tx - this.middle[0]) > RECENTER || Math.abs(tz - this.middle[1]) > RECENTER) this.middle = [tx, tz];
     const r = this.renditions;
-    const key = `${this.middle},${r.platters.size},${r.layout}`;
+    const key = `${this.middle},${r.platters.size},${r.layout},${this.surfaces.version}`;
     if (key === this.key) return;
     const now = performance.now();
     if (this.key?.startsWith(`${this.middle},${r.platters.size},`) && now - this.made < NEW_TILES_MS) return;
@@ -71,7 +76,7 @@ export class Sea {
         const [a, b] = [cx + i, cz + j];
         let there = 0;
         if (r.platters.has(`${Math.floor(a / PLATTER_TILES)},${Math.floor(b / PLATTER_TILES)}`)) there = r.tile(a, b) ? 3 : r.plate(Math.floor(a / PLATE_TILES), Math.floor(b / PLATE_TILES)) ? 2 : 1;
-        this.data[j * AROUND + i] = there * 85;
+        this.data[j * AROUND + i] = this.surfaces.drawn.has(`${a},${b}`) ? DRAWN : there * STEP;
       }
     }
     this.map.needsUpdate = true;

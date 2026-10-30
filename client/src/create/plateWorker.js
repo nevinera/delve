@@ -18,7 +18,14 @@ self.onmessage = ({ data }) => {
     return;
   }
   if (data.write) {
-    const bytes = data.write === "plate" ? encodePlate(bakeWater(bakePlate(data.value, biomes), water)) : encodePlatter(data.value);
+    if (data.write === "plate") {
+      // With each tile's water as it's baked, for drawing.
+      const bytes = encodePlate(bakeWater(bakePlate(data.value, biomes), water));
+      const waters = [...data.value.tiles].map(([index, tile]) => [index, tile.water]);
+      self.postMessage({ id: data.id, bytes, waters }, [bytes.buffer, ...waters.flatMap(([, w]) => (w ? [w.level.buffer, w.type.buffer] : []))]);
+      return;
+    }
+    const bytes = encodePlatter(data.value);
     self.postMessage({ id: data.id, bytes }, [bytes.buffer]);
     return;
   }
