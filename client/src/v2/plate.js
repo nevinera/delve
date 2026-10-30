@@ -5,7 +5,7 @@ import { dryWater } from "./water.js";
 
 // Plate files (spike): the ground of a plate's tiles at cell scale, which is what each chunk's
 // rendition is, the ground painted by hand there, each cell's biome, the tile's object slots
-// (slots.js) and its water (water.js). What the ground looks
+// (slots.js), its water (water.js) and how far courses (courses.js) cut it. What the ground looks
 // like is worked out from those where it's drawn (look.js). A client loads one only when it's near.
 //
 //   places/continents/<continent>/plates/<px>_<pz>.plate
@@ -13,7 +13,7 @@ import { dryWater } from "./water.js";
 // The file is gzipped. Inside, numbers are little-endian:
 //
 //   0   "DLD1"
-//   4   u32 version (6)
+//   4   u32 version (7)
 //   8   i32 px, i32 pz
 //   16  8 bytes: a bit for each of the plate's 64 tiles, in row order, set where it has one
 //   24  the terrain palette: u8 count, then each name as a u8 length and that many ASCII bytes
@@ -29,16 +29,19 @@ import { dryWater } from "./water.js";
 //         mode 2: u8 type, 8 × 8 i16 levels, row order, -32768 where the cell's dry
 //         mode 3: 8 × 8 i16 levels as for mode 2, then 8 × 8 u8 types
 //       levels in quarter feet, types indexes into water.js's WATER_TYPES
+//       u8 1 where courses cut the tile's ground, then 65 × 65 i16 how far down each corner's cut,
+//         in quarter feet, row order; or u8 0
 //
 // Versions 2 and 3 are read too, without what they kept that's now worked out: cell colors,
 // terrain and forest density, all left out, and in version 2, biomes, all plains. Tiles from before
-// version 5 get their slots scattered as they're read, and from before version 6 have no water.
+// version 5 get their slots scattered as they're read, from before version 6 have no water, and
+// from before version 7 no cuts.
 
 export const TILE_CELLS = TILE_CHUNKS * CHUNK_CELLS; // 64
 export const CELL_CORNERS = TILE_CELLS + 1;
 const MAGIC = "DLD1";
-const VERSION = 6;
-const VERSIONS = new Set([2, 3, 4, 5, 6]);
+const VERSION = 7;
+const VERSIONS = new Set([2, 3, 4, 5, 6, 7]);
 const HEADER = 24;
 const HEIGHTS = CELL_CORNERS * CELL_CORNERS;
 const COLORS = TILE_CELLS * TILE_CELLS * 3;
@@ -58,7 +61,8 @@ export const tileIndexInPlate = (tx, tz) => (tz - Math.floor(tz / PLATE_TILES) *
 
 // plate: { coords: [px, pz], palette: terrain names, tiles: Map(index -> { heights: 65×65 feet,
 // terrain: 64×64 bytes, 0 or 1 + palette indexes, biome: 64×64 indexes, slots, water: as water.js
-// has it }) }, each layer all 0 where it's missing, slots scattered and water dry.
+// has it, cut: 65×65 feet or null }) }, each layer all 0 where it's missing, slots scattered, water
+// dry and nothing cut.
 export function encodePlate({ coords, palette, tiles }) {
   const indexes = [...tiles.keys()].sort((a, b) => a - b);
   const names = palette.map((name) => new TextEncoder().encode(name));
@@ -66,7 +70,8 @@ export function encodePlate({ coords, palette, tiles }) {
   const slotsOf = (index) => tiles.get(index).slots ?? makeSlots(...tileOf(coords, index));
   const slotBytes = indexes.reduce((sum, index) => sum + 2 + slotsOf(index).length, 0);
   const waters = new Map(indexes.map((index) => [index, encodeWater(tiles.get(index).water)]));
-  const waterBytes = [...waters.values()].reduce((sum, water) => sum + water.length, 0);
+  const cutOf = (index) => (tiles.get(index).cut?.some((v) => v) ? tiles.get(index).cut : null);
+  const waterBytes = [...waters.values()].reduce((sum, water) => sum + water.length, 0) + indexes.reduce((sum, index) => sum + 1 + (cutOf(index) ? HEIGHTS * 2 : 0), 0);
   const bytes = new Uint8Array(HEADER + paletteBytes + indexes.length * (HEIGHTS * 2 + CELLS * 2) + slotBytes + waterBytes);
   const view = new DataView(bytes.buffer);
   for (let i = 0; i < 4; i++) bytes[i] = MAGIC.charCodeAt(i);
@@ -95,6 +100,11 @@ export function encodePlate({ coords, palette, tiles }) {
     at += 2 + slots.length;
     bytes.set(waters.get(index), at);
     at += waters.get(index).length;
+    const cut = cutOf(index);
+    bytes[at++] = cut ? 1 : 0;
+    if (!cut) continue;
+    for (let k = 0; k < HEIGHTS; k++) view.setInt16(at + k * 2, Math.max(-32768, Math.min(32767, Math.round(cut[k] * 4))), true);
+    at += HEIGHTS * 2;
   }
   return gzipSync(bytes, { level: 9 });
 }
@@ -134,7 +144,13 @@ export function decodePlate(gzipped) {
     }
     let water = null;
     if (version >= 6) [water, at] = decodeWater(bytes, view, at);
-    tiles.set(index, { heights, terrain, biome, slots, water });
+    let cut = null;
+    if (version >= 7 && bytes[at++]) {
+      cut = new Float32Array(HEIGHTS);
+      for (let k = 0; k < HEIGHTS; k++) cut[k] = view.getInt16(at + k * 2, true) / 4;
+      at += HEIGHTS * 2;
+    }
+    tiles.set(index, { heights, terrain, biome, slots, water, cut });
   }
   return { coords, palette, tiles };
 }

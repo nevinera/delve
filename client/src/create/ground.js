@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
 import { AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, partWater } from "../v2/water.js";
+import { courseBox, shape } from "../v2/courses.js";
 import { waterMaterial } from "../editor/waterMaterial.js";
 import { SHORE_FADE_FT, WATER_LOOKS } from "./waterSurface.js";
 import { PATTERNS, look, painted, slopeOf } from "../v2/look.js";
@@ -71,8 +72,9 @@ export class Renditions {
     this.biomes = new BiomeMap(); // and which biome is where from them, baked into plate files saved
     this.biomeCells = new Map(); // "tx,tz" -> its cells' biomes, worked out as they're wanted
     this.looks = 0; // counts changes to the biomes, to tell when what ground looks like is stale
-    this.waterBodies = []; // the water's bodies, as water.json keeps them
+    this.waterFile = { bodies: [], courses: [] }; // the water's bodies and courses, as water.json keeps them
     this.water = new WaterMap(); // and the water from them, baked into plate files saved
+    this.cuts = new Map(); // "tx,tz" -> how far courses cut the tile's corners, over what its plate file has
     this.waters = new Map(); // "tx,tz" -> the tile's water as last baked, over what its plate file has
     this.wet = 0; // counts changes to tiles' water
     this.wetPlates = new Set(); // "px,pz" of plates whose renditions' water changed, to draw again
@@ -97,14 +99,69 @@ export class Renditions {
     return dirty ? this.markBoxes(boxes) : new Set();
   }
 
-  // Takes the water's bodies, and with `dirty`, marks the plates where the water changed, to save
-  // again. Gives their "px,pz".
-  setWater(bodies, dirty = true) {
-    const boxes = changedWaterBoxes(this.waterBodies, bodies);
-    this.waterBodies = bodies;
-    this.water = new WaterMap(bodies);
-    this.worker?.postMessage({ water: bodies });
-    return dirty ? this.markBoxes(boxes) : new Set();
+  // Takes the water's bodies and courses, { bodies, courses } as water.json keeps them, and with
+  // `dirty`, carves the courses that changed into the ground and marks the plates where the water
+  // changed, to save again. Gives their "px,pz".
+  setWater(file, dirty = true) {
+    const boxes = changedWaterBoxes(this.waterFile, file);
+    const courses = changedWaterBoxes({ courses: this.waterFile.courses }, { courses: file.courses });
+    this.waterFile = file;
+    this.water = new WaterMap(file.bodies, file.courses);
+    this.worker?.postMessage({ water: file });
+    if (!dirty) return new Set();
+    const moved = this.carve(courses, file.courses ?? []);
+    return new Set([...moved, ...this.markBoxes(boxes)]);
+  }
+
+  // Carves `courses` into the ground within `boxes` ([x0, z0, x1, z1]): each cell corner there put
+  // back up by what courses cut it before, then cut down under every course there (courses.js's
+  // shape), and how far kept with its cells. Gives the "px,pz" of the plates moved.
+  carve(boxes, courses) {
+    const moved = new Set();
+    for (const [x0, z0, x1, z1] of boxes) {
+      const near = courses.filter((course) => {
+        const b = courseBox(course);
+        return course.surface?.length && b[0] <= x1 && b[2] >= x0 && b[1] <= z1 && b[3] >= z0;
+      });
+      const deltas = new Map(); // "ci,cj" of a corner -> how far it moves
+      for (let tz = Math.floor(z0 / TILE_FT); tz <= Math.floor(z1 / TILE_FT); tz++) {
+        for (let tx = Math.floor(x0 / TILE_FT); tx <= Math.floor(x1 / TILE_FT); tx++) {
+          const key = `${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`;
+          const tile = (this.decoded.get(key) ?? (this.plateFiles.has(key) || this.made.has(key) ? this.readNow(key) : null))?.tiles.get(tileIndexInPlate(tx, tz));
+          if (!tile) continue;
+          const cut = tile.cut ?? new Float32Array(CELL_CORNERS * CELL_CORNERS);
+          for (let j = 0; j < CELL_CORNERS; j++) {
+            const z = tz * TILE_FT + j * CELL_FT;
+            if (z < z0 || z > z1) continue;
+            for (let i = 0; i < CELL_CORNERS; i++) {
+              const x = tx * TILE_FT + i * CELL_FT;
+              if (x < x0 || x > x1) continue;
+              const k = j * CELL_CORNERS + i;
+              const base = tile.heights[k] + cut[k];
+              let top = base;
+              for (const course of near) top = Math.min(top, shape(course, x, z)?.top ?? top);
+              cut[k] = base - top;
+              if (top !== tile.heights[k]) deltas.set(`${tx * TILE_CELLS + i},${tz * TILE_CELLS + j}`, top - tile.heights[k]);
+            }
+          }
+          tile.cut = cut.some((v) => v) ? cut : null;
+          this.cuts.set(`${tx},${tz}`, tile.cut);
+        }
+      }
+      if (!deltas.size) continue;
+      const at = (x, z) => deltas.get(`${Math.round(x / CELL_FT)},${Math.round(z / CELL_FT)}`) ?? 0;
+      for (const key of this.raise(at, [x0, z0, x1, z1], CELLS, false)) moved.add(key);
+    }
+    return moved;
+  }
+
+  // The ground at (x, z) as it was before courses cut it, where its cells are read, else as
+  // heightAt has it.
+  baseAt(x, z) {
+    const height = this.heightAt(x, z);
+    const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
+    const cut = this.decoded.get(`${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`)?.tiles.get(tileIndexInPlate(tx, tz))?.cut;
+    return height == null || !cut ? height : height + between(cut, CELL_CORNERS, (x - tx * TILE_FT) / CELL_FT, (z - tz * TILE_FT) / CELL_FT);
   }
 
   // Marks the plates `boxes` ([x0, z0, x1, z1]) touch, that have ground, to save again. Gives
@@ -187,13 +244,15 @@ export class Renditions {
   }
 
   // Puts the tiles made in plate `key` into it, read from its file or made from nothing, and takes
-  // out those cleared away, and their water as last baked.
+  // out those cleared away, and their water as last baked and cuts as last carved.
   fill(key, plate) {
     for (const index of this.cleared.get(key) ?? []) plate.tiles.delete(index);
     const [px, pz] = key.split(",").map(Number);
     for (const [index, tile] of plate.tiles) {
-      const water = this.waters.get(`${px * PLATE_TILES + (index % PLATE_TILES)},${pz * PLATE_TILES + Math.floor(index / PLATE_TILES)}`);
+      const key = `${px * PLATE_TILES + (index % PLATE_TILES)},${pz * PLATE_TILES + Math.floor(index / PLATE_TILES)}`;
+      const [water, cut] = [this.waters.get(key), this.cuts.get(key)];
       if (water !== undefined) tile.water = water;
+      if (cut !== undefined) tile.cut = cut;
     }
     for (const index of this.made.get(key) ?? []) {
       if (plate.tiles.has(index)) continue;
@@ -252,7 +311,7 @@ export class Renditions {
         continue;
       }
       // Only what the file holds, not what's kept for drawing.
-      const tiles = new Map([...plate.tiles].map(([index, { heights, terrain, slots, water }]) => [index, { heights, terrain, slots, water }]));
+      const tiles = new Map([...plate.tiles].map(([index, { heights, terrain, slots, water, cut }]) => [index, { heights, terrain, slots, water, cut }]));
       writing.push(this.write("plate", { coords: [px, pz], palette: plate.palette, tiles, around: this.around(px, pz) }).then((bytes) => files.set(platePath(continent, [px, pz]), bytes)));
     }
     // Platters after, with their tiles' water as the plates were baked.
@@ -322,7 +381,7 @@ export class Renditions {
     if (this.worker) return;
     this.worker = new Worker(new URL("./plateWorker.js", import.meta.url), { type: "module" });
     this.worker.postMessage({ biomes: this.biomeAreas });
-    this.worker.postMessage({ water: this.waterBodies });
+    this.worker.postMessage({ water: this.waterFile });
     this.worker.onmessage = ({ data }) => {
       if (data.id === undefined) return this.done(data);
       this.writes.get(data.id)(data);
@@ -335,8 +394,9 @@ export class Renditions {
   // renditions' corners move by the average move round them, over a square as wide as their parts,
   // so a small brush makes a low, wide bump in them, not one as tall as it makes. Moves worked out
   // on corners are kept with a ring of corners round them, for smooth() to curve between. Gives
-  // the "px,pz" of the plates whose ground moved.
-  raise(at, [x0, z0, x1, z1], level) {
+  // the "px,pz" of the plates whose ground moved. With `grow` false, it makes no tiles where
+  // there are none.
+  raise(at, [x0, z0, x1, z1], level, grow = true) {
     const moved = new Set();
     // at() on a grid `n` squares a side, `step` ft apart from (ox, oz), and `ring` more corners
     // round it, or null where it's all 0. With `half`, each corner's the average of at() over the
@@ -370,7 +430,7 @@ export class Renditions {
     const [step, n] = level === CELLS ? [CELL_FT, TILE_CELLS] : level === CHUNKS ? [CHUNK_FT, TILE_CHUNKS] : [TILE_FT, 1];
     for (let tz = Math.floor(z0 / TILE_FT); tz <= Math.floor(z1 / TILE_FT); tz++) {
       for (let tx = Math.floor(x0 / TILE_FT); tx <= Math.floor(x1 / TILE_FT); tx++) {
-        if (!this.tile(tx, tz) && sample(tx * TILE_FT, tz * TILE_FT, step, n)) this.make(tx, tz);
+        if (grow && !this.tile(tx, tz) && sample(tx * TILE_FT, tz * TILE_FT, step, n)) this.make(tx, tz);
       }
     }
     const add = (map, key, values) => {
@@ -609,6 +669,15 @@ export class Renditions {
     for (let j = 0; j < side; j++) for (let i = r; i < side - r; i++) rows[j * side + i] = most(grid, j * side + i, 1, r);
     for (let j = 0; j < TILE_CELLS; j++) for (let i = 0; i < TILE_CELLS; i++) out[j * TILE_CELLS + i] = most(rows, (j + r) * side + i + r, side, r);
     return out;
+  }
+
+  // Whether there's sea at (x, z): off the tiles, or a cell's water that's the sea's.
+  seaAt(x, z) {
+    const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
+    if (!this.tile(tx, tz)) return true;
+    const water = this.decoded.get(`${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`)?.tiles.get(tileIndexInPlate(tx, tz))?.water;
+    const k = Math.floor((z - tz * TILE_FT) / CELL_FT) * TILE_CELLS + Math.floor((x - tx * TILE_FT) / CELL_FT);
+    return Boolean(water) && !Number.isNaN(water.level[k]) && water.type[k] === SEA;
   }
 
   // The water's surface at (x, z): the sea's off the tiles, a cell's water where its plate's read,

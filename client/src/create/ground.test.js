@@ -124,10 +124,27 @@ describe("raising the ground", () => {
   it("bakes water into the plates its bodies change", () => {
     const renditions = world();
     const pond = { type: "pond", level: 1000, points: [[10, 10], [50, 10], [50, 50], [10, 50]] };
-    expect([...renditions.setWater([pond])]).toEqual(["0,0"]);
+    expect([...renditions.setWater({ bodies: [pond], courses: [] })]).toEqual(["0,0"]);
     const { water } = decodePlate(renditions.changedFiles("main").get("places/continents/main/plates/0_0.plate")).tiles.get(0);
     expect(water.level[4 * 64 + 4]).toBe(1000);
     expect(Number.isNaN(water.level[0])).toBe(true);
+  });
+
+  it("carves courses' channels, and fills them in again when they move", () => {
+    const renditions = world();
+    renditions.cells(0, 0);
+    const stream = { type: "stream", points: [[0, 128, 6], [256, 128, 6]], surface: [9, 9] };
+    renditions.setWater({ bodies: [], courses: [stream] });
+    // Its bed 1.5 ft under its surface in its middle, the ground beside it as it was.
+    expect(renditions.heightAt(100, 128)).toBeCloseTo(7.5);
+    expect(renditions.baseAt(100, 128)).toBeCloseTo(10);
+    expect(renditions.heightAt(100, 200)).toBe(10);
+    renditions.setWater({ bodies: [], courses: [{ ...stream, points: [[0, 64, 6], [256, 64, 6]] }] });
+    expect(renditions.heightAt(100, 128)).toBeCloseTo(10);
+    expect(renditions.heightAt(100, 64)).toBeCloseTo(7.5);
+    const { water, cut } = decodePlate(renditions.changedFiles("main").get("places/continents/main/plates/0_0.plate")).tiles.get(0);
+    expect(cut[16 * 65 + 25]).toBeCloseTo(2.5);
+    expect(water.level[16 * 64 + 25]).toBe(9);
   });
 
   it("moves plate files read later by what was kept", () => {

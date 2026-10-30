@@ -45,8 +45,10 @@ describe("changedWaterBoxes", () => {
   it("gives the boxes of bodies added, removed or changed", () => {
     const a = { type: "pond", level: 5, points: square(0, 0, 100) };
     const b = { type: "pond", level: 5, points: square(1000, 0, 100) };
-    expect(changedWaterBoxes([a], [a, b])).toEqual([[1000, 0, 1100, 100]]);
-    expect(changedWaterBoxes([a, b], [a, { ...b, level: 6 }])).toHaveLength(2);
+    expect(changedWaterBoxes({ bodies: [a] }, { bodies: [a, b] })).toEqual([[1000, 0, 1100, 100]]);
+    expect(changedWaterBoxes({ bodies: [a, b] }, { bodies: [a, { ...b, level: 6 }] })).toHaveLength(2);
+    const course = { type: "stream", points: [[0, 0, 6], [100, 0, 6]], surface: [5, 5] };
+    expect(changedWaterBoxes({ courses: [course] }, { courses: [{ ...course, surface: [5, 4] }] })).toHaveLength(2);
   });
 });
 
@@ -114,5 +116,19 @@ describe("partWater", () => {
     expect(Number.isNaN(parts.level[1])).toBe(true);
     expect(partWater(dryWater(4096))).toBeNull();
     expect(partWater(null)).toBeNull();
+  });
+});
+
+describe("courses' water", () => {
+  it("lies along their line, as wide as they are, where the ground's lower than their surface", () => {
+    // Ground at -12 everywhere; a river 40 ft wide across the tile at z = 128, its surface at -10.
+    const heights = new Float32Array(65 * 65).fill(-12);
+    const river = { type: "river", points: [[-50, 128, 40], [300, 128, 40]], surface: [-10, -10] };
+    const water = new WaterMap([], [river]).tile(0, 0, heights);
+    const at = (x, z) => water.level[Math.floor(z / 4) * 64 + Math.floor(x / 4)];
+    expect(at(100, 128)).toBe(-10);
+    expect(water.type[32 * 64 + 25]).toBe(WATER_TYPES.indexOf("river"));
+    expect(at(100, 146)).toBe(-10);
+    expect(Number.isNaN(at(100, 160))).toBe(true);
   });
 });

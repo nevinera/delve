@@ -1,3 +1,4 @@
+import { courseBox, shape } from "./courses.js";
 import { CELL_FT, PLATE_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "./sizes.js";
 
 // Water: bodies (sea, lakes, ponds, swamp pools) and, later, courses (rivers, streams), drawn by
@@ -12,7 +13,8 @@ import { CELL_FT, PLATE_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "./size
 //
 // A body is { type, level, points: [[x, z], ...] }: its surface stands at `level` ft over the cells
 // inside its outline whose ground is lower, so its banks are where the ground rises through it.
-// The last body is on top where they overlap.
+// The last body is on top where they overlap, and courses (courses.js) are on top of them: their
+// water's over the cells near enough their line whose ground's lower than their surface there.
 //
 // A tile's water is null, or { level: 64×64 feet, NaN where the cell's dry, type: 64×64 indexes
 // into WATER_TYPES }, cells in row order.
@@ -36,10 +38,11 @@ const boxOf = (points) => {
 };
 
 export class WaterMap {
-  constructor(bodies = []) {
+  constructor(bodies = [], courses = []) {
     this.bodies = bodies
       .filter(({ points }) => points.length >= 3)
       .map(({ type, level, points }) => ({ type: Math.max(0, WATER_TYPES.indexOf(type)), level, points, box: boxOf(points) }));
+    this.courses = courses.filter(({ points, surface }) => points.length >= 2 && surface?.length).map((course) => ({ course, type: WATER_TYPES.indexOf(course.type), box: courseBox(course) }));
   }
 
   // Tile (tx, tz)'s water, from its 65 × 65 corner `heights`, or null where it has none.
@@ -69,6 +72,26 @@ export class WaterMap {
             water.level[j * TILE_CELLS + i] = level;
             water.type[j * TILE_CELLS + i] = type;
           }
+        }
+      }
+    }
+    for (const { course, type, box } of this.courses) {
+      if (box[0] > x0 + TILE_FT || box[2] < x0 || box[1] > z0 + TILE_FT || box[3] < z0) continue;
+      const [i0, i1] = [Math.max(0, Math.floor((box[0] - x0) / CELL_FT)), Math.min(TILE_CELLS, Math.ceil((box[2] - x0) / CELL_FT))];
+      const [j0, j1] = [Math.max(0, Math.floor((box[1] - z0) / CELL_FT)), Math.min(TILE_CELLS, Math.ceil((box[3] - z0) / CELL_FT))];
+      for (let j = j0; j < j1; j++) {
+        for (let i = i0; i < i1; i++) {
+          const made = shape(course, x0 + (i + 0.5) * CELL_FT, z0 + (j + 0.5) * CELL_FT);
+          if (!made?.wet) continue;
+          const at = j * CORNERS + i;
+          const ground = (heights[at] + heights[at + 1] + heights[at + CORNERS] + heights[at + CORNERS + 1]) / 4;
+          if (ground >= made.level) continue;
+          water ??= dryWater(TILE_CELLS * TILE_CELLS);
+          // Where courses meet, the higher.
+          const k = j * TILE_CELLS + i;
+          if (water.type[k] === type && !(made.level > water.level[k])) continue;
+          water.level[k] = made.level;
+          water.type[k] = type;
         }
       }
     }
@@ -107,12 +130,16 @@ export function partWater(water) {
   return out;
 }
 
-// The boxes, [x0, z0, x1, z1], of bodies in `before` or `after` but not both, where the water
-// may have changed.
+// The boxes, [x0, z0, x1, z1], of bodies and courses in `before` or `after` but not both, where
+// the water may have changed. before and after: { bodies, courses }, as water.json keeps them.
 export function changedWaterBoxes(before, after) {
-  const key = ({ type, level, points }) => `${type}:${level}:${points.join(";")}`;
-  const [was, now] = [new Set(before.map(key)), new Set(after.map(key))];
-  return [...before.filter((body) => !now.has(key(body))), ...after.filter((body) => !was.has(key(body)))].filter(({ points }) => points.length).map(({ points }) => boxOf(points));
+  const changed = (was, now, key) => {
+    const [had, has] = [new Set(was.map(key)), new Set(now.map(key))];
+    return [...was.filter((thing) => !has.has(key(thing))), ...now.filter((thing) => !had.has(key(thing)))];
+  };
+  const bodies = changed(before.bodies ?? [], after.bodies ?? [], ({ type, level, points }) => `${type}:${level}:${points.join(";")}`);
+  const courses = changed(before.courses ?? [], after.courses ?? [], (course) => JSON.stringify(course));
+  return [...bodies.filter(({ points }) => points.length).map(({ points }) => boxOf(points)), ...courses.filter(({ points }) => points.length).map(courseBox)];
 }
 
 // Each cell's ground: the mean of its corners', 64 × 64 in row order.

@@ -196,7 +196,8 @@ for (const continent of continents) {
       }
     }
   }
-  const water = files.has(waterPath(continent)) ? new WaterMap(JSON.parse(strFromU8(files.get(waterPath(continent)))).bodies) : new WaterMap();
+  const waterFile = files.has(waterPath(continent)) ? JSON.parse(strFromU8(files.get(waterPath(continent)))) : {};
+  const water = new WaterMap(waterFile.bodies, waterFile.courses);
   const changedPlates = new Set([...moved].map((id) => `${Math.floor(tiles[id].tx / PLATE_TILES)},${Math.floor(tiles[id].tz / PLATE_TILES)}`));
   for (const key of changedPlates) {
     const plate = plates.get(key);

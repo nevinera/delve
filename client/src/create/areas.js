@@ -12,6 +12,7 @@ import { inside } from "../v2/biomes.js";
 //   { "version": 1, <list>: [{ <field>: kind, ...more, "points": [[x, z], ...] }, ...] }, continent feet
 //
 // `more` being what else each area has (`extras`), worked out by `start(points)` for a new one.
+// With `closed` false, they're open lines, not polygons, of two corners or more.
 const WIDTH_PX = 3;
 const SELECTED_PX = 6;
 const HANDLE_PX = 9; // how wide a corner's handle is
@@ -26,8 +27,9 @@ const UNDOS = 50;
 export class Areas {
   // surface(x, z) gives the height outlines are drawn at. Corners' handles are drawn over `stage`.
   // colors: kind -> CSS color; kind: what new areas are; field and list: as files have them.
-  constructor(scene, surface, stage, { colors, kind, field, list, extras = [], start = () => ({}) }) {
-    Object.assign(this, { surface, colors, field, list, extras, start });
+  constructor(scene, surface, stage, { colors, kind, field, list, extras = [], start = () => ({}), closed = true }) {
+    Object.assign(this, { surface, colors, field, list, extras, start, closed });
+    this.fewest = closed ? 3 : 2; // the fewest corners an area has
     this.fallback = kind;
     this.group = new THREE.Group();
     scene.add(this.group);
@@ -59,7 +61,7 @@ export class Areas {
     this.unselect();
     for (const area of this.areas) this.remove(area.line);
     const extras = (area) => Object.fromEntries(this.extras.map((key) => [key, area[key]]));
-    this.areas = (json[this.list] ?? []).filter(({ points }) => points.length >= 3).map((area) => this.area(area[this.field] in this.colors ? area[this.field] : this.fallback, area.points, extras(area)));
+    this.areas = (json[this.list] ?? []).filter(({ points }) => points.length >= this.fewest).map((area) => this.area(area[this.field] in this.colors ? area[this.field] : this.fallback, area.points, extras(area)));
   }
 
   toJSON() {
@@ -98,7 +100,7 @@ export class Areas {
 
   area(kind, points, extras = this.start(points)) {
     const area = { kind, ...extras, points };
-    area.line = this.line(area, true);
+    area.line = this.line(area, this.closed);
     return area;
   }
 
@@ -155,7 +157,7 @@ export class Areas {
 
   // An area's outline across the screen, as pixels on the canvas, null where it's behind.
   outline(camera, width, height, area) {
-    return this.along(area.points, true).map((p) => this.screen(camera, width, height, p));
+    return this.along(area.points, this.closed).map((p) => this.screen(camera, width, height, p));
   }
 
   // The area whose outline passes under the canvas pixel (px, py), or null.
@@ -211,7 +213,7 @@ export class Areas {
     if (!this.draft) return;
     const { kind, points } = this.draft;
     this.drop();
-    if (points.length < 3) return;
+    if (points.length < this.fewest) return;
     this.save();
     const area = this.area(kind, points);
     this.areas.push(area);
@@ -291,6 +293,7 @@ export class Areas {
 
   // The area on top at (x, z), or null.
   at(x, z) {
+    if (!this.closed) return null;
     for (let k = this.areas.length - 1; k >= 0; k--) if (inside(this.areas[k].points, x, z)) return this.areas[k];
     return null;
   }
@@ -317,7 +320,7 @@ export class Areas {
     if (best) return best;
     on.forEach((a, k) => {
       const b = on[(k + 1) % on.length];
-      if (!a || !b) return;
+      if (!a || !b || (!this.closed && k === on.length - 1)) return;
       const [dx, dy] = [b[0] - a[0], b[1] - a[1]];
       const t = Math.min(1, Math.max(0, ((px - a[0]) * dx + (py - a[1]) * dy) / (dx * dx + dy * dy || 1)));
       const d = Math.hypot(a[0] + dx * t - px, a[1] + dy * t - py);
@@ -342,7 +345,7 @@ export class Areas {
   // Takes the picked out area's corner `k` away, while it keeps three.
   removeCorner(k) {
     const area = this.selected;
-    if (area.points.length <= 3) return;
+    if (area.points.length <= this.fewest) return;
     this.save();
     area.points.splice(k, 1);
     this.place(area.line, area.points);

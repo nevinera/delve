@@ -30,3 +30,14 @@ describe("plate files' water", () => {
     expect(size(water) - size(null)).toBeLessThan(100);
   });
 });
+
+describe("plate files' cuts", () => {
+  it("keep how far courses cut each corner, and none where they cut nothing", () => {
+    const cut = new Float32Array(65 * 65);
+    cut[70] = 3.25;
+    const tiles = roundTrip([[0, { ...tile(null), cut }], [1, { ...tile(null), cut: new Float32Array(65 * 65) }], [2, tile(null)]]);
+    expect(tiles.get(0).cut[70]).toBe(3.25);
+    expect(tiles.get(1).cut).toBeNull();
+    expect(tiles.get(2).cut).toBeNull();
+  });
+});

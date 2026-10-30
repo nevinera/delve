@@ -122,7 +122,7 @@ function download({ name, files, continent, renditions }, planning, biomes, wate
 
 function start(world, changes) {
   const { name, continent, renditions } = world;
-  $("downloadWorld").addEventListener("click", () => download(world, tools.marks.toJSON(), tools.biomes.toJSON(), tools.water.toJSON()));
+  $("downloadWorld").addEventListener("click", () => download(world, tools.marks.toJSON(), tools.biomes.toJSON(), { version: 1, bodies: tools.water.toJSON().bodies, courses: tools.courses.toJSON().courses }));
   $("open").hidden = true;
   $("worldName").textContent = name;
   const canvas = $("view");
@@ -196,9 +196,15 @@ function start(world, changes) {
   let biomesBaked = tools.biomes.version;
   // And with the water's bodies.
   const water = world.files.get(waterPath(continent));
-  if (water) tools.water.load(JSON.parse(strFromU8(water)));
-  renditions.setWater(tools.water.toJSON().bodies, false);
-  let waterBaked = tools.water.version;
+  if (water) {
+    tools.water.load(JSON.parse(strFromU8(water)));
+    tools.courses.load(JSON.parse(strFromU8(water)));
+  }
+  // What the water file has: the bodies and courses.
+  const waterFile = () => ({ version: 1, bodies: tools.water.toJSON().bodies, courses: tools.courses.toJSON().courses });
+  const waterVersion = () => `${tools.water.version},${tools.courses.version}`;
+  renditions.setWater(waterFile(), false);
+  let waterBaked = waterVersion();
 
   const resize = () => {
     const { clientWidth: w, clientHeight: h } = canvas;
@@ -213,7 +219,7 @@ function start(world, changes) {
   const FPS = 30;
   let lastSave = 0;
   let lastHud = 0;
-  let [saving, lastChangeSave, marksSaved, biomesSaved, waterSaved] = [false, 0, 0, 0, 0];
+  let [saving, lastChangeSave, marksSaved, biomesSaved, waterSaved] = [false, 0, 0, 0, "0,0"];
   let lastInfo = 0;
   const compass = new Compass($("stage"), document.querySelector(".create-bar"));
   const feet = (ft) => `${Math.round(ft).toLocaleString()} ft`;
@@ -287,23 +293,23 @@ function start(world, changes) {
       biomesBaked = tools.biomes.version;
       ground.retint();
     }
-    if (tools.water.version !== waterBaked && !tools.water.dragging) {
-      renditions.setWater(tools.water.toJSON().bodies);
-      waterBaked = tools.water.version;
+    if (waterVersion() !== waterBaked && !tools.water.dragging && !tools.courses.dragging && !tools.courses.draft) {
+      ground.refresh(renditions.setWater(waterFile()));
+      waterBaked = waterVersion();
     }
     // Saves what's changed once there's been time to finish the stroke, writing files on the worker.
-    if (!saving && !tools.stroke && !tools.drawing && now - lastChangeSave > SAVE_CHANGES_MS && (renditions.unsaved.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || tools.water.version !== waterSaved)) {
+    if (!saving && !tools.stroke && !tools.drawing && now - lastChangeSave > SAVE_CHANGES_MS && (renditions.unsaved.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || waterVersion() !== waterSaved)) {
       saving = true;
-      const [version, biomesVersion, waterVersion] = [tools.marks.version, tools.biomes.version, tools.water.version];
+      const [version, biomesVersion, waterNow] = [tools.marks.version, tools.biomes.version, waterVersion()];
       renditions
         .unsavedFiles(continent)
         .then(async (files) => {
           for (const [path, bytes] of files) changes.set(path, bytes);
           changes.set(planningPath(continent), strToU8(`${JSON.stringify(tools.marks.toJSON())}\n`));
           changes.set(biomesPath(continent), strToU8(`${JSON.stringify(tools.biomes.toJSON())}\n`));
-          changes.set(waterPath(continent), strToU8(`${JSON.stringify(tools.water.toJSON())}\n`));
+          changes.set(waterPath(continent), strToU8(`${JSON.stringify(waterFile())}\n`));
           await store.set("changes", changes);
-          [marksSaved, biomesSaved, waterSaved] = [version, biomesVersion, waterVersion];
+          [marksSaved, biomesSaved, waterSaved] = [version, biomesVersion, waterNow];
         })
         .catch((e) => console.error("couldn't save the changes", e))
         .finally(() => {

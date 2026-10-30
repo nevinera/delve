@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
 import { PICK_PX } from "./areas.js";
 import { Biomes } from "./biomes.js";
+import { Courses } from "./courses.js";
 import { SHAPES, TURNS, pullBrush, raiseBrush } from "./geo.js";
 import { EMPTY_FT } from "./ground.js";
 import { Draw } from "./draw.js";
@@ -27,6 +28,8 @@ import { WaterBodies } from "./water.js";
 //   one, clicking inside it starts another area there, and clicking outside puts it back.
 // - geo's water: the same for bodies of water (water.js), and the level of the one picked out
 //   can be typed.
+// - geo's courses: the same for streams and rivers, open lines from their source down, finished
+//   by double-clicking or Enter (courses.js), and the widths of the one picked out can be typed.
 // - geo's brushes, raise and lower, flatten, smooth and clear: dragging on the ground works them
 //   where the pointer is, and a ring on the ground shows where they reach. [ and ] resize them, and
 //   c and v turn raise and lower's, shift+c and shift+v a little.
@@ -44,6 +47,8 @@ const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
 
 const $ = (id) => document.getElementById(id);
+// The kind an area tool's kind button picks.
+const kindOf = (button) => button.dataset.biome ?? button.dataset.water ?? button.dataset.course;
 // The draw tool's sliders, 0 to 1000, and the growth settings they set, some on a log scale.
 const logSlider = (key, lo, hi, show) => ({
   get: (s) => Math.round((1000 * Math.log(s[key] / lo)) / Math.log(hi / lo)),
@@ -84,7 +89,9 @@ export class Tools {
     this.biomes = new Biomes(scene, (x, z) => this.surface(x, z), canvas.parentElement);
     this.biomesShown = false; // whether biome areas are shown with other tools too
     this.water = new WaterBodies(scene, (x, z) => this.surface(x, z), canvas.parentElement, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT);
-    this.outlined = { biomes: this.biomes, water: this.water }; // each tool that draws areas, its areas
+    const ends = (x, z) => Boolean(this.water.at(x, z)) || renditions.seaAt(x, z);
+    this.courses = new Courses(scene, (x, z) => this.surface(x, z), canvas.parentElement, (x, z) => renditions.baseAt(x, z), ends);
+    this.outlined = { biomes: this.biomes, water: this.water, courses: this.courses }; // each tool that draws areas, its areas
     this.draw = new Draw(scene, canvas.parentElement, renditions, ground, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, () => this.showDraw(), this.biomes);
     // Measure's, { from, to } for a ruler, { middle, radius } for a circle, and while the button's
     // down, where it went down and whether a ruler or circle was shown before.
@@ -204,11 +211,11 @@ export class Tools {
       });
     }
     // Each area tool's kinds' buttons, by tool.
-    this.kindButtons = { biomes: [...document.querySelectorAll("[data-biome]")], water: [...document.querySelectorAll("[data-water]")] };
+    this.kindButtons = { biomes: [...document.querySelectorAll("[data-biome]")], water: [...document.querySelectorAll("[data-water]")], courses: [...document.querySelectorAll("[data-course]")] };
     for (const [tool, buttons] of Object.entries(this.kindButtons)) {
       for (const button of buttons) {
         button.addEventListener("click", () => {
-          this.outlined[tool].setKind(button.dataset.biome ?? button.dataset.water);
+          this.outlined[tool].setKind(kindOf(button));
           pressed(buttons, button);
         });
       }
@@ -217,6 +224,14 @@ export class Tools {
     $("biomesUndo").addEventListener("click", () => this.biomes.undo());
     $("waterDelete").addEventListener("click", () => this.water.deleteSelected());
     $("waterUndo").addEventListener("click", () => this.water.undo());
+    $("coursesDelete").addEventListener("click", () => this.courses.deleteSelected());
+    $("coursesUndo").addEventListener("click", () => this.courses.undo());
+    for (const id of ["courseStart", "courseEnd"]) {
+      $(id).addEventListener("change", () => {
+        const [start, end] = [Number($("courseStart").value), Number($("courseEnd").value)];
+        if (start > 0 && end > 0) this.courses.setWidths(Math.round(start * 10) / 10, Math.round(end * 10) / 10);
+      });
+    }
     $("waterLevel").addEventListener("change", () => {
       const level = Number($("waterLevel").value);
       if (Number.isFinite(level)) this.water.setExtra("level", Math.round(level * 10) / 10);
@@ -403,7 +418,7 @@ export class Tools {
     const at = this.hit();
     const { draft } = areas;
     if (draft) {
-      if (draft.points.length >= 3 && near(draft.points[0])) return areas.close();
+      if (areas.closed && draft.points.length >= 3 && near(draft.points[0])) return areas.close();
       // A double-click's second press, closed by the dblclick.
       if (near(draft.points.at(-1))) return;
       if (at) areas.addCorner(at[0], at[2]);
@@ -430,7 +445,7 @@ export class Tools {
     areas.select(area);
     areas.kind = area.kind;
     const tool = Object.keys(this.outlined).find((t) => this.outlined[t] === areas);
-    this.kindButtons[tool].forEach((b) => b.setAttribute("aria-pressed", String((b.dataset.biome ?? b.dataset.water) === area.kind)));
+    this.kindButtons[tool].forEach((b) => b.setAttribute("aria-pressed", String(kindOf(b) === area.kind)));
   }
 
   // Shows biome areas' outlines with every tool, or only the biome tool.
@@ -492,7 +507,8 @@ export class Tools {
     this.marks.setFlat(PLANNING.has(tool));
     if (tool !== "draw") this.draw.clear();
     this.biomes.setShown(tool === "biomes" || this.biomesShown);
-    this.water.setShown(tool === "water");
+    this.water.setShown(tool === "water" || tool === "courses");
+    this.courses.setShown(tool === "courses" || tool === "water");
     this.measuring = null;
     this.box = null;
     this.boxEl.hidden = true;
@@ -652,6 +668,11 @@ export class Tools {
     const level = $("waterLevel");
     level.disabled = !this.water.selected;
     if (document.activeElement !== level) level.value = this.water.selected ? String(this.water.selected.level) : "";
+    // And the course picked out's widths.
+    [$("courseStart"), $("courseEnd")].forEach((input, k) => {
+      input.disabled = !this.courses.selected;
+      if (document.activeElement !== input) input.value = this.courses.selected ? String(this.courses.selected.widths[k]) : "";
+    });
     $("growPassable").hidden = !this.draw.passable;
     if (this.tool === "measure" && this.measuring) {
       if (this.measuring.from && !this.measuring.radius) {

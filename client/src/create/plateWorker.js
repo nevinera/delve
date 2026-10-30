@@ -14,7 +14,7 @@ self.onmessage = ({ data }) => {
     return;
   }
   if (data.water) {
-    water = new WaterMap(data.water);
+    water = new WaterMap(data.water.bodies, data.water.courses);
     return;
   }
   if (data.write) {
@@ -32,7 +32,7 @@ self.onmessage = ({ data }) => {
   const { key, bytes } = data;
   try {
     const plate = decodePlate(bytes);
-    const buffers = [...plate.tiles.values()].flatMap((tile) => [tile.heights.buffer, tile.terrain.buffer, tile.biome.buffer, tile.slots.buffer, ...(tile.water ? [tile.water.level.buffer, tile.water.type.buffer] : [])]);
+    const buffers = [...plate.tiles.values()].flatMap((tile) => [tile.heights.buffer, tile.terrain.buffer, tile.biome.buffer, tile.slots.buffer, ...(tile.water ? [tile.water.level.buffer, tile.water.type.buffer] : []), ...(tile.cut ? [tile.cut.buffer] : [])]);
     self.postMessage({ key, plate }, buffers);
   } catch (err) {
     self.postMessage({ key, error: err.message });

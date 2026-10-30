@@ -65,6 +65,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 10 C 8 8, 10 14, 14 14 L34 14 C 38 14, 40 8, 46 10 L46 22 Z" fill="#c8b48a"/><path d="M12 14 L36 14 C 34 19, 14 19, 12 14 Z" fill="#3a78b8"/></svg>
         <span>water</span><kbd class="create-key">B</kbd>
       </button>
+      <button type="button" data-tool="courses" data-key="r" aria-pressed="false" title="draw streams and rivers">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 12 L46 12 L46 22 Z" fill="#c8b48a"/><path d="M4 18 C 14 12, 20 22, 30 16 C 36 12, 40 16, 44 14" fill="none" stroke="#3a78b8" stroke-width="4" stroke-linecap="round"/></svg>
+        <span>courses</span><kbd class="create-key">R</kbd>
+      </button>
       <button type="button" data-tool="clear" aria-pressed="false" title="clear the ground away, back to empty sea">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 14 C 6 8, 10 12, 14 10 L14 22 Z M34 10 C 38 12, 42 8, 46 14 L46 22 L34 22 Z" fill="#c8b48a"/><path d="M14 22 L14 18 L34 18 L34 22 Z" fill="#2e608c"/></svg>
         <span>clear</span>
@@ -182,6 +186,20 @@
         <button type="button" id="waterUndo">undo</button>
       </div>
     </div>
+    <div data-config="courses" hidden>
+      <p class="create-note">Click corners from a stream's or river's source down to draw it. Double-click or press Enter to finish it, Backspace takes the last corner back, and Esc throws it away. Its channel's carved and its water's never higher than upstream. It's red till its end is in water or on another course.</p>
+      <div class="create-swatches create-biomes" role="group" aria-label="type of course">
+        <button type="button" data-course="stream" aria-pressed="true" title="stream"><span style="background:#5aa0d8"></span>stream</button>
+        <button type="button" data-course="river" aria-pressed="false" title="river"><span style="background:#2f6bb0"></span>river</button>
+      </div>
+      <label class="create-level">width at its source <input type="number" id="courseStart" step="1" min="1" disabled> ft</label>
+      <label class="create-level">width at its end <input type="number" id="courseEnd" step="1" min="1" disabled> ft</label>
+      <p class="create-note">Click a course to select it, then pick a type or type its widths to change it. Drag its corners, drag between them to add one, and shift-click a corner to take it away. Delete or backspace deletes it.</p>
+      <div class="create-way">
+        <button type="button" id="coursesDelete">delete</button>
+        <button type="button" id="coursesUndo">undo</button>
+      </div>
+    </div>
     <div data-config="measure" hidden>
       <p class="create-note">Click to start a ruler to the pointer, ticked at miles, quarter miles, 500, 100 and 10 ft, and click again to put it away. Drag to draw a circle, with its radius and area.</p>
     </div>
@@ -279,7 +297,7 @@
   <dl>
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, and measure measures distances and circles. Click a pin's head to open it</dd>
-    <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, and clear it away</dd>
+    <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, draw streams and rivers, and clear it away</dd>
   </dl>
 </div>
 <div id="pinEdit" class="create-pin-edit" popover>

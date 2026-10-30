@@ -184,7 +184,8 @@ body.create {
 }
 
 [data-config="biomes"],
-[data-config="water"] {
+[data-config="water"],
+[data-config="courses"] {
   display: flex;
   flex-direction: column;
   gap: 8px;
