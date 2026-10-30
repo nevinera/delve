@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
+import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate, platePath, tileIndexInPlate } from "../v2/plate.js";
 import { CORNERS, decodePlatter, encodePlatter, indexIn, plateIndexIn, platterOf, platterOfPlate, platterPath } from "../v2/platter.js";
 import { CELL_FT, CHUNK_CELLS, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
@@ -56,6 +57,32 @@ export class Renditions {
     this.made = new Map(); // "px,pz" -> indexes in the plate of tiles made where there were none
     this.cleared = new Map(); // "px,pz" -> indexes in the plate of tiles cleared away
     this.layout = 0; // counts tiles made and cleared, to tell when which there are has changed
+    this.biomeAreas = []; // the biome areas, as biomes.json keeps them
+    this.biomes = new BiomeMap(); // and which biome is where from them, baked into plate files saved
+  }
+
+  // Takes the biome areas, and with `dirty`, marks the plates where which biome is where changed,
+  // to save again. Gives their "px,pz".
+  setBiomes(areas, dirty = true) {
+    const boxes = changedBoxes(this.biomeAreas, areas);
+    this.biomeAreas = areas;
+    this.biomes = new BiomeMap(areas);
+    this.worker?.postMessage({ biomes: areas });
+    const marked = new Set();
+    if (!dirty) return marked;
+    for (const [x0, z0, x1, z1] of boxes) {
+      for (let pz = Math.floor(z0 / PLATE_FT); pz <= Math.floor(z1 / PLATE_FT); pz++) {
+        for (let px = Math.floor(x0 / PLATE_FT); px <= Math.floor(x1 / PLATE_FT); px++) {
+          const key = `${px},${pz}`;
+          if (this.plateFiles.has(key) || this.made.has(key)) marked.add(key);
+        }
+      }
+    }
+    for (const key of marked) {
+      this.changed.add(key);
+      this.unsaved.add(key);
+    }
+    return marked;
   }
 
   // Makes tile (tx, tz) where there's none, flat sea floor: its rendition, its plate's and platter's
@@ -155,7 +182,7 @@ export class Renditions {
       const [px, pz] = key.split(",").map(Number);
       platters.add(platterOfPlate(px, pz).join(","));
       const plate = this.decoded.get(key) ?? this.readNow(key);
-      files.set(platePath(continent, [px, pz]), plate?.tiles.size ? encodePlate({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles }) : null);
+      files.set(platePath(continent, [px, pz]), plate?.tiles.size ? encodePlate(bakePlate({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles }, this.biomes)) : null);
     }
     for (const key of platters) {
       const platter = this.platters.get(key);
@@ -198,7 +225,7 @@ export class Renditions {
 
   // Writes a plate or platter file (`kind`) on the worker, or here where there are no workers.
   write(kind, value) {
-    if (typeof Worker === "undefined") return Promise.resolve(kind === "plate" ? encodePlate(value) : encodePlatter(value));
+    if (typeof Worker === "undefined") return Promise.resolve(kind === "plate" ? encodePlate(bakePlate(value, this.biomes)) : encodePlatter(value));
     this.startWorker();
     const id = this.writes.size ? Math.max(...this.writes.keys()) + 1 : 1;
     return new Promise((resolve) => {
@@ -210,6 +237,7 @@ export class Renditions {
   startWorker() {
     if (this.worker) return;
     this.worker = new Worker(new URL("./plateWorker.js", import.meta.url), { type: "module" });
+    this.worker.postMessage({ biomes: this.biomeAreas });
     this.worker.onmessage = ({ data }) => {
       if (data.id === undefined) return this.done(data);
       this.writes.get(data.id)(data.bytes);

@@ -2,8 +2,10 @@ import * as THREE from "three";
 import { Line2 } from "three/addons/lines/Line2.js";
 import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
+import { inside } from "../v2/biomes.js";
 
-// Biome areas drawn on the map with geo's biome tool: polygons, each with one of BIOMES. Their
+// Biome areas drawn on the map with geo's biome tool: polygons, each with one of BIOMES (as
+// v2/biomes.js says which biome each place is). Their
 // outlines follow the ground, lifted off it more the further they are from the camera, in their
 // biome's color. Where areas overlap, the one drawn last wins. Undo goes back over every change.
 // A continent's are kept in its biomes file:
@@ -29,16 +31,6 @@ const LIFT_FT = 1;
 const LIFT_SHARE = 0.01; // how much higher outlines are lifted, as a share of how far off they are
 const LIFT_EVERY_S = 0.5; // how often outlines are put back on the ground, should it have moved
 const UNDOS = 50;
-
-// Whether (x, z) is inside the polygon `points`.
-export function inside(points, x, z) {
-  let within = false;
-  for (let k = 0, j = points.length - 1; k < points.length; j = k++) {
-    const [[ax, az], [bx, bz]] = [points[k], points[j]];
-    if (az > z !== bz > z && x < ((bx - ax) * (z - az)) / (bz - az) + ax) within = !within;
-  }
-  return within;
-}
 
 export class Biomes {
   // surface(x, z) gives the height outlines are drawn at. Corners' handles are drawn over `stage`.

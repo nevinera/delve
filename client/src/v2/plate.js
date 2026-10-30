@@ -10,7 +10,7 @@ import { CHUNK_CELLS, PLATE_TILES, TILE_CHUNKS } from "./sizes.js";
 // The file is gzipped. Inside, numbers are little-endian:
 //
 //   0   "DLD1"
-//   4   u32 version (2)
+//   4   u32 version (3; 2 has no biome layer)
 //   8   i32 px, i32 pz
 //   16  8 bytes: a bit for each of the plate's 64 tiles, in row order, set where it has one
 //   24  the terrain palette: u8 count, then each name as a u8 length and that many ASCII bytes
@@ -19,11 +19,13 @@ import { CHUNK_CELLS, PLATE_TILES, TILE_CHUNKS } from "./sizes.js";
 //       64 × 64 × 3 bytes of cell color, RGB, row order
 //       64 × 64 bytes of cell terrain, indexes into the palette
 //       64 × 64 bytes of cell forest density, 0 to 255
+//       64 × 64 bytes of cell biome, indexes into v2/biomes.js's BIOME_NAMES
 
 export const TILE_CELLS = TILE_CHUNKS * CHUNK_CELLS; // 64
 export const CELL_CORNERS = TILE_CELLS + 1;
 const MAGIC = "DLD1";
-const VERSION = 2;
+const VERSION = 3;
+const VERSIONS = new Set([2, 3]);
 const HEADER = 24;
 const HEIGHTS = CELL_CORNERS * CELL_CORNERS;
 const COLORS = TILE_CELLS * TILE_CELLS * 3;
@@ -36,12 +38,13 @@ export const PLATE_PATH = /^places\/continents\/([\w-]+)\/plates\/(-?\d+)_(-?\d+
 export const tileIndexInPlate = (tx, tz) => (tz - Math.floor(tz / PLATE_TILES) * PLATE_TILES) * PLATE_TILES + (tx - Math.floor(tx / PLATE_TILES) * PLATE_TILES);
 
 // plate: { coords: [px, pz], palette: terrain names, tiles: Map(index -> { heights: 65×65 feet,
-// colors: 64×64×3 bytes, terrain: 64×64 palette indexes, forest: 64×64 bytes }) }.
+// colors: 64×64×3 bytes, terrain: 64×64 palette indexes, forest: 64×64 bytes, biome: 64×64
+// indexes, plains where it's missing }) }.
 export function encodePlate({ coords, palette, tiles }) {
   const indexes = [...tiles.keys()].sort((a, b) => a - b);
   const names = palette.map((name) => new TextEncoder().encode(name));
   const paletteBytes = 1 + names.reduce((sum, name) => sum + 1 + name.length, 0);
-  const bytes = new Uint8Array(HEADER + paletteBytes + indexes.length * (HEIGHTS * 2 + COLORS + CELLS * 2));
+  const bytes = new Uint8Array(HEADER + paletteBytes + indexes.length * (HEIGHTS * 2 + COLORS + CELLS * 3));
   const view = new DataView(bytes.buffer);
   for (let i = 0; i < 4; i++) bytes[i] = MAGIC.charCodeAt(i);
   view.setUint32(4, VERSION, true);
@@ -56,10 +59,10 @@ export function encodePlate({ coords, palette, tiles }) {
   }
   for (const index of indexes) {
     bytes[16 + (index >> 3)] |= 1 << (index & 7);
-    const { heights, colors, terrain, forest } = tiles.get(index);
+    const { heights, colors, terrain, forest, biome = new Uint8Array(CELLS) } = tiles.get(index);
     for (let k = 0; k < HEIGHTS; k++) view.setInt16(at + k * 2, Math.max(-32768, Math.min(32767, Math.round(heights[k] * 4))), true);
     at += HEIGHTS * 2;
-    for (const layer of [colors, terrain, forest]) {
+    for (const layer of [colors, terrain, forest, biome]) {
       bytes.set(layer, at);
       at += layer.length;
     }
@@ -72,7 +75,8 @@ export function decodePlate(gzipped) {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
   const magic = String.fromCharCode(...bytes.subarray(0, 4));
   if (magic !== MAGIC) throw new Error(`not a plate file (magic ${JSON.stringify(magic)})`);
-  if (view.getUint32(4, true) !== VERSION) throw new Error(`unsupported plate version ${view.getUint32(4, true)}`);
+  const version = view.getUint32(4, true);
+  if (!VERSIONS.has(version)) throw new Error(`unsupported plate version ${version}`);
   const coords = [view.getInt32(8, true), view.getInt32(12, true)];
   const tiles = new Map();
   let at = HEADER;
@@ -88,7 +92,7 @@ export function decodePlate(gzipped) {
     const heights = new Float32Array(HEIGHTS);
     for (let k = 0; k < HEIGHTS; k++) heights[k] = view.getInt16(at + k * 2, true) / 4;
     at += HEIGHTS * 2;
-    tiles.set(index, { heights, colors: take(COLORS), terrain: take(CELLS), forest: take(CELLS) });
+    tiles.set(index, { heights, colors: take(COLORS), terrain: take(CELLS), forest: take(CELLS), biome: version >= 3 ? take(CELLS) : new Uint8Array(CELLS) });
   }
   return { coords, palette, tiles };
 }
