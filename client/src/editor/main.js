@@ -196,6 +196,7 @@ async function unpacked(world) {
 }
 
 $("download").addEventListener("click", async () => {
+  editor.flushLand();
   updateIndexes(editor.world);
   const stored = await editor.world.stored({ pool: plates, onProgress: progress("Packing") });
   editor.say("");
@@ -330,6 +331,7 @@ $("saveStart").addEventListener("click", async () => {
   const progress = $("saveProgress");
   let moved = null;
   try {
+    editor.flushLand();
     updateIndexes(editor.world);
     const onProgress = ({ stage, done, total }) => (progress.textContent = stage === "packing" ? `Packing plates: ${done} of ${total}` : `Sending files: ${done} of ${total}`);
     const saved = await saveToGithub(new GithubClient(source.repo), editor.world, source, { message, pool: plates, onProgress, log: logSave });
@@ -373,7 +375,10 @@ const publish = new PublishPanel(
     publish: $("publish"),
     info: $("publishInfo"),
   },
-  { world: () => editor.world, source: () => source, beforeStore: () => updateIndexes(editor.world), pool: plates },
+  { world: () => editor.world, source: () => source, beforeStore: () => {
+      editor.flushLand();
+      updateIndexes(editor.world);
+    }, pool: plates },
 );
 editor.onStep = (step) => {
   if (step === "publish") publish.refresh();
@@ -437,6 +442,7 @@ async function keep() {
   clearTimeout(keepTimer);
   keepTimer = null;
   try {
+    editor.flushLand();
     await library.push();
     await saveLocal({ zip: editor.world.toZip(), pending: [...editor.pending], dirty: editor.dirty, source });
     keeping = keepTimer !== null;

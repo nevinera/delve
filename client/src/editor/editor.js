@@ -434,6 +434,7 @@ export class Editor {
     this.zones = listZones(this.world, this.continent);
     this.sketch = loadSketch(this.world, this.continent);
     this.land = loadLand(this.world.files, this.continent);
+    this.landUnstored = false;
     this.landTileKeys = null;
     this.landKey = null;
     if (!this.activeZone) this.active = null;
@@ -464,9 +465,20 @@ export class Editor {
     }
   }
 
-  // The land's been sculpted: it's stored, and the generated tiles it changes are out of date.
+  // The land's been sculpted. Water and roads follow it at once. Storing it, and marking the
+  // generated tiles it changes out of date, waits for flushLand, since it goes over all the land:
+  // leaving the heights step, or keeping or saving the world.
   landChanged() {
     this.landKey = null;
+    this.landUnstored = true;
+    this.dirty = true;
+    this.updatePreview();
+  }
+
+  // Stores land sculpted since it was last stored, if any.
+  flushLand() {
+    if (!this.landUnstored) return;
+    this.landUnstored = false;
     this.store(() => saveLand(this.world.files, this.continent, this.land));
   }
 
@@ -900,6 +912,7 @@ export class Editor {
 
   // Opens a step, with its first tool.
   setStep(step) {
+    this.flushLand();
     if (step !== "detail" && this.templateEditing) {
       if (this.templateEditing.changed && !window.confirm("Stop editing this template? Changes you haven't saved to it will be lost.")) return;
       this.endTemplateEdit({ show: false });
@@ -1775,6 +1788,7 @@ export class Editor {
     });
 
     continent.addEventListener("change", () => {
+      this.flushLand();
       this.continent = continent.value;
       this.active = null;
       this.drawing = null;
