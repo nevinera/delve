@@ -68,7 +68,7 @@ describe("a way across", () => {
   const walled = (gap) => ({ ...grown, raise: (x, z) => (Math.abs(z) < 200 && Math.abs(x - 2500) > gap ? 1000 : 0) });
 
   it("is found through a gap", () => {
-    const path = crossing(grown, raises(walled(150), flat));
+    const path = crossing(raises(walled(150), flat));
     expect(path).not.toBeNull();
     // Through the gap, from one side to the other.
     expect(path.filter(([, z]) => Math.abs(z) < 200).every(([x]) => Math.abs(x - 2500) <= 150)).toBe(true);
@@ -76,6 +76,6 @@ describe("a way across", () => {
   });
 
   it("isn't found through a wall, nor round its ends", () => {
-    expect(crossing(grown, raises(walled(0), flat))).toBeNull();
+    expect(crossing(raises(walled(0), flat))).toBeNull();
   });
 });

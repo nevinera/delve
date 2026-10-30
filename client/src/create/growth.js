@@ -41,16 +41,25 @@ function smoothstep(a, b, x) {
 }
 
 // A line of points [x, z], to find how far points are from it and how far along it they're
-// nearest, with its segments bucketed `reach` ft squares apart.
+// nearest, with its segments bucketed `reach` ft squares apart. Points closer than a sixteenth of
+// `reach` to the last one kept are left out, so it's quick to search.
+const SIMPLER = 16;
+const bucket = (i, j) => (i + 32768) * 65536 + (j + 32768);
 export class Line {
   constructor(points, reach) {
-    this.points = points;
+    const apart = reach / SIMPLER;
+    this.points = [points[0]];
+    for (let k = 1; k < points.length; k++) {
+      const [last, p] = [this.points.at(-1), points[k]];
+      if (k === points.length - 1 || Math.hypot(p[0] - last[0], p[1] - last[1]) >= apart) this.points.push(p);
+    }
+    points = this.points;
     this.along = [0]; // how far along each point is
     for (let k = 1; k < points.length; k++) this.along.push(this.along[k - 1] + Math.hypot(points[k][0] - points[k - 1][0], points[k][1] - points[k - 1][1]));
     this.length = this.along.at(-1);
     this.reach = Math.max(1, reach);
     this.buckets = new Map();
-    const key = (i, j) => `${i},${j}`;
+    const key = bucket;
     for (let k = 0; k < Math.max(1, points.length - 1); k++) {
       const [a, b] = [points[k], points[Math.min(k + 1, points.length - 1)]];
       for (let j = Math.floor(Math.min(a[1], b[1]) / this.reach); j <= Math.floor(Math.max(a[1], b[1]) / this.reach); j++) {
@@ -69,7 +78,7 @@ export class Line {
     let best = null;
     for (let j = bj - 1; j <= bj + 1; j++) {
       for (let i = bi - 1; i <= bi + 1; i++) {
-        for (const k of this.buckets.get(`${i},${j}`) ?? []) {
+        for (const k of this.buckets.get(bucket(i, j)) ?? []) {
           const [a, b] = [this.points[k], this.points[Math.min(k + 1, this.points.length - 1)]];
           const [dx, dz] = [b[0] - a[0], b[1] - a[1]];
           const ll = dx * dx + dz * dz;
@@ -90,10 +99,20 @@ export class Line {
     return hit.s <= 0 || hit.s >= this.length;
   }
 
+  // The first point at least `s` ft along the line, but the first, by halving.
+  after(s) {
+    let [lo, hi] = [1, this.points.length - 1];
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (this.along[mid] < s) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  }
+
   // The point `s` ft along the line.
   at(s) {
-    let k = 1;
-    while (k < this.points.length - 1 && this.along[k] < s) k++;
+    const k = this.after(s);
     const [a, b] = [this.points[k - 1], this.points[k] ?? this.points[k - 1]];
     const span = this.along[k] - this.along[k - 1] || 1;
     const t = Math.max(0, Math.min(1, (s - this.along[k - 1]) / span));
@@ -121,15 +140,16 @@ export function baseHeights(line, heightAt) {
 // A growth of `kind` along `points`, with settings { width, height, noise, density } (noise 0 to
 // 1): { line, base(s), the height it aims for under its top s ft along, peaks, [{ x, z, tall,
 // tier }], zone(x, z), the third out from the line it's in, 3 the middle, 0 outside,
-// raise(x, z, ground), how far it raises ground of height `ground` at (x, z), and bounds
+// raise(x, z, ground, nearest), how far it raises ground of height `ground` at (x, z), its
+// line's nearest point there given if it's known, and bounds
 // [x0, z0, x1, z1] }.
 export function growth(kind, points, { width, height, noise, density = 1 }, heightAt) {
   const half = width / 2;
-  const line = new Line(points, half);
+  // Reaching a little past the band, to tell which side of it ground outside is (crossing()).
+  const line = new Line(points, half * 1.25);
   const bases = baseHeights(line, heightAt);
   const base = (s) => {
-    let k = 1;
-    while (k < bases.length - 1 && line.along[k] < s) k++;
+    const k = line.after(s);
     const span = line.along[k] - line.along[k - 1] || 1;
     const t = Math.max(0, Math.min(1, (s - line.along[k - 1]) / span));
     return bases[k - 1] + ((bases[k] ?? bases[k - 1]) - bases[k - 1]) * t;
@@ -160,7 +180,7 @@ export function growth(kind, points, { width, height, noise, density = 1 }, heig
   const cell = Math.max(1, ...peaks.map((p) => p.radius));
   const buckets = new Map();
   for (const peak of peaks) {
-    const key = `${Math.floor(peak.x / cell)},${Math.floor(peak.z / cell)}`;
+    const key = bucket(Math.floor(peak.x / cell), Math.floor(peak.z / cell));
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key).push(peak);
   }
@@ -168,8 +188,7 @@ export function growth(kind, points, { width, height, noise, density = 1 }, heig
   const shape = kind === "hills" ? (t) => (1 - t * t) ** 1.5 : (t, bend) => (1 - t) ** bend;
   // The band's edge, from the line, s ft along it: it wobbles.
   const edge = (s) => Math.min(half, half * (1 + 0.1 * noise * fbm(s, 5, SEED + 1, { wavelength: width })));
-  const near = (x, z) => {
-    const hit = line.nearest(x, z);
+  const near = (x, z, hit = line.nearest(x, z)) => {
     if (!hit) return null;
     const e = edge(hit.s);
     return hit.d > e ? null : { ...hit, edge: e };
@@ -180,14 +199,14 @@ export function growth(kind, points, { width, height, noise, density = 1 }, heig
   };
   // Sharp ribs where noise crosses 0, 0 to 1.
   const ridged = (x, z, wavelength, seed) => 1 - Math.abs(fbm(x, z, seed, { wavelength, octaves: 4 }));
-  const raise = (x, z, ground) => {
-    const hit = near(x, z);
+  const raise = (x, z, ground, nearest) => {
+    const hit = near(x, z, nearest);
     if (!hit) return 0;
     const [ci, cj] = [Math.floor(x / cell), Math.floor(z / cell)];
     let [tallest, sum] = [0, 0];
     for (let j = cj - 1; j <= cj + 1; j++) {
       for (let i = ci - 1; i <= ci + 1; i++) {
-        for (const peak of buckets.get(`${i},${j}`) ?? []) {
+        for (const peak of buckets.get(bucket(i, j)) ?? []) {
           const t = Math.hypot(x - peak.x, z - peak.z) / peak.radius;
           if (t >= 1) continue;
           const h = peak.tall * shape(t, peak.bend);
@@ -206,7 +225,7 @@ export function growth(kind, points, { width, height, noise, density = 1 }, heig
   };
   const xs = points.map(([x]) => x);
   const zs = points.map(([, z]) => z);
-  const reach = half * 1.1;
+  const reach = half * 1.25;
   const bounds = [Math.min(...xs) - reach, Math.min(...zs) - reach, Math.max(...xs) + reach, Math.max(...zs) + reach];
   return { kind, half, line, edge, base, peaks, zone, raise, bounds };
 }
@@ -222,11 +241,16 @@ export function raises(grown, heightAt) {
   const [nx, nz] = [Math.ceil((x1 - ox) / step) + 1, Math.ceil((z1 - oz) / step) + 1];
   const grid = new Float32Array(nx * nz);
   const ground = new Float32Array(nx * nz);
+  // Each point: 1 in the band, 2 outside it on the left, 3 on the right, 0 elsewhere or by the
+  // line's ends, for crossing().
+  const kinds = new Uint8Array(nx * nz);
   for (let j = 0; j < nz; j++) {
     for (let i = 0; i < nx; i++) {
-      const [x, z] = [ox + i * step, oz + j * step];
-      ground[j * nx + i] = heightAt(x, z);
-      grid[j * nx + i] = grown.raise(x, z, ground[j * nx + i]);
+      const [x, z, k] = [ox + i * step, oz + j * step, j * nx + i];
+      const hit = grown.line.nearest(x, z);
+      ground[k] = heightAt(x, z);
+      grid[k] = grown.raise(x, z, ground[k], hit);
+      if (hit && !grown.line.end(hit)) kinds[k] = hit.d <= grown.edge(hit.s) ? 1 : hit.side < 0 ? 2 : 3;
     }
   }
   const lookup = (sign) => (x, z) => {
@@ -237,24 +261,14 @@ export function raises(grown, heightAt) {
     const g = (a, b) => grid[(j + b) * nx + i + a];
     return sign * ((g(0, 0) * (1 - fu) + g(1, 0) * fu) * (1 - fv) + (g(0, 1) * (1 - fu) + g(1, 1) * fu) * fv);
   };
-  return { step, bounds: grown.bounds, at: lookup(1), undo: lookup(-1), grid, ground, ox, oz, nx, nz };
+  return { step, bounds: grown.bounds, at: lookup(1), undo: lookup(-1), grid, ground, kinds, ox, oz, nx, nz };
 }
 
-// A way across a growth, once raised by `r` (raises()), never steeper than WALK_DEG: from the
+// A way across a growth, once raised by `r`, its raises(), never steeper than WALK_DEG: from the
 // ground outside its band on one side, through the band, to the ground outside on the other, not
 // round the line's ends. Its points [x, z], or null when there's none.
-export function crossing(grown, r) {
-  const { grid, ground, ox, oz, nx, nz, step } = r;
-  const line = new Line(grown.line.points, grown.half * 1.25);
-  // Each grid point: 1 in the band, 2 outside it on the left, 3 on the right, 0 elsewhere.
-  const kinds = new Uint8Array(nx * nz);
-  for (let j = 0; j < nz; j++) {
-    for (let i = 0; i < nx; i++) {
-      const hit = line.nearest(ox + i * step, oz + j * step);
-      if (!hit || line.end(hit)) continue;
-      kinds[j * nx + i] = hit.d <= grown.edge(hit.s) ? 1 : hit.side < 0 ? 2 : 3;
-    }
-  }
+export function crossing(r) {
+  const { grid, ground, kinds, ox, oz, nx, nz, step } = r;
   const most = step * Math.tan((WALK_DEG * Math.PI) / 180);
   const from = new Int32Array(nx * nz).fill(-1);
   const queue = [];

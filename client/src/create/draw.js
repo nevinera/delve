@@ -134,7 +134,7 @@ export class Draw {
     if (this.state !== "adjusting") return;
     const grown = this.grown();
     const r = raises(grown, this.heightAt);
-    const way = this.settings[this.kind].impassable && crossing(grown, r);
+    const way = this.settings[this.kind].impassable && crossing(r);
     if (way) {
       this.fat(way.map(([x, z]) => [x, this.heightAt(x, z) + r.at(x, z) + LIFT_FT * 4, z]), this.passMaterial, "pass");
       this.passable = true;
