@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Line, baseHeights, growth, raises } from "./growth.js";
+import { Line, baseHeights, crossing, growth, raises } from "./growth.js";
 
 const straight = [
   [0, 0],
@@ -9,7 +9,7 @@ const straight = [
 describe("a line", () => {
   it("finds how far points are from it, and how far along", () => {
     const line = new Line(straight, 1000);
-    expect(line.nearest(2000, 300)).toEqual({ d: 300, s: 2000 });
+    expect(line.nearest(2000, 300)).toEqual({ d: 300, s: 2000, side: 1 });
     expect(line.nearest(2000, 3000)).toBeNull();
   });
 
@@ -60,3 +60,22 @@ for (const kind of ["range", "hills"]) {
     });
   });
 }
+
+describe("a way across", () => {
+  const flat = () => 0;
+  const grown = growth("range", straight, { width: 2000, height: 1000, noise: 0, density: 1 }, flat);
+  // A wall along the line, with a gap in it, or none.
+  const walled = (gap) => ({ ...grown, raise: (x, z) => (Math.abs(z) < 200 && Math.abs(x - 2500) > gap ? 1000 : 0) });
+
+  it("is found through a gap", () => {
+    const path = crossing(grown, raises(walled(150), flat));
+    expect(path).not.toBeNull();
+    // Through the gap, from one side to the other.
+    expect(path.filter(([, z]) => Math.abs(z) < 200).every(([x]) => Math.abs(x - 2500) <= 150)).toBe(true);
+    expect(Math.sign(path[0][1])).not.toBe(Math.sign(path.at(-1)[1]));
+  });
+
+  it("isn't found through a wall, nor round its ends", () => {
+    expect(crossing(grown, raises(walled(0), flat))).toBeNull();
+  });
+});

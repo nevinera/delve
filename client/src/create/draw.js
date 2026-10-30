@@ -3,7 +3,7 @@ import { Line2 } from "three/addons/lines/Line2.js";
 import { LineGeometry } from "three/addons/lines/LineGeometry.js";
 import { LineMaterial } from "three/addons/lines/LineMaterial.js";
 import { CHUNKS } from "./geo.js";
-import { growth, raises } from "./growth.js";
+import { crossing, growth, raises } from "./growth.js";
 import { Stroke } from "./stroke.js";
 
 // Geo's draw tool: a line drawn on the ground, kept till it's thrown away, to grow things along
@@ -14,17 +14,22 @@ import { Stroke } from "./stroke.js";
 // - adjusting: what to grow is picked, and its settings shown on the ground while they're
 //   changed: its band's thirds shaded, orange in the middle to yellow at the edge, a dot for each
 //   peak it'll grow, bigger the taller, and a line in the air at the height it aims for. Growing
-//   it moves the ground, as one step undo takes back.
+//   it moves the ground, as one step undo takes back. One that's to be impassable isn't grown
+//   when there's a way across it, and the way's drawn in red instead.
 
 const LINE_COLOR = 0xffffff;
 const AIM_COLOR = 0x40e0ff;
+const PASS_COLOR = 0xff2020;
 // The band's thirds, outermost first.
 const ZONES = [null, { color: 0xffe9a0, opacity: 0.22 }, { color: 0xffb347, opacity: 0.3 }, { color: 0xff8c00, opacity: 0.4 }];
 const DOT_COLORS = ["#ff3b1f", "#ff9a3c", "#ffe14d"]; // each tier of peaks' dots, tallest first
 const DOT_PX = [2, 9]; // how wide a dot is across, for the shortest peak to the tallest
 const PREVIEW_CELLS = 160; // how many squares the preview has along its longer side, at most
 const LIFT_FT = 2;
-export const DEFAULTS = { hills: { width: 5280, height: 300, noise: 0.6, density: 3 }, range: { width: 10560, height: 1500, noise: 0.6, density: 3 } };
+export const DEFAULTS = {
+  hills: { width: 5280, height: 300, noise: 0.6, density: 3, impassable: true },
+  range: { width: 10560, height: 1500, noise: 0.6, density: 3, impassable: true },
+};
 
 export class Draw {
   // heightAt(x, z) gives the ground's height; onChange() is called when the state changes.
@@ -50,6 +55,8 @@ export class Draw {
     const lineMaterial = (color, width) => new LineMaterial({ color, linewidth: width, depthTest: false, transparent: true });
     this.lineMaterial = lineMaterial(LINE_COLOR, 3);
     this.aimMaterial = lineMaterial(AIM_COLOR, 2);
+    this.passMaterial = lineMaterial(PASS_COLOR, 4);
+    this.passable = false; // whether growing was stopped by a way across
     this.zoneMaterials = ZONES.map((zone) => zone && new THREE.MeshBasicMaterial({ ...zone, transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide }));
     this.line = null;
     this.aim = null;
@@ -112,6 +119,8 @@ export class Draw {
 
   clearPreview() {
     this.peaks = [];
+    this.passable = false;
+    this.drop("pass");
     this.drop("aim");
     this.drop("zones");
   }
@@ -123,7 +132,15 @@ export class Draw {
   // Grows what's picked along the line, and throws the line away.
   grow() {
     if (this.state !== "adjusting") return;
-    const r = raises(this.grown(), this.heightAt);
+    const grown = this.grown();
+    const r = raises(grown, this.heightAt);
+    const way = this.settings[this.kind].impassable && crossing(grown, r);
+    if (way) {
+      this.fat(way.map(([x, z]) => [x, this.heightAt(x, z) + r.at(x, z) + LIFT_FT * 4, z]), this.passMaterial, "pass");
+      this.passable = true;
+      this.onChange();
+      return;
+    }
     this.ground.refresh(this.renditions.raise(r.at, r.bounds, CHUNKS));
     this.undos.push(r);
     this.clear();
@@ -154,6 +171,8 @@ export class Draw {
 
   // Shades where the growth reaches on the ground, and draws the height it aims for in the air.
   showPreview() {
+    this.passable = false;
+    this.drop("pass");
     const grown = this.grown();
     const { height } = this.settings[this.kind];
     this.peaks = grown.peaks.map((peak) => ({ ...peak, y: this.heightAt(peak.x, peak.z) + LIFT_FT, size: DOT_PX[0] + (DOT_PX[1] - DOT_PX[0]) * (peak.tall / height) }));
@@ -192,8 +211,7 @@ export class Draw {
   }
 
   tick(camera, width, height) {
-    this.lineMaterial.resolution.set(width, height);
-    this.aimMaterial.resolution.set(width, height);
+    for (const material of [this.lineMaterial, this.aimMaterial, this.passMaterial]) material.resolution.set(width, height);
     if (this.dirty && this.state === "adjusting") this.showPreview();
     this.dirty = false;
     this.drawDots(camera, width, height);

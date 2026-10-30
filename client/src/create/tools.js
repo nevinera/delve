@@ -174,6 +174,10 @@ export class Tools {
       if (JSON.stringify(before) !== JSON.stringify(this.marks.toJSON())) this.marks.undos.push(before);
     });
     for (const button of document.querySelectorAll("[data-grow]")) button.addEventListener("click", () => this.draw.adjust(button.dataset.grow));
+    $("growImpassable").addEventListener("change", () => {
+      this.draw.settings[this.draw.kind].impassable = $("growImpassable").checked;
+      this.draw.dirty = true;
+    });
     $("growBack").addEventListener("click", () => this.draw.back());
     $("growGo").addEventListener("click", () => this.draw.grow());
     $("growUndo").addEventListener("click", () => this.draw.undo());
@@ -347,6 +351,7 @@ export class Tools {
     $("growUndo").disabled = !this.draw.undos.length;
     if (state !== "adjusting") return;
     const settings = this.draw.settings[kind];
+    $("growImpassable").checked = settings.impassable;
     for (const [id, read] of Object.entries(GROW_SLIDERS)) {
       $(id).value = String(read.get(settings));
       $(`${id}Out`).textContent = read.show(settings);
@@ -542,6 +547,7 @@ export class Tools {
     this.marks.tick(dt, w, h, this.camera.position, above, ftPerPx);
     this.marks.pins.tick(this.camera, w, h);
     this.draw.tick(this.camera, w, h);
+    $("growPassable").hidden = !this.draw.passable;
     if (this.tool === "measure" && this.measuring) {
       if (this.measuring.from && !this.measuring.radius) {
         const at = this.hit(this.drawAt);
