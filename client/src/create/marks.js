@@ -117,7 +117,9 @@ export class Marks {
     const key = `${color},${width},${style}`;
     if (!this.materials.has(key)) {
       const halo = color === "halo";
-      const material = new LineMaterial({ color: halo ? HALO : COLORS[color], linewidth: WIDTHS_PX[width - 1], depthTest: false, transparent: true, dashed: Boolean(STYLES[style]) });
+      const material = new LineMaterial({ color: halo ? HALO : COLORS[color], linewidth: WIDTHS_PX[width - 1], depthTest: false, depthWrite: false, dashed: Boolean(STYLES[style]) });
+      // Opaque, so drawn with the ground and the builder by renderOrder: over the ground, under the
+      // builder, which still hides behind the ground.
       material.userData = { width, style, halo };
       this.materials.set(key, material);
     }
