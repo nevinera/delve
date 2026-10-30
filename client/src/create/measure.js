@@ -13,6 +13,7 @@ const MOST_TICKS = 2000; // past this many, the smallest ticks are left out
 const CIRCLE_POINTS = 96;
 const COLOR = "#ffe9a0";
 const SHADOW = "#14141c";
+const FILL = "#ffe9a02e"; // inside a circle
 
 // The sizes of tick a ruler `length` ft long shows: the biggest that fits, and the next two.
 export function tickSizes(length) {
@@ -54,7 +55,36 @@ export class Measure {
     c.shadowColor = SHADOW;
     c.shadowBlur = 3;
     let label, at;
-    if (from && to) {
+    if (middle && radius) {
+      c.beginPath();
+      let drawing = false;
+      for (let k = 0; k <= CIRCLE_POINTS; k++) {
+        const a = (k / CIRCLE_POINTS) * Math.PI * 2;
+        const p = screen([middle[0] + Math.cos(a) * radius, middle[1] + Math.sin(a) * radius]);
+        if (!p) {
+          drawing = false;
+          continue;
+        }
+        if (drawing) c.lineTo(...p);
+        else c.moveTo(...p);
+        drawing = true;
+      }
+      c.save();
+      c.shadowBlur = 0;
+      c.fillStyle = FILL;
+      c.fill();
+      c.restore();
+      const m = screen(middle);
+      const edge = screen([middle[0] + radius, middle[1]]);
+      if (m && edge) {
+        c.moveTo(...m);
+        c.lineTo(...edge);
+      }
+      c.stroke();
+      const area = Math.PI * radius * radius;
+      label = [`radius ${feet(radius)} · ${miles(radius)}`, `area ${(area / MILE_FT ** 2).toFixed(2)} sq mi · ${Math.round(area / 43560).toLocaleString()} acres`];
+      at = m;
+    } else if (from && to) {
       const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
       const [a, b] = [screen(from), screen(to)];
       if (!a || !b || !length) return;
@@ -81,30 +111,6 @@ export class Measure {
       c.stroke();
       label = [`${feet(length)} · ${miles(length)}`];
       at = b;
-    } else if (middle && radius) {
-      c.beginPath();
-      let drawing = false;
-      for (let k = 0; k <= CIRCLE_POINTS; k++) {
-        const a = (k / CIRCLE_POINTS) * Math.PI * 2;
-        const p = screen([middle[0] + Math.cos(a) * radius, middle[1] + Math.sin(a) * radius]);
-        if (!p) {
-          drawing = false;
-          continue;
-        }
-        if (drawing) c.lineTo(...p);
-        else c.moveTo(...p);
-        drawing = true;
-      }
-      const m = screen(middle);
-      const edge = screen([middle[0] + radius, middle[1]]);
-      if (m && edge) {
-        c.moveTo(...m);
-        c.lineTo(...edge);
-      }
-      c.stroke();
-      const area = Math.PI * radius * radius;
-      label = [`radius ${feet(radius)} · ${miles(radius)}`, `area ${(area / MILE_FT ** 2).toFixed(2)} sq mi · ${Math.round(area / 43560).toLocaleString()} acres`];
-      at = m;
     }
     if (!label || !at) return;
     label.forEach((line, k) => c.fillText(line, at[0] + 10, at[1] - 8 + k * 16));
