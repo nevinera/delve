@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
-import { CELL_CORNERS, TILE_CELLS, decodePlate, tileIndexInPlate } from "../v2/plate.js";
-import { CORNERS, decodePlatter, indexIn, plateIndexIn, platterOf, platterOfPlate } from "../v2/platter.js";
+import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate, platePath, tileIndexInPlate } from "../v2/plate.js";
+import { CORNERS, decodePlatter, encodePlatter, indexIn, plateIndexIn, platterOf, platterOfPlate, platterPath } from "../v2/platter.js";
 import { CELL_FT, CHUNK_CELLS, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
 import { CELLS, CHUNKS, TILES } from "./geo.js";
 import { withGrid } from "./grid.js";
@@ -47,6 +47,29 @@ export class Renditions {
     // How far the ground's been moved, by how finely: "tx,tz" -> 65 × 65 cell corners, "tx,tz" ->
     // 9 × 9 chunk corners, and "px,pz" -> 9 × 9 tile corners.
     this.offsets = { [CELLS]: new Map(), [CHUNKS]: new Map(), [TILES]: new Map() };
+    this.changed = new Set(); // "px,pz" of plates whose ground's been moved
+  }
+
+  // The files of `continent` whose ground's been moved, path -> bytes: their platters, and their
+  // plate files with the moves in.
+  changedFiles(continent) {
+    const files = new Map();
+    const platters = new Set();
+    for (const key of this.changed) {
+      const [px, pz] = key.split(",").map(Number);
+      platters.add(platterOfPlate(px, pz).join(","));
+      let plate = this.decoded.get(key);
+      if (!plate && this.plateFiles.has(key)) {
+        plate = decodePlate(this.plateFiles.get(key));
+        this.offset(key, plate);
+      }
+      if (plate) files.set(platePath(continent, [px, pz]), encodePlate({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles }));
+    }
+    for (const key of platters) {
+      const platter = this.platters.get(key);
+      files.set(platterPath(continent, platter.coords), encodePlatter(platter));
+    }
+    return files;
   }
 
   // Moves the ground by at(x, z) feet within `bounds`, [x0, z0, x1, z1] continent feet, worked out
@@ -127,6 +150,7 @@ export class Renditions {
         if (cells) delete cells.grid;
       }
     }
+    for (const key of moved) this.changed.add(key);
     return moved;
   }
 

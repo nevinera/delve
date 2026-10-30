@@ -45,6 +45,14 @@ export class Tools {
 
     for (const thumb of document.querySelectorAll("#side canvas[data-shape]")) drawShape(thumb, thumb.dataset.shape);
     const pressed = (buttons, on) => buttons.forEach((b) => b.setAttribute("aria-pressed", String(b === on)));
+    // Each type of work shows its own tools.
+    const works = [...document.querySelectorAll(".create-work [data-work]")];
+    for (const button of works) {
+      button.addEventListener("click", () => {
+        pressed(works, button);
+        for (const tools of document.querySelectorAll(".create-tools[data-work]")) tools.hidden = tools.dataset.work !== button.dataset.work;
+      });
+    }
     const toolButtons = [...document.querySelectorAll("[data-tool]")];
     for (const button of toolButtons) button.addEventListener("click", () => this.pick(this.tool === button.dataset.tool ? null : button.dataset.tool));
     const shapes = [...document.querySelectorAll(".create-shapes [data-shape]")];

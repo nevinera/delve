@@ -1,8 +1,8 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { TILE_FT } from "../v2/sizes.js";
-import { encodePlate } from "../v2/plate.js";
-import { encodePlatter } from "../v2/platter.js";
+import { decodePlate, encodePlate } from "../v2/plate.js";
+import { decodePlatter, encodePlatter } from "../v2/platter.js";
 import { CELLS, CHUNKS } from "./geo.js";
 import { COARSE, COARSE_TILES, FINE, FINE_TILES, FULL, FULL_TILES, Ground, PLATE, Renditions } from "./ground.js";
 
@@ -97,6 +97,16 @@ describe("raising the ground", () => {
     expect(renditions.tile(0, 0).heights[0]).toBe(15);
     expect(renditions.tile(0, 0).heights[3]).toBe(10);
     expect(renditions.plate(0, 0).heights[0]).toBe(15);
+  });
+
+  it("gives the files whose ground moved, with the moves in", () => {
+    const renditions = world();
+    renditions.raise(up, [0, 0, 64, 64], CHUNKS);
+    const files = renditions.changedFiles("main");
+    expect([...files.keys()].sort()).toEqual(["places/continents/main/plates/0_0.plate", "places/continents/main/platters/0_0.platter"]);
+    expect(decodePlate(files.get("places/continents/main/plates/0_0.plate")).tiles.get(0).heights[0]).toBe(15);
+    expect(decodePlatter(files.get("places/continents/main/platters/0_0.platter")).tiles.get(0).heights[0]).toBe(15);
+    expect(world().changedFiles("main").size).toBe(0);
   });
 
   it("moves plate files read later by what was kept", () => {

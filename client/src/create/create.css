@@ -100,6 +100,20 @@ body.create {
   gap: 4px;
 }
 
+.create-work,
+.create-manage {
+  flex-direction: column;
+}
+
+.create-manage {
+  display: flex;
+  gap: 4px;
+}
+
+.create-tools[hidden] {
+  display: none;
+}
+
 .create-work {
   padding-bottom: 10px;
   margin-bottom: 6px;
@@ -158,14 +172,6 @@ body.create {
   display: none;
 }
 
-.create-bar .spacer {
-  flex: 1;
-}
-
-.create-bar button {
-  pointer-events: auto;
-}
-
 #open {
   position: fixed;
   inset: 0;
@@ -190,4 +196,9 @@ body.create {
 
 .create-angle {
   margin: 0;
+}
+
+#side button:disabled {
+  opacity: 0.45;
+  cursor: default;
 }

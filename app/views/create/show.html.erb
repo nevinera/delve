@@ -3,14 +3,18 @@
   <header class="create-bar">
     <strong id="worldName"></strong>
     <span id="hud"></span>
-    <span class="spacer"></span>
-    <button id="openWorld" type="button">open world</button>
   </header>
 </div>
 <aside id="side">
   <section class="create-pick">
     <div class="create-work" role="group" aria-label="type of work">
+      <button type="button" data-work="manage" aria-pressed="false">manage</button>
       <button type="button" data-work="geo" aria-pressed="true">geo</button>
+    </div>
+    <div class="create-tools create-manage" data-work="manage" hidden>
+      <button id="openWorld" type="button">upload world</button>
+      <button id="downloadWorld" type="button">download world</button>
+      <button id="newWorld" type="button" disabled title="not made yet">new world</button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" aria-pressed="false" title="raise and lower the ground">

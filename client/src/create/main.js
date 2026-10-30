@@ -1,6 +1,6 @@
 import "./create.css";
 import * as THREE from "three";
-import { strFromU8, unzipSync } from "fflate";
+import { strFromU8, unzipSync, zipSync } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
 import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
@@ -10,9 +10,9 @@ import { grid } from "./grid.js";
 import { Tools } from "./tools.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
-// The world comes from a zip you open (script/convert-v2.mjs makes one from a v1 world), kept in
-// this browser so a reload opens it again, with the builder where they were. Opening another
-// replaces it.
+// The world comes from a zip you upload (script/convert-v2.mjs makes one from a v1 world), kept in
+// this browser so a reload opens it again, with the builder where they were. Uploading another
+// replaces it. Downloading it gives a zip of it with the ground as it's been moved.
 
 const $ = (id) => document.getElementById(id);
 const SKY = 0x9cc4e4;
@@ -44,7 +44,8 @@ const store = {
   },
 };
 
-// A v2 world's name and its first continent's renditions, from the zip's bytes.
+// A v2 world's name, its files (path -> bytes) and its first continent's renditions, from the zip's
+// bytes.
 function readWorld(bytes) {
   let files = Object.entries(unzipSync(bytes));
   if (!files.some(([path]) => path === "world.json")) {
@@ -69,10 +70,25 @@ function readWorld(bytes) {
   } catch (e) {
     throw new Error(`this world's plate files can't be read (${e.message}): convert it again with script/convert-v2.mjs`);
   }
-  return { name: info.name, continent, renditions };
+  return { name: info.name, files: new Map(files), continent, renditions };
 }
 
-function start({ name, continent, renditions }) {
+// Saves the world as a zip, its moved ground in. Its files are gzipped already, so the zip stores
+// them as they are.
+function download({ name, files, continent, renditions }) {
+  const out = new Map(files);
+  for (const [path, bytes] of renditions.changedFiles(continent)) out.set(path, bytes);
+  const zip = zipSync(Object.fromEntries([...out].map(([path, bytes]) => [path, [bytes, { level: 0 }]])));
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(new Blob([zip], { type: "application/zip" }));
+  link.download = `${name.replace(/[^\w-]+/g, "-").toLowerCase() || "world"}.zip`;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 10000);
+}
+
+function start(world) {
+  const { name, continent, renditions } = world;
+  $("downloadWorld").addEventListener("click", () => download(world));
   $("open").hidden = true;
   $("worldName").textContent = name;
   const canvas = $("view");
