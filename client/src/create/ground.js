@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
-import { WaterMap, bakeWater, changedWaterBoxes } from "../v2/water.js";
+import { AROUND, WaterMap, bakeWater, changedWaterBoxes } from "../v2/water.js";
 import { PATTERNS, look, painted, slopeOf } from "../v2/look.js";
 import { makeSlots } from "../v2/slots.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate, platePath, tileIndexInPlate } from "../v2/plate.js";
@@ -208,7 +208,7 @@ export class Renditions {
       const [px, pz] = key.split(",").map(Number);
       platters.add(platterOfPlate(px, pz).join(","));
       const plate = this.decoded.get(key) ?? this.readNow(key);
-      files.set(platePath(continent, [px, pz]), plate?.tiles.size ? encodePlate(this.bake({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles })) : null);
+      files.set(platePath(continent, [px, pz]), plate?.tiles.size ? encodePlate(this.bake({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles, around: this.around(px, pz) })) : null);
     }
     for (const key of platters) {
       const platter = this.platters.get(key);
@@ -234,7 +234,7 @@ export class Renditions {
       }
       // Only what the file holds, not what's kept for drawing.
       const tiles = new Map([...plate.tiles].map(([index, { heights, terrain, slots, water }]) => [index, { heights, terrain, slots, water }]));
-      writing.push(this.write("plate", { coords: [px, pz], palette: plate.palette, tiles }).then((bytes) => files.set(platePath(continent, [px, pz]), bytes)));
+      writing.push(this.write("plate", { coords: [px, pz], palette: plate.palette, tiles, around: this.around(px, pz) }).then((bytes) => files.set(platePath(continent, [px, pz]), bytes)));
     }
     for (const key of platters) {
       if (!this.platters.has(key)) {
@@ -258,6 +258,13 @@ export class Renditions {
       this.writes.set(id, resolve);
       this.worker.postMessage({ write: kind, id, value });
     });
+  }
+
+  // Which tiles there are round plate (px, pz), as water.js's bakeWater wants them.
+  around(px, pz) {
+    const around = new Uint8Array(AROUND * AROUND);
+    for (let b = 0; b < AROUND; b++) for (let a = 0; a < AROUND; a++) around[b * AROUND + a] = this.tile(px * PLATE_TILES + a - 1, pz * PLATE_TILES + b - 1) ? 1 : 0;
+    return around;
   }
 
   // Plate `plate` with its biomes and water baked in.

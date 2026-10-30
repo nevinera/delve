@@ -1,9 +1,14 @@
-import { CELL_FT, PLATE_TILES, TILE_FT } from "./sizes.js";
+import { CELL_FT, PLATE_TILES, SEA_LEVEL_FT, TILE_FT } from "./sizes.js";
 
 // Water: bodies (sea, lakes, ponds, swamp pools) and, later, courses (rivers, streams), drawn by
 // hand and kept in each continent's water.json, then baked into plate files (plate.js) as each
 // cell's water: the height its surface stands at, in continent feet, and its type. A tile with no
 // water keeps none.
+//
+// The sea is kept only in the plates, at SEA_LEVEL_FT: a cell's sea while its ground is lower,
+// and ground made or moved lower than that takes the sea from cells next to it that have it, or
+// from the edges of tiles next to none (the sea is all round the land), as its plate's saved. So ground
+// lower than the sea but closed off from it stays dry till it's opened to it.
 //
 // A body is { type, level, points: [[x, z], ...] }: its surface stands at `level` ft over the cells
 // inside its outline whose ground is lower, so its banks are where the ground rises through it.
@@ -16,6 +21,10 @@ export const WATER_TYPES = ["sea", "lake", "pond", "swamp", "river", "stream"];
 export const waterPath = (continent) => `places/continents/${continent}/water.json`;
 const TILE_CELLS = TILE_FT / CELL_FT;
 const CORNERS = TILE_CELLS + 1;
+const CELLS = TILE_CELLS * TILE_CELLS;
+const SEA = 0;
+// Around a plate: the tiles from one west and north of it to one east and south.
+export const AROUND = PLATE_TILES + 2;
 
 // A tile's water with every cell dry.
 export const dryWater = (cells) => ({ level: new Float32Array(cells).fill(NaN), type: new Uint8Array(cells) });
@@ -75,9 +84,78 @@ export function changedWaterBoxes(before, after) {
   return [...before.filter((body) => !now.has(key(body))), ...after.filter((body) => !was.has(key(body)))].filter(({ points }) => points.length).map(({ points }) => boxOf(points));
 }
 
-// Puts each of a plate's tiles' water in it, from `map`. plate: as v2/plate.js reads it.
+// Each cell's ground: the mean of its corners', 64 × 64 in row order.
+function cellGround(heights) {
+  const ground = new Float32Array(CELLS);
+  for (let j = 0; j < TILE_CELLS; j++) {
+    for (let i = 0; i < TILE_CELLS; i++) {
+      const at = j * CORNERS + i;
+      ground[j * TILE_CELLS + i] = (heights[at] + heights[at + 1] + heights[at + CORNERS] + heights[at + CORNERS + 1]) / 4;
+    }
+  }
+  return ground;
+}
+
+// Puts each of a plate's tiles' water in it: its sea, kept and spread (above), with `map`'s bodies
+// on top. plate: as v2/plate.js reads it, with `around`, AROUND × AROUND, row order, 1 where
+// there's a tile, from the one west and north of the plate's first; without it, the sea spreads
+// in from no tiles outside the plate.
 export function bakeWater(plate, map) {
   const [px, pz] = plate.coords;
-  for (const [index, tile] of plate.tiles) tile.water = map.tile(px * PLATE_TILES + (index % PLATE_TILES), pz * PLATE_TILES + Math.floor(index / PLATE_TILES), tile.heights);
+  const [tx0, tz0] = [px * PLATE_TILES, pz * PLATE_TILES];
+  const indexes = [...plate.tiles.keys()];
+  const ground = new Map(indexes.map((index) => [index, cellGround(plate.tiles.get(index).heights)]));
+  // Whether there's a tile `a` east and `b` south of the plate's first.
+  const there = (a, b) => (a >= 0 && b >= 0 && a < PLATE_TILES && b < PLATE_TILES ? plate.tiles.has(b * PLATE_TILES + a) : Boolean(plate.around?.[(b + 1) * AROUND + a + 1] ?? 1));
+  const sea = new Map(indexes.map((index) => [index, new Uint8Array(CELLS)]));
+  const queue = [];
+  const flood = (index, k) => {
+    if (sea.get(index)[k] || !(ground.get(index)[k] < SEA_LEVEL_FT)) return;
+    sea.get(index)[k] = 1;
+    queue.push(index * CELLS + k);
+  };
+  for (const index of indexes) {
+    const { water } = plate.tiles.get(index);
+    const [a, b] = [index % PLATE_TILES, Math.floor(index / PLATE_TILES)];
+    for (let k = 0; k < CELLS; k++) if (water && water.type[k] === SEA && !Number.isNaN(water.level[k])) flood(index, k);
+    // The sea's all round the land: in from each side with no tile past it.
+    for (let n = 0; n < TILE_CELLS; n++) {
+      if (!there(a - 1, b)) flood(index, n * TILE_CELLS);
+      if (!there(a + 1, b)) flood(index, n * TILE_CELLS + TILE_CELLS - 1);
+      if (!there(a, b - 1)) flood(index, n);
+      if (!there(a, b + 1)) flood(index, (TILE_CELLS - 1) * TILE_CELLS + n);
+    }
+  }
+  // Out to the cells next to sea, across the plate's tiles.
+  while (queue.length) {
+    const at = queue.pop();
+    const [index, k] = [Math.floor(at / CELLS), at % CELLS];
+    const [a, b] = [index % PLATE_TILES, Math.floor(index / PLATE_TILES)];
+    const [i, j] = [k % TILE_CELLS, Math.floor(k / TILE_CELLS)];
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      let [ni, nj, na, nb] = [i + di, j + dj, a, b];
+      if (ni < 0) [ni, na] = [TILE_CELLS - 1, a - 1];
+      if (ni >= TILE_CELLS) [ni, na] = [0, a + 1];
+      if (nj < 0) [nj, nb] = [TILE_CELLS - 1, b - 1];
+      if (nj >= TILE_CELLS) [nj, nb] = [0, b + 1];
+      if (na < 0 || nb < 0 || na >= PLATE_TILES || nb >= PLATE_TILES || !plate.tiles.has(nb * PLATE_TILES + na)) continue;
+      flood(nb * PLATE_TILES + na, nj * TILE_CELLS + ni);
+    }
+  }
+  for (const [index, tile] of plate.tiles) {
+    const bodies = map.tile(tx0 + (index % PLATE_TILES), tz0 + Math.floor(index / PLATE_TILES), tile.heights);
+    const wet = sea.get(index);
+    if (!wet.some(Boolean)) {
+      tile.water = bodies;
+      continue;
+    }
+    const water = bodies ?? dryWater(CELLS);
+    for (let k = 0; k < CELLS; k++) {
+      if (!wet[k] || !Number.isNaN(water.level[k])) continue;
+      water.level[k] = SEA_LEVEL_FT;
+      water.type[k] = SEA;
+    }
+    tile.water = water;
+  }
   return plate;
 }
