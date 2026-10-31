@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TILE_FT } from "./constants.js";
-import { cutSlab, defaultSteps, fitFloor, raiseWall, rampSlab, slabFootholds, slabHitsTrunk, stairShape, stairSlab, wallFootprint, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
+import { cutSlab, defaultSteps, fitFloor, insideSlab, raiseWall, rampSlab, slabFootholds, slabHitsTrunk, stairShape, stairSlab, wallFootprint, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
 
 // A 10 ft square floor, and a wall: the same square stood up on its south edge.
 const floor = { at: [100, 40, 200], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "floorboards" };
@@ -312,5 +312,18 @@ describe("rampSlab", () => {
   it("makes nothing upright or flat", () => {
     expect(rampSlab([0, 0, 0], [10, 0, 0], [0, 10, 0], [10, 10, 0], style)).toBeNull();
     expect(rampSlab([0, 0, 0], [10, 0, 0], [20, 0, 0], [30, 0, 0], style)).toBeNull();
+  });
+});
+
+describe("insideSlab", () => {
+  it("knows the points inside a slab", () => {
+    const floor = { at: [0, 10, 0], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "stone", holes: [[[4, 4], [6, 4], [6, 6], [4, 6]]] };
+    expect(insideSlab(floor, [2, 9.5, 2])).toBe(true);
+    expect(insideSlab(floor, [2, 10.5, 2])).toBe(false);
+    expect(insideSlab(floor, [2, 8.5, 2])).toBe(false);
+    expect(insideSlab(floor, [5, 9.5, 5])).toBe(false);
+    const wall = { at: [0, 0, 0], turn: [0, -90, 0], outline: [[0, 0], [10, 0], [10, 8], [0, 8]], thickness: 1, surface: "stone" };
+    expect(insideSlab(wall, [5, 4, 0.5])).toBe(true);
+    expect(insideSlab(wall, [5, 4, -0.5])).toBe(false);
   });
 });

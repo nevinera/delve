@@ -176,6 +176,13 @@ export function slabHitsTrunk(slab, { x, z, radius, ground, top }) {
   return false;
 }
 
+// Whether continent point [x, y, z] is inside the slab: under its top face, no deeper than its
+// thickness, and not in a hole.
+export function insideSlab(slab, p) {
+  const [u, h, v] = unturned(slab, p);
+  return h <= 0 && h >= -slab.thickness && inPolygon(slab.outline, [u, v]) && !(slab.holes ?? []).some((hole) => inPolygon(hole, [u, v]));
+}
+
 // A continent point as [u, h, v]: across the slab's top face from `at`, and up from it.
 function unturned(slab, [x, y, z]) {
   const deg = Math.PI / 180;

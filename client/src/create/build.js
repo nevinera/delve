@@ -9,7 +9,7 @@ import { Thumbnails } from "../editor/thumbnailRenderer.js";
 import { newObjectId, turnPoint } from "../world/builtObjects.js";
 import { CELL_FT as TEMPLATE_CELL_FT } from "../world/constants.js";
 import { makeObject, specOf } from "../world/objects.js";
-import { MAX_STAIR_DEG, SLAB_REACH_FT, cutSlab, defaultSteps, inPolygon, rampSlab, slabBottom, slabProblems, slabTop, stairShape, stairSlab } from "../world/slabs.js";
+import { MAX_STAIR_DEG, SLAB_REACH_FT, cutSlab, defaultSteps, insideSlab, rampSlab, slabBottom, slabProblems, slabTop, stairShape, stairSlab } from "../world/slabs.js";
 import { pressing } from "./press.js";
 import { captureTemplate, placedTemplate } from "../world/templates.js";
 import { CLIPBOARD_PREFIX } from "./library.js";
@@ -43,10 +43,10 @@ import { drawable, slabSpace } from "./things.js";
 //   made a template, or copied: a template kept in this browser, not the world, till the next
 //   copy, that paste arms the template tool with.
 // Corners drawn snap to slabs' corners near them on the screen, or else their edges, unless shift's
-// held: a floor or room started from a floor's is level with it, and a wall drawn along a floor's
-// edge from it stands outside it, its foot at the floor's bottom, and a wall started from another
-// wall's foot has its foot there too. A wall's foot is set where it starts, and it stands its
-// height from there. Floors, walls and rooms can snap to a 2 ft grid instead, square to north.
+// held: a floor or room started from a floor's is level with it, and a wall started from a floor's
+// has its foot at the floor's bottom, or from another wall's foot, there too. A wall's foot is set
+// where it starts, and it stands its height from there. The line a wall's drawn along is one face
+// of its foot, whichever puts it in other slabs least. Floors, walls and rooms can snap to a 2 ft grid instead, square to north.
 // Esc drops what's being drawn, keeping the tool. Ctrl+Z undoes the last change, ctrl+C copies
 // and ctrl+V pastes.
 
@@ -621,26 +621,50 @@ export class Build {
       return Math.min(low, from[1]);
     };
     const roofing = { style: roof, pitch, overhang: 1 };
-    // Started from a floor's corner or edge: a floor or room level with it, a wall along its edge
-    // outside it, its foot at the floor's bottom.
+    // Started from a floor's corner or edge: a floor or room level with it, or a wall with its foot
+    // at the floor's bottom.
     const floor = this.drawing?.from && pressing(this.drawing.from.slab) ? this.drawing.from.slab : null;
     const flush = floor ? [a[0], a[1] - thickness, a[2]] : a;
     if (mode === "floor") return rectanglePieces(flush, b, yaw, { thickness, surface });
     if (mode === "wall") {
       if (Math.hypot(b[0] - a[0], b[2] - a[2]) < 0.5) return [];
-      const outside = floor && besideEdge(floor, a, b);
-      // Its foot is set where it starts: flush with another wall's foot it snapped to, or else
-      // where it started, on the ground or a slab. Dragging doesn't move it.
-      const foot = wallFoot(this.drawing?.from) ?? a[1];
-      // `height` from its foot to its top, wherever its foot ends up.
-      const wall = (from, to, foot) => wallPieces([from[0], foot, from[2]], [to[0], foot, to[2]], { foot, height, thickness, surface });
-      if (!outside) return wall(a, b, foot);
-      // A wall's thickness goes to the right of its line: away from the floor.
-      const [from, to] = outside === "right" ? [b, a] : [a, b];
-      return wall(from, to, a[1] - floor.thickness);
+      // Its foot is set where it starts: a floor's bottom or another wall's foot it snapped to, or
+      // else where it started, on the ground or a slab. Dragging doesn't move it.
+      const foot = floor ? a[1] - floor.thickness : (wallFoot(this.drawing?.from) ?? a[1]);
+      // `height` from its foot to its top. The line drawn is either face of its foot: its
+      // thickness goes to the right of from -> to, so the way that overlaps other slabs least.
+      const wall = ([from, to]) => wallPieces([from[0], foot, from[2]], [to[0], foot, to[2]], { foot, height, thickness, surface });
+      const ways = [wall([a, b]), wall([b, a])];
+      const overlaps = ways.map((pieces) => this.overlap(pieces));
+      return ways[overlaps[1] < overlaps[0] ? 1 : 0];
     }
     if (mode === "room") return roomPieces(flush, b, yaw, { height, thickness, surface, footUnder, roof: roomRoof ? roofing : undefined });
     return roofPieces(a, b, yaw, { ...roofing, thickness, surface });
+  }
+
+  // How much of `pieces` (slabs) lies inside slabs already placed: how many of points spread
+  // through them are.
+  overlap(pieces) {
+    let count = 0;
+    for (const piece of pieces) {
+      const [[x, , z]] = slabTop(piece);
+      const others = this.placed.near(x, z, 2 * SLAB_REACH_FT).slabs;
+      if (!others.length) continue;
+      const [, [length], [, tall]] = piece.outline;
+      // A foot apart along it, and every 2 ft up from just over its foot, where floors meet it.
+      const nu = Math.max(2, Math.ceil(length));
+      const vs = [Math.min(0.25, tall / 2)];
+      for (let v = 2; v < tall; v += 2) vs.push(v);
+      for (let i = 0; i < nu; i++) {
+        for (const v of vs) {
+          // Through the middle of its thickness; turnPoint as slabFace turns.
+          const [px, py, pz] = turnPoint([((i + 0.5) / nu) * length, -piece.thickness / 2, v], piece.turn);
+          const p = [piece.at[0] + px, piece.at[1] + py, piece.at[2] + pz];
+          if (others.some((slab) => insideSlab(slab, p))) count++;
+        }
+      }
+    }
+    return count;
   }
 
   // The slabs being drawn, red where they can't be made.
@@ -1179,26 +1203,6 @@ export class Build {
     this.say(`Made the template "${name}".`);
     this.showRecent();
   }
-}
-
-// Whether the line from a to b ([x, y, z]) runs along an edge of the level slab `floor`: "left" or
-// "right" for the side of it the floor's on, looking from a to b with north up; or null.
-function besideEdge(floor, a, b) {
-  const ring = slabTop(floor).map(([x, , z]) => [x, z]);
-  const [dx, dz] = [b[0] - a[0], b[2] - a[2]];
-  const length = Math.hypot(dx, dz);
-  const [mx, mz] = [(a[0] + b[0]) / 2, (a[2] + b[2]) / 2];
-  const along = ring.some((p, i) => {
-    const q = ring[(i + 1) % ring.length];
-    const [ex, ez] = [q[0] - p[0], q[1] - p[1]];
-    const edge = Math.hypot(ex, ez);
-    const parallel = Math.abs(dx * ez - dz * ex) / (length * edge) < 0.02;
-    const t = Math.max(0, Math.min(1, ((mx - p[0]) * ex + (mz - p[1]) * ez) / (edge * edge)));
-    return parallel && Math.hypot(mx - (p[0] + ex * t), mz - (p[1] + ez * t)) < 0.1;
-  });
-  if (!along) return null;
-  const [rx, rz] = [-dz / length, dx / length];
-  return inPolygon(ring, [mx + rx * 0.5, mz + rz * 0.5]) ? "right" : "left";
 }
 
 // Moves a thing dx, dz across and dy up; an object without its own height gets one, standing at
