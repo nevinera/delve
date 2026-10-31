@@ -98,41 +98,65 @@ describe("middleOutline", () => {
 });
 
 describe("cliff", () => {
-  const flat = () => 0;
   const line = [
     [0, 0],
     [1000, 0],
   ];
-  const settings = { width: 300, height: 60, noise: 0, flip: false };
+  const settings = { width: 300, height: 60, noise: 0 };
+  // Ground rising to the line's right, going along it (+z), or its left.
+  const right = (x, z) => z * 0.1;
+  const left = (x, z) => -z * 0.1;
 
-  it("raises the ground on the line's left to its height, and none on its right", () => {
-    const grown = growth("cliff", line, settings, flat);
-    expect(grown.peaks).toEqual([]);
-    expect(grown.raise(500, -100, 0)).toBeCloseTo(60);
-    expect(grown.raise(500, 100, 0)).toBe(0);
-    expect(grown.raise(500, -400, 0)).toBe(0);
-    const flipped = growth("cliff", line, { ...settings, flip: true }, flat);
-    expect(flipped.raise(500, 100, 0)).toBeCloseTo(60);
-    expect(flipped.raise(500, -100, 0)).toBe(0);
+  it("raises the ground on whichever side's higher, and none on the other", () => {
+    const up = growth("cliff", line, settings, right);
+    expect(up.flat).toBe(false);
+    expect(up.raise(500, 100, 0)).toBeCloseTo(60);
+    expect(up.raise(500, -100, 0)).toBe(0);
+    expect(up.raise(500, 400, 0)).toBe(0);
+    const down = growth("cliff", line, settings, left);
+    expect(down.raise(500, -100, 0)).toBeCloseTo(60);
+    expect(down.raise(500, 100, 0)).toBe(0);
+  });
+
+  it("grows nowhere the ground's too flat to have a higher side", () => {
+    for (const ground of [() => 0, (x, z) => z * 0.005]) {
+      const grown = growth("cliff", line, settings, ground);
+      expect(grown.flat).toBe(true);
+      expect(grown.raise(500, 100, 0)).toBe(0);
+      expect(grown.raise(500, -100, 0)).toBe(0);
+    }
+  });
+
+  it("rises on the side that's higher along each stretch, and not between", () => {
+    const long = [
+      [0, 0],
+      [4000, 0],
+    ];
+    // Higher on the right for the first half, the left for the second.
+    const grown = growth("cliff", long, settings, (x, z) => (x < 2000 ? z : -z) * 0.1);
+    expect(grown.raise(800, 100, 0)).toBeCloseTo(60);
+    expect(grown.raise(3200, -100, 0)).toBeCloseTo(60);
+    expect(grown.raise(2000, 100, 0)).toBeLessThan(5);
+    expect(grown.raise(2000, -100, 0)).toBeLessThan(5);
   });
 
   it("has a face steeper than a character walks up, and is lower by its ends", () => {
-    const grown = growth("cliff", line, settings, flat);
+    const grown = growth("cliff", line, settings, right);
     let steepest = 0;
-    for (let z = -40; z <= 40; z += 1) steepest = Math.max(steepest, grown.raise(500, z - 1, 0) - grown.raise(500, z, 0));
+    for (let z = -40; z <= 40; z += 1) steepest = Math.max(steepest, grown.raise(500, z + 1, 0) - grown.raise(500, z, 0));
     expect((Math.atan(steepest) * 180) / Math.PI).toBeGreaterThan(WALK_DEG);
-    expect(grown.raise(10, -100, 0)).toBeLessThan(5);
+    expect(grown.raise(10, 100, 0)).toBeLessThan(5);
     expect(grown.zone(500, 0)).toBe(3);
-    expect(grown.zone(500, -100)).toBe(2);
-    expect(grown.zone(500, 100)).toBe(0);
+    expect(grown.zone(500, 100)).toBe(2);
+    expect(grown.zone(500, -100)).toBe(0);
   });
 
-  it("can't be walked up, but round its ends, unless it's too low or its noise breaks it", () => {
-    const r = raises(growth("cliff", line, settings, flat), flat);
+  it("can't be walked up, but round its ends, unless it's too low", () => {
+    const r = raises(growth("cliff", line, settings, right), right);
     expect(r.step).toBe(4);
     expect(crossing(r)).toBeNull();
-    expect(crossing(raises(growth("cliff", line, { ...settings, height: 2 }, flat), flat))).not.toBeNull();
-    const jagged = raises(growth("cliff", line, { ...settings, noise: 1 }, flat), flat);
+    expect(crossing(raises(growth("cliff", line, { ...settings, height: 1 }, right), right))).not.toBeNull();
+    const jagged = raises(growth("cliff", line, { ...settings, noise: 1 }, right), right);
     expect(Math.max(...jagged.grid)).toBeGreaterThan(55);
   });
 });

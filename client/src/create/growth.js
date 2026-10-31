@@ -234,20 +234,25 @@ export function growth(kind, points, settings, heightAt) {
   return { kind, half, line, edge, base, peaks, zone, raise, bounds };
 }
 
-// A cliff along `points`, a step `height` ft tall, with settings { width, height, noise, flip }:
-// the ground on the line's left, going along it, or its right with `flip`, raised by its height
-// out to `width` from the line, keeping its shape, then easing down to the ground over the last
-// part of that. Its face is steeper than any character
-// walks up, FACE_DEG on average, centred on the line, and with noise it wanders either side of
+// A cliff along `points`, a step `height` ft tall, with settings { width, height, noise }: the
+// ground on whichever side of the line is higher already raised by its height out to `width` from
+// the line, keeping its shape, then easing down to the ground over the last part of that. Which
+// side's higher is taken out to `width` either way, averaged along the line over `width`, and
+// where the ground across it is flatter than FLAT, rise over run, there's no cliff, easing in by
+// STEEPER. Its face is steeper than any character walks up, FACE_DEG on average, centred on the line, and with noise it wanders either side of
 // the line and is broken into splintered ribs, and its top is lumpy. It's lower to nothing over
 // ENDS heights from the line's ends. Its zone() is 3 on its face, 2 on its top, 1 where it eases
 // down behind, and its sides(x, z, hit) is 2 below it, 3 on its top and 1 on its face, for
-// crossing(), but 0 where it's lower by its ends, round which it can be walked.
+// crossing(), but 0 where it's lower by its ends or the flat, round which it can be walked. It's
+// `flat` where there's no cliff at all.
+const FLAT = 0.02;
+const RISE_STEP = 0.25;
+const STEEPER = 0.01;
 const FACE_DEG = 72;
 const ENDS = 1;
 const MIN_FACE_FT = 6;
 
-function cliff(points, { width, height, noise, flip = false }, heightAt) {
+function cliff(points, { width, height, noise }, heightAt) {
   const line = new Line(points, width * 1.25);
   const bases = baseHeights(line, heightAt);
   const base = (s) => {
@@ -256,13 +261,42 @@ function cliff(points, { width, height, noise, flip = false }, heightAt) {
     const t = Math.max(0, Math.min(1, (s - line.along[k - 1]) / span));
     return bases[k - 1] + ((bases[k] ?? bases[k - 1]) - bases[k - 1]) * t;
   };
-  const up = flip ? 1 : -1; // the side of the line raised
+  // How much higher the ground is on the line's right than its left, every RISE_STEP widths along
+  // it.
+  const count = Math.max(1, Math.ceil(line.length / (RISE_STEP * width)));
+  const along = Array.from({ length: count + 1 }, (_, k) => (k / count) * line.length);
+  const higher = along.map((s) => {
+    const p = line.at(s);
+    const [a, b] = [line.at(Math.max(0, s - width / 4)), line.at(Math.min(line.length, s + width / 4))];
+    const l = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+    const [nx, nz] = [-(b[1] - a[1]) / l, (b[0] - a[0]) / l]; // toward the right
+    let sum = 0;
+    for (const out of [0.5, 0.75, 1]) sum += heightAt(p[0] + nx * out * width, p[1] + nz * out * width) - heightAt(p[0] - nx * out * width, p[1] - nz * out * width);
+    return sum / 3;
+  });
+  // Averaged along the line, as a share of a cliff, signed by the side it rises on: -1 left, 1 right.
+  const rises = along.map((s) => {
+    let [sum, weights] = [0, 0];
+    for (let m = 0; m < higher.length; m++) {
+      const w = Math.exp(-(((along[m] - s) / width) ** 2));
+      sum += higher[m] * w;
+      weights += w;
+    }
+    const slope = sum / weights / (1.5 * width);
+    return Math.sign(slope) * smoothstep(FLAT, FLAT + STEEPER, Math.abs(slope));
+  });
+  const rise = (s) => {
+    const t = Math.max(0, Math.min(count, (s / line.length) * count || 0));
+    const k = Math.min(count - 1, Math.floor(t));
+    return rises[k] + ((rises[k + 1] ?? rises[k]) - rises[k]) * (t - k);
+  };
+  const flat = rises.every((r) => r === 0);
   const run = Math.max(MIN_FACE_FT, height / Math.tan((FACE_DEG * Math.PI) / 180));
   const ends = ENDS * height;
-  const tall = (s) => height * smoothstep(0, ends, s) * smoothstep(0, ends, line.length - s);
+  const tall = (s) => height * Math.abs(rise(s)) * smoothstep(0, ends, s) * smoothstep(0, ends, line.length - s);
   // How far toward the top (x, z) is, across the face: below it under -run / 2, on top over it.
   const across = (x, z, hit) => {
-    const u = hit.side === up ? hit.d : -hit.d;
+    const u = hit.side === Math.sign(rise(hit.s)) ? hit.d : -hit.d;
     if (!noise) return u;
     const wander = 0.6 * run * fbm(hit.s, 3, SEED + 20, { wavelength: Math.max(40, 4 * height), octaves: 3 });
     const splinters = 0.35 * run * fbm(x, z, SEED + 21, { wavelength: Math.max(2 * CELL_FT, run), octaves: 3 });
@@ -273,18 +307,18 @@ function cliff(points, { width, height, noise, flip = false }, heightAt) {
   const edge = () => width;
   const zone = (x, z) => {
     const hit = line.nearest(x, z);
-    if (!hit || line.end(hit)) return 0;
+    if (!hit || line.end(hit) || Math.abs(rise(hit.s)) < 0.5) return 0;
     const u = across(x, z, hit);
     return u < -run / 2 || u > width ? 0 : u <= run / 2 ? 3 : u <= EDGE * width ? 2 : 1;
   };
   const sides = (x, z, hit) => {
-    if (hit.s < ends || hit.s > line.length - ends) return 0;
+    if (hit.s < ends || hit.s > line.length - ends || Math.abs(rise(hit.s)) < 0.5) return 0;
     const u = across(x, z, hit);
     return u < -run / 2 ? 2 : u <= run / 2 ? 1 : u <= EDGE * width ? 3 : 0;
   };
   const raise = (x, z, ground, nearest) => {
     const hit = nearest === undefined ? line.nearest(x, z) : nearest;
-    if (!hit) return 0;
+    if (!hit || !rise(hit.s)) return 0;
     const u = across(x, z, hit);
     if (u <= -run / 2 || u >= width) return 0;
     const lumps = 1 + noise * 0.08 * fbm(x, z, SEED + 22, { wavelength: Math.max(40, width / 4), octaves: 4 });
@@ -294,7 +328,7 @@ function cliff(points, { width, height, noise, flip = false }, heightAt) {
   const zs = points.map(([, z]) => z);
   const reach = width * 1.25;
   const bounds = [Math.min(...xs) - reach, Math.min(...zs) - reach, Math.max(...xs) + reach, Math.max(...zs) + reach];
-  return { kind: "cliff", half: width, line, edge, base, peaks: [], zone, raise, bounds, step: CELL_FT, sides };
+  return { kind: "cliff", half: width, line, edge, base, peaks: [], zone, raise, bounds, step: CELL_FT, sides, flat };
 }
 
 // A growth's raises worked out once on a grid, CHUNK_FT apart or more (or its step, if finer), to keep to MOST_POINTS:

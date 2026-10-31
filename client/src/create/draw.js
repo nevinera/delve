@@ -14,7 +14,8 @@ import { Stroke } from "./stroke.js";
 // - adjusting: what to grow is picked, and its settings shown on the ground while they're
 //   changed: its band's thirds shaded, orange in the middle to yellow at the edge, a dot for each
 //   peak it'll grow, bigger the taller, and a line in the air at the height it aims for. A
-//   cliff's face is shaded orange, its top lighter, and where it eases down behind yellow. Growing
+//   cliff's face is shaded orange, its top lighter, and where it eases down behind yellow. One
+//   whose line's too flat everywhere to have a higher side isn't grown. Growing
 //   it moves the ground, as one step undo takes back. One that's to be impassable isn't grown
 //   when there's a way across it, and the way's drawn in red instead. A range's middle third is
 //   made rocky, a biome area on top (biomes.js), which undo takes away again.
@@ -31,7 +32,7 @@ const LIFT_FT = 2;
 export const DEFAULTS = {
   hills: { width: 5280, height: 300, noise: 0.6, density: 3, impassable: true },
   range: { width: 10560, height: 1500, noise: 0.6, density: 3, impassable: true },
-  cliff: { width: 300, height: 60, noise: 0.6, density: 1, impassable: true, flip: false },
+  cliff: { width: 300, height: 60, noise: 0.6, density: 1, impassable: true },
 };
 // How finely each kind's grown: a cliff's face is too narrow for chunks.
 const LEVELS = { hills: CHUNKS, range: CHUNKS, cliff: CELLS };
@@ -63,6 +64,7 @@ export class Draw {
     this.aimMaterial = lineMaterial(AIM_COLOR, 2);
     this.passMaterial = lineMaterial(PASS_COLOR, 4);
     this.passable = false; // whether growing was stopped by a way across
+    this.flat = false; // whether a cliff's line is too flat for any of it to grow
     this.zoneMaterials = ZONES.map((zone) => zone && new THREE.MeshBasicMaterial({ ...zone, transparent: true, depthTest: false, depthWrite: false, side: THREE.DoubleSide }));
     this.line = null;
     this.aim = null;
@@ -126,6 +128,7 @@ export class Draw {
   clearPreview() {
     this.peaks = [];
     this.passable = false;
+    this.flat = false;
     this.drop("pass");
     this.drop("aim");
     this.drop("zones");
@@ -139,6 +142,7 @@ export class Draw {
   grow() {
     if (this.state !== "adjusting") return;
     const grown = this.grown();
+    if (grown.flat) return;
     const r = raises(grown, this.heightAt);
     const way = this.settings[this.kind].impassable && crossing(r);
     if (way) {
@@ -183,6 +187,7 @@ export class Draw {
     this.passable = false;
     this.drop("pass");
     const grown = this.grown();
+    this.flat = Boolean(grown.flat);
     const { height } = this.settings[this.kind];
     this.peaks = grown.peaks.map((peak) => ({ ...peak, y: this.heightAt(peak.x, peak.z) + LIFT_FT, size: DOT_PX[0] + (DOT_PX[1] - DOT_PX[0]) * (peak.tall / height) }));
     this.fat(grown.line.points.map(([x, z], k) => [x, grown.base(grown.line.along[k]) + height, z]), this.aimMaterial, "aim");

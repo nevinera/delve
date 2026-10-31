@@ -219,10 +219,6 @@ export class Tools {
       this.draw.settings[this.draw.kind].impassable = $("growImpassable").checked;
       this.draw.dirty = true;
     });
-    $("growFlip").addEventListener("change", () => {
-      this.draw.settings[this.draw.kind].flip = $("growFlip").checked;
-      this.draw.dirty = true;
-    });
     $("growBack").addEventListener("click", () => this.draw.back());
     $("growGo").addEventListener("click", () => this.draw.grow());
     $("growUndo").addEventListener("click", () => this.draw.undo());
@@ -490,7 +486,6 @@ export class Tools {
     if (state !== "adjusting") return;
     const settings = this.draw.settings[kind];
     $("growImpassable").checked = settings.impassable;
-    $("growFlip").checked = settings.flip ?? false;
     for (const part of document.querySelectorAll("[data-grown]")) part.hidden = !part.dataset.grown.split(" ").includes(kind);
     for (const [id, read] of Object.entries(GROW_SLIDERS)) {
       $(id).value = String(read.get(settings, kind));
@@ -744,6 +739,7 @@ export class Tools {
     });
     $("courseRipple").checked = this.courses.ripple;
     $("growPassable").hidden = !this.draw.passable;
+    $("growFlat").hidden = !this.draw.flat;
     if (this.tool === "measure" && this.measuring) {
       if (this.measuring.from && !this.measuring.radius) {
         const at = this.hit(this.drawAt);
