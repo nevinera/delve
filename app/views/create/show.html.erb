@@ -149,9 +149,9 @@
           <input id="growNoise" type="range" min="0" max="1000">
         </label>
         <label class="create-check"><input type="checkbox" id="growImpassable" checked> impassable</label>
-        <p class="create-note create-warn" id="growFlat" hidden>Not grown: the ground's too flat across the line to have a higher side to rise on.</p>
+        <p class="create-note create-warn" id="growFlat" hidden>Not grown: the ground's flat across the whole line, so neither side is higher to rise on.</p>
         <p class="create-note create-warn" id="growPassable" hidden>Not grown: there's a way across, drawn in red. Make it taller or denser, or let it be passable.</p>
-        <p class="create-note" data-grown="cliff">The cliff rises on whichever side of the line is higher, and doesn't grow where the ground's too flat across it to tell. Width is how far back its top goes. Its face is shaded orange, its top lighter and where it eases down behind yellow. The blue line floats at the height of its top.</p>
+        <p class="create-note" data-grown="cliff">The cliff rises on the side of the line that's higher along most of it, shorter where the ground's only a little higher, and not where it's flat or higher on the other side. Height is the most it rises, and width how far back its top goes. Its face is shaded orange, its top lighter and where it eases down behind yellow. The blue line floats at the height of its top.</p>
         <p class="create-note" data-grown="hills range">Width is the whole band. Dots are the peaks to grow, bigger for taller: tallest in the orange middle third, smaller across the middle two, low hills out to the yellow edge. The blue line floats at the height it aims for.</p>
         <div class="create-way">
           <button type="button" id="growBack">back</button>

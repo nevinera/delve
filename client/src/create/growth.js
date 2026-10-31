@@ -234,25 +234,31 @@ export function growth(kind, points, settings, heightAt) {
   return { kind, half, line, edge, base, peaks, zone, raise, bounds };
 }
 
-// A cliff along `points`, a step `height` ft tall, with settings { width, height, noise }: the
-// ground on whichever side of the line is higher already raised by its height out to `width` from
-// the line, keeping its shape, then easing down to the ground over the last part of that. Which
-// side's higher is taken out to `width` either way, averaged along the line over `width`, and
-// where the ground across it is flatter than FLAT, rise over run, there's no cliff, easing in by
-// STEEPER. Its face is steeper than any character walks up, FACE_DEG on average, centred on the line, and with noise it wanders either side of
-// the line and is broken into splintered ribs, and its top is lumpy. It's lower to nothing over
+// A cliff along `points`, a step up to `height` ft tall, with settings { width, height, noise }:
+// the ground on one side of the line raised out to `width` from it, keeping its shape, then easing
+// down to the ground over the last part of that. Which side's higher is taken out to `width`
+// either way, averaged along the line over `width`, and the side higher along most of the line is
+// the one raised. Where the ground rises that way it's raised by a share of its height, SMALLEST
+// where the ground's only a little higher, all of it where it rises FULL, rise over run, or more;
+// where it's flat or rises the other way, it's not raised. Its face is steeper than any character
+// walks up, FACE_DEG on average, meandering MEANDER widths either side of the line, broken into
+// splintered ribs, and with its top lumpy: a little even with no noise, more with it. It's lower to nothing over
 // ENDS heights from the line's ends. Its zone() is 3 on its face, 2 on its top, 1 where it eases
 // down behind, and its sides(x, z, hit) is 2 below it, 3 on its top and 1 on its face, for
 // crossing(), but 0 where it's lower by its ends or the flat, round which it can be walked. It's
 // `flat` where there's no cliff at all.
-const FLAT = 0.02;
 const RISE_STEP = 0.25;
-const STEEPER = 0.01;
+const LEVEL = 0.005; // flatter than this, rise over run, the ground's taken as flat
+const SMALLEST = 0.2;
+const FULL = 0.1;
+const MEANDER = 0.12;
+const LEAST_NOISE = 0.25;
 const FACE_DEG = 72;
 const ENDS = 1;
 const MIN_FACE_FT = 6;
 
 function cliff(points, { width, height, noise }, heightAt) {
+  noise = LEAST_NOISE + (1 - LEAST_NOISE) * noise;
   const line = new Line(points, width * 1.25);
   const bases = baseHeights(line, heightAt);
   const base = (s) => {
@@ -274,51 +280,59 @@ function cliff(points, { width, height, noise }, heightAt) {
     for (const out of [0.5, 0.75, 1]) sum += heightAt(p[0] + nx * out * width, p[1] + nz * out * width) - heightAt(p[0] - nx * out * width, p[1] - nz * out * width);
     return sum / 3;
   });
-  // Averaged along the line, as a share of a cliff, signed by the side it rises on: -1 left, 1 right.
-  const rises = along.map((s) => {
+  // Averaged along the line, as a slope toward the right.
+  const slopes = along.map((s) => {
     let [sum, weights] = [0, 0];
     for (let m = 0; m < higher.length; m++) {
       const w = Math.exp(-(((along[m] - s) / width) ** 2));
       sum += higher[m] * w;
       weights += w;
     }
-    const slope = sum / weights / (1.5 * width);
-    return Math.sign(slope) * smoothstep(FLAT, FLAT + STEEPER, Math.abs(slope));
+    return sum / weights / (1.5 * width);
+  });
+  // The side it rises on along most of the line: -1 left, 1 right, 0 if it's flat all along.
+  const votes = slopes.reduce((sum, slope) => sum + (Math.abs(slope) < LEVEL ? 0 : Math.sign(slope)), 0);
+  const rising = slopes.some((slope) => Math.abs(slope) >= LEVEL);
+  const up = !rising ? 0 : Math.sign(votes) || Math.sign(slopes.reduce((a, b) => a + b, 0));
+  // How much of the cliff's height it is at each, eased in from the flat.
+  const rises = slopes.map((slope) => {
+    const toward = slope * up;
+    return smoothstep(0, LEVEL, toward) * (SMALLEST + (1 - SMALLEST) * smoothstep(LEVEL, FULL, toward));
   });
   const rise = (s) => {
     const t = Math.max(0, Math.min(count, (s / line.length) * count || 0));
     const k = Math.min(count - 1, Math.floor(t));
     return rises[k] + ((rises[k + 1] ?? rises[k]) - rises[k]) * (t - k);
   };
-  const flat = rises.every((r) => r === 0);
+  const flat = !up || rises.every((r) => r === 0);
   const run = Math.max(MIN_FACE_FT, height / Math.tan((FACE_DEG * Math.PI) / 180));
   const ends = ENDS * height;
-  const tall = (s) => height * Math.abs(rise(s)) * smoothstep(0, ends, s) * smoothstep(0, ends, line.length - s);
+  const tall = (s) => height * rise(s) * smoothstep(0, ends, s) * smoothstep(0, ends, line.length - s);
   // How far toward the top (x, z) is, across the face: below it under -run / 2, on top over it.
   const across = (x, z, hit) => {
-    const u = hit.side === Math.sign(rise(hit.s)) ? hit.d : -hit.d;
-    if (!noise) return u;
+    const u = hit.side === up ? hit.d : -hit.d;
+    const meander = MEANDER * width * fbm(hit.s, 7, SEED + 23, { wavelength: 1.5 * width, octaves: 3 });
     const wander = 0.6 * run * fbm(hit.s, 3, SEED + 20, { wavelength: Math.max(40, 4 * height), octaves: 3 });
     const splinters = 0.35 * run * fbm(x, z, SEED + 21, { wavelength: Math.max(2 * CELL_FT, run), octaves: 3 });
-    return u + noise * (wander + splinters);
+    return u + meander + noise * (wander + splinters);
   };
   const face = (u) => smoothstep(-run / 2, run / 2, u);
   const back = (u) => 1 - smoothstep(EDGE * width, width, u);
   const edge = () => width;
   const zone = (x, z) => {
     const hit = line.nearest(x, z);
-    if (!hit || line.end(hit) || Math.abs(rise(hit.s)) < 0.5) return 0;
+    if (!hit || line.end(hit) || !up || rise(hit.s) < SMALLEST / 2) return 0;
     const u = across(x, z, hit);
     return u < -run / 2 || u > width ? 0 : u <= run / 2 ? 3 : u <= EDGE * width ? 2 : 1;
   };
   const sides = (x, z, hit) => {
-    if (hit.s < ends || hit.s > line.length - ends || Math.abs(rise(hit.s)) < 0.5) return 0;
+    if (hit.s < ends || hit.s > line.length - ends || !up || rise(hit.s) < SMALLEST / 2) return 0;
     const u = across(x, z, hit);
     return u < -run / 2 ? 2 : u <= run / 2 ? 1 : u <= EDGE * width ? 3 : 0;
   };
   const raise = (x, z, ground, nearest) => {
     const hit = nearest === undefined ? line.nearest(x, z) : nearest;
-    if (!hit || !rise(hit.s)) return 0;
+    if (!hit || !up || !rise(hit.s)) return 0;
     const u = across(x, z, hit);
     if (u <= -run / 2 || u >= width) return 0;
     const lumps = 1 + noise * 0.08 * fbm(x, z, SEED + 22, { wavelength: Math.max(40, width / 4), octaves: 4 });
