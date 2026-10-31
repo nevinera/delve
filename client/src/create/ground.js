@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
-import { AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, partWater } from "../v2/water.js";
+import { ACROSS, AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, missingSea, partWater, seaEdges } from "../v2/water.js";
 import { LEDGE_RAISE_FT, LEVEE_FT, courseBox, shape } from "../v2/courses.js";
 import { waterMaterial } from "../editor/waterMaterial.js";
 import { SHORE_FADE_FT, WATER_LOOKS } from "./waterSurface.js";
@@ -292,7 +292,7 @@ export class Renditions {
         files.set(platePath(continent, [px, pz]), null);
         continue;
       }
-      files.set(platePath(continent, [px, pz]), encodePlate(this.bake({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles, around: this.around(px, pz) })));
+      files.set(platePath(continent, [px, pz]), encodePlate(this.bake({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles, around: this.around(px, pz), shores: this.shores(px, pz) })));
       this.baked([px, pz], [...plate.tiles].map(([index, tile]) => [index, tile.water]));
     }
     for (const key of platters) {
@@ -319,7 +319,7 @@ export class Renditions {
       }
       // Only what the file holds, not what's kept for drawing.
       const tiles = new Map([...plate.tiles].map(([index, { heights, terrain, slots, water, cut }]) => [index, { heights, terrain, slots, water, cut }]));
-      writing.push(this.write("plate", { coords: [px, pz], palette: plate.palette, tiles, around: this.around(px, pz) }).then((bytes) => files.set(platePath(continent, [px, pz]), bytes)));
+      writing.push(this.write("plate", { coords: [px, pz], palette: plate.palette, tiles, around: this.around(px, pz), shores: this.shores(px, pz) }).then((bytes) => files.set(platePath(continent, [px, pz]), bytes)));
     }
     // Platters after, with their tiles' water as the plates were baked.
     await Promise.all(writing);
@@ -357,9 +357,11 @@ export class Renditions {
   }
 
   // Takes the water baked into plate (px, pz)'s tiles, [index, water], to draw, and into their
-  // renditions.
+  // renditions. Where its sea along a side's changed, the plate past that side's to be saved
+  // again, to take the sea in from it.
   baked([px, pz], waters) {
     const plate = this.decoded.get(`${px},${pz}`);
+    const before = this.edges(px, pz);
     for (const [index, water] of waters) {
       const [tx, tz] = [px * PLATE_TILES + (index % PLATE_TILES), pz * PLATE_TILES + Math.floor(index / PLATE_TILES)];
       this.waters.set(`${tx},${tz}`, water);
@@ -370,6 +372,66 @@ export class Renditions {
     }
     this.wetPlates.add(`${px},${pz}`);
     this.wet++;
+    const after = this.edges(px, pz);
+    for (const [side, [dx, dz]] of Object.entries(PLATE_SIDES)) {
+      if (before && before[side].every((v, k) => v === after[side][k])) continue;
+      this.saveAgain(`${px + dx},${pz + dz}`);
+    }
+  }
+
+  // Marks plate `key`, if there is one, to be saved again.
+  saveAgain(key) {
+    if (!this.plateFiles.has(key) && !this.made.has(key)) return;
+    this.changed.add(key);
+    this.unsaved.add(key);
+  }
+
+  // The water of plate (px, pz)'s tiles as last baked, or as its file has it, by where they are in
+  // it, or null where it's not known.
+  waterOf(px, pz) {
+    const plate = this.decoded.get(`${px},${pz}`);
+    return (a, b) => this.waters.get(`${px * PLATE_TILES + a},${pz * PLATE_TILES + b}`) ?? plate?.tiles.get(b * PLATE_TILES + a)?.water ?? null;
+  }
+
+  // The sea along plate (px, pz)'s sides, as water.js's seaEdges(), or null where its plate's not
+  // been read and none of its water's been baked.
+  edges(px, pz) {
+    const key = `${px},${pz}`;
+    let known = this.decoded.has(key);
+    for (let b = 0; b < PLATE_TILES && !known; b++) for (let a = 0; a < PLATE_TILES && !known; a++) known = this.waters.has(`${px * PLATE_TILES + a},${pz * PLATE_TILES + b}`);
+    return known ? seaEdges(this.waterOf(px, pz)) : null;
+  }
+
+  // Which cells just past each of plate (px, pz)'s sides are sea, as water.js's bakeWater wants
+  // them, from the plates next to it, read now where they're not.
+  shores(px, pz) {
+    const shores = {};
+    for (const [side, [dx, dz]] of Object.entries(PLATE_SIDES)) {
+      const key = `${px + dx},${pz + dz}`;
+      if (!this.plateFiles.has(key) && !this.made.has(key)) continue;
+      if (!this.edges(px + dx, pz + dz)) {
+        const plate = this.readNow(key);
+        if (plate) this.keep(key, plate);
+      }
+      const edges = this.edges(px + dx, pz + dz);
+      if (edges) shores[side] = edges[ACROSS[side]];
+    }
+    return shores;
+  }
+
+  // Marks plate `key`, just read, or the plates next to it, to be saved again where one's dry
+  // ground lower than the sea is next to the other's sea, so the sea spreads across.
+  checkShores(key) {
+    const [px, pz] = key.split(",").map(Number);
+    const plate = this.decoded.get(key);
+    const mine = seaEdges(this.waterOf(px, pz));
+    for (const [side, [dx, dz]] of Object.entries(PLATE_SIDES)) {
+      const next = `${px + dx},${pz + dz}`;
+      const other = this.decoded.get(next);
+      if (!other) continue;
+      if (missingSea(plate, side, seaEdges(this.waterOf(px + dx, pz + dz))[ACROSS[side]])) this.saveAgain(key);
+      if (missingSea(other, ACROSS[side], mine[side])) this.saveAgain(next);
+    }
   }
 
   // Which tiles there are round plate (px, pz), as water.js's bakeWater wants them.
@@ -568,6 +630,7 @@ export class Renditions {
     this.fill(key, plate);
     this.offset(key, plate);
     this.keep(key, plate);
+    this.checkShores(key);
     this.onRead();
   }
 
@@ -1329,6 +1392,8 @@ function tileWater(tile) {
   return { wet: wet * 2 >= water.level.length, level, type };
 }
 
+// Each side of a plate, and how far the plate past it is.
+const PLATE_SIDES = { west: [-1, 0], east: [1, 0], north: [0, -1], south: [0, 1] };
 const SEA = WATER_TYPES.indexOf("sea");
 const PART_COLORS = WATER_TYPES.map((type) => new THREE.Color(WATER_LOOKS[type].color).toArray());
 const LIFT_FT = 1; // how far over the ground drawn from a plate's rendition its water's lifted

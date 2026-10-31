@@ -8,8 +8,10 @@ import { CELL_FT, PLATE_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "./size
 //
 // The sea is kept only in the plates, at SEA_LEVEL_FT: a cell's sea while its ground is lower,
 // and ground made or moved lower than that takes the sea from cells next to it that have it, or
-// from the edges of tiles next to none (the sea is all round the land), as its plate's saved. So ground
-// lower than the sea but closed off from it stays dry till it's opened to it.
+// from the edges of tiles next to none (the sea is all round the land), or from the sea in the
+// plates next to it, as its plate's saved. So ground lower than the sea but closed off from it
+// stays dry till it's opened to it. A plate whose sea along a side changes has the plate past that
+// side saved again too, to take the sea in from it (create/ground.js).
 //
 // A body is { type, level, points: [[x, z], ...] }: its surface stands at `level` ft over the cells
 // inside its outline whose ground is lower, so its banks are where the ground rises through it.
@@ -146,6 +148,50 @@ export function changedWaterBoxes(before, after) {
   return [...bodies.filter(({ points }) => points.length).map(({ points }) => boxOf(points)), ...courses.filter(({ points }) => points.length).map(courseBox)];
 }
 
+// The sea in the cells along each side of a plate, waterOf(a, b) giving the water of its tile `a`
+// east and `b` south of its first, or null: { west, east, north, south }, each PLATE_TILES ×
+// TILE_CELLS, 1 where the cell's sea, along the side from its north or west end. A plate's shores
+// are those of the plates next to it: its west shore the east side of the plate west of it.
+export function seaEdges(waterOf) {
+  const sides = { west: [0, null], east: [PLATE_TILES - 1, null], north: [null, 0], south: [null, PLATE_TILES - 1] };
+  const out = {};
+  for (const [side, [ta, tb]] of Object.entries(sides)) {
+    const edge = new Uint8Array(PLATE_TILES * TILE_CELLS);
+    for (let t = 0; t < PLATE_TILES; t++) {
+      const water = waterOf(ta ?? t, tb ?? t);
+      if (!water) continue;
+      for (let n = 0; n < TILE_CELLS; n++) {
+        const k = side === "west" ? n * TILE_CELLS : side === "east" ? n * TILE_CELLS + TILE_CELLS - 1 : side === "north" ? n : (TILE_CELLS - 1) * TILE_CELLS + n;
+        edge[t * TILE_CELLS + n] = water.type[k] === SEA && !Number.isNaN(water.level[k]) ? 1 : 0;
+      }
+    }
+    out[side] = edge;
+  }
+  return out;
+}
+
+// The side across from each.
+export const ACROSS = { west: "east", east: "west", north: "south", south: "north" };
+
+// Whether a plate's sea's out of date along `side`: one of the cells along it is dry, with ground
+// lower than the sea, and the cell just past it's sea, as `shore` (one of seaEdges()) says.
+export function missingSea(plate, side, shore) {
+  for (const [index, tile] of plate.tiles) {
+    const [a, b] = [index % PLATE_TILES, Math.floor(index / PLATE_TILES)];
+    const t = side === "west" ? (a === 0 ? b : -1) : side === "east" ? (a === PLATE_TILES - 1 ? b : -1) : side === "north" ? (b === 0 ? a : -1) : b === PLATE_TILES - 1 ? a : -1;
+    if (t < 0) continue;
+    let ground = null;
+    for (let n = 0; n < TILE_CELLS; n++) {
+      if (!shore[t * TILE_CELLS + n]) continue;
+      const k = side === "west" ? n * TILE_CELLS : side === "east" ? n * TILE_CELLS + TILE_CELLS - 1 : side === "north" ? n : (TILE_CELLS - 1) * TILE_CELLS + n;
+      if (tile.water && !Number.isNaN(tile.water.level[k])) continue;
+      ground ??= cellGround(tile.heights);
+      if (ground[k] < SEA_LEVEL_FT) return true;
+    }
+  }
+  return false;
+}
+
 // Each cell's ground: the mean of its corners', 64 × 64 in row order.
 function cellGround(heights) {
   const ground = new Float32Array(CELLS);
@@ -161,7 +207,8 @@ function cellGround(heights) {
 // Puts each of a plate's tiles' water in it: its sea, kept and spread (above), with `map`'s bodies
 // on top. plate: as v2/plate.js reads it, with `around`, AROUND × AROUND, row order, 1 where
 // there's a tile, from the one west and north of the plate's first; without it, the sea spreads
-// in from no tiles outside the plate.
+// in from no tiles outside the plate. With `shores`, as seaEdges() gives them, which cells just
+// past each of its sides are sea, it spreads in from those too.
 export function bakeWater(plate, map) {
   const [px, pz] = plate.coords;
   const [tx0, tz0] = [px * PLATE_TILES, pz * PLATE_TILES];
@@ -186,6 +233,15 @@ export function bakeWater(plate, map) {
       if (!there(a + 1, b)) flood(index, n * TILE_CELLS + TILE_CELLS - 1);
       if (!there(a, b - 1)) flood(index, n);
       if (!there(a, b + 1)) flood(index, (TILE_CELLS - 1) * TILE_CELLS + n);
+    }
+    // And from the plates next to it.
+    const shores = plate.shores;
+    if (!shores) continue;
+    for (let n = 0; n < TILE_CELLS; n++) {
+      if (a === 0 && shores.west?.[b * TILE_CELLS + n]) flood(index, n * TILE_CELLS);
+      if (a === PLATE_TILES - 1 && shores.east?.[b * TILE_CELLS + n]) flood(index, n * TILE_CELLS + TILE_CELLS - 1);
+      if (b === 0 && shores.north?.[a * TILE_CELLS + n]) flood(index, n);
+      if (b === PLATE_TILES - 1 && shores.south?.[a * TILE_CELLS + n]) flood(index, (TILE_CELLS - 1) * TILE_CELLS + n);
     }
   }
   // Out to the cells next to sea, across the plate's tiles.

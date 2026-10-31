@@ -268,3 +268,69 @@ describe("clearing the ground away", () => {
     expect(fresh.cells(0, 0)).not.toBeNull();
   });
 });
+
+describe("the sea across plates", () => {
+  const SEA = 0;
+  // Tiles 7 and 8 of row 0, the last of plate (0, 0) and the first of plate (1, 0), side by side,
+  // high round their north and south and the outer sides, their corners `height(i, j)` inside,
+  // with sea saved in tile 8's cells under it where `sea`.
+  const world = (height7, height8, sea) => {
+    const renditions = new Renditions();
+    const rendition = () => ({ heights: new Float32Array(81).fill(0), colors: new Uint8Array(192), hash: "0000000000000000" });
+    renditions.addPlatter(encodePlatter({ coords: [0, 0], tiles: new Map([[7, rendition()], [8, rendition()]]), plates: new Map([[0, rendition()], [1, rendition()]]) }));
+    const tile = (height, outer, water = null) => ({
+      heights: Float32Array.from({ length: 65 * 65 }, (_, k) => {
+        const [i, j] = [k % 65, Math.floor(k / 65)];
+        return j < 2 || j > 62 || outer(i) ? 5 : height(i, j);
+      }),
+      colors: new Uint8Array(64 * 64 * 3),
+      terrain: new Uint8Array(64 * 64),
+      forest: new Uint8Array(64 * 64),
+      water,
+    });
+    const water = { level: new Float32Array(4096).fill(NaN), type: new Uint8Array(4096) };
+    if (sea) for (let j = 2; j < 62; j++) for (let i = 0; i < 61; i++) water.level[j * 64 + i] = 0;
+    renditions.addPlate([0, 0], encodePlate({ coords: [0, 0], palette: ["grass"], tiles: new Map([[7, tile(height7, (i) => i < 2)]]) }));
+    renditions.addPlate([1, 0], encodePlate({ coords: [1, 0], palette: ["grass"], tiles: new Map([[0, tile(height8, (i) => i > 62, water)]]) }));
+    return renditions;
+  };
+  const sea = (renditions, key, index, i, j) => {
+    const { water } = decodePlate(renditions.changedFiles("main").get(`places/continents/main/plates/${key}.plate`)).tiles.get(index);
+    return Boolean(water) && water.type[j * 64 + i] === SEA && water.level[j * 64 + i] === 0;
+  };
+
+  it("comes in from the plate next to it, to ground lowered by its side", () => {
+    const renditions = world((i) => (i === 64 ? -7 : 5), () => -7, true);
+    renditions.cells(7, 0);
+    // Tile 7 lowered to -7 inside its rim, up to the plates' side.
+    renditions.raise((x, z) => (x >= 7 * 256 + 8 && x < 8 * 256 && z >= 8 && z <= 61 * 4 ? -12 : 0), [7 * 256, 0, 8 * 256, 256], CELLS);
+    expect(renditions.heightAt(7 * 256 + 128, 120)).toBe(-7);
+    expect(sea(renditions, "0_0", 7, 63, 30)).toBe(true);
+    expect(sea(renditions, "0_0", 7, 10, 30)).toBe(true);
+  });
+
+  it("has the plate next to it saved again when it reaches its side", () => {
+    // Tile 8 low and dry; tile 7's sea comes in from the plate's open side once lowered.
+    const renditions = world((i) => (i === 64 ? -7 : 5), () => -7, false);
+    renditions.cells(7, 0);
+    renditions.cells(8, 0);
+    renditions.unsaved.clear();
+    renditions.changed.clear();
+    renditions.raise((x, z) => (x >= 7 * 256 && x < 8 * 256 && z >= 8 && z <= 61 * 4 ? -12 : 0), [7 * 256 - 8, 0, 8 * 256, 256], CELLS);
+    renditions.addPlate([0, 0], renditions.changedFiles("main").get("places/continents/main/plates/0_0.plate"));
+    expect(renditions.unsaved.has("1,0")).toBe(true);
+    expect(sea(renditions, "1_0", 0, 30, 30)).toBe(true);
+  });
+
+  it("has a plate saved again when it's read with dry ground under the sea next to the sea", () => {
+    const renditions = world(() => 5, () => -7, true);
+    // Tile 7's east column is low but dry, by tile 8's sea.
+    const dry = world((i) => (i >= 63 ? -7 : 5), () => -7, true);
+    dry.cells(8, 0);
+    dry.cells(7, 0);
+    expect(dry.unsaved.has("0,0")).toBe(true);
+    renditions.cells(8, 0);
+    renditions.cells(7, 0);
+    expect(renditions.unsaved.size).toBe(0);
+  });
+});

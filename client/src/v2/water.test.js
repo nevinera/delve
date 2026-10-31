@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { trackOf } from "./courses.js";
-import { AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, dryWater, partWater } from "./water.js";
+import { ACROSS, AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, dryWater, missingSea, partWater, seaEdges } from "./water.js";
 
 const square = (x, z, size) => [[x, z], [x + size, z], [x + size, z + size], [x, z + size]];
 // 65 × 65 corner heights, a slope rising 1 ft a cell eastward from -10.
@@ -84,6 +84,36 @@ describe("the sea", () => {
     expect(wet(t, 28, 10)).toBe(true);
     expect(wet(t, 31, 10)).toBe(false);
     expect(wet(t, 0, 0)).toBe(false);
+  });
+
+  it("comes in from the sea in the plate next to it", () => {
+    // Below the sea, but high round its north, south and east, the plate's only tile.
+    const high = (i, j) => (j < 2 || j > 61 || i > 61 ? 5 : -7);
+    const t = tile(high);
+    const west = new Uint8Array(8 * 64);
+    west[20] = 1; // tile 0's west side, cell 20 down it
+    bakeWater({ coords: [0, 0], around: all, tiles: new Map([[0, t]]), shores: { west } }, new WaterMap());
+    expect(wet(t, 0, 20)).toBe(true);
+    expect(wet(t, 55, 30)).toBe(true);
+    const dry = tile(high);
+    bakeWater({ coords: [0, 0], around: all, tiles: new Map([[0, dry]]) }, new WaterMap());
+    expect(wet(dry, 0, 20)).toBeFalsy();
+  });
+
+  it("tells what's sea along a plate's sides, and where a plate's missing the sea next to it", () => {
+    const water = dryWater(4096);
+    for (let j = 0; j < 64; j++) [water.level[j * 64 + 63], water.type[j * 64 + 63]] = [0, SEA];
+    // Tile 7, the plate's northeast one, has sea down its east side.
+    const edges = seaEdges((a, b) => (a === 7 && b === 0 ? water : null));
+    expect(edges.east[5]).toBe(1);
+    expect(edges.east[64 + 5]).toBe(0);
+    expect(edges.west.every((v) => !v)).toBe(true);
+    expect(ACROSS.east).toBe("west");
+    // The plate east of it, its tile 0 low and dry, is missing the sea along its west side.
+    const low = { tiles: new Map([[0, tile(() => -7)]]) };
+    expect(missingSea(low, "west", edges.east)).toBe(true);
+    expect(missingSea({ tiles: new Map([[0, tile(() => 3)]]) }, "west", edges.east)).toBe(false);
+    expect(missingSea(low, "west", new Uint8Array(512))).toBe(false);
   });
 
   it("crosses into the plate's other tiles", () => {
