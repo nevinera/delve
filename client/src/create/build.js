@@ -3,6 +3,7 @@ import { objectMeshes } from "../editor/objectMeshes.js";
 import { PlacePicker } from "../editor/placePicker.js";
 import { slabMeshes } from "../editor/slabMeshes.js";
 import { polygonPieces, roofPieces, rectanglePieces, roomPieces, wallPieces } from "../editor/slabTool.js";
+import { mountSwatches } from "../editor/swatches.js";
 import { Thumbnails } from "../editor/thumbnailRenderer.js";
 import { newObjectId, turnPoint } from "../world/builtObjects.js";
 import { CELL_FT as TEMPLATE_CELL_FT } from "../world/constants.js";
@@ -80,6 +81,7 @@ export class Build {
   // ground, [x, y, z], or null. say(text): tells the builder something.
   constructor({ scene, camera, canvas, placed, things, library, groundAt, ray, groundHit }) {
     Object.assign(this, { scene, camera, canvas, placed, things, library, groundAt, ray, groundHit });
+    mountSwatches();
     this.tool = null;
     this.armed = { object: null, template: null }; // the type picked of each
     this.yaw = 0; // radians, objects' and templates' turn

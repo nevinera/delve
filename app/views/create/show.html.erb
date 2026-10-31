@@ -304,11 +304,7 @@
         <button type="button" data-slab-mode="window" aria-pressed="false" title="click a slab to cut a window 3 ft square in it">window</button>
       </div>
       <label data-slab-only="floor wall room roof polygon">surface
-        <select id="slabSurface">
-          <% %w[floorboards woodgrain logs shingles stone stoneBlocks brick roughRock dirtyStone cobblestone flagstones marble sandstone thatch slateTiles clayTiles plaster packedEarth ironPlate rustyIronPlate].each do |surface| %>
-            <option value="<%= surface %>"><%= surface %></option>
-          <% end %>
-        </select>
+        <span id="slabSurface" data-swatches title="surface" data-value="floorboards"></span>
       </label>
       <label data-slab-only="floor wall room roof polygon">thickness <input type="number" id="slabThickness" value="1" min="0.1" max="16" step="0.25"> ft</label>
       <label data-slab-only="wall room">height <input type="number" id="slabHeight" value="10" min="1" max="60" step="1"> ft</label>
@@ -326,20 +322,10 @@
       <p class="create-note">Drag the bottom edge of the flight on the ground or a slab, then point where its top edge goes, on a slab or the ground, and click. With nothing there to point at, set it with the sliders and place it. Esc puts it down.</p>
       <p class="create-note create-said" data-build-say></p>
       <label>surface
-        <select id="stairSurface">
-          <% %w[floorboards woodgrain logs shingles stone stoneBlocks brick roughRock dirtyStone cobblestone flagstones marble sandstone thatch slateTiles clayTiles plaster packedEarth ironPlate rustyIronPlate].each do |surface| %>
-            <option value="<%= surface %>"<%= " selected" if surface == "stoneBlocks" %>><%= surface %></option>
-          <% end %>
-        </select>
+        <span id="stairSurface" data-swatches title="surface" data-value="stoneBlocks"></span>
       </label>
       <label>risers
-        <select id="stairRisers">
-          <option value="same">as the treads</option>
-          <option value="open">open</option>
-          <% %w[floorboards woodgrain logs shingles stone stoneBlocks brick roughRock dirtyStone cobblestone flagstones marble sandstone thatch slateTiles clayTiles plaster packedEarth ironPlate rustyIronPlate].each do |surface| %>
-            <option value="<%= surface %>"><%= surface %></option>
-          <% end %>
-        </select>
+        <span id="stairRisers" data-swatches title="risers" data-value="same" data-extra="same:same,open:open"></span>
       </label>
       <label>thickness <input type="number" id="stairThickness" value="1" min="0.1" max="16" step="0.25"> ft</label>
       <label>steps <input type="number" id="stairSteps" value="1" min="1" max="128" step="1" disabled>

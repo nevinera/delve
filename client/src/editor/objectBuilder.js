@@ -5,6 +5,7 @@ import { GRAY_INKS, MAX_PIECES, newObjectId, MIN_SIZE_FT, PIECE_TYPES, REACH_FT,
 import { MAX_TEXT, TEXT_PLACEHOLDER, signText } from "../world/pixelFont.js";
 import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, faceFrame, faceIdOf, faceSpot, objectGeometry, primitive, textGeometry, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
 import { ImagePainter, drawImage } from "./imagePainter.js";
+import { swatchPicker } from "./swatches.js";
 import { objectMesh } from "./shapes.js";
 import { characterClips, loadAnimations } from "../character/animations.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
@@ -540,6 +541,11 @@ export class ObjectBuilder {
     );
   }
 
+  // `images` as swatch picker choices, drawn in `colors` over `underlay`.
+  imageChoices(images, colors, underlay) {
+    return images.map((image) => ({ value: image.id, label: image.name, draw: (canvas) => drawImage(canvas, image, colors, underlay) }));
+  }
+
   // --- decals ---
 
   imageOf(id) {
@@ -575,7 +581,9 @@ export class ObjectBuilder {
       );
     });
     const choices = this.images().filter((image) => image.kind === "decal");
-    const add = el("select", { title: "a decal image to put on this piece" }, new Option(choices.length ? "add a decal…" : "no decal images yet", ""), ...choices.map((image) => new Option(image.name, image.id)));
+    const add = choices.length
+      ? swatchPicker([{ value: "", label: "+ decal" }, ...this.imageChoices(choices, colors, underlay)], { title: "a decal image to put on this piece" })
+      : el("p", { className: "ob-info", textContent: "no decal images yet" });
     add.addEventListener("change", () => add.value && this.startPlacing({ list: "decals", index: null, image: add.value }));
     const hint = this.placing?.list === "decals" ? el("p", { className: "ob-info", textContent: "click a flat face of this piece to put it there · esc stops" }) : null;
     this.decalList.replaceChildren(...rows, add, ...(hint ? [hint] : []));
@@ -669,8 +677,8 @@ export class ObjectBuilder {
   // brightness varies.
   refreshTile(piece) {
     const choices = this.images().filter((image) => image.kind === "tiled");
-    const pick = el("select", { title: "an image to repeat over this piece" }, new Option(choices.length ? "none" : "no tiled images yet", ""), ...choices.map((image) => new Option(image.name, image.id)));
-    pick.value = piece.tile?.image ?? "";
+    const none = { value: "", label: choices.length ? "none" : "no tiled images yet" };
+    const pick = swatchPicker([none, ...this.imageChoices(choices, paletteColors(this.object), this.underlay())], { value: piece.tile?.image ?? "", title: "an image to repeat over this piece" });
     pick.addEventListener("change", () => this.changePiece((p) => (pick.value ? (p.tile = { every: 1, jitter: 0, ...p.tile, image: pick.value }) : delete p.tile)));
     if (!piece.tile) return this.tileBox.replaceChildren(pick);
     const every = el("input", { type: "number", value: piece.tile.every, step: 0.25, min: MIN_SIZE_FT, title: "how wide each copy is (ft)" });

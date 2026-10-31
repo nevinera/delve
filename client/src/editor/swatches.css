@@ -1,0 +1,61 @@
+/* A swatch picker (swatches.js): the picked swatch as a button, and a pullout of the others. */
+.swatch-picker {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.swatch-picker .swatch {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  min-width: 0;
+  margin: 0;
+  padding: 1px;
+  background: #2c2c34;
+  border: 1px solid #50505c;
+  border-radius: 4px;
+  cursor: pointer;
+  overflow: hidden;
+}
+
+.swatch-picker .swatch:hover {
+  border-color: #a8a8b4;
+}
+
+.swatch-picker .swatch[aria-pressed="true"] {
+  border-color: #f0c850;
+  box-shadow: 0 0 0 1px #f0c850;
+}
+
+.swatch-picker canvas {
+  display: block;
+  width: 40px;
+  height: 40px;
+  border-radius: 2px;
+}
+
+.swatch-word {
+  font: 10px ui-monospace, Menlo, monospace;
+  color: #e8e2d4;
+  line-height: 1.1;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.swatch-pullout {
+  position: fixed;
+  inset: auto;
+  margin: 0;
+  padding: 6px;
+  background: #22222a;
+  border: 1px solid #50505c;
+  border-radius: 6px;
+  grid-template-columns: repeat(5, 44px);
+  gap: 4px;
+}
+
+.swatch-pullout:popover-open {
+  display: grid;
+}
