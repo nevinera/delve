@@ -189,12 +189,13 @@ function start(world, changes) {
   // The debug toggles each show their part of the debug pane, and the pane while any's on.
   const debugToggles = [...document.querySelectorAll("[data-show-debug]")];
   const debugShown = (part) => debugToggles.some((t) => t.checked && (!part || t.dataset.showDebug === part));
-  for (const toggle of debugToggles) {
-    toggle.addEventListener("change", () => {
-      document.querySelector(`[data-debug="${toggle.dataset.showDebug}"]`).hidden = !toggle.checked;
-      $("debug").hidden = !debugShown();
-    });
-  }
+  const showDebug = () => {
+    for (const toggle of debugToggles) document.querySelector(`[data-debug="${toggle.dataset.showDebug}"]`).hidden = !toggle.checked;
+    $("debug").hidden = !debugShown();
+  };
+  for (const toggle of debugToggles) toggle.addEventListener("change", showDebug);
+  // The browser may have kept them checked from before the page was loaded again.
+  showDebug();
   showLines();
   // Let go of the toggle clicked, so keys go back to flying and the tools.
   $("bottom").addEventListener("change", (e) => e.target.blur());
