@@ -219,12 +219,15 @@ export function surfaceAt(surface, t) {
 // under the ground in its middle and EDGE_BELOW_FT under it just past its edges, but never over the surface upstream of it, nor under the water it runs into,
 // stillAt(x, z) (a body's or the sea's level, or null), to a tenth of a foot. Where it runs into
 // that water, it falls to it no more steeply than MOUTH_GRADE, over as far as that takes from
-// where it was just before it.
-export function profile(points, groundAt, stillAt = () => null, seed = 0) {
+// where it was just before it. joinAt(x, z) gives the level of another course's water at (x, z),
+// or null: where it runs into that, it's at that level, falling straight to it where it's higher,
+// and backed up to it where it's lower, as far up as it's lower.
+export function profile(points, groundAt, stillAt = () => null, seed = 0, joinAt = () => null) {
   const track = trackOf(points, seed);
   const surface = [];
   let low = Infinity;
   let mouth = -1; // where it first runs into still water
+  const joins = [];
   let k = 1;
   for (let t = 0; t <= track.length + SURFACE_STEP_FT; t += SURFACE_STEP_FT) {
     const at = Math.min(t, track.length);
@@ -240,7 +243,15 @@ export function profile(points, groundAt, stillAt = () => null, seed = 0) {
     const out = (track.width[k - 1] + (track.width[k] - track.width[k - 1]) * u) / 2 + MARGIN_FT;
     const edges = Math.min(groundAt(x - (dz / d) * out, z + (dx / d) * out), groundAt(x + (dz / d) * out, z - (dx / d) * out));
     low = Math.min(low, Math.max(Math.min(ground - BELOW_FT, edges - EDGE_BELOW_FT), still ?? -Infinity));
+    const join = joinAt(x, z);
+    if (join != null) low = Math.min(low, join);
     surface.push(low);
+    joins.push(join);
+  }
+  for (let n = surface.length - 1, backed = -Infinity; n >= 0; n--) {
+    if (joins[n] != null) backed = Math.max(backed, joins[n]);
+    if (surface[n] < backed) surface[n] = backed;
+    else if (joins[n] == null) backed = -Infinity;
   }
   const before = surface[mouth - 1];
   for (let n = mouth - 1; n >= 0 && surface[n + 1] + MOUTH_GRADE * SURFACE_STEP_FT < before; n--) surface[n] = Math.min(surface[n], surface[n + 1] + MOUTH_GRADE * SURFACE_STEP_FT);

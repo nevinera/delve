@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BELOW_FT, along, boulders, cascadesOf, depthOf, fallFtOf, fallsOf, flowOf, levelAt, lengthOf, onTrack, profile, shape, surfaceAt, trackOf } from "./courses.js";
+import { BELOW_FT, along, boulders, cascadesOf, depthOf, fallFtOf, fallsOf, flowOf, levelAt, lengthOf, onTrack, profile, shape, SURFACE_STEP_FT, surfaceAt, trackOf } from "./courses.js";
 
 const line = [[0, 0, 10], [100, 0, 10], [100, 100, 30]];
 
@@ -54,6 +54,22 @@ describe("courses", () => {
     const steep = profile(straight, (x) => (x < 100 ? 100 - x : 0), still);
     expect(steep[0]).toBe(100 - BELOW_FT);
     expect(steep[3]).toBeLessThan(80);
+  });
+
+  it("meet the water of a course they run into at its level, falling straight to it", () => {
+    // Ground 20 ft up all along, and another course's water at 10 past x = 100.
+    const straight = [[0, 0, 6], [200, 0, 6]];
+    const surface = profile(straight, () => 20, () => null, 0, (x) => (x < 100 ? null : 10));
+    const k = surface.indexOf(10);
+    expect(k).toBeGreaterThan(80 / SURFACE_STEP_FT);
+    expect(surface[k - 1]).toBe(20 - BELOW_FT);
+    expect(surface[k]).toBe(10);
+    expect(surface.at(-1)).toBe(10);
+    // Arriving lower, backed up to it as far as it's lower.
+    const low = profile(straight, (x) => (x < 50 ? 20 : 5), () => null, 0, (x) => (x < 100 ? null : 10));
+    expect(low[0]).toBe(20 - BELOW_FT);
+    expect(low.indexOf(10)).toBeLessThan(80 / SURFACE_STEP_FT);
+    expect(Math.min(...low)).toBe(10);
   });
 
   it("keep under the ground past their edges", () => {
