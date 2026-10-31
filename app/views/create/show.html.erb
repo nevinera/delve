@@ -287,6 +287,31 @@
       <dt>facing</dt><dd id="infoFacing">-</dd>
     </dl>
   </section>
+  <section class="create-debug" id="debug" aria-label="debug" hidden>
+    <dl data-debug="frame" hidden>
+      <dt>fps</dt><dd id="debugFps">-</dd>
+      <dt>slowest</dt><dd id="debugSlowest">-</dd>
+      <dt>moving</dt><dd id="debugMove">-</dd>
+      <dt>tools</dt><dd id="debugTool">-</dd>
+      <dt>ground</dt><dd id="debugGround">-</dd>
+      <dt>rendering</dt><dd id="debugRender">-</dd>
+      <dt>draws</dt><dd id="debugDraws">-</dd>
+    </dl>
+    <dl data-debug="ground" hidden>
+      <dt>tiles in full</dt><dd id="debugFull">-</dd>
+      <dt>at cell scale</dt><dd id="debugFine">-</dd>
+      <dt>coarse</dt><dd id="debugCoarse">-</dd>
+      <dt>from plates</dt><dd id="debugPlates">-</dd>
+      <dt>drawn out to</dt><dd id="debugReach">-</dd>
+      <dt>hiding</dt><dd id="debugHidden">-</dd>
+    </dl>
+    <dl data-debug="builder" hidden>
+      <dt>moving</dt><dd id="debugMoving">-</dd>
+      <dt>over ground</dt><dd id="debugAbove">-</dd>
+      <dt>tile</dt><dd id="debugTile">-</dd>
+      <dt>plate</dt><dd id="debugPlate">-</dd>
+    </dl>
+  </section>
   <section class="create-show" aria-label="show">
     <fieldset>
       <legend>planning</legend>
@@ -298,6 +323,12 @@
     <fieldset>
       <legend>geo</legend>
       <label title="biome areas, and the ground but that nearest tinted by biome"><input type="checkbox" id="showBiomes"> biomes</label>
+    </fieldset>
+    <fieldset>
+      <legend>debug</legend>
+      <label title="frame rate, the slowest frame and what it spent its time on, and draw calls"><input type="checkbox" data-show-debug="frame"> frame</label>
+      <label title="how many tiles are drawn how finely, and how far off"><input type="checkbox" data-show-debug="ground"> ground</label>
+      <label title="how the builder's moving, and where"><input type="checkbox" data-show-debug="builder"> builder</label>
     </fieldset>
   </section>
 </footer>

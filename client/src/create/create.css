@@ -44,7 +44,7 @@ body.create {
   grid-column: 1;
   grid-row: 2;
   display: grid;
-  grid-template-columns: 200px 1fr auto;
+  grid-template-columns: 200px minmax(0, 1fr) auto;
   overflow-y: auto;
   background: #22222a;
   border-top: 1px solid #44444e;
@@ -366,6 +366,41 @@ body.create {
   background: #ffe14d1a;
   pointer-events: none;
   z-index: 5;
+}
+
+.create-debug {
+  grid-column: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+  padding: 8px 12px;
+  border-right: 1px solid #44444e;
+  justify-self: start;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.create-debug[hidden],
+.create-debug dl[hidden] {
+  display: none;
+}
+
+.create-debug dl {
+  display: grid;
+  grid-template-columns: max-content max-content;
+  gap: 4px 10px;
+  margin: 0;
+}
+
+.create-debug dt {
+  color: #8f8a7e;
+}
+
+.create-debug dd {
+  margin: 0;
+  color: #e8e2d4;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .create-show {

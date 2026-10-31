@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { strFromU8, strToU8, unzipSync, zip } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
-import { SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
+import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { BIOME_NAMES } from "../v2/biomes.js";
 import { waterPath } from "../v2/water.js";
 import { BIOMES, biomesPath } from "./biomes.js";
@@ -186,6 +186,15 @@ function start(world, changes) {
     ground.setTint($("showBiomes").checked ? TINT : null);
   });
   $("showPins").addEventListener("change", () => tools.marks.pins.setShown($("showPins").checked));
+  // The debug toggles each show their part of the debug pane, and the pane while any's on.
+  const debugToggles = [...document.querySelectorAll("[data-show-debug]")];
+  const debugShown = (part) => debugToggles.some((t) => t.checked && (!part || t.dataset.showDebug === part));
+  for (const toggle of debugToggles) {
+    toggle.addEventListener("change", () => {
+      document.querySelector(`[data-debug="${toggle.dataset.showDebug}"]`).hidden = !toggle.checked;
+      $("debug").hidden = !debugShown();
+    });
+  }
   showLines();
   // Let go of the toggle clicked, so keys go back to flying and the tools.
   $("bottom").addEventListener("change", (e) => e.target.blur());
@@ -331,11 +340,27 @@ function start(world, changes) {
       lastInfo = now;
     }
     if (now - lastHud > HUD_EVERY_MS) {
-      const { flying } = builder.state;
-      const fps = Math.round((frames * 1000) / (now - lastHud));
+      const { flying, swimming } = builder.state;
       $("hud").classList.toggle("problem", Boolean(problem));
-      const hidden = KINDS.filter((kind) => !ground.shown[kind]);
-      $("hud").textContent = problem ? `can't draw the ground: ${problem}` : `${hidden.length ? `hiding ${hidden.join(", ")} · ` : ""}${flying ? "flying" : builder.state.swimming ? "swimming" : "walking"} · ${Math.round(builder.above)} ft up · ${Math.round(y)} ft · tile ${Math.floor(x / TILE_FT)},${Math.floor(z / TILE_FT)} · tiles drawn ${ground.counts[0]} in full, ${ground.counts[1]} at cell scale, ${ground.counts[2]} coarse, ${ground.counts[3]} from plates · ${fps} fps, slowest ${worst.gap.toFixed(0)} ms (move ${worst.move.toFixed(1)}, tool ${worst.tool.toFixed(1)}, ground ${worst.ground.toFixed(1)}, render ${worst.render.toFixed(1)}) · ${renderer.info.render.calls} draws`;
+      $("hud").textContent = problem ? `can't draw the ground: ${problem}` : "";
+      if (debugShown("frame")) {
+        $("debugFps").textContent = String(Math.round((frames * 1000) / (now - lastHud)));
+        $("debugSlowest").textContent = `${worst.gap.toFixed(0)} ms`;
+        for (const [id, part] of [["debugMove", "move"], ["debugTool", "tool"], ["debugGround", "ground"], ["debugRender", "render"]]) $(id).textContent = `${worst[part].toFixed(1)} ms`;
+        $("debugDraws").textContent = String(renderer.info.render.calls);
+      }
+      if (debugShown("ground")) {
+        ["debugFull", "debugFine", "debugCoarse", "debugPlates"].forEach((id, k) => ($(id).textContent = ground.counts[k].toLocaleString()));
+        $("debugReach").textContent = `${(ground.reach / 5280).toFixed(1)} mi`;
+        const hidden = KINDS.filter((kind) => !ground.shown[kind]);
+        $("debugHidden").textContent = hidden.length ? hidden.join(", ") : "-";
+      }
+      if (debugShown("builder")) {
+        $("debugMoving").textContent = flying ? "flying" : swimming ? "swimming" : "walking";
+        $("debugAbove").textContent = feet(builder.above);
+        $("debugTile").textContent = `${Math.floor(x / TILE_FT)}, ${Math.floor(z / TILE_FT)}`;
+        $("debugPlate").textContent = `${Math.floor(x / PLATE_FT)}, ${Math.floor(z / PLATE_FT)}`;
+      }
       worst = { gap: 0, move: 0, tool: 0, ground: 0, render: 0 };
       lastHud = now;
       frames = 0;
