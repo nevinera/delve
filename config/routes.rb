@@ -31,7 +31,6 @@ Rails.application.routes.draw do
 
   root "home#show"
   get "home" => "dashboard#show", :as => :home
-  get "editor" => "editor#show"
   get "create" => "create#show"
   resources :worlds, only: [:index, :create, :show] do
     resources :imports, only: [:create], controller: "world_imports"

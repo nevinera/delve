@@ -1,6 +1,6 @@
 # Slabs
 
-Slabs are flat pieces placed in the detail editor to walk on and to block movement and sight. Floors, ramps, walls and roofs are all slabs. A tile lists its slabs: tile files keep them as the manifest's `slabs`, and [plates](plates.md) as `slab` lines holding the same JSON. Code: `client/src/world/slabs.js`. [Schema](../schema/slab.schema.json).
+Slabs are flat pieces placed with `/create`'s build tools to walk on and to block movement and sight. Floors, ramps, walls and roofs are all slabs. A tile lists its slabs: tile files keep them as the manifest's `slabs`, and [plates](plates.md) as `slab` lines holding the same JSON. Code: `client/src/world/slabs.js`. [Schema](../schema/slab.schema.json).
 
 ```json
 {

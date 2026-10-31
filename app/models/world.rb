@@ -9,7 +9,7 @@ class World < ApplicationRecord
   validates :repo, presence: true, uniqueness: true, format: {with: %r{\A[\w.-]+/[\w.-]+\z}}
   validates :default_branch, :opened_at, presence: true
 
-  # What the editor's ?from= takes to open it.
+  # What /create's ?from= takes to open it.
   def source = "github/#{repo}"
 
   def display_name = name.presence || repo.split("/").last

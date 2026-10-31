@@ -1,4 +1,4 @@
-# One published version of a world (a tag the editor's publish step made) brought in to be
+# One published version of a world (a tag /create's publish made) brought in to be
 # played: the commit the tag pointed at when the import started, and what the validator said about
 # it. Tags can be moved, so everything after the import goes by `sha`, never by the tag again.
 class WorldImport < ApplicationRecord

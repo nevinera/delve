@@ -1,6 +1,6 @@
 # Architecture
 
-Delve is a browser-based 3D MMO in a tiled, height-mapped world. People build worlds in the editor, keep them in GitHub repos, and play them in the browser.
+Delve is a browser-based 3D MMO in a tiled, height-mapped world. People build worlds in `/create`, keep them in GitHub repos, and play them in the browser.
 
 ## Pieces
 
@@ -14,51 +14,40 @@ The client has one entry point per page (`vite.config.js`):
 
 | Page | Entry | What it is |
 | --- | --- | --- |
-| `/editor` | `client/src/editor/main.js` | the world editor |
+| `/create` | `client/src/create/main.js` | the world editor |
 | `/objects` | `client/src/objects/main.js` | the object builder |
 | `/characters/new` | `client/src/character/builder.js` | the character builder |
 | `/characters`, `/home` | `client/src/character/list.js` | your characters |
 | `/animation_lab` | `client/src/character/lab.js` | the animation lab |
 | `/creatures` | `client/src/character/creatures.js` | each creature body playing its clips, by skeleton |
 | `/creature` | `client/src/character/creature.js` | one creature playing each of its roles in turn, with a control for each setting |
+| `/play/:id` | `client/src/play/main.js` | the game |
 
 `client/src/main.js` is a placeholder for the game.
 
 ## Client code
 
 - `client/src/world/` is shared by every page and has no DOM: world scale (`constants.js`), file formats (`tileCodec.js`, `plateCodec.js`, `landGrid.js`), paths (`paths.js`), the generator, and object, slab, template and water rules.
-- `client/src/editor/` is the editor: its views and tools, workers for heavy jobs, and loading and saving.
+- `client/src/create/` is the world editor.
+- `client/src/editor/` holds code `/create`, `/play`, the object builder and the scripts share: rendering, walking, graphics settings, plates and world zips.
 - `client/src/objects/` is the object library: collections, and the builder pages.
 - `client/src/github/github.js` is the browser's only route to GitHub.
 
-The format code in `world/` is pure: it takes what it needs as arguments, so the game, the editor, workers and scripts can all call it. `world/objects.js` keeps a registry of the open world's kinds of object for rendering and placing; the codecs don't read it.
+The format code in `world/` is pure: it takes what it needs as arguments, so the game, `/create`, workers and scripts can all call it. `world/objects.js` keeps a registry of the open world's kinds of object for rendering and placing; the codecs don't read it.
 
 ## Worlds
 
 A world is a directory of files: JSON, plain-text plates, and a few binary files. [A world's files](formats/world-files.md) lists every path and links its format.
 
-The editor builds a continent in steps, each writing its own files:
+`/create` is the world editor: one view where a builder walks and flies over the world, with tools for the ground, water, biomes, paths, objects and slabs.
 
-1. **Heights**: sculpt the [land grid](formats/land-grid.md).
-2. **Biomes**, **water** and **civilization**: pins, rivers, lakes, roads and the spawn point in the sketch ([schema](schema/sketch.schema.json)).
-3. **Zones**: named regions ([schema](schema/zone.schema.json)).
-4. **Tiles**: the generator makes 512 ft tiles from the land and the sketch.
-5. **Detail**: change tiles by hand. Edited tiles are listed in `edited.json`, and generating leaves them alone. Digging beside water makes the water flow again over the edited ground.
-6. **Publish**: validate the saved world and tag it as a version.
-
-A world also defines what you fight and meet: classes, abilities, statuses, items, creatures, NPCs, dialogue, and each continent's spawns. [Game data](formats/game-data.md) describes them, and `client/src/world/gameData.js` checks them. Nothing reads them yet.
+A world also defines what you fight and meet: classes, abilities, statuses, items, creatures, NPCs, dialogue, and each continent's spawns. [Game data](formats/game-data.md) describes them. Nothing checks or reads them yet.
 
 Tiles are the heavy part. The editor holds each as a binary [tile file](formats/tile-file.md) while a world is open, and stores them 256 to a text [plate](formats/plates.md). Each plate carries the sizes of the objects in it, so a reader such as the game server can block movement without the world's object library. Tiles also hold [slabs](formats/slabs.md): flat pieces placed by hand for floors, walls and roofs, each kept by one tile and reaching at most 64 ft from its corner. A [template](formats/templates.md) is a group of slabs and objects kept in the world's library, to place as copies. Storing a world also writes [shapes.json](formats/shapes.md): for each kind of object that blocks line of sight, a mesh of a few dozen faces: a hull of at most 32 corners with any holes cut through it by hand (`client/src/editor/shapes.js`).
 
-## Checking a world
-
-`client/src/world/validate.js` checks a version 1 world's files for the old editor's publish step. Nothing checks a version 2 world, and importing doesn't check either.
-
 ## Loading and saving
 
-The editor opens a world from a zip or a GitHub repo, and saves to a zip or to GitHub as one commit. Publishing tags a saved commit that passes the validator as a version. [Opening, saving and publishing worlds on GitHub](formats/github-sync.md) covers the protocol.
-
-Opening splits plates into tile files on a few workers. Saving packs them again, remaking only plates whose tiles or object sizes changed, so an edit to one tile changes one plate.
+`/create` opens a world from a zip, and keeps it in IndexedDB with the files changed since. Downloading gives a zip of the world with those changes. It can't open or save a GitHub repo, and nothing checks a world's files.
 
 `/create` opens a version 2 world the same ways (`client/src/create/repo.js`), with the same protocol, and keeps it in IndexedDB with the files changed since. It saves to GitHub and publishes from its manage tools. It doesn't validate before publishing.
 
@@ -81,8 +70,8 @@ Released worlds are listed for everyone signed in, on `/worlds`. A world's owner
 
 1. It reads `world.json` and the object library from `raw.githubusercontent.com/<repo>/<released sha>/` (`client/src/play/loader.js`). The page lists the commit's files from its import, so nothing is probed for.
 2. It enters the game server with an entry token from the page, and the server says where your character is. A character new to the world starts at its spawn point, `spawn` in `world.json`, which `/create`'s manage tools set.
-3. It reads your continent's platters, biomes and water, and draws the world as `/create` does (`client/src/play/view.js`, with `client/src/create/ground.js` and the rest): tiles near you in full, coarser further off, out to where the fog closes in, 3,500 ft away. Plate files are fetched as the ground wants them, and placed files for the plates within two plates' width of you. The sky, its day and night, and the fog are the editor's walk mode's (`client/src/editor/sky.js`, `client/src/world/dayNight.js`).
-4. You walk as the editor's walker (`client/src/editor/walker.js`), on the ground as the game server has it (`client/src/play/ground.js`): slabs, objects placed by hand, and the trees and objects in tiles' slots are in the way.
+3. It reads your continent's platters, biomes and water, and draws the world as `/create` does (`client/src/play/view.js`, with `client/src/create/ground.js` and the rest): tiles near you in full, coarser further off, out to where the fog closes in, 3,500 ft away. Plate files are fetched as the ground wants them, and placed files for the plates within two plates' width of you. The sky, its day and night, and the fog come from `client/src/editor/sky.js` and `client/src/world/dayNight.js`.
+4. You walk with `client/src/editor/walker.js`, on the ground as the game server has it (`client/src/play/ground.js`): slabs, objects placed by hand, and the trees and objects in tiles' slots are in the way.
 5. It reports how you move, and draws the characters near you as the server reports theirs (`client/src/play/game.js`, `others.js`).
 6. A menu button in the bottom right opens the menu: graphics settings (`client/src/editor/graphicsPanel.js`, shared with the editor) and leaving the world.
 7. On a phone (`client/src/play/touch.js`) it plays in landscape only, with a thumbstick, a jump button, and drags that turn you with the camera, on lighter graphics. Menu and chat buttons sit along the bottom, and the menu scrolls.

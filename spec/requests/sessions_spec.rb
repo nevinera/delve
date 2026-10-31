@@ -2,7 +2,7 @@ require "rails_helper"
 
 RSpec.describe "Sessions", type: :request do
   it "sends signed-out visitors to the login page" do
-    get editor_path
+    get create_path
     expect(response).to redirect_to("/login")
   end
 
@@ -17,7 +17,7 @@ RSpec.describe "Sessions", type: :request do
     delete "/logout"
     expect(response).to redirect_to("/login")
 
-    get editor_path
+    get create_path
     expect(response).to redirect_to("/login")
   end
 
@@ -31,14 +31,14 @@ RSpec.describe "Sessions", type: :request do
     it "signs in as a chosen user" do
       user = create(:user)
       post "/dev_session", params: {user_id: user.id}
-      get editor_path
+      get create_path
       expect(response).to have_http_status(:ok)
     end
 
     it "makes a new user from an email" do
       expect { post "/dev_session", params: {email: "new@example.com"} }.to change(User, :count).by(1)
       expect(User.last).to have_attributes(provider: "developer", uid: "new@example.com")
-      get editor_path
+      get create_path
       expect(response).to have_http_status(:ok)
     end
 

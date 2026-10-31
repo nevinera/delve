@@ -1,6 +1,5 @@
 # The worlds anyone can play, then yours, each kept in a GitHub repo: the ones you've opened, and
-# the repos you've granted the app that you could open. The editor records a world each time it
-# opens one.
+# the repos you've granted the app.
 class WorldsController < ApplicationController
   before_action :require_github, only: :create
 

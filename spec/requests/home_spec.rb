@@ -7,7 +7,7 @@ RSpec.describe "Home", type: :request do
     expect(response).to have_http_status(:ok)
     expect(response.body).to include("<h1>Delve</h1>")
     expect(response.body).to include(%(href="/login"))
-    expect(response.body).not_to include(%(href="/editor"))
+    expect(response.body).not_to include(%(href="/create"))
   end
 
   it "sends you to /home when signed in" do

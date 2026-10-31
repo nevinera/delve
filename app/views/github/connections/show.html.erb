@@ -1,6 +1,6 @@
 <h1>GitHub</h1>
 <% if @connection %>
-  <p>Connected as <strong><%= @connection.login %></strong>. The editor can open every repo you've granted the app.</p>
+  <p>Connected as <strong><%= @connection.login %></strong>.</p>
   <p><%= link_to "Choose which repos the app can see", @install_url %></p>
   <%= button_to "Disconnect", github_disconnect_path, method: :delete %>
 <% else %>

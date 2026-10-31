@@ -26,12 +26,12 @@ RSpec.describe "Dashboard", type: :request do
     expect(response.body).not_to include(%(class="world-list"))
   end
 
-  it "lists your three latest worlds once GitHub is connected, each opening in the editor" do
+  it "lists your three latest worlds once GitHub is connected, each linking to its versions" do
     create(:github_connection, user: user)
     create(:world, user:, repo: "me/old", opened_at: 1.week.ago)
     %w[a b c].each_with_index { |name, i| create(:world, user:, repo: "me/#{name}", opened_at: i.hours.ago) }
     get home_path
-    expect(response.body).to include(%(href="/editor?from=github%2Fme%2Fa"))
+    expect(response.body).to include(%(href="#{world_path(World.find_by!(repo: "me/a"))}"))
     expect(response.body).not_to include("me/old")
     expect(response.body).to include(%(href="/worlds"))
   end

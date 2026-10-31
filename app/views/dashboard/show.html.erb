@@ -36,7 +36,7 @@
   <% if @github %>
     <p class="section-links">
       <%= link_to "All worlds", worlds_path, role: "button" %>
-      <%= link_to "World editor", editor_path %>
+      <%= link_to "World editor", create_path %>
       <%= link_to "Object library", objects_path %>
       <%= link_to "GitHub: #{@github.login}", github_connect_path %>
     </p>

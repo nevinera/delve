@@ -5,7 +5,6 @@
 <h1><%= @world.display_name %></h1>
 <p class="section-links">
   <span class="muted"><%= link_to @world.repo, "https://github.com/#{@world.repo}" %></span>
-  <%= link_to "edit", editor_path(from: @world.source) %>
   <%= link_to "build", create_path(from: @world.source) %>
   <%= link_to "your worlds", worlds_path %>
 </p>
@@ -23,7 +22,7 @@
 <% elsif @tags_error %>
   <p>Couldn't list the versions: <%= @tags_error %></p>
 <% elsif @tags.empty? %>
-  <p>Nothing's published yet. Publish a version from the editor's publish step.</p>
+  <p>Nothing's published yet. A version is a tag in the repo.</p>
 <% else %>
   <p class="muted">A version is a tag on a commit. Importing one checks it and keeps its commit, so moving the tag later changes nothing that was imported.</p>
   <table class="versions">
