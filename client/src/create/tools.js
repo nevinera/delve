@@ -232,6 +232,7 @@ export class Tools {
         if (start > 0 && end > 0) this.courses.setWidths(Math.round(start * 10) / 10, Math.round(end * 10) / 10);
       });
     }
+    $("courseRipple").addEventListener("change", () => this.courses.setRipple($("courseRipple").checked));
     $("waterLevel").addEventListener("change", () => {
       const level = Number($("waterLevel").value);
       if (Number.isFinite(level)) this.water.setExtra("level", Math.round(level * 10) / 10);
@@ -673,6 +674,7 @@ export class Tools {
       input.disabled = !this.courses.selected;
       if (document.activeElement !== input) input.value = this.courses.selected ? String(this.courses.selected.widths[k]) : "";
     });
+    $("courseRipple").checked = this.courses.ripple;
     $("growPassable").hidden = !this.draw.passable;
     if (this.tool === "measure" && this.measuring) {
       if (this.measuring.from && !this.measuring.radius) {

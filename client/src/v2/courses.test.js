@@ -33,7 +33,7 @@ describe("courses", () => {
 
   it("keep a surface under the ground that never rises downstream", () => {
     const ground = (x) => (x < 50 ? 100 - x : x < 70 ? 80 : 100 - x);
-    const surface = profile(line, ground);
+    const surface = profile({ points: line }, ground);
     expect(surface[0]).toBe(100 - BELOW_FT);
     for (let k = 1; k < surface.length; k++) expect(surface[k]).toBeLessThanOrEqual(surface[k - 1]);
     expect(surface.at(-1)).toBeLessThan(0);
@@ -45,13 +45,13 @@ describe("courses", () => {
     // Ground 20 ft up to x = 100, then a lake at 10 over a bed at 0.
     const straight = [[0, 0, 6], [200, 0, 6]];
     const still = (x) => (x < 100 ? null : 10);
-    const surface = profile(straight, (x) => (x < 100 ? 20 : 0), still);
+    const surface = profile({ points: straight }, (x) => (x < 100 ? 20 : 0), still);
     expect(surface[0]).toBe(20 - BELOW_FT);
     expect(surface.at(-1)).toBe(10);
     // 8 ft a step, at most a quarter foot a foot.
     for (let k = 1; k < surface.length; k++) expect(surface[k - 1] - surface[k]).toBeLessThanOrEqual(2.05);
     // Only as far as that takes: a steep course above it stays as steep.
-    const steep = profile(straight, (x) => (x < 100 ? 100 - x : 0), still);
+    const steep = profile({ points: straight }, (x) => (x < 100 ? 100 - x : 0), still);
     expect(steep[0]).toBe(100 - BELOW_FT);
     expect(steep[3]).toBeLessThan(80);
   });
@@ -59,22 +59,30 @@ describe("courses", () => {
   it("meet the water of a course they run into at its level, falling straight to it", () => {
     // Ground 20 ft up all along, and another course's water at 10 past x = 100.
     const straight = [[0, 0, 6], [200, 0, 6]];
-    const surface = profile(straight, () => 20, () => null, 0, (x) => (x < 100 ? null : 10));
+    const surface = profile({ points: straight }, () => 20, () => null, (x) => (x < 100 ? null : 10));
     const k = surface.indexOf(10);
     expect(k).toBeGreaterThan(80 / SURFACE_STEP_FT);
     expect(surface[k - 1]).toBe(20 - BELOW_FT);
     expect(surface[k]).toBe(10);
     expect(surface.at(-1)).toBe(10);
     // Arriving lower, backed up to it as far as it's lower.
-    const low = profile(straight, (x) => (x < 50 ? 20 : 5), () => null, 0, (x) => (x < 100 ? null : 10));
+    const low = profile({ points: straight }, (x) => (x < 50 ? 20 : 5), () => null, (x) => (x < 100 ? null : 10));
     expect(low[0]).toBe(20 - BELOW_FT);
     expect(low.indexOf(10)).toBeLessThan(80 / SURFACE_STEP_FT);
     expect(Math.min(...low)).toBe(10);
   });
 
+  it("widen below where others join them", () => {
+    const straight = [[0, 0, 30], [1000, 0, 30]];
+    const [plain, joined] = [trackOf(straight, 3), trackOf(straight, 3, [[400, 40]])];
+    const at = (track, t) => track.width[track.t.findIndex((v) => v >= t)];
+    expect(at(joined, 300)).toBeCloseTo(at(plain, 300));
+    expect(at(joined, 800) / at(plain, 800)).toBeCloseTo(50 / 30, 1);
+  });
+
   it("keep under the ground past their edges", () => {
     // Ground falling away to one side, 1 ft a foot: the edge 5 ft out on that side is lower.
-    const surface = profile([[0, 0, 6], [10, 0, 6]], (x, z) => 20 - Math.max(0, z));
+    const surface = profile({ points: [[0, 0, 6], [10, 0, 6]] }, (x, z) => 20 - Math.max(0, z));
     expect(Math.max(...surface)).toBeLessThanOrEqual(20 - 5 - 0.25 + 1);
   });
 

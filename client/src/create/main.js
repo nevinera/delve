@@ -124,7 +124,7 @@ function download({ name, files, continent, renditions }, planning, biomes, wate
 
 function start(world, changes) {
   const { name, continent, renditions } = world;
-  $("downloadWorld").addEventListener("click", () => download(world, tools.marks.toJSON(), tools.biomes.toJSON(), { version: 1, bodies: tools.water.toJSON().bodies, courses: tools.courses.toJSON().courses }));
+  $("downloadWorld").addEventListener("click", () => download(world, tools.marks.toJSON(), tools.biomes.toJSON(), { version: 1, bodies: tools.water.toJSON().bodies, courses: tools.courses.toJSON().courses, ripple: tools.courses.ripple }));
   $("open").hidden = true;
   $("worldName").textContent = name;
   const canvas = $("view");
@@ -207,7 +207,7 @@ function start(world, changes) {
     tools.courses.load(JSON.parse(strFromU8(water)));
   }
   // What the water file has: the bodies and courses.
-  const waterFile = () => ({ version: 1, bodies: tools.water.toJSON().bodies, courses: tools.courses.toJSON().courses });
+  const waterFile = () => ({ version: 1, bodies: tools.water.toJSON().bodies, courses: tools.courses.toJSON().courses, ripple: tools.courses.ripple });
   const waterVersion = () => `${tools.water.version},${tools.courses.version}`;
   renditions.setWater(waterFile(), false);
   let waterBaked = waterVersion();

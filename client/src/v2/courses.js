@@ -3,9 +3,11 @@ import { fbm } from "../world/noise.js";
 // Courses: streams and rivers, drawn by hand as lines running downstream and kept with the bodies
 // in each continent's water.json (water.js). A course is
 //
-//   { type: "stream" | "river", points: [[x, z, width], ...], surface: [ft, ...], seed }
+//   { type: "stream" | "river", points: [[x, z, width], ...], surface: [ft, ...], seed, joins: [[t, width], ...] }
 //
-// continent feet, its points from its source down, each with how wide its water is there. Its
+// continent feet, its points from its source down, each with how wide its water is there, and
+// joins, where other courses run into it, if any: t ft down its line, `width` wide. Below each,
+// it's wider, by the root of the sum of its width and theirs squared, over WIDEN_WIDTHS. Its
 // water doesn't follow that line straight: it runs down a track (trackOf) curved through its
 // points, meandering either side of them by its width, the way `seed` has it, wider and deeper in
 // its bends and pools than in its riffles. `surface` is its water's height every SURFACE_STEP_FT
@@ -53,15 +55,19 @@ const MEANDER_WAVE = 11; // how far down it, in widths, it takes to wander there
 const POOL_WAVE = 6; // and to go from one pool to the next
 const BEND_WIDTHS = 1.5; // how sharply it turns, as the widths round a turn of a radian, for its bend to count fully
 const GRID_FT = 32; // its track's segments are found by squares this wide
+const WIDEN_WIDTHS = 2; // how far below where another joins it, in widths, a course is as wide as that makes it
 
 // How deep a course of `type` is under its middle, `width` ft wide.
 export function depthOf(type, width) {
   return type === "river" ? Math.min(12, Math.max(2, width / 10)) : Math.min(2, Math.max(1, width / 4));
 }
 
+// How wide a course `width` wide is, with others' `widths` run into it.
+export const widened = (width, widths) => Math.sqrt(widths.reduce((sum, w) => sum + w * w, width * width));
+
 // How far out from a course's line its channel reaches, at its widest.
-export const reachOf = ({ points }) => {
-  const widest = Math.max(...points.map((p) => p[2]));
+export const reachOf = ({ points, joins = [] }) => {
+  const widest = widened(Math.max(...points.map((p) => p[2])), joins.map((j) => j[1]));
   return Math.min(MEANDER_MAX_FT, widest * MEANDER) + widest * 0.7 + BANK_FT;
 };
 
@@ -80,27 +86,36 @@ function wave(phase, seed) {
   return 0.65 * Math.sin(2 * Math.PI * phase + a) + 0.35 * Math.sin(2 * Math.PI * 1.73 * phase + b);
 }
 
-const tracks = new WeakMap(); // points -> their track, by seed
+const tracks = new WeakMap(); // points -> their track, by seed and joins
 
-// The track a course's water runs down, from its `points` and `seed`: { x, z, t, width, depth,
+// The track a course's water runs down, from its `points`, `seed` and `joins`: { x, z, t, width, depth,
 // bend } at each of its points, every TRACK_STEP_FT or so, t how far down it, width how wide its
 // water is there, depth how much deeper than depthOf has it, as a share, and bend how sharply it
 // turns, -1 (right) to 1 (left); with `length` and a grid of its segments.
-export function trackOf(points, seed = 0) {
+export function trackOf(points, seed = 0, joins = []) {
   const kept = tracks.get(points);
-  if (kept?.seed === seed) return kept;
+  const key = JSON.stringify(joins);
+  if (kept?.seed === seed && kept.joins === key) return kept;
   const given = points;
   if (points.length < 2) points = [points[0], points[0]];
-  // A curve through the points (Catmull-Rom), each with its width.
+  // A curve through the points (Catmull-Rom), each with its width, wider below joins.
   const curve = [];
+  let lineAt = 0;
   for (let k = 1; k < points.length; k++) {
+    const chord = Math.hypot(points[k][0] - points[k - 1][0], points[k][1] - points[k - 1][1]);
     const [p0, p1, p2, p3] = [points[Math.max(0, k - 2)], points[k - 1], points[k], points[Math.min(points.length - 1, k + 1)]];
     const n = Math.max(1, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / TRACK_STEP_FT));
     for (let m = k === 1 ? 0 : 1; m <= n; m++) {
       const u = m / n;
       const at = (c) => 0.5 * (2 * p1[c] + (p2[c] - p0[c]) * u + (2 * p0[c] - 5 * p1[c] + 4 * p2[c] - p3[c]) * u * u + (3 * p1[c] - p0[c] - 3 * p2[c] + p3[c]) * u * u * u);
-      curve.push([at(0), at(1), p1[2] + (p2[2] - p1[2]) * u]);
+      const w = p1[2] + (p2[2] - p1[2]) * u;
+      const ramp = (t) => {
+        const v = Math.min(1, Math.max(0, (lineAt + chord * u - t) / (WIDEN_WIDTHS * w)));
+        return v * v * (3 - 2 * v);
+      };
+      curve.push([at(0), at(1), Math.sqrt(joins.reduce((sum, [t, width]) => sum + ramp(t) * width * width, w * w))]);
     }
+    lineAt += chord;
   }
   const lengths = (line) => {
     const t = [0];
@@ -126,7 +141,7 @@ export function trackOf(points, seed = 0) {
     return Math.atan2(b[1] - a[1], b[0] - a[0]);
   });
   let pools = 0;
-  const track = { seed, length: t.at(-1), x: [], z: [], t, width: [], depth: [], bend: [] };
+  const track = { seed, joins: key, length: t.at(-1), x: [], z: [], t, width: [], depth: [], bend: [] };
   for (let k = 0; k < line.length; k++) {
     const w = line[k][2];
     let [a, b] = [k, k];
@@ -145,7 +160,7 @@ export function trackOf(points, seed = 0) {
     track.bend.push(bend);
   }
   // Each segment in the squares it reaches, with its channel.
-  const reach = reachOf({ points });
+  const reach = reachOf({ points, joins });
   track.grid = new Map();
   for (let k = 1; k < line.length; k++) {
     const [x0, x1] = [Math.min(track.x[k - 1], track.x[k]) - reach, Math.max(track.x[k - 1], track.x[k]) + reach];
@@ -215,19 +230,19 @@ export function surfaceAt(surface, t) {
   return surface[k] + (surface[k + 1] - surface[k]) * (at - k);
 }
 
-// A course's surface down its track, from its `points` and `seed`, and groundAt(x, z): BELOW_FT
+// A course's surface down its track, from its `points`, `seed` and `joins`, and groundAt(x, z): BELOW_FT
 // under the ground in its middle and EDGE_BELOW_FT under it just past its edges, but never over the surface upstream of it, nor under the water it runs into,
 // stillAt(x, z) (a body's or the sea's level, or null), to a tenth of a foot. Where it runs into
 // that water, it falls to it no more steeply than MOUTH_GRADE, over as far as that takes from
 // where it was just before it. joinAt(x, z) gives the level of another course's water at (x, z),
 // or null: where it runs into that, it's at that level, falling straight to it where it's higher,
 // and backed up to it where it's lower, as far up as it's lower.
-export function profile(points, groundAt, stillAt = () => null, seed = 0, joinAt = () => null) {
-  const track = trackOf(points, seed);
+export function profile({ points, seed = 0, joins = [] }, groundAt, stillAt = () => null, joinAt = () => null) {
+  const track = trackOf(points, seed, joins);
   const surface = [];
   let low = Infinity;
   let mouth = -1; // where it first runs into still water
-  const joins = [];
+  const joined = [];
   let k = 1;
   for (let t = 0; t <= track.length + SURFACE_STEP_FT; t += SURFACE_STEP_FT) {
     const at = Math.min(t, track.length);
@@ -246,12 +261,12 @@ export function profile(points, groundAt, stillAt = () => null, seed = 0, joinAt
     const join = joinAt(x, z);
     if (join != null) low = Math.min(low, join);
     surface.push(low);
-    joins.push(join);
+    joined.push(join);
   }
   for (let n = surface.length - 1, backed = -Infinity; n >= 0; n--) {
-    if (joins[n] != null) backed = Math.max(backed, joins[n]);
+    if (joined[n] != null) backed = Math.max(backed, joined[n]);
     if (surface[n] < backed) surface[n] = backed;
-    else if (joins[n] == null) backed = -Infinity;
+    else if (joined[n] == null) backed = -Infinity;
   }
   const before = surface[mouth - 1];
   for (let n = mouth - 1; n >= 0 && surface[n + 1] + MOUTH_GRADE * SURFACE_STEP_FT < before; n--) surface[n] = Math.min(surface[n], surface[n + 1] + MOUTH_GRADE * SURFACE_STEP_FT);
@@ -265,7 +280,7 @@ export function profile(points, groundAt, stillAt = () => null, seed = 0, joinAt
 // LEVEE_TOP_FT past its edge, falling away from there as steeply as its bank rises.
 export function shape(course, x, z) {
   if (!course.surface?.length) return null;
-  const track = trackOf(course.points, course.seed ?? 0);
+  const track = trackOf(course.points, course.seed ?? 0, course.joins);
   const near = onTrack(track, x, z, reachOf(course));
   if (!near) return null;
   const level = levelAt(course, near.t);
@@ -299,7 +314,7 @@ const SPEED_MAX = 14;
 // from its track }, or null where it's not in its water.
 export function flowOf(course, x, z) {
   if (!course.surface?.length) return null;
-  const near = onTrack(trackOf(course.points, course.seed ?? 0), x, z, reachOf(course));
+  const near = onTrack(trackOf(course.points, course.seed ?? 0, course.joins), x, z, reachOf(course));
   if (!near || near.d > near.width / 2 + MARGIN_FT + 4) return null;
   // Its slope there, but for its falls, whose foam's drawn with them.
   const [a, b] = [near.t - SURFACE_STEP_FT, near.t + SURFACE_STEP_FT];
@@ -333,9 +348,9 @@ function featuresOf(course) {
   const { surface } = course;
   if (!surface?.length) return { falls: [], cascades: [] };
   const kept = features.get(surface);
-  if (kept?.points === course.points) return kept;
+  if (kept?.points === course.points && kept.joins === course.joins) return kept;
   const seed = course.seed ?? 0;
-  const track = trackOf(course.points, seed);
+  const track = trackOf(course.points, seed, course.joins);
   const falls = [];
   const steep = (k, slope) => (surface[k - 1] - surface[k]) / SURFACE_STEP_FT >= slope;
   const falling = new Uint8Array(surface.length);
@@ -375,7 +390,7 @@ function featuresOf(course) {
     }
     k = end;
   }
-  const found = { points: course.points, falls, cascades };
+  const found = { points: course.points, joins: course.joins, falls, cascades };
   features.set(surface, found);
   return found;
 }
