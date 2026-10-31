@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { strFromU8, strToU8, unzipSync, zip } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
-import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
+import { SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { BIOME_NAMES } from "../v2/biomes.js";
 import { waterPath } from "../v2/water.js";
 import { BIOMES, biomesPath } from "./biomes.js";
@@ -165,12 +165,7 @@ function start(world, changes) {
     const kind = KINDS[Number(e.key) - 1];
     if (kind) ground.toggle(kind);
   });
-  // The middling height of the plate at (x, z), from its rendition's corners.
-  const baseAt = (x, z) => {
-    const plate = renditions.plate(Math.floor(x / PLATE_FT), Math.floor(z / PLATE_FT));
-    return plate ? plate.heights.reduce((sum, h) => sum + h, 0) / plate.heights.length : null;
-  };
-  const builder = new Builder({ scene, camera, canvas, groundAt, waterAt, baseAt, at: renditions.middle(), state: saved ?? undefined, push: (x, z) => scatter.pushOut(x, z, BUILDER_RADIUS_FT) });
+  const builder = new Builder({ scene, camera, canvas, groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push: (x, z) => scatter.pushOut(x, z, BUILDER_RADIUS_FT) });
   const tools = new Tools({ scene, camera, canvas, builder, renditions, ground });
   // The bottom bar's display toggles.
   $("showGrid").checked = grid.value === 1;

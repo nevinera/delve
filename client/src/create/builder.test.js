@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CLIMB_FT, RUN_FT, SWIM_FT, SWIM_SPEED, hopEase, hopTo, moveBuilder } from "./builder.js";
+import { CLIMB_FT, FAST, RUN_FT, SWIM_FT, SWIM_SPEED, moveBuilder } from "./builder.js";
 
 const still = { forward: 0, strafe: 0, turn: 0, rise: false, drop: false, takeoff: false };
 const flat = () => 100;
@@ -25,32 +25,16 @@ describe("the builder", () => {
     expect(at(1100)).toBeGreaterThan(at(200) * 5);
   });
 
-  it("hops between steps doubling over the plate's middling height, and down to the ground", () => {
-    expect(hopTo(100, 1, 300, 100)).toEqual({ y: 428, land: false });
-    expect(hopTo(428, 1, 300, 100)).toEqual({ y: 556, land: false });
-    expect(hopTo(556, 1, 300, 100)).toEqual({ y: 812, land: false });
-    expect(hopTo(700, -1, 300, 100)).toEqual({ y: 556, land: false });
-    expect(hopTo(428, -1, 300, 100)).toEqual({ y: 100, land: true });
-    expect(hopTo(100, -1, 300, 100)).toBeNull();
-    // On a peak over the plate's steps, up goes to the first step above it.
-    expect(hopTo(900, 1, 300, 900)).toEqual({ y: 1324, land: false });
-    // Steps within 32 ft are passed by.
-    expect(hopTo(400, 1, 300, 100)).toEqual({ y: 556, land: false });
-    expect(hopTo(580, -1, 300, 100)).toEqual({ y: 428, land: false });
-  });
-
-  it("speeds up and slows down at each end of a hop", () => {
-    expect(hopEase(0)).toBe(0);
-    expect(hopEase(1)).toBeCloseTo(1);
-    expect(hopEase(0.5)).toBeCloseTo(0.5);
-    expect(hopEase(0.1)).toBeLessThan(0.1);
-    expect(hopEase(0.9)).toBeGreaterThan(0.9);
-  });
-
-  it("goes to the height a hop says, and lands where it ends on the ground", () => {
-    const s = moveBuilder({ x: 0, y: 300, z: 0, yaw: 0, flying: true }, { ...still, y: 250 }, 0.1, flat);
-    expect(s).toMatchObject({ y: 250, flying: true });
-    expect(moveBuilder(s, { ...still, y: 100.5, land: true }, 0.1, flat)).toMatchObject({ y: 100, flying: false });
+  it("goes FAST times as fast forward, up or down, double-tapped", () => {
+    const flying = { x: 0, y: 300, z: 0, yaw: 0, flying: true };
+    const one = moveBuilder(flying, { ...still, forward: 1, rise: 1 }, 0.1, flat);
+    const fast = moveBuilder(flying, { ...still, forward: 1, ahead: FAST, rise: FAST }, 0.1, flat);
+    expect(fast.z).toBeCloseTo(one.z * FAST);
+    expect(fast.y - 300).toBeCloseTo((one.y - 300) * FAST);
+    const walk = moveBuilder({ x: 0, y: 100, z: 0, yaw: 0, flying: false }, { ...still, forward: 1, ahead: FAST }, 1, flat);
+    expect(walk.z).toBeCloseTo(RUN_FT * FAST);
+    // Backing up isn't any faster.
+    expect(moveBuilder({ x: 0, y: 100, z: 0, yaw: 0, flying: false }, { ...still, forward: -1, ahead: FAST }, 1, flat).z).toBeGreaterThan(-RUN_FT);
   });
 
   it("flies faster the higher it is", () => {
