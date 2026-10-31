@@ -42,8 +42,9 @@ import { drawable, slabSpace } from "./things.js";
 //   copy, that paste arms the template tool with.
 // Corners drawn snap to slabs' corners near them on the screen, or else their edges, unless shift's
 // held: a floor or room started from a floor's is level with it, and a wall drawn along a floor's
-// edge from it stands outside it, its foot at the floor's bottom. Floors, walls and rooms can snap
-// to a 2 ft grid instead, square to north.
+// edge from it stands outside it, its foot at the floor's bottom, and a wall with an end snapped to
+// another wall's foot has its foot there too. Floors, walls and rooms can snap to a 2 ft grid
+// instead, square to north.
 // Esc drops what's being drawn, keeping the tool. Ctrl+Z undoes the last change, ctrl+C copies
 // and ctrl+V pastes.
 
@@ -282,7 +283,7 @@ export class Build {
   // `at` ([x, y, z]) moved onto the slab corner nearest it on the screen, or else the nearest slab
   // edge, when one's near enough and shift isn't held, showing where with the snap mark; or, with
   // `grid`, onto the grid. Upright slabs' corners and edges are on both their faces. Kept at its
-  // height with `level`. What it snapped to is left in this.snapped, { slab, edge: [p, q] } (an
+  // height with `level`. What it snapped to is left in this.snapped, { slab, edge: [p, q], at } (an
   // edge, or a corner's two), or null. Null stays null.
   snap(at, level = false, grid = false) {
     this.snapMark.visible = false;
@@ -325,7 +326,7 @@ export class Build {
       const round = (v) => Math.round(v / GRID_FT) * GRID_FT;
       return [round(at[0]), at[1], round(at[2])];
     }
-    this.snapped = { slab: best.slab, edge: best.edge };
+    this.snapped = { slab: best.slab, edge: best.edge, at: best.p };
     const snapped = level ? [best.p[0], at[1], best.p[2]] : best.p;
     this.snapMark.position.set(...best.p);
     this.snapMark.scale.setScalar(this.camera.position.distanceTo(this.snapMark.position) * SNAP_MARK);
@@ -598,7 +599,9 @@ export class Build {
     if (mode === "wall") {
       if (Math.hypot(b[0] - a[0], b[2] - a[2]) < 0.5) return [];
       const outside = floor && besideEdge(floor, a, b);
-      if (!outside) return wallPieces(a, b, { foot: footUnder(a, b), height, thickness, surface });
+      // Either end snapped to another wall's foot: its foot is flush with that wall's.
+      const foot = [this.drawing?.from, this.snapped].map(wallFoot).find((y) => y !== null);
+      if (!outside) return wallPieces(a, b, { foot: foot ?? footUnder(a, b), height, thickness, surface });
       // A wall's thickness goes to the right of its line: away from the floor.
       const [from, to] = outside === "right" ? [b, a] : [a, b];
       return wallPieces(from, to, { foot: a[1] - floor.thickness, height, thickness, surface });
@@ -1134,4 +1137,11 @@ const middleOf = (points) => [points.reduce((s, p) => s + p[0], 0) / points.leng
 // How far a slab's face tilts from level, degrees.
 function tilt(slab) {
   return (Math.acos(Math.min(1, Math.abs(turnPoint([0, 1, 0], slab.turn)[1]))) * 180) / Math.PI;
+}
+
+// The height of an upright slab's foot, where `snap` (this.snapped's) is on it, or null.
+function wallFoot(snap) {
+  if (!snap || tilt(snap.slab) < 80) return null;
+  const low = Math.min(...slabBottom(snap.slab).map((q) => q[1]), ...slabTop(snap.slab).map((q) => q[1]));
+  return Math.abs(snap.at[1] - low) < 0.05 ? low : null;
 }
