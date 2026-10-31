@@ -486,11 +486,21 @@
   <h2>make a template</h2>
   <canvas id="templateMakeView" width="240" height="240"></canvas>
   <p class="create-note" id="templateMakeFacts"></p>
-  <input id="templateName" type="text" placeholder="name" aria-label="template name">
-  <label>collection
-    <select id="templateCollection"></select>
-  </label>
-  <input id="templateCollectionName" type="text" placeholder="new collection's name" aria-label="new collection's name" hidden>
+  <div class="create-way">
+    <button type="button" data-template-mode="new" aria-pressed="true">new</button>
+    <button type="button" data-template-mode="replace" aria-pressed="false">replace one</button>
+  </div>
+  <div class="create-template-mode" data-template-shown="new">
+    <input id="templateName" type="text" placeholder="name" aria-label="template name">
+    <label>collection
+      <select id="templateCollection"></select>
+    </label>
+    <input id="templateCollectionName" type="text" placeholder="new collection's name" aria-label="new collection's name" hidden>
+  </div>
+  <div class="create-template-mode" data-template-shown="replace" hidden>
+    <select id="templateReplace" aria-label="template to replace"></select>
+    <ul class="create-template-diff" id="templateDiff"></ul>
+  </div>
   <div class="create-way">
     <button type="button" id="templateMakeKeep">make it</button>
     <button type="button" id="templateMakeCancel">cancel</button>

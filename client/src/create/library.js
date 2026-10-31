@@ -2,6 +2,7 @@ import { strFromU8, strToU8 } from "fflate";
 import { addCollection, adoptStrays, allCollections, builtObjects, images, keepTemplate, ownCollections } from "../objects/collections.js";
 import { BUILTIN_TEMPLATES } from "../world/builtinTemplates.js";
 import { setBuiltObjects } from "../world/objects.js";
+import { templatePath } from "../world/paths.js";
 import { TEMPLATE_PREFIX } from "../world/templates.js";
 
 // The world's library of objects and templates (objects/collections.js: collections.json,
@@ -97,6 +98,13 @@ export class Library {
     const id = newName ? addCollection(this, newName, undefined, "templates").id : collection;
     const kept = keepTemplate(this, { ...template, ...(id ? { collection: id } : {}) });
     return `${TEMPLATE_PREFIX}${kept.id}`;
+  }
+
+  // Keeps `template`'s slabs and objects, and its ground if it has some, in place of `old`'s, `old`
+  // keeping its id, name, collection and tags.
+  replaceTemplate(old, template) {
+    const { ground: _, ...kept } = old;
+    this.writeJson(templatePath(old.id), { ...kept, slabs: template.slabs, objects: template.objects, ...(template.ground ? { ground: template.ground } : {}) });
   }
 
   // The files written since they were last saved, path -> bytes.

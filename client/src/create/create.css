@@ -538,6 +538,40 @@ body.create {
   flex: 1;
 }
 
+.create-template-make button[aria-pressed="true"] {
+  background: #4a5a78;
+  border-color: #8aa0c8;
+}
+
+.create-template-make button:disabled {
+  opacity: 0.5;
+}
+
+.create-template-mode {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.create-template-mode[hidden] {
+  display: none;
+}
+
+.create-template-diff {
+  margin: 0;
+  padding-left: 18px;
+  max-height: 140px;
+  overflow-y: auto;
+}
+
+.create-template-diff .added {
+  color: #9fd89a;
+}
+
+.create-template-diff .taken {
+  color: #f0a0a0;
+}
+
 .create-pin-edit {
   width: min(480px, calc(100vw - 32px));
   height: min(420px, calc(100vh - 32px));

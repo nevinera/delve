@@ -11,6 +11,7 @@ import { cutSlab, slabProblems, slabTop } from "../world/slabs.js";
 import { captureTemplate, placedTemplate } from "../world/templates.js";
 import { CLIPBOARD_PREFIX } from "./library.js";
 import { homeOf, isSlab, readyObject } from "./placed.js";
+import { footprint, templateDiff } from "./templateDiff.js";
 import { drawable, slabSpace } from "./things.js";
 
 // Build's tools, on the things placed by hand (placed.js, things.js):
@@ -106,6 +107,8 @@ export class Build {
     $("templateMakeCancel").addEventListener("click", () => $("templateMake").hidePopover());
     $("templateName").addEventListener("keydown", (e) => e.key === "Enter" && this.makeTemplate());
     $("templateCollection").addEventListener("input", () => ($("templateCollectionName").hidden = $("templateCollection").value !== NEW_COLLECTION));
+    for (const button of document.querySelectorAll("[data-template-mode]")) button.addEventListener("click", () => this.templateMode(button.dataset.templateMode));
+    $("templateReplace").addEventListener("input", () => this.showDiff());
     $("templateMake").addEventListener("toggle", (e) => {
       if (e.newState !== "closed") return;
       this.makeThumbs.stopTurning();
@@ -607,12 +610,9 @@ export class Build {
     const slabs = picked.filter(isSlab);
     const objects = picked.filter((t) => !isSlab(t));
     this.making = this.capture(picked, "");
-    const { cells } = placedTemplate(this.making, [0, 0, 0]);
-    const [is, js] = [cells.map((c) => c[0]), cells.map((c) => c[1])];
-    const across = (Math.max(...is) - Math.min(...is) + 1) * TEMPLATE_CELL_FT;
-    const deep = (Math.max(...js) - Math.min(...js) + 1) * TEMPLATE_CELL_FT;
+    const { cells, across, deep } = footprint(this.making);
     const count = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
-    $("templateMakeFacts").textContent = `${count(objects.length, "object")} and ${count(slabs.length, "slab")}, over ${count(cells.length, "cell")}: ${across} × ${deep} ft.`;
+    $("templateMakeFacts").textContent = `${count(objects.length, "object")} and ${count(slabs.length, "slab")}, over ${count(cells, "cell")}: ${across} × ${deep} ft.`;
 
     const own = this.library.templateCollections();
     const options = own.map((c) => el("option", { value: c.id, textContent: c.name }));
@@ -626,15 +626,61 @@ export class Build {
     $("templateCollectionName").value = "";
     $("templateName").value = "";
 
+    // The world's own templates, to replace one; or, armed, the one placed last.
+    const replaceable = this.library.collections("templates").filter((c) => c.kind === "own").flatMap((c) => c.entries.map((e) => ({ ...e, collection: c.name })));
+    $("templateReplace").replaceChildren(...replaceable.map((e) => el("option", { value: e.type, textContent: `${e.name} (${e.collection})` })));
+    if (replaceable.some((e) => e.type === this.armed.template)) $("templateReplace").value = this.armed.template;
+    document.querySelector("[data-template-mode=replace]").disabled = !replaceable.length;
+
     $("templateMake").showPopover();
-    $("templateName").focus();
+    this.templateMode("new");
     const entry = { key: `making:${this.making.id}`, template: this.making };
     this.makeThumbs.startTurning(entry, $("templateMakeView"));
   }
 
-  // Keeps the template the dialog shows, named and filed as asked, and arms it.
+  // Shows the dialog making a new template, or replacing one.
+  templateMode(mode) {
+    this.replacing = mode === "replace";
+    for (const button of document.querySelectorAll("[data-template-mode]")) button.setAttribute("aria-pressed", String(button.dataset.templateMode === mode));
+    for (const part of document.querySelectorAll("[data-template-shown]")) part.hidden = part.dataset.templateShown !== mode;
+    $("templateMakeKeep").textContent = this.replacing ? "replace it" : "make it";
+    $("templateMakeKeep").disabled = false;
+    if (this.replacing) this.showDiff();
+    else $("templateName").focus();
+  }
+
+  // How what's picked differs from the template it would replace.
+  showDiff() {
+    const old = this.library.template($("templateReplace").value);
+    $("templateMakeKeep").disabled = !old;
+    if (!old) return $("templateDiff").replaceChildren();
+    const nameOf = (type) => this.library.entry("objects", type)?.name ?? type;
+    const { changes, before, after } = templateDiff(old, this.making, nameOf);
+    const rows = changes.map(({ label, before: was, after: now }) => {
+      const d = now - was;
+      return el("li", { className: d > 0 ? "added" : "taken", textContent: `${d > 0 ? "+" : "−"}${Math.abs(d)} ${label} (${was} → ${now})` });
+    });
+    if (!changes.length) rows.push(el("li", { textContent: "The same things, though some may have moved or turned." }));
+    if (before.across !== after.across || before.deep !== after.deep) rows.push(el("li", { textContent: `${before.across} × ${before.deep} ft → ${after.across} × ${after.deep} ft` }));
+    $("templateDiff").replaceChildren(...rows);
+  }
+
+  // Keeps the template the dialog shows, named and filed as asked or in place of the one picked
+  // to replace, and arms it.
   makeTemplate() {
     if (!this.making) return;
+    if (this.replacing) {
+      const type = $("templateReplace").value;
+      const old = this.library.template(type);
+      if (!old) return;
+      this.library.replaceTemplate(old, this.making);
+      $("templateMake").hidePopover();
+      this.armed.template = type;
+      this.ghostOf = "";
+      this.say(`Replaced the template "${old.name}".`);
+      this.showRecent();
+      return;
+    }
     const name = $("templateName").value.trim() || "new template";
     const collection = $("templateCollection").value;
     const newName = collection === NEW_COLLECTION ? $("templateCollectionName").value.trim() || "new collection" : null;
