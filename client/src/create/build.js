@@ -73,8 +73,9 @@ const SNAP_EDGE_PX = 8; // and its edge
 const SNAP_MARK = 0.012; // the snap mark's size, as a share of its distance from the camera
 const GRID_NEAR_FT = 2; // how far off a run's faces a point can be and still snap to its grid
 const GROUND_GRID_FT = 16; // how far the ground's grid shows round the pointer, each way
-const GRID_MINOR = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false });
-const GRID_MAJOR = new THREE.LineBasicMaterial({ color: 0xffe080, transparent: true, opacity: 0.8, depthWrite: false });
+const GRID_MINOR = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, depthWrite: false });
+const GRID_MAJOR = new THREE.LineBasicMaterial({ color: 0xffd040, depthWrite: false });
+const GRID_MIDDLE = new THREE.LineBasicMaterial({ color: 0x40e0ff, depthWrite: false }); // a run's middle lines
 const HOME_TEMPLATES = "my templates"; // where keepTemplate keeps those given no collection
 const NEW_COLLECTION = "new"; // the collection select's value for a new one
 const WRONG = new THREE.MeshBasicMaterial({ color: 0xe04040, transparent: true, opacity: 0.6 });
@@ -1198,28 +1199,31 @@ export class Build {
     for (const lines of this.gridLines.children) lines.geometry.dispose();
     this.gridLines.clear();
     if (!key) return;
-    const segments = { minor: [], major: [] };
+    const segments = { minor: [], major: [], middle: [] };
+    const kind = ({ major, middle }) => (middle ? "middle" : major ? "major" : "minor");
     if (run) {
-      const h = this.cameraSide(run) ? 0.03 : -run.slab.thickness - 0.03;
+      const h = this.cameraSide(run) ? 0.05 : -run.slab.thickness - 0.05;
       const [u0, v0, u1, v1] = run.box;
       const { us, vs } = runLines(run.box, ft);
-      for (const { at, major } of us) segments[major ? "major" : "minor"].push(runPoint(run, [at, h, v0]), runPoint(run, [at, h, v1]));
-      for (const { at, major } of vs) segments[major ? "major" : "minor"].push(runPoint(run, [u0, h, at]), runPoint(run, [u1, h, at]));
+      for (const line of us) segments[kind(line)].push(runPoint(run, [line.at, h, v0]), runPoint(run, [line.at, h, v1]));
+      for (const line of vs) segments[kind(line)].push(runPoint(run, [u0, h, line.at]), runPoint(run, [u1, h, line.at]));
+      // Its outline, so where the run ends shows too.
+      for (const [p, q] of [[[u0, v0], [u1, v0]], [[u1, v0], [u1, v1]], [[u1, v1], [u0, v1]], [[u0, v1], [u0, v0]]]) segments.major.push(runPoint(run, [p[0], h, p[1]]), runPoint(run, [q[0], h, q[1]]));
     } else {
       // Draped over the ground, a foot at a time.
       const [cx, , cz] = ground;
       const y = (x, z) => this.groundAt(x, z) + 0.1;
       for (let k = -GROUND_GRID_FT; k <= GROUND_GRID_FT; k += ft) {
-        const kind = Math.round(k / ft) % MAJOR === 0 ? "major" : "minor";
+        const sort = Math.round(k / ft) % MAJOR === 0 ? "major" : "minor";
         for (let t = -GROUND_GRID_FT; t < GROUND_GRID_FT; t++) {
-          segments[kind].push([cx + k, y(cx + k, cz + t), cz + t], [cx + k, y(cx + k, cz + t + 1), cz + t + 1]);
-          segments[kind].push([cx + t, y(cx + t, cz + k), cz + k], [cx + t + 1, y(cx + t + 1, cz + k), cz + k]);
+          segments[sort].push([cx + k, y(cx + k, cz + t), cz + t], [cx + k, y(cx + k, cz + t + 1), cz + t + 1]);
+          segments[sort].push([cx + t, y(cx + t, cz + k), cz + k], [cx + t + 1, y(cx + t + 1, cz + k), cz + k]);
         }
       }
     }
-    for (const [kind, material] of [["minor", GRID_MINOR], ["major", GRID_MAJOR]]) {
-      if (!segments[kind].length) continue;
-      const lines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(segments[kind].map((p) => new THREE.Vector3(...p))), material);
+    for (const [sort, material] of [["minor", GRID_MINOR], ["major", GRID_MAJOR], ["middle", GRID_MIDDLE]]) {
+      if (!segments[sort].length) continue;
+      const lines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(segments[sort].map((p) => new THREE.Vector3(...p))), material);
       lines.renderOrder = 5;
       lines.frustumCulled = false;
       this.gridLines.add(lines);

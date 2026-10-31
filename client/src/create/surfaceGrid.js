@@ -7,7 +7,8 @@ import { unturned } from "../world/slabs.js";
 // `minor`, the majors on multiples of MAJOR of them.
 
 export const MAJOR = 4;
-const NEAR = 0.05; // feet apart that still count as meeting, or in one plane
+const NEAR = 0.1; // feet apart that still count as meeting, or in one plane
+const TURNED = 0.5; // degrees apart that still count as turned alike
 
 // The run of slabs `slab` is in: those in its plane, turned and as thick as it, overlapping or
 // meeting edge to edge, found from it through near(x, z) (the slabs round a point). Gives
@@ -19,7 +20,7 @@ export function planeRun(slab, near) {
     const vs = points.map((p) => p[2]);
     return [Math.min(...us), Math.min(...vs), Math.max(...us), Math.max(...vs)];
   };
-  const alike = (s) => s.kind === undefined && s.turn.every((d, i) => Math.abs((((d - slab.turn[i]) % 360) + 540) % 360 - 180) < 0.01) && Math.abs(s.thickness - slab.thickness) < 0.01 && Math.abs(unturned(slab, s.at)[1]) < NEAR;
+  const alike = (s) => s.kind === undefined && s.turn.every((d, i) => Math.abs((((d - slab.turn[i]) % 360) + 540) % 360 - 180) < TURNED) && Math.abs(s.thickness - slab.thickness) < 0.01 && Math.abs(unturned(slab, s.at)[1]) < NEAR;
   const meet = (a, b) => a[0] <= b[2] + NEAR && b[0] <= a[2] + NEAR && a[1] <= b[3] + NEAR && b[1] <= a[3] + NEAR;
   const boxes = new Map([[slab, boxOf(slab)]]);
   const queue = [slab];
@@ -38,12 +39,12 @@ export function planeRun(slab, near) {
   return { slab, slabs: [...boxes.keys()], box };
 }
 
-// Where a run's grid lines are: { us, vs }, each [{ at, major }] in the run's frame.
+// Where a run's grid lines are: { us, vs }, each [{ at, major, middle }] in the run's frame.
 export function runLines([u0, v0, u1, v1], minor) {
   const lines = (lo, hi) => {
     const middle = (lo + hi) / 2;
     const out = [];
-    for (let k = -Math.floor((middle - lo) / minor + 1e-9); middle + k * minor <= hi + 1e-9; k++) out.push({ at: middle + k * minor, major: k % MAJOR === 0 });
+    for (let k = -Math.floor((middle - lo) / minor + 1e-9); middle + k * minor <= hi + 1e-9; k++) out.push({ at: middle + k * minor, major: k % MAJOR === 0, middle: k === 0 });
     return out;
   };
   return { us: lines(u0, u1), vs: lines(v0, v1) };
