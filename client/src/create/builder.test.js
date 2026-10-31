@@ -73,9 +73,29 @@ describe("the builder", () => {
     expect(swim.z).toBeCloseTo(RUN_FT * SWIM_SPEED);
   });
 
-  it("lands on the water to swim, flying down into it", () => {
+  it("swims where it comes to, flying down into deep water", () => {
     const s = moveBuilder({ x: 0, y: 101, z: 0, yaw: 0, flying: true }, { ...still, drop: true }, 1, () => 50, undefined, () => 100);
-    expect(s).toMatchObject({ y: 100 - SWIM_FT, flying: false, swimming: true });
+    expect(s).toMatchObject({ y: 101 - CLIMB_FT, flying: false, swimming: true });
+  });
+
+  it("swims the way it's pitched, up and down with space and F, and stays put when still", () => {
+    const [bed, water] = [() => 50, () => 100];
+    const at = (y, input) => moveBuilder({ x: 0, y, z: 0, yaw: 0, flying: false, swimming: true }, { ...still, ...input }, 1, bed, undefined, water);
+    const speed = RUN_FT * SWIM_SPEED;
+    const down = at(90, { forward: 1, pitch: -Math.PI / 6 });
+    expect(down.y).toBeCloseTo(90 - speed / 2);
+    expect(down.z).toBeCloseTo(speed * Math.cos(Math.PI / 6));
+    expect(at(80, {})).toMatchObject({ y: 80, swimming: true });
+    expect(at(80, { rise: true }).y).toBeCloseTo(80 + speed);
+    expect(at(80, { drop: true }).y).toBeCloseTo(80 - speed);
+    // Never over its surface, nor under its bed, nor taking off.
+    expect(at(95, { rise: true, takeoff: true })).toMatchObject({ y: 100 - SWIM_FT, flying: false });
+    expect(at(52, { drop: true }).y).toBe(50);
+  });
+
+  it("stands where the water's too shallow to swim in", () => {
+    const s = moveBuilder({ x: 0, y: 90, z: 0, yaw: 0, flying: false, swimming: true }, { ...still, forward: 1 }, 1, (x, z) => (z > 5 ? 98 : 50), undefined, () => 100);
+    expect(s).toMatchObject({ y: 98, swimming: false });
   });
 
   it("stands on the sea off the tiles", () => {

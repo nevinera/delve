@@ -7,7 +7,10 @@ import { Figure } from "./figure.js";
 // behind them.
 //
 // On the ground: W/S run forward and back, A/D turn, Q/E strafe, and space takes off. In water
-// deeper than SWIM_FT they swim, slower, kept that far under its surface. In the air:
+// deeper than SWIM_FT they swim, slower, floating with their feet that far under its surface, or
+// anywhere under it: forward goes the way the camera looks, so looking down past where it rests
+// dives and looking up rises, space swims up and F down, and they stay where they are when still,
+// never over its surface nor under its bed; where it's shallower they stand. In the air:
 // the same keys move, space rises and F falls. Double-tapping either hops quickly to the next step
 // up or down: 128 ft over the middling height of the plate below, then 256, 512 and so on
 // doubling, and down past the lowest, to the ground, passing by any within HOP_SKIP_FT. The steps
@@ -42,32 +45,45 @@ const CAMERA = { distance: 30, min: 4, max: 2000, pitch: 0.35, minPitch: -1.3, m
 const ALOFT = { tilt: 0.7, tiltFt: 600 };
 const DRAG = 0.006; // radians per pixel
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "f"]);
+const SWIM_LEVEL = 0.12; // how far, in radians, the camera can look either way of where it rests while swimming on the level
 
-// One step of the builder's moving. state: { x, y, z, yaw, flying }, continent feet and radians.
-// input: { forward, strafe, turn } each -1, 0 or 1, rise and drop (space or F held), takeoff
-// (space was just pressed), and while hopping, y (the height to be at) and land (whether this hop
-// ends on the ground). groundAt(x, z) gives the ground's height, or null off the tiles, where the
-// sea's surface holds you up, and waterAt(x, z) the water's surface there, or null where there's
-// none. Walking, push(x, z) moves where they'd be out of what's in the way. Returns the new state,
-// with `swimming` whether they're in water deeper than SWIM_FT.
+// One step of the builder's moving. state: { x, y, z, yaw, flying, swimming }, continent feet and
+// radians. input: { forward, strafe, turn } each -1, 0 or 1, rise and drop (space or F held),
+// takeoff (space was just pressed), pitch, how far up the way they swim goes, in radians, and while
+// hopping, y (the height to be at) and land (whether this hop ends on the ground). groundAt(x, z)
+// gives the ground's height, or null off the tiles, where the sea's bed is SEA_LEVEL_FT, and
+// waterAt(x, z) the water's surface there, or null where there's none. Walking, push(x, z) moves
+// where they'd be out of what's in the way. Returns the new state, with `swimming` whether they're
+// in water deeper than SWIM_FT.
 export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z], waterAt = () => null) {
   const ground = (x, z) => standAt(x, z, groundAt, waterAt);
+  const bed = (x, z) => groundAt(x, z) ?? SEA_LEVEL_FT;
   let { x, y, z, yaw, flying } = state;
   yaw += input.turn * TURN_RATE * dt;
   const above = Math.max(0, y - ground(x, z));
-  if (!flying && input.takeoff) {
+  let swimming = !flying && deep(x, z, groundAt, waterAt);
+  if (!flying && !swimming && input.takeoff) {
     flying = true;
     y += LIFT_FT;
   }
-  const swimming = !flying && deep(x, z, groundAt, waterAt);
   const speed = flying ? Math.max(FLY_FT, above * FLY_PER_FT) : (input.forward < 0 ? BACK_FT : RUN_FT) * (swimming ? SWIM_SPEED : 1);
   const [fx, fz] = [Math.sin(yaw), Math.cos(yaw)];
-  let [mx, mz] = [fx * input.forward + fz * input.strafe, fz * input.forward - fx * input.strafe];
-  const length = Math.hypot(mx, mz);
+  // Swimming, forward and back go up or down as far as the way they swim does.
+  const level = swimming ? Math.cos(input.pitch ?? 0) : 1;
+  let [mx, mz] = [fx * input.forward * level + fz * input.strafe, fz * input.forward * level - fx * input.strafe];
+  const length = Math.hypot(input.forward, input.strafe);
   if (length) {
     x += (mx / length) * speed * dt;
     z += (mz / length) * speed * dt;
     if (!flying) [x, z] = push(x, z);
+  }
+  if (swimming && input.y == null) {
+    const up = (length ? (input.forward * Math.sin(input.pitch ?? 0)) / length : 0) + (input.rise ? 1 : 0) - (input.drop ? 1 : 0);
+    y = Math.min(ground(x, z), Math.max(bed(x, z), y + up * speed * dt));
+    // Where it's too shallow to swim, they stand.
+    swimming = deep(x, z, groundAt, waterAt);
+    if (!swimming) y = ground(x, z);
+    return { x, y, z, yaw, flying: false, swimming };
   }
   if (input.y != null) {
     flying = true;
@@ -77,6 +93,8 @@ export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z],
     y = Math.min(CEILING_FT, y + ((input.rise ? 1 : 0) - (input.drop ? 1 : 0)) * climb * dt);
   }
   const floor = ground(x, z);
+  // Flying down into deep water, they swim where they come to.
+  if (flying && !input.land && deep(x, z, groundAt, waterAt) && y <= floor) return { x, y: Math.max(bed(x, z), y), z, yaw, flying: false, swimming: true };
   if (!flying || y <= floor || input.land) {
     y = floor;
     flying = false;
@@ -178,6 +196,9 @@ export class Builder {
       }
     }
     const key = (k) => (this.held.has(k) ? 1 : 0);
+    // Swimming goes the way the camera looks, up or down, but for a little either way of where it rests.
+    const tilt = CAMERA.pitch - cameraFor(this.cam, this.above).pitch;
+    const pitch = Math.sign(tilt) * Math.max(0, Math.abs(tilt) - SWIM_LEVEL);
     const input = {
       forward: key("w") - key("s"),
       strafe: key("q") - key("e"),
@@ -185,6 +206,7 @@ export class Builder {
       rise: this.held.has(" "),
       drop: this.held.has("f"),
       takeoff: this.takeoff,
+      pitch,
       y,
       land,
     };
@@ -195,7 +217,8 @@ export class Builder {
     if (this.drag?.button === 2) this.cam.yaw = 0;
     const now = this.state;
     const speed = dt > 0 ? Math.hypot(now.x - was.x, now.z - was.z) / dt : 0;
-    this.figure.update(dt, { ...now, forward: input.forward, strafe: input.strafe, turn: input.turn, speed });
+    const swum = dt > 0 ? (now.y - was.y) / dt : 0;
+    this.figure.update(dt, { ...now, forward: input.forward, strafe: input.strafe, turn: input.turn, speed: Math.hypot(speed, now.swimming ? swum : 0), climb: now.swimming ? Math.atan2(swum, speed) : 0 });
     this.place();
   }
 
@@ -207,7 +230,8 @@ export class Builder {
     const head = new THREE.Vector3(x, y + EYE_FT, z);
     const away = new THREE.Vector3(-Math.sin(look) * Math.cos(pitch), Math.sin(pitch), -Math.cos(look) * Math.cos(pitch));
     const at = head.clone().addScaledVector(away, distance);
-    const floor = this.standAt(at.x, at.z) + 2;
+    // Over the ground, and over the water but while swimming.
+    const floor = (this.state.swimming ? (this.groundAt(at.x, at.z) ?? SEA_LEVEL_FT) : this.standAt(at.x, at.z)) + 2;
     if (at.y < floor) at.y = floor;
     this.camera.position.copy(at);
     this.camera.lookAt(at.clone().sub(away));

@@ -28,6 +28,7 @@ import { Tools } from "./tools.js";
 const $ = (id) => document.getElementById(id);
 const SKY = 0x9cc4e4;
 const FOG = { nearFt: FAR_FT * 0.5, farFt: FAR_FT * 1.02 };
+const UNDERWATER = { color: 0x1d4f5c, nearFt: -10, farFt: 70 }; // the fog with the camera under water
 const SAVE_EVERY_MS = 2000;
 const SEA_BELOW_FT = 2;
 const HUD_EVERY_MS = 250;
@@ -306,6 +307,12 @@ function start(world, changes) {
     const high = Math.max(0, camera.position.y - (groundAt(x, z) ?? SEA_LEVEL_FT));
     scene.fog.near = Math.hypot(FOG.nearFt + back, high);
     scene.fog.far = Math.hypot(FOG.farFt + back, high);
+    // Under water, murky, close in.
+    const surface = waterAt(camera.position.x, camera.position.z);
+    const under = surface != null && camera.position.y < surface;
+    scene.fog.color.set(under ? UNDERWATER.color : SKY);
+    scene.background.set(under ? UNDERWATER.color : SKY);
+    if (under) [scene.fog.near, scene.fog.far] = [UNDERWATER.nearFt, UNDERWATER.farFt];
     sun.position.set(x + 500, 1000, z + 300);
     sun.target.position.set(x, 0, z);
     compass.tick(camera);

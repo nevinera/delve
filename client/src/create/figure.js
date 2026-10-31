@@ -6,7 +6,8 @@ import { resolveRecipe } from "../character/recipe.js";
 // The builder's figure: a character (character/characterMesh.js), empty-handed, animated to
 // match how the builder moves. On the ground it runs, strafes, backs up and turns on the spot,
 // its legs turned part way toward a strafe and its chest twisted back to the front; in deep water
-// it swims, and in the air it swims too, as if through the air. It's always the same: plain, bland
+// it swims, tipped up or down the way it's going, and in the air it swims too, as if through the
+// air. It's always the same: plain, bland
 // and neither one thing nor another, so it's no one in particular.
 
 const LOOK = resolveRecipe({
@@ -40,14 +41,14 @@ export class Figure {
     this.mixer = new THREE.AnimationMixer(this.model);
     this.bones = new Map(this.model.skeleton.bones.map((b) => [b.name, b]));
     this.rest = new Map(TWIST.filter(([name]) => this.bones.has(name)).map(([name]) => [name, this.bones.get(name).quaternion.clone()]));
-    [this.clips, this.playing, this.t, this.facing, this.twist, this.landing, this.flew] = [null, null, 0, 0, 0, null, false];
+    [this.clips, this.playing, this.t, this.facing, this.twist, this.tip, this.landing, this.flew] = [null, null, 0, 0, 0, 0, null, false];
     loadAnimations().then((baked) => (this.clips = characterClips(this.model, baked)));
   }
 
   // Puts the figure at (x, y, z) facing `yaw`, and plays the clip for how it's moving: forward,
-  // strafe and turn as the keys have them, -1, 0 or 1, speed in ft a second over the ground, and
-  // whether it's flying or swimming.
-  update(dt, { x, y, z, yaw, forward, strafe, turn, speed, flying, swimming }) {
+  // strafe and turn as the keys have them, -1, 0 or 1, speed in ft a second, whether it's flying
+  // or swimming, and climb, how steeply up it's swimming, in radians.
+  update(dt, { x, y, z, yaw, forward, strafe, turn, speed, flying, swimming, climb = 0 }) {
     this.t += dt;
     const moving = speed > 0.1;
     const afloat = flying || swimming;
@@ -64,7 +65,8 @@ export class Figure {
     this.facing += (facing - this.facing) * ease;
     this.twist += (twist - this.twist) * ease;
     this.model.position.set(x, y, z);
-    this.model.rotation.y = yaw + this.facing;
+    this.tip += ((swimming && moving ? -climb * (forward < 0 ? -1 : 1) : 0) - this.tip) * ease;
+    this.model.rotation.set(this.tip, yaw + this.facing, 0, "YXZ");
     for (const [name, rest] of this.rest) this.bones.get(name).quaternion.copy(rest);
     this.mixer.update(dt);
     if (!this.clips) return;
