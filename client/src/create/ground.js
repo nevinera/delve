@@ -90,6 +90,9 @@ export class Renditions {
     // pressesOver() has it, or null for none; and a count of changes to that.
     this.pressesOver = null;
     this.pressings = 0;
+    // fetchPlate(coords): a plate file's bytes, or null for none, for plate files fetched as
+    // they're wanted rather than added beforehand (addPlate); or null.
+    this.fetchPlate = null;
   }
 
   // Tile (tx, tz)'s cell corners' heights as they're drawn and walked on: `cells.heights`, pressed
@@ -665,12 +668,28 @@ export class Renditions {
     if (!this.plateFiles.has(key)) {
       // Made by hand: nothing to read.
       if (this.made.has(key)) this.done({ key, plate: { coords: key.split(",").map(Number), palette: [], tiles: new Map() } });
+      // Or fetched first, where they're fetched as they're wanted (fetchPlate).
+      else if (this.fetchPlate && this.plate(...key.split(",").map(Number))) this.fetch(key);
       return;
     }
     this.reading.add(key);
     if (typeof Worker === "undefined") return this.done({ key, plate: decodePlate(this.plateFiles.get(key)) });
     this.startWorker();
     this.worker.postMessage({ key, bytes: this.plateFiles.get(key) });
+  }
+
+  // Fetches plate file `key` with fetchPlate(coords), which gives its bytes, then reads it.
+  fetch(key) {
+    this.reading.add(key);
+    this.fetchPlate(key.split(",").map(Number)).then(
+      (bytes) => {
+        this.reading.delete(key);
+        if (!bytes) return this.unreadable.add(key);
+        this.plateFiles.set(key, bytes);
+        this.read(key);
+      },
+      (error) => this.done({ key, error }),
+    );
   }
 
   done({ key, plate, error }) {
@@ -1062,8 +1081,12 @@ function groundTile(tx, tz, cells) {
 // changed are made again a few at a time, nearest first, within BUILD_MS a frame (build), each
 // kept as it was until it's replaced.
 export class Ground {
-  constructor(scene, renditions, renderer) {
+  // farFt and reachFt: how far off plates are drawn, and how far off anything's drawn high up, for
+  // a view that sees less far than FAR_FT and REACH_FT (the play page's fog, say).
+  constructor(scene, renditions, renderer, { farFt = FAR_FT, reachFt = REACH_FT } = {}) {
     this.renditions = renditions;
+    this.farFt = farFt;
+    this.reachFt = reachFt;
     // Tiles drawn coarser till their cells were read can now be drawn finer.
     renditions.onRead = () => (this.stale = true);
     this.group = new THREE.Group();
@@ -1079,7 +1102,7 @@ export class Ground {
     this.anchor = null; // the builder's tile and height in tiles' widths, [tx, ty, tz]
     this.stale = false; // whether what's drawn wants working out again, wherever the builder is
     this.finest = FULL; // the finest tier drawn, by how high the builder is (finestAt)
-    this.reach = FAR_FT; // how far off ground's drawn, by how high the builder is
+    this.reach = farFt; // how far off ground's drawn, by how high the builder is
     // Which kinds of ground are shown (toggle).
     this.shown = { full: true, fine: true, tile: true, plate: true, water: true };
     this.water = null; // the material water drawn from renditions is drawn with
@@ -1142,7 +1165,7 @@ export class Ground {
     this.anchor = [Math.floor(x / TILE_FT), Math.floor(y / TILE_FT), Math.floor(z / TILE_FT)];
     this.finest = this.finestAt(x, y, z);
     const [ax, , az] = this.anchor;
-    const reach = Math.ceil(FAR_FT / PLATE_FT);
+    const reach = Math.ceil(this.farFt / PLATE_FT);
     const [cx, cz] = [Math.floor(x / PLATE_FT), Math.floor(z / PLATE_FT)];
     const wanted = new Map();
     const distance = new Map();
@@ -1151,7 +1174,7 @@ export class Ground {
         if (!this.renditions.plate(px, pz)) continue;
         const dx = x - Math.max(px * PLATE_FT, Math.min(x, (px + 1) * PLATE_FT));
         const dz = z - Math.max(pz * PLATE_FT, Math.min(z, (pz + 1) * PLATE_FT));
-        if (Math.hypot(dx, dz) > FAR_FT) continue;
+        if (Math.hypot(dx, dz) > this.farFt) continue;
         const key = `${px},${pz}`;
         distance.set(key, Math.hypot(dx, dz));
         // A plate well clear of the builder's tile is drawn all from its rendition, but for the
@@ -1166,20 +1189,20 @@ export class Ground {
         wanted.set(key, tiers);
       }
     }
-    // Past FAR_FT, out to its reach, a platter's plates at a time, a 1 for each of its plates
+    // Past farFt, out to its reach, a platter's plates at a time, a 1 for each of its plates
     // drawn, row order.
     const high = Math.max(0, y - (this.renditions.heightAt(x, z) ?? SEA_LEVEL_FT));
-    this.reach = Math.min(REACH_FT, FAR_FT + REACH_PER_FT * high);
+    this.reach = Math.min(this.reachFt, this.farFt + REACH_PER_FT * high);
     const span = Math.ceil(this.reach / PLATTER_FT);
     const [qx, qz] = [Math.floor(x / PLATTER_FT), Math.floor(z / PLATTER_FT)];
-    for (let ppz = qz - span; this.reach > FAR_FT && ppz <= qz + span; ppz++) {
+    for (let ppz = qz - span; this.reach > this.farFt && ppz <= qz + span; ppz++) {
       for (let ppx = qx - span; ppx <= qx + span; ppx++) {
         let [plates, nearest] = ["", Infinity];
         for (let j = 0; j < PLATTER_PLATES; j++) {
           for (let i = 0; i < PLATTER_PLATES; i++) {
             const [px, pz] = [ppx * PLATTER_PLATES + i, ppz * PLATTER_PLATES + j];
             const d = Math.hypot(x - Math.max(px * PLATE_FT, Math.min(x, (px + 1) * PLATE_FT)), z - Math.max(pz * PLATE_FT, Math.min(z, (pz + 1) * PLATE_FT)));
-            const drawn = d > FAR_FT && d <= this.reach && Boolean(this.renditions.plate(px, pz));
+            const drawn = d > this.farFt && d <= this.reach && Boolean(this.renditions.plate(px, pz));
             plates += drawn ? "1" : "0";
             if (drawn) nearest = Math.min(nearest, d);
           }

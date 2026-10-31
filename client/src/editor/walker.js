@@ -22,6 +22,9 @@ import { trunkRadius } from "./treeMeshes.js";
 // through tree trunks, and wades or swims where the water's deep. It stands on the highest slab
 // face gentle enough to climb within a step of its feet, steps up onto one at most STEP_FT, and
 // can't walk into slabs. Positions are scene feet.
+//
+// What it walks on comes from a ground source: the RenderView's decoded tiles (ViewGround), unless
+// it's given another with the same methods (play/ground.js reads a version 2 world's).
 
 // Speeds in feet per second.
 export const RUN_FT = 21;
@@ -77,9 +80,11 @@ const LONG_FALL_S = 1.1;
 const ONCE = { Jump_Start: { from: 0.1, speed: 1.5 }, Jump_Land: { speed: 1.6, length: 0.55 }, Roll: { speed: 1.5 }, Sit_Ground_Enter: {}, Sit_Ground_Exit: {} };
 
 export class Walker {
-  // view: the RenderView, for its scene, camera, canvas and decoded tiles.
-  constructor(view, { onStop } = {}) {
+  // view: the RenderView, for its scene, camera and canvas, and its decoded tiles unless `ground`
+  // is given.
+  constructor(view, { onStop, ground } = {}) {
     this.view = view;
+    this.ground = ground ?? new ViewGround(view);
     this.onStop = onStop;
     this.active = false;
     this.held = new Set();
@@ -321,7 +326,7 @@ export class Walker {
   canStep(x, z) {
     const here = this.standHeight(this.pos.x, this.pos.z);
     const there = this.stand(x, z);
-    if (there === null || this.trunkAt(x, z) || this.objectAt(x, z) || this.slabInWay(x, z)) return false;
+    if (there === null || this.ground.inWay(x, z, this.pos, BODY_FT)) return false;
     const rise = there.height - (here ?? there.height);
     if (there.slab) return rise <= STEP_FT || this.pos.y >= there.height - 0.01;
     const run = Math.hypot(x - this.pos.x, z - this.pos.z);
@@ -337,133 +342,14 @@ export class Walker {
   // the water's surface where it's deeper than that, or a slab's face (slab true), whichever is
   // highest within a step of `feet` (standOn). Null off the tiles drawn in full.
   stand(x, z, feet = this.pos?.y ?? Infinity) {
-    const groundY = this.groundAt(x, z);
+    const groundY = this.ground.groundAt(x, z);
     if (groundY === null) return null;
-    const water = this.cell(x, z)?.water;
+    const water = this.ground.waterAt(x, z);
     const swim = Number.isFinite(water) && water - SWIM_DEPTH > groundY;
-    const { origin } = this.view;
-    const surfaces = this.slabsNear(x, z).flatMap((slab) => slabFootholds(slab, x + origin[0], z + origin[1], MAX_CLIMB));
+    const surfaces = this.ground.footholds(x, z, MAX_CLIMB);
     const ground = swim ? water - SWIM_DEPTH : groundY;
     const height = standOn(surfaces, ground, feet, STEP_FT);
     return { height, slab: height !== ground, swim: swim && height === ground };
-  }
-
-  // The slabs on the tile at scene (x, z) and those beside it.
-  slabsNear(x, z) {
-    const any = this.view.decoded.values().next().value;
-    if (!any) return [];
-    const size = any.cells * any.cellFt;
-    const { origin } = this.view;
-    const [tx, tz] = [Math.floor((x + origin[0]) / size), Math.floor((z + origin[1]) / size)];
-    const out = [];
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) out.push(...(this.view.decoded.get(`${tx + dx},${tz + dz}`)?.slabs ?? []));
-    }
-    return out;
-  }
-
-  // Whether a slab is in the way of a move to scene (x, z): one the body, from a step over its
-  // feet up to its eyes, would run into there. Like trunks, one it's already in doesn't hold it.
-  slabInWay(x, z) {
-    const { origin } = this.view;
-    const body = (bx, bz) => ({ x: bx + origin[0], z: bz + origin[1], radius: BODY_FT, ground: this.pos.y + STEP_FT, top: this.pos.y + EYE_FT });
-    const [there, here] = [body(x, z), body(this.pos.x, this.pos.z)];
-    return this.slabsNear(x, z).some((slab) => slabHitsTrunk(slab, there) && !slabHitsTrunk(slab, here));
-  }
-
-  // Ground height at a scene position, smoothly between cell centers, or null off the full tiles.
-  groundAt(x, z) {
-    const { origin } = this.view;
-    const any = this.view.decoded.values().next().value;
-    if (!any) return null;
-    const ft = any.cellFt;
-    const u = (x + origin[0]) / ft - 0.5;
-    const v = (z + origin[1]) / ft - 0.5;
-    const i = Math.floor(u);
-    const j = Math.floor(v);
-    const h = (a, b) => this.cellAt(a, b)?.height ?? null;
-    const corners = [h(i, j), h(i + 1, j), h(i, j + 1), h(i + 1, j + 1)];
-    if (corners.some((c) => c === null)) return h(Math.round(u), Math.round(v));
-    const fu = u - i;
-    const fv = v - j;
-    const top = corners[0] + (corners[1] - corners[0]) * fu;
-    const bottom = corners[2] + (corners[3] - corners[2]) * fu;
-    return top + (bottom - top) * fv;
-  }
-
-  // An object in the way of a character at scene (x, z), on that tile or the ones beside it. One
-  // the character is already inside (one placed on them, say) doesn't hold them in, a jump clears
-  // low ones, and ones on another storey don't count.
-  objectAt(x, z) {
-    const { origin } = this.view;
-    const any = this.view.decoded.values().next().value;
-    if (!any) return null;
-    const [cx, cz] = [x + origin[0], z + origin[1]];
-    const [hx, hz] = [this.pos.x + origin[0], this.pos.z + origin[1]];
-    const size = any.cells * any.cellFt;
-    const [tx, tz] = [Math.floor(cx / size), Math.floor(cz / size)];
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        for (const object of this.view.decoded.get(`${tx + dx},${tz + dz}`)?.objects ?? []) {
-          if (!blocks(object, cx, cz, BODY_FT) || blocks(object, hx, hz, BODY_FT)) continue;
-          const bottom = object.y ?? this.seatOf(object);
-          if (this.pos.y > bottom + object.height * 0.9 || this.pos.y + EYE_FT < bottom) continue;
-          return object;
-        }
-      }
-    }
-    return null;
-  }
-
-  // How high a world object without a height stands: on the ground.
-  seatOf(object) {
-    const { origin } = this.view;
-    return this.groundAt(object.at[0] - origin[0], object.at[1] - origin[1]) ?? 0;
-  }
-
-  // Whether a tree trunk is in the way of a character at scene (x, z), on that tile or the ones
-  // beside it. Like objects, a trunk the character is already inside doesn't hold them in.
-  trunkAt(x, z) {
-    const any = this.view.decoded.values().next().value;
-    if (!any) return false;
-    const size = any.cells * any.cellFt;
-    const { origin } = this.view;
-    const [tx, tz] = [Math.floor((x + origin[0]) / size), Math.floor((z + origin[1]) / size)];
-    this.trunks ??= new WeakMap(); // decoded tile -> its trunks as [x, z, radius]
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dx = -1; dx <= 1; dx++) {
-        const tile = this.view.decoded.get(`${tx + dx},${tz + dz}`);
-        if (!tile) continue;
-        if (!this.trunks.has(tile)) this.trunks.set(tile, this.view.treesOf(tile).map((t) => [t.x, t.z, trunkRadius(t.kind, t.size) + BODY_FT]));
-        for (const [cx, cz, r] of this.trunks.get(tile)) {
-          if (Math.hypot(x - cx, z - cz) < r && Math.hypot(this.pos.x - cx, this.pos.z - cz) >= r) return true;
-        }
-      }
-    }
-    return false;
-  }
-
-  cell(x, z) {
-    const { origin } = this.view;
-    const any = this.view.decoded.values().next().value;
-    if (!any) return null;
-    return this.cellAt(Math.floor((x + origin[0]) / any.cellFt), Math.floor((z + origin[1]) / any.cellFt));
-  }
-
-  // A cell by its continent cell position: { height, water }, or null where no tile is drawn.
-  cellAt(ci, cj) {
-    const any = this.view.decoded.values().next().value;
-    const n = any.cells;
-    const tx = Math.floor(ci / n);
-    const tz = Math.floor(cj / n);
-    const tile = this.view.decoded.get(`${tx},${tz}`);
-    if (!tile) return null;
-    const k = (cj - tz * n) * n + (ci - tx * n);
-    const water = tile.layers.water[k];
-    return {
-      height: tile.layers.height[k],
-      water: Number.isNaN(water) ? null : water,
-    };
   }
 
   // Puts the model and the camera where they belong. Trees between the head and the camera pull the
@@ -478,7 +364,7 @@ export class Walker {
     const away = new THREE.Vector3(-Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), -Math.cos(yaw) * Math.cos(pitch));
     this.ray.set(head, away);
     this.ray.far = distance;
-    const hit = this.ray.intersectObjects([...this.view.trees.children, ...this.view.objects.children], false)[0];
+    const hit = this.ray.intersectObjects(this.ground.sightBlockers(), false)[0];
     camera.position.copy(head).addScaledVector(away, hit ? Math.max(1, hit.distance - 1) : distance);
     // Kept above the ground; a slab far above (a roof overhead, say) doesn't push it up.
     const floor = this.stand(camera.position.x, camera.position.z, camera.position.y);
@@ -561,4 +447,152 @@ export function standOn(surfaces, ground, feet, step) {
   const heights = [...surfaces, ground];
   const reachable = heights.filter((h) => h <= feet + step);
   return reachable.length ? Math.max(...reachable) : Math.min(...heights);
+}
+
+// The ground a walker walks on in a RenderView: its decoded tiles, drawn in full, with their
+// slabs, objects and trees. Positions are scene feet.
+export class ViewGround {
+  constructor(view) {
+    this.view = view;
+  }
+
+  // Slab faces gentle enough to stand on at (x, z), no steeper than `steepest`.
+  footholds(x, z, steepest) {
+    const { origin } = this.view;
+    return this.slabsNear(x, z).flatMap((slab) => slabFootholds(slab, x + origin[0], z + origin[1], steepest));
+  }
+
+  // The water's surface over (x, z), or null.
+  waterAt(x, z) {
+    return this.cell(x, z)?.water ?? null;
+  }
+
+  // Whether a tree trunk, an object or a slab is in the way of a walker `radius` round moving from
+  // `pos` (its feet) to (x, z).
+  inWay(x, z, pos) {
+    return this.trunkAt(x, z, pos) || Boolean(this.objectAt(x, z, pos)) || this.slabInWay(x, z, pos);
+  }
+
+  // What pulls the camera in front of it.
+  sightBlockers() {
+    return [...this.view.trees.children, ...this.view.objects.children];
+  }
+
+  // The slabs on the tile at scene (x, z) and those beside it.
+  slabsNear(x, z) {
+    const any = this.view.decoded.values().next().value;
+    if (!any) return [];
+    const size = any.cells * any.cellFt;
+    const { origin } = this.view;
+    const [tx, tz] = [Math.floor((x + origin[0]) / size), Math.floor((z + origin[1]) / size)];
+    const out = [];
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) out.push(...(this.view.decoded.get(`${tx + dx},${tz + dz}`)?.slabs ?? []));
+    }
+    return out;
+  }
+
+  // Whether a slab is in the way of a move to scene (x, z): one the body, from a step over its
+  // feet up to its eyes, would run into there. Like trunks, one it's already in doesn't hold it.
+  slabInWay(x, z, pos) {
+    const { origin } = this.view;
+    const body = (bx, bz) => ({ x: bx + origin[0], z: bz + origin[1], radius: BODY_FT, ground: pos.y + STEP_FT, top: pos.y + EYE_FT });
+    const [there, here] = [body(x, z), body(pos.x, pos.z)];
+    return this.slabsNear(x, z).some((slab) => slabHitsTrunk(slab, there) && !slabHitsTrunk(slab, here));
+  }
+
+  // Ground height at a scene position, smoothly between cell centers, or null off the full tiles.
+  groundAt(x, z) {
+    const { origin } = this.view;
+    const any = this.view.decoded.values().next().value;
+    if (!any) return null;
+    const ft = any.cellFt;
+    const u = (x + origin[0]) / ft - 0.5;
+    const v = (z + origin[1]) / ft - 0.5;
+    const i = Math.floor(u);
+    const j = Math.floor(v);
+    const h = (a, b) => this.cellAt(a, b)?.height ?? null;
+    const corners = [h(i, j), h(i + 1, j), h(i, j + 1), h(i + 1, j + 1)];
+    if (corners.some((c) => c === null)) return h(Math.round(u), Math.round(v));
+    const fu = u - i;
+    const fv = v - j;
+    const top = corners[0] + (corners[1] - corners[0]) * fu;
+    const bottom = corners[2] + (corners[3] - corners[2]) * fu;
+    return top + (bottom - top) * fv;
+  }
+
+  // An object in the way of a character at scene (x, z), on that tile or the ones beside it. One
+  // the character is already inside (one placed on them, say) doesn't hold them in, a jump clears
+  // low ones, and ones on another storey don't count.
+  objectAt(x, z, pos) {
+    const { origin } = this.view;
+    const any = this.view.decoded.values().next().value;
+    if (!any) return null;
+    const [cx, cz] = [x + origin[0], z + origin[1]];
+    const [hx, hz] = [pos.x + origin[0], pos.z + origin[1]];
+    const size = any.cells * any.cellFt;
+    const [tx, tz] = [Math.floor(cx / size), Math.floor(cz / size)];
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        for (const object of this.view.decoded.get(`${tx + dx},${tz + dz}`)?.objects ?? []) {
+          if (!blocks(object, cx, cz, BODY_FT) || blocks(object, hx, hz, BODY_FT)) continue;
+          const bottom = object.y ?? this.seatOf(object);
+          if (pos.y > bottom + object.height * 0.9 || pos.y + EYE_FT < bottom) continue;
+          return object;
+        }
+      }
+    }
+    return null;
+  }
+
+  // How high a world object without a height stands: on the ground.
+  seatOf(object) {
+    const { origin } = this.view;
+    return this.groundAt(object.at[0] - origin[0], object.at[1] - origin[1]) ?? 0;
+  }
+
+  // Whether a tree trunk is in the way of a character at scene (x, z), on that tile or the ones
+  // beside it. Like objects, a trunk the character is already inside doesn't hold them in.
+  trunkAt(x, z, pos) {
+    const any = this.view.decoded.values().next().value;
+    if (!any) return false;
+    const size = any.cells * any.cellFt;
+    const { origin } = this.view;
+    const [tx, tz] = [Math.floor((x + origin[0]) / size), Math.floor((z + origin[1]) / size)];
+    this.trunks ??= new WeakMap(); // decoded tile -> its trunks as [x, z, radius]
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dx = -1; dx <= 1; dx++) {
+        const tile = this.view.decoded.get(`${tx + dx},${tz + dz}`);
+        if (!tile) continue;
+        if (!this.trunks.has(tile)) this.trunks.set(tile, this.view.treesOf(tile).map((t) => [t.x, t.z, trunkRadius(t.kind, t.size) + BODY_FT]));
+        for (const [cx, cz, r] of this.trunks.get(tile)) {
+          if (Math.hypot(x - cx, z - cz) < r && Math.hypot(pos.x - cx, pos.z - cz) >= r) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  cell(x, z) {
+    const { origin } = this.view;
+    const any = this.view.decoded.values().next().value;
+    if (!any) return null;
+    return this.cellAt(Math.floor((x + origin[0]) / any.cellFt), Math.floor((z + origin[1]) / any.cellFt));
+  }
+
+  // A cell by its continent cell position: { height, water }, or null where no tile is drawn.
+  cellAt(ci, cj) {
+    const any = this.view.decoded.values().next().value;
+    const n = any.cells;
+    const tx = Math.floor(ci / n);
+    const tz = Math.floor(cj / n);
+    const tile = this.view.decoded.get(`${tx},${tz}`);
+    if (!tile) return null;
+    const k = (cj - tz * n) * n + (ci - tx * n);
+    const water = tile.layers.water[k];
+    return {
+      height: tile.layers.height[k],
+      water: Number.isNaN(water) ? null : water,
+    };
+  }
 }

@@ -69,7 +69,7 @@
             <% if import.private_repo %>· private repo, so it can't be released<% end %>
           </span>
           <% if import.passed? && !import.private_repo %>
-            <span class="muted small" title="playing isn't ready yet">preview</span>
+            <%= link_to "preview", play_path(@world, import: import.id), class: "small" %>
           <% end %>
           <% if import.sha.present? && import.sha == @world.released_sha %>
             <span class="status status-passed">released</span>

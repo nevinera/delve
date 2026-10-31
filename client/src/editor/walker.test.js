@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { setBuiltObjects } from "../world/objects.js";
-import { Walker, frameDue } from "./walker.js";
+import { ViewGround, Walker, frameDue } from "./walker.js";
 
 // A 3 ft crate.
 const crate = { id: "crate001", name: "crate", palette: [{ color: "#806040" }], pieces: [{ type: "box", size: [3, 3, 3], at: [0, 1.5, 0], turn: [0, 0, 0], color: 0 }] };
@@ -18,6 +18,7 @@ function walker({ others = [] } = {}) {
   };
   const w = Object.create(Walker.prototype);
   w.view = { decoded: new Map([["0,0", tile]]), origin: [0, 0], treesOf: () => [] };
+  w.ground = new ViewGround(w.view);
   return w;
 }
 

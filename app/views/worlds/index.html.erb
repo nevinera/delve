@@ -6,7 +6,7 @@
       <li>
         <strong><%= world.display_name %></strong>
         <span class="muted"><%= world.repo %>, <%= world.released_tag %></span>
-        <span class="muted" title="playing isn't ready yet">play</span>
+        <%= link_to "play", play_path(world) %>
       </li>
     <% end %>
   </ul>

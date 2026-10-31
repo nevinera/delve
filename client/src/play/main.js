@@ -1,24 +1,26 @@
 import "./play.css";
 import { graphicsPanel } from "../editor/graphicsPanel.js";
-import { RenderView, SIGHT } from "../editor/renderView.js";
 import { builtObjects, images } from "../objects/collections.js";
 import { resolveRecipe } from "../character/recipe.js";
-import { TILE_FT } from "../world/constants.js";
+import { Renditions } from "../create/ground.js";
+import { Placed } from "../create/placed.js";
+import { PLATE_FT } from "../v2/sizes.js";
 import { setBuiltObjects } from "../world/objects.js";
 import { GameConnection } from "./game.js";
 import { PlayWorld } from "./loader.js";
-import { PlateCache, openStore } from "./plateCache.js";
 import { Others } from "./others.js";
 import { TouchControls, isTouch } from "./touch.js";
+import { PlayView } from "./view.js";
 
-// The play page: your character in a released world, where the game server puts it. Tiles come
-// from the world's plates on raw GitHub, at the released commit, fetched as you walk toward them.
-// Others near you come and go as the game server says.
+// The play page: your character in a released version 2 world, where the game server puts it. The
+// world comes from raw GitHub at the released commit: its continent's platters first, and plate
+// and placed files as you come near them. Others near you come and go as the game server says.
 
 const $ = (id) => document.getElementById(id);
 const config = JSON.parse($("playConfig").textContent); // { repo, sha, paths, look, game: { url, token } }
 const status = (text) => ($("playStatus").textContent = text);
-const STREAM_MS = 1000; // how often to look for plates coming into reach
+const STREAM_MS = 1000; // how often to look for placed files coming into reach
+const PLACED_FT = 2 * PLATE_FT; // how near a plate's placed file is fetched
 // Lighter graphics for phones: no extra pixel density, 30 frames a second to save the battery, less
 // ground clutter, and simple tree crowns.
 const PHONE_GRAPHICS = { resolution: 1, maxFps: 30, clutterRadiusFt: 120, clutterDensity: 0.5, solidCanopies: true };
@@ -49,11 +51,10 @@ menu.addEventListener("toggle", (e) => e.newState === "closed" && showPage(null)
 menu.querySelector('[data-open="playGraphics"]').disabled = true; // until there's a view
 
 async function play() {
-  const loader = new PlayWorld({ ...config, cache: new PlateCache(await openStore()) });
+  const loader = new PlayWorld(config);
   status("Loading the world...");
   await loader.open();
-  const { world } = loader;
-  setBuiltObjects(builtObjects(world), images(world));
+  setBuiltObjects(builtObjects(loader), images(loader));
 
   let others = null;
   const early = []; // what the server says before the view is ready, as [method, argument]
@@ -70,13 +71,34 @@ async function play() {
     },
   });
 
-  const tile = [Math.floor(you.at[0] / TILE_FT), Math.floor(you.at[2] / TILE_FT)];
   status("Loading the land around you...");
-  await loader.platesAround(you.continent, tile, SIGHT.farTiles + 1);
-  status("");
+  const continent = await loader.continent(you.continent);
+  const renditions = new Renditions();
+  for (const bytes of continent.platters) renditions.addPlatter(bytes);
+  renditions.setBiomes(continent.biomes?.areas ?? [], false);
+  renditions.setWater(continent.water ?? { bodies: [], courses: [] }, false);
+  renditions.fetchPlate = (coords) => loader.plate(you.continent, coords);
+  // Placed files for the plates near you, once each.
+  const placed = new Placed();
+  const fetched = new Set();
+  const placedNear = (x, z) =>
+    Promise.all(
+      loader
+        .plates(you.continent)
+        .filter(([px, pz]) => !fetched.has(`${px},${pz}`) && Math.hypot(x - Math.max(px * PLATE_FT, Math.min(x, (px + 1) * PLATE_FT)), z - Math.max(pz * PLATE_FT, Math.min(z, (pz + 1) * PLATE_FT))) <= PLACED_FT)
+        .map(async (coords) => {
+          fetched.add(coords.join(","));
+          const bytes = await loader.placed(you.continent, coords).catch((err) => (fetched.delete(coords.join(",")), Promise.reject(err)));
+          if (bytes) placed.load(coords, bytes);
+        }),
+    );
+  await placedNear(you.at[0], you.at[2]);
 
   let showGraphics = null;
-  const view = new RenderView($("scene"), { onGraphics: (graphics) => showGraphics?.(graphics) });
+  const view = new PlayView($("scene"), { onGraphics: (graphics) => showGraphics?.(graphics) });
+  view.show(renditions, placed);
+  await view.ready([you.at[0], you.at[2]]);
+  status("");
   const touch = isTouch();
   if (touch) view.setGraphics(PHONE_GRAPHICS);
   // Players get the settings that trade looks for speed, not the editor's switch for each part.
@@ -91,27 +113,26 @@ async function play() {
   for (const [method, arg] of early) others[method](arg);
   view.onWalkFrame = (dt) => others.frame(dt);
   const paused = () => ($("playPaused").hidden = false);
-  view.walkFrom({ world, continent: you.continent, zones: [], look: resolveRecipe(config.look) }, [you.at[0], you.at[2]], paused);
+  view.startWalk(paused, [you.at[0], you.at[2]], resolveRecipe(config.look));
   view.walker.yaw = you.yaw;
   connection.report(view);
+  // A handle for scripts and the browser's console.
+  window.play = { view, connection, others, renditions, placed };
   if (touch) new TouchControls(view, document.body);
   $("playResume").addEventListener("click", () => {
     $("playPaused").hidden = true;
     view.startWalk(paused, [view.walker.pos.x, view.walker.pos.z]);
   });
 
-  // Plates come in as you get near them.
+  // Placed files come in as you get near their plates; plate files as the ground wants them.
   let fetching = false;
   setInterval(async () => {
-    if (fetching || !view.walker) return;
-    const { pos } = view.walker;
-    const at = [Math.floor((pos.x + view.origin[0]) / TILE_FT), Math.floor((pos.z + view.origin[1]) / TILE_FT)];
+    if (fetching || !view.walker?.pos) return;
     fetching = true;
     try {
-      const added = await loader.platesAround(you.continent, at, SIGHT.farTiles + 1);
-      if (added.length) view.tilesArrived(added);
+      await placedNear(view.walker.pos.x, view.walker.pos.z);
     } catch (err) {
-      status(`Couldn't load the land nearby: ${err.message}`);
+      status(`Couldn't load what's built nearby: ${err.message}`);
     } finally {
       fetching = false;
     }

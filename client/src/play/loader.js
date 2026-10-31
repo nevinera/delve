@@ -1,120 +1,85 @@
+import { strFromU8 } from "fflate";
 import { pool } from "../github/github.js";
-import { World } from "../editor/world.js";
-import { plateOf } from "../world/plateCodec.js";
-import { COLLECTIONS_PATH, IMAGE_PATH, OBJECT_PATH, WORLD_PATH, plateAt, platePath, platesIndexPath, sketchPath, tilePath } from "../world/paths.js";
-import { MemoryStore, PlateCache } from "./plateCache.js";
+import { biomesPath } from "../create/biomes.js";
+import { PLACED_PATH, placedPath } from "../create/placed.js";
+import { PLATE_PATH, platePath } from "../v2/plate.js";
+import { PLATTER_PATH } from "../v2/platter.js";
+import { waterPath } from "../v2/water.js";
+import { COLLECTIONS_PATH, IMAGE_PATH, OBJECT_PATH, WORLD_PATH } from "../world/paths.js";
 
-// A released world, read straight from raw GitHub at its commit: no API calls and no token. The
-// page knows the commit's files (its import's list), so nothing has to be probed for. Plates are
-// streamed in and kept in the browser by their hashes (plateCache.js), so a plate already there
-// isn't downloaded again.
+// A released version 2 world, read straight from raw GitHub at its commit: no API calls and no
+// token. The page knows the commit's files (its import's list), so nothing has to be probed for.
+// World.json, the object library and a continent's platters, biomes and water come first; plate
+// and placed files as they're wanted.
 
 const FETCHES = 8; // at once
-// Plates stay loaded this many tiles beyond the reach they're loaded for, so walking back and forth
-// across a plate's edge doesn't load and drop it each time.
-const KEEP_BEYOND = 8;
 
 export const rawUrl = (repo, sha, path) => `https://raw.githubusercontent.com/${repo}/${sha}/${path}`;
 
-// The plates holding the surface tiles within `reach` tiles of (tx, tz) on a continent, as paths.
-export function platesAround(continent, [tx, tz], reach) {
-  const [x0, z0] = plateOf(tx - reach, tz - reach);
-  const [x1, z1] = plateOf(tx + reach, tz + reach);
-  const paths = [];
-  for (let pz = z0; pz <= z1; pz++) for (let px = x0; px <= x1; px++) paths.push(platePath(continent, "surface", px, pz));
-  return paths;
-}
-
 export class PlayWorld {
-  // paths: every file at the commit. fetchFn: fetch, or a stand-in. cache: a PlateCache.
-  constructor({ repo, sha, paths, fetchFn = (...args) => fetch(...args), cache = new PlateCache(new MemoryStore()) }) {
-    Object.assign(this, { repo, sha, fetchFn, cache });
+  // paths: every file at the commit. fetchFn: fetch, or a stand-in.
+  constructor({ repo, sha, paths, fetchFn = (...args) => fetch(...args) }) {
+    Object.assign(this, { repo, sha, fetchFn });
     this.paths = new Set(paths);
-    this.world = new World();
-    this.plates = new Map(); // plate path -> a promise of the tile keys it held
-    this.hashes = new Map(); // plate path -> its hash, from its continent's plates.json
-  }
-
-  async response(path) {
-    const res = await this.fetchFn(rawUrl(this.repo, this.sha, path));
-    if (!res.ok) throw new Error(`couldn't fetch ${path} (${res.status})`);
-    return res;
+    this.files = new Map(); // path -> bytes, of what's been fetched to keep
   }
 
   async bytes(path) {
-    return new Uint8Array(await (await this.response(path)).arrayBuffer());
+    const res = await this.fetchFn(rawUrl(this.repo, this.sha, path));
+    if (!res.ok) throw new Error(`couldn't fetch ${path} (${res.status})`);
+    return new Uint8Array(await res.arrayBuffer());
   }
 
-  // A file's text as it arrives, in pieces.
-  async *text(path) {
-    const reader = (await this.response(path)).body.pipeThrough(new TextDecoderStream()).getReader();
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) return;
-      yield value;
-    }
+  // A file's bytes, or null where the commit hasn't got it.
+  async file(path) {
+    return this.paths.has(path) ? this.bytes(path) : null;
   }
 
-  // Fetches the files the world needs before any tiles: world.json, the continents' sketches and
-  // plate indexes, and its object library.
+  readJson(path) {
+    const bytes = this.files.get(path);
+    return bytes ? JSON.parse(strFromU8(bytes)) : null;
+  }
+
+  // World.json and the object library.
   async open() {
-    const want = (path) => this.paths.has(path);
-    await this.fetchAll([WORLD_PATH]);
-    const continents = this.world.info.continents.map((c) => c.key);
     const library = [...this.paths].filter((p) => p === COLLECTIONS_PATH || OBJECT_PATH.test(p) || IMAGE_PATH.test(p));
-    await this.fetchAll([...continents.flatMap((c) => [sketchPath(c), platesIndexPath(c)]).filter(want), ...library]);
-    for (const continent of continents) {
-      const index = this.paths.has(platesIndexPath(continent)) && this.world.readJson(platesIndexPath(continent));
-      for (const [key, hash] of Object.entries(index?.plates ?? {})) {
-        const [layer, coords] = key.split("/");
-        this.hashes.set(platePath(continent, layer, ...coords.split("_").map(Number)), hash);
-      }
+    await this.fetchAll([WORLD_PATH, ...library]);
+    this.info = this.readJson(WORLD_PATH);
+    if (this.info.version !== 2) throw new Error(`this is a version ${this.info.version} world, and only version 2 worlds can be played`);
+  }
+
+  // A continent's platters (as [coords, bytes]), biomes and water.
+  async continent(key) {
+    const platters = [...this.paths].filter((p) => PLATTER_PATH.exec(p)?.[1] === key);
+    await this.fetchAll([...platters, biomesPath(key), waterPath(key)].filter((p) => this.paths.has(p)));
+    return {
+      platters: platters.map((p) => this.files.get(p)),
+      biomes: this.readJson(biomesPath(key)),
+      water: this.readJson(waterPath(key)),
+    };
+  }
+
+  // Plate (px, pz)'s plate file and placed file, either null where there's none.
+  plate(continent, coords) {
+    return this.file(platePath(continent, coords));
+  }
+
+  placed(continent, coords) {
+    return this.file(placedPath(continent, coords));
+  }
+
+  // The plates on a continent that have a plate or placed file, as [px, pz].
+  plates(continent) {
+    const out = new Map();
+    for (const path of this.paths) {
+      const m = PLATE_PATH.exec(path) ?? PLACED_PATH.exec(path);
+      if (m?.[1] === continent) out.set(`${m[2]},${m[3]}`, [Number(m[2]), Number(m[3])]);
     }
+    return [...out.values()];
   }
 
   async fetchAll(paths) {
     const bytes = await pool(paths, FETCHES, (path) => this.bytes(path));
-    paths.forEach((path, i) => this.world.files.set(path, bytes[i]));
-  }
-
-  // Loads the plates around tile (tx, tz) that haven't been, from the cache or GitHub, into tile
-  // files in the world, and drops the tile files of plates left well behind (the cache keeps them).
-  // Resolves with the "tx,tz" keys of the tiles that came.
-  async platesAround(continent, tile, reach) {
-    this.dropBeyond(continent, tile, reach + KEEP_BEYOND);
-    const fresh = platesAround(continent, tile, reach).filter((path) => this.paths.has(path) && !this.plates.has(path));
-    for (const path of fresh) {
-      const { layer } = plateAt(path);
-      // A plate missing from plates.json is known by the commit it's in instead.
-      const hash = this.hashes.get(path) ?? `${this.sha} ${path}`;
-      this.plates.set(
-        path,
-        this.cache.tiles(hash, () => this.text(path)).then((tiles) =>
-          tiles.map(([key, file]) => {
-            this.world.files.set(tilePath(continent, layer, ...key.split(",").map(Number)), file);
-            return key;
-          }),
-        ),
-      );
-    }
-    const added = await Promise.all(fresh.map((path) => this.plates.get(path).catch((err) => (this.plates.delete(path), Promise.reject(err)))));
-    return added.flat();
-  }
-
-  // Drops the loaded plates on the continent with no tile within reach of (tx, tz), or on another.
-  dropBeyond(continent, tile, reach) {
-    const keep = new Set(platesAround(continent, tile, reach));
-    for (const [path, loading] of this.plates) {
-      if (keep.has(path)) continue;
-      this.plates.delete(path);
-      const plate = plateAt(path);
-      loading.then(
-        (keys) => {
-          if (this.plates.has(path)) return; // loaded again since
-          for (const key of keys) this.world.files.delete(tilePath(plate.continent, plate.layer, ...key.split(",").map(Number)));
-        },
-        () => {},
-      );
-    }
+    paths.forEach((path, i) => this.files.set(path, bytes[i]));
   }
 }

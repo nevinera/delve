@@ -75,16 +75,15 @@ The owner releases an import that passed from the same page. Releasing checks th
 
 ## Playing
 
-The play page reads version 1 worlds, and the game server reads only version 2, so the worlds pages show the play and preview links greyed out.
+Released worlds are listed for everyone signed in, on `/worlds`. A world's owner can also preview an import that passed, before releasing it, from the world's page (`/play/:id?import=`); the game server keeps it on a layer of its own, by its commit. Playing one (`/play/:id`) asks which of your characters to enter as, then loads `client/src/play/main.js`. It plays version 2 worlds only.
 
-Released worlds are listed for everyone signed in, on `/worlds`. A world's owner can also preview an import that passed, before releasing it, from the world's page (`/play/:id?import=`); the game server keeps it on a layer of its own, by its commit. Playing one (`/play/:id`) asks which of your characters to enter as, then loads `client/src/play/main.js`:
-
-1. It reads `world.json`, the continents' sketches and the object library from `raw.githubusercontent.com/<repo>/<released sha>/`. The page lists the commit's files from its import, so nothing is probed for.
+1. It reads `world.json` and the object library from `raw.githubusercontent.com/<repo>/<released sha>/` (`client/src/play/loader.js`). The page lists the commit's files from its import, so nothing is probed for.
 2. It enters the game server with an entry token from the page, and the server says where your character is. A character new to the world starts at its spawn point, `spawn` in `world.json`, which `/create`'s manage tools set.
-3. It loads the plates around you, and more as you walk toward them, and walks your character there with the editor's walk mode (`RenderView`, `Walker`). It reads each plate as it streams in, and keeps its tiles in IndexedDB by the plate's hash from `plates.json` (`client/src/play/plateCache.js`), so a plate already there isn't downloaded again. The cache holds the 16 plates used last. Plates you've walked well away from leave memory, and come back from the cache.
-4. It reports how you move, and draws the characters near you as the server reports theirs (`client/src/play/game.js`, `others.js`).
-5. A menu button in the bottom right opens the menu: graphics settings (`client/src/editor/graphicsPanel.js`, shared with the editor) and leaving the world.
-6. On a phone (`client/src/play/touch.js`) it plays in landscape only, with a thumbstick, a jump button, and drags that turn you with the camera, on lighter graphics. Menu and chat buttons sit along the bottom, and the menu scrolls.
+3. It reads your continent's platters, biomes and water, and draws the world as `/create` does (`client/src/play/view.js`, with `client/src/create/ground.js` and the rest): tiles near you in full, coarser further off, out to where the fog closes in, 3,500 ft away. Plate files are fetched as the ground wants them, and placed files for the plates within two plates' width of you. The sky, its day and night, and the fog are the editor's walk mode's (`client/src/editor/sky.js`, `client/src/world/dayNight.js`).
+4. You walk as the editor's walker (`client/src/editor/walker.js`), on the ground as the game server has it (`client/src/play/ground.js`): slabs, objects placed by hand, and the trees and objects in tiles' slots are in the way.
+5. It reports how you move, and draws the characters near you as the server reports theirs (`client/src/play/game.js`, `others.js`).
+6. A menu button in the bottom right opens the menu: graphics settings (`client/src/editor/graphicsPanel.js`, shared with the editor) and leaving the world.
+7. On a phone (`client/src/play/touch.js`) it plays in landscape only, with a thumbstick, a jump button, and drags that turn you with the camera, on lighter graphics. Menu and chat buttons sit along the bottom, and the menu scrolls.
 
 ## The game server
 

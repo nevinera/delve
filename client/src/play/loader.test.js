@@ -1,62 +1,55 @@
-import { gunzipSync, gzipSync, strFromU8, strToU8 } from "fflate";
+import { strToU8 } from "fflate";
 import { describe, expect, it } from "vitest";
-import { packPlates } from "../editor/plates.js";
-import { generateTile, prepareWorld } from "../world/generator.js";
-import { LandGrid, PER_TILE } from "../world/landGrid.js";
-import { decodeTile, encodeTile } from "../world/tileCodec.js";
-import { PlayWorld, platesAround, rawUrl } from "./loader.js";
-import { MemoryStore, PlateCache } from "./plateCache.js";
+import { PlayWorld, rawUrl } from "./loader.js";
+
+const json = (data) => strToU8(JSON.stringify(data));
+
+// A released world's files, served as raw GitHub would, noting each fetch.
+function served(files) {
+  const fetched = [];
+  const fetchFn = async (url) => {
+    fetched.push(url);
+    const path = url.replace(rawUrl("me/w", "c0ffee", ""), "");
+    const bytes = files.get(path);
+    return bytes ? { ok: true, arrayBuffer: async () => bytes.buffer } : { ok: false, status: 404 };
+  };
+  return { fetched, world: new PlayWorld({ repo: "me/w", sha: "c0ffee", paths: [...files.keys()], fetchFn }) };
+}
 
 describe("playing a released world", () => {
-  it("lists the plates around a tile", () => {
-    expect(platesAround("main", [20, 3], 2)).toEqual(["places/continents/main/plates/surface/1_0.plate"]);
-    expect(platesAround("main", [1, 1], 3)).toEqual([
-      "places/continents/main/plates/surface/-1_-1.plate",
-      "places/continents/main/plates/surface/0_-1.plate",
-      "places/continents/main/plates/surface/-1_0.plate",
-      "places/continents/main/plates/surface/0_0.plate",
-    ]);
+  const files = new Map([
+    ["world.json", json({ version: 2, name: "W", continents: [{ key: "main", name: "Main" }] })],
+    ["objects/abcd1234.json", json({ id: "abcd1234", name: "x", palette: [], pieces: [] })],
+    ["places/continents/main/platters/0_0.platter", strToU8("platter")],
+    ["places/continents/main/biomes.json", json({ version: 1, areas: [] })],
+    ["places/continents/main/plates/0_0.plate", strToU8("plate 8 0 0\n")],
+    ["places/continents/main/placed/1_0.json", json({ version: 1, objects: [], slabs: [] })],
+    ["places/continents/other/plates/5_5.plate", strToU8("plate 8 5 5\n")],
+  ]);
+
+  it("reads world.json and the library first, then a continent's platters, biomes and water", async () => {
+    const { world, fetched } = served(files);
+    await world.open();
+    expect(world.info.name).toBe("W");
+    expect(fetched.map((u) => u.split("c0ffee/")[1]).sort()).toEqual(["objects/abcd1234.json", "world.json"]);
+    const main = await world.continent("main");
+    expect(main.platters).toHaveLength(1);
+    expect(main.biomes).toEqual({ version: 1, areas: [] });
+    expect(main.water).toBeNull(); // it hasn't got one, and nothing asked for it
+    expect(fetched.some((u) => u.endsWith("water.json"))).toBe(false);
   });
 
-  it("reads the world from raw GitHub at the commit, and plates as it goes, once each", async () => {
-    const land = new LandGrid();
-    for (let gz = -PER_TILE; gz <= 2 * PER_TILE; gz++) for (let gx = -PER_TILE; gx <= 2 * PER_TILE; gx++) land.set(gx, gz, 40);
-    const ctx = prepareWorld({ land: land.data, pins: [], paths: [], water: { rivers: [], lakes: [] } }, "t");
-    const files = await packPlates(new Map([["places/continents/main/tiles/surface/0/0.dlt.gz", gzipSync(encodeTile(generateTile(ctx, 0, 0)))]]));
-    files.set("world.json", strToU8(JSON.stringify({ version: 1, name: "W", continents: [{ key: "main", name: "Main" }] })));
-    files.set("places/continents/main/sketch.json", strToU8(JSON.stringify({ version: 5, pins: [{ id: "p1", kind: "spawn", at: [0.5, 0.5] }], paths: [] })));
-    files.set("objects/abcd1234.json", strToU8(JSON.stringify({ id: "abcd1234", name: "x", palette: [], pieces: [] })));
-    const fetched = [];
-    const fetchFn = async (url) => {
-      fetched.push(url);
-      const path = url.replace(rawUrl("me/w", "c0ffee", ""), "");
-      return files.has(path) ? new Response(files.get(path)) : new Response("", { status: 404 });
-    };
-    const cache = new PlateCache(new MemoryStore());
-    const play = new PlayWorld({ repo: "me/w", sha: "c0ffee", paths: [...files.keys()], fetchFn, cache });
-    await play.open();
-    expect(play.world.files.has("places/continents/main/sketch.json")).toBe(true);
-    expect(play.world.files.has("objects/abcd1234.json")).toBe(true);
-    expect(await play.platesAround("main", [0, 0], 3)).toEqual(["0,0"]);
-    const tile = play.world.files.get("places/continents/main/tiles/surface/0/0.dlt.gz");
-    expect(decodeTile(gunzipSync(tile)).coords).toEqual([0, 0]);
-    expect(await play.platesAround("main", [1, 1], 3)).toEqual([]);
-    const plateUrls = () => fetched.filter((u) => u.endsWith(".plate"));
-    expect(plateUrls()).toEqual(["https://raw.githubusercontent.com/me/w/c0ffee/places/continents/main/plates/surface/0_0.plate"]);
+  it("fetches plate and placed files only where the commit has them", async () => {
+    const { world, fetched } = served(files);
+    expect(await world.plate("main", [0, 0])).not.toBeNull();
+    expect(await world.plate("main", [1, 0])).toBeNull();
+    expect(await world.placed("main", [1, 0])).not.toBeNull();
+    expect(fetched).toHaveLength(2);
+    expect(world.plates("main")).toEqual([[0, 0], [1, 0]]);
+  });
 
-    // Walking far off drops the plate's tiles; coming back gets them from the cache.
-    expect(await play.platesAround("main", [100, 100], 3)).toEqual([]);
-    expect(play.world.files.has("places/continents/main/tiles/surface/0/0.dlt.gz")).toBe(false);
-    expect(await play.platesAround("main", [0, 0], 3)).toEqual(["0,0"]);
-    expect(play.world.files.has("places/continents/main/tiles/surface/0/0.dlt.gz")).toBe(true);
-    expect(plateUrls()).toHaveLength(1);
-
-    // Played again (a reload, say), the plate comes from the cache, by its hash.
-    const again = new PlayWorld({ repo: "me/w", sha: "c0ffee", paths: [...files.keys()], fetchFn, cache });
-    await again.open();
-    expect(await again.platesAround("main", [0, 0], 3)).toEqual(["0,0"]);
-    expect(plateUrls()).toHaveLength(1);
-    const hash = JSON.parse(strFromU8(files.get("places/continents/main/plates.json"))).plates["surface/0_0"];
-    expect(await cache.store.plate(hash)).toMatchObject({ tiles: ["0,0"] });
+  it("won't play a version 1 world", async () => {
+    const { world } = served(new Map([["world.json", json({ version: 1, name: "Old", continents: [] })]]));
+    await expect(world.open()).rejects.toThrow(/version 1/);
   });
 });
