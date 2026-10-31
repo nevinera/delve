@@ -42,9 +42,9 @@ import { drawable, slabSpace } from "./things.js";
 //   copy, that paste arms the template tool with.
 // Corners drawn snap to slabs' corners near them on the screen, or else their edges, unless shift's
 // held: a floor or room started from a floor's is level with it, and a wall drawn along a floor's
-// edge from it stands outside it, its foot at the floor's bottom, and a wall with an end snapped to
-// another wall's foot has its foot there too. Floors, walls and rooms can snap to a 2 ft grid
-// instead, square to north.
+// edge from it stands outside it, its foot at the floor's bottom, and a wall started from another
+// wall's foot has its foot there too. A wall's foot is set where it starts, and it stands its
+// height from there. Floors, walls and rooms can snap to a 2 ft grid instead, square to north.
 // Esc drops what's being drawn, keeping the tool. Ctrl+Z undoes the last change, ctrl+C copies
 // and ctrl+V pastes.
 
@@ -599,11 +599,12 @@ export class Build {
     if (mode === "wall") {
       if (Math.hypot(b[0] - a[0], b[2] - a[2]) < 0.5) return [];
       const outside = floor && besideEdge(floor, a, b);
-      // Either end snapped to another wall's foot: its foot is flush with that wall's.
-      const foot = [this.drawing?.from, this.snapped].map(wallFoot).find((y) => y !== null);
+      // Its foot is set where it starts: flush with another wall's foot it snapped to, or else
+      // where it started, on the ground or a slab. Dragging doesn't move it.
+      const foot = wallFoot(this.drawing?.from) ?? a[1];
       // `height` from its foot to its top, wherever its foot ends up.
       const wall = (from, to, foot) => wallPieces([from[0], foot, from[2]], [to[0], foot, to[2]], { foot, height, thickness, surface });
-      if (!outside) return wall(a, b, foot ?? footUnder(a, b));
+      if (!outside) return wall(a, b, foot);
       // A wall's thickness goes to the right of its line: away from the floor.
       const [from, to] = outside === "right" ? [b, a] : [a, b];
       return wall(from, to, a[1] - floor.thickness);
