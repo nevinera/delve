@@ -36,10 +36,11 @@ describe("the walk search", () => {
     expect(run(new WalkSearch({ from: [100, 400], to: [500, 400], most: 1000, cellsOf: walled(false) }))).toBe("none");
   });
 
-  it("climbs a slope gentler than the most it walks up, and not one too steep even slantwise", () => {
+  it("climbs a slope gentler than the most it walks up, and not a steeper one, even slanting across it", () => {
     const ramp = (rise) => world((x) => Math.max(0, Math.min(200, (x - 100) * rise)), () => NaN, 3);
     expect(run(new WalkSearch({ from: [50, 50], to: [600, 50], most: 2000, cellsOf: ramp(1) }))).toBe("found");
-    expect(run(new WalkSearch({ from: [50, 50], to: [600, 50], most: 2000, cellsOf: ramp(2) }))).toBe("none");
+    // 56°: a step slanting across it climbs less steeply than that.
+    expect(run(new WalkSearch({ from: [50, 50], to: [600, 50], most: 2000, cellsOf: ramp(1.5) }))).toBe("none");
   });
 
   it("swims across deep water, and tells how far it swam", () => {

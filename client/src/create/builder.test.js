@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CLIMB_FT, FAST, RUN_FT, SWIM_FT, SWIM_SPEED, moveBuilder } from "./builder.js";
+import { CLIMB_FT, FAST, RUN_FT, SLIDE_FT, SWIM_FT, SWIM_SPEED, moveBuilder } from "./builder.js";
 
 const still = { forward: 0, strafe: 0, turn: 0, rise: false, drop: false, takeoff: false };
 const flat = () => 100;
@@ -10,6 +10,20 @@ describe("the builder", () => {
     expect(s.z).toBeCloseTo(RUN_FT);
     expect(s.y).toBeCloseTo(100);
     expect(s.flying).toBe(false);
+  });
+
+  it("can't walk up ground steeper than it walks on, slanting across it or not, and slides down it", () => {
+    // Flat to x 10, then a face 60° steep.
+    const face = (x) => Math.max(0, x - 10) * 1.73;
+    let s = { x: 0, y: 0, z: 0, yaw: Math.PI / 4, flying: false };
+    for (let n = 0; n < 20; n++) s = moveBuilder(s, { ...still, forward: 1 }, 0.1, face);
+    expect(s.x).toBeLessThan(12);
+    expect(s.z).toBeGreaterThan(20);
+    const on = moveBuilder({ x: 30, y: face(30), z: 0, yaw: 0, flying: false }, still, 0.1, face);
+    expect(on.x).toBeCloseTo(30 - SLIDE_FT * 0.1);
+    // A 40° slope it walks up.
+    const gentle = moveBuilder({ x: 0, y: 0, z: 0, yaw: Math.PI / 2, flying: false }, { ...still, forward: 1 }, 1, (x) => x * 0.84);
+    expect(gentle.x).toBeCloseTo(RUN_FT);
   });
 
   it("takes off, rises while space is held, and hovers when it isn't", () => {

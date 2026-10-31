@@ -1,12 +1,15 @@
 import * as THREE from "three";
 import { TURN_RATE } from "../character/posed.js";
-import { SEA_LEVEL_FT } from "../v2/sizes.js";
+import { CELL_FT, SEA_LEVEL_FT } from "../v2/sizes.js";
 import { Figure } from "./figure.js";
+import { WALK_DEG } from "./growth.js";
 
 // The builder: a person (figure.js) who walks on the ground and flies over it, with a camera
 // behind them.
 //
-// On the ground: W/S run forward and back, A/D turn, Q/E strafe, and space takes off. In water
+// On the ground: W/S run forward and back, A/D turn, Q/E strafe, and space takes off. They can't
+// walk up onto ground whose face is steeper than WALK_DEG, whichever way they go up it, and slide
+// down it at SLIDE_FT where they're on it. In water
 // deeper than SWIM_FT they swim, slower, floating with their feet that far under its surface, or
 // anywhere under it: forward goes the way the camera looks, so looking down past where it rests
 // dives and looking up rises, space swims up and F down, and they stay where they are when still,
@@ -30,6 +33,8 @@ export const CLIMB_PER_FT = 0.8; // so height doubles about every 0.9 seconds
 export const FAST = 3; // how much faster a double-tapped key goes
 export const LIFT_FT = 1; // how far taking off rises at once
 export const CEILING_FT = 150000;
+export const SLIDE_FT = 30; // a second, down ground too steep to walk on
+const STEEPEST = Math.tan((WALK_DEG * Math.PI) / 180); // rise over run
 const DOUBLE_TAP_MS = 300;
 const EYE_FT = 5.5;
 const CAMERA = { distance: 30, min: 4, max: 2000, pitch: 0.35, minPitch: -1.3, maxPitch: 1.45 };
@@ -70,8 +75,9 @@ export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z],
   if (length) {
     x += (mx / length) * speed * ahead * dt;
     z += (mz / length) * speed * ahead * dt;
-    if (!flying) [x, z] = push(x, z);
+    if (!flying) [x, z] = push(...offSteep(state.x, state.z, x, z, groundAt));
   }
+  if (!flying && !swimming) [x, z] = slide(x, z, dt, groundAt);
   if (swimming) {
     const up = (length ? (input.forward * ahead * Math.sin(input.pitch ?? 0)) / length : 0) + rise - drop;
     y = Math.min(ground(x, z), Math.max(bed(x, z), y + up * speed * dt));
@@ -92,6 +98,32 @@ export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z],
     flying = false;
   }
   return { x, y, z, yaw, flying, swimming: !flying && deep(x, z, groundAt, waterAt) };
+}
+
+// How steep the ground's face is at (x, z), rise over run.
+export function steepness(x, z, groundAt) {
+  const h = (a, b) => groundAt(a, b) ?? SEA_LEVEL_FT;
+  const d = CELL_FT / 2;
+  return Math.hypot(h(x + d, z) - h(x - d, z), h(x, z + d) - h(x, z - d)) / (2 * d);
+}
+
+// Where walking from (x0, z0) to (x, z) ends: there, or where it isn't up onto ground too steep,
+// going only across or only along, or nowhere.
+function offSteep(x0, z0, x, z, groundAt) {
+  const from = groundAt(x0, z0) ?? SEA_LEVEL_FT;
+  const fine = (a, b) => (groundAt(a, b) ?? SEA_LEVEL_FT) <= from || steepness(a, b, groundAt) <= STEEPEST;
+  return [[x, z], [x, z0], [x0, z]].find(([a, b]) => fine(a, b)) ?? [x0, z0];
+}
+
+// Where standing at (x, z) for dt slides to, down the ground where it's too steep.
+function slide(x, z, dt, groundAt) {
+  const steep = steepness(x, z, groundAt);
+  if (steep <= STEEPEST) return [x, z];
+  const h = (a, b) => groundAt(a, b) ?? SEA_LEVEL_FT;
+  const d = CELL_FT / 2;
+  const [gx, gz] = [h(x + d, z) - h(x - d, z), h(x, z + d) - h(x, z - d)];
+  const length = Math.hypot(gx, gz);
+  return [x - (gx / length) * SLIDE_FT * dt, z - (gz / length) * SLIDE_FT * dt];
 }
 
 // Whether the water at (x, z) is deep enough to swim in.

@@ -4,8 +4,9 @@ import { WALK_DEG } from "./growth.js";
 
 // Planning's path tool's search: the shortest way on foot or swimming from one point to another,
 // no longer than `most` ft, over the ground's cells. A step's to one of the 8 cells round a cell,
-// CELL_FT straight or about 1.41 of that across, and it's walked where it climbs or drops no more
-// than WALK_DEG, or swum where both cells' water is deeper than SWIM_FT: swimmers are at its
+// CELL_FT straight or about 1.41 of that across. It's walked onto a cell whose face is no steeper
+// than WALK_DEG, whichever way it's crossed, climbing or dropping no more than that face would
+// across CELL_FT; or swum where both cells' water is deeper than SWIM_FT: swimmers are at its
 // surface, so getting out wants a bank near its level. Where there are no tiles is open sea. It's
 // searched a few thousand cells at a time (step()), nearest first by how far they are on foot and
 // how far they'd still be in a straight line (A*), so it spreads from the start like water, leaning
@@ -31,8 +32,10 @@ const UNSEEN = 0xffff;
 const START = 15;
 const CLOSED = 0x80;
 const DEEP = 0x40;
+const STEEP = 0x20; // its face is too steep to walk on
 const WAY = 0x0f; // which of STEPS came into a cell
-const RISE = Math.tan((WALK_DEG * Math.PI) / 180); // the most a step climbs, for each foot along
+const STEEPEST = Math.tan((WALK_DEG * Math.PI) / 180); // rise over run
+const MOST_STEP = CELL_FT * STEEPEST * HALF_FT; // the most a step climbs or drops, in half feet
 export const MOST_TILES = 8000;
 export const TILE_BYTES = CELLS * 5;
 
@@ -71,11 +74,13 @@ export class WalkSearch {
       }
       const [i, j] = [k % TILE_CELLS, Math.floor(k / TILE_CELLS)];
       const c = j * CORNERS + i;
-      const ground = (cells.heights[c] + cells.heights[c + 1] + cells.heights[c + CORNERS] + cells.heights[c + CORNERS + 1]) / 4;
+      const [nw, ne, sw, se] = [cells.heights[c], cells.heights[c + 1], cells.heights[c + CORNERS], cells.heights[c + CORNERS + 1]];
+      const ground = (nw + ne + sw + se) / 4;
       const water = cells.water?.level[k];
       const deep = water - ground > SWIM_FT;
       tile.height[k] = Math.round((deep ? water : ground) * HALF_FT);
       if (deep) tile.way[k] = DEEP;
+      else if (Math.hypot(ne + se - nw - sw, sw + se - nw - ne) / (2 * CELL_FT) > STEEPEST) tile.way[k] = STEEP;
     }
     this.slots.set(key, tile.slot);
     this.tiles.push(tile);
@@ -103,7 +108,7 @@ export class WalkSearch {
       if (!start) return "waiting";
       const [tile, k] = start;
       tile.g[k] = 0;
-      tile.way[k] = (tile.way[k] & DEEP) | START;
+      tile.way[k] = (tile.way[k] & (DEEP | STEEP)) | START;
       this.heap.push(tile.slot * CELLS + k, this.left(...this.start));
     }
     for (let n = 0; n < count; n++) {
@@ -132,12 +137,12 @@ export class WalkSearch {
         const [next, m] = this.at(i + di, j + dj);
         if (next.way[m] & CLOSED) return;
         const swum = deep && next.way[m] & DEEP;
-        if (!swum && Math.abs(next.height[m] - h) > (cost / 8) * CELL_FT * RISE * HALF_FT) return;
+        if (!swum && (next.way[m] & STEEP || Math.abs(next.height[m] - h) > MOST_STEP)) return;
         const to = g + cost;
         const guess = to + this.left(i + di, j + dj);
         if (to >= next.g[m] || guess > this.most) return;
         next.g[m] = to;
-        next.way[m] = (next.way[m] & DEEP) | way;
+        next.way[m] = (next.way[m] & (DEEP | STEEP)) | way;
         this.heap.push(next.slot * CELLS + m, guess);
       });
     }
