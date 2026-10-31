@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { objectMeshes } from "../editor/objectMeshes.js";
 import { PlacePicker } from "../editor/placePicker.js";
 import { slabMeshes } from "../editor/slabMeshes.js";
@@ -12,7 +13,7 @@ import { MAX_STAIR_DEG, SLAB_REACH_FT, cutSlab, defaultSteps, inPolygon, rampSla
 import { pressing } from "./press.js";
 import { captureTemplate, placedTemplate } from "../world/templates.js";
 import { CLIPBOARD_PREFIX } from "./library.js";
-import { homeOf, isSlab, readyObject } from "./placed.js";
+import { isSlab, readyObject } from "./placed.js";
 import { footprint, templateDiff } from "./templateDiff.js";
 import { drawable, slabSpace } from "./things.js";
 
@@ -36,7 +37,8 @@ import { drawable, slabSpace } from "./things.js";
 //   corners in a plane make a ramp, so it can be a parallelogram or narrow, but none steeper than
 //   can be walked up.
 // - pick: clicking an object or slab picks it out, shift picks more or fewer, and dragging a box
-//   picks those in it. Dragging picked things moves them, C and V turn them about their middle,
+//   picks those in it. Dragging picked things moves them, and so do the handles at their middle,
+//   which move them along each axis and turn them, as one, about their middle. C and V turn them,
 //   the up and down arrows raise and lower them, and Delete deletes them. What's picked can be
 //   made a template, or copied: a template kept in this browser, not the world, till the next
 //   copy, that paste arms the template tool with.
@@ -88,6 +90,30 @@ export class Build {
   constructor({ scene, camera, canvas, placed, things, library, groundAt, ray, groundHit }) {
     Object.assign(this, { scene, camera, canvas, placed, things, library, groundAt, ray, groundHit });
     mountSwatches();
+    // The handles moving and turning what's picked as one: arrows and planes that move it, and a
+    // ring round them that turns it about the upright line through its middle (objects only yaw).
+    this.pivot = new THREE.Object3D();
+    this.pivot.rotation.order = "YXZ";
+    scene.add(this.pivot);
+    this.mover = new TransformControls(camera, canvas);
+    this.turner = new TransformControls(camera, canvas);
+    this.turner.setMode("rotate");
+    this.turner.setSpace("world");
+    this.turner.setSize(2.4); // its ring well outside the arrows
+    Object.assign(this.turner, { showX: false, showZ: false, showXYZE: false });
+    this.turner.setRotationSnap(THREE.MathUtils.degToRad(TURN_DEG));
+    // Where the arrows and ring still overlap on the screen, a press is the arrows'. (Capturing, this
+    // runs before the handles' own listeners.)
+    canvas.addEventListener("pointerdown", () => (this.turner.enabled = !(this.mover.axis && this.turner.axis)), { capture: true });
+    canvas.addEventListener("pointerup", () => (this.turner.enabled = this.mover.enabled = true), { capture: true });
+    for (const handles of [this.mover, this.turner]) {
+      scene.add(handles.getHelper());
+      handles.addEventListener("dragging-changed", (e) => this.handleDrag(e.value));
+      handles.addEventListener("objectChange", () => this.handleMoved());
+    }
+    this.handling = null; // a drag of the handles: { at (the pivot's last position), yaw, joined }
+    this.pickedChanges = 0; // counts changes to what's picked, to put the handles at its middle
+    this.handlesFor = "";
     this.tool = null;
     this.armed = { object: null, template: null }; // the type picked of each
     this.yaw = 0; // radians, objects' and templates' turn
@@ -190,6 +216,9 @@ export class Build {
     this.say("");
     this.drawing = this.moving = this.box = this.outlining = this.stair = this.ramp = null;
     this.snapMark.visible = false;
+    this.mover.detach();
+    this.turner.detach();
+    this.handlesFor = "";
     this.showStair();
     this.showRamp();
     this.boxEl.hidden = true;
@@ -364,7 +393,7 @@ export class Build {
       this.drawing = { a, from: this.snapped, yaw: grid ? Math.round(this.cameraYaw() / 90) * 90 : this.cameraYaw(), pieces: [] };
       return;
     }
-    if (this.tool !== "pick") return;
+    if (this.tool !== "pick" || this.onHandles()) return;
     const picked = this.things.picked;
     if (hit?.thing) {
       if (e.shiftKey) {
@@ -390,6 +419,7 @@ export class Build {
 
   move(e) {
     this.free = e.shiftKey;
+    this.turner.setRotationSnap(e.shiftKey ? null : THREE.MathUtils.degToRad(TURN_DEG));
     // Where a slab or stairs would start snaps, shown before it's started.
     const starting = (this.tool === "slab" && !["door", "window"].includes(this.slab.mode) && !this.drawing && !this.outlining) || (this.tool === "stairs" && !this.stair) || (this.tool === "ramp" && (!this.ramp || this.ramp.phase === "top"));
     if (starting) this.snap(this.hit()?.at ?? null, false, this.tool === "slab" && this.slab.grid && this.slab.mode !== "roof");
@@ -874,6 +904,7 @@ export class Build {
 
   // Each frame: the thing armed follows the pointer.
   tick() {
+    this.placeHandles();
     if (this.drawing || this.outlining || this.stair || this.ramp) return;
     const type = this.tool === "object" ? this.armed.object : this.tool === "template" ? this.armed.template : null;
     const hit = type && this.hit();
@@ -924,6 +955,7 @@ export class Build {
 
   // What's picked: how many, an object's size when it's one alone, and making a template.
   showPicked() {
+    this.pickedChanges++;
     const picked = [...this.things.picked];
     $("pickedCount").textContent = picked.length ? `${picked.length} picked` : "Nothing picked.";
     $("pickedDelete").disabled = !picked.length;
@@ -959,20 +991,65 @@ export class Build {
   turnPicked(degrees) {
     const picked = [...this.things.picked];
     if (!picked.length) return;
-    const [cx, cz] = middleOf(picked.map(homeOf));
-    const r = (degrees * Math.PI) / 180;
-    const [c, s] = [Math.cos(r), Math.sin(r)];
-    const about = ([x, z]) => [cx + (x - cx) * c + (z - cz) * s, cz - (x - cx) * s + (z - cz) * c];
-    this.placed.alter(picked, (thing) => {
-      if (isSlab(thing)) {
-        const [x, z] = about([thing.at[0], thing.at[2]]);
-        thing.at = [x, thing.at[1], z];
-        thing.turn = [thing.turn[0] + degrees, thing.turn[1], thing.turn[2]];
-      } else {
-        thing.at = about(thing.at);
-        thing.yaw += r;
-      }
-    });
+    const [cx, , cz] = this.middleOfPicked(picked);
+    this.placed.alter(picked, (thing) => turnAbout(thing, cx, cz, degrees));
+  }
+
+  // The handles stand at the middle of what's picked, while the select tool's out and something's
+  // picked, and nothing's dragging them.
+  placeHandles() {
+    const picked = this.tool === "pick" ? [...this.things.picked] : [];
+    const key = `${this.tool}:${this.placed.version}:${this.pickedChanges}`;
+    if (this.handling || key === this.handlesFor) return;
+    this.handlesFor = key;
+    if (!picked.length) {
+      this.mover.detach();
+      this.turner.detach();
+      return;
+    }
+    this.pivot.position.set(...this.middleOfPicked(picked));
+    this.pivot.rotation.set(0, 0, 0);
+    this.mover.attach(this.pivot);
+    this.turner.attach(this.pivot);
+  }
+
+  // The middle of `picked`, [x, y, z]: of slabs' tops and objects' feet.
+  middleOfPicked(picked) {
+    return middleOf3(picked.map((thing) => (isSlab(thing) ? middleOf3(slabTop(thing)) : [thing.at[0], this.things.objectY(thing), thing.at[1]])));
+  }
+
+  // Whether the pointer's on a handle, so a click is theirs and not a pick.
+  onHandles() {
+    return Boolean(this.mover.object && (this.mover.axis || this.turner.axis));
+  }
+
+  // A drag of the handles starts or stops: one handle at a time, and one undoable change.
+  handleDrag(on) {
+    this.handling = on ? { at: this.pivot.position.clone(), yaw: this.pivot.rotation.y, joined: false } : null;
+    this.mover.enabled = this.turner.enabled = true;
+    if (on) (this.mover.dragging ? this.turner : this.mover).enabled = false;
+  }
+
+  // The handles moved: what's picked moves and turns with them.
+  handleMoved() {
+    const handling = this.handling;
+    if (!handling) return;
+    const d = this.pivot.position.clone().sub(handling.at);
+    let turn = this.pivot.rotation.y - handling.yaw;
+    turn = Math.atan2(Math.sin(turn), Math.cos(turn));
+    if (d.lengthSq() < 1e-8 && Math.abs(turn) < 1e-6) return;
+    const picked = [...this.things.picked];
+    const heights = new Map(picked.map((thing) => [thing, isSlab(thing) ? 0 : this.things.objectY(thing)]));
+    const { x, z } = this.pivot.position;
+    this.placed.alter(
+      picked,
+      (thing) => {
+        shift(thing, d.x, d.z, d.y, heights.get(thing));
+        turnAbout(thing, x, z, THREE.MathUtils.radToDeg(turn));
+      },
+      handling.joined,
+    );
+    Object.assign(handling, { at: this.pivot.position.clone(), yaw: this.pivot.rotation.y, joined: true });
   }
 
   // What's picked as a template, standing on the ground under it, named `name`.
@@ -1134,6 +1211,25 @@ function shift(thing, dx, dz, dy, y) {
   thing.at = [thing.at[0] + dx, thing.at[1] + dz];
   if (dy) thing.y = (Number.isFinite(thing.y) ? thing.y : y) + dy;
 }
+
+// Turns a thing `degrees` about the upright line through [cx, cz].
+function turnAbout(thing, cx, cz, degrees) {
+  if (!degrees) return;
+  const r = (degrees * Math.PI) / 180;
+  const [c, s] = [Math.cos(r), Math.sin(r)];
+  const about = ([x, z]) => [cx + (x - cx) * c + (z - cz) * s, cz - (x - cx) * s + (z - cz) * c];
+  const tidy = (v) => Math.round(v * 1000) / 1000 + 0;
+  if (isSlab(thing)) {
+    const [x, z] = about([thing.at[0], thing.at[2]]);
+    thing.at = [tidy(x), thing.at[1], tidy(z)];
+    thing.turn = [tidy(((((thing.turn[0] + degrees + 180) % 360) + 360) % 360) - 180), thing.turn[1], thing.turn[2]];
+  } else {
+    thing.at = about(thing.at).map(tidy);
+    thing.yaw += r;
+  }
+}
+
+const middleOf3 = (points) => [0, 1, 2].map((i) => points.reduce((sum, p) => sum + p[i], 0) / points.length);
 
 const middleOf = (points) => [points.reduce((s, p) => s + p[0], 0) / points.length, points.reduce((s, p) => s + (p.length === 3 ? p[2] : p[1]), 0) / points.length];
 
