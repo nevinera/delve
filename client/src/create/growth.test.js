@@ -102,67 +102,82 @@ describe("cliff", () => {
     [0, 0],
     [1000, 0],
   ];
-  const settings = { width: 300, height: 60, noise: 0 };
+  const settings = { width: 300, noise: 0 };
   // Ground rising to the line's right, going along it (+z), or its left.
   const right = (x, z) => z * 0.1;
   const left = (x, z) => -z * 0.1;
+  // The ground's height across the line at x once the cliff's grown, every foot from -400 to 400.
+  const across = (grown, ground, x) => Array.from({ length: 801 }, (_, k) => ground(x, k - 400) + grown.raise(x, k - 400, 0));
+  const steepest = (heights) => Math.max(...heights.slice(1).map((h, k) => Math.abs(h - heights[k])));
 
-  it("raises the ground on whichever side's higher, and none on the other", () => {
-    const up = growth("cliff", line, settings, right);
-    expect(up.flat).toBe(false);
-    expect(up.raise(500, 120, 0)).toBeGreaterThan(55);
-    expect(up.raise(500, -120, 0)).toBe(0);
-    expect(up.raise(500, 400, 0)).toBe(0);
-    const down = growth("cliff", line, settings, left);
-    expect(down.raise(500, -120, 0)).toBeGreaterThan(55);
-    expect(down.raise(500, 120, 0)).toBe(0);
+  it("gathers the ground's rise across the line into a step up to the higher side", () => {
+    for (const ground of [right, left]) {
+      const grown = growth("cliff", line, settings, ground);
+      expect(grown.flat).toBe(false);
+      const heights = across(grown, ground, 500);
+      expect((Math.atan(steepest(heights)) * 180) / Math.PI).toBeGreaterThan(WALK_DEG);
+      // As it was past the band, and no higher or lower than it was at its edges.
+      expect(grown.raise(500, 320, 0)).toBe(0);
+      expect(grown.raise(500, -320, 0)).toBe(0);
+      expect(Math.max(...heights)).toBeCloseTo(40, 0);
+      expect(Math.min(...heights)).toBeCloseTo(-40, 0);
+    }
   });
 
-  it("makes a little cliff where the ground's only a little higher, and none where it's flat", () => {
-    const slight = growth("cliff", line, settings, (x, z) => z * 0.01);
-    expect(slight.flat).toBe(false);
-    expect(slight.raise(500, 120, 0)).toBeGreaterThan(5);
-    expect(slight.raise(500, 120, 0)).toBeLessThan(30);
+  it("isn't a plateau: the ground keeps rising behind its top", () => {
+    const grown = growth("cliff", line, settings, right);
+    const heights = across(grown, right, 500);
+    expect(heights[400 + 280]).toBeGreaterThan(heights[400 + 120] + 2);
+    expect(heights[400 - 120]).toBeGreaterThan(heights[400 - 280] + 2);
+  });
+
+  it("makes a little step where the ground's only a little higher, and none where it's flat", () => {
+    const slight = (x, z) => z * 0.01;
+    const small = growth("cliff", line, settings, slight);
+    expect(small.flat).toBe(false);
+    const step = steepest(across(small, slight, 500));
+    expect(step).toBeGreaterThan(0.1);
+    expect(step).toBeLessThan(steepest(across(growth("cliff", line, settings, right), right, 500)) / 4);
     const flat = growth("cliff", line, settings, () => 0);
     expect(flat.flat).toBe(true);
-    expect(flat.raise(500, 120, 0)).toBe(0);
-    expect(flat.raise(500, -120, 0)).toBe(0);
+    expect(flat.raise(500, 50, 0)).toBe(0);
   });
 
-  it("rises on the side higher along most of the line, and not where it rises the other way", () => {
+  it("steps up to the side higher along most of the line, and not where it rises the other way", () => {
     const long = [
       [0, 0],
       [4000, 0],
     ];
     // Higher on the right for the first three quarters, the left after.
-    const grown = growth("cliff", long, settings, (x, z) => (x < 3000 ? z : -z) * 0.1);
-    expect(grown.raise(1500, 120, 0)).toBeGreaterThan(55);
-    expect(grown.raise(1500, -120, 0)).toBe(0);
-    expect(grown.raise(3600, 120, 0)).toBe(0);
-    expect(grown.raise(3600, -120, 0)).toBe(0);
+    const ground = (x, z) => (x < 3000 ? z : -z) * 0.1;
+    const grown = growth("cliff", long, settings, ground);
+    expect(steepest(across(grown, ground, 1500))).toBeGreaterThan(2);
+    expect(steepest(across(grown, ground, 3700))).toBeLessThan(0.15);
   });
 
-  it("meanders, with a face steeper than a character walks up, lower by its ends", () => {
+  it("eases out to no step at its ends", () => {
     const grown = growth("cliff", line, settings, right);
-    // Where its face crosses the middle of its height, along it.
-    const faceAt = (x) => {
-      for (let z = -100; z <= 100; z += 0.5) if (grown.raise(x, z, 0) > 30) return z;
-      return null;
-    };
-    const faces = [100, 300, 500, 700, 900].map(faceAt);
+    const steps = [5, 75, 150, 300].map((x) => steepest(across(grown, right, x)));
+    for (let k = 1; k < steps.length; k++) expect(steps[k]).toBeGreaterThan(steps[k - 1]);
+    expect(steps[0]).toBeLessThan(0.15);
+  });
+
+  it("meanders", () => {
+    const grown = growth("cliff", line, settings, right);
+    const faces = [300, 400, 500, 600, 700].map((x) => {
+      const heights = across(grown, right, x);
+      let [most, at] = [0, 0];
+      heights.slice(1).forEach((h, k) => h - heights[k] > most && ([most, at] = [h - heights[k], k]));
+      return at;
+    });
     expect(Math.max(...faces) - Math.min(...faces)).toBeGreaterThan(8);
-    let steepest = 0;
-    for (let z = -100; z <= 100; z += 1) steepest = Math.max(steepest, grown.raise(500, z + 1, 0) - grown.raise(500, z, 0));
-    expect((Math.atan(steepest) * 180) / Math.PI).toBeGreaterThan(WALK_DEG);
-    expect(grown.raise(10, 120, 0)).toBeLessThan(5);
-    expect(grown.zone(500, 150)).toBe(2);
-    expect(grown.zone(500, -150)).toBe(0);
   });
 
   it("can't be walked up, but round its ends, unless it's too low", () => {
     const r = raises(growth("cliff", line, settings, right), right);
     expect(r.step).toBe(4);
     expect(crossing(r)).toBeNull();
-    expect(crossing(raises(growth("cliff", line, { ...settings, height: 1 }, right), right))).not.toBeNull();
+    const gentle = (x, z) => z * 0.005;
+    expect(crossing(raises(growth("cliff", line, settings, gentle), gentle))).not.toBeNull();
   });
 });

@@ -32,7 +32,7 @@ const LIFT_FT = 2;
 export const DEFAULTS = {
   hills: { width: 5280, height: 300, noise: 0.6, density: 3, impassable: true },
   range: { width: 10560, height: 1500, noise: 0.6, density: 3, impassable: true },
-  cliff: { width: 300, height: 60, noise: 0.6, density: 1, impassable: true },
+  cliff: { width: 300, noise: 0.6, impassable: false },
 };
 // How finely each kind's grown: a cliff's face is too narrow for chunks.
 const LEVELS = { hills: CHUNKS, range: CHUNKS, cliff: CELLS };
@@ -190,7 +190,8 @@ export class Draw {
     this.flat = Boolean(grown.flat);
     const { height } = this.settings[this.kind];
     this.peaks = grown.peaks.map((peak) => ({ ...peak, y: this.heightAt(peak.x, peak.z) + LIFT_FT, size: DOT_PX[0] + (DOT_PX[1] - DOT_PX[0]) * (peak.tall / height) }));
-    this.fat(grown.line.points.map(([x, z], k) => [x, grown.base(grown.line.along[k]) + height, z]), this.aimMaterial, "aim");
+    const aim = grown.aim ?? ((s) => grown.base(s) + height);
+    this.fat(grown.line.points.map(([x, z], k) => [x, aim(grown.line.along[k]), z]), this.aimMaterial, "aim");
     const [x0, z0, x1, z1] = grown.bounds;
     const step = Math.max(x1 - x0, z1 - z0) / PREVIEW_CELLS;
     const [nx, nz] = [Math.ceil((x1 - x0) / step) + 1, Math.ceil((z1 - z0) / step) + 1];

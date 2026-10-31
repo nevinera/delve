@@ -139,7 +139,7 @@
         <label>width <output id="growWidthOut"></output>
           <input id="growWidth" type="range" min="0" max="1000">
         </label>
-        <label>height <output id="growHeightOut"></output>
+        <label data-grown="hills range">height <output id="growHeightOut"></output>
           <input id="growHeight" type="range" min="0" max="1000">
         </label>
         <label data-grown="hills range">density <output id="growDensityOut"></output>
@@ -151,7 +151,7 @@
         <label class="create-check"><input type="checkbox" id="growImpassable" checked> impassable</label>
         <p class="create-note create-warn" id="growFlat" hidden>Not grown: the ground's flat across the whole line, so neither side is higher to rise on.</p>
         <p class="create-note create-warn" id="growPassable" hidden>Not grown: there's a way across, drawn in red. Make it taller or denser, or let it be passable.</p>
-        <p class="create-note" data-grown="cliff">The cliff rises on the side of the line that's higher along most of it, shorter where the ground's only a little higher, and not where it's flat or higher on the other side. Height is the most it rises, and width how far back its top goes. Its face is shaded orange, its top lighter and where it eases down behind yellow. The blue line floats at the height of its top.</p>
+        <p class="create-note" data-grown="cliff">The cliff gathers the rise the ground already has across the line, out to its width either side, into a step at the line, up to the side that's higher along most of it. It's taller where the ground rises more, none where it's flat or higher on the other side, and it eases out to nothing at its ends. Its face is shaded orange, the ground it takes the rise from lighter. The blue line floats at the height of its top.</p>
         <p class="create-note" data-grown="hills range">Width is the whole band. Dots are the peaks to grow, bigger for taller: tallest in the orange middle third, smaller across the middle two, low hills out to the yellow edge. The blue line floats at the height it aims for.</p>
         <div class="create-way">
           <button type="button" id="growBack">back</button>

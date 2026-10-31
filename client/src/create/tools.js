@@ -488,6 +488,7 @@ export class Tools {
     $("growImpassable").checked = settings.impassable;
     for (const part of document.querySelectorAll("[data-grown]")) part.hidden = !part.dataset.grown.split(" ").includes(kind);
     for (const [id, read] of Object.entries(GROW_SLIDERS)) {
+      if (settings[id.replace("grow", "").toLowerCase()] === undefined) continue;
       $(id).value = String(read.get(settings, kind));
       $(`${id}Out`).textContent = read.show(settings);
     }
