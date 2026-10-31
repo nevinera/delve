@@ -36,6 +36,7 @@
         <strong><%= repo["name"] %></strong>
         <span class="muted"><%= repo["full_name"] %><%= ", private" if repo["private"] %></span>
         <%= link_to "open", editor_path(from: "github/#{repo["full_name"]}") %>
+        <%= link_to "build", create_path(from: "github/#{repo["full_name"]}") %>
       </li>
     <% end %>
   </ul>

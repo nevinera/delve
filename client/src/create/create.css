@@ -242,6 +242,41 @@ body.create {
   color: #ff9a80;
 }
 
+.create-repo {
+  display: grid;
+  gap: 4px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid #44444e;
+}
+
+.create-repo h3 {
+  margin: 0;
+  font-size: 12px;
+}
+
+.create-repo p {
+  margin: 0;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.create-repo form,
+#openRepo {
+  display: flex;
+  gap: 4px;
+}
+
+.create-repo input {
+  min-width: 0;
+  flex: 1;
+}
+
+.create-repo form button {
+  width: auto;
+  flex: none;
+}
+
 #side button:disabled {
   opacity: 0.45;
   cursor: default;

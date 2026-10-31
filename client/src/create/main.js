@@ -1,6 +1,6 @@
 import "./create.css";
 import * as THREE from "three";
-import { strFromU8, strToU8, unzipSync, zip } from "fflate";
+import { strFromU8, strToU8, unzipSync, zip, zipSync } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
 import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
@@ -24,11 +24,13 @@ import { pressesOver } from "./press.js";
 import { readLibrary, store, writeLibrary } from "./store.js";
 import { LibrarySync } from "../editor/libraryStore.js";
 import { Things } from "./things.js";
+import { GithubAuthError, GithubClient } from "../github/github.js";
+import { BranchMoved, fromRepo, loadRepo, nextVersion, recordOpened, repoChanges, sameRepo, saveRepo } from "./repo.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
-// The world comes from a zip you upload (script/convert-v2.mjs makes one from a v1 world), kept in
-// this browser so a reload opens it again, with the builder where they were. Uploading another
-// replaces it. Downloading it gives a zip of it with the ground as it's been moved. A new world has
+// The world comes from a zip you upload (script/convert-v2.mjs makes one from a v1 world) or a
+// GitHub repo (`?from=github/owner/repo`, repo.js), kept in this browser so a reload opens it
+// again, with the builder where they were. Opening another replaces it. Downloading it gives a zip of it with the ground as it's been moved. A new world has
 // nothing in it: no tiles, all sea.
 
 const $ = (id) => document.getElementById(id);
@@ -44,15 +46,16 @@ const BUILDER_RADIUS_FT = 1; // how much room the builder takes, walking among t
 const STEP_FT = 2.5; // how far up the builder steps onto a slab
 const INFO_EVERY_MS = 100;
 
-// The world's kept in IndexedDB (store.js): the zip opened last, and the files changed since, saved
-// a little after each change, so a reload opens the world as it was left.
+// The world's kept in IndexedDB (store.js): the zip opened last, or the files of the repo's commit
+// opened or saved last, with that commit ("source"), and the files changed since, saved a little
+// after each change, so a reload opens the world as it was left.
 const SAVE_CHANGES_MS = 3000;
 
 // A v2 world's name, its files (path -> bytes) and its first continent's renditions, from the zip's
-// bytes, with `changes` (path -> bytes) in place of its own files.
-function readWorld(bytes, changes = new Map()) {
-  let files = Object.entries(unzipSync(bytes));
-  if (!files.some(([path]) => path === "world.json")) {
+// bytes or its files, with `changes` (path -> bytes) in place of its own files.
+function readWorld(base, changes = new Map()) {
+  let files = base instanceof Map ? [...base] : Object.entries(unzipSync(base));
+  if (!(base instanceof Map) && !files.some(([path]) => path === "world.json")) {
     const top = files[0][0].split("/")[0];
     files = files.map(([path, b]) => [path.slice(top.length + 1), b]);
   }
@@ -79,16 +82,22 @@ function readWorld(bytes, changes = new Map()) {
   return { name: info.name, files: new Map(files), continent, renditions };
 }
 
-// Saves the world as a zip, with the files changed since it was opened, `changes` (path -> bytes,
-// null for gone), saved first by save(). Files gzipped already are stored as they are, and the rest
-// (text plates and platters among them) deflated, zipped off the page's thread.
-async function download({ name, files }, changes, save) {
-  await save();
+// The world's files with `changes` (path -> bytes, null for gone) in place of its own.
+function withChanges(files, changes) {
   const out = new Map(files);
   for (const [path, bytes] of changes) {
     if (bytes) out.set(path, bytes);
     else out.delete(path);
   }
+  return out;
+}
+
+// Saves the world as a zip, with the files changed since it was opened, `changes`, saved first by
+// save(). Files gzipped already are stored as they are, and the rest (text plates and platters
+// among them) deflated, zipped off the page's thread.
+async function download({ name, files }, changes, save) {
+  await save();
+  const out = withChanges(files, changes);
   const zipped = await new Promise((resolve, reject) => zip(Object.fromEntries([...out].map(([path, bytes]) => [path, [bytes, { level: bytes[0] === 0x1f && bytes[1] === 0x8b ? 0 : 6 }]])), (error, bytes) => (error ? reject(error) : resolve(bytes))));
   const link = document.createElement("a");
   link.href = URL.createObjectURL(new Blob([zipped], { type: "application/zip" }));
@@ -278,6 +287,7 @@ function start(world, changes, fresh) {
       [downloadButton.disabled, downloadButton.textContent] = [false, "download world"];
     }
   });
+  repoTools(world, changes, save);
   let lastInfo = 0;
   const compass = new Compass($("stage"), document.querySelector(".create-bar"));
   const feet = (ft) => `${Math.round(ft).toLocaleString()} ft`;
@@ -408,9 +418,9 @@ function start(world, changes, fresh) {
   requestAnimationFrame(frame);
 }
 
-async function open(bytes, changes = new Map(), fresh = false) {
+async function open(base, changes = new Map(), fresh = false) {
   try {
-    start(readWorld(bytes, changes), changes, fresh);
+    start(readWorld(base, changes), changes, fresh);
     showing = true;
     return true;
   } catch (e) {
@@ -419,13 +429,104 @@ async function open(bytes, changes = new Map(), fresh = false) {
   }
 }
 
-// A world opened while another's showing replaces it: kept, then the page loads again with it.
+// GitHub, in the manage tools: the repo the world came from, saving to it as one commit, and
+// publishing that commit as the next version.
+function repoTools(world, changes, save) {
+  const status = (text) => ($("repoStatus").textContent = text);
+  const buttons = [$("repoSave"), $("repoPublish")];
+  let busy = false;
+  const show = () => {
+    $("repoSource").textContent = source ? `${source.repo}, ${source.branch} at ${source.commitSha?.slice(0, 7) ?? "no commits yet"}` : "not kept in a repo";
+    for (const button of buttons) button.disabled = busy || !source;
+  };
+  show();
+  const run = async (doing, act) => {
+    if (busy || !source) return;
+    busy = true;
+    show();
+    try {
+      await save();
+      await act(new GithubClient(source.repo));
+    } catch (e) {
+      console.error(`couldn't ${doing}`, e);
+      if (e instanceof BranchMoved) status(`${e.message}: download the world to keep your changes, then open the repo again.`);
+      else if (e instanceof GithubAuthError) status("Connect GitHub first, from your worlds page.");
+      else status(`Couldn't ${doing}: ${e.message}`);
+    } finally {
+      busy = false;
+      show();
+    }
+  };
+  $("repoSave").addEventListener("click", () =>
+    run("save", async (client) => {
+      const files = withChanges(world.files, changes);
+      const message = $("repoMessage").value.trim() || "Save from /create";
+      const next = await saveRepo(client, files, source, { message, log: status, onProgress: ({ done, total }) => status(`Sending ${done} of ${total} files…`) });
+      if (!next) return status("Nothing's changed since the last save.");
+      // What was committed is the world's files now; what changed meanwhile stays a change.
+      for (const [path, bytes] of [...changes]) if (bytes === null ? !files.has(path) : files.get(path) === bytes) changes.delete(path);
+      for (const path of [...world.files.keys()]) if (!files.has(path)) world.files.delete(path);
+      for (const [path, bytes] of files) world.files.set(path, bytes);
+      source = next;
+      await store.set("world", files);
+      await store.set("changes", changes);
+      await store.set("source", source);
+      $("repoMessage").value = "";
+      status(`Saved ${next.commitSha.slice(0, 7)}.`);
+    }),
+  );
+  $("repoPublish").addEventListener("click", () =>
+    run("publish", async (client) => {
+      if (!source.commitSha || Object.keys((await repoChanges(withChanges(world.files, changes), source)).changes).length) return status("Save to GitHub first: publishing tags the saved commit.");
+      const tags = await client.tags();
+      const already = tags.find((tag) => tag.sha === source.commitSha);
+      if (already) return status(`${source.commitSha.slice(0, 7)} is published already, as ${already.name}.`);
+      const name = nextVersion(tags);
+      if (!window.confirm(`Publish ${source.commitSha.slice(0, 7)} as ${name}?`)) return;
+      await client.createTag(name, source.commitSha);
+      status(`Published ${name}.`);
+    }),
+  );
+}
+
+// Opening a repo, from the manage tools or the open screen, goes to its address, which opens it.
+for (const form of [$("repoOpen"), $("openRepo")]) {
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const repo = form.querySelector("input").value.trim().replace(/^https:\/\/github\.com\//, "").replace(/\.git$|\/$/g, "");
+    if (fromRepo(`github/${repo}`)) window.location.search = `?from=github/${repo}`;
+    else $(form.id === "openRepo" ? "openError" : "repoStatus").textContent = "Give the repo as owner/name.";
+  });
+}
+
+// The files at the head of `repo`, kept in place of the world kept here, or null when that's the
+// one to open: it's that commit already, or you'd rather keep its changes. Throws when it can't.
+async function openRepo(repo, kept, keptChanges) {
+  const client = new GithubClient(repo);
+  $("open").hidden = false;
+  $("openError").textContent = `Opening ${repo}…`;
+  const head = await client.headSha(await client.defaultBranch());
+  if (kept && sameRepo(source?.repo, repo) && source.commitSha === head) return null;
+  const lose = source && !sameRepo(source.repo, repo) ? `${source.repo}'s` : "its";
+  if (kept && keptChanges?.size && !window.confirm(`Open ${repo} from GitHub? It replaces the world kept in this browser, and ${lose} changes are lost unless you've saved or downloaded them.`)) return null;
+  const sameKept = kept instanceof Map && sameRepo(source?.repo, repo) ? { files: kept, source } : null;
+  const loaded = await loadRepo(client, { kept: sameKept, onProgress: ({ done, total }) => ($("openError").textContent = `Downloading ${done} of ${total} files…`) });
+  const { name } = readWorld(loaded.files);
+  await keepNew(loaded.files, false, loaded.source);
+  source = loaded.source;
+  recordOpened(repo, name).catch((e) => console.error("couldn't add the world to your list", e));
+  return loaded.files;
+}
+
+// A world opened while another's showing replaces it: kept, then the page loads again with it,
+// at /create alone, not a repo's address.
 let showing = false;
+const openKept = () => window.location.assign(window.location.pathname);
 $("openFile").addEventListener("change", async () => {
   const file = $("openFile").files[0];
   if (!file) return;
   const bytes = new Uint8Array(await file.arrayBuffer());
-  if (showing) {
+  if (showing || source) {
     try {
       readWorld(bytes);
     } catch (e) {
@@ -433,15 +534,15 @@ $("openFile").addEventListener("change", async () => {
       return;
     }
     await keepNew(bytes, true);
-    window.location.reload();
+    openKept();
     return;
   }
   if (await open(bytes, new Map(), true)) await keepNew(bytes);
 });
 // Starts an empty world in place of the one showing, after asking, since that's lost unless it's
-// been downloaded.
+// been downloaded or saved.
 $("newWorld").addEventListener("click", async () => {
-  if (showing && !window.confirm("Start a new, empty world? This one's lost unless you've downloaded it.")) return;
+  if (showing && !window.confirm("Start a new, empty world? This one's lost unless you've downloaded or saved it.")) return;
   const info = { version: 2, name: "New world", continents: [{ key: "main", name: "Main" }], dungeons: [] };
   const bytes = zipSync({ "world.json": strToU8(`${JSON.stringify(info, null, 2)}\n`) });
   try {
@@ -449,7 +550,7 @@ $("newWorld").addEventListener("click", async () => {
   } catch {}
   if (showing) {
     await keepNew(bytes, true);
-    window.location.reload();
+    openKept();
   } else if (await open(bytes, new Map(), true)) await keepNew(bytes);
 });
 $("openWorld").addEventListener("click", () => {
@@ -458,16 +559,31 @@ $("openWorld").addEventListener("click", () => {
   $("openFile").click();
 });
 
-// Keeps a world just opened or made, in place of the one kept, `fresh` for opening it on the
-// reload to come.
-async function keepNew(bytes, fresh = false) {
-  await store.set("world", bytes).catch(() => {});
+// Keeps a world just opened or made, in place of the one kept: a zip's bytes, or a repo's files
+// with their source. `fresh` is for opening it on the reload to come.
+async function keepNew(base, fresh = false, from = null) {
+  await store.set("world", base).catch(() => {});
   await store.delete("changes");
+  if (from) await store.set("source", from).catch(() => {});
+  else await store.delete("source");
   if (fresh) await store.set("fresh", true).catch(() => {});
 }
 
 const kept = await store.get("world").catch(() => null);
 const changes = await store.get("changes").catch(() => null);
+let source = await store.get("source").catch(() => null);
 const fresh = !!(await store.get("fresh").catch(() => null));
 await store.delete("fresh");
-if (!kept || !(await open(kept, changes ?? new Map(), fresh))) $("open").hidden = false;
+const repo = fromRepo(new URLSearchParams(window.location.search).get("from"));
+let [opened, failed] = [null, false];
+try {
+  opened = repo && (await openRepo(repo, kept, changes));
+  $("openError").textContent = "";
+} catch (e) {
+  failed = true;
+  console.error(`couldn't open ${repo}`, e);
+  $("openError").textContent = e instanceof GithubAuthError ? "Connect GitHub first, from your worlds page." : `Couldn't open ${repo}: ${e.message}`;
+  $("openKept").hidden = !kept;
+}
+if (opened) await open(opened, new Map(), true);
+else if (!failed && (!kept || !(await open(kept, changes ?? new Map(), fresh)))) $("open").hidden = false;

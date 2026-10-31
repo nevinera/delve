@@ -18,6 +18,15 @@
       <button id="openWorld" type="button">upload world</button>
       <button id="downloadWorld" type="button">download world</button>
       <button id="newWorld" type="button" title="an empty world, all sea">new world</button>
+      <section class="create-repo" aria-label="GitHub">
+        <h3>GitHub</h3>
+        <p id="repoSource"></p>
+        <form id="repoOpen"><input placeholder="owner/repo" aria-label="GitHub repo" autocomplete="off"><button type="submit">open repo</button></form>
+        <input id="repoMessage" placeholder="what you changed" aria-label="commit message" autocomplete="off">
+        <button id="repoSave" type="button" title="commit what's changed to the repo's branch">save to GitHub</button>
+        <button id="repoPublish" type="button" title="tag the saved commit as the next version">publish version</button>
+        <p id="repoStatus" role="status"></p>
+      </section>
     </div>
     <div class="create-tools" data-work="planning" hidden>
       <button type="button" data-tool="select" data-key="h" aria-pressed="false" title="select lines and pins, to move or delete them">
@@ -565,5 +574,7 @@
 <div id="open" hidden>
   <p>Open a version 2 world zip. <code>node script/convert-v2.mjs</code> makes one from a version 1 world.</p>
   <input id="openFile" type="file" accept=".zip,application/zip">
+  <form id="openRepo"><input placeholder="owner/repo" aria-label="GitHub repo" autocomplete="off"><button type="submit">open a GitHub repo</button></form>
   <p id="openError"></p>
+  <a id="openKept" href="/create" hidden>go back to the world kept in this browser</a>
 </div>

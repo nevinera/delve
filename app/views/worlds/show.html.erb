@@ -6,6 +6,7 @@
 <p class="section-links">
   <span class="muted"><%= link_to @world.repo, "https://github.com/#{@world.repo}" %></span>
   <%= link_to "edit", editor_path(from: @world.source) %>
+  <%= link_to "build", create_path(from: @world.source) %>
   <%= link_to "your worlds", worlds_path %>
 </p>
 

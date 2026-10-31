@@ -58,6 +58,8 @@ The editor opens a world from a zip or a GitHub repo, and saves to a zip or to G
 
 Opening splits plates into tile files on a few workers. Saving packs them again, remaking only plates whose tiles or object sizes changed, so an edit to one tile changes one plate.
 
+`/create` opens a version 2 world the same ways (`client/src/create/repo.js`), with the same protocol, and keeps it in IndexedDB with the files changed since. It saves to GitHub and publishes from its manage tools. It doesn't validate before publishing.
+
 ## Importing and releasing versions
 
 A published version is a tag. The world's page (`/worlds/:id`) lists its tags for the owner, with an import button for each. Importing (`ImportWorldJob`, on the SolidQueue worker):

@@ -37,6 +37,8 @@ RSpec.describe "Worlds", type: :request do
       expect(response.body).to include("Thornwood")
       expect(response.body).to include(%(href="/editor?from=github%2Fme%2Fmine"))
       expect(response.body).to include(%(href="/editor?from=github%2Fme%2Fother"))
+      expect(response.body).to include(%(href="/create?from=github%2Fme%2Fmine"))
+      expect(response.body).to include(%(href="/create?from=github%2Fme%2Fother"))
       expect(response.body.scan("me/mine").size).to eq(1)
     end
 

@@ -1,6 +1,6 @@
 # Opening, saving and publishing worlds on GitHub
 
-The editor reads and writes a world's repo straight from the browser, through GitHub's REST API. Code: `client/src/github/github.js` (the API) and `client/src/editor/githubWorld.js` (worlds).
+The editor reads and writes a world's repo straight from the browser, through GitHub's REST API. Code: `client/src/github/github.js` (the API), `client/src/editor/githubWorld.js` (the old editor's worlds) and `client/src/create/repo.js` (`/create`'s).
 
 ## Tokens
 
@@ -8,7 +8,7 @@ The browser gets a GitHub App user token from Rails at `GET /github/token`, as `
 
 ## Opening
 
-`/editor?from=github/<owner>/<repo>` opens the head of the repo's default branch.
+`/editor?from=github/<owner>/<repo>`, or `/create?from=...` for a version 2 world, opens the head of the repo's default branch.
 
 1. Read the branch's head commit. A repo with no commits opens as an empty world.
 2. List every file at that commit with its blob sha.
@@ -21,7 +21,7 @@ The world remembers where it came from: `{ repo, branch, commitSha, shas }`, whe
 
 ## Saving
 
-Saving makes one commit on the branch the world came from. The editor's save button, there in every step, opens a dialog that logs each stage and stays open until the save is done.
+Saving makes one commit on the branch the world came from. The editor's save button, there in every step, opens a dialog that logs each stage and stays open until the save is done. `/create` saves a repo with no commits by putting `world.json` in it first through the contents API, since the git data API can't commit there.
 
 1. Pack tiles into plates and write each continent's `plates.json`.
 2. Work out each file's blob sha (SHA-1 of `blob <length>\0` followed by its bytes). A file whose sha matches `shas` hasn't changed. A path in `shas` that the world no longer has is a deletion.

@@ -148,6 +148,14 @@ describe("tags", () => {
   });
 });
 
+describe("GithubClient.firstCommit", () => {
+  it("puts one file in a repo with no commits through the contents API", async () => {
+    const calls = fakeGithub({ [`PUT ${API}/contents/world.json`]: { commit: { sha: "c0" } } });
+    expect(await new GithubClient("me/world").firstCommit("world.json", "{}\n", { message: "m", branch: "main" })).toBe("c0");
+    expect(calls.at(-1).body).toEqual({ message: "m", content: toBase64(new TextEncoder().encode("{}\n")), branch: "main" });
+  });
+});
+
 describe("blobSha", () => {
   it("is git's sha for the bytes", async () => {
     expect(await blobSha(new TextEncoder().encode("hello\n"))).toBe("ce013625030ba8dba906f756967f9e9ca394464a");

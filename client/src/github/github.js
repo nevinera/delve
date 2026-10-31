@@ -220,6 +220,14 @@ export class GithubClient {
     await this._request("/git/refs", { method: "POST", body: { ref: `refs/tags/${name}`, sha } });
   }
 
+  // The first commit in a repo with none, holding one file, text or bytes, on `branch`: the git
+  // data API can't make one there. Returns its sha.
+  async firstCommit(path, content, { message, branch }) {
+    const bytes = typeof content === "string" ? new TextEncoder().encode(content) : content;
+    const made = await this._request(`/contents/${path}`, { method: "PUT", body: { message, content: toBase64(bytes), branch } });
+    return made.commit.sha;
+  }
+
   // Commits `files`, { path: content }, to `branch` as one commit on `parentSha` and moves the
   // branch to it. Content is text, bytes (Uint8Array or Blob), an ExistingBlob, or null to
   // delete the path. Text goes inline in the tree, and the tree goes up in parts (TREE_BYTES,
