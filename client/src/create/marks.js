@@ -11,7 +11,7 @@ import { Pins } from "./pins.js";
 // them, though ground between them and the camera hides them. Then they can be hidden (shown), and
 // can stand up as curtains, see-through walls CURTAIN_FT high over the ground. The planning file
 // keeps the pins too (pins.js), and undo goes back over both. Each has one of COLORS, one of four widths a few pixels wide, and a style, solid,
-// dashed or dotted. Lines, dashes and dots all grow the higher the builder flies. The eraser cuts
+// dashed or dotted. Lines thin the higher the builder flies, but less than the view shrinks. The eraser cuts
 // lines where it passes, in two where it passes their middles. Lines picked out with the select
 // tool show a halo, and can be deleted whole. A continent's are kept in its
 // planning file:
@@ -33,8 +33,9 @@ export const COLORS = {
 const WIDTHS_PX = [2, 3, 5, 8];
 // A dash and the gap after it, in line widths.
 const STYLES = { solid: null, dashed: [5, 3], dotted: [1, 2] };
-const WIDEN_FT = 1024; // flying higher over the ground than this, lines widen with its square root
-const MOST_WIDER = 4;
+const THIN_FT = 2048; // flying higher over the ground than this, lines thin with its fourth root
+const LEAST_THIN = 0.3; // as a share of their width
+const LEAST_PX = 1;
 const PEN = { color: "red", width: 2, style: "solid" }; // for lines kept without these
 const UNDOS = 50;
 const HALO = 0xffe14d;
@@ -323,9 +324,9 @@ export class Marks {
   // about how many feet a pixel is across there, for dashes' lengths.
   tick(dt, width, height, eye, above, ftPerPx) {
     this.eye.copy(eye);
-    const wider = Math.min(MOST_WIDER, Math.max(1, Math.sqrt(above / WIDEN_FT)));
+    const thin = Math.max(LEAST_THIN, Math.min(1, (THIN_FT / Math.max(above, 1)) ** 0.25));
     for (const material of this.materials.values()) {
-      const px = WIDTHS_PX[material.userData.width - 1] * wider + (material.userData.halo ? HALO_PX : 0);
+      const px = Math.max(LEAST_PX, (WIDTHS_PX[material.userData.width - 1] + (material.userData.halo ? HALO_PX : 0)) * thin);
       material.resolution.set(width, height);
       material.linewidth = px;
       const dash = STYLES[material.userData.style];
