@@ -62,6 +62,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M6 20 L30 20 L42 14 L18 14 Z" fill="#b08a5a"/><path d="M18 14 L18 4 L42 4 L42 14 Z" fill="#a09080"/></svg>
         <span>slab</span><kbd class="create-key">L</kbd>
       </button>
+      <button type="button" data-tool="stairs" data-key="m" aria-pressed="false" title="draw stairs">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M6 22 L6 18 L14 18 L14 14 L22 14 L22 10 L30 10 L30 6 L42 6 L42 22 Z" fill="#b08a5a"/></svg>
+        <span>stairs</span><kbd class="create-key">M</kbd>
+      </button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" data-key="h" aria-pressed="false" title="raise and lower the ground">
@@ -317,6 +321,42 @@
         <button type="button" data-build-undo>undo</button>
       </div>
     </div>
+    <div data-config="stairs" hidden>
+      <p class="create-note">Drag the bottom edge of the flight on the ground or a slab, then point where its top edge goes, on a slab or the ground, and click. With nothing there to point at, set it with the sliders and place it. Esc puts it down.</p>
+      <p class="create-note create-said" data-build-say></p>
+      <label>surface
+        <select id="stairSurface">
+          <% %w[floorboards woodgrain logs shingles stone stoneBlocks brick roughRock dirtyStone cobblestone flagstones marble sandstone thatch slateTiles clayTiles plaster packedEarth ironPlate rustyIronPlate].each do |surface| %>
+            <option value="<%= surface %>"<%= " selected" if surface == "stoneBlocks" %>><%= surface %></option>
+          <% end %>
+        </select>
+      </label>
+      <label>risers
+        <select id="stairRisers">
+          <option value="same">as the treads</option>
+          <option value="open">open</option>
+          <% %w[floorboards woodgrain logs shingles stone stoneBlocks brick roughRock dirtyStone cobblestone flagstones marble sandstone thatch slateTiles clayTiles plaster packedEarth ironPlate rustyIronPlate].each do |surface| %>
+            <option value="<%= surface %>"><%= surface %></option>
+          <% end %>
+        </select>
+      </label>
+      <label>thickness <input type="number" id="stairThickness" value="1" min="0.1" max="16" step="0.25"> ft</label>
+      <label>steps <input type="number" id="stairSteps" value="1" min="1" max="128" step="1" disabled>
+        <input type="checkbox" id="stairStepsAuto" checked> about 7 in each</label>
+      <label>width <output id="stairWidthOut"></output>
+        <input id="stairWidth" type="range" min="0.5" max="40" step="0.5" value="4" disabled>
+      </label>
+      <label>run <output id="stairRunOut"></output>
+        <input id="stairRun" type="range" min="0.5" max="64" step="0.5" value="8" disabled>
+      </label>
+      <label>height <output id="stairRiseOut"></output>
+        <input id="stairRise" type="range" min="0.5" max="49" step="0.5" value="6" disabled>
+      </label>
+      <div class="create-way">
+        <button type="button" id="stairPlace" disabled>place it</button>
+        <button type="button" data-build-undo>undo</button>
+      </div>
+    </div>
     <div data-config="select" hidden>
       <p class="create-note">Click a line or pin to select it, or drag a box round them. Shift selects more, or clicks fewer. Drag selected pins to move them. Double-click a pin to open it. Delete or backspace deletes what's selected.</p>
       <div class="create-way">
@@ -475,7 +515,7 @@
   <dl>
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, measure measures distances and circles, and path finds the shortest way on foot from one place to another, to find where ranges and cliffs can be crossed. Click a pin's head to open it</dd>
-    <dt>build</dt><dd>place objects and templates, from the ones used lately or the library, draw floors, walls, rooms and roofs as slabs, and pick what's placed to move, turn, delete or make a template of</dd>
+    <dt>build</dt><dd>place objects and templates, from the ones used lately or the library, draw floors, walls, rooms and roofs as slabs, draw stairs, and pick what's placed to move, turn, delete or make a template of</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, draw streams and rivers, and clear it away</dd>
   </dl>
 </div>

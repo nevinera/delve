@@ -161,6 +161,29 @@
           }
         }
       ]
+    },
+    "kind": {
+      "enum": [
+        "stairs"
+      ],
+      "description": "absent for a plain slab; stairs are a rectangle pitched up along v, drawn as steps"
+    },
+    "steps": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 128,
+      "description": "stairs only: how many steps"
+    },
+    "risers": {
+      "description": "stairs only: the risers' surface, null for open, absent for the treads' surface",
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/properties/surface"
+        }
+      ]
     }
   }
 }

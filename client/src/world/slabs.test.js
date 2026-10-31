@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TILE_FT } from "./constants.js";
-import { cutSlab, fitFloor, raiseWall, slabFootholds, slabHitsTrunk, wallFootprint, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
+import { cutSlab, defaultSteps, fitFloor, raiseWall, slabFootholds, slabHitsTrunk, stairShape, stairSlab, wallFootprint, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
 
 // A 10 ft square floor, and a wall: the same square stood up on its south edge.
 const floor = { at: [100, 40, 200], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "floorboards" };
@@ -235,5 +235,46 @@ describe("slabFootholds", () => {
     const [top] = slabFootholds(wall, 105, 200.5, steepest);
     expect(top).toBeCloseTo(50, 5);
     expect(slabFootholds(wall, 105, 202, steepest)).toEqual([]);
+  });
+});
+
+describe("stairs", () => {
+  const options = { thickness: 1, surface: "stone" };
+
+  it("makes a flight from its bottom edge up to its top", () => {
+    const stairs = stairSlab([0, 10, 0], [6, 10, 0], 12, 9, options);
+    expect(slabProblems(stairs)).toEqual([]);
+    expect(stairs.steps).toBe(15);
+    const shape = stairShape(stairs);
+    expect(shape.width).toBeCloseTo(6);
+    expect(shape.run).toBeCloseTo(12, 2);
+    expect(shape.rise).toBeCloseTo(9, 2);
+    // Its top edge is level, `run` to the right of a to b (south here), `rise` up.
+    const top = slabTop(stairs);
+    expect(top[2][1]).toBeCloseTo(19, 2);
+    expect(top[3][1]).toBeCloseTo(19, 2);
+    expect(top[2][2]).toBeCloseTo(12, 2);
+    expect(top[1][1]).toBeCloseTo(10, 5);
+  });
+
+  it("refuses flights too steep to walk, or not rectangles with level ends", () => {
+    expect(slabProblems(stairSlab([0, 0, 0], [6, 0, 0], 4, 9, options))[0]).toMatch(/pitch/);
+    const stairs = stairSlab([0, 0, 0], [6, 0, 0], 12, 9, options);
+    expect(slabProblems({ ...stairs, turn: [0, -30, 5] })[0]).toMatch(/pitch/);
+    expect(slabProblems({ ...stairs, outline: [[0, 0], [6, 0], [5, 15], [0, 15]] })[0]).toMatch(/outline/);
+    expect(slabProblems({ ...stairs, steps: 0 })[0]).toMatch(/steps/);
+    expect(slabProblems({ ...stairs, kind: "ladder" })[0]).toMatch(/kind/);
+  });
+
+  it("takes open risers, or risers of their own surface", () => {
+    const stairs = stairSlab([0, 0, 0], [6, 0, 0], 12, 9, { ...options, risers: null });
+    expect(slabProblems(stairs)).toEqual([]);
+    expect(slabProblems({ ...stairs, risers: "marble" })).toEqual([]);
+    expect(slabProblems({ ...stairs, risers: "nope" })[0]).toMatch(/risers/);
+  });
+
+  it("counts steps nearest the usual height", () => {
+    expect(defaultSteps(0.2)).toBe(1);
+    expect(defaultSteps(10)).toBe(17);
   });
 });

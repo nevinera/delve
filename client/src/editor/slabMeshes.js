@@ -4,10 +4,12 @@ import { imageOf } from "../world/objects.js";
 import { slabBottom, slabFace } from "../world/slabs.js";
 import { tileTexture, tiledMaterial } from "./builtMeshes.js";
 import { slabTexture } from "./slabTextures.js";
+import { stairParts } from "./stairMeshes.js";
 
 // Slabs for the 3D view (world/slabs.js): one mesh for each surface a tile's slabs wear, in scene
-// feet (continent feet less `origin`, [x, z]). A surface with a tiled world texture is its color
-// with the texture laid over it, as an object piece's tile is.
+// feet (continent feet less `origin`, [x, z]), stairs as their steps (stairMeshes.js). A surface
+// with a tiled world texture is its color with the texture laid over it, as an object piece's
+// tile is.
 
 const materials = new Map(); // surface key -> material
 
@@ -16,13 +18,14 @@ const materials = new Map(); // surface key -> material
 export function slabMeshes(slabs = [], origin) {
   const groups = new Map(); // surface key -> { surface, geometries, slabs }
   for (const slab of slabs) {
-    const key = JSON.stringify(slab.surface);
-    if (!groups.has(key)) groups.set(key, { surface: slab.surface, geometries: [], slabs: [] });
-    const group = groups.get(key);
-    const geometry = slabGeometry(slab, origin);
-    const start = group.slabs.reduce((n, s) => n + s.count, 0);
-    group.geometries.push(geometry);
-    group.slabs.push({ slab, start, count: geometry.attributes.position.count });
+    for (const { surface, geometry } of slab.kind === "stairs" ? stairParts(slab, origin) : [{ surface: slab.surface, geometry: slabGeometry(slab, origin) }]) {
+      const key = JSON.stringify(surface);
+      if (!groups.has(key)) groups.set(key, { surface, geometries: [], slabs: [] });
+      const group = groups.get(key);
+      const start = group.slabs.reduce((n, s) => n + s.count, 0);
+      group.geometries.push(geometry);
+      group.slabs.push({ slab, start, count: geometry.attributes.position.count });
+    }
   }
   const meshes = [];
   for (const [key, { surface, geometries, slabs: parts }] of groups) {

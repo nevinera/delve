@@ -7,7 +7,7 @@ import { Thumbnails } from "../editor/thumbnailRenderer.js";
 import { newObjectId, turnPoint } from "../world/builtObjects.js";
 import { CELL_FT as TEMPLATE_CELL_FT } from "../world/constants.js";
 import { makeObject, specOf } from "../world/objects.js";
-import { cutSlab, slabProblems, slabTop } from "../world/slabs.js";
+import { cutSlab, defaultSteps, slabProblems, slabTop, stairShape, stairSlab } from "../world/slabs.js";
 import { captureTemplate, placedTemplate } from "../world/templates.js";
 import { CLIPBOARD_PREFIX } from "./library.js";
 import { homeOf, isSlab, readyObject } from "./placed.js";
@@ -26,6 +26,9 @@ import { drawable, slabSpace } from "./things.js";
 //   corner, or Enter.
 //   Door and window click a slab to cut a hole in it: a door up from the floor or ground under
 //   where it's clicked, a window round where it's clicked.
+// - stairs: dragging draws a flight's bottom edge on the ground or a slab, level, then its top edge
+//   goes to where the pointer meets a slab or the ground, and a click places it. The sliders set
+//   its width, run and height instead, where there's nothing to point at.
 // - pick: clicking an object or slab picks it out, shift picks more or fewer, and dragging a box
 //   picks those in it. Dragging picked things moves them, C and V turn them about their middle,
 //   the up and down arrows raise and lower them, and Delete deletes them. What's picked can be
@@ -75,6 +78,9 @@ export class Build {
     this.slab = { mode: "floor", surface: "floorboards", thickness: 1, height: 10, roof: "gable", pitch: 30, roomRoof: false };
     this.drawing = null; // a slab being dragged: { a: [x, y, z], yaw degrees, pieces }
     this.outlining = null; // a polygon floor being clicked out: { y, points: [[x, z], ...] }
+    // A flight of stairs being drawn: its bottom edge from a to b ([x, y, z]), being dragged
+    // ("base") or done ("top"), its top's run and rise, and whether the sliders set them (fixed).
+    this.stair = null;
     this.moving = null; // picked things being dragged: { y, last: [x, z], moved }
     this.box = null; // a box being dragged to pick in: { x0, y0, x1, y1, add }
     this.ghost = new THREE.Group();
@@ -130,6 +136,9 @@ export class Build {
       });
     }
     for (const id of ["slabSurface", "slabThickness", "slabHeight", "slabRoof", "slabPitch", "slabRoomRoof"]) $(id).addEventListener("input", () => this.readSlab());
+    for (const id of ["stairSurface", "stairRisers", "stairThickness", "stairSteps", "stairStepsAuto"]) $(id).addEventListener("input", () => this.showStair());
+    for (const id of ["stairWidth", "stairRun", "stairRise"]) $(id).addEventListener("input", () => this.slideStair());
+    $("stairPlace").addEventListener("click", () => this.placeStair());
     this.readSlab();
     this.showRecent();
   }
@@ -143,7 +152,8 @@ export class Build {
   setTool(tool) {
     this.tool = tool;
     this.say("");
-    this.drawing = this.moving = this.box = this.outlining = null;
+    this.drawing = this.moving = this.box = this.outlining = this.stair = null;
+    this.showStair();
     this.boxEl.hidden = true;
     this.clearGhost();
     if (tool !== "pick") this.things.picked.clear();
@@ -252,6 +262,7 @@ export class Build {
     if (this.tool === "template" && hit && this.armed.template) return this.placeTemplate(hit);
     if (this.tool === "slab" && (this.slab.mode === "door" || this.slab.mode === "window")) return this.cut(hit);
     if (this.tool === "slab" && this.slab.mode === "polygon") return this.outline(hit);
+    if (this.tool === "stairs") return this.stairDown(hit);
     if (this.tool === "slab" && hit) {
       this.drawing = { a: hit.at, yaw: this.cameraYaw(), pieces: [] };
       return;
@@ -282,6 +293,7 @@ export class Build {
 
   move(e) {
     if (this.outlining) this.showOutline();
+    if (this.stair) this.stairMove();
     if (this.drawing) {
       const b = this.onLevel(this.drawing.a[1]);
       if (b) this.drawing.pieces = this.pieces(this.drawing.a, b, this.drawing.yaw);
@@ -306,6 +318,12 @@ export class Build {
   }
 
   up() {
+    if (this.stair?.phase === "base") {
+      const { a, b } = this.stair;
+      if (Math.hypot(b[0] - a[0], b[2] - a[2]) < 0.5) this.stair = null;
+      else this.stair.phase = "top";
+      this.showStair();
+    }
     if (this.drawing) {
       const { pieces } = this.drawing;
       this.drawing = null;
@@ -354,6 +372,10 @@ export class Build {
       const step = (e.shiftKey ? FINE_TURN_DEG : TURN_DEG) * (k === "c" ? 1 : -1);
       if (this.tool === "pick") this.turnPicked(step);
       else this.yaw += (step * Math.PI) / 180;
+      return true;
+    }
+    if (this.stair?.phase === "top" && e.key === "Enter") {
+      this.placeStair();
       return true;
     }
     if (this.outlining && e.key === "Enter") {
@@ -433,6 +455,7 @@ export class Build {
   cut(hit) {
     const slab = hit?.thing;
     if (!slab || !isSlab(slab)) return this.say("Click a slab to cut a hole in.");
+    if (slab.kind) return this.say("Holes can't be cut in stairs.");
     const [u, , v] = slabSpace(slab, hit.at);
     const door = this.slab.mode === "door";
     const [w, h] = door ? DOOR_FT : WINDOW_FT;
@@ -542,9 +565,115 @@ export class Build {
     this.ghost.add(line);
   }
 
+  // Starts a flight's bottom edge where `hit` is, or places the one being drawn.
+  stairDown(hit) {
+    if (this.stair?.phase === "top") return this.placeStair();
+    if (!hit) return;
+    this.stair = { phase: "base", a: hit.at, b: hit.at, run: 0, rise: 0, fixed: false };
+    this.showStair();
+  }
+
+  // The pointer moved: the bottom edge being dragged follows it, level; or the top edge goes to
+  // where it meets a slab or the ground.
+  stairMove() {
+    const stair = this.stair;
+    if (stair.phase === "base") {
+      const b = this.onLevel(stair.a[1]);
+      if (b) stair.b = b;
+      return this.showStair();
+    }
+    if (stair.fixed) return;
+    const hit = this.hit();
+    if (!hit) return;
+    const { a, b } = stair;
+    const width = Math.hypot(b[0] - a[0], b[2] - a[2]);
+    // How far the point is across the edge, to the right looking from a to b.
+    let across = ((hit.at[0] - a[0]) * -(b[2] - a[2]) + (hit.at[2] - a[2]) * (b[0] - a[0])) / width;
+    if (across < 0) {
+      // To the left: the edge turns round, so the flight goes that way.
+      [stair.a, stair.b] = [b, a];
+      across = -across;
+    }
+    stair.run = across;
+    stair.rise = hit.at[1] - a[1];
+    this.showStair();
+  }
+
+  // The sliders set the flight being drawn, and pointing no longer does.
+  slideStair() {
+    const stair = this.stair;
+    if (stair?.phase !== "top") return;
+    const { a, b } = stair;
+    const width = Number($("stairWidth").value);
+    const length = Math.hypot(b[0] - a[0], b[2] - a[2]);
+    stair.b = [a[0] + ((b[0] - a[0]) * width) / length, a[1], a[2] + ((b[2] - a[2]) * width) / length];
+    stair.run = Number($("stairRun").value);
+    stair.rise = Number($("stairRise").value);
+    stair.fixed = true;
+    this.showStair();
+  }
+
+  // The flight being drawn as a slab, as the settings have it, or null.
+  stairNow() {
+    const stair = this.stair;
+    if (stair?.phase !== "top") return null;
+    const risers = $("stairRisers").value;
+    const auto = $("stairStepsAuto").checked;
+    const steps = auto ? defaultSteps(stair.rise) : Math.max(1, Math.round(Number($("stairSteps").value) || 1));
+    return stairSlab(stair.a, stair.b, stair.run, stair.rise, {
+      thickness: Math.max(0.1, Math.min(16, Number($("stairThickness").value) || 1)),
+      surface: $("stairSurface").value,
+      ...(risers === "same" ? {} : { risers: risers === "open" ? null : risers }),
+      steps,
+    });
+  }
+
+  // The flight being drawn, red where it can't be made, and its numbers in the settings.
+  showStair() {
+    this.clearGhost();
+    const stair = this.stair;
+    const topping = stair?.phase === "top";
+    for (const id of ["stairWidth", "stairRun", "stairRise", "stairPlace"]) $(id).disabled = !topping;
+    $("stairSteps").disabled = $("stairStepsAuto").checked;
+    const slab = this.stairNow();
+    if (slab) {
+      const { width, run, rise, steps } = stairShape(slab);
+      $("stairWidth").value = String(width);
+      $("stairRun").value = String(run);
+      $("stairRise").value = String(rise);
+      if ($("stairStepsAuto").checked) $("stairSteps").value = String(steps);
+    }
+    const feet = (id) => ($(`${id}Out`).textContent = `${Number($(id).value).toFixed(1)} ft`);
+    ["stairWidth", "stairRun", "stairRise"].forEach(feet);
+    if (stair?.phase === "base") {
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([stair.a, stair.b].map((p) => new THREE.Vector3(p[0], p[1] + 0.05, p[2]))), new THREE.LineBasicMaterial({ color: 0xffe080, depthTest: false }));
+      line.renderOrder = 6;
+      this.ghost.add(line);
+    }
+    if (!slab) return;
+    const wrong = slabProblems(slab).length > 0;
+    for (const mesh of slabMeshes([slab], [0, 0])) {
+      if (wrong) mesh.material = WRONG;
+      this.ghost.add(mesh);
+    }
+  }
+
+  // Makes the flight being drawn, if it can be.
+  placeStair() {
+    const slab = this.stairNow();
+    if (!slab) return;
+    if (this.stair.rise <= 0) return this.say("The top of the stairs has to be higher than the bottom.");
+    const problem = slabProblems(slab)[0];
+    if (problem) return this.say(problem.includes("pitch") ? "Those stairs are too steep to walk up." : problem.includes("reaches") ? "Those stairs are too long: one flight reaches at most 64 ft." : `Those stairs can't be made: it ${problem}.`);
+    this.placed.put([slab]);
+    this.stair = null;
+    this.say("");
+    this.showStair();
+  }
+
   // Each frame: the thing armed follows the pointer.
   tick() {
-    if (this.drawing || this.outlining) return;
+    if (this.drawing || this.outlining || this.stair) return;
     const type = this.tool === "object" ? this.armed.object : this.tool === "template" ? this.armed.template : null;
     const hit = type && this.hit();
     if (!hit) {

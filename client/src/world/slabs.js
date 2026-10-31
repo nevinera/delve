@@ -20,6 +20,11 @@ import { TILE_FT } from "./constants.js";
 //   shaded by one of SLAB_PATTERNS the way the ground is, or with a world texture tiled over it
 //   ({ image, every, jitter }, as an object piece's tile), whose letter inks take palette's colors
 //   in turn (the color alone when there's no palette).
+// - kind: absent for a plain slab, or "stairs": a flight walked as the slope it is, drawn as
+//   `steps` treads and risers. Its outline is the rectangle [[0, 0], [width, 0], [width, length],
+//   [0, length]], pitched up along v (turn [yaw, -angle, 0], angle at most MAX_STAIR_DEG), so its
+//   bottom and top edges are level; no holes. risers: their surface, null for none (open), or
+//   absent for the treads' surface.
 //
 // A slab belongs to the tile holding its home corner: the north-most top corner, the west-most of
 // those. Every corner, top and bottom, is within SLAB_REACH_FT of it.
@@ -29,6 +34,9 @@ export const MAX_HOLES = 16;
 export const MAX_THICKNESS_FT = 16;
 export const DEFAULT_THICKNESS_FT = 1;
 export const SLAB_REACH_FT = 64;
+export const MAX_STAIR_DEG = 50; // as steep as a character walks
+export const MAX_STEPS = 128;
+export const STEP_FT = 0.6; // about how tall a stair's steps are by default
 
 // The surfaces a slab picks from by default, each with its colors baked in.
 export const SLAB_PRESETS = {
@@ -406,11 +414,59 @@ export function slabProblems(slab, images) {
   if (!out.length) out.push(...holeProblems(outline, slab.holes));
   if (!(Number.isFinite(slab?.thickness) && slab.thickness > 0 && slab.thickness <= MAX_THICKNESS_FT)) out.push(`needs a thickness over 0 and at most ${MAX_THICKNESS_FT} ft`);
   out.push(...surfaceProblems(slab?.surface, images));
+  if (!out.length) out.push(...stairProblems(slab, images));
   if (!out.length) {
     const home = slabHome(slab);
     if ([...slabTop(slab), ...slabBottom(slab)].some((p) => Math.hypot(...sub(p, home)) > SLAB_REACH_FT + 1e-6)) out.push(`reaches more than ${SLAB_REACH_FT} ft from its home corner`);
   }
   return out;
+}
+
+function stairProblems(slab, images) {
+  if (slab.kind === undefined) return [];
+  if (slab.kind !== "stairs") return [`has kind ${JSON.stringify(slab.kind)}, which isn't "stairs"`];
+  const [a, b, c, d] = slab.outline;
+  const [w, l] = [b?.[0], c?.[1]];
+  if (!(slab.outline.length === 4 && a[0] === 0 && a[1] === 0 && b[1] === 0 && c[0] === w && d[0] === 0 && d[1] === l && w > 0 && l > 0)) return ["is stairs, so needs an outline [[0, 0], [width, 0], [width, length], [0, length]]"];
+  if (slab.holes !== undefined) return ["is stairs, so has no holes"];
+  if (slab.turn[2] !== 0 || !(slab.turn[1] < 0 && slab.turn[1] >= -MAX_STAIR_DEG)) return [`is stairs, so needs a turn [yaw, pitch, 0], pitch -${MAX_STAIR_DEG} to under 0`];
+  if (!(Number.isInteger(slab.steps) && slab.steps >= 1 && slab.steps <= MAX_STEPS)) return [`is stairs, so needs 1 to ${MAX_STEPS} steps`];
+  if (slab.risers === undefined || slab.risers === null) return [];
+  return surfaceProblems(slab.risers, images).map((problem) => `has risers that ${problem.replace(/^(has|needs) /, "$1 ")}`);
+}
+
+// A stair slab's shape, feet: { width, length, run, rise, steps }, run and rise how far its top
+// goes across and up.
+export function stairShape(slab) {
+  const [width, length] = [slab.outline[1][0], slab.outline[2][1]];
+  const r = (-slab.turn[1] * Math.PI) / 180;
+  return { width, length, run: length * Math.cos(r), rise: length * Math.sin(r), steps: slab.steps };
+}
+
+// How many steps a flight rising `rise` ft has by default: the count nearest STEP_FT each.
+export const defaultSteps = (rise) => Math.max(1, Math.min(MAX_STEPS, Math.round(rise / STEP_FT)));
+
+// A stair slab whose bottom edge runs from `a` to `b` ([x, y, z], level at a's height), its top
+// edge `run` ft across from it, to the right looking from a to b, and `rise` ft up: or null where
+// that's not a rectangle with some length.
+export function stairSlab(a, b, run, rise, { thickness, surface, risers, steps }) {
+  const width = Math.hypot(b[0] - a[0], b[2] - a[2]);
+  const length = Math.hypot(run, rise);
+  if (width < 0.5 || run <= 0 || length < 0.5) return null;
+  // u runs from a to b; turned by yaw, u points along (cos, -sin) (turnPoint).
+  const yaw = (Math.atan2(-(b[2] - a[2]), b[0] - a[0]) * 180) / Math.PI;
+  const pitch = -(Math.atan2(rise, run) * 180) / Math.PI;
+  const round = (v) => Math.round(v * 1000) / 1000 + 0;
+  return {
+    kind: "stairs",
+    at: a.map(round),
+    turn: [round(yaw), round(pitch), 0],
+    outline: [[0, 0], [round(width), 0], [round(width), round(length)], [0, round(length)]],
+    thickness,
+    surface,
+    ...(risers === undefined ? {} : { risers }),
+    steps: steps ?? defaultSteps(rise),
+  };
 }
 
 function holeProblems(outline, holes) {
