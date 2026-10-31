@@ -57,6 +57,14 @@ describe("courses", () => {
     expect(steep[3]).toBeLessThan(80);
   });
 
+  it("never arrive under the water they run into", () => {
+    // Ground falling to just over the lake's level at its shore, at x = 100.
+    const straight = [[0, 0, 6], [200, 0, 6]];
+    const still = (x) => (x < 100 ? null : 10);
+    const surface = profile({ points: straight }, (x) => (x < 100 ? Math.max(10.3, 20 - x / 5) : 0), still).surface;
+    expect(Math.min(...surface)).toBe(10);
+  });
+
   it("meet the water of a course they run into at its level, falling straight to it", () => {
     // Ground 20 ft up all along, and another course's water at 10 past x = 100.
     const straight = [[0, 0, 6], [200, 0, 6]];

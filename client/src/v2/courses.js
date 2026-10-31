@@ -243,13 +243,13 @@ export function surfaceAt(surface, t) {
 // it no more steeply than MOUTH_GRADE, over as far as that takes from where it was just before it.
 // joinAt(x, z) gives the level of another course's water at (x, z), or null: where it runs into
 // that, it's at that level, falling straight to it where it's higher, and backed up to it where
-// it's lower, as far up as it's lower. With poolAt(x, z, low, most), as pools.js has it, where
+// it's lower, as far up as it's lower, as it is to still water it arrives lower than. With poolAt(x, z, low, most), as pools.js has it, where
 // it'd cut POOL_MIN_FT or more into a rise, the low spot above it's filled as a pool instead,
 // as far as that goes. { surface, pools: [{ level, from, to, how far down its track it's in it,
 // and points, its outline }] }.
 export function profile({ points, seed = 0, joins = [] }, groundAt, stillAt = () => null, joinAt = () => null, poolAt = null) {
   const track = trackOf(points, seed, joins);
-  const [raw, joined, xs, zs] = [[], [], [], []];
+  const [raw, into, xs, zs] = [[], [], [], []]; // and the level of the water it's in there, or null
   let mouth = -1; // where it first runs into still water
   let k = 1;
   for (let t = 0; t <= track.length + SURFACE_STEP_FT; t += SURFACE_STEP_FT) {
@@ -267,7 +267,7 @@ export function profile({ points, seed = 0, joins = [] }, groundAt, stillAt = ()
     const edges = Math.min(groundAt(x - (dz / d) * out, z + (dx / d) * out), groundAt(x + (dz / d) * out, z - (dx / d) * out));
     const join = joinAt(x, z);
     raw.push(Math.min(Math.max(Math.min(ground - BELOW_FT, edges - EDGE_BELOW_FT), still ?? -Infinity), join ?? Infinity));
-    joined.push(join);
+    into.push(join ?? still);
     xs.push(x);
     zs.push(z);
   }
@@ -299,9 +299,9 @@ export function profile({ points, seed = 0, joins = [] }, groundAt, stillAt = ()
     delete pool.at;
   }
   for (let n = surface.length - 1, backed = -Infinity; n >= 0; n--) {
-    if (joined[n] != null) backed = Math.max(backed, joined[n]);
+    if (into[n] != null) backed = Math.max(backed, into[n]);
     if (surface[n] < backed) surface[n] = backed;
-    else if (joined[n] == null) backed = -Infinity;
+    else if (into[n] == null) backed = -Infinity;
   }
   const before = surface[mouth - 1];
   for (let n = mouth - 1; n >= 0 && surface[n + 1] + MOUTH_GRADE * SURFACE_STEP_FT < before; n--) surface[n] = Math.min(surface[n], surface[n + 1] + MOUTH_GRADE * SURFACE_STEP_FT);
