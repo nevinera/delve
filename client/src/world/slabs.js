@@ -471,6 +471,36 @@ export function stairSlab(a, b, run, rise, { thickness, surface, risers, steps }
   };
 }
 
+// A plain slab whose top face is the quadrilateral a, b, d, c ([x, y, z] each): a ramp drawn as
+// its bottom edge, a to b, then its top edge, c to d. d moves up or down into the plane a, b and c
+// make, and c and d swap where the edges would cross. Null where the corners make no plane, or one standing
+// near enough upright that it couldn't be walked or stood on.
+export function rampSlab(a, b, c, d, { thickness, surface }) {
+  const sub = (p, q) => p.map((v, i) => v - q[i]);
+  const dot = (p, q) => p[0] * q[0] + p[1] * q[1] + p[2] * q[2];
+  const cross = (p, q) => [p[1] * q[2] - p[2] * q[1], p[2] * q[0] - p[0] * q[2], p[0] * q[1] - p[1] * q[0]];
+  const unit = (p) => p.map((v) => v / Math.hypot(...p));
+  const ab = sub(b, a);
+  let n = cross(ab, sub(c, a));
+  if (Math.hypot(...ab) < 0.5 || Math.hypot(...n) < 1e-6) return null;
+  n = unit(n);
+  if (n[1] < 0) n = n.map((v) => -v);
+  if (n[1] < 0.05) return null;
+  d = [d[0], a[1] - (n[0] * (d[0] - a[0]) + n[2] * (d[2] - a[2])) / n[1], d[2]];
+  // u along the bottom edge, up out of the face, and v across it, as the turn's x, y and z.
+  const u = unit(ab);
+  const v = cross(u, n);
+  // The turn as three.js's "YXZ" Euler angles of the matrix whose columns are u, n and v.
+  const pitch = Math.asin(-Math.max(-1, Math.min(1, v[1])));
+  const [yaw, roll] = Math.abs(v[1]) < 0.9999999 ? [Math.atan2(v[0], v[2]), Math.atan2(u[1], n[1])] : [Math.atan2(-u[2], u[0]), 0];
+  const round = (x) => Math.round(x * 1000) / 1000 + 0;
+  const flat = (p) => [round(dot(sub(p, a), u)), round(dot(sub(p, a), v))];
+  let outline = [a, b, d, c].map(flat);
+  if (crosses(outline)) outline = [a, b, c, d].map(flat);
+  const deg = (r) => round((r * 180) / Math.PI);
+  return { at: a.map(round), turn: [deg(yaw), deg(pitch), deg(roll)], outline, thickness, surface };
+}
+
 function holeProblems(outline, holes) {
   if (holes === undefined) return [];
   const loop = (h) => Array.isArray(h) && h.length >= 3 && h.length <= MAX_SLAB_CORNERS && h.every((p) => Array.isArray(p) && p.length === 2 && p.every(Number.isFinite));

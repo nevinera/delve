@@ -66,6 +66,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M6 22 L6 18 L14 18 L14 14 L22 14 L22 10 L30 10 L30 6 L42 6 L42 22 Z" fill="#b08a5a"/></svg>
         <span>stairs</span><kbd class="create-key">M</kbd>
       </button>
+      <button type="button" data-tool="ramp" data-key="n" aria-pressed="false" title="draw ramps">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M6 22 L30 6 L42 6 L42 22 Z" fill="#a09080"/></svg>
+        <span>ramp</span><kbd class="create-key">N</kbd>
+      </button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" data-key="h" aria-pressed="false" title="raise and lower the ground">
@@ -344,6 +348,17 @@
         <button type="button" data-build-undo>undo</button>
       </div>
     </div>
+    <div data-config="ramp" hidden>
+      <p class="create-note">Drag the bottom edge of the ramp on the ground or a slab, then drag its top edge. Where the top edge starts sets the ramp's slope, and its end stays on that slope, so the top can be shifted along or narrower than the bottom. Snapping to slabs' edges joins a ramp to them. Esc puts it down.</p>
+      <p class="create-note create-said" data-build-say></p>
+      <label>surface
+        <span id="rampSurface" data-swatches title="surface" data-value="flagstones"></span>
+      </label>
+      <label>thickness <input type="number" id="rampThickness" value="1" min="0.1" max="16" step="0.25"> ft</label>
+      <div class="create-way">
+        <button type="button" data-build-undo>undo</button>
+      </div>
+    </div>
     <div data-config="select" hidden>
       <p class="create-note">Click a line or pin to select it, or drag a box round them. Shift selects more, or clicks fewer. Drag selected pins to move them. Double-click a pin to open it. Delete or backspace deletes what's selected.</p>
       <div class="create-way">
@@ -502,7 +517,7 @@
   <dl>
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, measure measures distances and circles, and path finds the shortest way on foot from one place to another, to find where ranges and cliffs can be crossed. Click a pin's head to open it</dd>
-    <dt>build</dt><dd>place objects and templates, from the ones used lately or the library, draw floors, walls, rooms and roofs as slabs, draw stairs, and pick what's placed to move, turn, delete or make a template of</dd>
+    <dt>build</dt><dd>place objects and templates, from the ones used lately or the library, draw floors, walls, rooms and roofs as slabs, draw stairs and ramps, and pick what's placed to move, turn, delete or make a template of</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, draw streams and rivers, and clear it away</dd>
   </dl>
 </div>

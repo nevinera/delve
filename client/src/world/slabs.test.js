@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TILE_FT } from "./constants.js";
-import { cutSlab, defaultSteps, fitFloor, raiseWall, slabFootholds, slabHitsTrunk, stairShape, stairSlab, wallFootprint, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
+import { cutSlab, defaultSteps, fitFloor, raiseWall, rampSlab, slabFootholds, slabHitsTrunk, stairShape, stairSlab, wallFootprint, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
 
 // A 10 ft square floor, and a wall: the same square stood up on its south edge.
 const floor = { at: [100, 40, 200], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "floorboards" };
@@ -276,5 +276,41 @@ describe("stairs", () => {
   it("counts steps nearest the usual height", () => {
     expect(defaultSteps(0.2)).toBe(1);
     expect(defaultSteps(10)).toBe(17);
+  });
+});
+
+describe("rampSlab", () => {
+  const near = (got, want) => got.forEach((p, k) => p.forEach((v, i) => expect(v).toBeCloseTo(want[k][i], 2)));
+  const style = { thickness: 1, surface: "stone" };
+
+  it("makes a slab whose top is the corners drawn", () => {
+    const cases = [
+      [[0, 0, 0], [10, 0, 0], [0, 5, 12], [10, 5, 12]], // straight up a slope
+      [[0, 0, 0], [10, 0, 0], [4, 5, 12], [14, 5, 12]], // a parallelogram
+      [[0, 0, 0], [10, 0, 0], [3, 5, 12], [7, 5, 12]], // narrowing
+      [[0, 2, 0], [10, 0, 0], [0, 7, 12], [10, 5, 12]], // its bottom edge sloping too
+      [[5, 0, 5], [5, 0, -5], [-8, 4, 5], [-8, 4, -5]], // facing west
+    ];
+    for (const [a, b, c, d] of cases) {
+      const slab = rampSlab(a, b, c, d, style);
+      expect(slabProblems(slab)).toEqual([]);
+      near(slabTop(slab), [a, b, d, c]);
+      expect(slabBottom(slab)[0][1]).toBeLessThan(a[1]);
+    }
+  });
+
+  it("swaps a top edge drawn the other way", () => {
+    const slab = rampSlab([0, 0, 0], [10, 0, 0], [10, 5, 12], [0, 5, 12], style);
+    near(slabTop(slab), [[0, 0, 0], [10, 0, 0], [10, 5, 12], [0, 5, 12]]);
+  });
+
+  it("puts the last corner in the plane of the other three", () => {
+    const slab = rampSlab([0, 0, 0], [10, 0, 0], [0, 5, 12], [10, 9, 12], style);
+    expect(slabTop(slab)[2][1]).toBeCloseTo(5, 1);
+  });
+
+  it("makes nothing upright or flat", () => {
+    expect(rampSlab([0, 0, 0], [10, 0, 0], [0, 10, 0], [10, 10, 0], style)).toBeNull();
+    expect(rampSlab([0, 0, 0], [10, 0, 0], [20, 0, 0], [30, 0, 0], style)).toBeNull();
   });
 });
