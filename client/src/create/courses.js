@@ -8,7 +8,8 @@ import { WIDTHS, along, levelAt, onTrack, profile, reachOf, trackOf, widened } f
 // otherwise. A course that runs into another's water is at that water's level there. A course
 // whose end isn't in water, or in another course's, is drawn in OPEN's color. Arrows along each
 // show which way it flows. With ripple on, courses running into others widen them below (their
-// joins, worked out again with every change), and with it off, they're kept as they were. They're
+// joins, worked out again with every change), and the stretches of others a course being drawn or
+// dragged would change are drawn under them; with it off, joins are kept as they were. They're
 // kept in the water file with the bodies (water.js):
 //
 //   { "version": 1, "bodies": [...], "courses": [{ "type": "stream", "points": [[x, z, width], ...], "surface": [ft, ...], "seed": 412, "joins": [[t, width], ...] }, ...], "ripple": true }
@@ -17,6 +18,7 @@ export const COURSES = { stream: "#5aa0d8", river: "#2f6bb0" };
 const OPEN = "#e04040";
 const ARROW_EVERY_PX = 90; // how far apart arrows are along a course, on the screen at most
 const ARROW_PX = 7;
+const REACH = { color: "rgba(255, 196, 40, 0.75)", px: 9, every: 0.25 }; // how the stretches a ripple reaches are drawn, and how often they're found, s
 const JOIN_FT = 5; // how near another course's water a course's end joins it, past its edge
 
 const round = (v) => Math.round(v * 10) / 10;
@@ -29,6 +31,7 @@ export class Courses extends Areas {
     this.start = () => ({ widths: [WIDTHS[this.kind], WIDTHS[this.kind]], surface: null, seed: Math.floor(Math.random() * 1000), joins: [] });
     Object.assign(this, { baseAt, stillAt });
     this.ripple = true;
+    this.reaches = { key: null, since: 0, found: [] }; // the stretches a ripple reaches, [[area, t]], from t ft down its line
   }
 
   load(json) {
@@ -136,12 +139,69 @@ export class Courses extends Areas {
     return this.areas.some((other) => other !== area && this.nearOther(other, x, z));
   }
 
+  // What a course being drawn or dragged would change of others, with ripple on: [[area, t]], each
+  // from t ft down its line, where what runs into it changes, to its end.
+  reach() {
+    const editing = this.dragging?.moved ? this.dragging.area : this.draft && this.to ? { kind: this.draft.kind, points: [...this.draft.points, this.to], ...this.start() } : null;
+    if (!this.ripple || !editing) return [];
+    const areas = this.areas;
+    const had = areas.map((area) => area.joins ?? []);
+    if (!areas.includes(editing)) this.areas = [...areas, editing];
+    for (let pass = 0; pass <= this.areas.length; pass++) {
+      let changed = false;
+      for (const area of this.areas) {
+        const joins = this.joinsOf(area);
+        if (JSON.stringify(joins) === JSON.stringify(area.joins ?? [])) continue;
+        area.joins = joins;
+        changed = true;
+      }
+      if (!changed) break;
+    }
+    const found = [];
+    areas.forEach((area, k) => {
+      const [was, now] = [had[k].map((j) => JSON.stringify(j)), area.joins.map((j) => JSON.stringify(j))];
+      const moved = [...had[k].filter((_, n) => !now.includes(was[n])), ...area.joins.filter((_, n) => !was.includes(now[n]))];
+      if (area !== editing && moved.length) found.push([area, Math.min(...moved.map((j) => j[0]))]);
+      area.joins = had[k];
+    });
+    this.areas = areas;
+    return found;
+  }
+
   tick(dt, camera, width, height, to, active) {
     super.tick(dt, camera, width, height, to, active);
     if (!this.shown) return;
     for (const area of this.areas) area.line.material = this.material(this.ended(area) ? area.kind : "open", area === this.selected);
-    // Arrows down each course.
     const c = this.handles.getContext("2d");
+    // The stretches a ripple from the course being edited reaches, found again now and then as it changes.
+    const reaches = this.reaches;
+    const editing = this.dragging?.moved || (this.draft && this.to);
+    const key = editing ? JSON.stringify([this.ripple, this.dragging?.area.points ?? this.draft.points, this.to]) : null;
+    if ((reaches.since += dt) >= REACH.every && key !== reaches.key) [reaches.key, reaches.since, reaches.found] = [key, 0, key ? this.reach() : []];
+    c.strokeStyle = REACH.color;
+    c.lineWidth = REACH.px;
+    c.lineCap = "round";
+    for (const [area, from] of editing ? reaches.found : []) {
+      c.beginPath();
+      let [t, started] = [0, false];
+      for (let k = 1; k < area.points.length; k++) {
+        const [a, b] = [area.points[k - 1], area.points[k]];
+        const length = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (t + length > from) {
+          const u = Math.max(0, (from - t) / (length || 1));
+          const [p, q] = [this.screen(camera, width, height, [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u]), this.screen(camera, width, height, b)];
+          if (p && q) {
+            if (!started) c.moveTo(...p);
+            c.lineTo(...q);
+            started = true;
+          }
+        }
+        t += length;
+      }
+      c.stroke();
+    }
+    c.lineCap = "butt";
+    // Arrows down each course.
     c.lineWidth = 2;
     for (const area of this.areas) {
       c.strokeStyle = this.colors[this.ended(area) ? area.kind : "open"];
