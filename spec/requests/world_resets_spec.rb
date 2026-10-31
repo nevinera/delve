@@ -39,7 +39,7 @@ RSpec.describe "Emptying a world", type: :request do
       entries = JSON.parse(req.body)["tree"]
       expect(entries.pluck("path")).to eq(%w[README.md script/build.sh world.json])
       expect(entries[1]).to include("mode" => "100755", "sha" => "6" * 40)
-      expect(JSON.parse(entries[2]["content"])).to eq("version" => 1, "name" => "Thorn", "continents" => [{"key" => "main", "name" => "Main"}], "dungeons" => [])
+      expect(JSON.parse(entries[2]["content"])).to eq("version" => 2, "name" => "Thorn", "continents" => [{"key" => "main", "name" => "Main"}], "dungeons" => [])
       true
     }).to have_been_requested
     expect(commit.with(body: hash_including(tree: "n" * 40, parents: [head]))).to have_been_requested

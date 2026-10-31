@@ -1,6 +1,6 @@
 # Empties a world's repo, as one commit on its default branch: every world file
 # (docs/formats/world-files.md) goes, and a new world.json starts a world with one continent, as
-# the editor's new world does. Other files, like a README or LICENSE, stay. Tags and the released
+# /create's new world does. Other files, like a README or LICENSE, stay. Tags and the released
 # commit stay where they were.
 class WorldReset
   WORLD_FILES = %r{
@@ -34,7 +34,7 @@ class WorldReset
   end
 
   def world_json
-    info = {version: 1, name: @world.display_name, continents: [{key: "main", name: "Main"}], dungeons: []}
+    info = {version: 2, name: @world.display_name, continents: [{key: "main", name: "Main"}], dungeons: []}
     {path: "world.json", mode: "100644", type: "blob", content: "#{JSON.pretty_generate(info)}\n"}
   end
 end
