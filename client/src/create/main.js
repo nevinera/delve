@@ -9,7 +9,7 @@ import { waterPath } from "../v2/water.js";
 import { BIOMES, biomesPath } from "./biomes.js";
 import { Builder } from "./builder.js";
 import { Compass, facing } from "./compass.js";
-import { EMPTY_FT, FAR_FT, FINE, Ground, Renditions } from "./ground.js";
+import { EMPTY_FT, FAR_FT, FINE, Ground, REACH_FT, Renditions } from "./ground.js";
 import { grid } from "./grid.js";
 import { planningPath } from "./marks.js";
 import { Clutter } from "./clutter.js";
@@ -27,7 +27,9 @@ import { Tools } from "./tools.js";
 
 const $ = (id) => document.getElementById(id);
 const SKY = 0x9cc4e4;
-const FOG = { nearFt: FAR_FT * 0.5, farFt: FAR_FT * 1.02 };
+// Where fog starts and closes in, as shares of how far off ground's drawn.
+const FOG = { near: 0.5, far: 1.02 };
+const [NEAR_FT, NEAR_PER_FT, NEAR_MOST_FT] = [0.5, 0.001, 100]; // the camera's near plane, by how high it is
 const UNDERWATER = { color: 0x1d4f5c, nearFt: -10, farFt: 70 }; // the fog with the camera under water
 const SAVE_EVERY_MS = 2000;
 const SEA_BELOW_FT = 2;
@@ -133,8 +135,8 @@ function start(world, changes) {
   renderer.setPixelRatio(1);
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(SKY);
-  scene.fog = new THREE.Fog(SKY, FOG.nearFt, FOG.farFt);
-  const camera = new THREE.PerspectiveCamera(60, 1, 0.5, 100000);
+  scene.fog = new THREE.Fog(SKY, FAR_FT * FOG.near, FAR_FT * FOG.far);
+  const camera = new THREE.PerspectiveCamera(60, 1, 0.5, REACH_FT * 4);
   scene.add(new THREE.HemisphereLight(0xdde8ff, 0x55503c, 1.6));
   const sun = new THREE.DirectionalLight(0xfff2dd, 1.8);
   sun.position.set(0.5, 1, 0.3);
@@ -143,7 +145,7 @@ function start(world, changes) {
   // and the sea's plane the rest.
   const ground = new Ground(scene, renditions, renderer);
   const surfaces = new WaterSurfaces(scene, renditions, renderer, ground);
-  const sea = new Sea(scene, FAR_FT * 2.2, renditions, surfaces);
+  const sea = new Sea(scene, REACH_FT * 6, renditions, surfaces);
   // Trees and objects in the tiles' slots round the builder.
   const scatter = new Scatter(scene, renditions);
   // Reeds, pebbles and the like by the water near the builder.
@@ -296,12 +298,18 @@ function start(world, changes) {
     timed("ground", () => clutter.tick(dt, x, z, ground.finest <= FINE));
     timed("ground", () => falls.tick(dt, x, z));
     timed("ground", () => surfaces.tick(dt, x, z, ground.finest <= FINE));
-    // The ground drawn ends FAR_FT across from the builder, so fog closes in there, as far off
-    // as that is from the camera, high up too.
+    // The ground drawn ends ground.reach across from the builder, so fog closes in there, as far
+    // off as that is from the camera, high up too. High up, the camera's near plane's further
+    // off, to keep the far ground from flickering.
     const back = Math.hypot(camera.position.x - x, camera.position.z - z);
     const high = Math.max(0, camera.position.y - (groundAt(x, z) ?? SEA_LEVEL_FT));
-    scene.fog.near = Math.hypot(FOG.nearFt + back, high);
-    scene.fog.far = Math.hypot(FOG.farFt + back, high);
+    scene.fog.near = Math.hypot(ground.reach * FOG.near + back, high);
+    scene.fog.far = Math.hypot(ground.reach * FOG.far + back, high);
+    const near = Math.min(NEAR_MOST_FT, Math.max(NEAR_FT, high * NEAR_PER_FT));
+    if (Math.abs(camera.near - near) > near * 0.1) {
+      camera.near = near;
+      camera.updateProjectionMatrix();
+    }
     // Under water, murky, close in.
     const surface = waterAt(camera.position.x, camera.position.z);
     const under = surface != null && camera.position.y < surface;

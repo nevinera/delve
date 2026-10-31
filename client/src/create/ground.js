@@ -9,7 +9,7 @@ import { PATTERNS, RUNNING, look, painted, slopeOf } from "../v2/look.js";
 import { makeSlots } from "../v2/slots.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate, platePath, tileIndexInPlate } from "../v2/plate.js";
 import { CORNERS, decodePlatter, encodePlatter, indexIn, plateIndexIn, platterOf, platterOfPlate, platterPath } from "../v2/platter.js";
-import { CELL_FT, CHUNK_CELLS, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
+import { CELL_FT, CHUNK_CELLS, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_FT, PLATTER_PLATES, PLATTER_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
 import { CELLS, CHUNKS, TILES } from "./geo.js";
 import { withGrid } from "./grid.js";
 
@@ -18,7 +18,10 @@ import { withGrid } from "./grid.js";
 //   ground, as walk mode draws it (editor/groundMaterial.js)
 // - within FINE_TILES, flat-shaded at cell scale (its chunks' renditions, v2/plate.js)
 // - within COARSE_TILES, from its rendition, a part a chunk (v2/platter.js)
-// - further, from its plate's rendition, a part a tile, out to plates within FAR_FT.
+// - further, from its plate's rendition, a part a tile, out to plates within FAR_FT;
+// - further still, the same, but a platter's plates in one mesh, out to plates within the
+//   builder's reach: FAR_FT, and REACH_PER_FT more for each foot the builder's over the ground,
+//   up to REACH_FT.
 // All but the full ground are flat-shaded in their parts' colors.
 // Flying higher over the ground than half a tier's square is wide, that tier isn't drawn at all.
 // A tile's distance is in tiles, the most of how far it is east or west, north or south, and up
@@ -35,6 +38,8 @@ export const FULL_TILES = 4;
 export const FINE_TILES = 8;
 export const COARSE_TILES = 16;
 export const FAR_FT = 24576;
+export const REACH_FT = 160000; // about 30 miles
+const REACH_PER_FT = 1.5;
 const LEAVE_FT = 32; // how far past their tile's edge the builder goes before what's drawn changes
 const SKIRT = 0.75; // how far a skirt hangs, as a share of a part's size
 const SKIRT_SHADE = 0.6;
@@ -1024,6 +1029,7 @@ export class Ground {
     this.anchor = null; // the builder's tile and height in tiles' widths, [tx, ty, tz]
     this.stale = false; // whether what's drawn wants working out again, wherever the builder is
     this.finest = FULL; // the finest tier drawn, by how high the builder is (finestAt)
+    this.reach = FAR_FT; // how far off ground's drawn, by how high the builder is
     // Which kinds of ground are shown (toggle).
     this.shown = { full: true, fine: true, tile: true, plate: true, water: true };
     this.water = null; // the material water drawn from renditions is drawn with
@@ -1052,8 +1058,7 @@ export class Ground {
     const a = this.anchor;
     const out = (v, at) => v < at * TILE_FT - LEAVE_FT || v > (at + 1) * TILE_FT + LEAVE_FT;
     for (const key of this.renditions.wetPlates) {
-      const group = this.plates.get(key);
-      if (group) group.userData.tiers = null;
+      for (const group of [this.plates.get(key), this.plates.get(platterKeyOf(key))]) if (group) group.userData.tiers = null;
       this.stale = true;
     }
     this.renditions.wetPlates.clear();
@@ -1111,6 +1116,30 @@ export class Ground {
         wanted.set(key, tiers);
       }
     }
+    // Past FAR_FT, out to its reach, a platter's plates at a time, a 1 for each of its plates
+    // drawn, row order.
+    const high = Math.max(0, y - (this.renditions.heightAt(x, z) ?? SEA_LEVEL_FT));
+    this.reach = Math.min(REACH_FT, FAR_FT + REACH_PER_FT * high);
+    const span = Math.ceil(this.reach / PLATTER_FT);
+    const [qx, qz] = [Math.floor(x / PLATTER_FT), Math.floor(z / PLATTER_FT)];
+    for (let ppz = qz - span; this.reach > FAR_FT && ppz <= qz + span; ppz++) {
+      for (let ppx = qx - span; ppx <= qx + span; ppx++) {
+        let [plates, nearest] = ["", Infinity];
+        for (let j = 0; j < PLATTER_PLATES; j++) {
+          for (let i = 0; i < PLATTER_PLATES; i++) {
+            const [px, pz] = [ppx * PLATTER_PLATES + i, ppz * PLATTER_PLATES + j];
+            const d = Math.hypot(x - Math.max(px * PLATE_FT, Math.min(x, (px + 1) * PLATE_FT)), z - Math.max(pz * PLATE_FT, Math.min(z, (pz + 1) * PLATE_FT)));
+            const drawn = d > FAR_FT && d <= this.reach && Boolean(this.renditions.plate(px, pz));
+            plates += drawn ? "1" : "0";
+            if (drawn) nearest = Math.min(nearest, d);
+          }
+        }
+        if (nearest === Infinity) continue;
+        const key = `platter:${ppx},${ppz}`;
+        wanted.set(key, plates);
+        distance.set(key, nearest);
+      }
+    }
     this.wanted = wanted;
     for (const key of [...this.plates.keys()]) if (!wanted.has(key)) this.drop(key);
     this.pending = [...wanted].filter(([key, tiers]) => this.plates.get(key)?.userData.tiers !== tiers).map(([key]) => key);
@@ -1136,6 +1165,7 @@ export class Ground {
   // round them, a tier each, row order, "-" for none, or "far" for every tile from the plate's
   // rendition.
   makePlate(key, tiers) {
+    if (key.startsWith("platter:")) return this.makePlatter(key, tiers);
     const [px, pz] = key.split(",").map(Number);
     const plate = this.renditions.plate(px, pz);
     const side = PLATE_TILES + 2;
@@ -1228,6 +1258,38 @@ export class Ground {
       }
       this.add(group, g, this.water, "water").renderOrder = 1;
     }
+    return group;
+  }
+
+  // The plates of platter `key`, "platter:ppx,ppz", that `plates` has a 1 for, as one mesh, from
+  // their renditions, a part a tile, with skirts round them.
+  makePlatter(key, plates) {
+    const [ppx, ppz] = key.slice("platter:".length).split(",").map(Number);
+    const group = new THREE.Group();
+    group.position.set(ppx * PLATTER_FT, 0, ppz * PLATTER_FT);
+    group.userData = { tiers: plates, counts: [0, 0, 0, 0] };
+    const faces = new Faces();
+    const [tx0, tz0] = [ppx * PLATTER_TILES, ppz * PLATTER_TILES];
+    // Whether tile (i, j) of the platter's drawn here.
+    const drawn = (i, j) =>
+      i >= 0 && j >= 0 && i < PLATTER_TILES && j < PLATTER_TILES && plates[Math.floor(j / PLATE_TILES) * PLATTER_PLATES + Math.floor(i / PLATE_TILES)] === "1" && Boolean(this.renditions.tile(tx0 + i, tz0 + j));
+    for (let j = 0; j < PLATTER_TILES; j++) {
+      for (let i = 0; i < PLATTER_TILES; i++) {
+        if (!drawn(i, j)) continue;
+        const [tx, tz] = [tx0 + i, tz0 + j];
+        const plate = this.renditions.plate(Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES));
+        const [pi, pj] = [i % PLATE_TILES, j % PLATE_TILES];
+        const height = (a, b) => plate.heights[(pj + b) * CORNERS + pi + a];
+        const biome = this.renditions.biomes.at((tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT);
+        const rgb = this.partRgb(biome, height, 0, 0, 1, TILE_FT, tx * TILE_FT, tz * TILE_FT, tileWater(this.renditions.tile(tx, tz)));
+        const color = (shade) => Faces.tinted(rgb.map((v) => v * shade), this.tint, biome);
+        const corner = (a, b) => [(i + a) * TILE_FT, height(a, b), (j + b) * TILE_FT];
+        faces.square(corner(0, 0), corner(1, 0), corner(0, 1), corner(1, 1), color(1));
+        group.userData.counts[PLATE]++;
+        for (const [di, dj, from, to] of SIDES) if (!drawn(i + di, j + dj)) faces.skirt(corner(...from), corner(...to), TILE_FT * SKIRT, color(SKIRT_SHADE));
+      }
+    }
+    this.add(group, faces.geometry(), this.materials.plate, "plate");
     return group;
   }
 
@@ -1331,8 +1393,8 @@ export class Ground {
   // moved either side of a plate's edge shows moving together.
   refresh(keys) {
     // Plates made where there were none are worked into what's drawn.
-    if ([...keys].some((key) => !this.wanted.has(key))) this.stale = true;
-    const again = [...keys].filter((key) => this.wanted.has(key));
+    if ([...keys].some((key) => !this.wanted.has(key) && !this.wanted.has(platterKeyOf(key)))) this.stale = true;
+    const again = [...new Set([...keys].flatMap((key) => [key, platterKeyOf(key)]))].filter((key) => this.wanted.has(key));
     for (const key of again) {
       const group = this.plates.get(key);
       if (group) group.userData.tiers = null;
@@ -1391,6 +1453,9 @@ function tileWater(tile) {
   const type = [...counts].reduce((best, c) => (c[1] > best[1] ? c : best))[0];
   return { wet: wet * 2 >= water.level.length, level, type };
 }
+
+// The key a plate's drawn under past FAR_FT: its platter's.
+const platterKeyOf = (key) => `platter:${platterOfPlate(...key.split(",").map(Number)).join(",")}`;
 
 // Each side of a plate, and how far the plate past it is.
 const PLATE_SIDES = { west: [-1, 0], east: [1, 0], north: [0, -1], south: [0, 1] };

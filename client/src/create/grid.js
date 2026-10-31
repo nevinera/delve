@@ -3,7 +3,7 @@ import { CELL_FT, CHUNK_FT, PLATE_FT, PLATTER_FT, TILE_FT } from "../v2/sizes.js
 // The grid drawn over the ground and the sea, shown at first (g shows or hides it): lines round cells, chunks,
 // tiles, plates, platters and squares 8 platters across, thicker the bigger the square, a fixed number of pixels wide however far off. Each
 // ground material draws only the squares as fine as its ground is drawn, and fades out lines
-// too close together to read. Faces within about 5° of upright, like skirts, get none.
+// too close together to read: less than 4 to 10 of their widths apart. Faces within about 5° of upright, like skirts, get none.
 
 const LINES = [
   [CELL_FT, 1, 0.22],
@@ -41,7 +41,7 @@ export function withGrid(material, finest) {
           vec2 w = max(fwidth(p), vec2(1e-4));
           vec2 off = abs(fract(p / spacing + 0.5) - 0.5) * spacing / w;
           vec2 line = 1.0 - smoothstep(px * 0.5 - 0.5, px * 0.5 + 0.5, off);
-          return max(line.x, line.y) * smoothstep(4.0, 10.0, spacing / max(w.x, w.y));
+          return max(line.x, line.y) * smoothstep(4.0 * px, 10.0 * px, spacing / max(w.x, w.y));
         }`,
       )
       .replace(

@@ -29,13 +29,13 @@ export const CLIMB_FT = 24; // the least climbing speed
 export const CLIMB_PER_FT = 0.8; // so height doubles about every 0.9 seconds
 export const FAST = 3; // how much faster a double-tapped key goes
 export const LIFT_FT = 1; // how far taking off rises at once
-export const CEILING_FT = 20000;
+export const CEILING_FT = 150000;
 const DOUBLE_TAP_MS = 300;
 const EYE_FT = 5.5;
 const CAMERA = { distance: 30, min: 4, max: 2000, pitch: 0.35, minPitch: -1.3, maxPitch: 1.45 };
 // How the camera changes with height: tipped down by up to `tilt` radians, all of it by `tiltFt`
-// up.
-const ALOFT = { tilt: 0.7, tiltFt: 600 };
+// up, then, from `highFt`, toward looking straight down, all the way at `topFt`, to plan from.
+const ALOFT = { tilt: 0.7, tiltFt: 600, highFt: 20000, topFt: 100000 };
 const DRAG = 0.006; // radians per pixel
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "f"]);
 const SWIM_LEVEL = 0.12; // how far, in radians, the camera can look either way of where it rests while swimming on the level
@@ -110,8 +110,10 @@ export function standAt(x, z, groundAt, waterAt = () => null) {
 // The camera's pitch and distance for the builder `above` feet over the ground, from the ones
 // dragging and the wheel set.
 export function cameraFor({ pitch, distance }, above) {
-  const t = Math.min(1, Math.max(0, above) / ALOFT.tiltFt);
-  return { pitch: Math.min(CAMERA.maxPitch, pitch + ALOFT.tilt * t * t * (3 - 2 * t)), distance };
+  const ease = (t) => (t = Math.min(1, Math.max(0, t))) * t * (3 - 2 * t);
+  const low = Math.min(CAMERA.maxPitch, pitch + ALOFT.tilt * ease(above / ALOFT.tiltFt));
+  const high = ease((above - ALOFT.highFt) / (ALOFT.topFt - ALOFT.highFt));
+  return { pitch: low + (CAMERA.maxPitch - low) * high, distance };
 }
 
 // The builder in a scene, moved by the keys and followed by the camera.
