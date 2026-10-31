@@ -2,7 +2,7 @@ import polygonClipping from "polygon-clipping";
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { CELL_FT, CELLS } from "../world/constants.js";
-import { MAX_SLAB_CORNERS, SLAB_REACH_FT, cutSlab, fitFloor, raiseWall, slabBottom, slabFace, slabHitsTrunk, slabProblems, slabTile, slabTop } from "../world/slabs.js";
+import { MAX_SLAB_CORNERS, SLAB_REACH_FT, crosses, cutSlab, fitFloor, raiseWall, slabBottom, slabFace, slabHitsTrunk, slabProblems, slabTile, slabTop } from "../world/slabs.js";
 import { slabAt, slabGeometry, slabMeshes } from "./slabMeshes.js";
 import { repeatFt } from "./slabTextures.js";
 import { treeHeight, trunkRadius } from "./treeMeshes.js";
@@ -946,6 +946,34 @@ export function rectanglePieces(a, b, yaw, { thickness, surface }) {
     for (const [v, dv] of cuts(d, side)) {
       const at = [whole.at[0] + u * Math.cos(r) + v * Math.sin(r), whole.at[1], whole.at[2] - u * Math.sin(r) + v * Math.cos(r)].map(tidy);
       pieces.push({ ...whole, at, outline: [[0, 0], [du, 0], [du, dv], [0, dv]] });
+    }
+  }
+  return pieces;
+}
+
+// A level floor over `points` ([x, z] continent feet, in order round it), its top at `top`, as
+// slabs: cut into squares as rectangles are, each square's share of it a slab. Empty for fewer than
+// three points, edges that cross, or no area.
+export function polygonPieces(points, top, { thickness, surface }) {
+  const ring = points.map(([x, z]) => [tidy(x), tidy(z)]);
+  if (ring.length < 3 || crosses(ring)) return [];
+  const side = pieceFt(Math.sqrt((SLAB_REACH_FT ** 2 - thickness ** 2) / 2), repeatFt(surface));
+  if (side < 1) return [];
+  const xs = ring.map((p) => p[0]);
+  const zs = ring.map((p) => p[1]);
+  const [x0, z0] = [Math.min(...xs), Math.min(...zs)];
+  const pieces = [];
+  for (const [u, du] of cuts(Math.max(...xs) - x0, side)) {
+    for (const [v, dv] of cuts(Math.max(...zs) - z0, side)) {
+      const [sx, sz] = [x0 + u, z0 + v];
+      const square = [[sx, sz], [sx + du, sz], [sx + du, sz + dv], [sx, sz + dv]];
+      for (const [outer, ...holes] of polygonClipping.intersection([ring], [square])) {
+        // polygon-clipping repeats each ring's first corner at the end.
+        const open = (r) => r.slice(0, -1);
+        const [ax, az] = outer[0];
+        const local = (r) => open(r).map(([x, z]) => [tidy(x - ax), tidy(z - az)]);
+        pieces.push({ at: [tidy(ax), tidy(top), tidy(az)], turn: [0, 0, 0], outline: local(outer), ...(holes.length ? { holes: holes.map(local) } : {}), thickness, surface });
+      }
     }
   }
   return pieces;

@@ -288,24 +288,25 @@
       </div>
     </div>
     <div data-config="slab" hidden>
-      <p class="create-note">Drag to draw, starting on the ground or a slab. Floors, rooms and roofs are square to the way you look. Door and window cut holes in the slab clicked.</p>
+      <p class="create-note">Drag to draw, starting on the ground or a slab. Floors, rooms and roofs are square to the way you look. Polygon clicks a floor's corners in turn, level with the first, and closes on the first again or Enter; Backspace takes the last back. Door and window cut holes in the slab clicked.</p>
       <p class="create-note create-said" data-build-say></p>
       <div class="create-modes" role="group" aria-label="what to draw">
         <button type="button" data-slab-mode="floor" aria-pressed="true">floor</button>
         <button type="button" data-slab-mode="wall" aria-pressed="false">wall</button>
         <button type="button" data-slab-mode="room" aria-pressed="false">room</button>
         <button type="button" data-slab-mode="roof" aria-pressed="false">roof</button>
+        <button type="button" data-slab-mode="polygon" aria-pressed="false" title="click a floor's corners, closing it on the first">polygon</button>
         <button type="button" data-slab-mode="door" aria-pressed="false" title="click a wall to cut a door 4 ft wide and 7 tall in it, up from the floor or ground there">door</button>
         <button type="button" data-slab-mode="window" aria-pressed="false" title="click a slab to cut a window 3 ft square in it">window</button>
       </div>
-      <label data-slab-only="floor wall room roof">surface
+      <label data-slab-only="floor wall room roof polygon">surface
         <select id="slabSurface">
           <% %w[floorboards woodgrain logs shingles stone stoneBlocks brick roughRock dirtyStone cobblestone flagstones marble sandstone thatch slateTiles clayTiles plaster packedEarth ironPlate rustyIronPlate].each do |surface| %>
             <option value="<%= surface %>"><%= surface %></option>
           <% end %>
         </select>
       </label>
-      <label data-slab-only="floor wall room roof">thickness <input type="number" id="slabThickness" value="1" min="0.1" max="16" step="0.25"> ft</label>
+      <label data-slab-only="floor wall room roof polygon">thickness <input type="number" id="slabThickness" value="1" min="0.1" max="16" step="0.25"> ft</label>
       <label data-slab-only="wall room">height <input type="number" id="slabHeight" value="10" min="1" max="60" step="1"> ft</label>
       <label data-slab-only="room"><input type="checkbox" id="slabRoomRoof"> with a roof</label>
       <label data-slab-roof>roof

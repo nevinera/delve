@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { slabBottom, slabProblems, slabSpanAt, slabTop } from "../world/slabs.js";
-import { SlabTool, conformedCells, faceSlab, roofPieces, roomPieces, floorSlab, rectanglePieces, rectangleSlab, wallPieces, wallSlab } from "./slabTool.js";
+import { SlabTool, conformedCells, faceSlab, roofPieces, roomPieces, floorSlab, polygonPieces, rectanglePieces, rectangleSlab, wallPieces, wallSlab } from "./slabTool.js";
 
 const near = (points) => points.map((p) => p.map((v) => Math.round(v * 100) / 100 + 0));
 
@@ -199,5 +199,33 @@ describe("roofPieces", () => {
     expect(pieces.length).toBeGreaterThan(4);
     for (const piece of pieces) expect(slabProblems(piece)).toEqual([]);
     expect(under(pieces, 50, 29.9)).toBeCloseTo(10 + 29.9 * tan, 2);
+  });
+});
+
+const polygonOptions = { thickness: 1, surface: "floorboards" };
+const outlineArea = (outline) => Math.abs(outline.reduce((s, [x0, z0], i) => { const [x1, z1] = outline[(i + 1) % outline.length]; return s + x0 * z1 - x1 * z0; }, 0)) / 2;
+
+describe("polygon floors", () => {
+  it("covers the polygon with valid level slabs, its top where asked", () => {
+    const l = [[0, 0], [100, 0], [100, 30], [30, 30], [30, 90], [0, 90]];
+    const pieces = polygonPieces(l, 50, polygonOptions);
+    expect(pieces.length).toBeGreaterThan(1);
+    for (const piece of pieces) expect(slabProblems(piece)).toEqual([]);
+    expect(pieces.reduce((s, p) => s + outlineArea(p.outline), 0)).toBeCloseTo(100 * 30 + 30 * 60, 3);
+    const top = (x, z) => pieces.map((p) => slabSpanAt(p, x, z)).find(Boolean)?.[1];
+    expect(top(10, 80)).toBeCloseTo(50);
+    expect(top(80, 20)).toBeCloseTo(50);
+    expect(top(80, 80)).toBe(undefined);
+  });
+
+  it("makes nothing of too few points, or edges that cross", () => {
+    expect(polygonPieces([[0, 0], [10, 0]], 0, polygonOptions)).toEqual([]);
+    expect(polygonPieces([[0, 0], [10, 10], [10, 0], [0, 10]], 0, polygonOptions)).toEqual([]);
+  });
+
+  it("makes one slab of a small polygon", () => {
+    const pieces = polygonPieces([[5, 5], [15, 5], [10, 14]], 3, polygonOptions);
+    expect(pieces).toHaveLength(1);
+    expect(pieces[0].outline).toHaveLength(3);
   });
 });

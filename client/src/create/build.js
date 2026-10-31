@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { objectMeshes } from "../editor/objectMeshes.js";
 import { PlacePicker } from "../editor/placePicker.js";
 import { slabMeshes } from "../editor/slabMeshes.js";
-import { roofPieces, rectanglePieces, roomPieces, wallPieces } from "../editor/slabTool.js";
+import { polygonPieces, roofPieces, rectanglePieces, roomPieces, wallPieces } from "../editor/slabTool.js";
 import { Thumbnails } from "../editor/thumbnailRenderer.js";
 import { newObjectId, turnPoint } from "../world/builtObjects.js";
 import { CELL_FT as TEMPLATE_CELL_FT } from "../world/constants.js";
@@ -22,6 +22,8 @@ import { drawable, slabSpace } from "./things.js";
 // - slab: dragging draws a floor, a wall, a room (a floor with four walls on it, and a roof, if
 //   asked) or a roof, square to the way the camera looks. It starts on the ground or a slab, and
 //   the rest lies level with where it started.
+//   Polygon clicks a floor's corners in turn, level with where it started, and closes on its first
+//   corner, or Enter.
 //   Door and window click a slab to cut a hole in it: a door up from the floor or ground under
 //   where it's clicked, a window round where it's clicked.
 // - pick: clicking an object or slab picks it out, shift picks more or fewer, and dragging a box
@@ -42,6 +44,7 @@ const MOST_CELLS = 400; // how many of a template's cells are read for its heigh
 const GHOST_OPACITY = 0.6;
 const DOOR_FT = [4, 7]; // wide, tall
 const WINDOW_FT = [3, 3];
+const CLOSE_PX = 12; // how near a polygon's first corner a click closes it
 const HOME_TEMPLATES = "my templates"; // where keepTemplate keeps those given no collection
 const NEW_COLLECTION = "new"; // the collection select's value for a new one
 const WRONG = new THREE.MeshBasicMaterial({ color: 0xe04040, transparent: true, opacity: 0.6 });
@@ -71,6 +74,7 @@ export class Build {
     this.scale = null; // the object picked's size
     this.slab = { mode: "floor", surface: "floorboards", thickness: 1, height: 10, roof: "gable", pitch: 30, roomRoof: false };
     this.drawing = null; // a slab being dragged: { a: [x, y, z], yaw degrees, pieces }
+    this.outlining = null; // a polygon floor being clicked out: { y, points: [[x, z], ...] }
     this.moving = null; // picked things being dragged: { y, last: [x, z], moved }
     this.box = null; // a box being dragged to pick in: { x0, y0, x1, y1, add }
     this.ghost = new THREE.Group();
@@ -119,6 +123,8 @@ export class Build {
     for (const button of modes) {
       button.addEventListener("click", () => {
         this.slab.mode = button.dataset.slabMode;
+        this.outlining = null;
+        this.clearGhost();
         modes.forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
         this.showSlab();
       });
@@ -137,7 +143,7 @@ export class Build {
   setTool(tool) {
     this.tool = tool;
     this.say("");
-    this.drawing = this.moving = this.box = null;
+    this.drawing = this.moving = this.box = this.outlining = null;
     this.boxEl.hidden = true;
     this.clearGhost();
     if (tool !== "pick") this.things.picked.clear();
@@ -245,6 +251,7 @@ export class Build {
     if (this.tool === "object" && hit && this.armed.object) return this.placeObject(hit);
     if (this.tool === "template" && hit && this.armed.template) return this.placeTemplate(hit);
     if (this.tool === "slab" && (this.slab.mode === "door" || this.slab.mode === "window")) return this.cut(hit);
+    if (this.tool === "slab" && this.slab.mode === "polygon") return this.outline(hit);
     if (this.tool === "slab" && hit) {
       this.drawing = { a: hit.at, yaw: this.cameraYaw(), pieces: [] };
       return;
@@ -274,6 +281,7 @@ export class Build {
   }
 
   move(e) {
+    if (this.outlining) this.showOutline();
     if (this.drawing) {
       const b = this.onLevel(this.drawing.a[1]);
       if (b) this.drawing.pieces = this.pieces(this.drawing.a, b, this.drawing.yaw);
@@ -346,6 +354,18 @@ export class Build {
       const step = (e.shiftKey ? FINE_TURN_DEG : TURN_DEG) * (k === "c" ? 1 : -1);
       if (this.tool === "pick") this.turnPicked(step);
       else this.yaw += (step * Math.PI) / 180;
+      return true;
+    }
+    if (this.outlining && e.key === "Enter") {
+      if (this.outlining.points.length >= 3) this.closeOutline();
+      return true;
+    }
+    if (this.outlining && e.key === "Backspace") {
+      this.outlining.points.pop();
+      if (!this.outlining.points.length) {
+        this.outlining = null;
+        this.clearGhost();
+      } else this.showOutline();
       return true;
     }
     if (this.tool === "pick" && (e.key === "Delete" || e.key === "Backspace")) {
@@ -461,9 +481,70 @@ export class Build {
     }
   }
 
+  // A click drawing a polygon floor: its first corner where `hit` is, then each next one level with
+  // it, closing it on the first again.
+  outline(hit) {
+    if (!this.outlining) {
+      if (!hit) return;
+      this.outlining = { y: hit.at[1], points: [[hit.at[0], hit.at[2]]] };
+      return this.showOutline();
+    }
+    const at = this.onLevel(this.outlining.y);
+    if (!at) return;
+    const { points } = this.outlining;
+    if (points.length >= 3 && this.nearFirst(at)) return this.closeOutline();
+    points.push([at[0], at[2]]);
+    this.showOutline();
+  }
+
+  // Whether `at` is on the screen near the polygon's first corner.
+  nearFirst(at) {
+    const [x, z] = this.outlining.points[0];
+    const r = this.canvas.getBoundingClientRect();
+    const px = (p) => {
+      const v = new THREE.Vector3(...p).project(this.camera);
+      return [((v.x + 1) / 2) * r.width, ((1 - v.y) / 2) * r.height];
+    };
+    const [a, b] = [px([x, this.outlining.y, z]), px(at)];
+    return Math.hypot(a[0] - b[0], a[1] - b[1]) <= CLOSE_PX;
+  }
+
+  // Makes the polygon clicked out a floor, if it can be.
+  closeOutline() {
+    const { y, points } = this.outlining;
+    this.outlining = null;
+    this.clearGhost();
+    const { thickness, surface } = this.slab;
+    const pieces = polygonPieces(points, y + thickness, { thickness, surface });
+    if (pieces.length && pieces.every((slab) => !slabProblems(slab).length)) this.placed.put(pieces);
+    else this.say("That floor can't be made: its edges cross, or it's too small or has too many corners.");
+  }
+
+  // The polygon being clicked out, to the pointer: its edges, and the floor it would make, red
+  // where it can't be made.
+  showOutline() {
+    this.clearGhost();
+    const { y, points } = this.outlining;
+    const at = this.onLevel(y);
+    const corners = at ? [...points, [at[0], at[2]]] : points;
+    const { thickness, surface } = this.slab;
+    const pieces = corners.length >= 3 ? polygonPieces(corners, y + thickness, { thickness, surface }) : [];
+    const wrong = corners.length >= 3 && (!pieces.length || pieces.some((slab) => slabProblems(slab).length));
+    for (const mesh of slabMeshes(pieces, [0, 0])) {
+      if (wrong) mesh.material = WRONG;
+      this.ghost.add(mesh);
+    }
+    const line = new THREE.LineLoop(
+      new THREE.BufferGeometry().setFromPoints(corners.map(([x, z]) => new THREE.Vector3(x, y + thickness + 0.05, z))),
+      new THREE.LineBasicMaterial({ color: wrong ? 0xe04040 : 0xffe080, depthTest: false }),
+    );
+    line.renderOrder = 6;
+    this.ghost.add(line);
+  }
+
   // Each frame: the thing armed follows the pointer.
   tick() {
-    if (this.drawing) return;
+    if (this.drawing || this.outlining) return;
     const type = this.tool === "object" ? this.armed.object : this.tool === "template" ? this.armed.template : null;
     const hit = type && this.hit();
     if (!hit) {

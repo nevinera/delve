@@ -480,7 +480,8 @@ function touch(a, b, c, d) {
 }
 
 // Whether two edges of the loop that don't share a corner touch.
-function crosses(points) {
+// Whether any two of the closed outline's edges cross.
+export function crosses(points) {
   const n = points.length;
   for (let i = 0; i < n; i++) {
     for (let j = i + 1; j < n; j++) {
