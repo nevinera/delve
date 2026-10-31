@@ -1,8 +1,10 @@
 import * as THREE from "three";
 import { TURN_RATE } from "../character/posed.js";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
+import { Figure } from "./figure.js";
 
-// The builder: a person who walks on the ground and flies over it, with a camera behind them.
+// The builder: a person (figure.js) who walks on the ground and flies over it, with a camera
+// behind them.
 //
 // On the ground: W/S run forward and back, A/D turn, Q/E strafe, and space takes off. In water
 // deeper than SWIM_FT they swim, slower, kept that far under its surface. In the air:
@@ -144,8 +146,7 @@ export class Builder {
     this.hop = null; // { from, to, land, t, key, wait } while hopping
     this.takeoff = false;
     this.paints = false; // whether a tool has the left button, leaving looking round to the right
-    this.model = builderModel();
-    scene.add(this.model);
+    this.figure = new Figure(scene);
     window.addEventListener("keydown", (e) => this.onKey(e, true));
     window.addEventListener("keyup", (e) => this.onKey(e, false));
     window.addEventListener("blur", () => this.held.clear());
@@ -188,17 +189,19 @@ export class Builder {
       land,
     };
     this.takeoff = false;
+    const was = this.state;
     this.state = moveBuilder(this.state, input, dt, this.groundAt, this.push, this.waterAt);
     if (!this.state.flying) this.hop = null;
     if (this.drag?.button === 2) this.cam.yaw = 0;
+    const now = this.state;
+    const speed = dt > 0 ? Math.hypot(now.x - was.x, now.z - was.z) / dt : 0;
+    this.figure.update(dt, { ...now, forward: input.forward, strafe: input.strafe, turn: input.turn, speed });
     this.place();
   }
 
-  // Puts the model where the builder is and the camera behind them, above the ground.
+  // Puts the camera behind the builder, above the ground.
   place() {
     const { x, y, z, yaw } = this.state;
-    this.model.position.set(x, y, z);
-    this.model.rotation.y = yaw;
     const look = yaw + this.cam.yaw;
     const { pitch, distance } = cameraFor(this.cam, this.above);
     const head = new THREE.Vector3(x, y + EYE_FT, z);
@@ -257,17 +260,4 @@ export class Builder {
     e.preventDefault();
     this.cam.distance = Math.max(CAMERA.min, Math.min(CAMERA.max, this.cam.distance * Math.exp(e.deltaY * 0.001)));
   }
-}
-
-// A stand-in for the builder: a capsule with a nose, facing +z at yaw 0.
-function builderModel() {
-  const group = new THREE.Group();
-  const material = new THREE.MeshLambertMaterial({ color: 0xe0a040 });
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(1, 4, 4, 12), material);
-  body.position.y = 3;
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.5, 8), material);
-  nose.rotation.x = Math.PI / 2;
-  nose.position.set(0, 4.5, 1.2);
-  group.add(body, nose);
-  return group;
 }
