@@ -97,6 +97,28 @@ describe("the builder", () => {
   });
 
   it("stands on the sea off the tiles", () => {
-    expect(moveBuilder({ x: 0, y: 5, z: 0, yaw: 0, flying: false }, still, 0.1, () => null).y).toBe(0);
+    let s = { x: 0, y: 5, z: 0, yaw: 0, flying: false };
+    for (let n = 0; n < 10; n++) s = moveBuilder(s, still, 0.1, () => null);
+    expect(s.y).toBe(0);
+  });
+
+  it("falls off an edge higher than a step, and can take off while falling", () => {
+    const ledge = (x, z) => (z < 1 ? 20 : 0);
+    let s = moveBuilder({ x: 0, y: 20, z: 0, yaw: 0, flying: false }, { ...still, forward: 1 }, 0.1, ledge);
+    expect(s.y).toBeGreaterThan(19);
+    expect(s.falling).toBeGreaterThan(0);
+    const air = moveBuilder(s, { ...still, takeoff: true }, 0.1, ledge);
+    expect(air.flying).toBe(true);
+    for (let n = 0; n < 30; n++) s = moveBuilder(s, still, 0.1, ledge);
+    expect(s.y).toBe(0);
+    expect(s.falling).toBe(0);
+  });
+
+  it("flies as fast as its height over the land, not what's built on it", () => {
+    const floor = () => 50;
+    const land = () => 0;
+    const s = moveBuilder({ x: 0, y: 100, z: 0, yaw: 0, flying: true }, { ...still, forward: 1 }, 0.1, floor, undefined, undefined, land);
+    expect(s.z).toBeCloseTo(10);
   });
 });
+

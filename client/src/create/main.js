@@ -177,7 +177,7 @@ function start(world, changes, fresh) {
   const feetY = () => builder?.state.y ?? saved?.y ?? 0;
   const walkAt = (x, z) => things.standAt(x, z, feetY() + STEP_FT);
   const push = (x, z) => things.pushOut(...scatter.pushOut(x, z, BUILDER_RADIUS_FT), feetY(), BUILDER_RADIUS_FT);
-  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push });
+  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push });
   const tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library });
   // The bottom bar's display toggles.
   $("showGrid").checked = grid.value === 1;

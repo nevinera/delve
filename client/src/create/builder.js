@@ -13,9 +13,10 @@ import { WALK_DEG } from "./growth.js";
 // deeper than SWIM_FT they swim, slower, floating with their feet that far under its surface, or
 // anywhere under it: forward goes the way the camera looks, so looking down past where it rests
 // dives and looking up rises, space swims up and F down, and they stay where they are when still,
-// never over its surface nor under its bed; where it's shallower they stand. In the air:
-// the same keys move, space rises and F falls. Touching the ground lands. Flying goes faster the
-// higher you are, so you climb, sink and cross the land in about the same time whatever the
+// never over its surface nor under its bed; where it's shallower they stand. Walking off an edge
+// higher than a step, they fall, and space while falling takes off. In the air: the same keys move,
+// space rises and F falls. Touching the ground lands. Flying goes faster the higher you are over
+// the land, slabs aside, so you climb, sink and cross the land in about the same time whatever the
 // height. Double-tapping space, F or W and holding the second press goes FAST times as fast that
 // way.
 //
@@ -34,6 +35,7 @@ export const FAST = 3; // how much faster a double-tapped key goes
 export const LIFT_FT = 1; // how far taking off rises at once
 export const CEILING_FT = 150000;
 export const SLIDE_FT = 30; // a second, down ground too steep to walk on
+export const GRAVITY_FT = 32; // a second, each second, falling
 const STEEPEST = Math.tan((WALK_DEG * Math.PI) / 180); // rise over run
 const DOUBLE_TAP_MS = 300;
 const EYE_FT = 5.5;
@@ -45,23 +47,26 @@ const DRAG = 0.006; // radians per pixel
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "f"]);
 const SWIM_LEVEL = 0.12; // how far, in radians, the camera can look either way of where it rests while swimming on the level
 
-// One step of the builder's moving. state: { x, y, z, yaw, flying, swimming }, continent feet and
-// radians. input: { forward, strafe, turn } each -1, 0 or 1, rise and drop (space or F held: 0, 1,
+// One step of the builder's moving. state: { x, y, z, yaw, flying, swimming, falling }, continent
+// feet and radians, falling the speed they're falling at, feet a second, or 0. input: { forward, strafe, turn } each -1, 0 or 1, rise and drop (space or F held: 0, 1,
 // or FAST double-tapped), ahead (how many times as fast forward goes, 1 or FAST), takeoff (space
 // was just pressed), and pitch, how far up the way they swim goes, in radians. groundAt(x, z)
 // gives the ground's height, or null off the tiles, where the sea's bed is SEA_LEVEL_FT, and
 // waterAt(x, z) the water's surface there, or null where there's none. Walking, push(x, z) moves
-// where they'd be out of what's in the way. Returns the new state, with `swimming` whether they're
-// in water deeper than SWIM_FT.
-export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z], waterAt = () => null) {
+// where they'd be out of what's in the way. landAt(x, z), the land's height without what's built
+// on it, sets how fast flying goes. Returns the new state, with `swimming` whether they're in water
+// deeper than SWIM_FT.
+export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z], waterAt = () => null, landAt = groundAt) {
   const ground = (x, z) => standAt(x, z, groundAt, waterAt);
   const bed = (x, z) => groundAt(x, z) ?? SEA_LEVEL_FT;
   let { x, y, z, yaw, flying } = state;
+  let falling = state.falling ?? 0;
   yaw += input.turn * TURN_RATE * dt;
-  const above = Math.max(0, y - ground(x, z));
+  const above = Math.max(0, y - standAt(x, z, landAt, waterAt));
   let swimming = !flying && deep(x, z, groundAt, waterAt);
   if (!flying && !swimming && input.takeoff) {
     flying = true;
+    falling = 0;
     y += LIFT_FT;
   }
   const speed = flying ? Math.max(FLY_FT, above * FLY_PER_FT) : (input.forward < 0 ? BACK_FT : RUN_FT) * (swimming ? SWIM_SPEED : 1);
@@ -84,7 +89,7 @@ export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z],
     // Where it's too shallow to swim, they stand.
     swimming = deep(x, z, groundAt, waterAt);
     if (!swimming) y = ground(x, z);
-    return { x, y, z, yaw, flying: false, swimming };
+    return { x, y, z, yaw, flying: false, swimming, falling: 0 };
   }
   if (flying) {
     const climb = Math.max(CLIMB_FT, above * CLIMB_PER_FT);
@@ -92,12 +97,22 @@ export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z],
   }
   const floor = ground(x, z);
   // Flying down into deep water, they swim where they come to.
-  if (flying && deep(x, z, groundAt, waterAt) && y <= floor) return { x, y: Math.max(bed(x, z), y), z, yaw, flying: false, swimming: true };
-  if (!flying || y <= floor) {
+  if (flying && deep(x, z, groundAt, waterAt) && y <= floor) return { x, y: Math.max(bed(x, z), y), z, yaw, flying: false, swimming: true, falling: 0 };
+  if (flying && y <= floor) {
     y = floor;
     flying = false;
+  } else if (!flying) {
+    // Walking keeps to the ground down slopes and steps, as far as running could go down the
+    // steepest of them; past that, they fall till they land.
+    const step = Math.max(1, speed * dt * STEEPEST + 0.5);
+    if (!falling && y - floor <= step) y = floor;
+    else {
+      falling += GRAVITY_FT * dt;
+      y -= falling * dt;
+      if (y <= floor) [y, falling] = [floor, 0];
+    }
   }
-  return { x, y, z, yaw, flying, swimming: !flying && deep(x, z, groundAt, waterAt) };
+  return { x, y, z, yaw, flying, swimming: !flying && deep(x, z, groundAt, waterAt), falling };
 }
 
 // How steep the ground's face is at (x, z), rise over run.
@@ -151,8 +166,11 @@ export function cameraFor({ pitch, distance }, above) {
 // The builder in a scene, moved by the keys and followed by the camera.
 export class Builder {
   // Starts at `state` (as moveBuilder takes it), or else on the ground at continent feet `at`.
-  constructor({ scene, camera, canvas, groundAt, waterAt = () => null, at, state, push }) {
+  // landAt(x, z): the land's height, without what's built on it, for how fast flying goes and how
+  // the camera looks down (moveBuilder's).
+  constructor({ scene, camera, canvas, groundAt, landAt = groundAt, waterAt = () => null, at, state, push }) {
     this.push = push;
+    this.landAt = landAt;
     this.waterAt = waterAt;
     this.camera = camera;
     this.canvas = canvas;
@@ -175,8 +193,9 @@ export class Builder {
     canvas.addEventListener("contextmenu", (e) => e.preventDefault());
   }
 
+  // How high they are over the land, slabs aside.
   get above() {
-    return this.state.y - this.standAt(this.state.x, this.state.z);
+    return this.state.y - standAt(this.state.x, this.state.z, this.landAt, this.waterAt);
   }
 
   standAt(x, z) {
@@ -201,7 +220,7 @@ export class Builder {
     };
     this.takeoff = false;
     const was = this.state;
-    this.state = moveBuilder(this.state, input, dt, this.groundAt, this.push, this.waterAt);
+    this.state = moveBuilder(this.state, input, dt, this.groundAt, this.push, this.waterAt, this.landAt);
     if (this.drag?.button === 2) this.cam.yaw = 0;
     const now = this.state;
     const speed = dt > 0 ? Math.hypot(now.x - was.x, now.z - was.z) / dt : 0;
