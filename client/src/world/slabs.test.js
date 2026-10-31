@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { TILE_FT } from "./constants.js";
-import { cutSlab, defaultSteps, fitFloor, insideSlab, raiseWall, rampSlab, slabFootholds, slabHitsTrunk, stairShape, stairSlab, wallFootprint, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
+import { cutSlab, defaultSteps, fitFloor, insideSlab, raiseWall, rampSlab, splitSlab, slabFootholds, slabHitsTrunk, stairShape, stairSlab, wallFootprint, slabSpanAt, slabBottom, slabHome, slabProblems, slabTile, slabTop } from "./slabs.js";
 
 // A 10 ft square floor, and a wall: the same square stood up on its south edge.
 const floor = { at: [100, 40, 200], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "floorboards" };
@@ -325,5 +325,17 @@ describe("insideSlab", () => {
     const wall = { at: [0, 0, 0], turn: [0, -90, 0], outline: [[0, 0], [10, 0], [10, 8], [0, 8]], thickness: 1, surface: "stone" };
     expect(insideSlab(wall, [5, 4, 0.5])).toBe(true);
     expect(insideSlab(wall, [5, 4, -0.5])).toBe(false);
+  });
+});
+
+describe("splitSlab", () => {
+  it("cuts a slab too big for one into pieces that are slabs", () => {
+    const wall = { at: [0, 0, 0], turn: [0, -90, 0], outline: [[0, 0], [70, 0], [70, 20], [0, 20]], thickness: 1, surface: "stone", holes: [[[30, 2], [34, 2], [34, 9], [30, 9]]] };
+    const pieces = splitSlab(wall);
+    expect(pieces.length).toBe(3);
+    for (const piece of pieces) expect(slabProblems(piece)).toEqual([]);
+    // The hole straddles a cut, so it's two notches.
+    expect(pieces.reduce((sum, p) => sum + Math.abs(p.outline.reduce((a, q, i) => a + q[0] * p.outline[(i + 1) % p.outline.length][1] - p.outline[(i + 1) % p.outline.length][0] * q[1], 0)) / 2, 0)).toBeCloseTo(70 * 20 - 4 * 7);
+    expect(splitSlab({ ...wall, outline: [[0, 0], [10, 0], [10, 10], [0, 10]], holes: undefined })).toHaveLength(1);
   });
 });

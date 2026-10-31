@@ -267,8 +267,9 @@ export function wallFootprint(wall, low, high) {
 
 // A wall raised, or cut down, to meet the undersides of roofs over it: its top edge follows the
 // lowest roof over each point along it, whichever of its two faces meets that higher. Its foot,
-// doorways and windows stay. Returns { wall } or { problem }, saying why it can't.
-export function raiseWall(wall, roofs) {
+// doorways and windows stay. Returns { wall } or { problem }, saying why it can't. With `anySize`,
+// a wall too big for one slab is still given, for splitSlab to cut up.
+export function raiseWall(wall, roofs, { anySize = false } = {}) {
   const n = turnPoint([0, 1, 0], wall.turn);
   const up = turnPoint([0, 0, 1], wall.turn)[1];
   if (Math.abs(n[1]) >= 0.05 || Math.abs(Math.abs(up) - 1) > 1e-6) return { problem: "isn't standing straight up" };
@@ -346,8 +347,31 @@ export function raiseWall(wall, roofs) {
   const [ring, ...holesLeft] = left[0];
   const { holes: _, ...rest } = wall;
   const raisedWall = holesLeft.length ? { ...rest, outline: back(ring), holes: holesLeft.map(back) } : { ...rest, outline: back(ring) };
-  const problem = slabProblems(raisedWall)[0];
+  const problem = slabProblems(raisedWall).filter((p) => !(anySize && p.startsWith("reaches")))[0];
   return problem ? { problem: `would be a slab that ${problem}` } : { wall: raisedWall };
+}
+
+// A slab cut into pieces small enough to be slabs: squares `size` feet a side across its outline,
+// each piece what's of it in one, keeping its holes. A slab small enough already comes back alone.
+export function splitSlab(slab, size = SLAB_REACH_FT / 2) {
+  if (!slabProblems(slab).some((p) => p.startsWith("reaches"))) return [slab];
+  const close = (ring) => [...ring, ring[0]];
+  const tidy = (v) => Math.round(v * 100) / 100 + 0;
+  const open = (ring) => ring.slice(0, -1).map((p) => p.map(tidy));
+  const shape = [close(slab.outline), ...(slab.holes ?? []).map(close)];
+  const us = slab.outline.map((p) => p[0]);
+  const vs = slab.outline.map((p) => p[1]);
+  const { holes: _, ...rest } = slab;
+  const pieces = [];
+  for (let u = Math.min(...us); u < Math.max(...us) - 1e-6; u += size) {
+    for (let v = Math.min(...vs); v < Math.max(...vs) - 1e-6; v += size) {
+      const cell = [close([[u, v], [u + size, v], [u + size, v + size], [u, v + size]])];
+      for (const [outline, ...holes] of polygonClipping.intersection(shape, cell)) {
+        pieces.push(holes.length ? { ...rest, outline: open(outline), holes: holes.map(open) } : { ...rest, outline: open(outline) });
+      }
+    }
+  }
+  return pieces;
 }
 
 // How high a polygon reaches over u, in its second coordinate.

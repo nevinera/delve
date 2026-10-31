@@ -9,7 +9,7 @@ import { Thumbnails } from "../editor/thumbnailRenderer.js";
 import { newObjectId, turnPoint } from "../world/builtObjects.js";
 import { CELL_FT as TEMPLATE_CELL_FT } from "../world/constants.js";
 import { makeObject, specOf } from "../world/objects.js";
-import { MAX_STAIR_DEG, SLAB_REACH_FT, cutSlab, defaultSteps, insideSlab, rampSlab, slabBottom, slabProblems, slabTop, stairShape, stairSlab, unturned } from "../world/slabs.js";
+import { MAX_STAIR_DEG, SLAB_REACH_FT, cutSlab, defaultSteps, insideSlab, raiseWall, rampSlab, splitSlab, slabBottom, slabProblems, slabTop, stairShape, stairSlab, unturned } from "../world/slabs.js";
 import { pressing } from "./press.js";
 import { MAJOR, planeRun, runLines, runPoint, snapInRun } from "./surfaceGrid.js";
 import { captureTemplate, placedTemplate } from "../world/templates.js";
@@ -45,7 +45,8 @@ import { drawable, slabSpace } from "./things.js";
 //   which move them along each axis and turn them, as one, about their middle. C and V turn them,
 //   the up and down arrows raise and lower them, and Delete deletes them. What's picked can be
 //   made a template, or copied: a template kept in this browser, not the world, till the next
-//   copy, that paste arms the template tool with.
+//   copy, that paste arms the template tool with. Picked walls can be extended up, or cut down, to
+//   meet the floors or roofs over them.
 // Corners drawn snap to slabs' corners near them on the screen, or else their edges, unless shift's
 // held: a floor or room started from a floor's is level with it, and a wall started from a floor's
 // has its foot at the floor's bottom, or from another wall's foot, there too. A wall's foot is set
@@ -191,6 +192,7 @@ export class Build {
     $("pickedScale").addEventListener("change", () => (this.scaling = false));
     $("makeTemplate").addEventListener("click", () => this.askTemplate());
     $("pickedCopy").addEventListener("click", () => this.copy());
+    $("pickedRaise").addEventListener("click", () => this.raisePicked());
     $("templatePaste").addEventListener("click", () => this.paste());
     $("templateMakeKeep").addEventListener("click", () => this.makeTemplate());
     $("templateMakeCancel").addEventListener("click", () => $("templateMake").hidePopover());
@@ -1170,6 +1172,7 @@ export class Build {
     $("pickedDelete").disabled = !picked.length;
     $("makeTemplate").disabled = !picked.length;
     $("pickedCopy").disabled = !picked.length;
+    $("pickedRaise").disabled = !picked.some(upright);
     const one = picked.length === 1 && !isSlab(picked[0]) ? picked[0] : null;
     $("pickedScaleRow").hidden = !one;
     if (!one) return;
@@ -1194,6 +1197,42 @@ export class Build {
     this.things.picked.clear();
     this.things.pickedDrawn = "";
     this.showPicked();
+  }
+
+  // Raises each picked wall, or cuts it down, to meet the undersides of the slabs over it, floors or
+  // roofs, the lowest where they're stacked (raiseWall), cut into as many slabs as it takes. Walls
+  // that can't be stay as they were.
+  raisePicked() {
+    const walls = [...this.things.picked].filter(upright);
+    const changed = [];
+    const made = [];
+    const problems = [];
+    for (const wall of walls) {
+      const foot = Math.min(...slabTop(wall).map((p) => p[1]));
+      const [x, , z] = slabTop(wall)[0];
+      const over = this.placed.near(x, z, SLAB_REACH_FT * 2).slabs.filter((slab) => !upright(slab) && Math.min(...slabBottom(slab).map((p) => p[1])) > foot + 0.5);
+      const { wall: raised, problem } = over.length ? raiseWall(wall, over, { anySize: true }) : { problem: "has nothing over it" };
+      if (problem) {
+        problems.push(problem);
+        continue;
+      }
+      const pieces = splitSlab(raised);
+      if (pieces.some((piece) => slabProblems(piece).length)) {
+        problems.push("would be slabs that can't be made");
+        continue;
+      }
+      changed.push(wall);
+      made.push(...pieces);
+    }
+    if (changed.length) {
+      this.placed.swap(changed, made);
+      for (const wall of changed) this.things.picked.delete(wall);
+      for (const piece of made) this.things.picked.add(piece);
+      this.things.pickedDrawn = "";
+      this.showPicked();
+    }
+    const which = problems.length === walls.length ? "None of the walls could" : `${problems.length} of the walls couldn't`;
+    this.say(problems.length ? `${which} be extended: one ${problems[0]}.` : "");
   }
 
   // Turns what's picked `degrees` about the middle of their homes.
@@ -1493,6 +1532,9 @@ function shift(thing, dx, dz, dy, y) {
   thing.at = [thing.at[0] + dx, thing.at[1] + dz];
   if (dy) thing.y = (Number.isFinite(thing.y) ? thing.y : y) + dy;
 }
+
+// Whether a thing is a wall: a slab standing upright, not stairs.
+const upright = (thing) => isSlab(thing) && !thing.kind && Math.abs(turnPoint([0, 1, 0], thing.turn)[1]) < 0.05;
 
 // Turns a thing `degrees` about the upright line through [cx, cz].
 function turnAbout(thing, cx, cz, degrees) {
