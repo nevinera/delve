@@ -1,5 +1,7 @@
 # Plates
 
+Version 2 worlds keep their ground in [v2 plates](v2-plates.md) and [v2 platters](v2-platters.md) instead.
+
 A plate holds 16×16 tiles of one layer of a continent as plain ASCII text. A world stores all its tiles in plates. Code: `client/src/world/plateCodec.js` (the text), `client/src/editor/plates.js` (packing a world's tiles into plates and back).
 
 ## Where plates live
