@@ -1,15 +1,20 @@
 import * as THREE from "three";
 import { characterClips, loadAnimations } from "../character/animations.js";
 import { characterMesh } from "../character/characterMesh.js";
-import { randomLook } from "../character/recipe.js";
+import { resolveRecipe } from "../character/recipe.js";
 
-// The builder's figure: a character (character/characterMesh.js), weapons put away, animated to
+// The builder's figure: a character (character/characterMesh.js), empty-handed, animated to
 // match how the builder moves. On the ground it runs, strafes, backs up and turns on the spot,
 // its legs turned part way toward a strafe and its chest twisted back to the front; in deep water
-// it swims, and in the air it swims too, as if through the air. Its look is picked at random the
-// first time and kept in the browser after.
+// it swims, and in the air it swims too, as if through the air. It's always the same: plain, bland
+// and neither one thing nor another, so it's no one in particular.
 
-const LOOK_KEY = "create.look";
+const LOOK = resolveRecipe({
+  height: 5.8,
+  bust: 0,
+  hair: "short",
+  colors: { skin: "#d1a077", hair: "#3a2618", eyes: "#6a7a7a", primary: "#8a7a5a", secondary: "#5a5a5a" },
+});
 // The clips for running ahead, to the left and right and back, and how far one stretches to
 // match the builder's speed before its feet are left to slide.
 const GAIT = { ahead: "Run_Fwd_Loop", left: "Run_Left_Loop", right: "Run_Right_Loop", back: "Run_Back_Loop" };
@@ -30,7 +35,7 @@ const UP = new THREE.Vector3(0, 1, 0);
 
 export class Figure {
   constructor(scene) {
-    this.model = characterMesh({ ...lookOf(), sheathed: true });
+    this.model = characterMesh(LOOK);
     scene.add(this.model);
     this.mixer = new THREE.AnimationMixer(this.model);
     this.bones = new Map(this.model.skeleton.bones.map((b) => [b.name, b]));
@@ -92,17 +97,4 @@ export class Figure {
     action.play();
     if (previous) action.crossFadeFrom(previous, FADE_S, false);
   }
-}
-
-// The builder's look: kept in the browser, or picked at random and kept.
-function lookOf() {
-  try {
-    const kept = JSON.parse(localStorage.getItem(LOOK_KEY));
-    if (kept?.height) return kept;
-  } catch {}
-  const look = randomLook();
-  try {
-    localStorage.setItem(LOOK_KEY, JSON.stringify(look));
-  } catch {}
-  return look;
 }
