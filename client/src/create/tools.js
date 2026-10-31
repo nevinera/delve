@@ -9,6 +9,7 @@ import { Draw } from "./draw.js";
 import { Marks } from "./marks.js";
 import { scatterPools } from "./marsh.js";
 import { Measure } from "./measure.js";
+import { Paths } from "./paths.js";
 import { TITLE_MAX } from "./pins.js";
 import { STROKE_MAX_FT, Stroke } from "./stroke.js";
 import { WaterBodies } from "./water.js";
@@ -23,7 +24,8 @@ import { WaterBodies } from "./water.js";
 //   sticks pins in the ground. Clicking a pin's head, with no tool or with pin, or double-clicking
 //   it with select, opens its title and content to edit. Select picks pins out too, and dragging
 //   one picked out moves those picked out. Measure's click starts a ruler to the pointer, and its
-//   drag draws a circle (measure.js).
+//   drag draws a circle (measure.js). Path's clicks put a start and an end to search for the
+//   shortest way on foot between (paths.js).
 // - geo's biomes: clicking corners draws an area of a biome, closed by clicking its first corner,
 //   double-clicking or Enter, and Esc throws it away (biomes.js). Clicking an area or its outline
 //   picks it out; then its corners drag, shift-clicking one takes it away, dragging an edge adds
@@ -106,6 +108,7 @@ export class Tools {
     // Measure's, { from, to } for a ruler, { middle, radius } for a circle, and while the button's
     // down, where it went down and whether a ruler or circle was shown before.
     this.measuring = null;
+    this.paths = new Paths(scene, canvas.parentElement, renditions, (x, z) => this.surface(x, z), (text) => ($("pathStatus").textContent = text));
     this.moving = null; // pins being dragged, { from, pins: [[pin, x, z]], before, moved }
     this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }
     this.editing = null; // the pin open to edit, { pin, before }, before the planning file's JSON
@@ -161,6 +164,12 @@ export class Tools {
     $("poolsCount").addEventListener("input", () => this.readPools());
     $("poolsSize").addEventListener("input", () => this.readPools());
     $("poolsUndo").addEventListener("click", () => this.undoPools());
+    $("pathMost").addEventListener("input", () => {
+      this.readPath();
+      this.paths.start();
+    });
+    $("pathSpeed").addEventListener("input", () => this.readPath());
+    $("pathAgain").addEventListener("click", () => this.paths.start());
     const colors = [...document.querySelectorAll("[data-pen-color]")];
     for (const button of colors) {
       button.addEventListener("click", () => {
@@ -261,6 +270,7 @@ export class Tools {
     this.readNoise();
     this.readGrain();
     this.readPools();
+    this.readPath();
 
     this.box = null; // select's box, { x0, y0, x1, y1, add } in pixels on the canvas
     this.boxEl = document.createElement("div");
@@ -330,6 +340,11 @@ export class Tools {
       if (this.tool === "draw") {
         const at = this.hit();
         if (at) this.draw.start(at[0], at[2]);
+        return;
+      }
+      if (this.tool === "path") {
+        const at = this.hit();
+        if (at) this.paths.click(at[0], at[2]);
         return;
       }
       if (this.tool === "measure") {
@@ -531,6 +546,7 @@ export class Tools {
     this.water.setShown(tool === "water" || tool === "courses");
     this.courses.setShown(tool === "courses" || tool === "water");
     this.measuring = null;
+    this.paths.setShown(tool === "path");
     this.box = null;
     this.boxEl.hidden = true;
     this.drawing = null;
@@ -572,6 +588,16 @@ export class Tools {
     this.pools.size = Math.round(8 * 15 ** (Number($("poolsSize").value) / 1000));
     $("poolsCountOut").textContent = String(this.pools.count);
     $("poolsSizeOut").textContent = `${this.pools.size} ft`;
+  }
+
+  // The path tool's longest way, a quarter mile to 5 miles, and how many cells it searches a
+  // frame, 100 to 200,000, both on a log scale.
+  readPath() {
+    const s = this.paths.settings;
+    s.mostFt = Math.round(1320 * 20 ** (Number($("pathMost").value) / 1000));
+    s.cells = Math.round(100 * 2000 ** (Number($("pathSpeed").value) / 1000));
+    $("pathMostOut").textContent = `${(s.mostFt / 5280).toFixed(2)} mi`;
+    $("pathSpeedOut").textContent = `${s.cells.toLocaleString()} cells a frame`;
   }
 
   // Scatters pools in the ring at (x, z), kept to undo.
@@ -720,6 +746,7 @@ export class Tools {
     this.marks.tick(dt, w, h, this.camera.position, above, ftPerPx);
     this.marks.pins.tick(this.camera, w, h);
     this.draw.tick(this.camera, w, h);
+    this.paths.tick(this.camera, w, h);
     for (const [tool, areas] of Object.entries(this.outlined)) {
       const to = this.tool === tool && areas.draft && this.hit();
       areas.tick(dt, this.camera, w, h, to ? [to[0], to[2]] : null, this.tool === tool);

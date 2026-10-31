@@ -1,3 +1,4 @@
+import * as THREE from "three";
 import { CELL_FT, CHUNK_FT, PLATE_FT, PLATTER_FT, TILE_FT } from "../v2/sizes.js";
 
 // The grid drawn over the ground and the sea, shown at first (g shows or hides it): lines round cells, chunks,
@@ -15,6 +16,10 @@ const LINES = [
 ]; // [spacing ft, width px, how dark]
 
 export const grid = { value: 1 }; // 1 while it's shown, shared by every ground material
+// The path tool's tint over the ground it's reached (paths.js), shared by every ground material:
+// its texture, red the share of the longest way it's from the start, green where it's swum, alpha
+// where it's reached; the square it covers, [x0, z0, width, depth] ft; and 1 while it's shown.
+export const walked = { map: { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, box: { value: new THREE.Vector4() }, shown: { value: 0 } };
 
 // Draws the grid over `material`, its squares `finest` ft and up.
 export function withGrid(material, finest) {
@@ -24,6 +29,9 @@ export function withGrid(material, finest) {
   material.onBeforeCompile = (shader, renderer) => {
     compile.call(material, shader, renderer);
     shader.uniforms.gridShown = grid;
+    shader.uniforms.walkMap = walked.map;
+    shader.uniforms.walkBox = walked.box;
+    shader.uniforms.walkShown = walked.shown;
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nvarying vec3 vGridAt;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGridAt = (modelMatrix * vec4(transformed, 1.0)).xyz;");
@@ -35,6 +43,9 @@ export function withGrid(material, finest) {
         "#include <common>",
         `#include <common>
         uniform float gridShown;
+        uniform sampler2D walkMap;
+        uniform vec4 walkBox;
+        uniform float walkShown;
         varying vec3 vGridAt;
         // How much of a line \`px\` pixels wide, round squares \`spacing\` ft, is at p.
         float gridLine(vec2 p, float spacing, float px) {
@@ -52,6 +63,13 @@ export function withGrid(material, finest) {
           float on = 0.0;
           ${lines}
           gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.05, 0.04, 0.03), on * smoothstep(0.05, 0.1, abs(n.y)));
+        }
+        if (walkShown > 0.5) {
+          vec2 uv = (vGridAt.xz - walkBox.xy) / walkBox.zw;
+          vec4 w = all(greaterThan(uv, vec2(0.0))) && all(lessThan(uv, vec2(1.0))) ? texture2D(walkMap, uv) : vec4(0.0);
+          vec2 share = w.rg / max(w.a, 1e-3);
+          vec3 tint = mix(mix(vec3(1.0, 0.9, 0.3), vec3(0.95, 0.25, 0.15), share.x), vec3(0.25, 0.7, 1.0), step(0.5, share.y));
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, tint, 0.5 * w.a);
         }`,
       );
   };

@@ -39,6 +39,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M4 16 L44 16 M4 10 L4 22 M24 12 L24 20 M14 14 L14 18 M34 14 L34 18 M44 10 L44 22" fill="none" stroke="#ffe9a0" stroke-width="2"/></svg>
         <span>measure</span><kbd class="create-key">M</kbd>
       </button>
+      <button type="button" data-tool="path" data-key="l" aria-pressed="false" title="find the shortest way on foot from one place to another">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M6 18 C 14 18, 14 6, 24 8 C 32 10, 32 16, 42 6" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="4 3"/><circle cx="6" cy="18" r="3" fill="#ffe9a0"/><circle cx="42" cy="6" r="3" fill="#ffe9a0"/></svg>
+        <span>path</span><kbd class="create-key">L</kbd>
+      </button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" data-key="h" aria-pressed="false" title="raise and lower the ground">
@@ -212,6 +216,19 @@
     <div data-config="measure" hidden>
       <p class="create-note">Click to start a ruler to the pointer, ticked at miles, quarter miles, 500, 100 and 10 ft, and click again to put it away. Drag to draw a circle, with its radius and area.</p>
     </div>
+    <div data-config="path" hidden>
+      <p class="create-note">Click where to start, then where to go, and it searches for the shortest way on foot, up slopes no steeper than 50°, swimming where it has to. The ground it's searched is tinted yellow near the start to red at its longest, blue where it swam. The way is drawn white walked and blue swum.</p>
+      <p class="create-note" id="pathStatus"></p>
+      <label>longest <output id="pathMostOut"></output>
+        <input id="pathMost" type="range" min="0" max="1000" value="694">
+      </label>
+      <label>speed <output id="pathSpeedOut"></output>
+        <input id="pathSpeed" type="range" min="0" max="1000" value="500">
+      </label>
+      <div class="create-way">
+        <button type="button" id="pathAgain">search again</button>
+      </div>
+    </div>
     <div data-config="select" hidden>
       <p class="create-note">Click a line or pin to select it, or drag a box round them. Shift selects more, or clicks fewer. Drag selected pins to move them. Double-click a pin to open it. Delete or backspace deletes what's selected.</p>
       <div class="create-way">
@@ -366,7 +383,7 @@
   <h2>Tools</h2>
   <dl>
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
-    <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, and measure measures distances and circles. Click a pin's head to open it</dd>
+    <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, measure measures distances and circles, and path finds the shortest way on foot from one place to another, to find where ranges and cliffs can be crossed. Click a pin's head to open it</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, draw streams and rivers, and clear it away</dd>
   </dl>
 </div>
