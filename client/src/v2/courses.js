@@ -3,11 +3,12 @@ import { fbm } from "../world/noise.js";
 // Courses: streams and rivers, drawn by hand as lines running downstream and kept with the bodies
 // in each continent's water.json (water.js). A course is
 //
-//   { type: "stream" | "river", points: [[x, z, width], ...], surface: [ft, ...], seed, joins: [[t, width], ...] }
+//   { type: "stream" | "river", points: [[x, z, width], ...], surface: [ft, ...], seed, joins: [[t, width], ...], pools: [...] }
 //
 // continent feet, its points from its source down, each with how wide its water is there, and
 // joins, where other courses run into it, if any: t ft down its line, `width` wide. Below each,
-// it's wider, by the root of the sum of its width and theirs squared, over WIDEN_WIDTHS. Its
+// it's wider, by the root of the sum of its width and theirs squared, over WIDEN_WIDTHS. Pools,
+// if any, are low spots it fills as ponds (profile), each { level, from, to, points }. Its
 // water doesn't follow that line straight: it runs down a track (trackOf) curved through its
 // points, meandering either side of them by its width, the way `seed` has it, wider and deeper in
 // its bends and pools than in its riffles. `surface` is its water's height every SURFACE_STEP_FT
@@ -47,6 +48,7 @@ const STEP_BOULDERS = [2, 6]; // how many boulders lie across each step, at leas
 const STEP_BOULDER_FT = 6; // one more for every this many ft wide
 const STEP_BOULDER_MAX_FT = 7; // how big they are at most
 const SCOUR = { widths: 0.8, deep: 0.5, ft: 3 }; // how far below each step, in widths, it's scoured, how much deeper, as a share of the step, and at most
+const POOL_MIN_FT = 2; // how far a course would cut into a rise, at least, for the low spot above it to be filled as a pool, and how much higher that has it
 const MOUTH_GRADE = 0.25; // how steeply, ft a foot, a course at most falls to the water it runs into
 const TRACK_STEP_FT = 4; // how far apart its track's points are
 const MEANDER = 1.2; // how far its track wanders either side of its line, in widths
@@ -71,12 +73,16 @@ export const reachOf = ({ points, joins = [] }) => {
   return Math.min(MEANDER_MAX_FT, widest * MEANDER) + widest * 0.7 + BANK_FT;
 };
 
-// A course's box, [x0, z0, x1, z1], with its channel.
+// A course's box, [x0, z0, x1, z1], with its channel and pools.
 export function courseBox(course) {
   const r = reachOf(course);
   const xs = course.points.map((p) => p[0]);
   const zs = course.points.map((p) => p[1]);
-  return [Math.min(...xs) - r, Math.min(...zs) - r, Math.max(...xs) + r, Math.max(...zs) + r];
+  const box = [Math.min(...xs) - r, Math.min(...zs) - r, Math.max(...xs) + r, Math.max(...zs) + r];
+  for (const pool of course.pools ?? []) {
+    for (const [x, z] of pool.points) [box[0], box[1], box[2], box[3]] = [Math.min(box[0], x), Math.min(box[1], z), Math.max(box[2], x), Math.max(box[3], z)];
+  }
+  return box;
 }
 
 // A wave from -1 to 1 at `phase` (in waves), not quite regular, by `seed`.
@@ -230,19 +236,21 @@ export function surfaceAt(surface, t) {
   return surface[k] + (surface[k + 1] - surface[k]) * (at - k);
 }
 
-// A course's surface down its track, from its `points`, `seed` and `joins`, and groundAt(x, z): BELOW_FT
-// under the ground in its middle and EDGE_BELOW_FT under it just past its edges, but never over the surface upstream of it, nor under the water it runs into,
-// stillAt(x, z) (a body's or the sea's level, or null), to a tenth of a foot. Where it runs into
-// that water, it falls to it no more steeply than MOUTH_GRADE, over as far as that takes from
-// where it was just before it. joinAt(x, z) gives the level of another course's water at (x, z),
-// or null: where it runs into that, it's at that level, falling straight to it where it's higher,
-// and backed up to it where it's lower, as far up as it's lower.
-export function profile({ points, seed = 0, joins = [] }, groundAt, stillAt = () => null, joinAt = () => null) {
+// A course's surface down its track, from its `points`, `seed` and `joins`, and groundAt(x, z):
+// BELOW_FT under the ground in its middle and EDGE_BELOW_FT under it just past its edges, but
+// never over the surface upstream of it, nor under the water it runs into, stillAt(x, z) (a body's
+// or the sea's level, or null), to a tenth of a foot. Where it runs into that water, it falls to
+// it no more steeply than MOUTH_GRADE, over as far as that takes from where it was just before it.
+// joinAt(x, z) gives the level of another course's water at (x, z), or null: where it runs into
+// that, it's at that level, falling straight to it where it's higher, and backed up to it where
+// it's lower, as far up as it's lower. With poolAt(x, z, low, most), as pools.js has it, where
+// it'd cut POOL_MIN_FT or more into a rise, the low spot above it's filled as a pool instead,
+// as far as that goes. { surface, pools: [{ level, from, to, how far down its track it's in it,
+// and points, its outline }] }.
+export function profile({ points, seed = 0, joins = [] }, groundAt, stillAt = () => null, joinAt = () => null, poolAt = null) {
   const track = trackOf(points, seed, joins);
-  const surface = [];
-  let low = Infinity;
+  const [raw, joined, xs, zs] = [[], [], [], []];
   let mouth = -1; // where it first runs into still water
-  const joined = [];
   let k = 1;
   for (let t = 0; t <= track.length + SURFACE_STEP_FT; t += SURFACE_STEP_FT) {
     const at = Math.min(t, track.length);
@@ -251,17 +259,44 @@ export function profile({ points, seed = 0, joins = [] }, groundAt, stillAt = ()
     const u = span ? (at - track.t[k - 1]) / span : 0;
     const [x, z] = [track.x[k - 1] + (track.x[k] - track.x[k - 1]) * u, track.z[k - 1] + (track.z[k] - track.z[k - 1]) * u];
     const [ground, still] = [groundAt(x, z), stillAt(x, z)];
-    if (still != null && ground < still && mouth < 0) mouth = surface.length;
+    if (still != null && ground < still && mouth < 0) mouth = raw.length;
     // Square to it, out past each edge.
     const [dx, dz] = [track.x[k] - track.x[k - 1], track.z[k] - track.z[k - 1]];
     const d = Math.hypot(dx, dz) || 1;
     const out = (track.width[k - 1] + (track.width[k] - track.width[k - 1]) * u) / 2 + MARGIN_FT;
     const edges = Math.min(groundAt(x - (dz / d) * out, z + (dx / d) * out), groundAt(x + (dz / d) * out, z - (dx / d) * out));
-    low = Math.min(low, Math.max(Math.min(ground - BELOW_FT, edges - EDGE_BELOW_FT), still ?? -Infinity));
     const join = joinAt(x, z);
-    if (join != null) low = Math.min(low, join);
-    surface.push(low);
+    raw.push(Math.min(Math.max(Math.min(ground - BELOW_FT, edges - EDGE_BELOW_FT), still ?? -Infinity), join ?? Infinity));
     joined.push(join);
+    xs.push(x);
+    zs.push(z);
+  }
+  const surface = [];
+  const pools = [];
+  let [low, lowest] = [Infinity, 0]; // and where it got that low
+  let past = 0; // where the last rise tried ends
+  let held = -1; // and where a pool's held to, its crest
+  for (let n = 0; n < raw.length; n++) {
+    if (poolAt && n >= past && n > 0 && raw[n] > low + POOL_MIN_FT) {
+      // A rise: filled to as high as its crest, at most, else cut through.
+      let [crest, top] = [raw[n], n];
+      for (past = n; past < raw.length && raw[past] > low; past++) if (raw[past] > crest) [crest, top] = [raw[past], past];
+      const pool = poolAt(xs[lowest], zs[lowest], low, crest);
+      if (pool && pool.level >= low + POOL_MIN_FT) {
+        let from = n;
+        while (from > 0 && surface[from - 1] < pool.level) surface[--from] = pool.level;
+        pools.push({ level: pool.level, from: from * SURFACE_STEP_FT, at: n, points: pool.points });
+        [low, held] = [pool.level, top];
+      }
+    }
+    if (raw[n] <= low && n > held) [low, lowest] = [raw[n], n];
+    surface.push(low);
+  }
+  for (const pool of pools) {
+    let n = pool.at;
+    while (n < surface.length && surface[n] >= pool.level) n++;
+    pool.to = n * SURFACE_STEP_FT;
+    delete pool.at;
   }
   for (let n = surface.length - 1, backed = -Infinity; n >= 0; n--) {
     if (joined[n] != null) backed = Math.max(backed, joined[n]);
@@ -270,7 +305,7 @@ export function profile({ points, seed = 0, joins = [] }, groundAt, stillAt = ()
   }
   const before = surface[mouth - 1];
   for (let n = mouth - 1; n >= 0 && surface[n + 1] + MOUTH_GRADE * SURFACE_STEP_FT < before; n--) surface[n] = Math.min(surface[n], surface[n + 1] + MOUTH_GRADE * SURFACE_STEP_FT);
-  return surface.map((v) => Math.round(v * 10) / 10);
+  return { surface: surface.map((v) => Math.round(v * 10) / 10), pools: pools.map(({ level, from, to, points }) => ({ level, from, to, points })) };
 }
 
 // What a course makes of the ground at (x, z): { top, the highest the ground's left there, levee,
@@ -299,9 +334,10 @@ export function shape(course, x, z) {
   const run = BANK_RUN * (outside ? 1 - 0.6 * Math.abs(near.bend) : 1 + 2 * Math.abs(near.bend)) * (1 - (1 - POOL_WALL) * pool.share);
   // Broken up by rock jutting out of its walls, never cut back below its water, and its bed both ways.
   const top = out <= 0 ? level - bed + jag * POOL_JAG_FT[1] : level + out / run + Math.abs(jag) * POOL_JAG_FT[0];
-  // Over a fall's ledge, built up to hold its water to its lip.
+  // Over a fall's ledge, built up to hold its water to its lip; in a pool, its banks under its water aren't.
   const ledge = fallsOf(course).some((fall) => near.t >= fall.t && near.t <= fall.lip);
-  const levee = ledge ? top : out <= 0 ? -Infinity : level + LEVEE_OVER_FT - Math.max(0, out - LEVEE_TOP_FT) / run;
+  const pooled = (course.pools ?? []).some((pool) => near.t >= pool.from && near.t <= pool.to);
+  const levee = ledge ? top : out <= 0 || pooled ? -Infinity : level + LEVEE_OVER_FT - Math.max(0, out - LEVEE_TOP_FT) / run;
   return { top, levee, ledge, level, wet: out <= MARGIN_FT };
 }
 

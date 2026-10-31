@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { poolAt } from "./pools.js";
 import { BELOW_FT, along, boulders, cascadesOf, depthOf, fallFtOf, fallsOf, flowOf, levelAt, lengthOf, onTrack, profile, shape, SURFACE_STEP_FT, surfaceAt, trackOf } from "./courses.js";
 
 const line = [[0, 0, 10], [100, 0, 10], [100, 100, 30]];
@@ -33,7 +34,7 @@ describe("courses", () => {
 
   it("keep a surface under the ground that never rises downstream", () => {
     const ground = (x) => (x < 50 ? 100 - x : x < 70 ? 80 : 100 - x);
-    const surface = profile({ points: line }, ground);
+    const surface = profile({ points: line }, ground).surface;
     expect(surface[0]).toBe(100 - BELOW_FT);
     for (let k = 1; k < surface.length; k++) expect(surface[k]).toBeLessThanOrEqual(surface[k - 1]);
     expect(surface.at(-1)).toBeLessThan(0);
@@ -45,13 +46,13 @@ describe("courses", () => {
     // Ground 20 ft up to x = 100, then a lake at 10 over a bed at 0.
     const straight = [[0, 0, 6], [200, 0, 6]];
     const still = (x) => (x < 100 ? null : 10);
-    const surface = profile({ points: straight }, (x) => (x < 100 ? 20 : 0), still);
+    const surface = profile({ points: straight }, (x) => (x < 100 ? 20 : 0), still).surface;
     expect(surface[0]).toBe(20 - BELOW_FT);
     expect(surface.at(-1)).toBe(10);
     // 8 ft a step, at most a quarter foot a foot.
     for (let k = 1; k < surface.length; k++) expect(surface[k - 1] - surface[k]).toBeLessThanOrEqual(2.05);
     // Only as far as that takes: a steep course above it stays as steep.
-    const steep = profile({ points: straight }, (x) => (x < 100 ? 100 - x : 0), still);
+    const steep = profile({ points: straight }, (x) => (x < 100 ? 100 - x : 0), still).surface;
     expect(steep[0]).toBe(100 - BELOW_FT);
     expect(steep[3]).toBeLessThan(80);
   });
@@ -59,14 +60,14 @@ describe("courses", () => {
   it("meet the water of a course they run into at its level, falling straight to it", () => {
     // Ground 20 ft up all along, and another course's water at 10 past x = 100.
     const straight = [[0, 0, 6], [200, 0, 6]];
-    const surface = profile({ points: straight }, () => 20, () => null, (x) => (x < 100 ? null : 10));
+    const surface = profile({ points: straight }, () => 20, () => null, (x) => (x < 100 ? null : 10)).surface;
     const k = surface.indexOf(10);
     expect(k).toBeGreaterThan(80 / SURFACE_STEP_FT);
     expect(surface[k - 1]).toBe(20 - BELOW_FT);
     expect(surface[k]).toBe(10);
     expect(surface.at(-1)).toBe(10);
     // Arriving lower, backed up to it as far as it's lower.
-    const low = profile({ points: straight }, (x) => (x < 50 ? 20 : 5), () => null, (x) => (x < 100 ? null : 10));
+    const low = profile({ points: straight }, (x) => (x < 50 ? 20 : 5), () => null, (x) => (x < 100 ? null : 10)).surface;
     expect(low[0]).toBe(20 - BELOW_FT);
     expect(low.indexOf(10)).toBeLessThan(80 / SURFACE_STEP_FT);
     expect(Math.min(...low)).toBe(10);
@@ -80,9 +81,28 @@ describe("courses", () => {
     expect(at(joined, 800) / at(plain, 800)).toBeCloseTo(50 / 30, 1);
   });
 
+  it("fill low spots as pools, where they're asked to, instead of cutting through the rise below", () => {
+    // Falling a foot every 10, with a ridge 30 ft high across it at x = 500, in a valley.
+    const ground = (x, z) => 100 - x / 10 + 30 * Math.exp(-(((x - 500) / 60) ** 2)) + Math.abs(z) / 4;
+    const course = { points: [[0, 0, 6], [1000, 0, 6]] };
+    const cut = profile(course, ground);
+    const { surface, pools } = profile(course, ground, () => null, () => null, (x, z, low, most) => poolAt(ground, x, z, low, most));
+    expect(cut.pools).toEqual([]);
+    expect(pools.length).toBe(1);
+    const [pool] = pools;
+    // Up to just under where it'd spill, over the ridge, and held from above it to past it.
+    expect(pool.level).toBeGreaterThan(cut.surface[Math.round(450 / SURFACE_STEP_FT)] + 10);
+    expect(pool.from).toBeLessThan(450);
+    expect(pool.to).toBeGreaterThan(500);
+    expect(surface[Math.round(450 / SURFACE_STEP_FT)]).toBe(pool.level);
+    for (let k = 1; k < surface.length; k++) expect(surface[k]).toBeLessThanOrEqual(surface[k - 1]);
+    // Its outline's round ground over its level.
+    for (const [x, z] of pool.points) expect(ground(x, z)).toBeGreaterThan(pool.level - 1);
+  });
+
   it("keep under the ground past their edges", () => {
     // Ground falling away to one side, 1 ft a foot: the edge 5 ft out on that side is lower.
-    const surface = profile({ points: [[0, 0, 6], [10, 0, 6]] }, (x, z) => 20 - Math.max(0, z));
+    const surface = profile({ points: [[0, 0, 6], [10, 0, 6]] }, (x, z) => 20 - Math.max(0, z)).surface;
     expect(Math.max(...surface)).toBeLessThanOrEqual(20 - 5 - 0.25 + 1);
   });
 

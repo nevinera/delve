@@ -1,5 +1,7 @@
 import { Areas } from "./areas.js";
+import { inside } from "../v2/biomes.js";
 import { WIDTHS, along, levelAt, onTrack, profile, reachOf, trackOf, widened } from "../v2/courses.js";
+import { poolAt } from "../v2/pools.js";
 
 // Courses drawn on the map with geo's course tool (areas.js, as open lines): streams and rivers,
 // each from its source down (v2/courses.js), with a width at its start and end and straight
@@ -8,11 +10,12 @@ import { WIDTHS, along, levelAt, onTrack, profile, reachOf, trackOf, widened } f
 // otherwise. A course that runs into another's water is at that water's level there. A course
 // whose end isn't in water, or in another course's, is drawn in OPEN's color. Arrows along each
 // show which way it flows. With ripple on, courses running into others widen them below (their
-// joins, worked out again with every change), and the stretches of others a course being drawn or
-// dragged would change are drawn under them; with it off, joins are kept as they were. They're
+// joins, worked out again with every change), low spots courses run through are filled as pools,
+// and the stretches of others a course being drawn or dragged would change are drawn under them;
+// with it off, joins and pools are kept as they were, and courses changed cut through. They're
 // kept in the water file with the bodies (water.js):
 //
-//   { "version": 1, "bodies": [...], "courses": [{ "type": "stream", "points": [[x, z, width], ...], "surface": [ft, ...], "seed": 412, "joins": [[t, width], ...] }, ...], "ripple": true }
+//   { "version": 1, "bodies": [...], "courses": [{ "type": "stream", "points": [[x, z, width], ...], "surface": [ft, ...], "seed": 412, "joins": [[t, width], ...], "pools": [{ "level": ft, "from": t, "to": t, "points": [[x, z], ...] }, ...] }, ...], "ripple": true }
 
 export const COURSES = { stream: "#5aa0d8", river: "#2f6bb0" };
 const OPEN = "#e04040";
@@ -27,8 +30,8 @@ export class Courses extends Areas {
   // baseAt(x, z) gives the ground before courses cut it, and stillAt(x, z) the level of the water
   // at (x, z) for a course to end in, besides courses, or null.
   constructor(scene, surface, stage, baseAt, stillAt) {
-    super(scene, surface, stage, { colors: { ...COURSES, open: OPEN }, kind: "stream", field: "type", list: "courses", extras: ["widths", "surface", "seed", "joins"], closed: false });
-    this.start = () => ({ widths: [WIDTHS[this.kind], WIDTHS[this.kind]], surface: null, seed: Math.floor(Math.random() * 1000), joins: [] });
+    super(scene, surface, stage, { colors: { ...COURSES, open: OPEN }, kind: "stream", field: "type", list: "courses", extras: ["widths", "surface", "seed", "joins", "pools"], closed: false });
+    this.start = () => ({ widths: [WIDTHS[this.kind], WIDTHS[this.kind]], surface: null, seed: Math.floor(Math.random() * 1000), joins: [], pools: [] });
     Object.assign(this, { baseAt, stillAt });
     this.ripple = true;
     this.reaches = { key: null, since: 0, found: [] }; // the stretches a ripple reaches, [[area, t]], from t ft down its line
@@ -41,9 +44,10 @@ export class Courses extends Areas {
 
   show(json) {
     super.show({
-      courses: (json.courses ?? []).map(({ type, points, surface, seed, joins }) => ({ type, points: points.map(([x, z]) => [x, z]), widths: [points[0]?.[2] ?? WIDTHS.stream, points.at(-1)?.[2] ?? WIDTHS.stream], surface, seed: seed ?? 0, joins: joins ?? [] })),
+      courses: (json.courses ?? []).map(({ type, points, surface, seed, joins, pools }) => ({ type, points: points.map(([x, z]) => [x, z]), widths: [points[0]?.[2] ?? WIDTHS.stream, points.at(-1)?.[2] ?? WIDTHS.stream], surface, seed: seed ?? 0, joins: joins ?? [], pools: pools ?? [] })),
     });
-    for (const area of this.areas) area.surfaceKey = this.keyOf(area);
+    // As they were worked out, with ripple on or off as it is.
+    for (const area of this.areas) [area.surfaceKey, area.rippled] = [this.keyOf(area), this.ripple];
   }
 
   toJSON() {
@@ -59,10 +63,11 @@ export class Courses extends Areas {
       if (this.ripple) for (const area of this.areas) area.joins = this.joinsOf(area);
       for (const area of this.areas) {
         const key = this.keyOf(area);
-        if (area.surfaceKey === key && area.surface) continue;
+        if (area.surfaceKey === key && area.surface && (area.rippled || !this.ripple)) continue;
         const course = this.courseOf(area);
-        area.surface = profile(course, (x, z) => this.baseAt(x, z) ?? 0, this.stillAt, (x, z) => this.joinAt(area, x, z));
-        area.surfaceKey = key;
+        const pools = this.ripple ? (x, z, low, most) => poolAt(this.baseAt, x, z, low, most) : null;
+        ({ surface: area.surface, pools: area.pools } = profile(course, (x, z) => this.baseAt(x, z) ?? 0, this.stillAt, (x, z) => this.joinAt(area, x, z), pools));
+        [area.surfaceKey, area.rippled] = [key, this.ripple];
         changed = true;
       }
       if (!changed) return;
@@ -73,7 +78,7 @@ export class Courses extends Areas {
   courseOf(area) {
     const points = pointsOf(area);
     if (area.course?.points.length !== points.length || area.course.points.some((p, k) => p.some((v, n) => v !== points[k][n]))) area.course = { points };
-    return Object.assign(area.course, { type: area.kind, surface: area.surface, seed: area.seed, joins: area.joins ?? [] });
+    return Object.assign(area.course, { type: area.kind, surface: area.surface, seed: area.seed, joins: area.joins ?? [], pools: area.pools ?? [] });
   }
 
   // Where other courses run into `area`'s water, as courses.js has its joins, each as wide as its
@@ -107,14 +112,22 @@ export class Courses extends Areas {
     return JSON.stringify([area.seed, pointsOf(area), area.joins ?? [], join == null ? null : round(join)]);
   }
 
-  // The level of other courses' water than `area`'s at (x, z), the highest, or null.
+  // The level of other courses' water than `area`'s at (x, z), in them or their pools, the highest, or null.
   joinAt(area, x, z) {
     let level = null;
     for (const other of this.areas) {
-      const near = other !== area && this.nearOther(other, x, z);
+      if (other === area) continue;
+      const near = this.nearOther(other, x, z);
       if (near && near.d <= near.width / 2) level = Math.max(level ?? -Infinity, near.level);
+      const pool = this.poolOf(other, x, z);
+      if (pool) level = Math.max(level ?? -Infinity, pool.level);
     }
     return level;
+  }
+
+  // The pool of `other`'s that (x, z)'s in, or null.
+  poolOf(other, x, z) {
+    return (other.pools ?? []).find((pool) => inside(pool.points, x, z)) ?? null;
   }
 
   // Where (x, z) is from `other`'s track, as onTrack has it, with its level there, or null where
@@ -136,7 +149,7 @@ export class Courses extends Areas {
   ended(area) {
     const [x, z] = area.points.at(-1);
     if (this.stillAt(x, z) != null) return true;
-    return this.areas.some((other) => other !== area && this.nearOther(other, x, z));
+    return this.areas.some((other) => other !== area && (this.nearOther(other, x, z) || this.poolOf(other, x, z)));
   }
 
   // What a course being drawn or dragged would change of others, with ripple on: [[area, t]], each

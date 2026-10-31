@@ -13,8 +13,9 @@ import { CELL_FT, PLATE_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "./size
 //
 // A body is { type, level, points: [[x, z], ...] }: its surface stands at `level` ft over the cells
 // inside its outline whose ground is lower, so its banks are where the ground rises through it.
-// The last body is on top where they overlap, and courses (courses.js) are on top of them: their
-// water's over the cells near enough their line whose ground's lower than their surface there.
+// The last body is on top where they overlap, then pools courses fill (pools.js), as ponds, and
+// courses (courses.js) are on top of them: their water's over the cells near enough their line
+// whose ground's lower than their surface there.
 //
 // A tile's water is null, or { level: 64×64 feet, NaN where the cell's dry, type: 64×64 indexes
 // into WATER_TYPES }, cells in row order.
@@ -43,6 +44,9 @@ export class WaterMap {
       .filter(({ points }) => points.length >= 3)
       .map(({ type, level, points }) => ({ type: Math.max(0, WATER_TYPES.indexOf(type)), level, points, box: boxOf(points) }));
     this.courses = courses.filter(({ points, surface }) => points.length >= 2 && surface?.length).map((course) => ({ course, type: WATER_TYPES.indexOf(course.type), box: courseBox(course) }));
+    // Courses' pools are ponds, over the bodies drawn.
+    const pond = WATER_TYPES.indexOf("pond");
+    for (const { course } of this.courses) for (const { level, points } of course.pools ?? []) if (points.length >= 3) this.bodies.push({ type: pond, level, points, box: boxOf(points) });
   }
 
   // Tile (tx, tz)'s water, from its 65 × 65 corner `heights`, or null where it has none.
