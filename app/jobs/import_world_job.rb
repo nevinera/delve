@@ -1,5 +1,5 @@
 # Imports one published version of a world (WorldImport): finds the commit its tag points at, once,
-# downloads that commit as a zip by sha, and records what the validator says about it.
+# downloads that commit as a zip by sha, and records its files.
 class ImportWorldJob < ApplicationJob
   queue_as :default
 
@@ -17,11 +17,10 @@ class ImportWorldJob < ApplicationJob
     Tempfile.create(["world", ".zip"], binmode: true) do |zip|
       api.download_zip(world.repo, sha, zip)
       zip.flush
-      result = Worlds::Validator.call(zip.path)
-      files = result["files"]
+      files = Worlds::Manifest.call(zip.path)
       import.update!(
-        status: (result["problems"].any? { |p| !p["warning"] }) ? "failed" : "passed",
-        problems: result["problems"],
+        status: "passed",
+        problems: [],
         files:,
         file_count: files.size,
         bytes: files.sum { |_, f| f["size"] },
@@ -31,6 +30,6 @@ class ImportWorldJob < ApplicationJob
   rescue => e
     # Recorded rather than retried: importing again is the owner's call.
     import.update!(status: "error", error: e.message, finished_at: Time.current)
-    Rails.error.report(e, handled: true) unless e.is_a?(Github::OauthError) || e.is_a?(Worlds::Validator::Failed)
+    Rails.error.report(e, handled: true) unless e.is_a?(Github::OauthError) || e.is_a?(Worlds::Manifest::Failed)
   end
 end

@@ -8,12 +8,12 @@ RSpec.describe "Playing a world", type: :request do
 
   before { sign_in user }
 
-  it "lists released worlds for anyone to play" do
+  it "lists released worlds, with playing turned off for now" do
     create(:world, name: "Unreleased")
     world
     get worlds_path
     expect(response.body).to include("The Vale")
-    expect(response.body).to include(%(href="/play/#{world.id}"))
+    expect(response.body).not_to include(%(href="/play/#{world.id}"))
     expect(response.body).not_to include("Unreleased")
   end
 
@@ -72,9 +72,9 @@ RSpec.describe "Playing a world", type: :request do
       expect(response).to have_http_status(:not_found)
     end
 
-    it "is offered on the world's page" do
+    it "isn't offered on the world's page for now" do
       get world_path(owned)
-      expect(response.body).to include(%(href="/play/#{owned.id}?import=#{draft.id}"))
+      expect(response.body).not_to include(%(href="/play/#{owned.id}?import=#{draft.id}"))
     end
   end
 end

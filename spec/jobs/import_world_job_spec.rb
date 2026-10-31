@@ -20,22 +20,14 @@ RSpec.describe ImportWorldJob do
     stub_request(:get, "https://codeload.github.com/me/thorn/legacy.zip/#{sha}").to_return(body: zip)
   end
 
-  it "imports the commit the tag points at, by sha, and records what the validator found" do
-    expect(Worlds::Validator).to receive(:call) do |path|
+  it "imports the commit the tag points at, by sha, and records its files" do
+    expect(Worlds::Manifest).to receive(:call) do |path|
       expect(File.binread(path)).to eq(zip)
-      {"problems" => [{"path" => "a.json", "message" => "hm", "warning" => true}], "files" => {"world.json" => {"sha" => "s", "size" => 10}, "b" => {"sha" => "t", "size" => 5}}}
+      {"world.json" => {"sha" => "s", "size" => 10}, "b" => {"sha" => "t", "size" => 5}}
     end
     described_class.perform_now(import)
-    expect(import.reload).to have_attributes(status: "passed", sha:, private_repo: false, file_count: 2, bytes: 15, error: nil)
-    expect(import.warnings_found.size).to eq(1)
+    expect(import.reload).to have_attributes(status: "passed", sha:, private_repo: false, file_count: 2, bytes: 15, problems: [], error: nil)
     expect(import.finished_at).to be_present
-  end
-
-  it "fails a version the validator finds problems in" do
-    allow(Worlds::Validator).to receive(:call).and_return({"problems" => [{"path" => "world.json", "message" => "needs a name", "warning" => false}], "files" => {}})
-    described_class.perform_now(import)
-    expect(import.reload).to have_attributes(status: "failed", sha:)
-    expect(import.errors_found.sole["message"]).to eq("needs a name")
   end
 
   it "records an error for a tag that isn't there" do

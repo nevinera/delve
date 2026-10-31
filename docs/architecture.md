@@ -50,7 +50,7 @@ Tiles are the heavy part. The editor holds each as a binary [tile file](formats/
 
 ## Checking a world
 
-`client/src/world/validate.js` checks a stored world's files and lists what's wrong. Problems stop a world being played; warnings don't. Run it with `node script/validate.mjs <world directory or zip>`, which exits 1 when there are problems (`--json` prints them as JSON).
+`client/src/world/validate.js` checks a version 1 world's files for the old editor's publish step. Nothing checks a version 2 world, and importing doesn't check either.
 
 ## Loading and saving
 
@@ -66,8 +66,8 @@ A published version is a tag. The world's page (`/worlds/:id`) lists its tags fo
 
 1. finds the commit the tag points at, once, and keeps its sha;
 2. downloads that commit as a zip from GitHub, by sha;
-3. runs `node script/validate.mjs --manifest` on it;
-4. records a `WorldImport`: passed or failed, the problems, and each file's blob sha and size.
+3. runs `node script/manifest.mjs` on it;
+4. records a `WorldImport` as passed, with each file's blob sha and size.
 
 Nothing after step 1 reads the tag again, so moving or rewriting a tag can't change an import. The page shows when a tag has moved since it was imported.
 
