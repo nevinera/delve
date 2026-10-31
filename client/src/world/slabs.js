@@ -184,7 +184,7 @@ export function insideSlab(slab, p) {
 }
 
 // A continent point as [u, h, v]: across the slab's top face from `at`, and up from it.
-function unturned(slab, [x, y, z]) {
+export function unturned(slab, [x, y, z]) {
   const deg = Math.PI / 180;
   const [yaw, pitch, roll] = slab.turn.map((v) => -v);
   // Turning back: yaw, then pitch, then roll, each undone.

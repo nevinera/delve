@@ -256,6 +256,10 @@
         <button type="button" id="pathAgain">search again</button>
       </div>
     </div>
+    <div data-config="object template slab stairs ramp" hidden>
+      <label title="corners, objects, doors and windows snap to a grid on the floor or wall under the pointer, centered on it, or square to north on the ground; shift holds snapping off"><input type="checkbox" id="buildGrid"> snap to a grid of
+        <select id="buildGridFt"><option value="0.5">6 in</option><option value="1">1 ft</option><option value="2" selected>2 ft</option><option value="4">4 ft</option></select></label>
+    </div>
     <div data-config="pick" hidden>
       <p class="create-note">Click an object or slab to pick it, or drag a box round them. Shift picks more, or fewer. Drag picked things to move them, or drag the handles at their middle: the arrows and squares move them, and the ring turns them all about their middle, by 15° steps, or freely with shift. C and V turn them too, the up and down arrows raise and lower them, with shift further, and Delete deletes them.</p>
       <p class="create-note create-said" data-build-say></p>
@@ -313,7 +317,6 @@
       <label data-slab-only="floor wall room roof polygon">thickness <input type="number" id="slabThickness" value="1" min="0.1" max="16" step="0.25"> ft</label>
       <label data-slab-only="wall room">height <input type="number" id="slabHeight" value="10" min="1" max="60" step="1"> ft</label>
       <label data-slab-only="room"><input type="checkbox" id="slabRoomRoof"> with a roof</label>
-      <label data-slab-only="floor wall room polygon" title="corners snap to a 2 ft grid, square to north, where there's no slab to snap to; shift holds snapping off"><input type="checkbox" id="slabGrid"> snap to a 2 ft grid</label>
       <label data-slab-roof>roof
         <select id="slabRoof"><option>gable</option><option>hip</option><option>shed</option><option>flat</option></select>
       </label>

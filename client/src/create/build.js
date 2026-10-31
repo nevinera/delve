@@ -9,8 +9,9 @@ import { Thumbnails } from "../editor/thumbnailRenderer.js";
 import { newObjectId, turnPoint } from "../world/builtObjects.js";
 import { CELL_FT as TEMPLATE_CELL_FT } from "../world/constants.js";
 import { makeObject, specOf } from "../world/objects.js";
-import { MAX_STAIR_DEG, SLAB_REACH_FT, cutSlab, defaultSteps, insideSlab, rampSlab, slabBottom, slabProblems, slabTop, stairShape, stairSlab } from "../world/slabs.js";
+import { MAX_STAIR_DEG, SLAB_REACH_FT, cutSlab, defaultSteps, insideSlab, rampSlab, slabBottom, slabProblems, slabTop, stairShape, stairSlab, unturned } from "../world/slabs.js";
 import { pressing } from "./press.js";
+import { MAJOR, planeRun, runLines, runPoint, snapInRun } from "./surfaceGrid.js";
 import { captureTemplate, placedTemplate } from "../world/templates.js";
 import { CLIPBOARD_PREFIX } from "./library.js";
 import { isSlab, readyObject } from "./placed.js";
@@ -48,7 +49,10 @@ import { drawable, slabSpace } from "./things.js";
 // held: a floor or room started from a floor's is level with it, and a wall started from a floor's
 // has its foot at the floor's bottom, or from another wall's foot, there too. A wall's foot is set
 // where it starts, and it stands its height from there. The line a wall's drawn along is one face
-// of its foot, whichever puts it in other slabs least. Floors, walls and rooms can snap to a 2 ft grid instead, square to north.
+// of its foot, whichever puts it in other slabs least. With the grid on, every tool but select
+// snaps to it where there's no slab to snap to: across the floor or wall under the pointer
+// (surfaceGrid.js), centered on it, or square to north on the ground; it's drawn there.
+// Doors and windows cut every piece of a wall they reach.
 // Esc drops what's being drawn, keeping the tool. Ctrl+Z undoes the last change, ctrl+C copies
 // and ctrl+V pastes.
 
@@ -67,7 +71,10 @@ const CLOSE_PX = 12; // how near a polygon's first corner a click closes it
 const SNAP_CORNER_PX = 12; // how near a slab's corner, on the screen, a point snaps to it
 const SNAP_EDGE_PX = 8; // and its edge
 const SNAP_MARK = 0.012; // the snap mark's size, as a share of its distance from the camera
-const GRID_FT = 2; // the grid floors and walls snap to, when asked
+const GRID_NEAR_FT = 2; // how far off a run's faces a point can be and still snap to its grid
+const GROUND_GRID_FT = 16; // how far the ground's grid shows round the pointer, each way
+const GRID_MINOR = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false });
+const GRID_MAJOR = new THREE.LineBasicMaterial({ color: 0xffe080, transparent: true, opacity: 0.8, depthWrite: false });
 const HOME_TEMPLATES = "my templates"; // where keepTemplate keeps those given no collection
 const NEW_COLLECTION = "new"; // the collection select's value for a new one
 const WRONG = new THREE.MeshBasicMaterial({ color: 0xe04040, transparent: true, opacity: 0.6 });
@@ -116,6 +123,17 @@ export class Build {
     this.handling = null; // a drag of the handles: { at (the pivot's last position), yaw, joined }
     this.pickedChanges = 0; // counts changes to what's picked, to put the handles at its middle
     this.handlesFor = "";
+    // The grid every build tool but select snaps to, when it's on: { on, ft }, ft between its
+    // minor lines. gridRun is the run of slabs it lies across (surfaceGrid.js), or null for the
+    // ground's; gridShown, what's drawn of it.
+    this.grid = { on: false, ft: 2 };
+    this.hover = null; // where the pointer last met a slab or the ground (hit())
+    this.gridRun = null;
+    this.runs = { version: -1, of: new Map() }; // runs found, by the slab they were found from
+    this.gridShown = "";
+    this.gridLines = new THREE.Group();
+    scene.add(this.gridLines);
+    for (const id of ["buildGrid", "buildGridFt"]) $(id).addEventListener("input", () => this.readGrid());
     this.tool = null;
     this.armed = { object: null, template: null }; // the type picked of each
     this.yaw = 0; // radians, objects' and templates' turn
@@ -191,7 +209,7 @@ export class Build {
         this.showSlab();
       });
     }
-    for (const id of ["slabSurface", "slabThickness", "slabHeight", "slabRoof", "slabPitch", "slabRoomRoof", "slabGrid"]) $(id).addEventListener("input", () => this.readSlab());
+    for (const id of ["slabSurface", "slabThickness", "slabHeight", "slabRoof", "slabPitch", "slabRoomRoof"]) $(id).addEventListener("input", () => this.readSlab());
     for (const id of ["stairSurface", "stairRisers", "stairThickness", "stairSteps", "stairStepsAuto"]) $(id).addEventListener("input", () => this.showStair());
     for (const id of ["stairWidth", "stairRun", "stairRise"]) $(id).addEventListener("input", () => this.slideStair());
     $("stairPlace").addEventListener("click", () => this.placeStair());
@@ -224,6 +242,8 @@ export class Build {
     this.mover.detach();
     this.turner.detach();
     this.handlesFor = "";
+    this.gridRun = null;
+    this.showGrid();
     this.showStair();
     this.showRamp();
     this.boxEl.hidden = true;
@@ -292,7 +312,6 @@ export class Build {
       roof: $("slabRoof").value,
       pitch: Math.max(0, Math.min(60, Number($("slabPitch").value) || 0)),
       roomRoof: $("slabRoomRoof").checked,
-      grid: $("slabGrid").checked,
     });
     this.showSlab();
   }
@@ -316,10 +335,10 @@ export class Build {
 
   // `at` ([x, y, z]) moved onto the slab corner nearest it on the screen, or else the nearest slab
   // edge, when one's near enough and shift isn't held, showing where with the snap mark; or, with
-  // `grid`, onto the grid. Upright slabs' corners and edges are on both their faces. Kept at its
+  // the grid on, onto the grid. Upright slabs' corners and edges are on both their faces. Kept at its
   // height with `level`. What it snapped to is left in this.snapped, { slab, edge: [p, q], at } (an
   // edge, or a corner's two), or null. Null stays null.
-  snap(at, level = false, grid = false) {
+  snap(at, level = false) {
     this.snapMark.visible = false;
     this.snapped = null;
     if (!at || this.free) return at;
@@ -356,9 +375,7 @@ export class Build {
       }
     }
     if (!best) {
-      if (!grid) return at;
-      const round = (v) => Math.round(v / GRID_FT) * GRID_FT;
-      return [round(at[0]), at[1], round(at[2])];
+      return this.grid.on && this.tool !== "pick" ? this.onGrid(at) : at;
     }
     this.snapped = { slab: best.slab, edge: best.edge, at: best.p };
     const snapped = level ? [best.p[0], at[1], best.p[2]] : best.p;
@@ -394,9 +411,8 @@ export class Build {
     if (this.tool === "stairs") return this.stairDown(hit);
     if (this.tool === "ramp") return this.rampDown(hit);
     if (this.tool === "slab" && hit) {
-      const grid = this.slab.grid && this.slab.mode !== "roof";
-      const a = this.snap(hit.at, false, grid);
-      this.drawing = { a, from: this.snapped, yaw: grid ? Math.round(this.cameraYaw() / 90) * 90 : this.cameraYaw(), pieces: [] };
+      const a = this.snap(hit.at);
+      this.drawing = { a, from: this.snapped, yaw: this.grid.on ? this.gridYaw() : this.cameraYaw(), pieces: [] };
       return;
     }
     if (this.tool !== "pick" || this.onHandles()) return;
@@ -428,13 +444,15 @@ export class Build {
     this.turner.setRotationSnap(e.shiftKey ? null : THREE.MathUtils.degToRad(TURN_DEG));
     // Where a slab or stairs would start snaps, shown before it's started.
     const starting = (this.tool === "slab" && !["door", "window"].includes(this.slab.mode) && !this.drawing && !this.outlining && !this.roofing) || (this.tool === "stairs" && !this.stair) || (this.tool === "ramp" && (!this.ramp || this.ramp.phase === "top"));
-    if (starting) this.snap(this.hit()?.at ?? null, false, this.tool === "slab" && this.slab.grid && this.slab.mode !== "roof");
+    this.hover = this.hit();
+    if (!(this.drawing || this.outlining || this.stair || this.ramp || this.roofing)) this.gridRun = this.runUnder(this.hover);
+    if (starting) this.snap(this.hover?.at ?? null);
     if (this.outlining) this.showOutline();
     if (this.stair) this.stairMove();
     if (this.ramp && this.ramp.phase !== "top") this.rampMove();
     if (this.roofing) this.roofMove();
     if (this.drawing) {
-      const b = this.snap(this.onLevel(this.drawing.a[1]), true, this.slab.grid && this.slab.mode !== "roof");
+      const b = this.snap(this.onLevel(this.drawing.a[1]), true);
       if (b) this.drawing.pieces = this.pieces(this.drawing.a, b, this.drawing.yaw);
       this.showPieces();
     }
@@ -570,7 +588,7 @@ export class Build {
 
   placeObject(hit) {
     const type = this.armed.object;
-    const [x, y, z] = hit.at;
+    const [x, y, z] = this.objectAt(hit);
     // In the ghost's colors.
     const { id: _, ...made } = makeObject(type, [x, z], this.yaw, this.scale);
     const colors = this.ghostObject?.type === type ? this.ghostObject.colors : made.colors;
@@ -607,15 +625,19 @@ export class Build {
     const slab = hit?.thing;
     if (!slab || !isSlab(slab)) return this.say("Click a slab to cut a hole in.");
     if (slab.kind) return this.say("Holes can't be cut in stairs.");
-    const [u, , v] = slabSpace(slab, hit.at);
+    // The hole's cut through every piece of the run it's on that it reaches, in the frame of the
+    // piece clicked, its middle on the grid when that's on.
+    const run = this.runOf(slab);
+    let [u, , v] = slabSpace(slab, hit.at);
+    if (this.grid.on && !this.free) [u, v] = snapInRun(run.box, [u, v], this.grid.ft);
     const door = this.slab.mode === "door";
     const [w, h] = door ? DOOR_FT : WINDOW_FT;
     let [low, high] = [v - h / 2, v + h / 2];
     if (door) {
       // Up from the floor or ground under where it's clicked, or from its foot, cut as a notch.
       // The higher either side of it, so a door in a room's wall starts at its floor.
-      const [x, y, z] = hit.at;
-      const foot = Math.min(...slab.outline.map((p) => p[1]));
+      const [x, y, z] = runPoint(run, [u, 0, v]);
+      const foot = run.box[1];
       const n = turnPoint([0, 1, 0], slab.turn);
       const out = (slab.thickness + 0.5) / (Math.hypot(n[0], n[2]) || 1);
       const under = Math.max(this.things.standAt(x + n[0] * out, z + n[2] * out, y), this.things.standAt(x - n[0] * out, z - n[2] * out, y));
@@ -623,9 +645,20 @@ export class Build {
       high = low + h;
       if (low - foot < 0.5) low = foot - 1;
     }
-    const pieces = cutSlab(slab, [[u - w / 2, low], [u + w / 2, low], [u + w / 2, high], [u - w / 2, high]]);
-    if (!pieces.length || pieces.some((piece) => slabProblems(piece).length)) return this.say("That hole can't be cut there.");
-    this.placed.swap([slab], pieces);
+    const hole = [[u - w / 2, low], [u + w / 2, low], [u + w / 2, high], [u - w / 2, high]];
+    const cut = [];
+    const made = [];
+    for (const piece of run.slabs) {
+      const [ou, , ov] = unturned(slab, piece.at);
+      const local = hole.map(([a, b]) => [a - ou, b - ov]);
+      const us = piece.outline.map((p) => p[0]);
+      const vs = piece.outline.map((p) => p[1]);
+      if (u + w / 2 - ou <= Math.min(...us) || u - w / 2 - ou >= Math.max(...us) || high - ov <= Math.min(...vs) || low - ov >= Math.max(...vs)) continue;
+      cut.push(piece);
+      made.push(...cutSlab(piece, local));
+    }
+    if (!cut.length || made.some((piece) => slabProblems(piece).length)) return this.say("That hole can't be cut there.");
+    this.placed.swap(cut, made);
   }
 
   // The slabs dragging from `a` to `b` would make.
@@ -700,13 +733,13 @@ export class Build {
   outline(hit) {
     if (!this.outlining) {
       if (!hit) return;
-      const at = this.snap(hit.at, false, this.slab.grid);
+      const at = this.snap(hit.at);
       // Started from a floor, it's level with it.
       const y = this.snapped && pressing(this.snapped.slab) ? at[1] - this.slab.thickness : at[1];
       this.outlining = { y, points: [[at[0], at[2]]] };
       return this.showOutline();
     }
-    const at = this.snap(this.onLevel(this.outlining.y), true, this.slab.grid);
+    const at = this.snap(this.onLevel(this.outlining.y), true);
     if (!at) return;
     const { points } = this.outlining;
     if (points.length >= 3 && this.nearFirst(at)) return this.closeOutline();
@@ -742,7 +775,7 @@ export class Build {
   showOutline() {
     this.clearGhost();
     const { y, points } = this.outlining;
-    const at = this.snap(this.onLevel(y), true, this.slab.grid);
+    const at = this.snap(this.onLevel(y), true);
     const corners = at ? [...points, [at[0], at[2]]] : points;
     const { thickness, surface } = this.slab;
     const pieces = corners.length >= 3 ? polygonPieces(corners, y + thickness, { thickness, surface }) : [];
@@ -1017,6 +1050,7 @@ export class Build {
   // Each frame: the thing armed follows the pointer.
   tick() {
     this.placeHandles();
+    this.showGrid();
     if (this.drawing || this.outlining || this.stair || this.ramp || this.roofing) return;
     const type = this.tool === "object" ? this.armed.object : this.tool === "template" ? this.armed.template : null;
     const hit = type && this.hit();
@@ -1040,7 +1074,7 @@ export class Build {
         }
       }
     }
-    if (this.tool === "object") this.ghost.position.set(...hit.at);
+    if (this.tool === "object") this.ghost.position.set(...this.objectAt(hit));
     else {
       const template = this.library.template(type);
       if (template) this.ghost.position.set(...this.anchor(template, hit));
@@ -1105,6 +1139,96 @@ export class Build {
     if (!picked.length) return;
     const [cx, , cz] = this.middleOfPicked(picked);
     this.placed.alter(picked, (thing) => turnAbout(thing, cx, cz, degrees));
+  }
+
+  // Where an object goes for `hit`: on the grid, when it's on.
+  objectAt(hit) {
+    return this.grid.on && !this.free ? this.onGrid(hit.at) : hit.at;
+  }
+
+  readGrid() {
+    this.grid = { on: $("buildGrid").checked, ft: Number($("buildGridFt").value) || 2 };
+    this.gridShown = "";
+  }
+
+  // The run of slabs `slab` is in (surfaceGrid.js), found again when what's placed changes.
+  runOf(slab) {
+    if (this.runs.version !== this.placed.version) this.runs = { version: this.placed.version, of: new Map() };
+    if (!this.runs.of.has(slab)) this.runs.of.set(slab, planeRun(slab, (x, z) => this.placed.near(x, z, SLAB_REACH_FT * 2).slabs));
+    return this.runs.of.get(slab);
+  }
+
+  // The run of slabs under a hit(), or null on the ground or stairs.
+  runUnder(hit) {
+    return hit?.thing && isSlab(hit.thing) && !hit.thing.kind ? this.runOf(hit.thing) : null;
+  }
+
+  // `at` on the grid: across the run under the pointer, where it's near the run's plane, keeping
+  // its height off it; or else square to north, keeping its height.
+  onGrid(at) {
+    const run = this.gridRun;
+    if (run) {
+      const [u, h, v] = unturned(run.slab, at);
+      if (h <= GRID_NEAR_FT && h >= -run.slab.thickness - GRID_NEAR_FT) {
+        const [su, sv] = snapInRun(run.box, [u, v], this.grid.ft);
+        return runPoint(run, [su, h, sv]);
+      }
+    }
+    const round = (v) => Math.round(v / this.grid.ft) * this.grid.ft;
+    return [round(at[0]), at[1], round(at[2])];
+  }
+
+  // The yaw floors and rooms are drawn square to on the grid: the level run's under the pointer, or
+  // north's, whichever way of it's nearest the way the camera looks.
+  gridYaw() {
+    const base = this.gridRun && pressing(this.gridRun.slab) ? this.gridRun.slab.turn[0] : 0;
+    return base + Math.round((this.cameraYaw() - base) / 90) * 90;
+  }
+
+  // Draws the grid: across the run under the pointer, on the face toward the camera, or on the
+  // ground round the pointer.
+  showGrid() {
+    const show = this.grid.on && this.tool && this.tool !== "pick";
+    const run = show ? this.gridRun : null;
+    const ft = this.grid.ft;
+    const ground = show && !run && this.hover && !this.hover.thing ? this.hover.at.map((v) => Math.round(v / (ft * MAJOR)) * ft * MAJOR) : null;
+    const key = !show ? "" : run ? `run:${this.runs.version}:${run.slabs.length}:${run.box.join()}:${ft}:${this.cameraSide(run)}` : ground ? `ground:${ground[0]}:${ground[2]}:${ft}` : "";
+    if (key === this.gridShown) return;
+    this.gridShown = key;
+    for (const lines of this.gridLines.children) lines.geometry.dispose();
+    this.gridLines.clear();
+    if (!key) return;
+    const segments = { minor: [], major: [] };
+    if (run) {
+      const h = this.cameraSide(run) ? 0.03 : -run.slab.thickness - 0.03;
+      const [u0, v0, u1, v1] = run.box;
+      const { us, vs } = runLines(run.box, ft);
+      for (const { at, major } of us) segments[major ? "major" : "minor"].push(runPoint(run, [at, h, v0]), runPoint(run, [at, h, v1]));
+      for (const { at, major } of vs) segments[major ? "major" : "minor"].push(runPoint(run, [u0, h, at]), runPoint(run, [u1, h, at]));
+    } else {
+      // Draped over the ground, a foot at a time.
+      const [cx, , cz] = ground;
+      const y = (x, z) => this.groundAt(x, z) + 0.1;
+      for (let k = -GROUND_GRID_FT; k <= GROUND_GRID_FT; k += ft) {
+        const kind = Math.round(k / ft) % MAJOR === 0 ? "major" : "minor";
+        for (let t = -GROUND_GRID_FT; t < GROUND_GRID_FT; t++) {
+          segments[kind].push([cx + k, y(cx + k, cz + t), cz + t], [cx + k, y(cx + k, cz + t + 1), cz + t + 1]);
+          segments[kind].push([cx + t, y(cx + t, cz + k), cz + k], [cx + t + 1, y(cx + t + 1, cz + k), cz + k]);
+        }
+      }
+    }
+    for (const [kind, material] of [["minor", GRID_MINOR], ["major", GRID_MAJOR]]) {
+      if (!segments[kind].length) continue;
+      const lines = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(segments[kind].map((p) => new THREE.Vector3(...p))), material);
+      lines.renderOrder = 5;
+      lines.frustumCulled = false;
+      this.gridLines.add(lines);
+    }
+  }
+
+  // Whether the camera's on the run's top face's side.
+  cameraSide(run) {
+    return unturned(run.slab, this.camera.position.toArray())[1] > -run.slab.thickness / 2;
   }
 
   // The handles stand at the middle of what's picked, while the select tool's out and something's
