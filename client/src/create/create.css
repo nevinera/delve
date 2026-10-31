@@ -385,9 +385,10 @@ body.create {
   display: none;
 }
 
+/* Values in a column a fixed width, so the pane doesn't change width as they change. */
 .create-debug dl {
   display: grid;
-  grid-template-columns: max-content max-content;
+  grid-template-columns: max-content 10ch;
   gap: 4px 10px;
   margin: 0;
 }
@@ -401,6 +402,9 @@ body.create {
   color: #e8e2d4;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
 }
 
 .create-show {
