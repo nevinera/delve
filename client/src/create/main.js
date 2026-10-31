@@ -1,6 +1,6 @@
 import "./create.css";
 import * as THREE from "three";
-import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
+import { strFromU8, strToU8, unzipSync, zip } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
 import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
@@ -103,20 +103,19 @@ function readWorld(bytes, changes = new Map()) {
   return { name: info.name, files: new Map(files), continent, renditions };
 }
 
-// Saves the world as a zip, its moved ground in. Its files are gzipped already, so the zip stores
-// them as they are.
-function download({ name, files, continent, renditions }, planning, biomes, water) {
+// Saves the world as a zip, with the files changed since it was opened, `changes` (path -> bytes,
+// null for gone), saved first by save(). Its files are gzipped already, so the zip stores them as
+// they are, zipped off the page's thread.
+async function download({ name, files }, changes, save) {
+  await save();
   const out = new Map(files);
-  out.set(planningPath(continent), strToU8(`${JSON.stringify(planning)}\n`));
-  out.set(biomesPath(continent), strToU8(`${JSON.stringify(biomes)}\n`));
-  out.set(waterPath(continent), strToU8(`${JSON.stringify(water)}\n`));
-  for (const [path, bytes] of renditions.changedFiles(continent)) {
+  for (const [path, bytes] of changes) {
     if (bytes) out.set(path, bytes);
     else out.delete(path);
   }
-  const zip = zipSync(Object.fromEntries([...out].map(([path, bytes]) => [path, [bytes, { level: 0 }]])));
+  const zipped = await new Promise((resolve, reject) => zip(Object.fromEntries([...out].map(([path, bytes]) => [path, [bytes, { level: 0 }]])), (error, bytes) => (error ? reject(error) : resolve(bytes))));
   const link = document.createElement("a");
-  link.href = URL.createObjectURL(new Blob([zip], { type: "application/zip" }));
+  link.href = URL.createObjectURL(new Blob([zipped], { type: "application/zip" }));
   link.download = `${name.replace(/[^\w-]+/g, "-").toLowerCase() || "world"}.zip`;
   link.click();
   setTimeout(() => URL.revokeObjectURL(link.href), 10000);
@@ -124,7 +123,6 @@ function download({ name, files, continent, renditions }, planning, biomes, wate
 
 function start(world, changes) {
   const { name, continent, renditions } = world;
-  $("downloadWorld").addEventListener("click", () => download(world, tools.marks.toJSON(), tools.biomes.toJSON(), { version: 1, bodies: tools.water.toJSON().bodies, courses: tools.courses.toJSON().courses, ripple: tools.courses.ripple }));
   $("open").hidden = true;
   $("worldName").textContent = name;
   const canvas = $("view");
@@ -225,7 +223,43 @@ function start(world, changes) {
   const FPS = 30;
   let lastSave = 0;
   let lastHud = 0;
-  let [saving, lastChangeSave, marksSaved, biomesSaved, waterSaved] = [false, 0, 0, 0, "0,0"];
+  let [saving, lastChangeSave, marksSaved, biomesSaved, waterSaved] = [null, 0, 0, 0, "0,0"];
+  const unsaved = () => renditions.unsaved.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || waterVersion() !== waterSaved;
+  // Saves what's changed into `changes`, writing files on the worker: once what's being saved is,
+  // where something is.
+  const save = async () => {
+    while (saving) await saving;
+    if (!unsaved()) return;
+    const [version, biomesVersion, waterNow] = [tools.marks.version, tools.biomes.version, waterVersion()];
+    saving = renditions
+      .unsavedFiles(continent)
+      .then(async (files) => {
+        for (const [path, bytes] of files) changes.set(path, bytes);
+        changes.set(planningPath(continent), strToU8(`${JSON.stringify(tools.marks.toJSON())}\n`));
+        changes.set(biomesPath(continent), strToU8(`${JSON.stringify(tools.biomes.toJSON())}\n`));
+        changes.set(waterPath(continent), strToU8(`${JSON.stringify(waterFile())}\n`));
+        await store.set("changes", changes);
+        [marksSaved, biomesSaved, waterSaved] = [version, biomesVersion, waterNow];
+      })
+      .catch((e) => console.error("couldn't save the changes", e))
+      .finally(() => {
+        saving = null;
+        lastChangeSave = performance.now();
+      });
+    await saving;
+  };
+  const downloadButton = $("downloadWorld");
+  downloadButton.addEventListener("click", async () => {
+    if (downloadButton.disabled) return;
+    [downloadButton.disabled, downloadButton.textContent] = [true, "downloading…"];
+    try {
+      await download(world, changes, save);
+    } catch (e) {
+      console.error("couldn't download the world", e);
+    } finally {
+      [downloadButton.disabled, downloadButton.textContent] = [false, "download world"];
+    }
+  });
   let lastInfo = 0;
   const compass = new Compass($("stage"), document.querySelector(".create-bar"));
   const feet = (ft) => `${Math.round(ft).toLocaleString()} ft`;
@@ -305,26 +339,8 @@ function start(world, changes) {
       ground.refresh(renditions.setWater(waterFile()));
       waterBaked = waterVersion();
     }
-    // Saves what's changed once there's been time to finish the stroke, writing files on the worker.
-    if (!saving && !tools.stroke && !tools.drawing && now - lastChangeSave > SAVE_CHANGES_MS && (renditions.unsaved.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || waterVersion() !== waterSaved)) {
-      saving = true;
-      const [version, biomesVersion, waterNow] = [tools.marks.version, tools.biomes.version, waterVersion()];
-      renditions
-        .unsavedFiles(continent)
-        .then(async (files) => {
-          for (const [path, bytes] of files) changes.set(path, bytes);
-          changes.set(planningPath(continent), strToU8(`${JSON.stringify(tools.marks.toJSON())}\n`));
-          changes.set(biomesPath(continent), strToU8(`${JSON.stringify(tools.biomes.toJSON())}\n`));
-          changes.set(waterPath(continent), strToU8(`${JSON.stringify(waterFile())}\n`));
-          await store.set("changes", changes);
-          [marksSaved, biomesSaved, waterSaved] = [version, biomesVersion, waterNow];
-        })
-        .catch((e) => console.error("couldn't save the changes", e))
-        .finally(() => {
-          saving = false;
-          lastChangeSave = performance.now();
-        });
-    }
+    // Saves what's changed once there's been time to finish the stroke.
+    if (!saving && !tools.stroke && !tools.drawing && now - lastChangeSave > SAVE_CHANGES_MS && unsaved()) save();
     if (now - lastSave > SAVE_EVERY_MS) {
       try {
         localStorage.setItem(placeKey, JSON.stringify(builder.state));
