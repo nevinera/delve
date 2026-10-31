@@ -75,10 +75,12 @@ The owner releases an import that passed from the same page. Releasing checks th
 
 ## Playing
 
+The play page reads version 1 worlds, and the game server reads only version 2, so the worlds pages show the play and preview links greyed out.
+
 Released worlds are listed for everyone signed in, on `/worlds`. A world's owner can also preview an import that passed, before releasing it, from the world's page (`/play/:id?import=`); the game server keeps it on a layer of its own, by its commit. Playing one (`/play/:id`) asks which of your characters to enter as, then loads `client/src/play/main.js`:
 
 1. It reads `world.json`, the continents' sketches and the object library from `raw.githubusercontent.com/<repo>/<released sha>/`. The page lists the commit's files from its import, so nothing is probed for.
-2. It enters the game server with an entry token from the page, and the server says where your character is. A character new to the world starts at its spawn pin, placed on the editor's civilization step. The validator rejects a world without exactly one, on a generated tile, out of deep water.
+2. It enters the game server with an entry token from the page, and the server says where your character is. A character new to the world starts at its spawn point, `spawn` in `world.json`, which `/create`'s manage tools set.
 3. It loads the plates around you, and more as you walk toward them, and walks your character there with the editor's walk mode (`RenderView`, `Walker`). It reads each plate as it streams in, and keeps its tiles in IndexedDB by the plate's hash from `plates.json` (`client/src/play/plateCache.js`), so a plate already there isn't downloaded again. The cache holds the 16 plates used last. Plates you've walked well away from leave memory, and come back from the cache.
 4. It reports how you move, and draws the characters near you as the server reports theirs (`client/src/play/game.js`, `others.js`).
 5. A menu button in the bottom right opens the menu: graphics settings (`client/src/editor/graphicsPanel.js`, shared with the editor) and leaving the world.
@@ -89,11 +91,11 @@ Released worlds are listed for everyone signed in, on `/worlds`. A world's owner
 The game server (`game-server/`) holds every character in a world. Browsers connect over a websocket, and send what their player does; the server tells each one what the characters near them do. [The game protocol](formats/game-protocol.md) covers entry tokens, the messages and the internal API.
 
 - `internal/token` checks entry tokens, which Rails signs (`Game::EntryToken`).
-- `internal/worlds` downloads each released commit's zip once, keeps it on disk, and reads the continents and spawn pin. It reads a continent's surface plates as characters reach them, for the ground's heights, water and slabs.
-- `internal/game` places characters on a layer, works out who's near whom (the 3×3 tiles around each), checks that their movement adds up (speed, clocks, rising and falling, the ground and slabs under them, and not walking into slabs), and passes it on.
+- `internal/worlds` downloads each released commit's zip once, keeps it on disk, and reads a version 2 world's continents and spawn point. It reads a continent's plates and placed files as characters reach them, and samples the ground as `/create`'s builder walks it: heights pressed down by level slabs, water, slabs, objects placed by hand, the trees and objects in the tiles' slots (`fill.go`, by a copy of `client/src/v2/fill.json`), and boulders across courses' cascades from `water.json`. Off the tiles is sea. `testdata/world.mjs` writes its test world and what `/create` makes of it, with the client's own code.
+- `internal/game` places characters on a layer, works out who's near whom (the 3×3 tiles around each), checks that their movement adds up (speed, clocks, rising and falling, the ground and slabs under them, and not walking into slabs, trees or objects), and passes it on.
 - `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token, and writes their positions back to it (`WorldCharacter`, one per character per world). The server never writes to the database itself.
 
-Bots play characters, so you can test with others around: `script/game/bot` (code in `lib/bot/`) enters a released world as a character, the way the play page does, and runs a strategy. A bot fetches the surface plates from GitHub and walks on the ground and slabs they describe, stopping at slabs in its way. `null` stands still, and `follow` runs after a named character.
+Bots play characters, so you can test with others around: `script/game/bot` (code in `lib/bot/`) enters a released world as a character, the way the play page does, and runs a strategy. A bot fetches plates and placed files from GitHub and walks the ground as the game server reads it, stopping at slabs, trees and objects in its way. It doesn't know about the boulders across cascades. `null` stands still, and `follow` runs after a named character.
 
 ## Docs
 

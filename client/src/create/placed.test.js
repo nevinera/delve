@@ -18,7 +18,7 @@ describe("placed things", () => {
     const files = placed.unsavedFiles("main");
     expect(files.size).toBe(3);
     const json = JSON.parse(strFromU8(files.get(placedPath("main", [0, 0]))));
-    expect(json.objects).toEqual([{ type: "boulder", at: [10, 10], yaw: 0, scale: 4, colors: [[0.5, 0.5, 0.5]] }]);
+    expect(json.objects).toEqual([{ type: "boulder", at: [10, 10], yaw: 0, scale: 4, colors: [[0.5, 0.5, 0.5]], footprint: { circle: 1.8 }, height: 3.2 }]);
     expect(placed.unsavedFiles("main").size).toBe(0);
   });
 

@@ -35,11 +35,13 @@ RSpec.describe Bot::Runner do
   let(:welcome) { {"type" => "welcome", "you" => {"id" => character.id, "name" => "Botty", "continent" => "main", "at" => [0, 5, 0], "yaw" => 0}} }
   let(:arwen) { {"id" => 99, "name" => "Arwen", "continent" => "main", "at" => [30, 7, 0], "yaw" => 0, "move" => {}} }
 
-  # Level ground 7 ft up, on the one tile round the origin; no other plates.
+  # Level ground 7 ft up with nothing in its slots, on the one tile southeast of the origin; no
+  # other plates or placed files.
   before do
-    flat = "plate 2 0,0 surface\ntile 0,0 64\nlayer height =0GS\nlayer water =~~~\n"
-    stub_request(:get, %r{\Ahttps://raw\.githubusercontent\.com/octocat/world-\d+/c{40}/places/continents/main/plates/surface/})
-      .to_return { |request| request.uri.path.end_with?("/0_0.plate") ? {body: flat} : {status: 404} }
+    level = "h f" + (7 * 4 + Bot::Plate::OFFSET).digits(64).reverse.map { Bot::Plate::DIGITS[_1] }.join
+    flat = "plate 8 0 0\ntile 0\nh c\n#{"#{level}\n" * 65}s raw\n"
+    stub_request(:get, %r{\Ahttps://raw\.githubusercontent\.com/octocat/world-\d+/c{40}/places/continents/main/})
+      .to_return { |request| request.uri.path.end_with?("/plates/0_0.plate") ? {body: flat} : {status: 404} }
   end
 
   def run_bot(strategy, batches)

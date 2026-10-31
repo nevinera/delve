@@ -11,7 +11,7 @@ import { slabHome } from "../world/slabs.js";
 //
 // An object is in the plate its `at` is in, a slab in the one its home corner is in (slabHome).
 // Objects are kept as the world's tiles keep them (world/objects.js), with their footprint and
-// height worked out from their type as they're read. What's changed is kept to save again, and
+// height worked out from their type as they're read, and saved with them for the game server. What's changed is kept to save again, and
 // each change can be undone, up to UNDOS of them.
 
 export const placedPath = (continent, [px, pz]) => `places/continents/${continent}/placed/${px}_${pz}.json`;
@@ -44,8 +44,11 @@ export function readyObject(object) {
   return { ...object, ...(colors ? { colors } : {}), footprint: footprintOf(object.type, object.scale), height: spec.height * object.scale };
 }
 
+// A footprint's sizes rounded as the file keeps them.
+const keptFootprint = (footprint) => Object.fromEntries(Object.entries(footprint).map(([shape, v]) => [shape, Array.isArray(v) ? v.map((n) => round(n, 3)) : round(v, 3)]));
+
 // An object as the file keeps it.
-function keptObject({ type, at, y, yaw, scale, colors, texts, template }) {
+function keptObject({ type, at, y, yaw, scale, colors, texts, template, footprint, height }) {
   return {
     type,
     at: at.map((v) => round(v)),
@@ -55,6 +58,7 @@ function keptObject({ type, at, y, yaw, scale, colors, texts, template }) {
     ...(colors ? { colors } : {}),
     ...(texts && Object.keys(texts).length ? { texts } : {}),
     ...(template ? { template } : {}),
+    ...(footprint ? { footprint: keptFootprint(footprint), height: round(height, 3) } : {}),
   };
 }
 

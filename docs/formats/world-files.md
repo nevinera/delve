@@ -4,7 +4,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 
 | Path | What it is | Format |
 | --- | --- | --- |
-| `world.json` | name, level cap, continents and dungeons | [schema](../schema/world.schema.json) |
+| `world.json` | name, level cap, continents and dungeons, and in version 2 worlds the spawn point | [schema](../schema/world.schema.json) |
 | `collections.json` | the world's object collections | [schema](../schema/collections.schema.json) |
 | `template-collections.json` | the world's template collections | [schema](../schema/collections.schema.json) |
 | `objects/<id>.json` | a built object | [schema](../schema/object.schema.json) |
@@ -20,6 +20,8 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 | `places/continents/<c>/plates.json` | the continent's plates and their hashes | [schema](../schema/plates-index.schema.json) |
 | `places/continents/<c>/plates/<layer>/<px>_<pz>.plate` | 16×16 tiles of a layer, with their objects and [slabs](slabs.md) | [plates](plates.md) |
 | `places/continents/<c>/plates/<px>_<pz>.plate` | in version 2 worlds: 8×8 tiles' ground, biomes, slots, water and cuts | [v2 plates](v2-plates.md) |
+| `places/continents/<c>/placed/<px>_<pz>.json` | in version 2 worlds: objects and slabs placed by hand | [placed](placed.md) |
+| `places/continents/<c>/water.json` | in version 2 worlds: the water's bodies and courses | `client/src/v2/water.js` |
 | `places/continents/<c>/platters/<px>_<pz>.platter` | in version 2 worlds: renditions of 64×64 tiles and 8×8 plates | [v2 platters](v2-platters.md) |
 | `places/continents/<c>/index.json` | which tiles exist, their layers and the zones touching them | [schema](../schema/continent-index.schema.json) |
 | `places/continents/<c>/thumbs/<cx>/<cz>.png` | small pictures of 16×16 tiles, 16 px a tile | PNG |

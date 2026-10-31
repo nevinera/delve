@@ -13,7 +13,7 @@ import (
 // character can move, by the clocks of both. Where the world's ground is known, the character also
 // has to keep to it: not under it, not floating over it or over deep water, not swimming out of
 // water, and not up slopes too steep to climb. Slabs are ground too, to stand on, and it can't
-// move into one.
+// move into one, nor into a tree or an object.
 
 // Speeds and jumping, feet and seconds, as client/src/editor/walker.js moves characters.
 const (
@@ -26,11 +26,10 @@ const (
 	gravity = 48.0
 )
 
-// The ground, as client/src/editor/walker.js keeps to it.
-const (
-	maxClimb  = worlds.MaxClimb // rise over run of the steepest ground a character walks up
-	swimDepth = 4.5             // how far below the water's surface a swimming character's feet are
-)
+// The ground, as the walker keeps to it.
+const swimDepth = 4.5 // how far below the water's surface a swimming character's feet are
+
+var maxClimb = worlds.MaxClimb // rise over run of the steepest ground a character walks up
 
 // Leeway for what a client reports, for timing between its frames and its reports.
 const (
@@ -101,7 +100,7 @@ type footing struct {
 // Ground is the ground of the continent a character is on (worlds.Ground).
 type Ground interface {
 	At(x, z float64) (worlds.Sample, bool, error)
-	Enters(from, to [3]float64) (bool, error)
+	Enters(from, to [3]float64) (string, error)
 }
 
 // verdict is what to do with a report.
@@ -201,18 +200,18 @@ func (m *motion) check(r incoming, from [3]float64, now time.Time, g Ground) (ve
 	return m.take(r, t, f), ""
 }
 
-// intoSlab checks a report's move from the last one doesn't run into a slab.
+// intoSlab checks a report's move from the last one doesn't run into a slab, a tree or an object.
 func (m *motion) intoSlab(r incoming, g Ground) string {
 	if g == nil {
 		return ""
 	}
 	into, err := g.Enters(m.at, r.At)
 	if err != nil {
-		log.Printf("movement: reading the slabs: %v", err)
+		log.Printf("movement: reading the ground: %v", err)
 		return ""
 	}
-	if into {
-		return "walked into a slab"
+	if into != "" {
+		return "walked into " + into
 	}
 	return ""
 }

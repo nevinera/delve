@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
@@ -21,7 +22,7 @@ type fakeWorlds struct{ loads int }
 
 func (f *fakeWorlds) Load(_ context.Context, repo, sha string) (*worlds.World, error) {
 	f.loads++
-	return &worlds.World{Repo: repo, Sha: sha, Continents: []string{"main"}, Spawn: worlds.Spawn{Continent: "main", At: [2]float64{10.5, 10.5}}}, nil
+	return &worlds.World{Repo: repo, Sha: sha, Continents: []string{"main"}, Spawn: worlds.Spawn{Continent: "main", At: [2]float64{5376, 5376}}}, nil
 }
 
 // fakeCharacters gives characters at the positions it has for them, and keeps those saved.
@@ -295,30 +296,33 @@ func (z zipWorlds) Load(_ context.Context, repo, sha string) (*worlds.World, err
 	return w, nil
 }
 
-// plateWorld is a world whose spawn point is on the plate in ../worlds/testdata, at (256, 51.2) on
-// ground sloping gently east.
+// plateWorld is the world in ../worlds/testdata/world, whose spawn point is at (256, 51.2).
 func plateWorld(t *testing.T) zipWorlds {
 	t.Helper()
-	plate, err := os.ReadFile("../worlds/testdata/surface_0_0.plate")
-	if err != nil {
-		t.Fatal(err)
-	}
 	path := filepath.Join(t.TempDir(), "world.zip")
 	f, err := os.Create(path)
 	if err != nil {
 		t.Fatal(err)
 	}
 	z := zip.NewWriter(f)
-	for name, body := range map[string]string{
-		"world.json":                                      `{"version":1,"name":"Vale","continents":[{"key":"main","name":"Main"}]}`,
-		"places/continents/main/sketch.json":              `{"pins":[{"kind":"spawn","at":[0.5,0.1]}]}`,
-		"places/continents/main/plates/surface/0_0.plate": string(plate),
-	} {
-		w, err := z.Create("them-vale-0123456/" + name)
-		if err != nil {
-			t.Fatal(err)
+	err = filepath.WalkDir("../worlds/testdata/world", func(name string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
 		}
-		_, _ = w.Write([]byte(body))
+		body, err := os.ReadFile(name)
+		if err != nil {
+			return err
+		}
+		rel, _ := filepath.Rel("../worlds/testdata/world", name)
+		w, err := z.Create("them-vale-0123456/" + filepath.ToSlash(rel))
+		if err != nil {
+			return err
+		}
+		_, err = w.Write(body)
+		return err
+	})
+	if err != nil {
+		t.Fatal(err)
 	}
 	if err := z.Close(); err != nil {
 		t.Fatal(err)
@@ -329,20 +333,43 @@ func plateWorld(t *testing.T) zipWorlds {
 	return zipWorlds{path}
 }
 
+// spawnGround is the ground's height at the fixture's spawn point, as /create has it.
+func spawnGround(t *testing.T) float64 {
+	t.Helper()
+	raw, err := os.ReadFile("../worlds/testdata/expected.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var e struct {
+		Ground []struct {
+			At     [2]float64
+			Ground float64
+		}
+	}
+	if err := json.Unmarshal(raw, &e); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range e.Ground {
+		if p.At == [2]float64{256, 51.2} {
+			return p.Ground
+		}
+	}
+	t.Fatal("no ground at the spawn point")
+	return 0
+}
+
 func TestSpawnsOnTheGround(t *testing.T) {
 	h := NewHub(plateWorld(t), characters(nil))
 	c := clockOf(h)
 	p := enter(t, h, 1)
 	at := next(t, p)["you"].(map[string]any)["at"].([]any)
-	// The cells round (256, 51.2) are 10 + 0.25 i + 0.1 j ft high, to the quarter foot: halfway
-	// between cells 31 and 32 east, and 0.5 ft for rows 5 and 6 south.
-	if y := at[1].(float64); math.Abs(y-(10+0.25*31.5+0.5)) > 1e-9 {
+	if y := at[1].(float64); math.Abs(y-spawnGround(t)) > 1e-9 {
 		t.Errorf("spawned at %v", at)
 	}
 	next(t, p)
 	// And the ground holds it there: a report from under it is put back.
 	*c += 0.5
-	if err := p.Handle([]byte(`{"type":"move","t":500,"at":[256,5,51.2],"yaw":0,"move":{"gait":"run"}}`)); err != nil {
+	if err := p.Handle([]byte(`{"type":"move","t":500,"at":[256,-20,51.2],"yaw":0,"move":{"gait":"run"}}`)); err != nil {
 		t.Fatal(err)
 	}
 	if m := next(t, p); m["type"] != "correct" {

@@ -2,24 +2,31 @@ package worlds
 
 import (
 	"encoding/json"
+	"io/fs"
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 )
 
-// groundWorld is vale with testdata/surface_0_0.plate (written by testdata/plate.mjs) on its main
-// continent, read from a zip on disk.
-func groundWorld(t *testing.T) *World {
+// fixture is the world in testdata/world (written by testdata/world.mjs), read from a zip on disk,
+// and what /create finds on it (testdata/expected.json).
+func fixture(t *testing.T) (*World, expected) {
 	t.Helper()
-	plate, err := os.ReadFile("testdata/surface_0_0.plate")
+	files := map[string]string{}
+	err := filepath.WalkDir("testdata/world", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		body, err := os.ReadFile(path)
+		rel, _ := filepath.Rel("testdata/world", path)
+		files[filepath.ToSlash(rel)] = string(body)
+		return err
+	})
 	if err != nil {
 		t.Fatal(err)
-	}
-	files := map[string]string{"places/continents/main/plates/surface/0_0.plate": string(plate)}
-	for k, v := range vale {
-		files[k] = v
 	}
 	path := filepath.Join(t.TempDir(), "world.zip")
 	if err := os.WriteFile(path, worldZip(t, files), 0o644); err != nil {
@@ -29,37 +36,59 @@ func groundWorld(t *testing.T) *World {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return w
-}
-
-func TestGroundMatchesTheClient(t *testing.T) {
-	raw, err := os.ReadFile("testdata/ground.json")
+	raw, err := os.ReadFile("testdata/expected.json")
 	if err != nil {
 		t.Fatal(err)
 	}
-	var points []struct {
+	var e expected
+	if err := json.Unmarshal(raw, &e); err != nil {
+		t.Fatal(err)
+	}
+	return w, e
+}
+
+type expected struct {
+	Ground []struct {
 		At     [2]float64
 		Ground *float64
 		Water  *float64
 	}
-	if err := json.Unmarshal(raw, &points); err != nil {
-		t.Fatal(err)
+	Fills []struct {
+		Tile   [2]int
+		Things []struct {
+			Type      string
+			X, Z, Yaw float64
+			Footprint footprint
+			Height    float64
+		}
 	}
-	g := groundWorld(t).Ground("main")
-	for _, p := range points {
+	Standing []struct {
+		Type string
+		At   [2]float64
+		Y    float64
+	}
+	Footholds []struct {
+		At        [2]float64
+		Footholds []float64
+	}
+}
+
+func near(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
+
+func TestGroundMatchesCreate(t *testing.T) {
+	w, e := fixture(t)
+	g := w.Ground("main")
+	for _, p := range e.Ground {
 		s, ok, err := g.At(p.At[0], p.At[1])
-		if err != nil {
-			t.Fatal(err)
+		if err != nil || !ok {
+			t.Fatalf("%v: ok %v, %v", p.At, ok, err)
 		}
-		if ok != (p.Ground != nil) {
-			t.Errorf("%v: ok = %v, want %v", p.At, ok, p.Ground != nil)
-			continue
+		want := emptyFt
+		if p.Ground != nil {
+			want = *p.Ground
 		}
-		if !ok {
-			continue
-		}
-		if math.Abs(s.Ground-*p.Ground) > 1e-6 {
-			t.Errorf("%v: ground = %v, want %v", p.At, s.Ground, *p.Ground)
+		if !near(s.Ground, want) {
+			t.Errorf("%v: ground = %v, want %v", p.At, s.Ground, want)
 		}
 		if (p.Water == nil) != math.IsNaN(s.Water) || (p.Water != nil && s.Water != *p.Water) {
 			t.Errorf("%v: water = %v, want %v", p.At, s.Water, p.Water)
@@ -67,89 +96,213 @@ func TestGroundMatchesTheClient(t *testing.T) {
 	}
 }
 
-func TestGroundReadsOldStructures(t *testing.T) {
-	// The plate still places a dock, a structure from before templates, at (672.5, 160.25): the
-	// ground there reads as ground.
-	s, ok, err := groundWorld(t).Ground("main").At(672.5, 160.25)
-	if err != nil || !ok || len(s.Footholds) != 0 {
-		t.Errorf("sample %+v, ok %v, %v", s, ok, err)
+func TestSlotsFillAsCreateFillsThem(t *testing.T) {
+	w, e := fixture(t)
+	g := w.Ground("main")
+	key := func(typ string, x, z float64) string {
+		return typ + "@" + jsonOf([2]float64{math.Round(x*1000) / 1000, math.Round(z*1000) / 1000})
 	}
-}
-
-func TestGroundWithoutPlates(t *testing.T) {
-	g := groundWorld(t).Ground("isle")
-	if _, ok, err := g.At(10, 10); ok || err != nil {
-		t.Errorf("ok %v, err %v; want no ground", ok, err)
-	}
-	if (&World{}).Ground("main") != nil {
-		t.Error("a world not read from a zip has ground")
-	}
-}
-
-func TestReadPlateRefusesBadPlates(t *testing.T) {
-	for _, text := range []string{
-		"plate 2 0,0 surface\ntile 0,0 32\n",
-		"plate 2 0,0 surface\ntile 0,0 64\nlayer height\n000\n",
-		"plate 2 0,0 surface\ntile 0,0 64\nlayer height =0!0\n",
-		"plate 2 0,0 surface\ntile 0,0 64\nlayer water =000\n",
-	} {
-		if _, err := readPlate(strings.NewReader(text)); err == nil {
-			t.Errorf("read %q", text)
+	for _, f := range e.Fills {
+		got, err := g.fill(f.Tile[0], f.Tile[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		mine := map[string]thing{}
+		for _, th := range got {
+			mine[key(th.Type, th.X, th.Z)] = th
+		}
+		if len(got) != len(f.Things) {
+			t.Errorf("tile %v: %d things, want %d", f.Tile, len(got), len(f.Things))
+		}
+		for _, want := range f.Things {
+			th, ok := mine[key(want.Type, want.X, want.Z)]
+			if !ok && strings.HasSuffix(strings.ToLower(want.Type), "boulder") {
+				// Boulders across cascades come from sines of large numbers, which Go and the browser
+				// work out a little differently: they're near enough.
+				drifted := false
+				for _, o := range got {
+					drifted = drifted || (o.Type == want.Type && math.Hypot(o.X-want.X, o.Z-want.Z) < 0.1 && math.Abs(o.Footprint.reach()-want.Footprint.reach()) < 0.01)
+				}
+				if drifted {
+					continue
+				}
+			}
+			if !ok {
+				t.Errorf("tile %v: no %s at %v, %v", f.Tile, want.Type, want.X, want.Z)
+				continue
+			}
+			if !near(th.Yaw, want.Yaw) || !near(th.Footprint.reach(), want.Footprint.reach()) || (!th.tree && !near(th.Height, want.Height)) {
+				t.Errorf("tile %v: %s at %v, %v is %+v, want %+v", f.Tile, want.Type, want.X, want.Z, th, want)
+			}
 		}
 	}
 }
 
-func TestGroundFindsSlabFootholdsAsTheClientDoes(t *testing.T) {
-	raw, err := os.ReadFile("testdata/slabs.json")
+func jsonOf(v any) string {
+	b, _ := json.Marshal(v)
+	return string(b)
+}
+
+func TestPlacedObjectsStandAsInCreate(t *testing.T) {
+	w, e := fixture(t)
+	g := w.Ground("main")
+	p, err := g.plate(0, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var points []struct {
-		At        [2]float64
-		Footholds []float64
-	}
-	if err := json.Unmarshal(raw, &points); err != nil {
-		t.Fatal(err)
-	}
-	g := groundWorld(t).Ground("main")
-	for _, p := range points {
-		s, ok, err := g.At(p.At[0], p.At[1])
-		if err != nil || !ok {
-			t.Fatalf("%v: ok = %v, err = %v", p.At, ok, err)
+	for _, want := range e.Standing {
+		found := false
+		for _, o := range p.objects {
+			if o.Type != want.Type || o.X != want.At[0] || o.Z != want.At[1] {
+				continue
+			}
+			found = true
+			if y, err := g.objectY(o); err != nil || !near(y, want.Y) {
+				t.Errorf("%s stands at %v (%v), want %v", o.Type, y, err, want.Y)
+			}
 		}
+		if !found {
+			t.Errorf("no %s at %v", want.Type, want.At)
+		}
+	}
+	// A built object keeps its footprint in the file; the game server doesn't know its kind.
+	types := []string{}
+	for _, o := range p.objects {
+		types = append(types, o.Type)
+	}
+	sort.Strings(types)
+	if jsonOf(types) != `["boulder","built:shed0001","rubble","stump"]` {
+		t.Errorf("objects %v", types)
+	}
+}
+
+func TestGroundFindsSlabFootholdsAsCreateDoes(t *testing.T) {
+	w, e := fixture(t)
+	g := w.Ground("main")
+	for _, p := range e.Footholds {
+		s, _, err := g.At(p.At[0], p.At[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		sort.Float64s(s.Footholds)
+		sort.Float64s(p.Footholds)
 		if len(s.Footholds) != len(p.Footholds) {
 			t.Errorf("%v: footholds = %v, want %v", p.At, s.Footholds, p.Footholds)
 			continue
 		}
 		for i := range p.Footholds {
-			if math.Abs(s.Footholds[i]-p.Footholds[i]) > 1e-6 {
+			if !near(s.Footholds[i], p.Footholds[i]) {
 				t.Errorf("%v: footholds = %v, want %v", p.At, s.Footholds, p.Footholds)
 			}
 		}
 	}
 }
 
-func TestGroundStopsMovesIntoSlabs(t *testing.T) {
-	g := groundWorld(t).Ground("main")
+func TestGroundStopsMovesIntoSlabsAndThings(t *testing.T) {
+	w, _ := fixture(t)
+	g := w.Ground("main")
+	floor := heightAtFixture(100, 500) + 1
+	tree := firstTree(t, g)
+	shed, _, err := g.heightAt(200, 600)
+	if err != nil {
+		t.Fatal(err)
+	}
 	for _, c := range []struct {
 		name     string
 		from, to [3]float64
-		want     bool
+		want     string
 	}{
-		{"through the wall", [3]float64{804, 10, 402}, [3]float64{804, 10, 396}, true},
-		{"through the doorway", [3]float64{810, 10, 402}, [3]float64{810, 10, 396}, false},
-		{"across the floor", [3]float64{802, 10, 402}, [3]float64{818, 10, 418}, false},
-		{"up the ramp", [3]float64{821, 10.6, 410}, [3]float64{830, 15.8, 410}, false},
-		{"under the platform", [3]float64{895, 8, 410}, [3]float64{905, 8, 410}, false},
-		{"into the platform's side", [3]float64{895, 27, 410}, [3]float64{905, 27, 410}, true},
-		{"out of a wall it's in", [3]float64{804, 10, 399.5}, [3]float64{804, 10, 402}, false},
+		{"through the wall", [3]float64{104, floor, 502}, [3]float64{104, floor, 496}, "a slab"},
+		{"through the doorway", [3]float64{112, floor, 502}, [3]float64{112, floor, 496}, ""},
+		{"across the floor", [3]float64{102, floor, 502}, [3]float64{108, floor, 508}, ""},
+		{"out of a wall it's in", [3]float64{104, floor, 499.5}, [3]float64{104, floor, 502}, ""},
+		{"through a tree", [3]float64{tree.X - 10, 0, tree.Z}, [3]float64{tree.X + 10, 0, tree.Z}, "a tree"},
+		{"past a tree", [3]float64{tree.X - 10, 0, tree.Z + tree.Footprint.Circle + 1}, [3]float64{tree.X + 10, 0, tree.Z + tree.Footprint.Circle + 1}, ""},
+		{"through a shed", [3]float64{196, shed, 600}, [3]float64{204, shed, 600}, "a built:shed0001"},
+		{"over a shed", [3]float64{196, shed + 10, 600}, [3]float64{204, shed + 10, 600}, ""},
 	} {
+		if c.name == "through a tree" || c.name == "past a tree" {
+			c.from[1], c.to[1] = tree.Y, tree.Y
+		}
 		got, err := g.Enters(c.from, c.to)
 		if err != nil {
 			t.Fatal(err)
 		}
 		if got != c.want {
-			t.Errorf("%s: Enters = %v, want %v", c.name, got, c.want)
+			t.Errorf("%s: Enters = %q, want %q", c.name, got, c.want)
 		}
+	}
+}
+
+// heightAtFixture is testdata/world.mjs's heightAt.
+func heightAtFixture(x, z float64) float64 {
+	h := 20 + 15*math.Sin(x/180) + 10*math.Cos(z/140)
+	if x > 600 {
+		h += math.Min(60, (x-600)*3)
+	}
+	if d := math.Hypot(x-300, z-300); d < 110 {
+		h -= 25 * (1 - d/110)
+	}
+	return jsRound(h*4) / 4
+}
+
+// firstTree is a tree in the fixture away from other things, standing at its ground.
+func firstTree(t *testing.T, g *Ground) thing {
+	t.Helper()
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	for tz := 0; tz <= 2; tz++ {
+		for tx := 0; tx <= 2; tx++ {
+			filled, err := g.fill(tx, tz)
+			if err != nil {
+				t.Fatal(err)
+			}
+		next:
+			for _, th := range filled {
+				if !th.tree {
+					continue
+				}
+				for _, o := range filled {
+					if (o.X != th.X || o.Z != th.Z) && math.Abs(o.X-th.X) < 14 && math.Abs(o.Z-th.Z) < 14 {
+						continue next
+					}
+				}
+				th.Y, _, _ = g.heightAt(th.X, th.Z)
+				return th
+			}
+		}
+	}
+	t.Fatal("no tree on its own")
+	return thing{}
+}
+
+func TestReadPlateRefusesBadPlates(t *testing.T) {
+	for _, text := range []string{
+		"\x1f\x8b binary",
+		"plate 7 0 0\n",
+		"plat 8 0 0\n",
+		"plate 8 0 0\ntile 0\nh q\n",
+		"plate 8 0 0\ntile 0\nh c\nh fAAA\n",
+		"plate 8 0 0\ntile 99\n",
+	} {
+		if _, err := readPlate([]byte(text), 0, 0); err == nil {
+			t.Errorf("read %q", text)
+		}
+	}
+}
+
+func TestGroundOfAWorldNotFromAZip(t *testing.T) {
+	if (&World{}).Ground("main") != nil {
+		t.Error("a world not read from a zip has ground")
+	}
+}
+
+func TestFillIsTheClients(t *testing.T) {
+	theirs, err := os.ReadFile("../../../client/src/v2/fill.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(theirs) != string(fillJSON) {
+		t.Error("fill.json differs from client/src/v2/fill.json: copy it over")
 	}
 }

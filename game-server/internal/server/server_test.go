@@ -31,7 +31,7 @@ func TestUp(t *testing.T) {
 type oneWorld struct{}
 
 func (oneWorld) Load(_ context.Context, repo, sha string) (*worlds.World, error) {
-	return &worlds.World{Repo: repo, Sha: sha, Spawn: worlds.Spawn{Continent: "main", At: [2]float64{1, 1}}}, nil
+	return &worlds.World{Repo: repo, Sha: sha, Spawn: worlds.Spawn{Continent: "main", At: [2]float64{512, 512}}}, nil
 }
 
 type anyone struct{}

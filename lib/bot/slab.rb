@@ -4,7 +4,7 @@ module Bot
   class Slab
     REACH_FT = 64.0
 
-    attr_reader :low, :high
+    attr_reader :low, :high, :at, :turn, :outline, :thickness
 
     def initialize(json)
       @at = json.fetch("at")

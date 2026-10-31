@@ -11,7 +11,10 @@
   ],
   "properties": {
     "version": {
-      "const": 1
+      "enum": [
+        1,
+        2
+      ]
     },
     "name": {
       "type": "string"
@@ -47,6 +50,29 @@
     "notes": {
       "type": "string",
       "description": "free-form notes on intent and backstory, for whoever builds the world; the game never reads them"
+    },
+    "spawn": {
+      "type": "object",
+      "required": [
+        "continent",
+        "at"
+      ],
+      "description": "version 2: where characters new to the world start, set in /create",
+      "properties": {
+        "continent": {
+          "type": "string",
+          "description": "a continent's key"
+        },
+        "at": {
+          "type": "array",
+          "items": {
+            "type": "number"
+          },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "[x, z] in continent feet"
+        }
+      }
     }
   }
 }

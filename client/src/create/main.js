@@ -291,6 +291,26 @@ function start(world, changes, fresh) {
   let lastInfo = 0;
   const compass = new Compass($("stage"), document.querySelector(".create-bar"));
   const feet = (ft) => `${Math.round(ft).toLocaleString()} ft`;
+  const toward = (ft, ahead, back) => `${feet(Math.abs(ft))} ${ft < 0 ? back : ahead}`;
+  // The spawn point, kept in world.json: where characters new to the world start.
+  const worldInfo = () => JSON.parse(strFromU8(changes.get("world.json") ?? world.files.get("world.json")));
+  const showSpawn = () => {
+    const { spawn } = worldInfo();
+    $("spawnAt").textContent = spawn ? `${toward(spawn.at[0], "east", "west")}, ${toward(spawn.at[1], "south", "north")}` : "none yet: the game won't take the world without one";
+    $("spawnGo").disabled = !spawn;
+  };
+  showSpawn();
+  $("spawnHere").addEventListener("click", async () => {
+    const info = worldInfo();
+    info.spawn = { continent, at: [builder.state.x, builder.state.z].map((v) => Math.round(v * 10) / 10) };
+    changes.set("world.json", strToU8(`${JSON.stringify(info, null, 2)}\n`));
+    await store.set("changes", changes).catch(() => {});
+    showSpawn();
+  });
+  $("spawnGo").addEventListener("click", () => {
+    const [x, z] = worldInfo().spawn.at;
+    builder.state = { ...builder.state, x, z, y: walkAt(x, z), flying: false, falling: 0 };
+  });
   let frames = 0;
   let problem = null; // why the ground couldn't be drawn, shown in the HUD
   // The slowest of each part of a frame since the HUD last showed them, in ms, and of the gaps

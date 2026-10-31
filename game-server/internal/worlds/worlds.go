@@ -14,13 +14,11 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 	"sync"
 	"time"
 )
-
-// TileFt is a tile's width in feet (client/src/world/constants.js).
-const TileFt = 64 * 8
 
 // World is what the game server knows of a released world.
 type World struct {
@@ -30,10 +28,10 @@ type World struct {
 	path, prefix string // the zip it was read from, and its top directory
 }
 
-// Spawn is the world's spawn pin: a continent and a place in tile units.
+// Spawn is where characters new to the world start: a continent and a place in its feet.
 type Spawn struct {
-	Continent string
-	At        [2]float64
+	Continent string     `json:"continent"`
+	At        [2]float64 `json:"at"`
 }
 
 // Store downloads worlds into a directory, one download per world at a time.
@@ -133,44 +131,30 @@ func Read(path string) (*World, error) {
 		}
 	}
 	var info struct {
+		Version    int                    `json:"version"`
 		Continents []struct{ Key string } `json:"continents"`
+		Spawn      *Spawn                 `json:"spawn"`
 	}
 	if err := readJSON(files, "world.json", &info); err != nil {
 		return nil, err
 	}
+	if info.Version != 2 {
+		return nil, fmt.Errorf("worlds: %s is a version %d world, not 2", path, info.Version)
+	}
 	w := &World{path: path, prefix: prefix}
-	found := 0
 	for _, c := range info.Continents {
 		w.Continents = append(w.Continents, c.Key)
-		var sketch struct {
-			Pins []struct {
-				Kind string    `json:"kind"`
-				At   []float64 `json:"at"`
-			} `json:"pins"`
-		}
-		path := fmt.Sprintf("places/continents/%s/sketch.json", c.Key)
-		if files[path] == nil {
-			continue
-		}
-		if err := readJSON(files, path, &sketch); err != nil {
-			return nil, err
-		}
-		for _, pin := range sketch.Pins {
-			if pin.Kind == "spawn" && len(pin.At) == 2 {
-				w.Spawn = Spawn{Continent: c.Key, At: [2]float64{pin.At[0], pin.At[1]}}
-				found++
-			}
-		}
 	}
-	if found != 1 {
-		return nil, fmt.Errorf("worlds: %s has %d spawn points, not 1", path, found)
+	if info.Spawn == nil || !slices.Contains(w.Continents, info.Spawn.Continent) {
+		return nil, fmt.Errorf("worlds: %s has no spawn point on one of its continents: set one in /create", path)
 	}
+	w.Spawn = *info.Spawn
 	return w, nil
 }
 
 // SpawnAt is the spawn point in continent feet [x, y, z]; y is 0 until the server knows the ground.
 func (w *World) SpawnAt() [3]float64 {
-	return [3]float64{w.Spawn.At[0] * TileFt, 0, w.Spawn.At[1] * TileFt}
+	return [3]float64{w.Spawn.At[0], 0, w.Spawn.At[1]}
 }
 
 // TileOf is the tile holding continent feet (x, z).

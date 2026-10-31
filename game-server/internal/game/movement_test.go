@@ -238,7 +238,7 @@ func (f groundOf) At(x, z float64) (worlds.Sample, bool, error) {
 	return worlds.Sample{Ground: g, Water: w}, true, nil
 }
 
-func (f groundOf) Enters(from, to [3]float64) (bool, error) { return false, nil }
+func (f groundOf) Enters(from, to [3]float64) (string, error) { return "", nil }
 
 // slabbed is level ground at 50 with a floor over it, its top at 60, from x = 100 to 200, and a
 // wall standing across x = 300.
@@ -252,8 +252,11 @@ func (slabbed) At(x, z float64) (worlds.Sample, bool, error) {
 	return s, true, nil
 }
 
-func (slabbed) Enters(from, to [3]float64) (bool, error) {
-	return (from[0] < 300) != (to[0] < 300) && math.Min(from[1], to[1]) < 70, nil
+func (slabbed) Enters(from, to [3]float64) (string, error) {
+	if (from[0] < 300) != (to[0] < 300) && math.Min(from[1], to[1]) < 70 {
+		return "a slab", nil
+	}
+	return "", nil
 }
 
 var (

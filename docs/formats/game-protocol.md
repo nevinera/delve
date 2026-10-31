@@ -23,7 +23,7 @@ A token is `<payload>.<signature>`, both base64url without padding. The payload 
 ## Placing a character
 
 - The game server keeps each released commit's zip on disk, keyed by repo and sha, and downloads it from GitHub the first time someone enters it. A world stays in memory while it has players, and unloads a few minutes after the last one leaves.
-- Rails gives the character's last position in the world, or none. With none, the character starts at the world's spawn pin. A character still connected elsewhere in the same layer keeps where it is there.
+- Rails gives the character's last position in the world, or none. With none, the character starts at the world's spawn point (`spawn` in `world.json`). A character still connected elsewhere in the same layer keeps where it is there.
 - The open world runs as layers (copies). The server puts each entering character on a layer. For now each world has one.
 
 ## Messages
