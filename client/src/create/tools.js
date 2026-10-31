@@ -441,7 +441,7 @@ export class Tools {
     window.addEventListener("keydown", (e) => {
       if (e.target.matches?.("input, textarea, select") || e.target.closest?.(":popover-open")) return;
       const areas = this.outlined[this.tool];
-      if (BUILD.has(this.tool) && e.key !== "Escape" && this.build.key(e)) return e.preventDefault();
+      if (BUILD.has(this.tool) && this.build.key(e)) return e.preventDefault();
       if (e.key === "Escape" && areas?.draft) areas.drop();
       else if (e.key === "Escape") this.pick(null);
       else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "select") this.marks.deleteSelected();

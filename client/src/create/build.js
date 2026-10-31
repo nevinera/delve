@@ -44,7 +44,8 @@ import { drawable, slabSpace } from "./things.js";
 // held: a floor or room started from a floor's is level with it, and a wall drawn along a floor's
 // edge from it stands outside it, its foot at the floor's bottom. Floors, walls and rooms can snap
 // to a 2 ft grid instead, square to north.
-// Ctrl+Z undoes the last change, ctrl+C copies and ctrl+V pastes.
+// Esc drops what's being drawn, keeping the tool. Ctrl+Z undoes the last change, ctrl+C copies
+// and ctrl+V pastes.
 
 const THUMB_PX = 56;
 const TURN_DEG = 15;
@@ -170,6 +171,16 @@ export class Build {
   // Tells the builder something, in the tool's settings, till the tool's picked again.
   say(text) {
     for (const line of document.querySelectorAll("[data-build-say]")) line.textContent = text;
+  }
+
+  // Drops the slab, stairs or ramp being drawn, keeping the tool. Gives whether there was one.
+  cancel() {
+    if (!(this.drawing || this.outlining || this.stair || this.ramp)) return false;
+    this.drawing = this.outlining = this.stair = this.ramp = null;
+    this.say("");
+    this.clearGhost();
+    this.showStair();
+    return true;
   }
 
   // Picks a build tool, or puts it down with null or another tool.
@@ -465,6 +476,7 @@ export class Build {
       else this.yaw += (step * Math.PI) / 180;
       return true;
     }
+    if (e.key === "Escape") return this.cancel();
     if (this.stair?.phase === "top" && e.key === "Enter") {
       this.placeStair();
       return true;
