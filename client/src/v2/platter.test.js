@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { encodeBinaryPlatter } from "./platterBinary.js";
 import { CORNERS, decodePlatter, encodePlatter, indexIn, plateIndexIn, platterOf } from "./platter.js";
 
 describe("platter files", () => {
@@ -33,5 +34,13 @@ describe("platter files", () => {
     expect(indexIn(0, 0)).toBe(0);
     expect(indexIn(-1, 0)).toBe(63);
     expect(indexIn(1, 1)).toBe(65);
+  });
+});
+
+describe("platter files from before they were text", () => {
+  it("are read", () => {
+    const heights = Float32Array.from({ length: CORNERS * CORNERS }, (_, k) => k / 2);
+    const old = encodeBinaryPlatter({ coords: [0, 0], tiles: new Map([[5, { heights, hash: "0123456789abcdef", water: null }]]) });
+    expect([...decodePlatter(old).tiles.get(5).heights]).toEqual([...heights]);
   });
 });

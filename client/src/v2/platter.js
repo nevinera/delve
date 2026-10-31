@@ -1,4 +1,6 @@
-import { gunzipSync, gzipSync } from "fflate";
+import { digit, digits, readDigits } from "./digits.js";
+import { decodeLine, encodeLine, quarters } from "./heights.js";
+import { decodeBinaryPlatter } from "./platterBinary.js";
 import { PLATE_TILES, PLATTER_PLATES, PLATTER_TILES, TILE_CHUNKS } from "./sizes.js";
 
 // Platter files: the renditions of the tiles and plates in one platter (64×64 tiles, 8×8 plates,
@@ -12,32 +14,23 @@ import { PLATE_TILES, PLATTER_PLATES, PLATTER_TILES, TILE_CHUNKS } from "./sizes
 // they're drawn (look.js). A tile's rendition has its water too, a part a chunk (water.js's
 // partWater).
 //
-// The file is gzipped. Inside, numbers are little-endian:
+// The file is text, a line at a time, numbers in base64 digits (digits.js):
 //
-//   0   "DLP1"
-//   4   u32 version (4; 3 had no water, and 2 kept each part's color too, read and left out)
-//   8   i32 px, i32 pz
-//   16  the tiles: 512 bytes, a bit for each of the platter's 4,096 tiles in row order, set where
-//       it has one, then a record for each of those, in row order
-//   then the plates: 8 bytes, a bit for each of its 64 plates, then a record for each of those
+//   platter 5 <px> <pz>
+//   t <index> <hash> <heights>   a tile's rendition: its index in the platter, its hash in 16 hex
+//                                digits, and its corners as one heights.js line (rows of 9)
+//   tw <index> <levels><types>   its water: 64 parts' levels, 3 digits of quarter feet plus 32,768
+//                                each, ~~~ where it's dry, then their 64 types (water.js's
+//                                WATER_TYPES)
+//   p <index> <hash> <heights>   a plate's rendition, the same as a tile's
 //
-// A record is:
-//   81 i16 corner heights in quarter feet, row order
-//   8 bytes of hash
-//   and a tile's: u8 1 where it has water, then 8 × 8 i16 parts' levels in quarter feet, row
-//   order, -32768 where a part's dry, and 8 × 8 u8 types (water.js's WATER_TYPES), or u8 0
+// Platter files from before they were text are read too (platterBinary.js).
 
 export const CORNERS = TILE_CHUNKS + 1;
-const MAGIC = "DLP1";
-const VERSION = 4;
-const VERSIONS = new Set([2, 3, 4]);
+const VERSION = 5;
 const PARTS = TILE_CHUNKS * TILE_CHUNKS;
-const DRY = -32768;
-const HEADER = 16;
-const RECORD = CORNERS * CORNERS * 2 + 8;
-const COLORS = TILE_CHUNKS * TILE_CHUNKS * 3; // in version 2
-const TILE_COUNT = PLATTER_TILES * PLATTER_TILES;
-const PLATE_COUNT = PLATTER_PLATES * PLATTER_PLATES;
+const OFFSET = 32768;
+const DRY = "~~~";
 
 export const platterPath = (continent, [px, pz]) => `places/continents/${continent}/platters/${px}_${pz}.platter`;
 export const PLATTER_PATH = /^places\/continents\/([\w-]+)\/platters\/(-?\d+)_(-?\d+)\.platter$/;
@@ -54,77 +47,48 @@ export const plateOf = (tx, tz) => [Math.floor(tx / PLATE_TILES), Math.floor(tz 
 // a rendition { heights: 81 feet, hash: 16 hex digits }, and a tile's `water`, null or { level: 64
 // feet, NaN where a part's dry, type: 64 }.
 export function encodePlatter({ coords, tiles, plates = new Map() }) {
-  const sections = [
-    [tiles, TILE_COUNT],
-    [plates, PLATE_COUNT],
-  ];
-  const waterBytes = [...tiles.values()].reduce((sum, { water }) => sum + 1 + (water ? PARTS * 3 : 0), 0);
-  const size = sections.reduce((sum, [map, count]) => sum + count / 8 + map.size * RECORD, HEADER + waterBytes);
-  const bytes = new Uint8Array(size);
-  const view = new DataView(bytes.buffer);
-  for (let i = 0; i < 4; i++) bytes[i] = MAGIC.charCodeAt(i);
-  view.setUint32(4, VERSION, true);
-  view.setInt32(8, coords[0], true);
-  view.setInt32(12, coords[1], true);
-  let at = HEADER;
-  for (const [map, count] of sections) {
-    const bits = at;
-    at += count / 8;
-    for (const index of [...map.keys()].sort((a, b) => a - b)) {
-      bytes[bits + (index >> 3)] |= 1 << (index & 7);
-      const { heights, hash } = map.get(index);
-      for (let k = 0; k < CORNERS * CORNERS; k++) view.setInt16(at + k * 2, Math.max(-32768, Math.min(32767, Math.round(heights[k] * 4))), true);
-      at += CORNERS * CORNERS * 2;
-      for (let k = 0; k < 8; k++) bytes[at + k] = parseInt(hash.slice(k * 2, k * 2 + 2), 16);
-      at += 8;
-      if (map !== tiles) continue;
-      const { water } = map.get(index);
-      bytes[at++] = water ? 1 : 0;
-      if (!water) continue;
-      for (let k = 0; k < PARTS; k++) view.setInt16(at + k * 2, Number.isNaN(water.level[k]) ? DRY : Math.max(DRY + 1, Math.min(32767, Math.round(water.level[k] * 4))), true);
-      at += PARTS * 2;
-      bytes.set(water.type, at);
-      at += PARTS;
-    }
+  const lines = [`platter ${VERSION} ${coords[0]} ${coords[1]}`];
+  const rendition = (tag, index, { heights, hash }) => `${tag} ${index} ${hash} ${encodeLine(Int32Array.from(heights, quarters), CORNERS)}`;
+  for (const index of [...tiles.keys()].sort((a, b) => a - b)) {
+    const tile = tiles.get(index);
+    lines.push(rendition("t", index, tile));
+    if (!tile.water) continue;
+    const { level, type } = tile.water;
+    let out = `tw ${index} `;
+    for (let k = 0; k < PARTS; k++) out += Number.isNaN(level[k]) ? DRY : digits(Math.max(0, Math.min(2 * OFFSET - 1, Math.round(level[k] * 4) + OFFSET)), 3);
+    for (let k = 0; k < PARTS; k++) out += digit(type[k]);
+    lines.push(out);
   }
-  return gzipSync(bytes, { level: 9 });
+  for (const index of [...plates.keys()].sort((a, b) => a - b)) lines.push(rendition("p", index, plates.get(index)));
+  return new TextEncoder().encode(`${lines.join("\n")}\n`);
 }
 
-export function decodePlatter(gzipped) {
-  const bytes = gunzipSync(gzipped);
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const magic = String.fromCharCode(...bytes.subarray(0, 4));
-  if (magic !== MAGIC) throw new Error(`not a platter file (magic ${JSON.stringify(magic)})`);
-  const version = view.getUint32(4, true);
-  if (!VERSIONS.has(version)) throw new Error(`unsupported platter version ${version}`);
-  const coords = [view.getInt32(8, true), view.getInt32(12, true)];
-  let at = HEADER;
-  const section = (count, tiles) => {
-    const bits = at;
-    at += count / 8;
-    const map = new Map();
-    for (let index = 0; index < count; index++) {
-      if (!(bytes[bits + (index >> 3)] & (1 << (index & 7)))) continue;
-      const heights = new Float32Array(CORNERS * CORNERS);
-      for (let k = 0; k < heights.length; k++) heights[k] = view.getInt16(at + k * 2, true) / 4;
-      at += CORNERS * CORNERS * 2;
-      if (version === 2) at += COLORS;
-      const hash = [...bytes.subarray(at, at + 8)].map((b) => b.toString(16).padStart(2, "0")).join("");
-      at += 8;
-      let water = null;
-      if (tiles && version >= 4 && bytes[at++]) {
-        water = { level: new Float32Array(PARTS), type: bytes.slice(at + PARTS * 2, at + PARTS * 3) };
-        for (let k = 0; k < PARTS; k++) {
-          const level = view.getInt16(at + k * 2, true);
-          water.level[k] = level === DRY ? NaN : level / 4;
-        }
-        at += PARTS * 3;
+export function decodePlatter(bytes) {
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) return decodeBinaryPlatter(bytes);
+  const lines = new TextDecoder().decode(bytes).split("\n");
+  const [word, version, px, pz] = lines[0].split(" ");
+  if (word !== "platter") throw new Error(`not a platter file (${JSON.stringify(lines[0].slice(0, 20))})`);
+  if (Number(version) !== VERSION) throw new Error(`unsupported platter version ${version}`);
+  const [tiles, plates] = [new Map(), new Map()];
+  for (const line of lines.slice(1)) {
+    if (!line) continue;
+    const [tag, index] = line.split(" ", 2);
+    const at = tag.length + 1 + index.length + 1;
+    if (tag === "tw") {
+      const water = { level: new Float32Array(PARTS), type: new Uint8Array(PARTS) };
+      for (let k = 0; k < PARTS; k++) {
+        water.level[k] = line.startsWith(DRY, at + k * 3) ? NaN : (readDigits(line, at + k * 3, 3) - OFFSET) / 4;
+        water.type[k] = readDigits(line, at + PARTS * 3 + k, 1);
       }
-      map.set(index, tiles ? { heights, hash, water } : { heights, hash });
+      tiles.get(Number(index)).water = water;
+      continue;
     }
-    return map;
-  };
-  const tiles = section(TILE_COUNT, true);
-  const plates = section(PLATE_COUNT);
-  return { coords, tiles, plates };
+    const hash = line.slice(at, at + 16);
+    const [q] = decodeLine(line, at + 17, CORNERS * CORNERS);
+    const rendition = { heights: Float32Array.from(q, (v) => v / 4), hash };
+    if (tag === "t") tiles.set(Number(index), { ...rendition, water: null });
+    else if (tag === "p") plates.set(Number(index), rendition);
+    else throw new Error(`unknown platter line ${JSON.stringify(tag)}`);
+  }
+  return { coords: [Number(px), Number(pz)], tiles, plates };
 }
