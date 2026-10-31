@@ -1,7 +1,7 @@
 import { fbm } from "../world/noise.js";
 import { CELL_FT, PLATE_FT, TILE_FT } from "../v2/sizes.js";
 
-// Geo tools: the raise and lower, flatten and smooth brushes. Dragged, it moves the ground a little each frame, most at
+// Geo tools: the raise and lower, flatten, smooth and noise brushes. Dragged, it moves the ground a little each frame, most at
 // the brush's middle, by its shape:
 // - round eases out to nothing at the edge;
 // - steep holds most of its height out to near the edge, then drops fast;
@@ -39,6 +39,7 @@ export const CELLS = 0;
 export const CHUNKS = 1;
 export const TILES = 2;
 export const levelFor = (radius) => (radius < TILE_FT ? CELLS : radius < PLATE_FT ? CHUNKS : TILES);
+const STEPS = { [CELLS]: CELL_FT, [CHUNKS]: CELL_FT * 8, [TILES]: CELL_FT * 64 };
 
 // One frame of the brush at continent feet (x, z), dt seconds long, turned `angle` radians from
 // east toward south: { at(x, z), the height it adds there, bounds [x0, z0, x1, z1] round where
@@ -56,6 +57,31 @@ export function raiseBrush({ shape, radius, strength, noise, lower, angle = 0 },
   return { at, bounds: [x - radius, z - radius, x + radius, z + radius], level: levelFor(radius) };
 }
 
+// The noise brush roughens the ground a little each frame, most at the brush's middle, easing to
+// nothing at its edge: lumps `grain` ft across, rounded or craggy, the same lumps at the same place
+// each time, so going over it again makes them taller, and the other way takes them out again.
+// Its strength is how far the lumps grow a second, as a share of their size, so fine grain makes
+// small lumps and coarse grain big ones. Brushes reaching further than CELLS_FT, or with coarse
+// grain, work on chunk corners, or tile corners, to keep it quick, and their grain's at least
+// GRAIN_STEPS of those.
+const GRAIN_SEED = 0x2b7c94e1;
+const CELLS_FT = 512;
+const GRAIN_STEPS = 3;
+
+export function noiseBrush({ radius, strength, grain, craggy, lower }, x, z, dt) {
+  const level = levelFor(Math.max(grain, (radius * TILE_FT) / CELLS_FT));
+  grain = Math.max(grain, GRAIN_STEPS * STEPS[level]);
+  const move = (lower ? -1 : 1) * strength * grain * dt;
+  const at = (px, pz) => {
+    const d = Math.hypot(px - x, pz - z) / radius;
+    if (d >= 1) return 0;
+    const n = fbm(px, pz, GRAIN_SEED, { wavelength: grain, octaves: 4 });
+    // Ridged: sharp crests where the noise crosses 0, about level on average.
+    return move * round(d) * (craggy ? 2 * (0.7 - Math.abs(n)) : n);
+  };
+  return { at, bounds: [x - radius, z - radius, x + radius, z + radius], level };
+}
+
 // Flatten and smooth pull the ground toward a height a little each frame, most at the brush's
 // middle, easing to nothing at its edge: flatten toward `from`, the height where the stroke began,
 // and smooth toward the average of the ground round each point, about an eighth of the brush away
@@ -63,7 +89,6 @@ export function raiseBrush({ shape, radius, strength, noise, lower, angle = 0 },
 // a second, and smooth SMOOTH_RATE × strength.
 const FLATTEN_RATE = 5;
 const SMOOTH_RATE = 15;
-const STEPS = { [CELLS]: CELL_FT, [CHUNKS]: CELL_FT * 8, [TILES]: CELL_FT * 64 };
 
 // One frame of flatten or smooth (`tool`) at (x, z), dt seconds long, heightAt(x, z) giving the
 // ground's height: like raiseBrush's. Each point's move is worked out once a frame, so points

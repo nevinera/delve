@@ -272,6 +272,27 @@ export class Areas {
     return area;
   }
 
+  // Adds an area of `kind` for each of `list`, its points and whatever else it keeps, as one
+  // change. Gives them.
+  addAreas(kind, list) {
+    this.save();
+    const areas = list.map(({ points, ...extras }) => this.area(kind, points, { ...this.start(points), ...extras }));
+    this.areas.push(...areas);
+    this.changed();
+    return areas;
+  }
+
+  // Takes those of `areas` still there away, as one change.
+  removeAreas(areas) {
+    const gone = new Set(areas.filter((a) => this.areas.includes(a)));
+    if (!gone.size) return;
+    this.save();
+    if (gone.has(this.selected)) this.unselect();
+    for (const area of gone) this.remove(area.line);
+    this.areas = this.areas.filter((a) => !gone.has(a));
+    this.changed();
+  }
+
   // Takes `area` away, if it's still there.
   removeArea(area) {
     if (!this.areas.includes(area)) return;

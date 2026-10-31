@@ -1,5 +1,5 @@
 import { fbm, hash2 } from "../world/noise.js";
-import { CHUNK_FT } from "../v2/sizes.js";
+import { CELL_FT, CHUNK_FT } from "../v2/sizes.js";
 
 // Growths: ground grown along a line drawn with geo's draw tool, by scattering peaks along it and
 // growing each, overlapping, the way they'd be raised by hand. The band the growth covers is its
@@ -12,6 +12,8 @@ import { CHUNK_FT } from "../v2/sizes.js";
 // already higher.
 // - range: cones of different steepness, their sides broken into sharp ribs and crags by noise.
 // - hills: rounded domes, lumpy with noise.
+// A cliff's different: no peaks, the ground on one side of the line raised to its height, its face
+// along the line (cliff()).
 
 export const WALK_DEG = 50; // the steepest a character walks up
 const BASE_FT = 2640; // how far either way along the line its ground's averaged, at most
@@ -143,7 +145,9 @@ export function baseHeights(line, heightAt) {
 // raise(x, z, ground, nearest), how far it raises ground of height `ground` at (x, z), its
 // line's nearest point there given if it's known, and bounds
 // [x0, z0, x1, z1] }.
-export function growth(kind, points, { width, height, noise, density = 1 }, heightAt) {
+export function growth(kind, points, settings, heightAt) {
+  if (kind === "cliff") return cliff(points, settings, heightAt);
+  const { width, height, noise, density = 1 } = settings;
   const half = width / 2;
   // Reaching a little past the band, to tell which side of it ground outside is (crossing()).
   const line = new Line(points, half * 1.25);
@@ -230,12 +234,75 @@ export function growth(kind, points, { width, height, noise, density = 1 }, heig
   return { kind, half, line, edge, base, peaks, zone, raise, bounds };
 }
 
-// A growth's raises worked out once on a grid, CHUNK_FT apart or more, to keep to MOST_POINTS:
+// A cliff along `points`, a step `height` ft tall, with settings { width, height, noise, flip }:
+// the ground on the line's left, going along it, or its right with `flip`, raised by its height
+// out to `width` from the line, keeping its shape, then easing down to the ground over the last
+// part of that. Its face is steeper than any character
+// walks up, FACE_DEG on average, centred on the line, and with noise it wanders either side of
+// the line and is broken into splintered ribs, and its top is lumpy. It's lower to nothing over
+// ENDS heights from the line's ends. Its zone() is 3 on its face, 2 on its top, 1 where it eases
+// down behind, and its sides(x, z, hit) is 2 below it, 3 on its top and 1 on its face, for
+// crossing(), but 0 where it's lower by its ends, round which it can be walked.
+const FACE_DEG = 72;
+const ENDS = 1;
+const MIN_FACE_FT = 6;
+
+function cliff(points, { width, height, noise, flip = false }, heightAt) {
+  const line = new Line(points, width * 1.25);
+  const bases = baseHeights(line, heightAt);
+  const base = (s) => {
+    const k = line.after(s);
+    const span = line.along[k] - line.along[k - 1] || 1;
+    const t = Math.max(0, Math.min(1, (s - line.along[k - 1]) / span));
+    return bases[k - 1] + ((bases[k] ?? bases[k - 1]) - bases[k - 1]) * t;
+  };
+  const up = flip ? 1 : -1; // the side of the line raised
+  const run = Math.max(MIN_FACE_FT, height / Math.tan((FACE_DEG * Math.PI) / 180));
+  const ends = ENDS * height;
+  const tall = (s) => height * smoothstep(0, ends, s) * smoothstep(0, ends, line.length - s);
+  // How far toward the top (x, z) is, across the face: below it under -run / 2, on top over it.
+  const across = (x, z, hit) => {
+    const u = hit.side === up ? hit.d : -hit.d;
+    if (!noise) return u;
+    const wander = 0.6 * run * fbm(hit.s, 3, SEED + 20, { wavelength: Math.max(40, 4 * height), octaves: 3 });
+    const splinters = 0.35 * run * fbm(x, z, SEED + 21, { wavelength: Math.max(2 * CELL_FT, run), octaves: 3 });
+    return u + noise * (wander + splinters);
+  };
+  const face = (u) => smoothstep(-run / 2, run / 2, u);
+  const back = (u) => 1 - smoothstep(EDGE * width, width, u);
+  const edge = () => width;
+  const zone = (x, z) => {
+    const hit = line.nearest(x, z);
+    if (!hit || line.end(hit)) return 0;
+    const u = across(x, z, hit);
+    return u < -run / 2 || u > width ? 0 : u <= run / 2 ? 3 : u <= EDGE * width ? 2 : 1;
+  };
+  const sides = (x, z, hit) => {
+    if (hit.s < ends || hit.s > line.length - ends) return 0;
+    const u = across(x, z, hit);
+    return u < -run / 2 ? 2 : u <= run / 2 ? 1 : u <= EDGE * width ? 3 : 0;
+  };
+  const raise = (x, z, ground, nearest) => {
+    const hit = nearest === undefined ? line.nearest(x, z) : nearest;
+    if (!hit) return 0;
+    const u = across(x, z, hit);
+    if (u <= -run / 2 || u >= width) return 0;
+    const lumps = 1 + noise * 0.08 * fbm(x, z, SEED + 22, { wavelength: Math.max(40, width / 4), octaves: 4 });
+    return tall(hit.s) * lumps * face(u) * back(u);
+  };
+  const xs = points.map(([x]) => x);
+  const zs = points.map(([, z]) => z);
+  const reach = width * 1.25;
+  const bounds = [Math.min(...xs) - reach, Math.min(...zs) - reach, Math.max(...xs) + reach, Math.max(...zs) + reach];
+  return { kind: "cliff", half: width, line, edge, base, peaks: [], zone, raise, bounds, step: CELL_FT, sides };
+}
+
+// A growth's raises worked out once on a grid, CHUNK_FT apart or more (or its step, if finer), to keep to MOST_POINTS:
 // { step, bounds, at(x, z), the raise there between the grid's points, and undo, the same
 // negated, to take it away again }.
 export function raises(grown, heightAt) {
   const [x0, z0, x1, z1] = grown.bounds;
-  let step = CHUNK_FT;
+  let step = grown.step ?? CHUNK_FT;
   while (((x1 - x0) / step + 1) * ((z1 - z0) / step + 1) > MOST_POINTS) step *= 2;
   const [ox, oz] = [Math.floor(x0 / step) * step, Math.floor(z0 / step) * step];
   const [nx, nz] = [Math.ceil((x1 - ox) / step) + 1, Math.ceil((z1 - oz) / step) + 1];
@@ -250,7 +317,7 @@ export function raises(grown, heightAt) {
       const hit = grown.line.nearest(x, z);
       ground[k] = heightAt(x, z);
       grid[k] = grown.raise(x, z, ground[k], hit);
-      if (hit && !grown.line.end(hit)) kinds[k] = hit.d <= grown.edge(hit.s) ? 1 : hit.side < 0 ? 2 : 3;
+      if (hit && !grown.line.end(hit)) kinds[k] = grown.sides ? grown.sides(x, z, hit) : hit.d <= grown.edge(hit.s) ? 1 : hit.side < 0 ? 2 : 3;
     }
   }
   const lookup = (sign) => (x, z) => {
@@ -266,10 +333,18 @@ export function raises(grown, heightAt) {
 
 // A way across a growth, once raised by `r`, its raises(), never steeper than WALK_DEG: from the
 // ground outside its band on one side, through the band, to the ground outside on the other, not
-// round the line's ends. Its points [x, z], or null when there's none.
+// round the line's ends. Its points [x, z], or null when there's none. The ground's steepness at
+// each point is taken both ways across, so it can't be walked at a slant up a face too steep.
 export function crossing(r) {
   const { grid, ground, kinds, ox, oz, nx, nz, step } = r;
   const most = step * Math.tan((WALK_DEG * Math.PI) / 180);
+  const height = (i, j) => ground[j * nx + i] + grid[j * nx + i];
+  const steep = (i, j) => {
+    const [i0, i1, j0, j1] = [Math.max(0, i - 1), Math.min(nx - 1, i + 1), Math.max(0, j - 1), Math.min(nz - 1, j + 1)];
+    const across = (height(i1, j) - height(i0, j)) / (i1 - i0 || 1);
+    const down = (height(i, j1) - height(i, j0)) / (j1 - j0 || 1);
+    return Math.hypot(across, down) > most;
+  };
   const from = new Int32Array(nx * nz).fill(-1);
   const queue = [];
   for (let k = 0; k < kinds.length; k++) {
@@ -286,7 +361,7 @@ export function crossing(r) {
       const [a, b] = [i + di, j + dj];
       if (a < 0 || b < 0 || a >= nx || b >= nz) continue;
       const n = b * nx + a;
-      if (from[n] >= 0 || (kinds[n] !== 1 && kinds[n] !== 3) || Math.abs(ground[n] + grid[n] - h) > most) continue;
+      if (from[n] >= 0 || (kinds[n] !== 1 && kinds[n] !== 3) || Math.abs(ground[n] + grid[n] - h) > most || steep(a, b)) continue;
       from[n] = k;
       if (kinds[n] === 3) {
         const path = [];

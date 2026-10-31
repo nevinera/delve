@@ -3,10 +3,11 @@ import { SEA_LEVEL_FT } from "../v2/sizes.js";
 import { PICK_PX } from "./areas.js";
 import { Biomes } from "./biomes.js";
 import { Courses } from "./courses.js";
-import { SHAPES, TURNS, pullBrush, raiseBrush } from "./geo.js";
+import { CELLS, SHAPES, TURNS, noiseBrush, pullBrush, raiseBrush } from "./geo.js";
 import { EMPTY_FT } from "./ground.js";
 import { Draw } from "./draw.js";
 import { Marks } from "./marks.js";
+import { scatterPools } from "./marsh.js";
 import { Measure } from "./measure.js";
 import { TITLE_MAX } from "./pins.js";
 import { STROKE_MAX_FT, Stroke } from "./stroke.js";
@@ -14,7 +15,8 @@ import { WaterBodies } from "./water.js";
 
 // The tools' sidebar: the type of work and its tools above, the picked tool's settings below. A
 // picked tool takes the left button, and Esc puts it down.
-// - geo's draw: dragging draws a line to grow hills or a mountain range along (draw.js, growth.js).
+// - geo's draw: dragging draws a line to grow hills, a mountain range or a cliff along (draw.js,
+//   growth.js).
 // - planning's marker: dragging draws a line on the ground (stroke.js, marks.js), its eraser
 //   cuts lines away where it's dragged, and select picks lines out, clicked or in a box dragged
 //   round them, with shift more than one, for delete or backspace to delete whole. The pin tool
@@ -30,9 +32,11 @@ import { WaterBodies } from "./water.js";
 //   can be typed.
 // - geo's courses: the same for streams and rivers, open lines from their source down, finished
 //   by double-clicking or Enter (courses.js), and the widths of the one picked out can be typed.
-// - geo's brushes, raise and lower, flatten, smooth and clear: dragging on the ground works them
-//   where the pointer is, and a ring on the ground shows where they reach. [ and ] resize them, and
-//   c and v turn raise and lower's, shift+c and shift+v a little.
+// - geo's brushes, raise and lower, flatten, smooth, noise and clear: dragging on the ground works
+//   them where the pointer is, and a ring on the ground shows where they reach. [ and ] resize
+//   them, and c and v turn raise and lower's, shift+c and shift+v a little.
+// - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
+//   more each time the ring's moved its radius. Its undo takes back the last scattering.
 
 const MIN_RADIUS_FT = 16;
 const MAX_RADIUS_FT = 16000;
@@ -40,7 +44,7 @@ const RING_POINTS = 96;
 const PICK_FT = 30000; // how far off the pointer finds the ground
 const PICK_LINE_PX = 8; // how near the pointer a line is picked out
 const BOX_PX = 4; // how far the pointer's dragged before select draws a box
-const BRUSHES = new Set(["raise", "flatten", "smooth", "clear", "eraser"]);
+const BRUSHES = new Set(["raise", "flatten", "smooth", "noise", "pools", "clear", "eraser"]);
 const PLANNING = new Set(["marker", "eraser", "select", "measure"]); // tools that work on lines drawn at sea level
 const OPENS_PINS = new Set([null, "pin"]); // tools with which clicking a pin opens it
 const TURN_DEG = 15;
@@ -49,15 +53,19 @@ const FINE_TURN_DEG = 2;
 const $ = (id) => document.getElementById(id);
 // The kind an area tool's kind button picks.
 const kindOf = (button) => button.dataset.biome ?? button.dataset.water ?? button.dataset.course;
-// The draw tool's sliders, 0 to 1000, and the growth settings they set, some on a log scale.
-const logSlider = (key, lo, hi, show) => ({
-  get: (s) => Math.round((1000 * Math.log(s[key] / lo)) / Math.log(hi / lo)),
-  set: (s, v) => (s[key] = Math.round(lo * (hi / lo) ** (v / 1000))),
-  show: (s) => show(s[key]),
-});
+// The draw tool's sliders, 0 to 1000, and the growth settings they set, some on a log scale,
+// their ranges by what's grown.
+const logSlider = (key, ranges, show) => {
+  const range = (kind) => ranges[kind] ?? ranges.other;
+  return {
+    get: (s, kind) => Math.round((1000 * Math.log(s[key] / range(kind)[0])) / Math.log(range(kind)[1] / range(kind)[0])),
+    set: (s, v, kind) => (s[key] = Math.round(range(kind)[0] * (range(kind)[1] / range(kind)[0]) ** (v / 1000))),
+    show: (s) => show(s[key]),
+  };
+};
 const GROW_SLIDERS = {
-  growWidth: logSlider("width", 400, 21120, (ft) => `${ft.toLocaleString()} ft`),
-  growHeight: logSlider("height", 50, 3000, (ft) => `${ft.toLocaleString()} ft`),
+  growWidth: logSlider("width", { other: [400, 21120], cliff: [40, 2640] }, (ft) => `${ft.toLocaleString()} ft`),
+  growHeight: logSlider("height", { other: [50, 3000], cliff: [8, 600] }, (ft) => `${ft.toLocaleString()} ft`),
   growDensity: { get: (s) => Math.round(((s.density - 0.2) / 5.8) * 1000), set: (s, v) => (s.density = 0.2 + (5.8 * v) / 1000), show: (s) => `×${s.density.toFixed(1)}` },
   growNoise: { get: (s) => Math.round(s.noise * 1000), set: (s, v) => (s.noise = v / 1000), show: (s) => `${Math.round(s.noise * 100)}%` },
 };
@@ -79,7 +87,9 @@ export class Tools {
   constructor({ scene, camera, canvas, builder, renditions, ground }) {
     Object.assign(this, { camera, canvas, builder, renditions, ground });
     this.tool = null;
-    this.settings = { shape: "round", radius: 0, strength: 0, noise: 0, lower: false, angle: 0 };
+    this.settings = { shape: "round", radius: 0, strength: 0, noise: 0, lower: false, angle: 0, grain: 0, craggy: false };
+    this.pools = { count: 0, size: 0 }; // the pools tool's settings
+    this.poolUndos = []; // each scattering's pools and water bodies, latest last
     this.pointer = null; // normalized device coordinates, or null off the view
     this.stroke = null; // { invert } while the left button's down with the brush
     this.drawing = null; // the Stroke being drawn with the marker
@@ -140,6 +150,17 @@ export class Tools {
     $("brushStrength").addEventListener("input", () => this.readStrength());
     $("brushAngle").addEventListener("input", () => this.turn((Number($("brushAngle").value) * Math.PI) / 180));
     $("brushNoise").addEventListener("input", () => this.readNoise());
+    $("brushGrain").addEventListener("input", () => this.readGrain());
+    const grains = [...document.querySelectorAll("[data-grain]")];
+    for (const button of grains) {
+      button.addEventListener("click", () => {
+        this.settings.craggy = button.dataset.grain === "craggy";
+        pressed(grains, button);
+      });
+    }
+    $("poolsCount").addEventListener("input", () => this.readPools());
+    $("poolsSize").addEventListener("input", () => this.readPools());
+    $("poolsUndo").addEventListener("click", () => this.undoPools());
     const colors = [...document.querySelectorAll("[data-pen-color]")];
     for (const button of colors) {
       button.addEventListener("click", () => {
@@ -198,6 +219,10 @@ export class Tools {
       this.draw.settings[this.draw.kind].impassable = $("growImpassable").checked;
       this.draw.dirty = true;
     });
+    $("growFlip").addEventListener("change", () => {
+      this.draw.settings[this.draw.kind].flip = $("growFlip").checked;
+      this.draw.dirty = true;
+    });
     $("growBack").addEventListener("click", () => this.draw.back());
     $("growGo").addEventListener("click", () => this.draw.grow());
     $("growUndo").addEventListener("click", () => this.draw.undo());
@@ -205,7 +230,7 @@ export class Tools {
     for (const [id, read] of Object.entries(GROW_SLIDERS)) {
       $(id).addEventListener("input", () => {
         const settings = this.draw.settings[this.draw.kind];
-        read.set(settings, Number($(id).value));
+        read.set(settings, Number($(id).value), this.draw.kind);
         $(`${id}Out`).textContent = read.show(settings);
         this.draw.dirty = true;
       });
@@ -242,6 +267,8 @@ export class Tools {
     this.readSize();
     this.readStrength();
     this.readNoise();
+    this.readGrain();
+    this.readPools();
 
     this.box = null; // select's box, { x0, y0, x1, y1, add } in pixels on the canvas
     this.boxEl = document.createElement("div");
@@ -463,8 +490,10 @@ export class Tools {
     if (state !== "adjusting") return;
     const settings = this.draw.settings[kind];
     $("growImpassable").checked = settings.impassable;
+    $("growFlip").checked = settings.flip ?? false;
+    for (const part of document.querySelectorAll("[data-grown]")) part.hidden = !part.dataset.grown.split(" ").includes(kind);
     for (const [id, read] of Object.entries(GROW_SLIDERS)) {
-      $(id).value = String(read.get(settings));
+      $(id).value = String(read.get(settings, kind));
       $(`${id}Out`).textContent = read.show(settings);
     }
   }
@@ -498,7 +527,7 @@ export class Tools {
     this.tool = tool;
     this.toolButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tool === tool)));
     for (const panel of document.querySelectorAll("[data-config]")) panel.hidden = !panel.dataset.config.split(" ").includes(tool ?? "none");
-    for (const part of document.querySelectorAll("[data-only]")) part.hidden = part.dataset.only !== tool;
+    for (const part of document.querySelectorAll("[data-only]")) part.hidden = !part.dataset.only.split(" ").includes(tool);
     for (const part of document.querySelectorAll("[data-not]")) part.hidden = part.dataset.not.split(" ").includes(tool);
     this.showAngle();
     this.builder.paints = Boolean(tool);
@@ -537,6 +566,45 @@ export class Tools {
   readNoise() {
     this.settings.noise = Number($("brushNoise").value) / 100;
     $("brushNoiseOut").textContent = `${$("brushNoise").value}%`;
+  }
+
+  // Grain, 8 ft to 2,000, on a log scale.
+  readGrain() {
+    this.settings.grain = Math.round(8 * 250 ** (Number($("brushGrain").value) / 1000));
+    $("brushGrainOut").textContent = `${this.settings.grain.toLocaleString()} ft`;
+  }
+
+  // How many pools a scattering tries for, and how big across they are, 8 ft to 120, on a log
+  // scale.
+  readPools() {
+    this.pools.count = Number($("poolsCount").value);
+    this.pools.size = Math.round(8 * 15 ** (Number($("poolsSize").value) / 1000));
+    $("poolsCountOut").textContent = String(this.pools.count);
+    $("poolsSizeOut").textContent = `${this.pools.size} ft`;
+  }
+
+  // Scatters pools in the ring at (x, z), kept to undo.
+  scatter(x, z) {
+    const groundAt = (px, pz) => this.renditions.heightAt(px, pz) ?? EMPTY_FT;
+    const wetAt = (px, pz) => this.renditions.waterAt(px, pz) !== null || Boolean(this.water.at(px, pz));
+    const pools = scatterPools({ ...this.pools, radius: this.settings.radius }, x, z, groundAt, wetAt);
+    if (!pools.length) return;
+    const moved = new Set();
+    for (const pool of pools) for (const key of this.renditions.raise(pool.at, pool.bounds, CELLS)) moved.add(key);
+    this.ground.refresh(moved);
+    const areas = this.water.addAreas("swamp", pools.map((p) => p.body));
+    this.poolUndos.push({ pools, areas });
+    $("poolsUndo").disabled = false;
+  }
+
+  undoPools() {
+    const last = this.poolUndos.pop();
+    $("poolsUndo").disabled = !this.poolUndos.length;
+    if (!last) return;
+    const moved = new Set();
+    for (const pool of last.pools) for (const key of this.renditions.raise(pool.undo, pool.bounds, CELLS)) moved.add(key);
+    this.ground.refresh(moved);
+    this.water.removeAreas(last.areas);
   }
 
   readStrength() {
@@ -704,10 +772,21 @@ export class Tools {
         this.ground.stale = true;
         this.ground.refresh(cleared);
       }
-    } else if (this.stroke && dt > 0 && (this.tool === "raise" || this.stroke.from !== null)) {
+    } else if (this.stroke && this.tool === "pools") {
+      const last = this.stroke.scattered;
+      if (!last || Math.hypot(x - last[0], z - last[1]) >= this.settings.radius) {
+        this.stroke.scattered = [x, z];
+        this.scatter(x, z);
+      }
+    } else if (this.stroke && dt > 0 && (this.tool === "raise" || this.tool === "noise" || this.stroke.from !== null)) {
       const lower = this.settings.lower !== this.stroke.invert;
       const groundAt = (px, pz) => this.renditions.heightAt(px, pz) ?? EMPTY_FT;
-      const brush = this.tool === "raise" ? raiseBrush({ ...this.settings, lower }, x, z, dt) : pullBrush(this.tool, this.settings, x, z, dt, groundAt, this.stroke.from);
+      const brush =
+        this.tool === "raise"
+          ? raiseBrush({ ...this.settings, lower }, x, z, dt)
+          : this.tool === "noise"
+            ? noiseBrush({ ...this.settings, lower: this.stroke.invert }, x, z, dt)
+            : pullBrush(this.tool, this.settings, x, z, dt, groundAt, this.stroke.from);
       this.ground.refresh(this.renditions.raise(brush.at, brush.bounds, brush.level));
     }
     const positions = this.ring.geometry.attributes.position;

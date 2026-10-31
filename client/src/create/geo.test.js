@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CELLS, CHUNKS, SHAPES, TILES, levelFor, pullBrush, raiseBrush } from "./geo.js";
+import { CELLS, CHUNKS, SHAPES, TILES, levelFor, noiseBrush, pullBrush, raiseBrush } from "./geo.js";
 
 describe("raise brush", () => {
   it("has shapes that are 1 at the middle and 0 at the edge, but the cylinder's hard edge", () => {
@@ -70,5 +70,40 @@ describe("flatten and smooth", () => {
     expect(at(0, 0)).toBeCloseTo(-40 * 0.3);
     expect(at(0, 0)).toBe(at(0, 0));
     expect(at(12, 0)).toBeCloseTo(10 * 0.3 * SHAPES.round(0.12));
+  });
+});
+
+describe("noise brush", () => {
+  const settings = { radius: 100, strength: 0.5, grain: 20, craggy: false, lower: false };
+
+  it("moves the ground up and down, about evenly, and nothing past the edge", () => {
+    const { at, level } = noiseBrush(settings, 0, 0, 1);
+    const moves = [];
+    for (let x = -60; x <= 60; x += 4) for (let z = -60; z <= 60; z += 4) moves.push(at(x, z));
+    expect(Math.max(...moves)).toBeGreaterThan(0.5);
+    expect(Math.min(...moves)).toBeLessThan(-0.5);
+    expect(Math.abs(moves.reduce((a, b) => a + b) / moves.length)).toBeLessThan(2);
+    expect(at(101, 0)).toBe(0);
+    expect(level).toBe(CELLS);
+  });
+
+  it("makes the same lumps each time, and takes them out going the other way", () => {
+    const [a, b] = [noiseBrush(settings, 0, 0, 1), noiseBrush({ ...settings, lower: true }, 0, 0, 1)];
+    expect(a.at(13, 7)).toBe(noiseBrush(settings, 0, 0, 1).at(13, 7));
+    expect(a.at(13, 7) + b.at(13, 7)).toBeCloseTo(0);
+  });
+
+  it("grows lumps as fast as strength times grain a second", () => {
+    const { at } = noiseBrush(settings, 0, 0, 1);
+    let most = 0;
+    for (let x = -20; x <= 20; x += 1) most = Math.max(most, Math.abs(at(x, 0)));
+    expect(most).toBeLessThanOrEqual(settings.strength * settings.grain);
+  });
+
+  it("works coarser for big brushes, with their grain no finer than that", () => {
+    const big = noiseBrush({ ...settings, radius: 1000 }, 0, 0, 1);
+    expect(big.level).toBe(CHUNKS);
+    const craggy = noiseBrush({ ...settings, craggy: true }, 0, 0, 1);
+    expect(craggy.at(5, 5)).not.toBe(noiseBrush(settings, 0, 0, 1).at(5, 5));
   });
 });
