@@ -7,7 +7,7 @@ import { Thumbnails } from "../editor/thumbnailRenderer.js";
 import { newObjectId, turnPoint } from "../world/builtObjects.js";
 import { CELL_FT as TEMPLATE_CELL_FT } from "../world/constants.js";
 import { makeObject, specOf } from "../world/objects.js";
-import { cutSlab, defaultSteps, slabProblems, slabTop, stairShape, stairSlab } from "../world/slabs.js";
+import { SLAB_REACH_FT, cutSlab, defaultSteps, slabProblems, slabTop, stairShape, stairSlab } from "../world/slabs.js";
 import { captureTemplate, placedTemplate } from "../world/templates.js";
 import { CLIPBOARD_PREFIX } from "./library.js";
 import { homeOf, isSlab, readyObject } from "./placed.js";
@@ -34,6 +34,8 @@ import { drawable, slabSpace } from "./things.js";
 //   the up and down arrows raise and lower them, and Delete deletes them. What's picked can be
 //   made a template, or copied: a template kept in this browser, not the world, till the next
 //   copy, that paste arms the template tool with.
+// Corners drawn snap to slabs' top corners near them on the screen, or else their edges, unless
+// shift's held.
 // Ctrl+Z undoes the last change, ctrl+C copies and ctrl+V pastes.
 
 const THUMB_PX = 56;
@@ -48,6 +50,9 @@ const GHOST_OPACITY = 0.6;
 const DOOR_FT = [4, 7]; // wide, tall
 const WINDOW_FT = [3, 3];
 const CLOSE_PX = 12; // how near a polygon's first corner a click closes it
+const SNAP_CORNER_PX = 12; // how near a slab's corner, on the screen, a point snaps to it
+const SNAP_EDGE_PX = 8; // and its edge
+const SNAP_MARK = 0.012; // the snap mark's size, as a share of its distance from the camera
 const HOME_TEMPLATES = "my templates"; // where keepTemplate keeps those given no collection
 const NEW_COLLECTION = "new"; // the collection select's value for a new one
 const WRONG = new THREE.MeshBasicMaterial({ color: 0xe04040, transparent: true, opacity: 0.6 });
@@ -87,6 +92,11 @@ export class Build {
     this.ghost.renderOrder = 5;
     scene.add(this.ghost);
     this.ghostOf = ""; // what the ghost was made from
+    this.free = false; // whether shift's held, so nothing snaps
+    this.snapMark = new THREE.Mesh(new THREE.OctahedronGeometry(1), new THREE.MeshBasicMaterial({ color: 0x40e0ff, depthTest: false }));
+    this.snapMark.renderOrder = 7;
+    this.snapMark.visible = false;
+    scene.add(this.snapMark);
     this.boxEl = el("div", { className: "create-box", hidden: true });
     document.body.append(this.boxEl);
     this.thumbs = new Thumbnails();
@@ -153,6 +163,7 @@ export class Build {
     this.tool = tool;
     this.say("");
     this.drawing = this.moving = this.box = this.outlining = this.stair = null;
+    this.snapMark.visible = false;
     this.showStair();
     this.boxEl.hidden = true;
     this.clearGhost();
@@ -241,6 +252,49 @@ export class Build {
     return ground && { at: ground, thing: null };
   }
 
+  // `at` ([x, y, z]) moved onto the slab corner nearest it on the screen, or else the nearest slab
+  // edge, when one's near enough and shift isn't held, showing where with the snap mark; kept at
+  // its height with `level`. Null stays null.
+  snap(at, level = false) {
+    this.snapMark.visible = false;
+    if (!at || this.free) return at;
+    const r = this.canvas.getBoundingClientRect();
+    const screen = (p) => {
+      const v = new THREE.Vector3(...p).project(this.camera);
+      return v.z > 1 ? null : [((v.x + 1) / 2) * r.width, ((1 - v.y) / 2) * r.height];
+    };
+    const pointer = screen(at);
+    if (!pointer) return at;
+    const away = (p) => {
+      const s = screen(p);
+      return s ? Math.hypot(s[0] - pointer[0], s[1] - pointer[1]) : Infinity;
+    };
+    const { slabs } = this.placed.near(at[0], at[2], SLAB_REACH_FT * 2);
+    const tops = slabs.map((slab) => slabTop(slab));
+    let best = null;
+    for (const corner of tops.flat()) {
+      const d = away(corner);
+      if (d <= SNAP_CORNER_PX && (!best || d < best.d)) best = { d, p: corner };
+    }
+    if (!best) {
+      const ray = new THREE.Ray(this.camera.position.clone(), new THREE.Vector3(...at).sub(this.camera.position).normalize());
+      for (const top of tops) {
+        top.forEach((p, i) => {
+          const onEdge = new THREE.Vector3();
+          ray.distanceSqToSegment(new THREE.Vector3(...p), new THREE.Vector3(...top[(i + 1) % top.length]), undefined, onEdge);
+          const d = away(onEdge.toArray());
+          if (d <= SNAP_EDGE_PX && (!best || d < best.d)) best = { d, p: onEdge.toArray() };
+        });
+      }
+    }
+    if (!best) return at;
+    const snapped = level ? [best.p[0], at[1], best.p[2]] : best.p;
+    this.snapMark.position.set(...best.p);
+    this.snapMark.scale.setScalar(this.camera.position.distanceTo(this.snapMark.position) * SNAP_MARK);
+    this.snapMark.visible = true;
+    return snapped;
+  }
+
   // Where the pointer's ray meets the level at height y, [x, y, z], or null.
   onLevel(y) {
     const ray = this.ray();
@@ -257,6 +311,7 @@ export class Build {
   }
 
   down(e) {
+    this.free = e.shiftKey;
     const hit = this.hit();
     if (this.tool === "object" && hit && this.armed.object) return this.placeObject(hit);
     if (this.tool === "template" && hit && this.armed.template) return this.placeTemplate(hit);
@@ -264,7 +319,7 @@ export class Build {
     if (this.tool === "slab" && this.slab.mode === "polygon") return this.outline(hit);
     if (this.tool === "stairs") return this.stairDown(hit);
     if (this.tool === "slab" && hit) {
-      this.drawing = { a: hit.at, yaw: this.cameraYaw(), pieces: [] };
+      this.drawing = { a: this.snap(hit.at), yaw: this.cameraYaw(), pieces: [] };
       return;
     }
     if (this.tool !== "pick") return;
@@ -292,10 +347,14 @@ export class Build {
   }
 
   move(e) {
+    this.free = e.shiftKey;
+    // Where a slab or stairs would start snaps, shown before it's started.
+    const starting = (this.tool === "slab" && !["door", "window"].includes(this.slab.mode) && !this.drawing && !this.outlining) || (this.tool === "stairs" && !this.stair);
+    if (starting) this.snap(this.hit()?.at ?? null);
     if (this.outlining) this.showOutline();
     if (this.stair) this.stairMove();
     if (this.drawing) {
-      const b = this.onLevel(this.drawing.a[1]);
+      const b = this.snap(this.onLevel(this.drawing.a[1]), true);
       if (b) this.drawing.pieces = this.pieces(this.drawing.a, b, this.drawing.yaw);
       this.showPieces();
     }
@@ -509,10 +568,11 @@ export class Build {
   outline(hit) {
     if (!this.outlining) {
       if (!hit) return;
-      this.outlining = { y: hit.at[1], points: [[hit.at[0], hit.at[2]]] };
+      const at = this.snap(hit.at);
+      this.outlining = { y: at[1], points: [[at[0], at[2]]] };
       return this.showOutline();
     }
-    const at = this.onLevel(this.outlining.y);
+    const at = this.snap(this.onLevel(this.outlining.y), true);
     if (!at) return;
     const { points } = this.outlining;
     if (points.length >= 3 && this.nearFirst(at)) return this.closeOutline();
@@ -548,7 +608,7 @@ export class Build {
   showOutline() {
     this.clearGhost();
     const { y, points } = this.outlining;
-    const at = this.onLevel(y);
+    const at = this.snap(this.onLevel(y), true);
     const corners = at ? [...points, [at[0], at[2]]] : points;
     const { thickness, surface } = this.slab;
     const pieces = corners.length >= 3 ? polygonPieces(corners, y + thickness, { thickness, surface }) : [];
@@ -569,7 +629,8 @@ export class Build {
   stairDown(hit) {
     if (this.stair?.phase === "top") return this.placeStair();
     if (!hit) return;
-    this.stair = { phase: "base", a: hit.at, b: hit.at, run: 0, rise: 0, fixed: false };
+    const a = this.snap(hit.at);
+    this.stair = { phase: "base", a, b: a, run: 0, rise: 0, fixed: false };
     this.showStair();
   }
 
@@ -578,13 +639,14 @@ export class Build {
   stairMove() {
     const stair = this.stair;
     if (stair.phase === "base") {
-      const b = this.onLevel(stair.a[1]);
+      const b = this.snap(this.onLevel(stair.a[1]), true);
       if (b) stair.b = b;
       return this.showStair();
     }
     if (stair.fixed) return;
     const hit = this.hit();
     if (!hit) return;
+    hit.at = this.snap(hit.at);
     const { a, b } = stair;
     const width = Math.hypot(b[0] - a[0], b[2] - a[2]);
     // How far the point is across the edge, to the right looking from a to b.
