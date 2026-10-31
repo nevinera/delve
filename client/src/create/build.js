@@ -601,10 +601,12 @@ export class Build {
       const outside = floor && besideEdge(floor, a, b);
       // Either end snapped to another wall's foot: its foot is flush with that wall's.
       const foot = [this.drawing?.from, this.snapped].map(wallFoot).find((y) => y !== null);
-      if (!outside) return wallPieces(a, b, { foot: foot ?? footUnder(a, b), height, thickness, surface });
+      // `height` from its foot to its top, wherever its foot ends up.
+      const wall = (from, to, foot) => wallPieces([from[0], foot, from[2]], [to[0], foot, to[2]], { foot, height, thickness, surface });
+      if (!outside) return wall(a, b, foot ?? footUnder(a, b));
       // A wall's thickness goes to the right of its line: away from the floor.
       const [from, to] = outside === "right" ? [b, a] : [a, b];
-      return wallPieces(from, to, { foot: a[1] - floor.thickness, height, thickness, surface });
+      return wall(from, to, a[1] - floor.thickness);
     }
     if (mode === "room") return roomPieces(flush, b, yaw, { height, thickness, surface, footUnder, roof: roomRoof ? roofing : undefined });
     return roofPieces(a, b, yaw, { ...roofing, thickness, surface });
