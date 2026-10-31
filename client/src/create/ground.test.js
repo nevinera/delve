@@ -71,7 +71,8 @@ describe("Renditions", () => {
     renditions.onRead = () => reads++;
     expect(renditions.hasCells(0, 0)).toBe(true);
     expect(reads).toBe(1);
-    expect(renditions.cells(0, 0).palette).toEqual(["grass"]);
+    // Ground painted by hand isn't kept in plate files.
+    expect(renditions.cells(0, 0).palette).toEqual([]);
     expect(renditions.heightAt(10, 10)).toBe(12);
     expect(renditions.hasCells(9, 0)).toBe(false);
   });

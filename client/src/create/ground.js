@@ -323,7 +323,7 @@ export class Renditions {
         continue;
       }
       // Only what the file holds, not what's kept for drawing.
-      const tiles = new Map([...plate.tiles].map(([index, { heights, terrain, slots, water, cut }]) => [index, { heights, terrain, slots, water, cut }]));
+      const tiles = new Map([...plate.tiles].map(([index, { heights, slots, slotSeed, water, cut }]) => [index, { heights, slots, slotSeed, water, cut }]));
       writing.push(this.write("plate", { coords: [px, pz], palette: plate.palette, tiles, around: this.around(px, pz), shores: this.shores(px, pz) }).then((bytes) => files.set(platePath(continent, [px, pz]), bytes)));
     }
     // Platters after, with their tiles' water as the plates were baked.

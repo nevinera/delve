@@ -12,7 +12,8 @@
     "polygon-clipping": "^0.15.7",
     "three": "^0.186.0",
     "three-bvh-csg": "^0.0.18",
-    "three-mesh-bvh": "^0.9.16"
+    "three-mesh-bvh": "^0.9.16",
+    "zstdify": "1.4.0"
   },
   "devDependencies": {
     "vite": "^8.3.0",
