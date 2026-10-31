@@ -1,5 +1,5 @@
 import { strFromU8, strToU8 } from "fflate";
-import { adoptStrays, allCollections, builtObjects, images, keepTemplate } from "../objects/collections.js";
+import { addCollection, adoptStrays, allCollections, builtObjects, images, keepTemplate, ownCollections } from "../objects/collections.js";
 import { BUILTIN_TEMPLATES } from "../world/builtinTemplates.js";
 import { setBuiltObjects } from "../world/objects.js";
 import { TEMPLATE_PREFIX } from "../world/templates.js";
@@ -76,9 +76,16 @@ export class Library {
     return this.recent[kind].map((type) => this.entry(kind, type)).filter(Boolean);
   }
 
-  // Keeps a new template in "my templates" (keepTemplate), and gives its type.
-  keepTemplate(template) {
-    const kept = keepTemplate(this, template);
+  // The world's own collections of templates, not those read from elsewhere.
+  templateCollections() {
+    return ownCollections(this, "templates");
+  }
+
+  // Keeps a new template in the collection with id `collection`, or a new one named `newName`, or
+  // else "my templates" (keepTemplate), and gives its type.
+  keepTemplate(template, { collection, newName } = {}) {
+    const id = newName ? addCollection(this, newName, undefined, "templates").id : collection;
+    const kept = keepTemplate(this, { ...template, ...(id ? { collection: id } : {}) });
     return `${TEMPLATE_PREFIX}${kept.id}`;
   }
 

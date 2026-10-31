@@ -259,9 +259,8 @@
         <button type="button" id="pickedDelete">delete</button>
         <button type="button" data-build-undo>undo</button>
       </div>
-      <input id="templateName" type="text" placeholder="template name" aria-label="template name">
       <div class="create-way">
-        <button type="button" id="makeTemplate">make template</button>
+        <button type="button" id="makeTemplate">make template…</button>
       </div>
     </div>
     <div data-config="object" hidden>
@@ -479,6 +478,20 @@
 <div id="library" class="create-library" popover>
   <h2 id="libraryTitle">objects</h2>
   <div id="libraryPicker"></div>
+</div>
+<div id="templateMake" class="create-template-make" popover>
+  <h2>make a template</h2>
+  <canvas id="templateMakeView" width="240" height="240"></canvas>
+  <p class="create-note" id="templateMakeFacts"></p>
+  <input id="templateName" type="text" placeholder="name" aria-label="template name">
+  <label>collection
+    <select id="templateCollection"></select>
+  </label>
+  <input id="templateCollectionName" type="text" placeholder="new collection's name" aria-label="new collection's name" hidden>
+  <div class="create-way">
+    <button type="button" id="templateMakeKeep">make it</button>
+    <button type="button" id="templateMakeCancel">cancel</button>
+  </div>
 </div>
 <div id="pinEdit" class="create-pin-edit" popover>
   <input id="pinTitle" type="text" placeholder="title" aria-label="title">

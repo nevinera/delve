@@ -490,6 +490,54 @@ body.create {
   display: none;
 }
 
+.create-template-make {
+  width: min(280px, calc(100vw - 32px));
+  padding: 12px;
+  background: #22222a;
+  color: #e8e2d4;
+  border: 1px solid #50505c;
+  border-radius: 6px;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.create-template-make:popover-open {
+  display: flex;
+}
+
+.create-template-make h2 {
+  margin: 0;
+  font-size: 1em;
+}
+
+.create-template-make canvas {
+  width: 240px;
+  height: 240px;
+  align-self: center;
+  border-radius: 4px;
+}
+
+.create-template-make label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.create-template-make input,
+.create-template-make select,
+.create-template-make button {
+  font: inherit;
+  color: inherit;
+  background: #30303a;
+  border: 1px solid #50505c;
+  border-radius: 4px;
+  padding: 4px 6px;
+}
+
+.create-template-make select {
+  flex: 1;
+}
+
 .create-pin-edit {
   width: min(480px, calc(100vw - 32px));
   height: min(420px, calc(100vh - 32px));

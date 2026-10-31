@@ -439,7 +439,7 @@ export class Tools {
       this.drawing = null;
     });
     window.addEventListener("keydown", (e) => {
-      if (e.target.matches?.("input, textarea, select")) return;
+      if (e.target.matches?.("input, textarea, select") || e.target.closest?.(":popover-open")) return;
       const areas = this.outlined[this.tool];
       if (BUILD.has(this.tool) && e.key !== "Escape" && this.build.key(e)) return e.preventDefault();
       if (e.key === "Escape" && areas?.draft) areas.drop();

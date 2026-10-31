@@ -39,6 +39,8 @@ const MOST_CELLS = 400; // how many of a template's cells are read for its heigh
 const GHOST_OPACITY = 0.6;
 const DOOR_FT = [4, 7]; // wide, tall
 const WINDOW_FT = [3, 3];
+const HOME_TEMPLATES = "my templates"; // where keepTemplate keeps those given no collection
+const NEW_COLLECTION = "new"; // the collection select's value for a new one
 const WRONG = new THREE.MeshBasicMaterial({ color: 0xe04040, transparent: true, opacity: 0.6 });
 
 const $ = (id) => document.getElementById(id);
@@ -75,6 +77,8 @@ export class Build {
     this.boxEl = el("div", { className: "create-box", hidden: true });
     document.body.append(this.boxEl);
     this.thumbs = new Thumbnails();
+    this.makeThumbs = new Thumbnails(); // the template being made's, in its dialog
+    this.making = null; // the template the dialog would make
     this.picker = new PlacePicker($("libraryPicker"), { onArm: (type) => type && this.arm(this.libraryKind, type) });
     this.libraryKind = "objects";
 
@@ -93,7 +97,17 @@ export class Build {
     $("pickedDelete").addEventListener("click", () => this.deletePicked());
     $("pickedScale").addEventListener("input", () => this.scalePicked());
     $("pickedScale").addEventListener("change", () => (this.scaling = false));
-    $("makeTemplate").addEventListener("click", () => this.makeTemplate());
+    $("makeTemplate").addEventListener("click", () => this.askTemplate());
+    $("templateMakeKeep").addEventListener("click", () => this.makeTemplate());
+    $("templateMakeCancel").addEventListener("click", () => $("templateMake").hidePopover());
+    $("templateName").addEventListener("keydown", (e) => e.key === "Enter" && this.makeTemplate());
+    $("templateCollection").addEventListener("input", () => ($("templateCollectionName").hidden = $("templateCollection").value !== NEW_COLLECTION));
+    $("templateMake").addEventListener("toggle", (e) => {
+      if (e.newState !== "closed") return;
+      this.makeThumbs.stopTurning();
+      this.makeThumbs.dropUnused(new Set());
+      this.making = null;
+    });
     const modes = [...document.querySelectorAll("[data-slab-mode]")];
     for (const button of modes) {
       button.addEventListener("click", () => {
@@ -535,23 +549,55 @@ export class Build {
     });
   }
 
-  // Keeps what's picked as a template named as typed, and arms it.
-  makeTemplate() {
+  // Opens the dialog for making what's picked a template: what it holds, how big it is, and how
+  // it looks, asking its name and collection.
+  askTemplate() {
     const picked = [...this.things.picked];
     if (!picked.length) return;
-    const name = $("templateName").value.trim() || "new template";
+    const slabs = picked.filter(isSlab);
     const objects = picked.filter((t) => !isSlab(t));
-    const template = captureTemplate({
+    this.making = captureTemplate({
       id: newObjectId(),
-      name,
-      slabs: picked.filter(isSlab),
+      name: "",
+      slabs,
       objects: objects.map((o) => ({ ...o, y: Number.isFinite(o.y) ? o.y : undefined })),
       height: (ci, cj) => this.groundAt((ci + 0.5) * TEMPLATE_CELL_FT, (cj + 0.5) * TEMPLATE_CELL_FT),
     });
-    const type = this.library.keepTemplate(template);
+    const { cells } = placedTemplate(this.making, [0, 0, 0]);
+    const [is, js] = [cells.map((c) => c[0]), cells.map((c) => c[1])];
+    const across = (Math.max(...is) - Math.min(...is) + 1) * TEMPLATE_CELL_FT;
+    const deep = (Math.max(...js) - Math.min(...js) + 1) * TEMPLATE_CELL_FT;
+    const count = (n, one) => `${n} ${one}${n === 1 ? "" : "s"}`;
+    $("templateMakeFacts").textContent = `${count(objects.length, "object")} and ${count(slabs.length, "slab")}, over ${count(cells.length, "cell")}: ${across} × ${deep} ft.`;
+
+    const own = this.library.templateCollections();
+    const options = own.map((c) => el("option", { value: c.id, textContent: c.name }));
+    if (!own.some((c) => c.name === HOME_TEMPLATES)) options.unshift(el("option", { value: "", textContent: HOME_TEMPLATES }));
+    options.push(el("option", { value: NEW_COLLECTION, textContent: "new collection…" }));
+    const select = $("templateCollection");
+    const last = select.value;
+    select.replaceChildren(...options);
+    if (options.some((o) => o.value === last && last !== NEW_COLLECTION)) select.value = last;
+    $("templateCollectionName").hidden = true;
+    $("templateCollectionName").value = "";
+    $("templateName").value = "";
+
+    $("templateMake").showPopover();
+    $("templateName").focus();
+    const entry = { key: `making:${this.making.id}`, template: this.making };
+    this.makeThumbs.startTurning(entry, $("templateMakeView"));
+  }
+
+  // Keeps the template the dialog shows, named and filed as asked, and arms it.
+  makeTemplate() {
+    if (!this.making) return;
+    const name = $("templateName").value.trim() || "new template";
+    const collection = $("templateCollection").value;
+    const newName = collection === NEW_COLLECTION ? $("templateCollectionName").value.trim() || "new collection" : null;
+    const type = this.library.keepTemplate({ ...this.making, name }, newName ? { newName } : { collection: collection || undefined });
+    $("templateMake").hidePopover();
     this.library.used("templates", type);
     this.armed.template = type;
-    $("templateName").value = "";
     this.say(`Made the template "${name}".`);
     this.showRecent();
   }
