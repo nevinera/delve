@@ -215,10 +215,6 @@ export class Tools {
       if (JSON.stringify(before) !== JSON.stringify(this.marks.toJSON())) this.marks.undos.push(before);
     });
     for (const button of document.querySelectorAll("[data-grow]")) button.addEventListener("click", () => this.draw.adjust(button.dataset.grow));
-    $("growImpassable").addEventListener("change", () => {
-      this.draw.settings[this.draw.kind].impassable = $("growImpassable").checked;
-      this.draw.dirty = true;
-    });
     $("growBack").addEventListener("click", () => this.draw.back());
     $("growGo").addEventListener("click", () => this.draw.grow());
     $("growUndo").addEventListener("click", () => this.draw.undo());
@@ -485,7 +481,6 @@ export class Tools {
     $("growUndo").disabled = !this.draw.undos.length;
     if (state !== "adjusting") return;
     const settings = this.draw.settings[kind];
-    $("growImpassable").checked = settings.impassable;
     for (const part of document.querySelectorAll("[data-grown]")) part.hidden = !part.dataset.grown.split(" ").includes(kind);
     for (const [id, read] of Object.entries(GROW_SLIDERS)) {
       if (settings[id.replace("grow", "").toLowerCase()] === undefined) continue;
@@ -739,7 +734,6 @@ export class Tools {
       if (document.activeElement !== input) input.value = this.courses.selected ? String(this.courses.selected.widths[k]) : "";
     });
     $("courseRipple").checked = this.courses.ripple;
-    $("growPassable").hidden = !this.draw.passable;
     $("growFlat").hidden = !this.draw.flat;
     if (this.tool === "measure" && this.measuring) {
       if (this.measuring.from && !this.measuring.radius) {

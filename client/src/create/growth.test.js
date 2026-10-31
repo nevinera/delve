@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { inside } from "../v2/biomes.js";
-import { Line, WALK_DEG, baseHeights, crossing, growth, middleOutline, raises } from "./growth.js";
+import { Line, WALK_DEG, baseHeights, growth, middleOutline, raises } from "./growth.js";
 
 const straight = [
   [0, 0],
@@ -61,25 +61,6 @@ for (const kind of ["range", "hills"]) {
     });
   });
 }
-
-describe("a way across", () => {
-  const flat = () => 0;
-  const grown = growth("range", straight, { width: 2000, height: 1000, noise: 0, density: 1 }, flat);
-  // A wall along the line, with a gap in it, or none.
-  const walled = (gap) => ({ ...grown, raise: (x, z) => (Math.abs(z) < 200 && Math.abs(x - 2500) > gap ? 1000 : 0) });
-
-  it("is found through a gap", () => {
-    const path = crossing(raises(walled(150), flat));
-    expect(path).not.toBeNull();
-    // Through the gap, from one side to the other.
-    expect(path.filter(([, z]) => Math.abs(z) < 200).every(([x]) => Math.abs(x - 2500) <= 150)).toBe(true);
-    expect(Math.sign(path[0][1])).not.toBe(Math.sign(path.at(-1)[1]));
-  });
-
-  it("isn't found through a wall, nor round its ends", () => {
-    expect(crossing(raises(walled(0), flat))).toBeNull();
-  });
-});
 
 describe("middleOutline", () => {
   it("outlines the middle third of the band, round its ends", () => {
@@ -171,13 +152,5 @@ describe("cliff", () => {
       return at;
     });
     expect(Math.max(...faces) - Math.min(...faces)).toBeGreaterThan(8);
-  });
-
-  it("can't be walked up, but round its ends, unless it's too low", () => {
-    const r = raises(growth("cliff", line, settings, right), right);
-    expect(r.step).toBe(4);
-    expect(crossing(r)).toBeNull();
-    const gentle = (x, z) => z * 0.005;
-    expect(crossing(raises(growth("cliff", line, settings, gentle), gentle))).not.toBeNull();
   });
 });

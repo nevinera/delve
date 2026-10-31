@@ -149,7 +149,6 @@ export function growth(kind, points, settings, heightAt) {
   if (kind === "cliff") return cliff(points, settings, heightAt);
   const { width, height, noise, density = 1 } = settings;
   const half = width / 2;
-  // Reaching a little past the band, to tell which side of it ground outside is (crossing()).
   const line = new Line(points, half * 1.25);
   const bases = baseHeights(line, heightAt);
   const base = (s) => {
@@ -243,10 +242,9 @@ export function growth(kind, points, settings, heightAt) {
 // ground's flat or rises the other way, there's no step. Its face is steeper than any character
 // walks up, FACE_DEG on average, meandering MEANDER widths either side of the line, broken into
 // splintered ribs: a little even with no noise, more with it. It eases down to no step at all over
-// ENDS widths from the line's ends, or half the line if that's shorter. Its zone() is 3 on its face, 2 on its top, 1 further back, and its
-// sides(x, z, hit) is 2 below it, 3 on its top and 1 on its face, for crossing(), but 0 where it
-// eases out by its ends or the flat, round which it can be walked. It's `flat` where there's no step
-// at all, and aim(s) is the height of its top at the line.
+// ENDS widths from the line's ends, or half the line if that's shorter. Its zone() is 3 on its
+// face, 2 on its top and 1 further back. It's `flat` where there's no step at all, and aim(s) is
+// the height of its top at the line.
 const RISE_STEP = 0.25;
 const GATHERED = 0.75;
 const LEAST_FT = 1; // a step lower than this isn't a step
@@ -302,8 +300,7 @@ function cliff(points, { width, noise }, heightAt) {
     const k = Math.min(count - 1, Math.floor(t));
     return toward[k] + ((toward[k + 1] ?? toward[k]) - toward[k]) * (t - k);
   };
-  const taper = Math.min(ENDS * width, line.length / 2);
-  const ends = (s) => smoothstep(0, taper, Math.min(s, line.length - s));
+  const ends = (s) => smoothstep(0, Math.min(ENDS * width, line.length / 2), Math.min(s, line.length - s));
   // How tall its step is s ft along.
   const step = (s) => 2 * width * slopeAt(s) * GATHERED * ends(s);
   const runOf = (tall) => Math.max(MIN_FACE_FT, tall / Math.tan((FACE_DEG * Math.PI) / 180));
@@ -324,11 +321,6 @@ function cliff(points, { width, noise }, heightAt) {
     const { face, run } = across(x, z, hit);
     return face < -run / 2 ? 0 : face <= run / 2 ? 3 : face <= EDGE * width ? 2 : 1;
   };
-  const sides = (x, z, hit) => {
-    if (!stepped(hit) || hit.d > width || hit.s < taper || hit.s > line.length - taper) return 0;
-    const { face, run } = across(x, z, hit);
-    return face < -run / 2 ? 2 : face <= run / 2 ? 1 : 3;
-  };
   // The step, less the rise across the band it's gathered from, so the ground's as it was at the
   // band's edges.
   const raise = (x, z, ground, nearest) => {
@@ -345,7 +337,7 @@ function cliff(points, { width, noise }, heightAt) {
   const zs = points.map(([, z]) => z);
   const reach = width * 1.25;
   const bounds = [Math.min(...xs) - reach, Math.min(...zs) - reach, Math.max(...xs) + reach, Math.max(...zs) + reach];
-  return { kind: "cliff", half: width, line, edge, base, aim, peaks: [], zone, raise, bounds, step: CELL_FT, sides, flat };
+  return { kind: "cliff", half: width, line, edge, base, aim, peaks: [], zone, raise, bounds, step: CELL_FT, flat };
 }
 
 // A growth's raises worked out once on a grid, CHUNK_FT apart or more (or its step, if finer), to keep to MOST_POINTS:
@@ -358,17 +350,10 @@ export function raises(grown, heightAt) {
   const [ox, oz] = [Math.floor(x0 / step) * step, Math.floor(z0 / step) * step];
   const [nx, nz] = [Math.ceil((x1 - ox) / step) + 1, Math.ceil((z1 - oz) / step) + 1];
   const grid = new Float32Array(nx * nz);
-  const ground = new Float32Array(nx * nz);
-  // Each point: 1 in the band, 2 outside it on the left, 3 on the right, 0 elsewhere or by the
-  // line's ends, for crossing().
-  const kinds = new Uint8Array(nx * nz);
   for (let j = 0; j < nz; j++) {
     for (let i = 0; i < nx; i++) {
       const [x, z, k] = [ox + i * step, oz + j * step, j * nx + i];
-      const hit = grown.line.nearest(x, z);
-      ground[k] = heightAt(x, z);
-      grid[k] = grown.raise(x, z, ground[k], hit);
-      if (hit && !grown.line.end(hit)) kinds[k] = grown.sides ? grown.sides(x, z, hit) : hit.d <= grown.edge(hit.s) ? 1 : hit.side < 0 ? 2 : 3;
+      grid[k] = grown.raise(x, z, heightAt(x, z), grown.line.nearest(x, z));
     }
   }
   const lookup = (sign) => (x, z) => {
@@ -379,50 +364,7 @@ export function raises(grown, heightAt) {
     const g = (a, b) => grid[(j + b) * nx + i + a];
     return sign * ((g(0, 0) * (1 - fu) + g(1, 0) * fu) * (1 - fv) + (g(0, 1) * (1 - fu) + g(1, 1) * fu) * fv);
   };
-  return { step, bounds: grown.bounds, at: lookup(1), undo: lookup(-1), grid, ground, kinds, ox, oz, nx, nz };
-}
-
-// A way across a growth, once raised by `r`, its raises(), never steeper than WALK_DEG: from the
-// ground outside its band on one side, through the band, to the ground outside on the other, not
-// round the line's ends. Its points [x, z], or null when there's none. The ground's steepness at
-// each point is taken both ways across, so it can't be walked at a slant up a face too steep.
-export function crossing(r) {
-  const { grid, ground, kinds, ox, oz, nx, nz, step } = r;
-  const most = step * Math.tan((WALK_DEG * Math.PI) / 180);
-  const height = (i, j) => ground[j * nx + i] + grid[j * nx + i];
-  const steep = (i, j) => {
-    const [i0, i1, j0, j1] = [Math.max(0, i - 1), Math.min(nx - 1, i + 1), Math.max(0, j - 1), Math.min(nz - 1, j + 1)];
-    const across = (height(i1, j) - height(i0, j)) / (i1 - i0 || 1);
-    const down = (height(i, j1) - height(i, j0)) / (j1 - j0 || 1);
-    return Math.hypot(across, down) > most;
-  };
-  const from = new Int32Array(nx * nz).fill(-1);
-  const queue = [];
-  for (let k = 0; k < kinds.length; k++) {
-    if (kinds[k] === 2) {
-      from[k] = k;
-      queue.push(k);
-    }
-  }
-  for (let q = 0; q < queue.length; q++) {
-    const k = queue[q];
-    const [i, j] = [k % nx, Math.floor(k / nx)];
-    const h = ground[k] + grid[k];
-    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const [a, b] = [i + di, j + dj];
-      if (a < 0 || b < 0 || a >= nx || b >= nz) continue;
-      const n = b * nx + a;
-      if (from[n] >= 0 || (kinds[n] !== 1 && kinds[n] !== 3) || Math.abs(ground[n] + grid[n] - h) > most || steep(a, b)) continue;
-      from[n] = k;
-      if (kinds[n] === 3) {
-        const path = [];
-        for (let m = n; from[m] !== m; m = from[m]) path.push([ox + (m % nx) * step, oz + Math.floor(m / nx) * step]);
-        return path.reverse();
-      }
-      queue.push(n);
-    }
-  }
-  return null;
+  return { step, bounds: grown.bounds, at: lookup(1), undo: lookup(-1) };
 }
 
 const CAP_POINTS = 12; // points round each end of a middle third's outline
