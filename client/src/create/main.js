@@ -18,6 +18,9 @@ import { Scatter } from "./scatter.js";
 import { Sea } from "./sea.js";
 import { WaterSurfaces } from "./waterSurface.js";
 import { Tools } from "./tools.js";
+import { Library } from "./library.js";
+import { PLACED_PATH, Placed } from "./placed.js";
+import { Things } from "./things.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
 // The world comes from a zip you upload (script/convert-v2.mjs makes one from a v1 world), kept in
@@ -35,6 +38,7 @@ const SAVE_EVERY_MS = 2000;
 const SEA_BELOW_FT = 2;
 const HUD_EVERY_MS = 250;
 const BUILDER_RADIUS_FT = 1; // how much room the builder takes, walking among trees and objects
+const STEP_FT = 2.5; // how far up the builder steps onto a slab
 const INFO_EVERY_MS = 100;
 
 // Kept in IndexedDB: the zip opened last ("world"), and the files changed since ("changes", path ->
@@ -155,6 +159,14 @@ function start(world, changes) {
   // The builder stands on the ground, and swims in deep water.
   const groundAt = (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT;
   const waterAt = (x, z) => renditions.waterAt(x, z);
+  // The world's objects and templates, and the objects and slabs placed by hand.
+  const library = new Library(world.files, name);
+  const placed = new Placed();
+  for (const [path, bytes] of world.files) {
+    const match = PLACED_PATH.exec(path);
+    if (match?.[1] === continent) placed.load([Number(match[2]), Number(match[3])], bytes);
+  }
+  const things = new Things(scene, placed, groundAt);
   const placeKey = `create:${name}:${continent}`;
   let saved = null;
   try {
@@ -167,8 +179,13 @@ function start(world, changes) {
     const kind = KINDS[Number(e.key) - 1];
     if (kind) ground.toggle(kind);
   });
-  const builder = new Builder({ scene, camera, canvas, groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push: (x, z) => scatter.pushOut(x, z, BUILDER_RADIUS_FT) });
-  const tools = new Tools({ scene, camera, canvas, builder, renditions, ground });
+  // The builder stands on slabs as well as the ground, and walls and objects are in their way.
+  let builder = null;
+  const feetY = () => builder?.state.y ?? saved?.y ?? 0;
+  const walkAt = (x, z) => things.standAt(x, z, feetY() + STEP_FT);
+  const push = (x, z) => things.pushOut(...scatter.pushOut(x, z, BUILDER_RADIUS_FT), feetY(), BUILDER_RADIUS_FT);
+  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push });
+  const tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library });
   // The bottom bar's display toggles.
   $("showGrid").checked = grid.value === 1;
   $("showGrid").addEventListener("change", () => (grid.value = $("showGrid").checked ? 1 : 0));
@@ -232,7 +249,7 @@ function start(world, changes) {
   let lastSave = 0;
   let lastHud = 0;
   let [saving, lastChangeSave, marksSaved, biomesSaved, waterSaved] = [null, 0, 0, 0, "0,0"];
-  const unsaved = () => renditions.unsaved.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || waterVersion() !== waterSaved;
+  const unsaved = () => renditions.unsaved.size || placed.changed.size || library.dirty.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || waterVersion() !== waterSaved;
   // Saves what's changed into `changes`, writing files on the worker: once what's being saved is,
   // where something is.
   const save = async () => {
@@ -242,7 +259,7 @@ function start(world, changes) {
     saving = renditions
       .unsavedFiles(continent)
       .then(async (files) => {
-        for (const [path, bytes] of files) changes.set(path, bytes);
+        for (const [path, bytes] of [...files, ...placed.unsavedFiles(continent), ...library.unsavedFiles()]) changes.set(path, bytes);
         changes.set(planningPath(continent), strToU8(`${JSON.stringify(tools.marks.toJSON())}\n`));
         changes.set(biomesPath(continent), strToU8(`${JSON.stringify(tools.biomes.toJSON())}\n`));
         changes.set(waterPath(continent), strToU8(`${JSON.stringify(waterFile())}\n`));
@@ -282,7 +299,7 @@ function start(world, changes) {
     worst[part] = Math.max(worst[part], performance.now() - start);
   };
   // A handle for measuring from the browser's console or a script; paused stops the frames.
-  window.create = { ground, scatter, clutter, falls, surfaces, builder, tools, renderer, scene, camera, paused: false };
+  window.create = { placed, things, library, ground, scatter, clutter, falls, surfaces, builder, tools, renderer, scene, camera, paused: false };
   const frame = (now) => {
     if (window.create.paused) return requestAnimationFrame(frame);
     // At most FPS frames a second, with a little slack so a 60 Hz screen draws every other frame.
@@ -307,6 +324,7 @@ function start(world, changes) {
     timed("ground", () => scatter.tick(dt, x, z, ground.finest <= FINE));
     timed("ground", () => clutter.tick(dt, x, z, ground.finest <= FINE));
     timed("ground", () => falls.tick(dt, x, z));
+    timed("ground", () => things.tick(x, z));
     timed("ground", () => surfaces.tick(dt, x, z, ground.finest <= FINE));
     // The ground drawn ends ground.reach across from the builder, so fog closes in there, as far
     // off as that is from the camera, high up too. High up, the camera's near plane's further

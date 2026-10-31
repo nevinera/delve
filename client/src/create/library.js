@@ -1,0 +1,91 @@
+import { strFromU8, strToU8 } from "fflate";
+import { adoptStrays, allCollections, builtObjects, images, keepTemplate } from "../objects/collections.js";
+import { BUILTIN_TEMPLATES } from "../world/builtinTemplates.js";
+import { setBuiltObjects } from "../world/objects.js";
+import { TEMPLATE_PREFIX } from "../world/templates.js";
+
+// The world's library of objects and templates (objects/collections.js: collections.json,
+// objects/, templates/ and textures/), read from its files, with the game's builtins, and the
+// things picked from it lately, RECENT of each kind, kept in this browser for each world, most
+// lately first. Templates made here are kept in its files, and saved with the rest.
+
+export const RECENT = 12;
+
+export class Library {
+  // files: the world's, path -> bytes, which templates made are written into too.
+  constructor(files, worldName) {
+    this.files = files;
+    this.dirty = new Set(); // paths written since they were saved
+    this.version = 0;
+    this.recentKey = `create:recent:${worldName}`;
+    try {
+      this.recent = { objects: [], templates: [], ...JSON.parse(localStorage.getItem(this.recentKey)) };
+    } catch {
+      this.recent = { objects: [], templates: [] };
+    }
+    adoptStrays(this);
+    this.register();
+  }
+
+  readJson(path) {
+    const bytes = this.files.get(path);
+    return bytes ? JSON.parse(strFromU8(bytes)) : null;
+  }
+
+  writeJson(path, data) {
+    this.files.set(path, strToU8(`${JSON.stringify(data, null, 2)}\n`));
+    this.dirty.add(path);
+    this.version++;
+  }
+
+  // Makes the world's built objects known as types.
+  register() {
+    setBuiltObjects(builtObjects(this), images(this));
+  }
+
+  // Every collection of `kind`, "objects" or "templates", builtins first (allCollections).
+  collections(kind) {
+    return allCollections(this, kind);
+  }
+
+  // The entry of `kind` for `type` ("built:<id>", a builtin kind, or "template:<id>"), or null.
+  entry(kind, type) {
+    for (const collection of this.collections(kind)) {
+      const entry = collection.entries.find((e) => e.type === type);
+      if (entry) return entry;
+    }
+    return null;
+  }
+
+  // The template a "template:<id>" type names, or null.
+  template(type) {
+    const id = type?.slice(TEMPLATE_PREFIX.length);
+    return this.readJson(`templates/${id}.json`) ?? BUILTIN_TEMPLATES.find((t) => t.id === id) ?? null;
+  }
+
+  // Puts `type` first in the recent things of `kind`.
+  used(kind, type) {
+    this.recent[kind] = [type, ...this.recent[kind].filter((t) => t !== type)].slice(0, RECENT);
+    try {
+      localStorage.setItem(this.recentKey, JSON.stringify(this.recent));
+    } catch {}
+  }
+
+  // The recent things of `kind` still in the library, as entries.
+  recentEntries(kind) {
+    return this.recent[kind].map((type) => this.entry(kind, type)).filter(Boolean);
+  }
+
+  // Keeps a new template in "my templates" (keepTemplate), and gives its type.
+  keepTemplate(template) {
+    const kept = keepTemplate(this, template);
+    return `${TEMPLATE_PREFIX}${kept.id}`;
+  }
+
+  // The files written since they were last saved, path -> bytes.
+  unsavedFiles() {
+    const files = new Map([...this.dirty].map((path) => [path, this.files.get(path) ?? null]));
+    this.dirty.clear();
+    return files;
+  }
+}

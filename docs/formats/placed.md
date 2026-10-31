@@ -1,0 +1,39 @@
+# Placed objects and slabs
+
+A version 2 world keeps the objects and [slabs](slabs.md) placed by hand in /create in a JSON file for each plate (2,048 ft square) that has any. Code: `client/src/create/placed.js`.
+
+```
+places/continents/<continent>/placed/<px>_<pz>.json
+```
+
+```json
+{
+  "version": 1,
+  "objects": [
+    { "type": "boulder", "at": [6150.5, 2040], "yaw": 1.2, "scale": 4, "colors": [[0.5, 0.48, 0.45]] },
+    { "type": "built:stool001", "at": [6152, 2041.5], "y": 43, "yaw": 0, "scale": 1, "template": "hut00001" }
+  ],
+  "slabs": [
+    { "at": [6150, 42, 2036], "turn": [0, 0, 0], "outline": [[0, 0], [16, 0], [16, 16], [0, 16]], "thickness": 1, "surface": "floorboards" }
+  ]
+}
+```
+
+## Which plate
+
+Plate `(px, pz)` covers `[px * 2048, (px + 1) * 2048)` each way, in continent feet. An object is in the plate its `at` is in. A slab is in the plate its home corner is in: the north-most top corner, the west-most of those.
+
+## Objects
+
+- `type` is a built-in kind such as `boulder`, or `built:<id>` for one of the world's objects.
+- `at` is `[x, z]` in continent feet.
+- `y`, when there is one, is the height it stands at, as on a slab. An object without one stands on what's under it.
+- `yaw` is radians about up. `scale` is feet for a built-in kind, or a factor for a built object.
+- `colors` and `texts` are as the world's tiles keep them ([plates](plates.md#place-lines)).
+- `template`, when there is one, is the template it was placed from.
+
+Readers work out an object's footprint and height from its type.
+
+## Slabs
+
+Each is a [slab](slabs.md), with `template` when it was placed from one.
