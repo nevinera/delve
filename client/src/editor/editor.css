@@ -647,6 +647,11 @@
   outline: 2px solid #ffe066;
 }
 
+/* A parameter's color, set where the object is placed. */
+.editor .ob-swatch.param {
+  border: 2px dashed #f0ead8;
+}
+
 .ob-palette-row {
   display: grid;
   grid-template-columns: 34px auto 1fr auto;

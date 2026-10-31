@@ -1,7 +1,21 @@
 /* A swatch picker (swatches.js): the picked swatch as a button, and a pullout of the others. */
 .swatch-picker {
-  display: inline-block;
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
   vertical-align: middle;
+}
+
+.swatch-tint:empty {
+  display: none;
+}
+
+.swatch-tint input[type="color"] {
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 2px;
 }
 
 .swatch-picker .swatch {

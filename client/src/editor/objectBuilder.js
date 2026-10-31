@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
-import { GRAY_INKS, MAX_PIECES, newObjectId, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, PALETTE_INKS, addColor, dropUnusedColors, emptyImage, inkColor, paletteColors, pieceCorners, problems, shapeOf, textsOf, turnPoint } from "../world/builtObjects.js";
+import { GRAY_INKS, MAX_PIECES, newObjectId, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, PALETTE_INKS, addColor, dropUnusedColors, emptyImage, inkColor, paletteColors, pieceCorners, problems, shapeOf, textsOf, tintable, turnPoint } from "../world/builtObjects.js";
 import { MAX_TEXT, TEXT_PLACEHOLDER, signText } from "../world/pixelFont.js";
 import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, faceFrame, faceIdOf, faceSpot, objectGeometry, primitive, textGeometry, tileTexture, tiledGeometries, tiledMaterial } from "./builtMeshes.js";
 import { ImagePainter, drawImage } from "./imagePainter.js";
@@ -188,15 +188,13 @@ export class ObjectBuilder {
         return input;
       });
     this.inputs = { size: numbers("size", 0.25), at: numbers("at", 0.25), turn: numbers("turn", 5) };
-    this.swatches = div("ob-swatches");
-    this.newColor = el("input", { type: "color", value: NEW_COLOR, title: "a new color for this piece" });
-    this.newColor.addEventListener("change", () => this.changePiece((p) => (p.color = addColor(this.object, this.newColor.value))));
+    this.colorBox = div("ob-row");
     this.pieceBox = div(
       "ob-piece",
       field("type", this.type),
       this.taperField,
       el("label", { className: "ob-check", title: "take this piece out of the others, as a hole; its color colors the hole's sides" }, this.cut, el("span", { textContent: "hole" })),
-      field("color", div("ob-row", this.swatches, this.newColor)),
+      field("color", this.colorBox),
       el(
         "details",
         { className: "ob-numbers" },
@@ -464,14 +462,7 @@ export class ObjectBuilder {
       this.refreshDecals(piece);
       this.refreshTexts(piece);
       this.refreshTile(piece);
-      this.swatches.replaceChildren(
-        ...object.palette.map((p, i) => {
-          const b = el("button", { type: "button", className: `ob-swatch${i === piece.color ? " active" : ""}`, title: p.color });
-          b.style.background = p.color;
-          b.addEventListener("click", () => this.changePiece((x) => (x.color = i)));
-          return b;
-        }),
-      );
+      this.colorBox.replaceChildren(...this.colorChoices(piece));
     }
 
     this.refreshImages();
@@ -497,6 +488,21 @@ export class ObjectBuilder {
     const below = Math.min(0, ...object.pieces.map(lowest));
     const sunk = below < -0.05 ? [`note: pieces reach ${tidy(-below)} ft below the ground`] : [];
     this.problems.textContent = [...wrong, ...sunk].join(" · ");
+  }
+
+  // The picked piece's color: one of the palette's, a parameter's or not, or a new one.
+  colorChoices(piece) {
+    let param = 0;
+    const swatches = this.object.palette.map((p, i) => {
+      const title = p.param ? `${p.name ?? `parameter ${++param}`}: ${p.color}, set where it's placed` : p.color;
+      const b = el("button", { type: "button", className: `ob-swatch${i === piece.color ? " active" : ""}${p.param ? " param" : ""}`, title });
+      b.style.background = p.color;
+      b.addEventListener("click", () => this.changePiece((x) => (x.color = i)));
+      return b;
+    });
+    const fresh = el("input", { type: "color", value: NEW_COLOR, title: "a new color for this piece" });
+    fresh.addEventListener("change", () => this.changePiece((p) => (p.color = addColor(this.object, fresh.value))));
+    return [el("div", { className: "ob-swatches" }, ...swatches), fresh];
   }
 
   // --- images ---
@@ -678,7 +684,9 @@ export class ObjectBuilder {
   refreshTile(piece) {
     const choices = this.images().filter((image) => image.kind === "tiled");
     const none = { value: "", label: choices.length ? "none" : "no tiled images yet" };
-    const pick = swatchPicker([none, ...this.imageChoices(choices, paletteColors(this.object), this.underlay())], { value: piece.tile?.image ?? "", title: "an image to repeat over this piece" });
+    // An image the piece's color shows through is tinted by it.
+    const tintControl = (choice) => (choice.value && tintable(this.imageOf(choice.value)) ? el("div", { className: "ob-row" }, ...this.colorChoices(piece)) : null);
+    const pick = swatchPicker([none, ...this.imageChoices(choices, paletteColors(this.object), this.underlay())], { value: piece.tile?.image ?? "", title: "an image to repeat over this piece", tintControl });
     pick.addEventListener("change", () => this.changePiece((p) => (pick.value ? (p.tile = { every: 1, jitter: 0, ...p.tile, image: pick.value }) : delete p.tile)));
     if (!piece.tile) return this.tileBox.replaceChildren(pick);
     const every = el("input", { type: "number", value: piece.tile.every, step: 0.25, min: MIN_SIZE_FT, title: "how wide each copy is (ft)" });

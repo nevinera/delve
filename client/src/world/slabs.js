@@ -16,8 +16,9 @@ import { TILE_FT } from "./constants.js";
 //   right through the slab, for doors and windows. They're inside the outline, and touch neither
 //   it nor each other. Absent when there are none.
 // - thickness: feet down from the top face, more than 0 and at most MAX_THICKNESS_FT.
-// - surface: one of SLAB_PRESETS by name, or { color, pattern, tile, palette }: a "#rrggbb" color,
-//   shaded by one of SLAB_PATTERNS the way the ground is, or with a world texture tiled over it
+// - surface: one of SLAB_PRESETS by name, or { color, preset, pattern, tile, palette }: a
+//   "#rrggbb" color, a preset painted in it instead of its own, or shaded by one of SLAB_PATTERNS
+//   the way the ground is, or with a world texture tiled over it
 //   ({ image, every, jitter }, as an object piece's tile), whose letter inks take palette's colors
 //   in turn (the color alone when there's no palette).
 // - kind: absent for a plain slab, or "stairs": a flight walked as the slope it is, drawn as
@@ -38,7 +39,8 @@ export const MAX_STAIR_DEG = 50; // as steep as a character walks
 export const MAX_STEPS = 128;
 export const STEP_FT = 0.6; // about how tall a stair's steps are by default
 
-// The surfaces a slab picks from by default, each with its colors baked in.
+// The surfaces a slab picks from by default, each painted from its color, which a surface can
+// change ({ color, preset }).
 export const SLAB_PRESETS = {
   woodgrain: { color: "#8a6440" },
   floorboards: { color: "#7a5636" },
@@ -489,7 +491,8 @@ function surfaceProblems(surface, images) {
   if (!(typeof surface === "object" && surface !== null && HEX.test(surface.color ?? ""))) return ["needs a surface: a preset's name, or { color }"];
   const out = [];
   if (surface.pattern !== undefined && !SLAB_PATTERNS.includes(surface.pattern)) out.push(`has pattern ${JSON.stringify(surface.pattern)}, which isn't one of ${SLAB_PATTERNS.join(", ")}`);
-  if (surface.pattern !== undefined && surface.tile !== undefined) out.push("has both a pattern and a tile");
+  if (surface.preset !== undefined && !Object.hasOwn(SLAB_PRESETS, surface.preset)) out.push(`has preset ${JSON.stringify(surface.preset)}, which isn't one`);
+  if ([surface.preset, surface.pattern, surface.tile].filter((v) => v !== undefined).length > 1) out.push("has more than one of a preset, a pattern and a tile");
   const tile = surface.tile;
   if (tile !== undefined && !(typeof tile?.image === "string" && tile.every > 0 && tile.jitter >= 0 && tile.jitter <= 1)) out.push("has a tile without an image, a width (feet) and a jitter (0 to 1)");
   else if (tile && images && !images.has(tile.image)) out.push(`wears image ${tile.image}, which the world doesn't have`);

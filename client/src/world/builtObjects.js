@@ -101,6 +101,19 @@ export function pixelAt(image, x, y) {
   return s === ".." ? null : { ink: s[0], opacity: s[1] };
 }
 
+// Whether the wearer's color tints the image: it's drawn only in grays, and the color shows
+// through somewhere, where it's clear or see-through.
+export function tintable(image) {
+  const pixels = image.rows.join("");
+  let through = false;
+  for (let k = 0; k < pixels.length; k += 2) {
+    if (pixels[k] === ".") through = true;
+    else if (!GRAY_INKS.includes(pixels[k])) return false;
+    else if (pixels[k + 1] !== OPACITIES.at(-1)) through = true;
+  }
+  return through;
+}
+
 // Sets a pixel, or clears it with null; changes `image` in place.
 export function setPixel(image, x, y, pixel) {
   const row = image.rows[y];

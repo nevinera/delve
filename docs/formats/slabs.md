@@ -45,7 +45,7 @@ A slab with `"kind": "stairs"` is a flight of stairs. It's walked on as the slop
 
 ## Surface
 
-`surface` is the name of a preset, with its colours baked in:
+`surface` is the name of a preset, painted in its own colour:
 
 | Kind | Presets |
 | --- | --- |
@@ -54,9 +54,10 @@ A slab with `"kind": "stairs"` is a flight of stairs. It's walked on as the slop
 | Roofs | `thatch`, `slateTiles`, `clayTiles` |
 | Other | `plaster`, `packedEarth`, `ironPlate`, `rustyIronPlate` |
 
-Or it's `{ color, pattern, tile, palette }`:
+Or it's `{ color, preset, pattern, tile, palette }`, with at most one of `preset`, `pattern` and `tile`:
 
 - `color` is `#rrggbb`.
+- `preset` paints a preset in `color` instead of its own.
 - `pattern` shades the colour the way the ground's patterns do: `grass`, `dirt`, `sand`, `rock`, `path`, `shore`, `mud`, `moss` or `litter`.
 - `tile` repeats one of the world's textures over the slab instead, `{ image, every, jitter }` as an object piece's tile.
 - `palette` lists up to 26 `#rrggbb` colours, for the tiled texture's letter inks in turn. Without one, every letter ink is `color`.

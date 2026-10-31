@@ -3,7 +3,7 @@ import { objectMeshes } from "../editor/objectMeshes.js";
 import { PlacePicker } from "../editor/placePicker.js";
 import { slabMeshes } from "../editor/slabMeshes.js";
 import { polygonPieces, roofPieces, rectanglePieces, roomPieces, wallPieces } from "../editor/slabTool.js";
-import { mountSwatches } from "../editor/swatches.js";
+import { mountSwatches, pickedSurface } from "../editor/swatches.js";
 import { Thumbnails } from "../editor/thumbnailRenderer.js";
 import { newObjectId, turnPoint } from "../world/builtObjects.js";
 import { CELL_FT as TEMPLATE_CELL_FT } from "../world/constants.js";
@@ -231,7 +231,7 @@ export class Build {
 
   readSlab() {
     Object.assign(this.slab, {
-      surface: $("slabSurface").value,
+      surface: pickedSurface($("slabSurface")),
       thickness: Math.max(0.1, Math.min(16, Number($("slabThickness").value) || 1)),
       height: Math.max(1, Math.min(60, Number($("slabHeight").value) || 10)),
       roof: $("slabRoof").value,
@@ -717,8 +717,8 @@ export class Build {
     const steps = auto ? defaultSteps(stair.rise) : Math.max(1, Math.round(Number($("stairSteps").value) || 1));
     return stairSlab(stair.a, stair.b, stair.run, stair.rise, {
       thickness: Math.max(0.1, Math.min(16, Number($("stairThickness").value) || 1)),
-      surface: $("stairSurface").value,
-      ...(risers === "same" ? {} : { risers: risers === "open" ? null : risers }),
+      surface: pickedSurface($("stairSurface")),
+      ...(risers === "same" ? {} : { risers: risers === "open" ? null : pickedSurface($("stairRisers")) }),
       steps,
     });
   }

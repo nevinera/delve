@@ -111,6 +111,9 @@ describe("validateWorld", () => {
     const floor = { at: [100, 40, 100], turn: [0, 0, 0], outline: [[0, 0], [10, 0], [10, 10], [0, 10]], thickness: 1, surface: "plaster" };
     expect(withSlab(floor)).toEqual([]);
     expect(withSlab({ ...floor, surface: { color: "#336699", pattern: "rock" } })).toEqual([]);
+    expect(withSlab({ ...floor, surface: { color: "#336699", preset: "brick" } })).toEqual([]);
+    expect(withSlab({ ...floor, surface: { color: "#336699", preset: "tarmac" } })).toEqual([`${PLATE}: tile 0,0's slab 1 has preset "tarmac", which isn't one`]);
+    expect(withSlab({ ...floor, surface: { color: "#336699", preset: "brick", pattern: "rock" } })).toEqual([`${PLATE}: tile 0,0's slab 1 has more than one of a preset, a pattern and a tile`]);
     expect(withSlab({ ...floor, at: [600, 40, 100] })).toEqual([`${PLATE}: tile 0,0's slab 1 belongs in tile 1,0, which holds its home corner`]);
     expect(withSlab({ ...floor, outline: [[0, 0], [10, 10], [10, 0], [0, 10]] })).toEqual([`${PLATE}: tile 0,0's slab 1 has an outline whose edges cross`]);
     expect(withSlab({ ...floor, outline: [[0, 0], [80, 0], [80, 10]] })).toEqual([`${PLATE}: tile 0,0's slab 1 reaches more than 64 ft from its home corner`]);

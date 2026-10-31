@@ -101,15 +101,56 @@
             "color"
           ],
           "not": {
-            "required": [
-              "pattern",
-              "tile"
+            "anyOf": [
+              {
+                "required": [
+                  "pattern",
+                  "tile"
+                ]
+              },
+              {
+                "required": [
+                  "preset",
+                  "pattern"
+                ]
+              },
+              {
+                "required": [
+                  "preset",
+                  "tile"
+                ]
+              }
             ]
           },
           "properties": {
             "color": {
               "type": "string",
               "pattern": "^#[0-9a-f]{6}$"
+            },
+            "preset": {
+              "enum": [
+                "woodgrain",
+                "floorboards",
+                "logs",
+                "shingles",
+                "stone",
+                "stoneBlocks",
+                "brick",
+                "roughRock",
+                "dirtyStone",
+                "cobblestone",
+                "flagstones",
+                "marble",
+                "sandstone",
+                "thatch",
+                "slateTiles",
+                "clayTiles",
+                "plaster",
+                "packedEarth",
+                "ironPlate",
+                "rustyIronPlate"
+              ],
+              "description": "a preset, painted in the colour instead of its own"
             },
             "pattern": {
               "enum": [

@@ -35,15 +35,17 @@ const kept = new Map(); // surface key -> { texture, feet }
 // How many feet a surface's picture spans before it repeats.
 export function repeatFt(surface) {
   if (typeof surface === "string") return PRESET_FT[surface] ?? 1;
+  if (surface.preset) return PRESET_FT[surface.preset] ?? 1;
   if (surface.tile) return surface.tile.every;
   return surface.pattern ? PATTERN_FT[surface.pattern] : 1;
 }
 
-// The picture for a preset's name, or a { color, pattern } surface: { texture, feet }.
+// The picture for a preset's name, or a { color, pattern } or { color, preset } surface:
+// { texture, feet }.
 export function slabTexture(surface) {
-  const key = typeof surface === "string" ? surface : `${surface.color}/${surface.pattern}`;
+  const key = typeof surface === "string" ? surface : surface.preset ? `${surface.preset}/${surface.color}` : `${surface.color}/${surface.pattern}`;
   if (!kept.has(key)) {
-    const made = typeof surface === "string" ? presetPixels(surface) : patternPixels(surface);
+    const made = typeof surface === "string" ? presetPixels(surface) : surface.preset ? presetPixels(surface.preset, surface.color) : patternPixels(surface);
     const texture = new THREE.DataTexture(made.rgba, made.size, made.size);
     texture.colorSpace = THREE.SRGBColorSpace;
     texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
@@ -57,9 +59,9 @@ export function slabTexture(surface) {
   return kept.get(key);
 }
 
-// A preset's picture as { size, rgba, feet }.
-export function presetPixels(name) {
-  const base = rgbOf(SLAB_PRESETS[name].color);
+// A preset's picture as { size, rgba, feet }, painted from its own color or `color`.
+export function presetPixels(name, color = SLAB_PRESETS[name].color) {
+  const base = rgbOf(color);
   const c = new Canvas(PAINT[name].size ?? SIZE, 1 + Object.keys(SLAB_PRESETS).indexOf(name));
   return { size: c.size, rgba: toBytes(PAINT[name](c, base)), feet: PRESET_FT[name] };
 }

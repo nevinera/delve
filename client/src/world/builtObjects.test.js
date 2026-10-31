@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { MAX_PARAMS, addColor, collectionJson, dropUnusedColors, emptyImage, imageProblems, imageRgba, matches, emptyObject, pixelAt, setPixel, newObjectId, paletteColors, pieceCorners, problems, readCollection, shapeOf, turnPoint } from "./builtObjects.js";
+import { MAX_PARAMS, addColor, collectionJson, dropUnusedColors, emptyImage, imageProblems, imageRgba, matches, emptyObject, pixelAt, setPixel, newObjectId, paletteColors, pieceCorners, problems, readCollection, shapeOf, tintable, turnPoint } from "./builtObjects.js";
 
 const piece = (over = {}) => ({ type: "box", size: [2, 2, 2], at: [0, 1, 0], turn: [0, 0, 0], color: 0, ...over });
 
@@ -12,6 +12,19 @@ function table() {
 }
 
 describe("built objects", () => {
+  it("knows which images the wearer's color tints", () => {
+    const image = emptyImage("t", "tiled", undefined, 2);
+    expect(tintable(image)).toBe(true);
+    setPixel(image, 0, 0, { ink: "3", opacity: "4" });
+    expect(tintable(image)).toBe(true);
+    setPixel(image, 0, 0, { ink: "a", opacity: "2" });
+    expect(tintable(image)).toBe(false);
+    image.rows = ["3434", "3434"];
+    expect(tintable(image)).toBe(false);
+    image.rows = ["3434", "3433"];
+    expect(tintable(image)).toBe(true);
+  });
+
   it("makes short ids of letters and digits", () => {
     expect(newObjectId()).toMatch(/^[0-9a-z]{8}$/);
   });
