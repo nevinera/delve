@@ -257,6 +257,7 @@
       </label>
       <div class="create-way">
         <button type="button" id="pickedDelete">delete</button>
+        <button type="button" id="pickedCopy" title="copy what's picked, to paste with the template tool (ctrl+C)">copy</button>
         <button type="button" data-build-undo>undo</button>
       </div>
       <div class="create-way">
@@ -282,6 +283,7 @@
       <div class="create-recent" id="recentTemplates"></div>
       <div class="create-way">
         <button type="button" id="templateLibrary">library…</button>
+        <button type="button" id="templatePaste" aria-pressed="false" title="place what was copied last (ctrl+V)">paste</button>
         <button type="button" data-build-undo>undo</button>
       </div>
     </div>
@@ -465,6 +467,7 @@
     <dt>Delete</dt><dd>delete the selected lines, or the objects and slabs picked</dd>
     <dt>arrows up / down</dt><dd>raise or lower the objects and slabs picked, with shift further</dd>
     <dt>ctrl+Z</dt><dd>undo the last change to objects and slabs</dd>
+    <dt>ctrl+C / ctrl+V</dt><dd>copy the objects and slabs picked, and paste them as a template</dd>
     <dt>1 2 3 4</dt><dd>show or hide full ground, cell chunks, tiles, plates</dd>
   </dl>
   <h2>Tools</h2>

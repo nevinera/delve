@@ -162,6 +162,9 @@ function start(world, changes) {
   const waterAt = (x, z) => renditions.waterAt(x, z);
   // The world's objects and templates, and the objects and slabs placed by hand.
   const library = new Library(world.files, name);
+  // What was copied last is kept in this browser for each world, not in its files.
+  const clipboardKey = `clipboard:${name}`;
+  library.keepClipboard = (template) => store.set(clipboardKey, template).catch(() => {});
   const placed = new Placed();
   for (const [path, bytes] of world.files) {
     const match = PLACED_PATH.exec(path);
@@ -303,6 +306,10 @@ function start(world, changes) {
     worst[part] = Math.max(worst[part], performance.now() - start);
   };
   // A handle for measuring from the browser's console or a script; paused stops the frames.
+  store
+    .get(clipboardKey)
+    .then((template) => template && !library.clipboard && tools.build.setClipboard(template, false))
+    .catch(() => {});
   window.create = { placed, things, library, ground, scatter, clutter, falls, surfaces, builder, tools, renderer, scene, camera, paused: false };
   const frame = (now) => {
     if (window.create.paused) return requestAnimationFrame(frame);

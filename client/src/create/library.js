@@ -10,6 +10,7 @@ import { TEMPLATE_PREFIX } from "../world/templates.js";
 // lately first. Templates made here are kept in its files, and saved with the rest.
 
 export const RECENT = 12;
+export const CLIPBOARD_PREFIX = "clipboard:"; // the type of what was copied, "clipboard:<id>"
 
 export class Library {
   // files: the world's, path -> bytes, which templates made are written into too.
@@ -18,6 +19,8 @@ export class Library {
     this.dirty = new Set(); // paths written since they were saved
     this.version = 0;
     this.recentKey = `create:recent:${worldName}`;
+    this.clipboard = null; // the template copied last, kept in this browser, not the world's files
+    this.keepClipboard = () => {}; // keeps it, once it's copied
     try {
       this.recent = { objects: [], templates: [], ...JSON.parse(localStorage.getItem(this.recentKey)) };
     } catch {
@@ -57,14 +60,21 @@ export class Library {
     return null;
   }
 
-  // The template a "template:<id>" type names, or null.
+  // The template a "template:<id>" type names, or what was copied for "clipboard:<id>", or null.
   template(type) {
+    if (type?.startsWith(CLIPBOARD_PREFIX)) return type === this.clipboardType() ? this.clipboard : null;
     const id = type?.slice(TEMPLATE_PREFIX.length);
     return this.readJson(`templates/${id}.json`) ?? BUILTIN_TEMPLATES.find((t) => t.id === id) ?? null;
   }
 
-  // Puts `type` first in the recent things of `kind`.
+  // The type of what was copied last, or null.
+  clipboardType() {
+    return this.clipboard && `${CLIPBOARD_PREFIX}${this.clipboard.id}`;
+  }
+
+  // Puts `type` first in the recent things of `kind`; not what was copied.
   used(kind, type) {
+    if (type?.startsWith(CLIPBOARD_PREFIX)) return;
     this.recent[kind] = [type, ...this.recent[kind].filter((t) => t !== type)].slice(0, RECENT);
     try {
       localStorage.setItem(this.recentKey, JSON.stringify(this.recent));

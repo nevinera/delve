@@ -9,6 +9,7 @@ import { CELL_FT as TEMPLATE_CELL_FT } from "../world/constants.js";
 import { makeObject, specOf } from "../world/objects.js";
 import { cutSlab, slabProblems, slabTop } from "../world/slabs.js";
 import { captureTemplate, placedTemplate } from "../world/templates.js";
+import { CLIPBOARD_PREFIX } from "./library.js";
 import { homeOf, isSlab, readyObject } from "./placed.js";
 import { drawable, slabSpace } from "./things.js";
 
@@ -25,8 +26,9 @@ import { drawable, slabSpace } from "./things.js";
 // - pick: clicking an object or slab picks it out, shift picks more or fewer, and dragging a box
 //   picks those in it. Dragging picked things moves them, C and V turn them about their middle,
 //   the up and down arrows raise and lower them, and Delete deletes them. What's picked can be
-//   made a template.
-// Ctrl+Z undoes the last change.
+//   made a template, or copied: a template kept in this browser, not the world, till the next
+//   copy, that paste arms the template tool with.
+// Ctrl+Z undoes the last change, ctrl+C copies and ctrl+V pastes.
 
 const THUMB_PX = 56;
 const TURN_DEG = 15;
@@ -98,6 +100,8 @@ export class Build {
     $("pickedScale").addEventListener("input", () => this.scalePicked());
     $("pickedScale").addEventListener("change", () => (this.scaling = false));
     $("makeTemplate").addEventListener("click", () => this.askTemplate());
+    $("pickedCopy").addEventListener("click", () => this.copy());
+    $("templatePaste").addEventListener("click", () => this.paste());
     $("templateMakeKeep").addEventListener("click", () => this.makeTemplate());
     $("templateMakeCancel").addEventListener("click", () => $("templateMake").hidePopover());
     $("templateName").addEventListener("keydown", (e) => e.key === "Enter" && this.makeTemplate());
@@ -168,6 +172,9 @@ export class Build {
       $(id).replaceChildren(...(tiles.length ? tiles : [el("p", { className: "create-note", textContent: "None used yet." })]));
     }
     this.thumbs.drawAll(queue, new Set(queue.map(({ entry }) => entry.key)));
+    const pasting = this.library.clipboardType();
+    $("templatePaste").disabled = !pasting;
+    $("templatePaste").setAttribute("aria-pressed", String(!!pasting && this.armed.template === pasting));
   }
 
   // The object's size slider, on a log scale between its least and most.
@@ -329,6 +336,8 @@ export class Build {
       this.undo();
       return true;
     }
+    if ((e.ctrlKey || e.metaKey) && k === "c" && this.tool === "pick") return this.copy();
+    if ((e.ctrlKey || e.metaKey) && k === "v") return this.paste();
     if (e.ctrlKey || e.metaKey || e.altKey) return false;
     if (k === "c" || k === "v") {
       const step = (e.shiftKey ? FINE_TURN_DEG : TURN_DEG) * (k === "c" ? 1 : -1);
@@ -391,6 +400,8 @@ export class Build {
     const template = this.library.template(this.armed.template);
     if (!template) return;
     const { slabs, objects } = placedTemplate(template, this.anchor(template, hit), (this.yaw * 180) / Math.PI);
+    // What's pasted names no template.
+    if (this.armed.template.startsWith(CLIPBOARD_PREFIX)) for (const thing of [...slabs, ...objects]) delete thing.template;
     this.placed.put([...slabs, ...objects.map(readyObject).filter(Boolean)]);
     this.library.used("templates", this.armed.template);
   }
@@ -503,6 +514,7 @@ export class Build {
     $("pickedCount").textContent = picked.length ? `${picked.length} picked` : "Nothing picked.";
     $("pickedDelete").disabled = !picked.length;
     $("makeTemplate").disabled = !picked.length;
+    $("pickedCopy").disabled = !picked.length;
     const one = picked.length === 1 && !isSlab(picked[0]) ? picked[0] : null;
     $("pickedScaleRow").hidden = !one;
     if (!one) return;
@@ -549,6 +561,44 @@ export class Build {
     });
   }
 
+  // What's picked as a template, standing on the ground under it, named `name`.
+  capture(picked, name) {
+    const objects = picked.filter((t) => !isSlab(t));
+    return captureTemplate({
+      id: newObjectId(),
+      name,
+      slabs: picked.filter(isSlab),
+      objects: objects.map((o) => ({ ...o, y: Number.isFinite(o.y) ? o.y : undefined })),
+      height: (ci, cj) => this.groundAt((ci + 0.5) * TEMPLATE_CELL_FT, (cj + 0.5) * TEMPLATE_CELL_FT),
+    });
+  }
+
+  // Copies what's picked, in place of what was copied before. Says whether there was anything.
+  copy() {
+    const picked = [...this.things.picked];
+    if (!picked.length) return false;
+    this.setClipboard(this.capture(picked, "copied"));
+    this.say(`Copied ${picked.length}. Paste with the template tool, or ctrl+V.`);
+    return true;
+  }
+
+  // Makes `template` what was copied, keeping it in this browser unless `keep` is false.
+  setClipboard(template, keep = true) {
+    this.library.clipboard = template;
+    if (keep) this.library.keepClipboard(template);
+    this.showRecent();
+  }
+
+  // Arms the template tool with what was copied. Says whether there was anything.
+  paste() {
+    const type = this.library.clipboardType();
+    if (!type) return false;
+    this.armed.template = type;
+    this.showRecent();
+    this.onPick?.("template");
+    return true;
+  }
+
   // Opens the dialog for making what's picked a template: what it holds, how big it is, and how
   // it looks, asking its name and collection.
   askTemplate() {
@@ -556,13 +606,7 @@ export class Build {
     if (!picked.length) return;
     const slabs = picked.filter(isSlab);
     const objects = picked.filter((t) => !isSlab(t));
-    this.making = captureTemplate({
-      id: newObjectId(),
-      name: "",
-      slabs,
-      objects: objects.map((o) => ({ ...o, y: Number.isFinite(o.y) ? o.y : undefined })),
-      height: (ci, cj) => this.groundAt((ci + 0.5) * TEMPLATE_CELL_FT, (cj + 0.5) * TEMPLATE_CELL_FT),
-    });
+    this.making = this.capture(picked, "");
     const { cells } = placedTemplate(this.making, [0, 0, 0]);
     const [is, js] = [cells.map((c) => c[0]), cells.map((c) => c[1])];
     const across = (Math.max(...is) - Math.min(...is) + 1) * TEMPLATE_CELL_FT;
