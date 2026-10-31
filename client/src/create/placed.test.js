@@ -2,6 +2,7 @@ import { strFromU8 } from "fflate";
 import { describe, expect, it } from "vitest";
 import { PLATE_FT } from "../v2/sizes.js";
 import { Placed, placedPath, readyObject } from "./placed.js";
+import { cutSlab } from "../world/slabs.js";
 import { Things } from "./things.js";
 
 const boulder = (x, z) => readyObject({ type: "boulder", at: [x, z], yaw: 0, scale: 4, colors: [[0.5, 0.5, 0.5]] });
@@ -69,5 +70,13 @@ describe("walking among things", () => {
     expect(things.pushOut(10, 40.2, 20, 1)).toEqual([10, 40.2]);
     const [x] = things.pushOut(101, 100, 0, 1);
     expect(x).toBeGreaterThan(101);
+  });
+
+  it("walks through a door cut in a wall", () => {
+    const withDoor = new Placed();
+    withDoor.put(cutSlab(wall(0, 0, 0), [[8, -1], [12, -1], [12, 7], [8, 7]]));
+    const through = new Things({ add() {} }, withDoor, () => 0);
+    expect(through.pushOut(10, 0.2, 0, 1)).toEqual([10, 0.2]);
+    expect(Math.abs(through.pushOut(4, 0.2, 0, 1)[1] - 0.2)).toBeGreaterThan(0.5);
   });
 });

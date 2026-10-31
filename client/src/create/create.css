@@ -637,3 +637,11 @@ body.create {
   box-sizing: border-box;
   margin-top: 8px;
 }
+
+.create-said:empty {
+  display: none;
+}
+
+.create-said {
+  color: #ffe9a0;
+}

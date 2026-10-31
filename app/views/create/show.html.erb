@@ -250,6 +250,7 @@
     </div>
     <div data-config="pick" hidden>
       <p class="create-note">Click an object or slab to pick it, or drag a box round them. Shift picks more, or fewer. Drag picked things to move them. C and V turn them, the up and down arrows raise and lower them, with shift further, and Delete deletes them.</p>
+      <p class="create-note create-said" data-build-say></p>
       <p class="create-note" id="pickedCount"></p>
       <label id="pickedScaleRow" hidden>size <output id="pickedScaleOut"></output>
         <input id="pickedScale" type="range" min="0" max="1000">
@@ -265,6 +266,7 @@
     </div>
     <div data-config="object" hidden>
       <p class="create-note">Pick an object, then click the ground or a slab to place it. C and V turn it, [ and ] size it.</p>
+      <p class="create-note create-said" data-build-say></p>
       <div class="create-recent" id="recentObjects"></div>
       <div class="create-way">
         <button type="button" id="objectLibrary">library…</button>
@@ -277,6 +279,7 @@
     </div>
     <div data-config="template" hidden>
       <p class="create-note">Pick a template, then click to place copies of its slabs and objects, its anchor on the grid at the ground's height. C and V turn it. Make templates with select.</p>
+      <p class="create-note create-said" data-build-say></p>
       <div class="create-recent" id="recentTemplates"></div>
       <div class="create-way">
         <button type="button" id="templateLibrary">library…</button>
@@ -284,21 +287,24 @@
       </div>
     </div>
     <div data-config="slab" hidden>
-      <p class="create-note">Drag to draw, starting on the ground or a slab. Floors, rooms and roofs are square to the way you look.</p>
+      <p class="create-note">Drag to draw, starting on the ground or a slab. Floors, rooms and roofs are square to the way you look. Door and window cut holes in the slab clicked.</p>
+      <p class="create-note create-said" data-build-say></p>
       <div class="create-modes" role="group" aria-label="what to draw">
         <button type="button" data-slab-mode="floor" aria-pressed="true">floor</button>
         <button type="button" data-slab-mode="wall" aria-pressed="false">wall</button>
         <button type="button" data-slab-mode="room" aria-pressed="false">room</button>
         <button type="button" data-slab-mode="roof" aria-pressed="false">roof</button>
+        <button type="button" data-slab-mode="door" aria-pressed="false" title="click a wall to cut a door 4 ft wide and 7 tall in it, up from the floor or ground there">door</button>
+        <button type="button" data-slab-mode="window" aria-pressed="false" title="click a slab to cut a window 3 ft square in it">window</button>
       </div>
-      <label>surface
+      <label data-slab-only="floor wall room roof">surface
         <select id="slabSurface">
           <% %w[floorboards woodgrain logs shingles stone stoneBlocks brick roughRock dirtyStone cobblestone flagstones marble sandstone thatch slateTiles clayTiles plaster packedEarth ironPlate rustyIronPlate].each do |surface| %>
             <option value="<%= surface %>"><%= surface %></option>
           <% end %>
         </select>
       </label>
-      <label>thickness <input type="number" id="slabThickness" value="1" min="0.1" max="16" step="0.25"> ft</label>
+      <label data-slab-only="floor wall room roof">thickness <input type="number" id="slabThickness" value="1" min="0.1" max="16" step="0.25"> ft</label>
       <label data-slab-only="wall room">height <input type="number" id="slabHeight" value="10" min="1" max="60" step="1"> ft</label>
       <label data-slab-only="room"><input type="checkbox" id="slabRoomRoof"> with a roof</label>
       <label data-slab-roof>roof

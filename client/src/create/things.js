@@ -3,10 +3,9 @@ import { objectMeshes } from "../editor/objectMeshes.js";
 import { slabMeshes, slabAt } from "../editor/slabMeshes.js";
 import { objectShape, pushOut } from "../v2/blocking.js";
 import { TILE_FT } from "../v2/sizes.js";
-import { makeObject, reachOf, specOf } from "../world/objects.js";
+import { reachOf } from "../world/objects.js";
 import { turnPoint } from "../world/builtObjects.js";
-import { slabBottom, slabFootholds, slabTop } from "../world/slabs.js";
-import { convexHull } from "../world/templates.js";
+import { inPolygon, slabBottom, slabFootholds, slabTop } from "../world/slabs.js";
 import { WALK_DEG } from "./growth.js";
 
 // The objects and slabs placed by hand (placed.js) round the builder, out to REACH_FT, drawn with
@@ -21,12 +20,8 @@ const STEEPEST = Math.tan((WALK_DEG * Math.PI) / 180);
 const PICKED = 0xffe14d;
 const NEAR_FT = 64; // how far round a walker slabs are looked at
 
-// An object as objectMeshes draws it: standing at `y`, with colors.
-export function drawable(object, y) {
-  const spec = specOf(object.type);
-  const colors = object.colors ?? (spec.built ? undefined : makeObject(object.type, object.at, object.yaw, object.scale).colors);
-  return { ...object, y, ...(colors ? { colors } : {}), owner: object };
-}
+// An object (placed.js's readyObject) as objectMeshes draws it: standing at `y`.
+export const drawable = (object, y) => ({ ...object, y, owner: object });
 
 export class Things {
   // groundAt(x, z): the ground's height.
@@ -128,11 +123,19 @@ export class Things {
     const shapes = objects.filter((o) => o.footprint && !o.footprint.open && this.objectY(o) < y + HEAD_FT && this.objectY(o) + o.height > y + STEP_FT).map(objectShape).filter(Boolean);
     [x, z] = pushOut(x, z, radius, shapes);
     for (const slab of slabs) {
-      if (Math.abs(turnPoint([0, 1, 0], slab.turn)[1]) >= UPRIGHT) continue;
-      const corners = [...slabTop(slab), ...slabBottom(slab)];
-      const ys = corners.map((p) => p[1]);
-      if (Math.min(...ys) > y + HEAD_FT || Math.max(...ys) < y + STEP_FT) continue;
-      [x, z] = outOf(convexHull(corners.map(([px, , pz]) => [px, pz])), x, z, radius);
+      const n = turnPoint([0, 1, 0], slab.turn);
+      if (Math.abs(n[1]) >= UPRIGHT) continue;
+      // Out of its face the nearer way, where any of the walker's body, from a step up to their
+      // head, is in it, but for its holes.
+      for (let h = y + STEP_FT; h <= y + HEAD_FT; h += 1) {
+        const [u, across, v] = slabSpace(slab, [x, h, z]);
+        if (across > radius || across < -slab.thickness - radius) continue;
+        if (!inPolygon(slab.outline, [u, v]) || (slab.holes ?? []).some((hole) => inPolygon(hole, [u, v]))) continue;
+        const to = across > -slab.thickness / 2 ? radius : -slab.thickness - radius;
+        const flat = Math.hypot(n[0], n[2]) || 1;
+        [x, z] = [x + ((n[0] / flat) * (to - across)) / flat, z + ((n[2] / flat) * (to - across)) / flat];
+        break;
+      }
     }
     return [x, z];
   }
@@ -146,28 +149,11 @@ export class Things {
   }
 }
 
-// (x, z) moved out of the convex `polygon` ([x, z] corners) far enough for a walker `radius` round.
-function outOf(polygon, x, z, radius) {
-  if (polygon.length < 2) return [x, z];
-  let [best, bx, bz] = [Infinity, x, z];
-  polygon.forEach(([x0, z0], i) => {
-    const [x1, z1] = polygon[(i + 1) % polygon.length];
-    const [dx, dz] = [x1 - x0, z1 - z0];
-    const t = Math.max(0, Math.min(1, ((x - x0) * dx + (z - z0) * dz) / (dx * dx + dz * dz || 1)));
-    const [nx, nz] = [x0 + dx * t, z0 + dz * t];
-    const d = Math.hypot(x - nx, z - nz);
-    if (d < best) [best, bx, bz] = [d, nx, nz];
-  });
-  const sides = polygon.map(([x0, z0], i) => {
-    const [x1, z1] = polygon[(i + 1) % polygon.length];
-    return Math.sign((x1 - x0) * (z - z0) - (z1 - z0) * (x - x0));
-  });
-  const inside = sides.every((s) => s >= 0) || sides.every((s) => s <= 0);
-  if (!inside && best >= radius) return [x, z];
-  // Out past the nearest edge, the way away from the middle when inside.
-  const [mx, mz] = [polygon.reduce((s, p) => s + p[0], 0) / polygon.length, polygon.reduce((s, p) => s + p[1], 0) / polygon.length];
-  let [ox, oz] = inside ? [bx - mx, bz - mz] : [x - bx, z - bz];
-  const length = Math.hypot(ox, oz) || 1;
-  [ox, oz] = [ox / length, oz / length];
-  return [bx + ox * radius, bz + oz * radius];
+// Continent feet [x, y, z] in a slab's own frame, [u, across, v]: u and v along its outline, and
+// across out of its top face.
+export function slabSpace(slab, [x, y, z]) {
+  const deg = Math.PI / 180;
+  const turn = new THREE.Quaternion().setFromEuler(new THREE.Euler(slab.turn[1] * deg, slab.turn[0] * deg, slab.turn[2] * deg, "YXZ"));
+  const p = new THREE.Vector3(x - slab.at[0], y - slab.at[1], z - slab.at[2]).applyQuaternion(turn.invert());
+  return [p.x, p.y, p.z];
 }

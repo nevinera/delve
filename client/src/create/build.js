@@ -4,13 +4,13 @@ import { PlacePicker } from "../editor/placePicker.js";
 import { slabMeshes } from "../editor/slabMeshes.js";
 import { roofPieces, rectanglePieces, roomPieces, wallPieces } from "../editor/slabTool.js";
 import { Thumbnails } from "../editor/thumbnailRenderer.js";
-import { newObjectId } from "../world/builtObjects.js";
+import { newObjectId, turnPoint } from "../world/builtObjects.js";
 import { CELL_FT as TEMPLATE_CELL_FT } from "../world/constants.js";
 import { makeObject, specOf } from "../world/objects.js";
-import { slabProblems, slabTop } from "../world/slabs.js";
+import { cutSlab, slabProblems, slabTop } from "../world/slabs.js";
 import { captureTemplate, placedTemplate } from "../world/templates.js";
 import { homeOf, isSlab, readyObject } from "./placed.js";
-import { drawable } from "./things.js";
+import { drawable, slabSpace } from "./things.js";
 
 // Build's tools, on the things placed by hand (placed.js, things.js):
 // - object: places the object picked, from its recent ones or the library, where the pointer
@@ -20,6 +20,8 @@ import { drawable } from "./things.js";
 // - slab: dragging draws a floor, a wall, a room (a floor with four walls on it, and a roof, if
 //   asked) or a roof, square to the way the camera looks. It starts on the ground or a slab, and
 //   the rest lies level with where it started.
+//   Door and window click a slab to cut a hole in it: a door up from the floor or ground under
+//   where it's clicked, a window round where it's clicked.
 // - pick: clicking an object or slab picks it out, shift picks more or fewer, and dragging a box
 //   picks those in it. Dragging picked things moves them, C and V turn them about their middle,
 //   the up and down arrows raise and lower them, and Delete deletes them. What's picked can be
@@ -35,6 +37,8 @@ const FAR_RAISE_FT = 4;
 const BOX_PX = 4;
 const MOST_CELLS = 400; // how many of a template's cells are read for its height
 const GHOST_OPACITY = 0.6;
+const DOOR_FT = [4, 7]; // wide, tall
+const WINDOW_FT = [3, 3];
 const WRONG = new THREE.MeshBasicMaterial({ color: 0xe04040, transparent: true, opacity: 0.6 });
 
 const $ = (id) => document.getElementById(id);
@@ -103,9 +107,15 @@ export class Build {
     this.showRecent();
   }
 
+  // Tells the builder something, in the tool's settings, till the tool's picked again.
+  say(text) {
+    for (const line of document.querySelectorAll("[data-build-say]")) line.textContent = text;
+  }
+
   // Picks a build tool, or puts it down with null or another tool.
   setTool(tool) {
     this.tool = tool;
+    this.say("");
     this.drawing = this.moving = this.box = null;
     this.boxEl.hidden = true;
     this.clearGhost();
@@ -210,6 +220,7 @@ export class Build {
     const hit = this.hit();
     if (this.tool === "object" && hit && this.armed.object) return this.placeObject(hit);
     if (this.tool === "template" && hit && this.armed.template) return this.placeTemplate(hit);
+    if (this.tool === "slab" && (this.slab.mode === "door" || this.slab.mode === "window")) return this.cut(hit);
     if (this.tool === "slab" && hit) {
       this.drawing = { a: hit.at, yaw: this.cameraYaw(), pieces: [] };
       return;
@@ -268,7 +279,7 @@ export class Build {
       this.drawing = null;
       this.clearGhost();
       if (pieces.length && pieces.every((slab) => !slabProblems(slab).length)) this.placed.put(pieces);
-      else if (pieces.length) this.say?.("That slab can't be made: it's too big or too small.");
+      else if (pieces.length) this.say("That slab can't be made: it's too big or too small.");
     }
     if (this.moving) this.moving = null;
     if (this.box) {
@@ -341,8 +352,10 @@ export class Build {
   placeObject(hit) {
     const type = this.armed.object;
     const [x, y, z] = hit.at;
+    // In the ghost's colors.
     const { id: _, ...made } = makeObject(type, [x, z], this.yaw, this.scale);
-    const object = readyObject({ ...made, ...(hit.thing ? { y } : {}) });
+    const colors = this.ghostObject?.type === type ? this.ghostObject.colors : made.colors;
+    const object = readyObject({ ...made, ...(colors ? { colors } : {}), ...(hit.thing ? { y } : {}) });
     if (!object) return;
     this.placed.put([object]);
     this.library.used("objects", type);
@@ -366,6 +379,31 @@ export class Build {
     const { slabs, objects } = placedTemplate(template, this.anchor(template, hit), (this.yaw * 180) / Math.PI);
     this.placed.put([...slabs, ...objects.map(readyObject).filter(Boolean)]);
     this.library.used("templates", this.armed.template);
+  }
+
+  // Cuts a door or window in the slab hit.
+  cut(hit) {
+    const slab = hit?.thing;
+    if (!slab || !isSlab(slab)) return this.say("Click a slab to cut a hole in.");
+    const [u, , v] = slabSpace(slab, hit.at);
+    const door = this.slab.mode === "door";
+    const [w, h] = door ? DOOR_FT : WINDOW_FT;
+    let [low, high] = [v - h / 2, v + h / 2];
+    if (door) {
+      // Up from the floor or ground under where it's clicked, or from its foot, cut as a notch.
+      // The higher either side of it, so a door in a room's wall starts at its floor.
+      const [x, y, z] = hit.at;
+      const foot = Math.min(...slab.outline.map((p) => p[1]));
+      const n = turnPoint([0, 1, 0], slab.turn);
+      const out = (slab.thickness + 0.5) / (Math.hypot(n[0], n[2]) || 1);
+      const under = Math.max(this.things.standAt(x + n[0] * out, z + n[2] * out, y), this.things.standAt(x - n[0] * out, z - n[2] * out, y));
+      low = slabSpace(slab, [x, under, z])[2];
+      high = low + h;
+      if (low - foot < 0.5) low = foot - 1;
+    }
+    const pieces = cutSlab(slab, [[u - w / 2, low], [u + w / 2, low], [u + w / 2, high], [u - w / 2, high]]);
+    if (!pieces.length || pieces.some((piece) => slabProblems(piece).length)) return this.say("That hole can't be cut there.");
+    this.placed.swap([slab], pieces);
   }
 
   // The slabs dragging from `a` to `b` would make.
@@ -410,6 +448,7 @@ export class Build {
       this.ghostOf = made;
       if (this.tool === "object") {
         const object = readyObject(makeObject(type, [0, 0], this.yaw, this.scale));
+        this.ghostObject = object;
         if (object) this.addGhost(objectMeshes([drawable(object, 0)], null, [0, 0]));
       } else {
         const template = this.library.template(type);
@@ -513,7 +552,7 @@ export class Build {
     this.library.used("templates", type);
     this.armed.template = type;
     $("templateName").value = "";
-    this.say?.(`Made the template "${name}".`);
+    this.say(`Made the template "${name}".`);
     this.showRecent();
   }
 }

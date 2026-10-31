@@ -1,6 +1,6 @@
 import { strFromU8, strToU8 } from "fflate";
 import { PLATE_FT } from "../v2/sizes.js";
-import { footprintOf, specOf } from "../world/objects.js";
+import { footprintOf, makeObject, specOf } from "../world/objects.js";
 import { slabHome } from "../world/slabs.js";
 
 // The objects and slabs placed by hand (docs/formats/placed.md), kept in a file for each plate
@@ -24,11 +24,24 @@ export const isSlab = (thing) => Array.isArray(thing.outline);
 export const homeOf = (thing) => (isSlab(thing) ? [slabHome(thing)[0], slabHome(thing)[2]] : thing.at);
 const plateKey = ([x, z]) => `${Math.floor(x / PLATE_FT)},${Math.floor(z / PLATE_FT)}`;
 
-// An object with its footprint and height worked out, or null for a type that isn't known.
+// Rolls 0 to 1, the same each time for the same (x, z).
+function rollAt([x, z]) {
+  let seed = (Math.round(x * 100) * 73856093) ^ (Math.round(z * 100) * 19349663);
+  return () => {
+    seed = (seed + 0x6d2b79f5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// An object with its footprint and height worked out, and a built-in kind without colors given
+// some, the same each time for where it is; or null for a type that isn't known.
 export function readyObject(object) {
   const spec = specOf(object.type);
   if (!spec) return null;
-  return { ...object, footprint: footprintOf(object.type, object.scale), height: spec.height * object.scale };
+  const colors = object.colors ?? (spec.built ? undefined : makeObject(object.type, object.at, object.yaw, object.scale, rollAt(object.at)).colors);
+  return { ...object, ...(colors ? { colors } : {}), footprint: footprintOf(object.type, object.scale), height: spec.height * object.scale };
 }
 
 // An object as the file keeps it.
@@ -116,6 +129,13 @@ export class Placed {
     if (!things.length) return;
     for (const thing of things) this.remove(thing);
     this.kept({ removed: things });
+  }
+
+  // Takes `before` away and places `after` in their stead, as one change.
+  swap(before, after) {
+    for (const thing of before) this.remove(thing);
+    for (const thing of after) this.add(thing);
+    this.kept({ added: after, removed: before });
   }
 
   // Changes `things` with change(thing), kept with the plates they're in after. Changes made
