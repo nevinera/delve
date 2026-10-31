@@ -1,6 +1,5 @@
-import { compress } from "zstdify/compress";
-import { decompress } from "zstdify/decompress";
 import { bytesToDigits, digit, digits, digitsToBytes, readDigits } from "./digits.js";
+import { unzip, zip } from "./zstd.js";
 
 // Heights in text world files (plate.js, platter.js), in quarter feet, as lines of base64 digits
 // (digits.js). A line is a format letter, its base (its lowest height, as 3 digits of the height
@@ -14,15 +13,12 @@ import { bytesToDigits, digit, digits, digitsToBytes, readDigits } from "./digit
 // - 3: three digits each, of the height plus 32,768 (anything).
 // A tile's 65×65 corners are kept either as a line for each of its 8×8 chunks (their own 8×8
 // corners) and one for its far edge, or where it spans under 1,024 ft, as its rows in d's form
-// zipped with zstd (encodeTile).
+// zipped with zstd (encodeTile, once zstd.js's writer is loaded).
 
 const OFFSET = 32768;
 const NEAR = 31; // the most a d height changes by in one digit
 const ONE = 64; // spans under this many quarter feet take a digit a height
 const TWO = 4096; // and under this, two
-// zstdify 1.4.0 throws on some inputs at some levels (2, 3 and 9 seen), so each is tried in turn
-// and what it makes is read back before it's kept.
-const ZSTD_LEVELS = [6, 4, 5];
 
 const CORNERS = 65;
 const CHUNK = 8;
@@ -108,24 +104,12 @@ export function encodeTile(heights) {
   return lines;
 }
 
-// `bytes` zipped with zstd, or null where no level zips them so they read back.
-function zip(bytes) {
-  for (const level of ZSTD_LEVELS) {
-    try {
-      const zipped = compress(bytes, { level, checksum: false, noDictId: true });
-      const back = decompress(zipped);
-      if (back.length === bytes.length && back.every((b, k) => b === bytes[k])) return zipped;
-    } catch {}
-  }
-  return null;
-}
-
 // Tile heights (feet) from its lines, as encodeTile writes them.
 export function decodeTile(lines) {
   const heights = new Float32Array(CORNERS * CORNERS);
   const [first] = lines;
   if (first.startsWith("h z ")) {
-    const text = new TextDecoder().decode(decompress(digitsToBytes(first.slice(4))));
+    const text = new TextDecoder().decode(unzip(digitsToBytes(first.slice(4))));
     const lo = readDigits(text, 0, 3) - OFFSET;
     // Each row as a d line over the base.
     let p = 4;

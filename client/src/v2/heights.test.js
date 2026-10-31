@@ -1,6 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { bytesToDigits, digitsToBytes } from "./digits.js";
 import { decodeLine, decodeTile, encodeLine, encodeTile } from "./heights.js";
+import { loadZipper } from "./zstd.js";
+
+beforeAll(() => loadZipper());
 
 const rows = (n, f) => Array.from({ length: n }, (_, k) => f(k));
 

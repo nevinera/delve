@@ -16,6 +16,8 @@ import { CORNERS, encodePlatter, indexIn, plateIndexIn, platterOf, platterPath }
 import { CELL_CORNERS, TILE_CELLS, encodePlate, platePath, tileIndexInPlate } from "../client/src/v2/plate.js";
 import { hash64, plateRendition } from "../client/src/v2/rendition.js";
 import { CELL_FT, CHUNK_FT, PLATE_TILES, PLATTER_PLATES, TILE_CHUNKS } from "../client/src/v2/sizes.js";
+import { loadZipper } from "../client/src/v2/zstd.js";
+await loadZipper();
 
 
 const [from, to] = process.argv.slice(2);

@@ -14,6 +14,8 @@ import { CORNERS, PLATTER_PATH, decodePlatter, encodePlatter, indexIn, plateInde
 import { hash64, plateRendition } from "../client/src/v2/rendition.js";
 import { CELL_FT, PLATE_TILES, PLATTER_PLATES, TILE_CHUNKS } from "../client/src/v2/sizes.js";
 import { AROUND, WATER_TYPES, WaterMap, bakeWater, dryWater, partWater, waterPath } from "../client/src/v2/water.js";
+import { loadZipper } from "../client/src/v2/zstd.js";
+await loadZipper();
 
 const FLAT_FT = 0.5; // ground this high or lower is taken as the sea's
 const SLOPE = 1 / 4; // ft down for each ft out, near the shore
@@ -229,5 +231,5 @@ for (const continent of continents) {
   }
   console.log(`${continent}: ${corners} corners of sea floor lowered, in ${moved.size} tiles, ${changedPlates.size} plates and ${changedPlatters.size} platters, in ${((Date.now() - started) / 1000).toFixed(1)} s`);
 }
-fs.writeFileSync(to, zipSync(Object.fromEntries([...files].map(([path, bytes]) => [path, [bytes, { level: 0 }]]))));
+fs.writeFileSync(to, zipSync(Object.fromEntries([...files].map(([path, bytes]) => [path, [bytes, { level: bytes[0] === 0x1f && bytes[1] === 0x8b ? 0 : 6 }]]))));
 console.log(`wrote ${to}`);

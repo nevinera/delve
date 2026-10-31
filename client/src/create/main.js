@@ -107,8 +107,8 @@ function readWorld(bytes, changes = new Map()) {
 }
 
 // Saves the world as a zip, with the files changed since it was opened, `changes` (path -> bytes,
-// null for gone), saved first by save(). Its files are gzipped already, so the zip stores them as
-// they are, zipped off the page's thread.
+// null for gone), saved first by save(). Files gzipped already are stored as they are, and the rest
+// (text plates and platters among them) deflated, zipped off the page's thread.
 async function download({ name, files }, changes, save) {
   await save();
   const out = new Map(files);
@@ -116,7 +116,7 @@ async function download({ name, files }, changes, save) {
     if (bytes) out.set(path, bytes);
     else out.delete(path);
   }
-  const zipped = await new Promise((resolve, reject) => zip(Object.fromEntries([...out].map(([path, bytes]) => [path, [bytes, { level: 0 }]])), (error, bytes) => (error ? reject(error) : resolve(bytes))));
+  const zipped = await new Promise((resolve, reject) => zip(Object.fromEntries([...out].map(([path, bytes]) => [path, [bytes, { level: bytes[0] === 0x1f && bytes[1] === 0x8b ? 0 : 6 }]])), (error, bytes) => (error ? reject(error) : resolve(bytes))));
   const link = document.createElement("a");
   link.href = URL.createObjectURL(new Blob([zipped], { type: "application/zip" }));
   link.download = `${name.replace(/[^\w-]+/g, "-").toLowerCase() || "world"}.zip`;

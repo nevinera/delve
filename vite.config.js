@@ -36,4 +36,6 @@ export default defineConfig(({command}) => ({
     },
   },
   worker: {format: "es"},
+  // zstd-wasm finds its .wasm beside itself, which pre-bundling would move it away from.
+  optimizeDeps: {exclude: ["@bokuweb/zstd-wasm"]},
 }));

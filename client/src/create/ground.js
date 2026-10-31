@@ -8,6 +8,7 @@ import { SHORE_FADE_FT, WATER_LOOKS } from "./waterSurface.js";
 import { PATTERNS, RUNNING, look, painted, slopeOf } from "../v2/look.js";
 import { makeSlots } from "../v2/slots.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate, platePath, tileIndexInPlate } from "../v2/plate.js";
+import { loadZipper } from "../v2/zstd.js";
 import { CORNERS, decodePlatter, encodePlatter, indexIn, plateIndexIn, platterOf, platterOfPlate, platterPath } from "../v2/platter.js";
 import { CELL_FT, CHUNK_CELLS, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_FT, PLATTER_PLATES, PLATTER_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
 import { CELLS, CHUNKS, TILES } from "./geo.js";
@@ -345,10 +346,12 @@ export class Renditions {
   // Writes a plate or platter file (`kind`) on the worker, or here where there are no workers.
   write(kind, value) {
     if (typeof Worker === "undefined") {
-      if (kind !== "plate") return Promise.resolve(encodePlatter(value));
-      const bytes = encodePlate(this.bake(value));
-      this.baked(value.coords, [...value.tiles].map(([index, tile]) => [index, tile.water]));
-      return Promise.resolve(bytes);
+      return loadZipper().then(() => {
+        if (kind !== "plate") return encodePlatter(value);
+        const bytes = encodePlate(this.bake(value));
+        this.baked(value.coords, [...value.tiles].map(([index, tile]) => [index, tile.water]));
+        return bytes;
+      });
     }
     this.startWorker();
     const id = this.writes.size ? Math.max(...this.writes.keys()) + 1 : 1;
