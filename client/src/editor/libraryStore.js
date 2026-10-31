@@ -47,10 +47,14 @@ const writeStore = (changes, clear = false) =>
 
 export class LibrarySync {
   // onRemote() hears that another tab changed the library, after it's pulled into the world.
-  constructor(world, onRemote) {
+  // read() and write(changes, clear) keep it somewhere other than the world editor's store, as
+  // readStore and writeStore do, telling other tabs on `channel`.
+  constructor(world, onRemote, { read = readStore, write = writeStore, channel = CHANNEL } = {}) {
     this.world = world;
+    this.read = read;
+    this.write = write;
     this.kept = new Map(); // path -> JSON text, as the store last had it
-    this.channel = new BroadcastChannel(CHANNEL);
+    this.channel = new BroadcastChannel(channel);
     this.channel.onmessage = async () => {
       if (await this.pull()) onRemote?.();
     };
@@ -66,14 +70,14 @@ export class LibrarySync {
   // Reads the store over the world's library, returning whether anything changed. A store that
   // never kept a library takes the world's instead, as the first time after an older editor.
   async pull() {
-    const stored = await readStore();
+    const stored = await this.read();
     if (!stored) {
-      await writeStore(this.current());
+      await this.write(this.current());
       this.kept = this.current();
       return false;
     }
     const before = this.current();
-    for (const path of before.keys()) if (!stored.has(path)) this.world.files.delete(path);
+    for (const path of before.keys()) if (!stored.has(path)) this.world.deleteFile ? this.world.deleteFile(path) : this.world.files.delete(path);
     for (const [path, text] of stored) if (before.get(path) !== text) this.world.writeJson(path, JSON.parse(text));
     this.kept = stored;
     return before.size !== stored.size || [...stored].some(([path, text]) => before.get(path) !== text);
@@ -86,7 +90,7 @@ export class LibrarySync {
     for (const [path, text] of now) if (this.kept.get(path) !== text) changes.set(path, text);
     for (const path of this.kept.keys()) if (!now.has(path)) changes.set(path, null);
     if (!changes.size) return;
-    await writeStore(changes);
+    await this.write(changes);
     this.kept = now;
     this.channel.postMessage("changed");
   }
@@ -95,7 +99,7 @@ export class LibrarySync {
   async replace(world) {
     this.world = world;
     this.kept = this.current();
-    await writeStore(this.kept, true);
+    await this.write(this.kept, true);
     this.channel.postMessage("changed");
   }
 }

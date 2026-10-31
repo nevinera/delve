@@ -2,7 +2,8 @@ import { gunzipSync } from "fflate";
 import { surfaceTiles } from "../editor/thumbnails.js";
 import { decodeTile } from "../world/tileCodec.js";
 
-// How many objects of the given types (a Set) are placed in a world, in every continent's tiles.
+// How many objects of the given types (a Set) are placed in a version 1 world, in every continent's
+// tiles: for the old editor.
 export function placedCount(world, types) {
   let count = 0;
   for (const { key: continent } of world.info.continents) {

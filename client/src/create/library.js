@@ -40,6 +40,14 @@ export class Library {
     this.files.set(path, strToU8(`${JSON.stringify(data, null, 2)}\n`));
     this.dirty.add(path);
     this.version++;
+    this.onChange?.();
+  }
+
+  deleteFile(path) {
+    this.files.delete(path);
+    this.dirty.add(path);
+    this.version++;
+    this.onChange?.();
   }
 
   // Makes the world's built objects known as types.

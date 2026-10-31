@@ -21,6 +21,8 @@ import { Tools } from "./tools.js";
 import { Library } from "./library.js";
 import { PLACED_PATH, Placed } from "./placed.js";
 import { pressesOver } from "./press.js";
+import { readLibrary, store, writeLibrary } from "./store.js";
+import { LibrarySync } from "../editor/libraryStore.js";
 import { Things } from "./things.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
@@ -42,43 +44,9 @@ const BUILDER_RADIUS_FT = 1; // how much room the builder takes, walking among t
 const STEP_FT = 2.5; // how far up the builder steps onto a slab
 const INFO_EVERY_MS = 100;
 
-// Kept in IndexedDB: the zip opened last ("world"), and the files changed since ("changes", path ->
-// bytes), saved a little after each change, so a reload opens the world as it was left.
+// The world's kept in IndexedDB (store.js): the zip opened last, and the files changed since, saved
+// a little after each change, so a reload opens the world as it was left.
 const SAVE_CHANGES_MS = 3000;
-const store = {
-  db: () =>
-    new Promise((resolve, reject) => {
-      const open = indexedDB.open("create", 1);
-      open.onupgradeneeded = () => open.result.createObjectStore("files");
-      open.onsuccess = () => resolve(open.result);
-      open.onerror = () => reject(open.error);
-    }),
-  async get(key) {
-    const db = await this.db();
-    return new Promise((resolve) => {
-      const req = db.transaction("files").objectStore("files").get(key);
-      req.onsuccess = () => resolve(req.result ?? null);
-      req.onerror = () => resolve(null);
-    });
-  },
-  async set(key, value) {
-    const db = await this.db();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction("files", "readwrite");
-      tx.objectStore("files").put(value, key);
-      tx.oncomplete = () => resolve();
-      tx.onerror = () => reject(tx.error);
-    });
-  },
-  async delete(key) {
-    const db = await this.db();
-    return new Promise((resolve) => {
-      const tx = db.transaction("files", "readwrite");
-      tx.objectStore("files").delete(key);
-      tx.oncomplete = tx.onerror = () => resolve();
-    });
-  },
-};
 
 // A v2 world's name, its files (path -> bytes) and its first continent's renditions, from the zip's
 // bytes, with `changes` (path -> bytes) in place of its own files.
@@ -129,7 +97,7 @@ async function download({ name, files }, changes, save) {
   setTimeout(() => URL.revokeObjectURL(link.href), 10000);
 }
 
-function start(world, changes) {
+function start(world, changes, fresh) {
   const { name, continent, renditions } = world;
   $("open").hidden = true;
   $("worldName").textContent = name;
@@ -165,6 +133,24 @@ function start(world, changes) {
   // What was copied last is kept in this browser for each world, not in its files.
   const clipboardKey = `clipboard:${name}`;
   library.keepClipboard = (template) => store.set(clipboardKey, template).catch(() => {});
+  // The library's kept in this browser apart from the rest of the world, where the objects page
+  // changes it too (editor/libraryStore.js): a world opened anew puts its library there, and one
+  // opened again takes what's there. Changes go there, and come from there.
+  const sync = new LibrarySync(
+    library,
+    () => {
+      library.register();
+      tools.build.showRecent();
+    },
+    { read: readLibrary, write: writeLibrary, channel: "delve3d-create-library" },
+  );
+  let pushing = null;
+  library.onChange = () => {
+    pushing ??= Promise.resolve().then(() => {
+      pushing = null;
+      return sync.push().catch(() => {});
+    });
+  };
   const placed = new Placed();
   for (const [path, bytes] of world.files) {
     const match = PLACED_PATH.exec(path);
@@ -310,6 +296,7 @@ function start(world, changes) {
     .get(clipboardKey)
     .then((template) => template && !library.clipboard && tools.build.setClipboard(template, false))
     .catch(() => {});
+  (fresh ? sync.replace(library) : sync.pull().then((changed) => changed && (library.register(), tools.build.showRecent()))).catch(() => {});
   window.create = { placed, things, library, ground, scatter, clutter, falls, surfaces, builder, tools, renderer, scene, camera, paused: false };
   const frame = (now) => {
     if (window.create.paused) return requestAnimationFrame(frame);
@@ -421,9 +408,9 @@ function start(world, changes) {
   requestAnimationFrame(frame);
 }
 
-async function open(bytes, changes = new Map()) {
+async function open(bytes, changes = new Map(), fresh = false) {
   try {
-    start(readWorld(bytes, changes), changes);
+    start(readWorld(bytes, changes), changes, fresh);
     showing = true;
     return true;
   } catch (e) {
@@ -445,15 +432,11 @@ $("openFile").addEventListener("change", async () => {
       $("openError").textContent = e.message;
       return;
     }
-    await store.set("world", bytes).catch(() => {});
-    await store.delete("changes");
+    await keepNew(bytes, true);
     window.location.reload();
     return;
   }
-  if (await open(bytes)) {
-    await store.set("world", bytes).catch(() => {});
-    await store.delete("changes");
-  }
+  if (await open(bytes, new Map(), true)) await keepNew(bytes);
 });
 // Starts an empty world in place of the one showing, after asking, since that's lost unless it's
 // been downloaded.
@@ -464,9 +447,10 @@ $("newWorld").addEventListener("click", async () => {
   try {
     localStorage.removeItem(`create:${info.name}:main`);
   } catch {}
-  await store.set("world", bytes).catch(() => {});
-  await store.delete("changes");
-  window.location.reload();
+  if (showing) {
+    await keepNew(bytes, true);
+    window.location.reload();
+  } else if (await open(bytes, new Map(), true)) await keepNew(bytes);
 });
 $("openWorld").addEventListener("click", () => {
   $("openError").textContent = "";
@@ -474,6 +458,16 @@ $("openWorld").addEventListener("click", () => {
   $("openFile").click();
 });
 
+// Keeps a world just opened or made, in place of the one kept, `fresh` for opening it on the
+// reload to come.
+async function keepNew(bytes, fresh = false) {
+  await store.set("world", bytes).catch(() => {});
+  await store.delete("changes");
+  if (fresh) await store.set("fresh", true).catch(() => {});
+}
+
 const kept = await store.get("world").catch(() => null);
 const changes = await store.get("changes").catch(() => null);
-if (!kept || !(await open(kept, changes ?? new Map()))) $("open").hidden = false;
+const fresh = !!(await store.get("fresh").catch(() => null));
+await store.delete("fresh");
+if (!kept || !(await open(kept, changes ?? new Map(), fresh))) $("open").hidden = false;
