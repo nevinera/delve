@@ -30,8 +30,9 @@ import { drawable, slabSpace } from "./things.js";
 //   corner, or Enter.
 //   Roof drags one eave, level, then the pointer sets where the other eave goes, and a click places
 //   it: a gable's ridge runs along the eaves, and a shed rises from the first.
-//   Door and window click a slab to cut a hole in it: a door up from the floor or ground under
-//   where it's clicked, a window round where it's clicked.
+//   Door and window drag a hole's corners across a slab, cut when let go: a window as dragged, a
+//   door as wide and as tall as dragged, up from the floor or ground under it. A click cuts one of
+//   the size set, round where it's clicked.
 // - stairs: dragging draws a flight's bottom edge on the ground or a slab, level, then its top edge
 //   goes to where the pointer meets a slab or the ground, and a click places it. The sliders set
 //   its width, run and height instead, where there's nothing to point at.
@@ -135,6 +136,7 @@ export class Build {
     this.gridLines = new THREE.Group();
     scene.add(this.gridLines);
     for (const id of ["buildGrid", "buildGridFt"]) $(id).addEventListener("input", () => this.readGrid());
+    this.readGrid(); // the browser may keep the settings from before a reload
     this.tool = null;
     this.armed = { object: null, template: null }; // the type picked of each
     this.yaw = 0; // radians, objects' and templates' turn
@@ -151,6 +153,8 @@ export class Build {
     // A roof being drawn: one eave from a to b ([x, y, z]), being dragged ("edge"), then the other
     // eave `across` feet to the right of it, looking from a to b, following the pointer ("depth").
     this.roofing = null;
+    // A door or window being dragged: { slab, run, h (the face's), a, b ([u, v] corners) }.
+    this.holing = null;
     this.moving = null; // picked things being dragged: { y, last: [x, z], moved }
     this.box = null; // a box being dragged to pick in: { x0, y0, x1, y1, add }
     this.ghost = new THREE.Group();
@@ -204,7 +208,7 @@ export class Build {
     for (const button of modes) {
       button.addEventListener("click", () => {
         this.slab.mode = button.dataset.slabMode;
-        this.outlining = this.roofing = null;
+        this.outlining = this.roofing = this.holing = null;
         this.clearGhost();
         modes.forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
         this.showSlab();
@@ -226,8 +230,8 @@ export class Build {
 
   // Drops the slab, stairs or ramp being drawn, keeping the tool. Gives whether there was one.
   cancel() {
-    if (!(this.drawing || this.outlining || this.stair || this.ramp || this.roofing)) return false;
-    this.drawing = this.outlining = this.stair = this.ramp = this.roofing = null;
+    if (!(this.drawing || this.outlining || this.stair || this.ramp || this.roofing || this.holing)) return false;
+    this.drawing = this.outlining = this.stair = this.ramp = this.roofing = this.holing = null;
     this.say("");
     this.clearGhost();
     this.showStair();
@@ -238,7 +242,7 @@ export class Build {
   setTool(tool) {
     this.tool = tool;
     this.say("");
-    this.drawing = this.moving = this.box = this.outlining = this.stair = this.ramp = this.roofing = null;
+    this.drawing = this.moving = this.box = this.outlining = this.stair = this.ramp = this.roofing = this.holing = null;
     this.snapMark.visible = false;
     this.mover.detach();
     this.turner.detach();
@@ -406,7 +410,7 @@ export class Build {
     const hit = this.hit();
     if (this.tool === "object" && hit && this.armed.object) return this.placeObject(hit);
     if (this.tool === "template" && hit && this.armed.template) return this.placeTemplate(hit);
-    if (this.tool === "slab" && (this.slab.mode === "door" || this.slab.mode === "window")) return this.cut(hit);
+    if (this.tool === "slab" && (this.slab.mode === "door" || this.slab.mode === "window")) return this.holeDown(hit);
     if (this.tool === "slab" && this.slab.mode === "polygon") return this.outline(hit);
     if (this.tool === "slab" && this.slab.mode === "roof") return this.roofDown(hit);
     if (this.tool === "stairs") return this.stairDown(hit);
@@ -446,12 +450,13 @@ export class Build {
     // Where a slab or stairs would start snaps, shown before it's started.
     const starting = (this.tool === "slab" && !["door", "window"].includes(this.slab.mode) && !this.drawing && !this.outlining && !this.roofing) || (this.tool === "stairs" && !this.stair) || (this.tool === "ramp" && (!this.ramp || this.ramp.phase === "top"));
     this.hover = this.hit();
-    if (!(this.drawing || this.outlining || this.stair || this.ramp || this.roofing)) this.gridRun = this.runUnder(this.hover);
+    if (!(this.drawing || this.outlining || this.stair || this.ramp || this.roofing || this.holing)) this.gridRun = this.runUnder(this.hover);
     if (starting) this.snap(this.hover?.at ?? null);
     if (this.outlining) this.showOutline();
     if (this.stair) this.stairMove();
     if (this.ramp && this.ramp.phase !== "top") this.rampMove();
     if (this.roofing) this.roofMove();
+    if (this.holing) this.holeMove();
     if (this.drawing) {
       const b = this.snap(this.onLevel(this.drawing.a[1]), true);
       if (b) this.drawing.pieces = this.pieces(this.drawing.a, b, this.drawing.yaw);
@@ -476,6 +481,7 @@ export class Build {
   }
 
   up() {
+    if (this.holing) this.cutHole();
     if (this.ramp) this.rampUp();
     if (this.roofing?.phase === "edge") {
       const { a, b } = this.roofing;
@@ -622,45 +628,95 @@ export class Build {
   }
 
   // Cuts a door or window in the slab hit.
-  cut(hit) {
+  // Starts a door or window where `hit` is on a slab: dragging sets its shape, in the plane of the
+  // face toward the camera.
+  holeDown(hit) {
     const slab = hit?.thing;
     if (!slab || !isSlab(slab)) return this.say("Click a slab to cut a hole in.");
     if (slab.kind) return this.say("Holes can't be cut in stairs.");
-    // The hole's cut through every piece of the run it's on that it reaches, in the frame of the
-    // piece clicked, its middle on the grid when that's on.
     const run = this.runOf(slab);
-    let [u, , v] = slabSpace(slab, hit.at);
-    if (this.grid.on && !this.free) [u, v] = snapInRun(run.box, [u, v], this.grid.ft);
+    const h = this.cameraSide(run) ? 0 : -slab.thickness;
+    const [u, , v] = slabSpace(slab, hit.at);
+    const a = this.holeSnap(run, [u, v]);
+    this.holing = { slab, run, h, a, b: a };
+    this.say("");
+    this.showHole();
+  }
+
+  // [u, v] on the grid, when it's on.
+  holeSnap(run, uv) {
+    return this.grid.on && !this.free ? snapInRun(run.box, uv, this.grid.ft) : uv;
+  }
+
+  // The pointer moved: the hole's far corner follows it across the face.
+  holeMove() {
+    const { slab, run, h } = this.holing;
+    const plane = new THREE.Plane().setFromCoplanarPoints(...[[0, 0], [1, 0], [0, 1]].map(([u, v]) => new THREE.Vector3(...runPoint(run, [u, h, v]))));
+    const at = this.ray()?.ray.intersectPlane(plane, new THREE.Vector3());
+    if (!at) return;
+    const [u, , v] = slabSpace(slab, at.toArray());
+    this.holing.b = this.holeSnap(run, [u, v]);
+    this.showHole();
+  }
+
+  // The hole being dragged, [[u, v] x4] in its slab's frame: a window as dragged, or the size set
+  // round where it was clicked; a door as wide as dragged, up to the higher corner, or the size
+  // set, from the floor or ground under it, or from the wall's foot as a notch.
+  holeNow() {
+    const { slab, run, a, b } = this.holing;
     const door = this.slab.mode === "door";
     const [w, h] = door ? DOOR_FT : WINDOW_FT;
-    let [low, high] = [v - h / 2, v + h / 2];
+    const dragged = Math.abs(b[0] - a[0]) >= 0.5 && (door || Math.abs(b[1] - a[1]) >= 0.5);
+    let [u0, u1] = dragged ? [Math.min(a[0], b[0]), Math.max(a[0], b[0])] : [a[0] - w / 2, a[0] + w / 2];
+    let [low, high] = dragged ? [Math.min(a[1], b[1]), Math.max(a[1], b[1])] : [a[1] - h / 2, a[1] + h / 2];
     if (door) {
-      // Up from the floor or ground under where it's clicked, or from its foot, cut as a notch.
-      // The higher either side of it, so a door in a room's wall starts at its floor.
-      const [x, y, z] = runPoint(run, [u, 0, v]);
-      const foot = run.box[1];
+      // The higher of the floor or ground either side of it, so a door in a room's wall starts at
+      // its floor.
+      const [x, y, z] = runPoint(run, [(u0 + u1) / 2, 0, Math.min(a[1], b[1])]);
       const n = turnPoint([0, 1, 0], slab.turn);
       const out = (slab.thickness + 0.5) / (Math.hypot(n[0], n[2]) || 1);
       const under = Math.max(this.things.standAt(x + n[0] * out, z + n[2] * out, y), this.things.standAt(x - n[0] * out, z - n[2] * out, y));
       low = slabSpace(slab, [x, under, z])[2];
-      high = low + h;
-      if (low - foot < 0.5) low = foot - 1;
+      high = dragged ? Math.max(a[1], b[1]) : low + h;
+      if (low - run.box[1] < 0.5) low = run.box[1] - 1;
     }
-    const hole = [[u - w / 2, low], [u + w / 2, low], [u + w / 2, high], [u - w / 2, high]];
+    return [[u0, low], [u1, low], [u1, high], [u0, high]];
+  }
+
+  // The hole being dragged, outlined on the face.
+  showHole() {
+    this.clearGhost();
+    if (!this.holing) return;
+    const { run, h } = this.holing;
+    const side = h === 0 ? 0.06 : h - 0.06;
+    const ring = this.holeNow().map(([u, v]) => new THREE.Vector3(...runPoint(run, [u, side, v])));
+    const line = new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(ring), new THREE.LineBasicMaterial({ color: 0xffe080, depthTest: false }));
+    line.renderOrder = 6;
+    this.ghost.add(line);
+  }
+
+  // Cuts the hole dragged through every piece of the run it reaches.
+  cutHole() {
+    const { slab, run } = this.holing;
+    const hole = this.holeNow();
+    this.holing = null;
+    this.clearGhost();
+    const [[u0, low], , [u1, high]] = hole;
+    if (high - low < 0.5 || u1 - u0 < 0.5) return this.say("That hole's too small.");
     const cut = [];
     const made = [];
     for (const piece of run.slabs) {
       const [ou, , ov] = unturned(slab, piece.at);
-      const local = hole.map(([a, b]) => [a - ou, b - ov]);
       const us = piece.outline.map((p) => p[0]);
       const vs = piece.outline.map((p) => p[1]);
-      if (u + w / 2 - ou <= Math.min(...us) || u - w / 2 - ou >= Math.max(...us) || high - ov <= Math.min(...vs) || low - ov >= Math.max(...vs)) continue;
+      if (u1 - ou <= Math.min(...us) || u0 - ou >= Math.max(...us) || high - ov <= Math.min(...vs) || low - ov >= Math.max(...vs)) continue;
       cut.push(piece);
-      made.push(...cutSlab(piece, local));
+      made.push(...cutSlab(piece, hole.map(([u, v]) => [u - ou, v - ov])));
     }
     if (!cut.length || made.some((piece) => slabProblems(piece).length)) return this.say("That hole can't be cut there.");
     this.placed.swap(cut, made);
   }
+
 
   // The slabs dragging from `a` to `b` would make.
   pieces(a, b, yaw) {
@@ -903,6 +959,8 @@ export class Build {
     // A roof being drawn: one eave from a to b ([x, y, z]), being dragged ("edge"), then the other
     // eave `across` feet to the right of it, looking from a to b, following the pointer ("depth").
     this.roofing = null;
+    // A door or window being dragged: { slab, run, h (the face's), a, b ([u, v] corners) }.
+    this.holing = null;
     this.say("");
     this.showStair();
   }
@@ -968,6 +1026,8 @@ export class Build {
     if (pieces.some((slab) => slabProblems(slab).length)) return this.say("That roof can't be made: it's too big.");
     this.placed.put(pieces);
     this.roofing = null;
+    // A door or window being dragged: { slab, run, h (the face's), a, b ([u, v] corners) }.
+    this.holing = null;
     this.say("");
     this.showRoof();
   }
@@ -1019,6 +1079,8 @@ export class Build {
     // A roof being drawn: one eave from a to b ([x, y, z]), being dragged ("edge"), then the other
     // eave `across` feet to the right of it, looking from a to b, following the pointer ("depth").
     this.roofing = null;
+    // A door or window being dragged: { slab, run, h (the face's), a, b ([u, v] corners) }.
+    this.holing = null;
       this.say("");
     }
     this.showRamp();
@@ -1052,7 +1114,7 @@ export class Build {
   tick() {
     this.placeHandles();
     this.showGrid();
-    if (this.drawing || this.outlining || this.stair || this.ramp || this.roofing) return;
+    if (this.drawing || this.outlining || this.stair || this.ramp || this.roofing || this.holing) return;
     const type = this.tool === "object" ? this.armed.object : this.tool === "template" ? this.armed.template : null;
     const hit = type && this.hit();
     if (!hit) {
