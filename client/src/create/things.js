@@ -24,7 +24,7 @@ const NEAR_FT = 64; // how far round a walker slabs are looked at
 export const drawable = (object, y) => ({ ...object, y, owner: object });
 
 export class Things {
-  // groundAt(x, z): the ground's height.
+  // groundAt(x, z, under): the ground's height, or a cave's floor, no higher than `under`.
   constructor(scene, placed, groundAt) {
     Object.assign(this, { placed, groundAt });
     this.group = new THREE.Group();
@@ -41,7 +41,7 @@ export class Things {
   // The height something without its own stands at at (x, z): the highest slab top there no
   // higher than `under`, or the ground.
   standAt(x, z, under = Infinity, slabs = this.placed.near(x, z, NEAR_FT).slabs) {
-    let y = this.groundAt(x, z);
+    let y = this.groundAt(x, z, under);
     for (const slab of slabs) for (const top of slabFootholds(slab, x, z, STEEPEST)) if (top <= under && top > y) y = top;
     return y;
   }

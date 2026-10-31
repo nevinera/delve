@@ -26,6 +26,7 @@ import { LibrarySync } from "../editor/libraryStore.js";
 import { Things } from "./things.js";
 import { GithubAuthError, GithubClient } from "../github/github.js";
 import { BranchMoved, fromRepo, loadRepo, nextVersion, recordOpened, repoChanges, sameRepo, saveRepo } from "./repo.js";
+import { CAVES_PATH, Caves } from "./caves.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
 // The world comes from a zip you upload (script/convert-v2.mjs makes one from a v1 world) or a
@@ -43,7 +44,8 @@ const SAVE_EVERY_MS = 2000;
 const SEA_BELOW_FT = 2;
 const HUD_EVERY_MS = 250;
 const BUILDER_RADIUS_FT = 1; // how much room the builder takes, walking among trees and objects
-const STEP_FT = 2.5; // how far up the builder steps onto a slab
+const STEP_FT = 2.5; // how far up the builder steps onto a slab, or a cave's floor
+const HEAD_FT = 6; // how tall the builder is, for cave rock in the way
 const INFO_EVERY_MS = 100;
 
 // The world's kept in IndexedDB (store.js): the zip opened last, or the files of the repo's commit
@@ -165,7 +167,13 @@ function start(world, changes, fresh) {
     const match = PLACED_PATH.exec(path);
     if (match?.[1] === continent) placed.load([Number(match[2]), Number(match[3])], bytes);
   }
-  const things = new Things(scene, placed, groundAt);
+  // The caves dug by hand: the builder stands on their floors, and the ground at their mouths is
+  // theirs to draw.
+  const caves = new Caves(scene, renditions);
+  for (const [path, bytes] of world.files) if (CAVES_PATH.exec(path)?.[1] === continent) caves.load(bytes);
+  ground.holes = (tx, tz) => caves.holes(tx, tz);
+  caves.onMouths = (plates) => ground.refresh(plates);
+  const things = new Things(scene, placed, (x, z, under) => caves.groundAt(x, z, under));
   // Level slabs press the ground down under them (press.js).
   renditions.pressesOver = (tx, tz) => pressesOver(placed.near((tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT, TILE_FT).slabs, tx, tz);
   let pressedVersion = placed.version;
@@ -185,9 +193,21 @@ function start(world, changes, fresh) {
   let builder = null;
   const feetY = () => builder?.state.y ?? saved?.y ?? 0;
   const walkAt = (x, z) => things.standAt(x, z, feetY() + STEP_FT);
-  const push = (x, z) => things.pushOut(...scatter.pushOut(x, z, BUILDER_RADIUS_FT), feetY(), BUILDER_RADIUS_FT);
-  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push });
-  const tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library });
+  // Cave rock's in the way where it's between a step up and the builder's head, going only across
+  // or only along where it's in the way of both.
+  const rockAt = (x, z) => {
+    const y = feetY();
+    return [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => caves.inRock(x + dx * BUILDER_RADIUS_FT, z + dz * BUILDER_RADIUS_FT, y + STEP_FT, y + HEAD_FT));
+  };
+  const push = (x, z) => {
+    const [a, b] = things.pushOut(...scatter.pushOut(x, z, BUILDER_RADIUS_FT), feetY(), BUILDER_RADIUS_FT);
+    if (!builder || !rockAt(a, b)) return [a, b];
+    const { x: x0, z: z0 } = builder.state;
+    return [[a, z0], [x0, b]].find(([u, v]) => !rockAt(u, v)) ?? [x0, z0];
+  };
+  const clear = (head, at) => caves.clear(head, at);
+  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push, clear });
+  const tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves });
   // The bottom bar's display toggles.
   $("showGrid").checked = grid.value === 1;
   $("showGrid").addEventListener("change", () => (grid.value = $("showGrid").checked ? 1 : 0));
@@ -251,7 +271,7 @@ function start(world, changes, fresh) {
   let lastSave = 0;
   let lastHud = 0;
   let [saving, lastChangeSave, marksSaved, biomesSaved, waterSaved] = [null, 0, 0, 0, "0,0"];
-  const unsaved = () => renditions.unsaved.size || placed.changed.size || library.dirty.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || waterVersion() !== waterSaved;
+  const unsaved = () => renditions.unsaved.size || placed.changed.size || library.dirty.size || caves.changed.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || waterVersion() !== waterSaved;
   // Saves what's changed into `changes`, writing files on the worker: once what's being saved is,
   // where something is.
   const save = async () => {
@@ -261,7 +281,7 @@ function start(world, changes, fresh) {
     saving = renditions
       .unsavedFiles(continent)
       .then(async (files) => {
-        for (const [path, bytes] of [...files, ...placed.unsavedFiles(continent), ...library.unsavedFiles()]) changes.set(path, bytes);
+        for (const [path, bytes] of [...files, ...placed.unsavedFiles(continent), ...caves.unsavedFiles(continent), ...library.unsavedFiles()]) changes.set(path, bytes);
         changes.set(planningPath(continent), strToU8(`${JSON.stringify(tools.marks.toJSON())}\n`));
         changes.set(biomesPath(continent), strToU8(`${JSON.stringify(tools.biomes.toJSON())}\n`));
         changes.set(waterPath(continent), strToU8(`${JSON.stringify(waterFile())}\n`));
@@ -327,7 +347,7 @@ function start(world, changes, fresh) {
     .then((template) => template && !library.clipboard && tools.build.setClipboard(template, false))
     .catch(() => {});
   (fresh ? sync.replace(library) : sync.pull().then((changed) => changed && (library.register(), tools.build.showRecent()))).catch(() => {});
-  window.create = { placed, things, library, ground, scatter, clutter, falls, surfaces, builder, tools, renderer, scene, camera, paused: false };
+  window.create = { placed, things, library, caves, ground, scatter, clutter, falls, surfaces, builder, tools, renderer, scene, camera, paused: false };
   const frame = (now) => {
     if (window.create.paused) return requestAnimationFrame(frame);
     // At most FPS frames a second, with a little slack so a 60 Hz screen draws every other frame.
@@ -357,6 +377,7 @@ function start(world, changes, fresh) {
       timed("ground", () => ground.refresh(renditions.repress()));
     }
     timed("ground", () => things.tick(x, z));
+    timed("ground", () => caves.tick(x, z));
     timed("ground", () => surfaces.tick(dt, x, z, ground.finest <= FINE));
     // The ground drawn ends ground.reach across from the builder, so fog closes in there, as far
     // off as that is from the camera, high up too. High up, the camera's near plane's further

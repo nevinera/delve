@@ -10,6 +10,7 @@ import { Marks } from "./marks.js";
 import { scatterPools } from "./marsh.js";
 import { Measure } from "./measure.js";
 import { Build } from "./build.js";
+import { Dig } from "./dig.js";
 import { Paths } from "./paths.js";
 import { TITLE_MAX } from "./pins.js";
 import { STROKE_MAX_FT, Stroke } from "./stroke.js";
@@ -38,7 +39,8 @@ import { WaterBodies } from "./water.js";
 // - geo's brushes, raise and lower, flatten, smooth, noise and clear: dragging on the ground works
 //   them where the pointer is, and a ring on the ground shows where they reach. [ and ] resize
 //   them, and c and v turn raise and lower's, shift+c and shift+v a little.
-// - build's tools place objects, templates and slabs, and pick them to change (build.js).
+// - build's tools place objects, templates and slabs, and pick them to change (build.js), and
+//   dig caves (dig.js).
 // - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
 //   more each time the ring's moved its radius. Its undo takes back the last scattering.
 
@@ -89,7 +91,7 @@ function drawShape(canvas, shape) {
 }
 
 export class Tools {
-  constructor({ scene, camera, canvas, builder, renditions, ground, placed, things, library }) {
+  constructor({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves }) {
     Object.assign(this, { camera, canvas, builder, renditions, ground });
     this.tool = null;
     this.settings = { shape: "round", radius: 0, strength: 0, noise: 0, lower: false, angle: 0, grain: 0, craggy: false };
@@ -128,6 +130,7 @@ export class Tools {
       groundHit: () => this.hit(),
     });
     this.build.onPick = (tool) => this.tool !== tool && this.pick(tool);
+    this.dig = new Dig({ scene, caves, camera, ray: () => this.build.ray() });
     this.paths = new Paths(scene, canvas.parentElement, renditions, (x, z) => this.surface(x, z), (text) => ($("pathStatus").textContent = text));
     this.moving = null; // pins being dragged, { from, pins: [[pin, x, z]], before, moved }
     this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }
@@ -355,6 +358,10 @@ export class Tools {
         canvas.setPointerCapture(e.pointerId);
         return this.build.down(e);
       }
+      if (this.tool === "dig") {
+        canvas.setPointerCapture(e.pointerId);
+        return this.dig.press(e);
+      }
       if (this.tool === "pin") {
         const at = this.hit();
         if (at) this.clicked = { at };
@@ -411,6 +418,7 @@ export class Tools {
     canvas.addEventListener("pointerup", () => {
       this.stroke = null;
       if (BUILD.has(this.tool)) this.build.up();
+      if (this.dig.down) this.dig.letGo();
       if (this.clicked?.pin) this.openPin(this.clicked.pin);
       else if (this.clicked?.at) {
         const before = this.marks.toJSON();
@@ -442,6 +450,7 @@ export class Tools {
       if (e.target.matches?.("input, textarea, select") || e.target.closest?.(":popover-open")) return;
       const areas = this.outlined[this.tool];
       if (BUILD.has(this.tool) && this.build.key(e)) return e.preventDefault();
+      if (this.tool === "dig" && this.dig.key(e)) return e.preventDefault();
       if (e.key === "Escape" && areas?.draft) areas.drop();
       else if (e.key === "Escape") this.pick(null);
       else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "select") this.marks.deleteSelected();
@@ -776,6 +785,7 @@ export class Tools {
     this.draw.tick(this.camera, w, h);
     this.paths.tick(this.camera, w, h);
     if (BUILD.has(this.tool)) this.build.tick();
+    this.dig.tick(this.tool === "dig");
     for (const [tool, areas] of Object.entries(this.outlined)) {
       const to = this.tool === tool && areas.draft && this.hit();
       areas.tick(dt, this.camera, w, h, to ? [to[0], to[2]] : null, this.tool === tool);

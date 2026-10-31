@@ -1109,6 +1109,7 @@ export class Ground {
     this.counts = [0, 0, 0, 0]; // tiles drawn each way
     this.tint = null; // showing biomes, each biome's linear RGB, by index into BIOME_NAMES
     this.tints = 0; // counts changes to how ground's tinted, to tell tinted faces kept are stale
+    this.holes = null; // (tx, tz) => the cells of a tile not to draw in full, a Set of indices, or null
   }
 
   // Draws all but the ground in full tinted by biome, with `tint` (each biome's linear RGB), or
@@ -1430,15 +1431,23 @@ export class Ground {
   // ("tx,tz" -> mesh) when it's there.
   addFull(group, tx, tz, cells, ox, oz, before, heights) {
     const grid = cellGrid(cells, ox, oz, heights);
+    // Cells the caves draw are left out.
+    const holes = this.holes?.(tx, tz) ?? null;
+    const holesKey = holes ? [...holes].join(",") : "";
     const geometry = () => {
       const made = new THREE.BufferGeometry();
       for (const [name, values] of Object.entries(grid)) made.setAttribute(name, new THREE.BufferAttribute(values, 3));
-      made.setIndex(new THREE.BufferAttribute(SQUARES, 1));
+      made.setIndex(new THREE.BufferAttribute(holes ? SQUARES.filter((_, n) => !holes.has(Math.floor(n / 6))) : SQUARES, 1));
       return made;
     };
     const kept = before.get(`${tx},${tz}`);
     if (kept) {
       group.add(kept);
+      if (kept.userData.holes !== holesKey) {
+        kept.geometry.dispose();
+        kept.geometry = geometry();
+        kept.userData.holes = holesKey;
+      }
       // Moved ground, or ground that looks different: its new shape, and its patterns again.
       if (kept.userData.grid !== grid) {
         kept.geometry.dispose();
@@ -1452,6 +1461,7 @@ export class Ground {
     const mesh = this.add(group, geometry(), withGrid(groundMaterial(this.renderer, { tile: groundTile(tx, tz, cells), origin: [0, 0] }), CELL_FT), "full");
     mesh.userData.tile = `${tx},${tz}`;
     mesh.userData.grid = grid;
+    mesh.userData.holes = holesKey;
   }
 
   add(group, geometry, material, kind) {

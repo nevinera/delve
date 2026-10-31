@@ -167,10 +167,12 @@ export function cameraFor({ pitch, distance }, above) {
 export class Builder {
   // Starts at `state` (as moveBuilder takes it), or else on the ground at continent feet `at`.
   // landAt(x, z): the land's height, without what's built on it, for how fast flying goes and how
-  // the camera looks down (moveBuilder's).
-  constructor({ scene, camera, canvas, groundAt, landAt = groundAt, waterAt = () => null, at, state, push }) {
+  // the camera looks down (moveBuilder's). clear(head, at): where the camera can be, looking from
+  // `head` to `at`, kept out of rock.
+  constructor({ scene, camera, canvas, groundAt, landAt = groundAt, waterAt = () => null, at, state, push, clear = (head, to) => to }) {
     this.push = push;
     this.landAt = landAt;
+    this.clear = clear;
     this.waterAt = waterAt;
     this.camera = camera;
     this.canvas = canvas;
@@ -240,6 +242,7 @@ export class Builder {
     // Over the ground, and over the water but while swimming.
     const floor = (this.state.swimming ? (this.groundAt(at.x, at.z) ?? SEA_LEVEL_FT) : this.standAt(at.x, at.z)) + 2;
     if (at.y < floor) at.y = floor;
+    at.copy(this.clear(head, at));
     this.camera.position.copy(at);
     this.camera.lookAt(at.clone().sub(away));
   }
