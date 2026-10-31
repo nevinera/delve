@@ -13,6 +13,7 @@ import { CORNERS, decodePlatter, encodePlatter, indexIn, plateIndexIn, platterOf
 import { CELL_FT, CHUNK_CELLS, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_FT, PLATTER_PLATES, PLATTER_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
 import { CELLS, CHUNKS, TILES } from "./geo.js";
 import { withGrid } from "./grid.js";
+import { pressHeights, pressedCorners } from "./press.js";
 
 // The ground round the builder, a tile at a time, finer the nearer the tile is to the builder's:
 // - within FULL_TILES, drawn in full, smooth-shaded at cell scale with the patterns of its kinds of
@@ -84,6 +85,39 @@ export class Renditions {
     this.waters = new Map(); // "tx,tz" -> the tile's water as last baked, over what its plate file has
     this.wet = 0; // counts changes to tiles' water
     this.wetPlates = new Set(); // "px,pz" of plates whose renditions' water changed, to draw again
+    // What presses tile (tx, tz)'s ground down where it's drawn and walked on (press.js), as
+    // pressesOver() has it, or null for none; and a count of changes to that.
+    this.pressesOver = null;
+    this.pressings = 0;
+  }
+
+  // Tile (tx, tz)'s cell corners' heights as they're drawn and walked on: `cells.heights`, pressed
+  // down by slabs (press.js). Kept with the cells, the same array till what presses it changes.
+  pressedHeights(tx, tz, cells) {
+    if (!this.pressesOver) return cells.heights;
+    if (cells.press?.count === this.pressings) return cells.press.heights;
+    const presses = this.pressesOver(tx, tz);
+    const key = presses.length ? JSON.stringify(presses) : "";
+    if (cells.press?.key !== key) cells.press = { key, heights: pressHeights(cells.heights, pressedCorners(presses, tx, tz)) };
+    cells.press.count = this.pressings;
+    return cells.press.heights;
+  }
+
+  // After what presses the ground changes: the "px,pz" of plates read whose tiles are pressed
+  // differently now.
+  repress() {
+    this.pressings++;
+    const moved = new Set();
+    for (const [key, plate] of this.decoded) {
+      const [px, pz] = key.split(",").map(Number);
+      for (const [index, cells] of plate.tiles) {
+        if (!cells.press) continue;
+        const before = cells.press.heights;
+        const [tx, tz] = [px * PLATE_TILES + (index % PLATE_TILES), pz * PLATE_TILES + Math.floor(index / PLATE_TILES)];
+        if (this.pressedHeights(tx, tz, cells) !== before) moved.add(key);
+      }
+    }
+    return moved;
   }
 
   // Tile (tx, tz)'s cells' biomes, 64 × 64 indexes into BIOME_NAMES.
@@ -573,6 +607,7 @@ export class Renditions {
         if (cells) {
           delete cells.grid;
           delete cells.dressed;
+          delete cells.press;
         }
       }
     }
@@ -709,7 +744,7 @@ export class Renditions {
   heightAt(x, z) {
     const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
     const cells = this.decoded.get(`${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`)?.tiles.get(tileIndexInPlate(tx, tz));
-    if (cells) return between(cells.heights, CELL_CORNERS, (x - tx * TILE_FT) / CELL_FT, (z - tz * TILE_FT) / CELL_FT);
+    if (cells) return between(this.pressedHeights(tx, tz, cells), CELL_CORNERS, (x - tx * TILE_FT) / CELL_FT, (z - tz * TILE_FT) / CELL_FT);
     const tile = this.tile(tx, tz);
     return tile && between(tile.heights, CORNERS, (x - tx * TILE_FT) / CHUNK_FT, (z - tz * TILE_FT) / CHUNK_FT);
   }
@@ -951,14 +986,15 @@ const SIDES = [
 
 // A tile's cells as one grid of vertices on their corners, in feet from its plate's northwest
 // corner, the tile (ox, oz) feet from there, kept with the cells: each vertex the mean color of
-// the cells round it, with normals for smooth shading.
-function cellGrid(cells, ox, oz) {
-  if (cells.grid) return cells.grid;
+// the cells round it, with normals for smooth shading; at `heights`, the cells' own or pressed
+// (Renditions' pressedHeights).
+function cellGrid(cells, ox, oz, heights = cells.heights) {
+  if (cells.grid?.heights === heights) return cells.grid;
   const side = CELL_CORNERS;
   const positions = new Float32Array(side * side * 3);
   const colors = new Float32Array(side * side * 3);
   const normals = new Float32Array(side * side * 3);
-  const h = (i, j) => cells.heights[Math.max(0, Math.min(side - 1, j)) * side + Math.max(0, Math.min(side - 1, i))];
+  const h = (i, j) => heights[Math.max(0, Math.min(side - 1, j)) * side + Math.max(0, Math.min(side - 1, i))];
   for (let j = 0; j < side; j++) {
     for (let i = 0; i < side; i++) {
       const v = (j * side + i) * 3;
@@ -982,6 +1018,7 @@ function cellGrid(cells, ox, oz) {
     }
   }
   cells.grid = { position: positions, color: colors, normal: normals };
+  Object.defineProperty(cells.grid, "heights", { value: heights }); // not an attribute
   return cells.grid;
 }
 
@@ -1217,11 +1254,12 @@ export class Ground {
           };
         } else {
           [n, faces, depth] = [TILE_CELLS, near, CHUNK_FT * SKIRT];
-          height = (a, b) => cells.heights[b * CELL_CORNERS + a];
+          const heights = this.renditions.pressedHeights(tx, tz, cells);
+          height = (a, b) => heights[b * CELL_CORNERS + a];
           const biomes = tint && t === FINE && this.renditions.biomeTile(tx, tz);
           color = (a, b, shade) => Faces.tinted(near.rgb(cells.colors, (b * TILE_CELLS + a) * 3, shade), biomes && tint, biomes && biomes[b * TILE_CELLS + a]);
-          if (t === FINE) fine.push(biomes ? this.tintedGrid(cells, ox, oz, biomes) : cellGrid(cells, ox, oz));
-          else this.addFull(group, tx, tz, cells, ox, oz, before);
+          if (t === FINE) fine.push(biomes ? this.tintedGrid(cells, ox, oz, biomes, heights) : cellGrid(cells, ox, oz, heights));
+          else this.addFull(group, tx, tz, cells, ox, oz, before, heights);
         }
         const part = TILE_FT / n;
         const corner = (a, b) => [ox + a * part, height(a, b), oz + b * part];
@@ -1330,8 +1368,8 @@ export class Ground {
 
   // A tile's cell grid with its colors tinted by `biomes`, its cells' biomes, each corner by the
   // cells round it, kept with its cells till the tint changes.
-  tintedGrid(cells, ox, oz, biomes) {
-    const grid = cellGrid(cells, ox, oz);
+  tintedGrid(cells, ox, oz, biomes, heights) {
+    const grid = cellGrid(cells, ox, oz, heights);
     if (cells.tinted?.tints === this.tints && cells.tinted.grid === grid) return cells.tinted.tinted;
     const side = CELL_CORNERS;
     const color = new Float32Array(grid.color.length);
@@ -1357,8 +1395,8 @@ export class Ground {
 
   // A tile drawn in full into a plate's group, (ox, oz) feet into it: the mesh from `before`
   // ("tx,tz" -> mesh) when it's there.
-  addFull(group, tx, tz, cells, ox, oz, before) {
-    const grid = cellGrid(cells, ox, oz);
+  addFull(group, tx, tz, cells, ox, oz, before, heights) {
+    const grid = cellGrid(cells, ox, oz, heights);
     const geometry = () => {
       const made = new THREE.BufferGeometry();
       for (const [name, values] of Object.entries(grid)) made.setAttribute(name, new THREE.BufferAttribute(values, 3));

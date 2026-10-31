@@ -20,6 +20,7 @@ import { WaterSurfaces } from "./waterSurface.js";
 import { Tools } from "./tools.js";
 import { Library } from "./library.js";
 import { PLACED_PATH, Placed } from "./placed.js";
+import { pressesOver } from "./press.js";
 import { Things } from "./things.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
@@ -167,6 +168,9 @@ function start(world, changes) {
     if (match?.[1] === continent) placed.load([Number(match[2]), Number(match[3])], bytes);
   }
   const things = new Things(scene, placed, groundAt);
+  // Level slabs press the ground down under them (press.js).
+  renditions.pressesOver = (tx, tz) => pressesOver(placed.near((tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT, TILE_FT).slabs, tx, tz);
+  let pressedVersion = placed.version;
   const placeKey = `create:${name}:${continent}`;
   let saved = null;
   try {
@@ -324,6 +328,10 @@ function start(world, changes) {
     timed("ground", () => scatter.tick(dt, x, z, ground.finest <= FINE));
     timed("ground", () => clutter.tick(dt, x, z, ground.finest <= FINE));
     timed("ground", () => falls.tick(dt, x, z));
+    if (placed.version !== pressedVersion) {
+      pressedVersion = placed.version;
+      timed("ground", () => ground.refresh(renditions.repress()));
+    }
     timed("ground", () => things.tick(x, z));
     timed("ground", () => surfaces.tick(dt, x, z, ground.finest <= FINE));
     // The ground drawn ends ground.reach across from the builder, so fog closes in there, as far
