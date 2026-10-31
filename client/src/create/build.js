@@ -22,11 +22,13 @@ import { drawable, slabSpace } from "./things.js";
 //   meets the ground or a slab, at the size set, turned by C and V, or at random.
 // - template: places the template picked as copies of its slabs and objects, its anchor on the
 //   grid where the pointer is, at the ground's mean height under it, turned by C and V.
-// - slab: dragging draws a floor, a wall, a room (a floor with four walls on it, and a roof, if
-//   asked) or a roof, square to the way the camera looks. It starts on the ground or a slab, and
+// - slab: dragging draws a floor, a wall or a room (a floor with four walls on it, and a roof, if
+//   asked), square to the way the camera looks. It starts on the ground or a slab, and
 //   the rest lies level with where it started.
 //   Polygon clicks a floor's corners in turn, level with where it started, and closes on its first
 //   corner, or Enter.
+//   Roof drags one eave, level, then the pointer sets where the other eave goes, and a click places
+//   it: a gable's ridge runs along the eaves, and a shed rises from the first.
 //   Door and window click a slab to cut a hole in it: a door up from the floor or ground under
 //   where it's clicked, a window round where it's clicked.
 // - stairs: dragging draws a flight's bottom edge on the ground or a slab, level, then its top edge
@@ -127,6 +129,9 @@ export class Build {
     // A ramp being drawn: its bottom edge from a to b, being dragged ("base"), drawn ("top"), then
     // its top edge from c to d being dragged ("topping"), each [x, y, z].
     this.ramp = null;
+    // A roof being drawn: one eave from a to b ([x, y, z]), being dragged ("edge"), then the other
+    // eave `across` feet to the right of it, looking from a to b, following the pointer ("depth").
+    this.roofing = null;
     this.moving = null; // picked things being dragged: { y, last: [x, z], moved }
     this.box = null; // a box being dragged to pick in: { x0, y0, x1, y1, add }
     this.ghost = new THREE.Group();
@@ -180,7 +185,7 @@ export class Build {
     for (const button of modes) {
       button.addEventListener("click", () => {
         this.slab.mode = button.dataset.slabMode;
-        this.outlining = null;
+        this.outlining = this.roofing = null;
         this.clearGhost();
         modes.forEach((b) => b.setAttribute("aria-pressed", String(b === button)));
         this.showSlab();
@@ -202,8 +207,8 @@ export class Build {
 
   // Drops the slab, stairs or ramp being drawn, keeping the tool. Gives whether there was one.
   cancel() {
-    if (!(this.drawing || this.outlining || this.stair || this.ramp)) return false;
-    this.drawing = this.outlining = this.stair = this.ramp = null;
+    if (!(this.drawing || this.outlining || this.stair || this.ramp || this.roofing)) return false;
+    this.drawing = this.outlining = this.stair = this.ramp = this.roofing = null;
     this.say("");
     this.clearGhost();
     this.showStair();
@@ -214,7 +219,7 @@ export class Build {
   setTool(tool) {
     this.tool = tool;
     this.say("");
-    this.drawing = this.moving = this.box = this.outlining = this.stair = this.ramp = null;
+    this.drawing = this.moving = this.box = this.outlining = this.stair = this.ramp = this.roofing = null;
     this.snapMark.visible = false;
     this.mover.detach();
     this.turner.detach();
@@ -385,6 +390,7 @@ export class Build {
     if (this.tool === "template" && hit && this.armed.template) return this.placeTemplate(hit);
     if (this.tool === "slab" && (this.slab.mode === "door" || this.slab.mode === "window")) return this.cut(hit);
     if (this.tool === "slab" && this.slab.mode === "polygon") return this.outline(hit);
+    if (this.tool === "slab" && this.slab.mode === "roof") return this.roofDown(hit);
     if (this.tool === "stairs") return this.stairDown(hit);
     if (this.tool === "ramp") return this.rampDown(hit);
     if (this.tool === "slab" && hit) {
@@ -421,11 +427,12 @@ export class Build {
     this.free = e.shiftKey;
     this.turner.setRotationSnap(e.shiftKey ? null : THREE.MathUtils.degToRad(TURN_DEG));
     // Where a slab or stairs would start snaps, shown before it's started.
-    const starting = (this.tool === "slab" && !["door", "window"].includes(this.slab.mode) && !this.drawing && !this.outlining) || (this.tool === "stairs" && !this.stair) || (this.tool === "ramp" && (!this.ramp || this.ramp.phase === "top"));
+    const starting = (this.tool === "slab" && !["door", "window"].includes(this.slab.mode) && !this.drawing && !this.outlining && !this.roofing) || (this.tool === "stairs" && !this.stair) || (this.tool === "ramp" && (!this.ramp || this.ramp.phase === "top"));
     if (starting) this.snap(this.hit()?.at ?? null, false, this.tool === "slab" && this.slab.grid && this.slab.mode !== "roof");
     if (this.outlining) this.showOutline();
     if (this.stair) this.stairMove();
     if (this.ramp && this.ramp.phase !== "top") this.rampMove();
+    if (this.roofing) this.roofMove();
     if (this.drawing) {
       const b = this.snap(this.onLevel(this.drawing.a[1]), true, this.slab.grid && this.slab.mode !== "roof");
       if (b) this.drawing.pieces = this.pieces(this.drawing.a, b, this.drawing.yaw);
@@ -451,6 +458,12 @@ export class Build {
 
   up() {
     if (this.ramp) this.rampUp();
+    if (this.roofing?.phase === "edge") {
+      const { a, b } = this.roofing;
+      if (Math.hypot(b[0] - a[0], b[2] - a[2]) < 1) this.roofing = null;
+      else this.roofing.phase = "depth";
+      this.showRoof();
+    }
     if (this.stair?.phase === "base") {
       const { a, b } = this.stair;
       if (Math.hypot(b[0] - a[0], b[2] - a[2]) < 0.5) this.stair = null;
@@ -508,6 +521,10 @@ export class Build {
       return true;
     }
     if (e.key === "Escape") return this.cancel();
+    if (this.roofing?.phase === "depth" && e.key === "Enter") {
+      this.placeRoof();
+      return true;
+    }
     if (this.stair?.phase === "top" && e.key === "Enter") {
       this.placeStair();
       return true;
@@ -639,7 +656,7 @@ export class Build {
       return ways[overlaps[1] < overlaps[0] ? 1 : 0];
     }
     if (mode === "room") return roomPieces(flush, b, yaw, { height, thickness, surface, footUnder, roof: roomRoof ? roofing : undefined });
-    return roofPieces(a, b, yaw, { ...roofing, thickness, surface });
+    return [];
   }
 
   // How much of `pieces` (slabs) lies inside slabs already placed: how many of points spread
@@ -849,8 +866,76 @@ export class Build {
     // A ramp being drawn: its bottom edge from a to b, being dragged ("base"), drawn ("top"), then
     // its top edge from c to d being dragged ("topping"), each [x, y, z].
     this.ramp = null;
+    // A roof being drawn: one eave from a to b ([x, y, z]), being dragged ("edge"), then the other
+    // eave `across` feet to the right of it, looking from a to b, following the pointer ("depth").
+    this.roofing = null;
     this.say("");
     this.showStair();
+  }
+
+  // Starts a roof's first eave where `hit` is, or places the roof once its other eave's set.
+  roofDown(hit) {
+    if (this.roofing?.phase === "depth") return this.placeRoof();
+    if (!hit) return;
+    const a = this.snap(hit.at);
+    this.roofing = { phase: "edge", a, b: a, across: 0 };
+    this.showRoof();
+  }
+
+  // The pointer moved: the first eave being dragged follows it, level, or the other eave goes
+  // across to where it points, level with the first.
+  roofMove() {
+    const roofing = this.roofing;
+    const at = this.snap(this.onLevel(roofing.a[1]), true);
+    if (!at) return;
+    if (roofing.phase === "edge") roofing.b = at;
+    else {
+      const { a, b } = roofing;
+      const length = Math.hypot(b[0] - a[0], b[2] - a[2]);
+      roofing.across = ((at[0] - a[0]) * -(b[2] - a[2]) + (at[2] - a[2]) * (b[0] - a[0])) / length;
+    }
+    this.showRoof();
+  }
+
+  // The roof being drawn as slabs: a gable's ridge along the eaves, a shed rising from the first.
+  roofNow() {
+    const roofing = this.roofing;
+    if (roofing?.phase !== "depth" || Math.abs(roofing.across) < 1) return [];
+    const { a, b, across } = roofing;
+    const { roof, pitch, thickness, surface } = this.slab;
+    const [dx, dz] = [b[0] - a[0], b[2] - a[2]];
+    const length = Math.hypot(dx, dz);
+    const right = [-dz / length, dx / length];
+    const c = [b[0] + right[0] * across, a[1], b[2] + right[1] * across];
+    const yaw = (Math.atan2(-dz, dx) * 180) / Math.PI;
+    return roofPieces(a, c, yaw, { style: roof, pitch, overhang: 1, thickness, surface, ridge: 0, rising: right.map((v) => v * Math.sign(across)) });
+  }
+
+  // The roof being drawn: its first eave, then the roof, red where it can't be made.
+  showRoof() {
+    this.clearGhost();
+    const roofing = this.roofing;
+    if (!roofing) return;
+    const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints([roofing.a, roofing.b].map((p) => new THREE.Vector3(p[0], p[1] + 0.05, p[2]))), new THREE.LineBasicMaterial({ color: 0xffe080, depthTest: false }));
+    line.renderOrder = 6;
+    this.ghost.add(line);
+    const pieces = this.roofNow();
+    const wrong = pieces.some((slab) => slabProblems(slab).length);
+    for (const mesh of slabMeshes(pieces, [0, 0])) {
+      if (wrong) mesh.material = WRONG;
+      this.ghost.add(mesh);
+    }
+  }
+
+  // Makes the roof being drawn, if it can be.
+  placeRoof() {
+    const pieces = this.roofNow();
+    if (!pieces.length) return this.say("Move the pointer across from the first eave to where the other goes, then click.");
+    if (pieces.some((slab) => slabProblems(slab).length)) return this.say("That roof can't be made: it's too big.");
+    this.placed.put(pieces);
+    this.roofing = null;
+    this.say("");
+    this.showRoof();
   }
 
   // Starts a ramp's bottom edge where `hit` is, or its top edge once the bottom's drawn.
@@ -897,6 +982,9 @@ export class Build {
     else {
       this.placed.put([slab]);
       this.ramp = null;
+    // A roof being drawn: one eave from a to b ([x, y, z]), being dragged ("edge"), then the other
+    // eave `across` feet to the right of it, looking from a to b, following the pointer ("depth").
+    this.roofing = null;
       this.say("");
     }
     this.showRamp();
@@ -929,7 +1017,7 @@ export class Build {
   // Each frame: the thing armed follows the pointer.
   tick() {
     this.placeHandles();
-    if (this.drawing || this.outlining || this.stair || this.ramp) return;
+    if (this.drawing || this.outlining || this.stair || this.ramp || this.roofing) return;
     const type = this.tool === "object" ? this.armed.object : this.tool === "template" ? this.armed.template : null;
     const hit = type && this.hit();
     if (!hit) {
