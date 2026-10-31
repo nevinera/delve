@@ -44,7 +44,7 @@ body.create {
   grid-column: 1;
   grid-row: 2;
   display: grid;
-  grid-template-columns: 200px minmax(0, 1fr) auto;
+  grid-template-columns: 170px minmax(0, 1fr) max-content;
   overflow-y: auto;
   background: #22222a;
   border-top: 1px solid #44444e;
@@ -372,23 +372,36 @@ body.create {
   grid-column: 2;
   display: flex;
   align-items: flex-start;
-  gap: 20px;
-  padding: 8px 12px;
+  gap: 14px;
+  padding: 8px 10px;
   border-right: 1px solid #44444e;
   justify-self: start;
   max-width: 100%;
-  overflow-x: auto;
+  overflow: hidden;
+}
+
+/* Each part's values, in blocks of at most 5 rows, so they fit without scrolling. */
+.create-debug > div {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.create-debug .create-debug-head {
+  grid-column: 1 / -1;
+  color: #b8b2a4;
 }
 
 .create-debug[hidden],
-.create-debug dl[hidden] {
+.create-debug > div[hidden] {
   display: none;
 }
 
 /* Values in a column a fixed width, so the pane doesn't change width as they change. */
 .create-debug dl {
   display: grid;
-  grid-template-columns: max-content 10ch;
+  grid-template-columns: max-content 8ch;
+  align-content: start;
   gap: 4px 10px;
   margin: 0;
 }

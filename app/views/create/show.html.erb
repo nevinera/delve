@@ -288,29 +288,41 @@
     </dl>
   </section>
   <section class="create-debug" id="debug" aria-label="debug" hidden>
-    <dl data-debug="frame" hidden>
-      <dt>fps</dt><dd id="debugFps">-</dd>
-      <dt>slowest</dt><dd id="debugSlowest">-</dd>
-      <dt>moving</dt><dd id="debugMove">-</dd>
-      <dt>tools</dt><dd id="debugTool">-</dd>
-      <dt>ground</dt><dd id="debugGround">-</dd>
-      <dt>rendering</dt><dd id="debugRender">-</dd>
-      <dt>draws</dt><dd id="debugDraws">-</dd>
-    </dl>
-    <dl data-debug="ground" hidden>
-      <dt>tiles in full</dt><dd id="debugFull">-</dd>
-      <dt>at cell scale</dt><dd id="debugFine">-</dd>
-      <dt>coarse</dt><dd id="debugCoarse">-</dd>
-      <dt>from plates</dt><dd id="debugPlates">-</dd>
-      <dt>drawn out to</dt><dd id="debugReach">-</dd>
-      <dt>hiding</dt><dd id="debugHidden">-</dd>
-    </dl>
-    <dl data-debug="builder" hidden>
-      <dt>moving</dt><dd id="debugMoving">-</dd>
-      <dt>over ground</dt><dd id="debugAbove">-</dd>
-      <dt>tile</dt><dd id="debugTile">-</dd>
-      <dt>plate</dt><dd id="debugPlate">-</dd>
-    </dl>
+    <div data-debug="frame" hidden>
+      <dl>
+        <dt>fps</dt><dd id="debugFps">-</dd>
+        <dt>slowest</dt><dd id="debugSlowest">-</dd>
+        <dt>draws</dt><dd id="debugDraws">-</dd>
+      </dl>
+      <dl>
+        <dt class="create-debug-head" title="what the slowest frame spent its time on">slowest's</dt>
+        <dt>move</dt><dd id="debugMove">-</dd>
+        <dt>tools</dt><dd id="debugTool">-</dd>
+        <dt>ground</dt><dd id="debugGround">-</dd>
+        <dt>render</dt><dd id="debugRender">-</dd>
+      </dl>
+    </div>
+    <div data-debug="ground" hidden>
+      <dl>
+        <dt class="create-debug-head">tiles drawn</dt>
+        <dt title="in full">full</dt><dd id="debugFull">-</dd>
+        <dt title="flat-shaded at cell scale">cells</dt><dd id="debugFine">-</dd>
+        <dt title="from their renditions, a part a chunk">coarse</dt><dd id="debugCoarse">-</dd>
+        <dt title="from their plates' renditions">plates</dt><dd id="debugPlates">-</dd>
+      </dl>
+      <dl>
+        <dt title="how far off ground's drawn">reach</dt><dd id="debugReach">-</dd>
+        <dt>hiding</dt><dd id="debugHidden">-</dd>
+      </dl>
+    </div>
+    <div data-debug="builder" hidden>
+      <dl>
+        <dt>moving</dt><dd id="debugMoving">-</dd>
+        <dt title="over the ground">up</dt><dd id="debugAbove">-</dd>
+        <dt>tile</dt><dd id="debugTile">-</dd>
+        <dt>plate</dt><dd id="debugPlate">-</dd>
+      </dl>
+    </div>
   </section>
   <section class="create-show" aria-label="show">
     <fieldset>
