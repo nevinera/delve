@@ -33,7 +33,8 @@ import { drawable, slabSpace } from "./things.js";
 //   its width, run and height instead, where there's nothing to point at.
 // - ramp: dragging draws a ramp's bottom edge, level unless it snaps, then dragging again draws its
 //   top edge: where that starts makes the ramp's plane, and where it ends is kept in it. Any four
-//   corners in a plane make a ramp, so it can be a parallelogram or narrow.
+//   corners in a plane make a ramp, so it can be a parallelogram or narrow, but none steeper than
+//   can be walked up.
 // - pick: clicking an object or slab picks it out, shift picks more or fewer, and dragging a box
 //   picks those in it. Dragging picked things moves them, C and V turn them about their middle,
 //   the up and down arrows raise and lower them, and Delete deletes them. What's picked can be
@@ -819,12 +820,12 @@ export class Build {
     ramp.phase = "top";
     if (length(ramp.c, ramp.d) < 0.5) this.say("Drag the top edge, from one end to the other.");
     else if (!slab) this.say("That ramp can't be made: it stands upright, or its corners are in a line.");
+    else if (tilt(slab) > MAX_STAIR_DEG) this.say(`That ramp is ${Math.round(tilt(slab))}°, too steep to walk up: ${MAX_STAIR_DEG}° at most.`);
     else if (slabProblems(slab).length) this.say(slabProblems(slab)[0].includes("reaches") ? "That ramp is too big: it reaches at most 64 ft from its first corner." : `That ramp can't be made: it ${slabProblems(slab)[0]}.`);
     else {
       this.placed.put([slab]);
       this.ramp = null;
-      const steep = (Math.acos(Math.min(1, turnPoint([0, 1, 0], slab.turn)[1])) * 180) / Math.PI;
-      this.say(steep > MAX_STAIR_DEG ? `That ramp is ${Math.round(steep)}°, too steep to walk up.` : "");
+      this.say("");
     }
     this.showRamp();
   }
@@ -836,7 +837,7 @@ export class Build {
     return rampSlab(ramp.a, ramp.b, ramp.c, ramp.d, { thickness: Math.max(0.1, Math.min(16, Number($("rampThickness").value) || 1)), surface: pickedSurface($("rampSurface")) });
   }
 
-  // The ramp being drawn: its bottom edge, then the ramp, red where it can't be made.
+  // The ramp being drawn: its bottom edge, then the ramp, red where it can't be made or walked.
   showRamp() {
     this.clearGhost();
     const ramp = this.ramp;
@@ -846,7 +847,7 @@ export class Build {
     this.ghost.add(line);
     const slab = this.rampNow();
     if (!slab) return;
-    const wrong = slabProblems(slab).length > 0;
+    const wrong = slabProblems(slab).length > 0 || tilt(slab) > MAX_STAIR_DEG;
     for (const mesh of slabMeshes([slab], [0, 0])) {
       if (wrong) mesh.material = WRONG;
       this.ghost.add(mesh);
@@ -1117,3 +1118,8 @@ function shift(thing, dx, dz, dy, y) {
 }
 
 const middleOf = (points) => [points.reduce((s, p) => s + p[0], 0) / points.length, points.reduce((s, p) => s + (p.length === 3 ? p[2] : p[1]), 0) / points.length];
+
+// How far a slab's face tilts from level, degrees.
+function tilt(slab) {
+  return (Math.acos(Math.min(1, Math.abs(turnPoint([0, 1, 0], slab.turn)[1]))) * 180) / Math.PI;
+}
