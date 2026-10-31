@@ -33,7 +33,8 @@ export class Clutter {
     if (!r.hasCells(tx, tz)) return null;
     const cells = r.cells(tx, tz);
     if (!cells?.colors) return null;
-    if (cells.cluttered?.colors === cells.colors && cells.cluttered.water === cells.water) return cells.cluttered;
+    const covered = r.coveredCells(tx, tz, cells);
+    if (cells.cluttered?.colors === cells.colors && cells.cluttered.water === cells.water && cells.cluttered.covered === covered) return cells.cluttered;
     const [near, runs] = r.nearWater(tx, tz, cells.water);
     const biomes = r.biomeTile(tx, tz);
     const h = cells.heights;
@@ -55,7 +56,10 @@ export class Clutter {
       },
       (x, z) => r.heightAt(x, z) ?? 0,
     );
-    cells.cluttered = { instances, colors: cells.colors, water: cells.water, id: (Clutter.ids = (Clutter.ids ?? 0) + 1) };
+    // Nothing grows under slabs.
+    const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];
+    const open = ({ x, z }) => !covered.has(Math.floor((z - z0) / CELL_FT) * CELLS + Math.floor((x - x0) / CELL_FT));
+    cells.cluttered = { instances: covered.size ? instances.filter(open) : instances, colors: cells.colors, water: cells.water, covered, id: (Clutter.ids = (Clutter.ids ?? 0) + 1) };
     return cells.cluttered;
   }
 

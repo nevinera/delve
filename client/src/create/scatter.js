@@ -6,7 +6,8 @@ import { boulders, courseBox } from "../v2/courses.js";
 import { fillSlots } from "../v2/fill.js";
 import { makeObject } from "../world/objects.js";
 import { RUNNING, slopeOf } from "../v2/look.js";
-import { TILE_FT } from "../v2/sizes.js";
+import { TILE_CELLS } from "../v2/plate.js";
+import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 
 // What fills the tiles' object slots round the builder (v2/fill.js): trees and objects, out to
 // REACH_TILES tiles from theirs, drawn with the editor's models as its 3D view draws them: trees
@@ -42,7 +43,8 @@ export class Scatter {
     if (!r.hasCells(tx, tz)) return null;
     const cells = r.cells(tx, tz);
     if (!cells?.slots) return null;
-    if (cells.filled?.colors === cells.colors && cells.filled.water === cells.water) return cells.filled;
+    const covered = r.coveredCells(tx, tz, cells);
+    if (cells.filled?.colors === cells.colors && cells.filled.water === cells.water && cells.filled.covered === covered) return cells.filled;
     const ground = (x, z) => r.heightAt(x, z) ?? 0;
     const biomes = r.biomeTile(tx, tz);
     const filled = fillSlots(
@@ -72,6 +74,10 @@ export class Scatter {
         if (x >= x0 && x < x0 + TILE_FT && z >= z0 && z < z0 + TILE_FT) filled.objects.push(makeObject(roll(0) < 0.3 ? "mossyBoulder" : "boulder", [x, z], yaw, size, roll));
       }
     }
+    // Nothing grows under slabs.
+    const open = (x, z) => !covered.has(Math.floor((z - z0) / CELL_FT) * TILE_CELLS + Math.floor((x - x0) / CELL_FT));
+    filled.trees = filled.trees.filter((tree) => open(tree.x, tree.z));
+    filled.objects = filled.objects.filter((object) => open(...object.at));
     for (const tree of filled.trees) tree.ground = ground(tree.x, tree.z);
     // Standing on the lowest ground under them, sunk a little.
     for (const object of filled.objects) {
@@ -82,6 +88,7 @@ export class Scatter {
     filled.shapes = [...filled.trees.map((tree) => treeShape(tree, trunkRadius(tree.kind, tree.size))), ...filled.objects.map(objectShape).filter(Boolean)];
     filled.colors = cells.colors;
     filled.water = cells.water;
+    filled.covered = covered;
     filled.id = (Scatter.ids = (Scatter.ids ?? 0) + 1);
     cells.filled = filled;
     return filled;

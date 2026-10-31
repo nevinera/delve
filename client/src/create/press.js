@@ -29,10 +29,12 @@ export function pressesOver(slabs, tx, tz) {
   });
 }
 
-// The corners of tile (tx, tz) that `presses` (pressing()'s) press down, as corner index -> the
-// height it's pressed to, the lowest where they overlap; empty where they press none.
+// What `presses` (pressing()'s) press of tile (tx, tz): { corners, cells }, corners as corner
+// index -> the height it's pressed to, the lowest where they overlap, and cells, the indexes of the
+// tile's cells they cover, where nothing grows.
 export function pressedCorners(presses, tx, tz) {
   const pressed = new Map();
+  const cells = new Set();
   const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];
   for (const press of presses) {
     const xs = press.outline.map((p) => p[0]);
@@ -43,6 +45,7 @@ export function pressedCorners(presses, tx, tz) {
     for (let j = j0; j <= j1; j++) {
       for (let i = i0; i <= i1; i++) {
         if (!overlaps(press.outline, x0 + i * CELL_FT, z0 + j * CELL_FT)) continue;
+        if (i >= 0 && j >= 0 && i < TILE_CELLS && j < TILE_CELLS) cells.add(j * TILE_CELLS + i);
         for (const [a, b] of [[i, j], [i + 1, j], [i, j + 1], [i + 1, j + 1]]) {
           if (a < 0 || b < 0 || a >= CELL_CORNERS || b >= CELL_CORNERS) continue;
           const k = b * CELL_CORNERS + a;
@@ -51,7 +54,7 @@ export function pressedCorners(presses, tx, tz) {
       }
     }
   }
-  return pressed;
+  return { corners: pressed, cells };
 }
 
 // `heights` (a tile's corners) with `pressed` corners no higher than they're pressed to: a copy,

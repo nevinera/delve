@@ -3,7 +3,7 @@ import { CELL_CORNERS } from "../v2/plate.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 import { overlaps, pressHeights, pressedCorners, pressesOver, pressing } from "./press.js";
 
-const pressedBy = (slabs, tx, tz) => pressedCorners(pressesOver(slabs, tx, tz), tx, tz);
+const pressedBy = (slabs, tx, tz) => pressedCorners(pressesOver(slabs, tx, tz), tx, tz).corners;
 
 const floor = (x, y, z, w, yaw = 0) => ({ at: [x, y, z], turn: [yaw, 0, 0], outline: [[0, 0], [w, 0], [w, w], [0, w]], thickness: 1, surface: "floorboards" });
 const corner = (i, j) => j * CELL_CORNERS + i;
@@ -14,6 +14,7 @@ describe("pressing the ground", () => {
     // x 10 to 16 covers cells 2 to 3, so corners 2 to 4, and the same along z.
     expect([...pressed.keys()].sort((a, b) => a - b)).toEqual([2, 3, 4].flatMap((j) => [2, 3, 4].map((i) => corner(i, j))).sort((a, b) => a - b));
     expect(pressed.get(corner(3, 3))).toBe(49);
+    expect([...pressedCorners(pressesOver([floor(10, 50, 10, 6)], 0, 0), 0, 0).cells].sort((a, b) => a - b)).toEqual([2 * 64 + 2, 2 * 64 + 3, 3 * 64 + 2, 3 * 64 + 3]);
   });
 
   it("leaves cells the slab only touches", () => {

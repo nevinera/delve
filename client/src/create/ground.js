@@ -47,6 +47,7 @@ const SKIRT = 0.75; // how far a skirt hangs, as a share of a part's size
 const SKIRT_SHADE = 0.6;
 const KEEP_PLATES = 40; // plate files kept decoded
 const BUILD_MS = 6; // how long a frame spends making plates
+const NOTHING_COVERED = new Set();
 export const EMPTY_FT = -100; // the sea floor's height where there are no tiles
 const TINT = 0.8; // how far toward its biome's color ground's mixed, showing biomes
 const CHUNK_CELLS_HALF = CHUNK_CELLS / 2;
@@ -98,9 +99,18 @@ export class Renditions {
     if (cells.press?.count === this.pressings) return cells.press.heights;
     const presses = this.pressesOver(tx, tz);
     const key = presses.length ? JSON.stringify(presses) : "";
-    if (cells.press?.key !== key) cells.press = { key, heights: pressHeights(cells.heights, pressedCorners(presses, tx, tz)) };
+    if (cells.press?.key !== key) {
+      const pressed = pressedCorners(presses, tx, tz);
+      cells.press = { key, heights: pressHeights(cells.heights, pressed.corners), covered: pressed.cells };
+    }
     cells.press.count = this.pressings;
     return cells.press.heights;
+  }
+
+  // The indexes of tile (tx, tz)'s cells that slabs cover (press.js), where nothing grows.
+  coveredCells(tx, tz, cells) {
+    this.pressedHeights(tx, tz, cells);
+    return cells.press?.covered ?? NOTHING_COVERED;
   }
 
   // After what presses the ground changes: the "px,pz" of plates read whose tiles are pressed
