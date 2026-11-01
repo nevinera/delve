@@ -1,14 +1,17 @@
 import * as THREE from "three";
 
 // What's drawn in the earth, while the builder's in its rock: the points of the planning grid
-// round the camera, three grids of them, fading with distance.
+// round the camera, three grids of them, fading with distance, the two coarser joined by faint
+// white lines.
 
-// Each grid: a point every `every` ft, seen out to `out` ft, `px` across.
+// Each grid: a point every `every` ft, seen out to `out` ft, `px` across, and `lines` whether its
+// points are joined.
 const GRIDS = [
-  { every: 128, out: 1024, px: 4, rgb: [0.35, 0.5, 0.75] },
-  { every: 32, out: 256, px: 3, rgb: [0.3, 0.42, 0.62] },
-  { every: 8, out: 64, px: 2, rgb: [0.26, 0.36, 0.52] },
+  { every: 128, out: 1024, px: 4, rgb: [0.35, 0.5, 0.75], lines: true },
+  { every: 32, out: 256, px: 3, rgb: [0.3, 0.42, 0.62], lines: true },
+  { every: 8, out: 64, px: 2, rgb: [0.26, 0.36, 0.52], lines: false },
 ];
+const LINE_RGB = [0.05, 0.05, 0.05];
 
 export class Earth {
   constructor(scene) {
@@ -22,6 +25,14 @@ export class Earth {
       points.frustumCulled = false;
       this.group.add(points);
       return points;
+    });
+    const lineMaterial = new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false });
+    this.lines = GRIDS.map(({ lines }) => {
+      if (!lines) return null;
+      const segments = new THREE.LineSegments(new THREE.BufferGeometry(), lineMaterial);
+      segments.frustumCulled = false;
+      this.group.add(segments);
+      return segments;
     });
   }
 
@@ -39,23 +50,41 @@ export class Earth {
     GRIDS.forEach(({ every, out, rgb }, level) => {
       const n = Math.ceil(out / every);
       const base = [c.x, c.y, c.z].map((v) => Math.round(v / every) * every);
-      const [positions, colors] = [[], []];
+      const fade = (p) => Math.max(0, 1 - Math.hypot(p[0] - c.x, p[1] - c.y, p[2] - c.z) / out) ** 2;
+      const [positions, colors, ends, shades] = [[], [], [], []];
       for (let i = -n; i <= n; i++) {
         for (let j = -n; j <= n; j++) {
           for (let k = -n; k <= n; k++) {
             const p = [base[0] + i * every, base[1] + j * every, base[2] + k * every];
-            const fade = Math.max(0, 1 - Math.hypot(p[0] - c.x, p[1] - c.y, p[2] - c.z) / out) ** 2;
-            if (!fade) continue;
+            const f = fade(p);
+            if (!f) continue;
             positions.push(...p);
-            colors.push(...rgb.map((v) => v * fade));
+            colors.push(...rgb.map((v) => v * f));
+            if (!this.lines[level]) continue;
+            // To the next point along each way, where both ends are seen.
+            for (let axis = 0; axis < 3; axis++) {
+              const q = [...p];
+              q[axis] += every;
+              const g = fade(q);
+              if (!g) continue;
+              ends.push(...p, ...q);
+              shades.push(...LINE_RGB.map((v) => v * f), ...LINE_RGB.map((v) => v * g));
+            }
           }
         }
       }
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-      geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
       this.grids[level].geometry.dispose();
-      this.grids[level].geometry = geometry;
+      this.grids[level].geometry = made(positions, colors);
+      if (!this.lines[level]) return;
+      this.lines[level].geometry.dispose();
+      this.lines[level].geometry = made(ends, shades);
     });
   }
 }
+
+const made = (positions, colors) => {
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+  return geometry;
+};
