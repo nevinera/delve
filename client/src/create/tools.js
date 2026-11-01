@@ -40,8 +40,8 @@ import { WaterBodies } from "./water.js";
 //   them where the pointer is, and a ring on the ground shows where they reach. [ and ] resize
 //   them, and c and v turn raise and lower's, shift+c and shift+v a little.
 // - build's tools place objects, templates and slabs, and pick them to change (build.js).
-// - caves' go to stands the builder on a planned room's or tunnel's floor, or on the ground, where
-//   it's clicked, from over it or under it; chamber and tunnel plan rooms and tunnels
+// - caves' go to stands the builder on a planned room's or tunnel's floor where it's clicked;
+//   chamber and tunnel plan rooms and tunnels
 //   (cavePlan.js).
 // - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
 //   more each time the ring's moved its radius. Its undo takes back the last scattering.
@@ -369,7 +369,7 @@ export class Tools {
       }
       if (this.tool === "goto") {
         const r = canvas.getBoundingClientRect();
-        const at = this.plan.target([e.clientX - r.left, e.clientY - r.top]) ?? this.hit();
+        const at = this.plan.target([e.clientX - r.left, e.clientY - r.top]);
         if (at) this.builder.state = { ...this.builder.state, x: at[0], y: at[1], z: at[2], flying: false, swimming: false, falling: 0 };
         return;
       }
