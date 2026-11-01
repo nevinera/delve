@@ -40,7 +40,7 @@ import { WaterBodies } from "./water.js";
 //   them where the pointer is, and a ring on the ground shows where they reach. [ and ] resize
 //   them, and c and v turn raise and lower's, shift+c and shift+v a little.
 // - build's tools place objects, templates and slabs, and pick them to change (build.js).
-// - caves' tools dig caves, and fill them (dig.js).
+// - caves' tools dig caves, and fill them (dig.js), each doing the other with ctrl.
 // - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
 //   more each time the ring's moved its radius. Its undo takes back the last scattering.
 
@@ -358,9 +358,9 @@ export class Tools {
         canvas.setPointerCapture(e.pointerId);
         return this.build.down(e);
       }
-      if (this.tool === "dig") {
+      if (this.tool === "dig" || this.tool === "fill") {
         canvas.setPointerCapture(e.pointerId);
-        return this.dig.press(e);
+        return this.dig.press(e, this.tool === "fill");
       }
       if (this.tool === "pin") {
         const at = this.hit();
@@ -450,7 +450,7 @@ export class Tools {
       if (e.target.matches?.("input, textarea, select") || e.target.closest?.(":popover-open")) return;
       const areas = this.outlined[this.tool];
       if (BUILD.has(this.tool) && this.build.key(e)) return e.preventDefault();
-      if (this.tool === "dig" && this.dig.key(e)) return e.preventDefault();
+      if ((this.tool === "dig" || this.tool === "fill") && this.dig.key(e)) return e.preventDefault();
       if (e.key === "Escape" && areas?.draft) areas.drop();
       else if (e.key === "Escape") this.pick(null);
       else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "select") this.marks.deleteSelected();
@@ -785,7 +785,7 @@ export class Tools {
     this.draw.tick(this.camera, w, h);
     this.paths.tick(this.camera, w, h);
     if (BUILD.has(this.tool)) this.build.tick();
-    this.dig.tick(this.tool === "dig");
+    this.dig.tick(this.tool === "dig" || this.tool === "fill", this.tool === "fill");
     for (const [tool, areas] of Object.entries(this.outlined)) {
       const to = this.tool === tool && areas.draft && this.hit();
       areas.tick(dt, this.camera, w, h, to ? [to[0], to[2]] : null, this.tool === tool);

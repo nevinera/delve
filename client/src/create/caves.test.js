@@ -37,6 +37,31 @@ describe("cave columns", () => {
     expect(middle[0].ceiling).toBe(7);
   });
 
+  it("fills without leaving crumbs of air, but leaves the rest of a cave", () => {
+    const tiles = new Map();
+    const columnsOf = (tx, tz, make) => {
+      if (!tiles.has(`${tx},${tz}`) && make) tiles.set(`${tx},${tz}`, emptyColumns());
+      return tiles.get(`${tx},${tz}`) ?? null;
+    };
+    const air = () => [...tiles.values()].flat().filter(Boolean).flat();
+    // A tunnel 40 ft long, its end filled by a sphere a little off its line.
+    for (let x = 100; x <= 140; x += 4) carve({ kind: "sphere", at: [x, -30, 128], radius: 6 }, columnsOf, () => 5);
+    const before = air().length;
+    carve({ kind: "sphere", at: [139, -29, 129], radius: 9 }, columnsOf, () => 5, { fill: true });
+    const left = air();
+    expect(left.length).toBeLessThan(before);
+    // Only the tunnel's start is left, all of it joined: nothing past where the fill reached.
+    const columns = tiles.get("0,0");
+    const cellsLeft = columns.flatMap((spans, n) => (spans ? [n % TILE_CELLS] : []));
+    expect(Math.max(...cellsLeft) * 4).toBeLessThan(132);
+    for (const s of left) expect(s.ceiling - s.floor).toBeGreaterThan(2);
+    // A pocket alone, filled but for a sliver round it, closes; the tunnel stays.
+    carve({ kind: "sphere", at: [200, -30, 200], radius: 4 }, columnsOf, () => 5);
+    carve({ kind: "sphere", at: [201, -30, 200], radius: 3.5 }, columnsOf, () => 5, { fill: true });
+    expect(columns.some((spans, n) => spans && n % TILE_CELLS >= 48)).toBe(false);
+    expect(air().length).toBe(left.length);
+  });
+
   it("reads back what it writes", () => {
     const columns = emptyColumns();
     columns[5] = [{ floor: -10.25, ceiling: -2, theme: 2, hewn: true }, { floor: 4, ceiling: 9.5, theme: 0, hewn: false }];

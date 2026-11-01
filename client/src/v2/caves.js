@@ -17,6 +17,9 @@ import { CELL_FT, PLATE_TILES, TILE_FT } from "./sizes.js";
 //
 // Digging opens air in a shape, a sphere or a box, column by column, and filling puts rock back.
 // Air opened through the ground runs up out of it, so digging in from the surface makes a mouth.
+// Filling leaves no crumbs of air: it fills every column the shape touches any of, not just
+// those whose middles it covers; air it leaves thinner than MIN_AIR_FT closes; and pockets of
+// air near it smaller than POCKET_FT3, that don't open through the ground, close too.
 
 export const CAVE_THEMES = ["jagged", "smooth", "carved", "mined"];
 export const TILE_CELLS = TILE_FT / CELL_FT;
@@ -26,6 +29,8 @@ const VERSION = 1;
 const MOUTH_FT = 2; // air opened through the ground reaches this far over it
 const MIN_ROCK_FT = 0.25; // spans closer than this join
 const MAX_SPANS = 255;
+const MIN_AIR_FT = 2;
+const POCKET_FT3 = 512; // an 8 ft cube
 
 export const cavesPath = (continent, [px, pz]) => `places/continents/${continent}/caves/${px}_${pz}.caves`;
 export const CAVES_PATH = /^places\/continents\/([\w-]+)\/caves\/(-?\d+)_(-?\d+)\.caves$/;
@@ -75,14 +80,22 @@ export function openAir(column, low, high, span) {
   return out.sort((a, b) => a.floor - b.floor).slice(-MAX_SPANS);
 }
 
-// A column with rock from `low` to `high`: spans are cut back, split or dropped.
-export function fillRock(column, low, high) {
+// The height a shape covers over any of cell (ci, cj): its reach at the point in the cell
+// nearest its middle.
+function reachCell(shape, ci, cj) {
+  const near = (v, i) => Math.min((i + 1) * CELL_FT, Math.max(i * CELL_FT, v));
+  return reach(shape, near(shape.at[0], ci), near(shape.at[2], cj));
+}
+
+// A column with rock from `low` to `high`: spans are cut back, split or dropped, and what's left
+// of them closes where it's no more than `minAir` high.
+export function fillRock(column, low, high, minAir = MIN_ROCK_FT) {
   const out = [];
   for (const s of column ?? []) {
     if (s.ceiling <= low || s.floor >= high) out.push(s);
     else {
-      if (s.floor < low - MIN_ROCK_FT) out.push({ ...s, ceiling: low });
-      if (s.ceiling > high + MIN_ROCK_FT) out.push({ ...s, floor: high });
+      if (low - s.floor > minAir) out.push({ ...s, ceiling: low });
+      if (s.ceiling - high > minAir) out.push({ ...s, floor: high });
     }
   }
   return out.length ? out : null;
@@ -98,7 +111,7 @@ export function carve(shape, columnsOf, groundAt, { fill = false, theme = 0, hew
   const cuts = [];
   for (let cj = Math.floor(z0 / CELL_FT); cj <= Math.floor(z1 / CELL_FT); cj++) {
     for (let ci = Math.floor(x0 / CELL_FT); ci <= Math.floor(x1 / CELL_FT); ci++) {
-      const r = reach(shape, (ci + 0.5) * CELL_FT, (cj + 0.5) * CELL_FT);
+      const r = fill ? reachCell(shape, ci, cj) : reach(shape, (ci + 0.5) * CELL_FT, (cj + 0.5) * CELL_FT);
       const ground = r && groundAt(ci, cj);
       if (ground == null || r[0] >= ground + MOUTH_FT) continue;
       const [low, high] = [quarter(r[0]), quarter(Math.min(r[1], ground + MOUTH_FT))];
@@ -115,9 +128,10 @@ export function carve(shape, columnsOf, groundAt, { fill = false, theme = 0, hew
     for (const cut of cuts) {
       const found = at(cut, false);
       if (!found?.columns[found.k]) continue;
-      found.columns[found.k] = fillRock(found.columns[found.k], cut.low, cut.high);
+      found.columns[found.k] = fillRock(found.columns[found.k], cut.low, cut.high, MIN_AIR_FT);
       changed.add(found.key);
     }
+    if (changed.size) closePockets([x0, z0, x1, z1], at, groundAt, changed);
     return changed;
   }
   // The theme most of the air met has.
@@ -133,6 +147,58 @@ export function carve(shape, columnsOf, groundAt, { fill = false, theme = 0, hew
     changed.add(found.key);
   }
   return changed;
+}
+
+// Closes the pockets of air with a column within a cell of [x0, z0, x1, z1]: air joined through
+// the sides of columns, smaller than POCKET_FT3 and nowhere reaching the ground. at(cell, make)
+// is carve's; the "tx,tz" of tiles changed are added to `changed`.
+function closePockets([x0, z0, x1, z1], at, groundAt, changed) {
+  const spansAt = (ci, cj) => {
+    const found = at({ ci, cj }, false);
+    return found?.columns[found.k] ?? [];
+  };
+  const kept = new Set(); // spans in air too big to close
+  const closed = new Set();
+  for (let cj = Math.floor(z0 / CELL_FT) - 1; cj <= Math.floor(z1 / CELL_FT) + 1; cj++) {
+    for (let ci = Math.floor(x0 / CELL_FT) - 1; ci <= Math.floor(x1 / CELL_FT) + 1; ci++) {
+      for (const start of spansAt(ci, cj)) {
+        if (kept.has(start) || closed.has(start)) continue;
+        // The air joined to it, till it's big enough to keep, opens through the ground, or meets
+        // air that's kept.
+        const pocket = [];
+        const met = new Set([start]);
+        const todo = [{ ci, cj, span: start }];
+        let volume = 0;
+        let keep = false;
+        while (todo.length && !keep) {
+          const here = todo.pop();
+          pocket.push(here);
+          volume += (here.span.ceiling - here.span.floor) * CELL_FT * CELL_FT;
+          const ground = groundAt(here.ci, here.cj);
+          keep = volume >= POCKET_FT3 || ground == null || here.span.ceiling >= ground;
+          for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+            for (const span of spansAt(here.ci + di, here.cj + dj)) {
+              if (met.has(span) || span.floor >= here.span.ceiling || span.ceiling <= here.span.floor) continue;
+              if (kept.has(span)) keep = true;
+              met.add(span);
+              todo.push({ ci: here.ci + di, cj: here.cj + dj, span });
+            }
+          }
+        }
+        if (keep) {
+          for (const span of met) kept.add(span);
+          continue;
+        }
+        for (const { ci: i, cj: j, span } of pocket) {
+          closed.add(span);
+          const found = at({ ci: i, cj: j }, false);
+          const left = found.columns[found.k].filter((s) => s !== span);
+          found.columns[found.k] = left.length ? left : null;
+          changed.add(found.key);
+        }
+      }
+    }
+  }
 }
 
 // A new tile's columns: all rock.

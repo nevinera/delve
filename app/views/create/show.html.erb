@@ -88,9 +88,13 @@
       </button>
     </div>
     <div class="create-tools" data-work="caves" hidden>
-      <button type="button" data-tool="dig" data-key="h" aria-pressed="false" title="dig caves into the ground, or fill them">
+      <button type="button" data-tool="dig" data-key="h" aria-pressed="false" title="dig caves into the ground or rock">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 8 L46 8 L46 22 L2 22 Z" fill="#8a7a66"/><path d="M14 8 C 14 20, 34 20, 34 8 Z" fill="#1c1a20"/><path d="M2 8 L46 8" stroke="#6a8a4a" stroke-width="2"/></svg>
         <span>dig</span><kbd class="create-key">H</kbd>
+      </button>
+      <button type="button" data-tool="fill" data-key="j" aria-pressed="false" title="fill caves with rock">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 8 L46 8 L46 22 L2 22 Z" fill="#8a7a66"/><path d="M14 8 C 14 20, 34 20, 34 8 Z" fill="#a8977f" stroke="#1c1a20" stroke-dasharray="2 2"/><path d="M2 8 L46 8" stroke="#6a8a4a" stroke-width="2"/></svg>
+        <span>fill</span><kbd class="create-key">J</kbd>
       </button>
     </div>
     <div class="create-tools" data-work="geo">
@@ -387,8 +391,9 @@
         <button type="button" data-build-undo>undo</button>
       </div>
     </div>
-    <div data-config="dig" hidden>
-      <p class="create-note">Click rock or the ground to dig into it, and hold the button down to keep digging. Ctrl and click fills with rock. [ and ] size it.</p>
+    <div data-config="dig fill" hidden>
+      <p class="create-note" data-only="dig">Click rock or the ground to dig into it, and hold the button down to keep digging. Ctrl and click fills with rock. [ and ] size it.</p>
+      <p class="create-note" data-only="fill">Click a cave's rock to fill the cave there, and hold the button down to keep filling. Air left too small to stand in closes too. Ctrl and click digs. [ and ] size it.</p>
       <div class="create-modes" role="group" aria-label="shape">
         <button type="button" data-dig-shape="sphere" aria-pressed="true">round</button>
         <button type="button" data-dig-shape="box" aria-pressed="false">square</button>
@@ -396,11 +401,11 @@
       <label>size <output id="digSizeOut"></output>
         <input id="digSize" type="range" min="4" max="40" step="2" value="10">
       </label>
-      <label>rock
+      <label data-only="dig">rock
         <select id="digTheme"><option value="0">jagged</option><option value="1">smooth</option><option value="2">carved</option><option value="3">mined</option></select>
       </label>
-      <label title="cut flat-faced, as by hand"><input type="checkbox" id="digHewn"> hewn</label>
-      <p class="create-note">New caves are of this rock, but digging on from one goes on in its rock.</p>
+      <label data-only="dig" title="cut flat-faced, as by hand"><input type="checkbox" id="digHewn"> hewn</label>
+      <p class="create-note" data-only="dig">New caves are of this rock, but digging on from one goes on in its rock.</p>
       <div class="create-way">
         <button type="button" id="digUndo">undo</button>
       </div>

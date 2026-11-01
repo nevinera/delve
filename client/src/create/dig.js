@@ -1,11 +1,13 @@
 import * as THREE from "three";
 
-// The dig tool: digs a round or square hole into the rock or ground the pointer's on, its middle
-// where the pointer meets it, or fills one with ctrl, over and over while the button's held, as
-// the rock gives way. Shows where it'll dig as a wire ghost. Each press undoes as one.
+// The dig and fill tools: dig a round or square hole into the rock or ground the pointer's on,
+// its middle where the pointer meets it, or fill one with rock, over and over while the button's
+// held; ctrl does the other. Shows where it'll dig or fill as a wire ghost. Each press undoes as
+// one.
 
 const AGAIN_MS = 90; // how often holding the button digs again
 const GHOST = 0xffe14d;
+const FILL_GHOST = 0x7fd0ff;
 const $ = (id) => document.getElementById(id);
 
 export class Dig {
@@ -58,8 +60,9 @@ export class Dig {
     return { kind: "box", at, half: [size / 2, size / 2, size / 2], yaw: Math.atan2(look.x, look.z) };
   }
 
-  press(e) {
-    this.down = { fill: e.ctrlKey || e.metaKey, last: -Infinity, join: false };
+  // fill: whether it's the fill tool.
+  press(e, fill) {
+    this.down = { fill: fill !== (e.ctrlKey || e.metaKey), last: -Infinity, join: false };
     this.work();
   }
 
@@ -93,10 +96,11 @@ export class Dig {
     return false;
   }
 
-  // Each frame, with the tool picked or not.
-  tick(on) {
+  // Each frame, with the tool picked or not; fill whether it's the fill tool.
+  tick(on, fill) {
     if (on) this.work();
     const shape = on && this.shape();
+    this.ghosts.sphere.material.color.set(fill ? FILL_GHOST : GHOST);
     for (const [kind, ghost] of Object.entries(this.ghosts)) {
       ghost.visible = Boolean(shape) && shape.kind === kind;
       if (!ghost.visible) continue;
