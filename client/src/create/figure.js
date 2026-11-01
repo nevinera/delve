@@ -45,7 +45,7 @@ export class Figure {
 
   // Puts the figure at (x, y, z) facing `yaw`, and plays the clip for how it's moving: forward,
   // strafe and turn as the keys have them, -1, 0 or 1, speed in ft a second, whether it's flying
-  // or swimming, and climb, how steeply up it's swimming, in radians.
+  // or swimming, and climb, how steeply up it's swimming or flying, in radians.
   update(dt, { x, y, z, yaw, forward, strafe, turn, speed, flying, swimming, climb = 0 }) {
     this.t += dt;
     const moving = speed > 0.1;
@@ -63,7 +63,7 @@ export class Figure {
     this.facing += (facing - this.facing) * ease;
     this.twist += (twist - this.twist) * ease;
     this.model.position.set(x, y, z);
-    this.tip += ((swimming && moving ? -climb * (forward < 0 ? -1 : 1) : 0) - this.tip) * ease;
+    this.tip += ((afloat && moving ? -climb * (forward < 0 ? -1 : 1) : 0) - this.tip) * ease;
     this.model.rotation.set(this.tip, yaw + this.facing, 0, "YXZ");
     for (const [name, rest] of this.rest) this.bones.get(name).quaternion.copy(rest);
     this.mixer.update(dt);

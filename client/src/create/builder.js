@@ -15,13 +15,14 @@ import { WALK_DEG } from "./growth.js";
 // dives and looking up rises, space swims up and F down, and they stay where they are when still,
 // never over its surface nor under its bed; where it's shallower they stand. Walking off an edge
 // higher than a step, they fall, and space while falling takes off. In the air: the same keys move,
-// space rises and F falls. Touching the ground lands. Flying goes faster the higher you are over
+// forward and back going the way the camera looks, up or down, as swimming does, and space rises
+// and F falls. Touching the ground lands. Flying goes faster the higher you are over
 // the land, slabs aside, so you climb, sink and cross the land in about the same time whatever the
 // height. Double-tapping space, F or W and holding the second press goes FAST times as fast that
 // way.
 //
-// Left-drag swings the camera round the builder, right-drag turns the builder with it, and the
-// wheel zooms. The higher the builder flies, the more the camera looks down (cameraFor).
+// Left-drag swings the camera round the builder, right-drag turns the builder with it, both tip
+// it up and down, and the wheel zooms. The higher the builder flies, the more the camera looks down (cameraFor).
 
 export const RUN_FT = 21; // a second
 export const BACK_FT = 13.5;
@@ -45,12 +46,12 @@ const CAMERA = { distance: 30, min: 4, max: 2000, pitch: 0.35, minPitch: -1.3, m
 const ALOFT = { tilt: 0.7, tiltFt: 600, highFt: 20000, topFt: 100000 };
 const DRAG = 0.006; // radians per pixel
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "f"]);
-const SWIM_LEVEL = 0.12; // how far, in radians, the camera can look either way of where it rests while swimming on the level
+const SWIM_LEVEL = 0.12; // how far, in radians, the camera can look either way of where it rests while swimming or flying on the level
 
 // One step of the builder's moving. state: { x, y, z, yaw, flying, swimming, falling }, continent
 // feet and radians, falling the speed they're falling at, feet a second, or 0. input: { forward, strafe, turn } each -1, 0 or 1, rise and drop (space or F held: 0, 1,
 // or FAST double-tapped), ahead (how many times as fast forward goes, 1 or FAST), takeoff (space
-// was just pressed), and pitch, how far up the way they swim goes, in radians. groundAt(x, z)
+// was just pressed), and pitch, how far up the way they swim or fly goes, in radians. groundAt(x, z)
 // gives the ground's height, or null off the tiles, where the sea's bed is SEA_LEVEL_FT, and
 // waterAt(x, z) the water's surface there, or null where there's none. Walking, push(x, z) moves
 // where they'd be out of what's in the way. landAt(x, z), the land's height without what's built
@@ -73,8 +74,8 @@ export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z],
   const ahead = input.forward > 0 ? (input.ahead ?? 1) : 1;
   const [rise, drop] = [Number(input.rise ?? 0), Number(input.drop ?? 0)];
   const [fx, fz] = [Math.sin(yaw), Math.cos(yaw)];
-  // Swimming, forward and back go up or down as far as the way they swim does.
-  const level = swimming ? Math.cos(input.pitch ?? 0) : 1;
+  // Swimming and flying, forward and back go up or down as far as the way they're going does.
+  const level = swimming || flying ? Math.cos(input.pitch ?? 0) : 1;
   let [mx, mz] = [fx * input.forward * level + fz * input.strafe, fz * input.forward * level - fx * input.strafe];
   const length = Math.hypot(input.forward, input.strafe);
   if (length) {
@@ -93,7 +94,8 @@ export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z],
   }
   if (flying) {
     const climb = Math.max(CLIMB_FT, above * CLIMB_PER_FT);
-    y = Math.min(CEILING_FT, y + (rise - drop) * climb * dt);
+    const up = length ? (input.forward * ahead * Math.sin(input.pitch ?? 0) * speed) / length : 0;
+    y = Math.min(CEILING_FT, y + ((rise - drop) * climb + up) * dt);
   }
   const floor = ground(x, z);
   // Flying down into deep water, they swim where they come to.
@@ -211,9 +213,10 @@ export class Builder {
   tick(dt) {
     const key = (k) => (this.held.has(k) ? 1 : 0);
     const fast = (k) => (this.held.has(k) ? (this.fast.has(k) ? FAST : 1) : 0);
-    // Swimming goes the way the camera looks, up or down, but for a little either way of where it rests.
-    const tilt = CAMERA.pitch - cameraFor(this.cam, this.above).pitch;
-    const pitch = Math.sign(tilt) * Math.max(0, Math.abs(tilt) - SWIM_LEVEL);
+    // Swimming and flying go the way the camera's tipped, up or down, but for a little either way
+    // of where it rests; not the way it looks down by itself, higher up.
+    const tilt = CAMERA.pitch - this.cam.pitch;
+    const pitch = Math.sign(tilt) * Math.min(Math.PI / 2, Math.max(0, Math.abs(tilt) - SWIM_LEVEL));
     const input = {
       forward: key("w") - key("s"),
       strafe: key("q") - key("e"),
@@ -233,7 +236,8 @@ export class Builder {
     const now = this.state;
     const speed = dt > 0 ? Math.hypot(now.x - was.x, now.z - was.z) / dt : 0;
     const swum = dt > 0 ? (now.y - was.y) / dt : 0;
-    this.figure.update(dt, { ...now, forward: input.forward, strafe: input.strafe, turn: input.turn, speed: Math.hypot(speed, now.swimming ? swum : 0), climb: now.swimming ? Math.atan2(swum, speed) : 0 });
+    const afloat = now.swimming || now.flying;
+    this.figure.update(dt, { ...now, forward: input.forward, strafe: input.strafe, turn: input.turn, speed: Math.hypot(speed, afloat ? swum : 0), climb: afloat && input.forward ? Math.atan2(swum, speed) : 0 });
     this.place();
   }
 

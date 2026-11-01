@@ -76,6 +76,20 @@ describe("the builder", () => {
     expect(s).toMatchObject({ y: 101 - CLIMB_FT, flying: false, swimming: true });
   });
 
+  it("flies the way it's pitched, and walks level whatever the pitch", () => {
+    const fly = (pitch) => moveBuilder({ x: 0, y: 100, z: 0, yaw: 0, flying: true }, { ...still, forward: 1, pitch }, 0.1, () => 0);
+    const speed = 100; // FLY_PER_FT a foot over the ground
+    const down = fly(-Math.PI / 6);
+    expect(down.y).toBeCloseTo(100 - (speed * 0.1) / 2);
+    expect(down.z).toBeCloseTo(speed * 0.1 * Math.cos(Math.PI / 6));
+    expect(fly(Math.PI / 6).y).toBeCloseTo(100 + (speed * 0.1) / 2);
+    // Flying down into the ground lands.
+    expect(moveBuilder({ x: 0, y: 1, z: 0, yaw: 0, flying: true }, { ...still, forward: 1, pitch: -1 }, 1, () => 0)).toMatchObject({ y: 0, flying: false });
+    const walk = moveBuilder({ x: 0, y: 100, z: 0, yaw: 0, flying: false }, { ...still, forward: 1, pitch: 1 }, 1, flat);
+    expect(walk).toMatchObject({ y: 100, flying: false });
+    expect(walk.z).toBeCloseTo(RUN_FT);
+  });
+
   it("swims the way it's pitched, up and down with space and F, and stays put when still", () => {
     const [bed, water] = [() => 50, () => 100];
     const at = (y, input) => moveBuilder({ x: 0, y, z: 0, yaw: 0, flying: false, swimming: true }, { ...still, ...input }, 1, bed, undefined, water);
