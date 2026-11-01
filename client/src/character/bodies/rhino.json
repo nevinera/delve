@@ -18,12 +18,69 @@
   },
   "look": {
     "height": [5.5, 6.5],
-    "build": [0.5, 0.8],
-    "colors": {
-      "skin": ["#8a8580", "#7a756e", "#6a6560"],
-      "hair": ["#6a655e"],
-      "secondary": ["#a8a094", "#9a9488"],
-      "eyes": ["#2a2018"]
+    "build": [0.5, 0.8]
+  },
+  "patterns": {
+    "standard": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212"
+      },
+      "areas": {
+        "everything": "coat",
+        "back": "back",
+        "crown": "back",
+        "lower": "belly",
+        "limbs": "coat",
+        "shins": {
+          "color": "coat",
+          "tone": 0.85
+        },
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose",
+        "ears": "back",
+        "tuft": "back",
+        "horns": {
+          "color": "bare",
+          "tone": 0.9
+        }
+      }
     }
-  }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#8a8580",
+        "back": "#6a655e",
+        "belly": "#b3ada6",
+        "bare": "#a8a094",
+        "eyes": "#2a2018"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#7a756e",
+        "back": "#6a655e",
+        "belly": "#9f988f",
+        "bare": "#9a9488",
+        "eyes": "#2a2018"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#6a6560",
+        "back": "#6a655e",
+        "belly": "#8a837d",
+        "bare": "#a8a094",
+        "eyes": "#2a2018"
+      }
+    }
+  ]
 }

@@ -13,17 +13,100 @@
     "limb": 1.65,
     "ears": "cat",
     "tail": "cat",
-    "feet": "paw",
-    "pattern": "stripes"
+    "feet": "paw"
   },
   "look": {
     "height": [3.4, 4],
-    "build": [0.45, 0.7],
-    "colors": {
-      "skin": ["#d07a2a", "#c86a20", "#e0e0d8"],
-      "hair": ["#1a1410", "#2a1a10"],
-      "secondary": ["#3a2a20"],
-      "eyes": ["#c8a040", "#80b0d0"]
+    "build": [0.45, 0.7]
+  },
+  "patterns": {
+    "standard": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212"
+      },
+      "groups": {
+        "striped": ["coat", "back", "crown", "tail"]
+      },
+      "areas": {
+        "everything": "coat",
+        "lower": "belly",
+        "limbs": "coat",
+        "shins": {
+          "color": "coat",
+          "tone": 0.85
+        },
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose",
+        "ears": "back",
+        "tailTip": "stripe",
+        "striped": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "stripes",
+              "color": "stripe",
+              "width": 0.07,
+              "gap": 0.09,
+              "wave": 0.15,
+              "break": 0.1
+            }
+          ]
+        },
+        "legs": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "stripes",
+              "color": "stripe",
+              "width": 0.07,
+              "gap": 0.09,
+              "wave": 0.15,
+              "break": 0.25,
+              "across": "horizontal"
+            }
+          ]
+        }
+      }
     }
-  }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#d07a2a",
+        "back": "#1a1410",
+        "belly": "#e6c39c",
+        "bare": "#3a2a20",
+        "eyes": "#c8a040",
+        "stripe": "#120e0b"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#c86a20",
+        "back": "#2a1a10",
+        "belly": "#e3be98",
+        "bare": "#3a2a20",
+        "eyes": "#80b0d0",
+        "stripe": "#1d120b"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#e0e0d8",
+        "back": "#1a1410",
+        "belly": "#ece7d8",
+        "bare": "#3a2a20",
+        "eyes": "#c8a040",
+        "stripe": "#120e0b"
+      }
+    }
+  ]
 }

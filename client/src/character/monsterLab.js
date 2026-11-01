@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { ROLES, characterClips, loadAnimations, roleClips } from "./animations.js";
 import { SKELETONS, characterMesh, disposeCharacter } from "./characterMesh.js";
+import { SHIPPED_BODIES } from "./bodies.js";
 import { BODY_LOOKS, resolveRecipe } from "./recipe.js";
 
 // The monster lab, for looking over creature bodies: every body the client builds, listed by
@@ -54,7 +55,7 @@ function flame() {
 }
 
 const bodies = Object.values(SKELETONS).flat();
-const state = { body: location.hash.slice(1) || "goblin", seed: 1, count: 4, loadouts: "each", pick: "all", speed: 1, paused: false, loop: true, cycle: false };
+const state = { body: location.hash.slice(1) || "goblin", seed: 1, count: 4, loadouts: "each", coloration: "each", pick: "all", speed: 1, paused: false, loop: true, cycle: false };
 if (!bodies.includes(state.body)) state.body = "goblin";
 let baked = null;
 let looks = []; // { look, mesh, mixer, clips, roles, action, clip, flame }
@@ -70,6 +71,16 @@ function seeded(n) {
 }
 
 const loadoutsOf = (body) => BODY_LOOKS[body]?.loadouts ?? [];
+const colorationsOf = (body) => SHIPPED_BODIES[body]?.colorations ?? [];
+
+// The coloration picker: each in turn, picked by weight, or one of the body's.
+function fillColorations() {
+  const names = colorationsOf(state.body).map((c) => c.name);
+  if (!["each", "random", ...names].includes(state.coloration)) state.coloration = "each";
+  $("coloration").replaceChildren(el("option", { value: "each", textContent: "one each, in turn" }), el("option", { value: "random", textContent: "picked by weight" }), ...names.map((n) => el("option", { value: n, textContent: n })));
+  $("coloration").value = state.coloration;
+  $("coloration").disabled = !names.length;
+}
 const describe = (l) => [l.weapon, l.offhand, ...Object.values(l.armor ?? {}).map((a) => a.type)].filter((v) => v && v !== "none").join(", ") || "nothing";
 
 // The k'th look of the body: its own seed, and its loadout as the loadouts setting says.
@@ -78,11 +89,15 @@ function lookFor(k) {
   const loadouts = loadoutsOf(state.body);
   if (state.loadouts === "none") own.loadouts = [{}];
   else if (state.loadouts === "each" && loadouts.length) own.loadouts = [loadouts[k % loadouts.length]];
+  const colorations = colorationsOf(state.body);
+  if (state.coloration === "each" && colorations.length) own.coloration = colorations[k % colorations.length].name;
+  else if (state.coloration !== "random") own.coloration = state.coloration;
   return resolveRecipe(own, seeded(state.seed * 7919 + k));
 }
 
 function build() {
   turn = 0;
+  fillColorations();
   for (const l of looks) {
     scene.remove(l.mesh);
     disposeCharacter(l.mesh);
@@ -134,7 +149,7 @@ function fillClips() {
 }
 
 function fillLooks() {
-  $("looks").replaceChildren(...looks.map(({ look }, k) => el("div", { className: "monster-look", textContent: `${k + 1}: ${describe(look)}` })));
+  $("looks").replaceChildren(...looks.map(({ look }, k) => el("div", { className: "monster-look", textContent: `${k + 1}: ${[look.coloration, describe(look)].filter(Boolean).join("; ")}` })));
 }
 
 // The roles a look has a clip for, in ROLES' order.
@@ -338,6 +353,10 @@ $("count").addEventListener("input", () => {
 });
 $("loadouts").addEventListener("change", () => {
   state.loadouts = $("loadouts").value;
+  build();
+});
+$("coloration").addEventListener("change", () => {
+  state.coloration = $("coloration").value;
   build();
 });
 $("reroll").addEventListener("click", () => {

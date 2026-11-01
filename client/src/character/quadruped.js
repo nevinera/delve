@@ -2,6 +2,7 @@ import { MeshOut, fleshWear, hashAt } from "./body.js";
 import { TAU, add, ease, graft, hex, hump, lerp, mirrored, mul, sampled, shade, sub, turnedY } from "./rig.js";
 import { serpentMesh } from "./serpent.js";
 import { shapesOn } from "./bodies.js";
+import { painterFor } from "./paint.js";
 
 // Four-legged bodies, in families that move differently: canine (up on its toes: wolves, rats),
 // feline (low and heavy-shouldered, slinking, the head carried low: the big cats), ursine (flat-footed and heavy: bears), hoofed (stags, boars, horses), lizard (legs out to
@@ -33,6 +34,19 @@ import { shapesOn } from "./bodies.js";
 // springing it forward.
 export const FAMILIES = ["canine", "feline", "ursine", "hoofed", "lizard", "pachyderm"];
 export const SPECIES = shapesOn(...FAMILIES);
+
+// The areas a four-legged body's faces are tagged with, in named groups (paint.js); no group
+// shares an area's name.
+export const AREA_GROUPS = {
+  body: ["coat", "back", "belly"],
+  head: ["face", "crown", "muzzle", "jaw", "nose", "ears"],
+  limbs: ["legs", "shins", "paws", "hooves"],
+  tails: ["tail", "tailTip", "tuft"],
+  bone: ["horns", "antlers", "tusks"],
+  upper: ["back", "crown", "ears", "mane", "spines", "tails"],
+  lower: ["belly", "muzzle", "jaw", "limbs"],
+  everything: ["body", "head", "limbs", "tails", "bone", "mane", "beard", "spines", "eyes", "pupils", "shell", "plastron", "cap", "gills", "trunk", "beak"],
+};
 export const speciesOf = (look) => SPECIES[look.body] ?? SPECIES.wolf;
 
 // The top of the skull above the head's joint, for a head of size 1.
@@ -162,25 +176,17 @@ export function quadrupedMesh(look) {
   const [gx, gy] = sp.girth.map((g) => g * build);
   const limb = sp.limb * (0.9 + 0.3 * look.limbs);
   const big = sp.head * (0.8 + 0.4 * look.head);
-  const c = Object.fromEntries(Object.entries(look.colors).map(([key, v]) => [key, hex(v)]));
   const scaly = sp.family === "lizard";
-  const [fur, back, belly, bare, dark] = [c.skin, c.hair, scaly ? c.secondary : sp.family === "feline" ? lerp(c.skin, [0.95, 0.92, 0.85], 0.65) : shade(c.skin, 1.3), c.secondary, [0.08, 0.07, 0.07]];
   const out = new MeshOut(index);
+  // Faces are tagged with their areas (AREA_GROUPS), and painted by the look's coloration.
+  out.paint = painterFor(look, AREA_GROUPS, tallOf(sp));
   // Fire, molten rock, fungus and the like mark every face but the eyes.
   const wear = fleshWear(look.flesh, look.height / 6 / s);
   out.wear = wear;
   // Rings facing +z, their front down: angle 0 is the belly, ±π the back.
   const ring = (center, rx, rz, bones, push) => ({ center, dir: [0, 0, 1], rx, rz, bones, push });
-  const plain = (angle) => (sp.wool ? back : sp.pattern === "patches" || sp.pattern === "stripes" ? (Math.abs(angle) < 0.8 ? belly : fur) : Math.abs(angle) > 2.1 ? back : Math.abs(angle) < 0.8 ? belly : fur);
-  // Spots and stripes in the hair color, over the sides and back.
-  const furColor = (angle, band = 0) => {
-    // A cow's patches go all round.
-    if (sp.pattern === "patches") return hashAt([Math.round(band / 2), Math.round(angle * 1.2)], 13) > 0.55 ? back : fur;
-    if (Math.abs(angle) < (sp.pattern === "stripes" ? 0.7 : 0.9)) return plain(angle);
-    if (sp.pattern === "spots" && hashAt([band, Math.round(angle * 5)], 11) > 0.68) return shade(back, 0.8);
-    if (sp.pattern === "stripes" && band % 2 && hashAt([band, Math.round(angle * 2)], 17) > 0.2) return shade(back, 0.7);
-    return plain(angle);
-  };
+  // The back along the top, the belly beneath, the coat between.
+  const furColor = (angle) => (Math.abs(angle) > 2.1 ? "back" : Math.abs(angle) < 0.8 ? "belly" : "coat");
 
   // The body, rump to the shoulders, deep at the chest, a darker saddle along the back; then the
   // neck, along the line from the shoulders to the head.
@@ -205,18 +211,18 @@ export function quadrupedMesh(look) {
     [0.7, 0.27, 0.3, [["neck_01", 1]]],
     [0.9, 0.25, 0.27, [["neck_01", 0.4], ["head", 0.6]]],
   ].map(([u, rx, rz, bones]) => ring(add(lerp(at("spine_03"), at("head"), u), [0, -0.04 * k, 0]), rx * sp.neckGirth * build * bulk, rz * sp.neckGirth * build * bulk * (scaly ? sp.girth[1] * 1.3 : 1), bones));
-  // Stripes want narrower bands: a ring between each two.
+  // A ring between each two, for marks to follow more closely.
   const rows = [...trunk, ...neckRows];
-  const banded = sp.pattern === "stripes" ? rows.flatMap((r, i) => (i ? [{ ...rows[i - 1], center: lerp(rows[i - 1].center, r.center, 0.5), rx: (rows[i - 1].rx + r.rx) / 2, rz: (rows[i - 1].rz + r.rz) / 2 }, r] : [r])) : rows;
-  out.tube(banded, 12, (band, angle) => furColor(angle, band), { capStart: true });
+  const banded = rows.flatMap((r, i) => (i ? [{ ...rows[i - 1], center: lerp(rows[i - 1].center, r.center, 0.5), rx: (rows[i - 1].rx + r.rx) / 2, rz: (rows[i - 1].rz + r.rz) / 2 }, r] : [r]));
+  out.tube(banded, 12, (band, angle) => furColor(angle), { capStart: true });
   // A lion's mane round the neck and behind the head; a mammoth's long coat over the body.
   if (sp.ruff) {
     const ruff = [[0.05, 0.6], [0.35, 1.25], [0.65, 1.4], [0.92, 1.15], [1.05, 0.5]].map(([u, r]) => ring(add(lerp(at("spine_03"), at("head"), u), [0, 0.02 * k, -0.05 * k]), 0.36 * r * sp.neckGirth * bulk, 0.36 * r * sp.neckGirth * bulk, u < 0.5 ? [["spine_03", 0.4], ["neck_01", 0.6]] : [["neck_01", 0.4], ["head", 0.6]]));
-    out.tube(ruff, 12, (band) => (band % 2 ? back : shade(back, 0.85)), { capStart: true, capEnd: true });
+    out.tube(ruff, 12, (band) => (band % 2 ? "mane" : "mane@0.85"), { capStart: true, capEnd: true });
   }
   if (sp.shaggy) {
     const coat = trunk.slice(1).map((r) => ({ ...r, center: add(r.center, [0, -0.1 * r.rz, 0]), rx: r.rx * 1.12, rz: r.rz * 1.2 }));
-    out.tube(coat, 12, (band, angle) => (Math.abs(angle) < 0.6 ? shade(back, 0.8) : back), { capStart: true, capEnd: true });
+    out.tube(coat, 12, (band, angle) => (Math.abs(angle) < 0.6 ? "mane@0.8" : "mane"), { capStart: true, capEnd: true });
   }
   // A turtle's shell, over the body from the rump to the shoulders, in plates.
   if (sp.shell) {
@@ -225,13 +231,13 @@ export function quadrupedMesh(look) {
       const row = trunk[2];
       return { center: [0, backAt(t) + row.rz * 0.6 * high, hz + t * L], dir: [0, 0, 1], rx: row.rx * 1.55 * r, rz: row.rz * 1.7 * r * high, bones: [[t < 0.4 ? "pelvis" : t < 0.7 ? "spine_02" : "spine_03", 1]], push: (angle) => -Math.max(0, Math.cos(angle)) * row.rz * 0.5 * high };
     });
-    out.tube(plates, 14, (band, angle) => (Math.abs(angle) < 1.3 ? shade(belly, 0.9) : (band + Math.round(angle * 2)) % 2 ? back : shade(back, 0.8)), { capStart: true, capEnd: true });
+    out.tube(plates, 14, (band, angle) => (Math.abs(angle) < 1.3 ? "plastron" : (band + Math.round(angle * 2)) % 2 ? "shell" : "shell@0.8"), { capStart: true, capEnd: true });
   }
   // A mushroom's cap over the back, spotted, gills beneath.
   if (sp.cap) {
     const middle = add(trunk[4].center, [0, trunk[4].rz * 0.6, 0]);
     const dome = [[-0.05, 0.4], [-0.02, 1.15], [0.15, 1.25], [0.4, 1.05], [0.6, 0.6], [0.68, 0.1]].map(([dy, r]) => ({ center: add(middle, [0, dy * L, 0]), dir: [0, 1, 0], rx: r * 0.5 * L, rz: r * 0.48 * L, bones: [["spine_01", 1]] }));
-    out.tube(dome, 14, (band, angle) => (band === 0 ? shade(back, 0.5) : band >= 2 && hashAt([band, Math.round(angle * 3)], 7) > 0.68 ? [0.93, 0.9, 0.82] : back), { capStart: true, capEnd: true });
+    out.tube(dome, 14, (band) => (band === 0 ? "gills" : "cap"), { capStart: true, capEnd: true });
   }
 
   // The head, back of the skull to the nose, the lower jaw on its own bone. Places on the head are
@@ -263,16 +269,15 @@ export function quadrupedMesh(look) {
     [0.62, -0.1, 0.1, 0.07],
     [0.75, -0.13, 0.07, 0.05],
   ]).map(([dz, dy, rx, rz]) => headRing(dz, dy, rx * (scaly ? 1.2 : 1), rz * (sp.jaw ? (dz > 0.2 ? 0.5 : 0.7) : 1), headBones));
-  const nose = sp.snout ? bare : dark;
-  out.tube(skull, 10, (band, angle) => (sp.feathered ? (band % 2 ? back : shade(back, 0.85)) : band >= 4 && Math.abs(angle) > 2.3 ? back : band >= 3 && Math.abs(angle) < 0.9 ? belly : fur), { capStart: true, capEnd: true, endColor: nose });
+  out.tube(skull, 10, (band, angle) => (sp.feathered ? (band % 2 ? "face" : "face@0.85") : band >= 4 && Math.abs(angle) > 2.3 ? "crown" : band >= 3 && Math.abs(angle) < 0.9 ? "muzzle" : "face"), { capStart: true, capEnd: true, endColor: "nose" });
   if (sp.beak) {
     // A hooked beak over the face, its lower half on the jaw.
-    out.path([hp(0, 0.02, 0.3), hp(0, 0.0, 0.5), hp(0, -0.08, 0.62), hp(0, -0.22, 0.6)], [0.13, 0.1, 0.05, 0.005].map((r) => r * big), 8, () => bare, () => headBones, { capStart: true, capEnd: true, carry: true });
-    out.path([hp(0, -0.12, 0.3), hp(0, -0.16, 0.48)], [0.09 * big, 0.01 * big], 6, () => shade(bare, 0.8), () => [["jaw", 1]], { capStart: true });
+    out.path([hp(0, 0.02, 0.3), hp(0, 0.0, 0.5), hp(0, -0.08, 0.62), hp(0, -0.22, 0.6)], [0.13, 0.1, 0.05, 0.005].map((r) => r * big), 8, () => "beak", () => headBones, { capStart: true, capEnd: true, carry: true });
+    out.path([hp(0, -0.12, 0.3), hp(0, -0.16, 0.48)], [0.09 * big, 0.01 * big], 6, () => "beak@0.8", () => [["jaw", 1]], { capStart: true });
   }
   if (sp.noseHorn) {
     // A great horn on the end of the snout and a smaller one behind it.
-    const horn = shade(bare, 0.9);
+    const horn = "horns";
     out.path([hp(0, -0.02, 0.62), hp(0, 0.2, 0.68), hp(0, 0.42, 0.62)], [0.1, 0.06, 0.006].map((r) => r * big), 6, () => horn, () => headBones, { capStart: true, carry: true });
     out.path([hp(0, 0.02, 0.4), hp(0, 0.18, 0.42)], [0.07 * big, 0.006 * big], 6, () => horn, () => headBones, { capStart: true });
   }
@@ -281,9 +286,9 @@ export function quadrupedMesh(look) {
     cow: [[0.12, 0.2, -0.02, 0.05], [0.3, 0.22, 0.0, 0.04], [0.42, 0.32, 0.04, 0.03], [0.45, 0.45, 0.04, 0.005]],
   }[sp.horns];
   if (HORNS) {
-    for (const side of [-1, 1]) out.path(HORNS.map(([x, dy, dz]) => hp(side * x, dy, dz, 0)), HORNS.map((r) => r[3] * big), 6, () => [0.78, 0.72, 0.6], () => headBones, { capStart: true, carry: true });
+    for (const side of [-1, 1]) out.path(HORNS.map(([x, dy, dz]) => hp(side * x, dy, dz, 0)), HORNS.map((r) => r[3] * big), 6, () => "horns", () => headBones, { capStart: true, carry: true });
   }
-  if (sp.beard) out.path([hp(0, -0.2, 0.45), hp(0, -0.34, 0.42), hp(0, -0.44, 0.36)], [0.04, 0.035, 0.005].map((r) => r * big), 5, () => back, () => [["jaw", 1]], { capStart: true });
+  if (sp.beard) out.path([hp(0, -0.2, 0.45), hp(0, -0.34, 0.42), hp(0, -0.44, 0.36)], [0.04, 0.035, 0.005].map((r) => r * big), 5, () => "beard", () => [["jaw", 1]], { capStart: true });
   // A deep lower jaw (a crocodile's) runs the length of the snout, scaled above and pale below.
   const jaw = [
     [0.14, -0.12, 0.15, 0.07],
@@ -291,27 +296,27 @@ export function quadrupedMesh(look) {
     [0.66, -0.22, 0.06, 0.035],
     ...(sp.jaw ? [[0.76, -0.2, 0.05, 0.025]] : []),
   ].map(([dz, dy, rx, rz]) => headRing(dz, dy - (sp.jaw ? 0.03 * (sp.jaw - 1) : 0), rx * (scaly ? 1.3 : feline ? 1.35 : 1) * (sp.jaw ? 1.15 : 1), rz * (sp.jaw ?? 1), [["jaw", 1]]));
-  out.tube(jaw, 8, (band, angle) => (sp.jaw && Math.abs(angle) > 0.9 ? fur : belly), { capStart: true, capEnd: true });
-  if (!sp.snout && !scaly && !sp.beak) out.gem(hp(0, -0.11, 0.78), 0.05 * big, dark, headBones);
+  out.tube(jaw, 8, (band, angle) => (sp.jaw && Math.abs(angle) > 0.9 ? "face" : "jaw"), { capStart: true, capEnd: true });
+  if (!sp.snout && !scaly && !sp.beak) out.gem(hp(0, -0.11, 0.78), 0.05 * big, "nose", headBones);
   for (const side of [-1, 1]) {
     // Eyes, forward on the skull, or at the sides for a lizard.
     const [ex, ey, ez] = scaly ? [0.2, 0.12, 0.12] : sp.beak ? [0.15, 0.16, 0.24] : [0.15, 0.1, 0.25];
     const eye = sp.beak ? 1.8 : feline ? 1.3 : 1;
     out.wear = null;
-    out.gem(hp(side * ex, ey, ez), 0.04 * big * eye, c.eyes, headBones);
-    out.gem(hp(side * (ex + 0.02), ey + 0.01, ez + 0.02), 0.018 * big * eye, dark, headBones);
+    out.gem(hp(side * ex, ey, ez), 0.04 * big * eye, "eyes", headBones);
+    out.gem(hp(side * (ex + 0.02), ey + 0.01, ez + 0.02), 0.018 * big * eye, "pupils", headBones);
     out.wear = wear;
     ear(side);
     if (sp.tusks) {
       // Up from the lower jaw, curving out.
       const points = [hp(side * 0.1, -0.16, 0.5), hp(side * 0.16, -0.05, 0.58), hp(side * 0.2, 0.08, 0.56)];
-      out.path(points, [0.035, 0.025, 0.004].map((r) => r * big), 6, () => [0.9, 0.86, 0.72], () => [["jaw", 1]], { capStart: true, capEnd: true });
+      out.path(points, [0.035, 0.025, 0.004].map((r) => r * big), 6, () => "tusks", () => [["jaw", 1]], { capStart: true, capEnd: true });
     }
     if (sp.antlers) antlers(side);
     if (sp.ivory) {
       // Forward from the upper jaw, curving up.
       const points = sp.ivory === "curved" ? [hp(side * 0.17, -0.2, 0.4), hp(side * 0.3, -0.36, 0.75), hp(side * 0.42, -0.32, 1.1), hp(side * 0.32, -0.08, 1.3), hp(side * 0.14, 0.12, 1.25)] : [hp(side * 0.17, -0.2, 0.4), hp(side * 0.24, -0.42, 0.75), hp(side * 0.27, -0.42, 1.1), hp(side * 0.25, -0.25, 1.35)];
-      out.path(points, (sp.ivory === "curved" ? [0.06, 0.055, 0.045, 0.03, 0.005] : [0.05, 0.045, 0.035, 0.005]).map((r) => r * big), 6, () => [0.92, 0.88, 0.76], () => headBones, { carry: true });
+      out.path(points, (sp.ivory === "curved" ? [0.06, 0.055, 0.045, 0.03, 0.005] : [0.05, 0.045, 0.035, 0.005]).map((r) => r * big), 6, () => "tusks", () => headBones, { carry: true });
     }
   }
 
@@ -334,12 +339,12 @@ export function quadrupedMesh(look) {
     const earBones = sp.ears === "fan" ? [[side > 0 ? "ear_l" : "ear_r", 1]] : headBones;
     // A fan ear lies flat against the head, wide front to back, until its bone turns it out.
     const [wide, deep] = sp.ears === "fan" ? [EARS.map(() => 0.03), EARS.map((row) => row[3])] : [EARS.map((row) => row[3]), EARS.map(() => 0.03)];
-    out.path(points, wide.map((r) => r * big), 6, () => (sp.ears === "round" && sp.tail === "thin" ? bare : back), () => earBones, { capStart: true, capEnd: true, depth: deep.map((r) => r * big) });
+    out.path(points, wide.map((r) => r * big), 6, () => "ears", () => earBones, { capStart: true, capEnd: true, depth: deep.map((r) => r * big) });
   }
 
   // A main beam up, back and out, with tines forward off it.
   function antlers(side) {
-    const bone = [0.75, 0.65, 0.5];
+    const bone = "antlers";
     const beam = [[0.1, 0.22, -0.02], [0.18, 0.5, -0.12], [0.32, 0.85, -0.16], [0.42, 1.15, -0.06], [0.4, 1.4, 0.1]].map(([x, dy, dz]) => hp(side * x, dy, dz, 0));
     out.path(beam, [0.05, 0.045, 0.04, 0.03, 0.012].map((r) => r * big), 5, () => bone, () => headBones, { capStart: true, capEnd: true, carry: true });
     for (const [from, to] of [
@@ -357,19 +362,19 @@ export function quadrupedMesh(look) {
     for (const t of [0.05, 0.25, 0.45, 0.65, 0.85]) {
       const row = trunk[Math.min(trunk.length - 1, 2 + Math.round(t * 4))];
       const base = add(row.center, [0, row.rz * 0.9, 0]);
-      out.path([base, add(base, [0, 0.18 * k, -0.06])], [0.06, 0.005].map((r) => r * k), 4, () => back, () => row.bones, { capStart: true, capEnd: true, depth: [0.02, 0.005] });
+      out.path([base, add(base, [0, 0.18 * k, -0.06])], [0.06, 0.005].map((r) => r * k), 4, () => "spines", () => row.bones, { capStart: true, capEnd: true, depth: [0.02, 0.005] });
     }
   }
   if (sp.mane) {
     const points = [0.15, 0.45, 0.75, 1.0].map((u) => add(lerp(at("spine_03"), at("head"), u), [0, 0.32 * sp.neckGirth * k, -0.08 * k]));
-    out.path(points, [0.06, 0.07, 0.07, 0.05].map((r) => r * k), 6, () => back, (i) => (i < 2 ? [["spine_03", 0.4], ["neck_01", 0.6]] : [["neck_01", 0.5], ["head", 0.5]]), { capStart: true, capEnd: true, depth: [0.15, 0.18, 0.15, 0.1].map((r) => r * k) });
+    out.path(points, [0.06, 0.07, 0.07, 0.05].map((r) => r * k), 6, () => "mane", (i) => (i < 2 ? [["spine_03", 0.4], ["neck_01", 0.6]] : [["neck_01", 0.5], ["head", 0.5]]), { capStart: true, capEnd: true, depth: [0.15, 0.18, 0.15, 0.1].map((r) => r * k) });
   }
 
   // Legs: a row of [point, radius, bones] each, the top sunk into the body, the foot by its kind.
   const leg = (rows) => {
-    out.path(rows.map(([point]) => point), rows.map(([, r]) => r * limb * bulk), 8, (band) => rows[band + 1]?.[3] ?? (band >= rows.length - 4 ? shade(fur, 0.85) : fur), (i) => rows[i][2], { capStart: true, capEnd: true, carry: true });
+    out.path(rows.map(([point]) => point), rows.map(([, r]) => r * limb * bulk), 8, (band) => rows[band + 1]?.[3] ?? (band >= rows.length - 4 ? "shins" : "legs"), (i) => rows[i][2], { capStart: true, capEnd: true, carry: true });
   };
-  const hoof = shade(dark, 2.5);
+  const hoof = "hooves";
   for (const side of ["l", "r"]) {
     const n = (name) => `${name}_${side}`;
     const x = side === "l" ? 1 : -1;
@@ -379,12 +384,12 @@ export function quadrupedMesh(look) {
       const b = [[bone, 1]];
       if (sp.feet === "hoof") return [[[wx, 0.1 * k, wz + 0.02], 0.065, b], [[wx, 0.06 * k, wz + 0.05], 0.085, b, hoof], [[wx, 0.0, wz + 0.07], 0.09, b, hoof]];
       // Wide round pads.
-      if (sp.feet === "pad") return [[[wx, 0.1 * k, wz], 0.09, b], [[wx, 0.0, wz + 0.02], 0.095, b, shade(fur, 0.75)]];
-      if (sp.feet === "claw") return [[[wx + x * 0.06, 0.04, wz + 0.1], 0.07, b], [[wx + x * 0.1, 0.02, wz + 0.22], 0.035, b, shade(fur, 0.7)]];
+      if (sp.feet === "pad") return [[[wx, 0.1 * k, wz], 0.09, b], [[wx, 0.0, wz + 0.02], 0.095, b, "paws@0.75"]];
+      if (sp.feet === "claw") return [[[wx + x * 0.06, 0.04, wz + 0.1], 0.07, b], [[wx + x * 0.1, 0.02, wz + 0.22], 0.035, b, "paws@0.7"]];
       // A fist on its knuckles.
-      if (sp.knuckles && toward === 0) return [[[wx, 0.12, wz + 0.04], 0.1, b], [[wx, 0.06, wz + 0.1], 0.1, b, shade(fur, 0.7)]];
+      if (sp.knuckles && toward === 0) return [[[wx, 0.12, wz + 0.04], 0.1, b], [[wx, 0.06, wz + 0.1], 0.1, b, "paws@0.7"]];
       const flatFoot = sp.family === "ursine";
-      return [[[wx, flatFoot ? 0.09 : 0.11, wz + 0.07 + toward], 0.085, b], [[wx, 0.05, wz + (flatFoot ? 0.3 : 0.2) + toward], flatFoot ? 0.07 : 0.06, b, flatFoot ? shade(fur, 0.6) : undefined]];
+      return [[[wx, flatFoot ? 0.09 : 0.11, wz + 0.07 + toward], 0.085, b], [[wx, 0.05, wz + (flatFoot ? 0.3 : 0.2) + toward], flatFoot ? 0.07 : 0.06, b, flatFoot ? "paws@0.6" : "paws@0.85"]];
     };
     leg([
       [top(n("upperarm"), "spine_03", 0.3), 0.2, [["spine_03", 0.6], [n("upperarm"), 0.4]]],
@@ -411,7 +416,7 @@ export function quadrupedMesh(look) {
   // The trunk, tapering along its bones.
   if (sp.trunk) {
     const names = ["trunk_01", "trunk_02", "trunk_03", "trunk_04"];
-    out.path([...names, "trunk_end"].map(at), [0.13, 0.1, 0.075, 0.055, 0.04].map((r) => r * big), 10, () => fur, (i) => [[names[Math.min(i, 3)], 1]], { carry: true });
+    out.path([...names, "trunk_end"].map(at), [0.13, 0.1, 0.075, 0.055, 0.04].map((r) => r * big), 10, () => "trunk", (i) => [[names[Math.min(i, 3)], 1]], { carry: true });
   }
 
   // The tail, along its bones.
@@ -430,9 +435,9 @@ export function quadrupedMesh(look) {
     squirrel: [0.08, 0.2, 0.26, 0.24, 0.08],
     cat: [0.1, 0.085, 0.075, 0.07, 0.065, 0.045],
   }[sp.tail].map((r) => r * (sp.tail === "lizard" ? bulk * gx : k));
-  const tailColor = (band) => (sp.tail === "thin" ? bare : sp.tail === "cat" ? (sp.pattern === "stripes" ? (band % 2 || band >= tailPoints.length - 2 ? shade(back, 0.7) : fur) : band >= tailPoints.length - 2 && !sp.tuft ? shade(fur, 0.8) : fur) : sp.tail === "horse" || sp.tail === "squirrel" || (sp.tail === "bushy" && band >= tailPoints.length - 2) ? back : fur);
+  const tailColor = (band) => (band >= tailPoints.length - 2 && (sp.tail === "bushy" || sp.tail === "cat") ? "tailTip" : "tail");
   out.path(tailPoints, thick, 8, tailColor, (i) => tailBones[i], { capStart: true, capEnd: true, carry: true });
-  if (sp.tail === "tuft" || sp.tuft) out.gem(tailPoints.at(-1), 0.07 * k, back, tailBones.at(-1));
+  if (sp.tail === "tuft" || sp.tuft) out.gem(tailPoints.at(-1), 0.07 * k, "tuft", tailBones.at(-1));
 
   const mesh = out.arrays();
   for (let i = 0; i < mesh.positions.length; i++) mesh.positions[i] *= s;

@@ -18,11 +18,90 @@
   },
   "look": {
     "height": [7, 7.8],
-    "build": [0.4, 0.6],
-    "colors": {
-      "skin": ["#6a4028", "#3a2a20", "#8a7a6a", "#c8b898", "#2a2420"],
-      "hair": ["#1e1a18", "#3a2a20", "#d8d0c0"],
-      "eyes": ["#1a1010"]
+    "build": [0.4, 0.6]
+  },
+  "patterns": {
+    "standard": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212",
+        "hoof": "#2d2828"
+      },
+      "areas": {
+        "everything": "coat",
+        "back": "back",
+        "crown": "back",
+        "lower": "belly",
+        "limbs": "coat",
+        "shins": {
+          "color": "coat",
+          "tone": 0.85
+        },
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose",
+        "ears": "back",
+        "mane": "back",
+        "hooves": "hoof",
+        "tails": "back"
+      }
     }
-  }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#6a4028",
+        "back": "#1e1a18",
+        "belly": "#8a5334",
+        "bare": "#3a2a20",
+        "eyes": "#1a1010"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#3a2a20",
+        "back": "#3a2a20",
+        "belly": "#4b372a",
+        "bare": "#3a2a20",
+        "eyes": "#1a1010"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#8a7a6a",
+        "back": "#d8d0c0",
+        "belly": "#b39f8a",
+        "bare": "#3a2a20",
+        "eyes": "#1a1010"
+      }
+    },
+    {
+      "name": "standard 4",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#c8b898",
+        "back": "#1e1a18",
+        "belly": "#ffefc6",
+        "bare": "#3a2a20",
+        "eyes": "#1a1010"
+      }
+    },
+    {
+      "name": "standard 5",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#2a2420",
+        "back": "#3a2a20",
+        "belly": "#372f2a",
+        "bare": "#3a2a20",
+        "eyes": "#1a1010"
+      }
+    }
+  ]
 }

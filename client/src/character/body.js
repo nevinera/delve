@@ -1138,10 +1138,14 @@ export class MeshOut {
     // tattered faces are faded and patched, and some left out for holes; savage and crude ones are
     // dented (each corner moved a little, the same wherever it's shared) and grimy or rusted.
     this.wear = null;
+    // Turns a face's area tag, where its color is one, into its color (paint.js's painter).
+    this.paint = () => [0.5, 0.5, 0.5];
   }
 
-  // A triangle, turned to face away from `inside`, or toward it when `toward`.
+  // A triangle, turned to face away from `inside`, or toward it when `toward`. Its color is
+  // [r, g, b], or an area tag for `paint`.
   face(corners, color, bones, inside, cornerBones = null, toward = false) {
+    if (typeof color === "string") color = this.paint(color, mul(add(add(corners[0], corners[1]), corners[2]), 1 / 3));
     if (this.wear) {
       const { style, seed, jitter = 0, holes = 0 } = this.wear;
       const middle = mul(add(add(corners[0], corners[1]), corners[2]), 1 / 3);

@@ -15,17 +15,93 @@
     "tail": "bushy",
     "feet": "paw",
     "rump": 0.78,
-    "pattern": "spots",
     "laugh": true
   },
   "look": {
     "height": [2.9, 3.3],
-    "build": [0.4, 0.6],
-    "colors": {
-      "skin": ["#a08a60", "#b09a6a", "#8a7a58"],
-      "hair": ["#3a2a1a", "#2a2018"],
-      "secondary": ["#2a2018"],
-      "eyes": ["#c8a040", "#a07030"]
+    "build": [0.4, 0.6]
+  },
+  "patterns": {
+    "standard": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212"
+      },
+      "areas": {
+        "everything": "coat",
+        "back": {
+          "color": "back",
+          "marks": [
+            {
+              "kind": "spots",
+              "color": "spot",
+              "amount": 0.32,
+              "size": 0.06
+            }
+          ]
+        },
+        "crown": "back",
+        "lower": "belly",
+        "limbs": "coat",
+        "shins": {
+          "color": "coat",
+          "tone": 0.85
+        },
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose",
+        "ears": "back",
+        "tailTip": "back",
+        "coat": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "spots",
+              "color": "spot",
+              "amount": 0.32,
+              "size": 0.06
+            }
+          ]
+        }
+      }
     }
-  }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#a08a60",
+        "back": "#3a2a1a",
+        "belly": "#d0b37d",
+        "bare": "#2a2018",
+        "eyes": "#c8a040",
+        "spot": "#2e2215"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#b09a6a",
+        "back": "#2a2018",
+        "belly": "#e5c88a",
+        "bare": "#2a2018",
+        "eyes": "#a07030",
+        "spot": "#221a13"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#8a7a58",
+        "back": "#3a2a1a",
+        "belly": "#b39f72",
+        "bare": "#2a2018",
+        "eyes": "#c8a040",
+        "spot": "#2e2215"
+      }
+    }
+  ]
 }

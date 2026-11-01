@@ -13,17 +13,124 @@
     "limb": 1.5,
     "ears": "kitty",
     "tail": "cat",
-    "feet": "paw",
-    "pattern": "stripes"
+    "feet": "paw"
   },
   "look": {
     "height": [0.8, 1],
-    "build": [0.35, 0.65],
-    "colors": {
-      "skin": ["#c87a3a", "#8a8680", "#2a2626", "#e8e2d8", "#a88a68"],
-      "hair": ["#7a4420", "#4a4644", "#1a1818", "#9a8a78", "#5a4430"],
-      "secondary": ["#d08a8a"],
-      "eyes": ["#c8b030", "#70b040", "#d09030"]
+    "build": [0.35, 0.65]
+  },
+  "patterns": {
+    "standard": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212"
+      },
+      "groups": {
+        "striped": ["coat", "back", "crown", "tail"]
+      },
+      "areas": {
+        "everything": "coat",
+        "lower": "belly",
+        "limbs": "coat",
+        "shins": {
+          "color": "coat",
+          "tone": 0.85
+        },
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose",
+        "ears": "back",
+        "tailTip": "stripe",
+        "striped": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "stripes",
+              "color": "stripe",
+              "width": 0.07,
+              "gap": 0.09,
+              "wave": 0.15,
+              "break": 0.1
+            }
+          ]
+        },
+        "legs": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "stripes",
+              "color": "stripe",
+              "width": 0.07,
+              "gap": 0.09,
+              "wave": 0.15,
+              "break": 0.25,
+              "across": "horizontal"
+            }
+          ]
+        }
+      }
     }
-  }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#c87a3a",
+        "back": "#7a4420",
+        "belly": "#e3c3a1",
+        "bare": "#d08a8a",
+        "eyes": "#c8b030",
+        "stripe": "#553016"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#8a8680",
+        "back": "#4a4644",
+        "belly": "#cec7ba",
+        "bare": "#d08a8a",
+        "eyes": "#70b040",
+        "stripe": "#343130"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#2a2626",
+        "back": "#1a1818",
+        "belly": "#aca69a",
+        "bare": "#d08a8a",
+        "eyes": "#d09030",
+        "stripe": "#121111"
+      }
+    },
+    {
+      "name": "standard 4",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#e8e2d8",
+        "back": "#9a8a78",
+        "belly": "#efe8d8",
+        "bare": "#d08a8a",
+        "eyes": "#c8b030",
+        "stripe": "#6c6154"
+      }
+    },
+    {
+      "name": "standard 5",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#a88a68",
+        "back": "#5a4430",
+        "belly": "#d8c9b1",
+        "bare": "#d08a8a",
+        "eyes": "#70b040",
+        "stripe": "#3f3022"
+      }
+    }
+  ]
 }

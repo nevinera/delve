@@ -7,10 +7,176 @@
   "required": ["skeleton"],
   "properties": {
     "skeleton": {
-      "enum": ["humanoid", "canine", "feline", "ursine", "hoofed", "lizard", "pachyderm", "dragon", "serpent", "fish", "ray", "bat", "crawler", "slime", "bird", "strider", "eyeshaug"]
+      "enum": [
+        "humanoid",
+        "canine",
+        "feline",
+        "ursine",
+        "hoofed",
+        "lizard",
+        "pachyderm",
+        "dragon",
+        "serpent",
+        "fish",
+        "ray",
+        "bat",
+        "crawler",
+        "slime",
+        "bird",
+        "strider",
+        "eyeshaug"
+      ]
     },
-    "shape": { "type": "object", "description": "The skeleton's builder's settings; each skeleton takes its own." },
-    "look": { "type": "object", "description": "Recipe settings as [low, high] ranges, lists to pick from, colors and loadouts." }
+    "shape": {
+      "type": "object",
+      "description": "The skeleton's builder's settings; each skeleton takes its own."
+    },
+    "look": {
+      "type": "object",
+      "description": "Recipe settings as [low, high] ranges, lists to pick from, colors and loadouts."
+    },
+    "groups": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "description": "Named sets of areas and other groups."
+    },
+    "patterns": {
+      "type": "object",
+      "additionalProperties": {
+        "$ref": "#/$defs/pattern"
+      }
+    },
+    "colorations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/coloration"
+      }
+    }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "$defs": {
+    "colors": {
+      "type": "object",
+      "maxProperties": 10,
+      "additionalProperties": {
+        "type": "string",
+        "pattern": "^#[0-9a-fA-F]{6}$"
+      }
+    },
+    "mark": {
+      "type": "object",
+      "required": ["kind", "color"],
+      "properties": {
+        "kind": {
+          "enum": ["speckled", "spots", "patches", "stripes"]
+        },
+        "color": {
+          "type": "string"
+        },
+        "tone": {
+          "type": "number"
+        },
+        "amount": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "size": {
+          "type": "number"
+        },
+        "width": {
+          "type": "number"
+        },
+        "gap": {
+          "type": "number"
+        },
+        "across": {
+          "enum": ["vertical", "horizontal", "diagonal"]
+        },
+        "wave": {
+          "type": "number"
+        },
+        "break": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "rule": {
+      "oneOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "color": {
+              "type": "string"
+            },
+            "tone": {
+              "type": "number"
+            },
+            "shade": {
+              "type": "number"
+            },
+            "marks": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/mark"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "pattern": {
+      "type": "object",
+      "required": ["areas"],
+      "properties": {
+        "colors": {
+          "$ref": "#/$defs/colors"
+        },
+        "groups": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "areas": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/rule"
+          }
+        }
+      }
+    },
+    "coloration": {
+      "type": "object",
+      "required": ["name", "pattern", "colors"],
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "weight": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "colors": {
+          "$ref": "#/$defs/colors"
+        }
+      }
+    }
+  }
 }

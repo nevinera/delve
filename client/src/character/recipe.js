@@ -2,7 +2,7 @@ import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_STYLES, ARMOR_TYPES } from "./armor.js
 import { FLESH_KINDS, HORN_KINDS, MUZZLE_KINDS } from "./body.js";
 import { ARM_PAIRS, LOWER_KINDS, TAIL_KINDS, WING_KINDS } from "./extras.js";
 import { HELD, OFFHANDS, WEAPON_STYLES, WEAPONS } from "./weapons.js";
-import { SHIPPED_LOOKS } from "./bodies.js";
+import { SHIPPED_BODIES, SHIPPED_LOOKS } from "./bodies.js";
 
 // Character recipes: how a kind of character looks, as plain JSON, so a world can describe its
 // enemies' looks and the client builds their models (body.js). A recipe gives each setting either a
@@ -199,6 +199,18 @@ export function resolveRecipe(own = {}, random = Math.random) {
   if (!OFFHANDS.includes(look.offhand) || HELD[look.weapon]?.twoHanded) look.offhand = DEFAULT_LOOK.offhand;
   if (!WEAPON_STYLES.includes(look.weaponStyle)) look.weaponStyle = DEFAULT_LOOK.weaponStyle;
   if (!WEAPON_STYLES.includes(look.offhandStyle)) look.offhandStyle = DEFAULT_LOOK.offhandStyle;
+  // A body painted by colorations (bodies.md) wears the one the recipe names, or one picked by
+  // weight; the recipe's colors go over its colors by name.
+  const colorations = SHIPPED_BODIES[own.body]?.colorations ?? [];
+  if (colorations.length) {
+    let left = random() * colorations.reduce((sum, c) => sum + weight(c), 0);
+    const picked = colorations.find((c) => c.name === own.coloration) ?? colorations.find((c) => (left -= weight(c)) < 0) ?? colorations.at(-1);
+    look.coloration = picked.name;
+    // The old slot names still reach the colors they painted.
+    const renamed = { skin: "coat", hair: "back", secondary: "bare" };
+    const paints = Object.entries({ ...outfit.colors, ...own.colors }).filter(([, v]) => isColor(v)).map(([k, v]) => [renamed[k] ?? k, v]);
+    if (paints.length) look.paints = Object.fromEntries(paints);
+  }
   return look;
 }
 
