@@ -99,6 +99,18 @@ describe("cave layout", () => {
     expect(spansAt(caves, 2, 2)).toEqual([]);
   });
 
+  it("carves again what's joined to what changed, and nothing else", () => {
+    const layout = new Layout();
+    const [a, b, c] = [layout.addNode([0, -100, 0]), layout.addNode([96, -100, 0]), layout.addNode([0, -100, 400])];
+    const arc = layout.addArc(a.id, b.id);
+    layout.carved = carvePlan(layout).carved;
+    arc.size = 14;
+    expect(layout.linked(arc.id)).toEqual([a.id, b.id]);
+    expect(layout.linked(a.id)).toEqual([arc.id]);
+    const redone = new Set(carvePlan(layout).opens.map(({ shape }) => shape));
+    expect(redone.size).toBe(shapesOf(layout.copyOf(arc.id)).length + shapesOf(layout.copyOf(a.id)).length + shapesOf(layout.copyOf(b.id)).length);
+  });
+
   it("doesn't count locking as a change", () => {
     const layout = new Layout();
     const node = layout.addNode([0, -100, 0]);

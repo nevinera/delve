@@ -10,8 +10,9 @@ import { ARC_DEFAULTS, ARC_FT, NODE_DEFAULTS, NODE_SIZES, STEEP_DEG, arcCurve, a
 // and drags a selected tunnel's bends to curve it. Both select: a click picks one, shift-click
 // adds or takes away, and shift-drag boxes them in. The panel shows the details of what's
 // selected, to change all of it at once, or of what's placed next. Each change carves what it
-// changed straight away (caveLayout.js's carvePlan), and undoes on its own. What's locked can't
-// be moved, changed or deleted, so it isn't carved again, keeping work done on it by hand.
+// changed straight away (caveLayout.js's carvePlan), with what's joined to it, and undoes on its
+// own. What's locked can't be moved, changed or deleted, and nor can what's joined to it, so it
+// isn't carved again, keeping work done on it by hand.
 //
 // The plan's drawn as glowing blue lines, as thick, in feet, as what they stand for is big, so
 // they thin with distance: a room as a ring on its floor and a stalk as high as it is, a tunnel
@@ -30,6 +31,7 @@ const START_RGB = [0.5, 1, 0.63];
 const STEEP_RGB = [1, 0.25, 0.2];
 const OPENING_RGB = [0.45, 1, 0.9];
 const LOCKED_RGB = [0.75, 0.55, 1];
+const LOCKED_NOTE = "unlock it, and what's joined to it, to change it";
 const GLOW = 3; // how much wider the glow is than the line
 const UNDOS = 100;
 const SPOKES = 8; // how many spokes a room's ring has
@@ -83,9 +85,9 @@ export class CavePlan {
       const picked = [...this.selected].map((id) => this.layout.get(id)).filter(Boolean);
       if (!picked.length) return (this.details[kind][key] = value);
       // Sizes and shapes are a room's or a tunnel's own; an opening's shape is always that.
-      const takes = (e) => !e.locked && ((key !== "size" && key !== "shape") || (kindOf(e) === kind && !(key === "shape" && isOpening(e))));
+      const takes = (e) => this.free(e.id) && ((key !== "size" && key !== "shape") || (kindOf(e) === kind && !(key === "shape" && isOpening(e))));
       const changing = picked.filter((e) => takes(e) && e[key] !== value);
-      if (!changing.length) return;
+      if (!changing.length) return this.status(picked.some((e) => !this.free(e.id)) ? LOCKED_NOTE : "");
       this.remember();
       for (const e of changing) e[key] = value;
       this.layout.version++;
@@ -141,9 +143,14 @@ export class CavePlan {
     this.carve();
   }
 
+  // Whether an element can be changed: it isn't locked, nor anything joined to it.
+  free(id) {
+    return [id, ...this.layout.linked(id)].every((other) => !this.layout.get(other)?.locked);
+  }
+
   deleteSelected() {
-    const deleting = [...this.selected].filter((id) => !this.layout.get(id)?.locked);
-    if (!deleting.length) return this.status(this.selected.size ? "unlock it to delete it" : "");
+    const deleting = [...this.selected].filter((id) => this.free(id));
+    if (!deleting.length) return this.status(this.selected.size ? LOCKED_NOTE : "");
     this.remember();
     for (const id of deleting) this.layout.remove(id);
     this.select(null);
@@ -274,7 +281,7 @@ export class CavePlan {
   down(e) {
     const at = this.pointerPx(e);
     const bend = this.pickBend(at);
-    if (bend !== null && !this.layout.get(this.focus)?.locked) return (this.drag = { id: this.focus, bend, before: this.layout.toJSON(), moved: false });
+    if (bend !== null && this.free(this.focus)) return (this.drag = { id: this.focus, bend, before: this.layout.toJSON(), moved: false });
     const node = this.pickNode(at);
     const arc = !node && this.pickArc(at)?.id;
     const picked = node || arc;
@@ -286,6 +293,7 @@ export class CavePlan {
     if (node) {
       if (this.tool === "tunnel") {
         if (this.start && this.start !== node) {
+          if (this.layout.nodes.get(this.start).locked || this.layout.nodes.get(node).locked) return this.status(LOCKED_NOTE);
           this.remember();
           const made = this.layout.addArc(this.start, node, this.details.arc);
           this.start = null;
@@ -297,7 +305,7 @@ export class CavePlan {
       }
       if (!this.selected.has(node)) this.select(node);
       this.focus = node;
-      if (!this.layout.nodes.get(node).locked) this.drag = { id: node, before: this.layout.toJSON(), moved: false };
+      if (this.free(node)) this.drag = { id: node, before: this.layout.toJSON(), moved: false };
       return;
     }
     if (arc) return this.select(arc);
@@ -517,7 +525,7 @@ export class CavePlan {
     }
     for (const button of document.querySelectorAll("[data-plan-style]")) button.setAttribute("aria-pressed", String(button.dataset.planStyle === d.style));
     const picked = [...this.selected].map((id) => this.layout.get(id)).filter(Boolean);
-    $("planDelete").disabled = !picked.some((e) => !e.locked);
+    $("planDelete").disabled = !picked.some((e) => this.free(e.id));
     $("planLock").disabled = !picked.some((e) => !e.locked);
     $("planUnlock").disabled = !picked.some((e) => e.locked);
     if (focus?.locked) $("planWhat").textContent += ", locked";

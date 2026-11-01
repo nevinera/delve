@@ -79,6 +79,13 @@ export class Layout {
     this.version++;
   }
 
+  // The elements joined to one: a node's arcs, or an arc's nodes.
+  linked(id) {
+    const arc = this.arcs.get(id);
+    if (arc) return [arc.from, arc.to];
+    return [...this.arcs.values()].filter((a) => a.from === id || a.to === id).map((a) => a.id);
+  }
+
   // An element as carving sees it: a copy, an arc's with its ends' places, and without whether
   // it's locked, which carving doesn't care about.
   copyOf(id) {
@@ -231,6 +238,13 @@ export function shapeBox(shape) {
   return [[x0, y - shape.half[1], z0], [x1, y + shape.half[1], z1]];
 }
 
+// The elements joined to one, as it is or, deleted, as it was carved.
+function linkedOf(layout, id) {
+  if (layout.get(id)) return layout.linked(id);
+  const copy = layout.carved.get(id);
+  return copy?.from ? [copy.from, copy.to] : [];
+}
+
 // Whether a shape stays ROOF_FT under the ground, over its middle and its corners.
 function fits(shape, groundAt) {
   const [[x0, , z0], [x1, top, z1]] = shapeBox(shape);
@@ -242,13 +256,14 @@ const boxOf = (shapes) => shapes.map(shapeBox).reduce((a, b) => [a[0].map((v, k)
 const overlap = (a, b) => [0, 1, 2].every((k) => a[0][k] <= b[1][k] && b[0][k] <= a[1][k]);
 
 // What carving changes: rock filled back into what each changed element carved last time, then
-// the shapes each opens afresh, it and every unchanged element whose last carving the filling
-// cuts into, and the carved copies after. `ids`: the elements to carve (all changed ones, by
+// the shapes each opens afresh, it, the elements joined to it, and every unchanged element whose
+// last carving the filling cuts into, and the carved copies after. `ids`: the elements to carve (all changed ones, by
 // default); `uncarve`: the elements to fill in and not carve again. Only openings open through the
 // ground; given groundAt(x, z), the ground's height, a room that would come within ROOF_FT of
 // it isn't carved, and is listed in `unfit`.
 export function carvePlan(layout, { ids = layout.changes(), uncarve = [] } = {}, groundAt = null) {
   const redo = new Set(ids.filter((id) => !uncarve.includes(id)));
+  for (const id of ids) for (const other of linkedOf(layout, id)) if (layout.get(other)) redo.add(other);
   const filled = [...new Set([...ids, ...uncarve])].filter((id) => layout.carved.has(id));
   const fills = filled.flatMap((id) => shapesOf(layout.carved.get(id)));
   if (fills.length) {

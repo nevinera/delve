@@ -25,11 +25,11 @@ An arc is a tunnel between two nodes, `from` and `to`. It runs floor to floor th
 - `style`: a `mineshaft` is square, a `borehole` round, a `lavatube` round and swelling.
 - `rock` and `hewn`, as for nodes.
 
-A node or arc with `locked` true can't be moved, changed or deleted in /create, so it isn't carved again and keeps work done on it by hand.
+A node or arc with `locked` true can't be moved, changed or deleted in /create, and nor can the elements joined to it (a node's arcs, an arc's nodes), so it isn't carved again and keeps work done on it by hand.
 
 ## Carving
 
-For now every room carves as a round borehole room and every tunnel as a wiggly borehole tunnel, whatever their details say. Only openings open through the ground: other air stops 4 ft under it, and a room that would come that near it isn't carved. /create carves each change as it's made.
+For now every room carves as a round borehole room and every tunnel as a wiggly borehole tunnel, whatever their details say. Only openings open through the ground: other air stops 4 ft under it, and a room that would come that near it isn't carved. /create carves each change as it's made, with the elements joined to it.
 
 The same details always carve the same cave: the noise for each room and tunnel is seeded from its id. `carved` keeps each node or arc as it was when last carved (an arc's copy adds `ends`, its nodes' `at`). Carving a changed one fills its old shapes with rock, then opens its new ones, and carves again its unchanged neighbours that the fill touched. Uncarving fills an element's old shapes and drops it from `carved`.
 
