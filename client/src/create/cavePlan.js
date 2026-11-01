@@ -30,6 +30,7 @@ const STEEP_RGB = [1, 0.25, 0.2];
 const OPENING_RGB = [0.45, 1, 0.9];
 const GLOW = 3; // how much wider the glow is than the line
 const UNDOS = 100;
+const SPOKES = 8; // how many spokes a room's ring has
 const $ = (id) => document.getElementById(id);
 
 // How thick, in feet, a room's lines are, and a tunnel's.
@@ -184,12 +185,18 @@ export class CavePlan {
     return point ? { at: point.p, opening: false } : null;
   }
 
-  // The node at the pointer, nearest the camera.
+  // The node at the pointer, nearest the camera: its middle, or any of its lines.
   pickNode([px, py]) {
     let best = null;
     for (const node of this.layout.nodes.values()) {
-      const s = this.screen(node.at);
-      if (!s || Math.hypot(s[0] - px, s[1] - py) > PICK_PX) continue;
+      const middle = this.screen(node.at);
+      const near =
+        (middle && Math.hypot(middle[0] - px, middle[1] - py) <= PICK_PX) ||
+        nodeLines(node).some((points) => {
+          const seen = points.map((p) => this.screen(p));
+          return seen.some((a, i) => i > 0 && a && seen[i - 1] && toSegment([px, py], seen[i - 1], a) <= PICK_PX / 2 + 2);
+        });
+      if (!near) continue;
       const d = this.camera.position.distanceTo(new THREE.Vector3(...node.at));
       if (!best || d < best.d) best = { id: node.id, d };
     }
@@ -410,8 +417,8 @@ export class CavePlan {
     return this.materials.get(key);
   }
 
-  // Draws the nodes and arcs: each room a ring round its floor as wide as it is, with a stalk up
-  // as high, each opening a ring on the ground with a stalk down into it, each tunnel along its
+  // Draws the nodes and arcs: each room a ring round its floor as wide as it is, with thin spokes
+  // in to its middle and a stalk up as high, each opening a ring on the ground with a stalk down into it, each tunnel along its
   // line, red where it's steep; what's selected in yellow, a tunnel's start in green, and the one
   // arc selected with its bends.
   draw(made) {
@@ -421,12 +428,12 @@ export class CavePlan {
       child.geometry.dispose();
     }
     for (const node of this.layout.nodes.values()) {
-      const R = NODE_SIZES[node.size] / 2;
       const opening = isOpening(node);
       const rgb = this.selected.has(node.id) ? SELECTED_RGB : node.id === this.start ? START_RGB : opening ? OPENING_RGB : CORE_RGB;
-      const ring = Array.from({ length: 49 }, (_, i) => [node.at[0] + R * Math.cos((i / 48) * Math.PI * 2), node.at[1], node.at[2] + R * Math.sin((i / 48) * Math.PI * 2)]);
+      const [ring, stalk, ...spokes] = nodeLines(node);
       this.line(ring, nodeLine(node), rgb);
-      this.line([node.at, [node.at[0], node.at[1] + (opening ? -R : R), node.at[2]]], nodeLine(node), rgb);
+      this.line(stalk, nodeLine(node), rgb);
+      for (const spoke of spokes) this.line(spoke, nodeLine(node) / 3, rgb);
     }
     for (const arc of this.layout.arcs.values()) {
       const selected = this.selected.has(arc.id);
@@ -484,6 +491,17 @@ export class CavePlan {
     this.label.classList.toggle("steep", steepest.deg > STEEP_DEG);
     this.label.style.transform = `translate(${s[0]}px, ${s[1]}px)`;
   }
+}
+
+// A node's lines, continent feet: its ring round its floor, its stalk, up as high as the room is
+// (down, for an opening), and its spokes from the ring to its middle.
+function nodeLines(node) {
+  const R = NODE_SIZES[node.size] / 2;
+  const [x, y, z] = node.at;
+  const round = (i, n) => [x + R * Math.cos((i / n) * Math.PI * 2), y, z + R * Math.sin((i / n) * Math.PI * 2)];
+  const ring = Array.from({ length: 49 }, (_, i) => round(i, 48));
+  const stalk = [node.at, [x, y + (isOpening(node) ? -R : R), z]];
+  return [ring, stalk, ...Array.from({ length: SPOKES }, (_, i) => [round(i, SPOKES), node.at])];
 }
 
 const kindOf = (element) => (element.from ? "arc" : "node");
