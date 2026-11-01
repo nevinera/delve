@@ -455,7 +455,7 @@ export const BODY_LOOKS = {
       { weapon: "staff", weaponStyle: "fine", armor: { chest: { type: "cloth" } } },
     ],
   },
-  frogman: {
+  amphen: {
     height: [5, 5.8],
     build: [0.4, 0.65],
     limbs: [0.3, 0.5],

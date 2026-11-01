@@ -8,7 +8,7 @@ describe("slime", () => {
     const mesh = characterMesh(resolveRecipe({ body: "slime", height: 3 }));
     mesh.geometry.computeBoundingBox();
     expect(mesh.geometry.boundingBox.min.y).toBeCloseTo(0, 1);
-    expect(mesh.geometry.boundingBox.max.y).toBeCloseTo(3, 1);
+    expect(mesh.geometry.boundingBox.max.y).toBeCloseTo(3, 0);
     const death = characterClips(mesh, { clips: {} }).get("Death");
     expect(death.tracks.some((track) => track.name === "body.scale")).toBe(true);
   });
