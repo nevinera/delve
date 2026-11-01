@@ -237,6 +237,24 @@ export const BODY_LOOKS = {
     limbs: [0.5, 0.8],
     colors: { skin: ["#1a1a1a", "#2a2018"], secondary: ["#2a5a3a", "#3a2a5a", "#5a3a1a", "#1a3a5a"], hair: ["#2a2420", "#3a3028"], eyes: ["#c0a020", "#d04020"] },
   },
+  raptor: {
+    height: [5, 6.5],
+    build: [0.4, 0.7],
+    head: [0.4, 0.6],
+    colors: { skin: ["#6a7a3a", "#8a6a3a", "#5a6a5a"], secondary: ["#3a3a2a", "#4a2a1a"], hair: ["#c03020", "#d0a030", "#3a6ab0"], eyes: ["#e0c020", "#d08010"] },
+  },
+  tyrant: {
+    height: [16, 22],
+    build: [0.6, 0.9],
+    head: [0.5, 0.8],
+    colors: { skin: ["#5a5a3a", "#6a4a32", "#4a5a3a"], secondary: ["#3a3a28", "#3a2a1a"], hair: ["#d8d0b0", "#c8c0a0"], eyes: ["#e0a020", "#c06010"] },
+  },
+  ostora: {
+    height: [8, 10],
+    build: [0.5, 0.8],
+    head: [0.4, 0.6],
+    colors: { skin: ["#8a7a6a", "#6a5a5a", "#9a8a6a"], secondary: ["#d8c8a8", "#c0b0a0"], hair: ["#5a4a3a", "#3a3a3a"], eyes: ["#101010"] },
+  },
   vulture: {
     height: [4, 5.5],
     build: [0.5, 0.8],
