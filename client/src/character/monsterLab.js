@@ -61,6 +61,7 @@ let baked = null;
 let looks = []; // { look, mesh, mixer, clips, roles, action, clip, flame }
 let cycled = 0; // how long the role's played, going through every one
 let turn = 0; // which of its roles each look plays, playing everything in turn
+let human = null; // a 6ft human idling at the left end of the row, for scale: { mesh, mixer }
 
 function seeded(n) {
   let s = n >>> 0 || 1;
@@ -133,12 +134,23 @@ function build() {
     return Math.max(box.max.y, box.max.x - box.min.x, 0.9 * (box.max.z - box.min.z));
   });
   const size = Math.max(...sizes);
+  // The human first, then the looks, the whole row centered.
+  const at = (slot) => (slot - looks.length / 2) * size * GAP;
+  if (!human) {
+    const mesh = characterMesh(resolveRecipe({ body: "humanoid", height: 6 }));
+    const mixer = new THREE.AnimationMixer(mesh);
+    mixer.clipAction(characterClips(mesh, baked).get("Idle_Loop")).play();
+    human = { mesh, mixer };
+    scene.add(mesh);
+  }
+  // Clear of the first look, however small the looks are.
+  human.mesh.position.x = at(1) - Math.max(size * GAP, 3);
   looks.forEach(({ mesh, ring }, k) => {
-    mesh.position.x = (k - (looks.length - 1) / 2) * size * GAP;
+    mesh.position.x = at(k + 1);
     ring.position.x = mesh.position.x;
     scene.add(mesh, ring);
   });
-  ground.scale.setScalar(size * GAP * (looks.length + 2));
+  ground.scale.setScalar(Math.max(size * GAP * (looks.length + 2), 16));
   fillClips();
   fillLooks();
   start();
@@ -250,9 +262,11 @@ function pickBody(body) {
 let rowSize = 1;
 function view(name, size = rowSize) {
   rowSize = size;
-  const width = size * GAP * Math.max(1, looks.length);
-  const span = Math.max(size * 1.6, width * 0.75);
-  const middle = new THREE.Vector3(0, size * 0.45, 0);
+  // The row, the human at its end included.
+  const width = size * GAP * looks.length + Math.max(size * GAP, 3);
+  const tall = Math.max(size, 6);
+  const span = Math.max(tall * 1.6, width * 0.75);
+  const middle = new THREE.Vector3(human ? (human.mesh.position.x + (looks.at(-1)?.mesh.position.x ?? 0)) / 2 : 0, tall * 0.45, 0);
   camera.position.copy(middle).add(new THREE.Vector3(...VIEWS[name]).normalize().multiplyScalar(span * 2.4));
   orbit.target.copy(middle);
   orbit.update();
@@ -271,6 +285,7 @@ function step(dt) {
   }
   if (state.paused) return;
   for (const l of looks) l.mixer.update(dt * state.speed);
+  human?.mixer.update(dt * state.speed);
   showTime();
   if (state.pick === "all") {
     // Each role plays a while, or once and a beat, then every look goes on to its next.
