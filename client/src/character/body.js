@@ -894,13 +894,13 @@ export class MeshOut {
         this.face([a, cc, d], col, wa, inside, [wa, wc, wd], inward);
       }
     }
-    // A dome over the end ring: two smaller rings out past it, then a point, as deep as the ring's
-    // narrower radius.
+    // A low dome over the end ring: one smaller ring out past it, then a point, as deep as most of
+    // the ring's narrower radius.
     const cap = (i, outward, capColor) => {
       const r = rings[i];
       const depth = outward * Math.min(r.rx, r.rz) * 0.7;
       const inside = rings[i - outward]?.center ?? sub(r.center, mul(r.dir, outward));
-      const dome = [Math.PI / 6, Math.PI / 3].map((a) => points[i].map((q) => add(add(r.center, mul(sub(q, r.center), Math.cos(a))), mul(r.dir, depth * Math.sin(a)))));
+      const dome = [Math.PI / 4].map((a) => points[i].map((q) => add(add(r.center, mul(sub(q, r.center), Math.cos(a))), mul(r.dir, depth * Math.sin(a)))));
       const tip = add(r.center, mul(r.dir, depth));
       const layers = [points[i], ...dome];
       const w = cornerBones[i];
