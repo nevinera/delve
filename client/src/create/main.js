@@ -39,9 +39,6 @@ import { Overhead } from "./overhead.js";
 const $ = (id) => document.getElementById(id);
 const SKY = 0x9cc4e4;
 const UNDERGROUND = 0x000000; // the sky, with the camera under the ground
-const GHOST_TOOLS = new Set(["erase", "chamber", "tunnel"]); // tools the builder's always a ghost with
-const CAVE_TOOLS = new Set(["dig", "caveFill", "caveSmooth", "teleport"]); // tools they're a ghost with in rock
-const STAND_RINGS = 3; // how many rings of cells round where they teleport to are looked in for room to stand
 const OVERHEAD_EVERY_MS = 1000; // how often the ground drawn over the camera underground's read again
 // Where fog starts and closes in, as shares of how far off ground's drawn.
 const FOG = { near: 0.5, far: 1.02 };
@@ -216,15 +213,9 @@ function start(world, changes, fresh) {
     return [[a, z0], [x0, b]].find(([u, v]) => !rockAt(u, v)) ?? [x0, z0];
   };
   const clear = (head, at) => caves.clear(head, at);
-  // They're a ghost with the ghost toggle on; always with the tools for working from outside
-  // caves; and with the other cave tools while they're in rock under the ground, so they can work
-  // on from where those left them.
   let tools = null;
-  const inRock = () => {
-    const { x, y, z } = builder.state;
-    return y < groundAt(x, z) && rockAt(x, z, y);
-  };
-  const ghost = () => $("ghost").checked || GHOST_TOOLS.has(tools?.tool) || (CAVE_TOOLS.has(tools?.tool) && inRock());
+  // They're a ghost with the ghost toggle on.
+  const ghost = () => $("ghost").checked;
   // Flying, cave rock's in the way too, sliding along it where it can, unless they're a ghost or
   // already in it.
   const keep = (was, now) => {
@@ -234,24 +225,7 @@ function start(world, changes, fresh) {
     return tries.map((t) => ({ ...now, ...t })).find((s) => !stuck(s)) ?? { ...now, x: was.x, y: was.y, z: was.z };
   };
   builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push, clear, keep, ghost });
-  // Where the builder can stand in the cave `ray` points at (Caves.aimed), or near it, as
-  // [x, y, z], or null.
-  const standable = (ray) => {
-    const at = caves.aimed(ray);
-    if (!at) return null;
-    for (let ring = 0; ring <= STAND_RINGS; ring++) {
-      for (let dz = -ring; dz <= ring; dz++) {
-        for (let dx = -ring; dx <= ring; dx++) {
-          if (Math.max(Math.abs(dx), Math.abs(dz)) !== ring) continue;
-          const [x, z] = [at[0] + dx * CELL_FT, at[2] + dz * CELL_FT];
-          const y = caves.groundAt(x, z, at[1]);
-          if (Math.abs(y - at[1]) < STAND_RINGS * CELL_FT && !rockAt(x, z, y)) return [x, y, z];
-        }
-      }
-    }
-    return null;
-  };
-  tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves, layout, standable });
+  tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves });
   // The bottom bar's display toggles.
   $("showGrid").checked = grid.value === 1;
   $("showGrid").addEventListener("change", () => (grid.value = $("showGrid").checked ? 1 : 0));
