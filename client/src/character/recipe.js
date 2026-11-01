@@ -1,5 +1,5 @@
-import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_TYPES } from "./armor.js";
-import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
+import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_STYLES, ARMOR_TYPES } from "./armor.js";
+import { HELD, OFFHANDS, WEAPON_STYLES, WEAPONS } from "./weapons.js";
 
 // Character recipes: how a kind of character looks, as plain JSON, so a world can describe its
 // enemies' looks and the client builds their models (body.js). A recipe gives each setting either a
@@ -26,9 +26,13 @@ import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 // - weapon: one of weapons.js's WEAPONS, held in hand.
 // - offhand: one of weapons.js's OFFHANDS, a shield, orb or second weapon; none with a
 //   two-handed weapon.
+// - weaponStyle, offhandStyle: how each is made, one of weapons.js's WEAPON_STYLES.
 // - sheathed: true to put the weapon and off-hand item away, at the hips and across the back.
-// - armor: { slot: { type, colors: [main, trim] } } for armor.js's ARMOR_SLOTS and ARMOR_TYPES;
-//   type and each color can be a list to pick from.
+// - armor: { slot: { type, style, colors: [main, trim] } } for armor.js's ARMOR_SLOTS,
+//   ARMOR_TYPES and ARMOR_STYLES; type, style and each color can be a list to pick from.
+// - loadouts: for a creature, a list of outfits, each spawn wearing one: each has any of weapon,
+//   offhand, weaponStyle, offhandStyle, armor and colors, and a `weight` (1 unless given) for how
+//   often it's picked. An outfit goes over its body's look, and the recipe's own settings over it.
 // - colors: { skin, hair, eyes, primary, secondary, metal, steel, wood, paint }, each "#rrggbb" or
 //   a list to pick from. primary is the shirt or tunic, secondary the trousers; boots and belt are
 //   darker shades of those. metal is jewelry, fittings and glasses, steel blades, wood hafts and
@@ -67,6 +71,8 @@ export const DEFAULT_LOOK = {
   face: [],
   weapon: "none",
   offhand: "none",
+  weaponStyle: "fine",
+  offhandStyle: "fine",
   sheathed: false,
   armor: {},
   colors: {
@@ -99,6 +105,12 @@ export const BODY_LOOKS = {
     hair: ["bald", "bald", "spiky", "topknot"],
     mouth: ["grin", "frown", "smirk"],
     colors: { skin: ["#6a8a3a", "#7a9a40", "#5a7a34", "#8a9a4a"], hair: ["#1b1310", "#2a1c14"], eyes: ["#d0a020", "#c06020"], primary: ["#6b5a3a", "#5a4a3a", "#7a3b2e"], secondary: ["#4a4038", "#3a3430"] },
+    loadouts: [
+      { weapon: "dagger", weaponStyle: "crude", armor: { chest: { type: "leather", style: "tattered" }, feet: { type: "cloth", style: "tattered" } }, weight: 3 },
+      { weapon: "sword", weaponStyle: "crude", offhand: "shield", offhandStyle: "crude", armor: { chest: { type: "leather", style: "tattered" }, head: { type: "leather", style: "tattered" } }, weight: 2 },
+      { weapon: "bow", weaponStyle: "crude", armor: { chest: { type: "cloth", style: "tattered" } }, weight: 2 },
+      { weapon: "staff", weaponStyle: "savage", armor: { chest: { type: "cloth", style: "savage" }, head: { type: "cloth", style: "savage" } } },
+    ],
   },
   troll: {
     height: [8, 9],
@@ -116,6 +128,11 @@ export const BODY_LOOKS = {
     hair: ["mohawk", "bald", "spiky"],
     mouth: ["frown", "neutral"],
     colors: { skin: ["#4a7a8a", "#5a8a7a", "#6a8a9a"], hair: ["#c05a2a", "#d03030", "#1b1310"], eyes: ["#d03020", "#e0c040"], primary: ["#5a4a3a", "#6b5a3a"], secondary: ["#4a4038", "#3a3430"] },
+    loadouts: [
+      { weapon: "maul", weaponStyle: "savage", armor: { shoulders: { type: "leather", style: "savage" }, legs: { type: "leather", style: "tattered" } }, weight: 2 },
+      { weapon: "greataxe", weaponStyle: "savage", armor: { chest: { type: "plate", style: "savage" }, shoulders: { type: "plate", style: "savage" } } },
+      { weapon: "mace", weaponStyle: "crude", offhand: "shield", offhandStyle: "savage", armor: { chest: { type: "chain", style: "tattered" } } },
+    ],
   },
   wolf: {
     height: [2.9, 3.3],
@@ -177,7 +194,12 @@ export const BODY_LOOKS = {
 // still load.
 export function resolveRecipe(own = {}, random = Math.random) {
   const body = BODY_LOOKS[own.body] ?? {};
-  const recipe = { ...body, ...own, colors: { ...body.colors, ...own.colors } };
+  const loadouts = [own.loadouts ?? body.loadouts].flat().filter((l) => l && typeof l === "object");
+  // One outfit, picked by weight.
+  const weight = (l) => (Number.isFinite(l.weight) && l.weight > 0 ? l.weight : 1);
+  let at = loadouts.length ? random() * loadouts.reduce((sum, l) => sum + weight(l), 0) : 0;
+  const outfit = loadouts.find((l) => (at -= weight(l)) < 0) ?? loadouts.at(-1) ?? {};
+  const recipe = { ...body, ...outfit, ...own, colors: { ...body.colors, ...outfit.colors, ...own.colors } };
   const pick = (value) => {
     if (Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === "number")) {
       return value[0] + (value[1] - value[0]) * random();
@@ -202,7 +224,8 @@ export function resolveRecipe(own = {}, random = Math.random) {
         const piece = value?.[slot];
         const type = piece && pick(piece.type);
         if (!ARMOR_TYPES.includes(type)) continue;
-        look.armor[slot] = { type, colors: [0, 1].map((i) => [pick(list(piece.colors)[i])].find(isColor) ?? ARMOR_COLORS[type][i]) };
+        const style = pick(piece.style);
+        look.armor[slot] = { type, style: ARMOR_STYLES.includes(style) ? style : "fine", colors: [0, 1].map((i) => [pick(list(piece.colors)[i])].find(isColor) ?? ARMOR_COLORS[type][i]) };
       }
     } else if (key === "jewelry") {
       look.jewelry = list(value).filter((j) => JEWELRY.includes(j));
@@ -221,6 +244,8 @@ export function resolveRecipe(own = {}, random = Math.random) {
   if (!TUSKS.includes(look.tusks)) look.tusks = DEFAULT_LOOK.tusks;
   if (!WEAPONS.includes(look.weapon)) look.weapon = DEFAULT_LOOK.weapon;
   if (!OFFHANDS.includes(look.offhand) || HELD[look.weapon]?.twoHanded) look.offhand = DEFAULT_LOOK.offhand;
+  if (!WEAPON_STYLES.includes(look.weaponStyle)) look.weaponStyle = DEFAULT_LOOK.weaponStyle;
+  if (!WEAPON_STYLES.includes(look.offhandStyle)) look.offhandStyle = DEFAULT_LOOK.offhandStyle;
   return look;
 }
 
@@ -278,7 +303,7 @@ export function randomLook(random = Math.random) {
 
 // The settings a character only tries on in the builder: what it wears and holds comes from what
 // it has in each world, so a saved character keeps only its appearance.
-export const GEAR = ["weapon", "offhand", "sheathed", "armor"];
+export const GEAR = ["weapon", "offhand", "weaponStyle", "offhandStyle", "sheathed", "armor"];
 
 // A look without its gear, as a character saves it.
 export function appearance(look) {

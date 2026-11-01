@@ -69,3 +69,25 @@ describe("appearance", () => {
   });
 });
 
+describe("loadouts", () => {
+  const draws = (values) => () => values.shift() ?? 0.5;
+
+  it("wears one outfit, picked by weight", () => {
+    const loadouts = [{ weapon: "dagger", weight: 3 }, { weapon: "bow" }];
+    expect(resolveRecipe({ loadouts }, draws([0.7])).weapon).toBe("dagger");
+    expect(resolveRecipe({ loadouts }, draws([0.8])).weapon).toBe("bow");
+  });
+
+  it("puts an outfit over its body's look, and the recipe's own settings over it", () => {
+    const loadouts = [{ weapon: "maul", weaponStyle: "savage", armor: { chest: { type: "plate", style: "savage" } } }];
+    const look = resolveRecipe({ body: "troll", loadouts });
+    expect(look).toMatchObject({ weapon: "maul", weaponStyle: "savage", armor: { chest: { type: "plate", style: "savage" } } });
+    expect(resolveRecipe({ body: "troll", loadouts, weapon: "axe" }).weapon).toBe("axe");
+  });
+
+  it("drops styles it doesn't know", () => {
+    const look = resolveRecipe({ weapon: "sword", weaponStyle: "gilded", armor: { chest: { type: "chain", style: "gilded" } } });
+    expect(look.weaponStyle).toBe("fine");
+    expect(look.armor.chest.style).toBe("fine");
+  });
+});

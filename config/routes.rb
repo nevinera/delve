@@ -44,6 +44,7 @@ Rails.application.routes.draw do
   resources :characters, except: [:show]
   get "animation_lab" => "animation_lab#show"
   get "creatures" => "creatures#show"
+  get "creature" => "creatures#creature"
 
   # For the game server (docs/formats/game-protocol.md).
   namespace :internal_api, path: "internal" do

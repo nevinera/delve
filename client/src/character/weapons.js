@@ -96,13 +96,20 @@ const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
 const shadeOf = (rgb, f) => rgb.map((v) => v * f);
 const STRING = [0.86, 0.84, 0.78];
 
+// How a weapon is made: fine as it's drawn, crude (dented and rusted) or savage (cruder still,
+// with bone spikes down its back).
+export const WEAPON_STYLES = ["fine", "crude", "savage"];
+
 // { positions, colors } for an item, or null for "none". Blades are steel, hafts and staves wood,
 // fittings metal; a shield is painted in the primary color and an orb or wand gem glows in it.
-export function weaponMesh(type, colors) {
+// `style` is one of WEAPON_STYLES.
+export function weaponMesh(type, colors, style = "fine") {
   if (!HELD[type]) return null;
   const c = { steel: hex(colors.steel), wood: hex(colors.wood), metal: hex(colors.metal), paint: hex(colors.primary) };
   const grip = shadeOf(c.wood, 0.6);
   const out = new MeshOut(new Map([["weapon", 0]]));
+  const seed = [...type].reduce((h, ch) => h * 31 + ch.charCodeAt(0), 7);
+  if (style === "crude" || style === "savage") out.wear = { style, seed, jitter: style === "savage" ? 0.014 : 0.009 };
   const bones = [["weapon", 1]];
   const up = [0, 1, 0];
   const ring = (y, rx, rz = rx, z = 0) => ({ center: [0, y, z], dir: up, rx, rz, bones });
@@ -341,6 +348,24 @@ export function weaponMesh(type, colors) {
     out.tube([ring(0.2, 0.05), ring(0.35, 0.14)], 6, () => c.metal);
     out.tube([ring(0.3, 0.01), ring(0.36, 0.13), ring(0.5, 0.18), ring(0.64, 0.13), ring(0.7, 0.01)], 6, () => c.paint, { capStart: true, capEnd: true });
   }
+  if (style === "savage") spikes(out, bones);
   const { positions, colors: rgb } = out.arrays();
   return { positions, colors: rgb };
+}
+
+// Bone spikes out of the back of the far part of an item, its length running along +y.
+function spikes(out, bones) {
+  out.wear = null;
+  const points = [];
+  for (let i = 0; i < out.positions.length; i += 3) points.push(out.positions.slice(i, i + 3));
+  const ys = points.map((p) => p[1]);
+  const [low, high] = [Math.min(...ys), Math.max(...ys)];
+  for (const t of [0.9, 0.76, 0.62]) {
+    const y = low + (high - low) * t;
+    const near = points.filter((p) => Math.abs(p[1] - y) < 0.06 * (high - low) + 0.02);
+    if (!near.length) continue;
+    const back = Math.min(...near.map((p) => p[2]));
+    const length = 0.12 + 0.03 * (high - low);
+    out.path([[0, y, back + 0.03], [0, y + length * 0.4, back - length]], [length * 0.22, length * 0.02], 5, () => [0.85, 0.8, 0.64], () => bones);
+  }
 }

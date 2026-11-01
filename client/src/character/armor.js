@@ -1,13 +1,19 @@
+import { hashAt, worn } from "./body.js";
+
 // Armor over a body (body.js), so it fits any body shape: each piece recolors parts of the body,
 // adds shells (copies of the body's own rings pushed out, with the same bone weights, so they
 // bend as the body does), or adds pieces built round a bone, sized from the body under them.
 //
-// A look's armor has a piece per slot (ARMOR_SLOTS), each { type, colors: [main, trim] } with type
-// one of ARMOR_TYPES. Each type has a fixed pattern in those two colors: cloth is a robe, leather
-// strapped hide, chain mail (body.js marks its faces for the mail texture), plate segmented steel.
+// A look's armor has a piece per slot (ARMOR_SLOTS), each { type, style, colors: [main, trim] } with
+// type one of ARMOR_TYPES and style one of ARMOR_STYLES. Each type has a fixed pattern in those two
+// colors: cloth is a robe, leather strapped hide, chain mail (body.js marks its faces for the mail
+// texture), plate segmented steel. The style wears any of them: tattered is faded, patched, holed
+// and torn at the hem; savage is dented and grimy, spiked with bone at the shoulders, head and
+// hands.
 
 export const ARMOR_SLOTS = ["head", "shoulders", "chest", "hands", "legs", "feet"];
 export const ARMOR_TYPES = ["cloth", "leather", "chain", "plate"];
+export const ARMOR_STYLES = ["fine", "tattered", "savage"];
 // ARMOR_SWATCHES are the main and trim colors a player can paint armor in the builder, each
 // type's own among them.
 export const ARMOR_SWATCHES = [
@@ -23,6 +29,8 @@ export const ARMOR_COLORS = {
 };
 
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
+// The wear on the piece being put on, for recolor to wear the body's own faces it colors.
+let wearing = null;
 const add = (a, b) => a.map((v, i) => v + b[i]);
 const mul = (a, s) => a.map((v) => v * s);
 const SIDES = ["l", "r"];
@@ -35,7 +43,12 @@ export function dressArmor(out, parts, look, ctx) {
     const piece = look.armor?.[slot];
     if (!piece || !ARMOR_TYPES.includes(piece.type)) continue;
     const [main, trim] = piece.colors.map(hex);
+    const style = ARMOR_STYLES.includes(piece.style) ? piece.style : "fine";
+    const seed = ARMOR_SLOTS.indexOf(slot) * 7919 + 17;
+    wearing = style === "fine" ? null : { style, seed, jitter: style === "savage" ? 0.012 * ctx.s : 0.004 * ctx.s, holes: style === "tattered" ? 0.1 : 0, spikes: style === "savage" && ["shoulders", "head", "hands"].includes(slot) ? 0.22 * ctx.s : 0 };
+    out.wear = wearing;
     DRESS[slot][piece.type]({ out, parts, look, ctx, main, trim, chain: piece.type === "chain" });
+    out.wear = wearing = null;
   }
 }
 
@@ -65,7 +78,12 @@ const trunkBetween = (parts, s, y0, y1) => parts.trunk.rings.filter((r) => heigh
 // gives none.
 function recolor(part, which) {
   const before = part.color;
-  part.color = (band, angle) => which(band, angle) ?? before(band, angle);
+  const wear = wearing;
+  part.color = (band, angle) => {
+    const color = which(band, angle);
+    if (!color) return before(band, angle);
+    return wear ? worn(color, wear.style, hashAt([band, angle], wear.seed)) : color;
+  };
 }
 
 // Gloves over a side's fingers and thumb (body.js's hand_l_0 to hand_l_4): recolored, and made

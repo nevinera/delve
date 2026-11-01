@@ -78,7 +78,7 @@ function hold(bones, look, type, offhand = false) {
   const held = heldBy(type, offhand);
   if (!held) return null;
   const s = look.height / 6;
-  const data = weaponMesh(type, look.colors);
+  const data = weaponMesh(type, look.colors, offhand ? look.offhandStyle : look.weaponStyle);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(data.positions, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(linear(data.colors), 3));

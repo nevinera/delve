@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { DEFAULT_LOOK } from "./recipe.js";
-import { HELD, OFFHANDS, WEAPONS, heldBy, sheathOf, weaponMesh } from "./weapons.js";
+import { HELD, OFFHANDS, WEAPON_STYLES, WEAPONS, heldBy, sheathOf, weaponMesh } from "./weapons.js";
 
 describe("weaponMesh", () => {
   it("builds every item but none, and says which bone holds it", () => {
@@ -24,5 +24,16 @@ describe("weaponMesh", () => {
     expect(sheathOf("dagger", true)).toMatchObject({ place: "hip", side: "r" });
     expect(sheathOf("orb", true)).toMatchObject({ place: "hip", side: "r" });
     for (const type of ["greatsword", "maul", "staff", "bow", "gun", "shield"]) expect(sheathOf(type).place).toBe("back");
+  });
+});
+
+describe("weapon styles", () => {
+  it("dents crude and savage items, and gives savage ones spikes", () => {
+    for (const type of ["sword", "axe", "maul", "shield"]) {
+      const [fine, crude, savage] = WEAPON_STYLES.map((style) => weaponMesh(type, DEFAULT_LOOK.colors, style));
+      expect(crude.positions.length).toBe(fine.positions.length);
+      expect(crude.positions.some((v, i) => v !== fine.positions[i]), type).toBe(true);
+      expect(savage.positions.length, type).toBeGreaterThan(fine.positions.length);
+    }
   });
 });

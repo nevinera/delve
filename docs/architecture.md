@@ -20,6 +20,7 @@ The client has one entry point per page (`vite.config.js`):
 | `/characters`, `/home` | `client/src/character/list.js` | your characters |
 | `/animation_lab` | `client/src/character/lab.js` | the animation lab |
 | `/creatures` | `client/src/character/creatures.js` | each creature body playing its clips, by skeleton |
+| `/creature` | `client/src/character/creature.js` | one creature playing each of its roles in turn, with a control for each setting |
 
 `client/src/main.js` is a placeholder for the game.
 

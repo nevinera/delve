@@ -60,6 +60,26 @@ const norm = (a) => mul(a, 1 / Math.hypot(...a));
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
 const shade = (rgb, f) => rgb.map((v) => v * f);
 
+// A number from 0 to 1 for a point and a seed, the same for the same point, so corners shared by
+// faces move and color alike.
+export function hashAt(point, seed = 0) {
+  let h = seed | 0;
+  for (const v of point) {
+    h = Math.imul(h ^ Math.round(v * 500), 0x27d4eb2d);
+    h ^= h >>> 15;
+  }
+  h = Math.imul(h ^ (h >>> 13), 0x85ebca6b);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+// A color as wear leaves it (MeshOut's `wear`): faded and patched, grimy, or rusted, by `h` (0-1).
+export function worn(color, style, h) {
+  if (style === "tattered") return h < 0.15 ? [color[0] * 0.55 + 0.06, color[1] * 0.55 + 0.05, color[2] * 0.55 + 0.03] : shade(color, 0.72 + 0.33 * h);
+  const rust = style === "savage" ? 0.25 : 0.35;
+  const dim = 0.7 + 0.3 * h;
+  return color.map((v, i) => (v * (1 - rust) + [0.42, 0.28, 0.18][i] * rust) * dim);
+}
+
 // The skeleton for a look: [{ name, parent, at }], parents first, `at` the bind position.
 export function skeleton(look) {
   const s = look.height / 6;
@@ -832,10 +852,21 @@ export class MeshOut {
     this.skinWeight = [];
     this.marks = [];
     this.mail = false;
+    // How what's being made is worn, or null: { style, seed, jitter (feet), holes (0-1), spikes }.
+    // tattered faces are faded and patched, and some left out for holes; savage and crude ones are
+    // dented (each corner moved a little, the same wherever it's shared) and grimy or rusted.
+    this.wear = null;
   }
 
   // A triangle, turned to face away from `inside`, or toward it when `toward`.
   face(corners, color, bones, inside, cornerBones = null, toward = false) {
+    if (this.wear) {
+      const { style, seed, jitter = 0, holes = 0 } = this.wear;
+      const middle = mul(add(add(corners[0], corners[1]), corners[2]), 1 / 3);
+      if (holes && hashAt(middle, seed) < holes) return;
+      color = worn(color, style, hashAt(middle, seed + 1));
+      if (jitter) corners = corners.map((q) => q.map((v, i) => v + (hashAt(q, seed + 2 + i) - 0.5) * 2 * jitter));
+    }
     const normal = cross(sub(corners[1], corners[0]), sub(corners[2], corners[0]));
     const middle = mul(add(add(corners[0], corners[1]), corners[2]), 1 / 3);
     let order = [0, 1, 2];
@@ -881,12 +912,14 @@ export class MeshOut {
     rings.forEach((r, i) => (ringBones[i] = r.bones ?? ringBones[i - 1] ?? weightsOf(r)));
     const signed = (angle) => (angle > Math.PI ? angle - Math.PI * 2 : angle);
     const cornerBones = rings.map((r, i) => Array.from({ length: sides }, (_, k) => r.weights?.(signed((k / sides) * Math.PI * 2)) ?? ringBones[i]));
+    // A tattered hem: the last band of something open is torn into teeth.
+    const torn = (i, k) => this.wear?.style === "tattered" && (open || inward) && i === rings.length - 2 && k % 2 === 1;
     for (let i = 0; i < rings.length - 1; i++) {
       const inside = mul(add(rings[i].center, rings[i + 1].center), 0.5);
       for (let k = 0; k < sides; k++) {
         const k1 = (k + 1) % sides;
         const mid = signed(((k + 0.5) / sides) * Math.PI * 2);
-        if (skip?.(i, mid)) continue;
+        if (skip?.(i, mid) || torn(i, k)) continue;
         const col = color(i, mid);
         const [a, b, cc, d] = [points[i][k], points[i][k1], points[i + 1][k1], points[i + 1][k]];
         const [wa, wb, wc, wd] = [cornerBones[i][k], cornerBones[i][k1], cornerBones[i + 1][k1], cornerBones[i + 1][k]];
@@ -920,6 +953,20 @@ export class MeshOut {
     };
     if (capStart && !open && !inward) cap(0, -1, color(0, Math.PI));
     if (capEnd && !open && !inward) cap(rings.length - 1, 1, endColor ?? color(rings.length - 2, Math.PI));
+    // Savage spikes: bone points out of the widest ring, round its upper part.
+    if (this.wear?.spikes && rings.length >= 3 && !inward) {
+      const widest = rings.reduce((best, r, i) => (r.rx + r.rz > rings[best].rx + rings[best].rz ? i : best), 0);
+      const r = rings[widest];
+      const wear = this.wear;
+      this.wear = { ...wear, spikes: false, holes: 0, jitter: 0 };
+      for (let k = 0; k < sides; k += 3) {
+        const out = norm(sub(points[widest][k], r.center));
+        if (out[1] < -0.3) continue;
+        const length = wear.spikes * (0.6 + 0.4 * hashAt(points[widest][k], wear.seed));
+        this.path([sub(points[widest][k], mul(out, length * 0.2)), add(points[widest][k], mul(out, length))], [length * 0.22, length * 0.02], 5, () => [0.85, 0.8, 0.64], () => cornerBones[widest][k]);
+      }
+      this.wear = wear;
+    }
   }
 
   // A tube along a line of points, `radii` round each (or `depth` deep, square to the side, where

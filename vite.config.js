@@ -28,6 +28,7 @@ export default defineConfig(({command}) => ({
         characterList: resolve(__dirname, "client/src/character/list.js"),
         animationLab: resolve(__dirname, "client/src/character/lab.js"),
         creatures: resolve(__dirname, "client/src/character/creatures.js"),
+        creature: resolve(__dirname, "client/src/character/creature.js"),
       },
       output: {
         entryFileNames: "[name]-[hash].js",

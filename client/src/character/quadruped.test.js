@@ -2,9 +2,10 @@ import fs from "fs";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { ROLES, characterClips, clipNames, roleClips } from "./animations.js";
-import { characterMesh } from "./characterMesh.js";
+import { SKELETONS, characterMesh } from "./characterMesh.js";
 import { quadrupedMesh, quadrupedSkeleton } from "./quadruped.js";
 import { resolveRecipe } from "./recipe.js";
+import { WEAPONS, attackGroup } from "./weapons.js";
 
 const wolf = (look = {}) => resolveRecipe({ body: "wolf", ...look });
 const baked = JSON.parse(fs.readFileSync(new URL("./animations.json", import.meta.url)));
@@ -43,17 +44,25 @@ describe("quadrupedMesh", () => {
 });
 
 describe("roleClips", () => {
-  it("has a clip for each role each body plays", () => {
-    for (const body of ["humanoid", "goblin", "troll", "wolf"]) {
-      for (const weapon of ["none", "sword", "maul"]) {
-        const look = resolveRecipe({ body, weapon });
-        const mesh = characterMesh(look);
-        const clips = characterClips(mesh, baked);
-        const roles = roleClips(look, mesh.userData.skeleton);
-        for (const role of ["idle", "walk", "run", "attack", "hit", "death"]) expect(clips.has(roles[role]), `${body} ${role}`).toBe(true);
-        for (const role of ROLES) if (roles[role]) expect(clips.has(roles[role]), `${body} ${role}`).toBe(true);
-      }
+  it("has a clip for each role each body plays, a battle cry among them", () => {
+    for (const body of Object.values(SKELETONS).flat()) {
+      const look = resolveRecipe({ body, loadouts: [] });
+      const mesh = characterMesh(look);
+      const clips = characterClips(mesh, baked);
+      const roles = roleClips(look, mesh.userData.skeleton);
+      for (const role of ["idle", "walk", "run", "attack", "battleCry", "hit", "death"]) expect(clips.has(roles[role]), `${body} ${role}`).toBe(true);
+      for (const role of ROLES) if (roles[role]) expect(clips.has(roles[role]), `${body} ${role}`).toBe(true);
     }
+  });
+
+  it("attacks with every weapon, by one of a few groups of clips", () => {
+    const clips = characterClips(characterMesh(resolveRecipe()), baked);
+    for (const weapon of WEAPONS) {
+      const roles = roleClips(resolveRecipe({ weapon }), "humanoid");
+      for (const role of ["attack", "bigAttack"]) expect(clips.has(roles[role]), `${weapon} ${role}`).toBe(true);
+      if (roles.shoot) expect(clips.has(roles.shoot), `${weapon} shoot`).toBe(true);
+    }
+    expect(new Set(WEAPONS.map(attackGroup)).size).toBeLessThanOrEqual(6);
   });
 
   it("gives a wolf its own clips, on its own bones", () => {

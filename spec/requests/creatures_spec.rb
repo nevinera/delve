@@ -17,4 +17,11 @@ RSpec.describe "Creatures", type: :request do
     expect(response).to have_http_status(:ok)
     expect(response.body).to include("Creatures", "new looks")
   end
+
+  it "shows one creature" do
+    get creature_path
+
+    expect(response).to have_http_status(:ok)
+    expect(response.body).to include("Creature", "new look", "controls")
+  end
 end

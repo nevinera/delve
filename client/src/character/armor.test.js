@@ -28,3 +28,11 @@ describe("armor", () => {
     expect(resolveRecipe({ armor: { head: { type: "plate" } } }).armor.head.colors).toHaveLength(2);
   });
 });
+
+describe("armor styles", () => {
+  it("tears tattered armor and spikes savage shoulders", () => {
+    const count = (style) => mesh({ chest: { type: "leather", style }, shoulders: { type: "plate", style } }).positions.length;
+    expect(count("tattered")).toBeLessThan(count("fine"));
+    expect(count("savage")).toBeGreaterThan(count("fine"));
+  });
+});
