@@ -11,7 +11,7 @@ const GRIDS = [
   { every: 32, out: 256, px: 3, rgb: [0.3, 0.42, 0.62], lines: true },
   { every: 8, out: 64, px: 2, rgb: [0.26, 0.36, 0.52], lines: false },
 ];
-const LINE_RGB = [0.05, 0.05, 0.05];
+const LINE_RGB = [0.08, 0.08, 0.08];
 
 export class Earth {
   // groundAt(x, z): the ground's height.
@@ -52,7 +52,7 @@ export class Earth {
     GRIDS.forEach(({ every, out, rgb }, level) => {
       const n = Math.ceil(out / every);
       const base = [c.x, c.y, c.z].map((v) => Math.round(v / every) * every);
-      const fade = (p) => Math.max(0, 1 - Math.hypot(p[0] - c.x, p[1] - c.y, p[2] - c.z) / out) ** 2;
+      const fade = (p) => Math.max(0, 1 - Math.hypot(p[0] - c.x, p[1] - c.y, p[2] - c.z) / out) ** 3;
       const [positions, colors, ends, shades] = [[], [], [], []];
       for (let i = -n; i <= n; i++) {
         for (let j = -n; j <= n; j++) {
@@ -74,7 +74,7 @@ export class Earth {
               const g = fade(q);
               if (!g) continue;
               ends.push(...p, ...q);
-              shades.push(...LINE_RGB.map((v) => v * f), ...LINE_RGB.map((v) => v * g));
+              shades.push(...LINE_RGB.map((v) => v * f * f), ...LINE_RGB.map((v) => v * g * g));
             }
           }
         }
