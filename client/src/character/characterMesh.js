@@ -33,6 +33,8 @@ material.onBeforeCompile = (shader) => {
 };
 // Spirits and shadows are see-through.
 const ghostMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true, opacity: 0.55, depthWrite: false });
+// Wisps and other lights glow, unlit, a little see-through.
+const glowMaterial = new THREE.MeshBasicMaterial({ vertexColors: true, transparent: true, opacity: 0.8, depthWrite: false });
 // Weapons have no mail mark.
 const weaponMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
 
@@ -42,7 +44,7 @@ const linear = (colors) => colors.map((v) => (v < 0.04045 ? v / 12.92 : ((v + 0.
 export function characterMesh(look) {
   const skeleton = skeletonOf(look.body);
   const frame = FRAMES[skeleton];
-  const { bones: joints, positions, colors, skinIndex, skinWeight, mail, scale } = frame ? frame.mesh(look) : bodyMesh(look);
+  const { bones: joints, positions, colors, skinIndex, skinWeight, mail, scale, glow } = frame ? frame.mesh(look) : bodyMesh(look);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(linear(colors), 3));
@@ -60,7 +62,7 @@ export function characterMesh(look) {
     if (parent) bones.get(parent).add(bone);
     bones.set(name, bone);
   }
-  const mesh = new THREE.SkinnedMesh(geometry, look.flesh === "spirit" || look.flesh === "shadow" ? ghostMaterial : material);
+  const mesh = new THREE.SkinnedMesh(geometry, glow ? glowMaterial : look.flesh === "spirit" || look.flesh === "shadow" ? ghostMaterial : material);
   const root = bones.get("root");
   mesh.add(root);
   mesh.bind(new THREE.Skeleton([...bones.values()]));

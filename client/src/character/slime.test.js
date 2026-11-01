@@ -12,4 +12,13 @@ describe("slime", () => {
     const death = characterClips(mesh, { clips: {} }).get("Death");
     expect(death.tracks.some((track) => track.name === "body.scale")).toBe(true);
   });
+
+  it("floats a wisp off the ground, glowing, its motes circling", () => {
+    const mesh = characterMesh(resolveRecipe({ body: "wisp", height: 5 }));
+    mesh.geometry.computeBoundingBox();
+    expect(mesh.geometry.boundingBox.min.y).toBeGreaterThan(0.25);
+    expect(mesh.material.type).toBe("MeshBasicMaterial");
+    const idle = characterClips(mesh, { clips: {} }).get("Idle_Loop");
+    expect(idle.tracks.some((track) => track.name === "orbit.quaternion")).toBe(true);
+  });
 });

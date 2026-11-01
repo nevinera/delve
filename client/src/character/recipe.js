@@ -237,6 +237,11 @@ export const BODY_LOOKS = {
     limbs: [0.5, 0.8],
     colors: { skin: ["#1a1a1a", "#2a2018"], secondary: ["#2a5a3a", "#3a2a5a", "#5a3a1a", "#1a3a5a"], hair: ["#2a2420", "#3a3028"], eyes: ["#c0a020", "#d04020"] },
   },
+  wisp: {
+    height: [4, 6],
+    build: [0.4, 0.8],
+    colors: { skin: ["#7ad0ff", "#a0ffb0", "#c0a0ff", "#ffd070"], eyes: ["#ffffff", "#f0fff0"] },
+  },
   slime: {
     height: [2.5, 4],
     build: [0.4, 0.8],
