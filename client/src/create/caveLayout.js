@@ -21,14 +21,16 @@ export const BEND_FT = 32; // an arc gets a bend for about every this much of it
 export const STEEP_DEG = 45; // arcs are drawn red where they climb steeper than this
 const LEVEL = 0.7; // how far, of a room's radius, a tunnel runs level into it
 const CLEAR = 1.6; // how many times that from a room a tunnel's first bend has to be
-const FLARE = 3; // how many of its widths a tunnel flares out over to an opening's size
-const MOUTH_REACH = 6; // how far, in its widths, a tunnel can open through the ground from an opening
-const MOUTH_RUN = 4; // how far, in its widths, a tunnel runs level in from an opening
+export const ENTRANCE_LENGTHS = [16, 32, 48, 64];
+export const ENTRANCE_FT = [6, 24]; // the entrances' widths
+const DOWN = 0.2; // how far a sloping entrance drops for each foot in
+const LOW_RING = Math.PI / 4; // how far round from the bottom an entrance's mouth can be in the ground
 
 export const NODE_DEFAULTS = { size: "m", shape: "round", style: "borehole", rock: 0, hewn: false };
 export const ARC_DEFAULTS = { size: 12, shape: "wiggly", style: "borehole", rock: 0, hewn: false };
+export const ENTRANCE_DEFAULTS = { shape: "entrance", style: "natural", width: 10, length: 48, slope: "level", rock: 0, hewn: false };
 
-const isOpening = (node) => node.shape === "opening";
+export const isEntrance = (node) => node.shape === "entrance";
 const add = (a, b) => a.map((v, i) => v + b[i]);
 const mul = (a, k) => a.map((v) => v * k);
 const lerp = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
@@ -93,9 +95,8 @@ export class Layout {
   }
 
   // An element as carving sees it: a copy, without whether it's locked, which carving doesn't
-  // care about, and an arc's with its ends, the floors it runs between, how far into each it runs
-  // level (arcCurve: into a room's floor, or in from an opening through the hillside), `openings`, whether each is an opening, and `mouthFt`, how wide a mouth each
-  // opening wants.
+  // care about, and an arc's with its ends, the floors it runs between, and how far into each it
+  // runs level (arcCurve).
   copyOf(id) {
     const element = this.nodes.get(id) ?? this.arcs.get(id);
     if (!element) return null;
@@ -103,7 +104,7 @@ export class Layout {
     if (!copy.from) return copy;
     const [from, to] = [this.nodes.get(copy.from), this.nodes.get(copy.to)];
     const ends = [from, to];
-    return { ...copy, ends: ends.map((node) => [...node.at]), level: ends.map((node) => (isOpening(node) ? MOUTH_RUN * copy.size : LEVEL * (NODE_SIZES[node.size] / 2))), openings: ends.map(isOpening), mouthFt: ends.map((node) => (isOpening(node) ? NODE_SIZES[node.size] : 0)) };
+    return { ...copy, ends: ends.map((node) => [...node.at]), level: ends.map((node) => LEVEL * nodeRadius(node)) };
   }
 
   // Whether an element's changed since it was last carved: new, moved or otherwise changed, or
@@ -122,8 +123,8 @@ export class Layout {
 
 // The shapes an element (as Layout's copyOf gives it) carves, as v2/caves.js's carve takes them.
 // For now every room carves as a round borehole room and every tunnel as a wiggly borehole
-// tunnel, whatever their details say; an opening carves nothing.
-export const shapesOf = (copy) => (copy.ends ? arcShapes({ ...copy, ...PLAIN_ARC }) : nodeShapes(copy.shape === "opening" ? copy : { ...copy, ...PLAIN_NODE }));
+// tunnel, whatever their details say.
+export const shapesOf = (copy) => (copy.ends ? arcShapes({ ...copy, ...PLAIN_ARC }) : nodeShapes(isEntrance(copy) ? copy : { ...copy, ...PLAIN_NODE }));
 const PLAIN_NODE = { shape: "round", style: "borehole" };
 const PLAIN_ARC = { shape: "wiggly", style: "borehole" };
 
@@ -131,10 +132,10 @@ const PLAIN_ARC = { shape: "wiggly", style: "borehole" };
 // vaulted, narrowing upward, with lower aisles round it; round is a wide low dome with bays round
 // its edge; flat is wide and low, flat-roofed. A mineshaft room is cut square, a lava tube's
 // lumpy.
-export function nodeShapes({ id, at, size, shape, style }) {
+export function nodeShapes(node) {
+  const { id, at, size, shape, style } = node;
+  if (isEntrance(node)) return entranceShapes(node);
   const R = NODE_SIZES[size] / 2;
-  // An opening carves nothing of its own: it's where its tunnels come up through the ground.
-  if (shape === "opening") return [];
   const seed = hashString(id);
   const random = (k) => hash2(k, 0, seed);
   const yaw = random(0) * Math.PI;
@@ -212,19 +213,9 @@ export function arcShapes(copy) {
     const flat = Math.hypot(dx, dz) || 1;
     return [dx / flat, dz / flat];
   };
-  // How much wider than the tunnel it is `d` along: flaring out to an opening's size, over FLARE
-  // widths, toward an opening at its end.
-  const flare = (d) => {
-    let wide = 1;
-    (copy.mouthFt ?? []).forEach((mouth, k) => {
-      const t = 1 - (k ? length - d : d) / (FLARE * W);
-      if (mouth > W && t > 0) wide = Math.max(wide, 1 + (mouth / W - 1) * t * t);
-    });
-    return wide;
-  };
-  const section = (p, heading, d, scale = 1, wide = 1) => {
+  const section = (p, heading, d, scale = 1) => {
     const yaw = Math.atan2(heading[0], heading[1]);
-    const w = (W / 2) * scale * wide;
+    const w = (W / 2) * scale;
     if (style === "mineshaft") return { kind: "box", at: add(p, [0, 0.45 * W * scale, 0]), half: [w, 0.45 * W * scale, step * 0.6 + 0.5], yaw };
     if (style === "lavatube") {
       const swell = 1 + 0.35 * valueNoise(d / (3 * W), 2.5, seed);
@@ -236,7 +227,7 @@ export function arcShapes(copy) {
     const d = (i / count) * length;
     const [hx, hz] = along(i);
     const o = offset(d);
-    out.push(section(add(p, [hz * o, 0, -hx * o]), [hx, hz], d, 1, flare(d)));
+    out.push(section(add(p, [hz * o, 0, -hx * o]), [hx, hz], d));
   });
   if (shape === "deadends") {
     const branches = Math.floor(length / (8 * W));
@@ -256,6 +247,60 @@ export function arcShapes(copy) {
     }
   }
   return out;
+}
+
+// How far out from its middle a node's room reaches: an entrance's, the room at its far end.
+export const nodeRadius = (node) => (isEntrance(node) ? node.width : NODE_SIZES[node.size] / 2);
+
+// Where an entrance's far end is, from its mouth (the middle of the mouth's floor): `length` ft in
+// along its yaw (degrees, 0 facing +z), level, or down DOWN for each foot with slope "down".
+export function entranceEnd({ mouth, yaw, length, slope }) {
+  const a = (yaw * Math.PI) / 180;
+  return [mouth[0] + Math.sin(a) * length, mouth[1] - (slope === "down" ? DOWN * length : 0), mouth[2] + Math.cos(a) * length].map((v) => Math.round(v * 4) / 4);
+}
+
+// An entrance: a tube from its mouth to its far end, as wide as it is tall, round (natural) or
+// square (mine), opening through the ground wherever its roof would be too thin (each shape
+// `open`), and a room at the far end, twice as wide, for tunnels to join.
+function entranceShapes({ mouth, at, yaw, width: W, style }) {
+  const a = (yaw * Math.PI) / 180;
+  const step = Math.max(1.5, W / 3);
+  const length = Math.hypot(at[0] - mouth[0], at[2] - mouth[2]);
+  const count = Math.max(2, Math.ceil(length / step));
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const p = lerp(mouth, at, i / count);
+    if (style === "mine") out.push({ kind: "box", at: add(p, [0, W / 2, 0]), half: [W / 2, W / 2, step * 0.6 + 0.5], yaw: a, open: true });
+    else out.push({ kind: "dome", at: p, radii: [W / 2, W, step], yaw: a, open: true });
+  }
+  if (style === "mine") out.push({ kind: "box", at: add(at, [0, W / 2, 0]), half: [W, W / 2, W], yaw: a });
+  else out.push({ kind: "dome", at, radii: [W, W, W], yaw: a });
+  return out;
+}
+
+// The points round an entrance's mouth, as tall and wide as its tube, each { at, low, open }:
+// `low` where it's near enough the bottom that it can be in the ground, `open` where it's out in
+// the air or can be in the ground. groundAt(x, z): the ground's height.
+export function entranceRing({ mouth, yaw, width: W, style }, groundAt, count = 32) {
+  const a = (yaw * Math.PI) / 180;
+  const side = [Math.cos(a), 0, -Math.sin(a)];
+  return Array.from({ length: count }, (_, i) => {
+    // Round from the bottom, square for a mine.
+    const t = (i / count) * Math.PI * 2;
+    const s = style === "mine" ? 1 / Math.max(Math.abs(Math.cos(t)), Math.abs(Math.sin(t))) : 1;
+    const p = add(add(mouth, [0, W / 2 - (Math.cos(t) * s * W) / 2, 0]), mul(side, (Math.sin(t) * s * W) / 2));
+    const low = Math.min(t, Math.PI * 2 - t) <= LOW_RING;
+    return { at: p, low, open: low || p[1] > groundAt(p[0], p[2]) };
+  });
+}
+
+// Why an entrance can't go where it is, or null where it can: its mouth has to be out in the air,
+// but for the bottom of it, and the room at its far end under the ground.
+export function entranceProblem(node, groundAt) {
+  if (!entranceRing(node, groundAt).every((p) => p.open)) return "an entrance's mouth has to be out in the open";
+  const room = entranceShapes(node).at(-1);
+  if (!fits(room, groundAt)) return "an entrance's far end has to be under the ground";
+  return null;
 }
 
 // A shape's reach as a box, [[x0, y0, z0], [x1, y1, z1]].
@@ -281,14 +326,14 @@ function fits(shape, groundAt) {
   return [[x, z], [x0, z0], [x1, z0], [x0, z1], [x1, z1]].every(([a, b]) => top <= groundAt(a, b) - ROOF_FT);
 }
 
-// The box round some shapes, or null round none (an opening's).
+// The box round some shapes, or null round none.
 const boxOf = (shapes) => (shapes.length ? shapes.map(shapeBox).reduce((a, b) => [a[0].map((v, k) => Math.min(v, b[0][k])), a[1].map((v, k) => Math.max(v, b[1][k]))]) : null);
 const overlap = (a, b) => Boolean(a && b) && [0, 1, 2].every((k) => a[0][k] <= b[1][k] && b[0][k] <= a[1][k]);
 
 // What carving changes: rock filled back into what each changed element carved last time, then
 // the shapes each opens afresh, it, the elements joined to it, and every unchanged element whose
 // last carving the filling cuts into, and the carved copies after. `ids`: the elements to carve (all changed ones, by
-// default); `uncarve`: the elements to fill in and not carve again. Only tunnels near openings
+// default); `uncarve`: the elements to fill in and not carve again. Only entrances' tubes
 // open through the ground; given groundAt(x, z), the ground's height, a room that would come
 // within ROOF_FT of it isn't carved, and is listed in `unfit`.
 export function carvePlan(layout, { ids = layout.changes(), uncarve = [] } = {}, groundAt = null) {
@@ -311,13 +356,11 @@ export function carvePlan(layout, { ids = layout.changes(), uncarve = [] } = {},
     if (!copy) continue;
     carved.set(id, copy);
     const shapes = shapesOf(copy);
-    if (groundAt && !copy.ends && shapes.some((s) => !fits(s, groundAt))) {
+    if (groundAt && !copy.ends && shapes.some((s) => !s.open && !fits(s, groundAt))) {
       unfit.push(id);
       continue;
     }
-    // A tunnel opens through the ground only near an opening at its end.
-    const near = (shape) => (copy.openings ?? []).some((open, k) => open && Math.hypot(shape.at[0] - copy.ends[k][0], shape.at[2] - copy.ends[k][2]) <= MOUTH_REACH * copy.size);
-    for (const shape of shapes) opens.push({ shape, stone: allStone(copy.rock, copy.hewn), mouth: near(shape) });
+    for (const shape of shapes) opens.push({ shape, stone: allStone(copy.rock, copy.hewn), mouth: Boolean(shape.open) });
   }
   return { fills, opens, carved, unfit };
 }

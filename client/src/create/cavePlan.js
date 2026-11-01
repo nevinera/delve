@@ -2,12 +2,14 @@ import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
-import { ARC_DEFAULTS, ARC_FT, NODE_DEFAULTS, NODE_SIZES, STEEP_DEG, arcCurve, arcSteepness, carvePlan } from "./caveLayout.js";
+import { ARC_DEFAULTS, ARC_FT, ENTRANCE_DEFAULTS, ENTRANCE_FT, NODE_DEFAULTS, NODE_SIZES, STEEP_DEG, arcCurve, arcSteepness, carvePlan, entranceEnd, entranceProblem, entranceRing, isEntrance } from "./caveLayout.js";
 
-// The caves' plan tools, in the earth: chamber places rooms (nodes) on the points of the grid
-// round the camera, or an opening on the ground where the pointer meets it from under it, and
-// drags them elsewhere; tunnel joins two rooms with a tunnel (an arc), clicked one then the other,
-// and drags a selected tunnel's bends to curve it. Both select: a click picks one, shift-click
+// The caves' plan tools: chamber places rooms (nodes) on the points of the grid round the camera,
+// in the earth, and drags them elsewhere; tunnel joins two rooms with a tunnel (an arc), clicked
+// one then the other, and drags a selected tunnel's bends to curve it; entrance, from above the
+// ground, places an entrance where the pointer meets it: a tube into the hillside, facing the way
+// the camera looks, turned with C and V, with a room at its far end for tunnels to join. Its
+// mouth has to be out in the air but for the bottom of it, and it's red where it isn't. Both select: a click picks one, shift-click
 // adds or takes away, and shift-drag boxes them in. The panel shows the details of what's
 // selected, to change all of it at once, or of what's placed next. Each change carves what it
 // changed straight away (caveLayout.js's carvePlan), with what's joined to it, and undoes on its
@@ -32,15 +34,15 @@ const STEEP_RGB = [1, 0.25, 0.2];
 const OPENING_RGB = [0.45, 1, 0.9];
 const LOCKED_RGB = [0.75, 0.55, 1];
 const LOCKED_NOTE = "unlock it, and what's joined to it, to change it";
-const HILLSIDE_DEG = 20; // how steep the ground has to be for an opening
-const FLAT_NOTE = `openings go into hillsides, ${HILLSIDE_DEG}° and steeper`;
+const TURN_DEG = 15; // how far C and V turn an entrance, or with shift FINE_TURN_DEG
+const FINE_TURN_DEG = 5;
 const GLOW = 3; // how much wider the glow is than the line
 const UNDOS = 100;
 const SPOKES = 8; // how many spokes a room's ring has
 const $ = (id) => document.getElementById(id);
 
 // How thick, in feet, a room's lines are, and a tunnel's.
-const nodeLine = (node) => Math.max(0.25, NODE_SIZES[node.size] / 64);
+const nodeLine = (node) => Math.max(0.25, (isEntrance(node) ? node.width * 2 : NODE_SIZES[node.size]) / 64);
 const arcLine = (arc) => Math.max(0.25, arc.size / 20);
 
 export class CavePlan {
@@ -50,15 +52,17 @@ export class CavePlan {
   constructor({ scene, camera, canvas, layout, caves, ray, groundHit, groundAt }) {
     Object.assign(this, { scene, camera, canvas, layout, caves, ray, groundHit, groundAt });
     this.settled = false; // whether what was planned before has been carved
-    this.tool = null; // "chamber" or "tunnel" while one's picked
+    this.tool = null; // "chamber", "tunnel" or "entrance" while one's picked
     this.selected = new Set(); // the ids of the nodes and arcs selected
     this.focus = null; // the one selected last, whose details show
     this.start = null; // the node a tunnel's being drawn from
-    this.hover = null; // the grid point or ground the pointer snaps to, { at, opening }
+    this.hover = null; // the grid point the pointer snaps to, { at }, or the entrance it'd place, { entrance, problem }
+    this.pointer = null; // where the pointer last was, [x, y] pixels
+    this.turn = 0; // degrees an entrance is turned from the way the camera looks
     this.drag = null; // { id, bend } or { id } for a node, with the layout as it was, while dragging
     this.box = null; // { from, to } in pixels, while shift-dragging a box
     this.history = []; // the layout as it was before each change, latest last
-    this.details = { node: { ...NODE_DEFAULTS }, arc: { ...ARC_DEFAULTS } };
+    this.details = { node: { ...NODE_DEFAULTS }, arc: { ...ARC_DEFAULTS }, entrance: { ...ENTRANCE_DEFAULTS } };
     this.drawn = null; // what the drawing was made from
 
     this.group = new THREE.Group();
@@ -69,6 +73,13 @@ export class CavePlan {
     this.group.add(this.snapMark);
     this.drawing = new THREE.Group();
     this.group.add(this.drawing);
+    // The entrance being placed: drawn as it is, and faint through the ground.
+    this.preview = new THREE.Group();
+    scene.add(this.preview);
+    this.previewMaterials = [
+      new THREE.LineBasicMaterial({ vertexColors: true }),
+      new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, depthWrite: false, transparent: true, opacity: 0.25 }),
+    ];
     this.materials = new Map(); // "width,glow" -> LineMaterial
     this.label = document.createElement("div");
     this.label.className = "create-plan-label";
@@ -86,12 +97,20 @@ export class CavePlan {
       const kind = this.kind();
       const picked = [...this.selected].map((id) => this.layout.get(id)).filter(Boolean);
       if (!picked.length) return (this.details[kind][key] = value);
-      // Sizes and shapes are a room's or a tunnel's own; an opening's shape is always that.
-      const takes = (e) => this.free(e.id) && ((key !== "size" && key !== "shape") || (kindOf(e) === kind && !(key === "shape" && isOpening(e))));
+      // Rock is everything's; the rest a room's, a tunnel's or an entrance's own.
+      const takes = (e) => this.free(e.id) && (key === "rock" || key === "hewn" || kindOf(e) === kind);
       const changing = picked.filter((e) => takes(e) && e[key] !== value);
       if (!changing.length) return this.status(picked.some((e) => !this.free(e.id)) ? LOCKED_NOTE : "");
+      // An entrance changed has to fit where it is.
+      for (const e of changing.filter(isEntrance)) {
+        const problem = entranceProblem(placed({ ...e, [key]: value }), this.groundAt);
+        if (problem) return this.status(problem);
+      }
       this.remember();
-      for (const e of changing) e[key] = value;
+      for (const e of changing) {
+        e[key] = value;
+        if (isEntrance(e)) e.at = entranceEnd(e);
+      }
       this.layout.version++;
       this.carve();
     };
@@ -101,6 +120,12 @@ export class CavePlan {
     for (const button of document.querySelectorAll("[data-plan-size]")) button.addEventListener("click", () => changeDetail("size", button.dataset.planSize));
     for (const button of document.querySelectorAll("[data-plan-shape]")) button.addEventListener("click", () => changeDetail("shape", button.dataset.planShape));
     for (const button of document.querySelectorAll("[data-plan-style]")) button.addEventListener("click", () => changeDetail("style", button.dataset.planStyle));
+    for (const button of document.querySelectorAll("[data-entrance-style]")) button.addEventListener("click", () => changeDetail("style", button.dataset.entranceStyle));
+    for (const button of document.querySelectorAll("[data-entrance-length]")) button.addEventListener("click", () => changeDetail("length", Number(button.dataset.entranceLength)));
+    for (const button of document.querySelectorAll("[data-entrance-slope]")) button.addEventListener("click", () => changeDetail("slope", button.dataset.entranceSlope));
+    $("planEntranceWidth").addEventListener("input", () => changeDetail("width", Number($("planEntranceWidth").value)));
+    $("planEntranceWidth").min = String(ENTRANCE_FT[0]);
+    $("planEntranceWidth").max = String(ENTRANCE_FT[1]);
     $("planDelete").addEventListener("click", () => this.deleteSelected());
     $("planLock").addEventListener("click", () => this.lock(true));
     $("planUnlock").addEventListener("click", () => this.lock(false));
@@ -109,11 +134,12 @@ export class CavePlan {
     $("planArcSize").max = String(ARC_FT[1]);
   }
 
-  // Whether the details shown are a node's or an arc's: what was selected last, or the tool's.
+  // Whether the details shown are a node's, an arc's or an entrance's: what was selected last, or
+  // the tool's.
   kind() {
     const focus = this.focus && this.layout.get(this.focus);
     if (focus) return kindOf(focus);
-    return this.tool === "tunnel" ? "arc" : "node";
+    return { tunnel: "arc", entrance: "entrance" }[this.tool] ?? "node";
   }
 
   // Picks a plan tool, or none.
@@ -124,6 +150,7 @@ export class CavePlan {
     this.box = null;
     this.boxEl.hidden = true;
     this.hover = null;
+    this.drawPreview();
     if (!tool) this.label.hidden = true;
   }
 
@@ -199,9 +226,8 @@ export class CavePlan {
 
   // Where a room at the pointer at [px, py] goes: the grid point it snaps to, of those SHALLOW_FT
   // and more under the ground within SNAP_FT of the camera and SNAP_PX of the pointer, the one nearest the camera, or
-  // where none is that near the pointer, the nearest to it within FAR_PX; or an opening, where the
-  // pointer meets the ground before that point. { at, opening, flat }, or null: `flat` where the
-  // ground's too flat for an opening.
+  // where none is that near the pointer, the nearest to it within FAR_PX; or null, there or where
+  // the pointer meets the ground before that point. { at }, or null.
   snap([px, py]) {
     const c = this.camera.position;
     const n = SNAP_FT / 8;
@@ -223,16 +249,20 @@ export class CavePlan {
     }
     const point = best ?? nearest;
     const ground = this.groundHit();
-    if (ground && (!point || c.distanceTo(new THREE.Vector3(...ground)) < point.d)) return { at: ground.map((v) => Math.round(v * 4) / 4), opening: true, flat: this.slopeAt(ground) < HILLSIDE_DEG };
-    return point ? { at: point.p, opening: false } : null;
+    if (!point || (ground && c.distanceTo(new THREE.Vector3(...ground)) < point.d)) return null;
+    return { at: point.p };
   }
 
-  // How steep the ground is at [x, y, z], in degrees.
-  slopeAt([x, , z]) {
-    const d = 4;
-    const dx = this.groundAt(x + d, z) - this.groundAt(x - d, z);
-    const dz = this.groundAt(x, z + d) - this.groundAt(x, z - d);
-    return (Math.atan(Math.hypot(dx, dz) / (2 * d)) * 180) / Math.PI;
+  // The entrance the pointer would place, where it meets the ground: { entrance, problem }, with
+  // why it can't go there, or null where the pointer's off the ground.
+  entranceAt() {
+    const ground = this.groundHit();
+    if (!ground) return null;
+    const facing = new THREE.Vector3();
+    this.camera.getWorldDirection(facing);
+    const yaw = (((Math.round((Math.atan2(facing.x, facing.z) * 180) / Math.PI) + this.turn) % 360) + 360) % 360;
+    const entrance = placed({ ...this.details.entrance, mouth: ground.map((v) => Math.round(v * 4) / 4), yaw });
+    return { entrance, problem: entranceProblem(entrance, this.groundAt) };
   }
 
   // The node at the pointer, nearest the camera: its middle, or any of its lines.
@@ -316,16 +346,25 @@ export class CavePlan {
       }
       if (!this.selected.has(node)) this.select(node);
       this.focus = node;
-      if (this.free(node)) this.drag = { id: node, before: this.layout.toJSON(), moved: false };
+      // An entrance's room stays at the end of its tube.
+      if (this.free(node) && !isEntrance(this.layout.nodes.get(node))) this.drag = { id: node, before: this.layout.toJSON(), moved: false };
       return;
     }
     if (arc) return this.select(arc);
+    if (this.tool === "entrance") {
+      const spot = this.entranceAt();
+      if (spot?.problem) return this.status(spot.problem);
+      if (spot) {
+        this.remember();
+        const { at, ...details } = spot.entrance;
+        this.select(this.layout.addNode(at, details).id);
+        return this.carve();
+      }
+    }
     const spot = this.tool === "chamber" && this.snap(at);
-    if (spot?.flat) return this.status(FLAT_NOTE);
     if (spot) {
       this.remember();
-      const details = spot.opening ? { ...this.details.node, shape: "opening" } : { ...this.details.node, shape: this.details.node.shape === "opening" ? NODE_DEFAULTS.shape : this.details.node.shape };
-      this.select(this.layout.addNode(spot.at, details).id);
+      this.select(this.layout.addNode(spot.at, this.details.node).id);
       return this.carve();
     }
     this.start = null;
@@ -338,8 +377,10 @@ export class CavePlan {
       this.box.to = at;
       return;
     }
+    this.pointer = at;
     const node = this.drag && this.drag.bend === undefined && this.layout.nodes.get(this.drag.id);
-    this.hover = this.tool === "chamber" || node ? this.snap(at) : null;
+    this.hover = this.tool === "chamber" || node ? this.snap(at) : this.tool === "entrance" ? this.entranceAt() : null;
+    this.drawPreview();
     if (!this.drag) return;
     const element = this.layout.get(this.drag.id);
     if (!element) return (this.drag = null);
@@ -355,9 +396,8 @@ export class CavePlan {
       if (!to) return;
       element.bends[this.drag.bend] = [to.x, to.y, to.z].map((v) => Math.round(v * 4) / 4);
     } else {
-      // An opening stays on the ground, and a room under it.
       const spot = this.hover;
-      if (!spot || spot.flat || spot.opening !== isOpening(element) || spot.at.every((v, k) => v === element.at[k])) return;
+      if (!spot || spot.at.every((v, k) => v === element.at[k])) return;
       element.at = [...spot.at];
     }
     this.drag.moved = true;
@@ -412,6 +452,13 @@ export class CavePlan {
       this.undo();
       return true;
     }
+    const k = e.key.toLowerCase();
+    if (this.tool === "entrance" && (k === "c" || k === "v") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      this.turn += (e.shiftKey ? FINE_TURN_DEG : TURN_DEG) * (k === "c" ? 1 : -1);
+      this.hover = this.entranceAt();
+      this.drawPreview();
+      return true;
+    }
     if (e.key === "Delete" || e.key === "Backspace") {
       this.deleteSelected();
       return true;
@@ -435,11 +482,10 @@ export class CavePlan {
     const { clientWidth: w, clientHeight: h } = this.canvas;
     for (const material of this.materials.values()) material.resolution.set(w, h);
     const c = this.camera.position;
-    this.snapMark.visible = Boolean(this.hover) && !this.drag;
+    this.snapMark.visible = Boolean(this.hover?.at) && !this.drag;
     if (this.snapMark.visible) {
       this.snapMark.position.set(...this.hover.at);
       this.snapMark.scale.setScalar(Math.max(0.4, c.distanceTo(this.snapMark.position) * 0.012));
-      this.snapMark.material.color.setRGB(...(this.hover.flat ? STEEP_RGB : this.hover.opening ? OPENING_RGB : [1, 1, 1]));
     }
     const made = `${this.layout.version} ${[...this.selected]} ${this.start}`;
     if (made !== this.drawn) this.draw(made);
@@ -478,7 +524,7 @@ export class CavePlan {
   }
 
   // Draws the nodes and arcs, what's locked in violet: each room a ring round its floor as wide as it is, with thin spokes
-  // in to its middle and a stalk up as high, each opening a ring on the ground with a stalk down into it, each tunnel along its
+  // in to its middle and a stalk up as high, each entrance its tube and its room's ring, each tunnel along its
   // line, red where it's steep; what's selected in yellow, a tunnel's start in green, and the one
   // arc selected with its bends.
   draw(made) {
@@ -488,8 +534,11 @@ export class CavePlan {
       child.geometry.dispose();
     }
     for (const node of this.layout.nodes.values()) {
-      const opening = isOpening(node);
-      const rgb = this.selected.has(node.id) ? SELECTED_RGB : node.id === this.start ? START_RGB : node.locked ? LOCKED_RGB : opening ? OPENING_RGB : CORE_RGB;
+      const rgb = this.selected.has(node.id) ? SELECTED_RGB : node.id === this.start ? START_RGB : node.locked ? LOCKED_RGB : isEntrance(node) ? OPENING_RGB : CORE_RGB;
+      if (isEntrance(node)) {
+        for (const points of nodeLines(node)) this.line(points, nodeLine(node), rgb);
+        continue;
+      }
       const [ring, stalk, ...spokes] = nodeLines(node);
       this.line(ring, nodeLine(node), rgb);
       this.line(stalk, nodeLine(node), rgb);
@@ -515,27 +564,55 @@ export class CavePlan {
     }
   }
 
+  // Draws the entrance the pointer would place, red where it can't go.
+  drawPreview() {
+    for (const child of [...this.preview.children]) {
+      this.preview.remove(child);
+      child.geometry.dispose();
+    }
+    const spot = this.tool === "entrance" && this.hover?.entrance && this.hover;
+    if (!spot) return;
+    const [positions, colors] = [[], []];
+    for (const { points, open } of entranceLines(spot.entrance, this.groundAt, spot.problem)) {
+      for (let i = 1; i < points.length; i++) {
+        positions.push(...points[i - 1], ...points[i]);
+        for (let k = 0; k < 2; k++) colors.push(...(open ? OPENING_RGB : STEEP_RGB));
+      }
+    }
+    for (const material of this.previewMaterials) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+      const lines = new THREE.LineSegments(geometry, material);
+      lines.renderOrder = material.depthTest ? 0 : 12;
+      lines.frustumCulled = false;
+      this.preview.add(lines);
+    }
+  }
+
   // The panel: what the details are of, and their values.
   showDetails() {
     const kind = this.kind();
     const focus = this.focus && this.layout.get(this.focus);
     const d = focus ?? this.details[kind];
     const count = this.selected.size;
-    const name = (e) => (kindOf(e) === "arc" ? "tunnel" : isOpening(e) ? "opening" : "room");
-    $("planWhat").textContent = focus ? (count > 1 ? `${count} selected; details of ${name(focus)} ${focus.id}` : `${name(focus)} ${focus.id}`) : `the next ${kind === "node" ? "room" : "tunnel"}`;
-    for (const part of document.querySelectorAll("[data-plan-for]")) part.hidden = part.dataset.planFor !== kind;
+    const name = (e) => ({ arc: "tunnel", node: "room", entrance: "entrance" })[kindOf(e)];
+    $("planWhat").textContent = focus ? (count > 1 ? `${count} selected; details of ${name(focus)} ${focus.id}` : `${name(focus)} ${focus.id}`) : `the next ${{ arc: "tunnel", node: "room", entrance: "entrance" }[kind]}`;
+    for (const part of document.querySelectorAll("[data-plan-for]")) part.hidden = !part.dataset.planFor.split(" ").includes(kind);
     if (document.activeElement !== $("planRock")) $("planRock").value = String(d.rock);
     $("planHewn").checked = d.hewn;
     if (kind === "arc" && document.activeElement !== $("planArcSize")) $("planArcSize").value = String(d.size);
     $("planArcSizeOut").textContent = kind === "arc" ? `${d.size} ft` : "";
     for (const button of document.querySelectorAll("[data-plan-size]")) button.setAttribute("aria-pressed", String(button.dataset.planSize === d.size));
-    // A room can't be made an opening, nor an opening a room.
-    const opening = focus && isOpening(focus);
-    for (const button of document.querySelectorAll("[data-plan-shape]")) {
-      button.setAttribute("aria-pressed", String(button.dataset.planShape === d.shape));
-      if (kind === "node") button.disabled = Boolean(opening) !== (button.dataset.planShape === "opening");
-    }
+    for (const button of document.querySelectorAll("[data-plan-shape]")) button.setAttribute("aria-pressed", String(button.dataset.planShape === d.shape));
     for (const button of document.querySelectorAll("[data-plan-style]")) button.setAttribute("aria-pressed", String(button.dataset.planStyle === d.style));
+    if (kind === "entrance") {
+      for (const button of document.querySelectorAll("[data-entrance-style]")) button.setAttribute("aria-pressed", String(button.dataset.entranceStyle === d.style));
+      for (const button of document.querySelectorAll("[data-entrance-length]")) button.setAttribute("aria-pressed", String(Number(button.dataset.entranceLength) === d.length));
+      for (const button of document.querySelectorAll("[data-entrance-slope]")) button.setAttribute("aria-pressed", String(button.dataset.entranceSlope === d.slope));
+      if (document.activeElement !== $("planEntranceWidth")) $("planEntranceWidth").value = String(d.width);
+      $("planEntranceWidthOut").textContent = `${d.width} ft`;
+    }
     const picked = [...this.selected].map((id) => this.layout.get(id)).filter(Boolean);
     $("planDelete").disabled = !picked.some((e) => this.free(e.id));
     $("planLock").disabled = !picked.some((e) => !e.locked);
@@ -557,19 +634,41 @@ export class CavePlan {
   }
 }
 
-// A node's lines, continent feet: its ring round its floor, its stalk, up as high as the room is
-// (down, for an opening), and its spokes from the ring to its middle.
+// A node's lines, continent feet: its ring round its floor, its stalk, up as high as the room is,
+// and its spokes from the ring to its middle; an entrance's, its tube's (entranceLines) and its
+// room's ring.
 function nodeLines(node) {
+  if (isEntrance(node)) return entranceLines(node, () => -Infinity).map((line) => line.points);
   const R = NODE_SIZES[node.size] / 2;
   const [x, y, z] = node.at;
   const round = (i, n) => [x + R * Math.cos((i / n) * Math.PI * 2), y, z + R * Math.sin((i / n) * Math.PI * 2)];
   const ring = Array.from({ length: 49 }, (_, i) => round(i, 48));
-  const stalk = [node.at, [x, y + (isOpening(node) ? -R : R), z]];
+  const stalk = [node.at, [x, y + R, z]];
   return [ring, stalk, ...Array.from({ length: SPOKES }, (_, i) => [round(i, SPOKES), node.at])];
 }
 
-const kindOf = (element) => (element.from ? "arc" : "node");
-const isOpening = (element) => element.shape === "opening";
+// An entrance with its far end where its mouth, yaw, length and slope put it.
+const placed = (entrance) => ({ ...entrance, at: entranceEnd(entrance) });
+
+// An entrance's lines, continent feet, each { points, open }: its mouth's ring, a point at a
+// time, `open` false where it's in the ground and can't be; its tube's top and sides; and its
+// room's ring round its floor, `open` false where the room isn't under the ground (problem).
+function entranceLines(entrance, groundAt, problem = null) {
+  const ring = entranceRing(entrance, groundAt);
+  const out = ring.map((p, i) => ({ points: [p.at, ring[(i + 1) % ring.length].at], open: p.open && ring[(i + 1) % ring.length].open }));
+  const along = entrance.at.map((v, k) => v - entrance.mouth[k]);
+  for (const i of [ring.length / 4, ring.length / 2, (3 * ring.length) / 4]) {
+    const p = ring[i].at;
+    out.push({ points: [p, p.map((v, k) => v + along[k])], open: true });
+  }
+  const R = entrance.width;
+  const [x, y, z] = entrance.at;
+  const room = Array.from({ length: 33 }, (_, i) => [x + R * Math.cos((i / 32) * Math.PI * 2), y, z + R * Math.sin((i / 32) * Math.PI * 2)]);
+  out.push({ points: room, open: !problem?.includes("far end") });
+  return out;
+}
+
+const kindOf = (element) => (element.from ? "arc" : isEntrance(element) ? "entrance" : "node");
 
 // How far point p is from the segment a to b, in pixels.
 function toSegment([px, py], [ax, ay], [bx, by]) {

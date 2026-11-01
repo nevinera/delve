@@ -26,11 +26,16 @@
         "id": { "type": "string", "pattern": "^n\\d+$" },
         "at": { "$ref": "#/$defs/point", "description": "the middle of the room's floor, in feet" },
         "size": { "enum": ["s", "m", "l", "xl", "xxl", "3xl", "4xl"] },
-        "shape": { "enum": ["cathedral", "round", "flat", "opening"] },
-        "style": { "$ref": "#/$defs/style" },
+        "shape": { "enum": ["cathedral", "round", "flat", "entrance"] },
+        "style": { "description": "a room's style, or an entrance's: natural or mine", "anyOf": [{ "$ref": "#/$defs/style" }, { "enum": ["natural", "mine"] }] },
         "rock": { "$ref": "#/$defs/rock" },
         "hewn": { "type": "boolean" },
-        "locked": { "type": "boolean", "description": "kept from being moved, changed or deleted, so it isn't carved again" }
+        "locked": { "type": "boolean", "description": "kept from being moved, changed or deleted, so it isn't carved again" },
+        "mouth": { "$ref": "#/$defs/point", "description": "an entrance's: the middle of its mouth's floor" },
+        "yaw": { "type": "number", "description": "an entrance's: the way it runs in, degrees, 0 toward +z" },
+        "length": { "enum": [16, 32, 48, 64], "description": "an entrance's: how far in its far end is, feet across" },
+        "slope": { "enum": ["level", "down"], "description": "an entrance's: down drops 1 ft for every 5 in" },
+        "width": { "type": "number", "minimum": 6, "maximum": 24, "description": "an entrance's tube's width and height, feet" }
       }
     },
     "arc": {

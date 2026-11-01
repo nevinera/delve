@@ -56,7 +56,7 @@ const BRUSHES = new Set(["raise", "flatten", "smooth", "noise", "pools", "clear"
 const PLANNING = new Set(["marker", "eraser", "select", "measure"]); // tools that work on lines drawn at sea level
 const OPENS_PINS = new Set([null, "pin"]); // tools with which clicking a pin opens it
 const BUILD = new Set(["pick", "object", "template", "slab", "stairs", "ramp"]);
-const PLANS = new Set(["chamber", "tunnel"]);
+const PLANS = new Set(["chamber", "tunnel", "entrance"]);
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
 

@@ -1,11 +1,18 @@
 import { describe, expect, it } from "vitest";
 import { TILE_CELLS } from "../v2/caves.js";
 import { CELL_FT } from "../v2/sizes.js";
-import { Layout, arcShapes, arcSteepness, carvePlan, nodeShapes, shapesOf } from "./caveLayout.js";
+import { ENTRANCE_DEFAULTS, Layout, arcShapes, arcSteepness, carvePlan, entranceEnd, entranceProblem, nodeShapes, shapesOf } from "./caveLayout.js";
 import { Caves } from "./caves.js";
 
 // Flat ground at `height`, everywhere, with its cells all one color.
 const flat = (height) => ({ heightAt: () => height, cells: () => ({ colors: new Uint8Array(TILE_CELLS * TILE_CELLS * 3).fill(100) }) });
+// A hillside rising 0.6 ft for each foot east.
+const hill = (x) => 0.6 * x;
+const hillside = { heightAt: (x) => hill(x), cells: () => ({ colors: new Uint8Array(TILE_CELLS * TILE_CELLS * 3).fill(100) }) };
+const entrance = (details) => {
+  const e = { ...ENTRANCE_DEFAULTS, mouth: [0, 0, 0], yaw: 90, ...details };
+  return { ...e, at: entranceEnd(e) };
+};
 const scene = { add: () => {} };
 const spansAt = (caves, x, z) => caves.spans(Math.floor(x / CELL_FT), Math.floor(z / CELL_FT));
 
@@ -111,16 +118,6 @@ describe("cave layout", () => {
     expect(redone.size).toBe(shapesOf(layout.copyOf(arc.id)).length + shapesOf(layout.copyOf(a.id)).length + shapesOf(layout.copyOf(b.id)).length);
   });
 
-  it("carves round an opening, which has no shapes of its own", () => {
-    const layout = new Layout();
-    const room = layout.addNode([0, -100, 0]);
-    const opening = layout.addNode([200, 0, 0], { shape: "opening" });
-    layout.addArc(room.id, opening.id);
-    layout.carved = carvePlan(layout).carved;
-    room.at = [0, -92, 0];
-    expect(() => carvePlan(layout)).not.toThrow();
-  });
-
   it("doesn't count locking as a change", () => {
     const layout = new Layout();
     const node = layout.addNode([0, -100, 0]);
@@ -129,24 +126,45 @@ describe("cave layout", () => {
     expect(layout.changes()).toEqual([]);
   });
 
-  it("opens the ground only where a tunnel comes up to an opening, and leaves out rooms too near it", () => {
-    const caves = new Caves(scene, flat(0));
+  it("leaves out rooms too near the ground", () => {
     const layout = new Layout();
     const deep = layout.addNode([64, -60, 64], { size: "m" });
     const shallow = layout.addNode([192, -10, 64], { size: "m" });
-    const opening = layout.addNode([64, 0, 192], { size: "m", shape: "opening" });
-    layout.addArc(deep.id, opening.id, { size: 8 });
     const plan = carvePlan(layout, undefined, () => 0);
     expect(plan.unfit).toEqual([shallow.id]);
+    expect(plan.carved.has(deep.id)).toBe(true);
+  });
+
+  it("puts an entrance only where its mouth is in the open and its room under the ground", () => {
+    expect(entranceEnd({ mouth: [0, 0, 0], yaw: 90, length: 32, slope: "down" })).toEqual([32, -6.5, 0]);
+    expect(entranceProblem(entrance(), hill)).toBe(null);
+    expect(entranceProblem(entrance({ mouth: [0, -5, 0] }), hill)).toMatch(/mouth/);
+    expect(entranceProblem(entrance(), () => 0)).toMatch(/far end/);
+    expect(entranceProblem(entrance({ yaw: 270 }), hill)).toMatch(/far end/);
+  });
+
+  it("carves an entrance's tube out through the hillside, and joins tunnels to its room", () => {
+    const caves = new Caves(scene, hillside);
+    const layout = new Layout();
+    const { at, ...details } = entrance();
+    const way = layout.addNode(at, details);
+    const room = layout.addNode([160, 40, 0], { size: "m" });
+    layout.addArc(way.id, room.id, { size: 8 });
+    const plan = carvePlan(layout, undefined, hill);
+    expect(plan.unfit).toEqual([]);
     caves.carvePlan(plan, () => {});
-    expect(spansAt(caves, 192, 64)).toEqual([]);
-    // The tunnel comes up through the ground at the opening, and part way along, stays under it.
-    expect(Math.max(...spansAt(caves, 64, 192).map((s) => s.ceiling))).toBeGreaterThan(0);
-    expect(Math.max(...spansAt(caves, 64, 100).map((s) => s.ceiling))).toBeLessThanOrEqual(-4);
+    // The tube opens through the ground near its mouth, and further in, has rock over it.
+    expect(Math.max(...spansAt(caves, 6, 0).map((s) => s.ceiling))).toBeGreaterThan(hill(6));
+    expect(spansAt(caves, 48, 0)[0].floor).toBeCloseTo(0, 0);
+    expect(Math.max(...spansAt(caves, 40, 0).map((s) => s.ceiling))).toBeLessThanOrEqual(hill(40) - 4);
   });
 
   it("gives every element some shapes", () => {
     const layout = new Layout();
     for (const shape of ["cathedral", "round", "flat"]) for (const style of ["mineshaft", "borehole", "lavatube"]) expect(shapesOf(layout.copyOf(layout.addNode([0, 0, 0], { shape, style }).id)).length).toBeGreaterThan(0);
+    for (const style of ["natural", "mine"]) {
+      const { at, ...details } = entrance({ style });
+      expect(shapesOf(layout.copyOf(layout.addNode(at, details).id)).length).toBeGreaterThan(1);
+    }
   });
 });
