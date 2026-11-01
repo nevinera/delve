@@ -322,7 +322,7 @@ export const BODY_LOOKS = {
       { weapon: "thrown", weaponStyle: "crude" },
     ],
   },
-  minotaur: {
+  tauros: {
     unarmed: "claw",
     height: [8.5, 9.5],
     build: [0.8, 1],
@@ -472,7 +472,7 @@ export const BODY_LOOKS = {
       { weapon: "dagger", weaponStyle: "crude", offhand: "shield", offhandStyle: "crude", armor: { chest: { type: "leather", style: "tattered" } } },
     ],
   },
-  earthElemental: {
+  georite: {
     height: [9, 11],
     build: [0.9, 1],
     limbs: [0.9, 1],
@@ -485,7 +485,7 @@ export const BODY_LOOKS = {
     mouth: "frown",
     colors: { skin: ["#7a6a5a", "#6a6a6a", "#8a7a5a"], primary: ["#6a5a4a", "#5a5a5a"], secondary: ["#5a4a3a", "#4a4a4a"], eyes: ["#e0a020", "#60e040"] },
   },
-  fireElemental: {
+  furite: {
     height: [8, 9],
     build: [0.4, 0.6],
     limbs: [0.4, 0.6],
@@ -495,7 +495,7 @@ export const BODY_LOOKS = {
     mouth: "grin",
     colors: { skin: "#ff8020", hair: "#ffc040", primary: "#ff8020", secondary: "#ff6010", eyes: "#fff0a0" },
   },
-  waterElemental: {
+  aquite: {
     height: [8, 9.5],
     build: [0.6, 0.85],
     limbs: [0.6, 0.8],
@@ -504,7 +504,7 @@ export const BODY_LOOKS = {
     hair: "bald",
     colors: { skin: "#3a7ab0", primary: "#3a7ab0", secondary: "#3a7ab0", eyes: "#e0f8ff" },
   },
-  airElemental: {
+  aerite: {
     height: [8, 9],
     build: [0.3, 0.5],
     limbs: [0.3, 0.5],

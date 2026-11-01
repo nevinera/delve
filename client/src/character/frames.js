@@ -20,7 +20,7 @@ const SLIME = { mesh: slimeMesh, clips: slimeClips, roles: slimeRoles, settings:
 export const FRAMES = { canine: FOUR_LEGS, ursine: FOUR_LEGS, hoofed: FOUR_LEGS, lizard: FOUR_LEGS, pachyderm: FOUR_LEGS, dragon: DRAGON, serpent: SERPENT, fish: SWIMMER, ray: SWIMMER, bat: BAT, crawler: CRAWLER, slime: SLIME };
 
 // The skeletons, and the bodies built on each. Bodies not built yet stand as humanoids.
-export const SKELETONS = { humanoid: ["humanoid", "goblin", "troll", "orc", "ogre", "kobold", "gnoll", "lizardfolk", "minotaur", "skeleton", "zombie", "giant", "harpy", "gargoyle", "imp", "centaur", "naga", "amphen", "earthElemental", "fireElemental", "waterElemental", "airElemental"] };
+export const SKELETONS = { humanoid: ["humanoid", "goblin", "troll", "orc", "ogre", "kobold", "gnoll", "lizardfolk", "tauros", "skeleton", "zombie", "giant", "harpy", "gargoyle", "imp", "centaur", "naga", "amphen", "georite", "furite", "aquite", "aerite"] };
 for (const [body, { family }] of Object.entries(SPECIES)) (SKELETONS[family] ??= []).push(body);
 SKELETONS.dragon = Object.keys(DRAGONS);
 SKELETONS.serpent = Object.keys(SERPENTS);
