@@ -9,6 +9,7 @@ import { Draw } from "./draw.js";
 import { Marks } from "./marks.js";
 import { scatterPools } from "./marsh.js";
 import { Measure } from "./measure.js";
+import { CavePlan } from "./cavePlan.js";
 import { Build } from "./build.js";
 import { Paths } from "./paths.js";
 import { TITLE_MAX } from "./pins.js";
@@ -39,7 +40,9 @@ import { WaterBodies } from "./water.js";
 //   them where the pointer is, and a ring on the ground shows where they reach. [ and ] resize
 //   them, and c and v turn raise and lower's, shift+c and shift+v a little.
 // - build's tools place objects, templates and slabs, and pick them to change (build.js).
-// - caves' go to stands the builder on the ground where it's clicked, from over it or under it.
+// - caves' go to stands the builder on a planned room's or tunnel's floor, or on the ground, where
+//   it's clicked, from over it or under it; chamber and tunnel plan rooms and tunnels
+//   (cavePlan.js).
 // - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
 //   more each time the ring's moved its radius. Its undo takes back the last scattering.
 
@@ -53,6 +56,7 @@ const BRUSHES = new Set(["raise", "flatten", "smooth", "noise", "pools", "clear"
 const PLANNING = new Set(["marker", "eraser", "select", "measure"]); // tools that work on lines drawn at sea level
 const OPENS_PINS = new Set([null, "pin"]); // tools with which clicking a pin opens it
 const BUILD = new Set(["pick", "object", "template", "slab", "stairs", "ramp"]);
+const PLANS = new Set(["chamber", "tunnel"]);
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
 
@@ -90,7 +94,8 @@ function drawShape(canvas, shape) {
 }
 
 export class Tools {
-  constructor({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves }) {
+  constructor({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves, layout, inEarth }) {
+    this.inEarth = inEarth;
     Object.assign(this, { camera, canvas, builder, renditions, ground });
     this.tool = null;
     this.settings = { shape: "round", radius: 0, strength: 0, noise: 0, lower: false, angle: 0, grain: 0, craggy: false };
@@ -129,6 +134,7 @@ export class Tools {
       groundHit: () => this.hit(),
     });
     this.build.onPick = (tool) => this.tool !== tool && this.pick(tool);
+    this.plan = new CavePlan({ scene, camera, canvas, layout, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT });
     this.paths = new Paths(scene, canvas.parentElement, renditions, (x, z) => this.surface(x, z), (text) => ($("pathStatus").textContent = text));
     this.moving = null; // pins being dragged, { from, pins: [[pin, x, z]], before, moved }
     this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }
@@ -301,6 +307,7 @@ export class Tools {
     canvas.addEventListener("pointermove", (e) => {
       this.point(e);
       if (BUILD.has(this.tool)) this.build.move(e);
+      if (PLANS.has(this.tool)) this.plan.move(e);
       if (this.moving) this.movePins();
       for (const areas of Object.values(this.outlined)) {
         if (!areas.dragging) continue;
@@ -356,8 +363,13 @@ export class Tools {
         canvas.setPointerCapture(e.pointerId);
         return this.build.down(e);
       }
+      if (PLANS.has(this.tool)) {
+        canvas.setPointerCapture(e.pointerId);
+        return this.plan.down(e);
+      }
       if (this.tool === "goto") {
-        const at = this.hit();
+        const r = canvas.getBoundingClientRect();
+        const at = this.plan.target([e.clientX - r.left, e.clientY - r.top]) ?? this.hit();
         if (at) this.builder.state = { ...this.builder.state, x: at[0], y: at[1], z: at[2], flying: false, swimming: false, falling: 0 };
         return;
       }
@@ -417,6 +429,7 @@ export class Tools {
     canvas.addEventListener("pointerup", () => {
       this.stroke = null;
       if (BUILD.has(this.tool)) this.build.up();
+      if (PLANS.has(this.tool)) this.plan.up();
       if (this.clicked?.pin) this.openPin(this.clicked.pin);
       else if (this.clicked?.at) {
         const before = this.marks.toJSON();
@@ -448,6 +461,7 @@ export class Tools {
       if (e.target.matches?.("input, textarea, select") || e.target.closest?.(":popover-open")) return;
       const areas = this.outlined[this.tool];
       if (BUILD.has(this.tool) && this.build.key(e)) return e.preventDefault();
+      if (PLANS.has(this.tool) && this.plan.key(e)) return e.preventDefault();
       if (e.key === "Escape" && areas?.draft) areas.drop();
       else if (e.key === "Escape") this.pick(null);
       else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "select") this.marks.deleteSelected();
@@ -581,6 +595,7 @@ export class Tools {
     this.measuring = null;
     this.paths.setShown(tool === "path");
     if (BUILD.has(tool) || BUILD.has(this.build.tool)) this.build.setTool(BUILD.has(tool) ? tool : null);
+    this.plan.setTool(PLANS.has(tool) ? tool : null);
     this.box = null;
     this.boxEl.hidden = true;
     this.drawing = null;
@@ -784,6 +799,7 @@ export class Tools {
     this.draw.tick(this.camera, w, h);
     this.paths.tick(this.camera, w, h);
     if (BUILD.has(this.tool)) this.build.tick();
+    this.plan.tick(this.inEarth());
     for (const [tool, areas] of Object.entries(this.outlined)) {
       const to = this.tool === tool && areas.draft && this.hit();
       areas.tick(dt, this.camera, w, h, to ? [to[0], to[2]] : null, this.tool === tool);

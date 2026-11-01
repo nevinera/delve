@@ -231,7 +231,7 @@ function start(world, changes, fresh) {
     return tries.map((t) => ({ ...now, ...t })).find((s) => !stuck(s)) ?? { ...now, x: was.x, y: was.y, z: was.z };
   };
   builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push, clear, keep, ghost });
-  tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves });
+  tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves, layout, inEarth: ghost });
   // The bottom bar's display toggles.
   $("showGrid").checked = grid.value === 1;
   $("showGrid").addEventListener("change", () => (grid.value = $("showGrid").checked ? 1 : 0));

@@ -685,6 +685,10 @@ body.create {
   gap: 4px;
 }
 
+.create-modes[hidden] {
+  display: none;
+}
+
 .create-recent .create-note {
   grid-column: 1 / -1;
 }

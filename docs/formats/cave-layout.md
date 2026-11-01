@@ -1,6 +1,6 @@
 # Cave layout
 
-A version 2 world can keep a plan of each continent's caves: rooms (nodes) joined by tunnels (arcs). /create's chamber (N) and tunnel (L) tools edit it, and carving it opens the caves in the [caves](caves.md) files. Code: `client/src/create/caveLayout.js`, `client/src/create/cavePlan.js`. Schema: [cave-layout.schema.json](../schema/cave-layout.schema.json).
+A version 2 world can keep a plan of each continent's caves: rooms (nodes) joined by tunnels (arcs). /create's chamber (J) and tunnel (K) tools edit it, and carving it opens the caves in the [caves](caves.md) files. Code: `client/src/create/caveLayout.js`, `client/src/create/cavePlan.js`. Schema: [cave-layout.schema.json](../schema/cave-layout.schema.json).
 
 ```
 places/continents/<continent>/caves/layout.json
@@ -11,7 +11,7 @@ places/continents/<continent>/caves/layout.json
 A node is a room. Its `at` is the middle of its floor, in feet.
 
 - `size`: the width of the sphere the room fits in. `s` 16 ft, `m` 32, `l` 64, `xl` 128, `xxl` 256, `3xl` 512, `4xl` 1024.
-- `shape`: `cathedral` (tall, with aisles), `round` (a dome with bays) or `flat` (low and wide).
+- `shape`: `cathedral` (tall, with aisles), `round` (a dome with bays), `flat` (low and wide), or `opening`, a cave's mouth: a node on the ground, its `at` on it. Only an opening may reach up through the ground, and a node on the ground is always one.
 - `style`: `borehole`, `lavatube` or `mineshaft`. A mineshaft room is cut square.
 - `rock`: the caves' theme, 0 jagged, 1 smooth, 2 carved, 3 mined.
 - `hewn`: whether the rock is cut flat-faced.

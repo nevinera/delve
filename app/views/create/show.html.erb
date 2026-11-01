@@ -92,6 +92,14 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M24 3 L24 17 M18 11 L24 17 L30 11 M14 21 L34 21" stroke="#c8d4e8" stroke-width="2" fill="none"/></svg>
         <span>go to</span><kbd class="create-key">H</kbd>
       </button>
+      <button type="button" data-tool="chamber" data-key="j" aria-pressed="false" title="plan rooms on the grid, and openings on the ground">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><ellipse cx="24" cy="17" rx="16" ry="4" stroke="#6ac7ff" stroke-width="2" fill="none"/><line x1="24" y1="17" x2="24" y2="4" stroke="#6ac7ff" stroke-width="2"/></svg>
+        <span>chamber</span><kbd class="create-key">J</kbd>
+      </button>
+      <button type="button" data-tool="tunnel" data-key="k" aria-pressed="false" title="plan tunnels between rooms">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M6 16 C16 4, 30 22, 42 8" stroke="#6ac7ff" stroke-width="3" fill="none"/></svg>
+        <span>tunnel</span><kbd class="create-key">K</kbd>
+      </button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" data-key="h" aria-pressed="false" title="raise and lower the ground">
@@ -393,8 +401,52 @@
         <button type="button" id="marksDelete">delete</button>
       </div>
     </div>
+    <div data-config="chamber tunnel" hidden>
+      <p class="create-note" data-only="chamber">Click a point of the grid to place a room on it, or the ground from under it to place an opening there. Drag a room or opening to move it. Points snap within 64 ft: fly closer to reach further ones.</p>
+      <p class="create-note" data-only="tunnel">Click a room, then another, to join them with a tunnel. Drag a selected tunnel's bends to curve it. It's red where it climbs steeper than 45°.</p>
+      <p class="create-note">Click to select, shift-click to select more or fewer, shift-drag to box them in. Changes here change everything selected. Nothing's carved yet.</p>
+      <p id="planWhat" class="create-note"></p>
+      <label>rock
+        <select id="planRock"><option value="0">jagged</option><option value="1">smooth</option><option value="2">carved</option><option value="3">mined</option></select>
+      </label>
+      <label title="cut flat-faced, as by hand"><input type="checkbox" id="planHewn"> hewn</label>
+      <div class="create-modes" role="group" aria-label="size" data-plan-for="node">
+        <button type="button" data-plan-size="s" aria-pressed="false" title="16 ft">s</button>
+        <button type="button" data-plan-size="m" aria-pressed="false" title="32 ft">m</button>
+        <button type="button" data-plan-size="l" aria-pressed="false" title="64 ft">l</button>
+        <button type="button" data-plan-size="xl" aria-pressed="false" title="128 ft">xl</button>
+        <button type="button" data-plan-size="xxl" aria-pressed="false" title="256 ft">xxl</button>
+        <button type="button" data-plan-size="3xl" aria-pressed="false" title="512 ft">3xl</button>
+        <button type="button" data-plan-size="4xl" aria-pressed="false" title="1,024 ft">4xl</button>
+      </div>
+      <label data-plan-for="arc">width <output id="planArcSizeOut"></output>
+        <input id="planArcSize" type="range" step="1" value="10">
+      </label>
+      <div class="create-modes" role="group" aria-label="shape" data-plan-for="node">
+        <button type="button" data-plan-shape="cathedral" aria-pressed="false" title="tall and vaulted, narrowing upward">cathedral</button>
+        <button type="button" data-plan-shape="round" aria-pressed="false" title="wide, with a domed roof">round</button>
+        <button type="button" data-plan-shape="flat" aria-pressed="false" title="wide and low, flat-roofed">flat</button>
+        <button type="button" data-plan-shape="opening" aria-pressed="false" disabled title="a cave's mouth on the ground; only rooms placed on the ground are openings">opening</button>
+      </div>
+      <div class="create-modes" role="group" aria-label="shape" data-plan-for="arc">
+        <button type="button" data-plan-shape="straight" aria-pressed="false">straight</button>
+        <button type="button" data-plan-shape="wiggly" aria-pressed="false">wiggly</button>
+        <button type="button" data-plan-shape="zigzag" aria-pressed="false">zigzag</button>
+        <button type="button" data-plan-shape="deadends" aria-pressed="false" title="short side passages that stop in the rock">dead ends</button>
+      </div>
+      <div class="create-modes" role="group" aria-label="style">
+        <button type="button" data-plan-style="mineshaft" aria-pressed="false" title="square, a level floor">mineshaft</button>
+        <button type="button" data-plan-style="borehole" aria-pressed="false" title="round">borehole</button>
+        <button type="button" data-plan-style="lavatube" aria-pressed="false" title="a flattened tube that swells and narrows">lava tube</button>
+      </div>
+      <div class="create-way">
+        <button type="button" id="planDelete">delete</button>
+        <button type="button" id="planUndo">undo</button>
+      </div>
+      <p id="planStatus" class="create-note" role="status"></p>
+    </div>
     <div data-config="goto" hidden>
-      <p class="create-note">Click the ground, from over it or from in the earth under it, to go there, standing on it.</p>
+      <p class="create-note">Click a planned room or tunnel to go to its floor, or the ground, from over it or from in the earth under it, to stand on it there.</p>
     </div>
     <div data-config="raise flatten smooth noise pools clear eraser" hidden>
       <div class="create-shapes" role="group" aria-label="shape" data-only="raise">
@@ -555,7 +607,7 @@
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, measure measures distances and circles, and path finds the shortest way on foot from one place to another, to find where ranges and cliffs can be crossed. Click a pin's head to open it</dd>
     <dt>build</dt><dd>place objects and templates, from the ones used lately or the library, draw floors, walls, rooms and roofs as slabs, draw stairs and ramps, and pick what's placed to move, turn, delete or make a template of</dd>
-    <dt>caves</dt><dd>plan and shape caves (being rebuilt); go to takes you to where you click</dd>
+    <dt>caves</dt><dd>plan caves: chamber places rooms and openings, tunnel joins them; go to takes you to where you click (carving is being rebuilt)</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, draw streams and rivers, and clear it away</dd>
   </dl>
 </div>
