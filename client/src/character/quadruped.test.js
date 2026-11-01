@@ -120,3 +120,12 @@ describe("grafted heads", () => {
     expect(names("chimera")).toEqual(expect.arrayContaining(["head", "head2", "snake_head", "snake_jaw"]));
   });
 });
+
+describe("hopping", () => {
+  it("lifts a rabbit off the ground as it walks", () => {
+    const mesh = characterMesh(resolveRecipe({ body: "rabbit", height: 2 }));
+    const walk = characterClips(mesh, { clips: {} }).get("Walk_Loop");
+    const rise = walk.tracks.find((track) => track.name === "pelvis.position").values.filter((_, i) => i % 3 === 1);
+    expect(Math.max(...rise) - Math.min(...rise)).toBeGreaterThan(0.3);
+  });
+});

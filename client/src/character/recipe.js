@@ -237,6 +237,27 @@ export const BODY_LOOKS = {
     limbs: [0.5, 0.8],
     colors: { skin: ["#1a1a1a", "#2a2018"], secondary: ["#2a5a3a", "#3a2a5a", "#5a3a1a", "#1a3a5a"], hair: ["#2a2420", "#3a3028"], eyes: ["#c0a020", "#d04020"] },
   },
+  rabbit: {
+    height: [1.5, 2.5],
+    build: [0.5, 0.9],
+    limbs: [0.5, 0.8],
+    head: [0.5, 0.7],
+    colors: { skin: ["#9a8a7a", "#e8e4dc", "#6a5a4a", "#b8a890"], hair: ["#7a6a5a", "#d8d4cc", "#5a4a3a"], secondary: ["#d8a8a0"], eyes: ["#2a1a10", "#c02020"] },
+  },
+  squirrel: {
+    height: [1.5, 2.2],
+    build: [0.4, 0.7],
+    limbs: [0.5, 0.8],
+    head: [0.5, 0.7],
+    colors: { skin: ["#a0582a", "#7a7a78", "#5a3a20"], hair: ["#b0682e", "#8a8a88", "#6a4a2a"], secondary: ["#d8b8a0"], eyes: ["#101010"] },
+  },
+  frog: {
+    height: [2, 3.5],
+    build: [0.6, 0.9],
+    limbs: [0.6, 0.9],
+    head: [0.5, 0.8],
+    colors: { skin: ["#4a7a3a", "#6a7a2a", "#5a5a3a", "#3a6a5a"], secondary: ["#d8d0a0", "#c8c890"], hair: ["#2a4a2a", "#4a4a20"], eyes: ["#d0a020", "#c0c030"] },
+  },
   eyeshaug: {
     height: [6, 8],
     build: [0.5, 0.9],

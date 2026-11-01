@@ -28,7 +28,8 @@ import { serpentMesh } from "./serpent.js";
 // hair over the body (a mammoth's); shell: a turtle's; beak and feathered: an owlbear's head;
 // knuckles: walking on its fists; cap: a mushroom's cap over its back; heads: how many necks and
 // heads a hydra has, fanned out from its shoulders; chimera: a goat's neck and head rising from the
-// back and a snake's head at the end of the tail.
+// back and a snake's head at the end of the tail; hop: it hops to walk and run, the back legs
+// springing it forward.
 export const SPECIES = {
   wolf: { family: "canine", H: 2.05, L: 1.75, w: 0.3, neck: [0.52, 0.78], head: 1, muzzle: 1, pitch: 0.1, girth: [1, 1], neckGirth: 1, limb: 1, ears: "pointed", tail: "bushy", feet: "paw" },
   panther: { family: "canine", H: 1.75, L: 1.95, w: 0.27, neck: [0.38, 0.6], head: 0.95, muzzle: 0.45, pitch: 0, girth: [0.9, 0.85], neckGirth: 1.05, limb: 1, ears: "short", tail: "long", feet: "paw" },
@@ -59,6 +60,9 @@ export const SPECIES = {
   owlbear: { family: "ursine", H: 2.6, L: 2.5, w: 0.45, neck: [0.15, 0.7], head: 1.6, muzzle: 0.3, pitch: 0.1, girth: [1.5, 1.45], neckGirth: 1.8, limb: 2, hump: 0.2, ears: "pointed", tail: "stub", feet: "paw", beak: true, feathered: true },
   hydra: { family: "lizard", H: 1.1, L: 2.8, w: 0.5, neck: [2.0, 1.4], head: 1.15, muzzle: 1.0, pitch: 0.25, girth: [1.4, 0.9], neckGirth: 1.1, limb: 1.7, ears: "none", tail: "lizard", feet: "claw", crest: true, heads: 5 },
   chimera: { family: "canine", H: 2.7, L: 2.4, w: 0.33, neck: [0.4, 0.62], head: 1.2, muzzle: 0.55, pitch: 0.05, girth: [1.05, 1], neckGirth: 1.15, limb: 1.2, ears: "short", tail: "long", feet: "paw", ruff: true, chimera: true },
+  rabbit: { family: "canine", H: 0.85, L: 0.85, w: 0.22, neck: [0.28, 0.32], head: 0.85, muzzle: 0.35, pitch: 0.25, girth: [2.1, 2.3], neckGirth: 1.8, limb: 1.3, rump: 1.2, ears: "tall", tail: "stub", feet: "paw", hop: true },
+  squirrel: { family: "canine", H: 0.75, L: 0.95, w: 0.2, neck: [0.22, 0.32], head: 0.75, muzzle: 0.5, pitch: 0.15, girth: [1.75, 1.85], neckGirth: 1.5, limb: 1.1, ears: "pointed", tail: "squirrel", feet: "paw" },
+  frog: { family: "lizard", H: 0.55, L: 1.1, w: 0.4, neck: [0.18, 0.35], head: 1.35, muzzle: 0.3, pitch: -0.05, girth: [1.7, 0.95], neckGirth: 1.7, limb: 1.5, ears: "none", tail: "none", feet: "claw", hop: true },
   myoxa: { family: "ursine", H: 2.6, L: 2.8, w: 0.5, neck: [0.05, 0.75], head: 1.3, muzzle: 0.45, pitch: 0.25, girth: [1.6, 1.4], neckGirth: 1.6, limb: 2.2, ears: "none", tail: "stub", feet: "paw", cap: true, slow: true },
 };
 export const FAMILIES = ["canine", "ursine", "hoofed", "lizard", "pachyderm"];
@@ -88,7 +92,7 @@ function joints(sp) {
   ];
   // Tail bones, back from the rump.
   if (sp.breath) out.push(["mouth", "head", add(head, mul(pitched(sp, 0.08 + 0.67 * sp.muzzle, -0.15), sp.head))]);
-  const tails = { none: [[0, -0.05]], bushy: [[0.1, -0.35], [-0.3, -0.45], [-0.4, -0.3]], long: [[-0.1, -0.45], [-0.55, -0.35], [-0.45, -0.45], [0.05, -0.4]], thin: [[-0.05, -0.4], [-0.3, -0.45], [-0.35, -0.5], [-0.25, -0.5]], stub: [[0.05, -0.3]], tuft: [[-0.1, -0.2], [-0.25, -0.05]], horse: [[0.0, -0.35], [-0.6, -0.15], [-0.9, -0.05]], lizard: [[-0.1, -0.5], [-0.12, -0.6], [-0.1, -0.6], [-0.08, -0.6], [-0.05, -0.55]] }[sp.tail];
+  const tails = { none: [[0, -0.05]], bushy: [[0.1, -0.35], [-0.3, -0.45], [-0.4, -0.3]], long: [[-0.1, -0.45], [-0.55, -0.35], [-0.45, -0.45], [0.05, -0.4]], thin: [[-0.05, -0.4], [-0.3, -0.45], [-0.35, -0.5], [-0.25, -0.5]], stub: [[0.05, -0.3]], tuft: [[-0.1, -0.2], [-0.25, -0.05]], horse: [[0.0, -0.35], [-0.6, -0.15], [-0.9, -0.05]], lizard: [[-0.1, -0.5], [-0.12, -0.6], [-0.1, -0.6], [-0.08, -0.6], [-0.05, -0.55]], squirrel: [[0.3, -0.25], [0.45, -0.05], [0.35, 0.2], [0.1, 0.3]] }[sp.tail];
   const scale = sp.tail === "lizard" ? L / 2 : k;
   let at = [0, Hb + 0.05 * k, hz - 0.3 * k];
   tails.forEach(([dy, dz], i) => {
@@ -340,6 +344,7 @@ export function quadrupedMesh(look) {
       round: [[0.18, 0.2, -0.02, 0.11], [0.24, 0.31, -0.04, 0.12], [0.27, 0.38, -0.05, 0.03]],
       small: [[0.16, 0.18, 0.0, 0.07], [0.24, 0.27, -0.03, 0.05], [0.3, 0.3, -0.04, 0.008]],
       leaf: [[0.13, 0.2, -0.02, 0.07], [0.24, 0.34, -0.08, 0.075], [0.32, 0.45, -0.14, 0.01]],
+      tall: [[0.08, 0.2, 0.0, 0.07], [0.11, 0.5, -0.08, 0.085], [0.13, 0.8, -0.16, 0.06], [0.14, 0.95, -0.2, 0.01]],
       fan: [[0.27, 0.22, -0.2, 0.2], [0.3, 0.1, -0.3, 0.32], [0.32, -0.12, -0.32, 0.3], [0.32, -0.34, -0.26, 0.05]],
     }[sp.ears];
     if (!EARS) return;
@@ -440,8 +445,9 @@ export function quadrupedMesh(look) {
     tuft: [0.04, 0.03, 0.015],
     horse: [0.12, 0.17, 0.15, 0.03],
     lizard: [0.3, 0.24, 0.17, 0.11, 0.06, 0.01],
+    squirrel: [0.08, 0.2, 0.26, 0.24, 0.08],
   }[sp.tail].map((r) => r * (sp.tail === "lizard" ? bulk * gx : k));
-  const tailColor = (band) => (sp.tail === "thin" ? bare : sp.tail === "horse" || (sp.tail === "bushy" && band >= tailPoints.length - 2) ? back : fur);
+  const tailColor = (band) => (sp.tail === "thin" ? bare : sp.tail === "horse" || sp.tail === "squirrel" || (sp.tail === "bushy" && band >= tailPoints.length - 2) ? back : fur);
   out.path(tailPoints, thick, 8, tailColor, (i) => tailBones[i], { capStart: true, capEnd: true, carry: true });
   if (sp.tail === "tuft") out.gem(tailPoints.at(-1), 0.07 * k, back, tailBones.at(-1));
 
@@ -822,12 +828,29 @@ function gallop(sp, duration, swing) {
   };
 }
 
+// A hop at its own pace: crouched, the back legs spring it forward, the front legs reaching, and
+// it lands on its front feet and gathers its back ones under it. `high`: how high, 1 for a run.
+function hop(sp, duration, high) {
+  const k = sp.H / 2.05;
+  return (t) => {
+    const u = t / duration;
+    const push = hump(u, 0, 0.1, 0.2, 0.35);
+    const air = hump(u, 0.12, 0.3, 0.42, 0.6);
+    const land = hump(u, 0.5, 0.62, 0.72, 0.95);
+    return {
+      bones: { ...both("thigh", [1.0 * push + 0.5 * air - 0.5 * land, 0, 0]), ...both("calf", [-0.6 * push + 0.6 * land, 0, 0]), ...both("foot", [0.5 * push - 0.5 * land, 0, 0]), ...both("upperarm", [-0.7 * air + 0.3 * land, 0, 0]), ...both("lowerarm", [0.4 * land, 0, 0]), pelvis: [0.15 * push - 0.1 * air + 0.12 * land, 0, 0], neck_01: [-0.1 * air, 0, 0] },
+      pelvis: [0, (0.9 * high + 0.4) * k * air - 0.12 * k * (land + push), 0],
+    };
+  };
+}
+
 // The clips for a four-legged mesh, by name.
 export function quadrupedClips(mesh, look) {
   const sp = speciesOf(look);
   // A slow species does everything a third slower.
   const slow = sp.slow ? 1.35 : 1;
   const clips = Object.entries(familyClips(sp)).map(([name, [duration, pose, speed, breath]]) => {
+    if (sp.hop && (name === "Walk_Loop" || name === "Run_Fwd_Loop")) [duration, pose, speed] = name === "Walk_Loop" ? [1, hop(sp, 1, 0.6), 2.2 * sp.L] : [0.6, hop(sp, 0.6, 1), 7 * sp.L];
     const moved = sp.trunk ? withTrunk(name, duration, pose) : sp.heads || sp.chimera ? withHeads(sp, duration, pose) : pose;
     const clip = sampled(mesh, name, duration * slow, (t) => moved(t / slow), (speed ?? 0) / slow);
     if (breath) clip.userData.breath = breath.map((t) => t * slow);
