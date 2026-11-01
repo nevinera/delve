@@ -1,43 +1,52 @@
 import { SHIPPED_BODIES } from "../character/bodies.js";
 import { FRAMES } from "../character/frames.js";
 import { colorationProblems } from "../character/paint.js";
-import { modelAt } from "./paths.js";
 
-// A world's models (docs/formats/bodies.md): its own bodies, and the patterns and colorations it
-// adds to shipped bodies, as useModels takes them, from its files. `json` reads a path.
-export function modelsOf(paths, json) {
-  const models = { bodies: {}, colorations: {} };
-  for (const path of paths) {
-    const at = modelAt(path);
-    if (!at || at.bad) continue;
-    const thing = json(path);
-    if (thing && typeof thing === "object" && !Array.isArray(thing)) models[at.kind][at.name] = thing;
-  }
-  return models;
-}
+// A world's models (docs/formats/bodies.md), models.json: `bodies`, its own bodies by name, and
+// `colorations`, the patterns and colorations it adds to shipped bodies, by the body's name.
 
 const SKELETONS = ["humanoid", ...Object.keys(FRAMES)];
+const NAME = /^[a-z][a-z0-9-]*$/;
 const isObject = (v) => v !== null && typeof v === "object" && !Array.isArray(v);
 
-// What's wrong with a models file, as [path, message] pairs.
-export function modelProblems(path, thing) {
-  const at = modelAt(path);
-  if (at.bad) return ["isn't a models file: models/bodies/<name>.json or models/colorations/<name>.json, the name in lowercase letters, digits and dashes"];
-  if (!isObject(thing)) return ["should be an object"];
+// The models as useModels takes them, leaving out what isn't an object.
+export function modelsOf(file) {
+  const pick = (group) => Object.fromEntries(Object.entries(isObject(group) ? group : {}).filter(([, v]) => isObject(v)));
+  return { bodies: pick(file?.bodies), colorations: pick(file?.colorations) };
+}
+
+// What's wrong with models.json.
+export function modelProblems(file) {
+  if (!isObject(file)) return ["should be an object"];
   const out = [];
-  if (at.kind === "bodies") {
-    if (!SKELETONS.includes(thing.skeleton)) out.push(`has skeleton ${JSON.stringify(thing.skeleton)}, not one of ${SKELETONS.join(", ")}`);
-    if (!(thing.scale > 0)) out.push("needs a scale above 0");
-    if (thing.skeleton !== "humanoid" && !isObject(thing.shape)) out.push("needs a shape, its skeleton's builder's settings");
-    if (thing.look !== undefined && !isObject(thing.look)) out.push("needs its look as an object");
-    if (thing.colorations !== undefined) out.push(...colorationProblems(thing.colorations, thing.patterns));
-  } else {
-    const shipped = SHIPPED_BODIES[at.name];
-    if (!shipped) return [`adds to body ${at.name}, which the game doesn't ship`];
-    const patterns = { ...shipped.patterns, ...thing.patterns };
-    out.push(...colorationProblems(thing.colorations ?? [], patterns));
+  for (const key of ["bodies", "colorations"]) if (file[key] !== undefined && !isObject(file[key])) out.push(`needs ${key} as an object, by body name`);
+  for (const [name, body] of Object.entries(isObject(file.bodies) ? file.bodies : {})) {
+    const problem = (m) => out.push(`body ${name} ${m}`);
+    if (!NAME.test(name)) problem("needs a name of lowercase letters, digits and dashes");
+    if (!isObject(body)) {
+      problem("should be an object");
+      continue;
+    }
+    if (!SKELETONS.includes(body.skeleton)) problem(`has skeleton ${JSON.stringify(body.skeleton)}, not one of ${SKELETONS.join(", ")}`);
+    if (!(body.scale > 0)) problem("needs a scale above 0");
+    if (body.skeleton !== "humanoid" && !isObject(body.shape)) problem("needs a shape, its skeleton's builder's settings");
+    if (body.look !== undefined && !isObject(body.look)) problem("needs its look as an object");
+    if (body.colorations !== undefined) for (const m of colorationProblems(body.colorations, body.patterns)) problem(m);
+  }
+  for (const [name, added] of Object.entries(isObject(file.colorations) ? file.colorations : {})) {
+    const problem = (m) => out.push(`colorations for ${name} ${m}`);
+    const shipped = SHIPPED_BODIES[name];
+    if (!shipped) {
+      problem("are for a body the game doesn't ship");
+      continue;
+    }
+    if (!isObject(added)) {
+      problem("should be an object");
+      continue;
+    }
+    for (const m of colorationProblems(added.colorations ?? [], { ...shipped.patterns, ...added.patterns })) problem(m);
     const taken = new Set((shipped.colorations ?? []).map((c) => c.name));
-    for (const c of Array.isArray(thing.colorations) ? thing.colorations : []) if (taken.has(c?.name)) out.push(`adds coloration ${JSON.stringify(c.name)}, which ${at.name} already has`);
+    for (const c of Array.isArray(added.colorations) ? added.colorations : []) if (taken.has(c?.name)) problem(`add ${JSON.stringify(c.name)}, which ${name} already has`);
   }
   return out;
 }

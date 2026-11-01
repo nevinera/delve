@@ -189,26 +189,18 @@ describe("validateWorld", () => {
     ).toEqual([`warning: ${spawns}: placed p1x9z2aa is past the level cap of 10`]);
   });
 
-  it("checks models, and creatures against the world's bodies and colorations", () => {
-    const wolf = JSON.parse(strFromU8(json(SHIPPED_BODIES.wolf)));
+  it("checks models.json, and creatures against the world's bodies and colorations", () => {
+    const wolf = JSON.parse(JSON.stringify(SHIPPED_BODIES.wolf));
     const creature = (look) => (f) => f.set("creatures/wolf0001.json", json({ id: "wolf0001", name: "Wolf", look }));
+    const models = (m) => (f) => f.set("models.json", json(m));
+    const both = (...changes) => (f) => changes.forEach((c) => c(f));
     expect(changed(creature({ body: "dire", coloration: "grey" }))).toEqual(['creatures/wolf0001.json: has body "dire", which isn\'t a body the game ships or the world has']);
-    expect(
-      changed((f) => {
-        f.set("models/bodies/dire.json", json({ ...wolf, scale: 1.6 }));
-        creature({ body: "dire", coloration: "grey" })(f);
-      }),
-    ).toEqual([]);
+    expect(changed(both(models({ bodies: { dire: { ...wolf, scale: 1.6 } } }), creature({ body: "dire", coloration: "grey" })))).toEqual([]);
     expect(changed(creature({ body: "core:wolf", coloration: "ghost" }))).toEqual(['creatures/wolf0001.json: has coloration "ghost", which body core:wolf doesn\'t have']);
     const ghost = { colorations: [{ name: "ghost", pattern: "standard", colors: { coat: "#ffffff", back: "#eeeeee", belly: "#ffffff", eyes: "#80b0d0" } }] };
-    expect(
-      changed((f) => {
-        f.set("models/colorations/wolf.json", json(ghost));
-        creature({ body: "wolf", coloration: "ghost" })(f);
-      }),
-    ).toEqual([]);
-    expect(changed((f) => f.set("models/colorations/kraken.json", json(ghost)))).toEqual(["models/colorations/kraken.json: adds to body kraken, which the game doesn't ship"]);
-    expect(changed((f) => f.set("models/colorations/wolf.json", json({ colorations: [{ name: "x", pattern: "standard", colors: {} }] })))[0]).toMatch(/doesn't fill coat/);
-    expect(changed((f) => f.set("models/Dire.json", json({}))).map((m) => m.split(":")[0])).toEqual(["models/Dire.json"]);
+    expect(changed(both(models({ colorations: { wolf: ghost } }), creature({ body: "wolf", coloration: "ghost" })))).toEqual([]);
+    expect(changed(models({ colorations: { kraken: ghost } }))).toEqual(["models.json: colorations for kraken are for a body the game doesn't ship"]);
+    expect(changed(models({ colorations: { wolf: { colorations: [{ name: "x", pattern: "standard", colors: {} }] } } }))[0]).toMatch(/doesn't fill coat/);
+    expect(changed(models({ bodies: { Dire: { ...wolf } } }))).toEqual(["models.json: body Dire needs a name of lowercase letters, digits and dashes"]);
   });
 });

@@ -20,7 +20,7 @@ import {
   gameDataAt,
   indexPath,
   landBlockAt,
-  modelAt,
+  MODELS_PATH,
   plateAt,
   platesIndexPath,
   SHAPES_PATH,
@@ -63,7 +63,7 @@ export function validateWorld(files) {
   const world = json(WORLD_PATH);
   const continents = checkWorld(world, problem);
   const library = checkLibrary(files, json, problem, warning);
-  checkModels(files, json, problem);
+  checkModels(json, problem);
   checkData(files, continents, Number.isInteger(world?.levelCap) ? world.levelCap : MAX_LEVEL, json, problem, warning);
   for (const path of files.keys()) {
     const continent = continentOf(path);
@@ -178,13 +178,10 @@ function checkLibrary(files, json, problem, warning) {
 
 // The world's models, put in use (bodies.js's useModels) so its creatures can be checked against
 // its own bodies and colorations.
-function checkModels(files, json, problem) {
-  const paths = [...files.keys()].filter((path) => modelAt(path));
-  for (const path of paths) {
-    const thing = json(path);
-    if (thing !== null) for (const message of modelProblems(path, thing)) problem(path, message);
-  }
-  useModels(modelsOf(paths, json));
+function checkModels(json, problem) {
+  const file = json(MODELS_PATH);
+  if (file !== undefined && file !== null) for (const message of modelProblems(file)) problem(MODELS_PATH, message);
+  useModels(modelsOf(file));
 }
 
 // The world's game data (gameData.js): its classes, abilities and the rest, and each continent's

@@ -73,15 +73,20 @@ A body's `patterns` say how its areas are painted, and its `colorations` fill a 
 
 ## A world's models
 
-A world can have bodies of its own, and add patterns and colorations to the bodies the game ships. Every continent shares them. Names are lowercase letters, digits and dashes.
+A world can have bodies of its own, and add patterns and colorations to the bodies the game ships, all in one file, `models.json`. Every continent shares it. Body names are lowercase letters, digits and dashes.
 
-- `models/bodies/<name>.json` is a whole body file, in the format above. A world never changes a shipped body. To make a variant of one, copy its file here and edit the copy, under its own name or the shipped one's.
-- `models/colorations/<name>.json` adds `patterns` and `colorations` to the shipped body `<name>`. Its colorations can use the body's patterns or the ones it adds, and can't take a name the body's colorations already have.
+- `bodies`: the world's own bodies by name, each a whole body in the format above. A world never changes a shipped body. To make a variant of one, copy it here and edit the copy, under its own name or the shipped one's.
+- `colorations`: by a shipped body's name, `patterns` and `colorations` to add to it. Its colorations can use the body's patterns or the ones it adds, and can't take a name the body's colorations already have.
 
 ```json
 {
-  "patterns": { "plain": { "areas": { "everything": "coat", "eyes": "eyes", "pupils": "pupil" }, "colors": { "pupil": "#141212" } } },
-  "colorations": [{ "name": "ghost", "pattern": "plain", "colors": { "coat": "#e8eef4", "eyes": "#80b0d0" } }]
+  "bodies": { "dire-wolf": { "skeleton": "canine", "scale": 1.6, "shape": { "...": "a copy of the wolf's" } } },
+  "colorations": {
+    "tiger": {
+      "patterns": { "plain": { "areas": { "everything": "coat", "eyes": "eyes", "pupils": "pupil" }, "colors": { "pupil": "#141212" } } },
+      "colorations": [{ "name": "ghost", "pattern": "plain", "colors": { "coat": "#e8eef4", "eyes": "#80b0d0" } }]
+    }
+  }
 }
 ```
 

@@ -11,8 +11,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 | `templates/<id>.json` | a [template](templates.md): slabs and objects placed together | [schema](../schema/template.schema.json) |
 | `textures/<id>.json` | an image objects and slabs wear | [schema](../schema/image.schema.json) |
 | `shapes.json` | the hulls line of sight tests against, written by the editor | [shapes](shapes.md) |
-| `models/bodies/<name>.json` | a body of the world's own, which every continent can use | [bodies](bodies.md#a-worlds-models) |
-| `models/colorations/<name>.json` | patterns and colorations the world adds to a shipped body | [bodies](bodies.md#a-worlds-models) |
+| `models.json` | the world's own bodies, and the patterns and colorations it adds to shipped ones, which every continent shares | [bodies](bodies.md#a-worlds-models) |
 | `classes/`, `abilities/`, `statuses/`, `items/`, `item-templates/`, `creatures/`, `npcs/`, `dialogues/` | game data, each `<id>.json` | [game data](game-data.md) |
 | `places/continents/<c>/sketch.json` | pins, road paths, rivers and lakes | [schema](../schema/sketch.schema.json) |
 | `places/continents/<c>/zones/<key>.json` | a zone: a name and a region | [schema](../schema/zone.schema.json) |
