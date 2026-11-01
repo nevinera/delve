@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { shapeBounds } from "../v2/caves.js";
+import { allStone, shapeBounds } from "../v2/caves.js";
 import { hash2, hashString, valueNoise } from "../world/noise.js";
 
 // A continent's cave layout (docs/formats/cave-layout.md): rooms (nodes) joined by tunnels
@@ -249,7 +249,7 @@ export function carvePlan(layout, { ids = layout.changes(), uncarve = [] } = {})
     const copy = layout.copyOf(id);
     if (!copy) continue;
     carved.set(id, copy);
-    for (const shape of shapesOf(copy)) opens.push({ shape, theme: copy.rock, hewn: copy.hewn });
+    for (const shape of shapesOf(copy)) opens.push({ shape, stone: allStone(copy.rock, copy.hewn) });
   }
   return { fills, opens, carved };
 }

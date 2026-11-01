@@ -1,6 +1,6 @@
 # Caves
 
-A version 2 world keeps the caves dug by hand in /create in a binary file for each plate (2,048 ft square) that has any. Code: `client/src/v2/caves.js`.
+A version 2 world keeps its caves in a text file for each plate (8×8 tiles, 2,048 ft square) that has any. Code: `client/src/v2/caves.js`.
 
 ```
 places/continents/<continent>/caves/<px>_<pz>.caves
@@ -8,31 +8,60 @@ places/continents/<continent>/caves/<px>_<pz>.caves
 
 ## What's kept
 
-Under the ground everything is rock, but where a cave opens air. Each 4 ft cell of a tile with caves keeps a column of air spans, lowest first, so ledges, arches and caves over caves are just more spans. A span has:
+Under the ground everything is rock, except where a cave opens air. Each 4 ft cell of a tile with caves keeps a column of air spans, lowest first, so ledges, arches and caves over caves are just more spans. A span has:
 
-- `floor` and `ceiling`, heights in feet, to a quarter foot.
-- `theme`, how its rock looks: 0 jagged, 1 smooth, 2 carved, 3 mined.
-- `hewn`, whether it was cut flat-faced, as by hand.
+- a start, the height of its floor.
+- a length, how far up its ceiling is, under 1,024 ft.
+- three stone types: its ceiling's, its walls' and its floor's.
 
-Where a span reaches up through the ground, the cave opens there: a mouth. Digging up through the ground leaves the span 2 ft over it.
+A stone type is a theme, 0 jagged, 1 smooth, 2 carved or 3 mined, plus 4 if it's hewn (cut flat-faced, as by hand). Where the rock faces up it takes the floor type of the nearest span, where it faces down the ceiling type, and where it faces sideways the wall type.
 
-## The file
+Only an opening, a node in the [cave layout](cave-layout.md), may reach up through the ground.
 
-The file is gzipped. Inside, little-endian:
+## Numbers
 
-| Field | Type | What |
-| --- | --- | --- |
-| magic | 4 bytes | `DLC1` |
-| version | u32 | 1 |
-| px, pz | i32, i32 | the plate |
-| tiles | u8 | how many tiles follow |
+Numbers are base64 digits, as in [plates](v2-plates.md): `A`–`Z` `a`–`z` `0`–`9` `+` `/` stand for 0 to 63, most significant digit first. Heights and lengths are in quarter feet. A height written absolutely is the height plus 32,768.
 
-Then for each tile:
+## Layout
 
-| Field | Type | What |
-| --- | --- | --- |
-| index | u8 | the tile's place in the plate, `tz * 8 + tx`, each 0 to 7 |
-| counts | 4,096 × u8 | how many spans each cell has, row by row from the northwest |
-| spans | 10 bytes each | for each cell in turn, its spans: i32 floor and i32 ceiling in quarter feet, u8 theme, u8 hewn |
+```
+caves 1 <px> <pz>
+tile <index>
+<cells>
+tile <index>
+...
+```
 
-Tiles with no air are left out, and a plate with none has no file.
+The first line gives the format's version, 1, and the plate. Each tile with air comes in row order, with `index` = `tz * 8 + tx` within the plate. Its cells take one line, in one of three forms. Writers pick the shortest.
+
+A span is written as 3 digits of stone types (ceiling, wall, floor), then its start, then 2 digits of length.
+
+### `c3`: anything
+
+`c3 <counts> <spans>`
+
+- `counts`: 4,096 digits, how many spans each cell has, in row order from the northwest.
+- `spans`: every span, cell by cell, lowest first, 11 digits each with no breaks: types, a 6-digit start written absolutely, and its length.
+
+### `c2`: starts within 1,024 ft
+
+`c2 <base> <counts> <spans>`
+
+- `base`: the tile's lowest span start, 3 digits, written absolutely.
+- `counts`: the cells in row order. A digit 0 to 31 is how many spans the next cell has. A digit 32 to 63 stands for that many less 30 empty cells in a row (2 to 33).
+- `spans`: every span, as in `c3`, but 7 digits each: its start is 2 digits over the base.
+
+No cell may have more than 31 spans.
+
+### `c1`: few spans
+
+`c1 <count> <span> <span> ...`
+
+- `count`: how many spans, 2 digits.
+- Each span, after a space: its cell's x and z within the tile, 1 digit each, then 11 digits as in `c3`. A cell's spans come lowest first.
+
+### Zipped
+
+`c1z`, `c2z` and `c3z` are followed by a space and a zstd frame in base64 (3 bytes to 4 digits, the last group short). Unzipped, it's what follows `c1`, `c2` or `c3`.
+
+Readers also take the gzipped binary files written before (`DLC1`), each span's one theme and hewn taken for all three of its stone types.

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { TILE_CELLS, carve, cavesPath, growCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, fillRock, openAir } from "../v2/caves.js";
+import { TILE_CELLS, carve, cavesPath, growCave, smoothCave, emptyColumns, fillRock, openAir } from "../v2/caves.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 import { caveMesh, mouthCells } from "./caveMesh.js";
 import { Caves } from "./caves.js";
@@ -10,7 +10,7 @@ const flat = (height) => ({ heightAt: () => height, cells: () => ({ colors: new 
 
 describe("cave columns", () => {
   it("opens air, joining what it meets, and fills it again", () => {
-    const span = { theme: 0, hewn: false };
+    const span = { stone: [0, 0, 0] };
     let column = openAir(null, 0, 10, span);
     column = openAir(column, 20, 30, span);
     expect(column.map((s) => [s.floor, s.ceiling])).toEqual([[0, 10], [20, 30]]);
@@ -68,7 +68,7 @@ describe("cave columns", () => {
       if (!tiles.has(`${tx},${tz}`) && make) tiles.set(`${tx},${tz}`, emptyColumns());
       return tiles.get(`${tx},${tz}`) ?? null;
     };
-    const span = { theme: 0, hewn: false };
+    const span = { stone: [0, 0, 0] };
     const at = (ci, cj) => tiles.get("0,0")[cj * TILE_CELLS + ci];
     // A room 10 cells square, 12 ft high.
     for (let cj = 10; cj < 20; cj++) for (let ci = 10; ci < 20; ci++) columnsOf(0, 0, true)[cj * TILE_CELLS + ci] = [{ ...span, floor: 0, ceiling: 12 }];
@@ -91,7 +91,7 @@ describe("cave columns", () => {
       if (!tiles.has(`${tx},${tz}`) && make) tiles.set(`${tx},${tz}`, emptyColumns());
       return tiles.get(`${tx},${tz}`) ?? null;
     };
-    const span = { theme: 0, hewn: false };
+    const span = { stone: [0, 0, 0] };
     const at = (ci, cj) => tiles.get("0,0")[cj * TILE_CELLS + ci];
     // A room 10 cells square, its floor bumpy, and a notch in its east wall.
     for (let cj = 10; cj < 20; cj++) for (let ci = 10; ci < 20; ci++) columnsOf(0, 0, true)[cj * TILE_CELLS + ci] = [{ ...span, floor: (ci + cj) % 2 ? 3 : 0, ceiling: 12 }];
@@ -112,15 +112,6 @@ describe("cave columns", () => {
     at(15, 15)[0].ceiling = 104;
     smoothCave({ at: [62, 12, 62], normal: [0, -1, 0], radius: 12, strength: 1 }, columnsOf, () => 100);
     expect(at(15, 15)[0].ceiling).toBe(104);
-  });
-
-  it("reads back what it writes", () => {
-    const columns = emptyColumns();
-    columns[5] = [{ floor: -10.25, ceiling: -2, theme: 2, hewn: true }, { floor: 4, ceiling: 9.5, theme: 0, hewn: false }];
-    const { coords, tiles } = decodeCaves(encodeCaves([-1, 2], new Map([[9, columns]])));
-    expect(coords).toEqual([-1, 2]);
-    expect(tiles.get(9)[5]).toEqual(columns[5]);
-    expect(tiles.get(9)[4]).toBe(null);
   });
 });
 

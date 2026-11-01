@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CAVES_PATH, TILE_CELLS, carve, cavesPath, growCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
+import { CAVES_PATH, TILE_CELLS, allStone, carve, cavesPath, growCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
 import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial, setBrush } from "./caveMaterial.js";
 import { caveMesh, opensAt } from "./caveMesh.js";
@@ -114,7 +114,7 @@ export class Caves {
   // anything changed.
   dig(shape, { fill = false, theme = 0, hewn = false, join = false } = {}) {
     const groundAt = (ci, cj) => (Number.isFinite(this.groundCell(ci, cj)) ? this.groundCell(ci, cj) : null);
-    return this.change((columnsOf) => carve(shape, columnsOf, groundAt, { fill, theme, hewn }), join);
+    return this.change((columnsOf) => carve(shape, columnsOf, groundAt, { fill, stone: allStone(theme, hewn) }), join);
   }
 
   // Carves a cave layout's plan (caveLayout.js's carvePlan): its fills, then its opens, each
@@ -125,7 +125,7 @@ export class Caves {
     const work = (columnsOf) => {
       const changed = new Set();
       for (const shape of fills) for (const key of carve(shape, columnsOf, groundAt, { fill: true })) changed.add(key);
-      for (const { shape, theme, hewn } of opens) for (const key of carve(shape, columnsOf, groundAt, { theme, hewn, own: true })) changed.add(key);
+      for (const { shape, stone } of opens) for (const key of carve(shape, columnsOf, groundAt, { stone, own: true })) changed.add(key);
       return changed;
     };
     if (!this.change(work, false, false)) return null;

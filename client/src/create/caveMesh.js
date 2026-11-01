@@ -1,5 +1,5 @@
 import { hash2, facets, valueNoise } from "../world/noise.js";
-import { CAVE_THEMES, TILE_CELLS } from "../v2/caves.js";
+import { CAVE_THEMES, TILE_CELLS, isHewn, stonePart, themeOf } from "../v2/caves.js";
 import { CELL_FT } from "../v2/sizes.js";
 
 // Mesh data for a tile's caves (v2/caves.js), without three.js, so it can be tested. The rock's
@@ -9,7 +9,7 @@ import { CELL_FT } from "../v2/sizes.js";
 // each grid edge it crosses. Up and down, a crossing is exactly at a floor or ceiling. Across,
 // between an open column and a solid one, it's where the open column's height would run out,
 // going by how it shrinks from the column behind it (wallAt), so walls aren't held to the
-// columns' grid. A cube by a hewn span keeps its vertex at the columns' corner instead, so hewn
+// columns' grid. A cube by hewn stone (its floor, wall or ceiling, as it faces) keeps its vertex at the columns' corner instead, so hewn
 // rock is squared off. Faces look into the air, so from outside a cave its rock isn't drawn.
 //
 // Each theme draws the rock its own way (THEME_LOOK): vertices are drawn toward their
@@ -162,8 +162,7 @@ export function caveMesh(tx, tz, world) {
     let [sx, sy, sz, n] = [0, 0, 0, 0];
     let [upY, ups] = [0, 0]; // crossings on the up edges alone
     let floor = false; // whether the vertex is on a span's floor
-    let hewn = false;
-    let theme = null;
+    const touched = []; // the spans the cube's crossings meet
     let sky = null; // a ground cell, where it's the ground near a mouth
     let cave = false; // whether the cube meets a cave's air
     for (const [p, q] of CUBE_EDGES) {
@@ -187,10 +186,7 @@ export function caveMesh(tx, tz, world) {
       }
       for (const w of [u, v]) {
         const span = spans(w[0], w[1]).find((s) => s.floor <= w[2] * STEP_FT + STEP_FT && w[2] * STEP_FT - STEP_FT <= s.ceiling);
-        if (span) {
-          hewn ||= span.hewn;
-          theme ??= CAVE_THEMES[span.theme];
-        }
+        if (span) touched.push(span);
       }
       let [cx, cz] = [(u[0] + v[0]) / 2, (u[1] + v[1]) / 2];
       if (!upright && (su === CAVE || sv === CAVE) && (su === ROCK || sv === ROCK)) {
@@ -207,12 +203,16 @@ export function caveMesh(tx, tz, world) {
     let found = null;
     if (n) {
       let [x, y, z] = [sx / n, sy / n, sz / n];
+      const length = Math.hypot(toward[0] * CELL_FT, toward[1] * STEP_FT, toward[2] * CELL_FT) || 1;
+      const way = [(toward[0] * CELL_FT) / length, (toward[1] * STEP_FT) / length, (toward[2] * CELL_FT) / length];
+      // The stone of the floor, wall or ceiling, as the rock faces.
+      const part = stonePart(way[1]);
+      const hewn = touched.some((span) => isHewn(span.stone[part]));
+      const theme = touched.length ? CAVE_THEMES[themeOf(touched[0].stone[part])] : null;
       // Hewn rock: walls on the columns' edges, floors and ceilings at their heights.
       if (hewn) [x, y, z] = [a + 0.5, ups ? upY / ups : y, b + 0.5];
       // The ground alone: on the ground's own corner, so it meets the ground drawn in full.
       if (sky && !cave) [x, y, z] = [a + 0.5, world.corner(a + 1, b + 1), b + 0.5];
-      const length = Math.hypot(toward[0] * CELL_FT, toward[1] * STEP_FT, toward[2] * CELL_FT) || 1;
-      const way = [(toward[0] * CELL_FT) / length, (toward[1] * STEP_FT) / length, (toward[2] * CELL_FT) / length];
       found = { at: [(x + 0.5) * CELL_FT, y, (z + 0.5) * CELL_FT], toward: way, hewn, theme: THEME_LOOK[theme] ? theme : CAVE_THEMES[0], floor, sky };
     }
     crossings.set(key, found);
