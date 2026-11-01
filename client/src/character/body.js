@@ -915,13 +915,16 @@ export class MeshOut {
     // A tattered hem: the last band of something open is torn into teeth.
     const torn = (i, k) => this.wear?.style === "tattered" && (open || inward) && i === rings.length - 2 && k % 2 === 1;
     for (let i = 0; i < rings.length - 1; i++) {
-      const inside = mul(add(rings[i].center, rings[i + 1].center), 0.5);
       for (let k = 0; k < sides; k++) {
         const k1 = (k + 1) % sides;
         const mid = signed(((k + 0.5) / sides) * Math.PI * 2);
         if (skip?.(i, mid) || torn(i, k)) continue;
         const col = color(i, mid);
         const [a, b, cc, d] = [points[i][k], points[i][k1], points[i + 1][k1], points[i + 1][k]];
+        // Inside is back from the face's middle toward its rings' centers, so a band between rings
+        // side by side, or one behind the other, still faces out.
+        const out = mul(add(add(sub(a, rings[i].center), sub(b, rings[i].center)), add(sub(cc, rings[i + 1].center), sub(d, rings[i + 1].center))), 0.25);
+        const inside = sub(mul(add(add(a, b), add(cc, d)), 0.25), out);
         const [wa, wb, wc, wd] = [cornerBones[i][k], cornerBones[i][k1], cornerBones[i + 1][k1], cornerBones[i + 1][k]];
         this.face([a, b, cc], col, wa, inside, [wa, wb, wc], inward);
         this.face([a, cc, d], col, wa, inside, [wa, wc, wd], inward);

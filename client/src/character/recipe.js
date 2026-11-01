@@ -134,6 +134,16 @@ export const BODY_LOOKS = {
       { weapon: "mace", weaponStyle: "crude", offhand: "shield", offhandStyle: "savage", armor: { chest: { type: "chain", style: "tattered" } } },
     ],
   },
+  dragon: {
+    height: [13, 16],
+    build: [0.4, 0.7],
+    colors: { skin: ["#8a2a1e", "#3a6a34", "#2a2a30", "#9a6a2a"], secondary: ["#c8a070", "#b09060"], hair: ["#e0d6b8", "#3a3430"], eyes: ["#f0c020", "#e06020"] },
+  },
+  wyvern: {
+    height: [9, 11],
+    build: [0.3, 0.6],
+    colors: { skin: ["#4a5a2a", "#5a4a30", "#3a4a4a"], secondary: ["#a09060", "#8a7a5a"], hair: ["#d8ccb0", "#2a2420"], eyes: ["#e0d020", "#c04020"] },
+  },
   wolf: {
     height: [2.9, 3.3],
     build: [0.4, 0.6],

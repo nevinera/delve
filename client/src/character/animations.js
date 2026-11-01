@@ -62,9 +62,9 @@ export function characterClips(mesh, baked) {
 }
 
 // What a creature does, each played by one of its clips: idle, walk, run, attack, battleCry (an
-// enrage or a rallying shout), hit and death for every body, and bigAttack, cast and shoot for
-// those that can.
-export const ROLES = ["idle", "walk", "run", "attack", "bigAttack", "cast", "shoot", "battleCry", "hit", "death"];
+// enrage or a rallying shout), hit and death for every body, and fly, bigAttack, cast, shoot and
+// breath (fire or the like, from its mouth bone) for those that can.
+export const ROLES = ["idle", "walk", "run", "fly", "attack", "bigAttack", "cast", "shoot", "breath", "battleCry", "hit", "death"];
 
 // The clip for each of ROLES for a look (recipe.js's resolveRecipe), by its skeleton
 // (frames.js's skeletonOf), or null where it has none. A humanoid's attacks go with how its weapon

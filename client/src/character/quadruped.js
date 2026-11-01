@@ -18,7 +18,7 @@ import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "
 // H: the back's height; L: hip to shoulder; w: how far out the legs are; neck: the head's joint
 // from the shoulders, [up, forward]; head: its size; muzzle: how long the face is; pitch: how far
 // the face tips down; girth: [across, deep]; neckGirth and limb: thickness; hump: a rise over the
-// shoulders.
+// shoulders; jaw: how much deeper the lower jaw is than usual.
 export const SPECIES = {
   wolf: { family: "canine", H: 2.05, L: 1.75, w: 0.3, neck: [0.52, 0.78], head: 1, muzzle: 1, pitch: 0.1, girth: [1, 1], neckGirth: 1, limb: 1, ears: "pointed", tail: "bushy", feet: "paw" },
   panther: { family: "canine", H: 1.75, L: 1.95, w: 0.27, neck: [0.38, 0.6], head: 0.95, muzzle: 0.45, pitch: 0, girth: [0.9, 0.85], neckGirth: 1.05, limb: 1, ears: "short", tail: "long", feet: "paw" },
@@ -29,7 +29,7 @@ export const SPECIES = {
   horse: { family: "hoofed", H: 4.6, L: 2.9, w: 0.42, neck: [1.55, 1.3], head: 1.45, muzzle: 1.6, pitch: 0.8, girth: [0.95, 0.95], neckGirth: 0.9, limb: 0.9, ears: "leaf", tail: "horse", feet: "hoof", mane: true },
   lizard: { family: "lizard", H: 0.6, L: 2, w: 0.35, neck: [0.2, 0.75], head: 1, muzzle: 0.9, pitch: 0, girth: [1.15, 0.62], neckGirth: 1.1, limb: 1.25, ears: "none", tail: "lizard", feet: "claw" },
   basilisk: { family: "lizard", H: 0.8, L: 2.3, w: 0.4, neck: [0.35, 0.8], head: 1.2, muzzle: 0.75, pitch: 0, girth: [1.3, 0.75], neckGirth: 1.25, limb: 1.5, ears: "none", tail: "lizard", feet: "claw", crest: true },
-  crocodile: { family: "lizard", H: 0.55, L: 2.8, w: 0.42, neck: [0.05, 0.75], head: 1.15, muzzle: 2.1, pitch: 0, girth: [1.45, 0.6], neckGirth: 1.4, limb: 1.4, ears: "none", tail: "lizard", feet: "claw", crest: true },
+  crocodile: { family: "lizard", H: 0.55, L: 2.8, w: 0.42, neck: [0.05, 0.75], head: 1.15, muzzle: 2.1, pitch: 0, girth: [1.45, 0.6], neckGirth: 1.4, limb: 1.4, ears: "none", tail: "lizard", feet: "claw", crest: true, jaw: 2.4 },
 };
 export const FAMILIES = ["canine", "ursine", "hoofed", "lizard"];
 export const speciesOf = (look) => SPECIES[look.body] ?? SPECIES.wolf;
@@ -94,8 +94,8 @@ function joints(sp) {
       ["lowerarm_l", "upperarm_l", [w, (hoofed ? 0.62 : 0.57) * front, cz + 0.02 * k]],
       ["hand_l", "lowerarm_l", [w * 0.97, (hoofed ? 0.3 : 0.16) * front, cz + 0.06 * k]],
       ["thigh_l", "pelvis", [w, back, hz]],
-      ["calf_l", "thigh_l", [w, (hoofed ? 0.66 : 0.615) * back, hz + 0.3 * k]],
-      ["foot_l", "calf_l", [w, (hoofed ? 0.42 : 0.36) * back, hz - 0.15 * k]],
+      ["calf_l", "thigh_l", [w, (hoofed ? 0.76 : 0.615) * back, hz + (hoofed ? 0.32 : 0.3) * k]],
+      ["foot_l", "calf_l", [w, (hoofed ? 0.36 : 0.36) * back, hz - (hoofed ? 0.12 : 0.15) * k]],
       ["ball_l", "foot_l", [w, (hoofed ? 0.1 : 0.06) * H, hz - 0.08 * k]],
     );
   }
@@ -158,7 +158,7 @@ export function quadrupedMesh(look) {
     [0.45, 0.3, 0.36, [["spine_03", 0.4], ["neck_01", 0.6]]],
     [0.7, 0.27, 0.3, [["neck_01", 1]]],
     [0.9, 0.25, 0.27, [["neck_01", 0.4], ["head", 0.6]]],
-  ].map(([u, rx, rz, bones]) => ring(add(lerp(at("spine_03"), at("head"), u), [0, -0.04 * k, 0]), rx * sp.neckGirth * build * bulk, rz * sp.neckGirth * build * bulk, bones));
+  ].map(([u, rx, rz, bones]) => ring(add(lerp(at("spine_03"), at("head"), u), [0, -0.04 * k, 0]), rx * sp.neckGirth * build * bulk, rz * sp.neckGirth * build * bulk * (scaly ? sp.girth[1] * 1.3 : 1), bones));
   out.tube([...trunk, ...neckRows], 12, (band, angle) => furColor(angle), { capStart: true });
 
   // The head, back of the skull to the nose, the lower jaw on its own bone. Places on the head are
@@ -179,15 +179,17 @@ export function quadrupedMesh(look) {
     [0.44, -0.05, 0.13, 0.1],
     [0.62, -0.1, 0.1, 0.07],
     [0.75, -0.13, 0.07, 0.05],
-  ].map(([dz, dy, rx, rz]) => headRing(dz, dy, rx * (scaly ? 1.2 : 1), rz, headBones));
+  ].map(([dz, dy, rx, rz]) => headRing(dz, dy, rx * (scaly ? 1.2 : 1), rz * (sp.jaw ? (dz > 0.2 ? 0.5 : 0.7) : 1), headBones));
   const nose = sp.snout ? bare : dark;
   out.tube(skull, 10, (band, angle) => (band >= 4 && Math.abs(angle) > 2.3 ? back : band >= 3 && Math.abs(angle) < 0.9 ? belly : fur), { capStart: true, capEnd: true, endColor: nose });
+  // A deep lower jaw (a crocodile's) runs the length of the snout, scaled above and pale below.
   const jaw = [
     [0.14, -0.12, 0.15, 0.07],
     [0.4, -0.18, 0.11, 0.05],
     [0.66, -0.22, 0.06, 0.035],
-  ].map(([dz, dy, rx, rz]) => headRing(dz, dy, rx * (scaly ? 1.3 : 1), rz, [["jaw", 1]]));
-  out.tube(jaw, 8, () => belly, { capStart: true, capEnd: true });
+    ...(sp.jaw ? [[0.76, -0.2, 0.05, 0.025]] : []),
+  ].map(([dz, dy, rx, rz]) => headRing(dz, dy - (sp.jaw ? 0.03 * (sp.jaw - 1) : 0), rx * (scaly ? 1.3 : 1) * (sp.jaw ? 1.15 : 1), rz * (sp.jaw ?? 1), [["jaw", 1]]));
+  out.tube(jaw, 8, (band, angle) => (sp.jaw && Math.abs(angle) > 0.9 ? fur : belly), { capStart: true, capEnd: true });
   if (!sp.snout && !scaly) out.gem(hp(0, -0.11, 0.78), 0.05 * big, dark, headBones);
   for (const side of [-1, 1]) {
     // Eyes, forward on the skull, or at the sides for a lizard.

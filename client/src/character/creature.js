@@ -13,7 +13,7 @@ import { HELD, OFFHANDS, WEAPON_STYLES, WEAPONS } from "./weapons.js";
 // body or a loadout makes a new look from its recipe; every other control changes the look as it
 // stands.
 
-const LOOPS = new Set(["idle", "walk", "run"]);
+const LOOPS = new Set(["idle", "walk", "run", "fly"]);
 const LOOP_S = 3; // how long a looping clip plays before the next role
 const HOLD_S = 0.8; // how long a clip that doesn't loop holds its last frame
 
@@ -43,6 +43,17 @@ scene.add(ground);
 const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 400);
 const orbit = new OrbitControls(camera, canvas);
 orbit.enableDamping = true;
+
+// Fire for a breath: a cone out of the mouth bone along the snout, shown while the clip says the
+// breath comes out (its userData.breath), flickering.
+const cone = (radius, color, opacity) =>
+  new THREE.Mesh(
+    new THREE.ConeGeometry(radius, 1, 12, 1, true).translate(0, -0.5, 0).rotateX(-Math.PI / 2),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+  );
+const flame = new THREE.Group();
+flame.add(cone(0.45, 0xe03a10, 0.55), cone(0.22, 0xffc040, 0.8));
+flame.visible = false;
 
 let baked = null;
 let seed = 1;
@@ -88,6 +99,11 @@ function rebuild({ frame = false } = {}) {
   }
   mesh = characterMesh(look);
   scene.add(mesh);
+  const mouth = mesh.skeleton.getBoneByName("mouth");
+  if (mouth) {
+    mouth.add(flame);
+    flame.scale.setScalar(look.height / 14);
+  }
   mixer = new THREE.AnimationMixer(mesh);
   clips = characterClips(mesh, baked);
   roles = roleClips(look, mesh.userData.skeleton);
@@ -100,8 +116,8 @@ function rebuild({ frame = false } = {}) {
 function frameCamera() {
   mesh.geometry.computeBoundingBox();
   const box = mesh.geometry.boundingBox;
-  const size = Math.max(box.max.y, box.max.z - box.min.z);
-  ground.scale.setScalar(size * 1.6);
+  const size = Math.max(box.max.y, 0.65 * (box.max.z - box.min.z));
+  ground.scale.setScalar(size * 2);
   const middle = new THREE.Vector3(0, box.max.y * 0.55, (box.min.z + box.max.z) / 2);
   camera.position.copy(middle).add(new THREE.Vector3(1.25, 0.45, 1).normalize().multiplyScalar(size * 3.4));
   orbit.target.copy(middle);
@@ -125,7 +141,17 @@ function play(at) {
 const lasts = (role, clip) => (LOOPS.has(role) ? Math.max(LOOP_S, clip.duration) : clip.duration + HOLD_S);
 
 function step(dt) {
-  if (paused || !mixer) return;
+  if (!mixer) return;
+  const breath = playing.clip?.userData.breath;
+  const time = playing.action?.time ?? 0;
+  flame.visible = Boolean(breath && flame.parent && time >= breath[0] && time <= breath[1]);
+  if (flame.visible) {
+    // Grows out to full length, the head of it pointing the way the head turns.
+    const grow = Math.min(1, (time - breath[0]) / 0.25) * Math.min(1, (breath[1] - time) / 0.15 + 0.3);
+    const base = mesh.userData.look.height / 14;
+    flame.scale.set(base * (1 + 0.15 * Math.sin(time * 40)), base * (1 + 0.15 * Math.cos(time * 33)), base * 9 * grow);
+  }
+  if (paused) return;
   mixer.update(dt);
   playing.time += dt;
   const role = order[playing.at];
@@ -166,7 +192,7 @@ function select(options, value, change) {
 }
 
 function slider(key) {
-  const [min, max, step] = key === "height" ? [1, 12, 0.1] : [0, 1, 0.05];
+  const [min, max, step] = key === "height" ? [1, 20, 0.1] : [0, 1, 0.05];
   const input = el("input", { type: "range", min, max, step, value: look[key] });
   const shown = el("output", { textContent: (+look[key]).toFixed(2) });
   input.addEventListener("input", () => {
@@ -312,9 +338,10 @@ loadAnimations().then((data) => {
 
 // For scripted screenshots: shows a body with a loadout, holding one role `fraction` of the way in.
 window.creature = {
-  show({ body: b = body, loadout: l = "random", seed: s = seed, role, fraction = 0.5 } = {}) {
+  show({ body: b = body, loadout: l = "random", seed: s = seed, role, fraction = 0.5, colors } = {}) {
     [body, loadout, seed] = [b, l, s];
     roll();
+    Object.assign(look.colors, colors);
     rebuild({ frame: true });
     fillControls();
     if (role) {
@@ -325,6 +352,14 @@ window.creature = {
       playing.action.time = fraction * playing.clip.duration;
       mixer.update(0);
     }
+  },
+  // Looks from [x, y, z] about the creature's middle, as a fraction of its size.
+  view(from) {
+    mesh.geometry.computeBoundingBox();
+    const box = mesh.geometry.boundingBox;
+    const size = Math.max(box.max.y, 0.65 * (box.max.z - box.min.z));
+    camera.position.copy(orbit.target).add(new THREE.Vector3(...from).multiplyScalar(size));
+    orbit.update();
   },
   get look() {
     return look;
