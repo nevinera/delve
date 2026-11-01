@@ -528,6 +528,11 @@
       <label title="biome areas, and the ground but that nearest tinted by biome"><input type="checkbox" id="showBiomes"> biomes</label>
     </fieldset>
     <fieldset>
+      <legend>caves</legend>
+      <label title="a point at each column for each cave's floor (green) and ceiling (orange), seen through the rock"><input type="checkbox" id="showCaveGrid"> cave-grid</label>
+      <label title="the edges of every face of the caves' rock, glowing"><input type="checkbox" id="showCaveLines"> surface-lines</label>
+    </fieldset>
+    <fieldset>
       <legend>debug</legend>
       <label title="frame rate, the slowest frame and what it spent its time on, and draw calls"><input type="checkbox" data-show-debug="frame"> frame</label>
       <label title="how many tiles are drawn how finely, and how far off"><input type="checkbox" data-show-debug="ground"> ground</label>
@@ -538,7 +543,7 @@
 <div id="help" popover>
   <h2>Keys</h2>
   <dl>
-    <dt>T / G / Y</dt><dd>planning, geo or build</dd>
+    <dt>T / G / Y / I</dt><dd>planning, geo, build or caves</dd>
     <dt>H J K L N M</dt><dd>pick a tool, as shown on its button</dd>
     <dt>W / S</dt><dd>run, fly or swim forward and back; swimming, the way the camera looks, so look down to dive</dd>
     <dt>A / D</dt><dd>turn</dd>

@@ -11,12 +11,20 @@ export { CAVES_PATH };
 // within MESH_TILES tiles, made again a few at a time as they change; the ground at their mouths
 // left out of the ground drawn in full (Ground's holes); what the builder stands on and is kept
 // out of; and the camera kept inside them. Each dig or fill can be undone, up to UNDOS of them.
+//
+// Two overlays show how the rock comes from the spans, each shown or hidden as a whole: the grid,
+// a point of light at each column's middle for each span's floor and ceiling, seen through the
+// rock; and lines, every edge of the rock's faces drawn glowing over them.
 
 const MESH_TILES = FULL_TILES;
 const BUILD_MS = 8; // how long making meshes may take a frame
 const UNDOS = 50;
 const CAMERA_FT = 1; // how far the camera's kept from rock
 const PICK_FT = 1200;
+const FLOOR_RGB = [0.3, 1, 0.55]; // the grid's points: floors green, ceilings orange
+const CEILING_RGB = [1, 0.55, 0.15];
+const POINT_PX = 4;
+const LINE_RGB = 0x5ad8ff;
 
 export class Caves {
   constructor(scene, renditions) {
@@ -30,6 +38,15 @@ export class Caves {
     this.meshes = new Map(); // "tx,tz" -> its mesh, or null where there's no rock to draw
     this.stale = new Set(); // "tx,tz" of tiles whose meshes want making again
     this.materials = [caveMaterial(), new THREE.MeshLambertMaterial({ vertexColors: true })];
+    // The rock's faces sit a little back, so lines drawn over their edges show.
+    for (const material of this.materials) Object.assign(material, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+    this.overlays = { grid: new THREE.Group(), lines: new THREE.Group() };
+    for (const group of Object.values(this.overlays)) {
+      group.visible = false;
+      scene.add(group);
+    }
+    this.pointMaterial = new THREE.PointsMaterial({ size: POINT_PX, sizeAttenuation: false, vertexColors: true, depthTest: false, transparent: true });
+    this.lineMaterial = new THREE.LineBasicMaterial({ color: LINE_RGB, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
     this.onMouths = null; // (plate keys) => void, when the ground at mouths changes
     this.world = {
       spans: (ci, cj) => this.spans(ci, cj),
@@ -190,6 +207,11 @@ export class Caves {
     }
   }
 
+  // Shows or hides an overlay: "grid" or "lines".
+  show(overlay, shown) {
+    this.overlays[overlay].visible = shown;
+  }
+
   make(key) {
     const [tx, tz] = key.split(",").map(Number);
     this.stale.delete(key);
@@ -210,12 +232,47 @@ export class Caves {
     mesh.userData.tile = key;
     this.group.add(mesh);
     this.meshes.set(key, mesh);
+    const lines = new THREE.LineSegments(new THREE.WireframeGeometry(geometry), this.lineMaterial);
+    lines.position.copy(mesh.position);
+    this.overlays.lines.add(lines);
+    mesh.userData.overlays = [lines];
+    const points = this.points(tx, tz);
+    if (points) {
+      this.overlays.grid.add(points);
+      mesh.userData.overlays.push(points);
+    }
+  }
+
+  // Tile (tx, tz)'s grid: a point at each column's middle for each span's floor and ceiling, or
+  // null where it has no caves.
+  points(tx, tz) {
+    const columns = this.tiles.get(`${tx},${tz}`);
+    if (!columns) return null;
+    const [positions, colors] = [[], []];
+    columns.forEach((spans, n) => {
+      const [x, z] = [(tx * TILE_CELLS + (n % TILE_CELLS) + 0.5) * CELL_FT, (tz * TILE_CELLS + Math.floor(n / TILE_CELLS) + 0.5) * CELL_FT];
+      for (const span of spans ?? []) {
+        positions.push(x, span.floor, z, x, span.ceiling, z);
+        colors.push(...FLOOR_RGB, ...CEILING_RGB);
+      }
+    });
+    if (!positions.length) return null;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    const points = new THREE.Points(geometry, this.pointMaterial);
+    points.renderOrder = 10;
+    return points;
   }
 
   drop(mesh) {
     if (!mesh) return;
     this.group.remove(mesh);
     mesh.geometry.dispose();
+    for (const overlay of mesh.userData.overlays ?? []) {
+      overlay.parent?.remove(overlay);
+      overlay.geometry.dispose();
+    }
   }
 
   // Whether there are caves in tile (tx, tz) or beside it.
