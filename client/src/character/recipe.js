@@ -196,6 +196,11 @@ export const BODY_LOOKS = {
     build: [0.4, 0.7],
     colors: { skin: ["#6a5a48", "#5a5040", "#4a4a40"], secondary: ["#e0d8c8", "#d8d0c0"], hair: ["#3a3028", "#8a7a5a"], eyes: ["#d0a030", "#202020"] },
   },
+  bat: {
+    height: [8, 12],
+    build: [0.3, 0.7],
+    colors: { skin: ["#4a3a30", "#3a3030", "#5a4a3a", "#2a2428"], secondary: ["#3a2a28", "#4a3430", "#2a2020"], hair: ["#1a1414", "#2a2020"], eyes: ["#d03020", "#e0c040", "#101010"] },
+  },
   orc: {
     height: [6.2, 7],
     build: [0.65, 0.9],
