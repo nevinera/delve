@@ -34,7 +34,8 @@ const FPS = 30;
 
 // A clip from pose(t), t in seconds from 0 to `duration`, giving { bones: { name: [x, y, z] }
 // (turns, radians), pelvis: [x, y, z] (how far the pelvis moves, in the body's own feet, scaled by
-// the mesh's userData.scale) }. `speed`: how fast it moves along the ground, kept in userData.
+// the mesh's userData.scale), scale: { name: [x, y, z] } (how far each bone is stretched, 1 as it
+// rests) }. `speed`: how fast it moves along the ground, kept in userData.
 export function sampled(mesh, name, duration, pose, speed = 0) {
   const s = mesh.userData.scale;
   const frames = Math.max(2, Math.round(duration * FPS) + 1);
@@ -48,6 +49,12 @@ export function sampled(mesh, name, duration, pose, speed = 0) {
     poses.forEach((q, f) => turn.setFromEuler(euler.set(...(q.bones[bone] ?? [0, 0, 0]))).toArray(values, f * 4));
     return new THREE.QuaternionKeyframeTrack(`${bone}.quaternion`, times, values);
   });
+  const stretched = [...new Set(poses.flatMap((q) => Object.keys(q.scale ?? {})))].filter((bone) => mesh.skeleton.getBoneByName(bone));
+  for (const bone of stretched) {
+    const values = new Float32Array(frames * 3);
+    poses.forEach((q, f) => values.set(q.scale?.[bone] ?? [1, 1, 1], f * 3));
+    tracks.push(new THREE.VectorKeyframeTrack(`${bone}.scale`, times, values));
+  }
   const rest = mesh.skeleton.getBoneByName("pelvis").position;
   const positions = new Float32Array(frames * 3);
   poses.forEach((q, f) => [0, 1, 2].forEach((k) => (positions[f * 3 + k] = rest.getComponent(k) + (q.pelvis?.[k] ?? 0) * s)));

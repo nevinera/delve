@@ -85,11 +85,6 @@ function joints(sp) {
 // A fish's length, or a ray's span, in its own feet.
 const sizeOf = (sp) => (sp.family === "ray" ? 6 : 10);
 
-export function fishSkeleton(look) {
-  const sp = fishOf(look);
-  return mirrored(joints(sp), look.height / sizeOf(sp));
-}
-
 // Mesh data for a look, as body.js's bodyMesh gives it, and the scale its clips move the pelvis by.
 export function fishMesh(look) {
   const sp = fishOf(look);

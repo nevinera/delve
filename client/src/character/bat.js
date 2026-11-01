@@ -43,10 +43,6 @@ const FINGERS = [
   [-0.6, -1.9, -0.75],
 ];
 
-export function batSkeleton(look) {
-  return mirrored(joints(), look.height / SPAN);
-}
-
 // Mesh data for a look, as body.js's bodyMesh gives it, and the scale its clips move the pelvis by.
 export function batMesh(look) {
   const s = look.height / SPAN;

@@ -44,11 +44,6 @@ function joints(sp) {
 
 const tallOf = (sp) => sp.r + sp.rise + 0.3 * sp.head;
 
-export function serpentSkeleton(look) {
-  const sp = serpentOf(look);
-  return mirrored(joints(sp), look.height / tallOf(sp));
-}
-
 // Mesh data for a look, as body.js's bodyMesh gives it, and the scale its clips move the pelvis by.
 export function serpentMesh(look) {
   const sp = serpentOf(look);
