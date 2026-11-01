@@ -76,6 +76,13 @@ export function characterClips(mesh, baked) {
   return clips;
 }
 
+// How fast to play a clip that moves along the ground so a character's feet keep pace with it
+// going `speed` ft a second, and don't slide: 1 for a clip that doesn't move.
+export function strideRate(clip, mesh, speed) {
+  const ground = (clip?.userData.speed ?? 0) * mesh.userData.scale;
+  return ground > 0 ? speed / ground : 1;
+}
+
 // What a creature does, each played by one of its clips: idle, walk, run, attack, battleCry (an
 // enrage or a rallying shout), hit and death for every body, and fly, bigAttack, cast, shoot and
 // breath (fire or the like, from its mouth bone) for those that can.

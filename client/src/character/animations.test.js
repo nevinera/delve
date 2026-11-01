@@ -1,7 +1,7 @@
 import fs from "fs";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { characterClips } from "./animations.js";
+import { characterClips, strideRate } from "./animations.js";
 import { characterMesh } from "./characterMesh.js";
 import { TURN_RATE } from "./posed.js";
 import { resolveRecipe } from "./recipe.js";
@@ -110,5 +110,16 @@ describe("characterClips", () => {
       const at = posed("Run_Left_Loop", t);
       expect(at("foot_l").distanceTo(at("foot_r"))).toBeGreaterThan(0.25);
     }
+  });
+});
+
+describe("strideRate", () => {
+  it("plays a bigger body's stride slower at the same speed, so its feet don't slide", () => {
+    const rate = (scale) => {
+      const mesh = characterMesh(resolveRecipe({ body: "wolf", scale }));
+      return strideRate(characterClips(mesh, { clips: {} }).get("Run_Fwd_Loop"), mesh, 20);
+    };
+    expect(rate(2)).toBeCloseTo(rate(1) / 2);
+    expect(strideRate(null, { userData: { scale: 1 } }, 20)).toBe(1);
   });
 });

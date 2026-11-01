@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { characterClips, loadAnimations } from "../character/animations.js";
+import { characterClips, loadAnimations, strideRate } from "../character/animations.js";
 import { characterMesh } from "../character/characterMesh.js";
 import { resolveRecipe } from "../character/recipe.js";
 
@@ -16,10 +16,8 @@ const LOOK = resolveRecipe({
   hair: "short",
   colors: { skin: "#d1a077", hair: "#3a2618", eyes: "#6a7a7a", primary: "#8a7a5a", secondary: "#5a5a5a" },
 });
-// The clips for running ahead, to the left and right and back, and how far one stretches to
-// match the builder's speed before its feet are left to slide.
+// The clips for running ahead, to the left and right and back.
 const GAIT = { ahead: "Run_Fwd_Loop", left: "Run_Left_Loop", right: "Run_Right_Loop", back: "Run_Back_Loop" };
-const STRETCH = [0.6, 1.8];
 const QUARTER = Math.PI / 4;
 // How the chest twists against the legs, shared down the spine to the head.
 const TWIST = [
@@ -74,8 +72,7 @@ export class Figure {
     else if (this.landing) this.play("Jump_Land");
     else if (moving) {
       const clip = GAIT[way];
-      const ground = (this.clips.get(clip)?.userData.speed ?? speed) * this.model.userData.scale;
-      this.play(clip, Math.min(STRETCH[1], Math.max(STRETCH[0], speed / ground)));
+      this.play(clip, strideRate(this.clips.get(clip), this.model, speed));
     } else if (turn) this.play(turn > 0 ? "Turn_Left_Loop" : "Turn_Right_Loop");
     else this.play("Idle_Loop");
     // The chest and head twisted on top of whatever the clip has them doing.

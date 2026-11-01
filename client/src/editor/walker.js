@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { blocks } from "../world/objects.js";
 import { slabFootholds, slabHitsTrunk } from "../world/slabs.js";
-import { characterClips, loadAnimations } from "../character/animations.js";
+import { characterClips, loadAnimations, strideRate } from "../character/animations.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
 import { TURN_RATE } from "../character/posed.js";
 import { randomLook } from "../character/recipe.js";
@@ -55,14 +55,12 @@ const UP = new THREE.Vector3(0, 1, 0);
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " "]);
 const TOGGLES = new Set(["/", "x", "z"]);
 
-// The clips for moving at each gait, ahead, to the left and right and back, and how far one
-// stretches to match the character's speed before its feet are left to slide.
+// The clips for moving at each gait, ahead, to the left and right and back.
 export const GAITS = {
   walk: { ahead: "Walk_Loop", left: "Walk_Left_Loop", right: "Walk_Right_Loop", back: "Walk_Back_Loop" },
   run: { ahead: "Run_Fwd_Loop", left: "Run_Left_Loop", right: "Run_Right_Loop", back: "Run_Back_Loop" },
   sprint: { ahead: "Sprint_Loop", left: "Run_Left_Loop", right: "Run_Right_Loop", back: "Run_Back_Loop" },
 };
-const STRETCH = [0.6, 1.8];
 const QUARTER = Math.PI / 4;
 // How the chest twists against the legs, shared down the spine to the head.
 const TWIST = [
@@ -275,8 +273,7 @@ export class Walker {
     else if (this.sitting) this.play(this.sitting.standing ? "Sit_Ground_Exit" : sat < 1 ? "Sit_Ground_Enter" : "Sit_Ground_Idle_Loop");
     else if (moving) {
       const clip = (GAITS[gait] ?? GAITS.run)[way];
-      const ground = (this.clips.get(clip)?.userData.speed ?? speed) * this.model.userData.scale;
-      this.play(clip, Math.min(STRETCH[1], Math.max(STRETCH[0], speed / ground)));
+      this.play(clip, strideRate(this.clips.get(clip), this.model, speed));
     } else if (still && this.turning) this.play(this.turning > 0 ? "Turn_Left_Loop" : "Turn_Right_Loop");
     else this.play("Idle_Loop");
     this.twistChest();

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { characterClips, loadAnimations } from "../character/animations.js";
+import { characterClips, loadAnimations, strideRate } from "../character/animations.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
 import { TURN_RATE } from "../character/posed.js";
 import { resolveRecipe } from "../character/recipe.js";
@@ -176,13 +176,15 @@ export class Others {
     else if (drawn.airborne) clip = "Jump_Loop";
     else if (speed) clip = (GAITS[move.gait] ?? GAITS.run)[way];
     else if (move.turn) clip = move.turn > 0 ? "Turn_Left_Loop" : "Turn_Right_Loop";
-    this.play(drawn, clip);
+    this.play(drawn, clip, strideRate(drawn.clips.get(clip), drawn.model, speed));
   }
 
-  play(drawn, name) {
-    if (drawn.playing === name) return;
+  // Fades to a clip, or sets the playing one's speed.
+  play(drawn, name, rate = 1) {
     const clip = drawn.clips.get(name);
     if (!clip) return;
+    drawn.mixer.clipAction(clip).timeScale = rate;
+    if (drawn.playing === name) return;
     const previous = drawn.playing && drawn.mixer.existingAction(drawn.clips.get(drawn.playing));
     drawn.playing = name;
     const action = drawn.mixer.clipAction(clip);
