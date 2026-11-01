@@ -19,9 +19,12 @@ export const STYLES = ["mineshaft", "borehole", "lavatube"];
 export const ARC_FT = [4, 60]; // the tunnels' widths
 export const BEND_FT = 32; // an arc gets a bend for about every this much of its length
 export const STEEP_DEG = 45; // arcs are drawn red where they climb steeper than this
+const LEVEL = 0.7; // how far, of a room's radius, a tunnel runs level into it
+const CLEAR = 1.6; // how many times that from a room a tunnel's first bend has to be
+const OPENING_DEPTH = 0.8; // how far, of its radius, an opening's floor is under the ground
 
 export const NODE_DEFAULTS = { size: "m", shape: "round", style: "borehole", rock: 0, hewn: false };
-export const ARC_DEFAULTS = { size: 10, shape: "wiggly", style: "borehole", rock: 0, hewn: false };
+export const ARC_DEFAULTS = { size: 12, shape: "wiggly", style: "borehole", rock: 0, hewn: false };
 
 const add = (a, b) => a.map((v, i) => v + b[i]);
 const mul = (a, k) => a.map((v) => v * k);
@@ -86,14 +89,16 @@ export class Layout {
     return [...this.arcs.values()].filter((a) => a.from === id || a.to === id).map((a) => a.id);
   }
 
-  // An element as carving sees it: a copy, an arc's with its ends' places, and without whether
-  // it's locked, which carving doesn't care about.
+  // An element as carving sees it: a copy, without whether it's locked, which carving doesn't
+  // care about, and an arc's with its ends, the floors it runs between, and how far into each it
+  // runs level (arcCurve).
   copyOf(id) {
     const element = this.nodes.get(id) ?? this.arcs.get(id);
     if (!element) return null;
     const { locked, ...copy } = structuredClone(element);
     if (!copy.from) return copy;
-    return { ...copy, ends: [[...this.nodes.get(copy.from).at], [...this.nodes.get(copy.to).at]] };
+    const [from, to] = [this.nodes.get(copy.from), this.nodes.get(copy.to)];
+    return { ...copy, ends: [floorOf(from), floorOf(to)], level: [from, to].map((node) => LEVEL * (NODE_SIZES[node.size] / 2)) };
   }
 
   // Whether an element's changed since it was last carved: new, moved or otherwise changed, or
@@ -124,7 +129,7 @@ const PLAIN_ARC = { shape: "wiggly", style: "borehole" };
 export function nodeShapes({ id, at, size, shape, style }) {
   const R = NODE_SIZES[size] / 2;
   // An opening: a dome sunk into the ground, its top breaking through.
-  if (shape === "opening") return [{ kind: "dome", at: add(at, [0, -0.8 * R, 0]), radii: [0.6 * R, 1.2 * R, 0.6 * R], yaw: 0 }];
+  if (shape === "opening") return [{ kind: "dome", at: add(at, [0, -OPENING_DEPTH * R, 0]), radii: [0.6 * R, 1.2 * R, 0.6 * R], yaw: 0 }];
   const seed = hashString(id);
   const random = (k) => hash2(k, 0, seed);
   const yaw = random(0) * Math.PI;
@@ -143,12 +148,25 @@ export function nodeShapes({ id, at, size, shape, style }) {
     const main = style === "mineshaft" ? round(1, 0, [0.85 * R, 0.25 * R, 0.85 * R]) : { kind: "box", at: add(at, [0, 0.12 * R, 0]), half: [0.6 * R, 0.12 * R, 0.6 * R], yaw };
     return [main, ...bays(6, 0.6 * R, [0.38 * R, 0.24 * R, 0.38 * R])];
   }
-  return [round(1, 0, [0.85 * R, 0.5 * R, 0.75 * R]), ...bays(5, 0.6 * R, [0.35 * R, 0.32 * R, 0.35 * R])];
+  return [round(1, 0, [0.85 * R, 0.8 * R, 0.75 * R]), ...bays(5, 0.6 * R, [0.35 * R, 0.5 * R, 0.35 * R])];
 }
 
-// The line an arc (as Layout's copyOf gives it) runs along, floor to floor through its bends.
-export function arcCurve({ ends, bends }) {
-  const points = [ends[0], ...bends, ends[1]].map((p) => new THREE.Vector3(...p));
+// The middle of a node's floor: its `at`, or for an opening, the floor of the hollow it sinks
+// into the ground (nodeShapes).
+const floorOf = (node) => (node.shape === "opening" ? add(node.at, [0, -OPENING_DEPTH * (NODE_SIZES[node.size] / 2), 0]) : [...node.at]);
+
+// The line an arc (as Layout's copyOf gives it) runs along, floor to floor through its bends,
+// leaving each end level, out across the room's floor as far as `level` says, so it meets the
+// floor and not the walls or ceiling. Bends that near an end, or not far past, give way to it.
+export function arcCurve({ ends, bends, level = [0, 0] }) {
+  const flat = (a, b) => Math.hypot(b[0] - a[0], b[2] - a[2]);
+  const kept = bends.filter((b) => flat(ends[0], b) > level[0] * CLEAR && flat(ends[1], b) > level[1] * CLEAR);
+  const out = (end, toward, reach) => {
+    const d = flat(end, toward);
+    return reach && d > reach * CLEAR ? [[end[0] + ((toward[0] - end[0]) / d) * reach, end[1], end[2] + ((toward[2] - end[2]) / d) * reach]] : [];
+  };
+  const [first, last] = [kept[0] ?? ends[1], kept.at(-1) ?? ends[0]];
+  const points = [ends[0], ...out(ends[0], first, level[0]), ...kept, ...out(ends[1], last, level[1]), ends[1]].map((p) => new THREE.Vector3(...p));
   return new THREE.CatmullRomCurve3(points, false, "centripetal");
 }
 
@@ -201,7 +219,7 @@ export function arcShapes(copy) {
       const swell = 1 + 0.35 * valueNoise(d / (3 * W), 2.5, seed);
       return { kind: "dome", at: p, radii: [w * swell, 0.6 * W * scale * (1 + 0.3 * valueNoise(d / (2 * W), 4.5, seed)), Math.max(w, step)], yaw };
     }
-    return { kind: "dome", at: p, radii: [w, 0.85 * W * scale, Math.max(w, step)], yaw };
+    return { kind: "dome", at: p, radii: [w, W * scale, Math.max(w, step)], yaw };
   };
   points.forEach((p, i) => {
     const d = (i / count) * length;

@@ -29,7 +29,7 @@ A node or arc with `locked` true can't be moved, changed or deleted in /create, 
 
 ## Carving
 
-For now every room carves as a round borehole room and every tunnel as a wiggly borehole tunnel, whatever their details say. Only openings open through the ground: other air stops 4 ft under it, and a room that would come that near it isn't carved. /create carves each change as it's made, with the elements joined to it.
+For now every room carves as a round borehole room and every tunnel as a wiggly borehole tunnel, whatever their details say. A tunnel runs level into each room it joins, across 0.7 of the room's radius, so it meets the floor; bends nearer than that give way. It meets an opening at the floor of the hollow the opening sinks into the ground. Only openings open through the ground: other air stops 4 ft under it, and a room that would come that near it isn't carved. /create carves each change as it's made, with the elements joined to it.
 
 The same details always carve the same cave: the noise for each room and tunnel is seeded from its id. `carved` keeps each node or arc as it was when last carved (an arc's copy adds `ends`, its nodes' `at`). Carving a changed one fills its old shapes with rock, then opens its new ones, and carves again its unchanged neighbours that the fill touched. Uncarving fills an element's old shapes and drops it from `carved`.
 
