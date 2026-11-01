@@ -14,11 +14,8 @@
     "flesh": "chitin",
     "hair": "bald",
     "colors": {
-      "skin": ["#8a7040", "#5a4a30", "#3a3a2a", "#7a5a2a"],
-      "eyes": ["#40c0a0", "#c04020", "#e0c040"],
       "primary": ["#6a5a30", "#4a3a2a"],
-      "secondary": ["#5a4a30"],
-      "horn": ["#2a2018", "#3a2a20"]
+      "secondary": ["#5a4a30"]
     },
     "loadouts": [
       {
@@ -44,5 +41,52 @@
         "weaponStyle": "fine"
       }
     ]
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "eyes": "eyes",
+        "horn": "horn"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#8a7040",
+        "eyes": "#40c0a0",
+        "horn": "#2a2018"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#5a4a30",
+        "eyes": "#c04020",
+        "horn": "#3a2a20"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#3a3a2a",
+        "eyes": "#e0c040",
+        "horn": "#2a2018"
+      }
+    },
+    {
+      "name": "standard 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#7a5a2a",
+        "eyes": "#40c0a0",
+        "horn": "#3a2a20"
+      }
+    }
+  ]
 }

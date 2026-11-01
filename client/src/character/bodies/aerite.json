@@ -8,10 +8,26 @@
     "flesh": "air",
     "hair": "bald",
     "colors": {
-      "skin": "#d0dae8",
       "primary": "#d0dae8",
-      "secondary": "#d0dae8",
-      "eyes": "#80c0ff"
+      "secondary": "#d0dae8"
     }
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "eyes": "eyes"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#d0dae8",
+        "eyes": "#80c0ff"
+      }
+    }
+  ]
 }

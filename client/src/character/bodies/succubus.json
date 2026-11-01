@@ -16,12 +16,8 @@
     "hair": ["long", "ponytail", "bob"],
     "mouth": ["smirk", "full"],
     "colors": {
-      "skin": ["#a04a6a", "#7a3a7a", "#c06a6a", "#5a3a6a"],
-      "hair": ["#1a1018", "#f0e0d0", "#6a1a2a"],
-      "eyes": ["#f0d040", "#e04040"],
       "primary": ["#2a1a2a", "#5a1a2a"],
-      "secondary": ["#2a1a2a"],
-      "horn": ["#2a2020", "#4a3a40"]
+      "secondary": ["#2a1a2a"]
     },
     "loadouts": [
       {
@@ -40,5 +36,57 @@
         "weaponStyle": "fine"
       }
     ]
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "hair": "hair",
+        "eyes": "eyes",
+        "horn": "horn"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#a04a6a",
+        "hair": "#1a1018",
+        "eyes": "#f0d040",
+        "horn": "#2a2020"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#7a3a7a",
+        "hair": "#f0e0d0",
+        "eyes": "#e04040",
+        "horn": "#4a3a40"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#c06a6a",
+        "hair": "#6a1a2a",
+        "eyes": "#f0d040",
+        "horn": "#2a2020"
+      }
+    },
+    {
+      "name": "standard 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#5a3a6a",
+        "hair": "#1a1018",
+        "eyes": "#e04040",
+        "horn": "#4a3a40"
+      }
+    }
+  ]
 }

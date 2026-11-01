@@ -14,12 +14,8 @@
     "tail": "tuft",
     "hair": ["short"],
     "colors": {
-      "skin": ["#5a3a2a", "#3a2a22", "#7a5a3a"],
-      "hair": ["#2a1c14", "#1b1310"],
-      "eyes": ["#c02a1a"],
       "primary": ["#5a4a3a"],
-      "secondary": ["#4a4038", "#5a3a2a"],
-      "horn": ["#d8ccb0", "#c8b898"]
+      "secondary": ["#4a4038", "#5a3a2a"]
     },
     "loadouts": [
       {
@@ -44,5 +40,47 @@
         }
       }
     ]
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "hair": "hair",
+        "eyes": "eyes",
+        "horn": "horn"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#5a3a2a",
+        "hair": "#2a1c14",
+        "eyes": "#c02a1a",
+        "horn": "#d8ccb0"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#3a2a22",
+        "hair": "#1b1310",
+        "eyes": "#c02a1a",
+        "horn": "#c8b898"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#7a5a3a",
+        "hair": "#2a1c14",
+        "eyes": "#c02a1a",
+        "horn": "#d8ccb0"
+      }
+    }
+  ]
 }

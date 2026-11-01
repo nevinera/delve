@@ -14,9 +14,6 @@
     "hair": ["bald", "bald", "spiky", "topknot"],
     "mouth": ["grin", "frown", "smirk"],
     "colors": {
-      "skin": ["#6a8a3a", "#7a9a40", "#5a7a34", "#8a9a4a"],
-      "hair": ["#1b1310", "#2a1c14"],
-      "eyes": ["#d0a020", "#c06020"],
       "primary": ["#6b5a3a", "#5a4a3a", "#7a3b2e"],
       "secondary": ["#4a4038", "#3a3430"]
     },
@@ -79,5 +76,52 @@
         }
       }
     ]
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "hair": "hair",
+        "eyes": "eyes"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#6a8a3a",
+        "hair": "#1b1310",
+        "eyes": "#d0a020"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#7a9a40",
+        "hair": "#2a1c14",
+        "eyes": "#c06020"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#5a7a34",
+        "hair": "#1b1310",
+        "eyes": "#d0a020"
+      }
+    },
+    {
+      "name": "standard 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#8a9a4a",
+        "hair": "#2a1c14",
+        "eyes": "#c06020"
+      }
+    }
+  ]
 }

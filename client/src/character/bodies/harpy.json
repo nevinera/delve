@@ -11,9 +11,6 @@
     "hair": ["long", "dreadlocks", "bun"],
     "mouth": ["grin", "smirk"],
     "colors": {
-      "skin": ["#c8a888", "#a88868", "#d0b8a0"],
-      "hair": ["#5a4a3a", "#3a3a4a", "#8a6a4a"],
-      "eyes": ["#e0c040"],
       "primary": ["#5a4a3a", "#6a5a4a"],
       "secondary": ["#3a3430"]
     },
@@ -30,5 +27,43 @@
         "weaponStyle": "crude"
       }
     ]
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "hair": "hair",
+        "eyes": "eyes"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#c8a888",
+        "hair": "#5a4a3a",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#a88868",
+        "hair": "#3a3a4a",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#d0b8a0",
+        "hair": "#8a6a4a",
+        "eyes": "#e0c040"
+      }
+    }
+  ]
 }

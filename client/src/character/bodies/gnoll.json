@@ -13,9 +13,6 @@
     "tail": "bushy",
     "hair": ["mohawk", "mohawk", "short"],
     "colors": {
-      "skin": ["#a08050", "#8a7a5a", "#b09060"],
-      "hair": ["#3a2a1a", "#2a2018"],
-      "eyes": ["#e0c040", "#c04020"],
       "primary": ["#6b5a3a", "#5a4a3a"],
       "secondary": ["#4a4038"]
     },
@@ -55,5 +52,43 @@
         }
       }
     ]
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "hair": "hair",
+        "eyes": "eyes"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#a08050",
+        "hair": "#3a2a1a",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#8a7a5a",
+        "hair": "#2a2018",
+        "eyes": "#c04020"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#b09060",
+        "hair": "#3a2a1a",
+        "eyes": "#e0c040"
+      }
+    }
+  ]
 }

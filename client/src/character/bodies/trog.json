@@ -15,9 +15,6 @@
     "hair": ["bald", "bald", "mohawk"],
     "mouth": ["frown", "grin"],
     "colors": {
-      "skin": ["#7a7a72", "#6a6a66", "#8a8478", "#5a5e5a"],
-      "hair": ["#2a2a2a", "#4a4038"],
-      "eyes": ["#e0c040", "#d04020"],
       "primary": ["#5a4a3a"],
       "secondary": ["#4a4038", "#3a3430"]
     },
@@ -43,5 +40,52 @@
         "weaponStyle": "crude"
       }
     ]
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "hair": "hair",
+        "eyes": "eyes"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#7a7a72",
+        "hair": "#2a2a2a",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#6a6a66",
+        "hair": "#4a4038",
+        "eyes": "#d04020"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#8a8478",
+        "hair": "#2a2a2a",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "standard 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#5a5e5a",
+        "hair": "#4a4038",
+        "eyes": "#d04020"
+      }
+    }
+  ]
 }

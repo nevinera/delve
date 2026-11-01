@@ -9,10 +9,8 @@
     "flesh": "bone",
     "hair": "bald",
     "colors": {
-      "skin": ["#d8d0b8", "#c8c0a8"],
       "primary": ["#d0c8b0", "#c8c0a8"],
-      "secondary": ["#c8c0a8"],
-      "eyes": ["#40c0f0", "#f04020"]
+      "secondary": ["#c8c0a8"]
     },
     "loadouts": [
       {
@@ -55,5 +53,31 @@
         }
       }
     ]
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "eyes": "eyes"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#d8d0b8",
+        "eyes": "#40c0f0"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#c8c0a8",
+        "eyes": "#f04020"
+      }
+    }
+  ]
 }

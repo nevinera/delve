@@ -9,11 +9,28 @@
     "hair": "spiky",
     "mouth": "grin",
     "colors": {
-      "skin": "#ff8020",
-      "hair": "#ffc040",
       "primary": "#ff8020",
-      "secondary": "#ff6010",
-      "eyes": "#fff0a0"
+      "secondary": "#ff6010"
     }
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "hair": "hair",
+        "eyes": "eyes"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#ff8020",
+        "hair": "#ffc040",
+        "eyes": "#fff0a0"
+      }
+    }
+  ]
 }

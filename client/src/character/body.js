@@ -1,5 +1,6 @@
 import { dressArmor } from "./armor.js";
 import { buildExtras, extraJoints } from "./extras.js";
+import { painterFor } from "./paint.js";
 import { HELD, heldBy } from "./weapons.js";
 
 // A character's body as mesh data, without three.js, so it can be tested: a skeleton and a low-poly
@@ -64,7 +65,12 @@ const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
 const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 const norm = (a) => mul(a, 1 / Math.hypot(...a));
 const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
-const shade = (rgb, f) => rgb.map((v) => v * f);
+// A color made lighter or darker by f; an area tag (paint.js) gets the tone to paint it with.
+const shade = (rgb, f) => {
+  if (typeof rgb !== "string") return rgb.map((v) => v * f);
+  const [area, tone = 1] = rgb.split("@");
+  return `${area}@${+(Number(tone) * f).toFixed(3)}`;
+};
 
 // A number from 0 to 1 for a point and a seed, the same for the same point, so corners shared by
 // faces move and color alike.
@@ -132,6 +138,14 @@ export function fleshWear(flesh, s) {
   const wear = FLESH_WEAR[flesh];
   return wear ? { style: flesh === "rotting" ? "rot" : flesh, seed: 31, jitter: wear.jitter * s } : null;
 }
+// The areas a humanoid's faces are tagged with: its look's color slots, in named groups (paint.js).
+export const AREA_GROUPS = {
+  flesh: ["skin", "hair", "eyes", "horn", "leaf"],
+  clothes: ["primary", "secondary"],
+  gear: ["metal", "steel", "wood", "paint"],
+  everything: ["flesh", "clothes", "gear"],
+};
+
 const UNCLOTHED = ["fur", "shell", "chitin", "bark", "fungal", "wrapped", "molten", "spirit", "shadow"];
 export const FLESH_KINDS = ["living", "bone", ...Object.keys(FLESH_WEAR)];
 
@@ -232,13 +246,16 @@ export function bodyMesh(look) {
   const hocked = look.lower === "hocked";
   if (hocked) look = { ...look, armor: Object.fromEntries(Object.entries(look.armor ?? {}).filter(([slot]) => slot !== "feet")) };
   if (!legged) look = { ...look, armor: Object.fromEntries(Object.entries(look.armor ?? {}).filter(([slot]) => slot !== "legs" && slot !== "feet")) };
-  const c = Object.fromEntries(Object.entries(look.colors).map(([k, v]) => [k, hex(v)]));
+  // Faces are tagged with the look's color slots as areas, painted by its colors, or for a
+  // creature body with colorations, by its coloration (paint.js).
+  const c = Object.fromEntries(Object.keys(look.colors).map((k) => [k, k]));
   // Fur, shell and the like wear no clothes: shirt, trousers and boots are all the flesh.
   const bare = UNCLOTHED.includes(look.flesh);
   if (bare) c.primary = c.secondary = c.skin;
   const boots = bare ? c.skin : shade(c.secondary, 0.55);
   const belt = bare ? c.skin : shade(c.primary, 0.45);
   const out = new MeshOut(index);
+  out.paint = painterFor(look, AREA_GROUPS, 6, look.colors);
 
   // The end of a bone: its child's joint, or its own end point.
   const endOf = (name) => {
@@ -1013,7 +1030,7 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
   };
   if (marked("warpaint")) {
     // Two slashes down each cheek, under the eyes.
-    const paint = hex(look.colors.paint ?? "#2a4a9a");
+    const paint = "paint";
     for (const side of [-1, 1]) {
       for (const dy of [0.27, 0.205]) strip([0.09, 0.17, 0.25, 0.31].map((x) => [dy - (x - 0.09) * 0.25, side * x]), 0.035, paint);
     }
@@ -1071,7 +1088,7 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
       const [x, z] = [Math.sin(turn) * 0.37, Math.cos(turn) * 0.4 - 0.02];
       out.path([p(x, 0.68, z), p(x * 1.05, 0.88, z * 1.05)], [0.05 * s, 0.004 * s], 4, () => c.metal, () => bones, { capStart: true });
     }
-    out.gem(p(0, 0.65, 0.4), 0.04 * s, hex(look.colors.paint ?? "#a03030"), bones);
+    out.gem(p(0, 0.65, 0.4), 0.04 * s, "paint", bones);
   }
   if (look.jewelry.includes("necklace")) {
     const ringAt = (dy, r) => ({ center: p(0, dy, 0.02), dir: [0, 1, 0], rx: r * s, rz: r * s, bones: neck });

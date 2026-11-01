@@ -23,13 +23,37 @@
       }
     },
     "colors": {
-      "skin": ["#d8d0b8", "#c8c0a8"],
       "paint": ["#a03030", "#4040a0", "#30a060"],
       "metal": ["#d4b050", "#c8ccd0"],
       "primary": ["#3a2a4a", "#2a3a4a", "#1a1a2a"],
       "secondary": ["#3a2a4a"],
-      "eyes": ["#40c0f0", "#a040f0"],
       "wood": ["#3a3030", "#d8d0b8"]
     }
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "eyes": "eyes"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#d8d0b8",
+        "eyes": "#40c0f0"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#c8c0a8",
+        "eyes": "#a040f0"
+      }
+    }
+  ]
 }

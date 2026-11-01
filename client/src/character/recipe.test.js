@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { BODY_LOOKS, DEFAULT_LOOK, appearance, randomLook, resolveRecipe } from "./recipe.js";
+import { SHIPPED_BODIES } from "./bodies.js";
 
 describe("resolveRecipe", () => {
   it("takes a creature's look from its body, under the recipe's own settings", () => {
@@ -9,8 +10,9 @@ describe("resolveRecipe", () => {
     expect(goblin.ears).toBe("long");
     const troll = resolveRecipe({ body: "troll", height: 10, colors: { eyes: "#ffffff" } });
     expect(troll.height).toBe(10);
-    expect(troll.colors.eyes).toBe("#ffffff");
-    expect(BODY_LOOKS.troll.colors.skin).toContain(troll.colors.skin);
+    expect(troll.paints.eyes).toBe("#ffffff");
+    expect(SHIPPED_BODIES.troll.colorations.map((c) => c.name)).toContain(troll.coloration);
+    expect(resolveRecipe({ body: "troll", coloration: "standard 2" }).coloration).toBe("standard 2");
   });
 
   it("fills in the defaults", () => {

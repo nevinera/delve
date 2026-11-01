@@ -15,10 +15,50 @@
     "hair": "bald",
     "mouth": "thin",
     "colors": {
-      "skin": ["#a83a2a", "#3a5a6a", "#8a4a2a", "#4a6a5a"],
-      "eyes": ["#101010", "#202020"],
       "primary": ["#6a3a2a", "#3a4a5a"],
       "secondary": ["#5a3a2a", "#3a4a4a"]
     }
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "eyes": "eyes"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#a83a2a",
+        "eyes": "#101010"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#3a5a6a",
+        "eyes": "#202020"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#8a4a2a",
+        "eyes": "#101010"
+      }
+    },
+    {
+      "name": "standard 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#4a6a5a",
+        "eyes": "#202020"
+      }
+    }
+  ]
 }

@@ -10,8 +10,6 @@
     "hair": ["long", "braids", "bald"],
     "beard": ["full", "long", "none"],
     "colors": {
-      "skin": ["#b09070", "#8a9aaa", "#c0a080"],
-      "hair": ["#5a4a3a", "#c0c0c0", "#8a5a2a"],
       "primary": ["#6b5a3a", "#5a6a7a"],
       "secondary": ["#4a4038"]
     },
@@ -32,5 +30,39 @@
         "weaponStyle": "crude"
       }
     ]
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "hair": "hair"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#b09070",
+        "hair": "#5a4a3a"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#8a9aaa",
+        "hair": "#c0c0c0"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#c0a080",
+        "hair": "#8a5a2a"
+      }
+    }
+  ]
 }

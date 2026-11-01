@@ -11,8 +11,6 @@
     "tail": "reptile",
     "hair": "bald",
     "colors": {
-      "skin": ["#4a7a4a", "#3a6a5a", "#6a7a3a"],
-      "eyes": ["#e0c040", "#e06020"],
       "primary": ["#6b5a3a", "#3a5a4a"],
       "secondary": ["#4a4038"]
     },
@@ -41,5 +39,39 @@
         "weaponStyle": "crude"
       }
     ]
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "eyes": "eyes"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#4a7a4a",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#3a6a5a",
+        "eyes": "#e06020"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#6a7a3a",
+        "eyes": "#e0c040"
+      }
+    }
+  ]
 }

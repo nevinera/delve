@@ -208,7 +208,7 @@ export function resolveRecipe(own = {}, random = Math.random) {
     look.coloration = picked.name;
     // The old slot names still reach the colors they painted.
     const renamed = { skin: "coat", hair: "back", secondary: "bare" };
-    const paints = Object.entries({ ...outfit.colors, ...own.colors }).filter(([, v]) => isColor(v)).map(([k, v]) => [renamed[k] ?? k, v]);
+    const paints = Object.entries({ ...outfit.colors, ...own.colors }).filter(([, v]) => isColor(v)).map(([k, v]) => [k in picked.colors ? k : (renamed[k] ?? k), v]);
     if (paints.length) look.paints = Object.fromEntries(paints);
   }
   return look;

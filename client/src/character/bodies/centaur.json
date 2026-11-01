@@ -10,8 +10,6 @@
     "hair": ["long", "braids", "ponytail", "mohawk"],
     "beard": ["none", "none", "full"],
     "colors": {
-      "skin": ["#c89a70", "#a87a50", "#e0b48c"],
-      "hair": ["#3a2a1a", "#6a4a2a", "#1b1310"],
       "primary": ["#6b5a3a", "#5a6a3a"],
       "secondary": ["#7a5a3a", "#5a4030", "#9a8a7a", "#3a3030"]
     },
@@ -54,5 +52,39 @@
         }
       }
     ]
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "hair": "hair"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#c89a70",
+        "hair": "#3a2a1a"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#a87a50",
+        "hair": "#6a4a2a"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#e0b48c",
+        "hair": "#1b1310"
+      }
+    }
+  ]
 }

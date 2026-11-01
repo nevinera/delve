@@ -59,7 +59,7 @@ A body's `patterns` say how its areas are painted, and its `colorations` fill a 
 
 - A pattern's colors are the names its rules use, up to 10. Its `colors` give defaults, and a coloration's go over them.
 - The builder tags every face with an area. `groups` name sets of areas and other groups. The skeleton has its own groups, and a body or pattern can add more. No group shares an area's name.
-- An area takes its own rule, or else the rule of the smallest group holding it that has one.
+- An area takes its own rule, or else the rule of the smallest group holding it that has one, or else the color of its own name.
 - A rule is a color's name, a `#rrggbb` color, or `{ color, tone, shade, marks }`:
   - `tone` lightens (over 1) or darkens (under 1) it.
   - `shade` makes each face up to that much lighter or darker, at random.
@@ -97,4 +97,13 @@ Each has one group, `everything`, holding all its areas.
 | `strider` | hide, markings, claws, eyes, dark, teeth |
 | `eyeshaug` | hide, mouth, eyes, eyeWhites, dark, teeth |
 
-Humanoid bodies still take their look's `colors` (skin, hair, eyes and the rest), not colorations.
+### Humanoid areas
+
+A humanoid's areas are its look's color slots, and an area with no rule takes the color of its own name. A humanoid unit's colorations fill its body's colors: skin, hair, eyes, horn and leaf. Its clothes and gear take its look's and loadouts' `colors`. Player characters have no colorations; they're painted by their look's colors.
+
+| Group | Areas |
+| --- | --- |
+| `flesh` | skin, hair, eyes, horn, leaf |
+| `clothes` | primary, secondary |
+| `gear` | metal, steel, wood, paint |
+| `everything` | `flesh`, `clothes`, `gear` |

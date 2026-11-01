@@ -8,9 +8,6 @@
     "ears": ["pointed", "long"],
     "hair": ["long", "braids", "dreadlocks"],
     "colors": {
-      "skin": ["#3a7a6a", "#4a6a8a", "#5a8a5a"],
-      "hair": ["#1a3a4a", "#2a4a3a", "#3a2a4a"],
-      "eyes": ["#e0c040", "#40e0c0"],
       "primary": ["#3a5a6a", "#4a3a5a"],
       "secondary": ["#3a5a6a"]
     },
@@ -46,5 +43,43 @@
         }
       }
     ]
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "hair": "hair",
+        "eyes": "eyes"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#3a7a6a",
+        "hair": "#1a3a4a",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#4a6a8a",
+        "hair": "#2a4a3a",
+        "eyes": "#40e0c0"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#5a8a5a",
+        "hair": "#3a2a4a",
+        "eyes": "#e0c040"
+      }
+    }
+  ]
 }

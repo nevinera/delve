@@ -8,10 +8,26 @@
     "flesh": "water",
     "hair": "bald",
     "colors": {
-      "skin": "#3a7ab0",
       "primary": "#3a7ab0",
-      "secondary": "#3a7ab0",
-      "eyes": "#e0f8ff"
+      "secondary": "#3a7ab0"
     }
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "eyes": "eyes"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#3a7ab0",
+        "eyes": "#e0f8ff"
+      }
+    }
+  ]
 }

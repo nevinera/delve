@@ -88,7 +88,12 @@ export function extraJoints(look) {
 const add = (a, b) => a.map((v, i) => v + b[i]);
 const mul = (a, k) => a.map((v) => v * k);
 const lerp = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
-const shade = (rgb, f) => rgb.map((v) => Math.min(1, v * f));
+// A color made lighter or darker by f; an area tag (paint.js) gets the tone to paint it with.
+const shade = (rgb, f) => {
+  if (typeof rgb !== "string") return rgb.map((v) => Math.min(1, v * f));
+  const [area, tone = 1] = rgb.split("@");
+  return `${area}@${+(Number(tone) * f).toFixed(3)}`;
+};
 
 // Builds the tail and wings onto `out` (body.js's MeshOut): `at(name)` is a bone's place, `s` the
 // body's scale and `c` the look's colors as numbers.

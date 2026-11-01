@@ -37,8 +37,9 @@ export function painter({ pattern, colors = {}, groups = {}, unit = 1, seed = 0 
   const ruleOf = new Map();
   const rule = (area) => {
     if (!ruleOf.has(area)) {
-      const found = rules[area] ?? rules[holding.find(([, areas]) => areas.has(area))?.[0]];
-      ruleOf.set(area, typeof found === "string" ? { color: found } : (found ?? {}));
+      // With no rule, an area takes the color of its own name.
+      const found = rules[area] ?? rules[holding.find(([, areas]) => areas.has(area))?.[0]] ?? area;
+      ruleOf.set(area, typeof found === "string" ? { color: found } : found);
     }
     return ruleOf.get(area);
   };
@@ -63,13 +64,14 @@ export function painter({ pattern, colors = {}, groups = {}, unit = 1, seed = 0 
 }
 
 // The painter for a look: its body's coloration (look.coloration, or the body's first), its
-// pattern's default colors under the coloration's, and the look's own `paints` over both.
-export function painterFor(look, groups, unit) {
+// pattern's default colors under the coloration's, and the look's own `paints` over both, all over
+// `base` colors (a humanoid look's own, for the areas a coloration leaves be).
+export function painterFor(look, groups, unit, base = {}) {
   const body = SHIPPED_BODIES[look.body] ?? {};
   const colorations = body.colorations ?? [];
   const coloration = colorations.find((c) => c.name === look.coloration) ?? colorations[0];
   const pattern = body.patterns?.[coloration?.pattern];
-  const colors = { ...pattern?.colors, ...coloration?.colors, ...look.paints };
+  const colors = { ...base, ...pattern?.colors, ...coloration?.colors, ...look.paints };
   return painter({ pattern, colors, groups: { ...groups, ...body.groups }, unit, seed: Math.round((look.height ?? 1) * 1000) });
 }
 

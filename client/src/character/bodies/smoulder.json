@@ -10,9 +10,6 @@
     "hair": "spiky",
     "mouth": "grin",
     "colors": {
-      "skin": ["#4a3028", "#3a2824"],
-      "hair": ["#ff8020", "#ffc040"],
-      "eyes": ["#fff0a0"],
       "primary": ["#3a2a24"],
       "secondary": ["#3a2a24"]
     },
@@ -51,5 +48,34 @@
         }
       }
     ]
-  }
+  },
+  "patterns": {
+    "standard": {
+      "areas": {
+        "skin": "skin",
+        "hair": "hair",
+        "eyes": "eyes"
+      }
+    }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#4a3028",
+        "hair": "#ff8020",
+        "eyes": "#fff0a0"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#3a2824",
+        "hair": "#ffc040",
+        "eyes": "#fff0a0"
+      }
+    }
+  ]
 }
