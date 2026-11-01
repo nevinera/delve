@@ -129,8 +129,8 @@ export function fillRock(column, low, high, minAir = MIN_ROCK_FT) {
 // the tile's columns, made when `make` and it has none, or null; groundAt(ci, cj): the ground's
 // height at a continent cell's middle, or null where its cells aren't read. New air takes the
 // stone of the air it's dug from, the one most of it meets, or `stone` (always, with `own`).
-// Without `mouth`, air stops ROOF_FT under the ground instead of opening through it. Gives the
-// "tx,tz" of the tiles changed.
+// With `mouth`, air opens through the ground where it would leave less than ROOF_FT of rock over
+// it; without, it stops ROOF_FT under the ground. Gives the "tx,tz" of the tiles changed.
 export function carve(shape, columnsOf, groundAt, { fill = false, stone = allStone(0, false), own = false, mouth = true } = {}) {
   const [x0, z0, x1, z1] = shapeBounds(shape);
   const cuts = [];
@@ -139,7 +139,8 @@ export function carve(shape, columnsOf, groundAt, { fill = false, stone = allSto
       const r = fill ? reachCell(shape, ci, cj) : reach(shape, (ci + 0.5) * CELL_FT, (cj + 0.5) * CELL_FT);
       const ground = r && groundAt(ci, cj);
       if (ground == null || r[0] >= ground + MOUTH_FT) continue;
-      const [low, high] = [quarter(r[0]), quarter(Math.min(r[1], mouth || fill ? ground + MOUTH_FT : ground - ROOF_FT))];
+      const top = fill ? Math.min(r[1], ground + MOUTH_FT) : mouth ? (r[1] > ground - ROOF_FT ? ground + MOUTH_FT : r[1]) : Math.min(r[1], ground - ROOF_FT);
+      const [low, high] = [quarter(r[0]), quarter(top)];
       if (high > low) cuts.push({ ci, cj, low, high });
     }
   }

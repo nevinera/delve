@@ -39,9 +39,8 @@ export class Caves {
     scene.add(this.group);
     this.meshes = new Map(); // "tx,tz" -> its mesh, or null where there's no rock to draw
     this.stale = new Set(); // "tx,tz" of tiles whose meshes want making again
-    this.materials = [caveMaterial(), new THREE.MeshLambertMaterial({ vertexColors: true })];
     // The rock's faces sit a little back, so lines drawn over their edges show.
-    for (const material of this.materials) Object.assign(material, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+    this.material = Object.assign(caveMaterial(), { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
     // The grid's drawn on its own, after the rest, hidden only by the builder (drawOver); the lines
     // with the rest.
     this.overlays = { grid: new THREE.Group(), lines: new THREE.Group() };
@@ -55,8 +54,7 @@ export class Caves {
       spans: (ci, cj) => this.spans(ci, cj),
       ground: (ci, cj) => this.groundCell(ci, cj),
       corner: (ci, cj) => this.renditions.heightAt(ci * CELL_FT, cj * CELL_FT) ?? EMPTY_FT,
-      rgb: (ci, cj) => this.rgbCell(ci, cj),
-      mouth: (ci, cj) => this.mouth(ci, cj),
+      mouth: (ci, cj) => this.opens(ci, cj),
       caved: (tx, tz) => this.tiles.has(`${tx},${tz}`),
     };
   }
@@ -86,18 +84,14 @@ export class Caves {
     return this.renditions.heightAt((ci + 0.5) * CELL_FT, (cj + 0.5) * CELL_FT) ?? -Infinity;
   }
 
-  rgbCell(ci, cj) {
-    const [tx, tz] = [Math.floor(ci / TILE_CELLS), Math.floor(cj / TILE_CELLS)];
-    const cells = this.renditions.cells(tx, tz);
-    if (!cells?.colors) return null;
-    const k = ((cj - tz * TILE_CELLS) * TILE_CELLS + ci - tx * TILE_CELLS) * 3;
-    return [cells.colors[k], cells.colors[k + 1], cells.colors[k + 2]];
+  // Whether the ground at cell (ci, cj) opens into a cave, so isn't drawn.
+  opens(ci, cj) {
+    return this.spans(ci, cj).length > 0 && opensAt(this.world, ci, cj);
   }
 
-  // Whether the ground at cell (ci, cj) is drawn with the caves: where it opens into one, or is
-  // beside where it does.
+  // Whether the ground at cell (ci, cj) opens into a cave, or is beside where it does.
   mouth(ci, cj) {
-    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if (this.spans(ci + di, cj + dj).length && opensAt(this.world, ci + di, cj + dj)) return true;
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if (this.opens(ci + di, cj + dj)) return true;
     return false;
   }
 
@@ -107,7 +101,7 @@ export class Caves {
     for (let dz = -1; dz <= 1 && !near; dz++) for (let dx = -1; dx <= 1 && !near; dx++) near = this.tiles.has(`${tx + dx},${tz + dz}`);
     if (!near) return null;
     const out = new Set();
-    for (let j = 0; j < TILE_CELLS; j++) for (let i = 0; i < TILE_CELLS; i++) if (this.mouth(tx * TILE_CELLS + i, tz * TILE_CELLS + j)) out.add(j * TILE_CELLS + i);
+    for (let j = 0; j < TILE_CELLS; j++) for (let i = 0; i < TILE_CELLS; i++) if (this.opens(tx * TILE_CELLS + i, tz * TILE_CELLS + j)) out.add(j * TILE_CELLS + i);
     return out.size ? out : null;
   }
 
@@ -286,7 +280,7 @@ export class Caves {
 
   // Shows a brush's patch on the rock (caveMaterial.js's setBrush), or none, with at null.
   brush(at, normal, radius) {
-    setBrush(this.materials[0], at, normal, radius);
+    setBrush(this.material, at, normal, radius);
   }
 
   // Shows or hides an overlay: "grid" or "lines".
@@ -317,9 +311,7 @@ export class Caves {
     geometry.setAttribute("caveTheme", new THREE.BufferAttribute(data.themes, 1));
     geometry.setIndex(new THREE.BufferAttribute(data.indices, 1));
     geometry.computeVertexNormals();
-    geometry.addGroup(0, data.inside, 0);
-    geometry.addGroup(data.inside, data.indices.length - data.inside, 1);
-    const mesh = new THREE.Mesh(geometry, this.materials);
+    const mesh = new THREE.Mesh(geometry, this.material);
     mesh.position.set(tx * TILE_FT, 0, tz * TILE_FT);
     mesh.userData.tile = key;
     this.group.add(mesh);

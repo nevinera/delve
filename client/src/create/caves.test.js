@@ -116,12 +116,17 @@ describe("cave columns", () => {
 });
 
 describe("caves", () => {
-  it("meshes dug rock, and the ground round its mouth", () => {
+  it("meshes dug rock, its rim on the ground's corners", () => {
     const caves = new Caves({ add() {} }, flat(5));
     caves.dig({ kind: "sphere", at: [128, 0, 128], radius: 10 });
     const mesh = caveMesh(0, 0, caves.world);
-    expect(mesh.inside).toBeGreaterThan(0);
-    expect(mesh.indices.length).toBeGreaterThan(mesh.inside);
+    expect(mesh.indices.length).toBeGreaterThan(0);
+    // Every vertex over the ground is on it, at a cell's corner.
+    for (let n = 0; n < mesh.positions.length; n += 3) {
+      if (mesh.positions[n + 1] < 5) continue;
+      expect(mesh.positions[n + 1]).toBeCloseTo(5);
+      expect(mesh.positions[n] % CELL_FT).toBeCloseTo(0);
+    }
     expect(mouthCells(0, 0, caves.world).has(32 * TILE_CELLS + 32)).toBe(true);
     expect(caves.holes(5, 5)).toBe(null);
     // Nothing's meshed far from caves.

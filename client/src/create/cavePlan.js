@@ -32,6 +32,8 @@ const STEEP_RGB = [1, 0.25, 0.2];
 const OPENING_RGB = [0.45, 1, 0.9];
 const LOCKED_RGB = [0.75, 0.55, 1];
 const LOCKED_NOTE = "unlock it, and what's joined to it, to change it";
+const HILLSIDE_DEG = 20; // how steep the ground has to be for an opening
+const FLAT_NOTE = `openings go into hillsides, ${HILLSIDE_DEG}° and steeper`;
 const GLOW = 3; // how much wider the glow is than the line
 const UNDOS = 100;
 const SPOKES = 8; // how many spokes a room's ring has
@@ -198,7 +200,8 @@ export class CavePlan {
   // Where a room at the pointer at [px, py] goes: the grid point it snaps to, of those SHALLOW_FT
   // and more under the ground within SNAP_FT of the camera and SNAP_PX of the pointer, the one nearest the camera, or
   // where none is that near the pointer, the nearest to it within FAR_PX; or an opening, where the
-  // pointer meets the ground before that point. { at, opening }, or null.
+  // pointer meets the ground before that point. { at, opening, flat }, or null: `flat` where the
+  // ground's too flat for an opening.
   snap([px, py]) {
     const c = this.camera.position;
     const n = SNAP_FT / 8;
@@ -220,8 +223,16 @@ export class CavePlan {
     }
     const point = best ?? nearest;
     const ground = this.groundHit();
-    if (ground && (!point || c.distanceTo(new THREE.Vector3(...ground)) < point.d)) return { at: ground.map((v) => Math.round(v * 4) / 4), opening: true };
+    if (ground && (!point || c.distanceTo(new THREE.Vector3(...ground)) < point.d)) return { at: ground.map((v) => Math.round(v * 4) / 4), opening: true, flat: this.slopeAt(ground) < HILLSIDE_DEG };
     return point ? { at: point.p, opening: false } : null;
+  }
+
+  // How steep the ground is at [x, y, z], in degrees.
+  slopeAt([x, , z]) {
+    const d = 4;
+    const dx = this.groundAt(x + d, z) - this.groundAt(x - d, z);
+    const dz = this.groundAt(x, z + d) - this.groundAt(x, z - d);
+    return (Math.atan(Math.hypot(dx, dz) / (2 * d)) * 180) / Math.PI;
   }
 
   // The node at the pointer, nearest the camera: its middle, or any of its lines.
@@ -310,6 +321,7 @@ export class CavePlan {
     }
     if (arc) return this.select(arc);
     const spot = this.tool === "chamber" && this.snap(at);
+    if (spot?.flat) return this.status(FLAT_NOTE);
     if (spot) {
       this.remember();
       const details = spot.opening ? { ...this.details.node, shape: "opening" } : { ...this.details.node, shape: this.details.node.shape === "opening" ? NODE_DEFAULTS.shape : this.details.node.shape };
@@ -345,7 +357,7 @@ export class CavePlan {
     } else {
       // An opening stays on the ground, and a room under it.
       const spot = this.hover;
-      if (!spot || spot.opening !== isOpening(element) || spot.at.every((v, k) => v === element.at[k])) return;
+      if (!spot || spot.flat || spot.opening !== isOpening(element) || spot.at.every((v, k) => v === element.at[k])) return;
       element.at = [...spot.at];
     }
     this.drag.moved = true;
@@ -427,7 +439,7 @@ export class CavePlan {
     if (this.snapMark.visible) {
       this.snapMark.position.set(...this.hover.at);
       this.snapMark.scale.setScalar(Math.max(0.4, c.distanceTo(this.snapMark.position) * 0.012));
-      this.snapMark.material.color.setRGB(...(this.hover.opening ? OPENING_RGB : [1, 1, 1]));
+      this.snapMark.material.color.setRGB(...(this.hover.flat ? STEEP_RGB : this.hover.opening ? OPENING_RGB : [1, 1, 1]));
     }
     const made = `${this.layout.version} ${[...this.selected]} ${this.start}`;
     if (made !== this.drawn) this.draw(made);

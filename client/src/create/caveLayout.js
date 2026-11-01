@@ -21,7 +21,9 @@ export const BEND_FT = 32; // an arc gets a bend for about every this much of it
 export const STEEP_DEG = 45; // arcs are drawn red where they climb steeper than this
 const LEVEL = 0.7; // how far, of a room's radius, a tunnel runs level into it
 const CLEAR = 1.6; // how many times that from a room a tunnel's first bend has to be
+const FLARE = 3; // how many of its widths a tunnel flares out over to an opening's size
 const MOUTH_REACH = 6; // how far, in its widths, a tunnel can open through the ground from an opening
+const MOUTH_RUN = 4; // how far, in its widths, a tunnel runs level in from an opening
 
 export const NODE_DEFAULTS = { size: "m", shape: "round", style: "borehole", rock: 0, hewn: false };
 export const ARC_DEFAULTS = { size: 12, shape: "wiggly", style: "borehole", rock: 0, hewn: false };
@@ -92,7 +94,8 @@ export class Layout {
 
   // An element as carving sees it: a copy, without whether it's locked, which carving doesn't
   // care about, and an arc's with its ends, the floors it runs between, how far into each it runs
-  // level (arcCurve), and `openings`, whether each is an opening.
+  // level (arcCurve: into a room's floor, or in from an opening through the hillside), `openings`, whether each is an opening, and `mouthFt`, how wide a mouth each
+  // opening wants.
   copyOf(id) {
     const element = this.nodes.get(id) ?? this.arcs.get(id);
     if (!element) return null;
@@ -100,7 +103,7 @@ export class Layout {
     if (!copy.from) return copy;
     const [from, to] = [this.nodes.get(copy.from), this.nodes.get(copy.to)];
     const ends = [from, to];
-    return { ...copy, ends: ends.map((node) => [...node.at]), level: ends.map((node) => (isOpening(node) ? 0 : LEVEL * (NODE_SIZES[node.size] / 2))), openings: ends.map(isOpening) };
+    return { ...copy, ends: ends.map((node) => [...node.at]), level: ends.map((node) => (isOpening(node) ? MOUTH_RUN * copy.size : LEVEL * (NODE_SIZES[node.size] / 2))), openings: ends.map(isOpening), mouthFt: ends.map((node) => (isOpening(node) ? NODE_SIZES[node.size] : 0)) };
   }
 
   // Whether an element's changed since it was last carved: new, moved or otherwise changed, or
@@ -209,9 +212,19 @@ export function arcShapes(copy) {
     const flat = Math.hypot(dx, dz) || 1;
     return [dx / flat, dz / flat];
   };
-  const section = (p, heading, d, scale = 1) => {
+  // How much wider than the tunnel it is `d` along: flaring out to an opening's size, over FLARE
+  // widths, toward an opening at its end.
+  const flare = (d) => {
+    let wide = 1;
+    (copy.mouthFt ?? []).forEach((mouth, k) => {
+      const t = 1 - (k ? length - d : d) / (FLARE * W);
+      if (mouth > W && t > 0) wide = Math.max(wide, 1 + (mouth / W - 1) * t * t);
+    });
+    return wide;
+  };
+  const section = (p, heading, d, scale = 1, wide = 1) => {
     const yaw = Math.atan2(heading[0], heading[1]);
-    const w = (W / 2) * scale;
+    const w = (W / 2) * scale * wide;
     if (style === "mineshaft") return { kind: "box", at: add(p, [0, 0.45 * W * scale, 0]), half: [w, 0.45 * W * scale, step * 0.6 + 0.5], yaw };
     if (style === "lavatube") {
       const swell = 1 + 0.35 * valueNoise(d / (3 * W), 2.5, seed);
@@ -223,7 +236,7 @@ export function arcShapes(copy) {
     const d = (i / count) * length;
     const [hx, hz] = along(i);
     const o = offset(d);
-    out.push(section(add(p, [hz * o, 0, -hx * o]), [hx, hz], d));
+    out.push(section(add(p, [hz * o, 0, -hx * o]), [hx, hz], d, 1, flare(d)));
   });
   if (shape === "deadends") {
     const branches = Math.floor(length / (8 * W));

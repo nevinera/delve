@@ -16,18 +16,18 @@ import { CELL_FT } from "../v2/sizes.js";
 // neighbours', rounding off the columns' grid, then pushed in or out by noise along the way the
 // rock faces. Both come from the tiles alone, never from the mesh, so tiles agree at seams.
 //
-// Where a cave opens through the ground (a mouth: ground inside a span's air), the ground near it
-// is drawn here too, so it meets the cave, and the ground's full tiles leave those cells out
-// (mouthCells).
+// Where a cave opens through the ground (a mouth: ground inside a span's air), the ground's full
+// tiles leave those cells out (mouthCells), and the cave's rim, its vertices in cubes that reach
+// the sky by an opened column, sits on the ground's corners, so the two meet along the cells'
+// edges.
 //
 // The mesh covers the tile's grid edges, and reaches to its east and south neighbours' columns,
 // so tiles meet without gaps. Positions are feet from the tile's northwest corner.
 //
 // world: what a mesh needs to know, by continent cell (ci, cj): spans(ci, cj), lowest first;
 // ground(ci, cj), the ground's height at its middle, -Infinity where it's not known; corner(ci,
-// cj), at its northwest corner; rgb(ci, cj),
-// the ground's sRGB there, or null; mouth(ci, cj), whether the ground there's drawn with the
-// caves; and caved(tx, tz), whether a tile has any caves.
+// cj), at its northwest corner; mouth(ci, cj), whether the ground there opens into a cave;
+// and caved(tx, tz), whether a tile has any caves.
 
 const STEP_FT = 2;
 const ROCK = 0;
@@ -42,7 +42,6 @@ const THEME_LOOK = {
   mined: { rgb: [104, 96, 88], floor: [86, 78, 70], relax: 0.8, passes: 1, bumpFt: 0.7, waveFt: 3 },
 };
 const SHADE = 0.1; // how much each vertex's color varies, lighter or darker
-const linear = (v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4);
 
 // Whether cell (ci, cj)'s ground lies in a cave's air.
 export function opensAt(world, ci, cj) {
@@ -58,9 +57,7 @@ export function mouthCells(tx, tz, world) {
   return out;
 }
 
-// Tile (tx, tz)'s cave rock as { positions, colors, themes, indices, inside }, or null where
-// there's none: the first `inside` indices face into caves, and the rest are the ground round
-// mouths, lit as the ground is.
+// Tile (tx, tz)'s cave rock as { positions, colors, themes, indices }, or null where there's none.
 export function caveMesh(tx, tz, world) {
   let near = false;
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) near ||= world.caved(tx + dx, tz + dz);
@@ -86,9 +83,8 @@ export function caveMesh(tx, tz, world) {
   };
   // Whether the surface runs along the edge between two grid points, and which way it faces: 1
   // toward the second, -1 toward the first, 0 for none.
-  const facing = (a, b, ac, bc) => {
+  const facing = (a, b) => {
     if ((a === CAVE && b === ROCK) || (a === ROCK && b === CAVE)) return a === ROCK ? 1 : -1;
-    if ((a === SKY && b === ROCK) || (a === ROCK && b === SKY)) return mouthAt(...ac) || mouthAt(...bc) ? (a === ROCK ? 1 : -1) : 0;
     return 0;
   };
 
@@ -117,8 +113,7 @@ export function caveMesh(tx, tz, world) {
   const positions = [];
   const colors = [];
   const themes = [];
-  const inside = []; // faces into caves
-  const outside = []; // the ground round mouths
+  const indices = [];
   // How far up or down from y a column's air reaches, to the nearer of its floor and ceiling, or 0
   // where it's rock.
   const reachAt = (ci, cj, y) => {
@@ -137,7 +132,7 @@ export function caveMesh(tx, tz, world) {
   const vertices = new Map(); // grid cube -> vertex
   const cubeKey = (a, b, c) => ((c + 65536) * (SIDE + 8) + b - cj0 + PAD + 4) * (SIDE + 8) + a - ci0 + PAD + 4;
   // Where the surface crosses grid cube (a, b, c), as it is in the tiles: { at: [x, y, z]
-  // continent feet, toward: the way to the air, hewn, theme, floor, sky }, or null where it
+  // continent feet, toward: the way to the air, hewn, theme, floor, rim }, or null where it
   // doesn't. The cube's corners are columns a..a+1, b..b+1, heights c..c+1 steps.
   const crossings = new Map();
   const crossing = (a, b, c) => {
@@ -163,25 +158,19 @@ export function caveMesh(tx, tz, world) {
     let [upY, ups] = [0, 0]; // crossings on the up edges alone
     let floor = false; // whether the vertex is on a span's floor
     const touched = []; // the spans the cube's crossings meet
-    let sky = null; // a ground cell, where it's the ground near a mouth
-    let cave = false; // whether the cube meets a cave's air
     for (const [p, q] of CUBE_EDGES) {
       const [u, v] = [corners[p], corners[q]];
       const [su, sv] = [states[p], states[q]];
-      if (!facing(su, sv, u, v)) continue;
-      cave ||= su === CAVE || sv === CAVE;
+      if (!facing(su, sv)) continue;
       let y = ((u[2] + v[2]) / 2) * STEP_FT;
       const upright = u[0] === v[0] && u[1] === v[1];
       if (upright) {
         // Up and down: exactly where the span's floor or ceiling, or the ground, is.
         const [lowY, highY] = [u[2] * STEP_FT, v[2] * STEP_FT];
         const span = spans(u[0], u[1]).find((s) => (s.floor >= lowY && s.floor <= highY) || (s.ceiling >= lowY && s.ceiling <= highY));
-        if (span && (su === CAVE || sv === CAVE)) {
+        if (span) {
           y = span.floor >= lowY && span.floor <= highY && sv === CAVE ? span.floor : span.ceiling;
           if (sv === CAVE && y === span.floor) floor = true;
-        } else if (su === SKY || sv === SKY) {
-          y = Math.min(highY, Math.max(lowY, ground(u[0], u[1])));
-          sky = [u[0], u[1]];
         }
       }
       for (const w of [u, v]) {
@@ -189,7 +178,7 @@ export function caveMesh(tx, tz, world) {
         if (span) touched.push(span);
       }
       let [cx, cz] = [(u[0] + v[0]) / 2, (u[1] + v[1]) / 2];
-      if (!upright && (su === CAVE || sv === CAVE) && (su === ROCK || sv === ROCK)) {
+      if (!upright) {
         const [open, shut] = su === CAVE ? [u, v] : [v, u];
         const off = wallAt(open, shut, y);
         [cx, cz] = [open[0] + (shut[0] - open[0]) * off, open[1] + (shut[1] - open[1]) * off];
@@ -211,19 +200,21 @@ export function caveMesh(tx, tz, world) {
       const theme = touched.length ? CAVE_THEMES[themeOf(touched[0].stone[part])] : null;
       // Hewn rock: walls on the columns' edges, floors and ceilings at their heights.
       if (hewn) [x, y, z] = [a + 0.5, ups ? upY / ups : y, b + 0.5];
-      // The ground alone: on the ground's own corner, so it meets the ground drawn in full.
-      if (sky && !cave) [x, y, z] = [a + 0.5, world.corner(a + 1, b + 1), b + 0.5];
-      found = { at: [(x + 0.5) * CELL_FT, y, (z + 0.5) * CELL_FT], toward: way, hewn, theme: THEME_LOOK[theme] ? theme : CAVE_THEMES[0], floor, sky };
+      // The rim, where the cave reaches the sky by an opened column: on the ground's own corner, so
+      // it meets the ground drawn in full.
+      const rim = states.includes(SKY) && corners.some(([ci, cj]) => mouthAt(ci, cj));
+      if (rim) [x, y, z] = [a + 0.5, world.corner(a + 1, b + 1), b + 0.5];
+      found = { at: [(x + 0.5) * CELL_FT, y, (z + 0.5) * CELL_FT], toward: way, hewn, theme: THEME_LOOK[theme] ? theme : CAVE_THEMES[0], floor, rim };
     }
     crossings.set(key, found);
     return found;
   };
-  // A crossing drawn toward its neighbours', `passes` times over. Hewn rock and the ground at
-  // mouths stay where they are.
+  // A crossing drawn toward its neighbours', `passes` times over. Hewn rock and the rim stay where
+  // they are.
   const relaxedBy = [new Map()];
   const relaxed = (a, b, c, passes) => {
     const here = crossing(a, b, c);
-    if (!passes || here.hewn || here.sky) return here.at;
+    if (!passes || here.hewn || here.rim) return here.at;
     const kept = (relaxedBy[passes] ??= new Map());
     const key = cubeKey(a, b, c);
     if (kept.has(key)) return kept.get(key);
@@ -254,7 +245,7 @@ export function caveMesh(tx, tz, world) {
     const here = crossing(a, b, c);
     const look = THEME_LOOK[here.theme];
     let at = here.at;
-    if (!here.hewn && !here.sky) {
+    if (!here.hewn && !here.rim) {
       const smooth = relaxed(a, b, c, look.passes);
       at = at.map((v, i) => v + (smooth[i] - v) * look.relax);
       const bump = themeBump(here.theme, at, look) * look.bumpFt;
@@ -263,21 +254,15 @@ export function caveMesh(tx, tz, world) {
     const index = positions.length / 3;
     positions.push(at[0] - ox, at[1], at[2] - oz);
     themes.push(CAVE_THEMES.indexOf(here.theme));
-    let rgb = here.floor ? look.floor : look.rgb;
-    if (here.sky) rgb = world.rgb(...here.sky) ?? rgb;
-    // The ground's in linear colors, as the ground drawn in full is.
-    if (here.sky) colors.push(...rgb.map(linear));
-    else {
-      const shade = 1 + (hash2(a * 3 + c, b * 5 - c) * 2 - 1) * SHADE;
-      colors.push(...rgb.map((v) => Math.min(1, (v / 255) * shade)));
-    }
+    const rgb = here.floor ? look.floor : look.rgb;
+    const shade = 1 + (hash2(a * 3 + c, b * 5 - c) * 2 - 1) * SHADE;
+    colors.push(...rgb.map((v) => Math.min(1, (v / 255) * shade)));
     vertices.set(key, index);
     return index;
   };
   // A face across a grid edge, from the four cubes round it, facing `way` along the edge.
-  const quad = (cubes, way, sky) => {
+  const quad = (cubes, way) => {
     const [v0, v1, v2, v3] = cubes.map((cube) => vertex(...cube));
-    const indices = sky ? outside : inside;
     // The cubes run round the edge so that this order faces back along it.
     if (way > 0) indices.push(v0, v2, v1, v0, v3, v2);
     else indices.push(v0, v1, v2, v0, v2, v3);
@@ -292,21 +277,21 @@ export function caveMesh(tx, tz, world) {
         const here = state(ci, cj, k * STEP_FT);
         // East: the edge to (ci + 1, cj), and the cubes round it.
         const east = state(ci + 1, cj, k * STEP_FT);
-        let way = facing(here, east, [ci, cj], [ci + 1, cj]);
-        if (way) quad([[ci, cj - 1, k - 1], [ci, cj, k - 1], [ci, cj, k], [ci, cj - 1, k]], way, here === SKY || east === SKY);
+        let way = facing(here, east);
+        if (way) quad([[ci, cj - 1, k - 1], [ci, cj, k - 1], [ci, cj, k], [ci, cj - 1, k]], way);
         // South: the edge to (ci, cj + 1).
         const south = state(ci, cj + 1, k * STEP_FT);
-        way = facing(here, south, [ci, cj], [ci, cj + 1]);
-        if (way) quad([[ci - 1, cj, k - 1], [ci - 1, cj, k], [ci, cj, k], [ci, cj, k - 1]], way, here === SKY || south === SKY);
+        way = facing(here, south);
+        if (way) quad([[ci - 1, cj, k - 1], [ci - 1, cj, k], [ci, cj, k], [ci, cj, k - 1]], way);
         // Up: the edge to the next step.
         const up = state(ci, cj, (k + 1) * STEP_FT);
-        way = facing(here, up, [ci, cj], [ci, cj]);
-        if (way) quad([[ci - 1, cj - 1, k], [ci, cj - 1, k], [ci, cj, k], [ci - 1, cj, k]], way, here === SKY || up === SKY);
+        way = facing(here, up);
+        if (way) quad([[ci - 1, cj - 1, k], [ci, cj - 1, k], [ci, cj, k], [ci - 1, cj, k]], way);
       }
     }
   }
-  if (!inside.length && !outside.length) return null;
-  return { positions: Float32Array.from(positions), colors: Float32Array.from(colors), themes: Float32Array.from(themes), indices: Uint32Array.from([...inside, ...outside]), inside: inside.length };
+  if (!indices.length) return null;
+  return { positions: Float32Array.from(positions), colors: Float32Array.from(colors), themes: Float32Array.from(themes), indices: Uint32Array.from(indices) };
 }
 
 // How far a theme pushes the rock at continent feet [x, y, z], in about [-0.5, 0.5]: broken
