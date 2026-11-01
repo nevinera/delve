@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CAVES_PATH, TILE_CELLS, carve, cavesPath, fillCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
+import { CAVES_PATH, TILE_CELLS, carve, cavesPath, growCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
 import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial } from "./caveMaterial.js";
 import { caveMesh, opensAt } from "./caveMesh.js";
@@ -117,10 +117,11 @@ export class Caves {
     return this.change((columnsOf) => carve(shape, columnsOf, groundAt, { fill, theme, hewn }), join);
   }
 
-  // Fills the cave at continent feet `at` (on its rock or in its air) with rock, out to `reachFt`
-  // from there (v2/caves.js's fillCave). Gives whether anything changed.
-  fillCave(at, reachFt) {
-    return this.change((columnsOf) => fillCave(at, columnsOf, reachFt), false, false);
+  // Adds rock round continent feet `at` (on the rock), facing `normal`, out to `radius`, up to
+  // `amountFt` (v2/caves.js's growCave). Gives whether anything changed.
+  grow(at, normal, radius, { amountFt, join = false }) {
+    const groundAt = (ci, cj) => (Number.isFinite(this.groundCell(ci, cj)) ? this.groundCell(ci, cj) : null);
+    return this.change((columnsOf) => growCave({ at, normal, radius, amountFt }, columnsOf, groundAt), join);
   }
 
   // Smooths the rock round continent feet `at` (on the rock), facing `normal`, out to `radius`
@@ -391,6 +392,22 @@ export class Caves {
   // Whether continent feet (x, y, z) is in rock.
   solid(x, y, z) {
     return !this.air(x, z).some(([a, b]) => a <= y && y <= b);
+  }
+
+  // The first cave air `ray` comes to past rock, as continent feet [x, y, z], or null: from in a
+  // cave or the open, past the rock it next meets; from in rock, the first it comes to.
+  through(ray) {
+    const { origin, direction } = ray;
+    const p = new THREE.Vector3();
+    const point = (t) => p.copy(origin).addScaledVector(direction, t);
+    const caveAir = (q) => !this.solid(q.x, q.y, q.z) && q.y < (this.renditions.heightAt(q.x, q.z) ?? EMPTY_FT);
+    let rock = this.solid(origin.x, origin.y, origin.z);
+    for (let t = 0; t < PICK_FT; t += Math.max(0.5, t * 0.01)) {
+      const q = point(t);
+      if (!rock) rock = this.solid(q.x, q.y, q.z);
+      else if (caveAir(q)) return [q.x, q.y, q.z];
+    }
+    return null;
   }
 
   // Where the camera can be, looking from `head` to `at` (Vector3s): `at`, or short of the first

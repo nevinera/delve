@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { TILE_CELLS, carve, cavesPath, fillCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, fillRock, openAir } from "../v2/caves.js";
+import { TILE_CELLS, carve, cavesPath, growCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, fillRock, openAir } from "../v2/caves.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 import { caveMesh, mouthCells } from "./caveMesh.js";
 import { Caves } from "./caves.js";
@@ -62,25 +62,27 @@ describe("cave columns", () => {
     expect(air().length).toBe(left.length);
   });
 
-  it("fills a whole cave out to a reach, leaving caves apart from it", () => {
+  it("adds rock to a floor, a ceiling and a wall", () => {
     const tiles = new Map();
     const columnsOf = (tx, tz, make) => {
       if (!tiles.has(`${tx},${tz}`) && make) tiles.set(`${tx},${tz}`, emptyColumns());
       return tiles.get(`${tx},${tz}`) ?? null;
     };
-    const ground = () => 100;
-    // A tunnel 200 ft long, and a chamber beside it but not joined.
-    for (let x = 20; x <= 220; x += 4) carve({ kind: "sphere", at: [x, 0, 128], radius: 6 }, columnsOf, ground);
-    carve({ kind: "sphere", at: [60, 0, 160], radius: 8 }, columnsOf, ground);
-    const xs = () => [...tiles.values()].flatMap((columns) => columns.flatMap((spans, n) => (spans ? [{ x: (n % TILE_CELLS) * 4 + 2, z: Math.floor(n / TILE_CELLS) * 4 + 2 }] : [])));
-    expect(fillCave([200, 0, 128], columnsOf, 150).size).toBeGreaterThan(0);
-    const left = xs();
-    // The tunnel's start past 150 ft stays, and the chamber.
-    expect(left.filter((c) => c.z < 140).every((c) => c.x < 52)).toBe(true);
-    expect(left.some((c) => c.z > 150)).toBe(true);
-    expect(left.some((c) => c.z < 140)).toBe(true);
-    // Missing every cave fills nothing.
-    expect(fillCave([200, -60, 128], columnsOf, 150).size).toBe(0);
+    const span = { theme: 0, hewn: false };
+    const at = (ci, cj) => tiles.get("0,0")[cj * TILE_CELLS + ci];
+    // A room 10 cells square, 12 ft high.
+    for (let cj = 10; cj < 20; cj++) for (let ci = 10; ci < 20; ci++) columnsOf(0, 0, true)[cj * TILE_CELLS + ci] = [{ ...span, floor: 0, ceiling: 12 }];
+    growCave({ at: [60, 0, 60], normal: [0, 1, 0], radius: 12, amountFt: 1 }, columnsOf, () => 100);
+    expect(at(15, 15)[0].floor).toBe(1);
+    expect(at(12, 15)[0].floor).toBeLessThan(1);
+    expect(at(10, 10)[0].floor).toBe(0);
+    growCave({ at: [60, 12, 60], normal: [0, -1, 0], radius: 12, amountFt: 1 }, columnsOf, () => 100);
+    expect(at(15, 15)[0].ceiling).toBe(11);
+    // The east wall, at x 80, comes out a column.
+    growCave({ at: [80, 6, 62], normal: [-1, 0, 0], radius: 8, amountFt: 0.5 }, columnsOf, () => 100);
+    expect(at(19, 15)).toBe(null);
+    expect(at(18, 15)).not.toBe(null);
+    expect(at(19, 10)).not.toBe(null);
   });
 
   it("smooths floors and ceilings toward their neighbours', and evens walls", () => {

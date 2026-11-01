@@ -153,61 +153,6 @@ function cellAt(columnsOf, ci, cj, make) {
   return columns && { columns, k: (cj - tz * TILE_CELLS) * TILE_CELLS + ci - tx * TILE_CELLS, key: `${tx},${tz}` };
 }
 
-// Fills the cave at continent feet (x, y, z), on its rock or in its air, with rock: all the air
-// joined to it through the sides of columns, out to `reachFt` from there across and up and down.
-// A span reaching past that up or down is cut there. Gives the "tx,tz" of the tiles changed.
-export function fillCave([x, y, z], columnsOf, reachFt) {
-  const [ci0, cj0] = [Math.floor(x / CELL_FT), Math.floor(z / CELL_FT)];
-  const spansAt = (ci, cj) => {
-    const found = cellAt(columnsOf, ci, cj, false);
-    return found?.columns[found.k] ?? [];
-  };
-  // The air nearest the point, in its column or those round it.
-  let start = null;
-  for (let dj = -1; dj <= 1; dj++) {
-    for (let di = -1; di <= 1; di++) {
-      for (const span of spansAt(ci0 + di, cj0 + dj)) {
-        const off = Math.max(0, span.floor - y, y - span.ceiling) + Math.hypot(di, dj) * CELL_FT;
-        if (off <= 2 * CELL_FT && (!start || off < start.off)) start = { ci: ci0 + di, cj: cj0 + dj, span, off };
-      }
-    }
-  }
-  const changed = new Set();
-  if (!start) return changed;
-  const [low, high] = [y - reachFt, y + reachFt];
-  const met = new Set([start.span]);
-  const todo = [start];
-  const cells = new Set();
-  while (todo.length) {
-    const here = todo.pop();
-    cells.add(`${here.ci},${here.cj}`);
-    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
-      const [ci, cj] = [here.ci + di, here.cj + dj];
-      if (Math.hypot(ci - ci0, cj - cj0) * CELL_FT > reachFt) continue;
-      for (const span of spansAt(ci, cj)) {
-        if (met.has(span) || span.floor >= Math.min(here.span.ceiling, high) || span.ceiling <= Math.max(here.span.floor, low)) continue;
-        met.add(span);
-        todo.push({ ci, cj, span });
-      }
-    }
-  }
-  for (const cell of cells) {
-    const [ci, cj] = cell.split(",").map(Number);
-    const found = cellAt(columnsOf, ci, cj, false);
-    const out = [];
-    for (const s of found.columns[found.k]) {
-      if (!met.has(s)) out.push(s);
-      else {
-        if (s.floor < low) out.push({ ...s, ceiling: low });
-        if (s.ceiling > high) out.push({ ...s, floor: high });
-      }
-    }
-    found.columns[found.k] = out.length ? out : null;
-    changed.add(found.key);
-  }
-  return changed;
-}
-
 // Smooths the cave's rock round continent feet `at`, out to `radius` across, where it faces
 // `normal` (unit, out of the rock): a floor (facing up) or a ceiling (facing down) eases toward
 // its neighbours' heights, by `strength` (0 to 1) at the middle and less further out; a wall
@@ -280,6 +225,54 @@ export function smoothCave({ at: [x, y, z], normal, radius, strength = 0.5 }, co
     if (to !== span[key]) plans.push({ ci, cj, span, to });
   }
   for (const { ci, cj, span, to } of plans) set(ci, cj, spansAt(ci, cj).map((s) => (s === span ? { ...s, [key]: to } : s)));
+  return changed;
+}
+
+// Adds rock to the cave's rock round continent feet `at`, out to `radius` across, where it faces
+// `normal` (unit, out of the rock): a floor rises and a ceiling comes down by up to `amountFt`,
+// that at the middle and less further out; a wall comes out, its air filled a column at a time
+// where the column's middle is within half a column and `amountFt` of it. Air left too thin
+// closes, and so do pockets left near it (closePockets). groundAt is carve's. Gives the "tx,tz"
+// of the tiles changed.
+export function growCave({ at: [x, y, z], normal, radius, amountFt }, columnsOf, groundAt) {
+  const facing = normal[1] > 0.5 ? "floor" : normal[1] < -0.5 ? "ceiling" : "wall";
+  const at = ({ ci, cj }, make) => cellAt(columnsOf, ci, cj, make);
+  const spansAt = (ci, cj) => {
+    const found = at({ ci, cj }, false);
+    return found?.columns[found.k] ?? [];
+  };
+  const changed = new Set();
+  const set = (ci, cj, column) => {
+    const found = at({ ci, cj }, false);
+    if (!found) return;
+    found.columns[found.k] = column?.length ? column : null;
+    changed.add(found.key);
+  };
+  const flat = Math.hypot(normal[0], normal[2]) || 1;
+  const [nx, nz] = [normal[0] / flat, normal[2] / flat];
+  for (let cj = Math.floor((z - radius) / CELL_FT); cj <= Math.floor((z + radius) / CELL_FT); cj++) {
+    for (let ci = Math.floor((x - radius) / CELL_FT); ci <= Math.floor((x + radius) / CELL_FT); ci++) {
+      const [cx, cz] = [(ci + 0.5) * CELL_FT, (cj + 0.5) * CELL_FT];
+      const d = Math.hypot(cx - x, cz - z) / radius;
+      if (facing !== "wall") {
+        if (d >= 1) continue;
+        const by = amountFt * (1 - d * d);
+        let best = null;
+        for (const s of spansAt(ci, cj)) if (Math.abs(s[facing] - y) <= radius && (!best || Math.abs(s[facing] - y) < Math.abs(best[facing] - y))) best = s;
+        if (!best) continue;
+        const [low, high] = facing === "floor" ? [best.floor, quarter(best.floor + by)] : [quarter(best.ceiling - by), best.ceiling];
+        if (high > low) set(ci, cj, fillRock(spansAt(ci, cj), low, high, MIN_AIR_FT));
+        continue;
+      }
+      // A wall: the columns just off it, within the ring up and down.
+      const out = (cx - x) * nx + (cz - z) * nz;
+      const along = Math.hypot(cx - x - out * nx, cz - z - out * nz);
+      if (out < 0 || out > CELL_FT / 2 + amountFt || along >= radius) continue;
+      const h = Math.sqrt(radius * radius - along * along);
+      if (spansAt(ci, cj).some((s) => s.ceiling > y - h && s.floor < y + h)) set(ci, cj, fillRock(spansAt(ci, cj), quarter(y - h), quarter(y + h), MIN_AIR_FT));
+    }
+  }
+  if (changed.size) closePockets([x - radius, z - radius, x + radius, z + radius], at, groundAt, changed);
   return changed;
 }
 

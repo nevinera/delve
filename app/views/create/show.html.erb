@@ -92,13 +92,13 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 8 L46 8 L46 22 L2 22 Z" fill="#8a7a66"/><path d="M14 8 C 14 20, 34 20, 34 8 Z" fill="#1c1a20"/><path d="M2 8 L46 8" stroke="#6a8a4a" stroke-width="2"/></svg>
         <span>dig</span><kbd class="create-key">H</kbd>
       </button>
-      <button type="button" data-tool="fill" data-key="j" aria-pressed="false" title="fill caves with rock">
+      <button type="button" data-tool="caveFill" data-key="j" aria-pressed="false" title="add rock to caves' floors, ceilings and walls">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 8 L46 8 L46 22 L2 22 Z" fill="#8a7a66"/><path d="M14 8 C 14 20, 34 20, 34 8 Z" fill="#a8977f" stroke="#1c1a20" stroke-dasharray="2 2"/><path d="M2 8 L46 8" stroke="#6a8a4a" stroke-width="2"/></svg>
         <span>fill</span><kbd class="create-key">J</kbd>
       </button>
-      <button type="button" data-tool="fillCave" data-key="k" aria-pressed="false" title="fill a whole cave with rock, out to 150 ft">
+      <button type="button" data-tool="erase" data-key="k" aria-pressed="false" title="fill big balls of caves with rock, aiming through rock, for working from outside them">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 8 L46 8 L46 22 L2 22 Z" fill="#8a7a66"/><path d="M6 8 C 6 20, 42 20, 42 8 Z" fill="#a8977f" stroke="#1c1a20" stroke-dasharray="2 2"/><path d="M2 8 L46 8" stroke="#6a8a4a" stroke-width="2"/></svg>
-        <span>fill cave</span><kbd class="create-key">K</kbd>
+        <span>erase</span><kbd class="create-key">K</kbd>
       </button>
       <button type="button" data-tool="caveSmooth" data-key="u" aria-pressed="false" title="smooth caves' floors, ceilings and walls">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 8 L46 8 L46 22 L2 22 Z" fill="#8a7a66"/><path d="M8 8 C 8 19, 40 19, 40 8 Z" fill="#1c1a20"/><path d="M2 8 L46 8" stroke="#6a8a4a" stroke-width="2"/></svg>
@@ -399,27 +399,30 @@
         <button type="button" data-build-undo>undo</button>
       </div>
     </div>
-    <div data-config="caveSmooth" hidden>
-      <p class="create-note">Hold the button on a cave's rock to smooth it inside the ring: floors toward walkable, ceilings plainer, walls evened. [ and ] size it.</p>
-      <label>size <output id="caveSmoothSizeOut"></output>
-        <input id="caveSmoothSize" type="range" min="4" max="40" step="2" value="16">
+    <div data-config="caveSmooth caveFill" hidden>
+      <p class="create-note" data-only="caveSmooth">Hold the button on a cave's rock to smooth it inside the ring: floors toward walkable, ceilings plainer, walls evened. [ and ] size it.</p>
+      <p class="create-note" data-only="caveFill">Hold the button on a cave's rock to add rock to it inside the ring: floors rise, ceilings come down, walls come out. [ and ] size it.</p>
+      <label>size <output id="caveBrushSizeOut"></output>
+        <input id="caveBrushSize" type="range" min="4" max="40" step="2" value="16">
       </label>
-      <label>strength <output id="caveSmoothStrengthOut"></output>
-        <input id="caveSmoothStrength" type="range" min="10" max="100" step="10" value="50">
+      <label>strength <output id="caveBrushStrengthOut"></output>
+        <input id="caveBrushStrength" type="range" min="10" max="100" step="10" value="50">
       </label>
       <div class="create-way">
         <button type="button" data-cave-undo>undo</button>
       </div>
     </div>
-    <div data-config="fillCave" hidden>
-      <p class="create-note">Click a cave to fill all of it with rock, out to 150 ft from where you click. The ghost shows how far.</p>
+    <div data-config="erase" hidden>
+      <p class="create-note">Point through the rock at a cave, best as a ghost from outside it, and click to fill a ball of it with rock; hold the button to keep going. The ball sits where your aim first meets cave air past rock. [ and ] size it.</p>
+      <label>size <output id="eraseSizeOut"></output>
+        <input id="eraseSize" type="range" min="10" max="100" step="5" value="40">
+      </label>
       <div class="create-way">
         <button type="button" data-cave-undo>undo</button>
       </div>
     </div>
-    <div data-config="dig fill" hidden>
-      <p class="create-note" data-only="dig">Click rock or the ground to dig into it, and hold the button down to keep digging. Ctrl and click fills with rock. [ and ] size it.</p>
-      <p class="create-note" data-only="fill">Click a cave's rock to fill the cave there, and hold the button down to keep filling. Air left too small to stand in closes too. Ctrl and click digs. [ and ] size it.</p>
+    <div data-config="dig" hidden>
+      <p class="create-note">Click rock or the ground to dig into it, and hold the button down to dig on in, a foot at a time. [ and ] size it.</p>
       <div class="create-modes" role="group" aria-label="shape">
         <button type="button" data-dig-shape="sphere" aria-pressed="true">round</button>
         <button type="button" data-dig-shape="box" aria-pressed="false">square</button>
@@ -427,13 +430,13 @@
       <label>size <output id="digSizeOut"></output>
         <input id="digSize" type="range" min="4" max="40" step="2" value="10">
       </label>
-      <label data-only="dig">rock
+      <label>rock
         <select id="digTheme"><option value="0">jagged</option><option value="1">smooth</option><option value="2">carved</option><option value="3">mined</option></select>
       </label>
-      <label data-only="dig" title="cut flat-faced, as by hand"><input type="checkbox" id="digHewn"> hewn</label>
-      <p class="create-note" data-only="dig">New caves are of this rock, but digging on from one goes on in its rock.</p>
+      <label title="cut flat-faced, as by hand"><input type="checkbox" id="digHewn"> hewn</label>
+      <p class="create-note">New caves are of this rock, but digging on from one goes on in its rock.</p>
       <div class="create-way">
-        <button type="button" id="digUndo">undo</button>
+        <button type="button" data-cave-undo>undo</button>
       </div>
     </div>
     <div data-config="select" hidden>
@@ -602,7 +605,7 @@
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, measure measures distances and circles, and path finds the shortest way on foot from one place to another, to find where ranges and cliffs can be crossed. Click a pin's head to open it</dd>
     <dt>build</dt><dd>place objects and templates, from the ones used lately or the library, draw floors, walls, rooms and roofs as slabs, draw stairs and ramps, and pick what's placed to move, turn, delete or make a template of</dd>
-    <dt>caves</dt><dd>dig caves into the ground or rock, or fill them</dd>
+    <dt>caves</dt><dd>dig caves into the ground or rock, smooth them, add rock to them, or erase them</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, draw streams and rivers, and clear it away</dd>
   </dl>
 </div>
