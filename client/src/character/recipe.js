@@ -1076,6 +1076,26 @@ export const BODY_LOOKS = {
     limbs: [0.4, 0.6],
     colors: { skin: ["#1a1614", "#2a2018"], secondary: ["#e0b020", "#d09a20", "#c04020"], hair: ["#1a1410"], eyes: ["#2a1a10", "#802020"] },
   },
+  centipede: {
+    height: [1.4, 2],
+    build: [0.4, 0.7],
+    colors: { skin: ["#7a3a1a", "#5a2a1a", "#3a2a20", "#8a6a2a"], secondary: ["#c08040", "#b07030"], hair: ["#2a1a10", "#e0a040"], eyes: ["#101010"] },
+  },
+  duneshk: {
+    height: [18, 24],
+    build: [0.4, 0.7],
+    colors: { skin: ["#b09060", "#a08050", "#c0a070"], secondary: ["#d8c090", "#e0c8a0"], hair: ["#8a6a40"], eyes: ["#101010"] },
+  },
+  eel: {
+    height: [1.2, 1.6],
+    build: [0.4, 0.7],
+    colors: { skin: ["#3a4a3a", "#4a4a30", "#2a3a4a"], secondary: ["#a0a070", "#c0b080"], hair: ["#2a3428", "#3a3a28"], eyes: ["#e0c040", "#101010"] },
+  },
+  coatl: {
+    height: [5, 6],
+    build: [0.3, 0.6],
+    colors: { skin: ["#2a8a5a", "#3a7a8a", "#4a9a4a"], secondary: ["#e0c040", "#e0a040"], hair: ["#c03030", "#3050c0", "#e0a020"], eyes: ["#e0c020", "#101010"] },
+  },
 };
 
 // A look with every choice made: the recipe's settings over its body's (BODY_LOOKS) and the
