@@ -18,7 +18,7 @@ import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "
 // H: the back's height; L: hip to shoulder; w: how far out the legs are; neck: the head's joint
 // from the shoulders, [up, forward]; head: its size; muzzle: how long the face is; pitch: how far
 // the face tips down; girth: [across, deep]; neckGirth and limb: thickness; hump: a rise over the
-// shoulders; jaw: how much deeper the lower jaw is than usual.
+// shoulders; jaw: how much deeper the lower jaw is than usual; trunk and ivory: an elephant's.
 export const SPECIES = {
   wolf: { family: "canine", H: 2.05, L: 1.75, w: 0.3, neck: [0.52, 0.78], head: 1, muzzle: 1, pitch: 0.1, girth: [1, 1], neckGirth: 1, limb: 1, ears: "pointed", tail: "bushy", feet: "paw" },
   panther: { family: "canine", H: 1.75, L: 1.95, w: 0.27, neck: [0.38, 0.6], head: 0.95, muzzle: 0.45, pitch: 0, girth: [0.9, 0.85], neckGirth: 1.05, limb: 1, ears: "short", tail: "long", feet: "paw" },
@@ -29,6 +29,7 @@ export const SPECIES = {
   horse: { family: "hoofed", H: 4.6, L: 2.9, w: 0.42, neck: [1.55, 1.3], head: 1.45, muzzle: 1.6, pitch: 0.8, girth: [0.95, 0.95], neckGirth: 0.9, limb: 0.9, ears: "leaf", tail: "horse", feet: "hoof", mane: true },
   lizard: { family: "lizard", H: 0.6, L: 2, w: 0.35, neck: [0.2, 0.75], head: 1, muzzle: 0.9, pitch: 0, girth: [1.15, 0.62], neckGirth: 1.1, limb: 1.25, ears: "none", tail: "lizard", feet: "claw" },
   basilisk: { family: "lizard", H: 0.8, L: 2.3, w: 0.4, neck: [0.35, 0.8], head: 1.2, muzzle: 0.75, pitch: 0, girth: [1.3, 0.75], neckGirth: 1.25, limb: 1.5, ears: "none", tail: "lizard", feet: "claw", crest: true },
+  elephant: { family: "hoofed", H: 9, L: 5.4, w: 1.3, neck: [-0.3, 1.2], head: 7.4, muzzle: 0.3, pitch: 0.25, girth: [1.45, 1.3], neckGirth: 1.35, limb: 1.6, ears: "fan", tail: "tuft", feet: "pad", trunk: true, ivory: true, pillar: true },
   crocodile: { family: "lizard", H: 0.55, L: 2.8, w: 0.42, neck: [0.05, 0.75], head: 1.15, muzzle: 2.1, pitch: 0, girth: [1.45, 0.6], neckGirth: 1.4, limb: 1.4, ears: "none", tail: "lizard", feet: "claw", crest: true, jaw: 2.4 },
 };
 export const FAMILIES = ["canine", "ursine", "hoofed", "lizard"];
@@ -63,6 +64,18 @@ function joints(sp) {
     at = add(at, mul([0, dy, dz], scale));
   });
   out.push(["tail_end", `tail_0${tails.length}`, at]);
+  // A trunk, from the end of the face down nearly to the ground.
+  if (sp.trunk) {
+    let tip = add(head, mul(pitched(sp, 0.08 + 0.5 * sp.muzzle, -0.12), sp.head));
+    // Down in four lengths to a foot above the ground, a little forward at the end.
+    const drop = tip[1] - 0.12 * sp.H;
+    const steps = [[0.3, 0.05], [0.3, 0.02], [0.25, 0.02], [0.15, 0.06]].map(([dy, dz]) => [0, -dy * drop, dz * drop]);
+    out.push(["trunk_01", "head", tip]);
+    steps.forEach((step, i) => {
+      tip = add(tip, step);
+      out.push([i < 3 ? `trunk_0${i + 2}` : "trunk_end", `trunk_0${i + 1}`, tip]);
+    });
+  }
   // Legs: upright under the body, or out to the sides.
   if (family === "lizard") {
     const r = 0.75 * (sp.L / 2.3) * (sp.limb / 1.25);
@@ -84,6 +97,17 @@ function joints(sp) {
       ["calf_l", "thigh_l", [w, 0.52 * H, hz + 0.25 * k]],
       ["foot_l", "calf_l", [w, 0.12 * k, hz - 0.08 * k]],
       ["ball_l", "foot_l", [w, 0.06 * k, hz + 0.3 * k]],
+    );
+  } else if (sp.pillar) {
+    // Straight columns under the shoulders and hips, the knees barely bent.
+    out.push(
+      ["upperarm_l", "spine_03", [w, H - 0.3 * k, cz]],
+      ["lowerarm_l", "upperarm_l", [w, 0.48 * H, cz + 0.06 * k]],
+      ["hand_l", "lowerarm_l", [w, 0.08 * k, cz + 0.02 * k]],
+      ["thigh_l", "pelvis", [w, H - 0.2 * k, hz]],
+      ["calf_l", "thigh_l", [w, 0.5 * H, hz + 0.1 * k]],
+      ["foot_l", "calf_l", [w, 0.08 * k, hz]],
+      ["ball_l", "foot_l", [w, 0.04 * k, hz + 0.08 * k]],
     );
   } else {
     const hoofed = family === "hoofed";
@@ -203,6 +227,11 @@ export function quadrupedMesh(look) {
       out.path(points, [0.035, 0.025, 0.004].map((r) => r * big), 6, () => [0.9, 0.86, 0.72], () => [["jaw", 1]], { capStart: true, capEnd: true });
     }
     if (sp.antlers) antlers(side);
+    if (sp.ivory) {
+      // Forward from the upper jaw, curving up.
+      const points = [hp(side * 0.17, -0.2, 0.4), hp(side * 0.24, -0.42, 0.75), hp(side * 0.27, -0.42, 1.1), hp(side * 0.25, -0.25, 1.35)];
+      out.path(points, [0.05, 0.045, 0.035, 0.005].map((r) => r * big), 6, () => [0.92, 0.88, 0.76], () => headBones, { carry: true });
+    }
   }
 
   // Ears: rows of [across, up, forward], each with its width, the head tipping them less than
@@ -214,6 +243,7 @@ export function quadrupedMesh(look) {
       round: [[0.18, 0.2, -0.02, 0.11], [0.24, 0.31, -0.04, 0.12], [0.27, 0.38, -0.05, 0.03]],
       small: [[0.16, 0.18, 0.0, 0.07], [0.24, 0.27, -0.03, 0.05], [0.3, 0.3, -0.04, 0.008]],
       leaf: [[0.13, 0.2, -0.02, 0.07], [0.24, 0.34, -0.08, 0.075], [0.32, 0.45, -0.14, 0.01]],
+      fan: [[0.26, 0.2, -0.04, 0.26], [0.4, 0.12, -0.1, 0.4], [0.48, -0.08, -0.1, 0.38], [0.5, -0.32, -0.06, 0.06]],
     }[sp.ears];
     if (!EARS) return;
     const points = EARS.map(([x, dy, dz]) => hp(side * x, dy, dz, sp.pitch * 0.3));
@@ -261,6 +291,8 @@ export function quadrupedMesh(look) {
       const [wx, , wz] = at(wrist);
       const b = [[bone, 1]];
       if (sp.feet === "hoof") return [[[wx, 0.1 * k, wz + 0.02], 0.065, b], [[wx, 0.06 * k, wz + 0.05], 0.085, b, hoof], [[wx, 0.0, wz + 0.07], 0.09, b, hoof]];
+      // Wide round pads.
+      if (sp.feet === "pad") return [[[wx, 0.1 * k, wz], 0.09, b], [[wx, 0.0, wz + 0.02], 0.095, b, shade(fur, 0.75)]];
       if (sp.feet === "claw") return [[[wx + x * 0.06, 0.04, wz + 0.1], 0.07, b], [[wx + x * 0.1, 0.02, wz + 0.22], 0.035, b, shade(fur, 0.7)]];
       const flatFoot = sp.family === "ursine";
       return [[[wx, flatFoot ? 0.09 : 0.11, wz + 0.07 + toward], 0.085, b], [[wx, 0.05, wz + (flatFoot ? 0.3 : 0.2) + toward], flatFoot ? 0.07 : 0.06, b, flatFoot ? shade(fur, 0.6) : undefined]];
@@ -285,6 +317,12 @@ export function quadrupedMesh(look) {
       [at(n("ball")), 0.07, [[n("foot"), 0.5], [n("ball"), 0.5]]],
       ...feet(n("ball"), n("ball"), n("foot"), -0.06),
     ]);
+  }
+
+  // The trunk, tapering along its bones.
+  if (sp.trunk) {
+    const names = ["trunk_01", "trunk_02", "trunk_03", "trunk_04"];
+    out.path([...names, "trunk_end"].map(at), [0.13, 0.1, 0.075, 0.055, 0.04].map((r) => r * big), 10, () => fur, (i) => [[names[Math.min(i, 3)], 1]], { carry: true });
   }
 
   // The tail, along its bones.
@@ -536,8 +574,23 @@ function gallop(sp, duration, swing) {
 
 // The clips for a four-legged mesh, by name.
 export function quadrupedClips(mesh, look) {
-  const clips = Object.entries(familyClips(speciesOf(look))).map(([name, [duration, pose, speed]]) => sampled(mesh, name, duration, pose, speed));
+  const sp = speciesOf(look);
+  const clips = Object.entries(familyClips(sp)).map(([name, [duration, pose, speed]]) => sampled(mesh, name, duration, sp.trunk ? withTrunk(name, duration, pose) : pose, speed));
   return new Map(clips.map((c) => [c.name, c]));
+}
+
+// A trunk's turns on top of a pose: it sways, curls up for a trumpet, and tucks back to charge
+// or gore.
+function withTrunk(name, duration, pose) {
+  return (t) => {
+    const q = pose(t);
+    const u = t / duration;
+    const up = name === "Roar" ? hump(u, 0.05, 0.25, 0.75, 0.95) : 0;
+    const tuck = name === "Charge" || name === "Gore" ? hump(u, 0, 0.2, 0.7, 1) : 0;
+    const sway = 0.12 * Math.sin(TAU * u) * (1 - up);
+    const trunk = Object.fromEntries([1, 2, 3, 4].map((i) => [`trunk_0${i}`, [-0.8 * up * (i === 1 ? 0.6 : 1) + 0.25 * tuck, sway * (0.5 + 0.2 * i), 0]]));
+    return { ...q, bones: { ...q.bones, ...trunk } };
+  };
 }
 
 // The clip for each creature role (animations.js's ROLES), or null where it has none.

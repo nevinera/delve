@@ -507,6 +507,11 @@ export const BODY_LOOKS = {
     build: [0.5, 0.7],
     colors: { skin: ["#3a5a4a", "#4a4a5a"], hair: ["#8a2a2a", "#6a2a4a"], secondary: ["#a8a070"], eyes: ["#f0f040", "#e04020"] },
   },
+  elephant: {
+    height: [11, 13],
+    build: [0.4, 0.7],
+    colors: { skin: ["#8a8580", "#7a756e", "#9a8a80"], hair: ["#6a655e", "#5a554e"], secondary: ["#6a655e"], eyes: ["#2a2018"] },
+  },
   crocodile: {
     height: [1.3, 1.5],
     build: [0.5, 0.7],
