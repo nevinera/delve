@@ -13,6 +13,7 @@
       <button type="button" data-work="planning" data-key="t" aria-pressed="false">planning<kbd class="create-key">T</kbd></button>
       <button type="button" data-work="geo" data-key="g" aria-pressed="true">geo<kbd class="create-key">G</kbd></button>
       <button type="button" data-work="build" data-key="y" aria-pressed="false">build<kbd class="create-key">Y</kbd></button>
+      <button type="button" data-work="caves" data-key="i" aria-pressed="false">caves<kbd class="create-key">I</kbd></button>
     </div>
     <div class="create-tools create-manage" data-work="manage" hidden>
       <button id="openWorld" type="button">upload world</button>
@@ -85,9 +86,11 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M6 22 L30 6 L42 6 L42 22 Z" fill="#a09080"/></svg>
         <span>ramp</span><kbd class="create-key">N</kbd>
       </button>
-      <button type="button" data-tool="dig" data-key="u" aria-pressed="false" title="dig caves into the ground, or fill them">
+    </div>
+    <div class="create-tools" data-work="caves" hidden>
+      <button type="button" data-tool="dig" data-key="h" aria-pressed="false" title="dig caves into the ground, or fill them">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 8 L46 8 L46 22 L2 22 Z" fill="#8a7a66"/><path d="M14 8 C 14 20, 34 20, 34 8 Z" fill="#1c1a20"/><path d="M2 8 L46 8" stroke="#6a8a4a" stroke-width="2"/></svg>
-        <span>dig</span><kbd class="create-key">U</kbd>
+        <span>dig</span><kbd class="create-key">H</kbd>
       </button>
     </div>
     <div class="create-tools" data-work="geo">
@@ -560,7 +563,8 @@
   <dl>
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, measure measures distances and circles, and path finds the shortest way on foot from one place to another, to find where ranges and cliffs can be crossed. Click a pin's head to open it</dd>
-    <dt>build</dt><dd>place objects and templates, from the ones used lately or the library, draw floors, walls, rooms and roofs as slabs, draw stairs and ramps, pick what's placed to move, turn, delete or make a template of, and dig caves</dd>
+    <dt>build</dt><dd>place objects and templates, from the ones used lately or the library, draw floors, walls, rooms and roofs as slabs, draw stairs and ramps, and pick what's placed to move, turn, delete or make a template of</dd>
+    <dt>caves</dt><dd>dig caves into the ground or rock, or fill them</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, draw streams and rivers, and clear it away</dd>
   </dl>
 </div>

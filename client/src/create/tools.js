@@ -39,8 +39,8 @@ import { WaterBodies } from "./water.js";
 // - geo's brushes, raise and lower, flatten, smooth, noise and clear: dragging on the ground works
 //   them where the pointer is, and a ring on the ground shows where they reach. [ and ] resize
 //   them, and c and v turn raise and lower's, shift+c and shift+v a little.
-// - build's tools place objects, templates and slabs, and pick them to change (build.js), and
-//   dig caves (dig.js).
+// - build's tools place objects, templates and slabs, and pick them to change (build.js).
+// - caves' tools dig caves, and fill them (dig.js).
 // - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
 //   more each time the ring's moved its radius. Its undo takes back the last scattering.
 
