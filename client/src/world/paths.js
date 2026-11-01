@@ -32,6 +32,22 @@ export const GAME_DATA_DIRS = {
 export const gameDataPath = (kind, id) => `${GAME_DATA_DIRS[kind]}/${id}.json`;
 const GAME_DATA = /^([\w-]+)\/([0-9a-z]{8})\.json$/;
 
+// Models (docs/formats/bodies.md), shared by every continent: the world's own bodies, and the
+// patterns and colorations it adds to shipped bodies, each file by the body's name.
+export const modelBodyPath = (name) => `models/bodies/${name}.json`;
+export const modelColorationsPath = (name) => `models/colorations/${name}.json`;
+const MODEL = /^models\/([\w-]+)\/([^/]+)\.json$/;
+const MODEL_NAME = /^[a-z][a-z0-9-]*$/;
+
+// { kind: "bodies" or "colorations", name } for a models file, with `bad` set when the path isn't
+// one a models file can have.
+export function modelAt(path) {
+  const m = path.match(MODEL);
+  if (!m && !path.startsWith("models/")) return null;
+  const bad = !m || !["bodies", "colorations"].includes(m[1]) || !MODEL_NAME.test(m[2]);
+  return { kind: m?.[1], name: m?.[2], bad };
+}
+
 export const sketchPath = (continent) => `${CONTINENT(continent)}/sketch.json`;
 export const editedPath = (continent) => `${CONTINENT(continent)}/edited.json`;
 export const indexPath = (continent) => `${CONTINENT(continent)}/index.json`;

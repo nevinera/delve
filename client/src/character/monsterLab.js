@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { ROLES, characterClips, loadAnimations, roleClips } from "./animations.js";
 import { SKELETONS, characterMesh, disposeCharacter } from "./characterMesh.js";
-import { SHIPPED_BODIES } from "./bodies.js";
+import { BODIES } from "./bodies.js";
 import { BODY_LOOKS, resolveRecipe } from "./recipe.js";
 
 // The monster lab, for looking over creature bodies: every body the client builds, listed by
@@ -71,7 +71,7 @@ function seeded(n) {
 }
 
 const loadoutsOf = (body) => BODY_LOOKS[body]?.loadouts ?? [];
-const colorationsOf = (body) => SHIPPED_BODIES[body]?.colorations ?? [];
+const colorationsOf = (body) => BODIES[body]?.colorations ?? [];
 
 // The coloration picker: each in turn, picked by weight, or one of the body's.
 function fillColorations() {
@@ -302,7 +302,7 @@ $("bodies").replaceChildren(
       {},
       el("h2", { textContent: `${skeleton} (${names.length})` }),
       ...names.map((name) => {
-        const button = el("button", { type: "button", textContent: name });
+        const button = el("button", { type: "button", textContent: BODIES[name]?.custom ? `${name} (custom)` : name });
         button.dataset.body = name;
         button.addEventListener("click", () => pickBody(name));
         return button;

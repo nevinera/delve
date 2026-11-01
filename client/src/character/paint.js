@@ -1,4 +1,4 @@
-import { SHIPPED_BODIES } from "./bodies.js";
+import { BODIES } from "./bodies.js";
 import { hashAt } from "./body.js";
 import { hex, shade } from "./rig.js";
 
@@ -67,12 +67,45 @@ export function painter({ pattern, colors = {}, groups = {}, unit = 1, seed = 0 
 // pattern's default colors under the coloration's, and the look's own `paints` over both, all over
 // `base` colors (a humanoid look's own, for the areas a coloration leaves be).
 export function painterFor(look, groups, unit, base = {}) {
-  const body = SHIPPED_BODIES[look.body] ?? {};
+  const body = BODIES[look.body] ?? {};
   const colorations = body.colorations ?? [];
   const coloration = colorations.find((c) => c.name === look.coloration) ?? colorations[0];
   const pattern = body.patterns?.[coloration?.pattern];
   const colors = { ...base, ...pattern?.colors, ...coloration?.colors, ...look.paints };
   return painter({ pattern, colors, groups: { ...groups, ...body.groups }, unit, seed: Math.round((look.height ?? 1) * 1000) });
+}
+
+// The color names a pattern's rules use.
+export function patternColors(pattern) {
+  const names = new Set();
+  for (const rule of Object.values(pattern?.areas ?? {})) {
+    if (typeof rule === "string") names.add(rule);
+    else if (rule && typeof rule === "object") {
+      if (rule.color) names.add(rule.color);
+      for (const mark of rule.marks ?? []) names.add(mark?.color);
+    }
+  }
+  return [...names].filter((n) => typeof n === "string" && !isHex(n));
+}
+
+// What's wrong with a body's colorations, each filling the colors its pattern uses, ten at most,
+// from `patterns` (the body's, by default).
+export function colorationProblems(colorations, patterns) {
+  const out = [];
+  if (!Array.isArray(colorations)) return ["needs colorations as a list"];
+  for (const coloration of colorations) {
+    const name = JSON.stringify(coloration?.name);
+    if (typeof coloration?.name !== "string" || !coloration.name) out.push("has a coloration with no name");
+    const pattern = patterns?.[coloration?.pattern];
+    if (!pattern) {
+      out.push(`has coloration ${name} with pattern ${JSON.stringify(coloration?.pattern)}, which it doesn't have`);
+      continue;
+    }
+    const colors = { ...pattern.colors, ...coloration.colors };
+    for (const color of patternColors(pattern)) if (!isHex(colors[color])) out.push(`has coloration ${name}, which doesn't fill ${color} with a "#rrggbb" color`);
+    if (Object.keys(colors).length > 10) out.push(`has coloration ${name} with more than 10 colors`);
+  }
+  return out;
 }
 
 // Whether a mark falls on a face at `at`. Sizes are shares of the body's size.

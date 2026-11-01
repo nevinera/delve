@@ -2,7 +2,7 @@ import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_STYLES, ARMOR_TYPES } from "./armor.js
 import { FLESH_KINDS, HORN_KINDS, MUZZLE_KINDS } from "./body.js";
 import { ARM_PAIRS, LOWER_KINDS, TAIL_KINDS, WING_KINDS } from "./extras.js";
 import { HELD, OFFHANDS, WEAPON_STYLES, WEAPONS } from "./weapons.js";
-import { SHIPPED_BODIES, SHIPPED_LOOKS } from "./bodies.js";
+import { BODIES, BODY_LOOKS } from "./bodies.js";
 import { nativeHeight } from "./frames.js";
 
 // Character recipes: how a kind of character looks, as plain JSON, so a world can describe its
@@ -139,7 +139,7 @@ export const DEFAULT_LOOK = {
 
 // The creatures' bodies, as recipes under a recipe with that body: each picks its own look from
 // these, so no two goblins are quite alike. A world's creature recipe changes what it likes.
-export const BODY_LOOKS = SHIPPED_LOOKS;
+export { BODY_LOOKS };
 
 // A look with every choice made: the recipe's settings over its body's (BODY_LOOKS) and the
 // defaults, ranges and lists picked from by `random` (returning 0-1). Settings it doesn't know, and
@@ -204,9 +204,9 @@ export function resolveRecipe(own = {}, random = Math.random) {
   if (!WEAPON_STYLES.includes(look.offhandStyle)) look.offhandStyle = DEFAULT_LOOK.offhandStyle;
   // A body painted by colorations (bodies.md) wears the one the recipe names, or one of those it
   // names, or of all of them, picked by weight; the recipe's colors go over its colors by name.
-  const shipped = SHIPPED_BODIES[own.body];
+  const creature = BODIES[own.body];
   const named = [own.coloration].flat();
-  const colorations = (shipped?.colorations ?? []).filter((c, _, all) => named.includes(c.name) || !all.some((a) => named.includes(a.name)));
+  const colorations = (creature?.colorations ?? []).filter((c, _, all) => named.includes(c.name) || !all.some((a) => named.includes(a.name)));
   if (colorations.length) {
     let left = random() * colorations.reduce((sum, c) => sum + weight(c), 0);
     const picked = colorations.find((c) => (left -= weight(c)) < 0) ?? colorations.at(-1);
@@ -217,10 +217,10 @@ export function resolveRecipe(own = {}, random = Math.random) {
     if (paints.length) look.paints = Object.fromEntries(paints);
   }
   // A creature stands at its body's size times its own scale, unless its recipe gives a height.
-  if (shipped) {
+  if (creature) {
     const scale = pick(own.scale ?? 1);
     look.scale = Number.isFinite(scale) ? Math.min(2, Math.max(0.5, scale)) : 1;
-    if (own.height === undefined) look.height = nativeHeight(look) * (shipped.scale ?? 1) * look.scale;
+    if (own.height === undefined) look.height = nativeHeight(look) * (creature.scale ?? 1) * look.scale;
   }
   return look;
 }

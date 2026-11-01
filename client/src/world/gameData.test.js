@@ -1,6 +1,6 @@
 import fs from "fs";
 import { describe, expect, it } from "vitest";
-import { BODIES, checkGameData } from "./gameData.js";
+import { checkGameData } from "./gameData.js";
 
 // The examples in docs/formats/game-data.md, in the order they appear.
 const EXAMPLES = [...fs.readFileSync(new URL("../../../docs/formats/game-data.md", import.meta.url), "utf8").matchAll(/```json\n([\s\S]*?)```/g)].map((m) => JSON.parse(m[1]));
@@ -131,7 +131,7 @@ describe("checkGameData", () => {
   });
 
   it("checks creatures, NPCs and dialogue", () => {
-    expect(changed((d) => (d.creatures.get("wolf0001").look.body = "kraken"))).toEqual([`creatures/wolf0001.json: has body "kraken", not one of ${BODIES.join(", ")}`]);
+    expect(changed((d) => (d.creatures.get("wolf0001").look.body = "kraken"))).toEqual([`creatures/wolf0001.json: has body "kraken", which isn't a body the game ships or the world has`]);
     expect(changed((d) => (d.creatures.get("wolf0001").tactics = { type: "priority", abilities: ["kick0001"] }))).toEqual(["creatures/wolf0001.json: uses kick0001 in its tactics, but doesn't have it"]);
     expect(changed((d) => Object.assign(d.creatures.get("wolf0001"), { onDeath: "bite0001", tactics: { type: "rotation", abilities: ["bite0001"] } }))).toEqual(["creatures/wolf0001.json: uses bite0001 in its tactics, but that's what it does as it dies"]);
     expect(changed((d) => (d.creatures.get("wolf0001").stealthed = "chil0001"))).toEqual(["creatures/wolf0001.json: spawns stealthed with chil0001, which isn't a stealth status the world has"]);

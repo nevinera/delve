@@ -4,6 +4,7 @@ import { packPlates } from "../editor/plates.js";
 import { generateTile, prepareWorld } from "./generator.js";
 import { LandGrid, PER_TILE } from "./landGrid.js";
 import { encodeTile } from "./tileCodec.js";
+import { SHIPPED_BODIES } from "../character/bodies.js";
 import { validateWorld } from "./validate.js";
 
 const json = (data) => strToU8(JSON.stringify(data));
@@ -186,5 +187,28 @@ describe("validateWorld", () => {
         f.set(spawns, json(placed));
       }),
     ).toEqual([`warning: ${spawns}: placed p1x9z2aa is past the level cap of 10`]);
+  });
+
+  it("checks models, and creatures against the world's bodies and colorations", () => {
+    const wolf = JSON.parse(strFromU8(json(SHIPPED_BODIES.wolf)));
+    const creature = (look) => (f) => f.set("creatures/wolf0001.json", json({ id: "wolf0001", name: "Wolf", look }));
+    expect(changed(creature({ body: "dire", coloration: "grey" }))).toEqual(['creatures/wolf0001.json: has body "dire", which isn\'t a body the game ships or the world has']);
+    expect(
+      changed((f) => {
+        f.set("models/bodies/dire.json", json({ ...wolf, scale: 1.6 }));
+        creature({ body: "dire", coloration: "grey" })(f);
+      }),
+    ).toEqual([]);
+    expect(changed(creature({ body: "core:wolf", coloration: "ghost" }))).toEqual(['creatures/wolf0001.json: has coloration "ghost", which body core:wolf doesn\'t have']);
+    const ghost = { colorations: [{ name: "ghost", pattern: "standard", colors: { coat: "#ffffff", back: "#eeeeee", belly: "#ffffff", eyes: "#80b0d0" } }] };
+    expect(
+      changed((f) => {
+        f.set("models/colorations/wolf.json", json(ghost));
+        creature({ body: "wolf", coloration: "ghost" })(f);
+      }),
+    ).toEqual([]);
+    expect(changed((f) => f.set("models/colorations/kraken.json", json(ghost)))).toEqual(["models/colorations/kraken.json: adds to body kraken, which the game doesn't ship"]);
+    expect(changed((f) => f.set("models/colorations/wolf.json", json({ colorations: [{ name: "x", pattern: "standard", colors: {} }] })))[0]).toMatch(/doesn't fill coat/);
+    expect(changed((f) => f.set("models/Dire.json", json({}))).map((m) => m.split(":")[0])).toEqual(["models/Dire.json"]);
   });
 });

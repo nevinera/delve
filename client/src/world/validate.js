@@ -2,7 +2,9 @@ import { strFromU8 } from "fflate";
 import { imageProblems, problems as objectProblems } from "./builtObjects.js";
 import { BUILTIN_IMAGES } from "./builtinImages.js";
 import { BUILTIN_OBJECTS } from "./builtinObjects.js";
+import { useModels } from "../character/bodies.js";
 import { MAX_LEVEL, checkGameData } from "./gameData.js";
+import { modelProblems, modelsOf } from "./models.js";
 import { BLOCK } from "./landGrid.js";
 import { PLATE_TILES, decodePlateTile, plateHash, plateOf, splitPlate } from "./plateCodec.js";
 import {
@@ -18,6 +20,7 @@ import {
   gameDataAt,
   indexPath,
   landBlockAt,
+  modelAt,
   plateAt,
   platesIndexPath,
   SHAPES_PATH,
@@ -60,6 +63,7 @@ export function validateWorld(files) {
   const world = json(WORLD_PATH);
   const continents = checkWorld(world, problem);
   const library = checkLibrary(files, json, problem, warning);
+  checkModels(files, json, problem);
   checkData(files, continents, Number.isInteger(world?.levelCap) ? world.levelCap : MAX_LEVEL, json, problem, warning);
   for (const path of files.keys()) {
     const continent = continentOf(path);
@@ -170,6 +174,17 @@ function checkLibrary(files, json, problem, warning) {
     }
   }
   return { objects, images };
+}
+
+// The world's models, put in use (bodies.js's useModels) so its creatures can be checked against
+// its own bodies and colorations.
+function checkModels(files, json, problem) {
+  const paths = [...files.keys()].filter((path) => modelAt(path));
+  for (const path of paths) {
+    const thing = json(path);
+    if (thing !== null) for (const message of modelProblems(path, thing)) problem(path, message);
+  }
+  useModels(modelsOf(paths, json));
 }
 
 // The world's game data (gameData.js): its classes, abilities and the rest, and each continent's

@@ -71,6 +71,22 @@ A body's `patterns` say how its areas are painted, and its `colorations` fill a 
     - `spots` and `patches`: blobs `size` across, covering `amount` of the area.
     - `stripes`: `width` wide with `gap` between, `across` the body: `vertical` (the default), `horizontal` (which rings the legs) or `diagonal`. `wave` makes them waver and `break` breaks some off.
 
+## A world's models
+
+A world can have bodies of its own, and add patterns and colorations to the bodies the game ships. Every continent shares them. Names are lowercase letters, digits and dashes.
+
+- `models/bodies/<name>.json` is a whole body file, in the format above. A world never changes a shipped body. To make a variant of one, copy its file here and edit the copy, under its own name or the shipped one's.
+- `models/colorations/<name>.json` adds `patterns` and `colorations` to the shipped body `<name>`. Its colorations can use the body's patterns or the ones it adds, and can't take a name the body's colorations already have.
+
+```json
+{
+  "patterns": { "plain": { "areas": { "everything": "coat", "eyes": "eyes", "pupils": "pupil" }, "colors": { "pupil": "#141212" } } },
+  "colorations": [{ "name": "ghost", "pattern": "plain", "colors": { "coat": "#e8eef4", "eyes": "#80b0d0" } }]
+}
+```
+
+A creature's `"body": "tiger"` is the world's own tiger if it has one, or else the shipped tiger. `"body": "core:tiger"` is always the shipped tiger. A world's colorations for a shipped body reach it under both names. Pickers mark a world's own bodies as custom.
+
 ### Four-legged areas
 
 | Group | Areas |

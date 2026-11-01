@@ -1,31 +1,36 @@
-import { describe, expect, it } from "vitest";
-import { SHIPPED_BODIES } from "./bodies.js";
-import { marked, painter } from "./paint.js";
-
-// The color names a pattern's rules use.
-function used(pattern) {
-  const names = new Set();
-  for (const rule of Object.values(pattern.areas)) {
-    if (typeof rule === "string") names.add(rule);
-    else {
-      if (rule.color) names.add(rule.color);
-      for (const mark of rule.marks ?? []) names.add(mark.color);
-    }
-  }
-  return [...names].filter((n) => !n.startsWith("#"));
-}
+import { afterEach, describe, expect, it } from "vitest";
+import { BODIES, SHIPPED_BODIES, useModels } from "./bodies.js";
+import { SKELETONS } from "./frames.js";
+import { colorationProblems, marked, painter } from "./paint.js";
+import { resolveRecipe } from "./recipe.js";
 
 describe("shipped bodies", () => {
   it("fill every color their patterns use, ten at most, from patterns they have", () => {
-    for (const [name, body] of Object.entries(SHIPPED_BODIES)) {
-      for (const coloration of body.colorations ?? []) {
-        const pattern = body.patterns?.[coloration.pattern];
-        expect(pattern, `${name} ${coloration.name}`).toBeTruthy();
-        const colors = { ...pattern.colors, ...coloration.colors };
-        for (const color of used(pattern)) expect(colors[color], `${name} ${coloration.name} ${color}`).toMatch(/^#[0-9a-f]{6}$/i);
-        expect(Object.keys(colors).length, `${name} ${coloration.name}`).toBeLessThanOrEqual(10);
-      }
-    }
+    for (const [name, body] of Object.entries(SHIPPED_BODIES)) expect(colorationProblems(body.colorations, body.patterns), name).toEqual([]);
+  });
+});
+
+describe("useModels", () => {
+  afterEach(() => useModels());
+  const tiger = SHIPPED_BODIES.tiger;
+
+  it("puts a world's own body over the shipped one of its name, keeping the shipped one as core:", () => {
+    useModels({ bodies: { tiger: { ...tiger, shape: { ...tiger.shape, head: 3 } }, gremlin: { ...SHIPPED_BODIES.wolf, scale: 0.5 } } });
+    expect(BODIES.tiger.custom).toBe(true);
+    expect(BODIES["core:tiger"]).toEqual(tiger);
+    expect(SKELETONS.feline).toContain("tiger");
+    expect(SKELETONS.feline).not.toContain("core:tiger");
+    expect(SKELETONS.canine).toContain("gremlin");
+    expect(resolveRecipe({ body: "gremlin" }).height).toBeGreaterThan(0);
+    useModels();
+    expect(BODIES.gremlin).toBeUndefined();
+  });
+
+  it("adds a world's patterns and colorations to a shipped body", () => {
+    const pattern = { areas: { everything: "coat", eyes: "eyes" } };
+    useModels({ colorations: { tiger: { patterns: { plain: pattern }, colorations: [{ name: "ghost", pattern: "plain", colors: { coat: "#ffffff", eyes: "#80b0d0" } }] } } });
+    expect(BODIES.tiger.colorations.map((c) => c.name)).toEqual([...tiger.colorations.map((c) => c.name), "ghost"]);
+    expect(resolveRecipe({ body: "tiger", coloration: "ghost" }).coloration).toBe("ghost");
   });
 });
 

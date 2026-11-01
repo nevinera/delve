@@ -1,7 +1,7 @@
 import { ARMOR_SLOTS, ARMOR_TYPES } from "../character/armor.js";
 import { HELD } from "../character/weapons.js";
 import { gameDataPath } from "./paths.js";
-import { SHIPPED_BODIES } from "../character/bodies.js";
+import { BODIES as IN_USE } from "../character/bodies.js";
 
 // Checks a world's game data (docs/formats/game-data.md): classes, abilities, statuses, items,
 // item templates, creatures, NPCs, dialogue and spawns. The schemas in docs/schema say the same
@@ -30,7 +30,9 @@ export const TRIGGERS = ["dealDamage", "takeDamage", "heal", "crit", "cast", "do
 export const QUALITIES = ["poor", "common", "uncommon", "rare", "epic"];
 export const ITEM_SLOTS = ["head", "neck", "shoulders", "back", "chest", "wrists", "hands", "waist", "legs", "feet", "finger", "trinket", "oneHand", "mainHand", "offHand", "twoHand", "ranged"];
 export const WEAPON_SLOTS = ["oneHand", "mainHand", "offHand", "twoHand", "ranged"];
-export const BODIES = ["humanoid", ...Object.keys(SHIPPED_BODIES)];
+// The bodies a look can name: humanoid, and the bodies in use, the open world's and the shipped
+// ones, by name or as core:<name>.
+export const bodyNames = () => ["humanoid", ...Object.keys(IN_USE)];
 export const CREATURE_TYPES = ["beast", "humanoid", "undead", "elemental", "demon", "dragonkin", "giant", "mechanical", "aberration", "critter"];
 export const CLASSIFICATIONS = ["trivial", "normal", "elite", "rare", "rareElite", "boss"];
 const WHEN = ["cast", "launch", "impact", "channel"];
@@ -304,9 +306,12 @@ export function templateProblems(template) {
 export function creatureProblems(creature, { has, statuses }) {
   const out = named(creature);
   if (!isObject(creature.look)) out.push("needs a look, a character recipe");
-  else if (!BODIES.includes(creature.look.body ?? "humanoid")) out.push(`has body ${JSON.stringify(creature.look.body)}, not one of ${BODIES.join(", ")}`);
+  else if (!bodyNames().includes(creature.look.body ?? "humanoid")) out.push(`has body ${JSON.stringify(creature.look.body)}, which isn't a body the game ships or the world has`);
   else {
     const scale = creature.look.scale;
+    const wanted = [creature.look.coloration ?? []].flat();
+    const colorations = (IN_USE[creature.look.body]?.colorations ?? []).map((c) => c.name);
+    for (const name of wanted) if (!colorations.includes(name)) out.push(`has coloration ${JSON.stringify(name)}, which body ${creature.look.body ?? "humanoid"} doesn't have`);
     if (scale !== undefined && (![scale].flat().every((v) => v >= 0.5 && v <= 2) || (Array.isArray(scale) && scale.length !== 2))) out.push("needs a look scale from 0.5 to 2, or a [low, high] range of them");
   }
   if (creature.creatureType !== undefined && !CREATURE_TYPES.includes(creature.creatureType)) out.push(`has creatureType ${JSON.stringify(creature.creatureType)}, not one of ${CREATURE_TYPES.join(", ")}`);
