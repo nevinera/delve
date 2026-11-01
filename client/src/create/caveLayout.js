@@ -259,6 +259,13 @@ export function entranceEnd({ mouth, yaw, length, slope }) {
   return [mouth[0] + Math.sin(a) * length, mouth[1] - (slope === "down" ? DOWN * length : 0), mouth[2] + Math.cos(a) * length].map((v) => Math.round(v * 4) / 4);
 }
 
+// The mouth of an entrance whose floor, `inFt` in along the tube, is at `held`: where the
+// pointer holds it as it's placed, so the mouth stands out from the hillside.
+export function mouthBehind(held, { yaw, slope }, inFt) {
+  const a = (yaw * Math.PI) / 180;
+  return [held[0] - Math.sin(a) * inFt, held[1] + (slope === "down" ? DOWN * inFt : 0), held[2] - Math.cos(a) * inFt].map((v) => Math.round(v * 4) / 4);
+}
+
 // An entrance: a tube from its mouth to its far end, as wide as it is tall, round (natural) or
 // square (mine), opening through the ground wherever its roof would be too thin (each shape
 // `open`), and a room at the far end, twice as wide, for tunnels to join.

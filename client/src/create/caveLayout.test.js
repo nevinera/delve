@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TILE_CELLS } from "../v2/caves.js";
 import { CELL_FT } from "../v2/sizes.js";
-import { ENTRANCE_DEFAULTS, Layout, arcShapes, arcSteepness, carvePlan, entranceEnd, entranceProblem, nodeShapes, shapesOf } from "./caveLayout.js";
+import { ENTRANCE_DEFAULTS, Layout, arcShapes, arcSteepness, carvePlan, entranceEnd, entranceProblem, mouthBehind, nodeShapes, shapesOf } from "./caveLayout.js";
 import { Caves } from "./caves.js";
 
 // Flat ground at `height`, everywhere, with its cells all one color.
@@ -137,6 +137,7 @@ describe("cave layout", () => {
 
   it("puts an entrance only where its mouth is in the open and its room under the ground", () => {
     expect(entranceEnd({ mouth: [0, 0, 0], yaw: 90, length: 32, slope: "down" })).toEqual([32, -6.5, 0]);
+    expect(mouthBehind([10, 0, 0], { yaw: 90, slope: "down" }, 10).map((v) => v + 0)).toEqual([0, 2, 0]);
     expect(entranceProblem(entrance(), hill)).toBe(null);
     expect(entranceProblem(entrance({ mouth: [0, -5, 0] }), hill)).toMatch(/mouth/);
     expect(entranceProblem(entrance(), () => 0)).toMatch(/far end/);

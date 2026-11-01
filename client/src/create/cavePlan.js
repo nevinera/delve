@@ -2,12 +2,12 @@ import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
-import { ARC_DEFAULTS, ARC_FT, ENTRANCE_DEFAULTS, ENTRANCE_FT, NODE_DEFAULTS, NODE_SIZES, STEEP_DEG, arcCurve, arcSteepness, carvePlan, entranceEnd, entranceProblem, entranceRing, isEntrance } from "./caveLayout.js";
+import { ARC_DEFAULTS, ARC_FT, ENTRANCE_DEFAULTS, ENTRANCE_FT, NODE_DEFAULTS, NODE_SIZES, STEEP_DEG, arcCurve, arcSteepness, carvePlan, entranceEnd, entranceProblem, entranceRing, isEntrance, mouthBehind } from "./caveLayout.js";
 
 // The caves' plan tools: chamber places rooms (nodes) on the points of the grid round the camera,
 // in the earth, and drags them elsewhere; tunnel joins two rooms with a tunnel (an arc), clicked
 // one then the other, and drags a selected tunnel's bends to curve it; entrance, from above the
-// ground, places an entrance where the pointer meets it: a tube into the hillside, facing the way
+// ground, places an entrance held where the pointer meets it, HOLD_FT in from its mouth: a tube into the hillside, facing the way
 // the camera looks, turned with C and V, with a room at its far end for tunnels to join. Its
 // mouth has to be out in the air but for the bottom of it, and it's red where it isn't. Both select: a click picks one, shift-click
 // adds or takes away, and shift-drag boxes them in. The panel shows the details of what's
@@ -36,6 +36,7 @@ const LOCKED_RGB = [0.75, 0.55, 1];
 const LOCKED_NOTE = "unlock it, and what's joined to it, to change it";
 const TURN_DEG = 15; // how far C and V turn an entrance, or with shift FINE_TURN_DEG
 const FINE_TURN_DEG = 5;
+const HOLD_FT = 10; // how far in from an entrance's mouth the pointer holds it
 const GLOW = 3; // how much wider the glow is than the line
 const UNDOS = 100;
 const SPOKES = 8; // how many spokes a room's ring has
@@ -253,7 +254,8 @@ export class CavePlan {
     return { at: point.p };
   }
 
-  // The entrance the pointer would place, where it meets the ground: { entrance, problem }, with
+  // The entrance the pointer would place, its floor HOLD_FT in where the pointer meets the
+  // ground: { entrance, problem }, with
   // why it can't go there, or null where the pointer's off the ground.
   entranceAt() {
     const ground = this.groundHit();
@@ -261,7 +263,7 @@ export class CavePlan {
     const facing = new THREE.Vector3();
     this.camera.getWorldDirection(facing);
     const yaw = (((Math.round((Math.atan2(facing.x, facing.z) * 180) / Math.PI) + this.turn) % 360) + 360) % 360;
-    const entrance = placed({ ...this.details.entrance, mouth: ground.map((v) => Math.round(v * 4) / 4), yaw });
+    const entrance = placed({ ...this.details.entrance, mouth: mouthBehind(ground, { ...this.details.entrance, yaw }, HOLD_FT), yaw });
     return { entrance, problem: entranceProblem(entrance, this.groundAt) };
   }
 
