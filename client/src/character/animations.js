@@ -89,8 +89,12 @@ const ATTACKS = {
   thrown: ["OverhandThrow", "OverhandThrow", "OverhandThrow"],
 };
 
+// A humanoid empty-handed tears with its hands when its look fights with claws; a shambling one
+// stands, walks and runs as a zombie does.
 export function roleClips(look, skeleton) {
   if (FRAMES[skeleton]) return FRAMES[skeleton].roles(look);
-  const [attack, bigAttack, shoot] = ATTACKS[attackGroup(look.weapon)];
-  return { idle: "Idle_Loop", walk: "Walk_Loop", run: "Run_Fwd_Loop", attack, bigAttack, cast: "Spell_Simple_Shoot", shoot, battleCry: "Battle_Cry", hit: "Hit_Chest", death: "Death01" };
+  const group = attackGroup(look.weapon);
+  const [attack, bigAttack, shoot] = group === "unarmed" && look.unarmed === "claw" ? ["Zombie_Scratch", "Zombie_Scratch", null] : ATTACKS[group];
+  const moves = look.gait === "shamble" ? { idle: "Zombie_Idle_Loop", walk: "Zombie_Walk_Fwd_Loop", run: "Zombie_Walk_Fwd_Loop" } : { idle: "Idle_Loop", walk: "Walk_Loop", run: "Run_Fwd_Loop" };
+  return { ...moves, attack, bigAttack, cast: "Spell_Simple_Shoot", shoot, battleCry: "Battle_Cry", hit: "Hit_Chest", death: "Death01" };
 }

@@ -1,7 +1,7 @@
 // Bakes Quaternius' Universal Animation Library clips (CC0, quaternius.com) onto the character
 // skeleton (client/src/character/body.js), as client/src/character/animations.json, which
-// animations.js plays. Zombie clips and the T-pose go to animations-stash.json instead, which
-// nothing loads yet: the zombies are for zombie enemies, and the T-pose checks the baking.
+// animations.js plays. The T-pose goes to animations-stash.json instead, which nothing loads: it
+// checks the baking.
 //
 //   node script/bake_animations.mjs <UAL1 Godot .glb> <UAL2 Unreal-Godot .glb>
 //
@@ -25,8 +25,8 @@ const OUT = new URL("../client/src/character/animations.json", import.meta.url);
 const STASH_OUT = new URL("../client/src/character/animations-stash.json", import.meta.url);
 // Root motion, gun, vehicle, phone, parkour and chair clips are left out.
 const SKIP = /_RM$|^Pistol_|^Driving|Phone|Rail|^NinjaJump|^Slide|^Sitting/;
-const STASH = /^Zombie|^A_TPose$/;
-const MOVES = /^(Walk|Jog|Sprint|Crouch_Fwd)/;
+const STASH = /^A_TPose$/;
+const MOVES = /^(Walk|Jog|Sprint|Crouch_Fwd|Zombie_Walk)/;
 
 // How fast the lower foot moves back, frame to frame, in the middle of the range so the moments
 // the feet change over don't count.

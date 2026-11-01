@@ -23,6 +23,8 @@ import { HELD, OFFHANDS, WEAPON_STYLES, WEAPONS } from "./weapons.js";
 // - ears: an EARS shape; nose: a NOSE shape; tusks: a TUSKS size.
 // - muzzle: a snout over the nose and mouth (MUZZLE): canine, reptile or bovine.
 // - horns: a HORNS shape; tail: a TAIL shape; wings: bat or feather (WINGS).
+// - gait: how it stands and moves, normal or shamble (a zombie's).
+// - unarmed: how it fights with nothing in hand, punch or claw (tearing with its hands).
 // - flesh: living, rotting (mottled and sore) or bone (a skeleton: thin limbs, ribs, sockets).
 // - bust: 0 to 1.
 // - rear: 0 flat to 1 full.
@@ -56,6 +58,8 @@ export const HORNS = HORN_KINDS;
 export const TAIL = TAIL_KINDS;
 export const WINGS = WING_KINDS;
 export const FLESH = ["living", "rotting", "bone"];
+export const GAIT = ["normal", "shamble"];
+export const UNARMED = ["punch", "claw"];
 
 export const DEFAULT_LOOK = {
   body: "humanoid",
@@ -77,6 +81,8 @@ export const DEFAULT_LOOK = {
   tail: "none",
   wings: "none",
   flesh: "living",
+  gait: "normal",
+  unarmed: "punch",
   bust: 0,
   rear: 0.3,
   hair: "short",
@@ -181,6 +187,7 @@ export const BODY_LOOKS = {
     ],
   },
   ogre: {
+    unarmed: "claw",
     height: [9, 10.5],
     build: [0.9, 1],
     limbs: [0.85, 1],
@@ -203,6 +210,7 @@ export const BODY_LOOKS = {
     ],
   },
   kobold: {
+    unarmed: "claw",
     height: [2.8, 3.4],
     build: [0.25, 0.45],
     limbs: [0.2, 0.35],
@@ -221,6 +229,7 @@ export const BODY_LOOKS = {
     ],
   },
   gnoll: {
+    unarmed: "claw",
     height: [6.8, 7.6],
     build: [0.45, 0.65],
     limbs: [0.4, 0.6],
@@ -239,6 +248,7 @@ export const BODY_LOOKS = {
     ],
   },
   lizardfolk: {
+    unarmed: "claw",
     height: [6, 7],
     build: [0.45, 0.65],
     limbs: [0.45, 0.6],
@@ -255,6 +265,7 @@ export const BODY_LOOKS = {
     ],
   },
   minotaur: {
+    unarmed: "claw",
     height: [8.5, 9.5],
     build: [0.8, 1],
     limbs: [0.75, 0.95],
@@ -273,6 +284,7 @@ export const BODY_LOOKS = {
     ],
   },
   skeleton: {
+    unarmed: "claw",
     height: [5.8, 6.2],
     build: [0.1, 0.2],
     limbs: [0.2, 0.3],
@@ -291,6 +303,8 @@ export const BODY_LOOKS = {
     height: [5.6, 6.2],
     build: [0.3, 0.55],
     flesh: "rotting",
+    gait: "shamble",
+    unarmed: "claw",
     hair: ["bald", "receding", "long", "short"],
     mouth: ["grin", "frown"],
     colors: { skin: ["#8a9a7a", "#7a8a6a", "#9a9a8a"], hair: ["#3a3430", "#5a5048"], eyes: ["#e0e0a0", "#c0d040"], primary: ["#5a5a4a", "#4a4a5a", "#6a5a4a"], secondary: ["#3a3a3a", "#4a4038"] },
@@ -312,6 +326,7 @@ export const BODY_LOOKS = {
     ],
   },
   harpy: {
+    unarmed: "claw",
     height: [5, 5.6],
     build: [0.15, 0.3],
     limbs: [0.15, 0.3],
@@ -324,6 +339,7 @@ export const BODY_LOOKS = {
     loadouts: [{ weapon: "fist", weaponStyle: "crude", offhand: "fist", offhandStyle: "crude", weight: 2 }, { weapon: "dagger", weaponStyle: "crude" }],
   },
   gargoyle: {
+    unarmed: "claw",
     height: [6, 7],
     build: [0.6, 0.85],
     limbs: [0.6, 0.8],
@@ -337,6 +353,7 @@ export const BODY_LOOKS = {
     colors: { skin: ["#7a7a7a", "#6a6a72", "#8a8278"], eyes: ["#e04020", "#e0c040"], primary: ["#6a6a6a"], secondary: ["#5a5a5a"], horn: ["#4a4a4a", "#5a5a5a"] },
   },
   imp: {
+    unarmed: "claw",
     height: [2.6, 3.2],
     build: [0.2, 0.35],
     limbs: [0.15, 0.3],
@@ -458,7 +475,7 @@ export function resolveRecipe(own = {}, random = Math.random) {
   if (!EARS.includes(look.ears)) look.ears = DEFAULT_LOOK.ears;
   if (!NOSE.includes(look.nose)) look.nose = DEFAULT_LOOK.nose;
   if (!TUSKS.includes(look.tusks)) look.tusks = DEFAULT_LOOK.tusks;
-  for (const [key, options] of Object.entries({ muzzle: MUZZLE, horns: HORNS, tail: TAIL, wings: WINGS, flesh: FLESH })) {
+  for (const [key, options] of Object.entries({ muzzle: MUZZLE, horns: HORNS, tail: TAIL, wings: WINGS, flesh: FLESH, gait: GAIT, unarmed: UNARMED })) {
     if (!options.includes(look[key])) look[key] = DEFAULT_LOOK[key];
   }
   if (!WEAPONS.includes(look.weapon)) look.weapon = DEFAULT_LOOK.weapon;
