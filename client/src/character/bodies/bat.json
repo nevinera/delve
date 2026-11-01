@@ -1,6 +1,7 @@
 {
   "skeleton": "bat",
   "scale": 1,
+  "reach": 6.5,
   "shape": {},
   "look": {
     "build": [0.3, 0.7]

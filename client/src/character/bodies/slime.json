@@ -1,6 +1,7 @@
 {
   "skeleton": "slime",
   "scale": 3.25,
+  "reach": 2.4,
   "shape": {},
   "look": {
     "build": [0.4, 0.8]

@@ -1,6 +1,7 @@
 {
   "skeleton": "slime",
   "scale": 5,
+  "reach": 3.8,
   "shape": {
     "wisp": true
   },

@@ -1,6 +1,7 @@
 {
   "skeleton": "feline",
   "scale": 1.31,
+  "reach": 2.9,
   "shape": {
     "H": 2.05,
     "L": 2.6,

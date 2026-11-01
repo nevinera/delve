@@ -1,6 +1,7 @@
 {
   "skeleton": "humanoid",
   "scale": 1.1,
+  "reach": 4.8,
   "look": {
     "unarmed": "claw",
     "build": [0.5, 0.7],

@@ -1,6 +1,7 @@
 {
   "skeleton": "pachyderm",
   "scale": 1.11,
+  "reach": 4,
   "shape": {
     "H": 3.3,
     "L": 4.6,

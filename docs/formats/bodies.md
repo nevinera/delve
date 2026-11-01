@@ -10,6 +10,7 @@ client/src/character/bodies/<body>.json
 {
   "skeleton": "feline",
   "scale": 1.34,
+  "reach": 2.8,
   "shape": { "H": 1.9, "L": 2.75, "head": 1.7, "ears": "cat", "tail": "cat" },
   "look": { "build": [0.45, 0.7] }
 }
@@ -17,6 +18,7 @@ client/src/character/bodies/<body>.json
 
 - `skeleton`: which builder makes the body, and so which bones and clips it has.
 - `scale`: the body's default size against its shape's. A creature stands at the height its builder shapes, times this, times its own `scale` (see [game data](game-data.md)). A humanoid's shape is 6 ft tall.
+- `reach`: how far the body reaches from its middle at its default size, in feet: the circle that ranges are measured from and that's drawn under it as a target. It takes in the bulk of the body, and heads, tails and wings can poke out of it. No reach is under three quarters of the body's height, up to 4.5 ft at 6 ft tall, and half a foot more for each foot taller, so a humanoid's is a player's. A creature's reach grows with its scale.
 - `shape`: the builder's settings for this body. Each skeleton takes its own, listed at the top of its builder.
 - `look`: a recipe's settings (see [game data](game-data.md)), as ranges and lists that each creature picks from. A humanoid body has no `shape`; its look's settings (ears, horns, tail and the rest) are its shape.
 

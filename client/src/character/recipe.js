@@ -19,6 +19,7 @@ import { nativeHeight } from "./frames.js";
 // - height: in feet, to the top of the head. A creature body's is its own size: its builder's
 //   shape times the body's `scale`.
 // - scale: a creature's size against its body's, 0.5 to 2, 1 by default.
+// - reach (worked out, not given): a creature's circle, the body's reach at its size.
 // - build: 0 slight to 1 heavy, the thickness of the trunk and limbs.
 // - limbs: 0 thin to 1 thick, the limbs on top of build.
 // - shoulders, waist, hips, jaw: 0 narrow to 1 broad.
@@ -220,7 +221,10 @@ export function resolveRecipe(own = {}, random = Math.random) {
   if (creature) {
     const scale = pick(own.scale ?? 1);
     look.scale = Number.isFinite(scale) ? Math.min(2, Math.max(0.5, scale)) : 1;
-    if (own.height === undefined) look.height = nativeHeight(look) * (creature.scale ?? 1) * look.scale;
+    const size = nativeHeight(look) * (creature.scale ?? 1);
+    if (own.height === undefined) look.height = size * look.scale;
+    // How far it reaches from its middle (bodies.md), at its size.
+    look.reach = (creature.reach ?? Math.min(size, 6) * 0.75) * (look.height / size);
   }
   return look;
 }

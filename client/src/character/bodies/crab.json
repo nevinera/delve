@@ -1,6 +1,7 @@
 {
   "skeleton": "crawler",
   "scale": 1.76,
+  "reach": 4.3,
   "shape": {
     "kind": "crab",
     "y": 0.9,

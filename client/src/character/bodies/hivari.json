@@ -1,6 +1,7 @@
 {
   "skeleton": "crawler",
   "scale": 2.24,
+  "reach": 4.1,
   "shape": {
     "kind": "ant",
     "y": 1.3,

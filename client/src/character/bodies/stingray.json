@@ -1,6 +1,7 @@
 {
   "skeleton": "ray",
   "scale": 1.08,
+  "reach": 4.7,
   "shape": {},
   "look": {
     "build": [0.4, 0.7]

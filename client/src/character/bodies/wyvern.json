@@ -1,6 +1,7 @@
 {
   "skeleton": "dragon",
   "scale": 1.1,
+  "reach": 9.1,
   "shape": {
     "H": 4.4,
     "L": 3.6,

@@ -1,6 +1,7 @@
 {
   "skeleton": "fish",
   "scale": 1.2,
+  "reach": 7.5,
   "shape": {
     "rings": [
       [5, 0.08, 0.06, -0.1],

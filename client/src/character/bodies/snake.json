@@ -1,6 +1,7 @@
 {
   "skeleton": "serpent",
   "scale": 1.51,
+  "reach": 4.5,
   "shape": {
     "r": 0.75,
     "segment": 1.5,

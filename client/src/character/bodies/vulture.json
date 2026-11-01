@@ -1,6 +1,7 @@
 {
   "skeleton": "bird",
   "scale": 1.57,
+  "reach": 3.6,
   "shape": {
     "tilt": 0.55,
     "hip": 1,

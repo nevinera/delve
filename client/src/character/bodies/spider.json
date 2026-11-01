@@ -1,6 +1,7 @@
 {
   "skeleton": "crawler",
   "scale": 1.48,
+  "reach": 3.4,
   "shape": {
     "kind": "spider",
     "y": 1.5,

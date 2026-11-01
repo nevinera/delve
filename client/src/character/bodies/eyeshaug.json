@@ -1,6 +1,7 @@
 {
   "skeleton": "eyeshaug",
   "scale": 3.09,
+  "reach": 5,
   "shape": {},
   "look": {
     "build": [0.5, 0.9]

@@ -1,6 +1,7 @@
 {
   "skeleton": "ursine",
   "scale": 1.54,
+  "reach": 3.4,
   "shape": {
     "H": 2.3,
     "L": 2.6,

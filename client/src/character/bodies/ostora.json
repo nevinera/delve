@@ -1,6 +1,7 @@
 {
   "skeleton": "strider",
   "scale": 1.95,
+  "reach": 6,
   "shape": {
     "hip": 2.4,
     "body": 1.15,

@@ -95,12 +95,23 @@ function lookFor(k) {
   return resolveRecipe(own, seeded(state.seed * 7919 + k));
 }
 
+// The circle a creature reaches out to (its look's reach), on the ground under it, as a target's
+// is drawn.
+const ringMaterial = new THREE.MeshBasicMaterial({ color: 0xf0d040, transparent: true, opacity: 0.8, depthWrite: false });
+function ring(reach) {
+  const mesh = new THREE.Mesh(new THREE.RingGeometry(reach * 0.94, reach, 64).rotateX(-Math.PI / 2), ringMaterial);
+  mesh.position.y = 0.02;
+  mesh.renderOrder = 1;
+  return mesh;
+}
+
 function build() {
   turn = 0;
   fillColorations();
   for (const l of looks) {
-    scene.remove(l.mesh);
+    scene.remove(l.mesh, l.ring);
     disposeCharacter(l.mesh);
+    l.ring.geometry.dispose();
   }
   looks = [];
   for (let k = 0; k < state.count; k++) {
@@ -113,7 +124,7 @@ function build() {
       mouth.add(fire);
       fire.scale.setScalar(look.height / 14);
     }
-    looks.push({ look, mesh, mixer, clips: characterClips(mesh, baked), roles: roleClips(look, mesh.userData.skeleton), flame: fire, action: null, clip: null });
+    looks.push({ look, mesh, mixer, clips: characterClips(mesh, baked), roles: roleClips(look, mesh.userData.skeleton), flame: fire, ring: ring(look.reach ?? 4.5 * (look.height / 6)), action: null, clip: null });
   }
   // Side by side, along x, each as far from the next as the biggest is big.
   const sizes = looks.map(({ mesh }) => {
@@ -122,9 +133,10 @@ function build() {
     return Math.max(box.max.y, box.max.x - box.min.x, 0.9 * (box.max.z - box.min.z));
   });
   const size = Math.max(...sizes);
-  looks.forEach(({ mesh }, k) => {
+  looks.forEach(({ mesh, ring }, k) => {
     mesh.position.x = (k - (looks.length - 1) / 2) * size * GAP;
-    scene.add(mesh);
+    ring.position.x = mesh.position.x;
+    scene.add(mesh, ring);
   });
   ground.scale.setScalar(size * GAP * (looks.length + 2));
   fillClips();

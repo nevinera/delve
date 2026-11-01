@@ -1,6 +1,7 @@
 {
   "skeleton": "canine",
   "scale": 0.88,
+  "reach": 1.1,
   "shape": {
     "H": 1.15,
     "L": 1.5,

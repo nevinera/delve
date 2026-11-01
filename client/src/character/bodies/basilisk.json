@@ -1,6 +1,7 @@
 {
   "skeleton": "lizard",
   "scale": 1.35,
+  "reach": 2.7,
   "shape": {
     "H": 0.8,
     "L": 2.3,

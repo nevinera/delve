@@ -1,6 +1,7 @@
 {
   "skeleton": "ray",
   "scale": 1.17,
+  "reach": 5,
   "shape": {
     "turtle": true
   },

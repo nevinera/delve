@@ -23,6 +23,7 @@ describe("resolveRecipe", () => {
     expect(some.scale).toBeGreaterThanOrEqual(0.8);
     expect(some.scale).toBeLessThanOrEqual(1.2);
     expect(resolveRecipe({ body: "elephant" }).height).toBeGreaterThan(10);
+    expect(resolveRecipe({ body: "wolf", scale: 2 }).reach).toBeCloseTo(2 * resolveRecipe({ body: "wolf" }).reach);
   });
 
   it("fills in the defaults", () => {

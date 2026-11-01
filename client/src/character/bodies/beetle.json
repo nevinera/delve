@@ -1,6 +1,7 @@
 {
   "skeleton": "crawler",
   "scale": 1.66,
+  "reach": 3,
   "shape": {
     "kind": "beetle",
     "y": 1,

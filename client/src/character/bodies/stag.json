@@ -1,6 +1,7 @@
 {
   "skeleton": "hoofed",
   "scale": 1.15,
+  "reach": 4.1,
   "shape": {
     "H": 3.3,
     "L": 2.1,
