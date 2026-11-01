@@ -1,31 +1,34 @@
 import * as THREE from "three";
 import { CHUNK_FT } from "../v2/sizes.js";
 
-// The ground over the camera underground, as a net of faint lines seen through the rock: its
-// height at each chunk's corners out to REACH_FT from the builder, fading off toward there. Enough
-// to tell where digging up will come out, without the cost of drawing the ground's every face.
+// The ground over the camera underground, as a brown ceiling with its edges drawn in: its height
+// at each chunk's corners out to REACH_FT from the builder, darkening off toward there. Enough to
+// tell where digging up will come out, without the cost of drawing the ground's every face.
 
 const REACH_FT = 512;
-const RGB = [0.3, 0.32, 0.34];
+const RGB = [0.95, 0.62, 0.36];
+const LINE_RGB = 0x2a1c10;
 const STEPS = (2 * REACH_FT) / CHUNK_FT;
 
 export class Overhead {
   // heightAt(x, z): the ground's height, or null where it's not known.
   constructor(scene, heightAt) {
     this.heightAt = heightAt;
-    this.lines = new THREE.LineSegments(
+    this.ceiling = new THREE.Mesh(
       new THREE.BufferGeometry(),
-      new THREE.LineBasicMaterial({ vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false, fog: false }),
+      new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, side: THREE.DoubleSide, fog: false, polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 }),
     );
-    this.lines.visible = false;
-    this.lines.frustumCulled = false;
-    scene.add(this.lines);
+    this.lines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: LINE_RGB, fog: false }));
+    this.ceiling.add(this.lines);
+    this.ceiling.visible = false;
+    this.ceiling.frustumCulled = this.lines.frustumCulled = false;
+    scene.add(this.ceiling);
     this.at = null; // the chunk corner the net's made round, "i,j"
   }
 
   // Shows the net round continent feet (x, z), or hides it. again: whether the ground's moved.
   tick(shown, x, z, again = false) {
-    this.lines.visible = shown;
+    this.ceiling.visible = shown;
     if (!shown) return;
     const [i0, j0] = [Math.round(x / CHUNK_FT) - STEPS / 2, Math.round(z / CHUNK_FT) - STEPS / 2];
     const at = `${i0},${j0}`;
@@ -38,26 +41,31 @@ export class Overhead {
       for (let i = 0; i < n; i++) {
         const [cx, cz] = [(i0 + i) * CHUNK_FT, (j0 + j) * CHUNK_FT];
         const h = this.heightAt(cx, cz);
-        corners.set([cx, h ?? NaN, cz], (j * n + i) * 3);
+        corners.set([cx, h ?? 0, cz], (j * n + i) * 3);
         shades[j * n + i] = h == null ? 0 : Math.max(0, 1 - Math.hypot(cx - x, cz - z) / REACH_FT);
       }
     }
-    const [positions, colors] = [[], []];
-    const add = (a, b) => {
-      if (!shades[a] || !shades[b]) return;
-      positions.push(...corners.subarray(a * 3, a * 3 + 3), ...corners.subarray(b * 3, b * 3 + 3));
-      for (const k of [a, b]) colors.push(...RGB.map((c) => c * shades[k]));
-    };
+    const [faces, edges] = [[], []];
     for (let j = 0; j < n; j++) {
       for (let i = 0; i < n; i++) {
-        if (i + 1 < n) add(j * n + i, j * n + i + 1);
-        if (j + 1 < n) add(j * n + i, (j + 1) * n + i);
+        const k = j * n + i;
+        if (i + 1 < n && shades[k] && shades[k + 1]) edges.push(k, k + 1);
+        if (j + 1 < n && shades[k] && shades[k + n]) edges.push(k, k + n);
+        if (i + 1 < n && j + 1 < n && shades[k] && shades[k + 1] && shades[k + n] && shades[k + n + 1]) faces.push(k, k + n, k + 1, k + 1, k + n, k + n + 1);
       }
     }
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+    const colors = new Float32Array(n * n * 3);
+    shades.forEach((shade, k) => colors.set(RGB.map((c) => c * shade), k * 3));
+    const geometry = (index) => {
+      const made = new THREE.BufferGeometry();
+      made.setAttribute("position", new THREE.BufferAttribute(corners, 3));
+      made.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+      made.setIndex(index);
+      return made;
+    };
+    this.ceiling.geometry.dispose();
+    this.ceiling.geometry = geometry(faces);
     this.lines.geometry.dispose();
-    this.lines.geometry = geometry;
+    this.lines.geometry = geometry(edges);
   }
 }
