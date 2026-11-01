@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { TILE_CELLS, carve, cavesPath, fillCave, decodeCaves, emptyColumns, encodeCaves, fillRock, openAir } from "../v2/caves.js";
+import { TILE_CELLS, carve, cavesPath, fillCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, fillRock, openAir } from "../v2/caves.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 import { caveMesh, mouthCells } from "./caveMesh.js";
 import { Caves } from "./caves.js";
@@ -81,6 +81,35 @@ describe("cave columns", () => {
     expect(left.some((c) => c.z < 140)).toBe(true);
     // Missing every cave fills nothing.
     expect(fillCave([200, -60, 128], columnsOf, 150).size).toBe(0);
+  });
+
+  it("smooths floors and ceilings toward their neighbours', and evens walls", () => {
+    const tiles = new Map();
+    const columnsOf = (tx, tz, make) => {
+      if (!tiles.has(`${tx},${tz}`) && make) tiles.set(`${tx},${tz}`, emptyColumns());
+      return tiles.get(`${tx},${tz}`) ?? null;
+    };
+    const span = { theme: 0, hewn: false };
+    const at = (ci, cj) => tiles.get("0,0")[cj * TILE_CELLS + ci];
+    // A room 10 cells square, its floor bumpy, and a notch in its east wall.
+    for (let cj = 10; cj < 20; cj++) for (let ci = 10; ci < 20; ci++) columnsOf(0, 0, true)[cj * TILE_CELLS + ci] = [{ ...span, floor: (ci + cj) % 2 ? 3 : 0, ceiling: 12 }];
+    tiles.get("0,0")[15 * TILE_CELLS + 20] = [{ ...span, floor: 0, ceiling: 12 }];
+    const rough = () => Math.abs(at(14, 14)[0].floor - at(15, 14)[0].floor);
+    const before = rough();
+    for (let k = 0; k < 6; k++) smoothCave({ at: [60, 1.5, 60], normal: [0, 1, 0], radius: 16, strength: 1 }, columnsOf, () => 100);
+    expect(rough()).toBeLessThan(before / 4);
+    // Away from the brush, it's as it was.
+    expect(at(10, 10)[0].floor).toBe(0);
+    // The notch, air with rock most of the way round, closes.
+    smoothCave({ at: [80, 6, 62], normal: [-1, 0, 0], radius: 8 }, columnsOf, () => 100);
+    expect(at(20, 15)).toBe(null);
+    // A ceiling smooths too, but one opening through the ground doesn't.
+    at(15, 15)[0].ceiling = 20;
+    smoothCave({ at: [62, 12, 62], normal: [0, -1, 0], radius: 12, strength: 1 }, columnsOf, () => 100);
+    expect(at(15, 15)[0].ceiling).toBeLessThan(20);
+    at(15, 15)[0].ceiling = 104;
+    smoothCave({ at: [62, 12, 62], normal: [0, -1, 0], radius: 12, strength: 1 }, columnsOf, () => 100);
+    expect(at(15, 15)[0].ceiling).toBe(104);
   });
 
   it("reads back what it writes", () => {

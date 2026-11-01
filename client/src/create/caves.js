@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CAVES_PATH, TILE_CELLS, carve, cavesPath, fillCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
+import { CAVES_PATH, TILE_CELLS, carve, cavesPath, fillCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
 import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial } from "./caveMaterial.js";
 import { caveMesh, opensAt } from "./caveMesh.js";
@@ -121,6 +121,32 @@ export class Caves {
   // from there (v2/caves.js's fillCave). Gives whether anything changed.
   fillCave(at, reachFt) {
     return this.change((columnsOf) => fillCave(at, columnsOf, reachFt), false, false);
+  }
+
+  // Smooths the rock round continent feet `at` (on the rock), facing `normal`, out to `radius`
+  // (v2/caves.js's smoothCave). Gives whether anything changed.
+  smooth(at, normal, radius, { strength = 0.5, join = false } = {}) {
+    const groundAt = (ci, cj) => (Number.isFinite(this.groundCell(ci, cj)) ? this.groundCell(ci, cj) : null);
+    return this.change((columnsOf) => smoothCave({ at, normal, radius, strength }, columnsOf, groundAt), join);
+  }
+
+  // The way the rock at continent feet `at` faces, out of it into the air, as a unit [x, y, z]:
+  // from which points round it, `aroundFt` off, are air, so bumps smaller than that don't sway
+  // it. Null where all round's rock or air.
+  normalAt([x, y, z], aroundFt) {
+    let [nx, ny, nz] = [0, 0, 0];
+    for (let dz = -1; dz <= 1; dz++) {
+      for (let dy = -1; dy <= 1; dy++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          if (!(dx || dy || dz)) continue;
+          const length = Math.hypot(dx, dy, dz);
+          const sign = this.solid(x + (dx / length) * aroundFt, y + (dy / length) * aroundFt, z + (dz / length) * aroundFt) ? -1 : 1;
+          [nx, ny, nz] = [nx + (sign * dx) / length, ny + (sign * dy) / length, nz + (sign * dz) / length];
+        }
+      }
+    }
+    const length = Math.hypot(nx, ny, nz);
+    return length > 1e-6 ? [nx / length, ny / length, nz / length] : null;
   }
 
   // Makes a change, work(columnsOf), which gives the "tx,tz" of the tiles it changed, so it can

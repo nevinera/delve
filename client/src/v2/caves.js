@@ -208,6 +208,81 @@ export function fillCave([x, y, z], columnsOf, reachFt) {
   return changed;
 }
 
+// Smooths the cave's rock round continent feet `at`, out to `radius` across, where it faces
+// `normal` (unit, out of the rock): a floor (facing up) or a ceiling (facing down) eases toward
+// its neighbours' heights, by `strength` (0 to 1) at the middle and less further out; a wall
+// evens its outline at that height, air that's mostly rock round it closing and rock that's
+// mostly air round it opening. groundAt is carve's; ceilings opening through the ground aren't
+// smoothed. Gives the "tx,tz" of the tiles changed.
+export function smoothCave({ at: [x, y, z], normal, radius, strength = 0.5 }, columnsOf, groundAt) {
+  const facing = normal[1] > 0.5 ? "floor" : normal[1] < -0.5 ? "ceiling" : "wall";
+  const spansAt = (ci, cj) => {
+    const found = cellAt(columnsOf, ci, cj, false);
+    return found?.columns[found.k] ?? [];
+  };
+  const cells = [];
+  for (let cj = Math.floor((z - radius) / CELL_FT); cj <= Math.floor((z + radius) / CELL_FT); cj++) {
+    for (let ci = Math.floor((x - radius) / CELL_FT); ci <= Math.floor((x + radius) / CELL_FT); ci++) {
+      const d = Math.hypot((ci + 0.5) * CELL_FT - x, (cj + 0.5) * CELL_FT - z) / radius;
+      if (d < 1) cells.push({ ci, cj, weight: strength * (1 - d * d) });
+    }
+  }
+  const changed = new Set();
+  const set = (ci, cj, column) => {
+    const found = cellAt(columnsOf, ci, cj, column !== null);
+    if (!found) return;
+    found.columns[found.k] = column?.length ? column.sort((a, b) => a.floor - b.floor) : null;
+    changed.add(found.key);
+  };
+  const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+  if (facing === "wall") {
+    // Air at y in each column, and how many of the eight round it have it.
+    const airAt = (ci, cj) => spansAt(ci, cj).find((s) => s.floor <= y && y <= s.ceiling) ?? null;
+    const round = (ci, cj) => {
+      const out = [];
+      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if (di || dj) out.push(airAt(ci + di, cj + dj));
+      return out.filter(Boolean);
+    };
+    const plans = cells.map(({ ci, cj }) => ({ ci, cj, air: airAt(ci, cj), round: round(ci, cj) }));
+    for (const { ci, cj, air, round: near } of plans) {
+      if (air && near.length <= 3) set(ci, cj, fillRock(spansAt(ci, cj), Math.max(air.floor, y - radius), Math.min(air.ceiling, y + radius), MIN_AIR_FT) ?? null);
+      else if (!air && near.length >= 5) {
+        const mean = (key) => quarter(near.reduce((sum, s) => sum + s[key], 0) / near.length);
+        const [low, high] = [Math.max(mean("floor"), y - radius), Math.min(mean("ceiling"), y + radius)];
+        if (high - low > MIN_AIR_FT) set(ci, cj, openAir(spansAt(ci, cj), low, high, { theme: near[0].theme, hewn: near[0].hewn }));
+      }
+    }
+    return changed;
+  }
+  // The span whose floor (or ceiling) is this surface in each column: the nearest to y, within
+  // the radius.
+  const key = facing;
+  const surfaceAt = (ci, cj) => {
+    let best = null;
+    for (const s of spansAt(ci, cj)) if (Math.abs(s[key] - y) <= radius && (!best || Math.abs(s[key] - y) < Math.abs(best[key] - y))) best = s;
+    return best;
+  };
+  const plans = [];
+  for (const { ci, cj, weight } of cells) {
+    const span = surfaceAt(ci, cj);
+    if (!span) continue;
+    const ground = groundAt(ci, cj);
+    if (key === "ceiling" && (ground == null || span.ceiling >= ground)) continue;
+    // Its neighbours' heights, where their air meets its.
+    const heights = [span[key]];
+    for (const [di, dj] of SIDES) {
+      const other = spansAt(ci + di, cj + dj).filter((s) => s.floor < span.ceiling && s.ceiling > span.floor);
+      if (other.length) heights.push(other.reduce((a, b) => (Math.abs(b[key] - span[key]) < Math.abs(a[key] - span[key]) ? b : a))[key]);
+    }
+    const mean = heights.reduce((a, b) => a + b, 0) / heights.length;
+    let to = quarter(span[key] + (mean - span[key]) * weight);
+    to = key === "floor" ? Math.min(to, span.ceiling - MIN_AIR_FT) : Math.max(to, span.floor + MIN_AIR_FT);
+    if (to !== span[key]) plans.push({ ci, cj, span, to });
+  }
+  for (const { ci, cj, span, to } of plans) set(ci, cj, spansAt(ci, cj).map((s) => (s === span ? { ...s, [key]: to } : s)));
+  return changed;
+}
+
 // Closes the pockets of air with a column within a cell of [x0, z0, x1, z1]: air joined through
 // the sides of columns, smaller than POCKET_FT3 and nowhere reaching the ground. at(cell, make)
 // is carve's; the "tx,tz" of tiles changed are added to `changed`.
