@@ -1,0 +1,84 @@
+/* The creatures page: a row of tiles for each body, one tile a clip, under one canvas that draws
+   them all. */
+body.creatures-page {
+  margin: 0;
+  background: #1c1c1c;
+  color: #ddd;
+  font: 13px/1.4 system-ui, sans-serif;
+}
+
+.creatures-stage {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.creatures {
+  padding: 16px;
+}
+
+.creatures-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.creatures-head h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.creatures-head button {
+  padding: 4px 10px;
+  background: #333;
+  color: #ddd;
+  border: 1px solid #555;
+  border-radius: 3px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.creatures-head button:hover {
+  border-color: #c49a2a;
+}
+
+.creatures h2 {
+  margin: 24px 0 4px;
+  font-size: 16px;
+  color: #c49a2a;
+}
+
+.creatures h3 {
+  margin: 12px 0 6px;
+  font-size: 14px;
+}
+
+.creature-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+.creature-tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  aspect-ratio: 1;
+  padding: 6px 8px;
+  background: #2a2d33;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.creature-tile span {
+  position: relative;
+  z-index: 2;
+}
+
+.creature-tile .clip {
+  color: #888;
+  font-size: 11px;
+}

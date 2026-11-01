@@ -1,6 +1,8 @@
 import * as THREE from "three";
 import url from "./animations.json?url";
 import { POSED, posedClip, posedSpeed } from "./posed.js";
+import { quadrupedClips } from "./quadruped.js";
+import { HELD } from "./weapons.js";
 
 // Animation clips for characters (characterMesh.js), baked onto the skeleton from Quaternius'
 // Universal Animation Library by script/bake_animations.mjs. Each frame holds a quaternion per
@@ -42,6 +44,7 @@ export const clipNames = (baked) => [...Object.keys(baked.clips), ...Object.keys
 // Every clip as a three.js AnimationClip for this character, by name. A clip that moves along the
 // ground keeps its speed, for a 6ft body, in userData.speed.
 export function characterClips(mesh, baked) {
+  if (mesh.userData.skeleton === "quadruped") return quadrupedClips(mesh);
   const s = mesh.userData.scale;
   const rest = mesh.skeleton.getBoneByName("pelvis").position;
   const clips = new Map();
@@ -55,4 +58,30 @@ export function characterClips(mesh, baked) {
     clips.set(name, clip);
   }
   return clips;
+}
+
+// What a creature does, each played by one of its clips: idle, walk, run, attack, hit and death
+// for every body, and bigAttack, cast and shoot for those that can.
+export const ROLES = ["idle", "walk", "run", "attack", "bigAttack", "cast", "shoot", "hit", "death"];
+
+// The clip for each of ROLES for a look (recipe.js's resolveRecipe), by its skeleton
+// (characterMesh.js's skeletonOf), or null where it has none. A humanoid's attacks go with what
+// it holds.
+export function roleClips(look, skeleton) {
+  if (skeleton === "quadruped") {
+    return { idle: "Idle_Loop", walk: "Walk_Loop", run: "Run_Fwd_Loop", attack: "Bite", bigAttack: "Leap", cast: "Howl", shoot: null, hit: "Hit", death: "Death" };
+  }
+  const twoHanded = HELD[look.weapon]?.twoHanded && !["bow", "crossbow", "gun", "staff"].includes(look.weapon);
+  const unarmed = look.weapon === "none";
+  return {
+    idle: "Idle_Loop",
+    walk: "Walk_Loop",
+    run: "Run_Fwd_Loop",
+    attack: twoHanded ? "TwoHand_Chop" : unarmed ? "Punch_Jab" : "Sword_Attack",
+    bigAttack: twoHanded ? "TwoHand_Sweep" : unarmed ? "Punch_Cross" : "Sword_Regular_B",
+    cast: "Spell_Simple_Shoot",
+    shoot: "Bow_Shoot",
+    hit: "Hit_Chest",
+    death: "Death01",
+  };
 }

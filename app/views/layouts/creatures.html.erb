@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title><%= content_for(:title) || "Delve creatures" %></title>
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <%= csrf_meta_tags %>
+    <%= csp_meta_tag %>
+    <link rel="icon" href="/icon.png" type="image/png">
+    <%= vite_stylesheet_tags "src/character/creatures.js" %>
+    <%= vite_script_tags "src/character/creatures.js", "/client/creatures.js" %>
+  </head>
+
+  <body class="creatures-page">
+    <%= yield %>
+  </body>
+</html>

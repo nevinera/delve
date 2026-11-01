@@ -1,10 +1,15 @@
 import * as THREE from "three";
 import { bodyMesh } from "./body.js";
+import { QUADRUPED_PELVIS_FT, quadrupedMesh } from "./quadruped.js";
 import { heldBy, sheathOf, weaponMesh } from "./weapons.js";
 
 // A character as a three.js skinned mesh, built from a look (recipe.js's resolveRecipe). Its bones
-// carry body.js's names, for animations to drive. Weapons, shields and off-hand items ride on the
-// bones that hold them.
+// carry body.js's names, or quadruped.js's for four-legged bodies, for animations to drive.
+// Weapons, shields and off-hand items ride on the bones that hold them.
+
+// The skeletons, and the bodies built on each. Bodies not built yet stand as humanoids.
+export const SKELETONS = { humanoid: ["humanoid", "goblin", "troll"], quadruped: ["wolf"] };
+export const skeletonOf = (body) => Object.keys(SKELETONS).find((name) => SKELETONS[name].includes(body)) ?? "humanoid";
 
 // Chain mail faces (body.js's mail mark) are patterned with rows of rings, laid on the body as it
 // stands at rest, so the pattern moves with it. Each face takes the pattern from the side it
@@ -35,7 +40,8 @@ const weaponMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatS
 const linear = (colors) => colors.map((v) => (v < 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4));
 
 export function characterMesh(look) {
-  const { bones: joints, positions, colors, skinIndex, skinWeight, mail } = bodyMesh(look);
+  const skeleton = skeletonOf(look.body);
+  const { bones: joints, positions, colors, skinIndex, skinWeight, mail } = skeleton === "quadruped" ? quadrupedMesh(look) : bodyMesh(look);
   const geometry = new THREE.BufferGeometry();
   geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
   geometry.setAttribute("color", new THREE.BufferAttribute(linear(colors), 3));
@@ -57,9 +63,13 @@ export function characterMesh(look) {
   const root = bones.get("root");
   mesh.add(root);
   mesh.bind(new THREE.Skeleton([...bones.values()]));
-  mesh.userData.scale = look.height / 6;
+  // How far clips move the pelvis: as far as for a 6ft body (or a 3ft quadruped) in proportion
+  // to its pelvis's height.
+  const pelvis = joints.find((j) => j.name === "pelvis").at[1];
+  mesh.userData.skeleton = skeleton;
+  mesh.userData.scale = pelvis / (skeleton === "quadruped" ? QUADRUPED_PELVIS_FT : 3.15);
   mesh.userData.joints = joints;
-  mesh.userData.held = [hold(bones, look, look.weapon), hold(bones, look, look.offhand, true)].filter(Boolean);
+  mesh.userData.held = skeleton === "humanoid" ? [hold(bones, look, look.weapon), hold(bones, look, look.offhand, true)].filter(Boolean) : [];
   return mesh;
 }
 

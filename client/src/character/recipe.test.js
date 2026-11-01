@@ -1,7 +1,18 @@
 import { describe, it, expect } from "vitest";
-import { DEFAULT_LOOK, appearance, randomLook, resolveRecipe } from "./recipe.js";
+import { BODY_LOOKS, DEFAULT_LOOK, appearance, randomLook, resolveRecipe } from "./recipe.js";
 
 describe("resolveRecipe", () => {
+  it("takes a creature's look from its body, under the recipe's own settings", () => {
+    const goblin = resolveRecipe({ body: "goblin" });
+    expect(goblin.height).toBeGreaterThanOrEqual(BODY_LOOKS.goblin.height[0]);
+    expect(goblin.height).toBeLessThanOrEqual(BODY_LOOKS.goblin.height[1]);
+    expect(goblin.ears).toBe("long");
+    const troll = resolveRecipe({ body: "troll", height: 10, colors: { eyes: "#ffffff" } });
+    expect(troll.height).toBe(10);
+    expect(troll.colors.eyes).toBe("#ffffff");
+    expect(BODY_LOOKS.troll.colors.skin).toContain(troll.colors.skin);
+  });
+
   it("fills in the defaults", () => {
     expect(resolveRecipe({ height: 5 })).toEqual({ ...DEFAULT_LOOK, height: 5 });
   });

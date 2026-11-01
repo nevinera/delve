@@ -8,11 +8,17 @@ import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 // related without looking alike. A player's appearance is a recipe with every choice made.
 //
 // Settings:
-// - body: the skeleton and body plan; only "humanoid" so far.
+// - body: the skeleton and body plan: "humanoid" or one of BODY_LOOKS's creatures, whose settings
+//   the recipe's own go over. Goblins and trolls are humanoids shaped differently; wolves stand on
+//   four legs (quadruped.js), and take only height, build, limbs, head and colors (skin the fur,
+//   hair its darker back and tail, eyes).
 // - height: in feet, to the top of the head.
 // - build: 0 slight to 1 heavy, the thickness of the trunk and limbs.
 // - limbs: 0 thin to 1 thick, the limbs on top of build.
 // - shoulders, waist, hips, jaw: 0 narrow to 1 broad.
+// - arms, legs: 0 short to 1 long, the arms (hands too) and legs, 0.5 as usual.
+// - head: 0 small to 1 large, 0.5 as usual.
+// - ears: an EARS shape; nose: a NOSE shape; tusks: a TUSKS size.
 // - bust: 0 to 1.
 // - rear: 0 flat to 1 full.
 // - hair: a HAIR style; beard: a BEARD style; mouth: a MOUTH style; jewelry: a list of JEWELRY; face: a list of FACE
@@ -33,6 +39,9 @@ export const BEARD = ["none", "goatee", "handlebar", "full", "long"];
 export const MOUTH = ["neutral", "thin", "smile", "grin", "smirk", "frown", "full"];
 export const JEWELRY = ["earrings", "necklace"];
 export const FACE = ["glasses", "sideburns", "scar", "eyepatch", "warpaint"];
+export const EARS = ["round", "pointed", "long"];
+export const NOSE = ["human", "long", "broad"];
+export const TUSKS = ["none", "small", "large"];
 
 export const DEFAULT_LOOK = {
   body: "humanoid",
@@ -43,6 +52,12 @@ export const DEFAULT_LOOK = {
   waist: 0.5,
   hips: 0.5,
   jaw: 0.5,
+  arms: 0.5,
+  legs: 0.5,
+  head: 0.5,
+  ears: "round",
+  nose: "human",
+  tusks: "none",
   bust: 0,
   rear: 0.3,
   hair: "short",
@@ -67,10 +82,57 @@ export const DEFAULT_LOOK = {
   },
 };
 
-// A look with every choice made: the recipe's settings over the defaults, ranges and lists picked
-// from by `random` (returning 0-1). Settings it doesn't know, and values that don't fit, are
-// dropped for the defaults, so recipes saved by older or newer versions still load.
-export function resolveRecipe(recipe = {}, random = Math.random) {
+// The creatures' bodies, as recipes under a recipe with that body: each picks its own look from
+// these, so no two goblins are quite alike. A world's creature recipe changes what it likes.
+export const BODY_LOOKS = {
+  goblin: {
+    height: [3.3, 3.9],
+    build: [0.25, 0.5],
+    limbs: [0.2, 0.4],
+    shoulders: [0.3, 0.5],
+    arms: [0.75, 0.85],
+    legs: [0.2, 0.3],
+    head: [0.8, 0.9],
+    jaw: [0.3, 0.6],
+    ears: "long",
+    nose: "long",
+    hair: ["bald", "bald", "spiky", "topknot"],
+    mouth: ["grin", "frown", "smirk"],
+    colors: { skin: ["#6a8a3a", "#7a9a40", "#5a7a34", "#8a9a4a"], hair: ["#1b1310", "#2a1c14"], eyes: ["#d0a020", "#c06020"], primary: ["#6b5a3a", "#5a4a3a", "#7a3b2e"], secondary: ["#4a4038", "#3a3430"] },
+  },
+  troll: {
+    height: [8, 9],
+    build: [0.75, 0.95],
+    limbs: [0.6, 0.8],
+    shoulders: [0.8, 1],
+    waist: [0.6, 0.8],
+    arms: [0.8, 0.9],
+    legs: [0.35, 0.45],
+    head: [0.2, 0.3],
+    jaw: [0.8, 1],
+    ears: "pointed",
+    nose: "broad",
+    tusks: "large",
+    hair: ["mohawk", "bald", "spiky"],
+    mouth: ["frown", "neutral"],
+    colors: { skin: ["#4a7a8a", "#5a8a7a", "#6a8a9a"], hair: ["#c05a2a", "#d03030", "#1b1310"], eyes: ["#d03020", "#e0c040"], primary: ["#5a4a3a", "#6b5a3a"], secondary: ["#4a4038", "#3a3430"] },
+  },
+  wolf: {
+    height: [2.9, 3.3],
+    build: [0.4, 0.6],
+    limbs: [0.4, 0.6],
+    head: [0.45, 0.55],
+    colors: { skin: ["#7a6e60", "#8a8478", "#6a5e52", "#9a948a"], hair: ["#3e3a36", "#4a4038", "#2e2a28"], eyes: ["#c8a040", "#b08030"] },
+  },
+};
+
+// A look with every choice made: the recipe's settings over its body's (BODY_LOOKS) and the
+// defaults, ranges and lists picked from by `random` (returning 0-1). Settings it doesn't know, and
+// values that don't fit, are dropped for the defaults, so recipes saved by older or newer versions
+// still load.
+export function resolveRecipe(own = {}, random = Math.random) {
+  const body = BODY_LOOKS[own.body] ?? {};
+  const recipe = { ...body, ...own, colors: { ...body.colors, ...own.colors } };
   const pick = (value) => {
     if (Array.isArray(value) && value.length === 2 && value.every((v) => typeof v === "number")) {
       return value[0] + (value[1] - value[0]) * random();
@@ -109,6 +171,9 @@ export function resolveRecipe(recipe = {}, random = Math.random) {
   if (!HAIR.includes(look.hair)) look.hair = DEFAULT_LOOK.hair;
   if (!BEARD.includes(look.beard)) look.beard = DEFAULT_LOOK.beard;
   if (!MOUTH.includes(look.mouth)) look.mouth = DEFAULT_LOOK.mouth;
+  if (!EARS.includes(look.ears)) look.ears = DEFAULT_LOOK.ears;
+  if (!NOSE.includes(look.nose)) look.nose = DEFAULT_LOOK.nose;
+  if (!TUSKS.includes(look.tusks)) look.tusks = DEFAULT_LOOK.tusks;
   if (!WEAPONS.includes(look.weapon)) look.weapon = DEFAULT_LOOK.weapon;
   if (!OFFHANDS.includes(look.offhand) || HELD[look.weapon]?.twoHanded) look.offhand = DEFAULT_LOOK.offhand;
   return look;

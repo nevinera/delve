@@ -58,3 +58,23 @@ describe("bodyMesh", () => {
     expect(reds({ hair: "long" })).toBeGreaterThan(reds({ hair: "short" }));
   });
 });
+
+describe("proportions", () => {
+  const lowest = (positions) => Math.min(...positions.filter((_, i) => i % 3 === 1));
+  const bones = (look) => Object.fromEntries(bodyMesh(resolveRecipe(look)).bones.map((b) => [b.name, b.at]));
+  const length = (a, b) => Math.hypot(...a.map((v, i) => v - b[i]));
+
+  it("keeps the height and the feet on the ground, whatever the arms, legs and head", () => {
+    for (const look of [{ arms: 0, legs: 0, head: 1 }, { arms: 1, legs: 1, head: 0 }]) {
+      const { positions } = bodyMesh(resolveRecipe({ height: 6, ...look }));
+      expect(tallest(positions)).toBeCloseTo(6, 0);
+      expect(lowest(positions)).toBeCloseTo(0, 0);
+    }
+  });
+
+  it("lengthens the arms and legs", () => {
+    const [short, long] = [bones({ arms: 0, legs: 0 }), bones({ arms: 1, legs: 1 })];
+    expect(length(long.upperarm_l, long.hand_l)).toBeGreaterThan(length(short.upperarm_l, short.hand_l) * 1.2);
+    expect(long.pelvis[1]).toBeGreaterThan(short.pelvis[1] * 1.1);
+  });
+});

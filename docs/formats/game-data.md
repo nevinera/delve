@@ -250,7 +250,8 @@ The rest is as for items.
 }
 ```
 
-- `look`: a character recipe (`client/src/character/recipe.js`). Its `body` is `humanoid`, or one of the creature bodies: `goblin`, `trog`, `wolf`, `bobcat`, `bear` and `slime`.
+- `look`: a character recipe (`client/src/character/recipe.js`). Its `body` is `humanoid`, or one of the creature bodies: `goblin`, `troll`, `trog`, `wolf`, `bobcat`, `bear` and `slime`. A creature body gives the look its own settings (recipe.js's `BODY_LOOKS`), and the recipe's settings go over them, so a world can make a pale goblin or a small troll. Goblins and trolls stand on the humanoid skeleton and use its clips; wolves have a four-legged one with their own. Bodies not built yet are drawn as humanoids.
+- A recipe also shapes the body with `arms`, `legs` and `head` (0 to 1, 0.5 ordinary: longer arms, longer legs, a bigger head, at the same height), `ears` (`round`, `pointed` or `long`), `nose` (`human`, `long` or `broad`) and `tusks` (`none`, `small` or `large`).
 - `creatureType`: `beast`, `humanoid`, `undead`, `elemental`, `demon`, `dragonkin`, `giant`, `mechanical`, `aberration` or `critter`. Some abilities only work on some types. `family` groups creatures in the editor.
 - `reach`: how far its body extends from its center (see Distance and areas). Left out, it comes from the body and `look.height`.
 - `classification`: `normal` by default, or `trivial`, `elite`, `rare`, `rareElite` or `boss`. With the level, it sets health, damage and armor, and `health`, `damage` and `armor` multiply those (1 by default).

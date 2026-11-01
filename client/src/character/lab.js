@@ -2,10 +2,10 @@ import "./builder.css";
 import "./lab.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { characterClips, clipNames, loadAnimations } from "./animations.js";
+import { characterClips, loadAnimations } from "./animations.js";
 import { characterMesh, disposeCharacter } from "./characterMesh.js";
 import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_TYPES } from "./armor.js";
-import { appearance, randomLook, resolveRecipe } from "./recipe.js";
+import { BODY_LOOKS, appearance, randomLook, resolveRecipe } from "./recipe.js";
 import { HELD, OFFHANDS, WEAPONS } from "./weapons.js";
 
 // The animation lab, for working on animations: any clip on any of your characters, holding any
@@ -74,6 +74,7 @@ function rebuild() {
   mixer = new THREE.AnimationMixer(character);
   clips = baked ? characterClips(character, baked) : new Map();
   action = null;
+  listClips();
   start(time);
 }
 
@@ -140,8 +141,11 @@ function select(label, options, value, change) {
 
 function buildControls() {
   const characterOptions = characters.map((c, i) => [String(i), c.name]);
-  select("character", [...characterOptions, ["random", "a random look"]], "0", (value) => {
-    look = value === "random" ? resolveRecipe(appearance(randomLook())) : resolveRecipe(characters[Number(value)].look);
+  const creatures = Object.keys(BODY_LOOKS).map((body) => [body, `a ${body}`]);
+  select("character", [...characterOptions, ["random", "a random look"], ...creatures], "0", (value) => {
+    if (value === "random") look = resolveRecipe(appearance(randomLook()));
+    else if (BODY_LOOKS[value]) look = resolveRecipe({ body: value });
+    else look = resolveRecipe(characters[Number(value)].look);
     rebuild();
   });
   select("weapon", WEAPONS.map((w) => [w, w]), gear.weapon, (value) => {
@@ -158,9 +162,17 @@ function buildControls() {
   });
 }
 
-function buildPlayer(names) {
+// Lists the character's clips, keeping the chosen one where it has it, or idling where not.
+function listClips() {
   const clip = $("clip");
-  for (const name of names) clip.append(new Option(name, name, false, name === state.clip));
+  const names = [...clips.keys()].sort();
+  if (!names.length) return;
+  if (!clips.has(state.clip)) state.clip = "Idle_Loop";
+  clip.replaceChildren(...names.map((name) => new Option(name, name, false, name === state.clip)));
+}
+
+function buildPlayer() {
+  const clip = $("clip");
   clip.addEventListener("change", () => {
     state.clip = clip.value;
     start(0);
@@ -216,10 +228,10 @@ new ResizeObserver(resize).observe(canvas);
 
 view("quarter");
 buildControls();
+buildPlayer();
 rebuild();
 loadAnimations().then((data) => {
   baked = data;
-  buildPlayer(clipNames(baked).sort());
   rebuild();
 });
 

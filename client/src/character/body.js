@@ -251,7 +251,57 @@ export function bodyMesh(look) {
   };
   dressArmor(out, parts, look, { s, trunk, limb, along, level, shoulders, hips, trunkSides: TRUNK_SIDES, trunkReach, n: (name, side) => name.replace(/_l$/, `_${side}`) });
   for (const { rings, sides, color, opts } of Object.values(parts)) out.tube(rings, sides, color, opts);
-  return { bones, ...out.arrays() };
+  const mesh = out.arrays();
+  return { ...mesh, bones: proportion(bones, mesh, look) };
+}
+
+// Long or short arms and legs, and a large or small head (look.arms, legs and head): each bone's
+// joint moves with its parent's, and what each bone carries moves and stretches with it, the arms
+// and legs along their length, the hands and head every way. Then the whole is scaled back to the
+// look's height. Changes `mesh`'s positions in place, and gives the bones' new places.
+function proportion(bones, mesh, look) {
+  const [arms, legs, head] = [0.7 + 0.6 * look.arms, 0.7 + 0.6 * look.legs, 0.6 + 0.8 * look.head];
+  if (arms === 1 && legs === 1 && head === 1) return bones;
+  const byName = new Map(bones.map((b) => [b.name, b]));
+  const at = (name) => byName.get(name).at;
+  const child = { upperarm: "lowerarm", lowerarm: "hand", thigh: "calf", calf: "foot" };
+  // Each bone's stretch: [how much, along what], or every way where there's no direction.
+  const stretchOf = (name) => {
+    const [part, side] = name.split("_");
+    if (child[part]) return [part.endsWith("arm") ? arms : legs, norm(sub(at(`${child[part]}_${side}`), at(name)))];
+    if (part === "hand") return [arms, null];
+    if (name === "head") return [head, null];
+    return [1, null];
+  };
+  const stretch = (name, v) => {
+    const [k, dir] = stretchOf(name);
+    if (k === 1) return v;
+    return dir ? add(v, mul(dir, dot(v, dir) * (k - 1))) : mul(v, k);
+  };
+  // Shorter legs lower everything above them, so the feet stay on the ground.
+  const drop = (at("thigh_l")[1] - at("foot_l")[1]) * (1 - legs);
+  const moved = new Map();
+  for (const { name, parent, at: p } of bones) {
+    if (!parent) moved.set(name, p);
+    else if (name === "pelvis") moved.set(name, add(p, [0, -drop, 0]));
+    else moved.set(name, add(moved.get(parent), stretch(parent, sub(p, at(parent)))));
+  }
+  const place = (name, v) => add(moved.get(name), stretch(name, sub(v, at(name))));
+  const { positions, skinIndex, skinWeight } = mesh;
+  for (let i = 0; i < positions.length / 3; i++) {
+    const v = [positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]];
+    let out = [0, 0, 0];
+    for (let n = 0; n < 4; n++) {
+      const w = skinWeight[i * 4 + n];
+      if (w) out = add(out, mul(place(bones[skinIndex[i * 4 + n]].name, v), w));
+    }
+    positions.set(out, i * 3);
+  }
+  // Back to the look's height, to the top of the head.
+  const top = place("head", [at("head")[0], look.height, at("head")[2]])[1];
+  const f = look.height / top;
+  for (let i = 0; i < positions.length; i++) positions[i] *= f;
+  return bones.map((b) => ({ ...b, at: mul(moved.get(b.name), f) }));
 }
 
 // How far the bust pushes a trunk ring out at each angle round it (0 the front), as the shirt over
@@ -442,9 +492,10 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
     return [hx + x * s, hy + dy * s, hz + (dz + rz * Math.sqrt(Math.max(0, 1 - (x / rx) ** 2))) * s];
   };
   const bones = [["head", 1]];
-  // Nose, between the eyes and the mouth.
-  const tip = add(front(0.24, 0), [0, 0, 0.1 * s]);
-  const [top, left, right] = [front(0.36, 0), front(0.22, -0.06), front(0.22, 0.06)];
+  // Nose, between the eyes and the mouth: [tip height, how far out, half its width at the base, top].
+  const [tipY, outFt, baseX, topY] = { human: [0.24, 0.1, 0.06, 0.36], long: [0.15, 0.32, 0.07, 0.36], broad: [0.2, 0.13, 0.13, 0.32] }[look.nose] ?? [0.24, 0.1, 0.06, 0.36];
+  const tip = add(front(tipY, 0), [0, 0, outFt * s]);
+  const [top, left, right] = [front(topY, 0), front(0.22, -baseX), front(0.22, baseX)];
   const inside = [hx, hy + 0.3 * s, hz];
   out.face([top, left, tip], c.skin, bones, inside);
   out.face([top, tip, right], c.skin, bones, inside);
@@ -469,6 +520,13 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
 
   // Head-relative points, in the head's own feet, to scene points.
   const p = (x, dy, z) => [hx + x * s, hy + dy * s, hz + z * s];
+  // Ears, pointed or long, flat blades out from the sides of the head and up a little; round ones
+  // aren't drawn.
+  const EAR = { pointed: [[0.36, 0.34, -0.02], [0.5, 0.45, -0.07], [0.62, 0.58, -0.12]], long: [[0.36, 0.34, -0.02], [0.6, 0.42, -0.06], [0.82, 0.48, -0.1], [1.0, 0.52, -0.13]] }[look.ears];
+  if (EAR) {
+    const radii = look.ears === "long" ? [0.13, 0.11, 0.07, 0.01] : [0.11, 0.07, 0.01];
+    for (const side of [-1, 1]) out.path(EAR.map(([x, dy, z]) => p(side * x, dy, z)), radii.map((r) => r * s), 6, () => c.skin, () => bones, { capStart: true, capEnd: true, depth: radii.map(() => 0.035 * s) });
+  }
   const neck = [["neck_01", 0.5], ["spine_03", 0.5]];
   if (hair === "long") {
     // A sheet of hair down the back to the shoulder blades.
@@ -673,6 +731,17 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
     },
   };
   (shapes[look.mouth] ?? shapes.neutral)();
+  // Tusks up from the lower jaw either side of the mouth, curving out.
+  const tusk = { small: 0.035, large: 0.055 }[look.tusks];
+  if (tusk) {
+    const ivory = [0.9, 0.86, 0.72];
+    const reach = tusk / 0.035;
+    for (const side of [-1, 1]) {
+      const base = lower(0.07, side * 0.13);
+      const points = [base, add(base, [side * 0.02 * s, 0.07 * reach * s, 0.05 * s]), add(base, [side * 0.05 * s, 0.15 * reach * s, 0.06 * s])];
+      out.path(points, [tusk, tusk * 0.7, tusk * 0.1].map((r) => r * s), 6, () => ivory, () => bones, { capStart: true, capEnd: true });
+    }
+  }
 
   // Face markings and wear, laid a little proud of the face.
   const on = (dy, x, proud) => add(front(dy, x), [0, 0, proud * s]);
