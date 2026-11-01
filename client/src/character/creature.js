@@ -5,7 +5,7 @@ import { ROLES, characterClips, loadAnimations, roleClips } from "./animations.j
 import { ARMOR_SLOTS, ARMOR_STYLES, ARMOR_TYPES } from "./armor.js";
 import { SKELETONS, characterMesh, disposeCharacter, skeletonOf } from "./characterMesh.js";
 import { FRAMES } from "./frames.js";
-import { BEARD, BODY_LOOKS, DEFAULT_LOOK, EARS, FACE, FLESH, GAIT, HAIR, HORNS, JEWELRY, MOUTH, MUZZLE, NOSE, TAIL, TUSKS, UNARMED, WINGS, resolveRecipe } from "./recipe.js";
+import { BEARD, BODY_LOOKS, DEFAULT_LOOK, EARS, FACE, FLESH, GAIT, HAIR, LOWER, HORNS, JEWELRY, MOUTH, MUZZLE, NOSE, TAIL, TUSKS, UNARMED, WINGS, resolveRecipe } from "./recipe.js";
 import { HELD, OFFHANDS, WEAPON_STYLES, WEAPONS } from "./weapons.js";
 
 // The creature page: one creature at a time, playing the clip for each of its roles
@@ -19,7 +19,7 @@ const HOLD_S = 0.8; // how long a clip that doesn't loop holds its last frame
 
 // The look's number settings, each 0 to 1 but height.
 const NUMBERS = ["height", "build", "limbs", "shoulders", "waist", "hips", "jaw", "arms", "legs", "head", "bust", "rear"];
-const CHOICES = { ears: EARS, nose: NOSE, tusks: TUSKS, muzzle: MUZZLE, horns: HORNS, hair: HAIR, beard: BEARD, mouth: MOUTH, tail: TAIL, wings: WINGS, flesh: FLESH, gait: GAIT, unarmed: UNARMED };
+const CHOICES = { ears: EARS, nose: NOSE, tusks: TUSKS, muzzle: MUZZLE, horns: HORNS, hair: HAIR, beard: BEARD, mouth: MOUTH, tail: TAIL, wings: WINGS, flesh: FLESH, gait: GAIT, unarmed: UNARMED, lower: LOWER };
 const LISTS = { jewelry: JEWELRY, face: FACE };
 
 const $ = (id) => document.getElementById(id);

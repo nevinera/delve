@@ -10,7 +10,7 @@ const DRAGON = { mesh: dragonMesh, clips: dragonClips, roles: dragonRoles, setti
 export const FRAMES = { canine: FOUR_LEGS, ursine: FOUR_LEGS, hoofed: FOUR_LEGS, lizard: FOUR_LEGS, dragon: DRAGON };
 
 // The skeletons, and the bodies built on each. Bodies not built yet stand as humanoids.
-export const SKELETONS = { humanoid: ["humanoid", "goblin", "troll", "orc", "ogre", "kobold", "gnoll", "lizardfolk", "minotaur", "skeleton", "zombie", "giant", "harpy", "gargoyle", "imp"] };
+export const SKELETONS = { humanoid: ["humanoid", "goblin", "troll", "orc", "ogre", "kobold", "gnoll", "lizardfolk", "minotaur", "skeleton", "zombie", "giant", "harpy", "gargoyle", "imp", "centaur", "naga", "frogman", "earthElemental", "fireElemental", "waterElemental", "airElemental"] };
 for (const [body, { family }] of Object.entries(SPECIES)) (SKELETONS[family] ??= []).push(body);
 SKELETONS.dragon = Object.keys(DRAGONS);
 

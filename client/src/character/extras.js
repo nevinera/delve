@@ -16,6 +16,22 @@ export const TAILS = {
   bushy: { points: [[0, 3.2, -0.35], [0, 2.85, -0.6], [0, 2.4, -0.7], [0, 2.0, -0.7]], radii: [0.08, 0.12, 0.11, 0.02], hairy: true },
 };
 export const TAIL_KINDS = ["none", ...Object.keys(TAILS)];
+// What stands below the waist in place of legs: a horse's body (a centaur), a serpent's tail (a
+// naga) or a whirl down to a point (an elemental).
+export const LOWER_KINDS = ["legs", "horse", "serpent", "vortex"];
+
+// A serpent's tail from the hips down to the ground and back along it, and a whirl to the ground:
+// points and thickness, a bone from each but the last.
+const SERPENT = { points: [[0, 3.0, 0], [0, 2.15, -0.1], [0, 1.15, -0.45], [0, 0.42, -1.2], [0, 0.32, -2.3], [0.3, 0.27, -3.3], [0.1, 0.22, -4.3], [-0.25, 0.18, -5.1], [0, 0.14, -5.8]], radii: [0.5, 0.48, 0.44, 0.38, 0.32, 0.25, 0.18, 0.1, 0.02] };
+const VORTEX = { points: [[0, 3.0, 0], [0.12, 2.3, -0.05], [-0.1, 1.6, 0.02], [0.08, 0.95, -0.03], [0, 0.35, 0]], radii: [0.5, 0.36, 0.24, 0.12, 0.02] };
+// A horse's body behind and below the waist: its barrel, front to back, and each leg's joints
+// from the body down to the hoof.
+const HORSE = {
+  barrel: [[0.35, 2.85, 0.35, 0.4], [0.15, 2.85, 0.62, 0.72], [-0.6, 2.8, 0.7, 0.8], [-1.5, 2.85, 0.68, 0.78], [-2.4, 2.95, 0.66, 0.75], [-3.0, 3.0, 0.55, 0.6], [-3.3, 3.0, 0.3, 0.32]],
+  fore: [[0.38, 2.5, -0.05], [0.4, 1.35, 0.02], [0.4, 0.35, 0.0], [0.4, 0.0, 0.08]],
+  hind: [[0.42, 2.7, -2.75], [0.44, 1.05, -3.0], [0.44, 0.35, -2.9], [0.44, 0.0, -2.82]],
+  tail: [[0, 3.15, -3.35], [0, 2.75, -3.65], [0, 2.0, -3.8], [0, 1.35, -3.75]],
+};
 export const WING_KINDS = ["none", "bat", "feather"];
 
 // Each wing: the shoulder on the upper back, the elbow up and out, the wrist out past it, the
@@ -32,6 +48,15 @@ const FINGERS = [
 // the caller.
 export function extraJoints(look) {
   const joints = [];
+  const chain = (prefix, points) => points.slice(0, -1).forEach((at, i) => joints.push([`${prefix}_0${i + 1}`, i ? `${prefix}_0${i}` : "pelvis", at]));
+  if (look.lower === "serpent") chain("lower", SERPENT.points);
+  if (look.lower === "vortex") chain("lower", VORTEX.points);
+  if (look.lower === "horse") {
+    for (const [leg, points] of [["fore", HORSE.fore], ["hind", HORSE.hind]]) {
+      points.slice(0, -1).forEach((at, i) => joints.push([`${leg}_0${i + 1}_l`, i ? `${leg}_0${i}_l` : "pelvis", at]));
+    }
+    chain("horsetail", HORSE.tail);
+  }
   const tail = TAILS[look.tail];
   if (tail) tail.points.slice(0, -1).forEach((at, i) => joints.push([`tail_0${i + 1}`, i ? `tail_0${i}` : "pelvis", at]));
   if (WING_KINDS.includes(look.wings) && look.wings !== "none") {
@@ -48,6 +73,7 @@ const shade = (rgb, f) => rgb.map((v) => Math.min(1, v * f));
 // Builds the tail and wings onto `out` (body.js's MeshOut): `at(name)` is a bone's place, `s` the
 // body's scale and `c` the look's colors as numbers.
 export function buildExtras(out, look, at, s, c, trunk) {
+  buildLower(out, look, at, s, c, trunk);
   const tail = TAILS[look.tail];
   if (tail) {
     const names = tail.points.slice(0, -1).map((_, i) => `tail_0${i + 1}`);
@@ -68,6 +94,33 @@ export function buildExtras(out, look, at, s, c, trunk) {
 }
 
 const ww = (side, n) => [[`wing_0${n}_${side}`, 1]];
+
+// Below the waist: a chain of bones and its tube, or a horse's body and legs.
+function buildLower(out, look, at, s, c, trunk) {
+  const along = (prefix, shape, color, sides = 10) => {
+    const n = shape.points.length - 1;
+    const names = Array.from({ length: n }, (_, i) => `${prefix}_0${i + 1}`);
+    const points = [...names.map(at), mul(shape.points.at(-1), s)];
+    out.path(points, shape.radii.map((r) => r * trunk), sides, color, (i) => [[names[Math.min(i, n - 1)], 1]], { carry: true });
+  };
+  if (look.lower === "serpent") along("lower", SERPENT, (band, angle) => (Math.abs(angle) < 0.9 ? shade(c.skin, 1.25) : band % 2 ? c.skin : shade(c.skin, 0.85)));
+  if (look.lower === "vortex") along("lower", VORTEX, (band) => shade(c.skin, 1 - 0.08 * band));
+  if (look.lower !== "horse") return;
+  const coat = c.secondary;
+  const barrel = HORSE.barrel.map(([z, y, rx, rz]) => ({ center: [0, y * s, z * s], dir: [0, 0, -1], rx: rx * trunk, rz: rz * trunk, bones: [["pelvis", 1]] }));
+  out.tube(barrel, 12, () => coat);
+  for (const side of ["l", "r"]) {
+    for (const leg of ["fore", "hind"]) {
+      const names = [1, 2, 3].map((i) => `${leg}_0${i}_${side}`);
+      const x = side === "l" ? 1 : -1;
+      const points = [...names.map(at), mul(HORSE[leg].at(-1), s).map((v, i) => (i ? v : x * v))];
+      const radii = (leg === "fore" ? [0.24, 0.12, 0.09, 0.1] : [0.3, 0.12, 0.09, 0.1]).map((r) => r * trunk);
+      out.path([add(points[0], [0, 0.35 * s, 0]), ...points], [radii[0] * 1.2, ...radii], 8, (band) => (band >= 3 ? [0.12, 0.1, 0.09] : coat), (i) => [[names[Math.min(Math.max(i - 1, 0), 2)], 1]], { carry: true });
+    }
+  }
+  const tailNames = [1, 2, 3].map((i) => `horsetail_0${i}`);
+  out.path([...tailNames.map(at), mul(HORSE.tail.at(-1), s)], [0.12, 0.16, 0.14, 0.03].map((r) => r * s), 6, () => c.hair, (i) => [[tailNames[Math.min(i, 2)], 1]], { carry: true });
+}
 
 // Bat wings: the arm, three fingers and skin between them, both faces drawn.
 function batWings(out, at, s, c) {
@@ -134,11 +187,46 @@ function featherWings(out, at, s, c) {
 // Sway for the tail and wings, as quaternion tracks for every clip (through `track(bone, turn(t))`
 // with turns in radians about x, y and z), whole cycles over the clip's length so a loop meets
 // itself: the tail swings side to side, and wings breathe a little open and shut.
-export function extraSway(names, duration) {
+// A horse's legs walk or gallop through a clip that moves along the ground (`speed`, feet a
+// second for a 6ft body), once through each time the clip loops; a serpent's tail ripples.
+export function extraSway(names, duration, speed = 0) {
   const cycles = Math.max(1, Math.round(duration / 1.6));
   const w = (t) => (Math.PI * 2 * cycles * t) / duration;
+  const stride = (t) => (Math.PI * 2 * t) / duration;
   const sway = {};
+  const fast = speed > 6;
+  // Each leg's phase through a stride: walking, each foot in turn; galloping, the hind pair then
+  // the fore.
+  const PHASES = fast ? { hind_l: 0, hind_r: 0.08, fore_l: 0.5, fore_r: 0.58 } : { hind_l: 0, fore_l: 0.25, hind_r: 0.5, fore_r: 0.75 };
   for (const name of names) {
+    const leg = name.match(/^(fore|hind)_0(\d)_([lr])$/);
+    if (leg) {
+      const [, which, n, side] = leg;
+      if (!speed) continue;
+      const a = stride(0) + Math.PI * 2 * PHASES[`${which}_${side}`];
+      const [swing, lift] = fast ? [0.6, 1.1] : [0.32, 0.7];
+      sway[name] = (t) => {
+        const turn = stride(t) + a;
+        const fold = lift * Math.max(0, -Math.cos(turn));
+        if (n === "1") return [swing * Math.sin(turn) - (which === "hind" ? 0.3 * fold : 0), 0, 0];
+        if (n === "2") return [which === "fore" ? 1.1 * fold : -0.8 * fold, 0, 0];
+        return [which === "fore" ? 0.6 * fold : 0.9 * fold, 0, 0];
+      };
+      continue;
+    }
+    const lower = name.match(/^lower_0(\d)$/);
+    if (lower) {
+      const i = +lower[1];
+      const amount = speed ? 0.18 : 0.06;
+      sway[name] = (t) => [0, i > 2 ? amount * Math.sin((speed ? stride(t) * 2 : w(t)) - 0.9 * i) : 0, 0];
+      continue;
+    }
+    const horsetail = name.match(/^horsetail_0(\d)$/);
+    if (horsetail) {
+      const i = +horsetail[1];
+      sway[name] = (t) => [fast ? -0.5 : 0, 0.1 * Math.sin(w(t) - 0.6 * i), 0];
+      continue;
+    }
     const tail = name.match(/^tail_0(\d)$/);
     if (tail) {
       const i = +tail[1];

@@ -75,6 +75,12 @@ export function hashAt(point, seed = 0) {
 
 // A color as wear leaves it (MeshOut's `wear`): faded and patched, grimy, or rusted, by `h` (0-1).
 export function worn(color, style, h) {
+  // Elements: each face a color of its own from the element's palette.
+  const pick = (palette) => palette[Math.min(palette.length - 1, Math.floor(h * palette.length))];
+  if (style === "stone") return h < 0.08 ? [0.3, 0.38, 0.2] : shade(color, 0.7 + 0.45 * h);
+  if (style === "fire") return pick([[1, 0.92, 0.45], [1, 0.75, 0.2], [1, 0.55, 0.12], [0.95, 0.35, 0.08], [0.75, 0.18, 0.05]]);
+  if (style === "water") return pick([[0.55, 0.8, 0.95], [0.3, 0.6, 0.85], [0.2, 0.45, 0.75], [0.15, 0.35, 0.65]]);
+  if (style === "air") return pick([[0.95, 0.97, 1], [0.85, 0.9, 0.95], [0.75, 0.82, 0.9], [0.65, 0.72, 0.82]]);
   // Rotting flesh: grey-green patches and dark sores.
   if (style === "rot") return h < 0.25 ? color.map((v, i) => v * 0.5 + [0.48, 0.52, 0.32][i] * 0.5) : h > 0.95 ? [0.3, 0.14, 0.12] : shade(color, 0.88 + 0.2 * h);
   if (style === "tattered") return h < 0.15 ? [color[0] * 0.55 + 0.06, color[1] * 0.55 + 0.05, color[2] * 0.55 + 0.03] : shade(color, 0.72 + 0.33 * h);
@@ -138,7 +144,13 @@ export function bodyMesh(look) {
   // Bare bones: thin limbs, a spine for a waist, ribs; rotting flesh is mottled and sore.
   const bony = look.flesh === "bone";
   const limb = trunk * (0.8 + 0.4 * look.limbs) * (bony ? 0.45 : 1);
-  const rot = look.flesh === "rotting" ? { style: "rot", seed: 31, jitter: 0.008 * s } : null;
+  // How the flesh wears every face: rotting, or an element's (rough stone, licking fire, rippling
+  // water, wisps of air).
+  const rot = { rotting: { jitter: 0.008 }, stone: { jitter: 0.03 }, fire: { jitter: 0.035 }, water: { jitter: 0.012 }, air: { jitter: 0.02 } }[look.flesh];
+  if (rot) Object.assign(rot, { style: look.flesh === "rotting" ? "rot" : look.flesh, seed: 31, jitter: rot.jitter * s });
+  // Without legs, there's no leg armor.
+  const legged = look.lower === "legs" || !look.lower;
+  if (!legged) look = { ...look, armor: Object.fromEntries(Object.entries(look.armor ?? {}).filter(([slot]) => slot !== "legs" && slot !== "feet")) };
   const c = Object.fromEntries(Object.entries(look.colors).map(([k, v]) => [k, hex(v)]));
   const boots = shade(c.secondary, 0.55);
   const belt = shade(c.primary, 0.45);
@@ -291,6 +303,7 @@ export function bodyMesh(look) {
     return reach(lower) + (reach(upper) - reach(lower)) * t;
   };
   dressArmor(out, parts, look, { s, trunk, limb, along, level, shoulders, hips, trunkSides: TRUNK_SIDES, trunkReach, n: (name, side) => name.replace(/_l$/, `_${side}`) });
+  if (!legged) for (const name of ["leg_l", "leg_r", "foot_l", "foot_r"]) delete parts[name];
   out.wear = rot;
   for (const { rings, sides, color, opts } of Object.values(parts)) out.tube(rings, sides, color, opts);
   out.wear = null;
@@ -560,7 +573,8 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
     });
     for (let k = 0; k < sides; k++) out.face([center, rim[k], rim[(k + 1) % sides]], color, bones, inside);
   };
-  for (const x of [-0.14, 0.14]) {
+  // A frog's eyes bulge from the top of its head instead.
+  for (const x of muzzle?.bulging ? [] : [-0.14, 0.14]) {
     const [cx, cy, cz] = front(0.34, x);
     if (bony) {
       // Dark sockets with a glow deep in each.
@@ -803,6 +817,13 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
         }
       }
     }
+    if (muzzle.bulging) {
+      for (const side of [-1, 1]) {
+        out.gem(p(side * 0.24, 0.52, 0.2), 0.11 * s, c.skin, bones);
+        out.gem(p(side * 0.26, 0.56, 0.27), 0.065 * s, c.eyes, bones);
+        out.gem(p(side * 0.27, 0.57, 0.31), 0.03 * s, [0.05, 0.05, 0.06], bones);
+      }
+    }
     if (muzzle.nose === "dark") out.gem(p(0, muzzle.upper.at(-1)[1] + 0.03, muzzle.upper.at(-1)[0] + 0.02), 0.045 * s, [0.08, 0.07, 0.07], bones);
   }
   // Horns from the top of the head: rows of [across, up, forward] and thickness.
@@ -899,6 +920,8 @@ const MUZZLES = {
   canine: { upper: [[0.25, 0.23, 0.25, 0.21], [0.5, 0.2, 0.2, 0.16], [0.74, 0.17, 0.14, 0.11], [0.88, 0.17, 0.09, 0.08]], lower: [[0.25, 0.05, 0.2, 0.08], [0.75, 0.06, 0.1, 0.05]], teeth: true, nose: "dark" },
   reptile: { upper: [[0.25, 0.21, 0.24, 0.15], [0.52, 0.17, 0.19, 0.11], [0.8, 0.14, 0.14, 0.08], [0.95, 0.13, 0.09, 0.05]], lower: [[0.25, 0.06, 0.2, 0.08], [0.88, 0.07, 0.09, 0.04]], teeth: true },
   bovine: { upper: [[0.25, 0.18, 0.27, 0.24], [0.42, 0.14, 0.26, 0.2], [0.58, 0.11, 0.22, 0.16]], lower: [[0.25, 0.0, 0.18, 0.08], [0.48, 0.0, 0.14, 0.06]], nose: "pad" },
+  // Wide and flat, with eyes bulging up from the top of the head.
+  frog: { upper: [[0.2, 0.16, 0.38, 0.15], [0.4, 0.14, 0.33, 0.11], [0.54, 0.13, 0.22, 0.07]], lower: [[0.2, 0.04, 0.36, 0.08], [0.5, 0.06, 0.24, 0.05]], bulging: true },
 };
 export const MUZZLE_KINDS = ["none", ...Object.keys(MUZZLES)];
 // Horns, root to tip: [across, up, forward, thickness] from the head's joint.

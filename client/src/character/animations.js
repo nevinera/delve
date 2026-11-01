@@ -50,7 +50,7 @@ export function characterClips(mesh, baked) {
   const s = mesh.userData.scale;
   const rest = mesh.skeleton.getBoneByName("pelvis").position;
   // A tail and wings sway through every clip, since the baked clips don't move them.
-  const extras = mesh.skeleton.bones.map((b) => b.name).filter((name) => /^(tail|wing)_0/.test(name));
+  const extras = mesh.skeleton.bones.map((b) => b.name).filter((name) => /^(tail|wing|lower|fore|hind|horsetail)_0/.test(name));
   const euler = new THREE.Euler();
   const turn = new THREE.Quaternion();
   const clips = new Map();
@@ -60,7 +60,8 @@ export function characterClips(mesh, baked) {
     const positions = pelvis.map((v, i) => rest.getComponent(i % 3) + v * s);
     tracks.push(new THREE.VectorKeyframeTrack("pelvis.position", times, positions));
     const duration = times[times.length - 1] || 1 / baked.fps;
-    for (const [bone, sway] of Object.entries(extraSway(extras, duration))) {
+    const speed = POSED[name] ? posedSpeed(name) : baked.clips[name].speed;
+    for (const [bone, sway] of Object.entries(extraSway(extras, duration, speed))) {
       const values = new Float32Array(times.length * 4);
       times.forEach((t, f) => turn.setFromEuler(euler.set(...sway(t))).toArray(values, f * 4));
       tracks.push(new THREE.QuaternionKeyframeTrack(`${bone}.quaternion`, times, values));

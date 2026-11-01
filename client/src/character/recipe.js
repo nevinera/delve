@@ -1,6 +1,6 @@
 import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_STYLES, ARMOR_TYPES } from "./armor.js";
 import { HORN_KINDS, MUZZLE_KINDS } from "./body.js";
-import { TAIL_KINDS, WING_KINDS } from "./extras.js";
+import { LOWER_KINDS, TAIL_KINDS, WING_KINDS } from "./extras.js";
 import { HELD, OFFHANDS, WEAPON_STYLES, WEAPONS } from "./weapons.js";
 
 // Character recipes: how a kind of character looks, as plain JSON, so a world can describe its
@@ -25,7 +25,10 @@ import { HELD, OFFHANDS, WEAPON_STYLES, WEAPONS } from "./weapons.js";
 // - horns: a HORNS shape; tail: a TAIL shape; wings: bat or feather (WINGS).
 // - gait: how it stands and moves, normal or shamble (a zombie's).
 // - unarmed: how it fights with nothing in hand, punch or claw (tearing with its hands).
-// - flesh: living, rotting (mottled and sore) or bone (a skeleton: thin limbs, ribs, sockets).
+// - flesh: living, rotting (mottled and sore) or bone (a skeleton: thin limbs, ribs, sockets), or
+//   an element's: stone, fire, water or air.
+// - lower: what stands below the waist: legs, or a horse's body (in the secondary color), a
+//   serpent's tail or a whirl down to a point.
 // - bust: 0 to 1.
 // - rear: 0 flat to 1 full.
 // - hair: a HAIR style; beard: a BEARD style; mouth: a MOUTH style; jewelry: a list of JEWELRY; face: a list of FACE
@@ -57,7 +60,8 @@ export const MUZZLE = MUZZLE_KINDS;
 export const HORNS = HORN_KINDS;
 export const TAIL = TAIL_KINDS;
 export const WINGS = WING_KINDS;
-export const FLESH = ["living", "rotting", "bone"];
+export const FLESH = ["living", "rotting", "bone", "stone", "fire", "water", "air"];
+export const LOWER = LOWER_KINDS;
 export const GAIT = ["normal", "shamble"];
 export const UNARMED = ["punch", "claw"];
 
@@ -83,6 +87,7 @@ export const DEFAULT_LOOK = {
   flesh: "living",
   gait: "normal",
   unarmed: "punch",
+  lower: "legs",
   bust: 0,
   rear: 0.3,
   hair: "short",
@@ -367,6 +372,94 @@ export const BODY_LOOKS = {
     colors: { skin: ["#b03a2a", "#a04a3a", "#7a3a6a"], eyes: ["#f0d040"], primary: ["#3a2a2a"], secondary: ["#2a2020"], horn: ["#2a2020", "#4a3a30"] },
     loadouts: [{ weight: 2 }, { weapon: "wand", weaponStyle: "fine" }],
   },
+  centaur: {
+    height: [8, 8.8],
+    build: [0.45, 0.7],
+    limbs: [0.45, 0.65],
+    shoulders: [0.55, 0.8],
+    lower: "horse",
+    ears: ["round", "pointed"],
+    hair: ["long", "braids", "ponytail", "mohawk"],
+    beard: ["none", "none", "full"],
+    colors: { skin: ["#c89a70", "#a87a50", "#e0b48c"], hair: ["#3a2a1a", "#6a4a2a", "#1b1310"], primary: ["#6b5a3a", "#5a6a3a"], secondary: ["#7a5a3a", "#5a4030", "#9a8a7a", "#3a3030"] },
+    loadouts: [
+      { weapon: "bow", weaponStyle: "fine", armor: { chest: { type: "leather" } }, weight: 3 },
+      { weapon: "polearm", weaponStyle: "fine", armor: { chest: { type: "chain" }, shoulders: { type: "leather" } }, weight: 2 },
+      { weapon: "sword", weaponStyle: "fine", offhand: "shield", offhandStyle: "fine", armor: { chest: { type: "plate" }, head: { type: "plate" } } },
+    ],
+  },
+  naga: {
+    height: [7.5, 8.5],
+    build: [0.4, 0.6],
+    limbs: [0.4, 0.55],
+    lower: "serpent",
+    ears: ["pointed", "long"],
+    hair: ["long", "braids", "dreadlocks"],
+    colors: { skin: ["#3a7a6a", "#4a6a8a", "#5a8a5a"], hair: ["#1a3a4a", "#2a4a3a", "#3a2a4a"], eyes: ["#e0c040", "#40e0c0"], primary: ["#3a5a6a", "#4a3a5a"], secondary: ["#3a5a6a"] },
+    loadouts: [
+      { weapon: "polearm", weaponStyle: "fine", armor: { chest: { type: "chain" } }, weight: 2 },
+      { weapon: "sword", weaponStyle: "fine", offhand: "sword", offhandStyle: "fine", armor: { shoulders: { type: "plate" } } },
+      { weapon: "staff", weaponStyle: "fine", armor: { chest: { type: "cloth" } } },
+    ],
+  },
+  frogman: {
+    height: [5, 5.8],
+    build: [0.4, 0.65],
+    limbs: [0.3, 0.5],
+    legs: [0.3, 0.4],
+    arms: [0.65, 0.8],
+    head: [0.6, 0.7],
+    muzzle: "frog",
+    hair: "bald",
+    unarmed: "claw",
+    colors: { skin: ["#5a8a3a", "#4a7a5a", "#7a8a3a", "#3a6a6a"], eyes: ["#e0c040", "#e06020"], primary: ["#5a6a3a", "#4a5a4a"], secondary: ["#5a6a3a", "#3a4a3a"] },
+    loadouts: [
+      { weapon: "polearm", weaponStyle: "crude", weight: 3 },
+      { weapon: "thrown", weaponStyle: "crude", weight: 2 },
+      { weapon: "dagger", weaponStyle: "crude", offhand: "shield", offhandStyle: "crude", armor: { chest: { type: "leather", style: "tattered" } } },
+    ],
+  },
+  earthElemental: {
+    height: [9, 11],
+    build: [0.9, 1],
+    limbs: [0.9, 1],
+    shoulders: [0.9, 1],
+    arms: [0.75, 0.85],
+    legs: [0.2, 0.3],
+    head: [0.2, 0.3],
+    flesh: "stone",
+    hair: "bald",
+    mouth: "frown",
+    colors: { skin: ["#7a6a5a", "#6a6a6a", "#8a7a5a"], primary: ["#6a5a4a", "#5a5a5a"], secondary: ["#5a4a3a", "#4a4a4a"], eyes: ["#e0a020", "#60e040"] },
+  },
+  fireElemental: {
+    height: [8, 9],
+    build: [0.4, 0.6],
+    limbs: [0.4, 0.6],
+    lower: "vortex",
+    flesh: "fire",
+    hair: "spiky",
+    mouth: "grin",
+    colors: { skin: "#ff8020", hair: "#ffc040", primary: "#ff8020", secondary: "#ff6010", eyes: "#fff0a0" },
+  },
+  waterElemental: {
+    height: [8, 9.5],
+    build: [0.6, 0.85],
+    limbs: [0.6, 0.8],
+    lower: "vortex",
+    flesh: "water",
+    hair: "bald",
+    colors: { skin: "#3a7ab0", primary: "#3a7ab0", secondary: "#3a7ab0", eyes: "#e0f8ff" },
+  },
+  airElemental: {
+    height: [8, 9],
+    build: [0.3, 0.5],
+    limbs: [0.3, 0.5],
+    lower: "vortex",
+    flesh: "air",
+    hair: "bald",
+    colors: { skin: "#d0dae8", primary: "#d0dae8", secondary: "#d0dae8", eyes: "#80c0ff" },
+  },
   wolf: {
     height: [2.9, 3.3],
     build: [0.4, 0.6],
@@ -475,7 +568,7 @@ export function resolveRecipe(own = {}, random = Math.random) {
   if (!EARS.includes(look.ears)) look.ears = DEFAULT_LOOK.ears;
   if (!NOSE.includes(look.nose)) look.nose = DEFAULT_LOOK.nose;
   if (!TUSKS.includes(look.tusks)) look.tusks = DEFAULT_LOOK.tusks;
-  for (const [key, options] of Object.entries({ muzzle: MUZZLE, horns: HORNS, tail: TAIL, wings: WINGS, flesh: FLESH, gait: GAIT, unarmed: UNARMED })) {
+  for (const [key, options] of Object.entries({ muzzle: MUZZLE, horns: HORNS, tail: TAIL, wings: WINGS, flesh: FLESH, gait: GAIT, unarmed: UNARMED, lower: LOWER })) {
     if (!options.includes(look[key])) look[key] = DEFAULT_LOOK[key];
   }
   if (!WEAPONS.includes(look.weapon)) look.weapon = DEFAULT_LOOK.weapon;
