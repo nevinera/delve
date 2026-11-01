@@ -1052,6 +1052,30 @@ export const BODY_LOOKS = {
     flesh: "fungal",
     colors: { skin: ["#d8ccb0", "#c8c0a8", "#a8a090"], hair: ["#a03a2a", "#8a5a30", "#6a4a7a", "#c08a40"], secondary: ["#8a8070"], eyes: ["#101010", "#e0c040"] },
   },
+  crab: {
+    height: [2.5, 3.5],
+    build: [0.5, 0.8],
+    limbs: [0.5, 0.8],
+    colors: { skin: ["#b04a2a", "#8a3a2a", "#4a6a7a", "#7a5a3a"], secondary: ["#e0c8a0", "#d8b890"], hair: ["#2a1a14", "#e0d0b0"], eyes: ["#101010"] },
+  },
+  ant: {
+    height: [2.5, 3.2],
+    build: [0.4, 0.7],
+    limbs: [0.4, 0.6],
+    colors: { skin: ["#3a1a14", "#1a1414", "#8a3a1a"], secondary: ["#5a2a1a", "#2a2020"], hair: ["#2a1410", "#1a1010"], eyes: ["#101010", "#2a2a2a"] },
+  },
+  hivari: {
+    height: [5, 6],
+    build: [0.5, 0.8],
+    limbs: [0.5, 0.8],
+    colors: { skin: ["#8a7040", "#5a4a30", "#3a3a2a"], secondary: ["#c0a040", "#6a3a6a", "#3a6a5a"], hair: ["#2a2018", "#3a2a20"], eyes: ["#40c0a0", "#c04020"] },
+  },
+  wasp: {
+    height: [4, 5],
+    build: [0.4, 0.7],
+    limbs: [0.4, 0.6],
+    colors: { skin: ["#1a1614", "#2a2018"], secondary: ["#e0b020", "#d09a20", "#c04020"], hair: ["#1a1410"], eyes: ["#2a1a10", "#802020"] },
+  },
 };
 
 // A look with every choice made: the recipe's settings over its body's (BODY_LOOKS) and the
