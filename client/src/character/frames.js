@@ -26,15 +26,15 @@ const EYESHAUG = { mesh: eyeshaugMesh, clips: eyeshaugClips, roles: eyeshaugRole
 const SLIME = { mesh: slimeMesh, clips: slimeClips, roles: slimeRoles, settings: ["height", "build"], colors: ["skin", "eyes"] };
 export const FRAMES = { canine: FOUR_LEGS, feline: FOUR_LEGS, ursine: FOUR_LEGS, hoofed: FOUR_LEGS, lizard: FOUR_LEGS, pachyderm: FOUR_LEGS, dragon: DRAGON, serpent: SERPENT, fish: SWIMMER, ray: SWIMMER, bat: BAT, crawler: CRAWLER, slime: SLIME, bird: BIRD, strider: STRIDER, eyeshaug: EYESHAUG };
 
-// The skeletons, and the bodies in use built on each (bodies.js), by their own names, not their
-// core: ones. Bodies not built yet stand as humanoids.
+// The skeletons, and the bodies in use built on each (bodies.js), by their own names, and by their
+// core: ones only where a world's body has taken the name. Bodies not built yet stand as humanoids.
 const ORDER = ["humanoid", "canine", "feline", "ursine", "hoofed", "lizard", "pachyderm", "dragon", "serpent", "fish", "ray", "bat", "crawler", "slime", "bird", "strider", "eyeshaug"];
 export const SKELETONS = {};
 const natives = new Map();
 followBodies(() => {
   for (const name of Object.keys(SKELETONS)) delete SKELETONS[name];
   for (const skeleton of ORDER) {
-    const names = bodiesOn(skeleton).filter((name) => !name.startsWith("core:"));
+    const names = bodiesOn(skeleton).filter((name) => !name.startsWith("core:") || BODIES[name.slice(5)]?.custom);
     if (skeleton === "humanoid") names.unshift("humanoid");
     if (names.length) SKELETONS[skeleton] = names;
   }

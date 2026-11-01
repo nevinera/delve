@@ -3,7 +3,8 @@ import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { ROLES, characterClips, loadAnimations, roleClips } from "./animations.js";
 import { SKELETONS, characterMesh, disposeCharacter } from "./characterMesh.js";
-import { BODIES } from "./bodies.js";
+import { BODIES, useModels } from "./bodies.js";
+import { modelProblems, modelsOf } from "../world/models.js";
 import { BODY_LOOKS, resolveRecipe } from "./recipe.js";
 
 // The monster lab, for looking over creature bodies: every body the client builds, listed by
@@ -54,7 +55,8 @@ function flame() {
   return group;
 }
 
-const bodies = Object.values(SKELETONS).flat();
+let bodies = Object.values(SKELETONS).flat();
+let linked = location.hash.slice(1); // the body the address opened on, which may be a world's
 const state = { body: location.hash.slice(1) || "goblin", seed: 1, count: 4, loadouts: "each", coloration: "each", pick: "all", speed: 1, paused: false, loop: true, cycle: false };
 if (!bodies.includes(state.body)) state.body = "goblin";
 let baked = null;
@@ -328,21 +330,73 @@ function draw(dt) {
 }
 
 // The body list, by skeleton.
-$("bodies").replaceChildren(
-  ...Object.entries(SKELETONS).map(([skeleton, names]) =>
-    el(
-      "section",
-      {},
-      el("h2", { textContent: `${skeleton} (${names.length})` }),
-      ...names.map((name) => {
-        const button = el("button", { type: "button", textContent: BODIES[name]?.custom ? `${name} (custom)` : name });
-        button.dataset.body = name;
-        button.addEventListener("click", () => pickBody(name));
-        return button;
-      }),
+function listBodies() {
+  bodies = Object.values(SKELETONS).flat();
+  $("bodies").replaceChildren(
+    ...Object.entries(SKELETONS).map(([skeleton, names]) =>
+      el(
+        "section",
+        {},
+        el("h2", { textContent: `${skeleton} (${names.length})` }),
+        ...names.map((name) => {
+          const button = el("button", { type: "button", textContent: BODIES[name]?.custom ? `${name} (custom)` : name });
+          button.dataset.body = name;
+          button.addEventListener("click", () => pickBody(name));
+          return button;
+        }),
+      ),
     ),
-  ),
-);
+  );
+}
+listBodies();
+
+// A world's models (docs/formats/bodies.md), read from its repo on GitHub: "owner/repo", with
+// "@branch" or a github.com link to a branch, its default branch otherwise. Left in the address,
+// so a reload or a shared link opens it again.
+const REPO = /^(?:https?:\/\/github\.com\/)?([\w.-]+\/[\w.-]+?)(?:\.git)?(?:(?:@|\/tree\/)([\w./-]+))?\/?$/;
+async function loadWorld(spec) {
+  const status = $("worldStatus");
+  const url = new URL(location.href);
+  if (!spec) {
+    useModels();
+    url.searchParams.delete("world");
+    status.textContent = "";
+  } else {
+    const m = spec.trim().match(REPO);
+    if (!m) {
+      status.textContent = "That isn't a repo: give owner/repo, owner/repo@branch or a github.com link.";
+      return;
+    }
+    status.textContent = `Reading ${m[1]}…`;
+    let file;
+    try {
+      const res = await fetch(`https://raw.githubusercontent.com/${m[1]}/${m[2] ?? "HEAD"}/models.json`);
+      if (res.status === 404) throw new Error("it has no models.json");
+      if (!res.ok) throw new Error(`GitHub answered ${res.status}`);
+      file = await res.json();
+    } catch (err) {
+      status.textContent = `Couldn't read ${m[1]}'s models: ${err.message}.`;
+      return;
+    }
+    const models = modelsOf(file);
+    useModels(models);
+    url.search = `?world=${spec.trim()}`;
+    const problems = modelProblems(file);
+    const added = Object.values(models.colorations).reduce((n, c) => n + (Array.isArray(c.colorations) ? c.colorations.length : 0), 0);
+    status.textContent = `${m[1]}: ${Object.keys(models.bodies).length} bodies of its own, ${added} colorations added to shipped ones.${problems.length ? ` Problems: ${problems.join("; ")}.` : ""}`;
+  }
+  history.replaceState(null, "", url);
+  listBodies();
+  pickBody([linked, state.body].find((b) => bodies.includes(b)) ?? "goblin");
+  linked = null;
+}
+$("world").value = new URLSearchParams(location.search).get("world") ?? "";
+$("loadWorld").addEventListener("click", () => loadWorld($("world").value));
+$("world").addEventListener("keydown", (e) => e.key === "Enter" && loadWorld($("world").value));
+$("shippedOnly").addEventListener("click", () => {
+  $("world").value = "";
+  loadWorld("");
+});
 for (const name of Object.keys(VIEWS)) {
   const button = el("button", { type: "button", textContent: name });
   button.addEventListener("click", () => view(name));
@@ -409,6 +463,7 @@ window.addEventListener("keydown", (e) => {
 loadAnimations().then((data) => {
   baked = data;
   pickBody(state.body);
+  if ($("world").value) loadWorld($("world").value);
   const clock = new THREE.Clock();
   renderer.setAnimationLoop(() => draw(Math.min(clock.getDelta(), 0.1)));
 });

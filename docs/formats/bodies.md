@@ -92,7 +92,7 @@ A world can have bodies of its own, and add patterns and colorations to the bodi
 }
 ```
 
-A creature's `"body": "tiger"` is the world's own tiger if it has one, or else the shipped tiger. `"body": "core:tiger"` is always the shipped tiger. A world's colorations for a shipped body reach it under both names. Pickers mark a world's own bodies as custom.
+A creature's `"body": "tiger"` is the world's own tiger if it has one, or else the shipped tiger. `"body": "core:tiger"` is always the shipped tiger. A world's colorations for a shipped body reach it under both names. Pickers mark a world's own bodies as custom, and list the shipped body it took the name of as `core:<name>`. The monster lab (`/monster_lab?world=owner/repo`) reads a world's `models.json` from GitHub and shows its bodies beside the shipped ones.
 
 ### Four-legged areas
 

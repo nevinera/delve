@@ -14,12 +14,13 @@ describe("useModels", () => {
   afterEach(() => useModels());
   const tiger = SHIPPED_BODIES.tiger;
 
-  it("puts a world's own body over the shipped one of its name, keeping the shipped one as core:", () => {
+  it("puts a world's own body over the shipped one of its name, keeping the shipped one, listed, as core:", () => {
     useModels({ bodies: { tiger: { ...tiger, shape: { ...tiger.shape, head: 3 } }, gremlin: { ...SHIPPED_BODIES.wolf, scale: 0.5 } } });
     expect(BODIES.tiger.custom).toBe(true);
     expect(BODIES["core:tiger"]).toEqual(tiger);
     expect(SKELETONS.feline).toContain("tiger");
-    expect(SKELETONS.feline).not.toContain("core:tiger");
+    expect(SKELETONS.feline).toContain("core:tiger");
+    expect(SKELETONS.feline).not.toContain("core:lion");
     expect(SKELETONS.canine).toContain("gremlin");
     expect(resolveRecipe({ body: "gremlin" }).height).toBeGreaterThan(0);
     useModels();
