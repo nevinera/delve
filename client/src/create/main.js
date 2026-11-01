@@ -375,6 +375,8 @@ function start(world, changes, fresh) {
     last = now;
     frames++;
     timed("move", () => builder.tick(dt));
+    // Shut in rock, and not a ghost, they're put on the ground over it.
+    if (!$("ghost").checked && rockAt(builder.state.x, builder.state.z, builder.state.y)) builder.state = { ...builder.state, y: groundAt(builder.state.x, builder.state.z), flying: false, falling: 0 };
     timed("tool", () => tools.tick(dt));
     const { x, y, z } = builder.state;
     timed("ground", () => {

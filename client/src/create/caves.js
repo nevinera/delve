@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CAVES_PATH, TILE_CELLS, carve, cavesPath, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
+import { CAVES_PATH, TILE_CELLS, carve, cavesPath, fillCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
 import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial } from "./caveMaterial.js";
 import { caveMesh, opensAt } from "./caveMesh.js";
@@ -113,13 +113,26 @@ export class Caves {
   // Opens air in `shape` (v2/caves.js's carve), or fills it with rock with `fill`. Gives whether
   // anything changed.
   dig(shape, { fill = false, theme = 0, hewn = false, join = false } = {}) {
+    const groundAt = (ci, cj) => (Number.isFinite(this.groundCell(ci, cj)) ? this.groundCell(ci, cj) : null);
+    return this.change((columnsOf) => carve(shape, columnsOf, groundAt, { fill, theme, hewn }), join);
+  }
+
+  // Fills the cave at continent feet `at` (on its rock or in its air) with rock, out to `reachFt`
+  // from there (v2/caves.js's fillCave). Gives whether anything changed.
+  fillCave(at, reachFt) {
+    return this.change((columnsOf) => fillCave(at, columnsOf, reachFt), false, false);
+  }
+
+  // Makes a change, work(columnsOf), which gives the "tx,tz" of the tiles it changed, so it can
+  // be undone: with what came before it (`join`), and with what comes after it till letGo
+  // (`joinable`). Gives whether anything changed.
+  change(work, join, joinable = true) {
     const before = new Map();
-    const keep = (tx, tz, make) => {
+    const changed = work((tx, tz, make) => {
       const key = `${tx},${tz}`;
       if (!before.has(key)) before.set(key, this.tiles.has(key) ? structuredClone(this.tiles.get(key)) : null);
       return this.columnsOf(tx, tz, make);
-    };
-    const changed = carve(shape, keep, (ci, cj) => (Number.isFinite(this.groundCell(ci, cj)) ? this.groundCell(ci, cj) : null), { fill, theme, hewn });
+    });
     for (const [key, columns] of before) if (!changed.has(key) && columns === null) this.tiles.delete(key);
     if (!changed.size) return false;
     // A drag undoes as one: what was there when it began. Each dig can be joined by those after
@@ -128,7 +141,7 @@ export class Caves {
     if (join && last?.join) {
       for (const key of changed) if (!last.tiles.has(key)) last.tiles.set(key, before.get(key));
     } else {
-      this.undos.push({ tiles: new Map([...changed].map((key) => [key, before.get(key)])), join: true });
+      this.undos.push({ tiles: new Map([...changed].map((key) => [key, before.get(key)])), join: joinable });
       if (this.undos.length > UNDOS) this.undos.shift();
     }
     this.touched(changed);

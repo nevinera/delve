@@ -118,11 +118,7 @@ export function carve(shape, columnsOf, groundAt, { fill = false, theme = 0, hew
       if (high > low) cuts.push({ ci, cj, low, high });
     }
   }
-  const at = ({ ci, cj }, make) => {
-    const [tx, tz] = [Math.floor(ci / TILE_CELLS), Math.floor(cj / TILE_CELLS)];
-    const columns = columnsOf(tx, tz, make);
-    return columns && { columns, k: (cj - tz * TILE_CELLS) * TILE_CELLS + ci - tx * TILE_CELLS, key: `${tx},${tz}` };
-  };
+  const at = ({ ci, cj }, make) => cellAt(columnsOf, ci, cj, make);
   const changed = new Set();
   if (fill) {
     for (const cut of cuts) {
@@ -144,6 +140,69 @@ export function carve(shape, columnsOf, groundAt, { fill = false, theme = 0, hew
   for (const cut of cuts) {
     const found = at(cut, true);
     found.columns[found.k] = openAir(found.columns[found.k], cut.low, cut.high, span);
+    changed.add(found.key);
+  }
+  return changed;
+}
+
+// Continent cell (ci, cj)'s place in columnsOf's tiles: { columns, k, key }, k its index in its
+// tile's columns and key its tile's "tx,tz", or null where its tile has none (and not `make`).
+function cellAt(columnsOf, ci, cj, make) {
+  const [tx, tz] = [Math.floor(ci / TILE_CELLS), Math.floor(cj / TILE_CELLS)];
+  const columns = columnsOf(tx, tz, make);
+  return columns && { columns, k: (cj - tz * TILE_CELLS) * TILE_CELLS + ci - tx * TILE_CELLS, key: `${tx},${tz}` };
+}
+
+// Fills the cave at continent feet (x, y, z), on its rock or in its air, with rock: all the air
+// joined to it through the sides of columns, out to `reachFt` from there across and up and down.
+// A span reaching past that up or down is cut there. Gives the "tx,tz" of the tiles changed.
+export function fillCave([x, y, z], columnsOf, reachFt) {
+  const [ci0, cj0] = [Math.floor(x / CELL_FT), Math.floor(z / CELL_FT)];
+  const spansAt = (ci, cj) => {
+    const found = cellAt(columnsOf, ci, cj, false);
+    return found?.columns[found.k] ?? [];
+  };
+  // The air nearest the point, in its column or those round it.
+  let start = null;
+  for (let dj = -1; dj <= 1; dj++) {
+    for (let di = -1; di <= 1; di++) {
+      for (const span of spansAt(ci0 + di, cj0 + dj)) {
+        const off = Math.max(0, span.floor - y, y - span.ceiling) + Math.hypot(di, dj) * CELL_FT;
+        if (off <= 2 * CELL_FT && (!start || off < start.off)) start = { ci: ci0 + di, cj: cj0 + dj, span, off };
+      }
+    }
+  }
+  const changed = new Set();
+  if (!start) return changed;
+  const [low, high] = [y - reachFt, y + reachFt];
+  const met = new Set([start.span]);
+  const todo = [start];
+  const cells = new Set();
+  while (todo.length) {
+    const here = todo.pop();
+    cells.add(`${here.ci},${here.cj}`);
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const [ci, cj] = [here.ci + di, here.cj + dj];
+      if (Math.hypot(ci - ci0, cj - cj0) * CELL_FT > reachFt) continue;
+      for (const span of spansAt(ci, cj)) {
+        if (met.has(span) || span.floor >= Math.min(here.span.ceiling, high) || span.ceiling <= Math.max(here.span.floor, low)) continue;
+        met.add(span);
+        todo.push({ ci, cj, span });
+      }
+    }
+  }
+  for (const cell of cells) {
+    const [ci, cj] = cell.split(",").map(Number);
+    const found = cellAt(columnsOf, ci, cj, false);
+    const out = [];
+    for (const s of found.columns[found.k]) {
+      if (!met.has(s)) out.push(s);
+      else {
+        if (s.floor < low) out.push({ ...s, ceiling: low });
+        if (s.ceiling > high) out.push({ ...s, floor: high });
+      }
+    }
+    found.columns[found.k] = out.length ? out : null;
     changed.add(found.key);
   }
   return changed;

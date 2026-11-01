@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { TILE_CELLS, carve, cavesPath, decodeCaves, emptyColumns, encodeCaves, fillRock, openAir } from "../v2/caves.js";
+import { TILE_CELLS, carve, cavesPath, fillCave, decodeCaves, emptyColumns, encodeCaves, fillRock, openAir } from "../v2/caves.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 import { caveMesh, mouthCells } from "./caveMesh.js";
 import { Caves } from "./caves.js";
@@ -60,6 +60,27 @@ describe("cave columns", () => {
     carve({ kind: "sphere", at: [201, -30, 200], radius: 3.5 }, columnsOf, () => 5, { fill: true });
     expect(columns.some((spans, n) => spans && n % TILE_CELLS >= 48)).toBe(false);
     expect(air().length).toBe(left.length);
+  });
+
+  it("fills a whole cave out to a reach, leaving caves apart from it", () => {
+    const tiles = new Map();
+    const columnsOf = (tx, tz, make) => {
+      if (!tiles.has(`${tx},${tz}`) && make) tiles.set(`${tx},${tz}`, emptyColumns());
+      return tiles.get(`${tx},${tz}`) ?? null;
+    };
+    const ground = () => 100;
+    // A tunnel 200 ft long, and a chamber beside it but not joined.
+    for (let x = 20; x <= 220; x += 4) carve({ kind: "sphere", at: [x, 0, 128], radius: 6 }, columnsOf, ground);
+    carve({ kind: "sphere", at: [60, 0, 160], radius: 8 }, columnsOf, ground);
+    const xs = () => [...tiles.values()].flatMap((columns) => columns.flatMap((spans, n) => (spans ? [{ x: (n % TILE_CELLS) * 4 + 2, z: Math.floor(n / TILE_CELLS) * 4 + 2 }] : [])));
+    expect(fillCave([200, 0, 128], columnsOf, 150).size).toBeGreaterThan(0);
+    const left = xs();
+    // The tunnel's start past 150 ft stays, and the chamber.
+    expect(left.filter((c) => c.z < 140).every((c) => c.x < 52)).toBe(true);
+    expect(left.some((c) => c.z > 150)).toBe(true);
+    expect(left.some((c) => c.z < 140)).toBe(true);
+    // Missing every cave fills nothing.
+    expect(fillCave([200, -60, 128], columnsOf, 150).size).toBe(0);
   });
 
   it("reads back what it writes", () => {

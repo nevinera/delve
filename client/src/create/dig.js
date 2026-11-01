@@ -3,11 +3,13 @@ import * as THREE from "three";
 // The dig and fill tools: dig a round or square hole into the rock or ground the pointer's on,
 // its middle where the pointer meets it, or fill one with rock, over and over while the button's
 // held; ctrl does the other. Shows where it'll dig or fill as a wire ghost. Each press undoes as
-// one.
+// one. And the fill-cave tool: fills all of the cave clicked, out to CAVE_FT, shown as a ghost
+// that big.
 
 const AGAIN_MS = 90; // how often holding the button digs again
 const GHOST = 0xffe14d;
 const FILL_GHOST = 0x7fd0ff;
+export const CAVE_FT = 150;
 const $ = (id) => document.getElementById(id);
 
 export class Dig {
@@ -32,7 +34,7 @@ export class Dig {
     $("digSize").addEventListener("input", () => this.read());
     $("digTheme").addEventListener("change", () => this.read());
     $("digHewn").addEventListener("change", () => this.read());
-    $("digUndo").addEventListener("click", () => this.caves.undo());
+    for (const button of [$("digUndo"), ...document.querySelectorAll("[data-cave-undo]")]) button.addEventListener("click", () => this.caves.undo());
     this.read();
   }
 
@@ -60,8 +62,15 @@ export class Dig {
     return { kind: "box", at, half: [size / 2, size / 2, size / 2], yaw: Math.atan2(look.x, look.z) };
   }
 
-  // fill: whether it's the fill tool.
-  press(e, fill) {
+  // tool: "dig", "fill" or "fillCave".
+  press(e, tool) {
+    if (tool === "fillCave") {
+      const ray = this.ray();
+      const at = ray && this.caves.hit(ray.ray);
+      if (at) this.caves.fillCave(at, CAVE_FT);
+      return;
+    }
+    const fill = tool === "fill";
     this.down = { fill: fill !== (e.ctrlKey || e.metaKey), last: -Infinity, join: false };
     this.work();
   }
@@ -96,16 +105,18 @@ export class Dig {
     return false;
   }
 
-  // Each frame, with the tool picked or not; fill whether it's the fill tool.
-  tick(on, fill) {
+  // Each frame, with the tool picked: "dig", "fill" or "fillCave", or another.
+  tick(tool) {
+    const on = ["dig", "fill", "fillCave"].includes(tool);
     if (on) this.work();
-    const shape = on && this.shape();
-    this.ghosts.sphere.material.color.set(fill ? FILL_GHOST : GHOST);
+    let shape = on && this.shape();
+    if (shape && tool === "fillCave") shape = { kind: "sphere", at: shape.at, radius: CAVE_FT };
+    this.ghosts.sphere.material.color.set(tool === "dig" ? GHOST : FILL_GHOST);
     for (const [kind, ghost] of Object.entries(this.ghosts)) {
       ghost.visible = Boolean(shape) && shape.kind === kind;
       if (!ghost.visible) continue;
       ghost.position.set(...shape.at);
-      ghost.scale.setScalar(this.settings.size);
+      ghost.scale.setScalar(shape.radius ? shape.radius * 2 : this.settings.size);
       ghost.rotation.set(0, shape.yaw ?? 0, 0);
     }
   }

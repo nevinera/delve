@@ -96,6 +96,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 8 L46 8 L46 22 L2 22 Z" fill="#8a7a66"/><path d="M14 8 C 14 20, 34 20, 34 8 Z" fill="#a8977f" stroke="#1c1a20" stroke-dasharray="2 2"/><path d="M2 8 L46 8" stroke="#6a8a4a" stroke-width="2"/></svg>
         <span>fill</span><kbd class="create-key">J</kbd>
       </button>
+      <button type="button" data-tool="fillCave" data-key="k" aria-pressed="false" title="fill a whole cave with rock, out to 150 ft">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 8 L46 8 L46 22 L2 22 Z" fill="#8a7a66"/><path d="M6 8 C 6 20, 42 20, 42 8 Z" fill="#a8977f" stroke="#1c1a20" stroke-dasharray="2 2"/><path d="M2 8 L46 8" stroke="#6a8a4a" stroke-width="2"/></svg>
+        <span>fill cave</span><kbd class="create-key">K</kbd>
+      </button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" data-key="h" aria-pressed="false" title="raise and lower the ground">
@@ -389,6 +393,12 @@
       <label>thickness <input type="number" id="rampThickness" value="1" min="0.1" max="16" step="0.25"> ft</label>
       <div class="create-way">
         <button type="button" data-build-undo>undo</button>
+      </div>
+    </div>
+    <div data-config="fillCave" hidden>
+      <p class="create-note">Click a cave to fill all of it with rock, out to 150 ft from where you click. The ghost shows how far.</p>
+      <div class="create-way">
+        <button type="button" data-cave-undo>undo</button>
       </div>
     </div>
     <div data-config="dig fill" hidden>
