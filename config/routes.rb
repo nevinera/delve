@@ -43,6 +43,7 @@ Rails.application.routes.draw do
   get "character_builder", to: redirect("/characters/new")
   resources :characters, except: [:show]
   get "animation_lab" => "animation_lab#show"
+  get "monster_lab" => "monster_lab#show"
   get "creatures" => "creatures#show"
   get "creature" => "creatures#creature"
 
