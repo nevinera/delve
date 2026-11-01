@@ -127,11 +127,17 @@ function build() {
     }
     looks.push({ look, mesh, mixer, clips: characterClips(mesh, baked), roles: roleClips(look, mesh.userData.skeleton), flame: fire, ring: ring(look.reach ?? 4.5 * (look.height / 6)), action: null, clip: null });
   }
-  // Side by side, along x, each as far from the next as the biggest is big.
-  const sizes = looks.map(({ mesh }) => {
-    mesh.geometry.computeBoundingBox();
-    const box = mesh.geometry.boundingBox;
-    return Math.max(box.max.y, box.max.x - box.min.x, 0.9 * (box.max.z - box.min.z));
+  // Side by side, along x, each as far from the next as the biggest is big, as it stands idle (a
+  // dragon's wings spread and its tail out straight until a clip poses them).
+  const sizes = looks.map(({ look, mesh, mixer, clips, roles }) => {
+    mixer.clipAction(clips.get(roles.idle)).play();
+    mixer.update(0);
+    mesh.updateMatrixWorld(true);
+    mesh.computeBoundingBox();
+    mixer.stopAllAction();
+    const box = mesh.boundingBox;
+    // Its length counts for less, since it stands across the row; its ring mostly clear of the next.
+    return Math.max(box.max.y, box.max.x - box.min.x, 0.5 * (box.max.z - box.min.z), 1.5 * (look.reach ?? 0));
   });
   const size = Math.max(...sizes);
   // The human first, then the looks, the whole row centered.
