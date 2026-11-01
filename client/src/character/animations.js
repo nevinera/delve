@@ -2,7 +2,7 @@ import * as THREE from "three";
 import url from "./animations.json?url";
 import { POSED, posedClip, posedSpeed } from "./posed.js";
 import { FRAMES } from "./frames.js";
-import { HELD } from "./weapons.js";
+import { attackGroup } from "./weapons.js";
 
 // Animation clips for characters (characterMesh.js), baked onto the skeleton from Quaternius'
 // Universal Animation Library by script/bake_animations.mjs. Each frame holds a quaternion per
@@ -61,26 +61,25 @@ export function characterClips(mesh, baked) {
   return clips;
 }
 
-// What a creature does, each played by one of its clips: idle, walk, run, attack, hit and death
-// for every body, and bigAttack, cast and shoot for those that can.
-export const ROLES = ["idle", "walk", "run", "attack", "bigAttack", "cast", "shoot", "hit", "death"];
+// What a creature does, each played by one of its clips: idle, walk, run, attack, battleCry (an
+// enrage or a rallying shout), hit and death for every body, and bigAttack, cast and shoot for
+// those that can.
+export const ROLES = ["idle", "walk", "run", "attack", "bigAttack", "cast", "shoot", "battleCry", "hit", "death"];
 
 // The clip for each of ROLES for a look (recipe.js's resolveRecipe), by its skeleton
-// (characterMesh.js's skeletonOf), or null where it has none. A humanoid's attacks go with what
-// it holds.
+// (frames.js's skeletonOf), or null where it has none. A humanoid's attacks go with how its weapon
+// attacks (weapons.js's attackGroup), and it shoots only with something to shoot or throw.
+const ATTACKS = {
+  unarmed: ["Punch_Jab", "Punch_Cross", null],
+  oneHanded: ["Sword_Attack", "Sword_Regular_B", null],
+  twoHanded: ["TwoHand_Chop", "TwoHand_Sweep", null],
+  bow: ["Bow_Shoot", "Bow_Shoot", "Bow_Shoot"],
+  firearm: ["Firearm_Shoot", "Firearm_Shoot", "Firearm_Shoot"],
+  thrown: ["OverhandThrow", "OverhandThrow", "OverhandThrow"],
+};
+
 export function roleClips(look, skeleton) {
   if (FRAMES[skeleton]) return FRAMES[skeleton].roles(look);
-  const twoHanded = HELD[look.weapon]?.twoHanded && !["bow", "crossbow", "gun", "staff"].includes(look.weapon);
-  const unarmed = look.weapon === "none";
-  return {
-    idle: "Idle_Loop",
-    walk: "Walk_Loop",
-    run: "Run_Fwd_Loop",
-    attack: twoHanded ? "TwoHand_Chop" : unarmed ? "Punch_Jab" : "Sword_Attack",
-    bigAttack: twoHanded ? "TwoHand_Sweep" : unarmed ? "Punch_Cross" : "Sword_Regular_B",
-    cast: "Spell_Simple_Shoot",
-    shoot: "Bow_Shoot",
-    hit: "Hit_Chest",
-    death: "Death01",
-  };
+  const [attack, bigAttack, shoot] = ATTACKS[attackGroup(look.weapon)];
+  return { idle: "Idle_Loop", walk: "Walk_Loop", run: "Run_Fwd_Loop", attack, bigAttack, cast: "Spell_Simple_Shoot", shoot, battleCry: "Battle_Cry", hit: "Hit_Chest", death: "Death01" };
 }

@@ -3,6 +3,7 @@ import * as THREE from "three";
 import { ROLES, characterClips, loadAnimations, roleClips } from "./animations.js";
 import { SKELETONS, characterMesh, disposeCharacter, skeletonOf } from "./characterMesh.js";
 import { BODY_LOOKS, appearance, randomLook, resolveRecipe } from "./recipe.js";
+import { WEAPONS } from "./weapons.js";
 
 // The creatures page: each body the client builds, grouped by skeleton, playing the clip for each
 // of a creature's roles (animations.js's ROLES) in a tile of its own. One canvas over the page draws
@@ -68,6 +69,26 @@ function build() {
     }
     $("creatures").append(section);
   }
+  // Every weapon's attacks, on one look, so each can be checked against its group's clips.
+  const section = document.createElement("section");
+  section.append(Object.assign(document.createElement("h2"), { textContent: "attacks by weapon" }));
+  const base = resolveRecipe({ body: "goblin" });
+  for (const weapon of WEAPONS) {
+    const look = { ...base, weapon, offhand: "none" };
+    const clipFor = roleClips(look, "humanoid");
+    const grid = Object.assign(document.createElement("div"), { className: "creature-tiles" });
+    section.append(Object.assign(document.createElement("h3"), { textContent: weapon }), grid);
+    let clips = null;
+    for (const role of ["attack", "bigAttack", "shoot"].filter((r) => clipFor[r])) {
+      const el = Object.assign(document.createElement("div"), { className: "creature-tile" });
+      el.append(Object.assign(document.createElement("span"), { textContent: role }), Object.assign(document.createElement("span"), { className: "clip", textContent: clipFor[role] }));
+      grid.append(el);
+      const t = tile(el, look, role, clipFor[role], clips);
+      clips = t.clips;
+      tiles.push(t);
+    }
+  }
+  $("creatures").append(section);
 }
 
 function tile(el, look, role, name, clips) {

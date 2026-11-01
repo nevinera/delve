@@ -215,6 +215,27 @@ const DRAWN = { ...ARCHER, bones: SIDE_ON, reach: { hand_l: BOW_OUT, hand_r: { w
 const AIM_SWAY = { ...DRAWN, reach: { ...DRAWN.reach, hand_l: bowAt([0.21, 4.63, 2.0], [0.12, 1, 0], [0, 0, 1]) } };
 const LOOSED = { ...ARCHER, bones: SIDE_ON, reach: { hand_l: BOW_OUT, hand_r: { wrist: [-0.3, 5.1, 0.05], elbow: [-0.5, 0, -1] } } };
 
+// A crossbow or gun: brought up from the hip to the right shoulder, the left hand under the
+// barrel, fired with a kick back and up, and lowered.
+const SHOOTING = { feet: { foot_l: [0.35, 0.32, 0.3], foot_r: [-0.35, 0.32, -0.2] } };
+const shouldered = (grip, dir) => ({
+  ...SHOOTING,
+  bones: { spine_01: [0, -0.2, 0], spine_02: [0, -0.1, 0], head: [0.15, 0.3, 0] },
+  reach: { hand_r: { item: "gun", grip, dir, front: [0, 1, 0], elbow: [-0.7, -0.6, 0] }, hand_l: { along: "hand_r", back: -0.75, roll: Math.PI, elbow: [0.4, -0.8, 0] } },
+});
+const HIP_FIRE = shouldered([-0.45, 3.5, 0.7], [0, 0.35, 0.94]);
+const AIMED = shouldered([-0.3, 4.75, 0.85], [0.05, 0.02, 1]);
+const KICKED = shouldered([-0.32, 4.85, 0.7], [0.05, 0.3, 0.95]);
+
+// A battle cry: a crouch, then up with the arms flung wide and the head thrown back, shaking.
+const PLANTED = { feet: { foot_l: [0.4, 0.32, 0.15], foot_r: [-0.4, 0.32, -0.1] } };
+const GATHER = { ...PLANTED, pelvis: [0, -0.35, 0], bones: { spine_01: [0.25, 0, 0], spine_02: [0.2, 0, 0], neck_01: [-0.2, 0, 0], upperarm_l: [-0.5, 0, 0.3], upperarm_r: [-0.5, 0, -0.3], lowerarm_l: [-1.2, 0, 0], lowerarm_r: [-1.2, 0, 0] } };
+const roar = (shake) => ({
+  ...PLANTED,
+  pelvis: [0, -0.1, 0],
+  bones: { spine_01: [-0.1, 0, 0], spine_02: [-0.15, 0, 0], neck_01: [-0.25, 0, 0], head: [-0.35 + shake, 0, 0], upperarm_l: [-0.4, 0, 2.2 + shake], upperarm_r: [-0.4, 0, -2.2 - shake], lowerarm_l: [-0.5, 0, 0], lowerarm_r: [-0.5, 0, 0] },
+});
+
 // A gait: the feet stepping by turns, each planted for `planted` of every `cycle` seconds and
 // swung forward the rest, carrying the body along `heading` (radians from straight ahead, toward
 // the left) at `speed`. While planted a foot slides back at that speed, so played at it the feet
@@ -348,6 +369,24 @@ export const POSED = {
     [1.6, DRAWN],
     [1.65, LOOSED],
     [2.3, BOW_LOW],
+  ],
+  Firearm_Shoot: [
+    [0, HIP_FIRE],
+    [0.45, AIMED],
+    [1.0, AIMED],
+    [1.06, KICKED],
+    [1.3, AIMED],
+    [1.8, HIP_FIRE],
+  ],
+  Battle_Cry: [
+    [0, STANDING],
+    [0.35, GATHER],
+    [0.65, roar(0)],
+    [0.9, roar(0.12)],
+    [1.15, roar(-0.05)],
+    [1.4, roar(0.12)],
+    [1.65, roar(0)],
+    [2.2, STANDING],
   ],
   Bow_Aim_Loop: [
     [0, DRAWN],

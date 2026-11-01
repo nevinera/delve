@@ -40,6 +40,18 @@ export const HELD = {
   orb: { bone: "hand_l", at: IN_HAND, toward: [0, 0, 1] },
 };
 
+// How each weapon attacks: a handful of ways, so creatures need only a clip for each, not one for
+// every weapon. The clips (animations.js's roleClips) are each group's.
+const GROUPS = {
+  unarmed: ["none"],
+  oneHanded: ["sword", "axe", "mace", "dagger", "fist", "wand"],
+  twoHanded: ["greatsword", "greataxe", "maul", "polearm", "staff"],
+  bow: ["bow"],
+  firearm: ["crossbow", "gun"],
+  thrown: ["thrown"],
+};
+export const attackGroup = (weapon) => Object.keys(GROUPS).find((group) => GROUPS[group].includes(weapon)) ?? "unarmed";
+
 // What a look can hold in its main hand, and in its off hand alongside a one-handed weapon.
 export const WEAPONS = ["none", ...Object.keys(HELD).filter((type) => !["shield", "orb"].includes(type))];
 export const OFFHANDS = ["none", "shield", "orb", "sword", "axe", "mace", "dagger", "fist"];

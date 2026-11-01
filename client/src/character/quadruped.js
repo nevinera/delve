@@ -448,6 +448,7 @@ function familyClips(sp) {
         },
       ],
       Howl: [2.2, call(2.2, 0.45)],
+      Roar: [1.8, call(1.8, -0.15)],
     });
   }
   if (sp.family === "ursine") {
@@ -471,6 +472,8 @@ function familyClips(sp) {
   if (sp.family === "hoofed") {
     const horse = sp.tail === "horse";
     Object.assign(clips, {
+      // A bellow, head up and jaw open.
+      Roar: [2, call(2, 0.35)],
       Walk_Loop: [1.2, (t) => ({ bones: { ...legs(sp, t / 1.2, 0.3, 0.6, { back_l: 0, front_l: 0.25, back_r: 0.5, front_r: 0.75 }), neck_01: [0.06 * Math.sin((TAU * t * 2) / 1.2), 0, 0], ...tail(t / 1.2, 0.1) } }), 4.5 * k],
       Run_Fwd_Loop: [0.6, gallop(sp, 0.6, 0.6), 24 * k],
       // Charging: head down, a burst forward.
@@ -538,9 +541,9 @@ export function quadrupedClips(mesh, look) {
 // The clip for each creature role (animations.js's ROLES), or null where it has none.
 export function quadrupedRoles(look) {
   const sp = speciesOf(look);
-  const base = { idle: "Idle_Loop", walk: "Walk_Loop", run: "Run_Fwd_Loop", hit: "Hit", death: "Death", shoot: null, cast: null };
-  if (sp.family === "lizard") return { ...base, attack: "Bite", bigAttack: "Lunge", cast: look.body === "basilisk" ? "Hiss" : null };
+  const base = { idle: "Idle_Loop", walk: "Walk_Loop", run: "Run_Fwd_Loop", hit: "Hit", death: "Death", shoot: null, cast: null, battleCry: "Roar" };
+  if (sp.family === "lizard") return { ...base, attack: "Bite", bigAttack: "Lunge", cast: look.body === "basilisk" ? "Hiss" : null, battleCry: "Hiss" };
   if (sp.family === "ursine") return { ...base, attack: "Bite", bigAttack: "Rear", cast: "Roar" };
   if (sp.family === "hoofed") return sp.tail === "horse" ? { ...base, attack: "Kick", bigAttack: "Rear" } : { ...base, attack: "Gore", bigAttack: "Charge" };
-  return { ...base, attack: "Bite", bigAttack: "Leap", cast: look.body === "wolf" ? "Howl" : null };
+  return { ...base, attack: "Bite", bigAttack: "Leap", cast: look.body === "wolf" ? "Howl" : null, battleCry: look.body === "wolf" ? "Howl" : "Roar" };
 }
