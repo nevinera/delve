@@ -38,6 +38,9 @@ import { Overhead } from "./overhead.js";
 const $ = (id) => document.getElementById(id);
 const SKY = 0x9cc4e4;
 const UNDERGROUND = 0x000000; // the sky, with the camera under the ground
+const GHOST_TOOLS = new Set(["erase", "layout"]); // tools the builder's always a ghost with
+const CAVE_TOOLS = new Set(["dig", "caveFill", "caveSmooth", "teleport"]); // tools they're a ghost with in rock
+const STAND_RINGS = 3; // how many rings of cells round where they teleport to are looked in for room to stand
 const OVERHEAD_EVERY_MS = 1000; // how often the ground drawn over the camera underground's read again
 // Where fog starts and closes in, as shares of how far off ground's drawn.
 const FOG = { near: 0.5, far: 1.02 };
@@ -209,16 +212,42 @@ function start(world, changes, fresh) {
     return [[a, z0], [x0, b]].find(([u, v]) => !rockAt(u, v)) ?? [x0, z0];
   };
   const clear = (head, at) => caves.clear(head, at);
+  // They're a ghost with the ghost toggle on; always with the tools for working from outside
+  // caves; and with the other cave tools while they're in rock under the ground, so they can work
+  // on from where those left them.
+  let tools = null;
+  const inRock = () => {
+    const { x, y, z } = builder.state;
+    return y < groundAt(x, z) && rockAt(x, z, y);
+  };
+  const ghost = () => $("ghost").checked || GHOST_TOOLS.has(tools?.tool) || (CAVE_TOOLS.has(tools?.tool) && inRock());
   // Flying, cave rock's in the way too, sliding along it where it can, unless they're a ghost or
   // already in it.
   const keep = (was, now) => {
     const stuck = (s) => rockAt(s.x, s.z, s.y);
-    if (!now.flying || $("ghost").checked || !stuck(now) || stuck(was)) return now;
+    if (!now.flying || ghost() || !stuck(now) || stuck(was)) return now;
     const tries = [{ y: was.y }, { x: was.x, y: was.y }, { z: was.z, y: was.y }, { x: was.x, z: was.z }, { x: was.x, y: was.y, z: was.z }];
     return tries.map((t) => ({ ...now, ...t })).find((s) => !stuck(s)) ?? { ...now, x: was.x, y: was.y, z: was.z };
   };
-  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push, clear, keep, ghost: () => $("ghost").checked });
-  const tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves });
+  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push, clear, keep, ghost });
+  // Where the builder can stand in the cave `ray` points at (Caves.aimed), or near it, as
+  // [x, y, z], or null.
+  const standable = (ray) => {
+    const at = caves.aimed(ray);
+    if (!at) return null;
+    for (let ring = 0; ring <= STAND_RINGS; ring++) {
+      for (let dz = -ring; dz <= ring; dz++) {
+        for (let dx = -ring; dx <= ring; dx++) {
+          if (Math.max(Math.abs(dx), Math.abs(dz)) !== ring) continue;
+          const [x, z] = [at[0] + dx * CELL_FT, at[2] + dz * CELL_FT];
+          const y = caves.groundAt(x, z, at[1]);
+          if (Math.abs(y - at[1]) < STAND_RINGS * CELL_FT && !rockAt(x, z, y)) return [x, y, z];
+        }
+      }
+    }
+    return null;
+  };
+  tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves, standable });
   // The bottom bar's display toggles.
   $("showGrid").checked = grid.value === 1;
   $("showGrid").addEventListener("change", () => (grid.value = $("showGrid").checked ? 1 : 0));
@@ -231,13 +260,8 @@ function start(world, changes, fresh) {
   $("showCurtains").addEventListener("change", showLines);
   // Showing biomes outlines their areas and tints the ground but that drawn in full.
   const TINT = BIOME_NAMES.map((name) => new THREE.Color(BIOMES[name]).toArray());
-  for (const [id, overlay] of [
-    ["showCaveGrid", "grid"],
-    ["showCaveLines", "lines"],
-  ]) {
-    caves.show(overlay, $(id).checked);
-    $(id).addEventListener("change", () => caves.show(overlay, $(id).checked));
-  }
+  caves.show("grid", $("showHeightGrid").checked);
+  $("showHeightGrid").addEventListener("change", () => caves.show("grid", $("showHeightGrid").checked));
   $("showBiomes").addEventListener("change", () => {
     tools.showBiomes($("showBiomes").checked);
     ground.setTint($("showBiomes").checked ? TINT : null);
@@ -376,7 +400,7 @@ function start(world, changes, fresh) {
     frames++;
     timed("move", () => builder.tick(dt));
     // Shut in rock, and not a ghost, they're put on the ground over it.
-    if (!$("ghost").checked && rockAt(builder.state.x, builder.state.z, builder.state.y)) builder.state = { ...builder.state, y: groundAt(builder.state.x, builder.state.z), flying: false, falling: 0 };
+    if (!ghost() && rockAt(builder.state.x, builder.state.z, builder.state.y)) builder.state = { ...builder.state, y: groundAt(builder.state.x, builder.state.z), flying: false, falling: 0 };
     timed("tool", () => tools.tick(dt));
     const { x, y, z } = builder.state;
     timed("ground", () => {
@@ -419,7 +443,9 @@ function start(world, changes, fresh) {
     const [cx, cz] = [camera.position.x, camera.position.z];
     const buried = camera.position.y < groundAt(cx, cz) && !caves.mouth(Math.floor(cx / CELL_FT), Math.floor(cz / CELL_FT));
     ground.group.visible = !buried;
-    timed("ground", () => overhead.tick(buried && $("showOverhead").checked, x, z, now - lastOverhead > OVERHEAD_EVERY_MS && (lastOverhead = now)));
+    // In the rock, the caves' outlines show whether they're toggled on or not.
+    caves.show("lines", $("showCaveOutlines").checked || (buried && caves.solid(cx, camera.position.y, cz)));
+    timed("ground", () => overhead.tick(buried, x, z, now - lastOverhead > OVERHEAD_EVERY_MS && (lastOverhead = now)));
     for (const shown of [sea.mesh, falls.group, things.group, things.outlines]) shown.visible = !buried;
     if (buried) for (const shown of [scatter.group, clutter.group, surfaces.group]) shown.visible = false;
     const sky = buried ? UNDERGROUND : under ? UNDERWATER.color : SKY;

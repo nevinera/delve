@@ -6,7 +6,8 @@ import { CAVE_THEMES } from "../v2/caves.js";
 // theme gives the stone its own texture, made in the shader from noise over continent feet: a
 // height that shades the color and tilts the way the rock seems to face. Jagged rock is drawn
 // flat across each face, so it breaks into facets. Smooth rock has a wet sheen at glancing angles.
-// Caves fade into the dark with distance instead of into the sky.
+// Caves fade into the dark with distance instead of into the sky. A brush's patch (setBrush) is
+// drawn lighter: the rock within its radius of its middle that faces about its way.
 
 const LIGHT = 0x6a7088; // what cave rock's colors are lit by, about the surface's by night
 const FOG = { color: 0x0c0d12, nearFt: 20, farFt: 160 };
@@ -23,6 +24,8 @@ varying float vCaveTheme;
 `;
 
 const FRAGMENT = `
+uniform vec4 caveBrush;
+uniform vec3 caveBrushNormal;
 varying vec3 vCavePos;
 varying vec3 vCaveNormal;
 varying float vCaveTheme;
@@ -99,6 +102,11 @@ const SHADING = `
   }
   vec3 caveN = caveBump( caveBase, vCavePos, stone.x, stone.y );
   diffuseColor.rgb *= ( 0.8 + 0.4 * stone.x ) * mix( ${f(SHADE.down)}, ${f(SHADE.up)}, caveN.y * 0.5 + 0.5 );
+  if ( caveBrush.w > 0.0 ) {
+    float near = 1.0 - distance( vCavePos, caveBrush.xyz ) / caveBrush.w;
+    float faces = smoothstep( 0.0, 0.4, dot( normalize( vCaveNormal ), caveBrushNormal ) );
+    diffuseColor.rgb = mix( diffuseColor.rgb, diffuseColor.rgb * 1.7 + 0.06, 0.6 * step( 0.0, near ) * ( 0.4 + 0.6 * near ) * faces );
+  }
   if ( abs( vCaveTheme - ${THEME.smooth} ) < 0.5 ) {
     vec3 toEye = normalize( cameraPosition - vCavePos );
     float glance = pow( 1.0 - max( dot( caveN, toEye ), 0.0 ), 4.0 );
@@ -106,10 +114,21 @@ const SHADING = `
   }
 `;
 
+// Shows a brush's patch on `material`'s rock: round continent feet `at`, out to `radius`, where
+// it faces about `normal`; or none, with at null.
+export function setBrush(material, at, normal, radius) {
+  const { caveBrush, caveBrushNormal } = material.userData.uniforms;
+  if (!at) return caveBrush.value.setW(0);
+  caveBrush.value.set(...at, radius);
+  caveBrushNormal.value.set(...normal);
+}
+
 export function caveMaterial() {
   const material = new THREE.MeshBasicMaterial({ vertexColors: true, color: LIGHT });
   const [r, g, b] = new THREE.Color(FOG.color).toArray().map(f);
+  material.userData.uniforms = { caveBrush: { value: new THREE.Vector4(0, 0, 0, 0) }, caveBrushNormal: { value: new THREE.Vector3(0, 1, 0) } };
   material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, material.userData.uniforms);
     shader.vertexShader = shader.vertexShader
       .replace("void main() {", `${VERTEX}\nvoid main() {\n\tvCavePos = ( modelMatrix * vec4( position, 1.0 ) ).xyz;\n\tvCaveNormal = normal;\n\tvCaveTheme = caveTheme;`);
     shader.fragmentShader = shader.fragmentShader

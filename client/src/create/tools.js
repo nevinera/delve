@@ -41,8 +41,8 @@ import { WaterBodies } from "./water.js";
 //   them where the pointer is, and a ring on the ground shows where they reach. [ and ] resize
 //   them, and c and v turn raise and lower's, shift+c and shift+v a little.
 // - build's tools place objects, templates and slabs, and pick them to change (build.js).
-// - caves' tools dig caves and erase them (dig.js), and smooth caves' rock and add to it
-//   (caveBrush.js).
+// - caves' tools dig caves and erase them (dig.js), smooth caves' rock and add to it
+//   (caveBrush.js), and teleport the builder into them.
 // - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
 //   more each time the ring's moved its radius. Its undo takes back the last scattering.
 
@@ -95,7 +95,10 @@ function drawShape(canvas, shape) {
 }
 
 export class Tools {
-  constructor({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves }) {
+  // standable(ray): where the builder can stand in the cave a THREE.Ray points at, [x, y, z], or
+  // null, for the teleport tool.
+  constructor({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves, standable }) {
+    this.standable = standable;
     Object.assign(this, { camera, canvas, builder, renditions, ground });
     this.tool = null;
     this.settings = { shape: "round", radius: 0, strength: 0, noise: 0, lower: false, angle: 0, grain: 0, craggy: false };
@@ -135,7 +138,7 @@ export class Tools {
     });
     this.build.onPick = (tool) => this.tool !== tool && this.pick(tool);
     this.dig = new Dig({ scene, caves, camera, ray: () => this.build.ray() });
-    this.caveBrush = new CaveBrush({ scene, caves, ray: () => this.build.ray() });
+    this.caveBrush = new CaveBrush({ caves, ray: () => this.build.ray() });
     this.paths = new Paths(scene, canvas.parentElement, renditions, (x, z) => this.surface(x, z), (text) => ($("pathStatus").textContent = text));
     this.moving = null; // pins being dragged, { from, pins: [[pin, x, z]], before, moved }
     this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }
@@ -370,6 +373,12 @@ export class Tools {
       if (CAVE_BRUSHES.has(this.tool)) {
         canvas.setPointerCapture(e.pointerId);
         return this.caveBrush.press(this.tool);
+      }
+      if (this.tool === "teleport") {
+        const ray = this.build.ray();
+        const to = ray && this.standable(ray.ray);
+        if (to) this.builder.state = { ...this.builder.state, x: to[0], y: to[1], z: to[2], flying: false, swimming: false, falling: 0 };
+        return;
       }
       if (this.tool === "pin") {
         const at = this.hit();

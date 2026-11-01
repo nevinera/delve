@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { CAVES_PATH, TILE_CELLS, carve, cavesPath, growCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
 import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
-import { caveMaterial } from "./caveMaterial.js";
+import { caveMaterial, setBrush } from "./caveMaterial.js";
 import { caveMesh, opensAt } from "./caveMesh.js";
 import { EMPTY_FT, FULL_TILES } from "./ground.js";
 
@@ -265,6 +265,11 @@ export class Caves {
     renderer.autoClear = true;
   }
 
+  // Shows a brush's patch on the rock (caveMaterial.js's setBrush), or none, with at null.
+  brush(at, normal, radius) {
+    setBrush(this.materials[0], at, normal, radius);
+  }
+
   // Shows or hides an overlay: "grid" or "lines".
   show(overlay, shown) {
     this.overlays[overlay].visible = shown;
@@ -392,6 +397,16 @@ export class Caves {
   // Whether continent feet (x, y, z) is in rock.
   solid(x, y, z) {
     return !this.air(x, z).some(([a, b]) => a <= y && y <= b);
+  }
+
+  // The cave air `ray` points at, as continent feet [x, y, z], or null: from in a cave, just
+  // short of the rock it meets; from in rock or the open, the first cave air past rock (through).
+  aimed(ray) {
+    const { origin, direction } = ray;
+    const inCave = !this.solid(origin.x, origin.y, origin.z) && origin.y < (this.renditions.heightAt(origin.x, origin.z) ?? EMPTY_FT);
+    if (!inCave) return this.through(ray);
+    const at = this.hit(ray);
+    return at && at.map((v, k) => v - [direction.x, direction.y, direction.z][k]);
   }
 
   // The first cave air `ray` comes to past rock, as continent feet [x, y, z], or null: from in a

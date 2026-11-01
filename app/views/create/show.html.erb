@@ -104,6 +104,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 8 L46 8 L46 22 L2 22 Z" fill="#8a7a66"/><path d="M8 8 C 8 19, 40 19, 40 8 Z" fill="#1c1a20"/><path d="M2 8 L46 8" stroke="#6a8a4a" stroke-width="2"/></svg>
         <span>smooth</span><kbd class="create-key">U</kbd>
       </button>
+      <button type="button" data-tool="teleport" data-key="m" aria-pressed="false" title="go to where you click in a cave, from in it or outside it">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 8 L46 8 L46 22 L2 22 Z" fill="#8a7a66"/><path d="M14 8 C 14 20, 34 20, 34 8 Z" fill="#1c1a20"/><path d="M24 2 L24 15 M19 10 L24 15 L29 10" stroke="#ffe14d" stroke-width="2" fill="none"/></svg>
+        <span>teleport</span><kbd class="create-key">M</kbd>
+      </button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" data-key="h" aria-pressed="false" title="raise and lower the ground">
@@ -400,8 +404,8 @@
       </div>
     </div>
     <div data-config="caveSmooth caveFill" hidden>
-      <p class="create-note" data-only="caveSmooth">Hold the button on a cave's rock to smooth it inside the ring: floors toward walkable, ceilings plainer, walls evened. [ and ] size it.</p>
-      <p class="create-note" data-only="caveFill">Hold the button on a cave's rock to add rock to it inside the ring: floors rise, ceilings come down, walls come out. [ and ] size it.</p>
+      <p class="create-note" data-only="caveSmooth">Hold the button on a cave's rock to smooth it in the lit patch: floors toward walkable, ceilings plainer, walls evened. [ and ] size it.</p>
+      <p class="create-note" data-only="caveFill">Hold the button on a cave's rock to add rock to it in the lit patch: floors rise, ceilings come down, walls come out. [ and ] size it.</p>
       <label>size <output id="caveBrushSizeOut"></output>
         <input id="caveBrushSize" type="range" min="4" max="40" step="2" value="16">
       </label>
@@ -411,6 +415,9 @@
       <div class="create-way">
         <button type="button" data-cave-undo>undo</button>
       </div>
+    </div>
+    <div data-config="teleport" hidden>
+      <p class="create-note">Click a cave to go there, standing on its floor: from in it, where you click; from outside it, the cave your aim first meets past rock.</p>
     </div>
     <div data-config="erase" hidden>
       <p class="create-note">Point through the rock at a cave, best as a ghost from outside it, and click to fill a ball of it with rock; hold the button to keep going. The ball sits where your aim first meets cave air past rock. [ and ] size it.</p>
@@ -563,10 +570,9 @@
     </fieldset>
     <fieldset>
       <legend>caves</legend>
-      <label title="each column's cave floors (gold) and ceilings (silver), points joined by lines, seen through the rock"><input type="checkbox" id="showCaveGrid"> cave-grid</label>
-      <label title="the edges of every face of the caves' rock, glowing"><input type="checkbox" id="showCaveLines"> surface-lines</label>
-      <label title="underground, the ground over you as a brown ceiling, out to 512 ft"><input type="checkbox" id="showOverhead" checked> ground-above</label>
-      <label title="fly anywhere, through the ground and cave rock"><input type="checkbox" id="ghost"> ghost</label>
+      <label title="each column's cave floors (gold) and ceilings (silver), points joined by lines, seen through the rock"><input type="checkbox" id="showHeightGrid"> height-grid</label>
+      <label title="the edges of every face of the caves' rock, glowing; always shown from in the rock"><input type="checkbox" id="showCaveOutlines"> cave-outlines</label>
+      <label title="fly anywhere, through the ground and cave rock; always so with erase, and with the other cave tools in rock"><input type="checkbox" id="ghost"> ghost</label>
     </fieldset>
     <fieldset>
       <legend>debug</legend>
