@@ -1,0 +1,59 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "unarmed": "claw",
+    "height": [6.8, 7.6],
+    "build": [0.45, 0.65],
+    "limbs": [0.4, 0.6],
+    "shoulders": [0.65, 0.85],
+    "arms": [0.7, 0.8],
+    "head": [0.5, 0.6],
+    "ears": "pointed",
+    "muzzle": "canine",
+    "tail": "bushy",
+    "hair": ["mohawk", "mohawk", "short"],
+    "colors": {
+      "skin": ["#a08050", "#8a7a5a", "#b09060"],
+      "hair": ["#3a2a1a", "#2a2018"],
+      "eyes": ["#e0c040", "#c04020"],
+      "primary": ["#6b5a3a", "#5a4a3a"],
+      "secondary": ["#4a4038"]
+    },
+    "loadouts": [
+      {
+        "weapon": "polearm",
+        "weaponStyle": "savage",
+        "armor": {
+          "chest": {
+            "type": "leather",
+            "style": "savage"
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "bow",
+        "weaponStyle": "crude",
+        "armor": {
+          "chest": {
+            "type": "leather",
+            "style": "tattered"
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "axe",
+        "weaponStyle": "savage",
+        "offhand": "shield",
+        "offhandStyle": "crude",
+        "armor": {
+          "shoulders": {
+            "type": "leather",
+            "style": "savage"
+          }
+        }
+      }
+    ]
+  }
+}

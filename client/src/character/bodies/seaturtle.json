@@ -1,0 +1,16 @@
+{
+  "skeleton": "ray",
+  "shape": {
+    "turtle": true
+  },
+  "look": {
+    "height": [6, 8],
+    "build": [0.5, 0.8],
+    "colors": {
+      "skin": ["#5a6a3a", "#6a5a3a", "#4a5a4a"],
+      "secondary": ["#d8c890", "#e0d0a0"],
+      "hair": ["#4a4a2a", "#5a4a2a"],
+      "eyes": ["#101010"]
+    }
+  }
+}

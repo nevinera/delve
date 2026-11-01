@@ -1,0 +1,23 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "height": [10, 12],
+    "build": [0.95, 1],
+    "limbs": [0.95, 1],
+    "shoulders": [0.95, 1],
+    "waist": [0.9, 1],
+    "arms": [0.75, 0.85],
+    "legs": [0.25, 0.35],
+    "head": [0.15, 0.25],
+    "jaw": [0.9, 1],
+    "flesh": "stone",
+    "hair": "bald",
+    "mouth": "thin",
+    "colors": {
+      "skin": ["#8a8a88", "#9a9488", "#7a7a80"],
+      "primary": ["#8a8a88", "#7a7a80"],
+      "secondary": ["#7a7a7a"],
+      "eyes": ["#40c0f0", "#f0a020"]
+    }
+  }
+}

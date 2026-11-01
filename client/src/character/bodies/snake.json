@@ -1,0 +1,21 @@
+{
+  "skeleton": "serpent",
+  "shape": {
+    "r": 0.75,
+    "segment": 1.5,
+    "rise": 2.8,
+    "head": 1.4,
+    "markings": "diamonds",
+    "hood": false
+  },
+  "look": {
+    "height": [5, 7],
+    "build": [0.4, 0.7],
+    "colors": {
+      "skin": ["#6a6a3a", "#4a5a3a", "#7a5a3a"],
+      "secondary": ["#d8c890", "#c8b880"],
+      "hair": ["#2a2418", "#3a2a1a", "#5a3a20"],
+      "eyes": ["#e0c020", "#d07020"]
+    }
+  }
+}

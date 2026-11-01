@@ -1,0 +1,41 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "height": [7, 7.6],
+    "build": [0.15, 0.3],
+    "limbs": [0.15, 0.3],
+    "shoulders": [0.3, 0.45],
+    "bust": [0.3, 0.6],
+    "lower": "horse",
+    "ears": "pointed",
+    "horns": ["none", "none", "antlers"],
+    "hair": "leaves",
+    "mouth": ["full", "smile", "neutral"],
+    "colors": {
+      "skin": ["#8aa86a", "#a0b880", "#c0a080", "#7a9a6a"],
+      "hair": ["#4a7a3a", "#6a9a3a", "#8a7a2a"],
+      "eyes": ["#e0c040", "#80e060"],
+      "primary": ["#5a7a3a", "#6a5a3a"],
+      "secondary": ["#9a6a40", "#8a5a34", "#a07a50"],
+      "horn": ["#6a5038"]
+    },
+    "loadouts": [
+      {
+        "weapon": "bow",
+        "weaponStyle": "fine",
+        "weight": 2
+      },
+      {
+        "weapon": "staff",
+        "weaponStyle": "fine",
+        "colors": {
+          "wood": "#5a4030"
+        }
+      },
+      {
+        "weapon": "polearm",
+        "weaponStyle": "fine"
+      }
+    ]
+  }
+}

@@ -1,0 +1,31 @@
+{
+  "skeleton": "ursine",
+  "shape": {
+    "H": 2.6,
+    "L": 2.8,
+    "w": 0.5,
+    "neck": [0.05, 0.75],
+    "head": 1.3,
+    "muzzle": 0.45,
+    "pitch": 0.25,
+    "girth": [1.6, 1.4],
+    "neckGirth": 1.6,
+    "limb": 2.2,
+    "ears": "none",
+    "tail": "stub",
+    "feet": "paw",
+    "cap": true,
+    "slow": true
+  },
+  "look": {
+    "height": [4.8, 5.6],
+    "build": [0.6, 0.9],
+    "flesh": "fungal",
+    "colors": {
+      "skin": ["#d8ccb0", "#c8c0a8", "#a8a090"],
+      "hair": ["#a03a2a", "#8a5a30", "#6a4a7a", "#c08a40"],
+      "secondary": ["#8a8070"],
+      "eyes": ["#101010", "#e0c040"]
+    }
+  }
+}

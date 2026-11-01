@@ -1,0 +1,42 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "unarmed": "claw",
+    "height": [9, 10],
+    "build": [0.95, 1],
+    "limbs": [0.85, 1],
+    "shoulders": [0.9, 1],
+    "waist": [0.95, 1],
+    "hips": [0.8, 1],
+    "arms": [0.6, 0.75],
+    "legs": [0.2, 0.3],
+    "head": [0.2, 0.3],
+    "jaw": [0.6, 0.9],
+    "flesh": "stitched",
+    "lowerArms": "pair",
+    "hair": "bald",
+    "mouth": ["grin", "frown"],
+    "colors": {
+      "skin": ["#a8b098", "#9a9aa8", "#b0a890", "#8a9a8a"],
+      "eyes": ["#e0e0a0", "#c0d040"],
+      "primary": ["#5a5048", "#4a4a4a"],
+      "secondary": ["#4a4038", "#3a3a3a"]
+    },
+    "loadouts": [
+      {
+        "weapon": "axe",
+        "weaponStyle": "crude",
+        "offhand": "axe",
+        "offhandStyle": "crude",
+        "weight": 2
+      },
+      {
+        "weapon": "maul",
+        "weaponStyle": "crude"
+      },
+      {
+        "weight": 1
+      }
+    ]
+  }
+}

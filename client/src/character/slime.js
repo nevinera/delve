@@ -1,5 +1,6 @@
 import { MeshOut } from "./body.js";
 import { TAU, ease, hex, hump, mirrored, mul, sampled, shade } from "./rig.js";
+import { shapesOn } from "./bodies.js";
 
 // Slimes: a dome of jelly that squashes and stretches as it moves, hopping, eyes on its front.
 // Its `body` bone sits at the middle of its base, so stretching it squashes the slime onto the
@@ -13,7 +14,7 @@ import { TAU, ease, hex, hump, mirrored, mul, sampled, shade } from "./rig.js";
 //
 // Shapes are in the slime's own feet, a slime 1ft tall, scaled to the look's height. It faces +z.
 
-export const SLIMES = { slime: {}, wisp: { wisp: true } };
+export const SLIMES = shapesOn("slime");
 
 // How high a wisp's middle floats, in the wisp's own feet.
 const FLOAT = 0.55;

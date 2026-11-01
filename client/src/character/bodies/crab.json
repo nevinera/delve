@@ -1,0 +1,28 @@
+{
+  "skeleton": "crawler",
+  "shape": {
+    "kind": "crab",
+    "y": 0.9,
+    "legs": [
+      [25, 0.3],
+      [5, 0.05],
+      [-15, -0.2],
+      [-35, -0.45]
+    ],
+    "hipOut": 0.85,
+    "reach": 2.1,
+    "rise": 0.8,
+    "thick": 0.95
+  },
+  "look": {
+    "height": [2.5, 3.5],
+    "build": [0.5, 0.8],
+    "limbs": [0.5, 0.8],
+    "colors": {
+      "skin": ["#b04a2a", "#8a3a2a", "#4a6a7a", "#7a5a3a"],
+      "secondary": ["#e0c8a0", "#d8b890"],
+      "hair": ["#2a1a14", "#e0d0b0"],
+      "eyes": ["#101010"]
+    }
+  }
+}

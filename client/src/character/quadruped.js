@@ -1,6 +1,7 @@
 import { MeshOut, fleshWear, hashAt } from "./body.js";
 import { TAU, add, ease, graft, hex, hump, lerp, mirrored, mul, sampled, shade, sub, turnedY } from "./rig.js";
 import { serpentMesh } from "./serpent.js";
+import { shapesOn } from "./bodies.js";
 
 // Four-legged bodies, in families that move differently: canine (up on its toes: wolves, rats),
 // feline (low and heavy-shouldered, slinking, the head carried low: the big cats), ursine (flat-footed and heavy: bears), hoofed (stags, boars, horses), lizard (legs out to
@@ -30,43 +31,8 @@ import { serpentMesh } from "./serpent.js";
 // heads a hydra has, fanned out from its shoulders; chimera: a goat's neck and head rising from the
 // back and a snake's head at the end of the tail; hop: it hops to walk and run, the back legs
 // springing it forward.
-export const SPECIES = {
-  wolf: { family: "canine", H: 2.05, L: 1.75, w: 0.3, neck: [0.52, 0.78], head: 1, muzzle: 1, pitch: 0.1, girth: [1, 1], neckGirth: 1, limb: 1, ears: "pointed", tail: "bushy", feet: "paw" },
-  panther: { family: "feline", H: 1.6, L: 2.5, w: 0.28, neck: [0.28, 0.58], head: 1.45, muzzle: 0.32, pitch: 0, girth: [0.95, 0.95], neckGirth: 1.2, limb: 1.35, ears: "cat", tail: "cat", feet: "paw" },
-  rat: { family: "canine", H: 1.15, L: 1.5, w: 0.28, neck: [0.15, 0.55], head: 1, muzzle: 1.05, pitch: 0.15, girth: [1.3, 1.2], neckGirth: 1.3, limb: 1, ears: "round", tail: "thin", feet: "paw" },
-  bear: { family: "ursine", H: 2.3, L: 2.6, w: 0.45, neck: [0.1, 0.8], head: 1.45, muzzle: 0.55, pitch: 0.2, girth: [1.55, 1.5], neckGirth: 1.7, limb: 2.1, hump: 0.3, ears: "round", tail: "stub", feet: "paw" },
-  boar: { family: "hoofed", H: 1.95, L: 1.9, w: 0.3, neck: [0.02, 0.62], head: 1.25, muzzle: 0.9, pitch: 0.35, girth: [1.3, 1.35], neckGirth: 1.6, limb: 1.1, hump: 0.15, ears: "small", tail: "tuft", feet: "hoof", tusks: true, snout: true },
-  stag: { family: "hoofed", H: 3.3, L: 2.1, w: 0.3, neck: [1.05, 0.75], head: 1.05, muzzle: 1.05, pitch: 0.45, girth: [0.85, 0.9], neckGirth: 0.7, limb: 0.7, ears: "leaf", tail: "stub", feet: "hoof", antlers: true },
-  horse: { family: "hoofed", H: 4.6, L: 2.9, w: 0.42, neck: [1.55, 1.3], head: 1.45, muzzle: 1.6, pitch: 0.8, girth: [0.95, 0.95], neckGirth: 0.9, limb: 0.9, ears: "leaf", tail: "horse", feet: "hoof", mane: true },
-  lizard: { family: "lizard", H: 0.6, L: 2, w: 0.35, neck: [0.2, 0.75], head: 1, muzzle: 0.9, pitch: 0, girth: [1.15, 0.62], neckGirth: 1.1, limb: 1.25, ears: "none", tail: "lizard", feet: "claw" },
-  basilisk: { family: "lizard", H: 0.8, L: 2.3, w: 0.4, neck: [0.35, 0.8], head: 1.2, muzzle: 0.75, pitch: 0, girth: [1.3, 0.75], neckGirth: 1.25, limb: 1.5, ears: "none", tail: "lizard", feet: "claw", crest: true },
-  elephant: { family: "pachyderm", H: 9, L: 5.4, w: 1.3, neck: [-0.3, 1.2], head: 7.4, muzzle: 0.3, pitch: 0.25, girth: [1.45, 1.3], neckGirth: 1.35, limb: 1.6, ears: "fan", tail: "tuft", feet: "pad", trunk: true, ivory: true },
-  crocodile: { family: "lizard", H: 0.55, L: 2.8, w: 0.42, neck: [0.05, 0.75], head: 1.15, muzzle: 2.1, pitch: 0, girth: [1.45, 0.6], neckGirth: 1.4, limb: 1.4, ears: "none", tail: "lizard", feet: "claw", crest: true, jaw: 2.4 },
-  hyena: { family: "canine", H: 2.2, L: 1.7, w: 0.3, neck: [0.45, 0.7], head: 1.15, muzzle: 0.8, pitch: 0.15, girth: [1, 1.1], neckGirth: 1.25, limb: 1.05, ears: "round", tail: "bushy", feet: "paw", rump: 0.78, pattern: "spots", laugh: true },
-  lion: { family: "feline", H: 2.05, L: 2.6, w: 0.32, neck: [0.32, 0.6], head: 1.75, muzzle: 0.42, pitch: 0.05, girth: [1.1, 1.1], neckGirth: 1.3, limb: 1.6, ears: "cat", tail: "cat", tuft: true, feet: "paw", ruff: true },
-  tiger: { family: "feline", H: 1.9, L: 2.75, w: 0.32, neck: [0.28, 0.6], head: 1.7, muzzle: 0.36, pitch: 0.02, girth: [1.12, 1.1], neckGirth: 1.35, limb: 1.65, ears: "cat", tail: "cat", feet: "paw", pattern: "stripes" },
-  housecat: { family: "feline", H: 1.2, L: 1.9, w: 0.24, neck: [0.32, 0.5], head: 1.75, muzzle: 0.22, pitch: 0, girth: [0.95, 1], neckGirth: 1.1, limb: 1.5, ears: "kitty", tail: "cat", feet: "paw", pattern: "stripes" },
-  deshaug: { family: "canine", H: 2.6, L: 2.1, w: 0.34, neck: [0.45, 0.7], head: 1.2, muzzle: 0.8, pitch: 0.1, girth: [1.1, 1.05], neckGirth: 1.2, limb: 1.2, ears: "pointed", tail: "thin", feet: "paw", crest: true, breath: true },
-  coalhound: { family: "canine", H: 2.8, L: 2.2, w: 0.36, neck: [0.4, 0.7], head: 1.25, muzzle: 0.85, pitch: 0.1, girth: [1.2, 1.15], neckGirth: 1.3, limb: 1.3, ears: "pointed", tail: "bushy", feet: "paw", crest: true },
-  rhino: { family: "pachyderm", H: 4.2, L: 4.2, w: 0.8, neck: [-0.3, 1.7], head: 3.6, muzzle: 0.85, pitch: 0.35, girth: [1.7, 1.6], neckGirth: 1.5, limb: 1.8, ears: "small", tail: "tuft", feet: "pad", noseHorn: true },
-  hippo: { family: "pachyderm", H: 3.3, L: 4.6, w: 0.85, neck: [-0.15, 1.6], head: 4, muzzle: 0.7, pitch: 0.1, girth: [2, 1.75], neckGirth: 1.8, limb: 1.9, ears: "small", tail: "tuft", feet: "pad", wide: 1.7, jaw: 1.6 },
-  mammoth: { family: "pachyderm", H: 10, L: 5.4, w: 1.35, neck: [-0.2, 1.2], head: 7.8, muzzle: 0.3, pitch: 0.25, girth: [1.5, 1.35], neckGirth: 1.4, limb: 1.5, ears: "small", tail: "tuft", feet: "pad", trunk: true, ivory: "curved", hump: 0.25, shaggy: true },
-  deer: { family: "hoofed", H: 2.9, L: 1.9, w: 0.27, neck: [0.95, 0.7], head: 0.95, muzzle: 1.0, pitch: 0.45, girth: [0.8, 0.85], neckGirth: 0.65, limb: 0.62, ears: "leaf", tail: "stub", feet: "hoof" },
-  goat: { family: "hoofed", H: 2.1, L: 1.6, w: 0.25, neck: [0.65, 0.55], head: 0.9, muzzle: 0.9, pitch: 0.55, girth: [0.95, 1], neckGirth: 0.75, limb: 0.65, ears: "leaf", tail: "stub", feet: "hoof", horns: "goat", beard: true },
-  sheep: { family: "hoofed", H: 1.9, L: 1.7, w: 0.28, neck: [0.5, 0.55], head: 0.9, muzzle: 0.8, pitch: 0.55, girth: [1.5, 1.45], neckGirth: 1.15, limb: 0.75, ears: "small", tail: "stub", feet: "hoof", wool: true },
-  cow: { family: "hoofed", H: 3.3, L: 3.2, w: 0.42, neck: [0.25, 0.9], head: 1.35, muzzle: 1.1, pitch: 0.6, girth: [1.45, 1.45], neckGirth: 1.2, limb: 1.1, ears: "small", tail: "tuft", feet: "hoof", horns: "cow", pattern: "patches" },
-  turtle: { family: "lizard", H: 0.75, L: 1.8, w: 0.55, neck: [0.15, 0.85], head: 0.95, muzzle: 0.5, pitch: 0, girth: [1.35, 0.8], neckGirth: 0.9, limb: 1.7, reach: 0.4, ears: "none", tail: "stub", feet: "claw", shell: true },
-  tortoise: { family: "lizard", H: 1.1, L: 2.2, w: 0.65, neck: [0.25, 0.9], head: 1.05, muzzle: 0.45, pitch: 0.05, girth: [1.45, 1], neckGirth: 1, limb: 2.3, reach: 0.35, ears: "none", tail: "stub", feet: "claw", shell: "high" },
-  gorilla: { family: "ursine", H: 3.2, L: 1.9, w: 0.48, neck: [0.15, 0.45], head: 1.2, muzzle: 0.25, pitch: 0.05, girth: [1.5, 1.35], neckGirth: 1.6, limb: 2.1, ears: "none", tail: "none", feet: "paw", rump: 0.68, knuckles: true, chestBeat: true },
-  owlbear: { family: "ursine", H: 2.6, L: 2.5, w: 0.45, neck: [0.15, 0.7], head: 1.6, muzzle: 0.3, pitch: 0.1, girth: [1.5, 1.45], neckGirth: 1.8, limb: 2, hump: 0.2, ears: "pointed", tail: "stub", feet: "paw", beak: true, feathered: true },
-  hydra: { family: "lizard", H: 1.1, L: 2.8, w: 0.5, neck: [2.0, 1.4], head: 1.15, muzzle: 1.0, pitch: 0.25, girth: [1.4, 0.9], neckGirth: 1.1, limb: 1.7, ears: "none", tail: "lizard", feet: "claw", crest: true, heads: 5 },
-  chimera: { family: "feline", H: 2.4, L: 2.5, w: 0.33, neck: [0.4, 0.62], head: 1.2, muzzle: 0.55, pitch: 0.05, girth: [1.05, 1], neckGirth: 1.15, limb: 1.2, ears: "short", tail: "long", feet: "paw", ruff: true, chimera: true },
-  rabbit: { family: "canine", H: 0.85, L: 0.85, w: 0.22, neck: [0.28, 0.32], head: 0.85, muzzle: 0.35, pitch: 0.25, girth: [2.1, 2.3], neckGirth: 1.8, limb: 1.3, rump: 1.2, ears: "tall", tail: "stub", feet: "paw", hop: true },
-  squirrel: { family: "canine", H: 0.75, L: 0.95, w: 0.2, neck: [0.22, 0.32], head: 0.75, muzzle: 0.5, pitch: 0.15, girth: [1.75, 1.85], neckGirth: 1.5, limb: 1.1, ears: "pointed", tail: "squirrel", feet: "paw" },
-  frog: { family: "lizard", H: 0.55, L: 1.1, w: 0.4, neck: [0.18, 0.35], head: 1.35, muzzle: 0.3, pitch: -0.05, girth: [1.7, 0.95], neckGirth: 1.7, limb: 1.5, ears: "none", tail: "none", feet: "claw", hop: true },
-  myoxa: { family: "ursine", H: 2.6, L: 2.8, w: 0.5, neck: [0.05, 0.75], head: 1.3, muzzle: 0.45, pitch: 0.25, girth: [1.6, 1.4], neckGirth: 1.6, limb: 2.2, ears: "none", tail: "stub", feet: "paw", cap: true, slow: true },
-};
 export const FAMILIES = ["canine", "feline", "ursine", "hoofed", "lizard", "pachyderm"];
+export const SPECIES = shapesOn(...FAMILIES);
 export const speciesOf = (look) => SPECIES[look.body] ?? SPECIES.wolf;
 
 // The top of the skull above the head's joint, for a head of size 1.

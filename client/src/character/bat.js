@@ -1,5 +1,6 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "./rig.js";
+import { shapesOn } from "./bodies.js";
 
 // Bats: a small furred body hanging between two wide wings, always in the air. Each wing is an
 // arm (shoulder, elbow, wrist) with four long fingers and skin between them, back to the feet,
@@ -12,7 +13,7 @@ import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "
 // Shapes are in the species' own feet, a bat 10ft across, scaled to the look's height. Each faces
 // +z, its left toward +x, its body tipped up, hovering.
 
-export const BATS = { bat: {} };
+export const BATS = shapesOn("bat");
 
 const HOVER = 4;
 const SPAN = 10;

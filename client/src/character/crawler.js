@@ -1,5 +1,6 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "./rig.js";
+import { shapesOn } from "./bodies.js";
 
 // Crawlers: a body low between many jointed legs. A spider has eight long legs round a round
 // body, fangs, a cluster of eyes and a great abdomen behind; a scorpion has eight short legs, two
@@ -19,15 +20,7 @@ import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "
 // y: the body's height; legs: each leg's angle out from the side (degrees, forward positive), its
 // hip's place along the body, and its reach; rise: how far the knees lift above the hips.
 // kind: the body plan, as above; hover: off the ground, legs hanging; spines: a hivari's.
-export const CRAWLERS = {
-  spider: { kind: "spider", y: 1.5, legs: [[65, 0.55], [25, 0.25], [-15, -0.05], [-50, -0.3]], hipOut: 0.4, reach: 3.3, rise: 1.4, thick: 0.7 },
-  scorpion: { kind: "scorpion", y: 0.9, legs: [[35, 0.3], [5, -0.1], [-25, -0.5], [-50, -0.9]], hipOut: 0.45, reach: 2.2, rise: 0.75, thick: 0.85 },
-  beetle: { kind: "beetle", y: 1.0, legs: [[45, 0.5], [0, -0.1], [-45, -0.6]], hipOut: 0.5, reach: 1.55, rise: 0.5, thick: 1.4 },
-  crab: { kind: "crab", y: 0.9, legs: [[25, 0.3], [5, 0.05], [-15, -0.2], [-35, -0.45]], hipOut: 0.85, reach: 2.1, rise: 0.8, thick: 0.95 },
-  ant: { kind: "ant", y: 0.9, legs: [[50, 0.35], [0, 0.15], [-45, -0.05]], hipOut: 0.3, reach: 1.6, rise: 0.4, thick: 0.6 },
-  hivari: { kind: "ant", y: 1.3, legs: [[50, 0.35], [0, 0.15], [-45, -0.05]], hipOut: 0.3, reach: 2.1, rise: 0.6, thick: 0.8, spines: true },
-  wasp: { kind: "ant", y: 2.6, legs: [[35, 0.35], [0, 0.15], [-35, -0.05]], hipOut: 0.25, reach: 0.8, rise: -0.15, thick: 0.45, hover: true },
-};
+export const CRAWLERS = shapesOn("crawler");
 export const crawlerOf = (look) => CRAWLERS[look.body] ?? CRAWLERS.spider;
 const isOf = (sp, kind) => sp.kind === kind;
 

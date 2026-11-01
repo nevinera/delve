@@ -1,5 +1,6 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "./rig.js";
+import { shapesOn } from "./bodies.js";
 
 // Serpents: a long body on the ground behind the pelvis, a neck rising ahead of it to the head,
 // the jaw on its own bone and a `mouth` bone at the tip of the snout. A cobra spreads a hood
@@ -17,14 +18,7 @@ import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "
 // r: the body's radius; segment: each body bone's length; rise: how high the neck lifts the
 // head; head: the head's size; markings: "diamonds", "bands", "rings" or none; hood: a cobra's;
 // legs, fangs, maw, fin, wings and crest as above.
-export const SERPENTS = {
-  snake: { r: 0.75, segment: 1.5, rise: 2.8, head: 1.4, markings: "diamonds", hood: false },
-  cobra: { r: 0.55, segment: 1.4, rise: 3.4, head: 1.1, markings: "bands", hood: true },
-  centipede: { r: 0.45, segment: 0.85, rise: 0.8, head: 1.0, markings: "bands", legs: true, fangs: true },
-  duneshk: { r: 1.6, segment: 2.4, rise: 9, head: 2.4, markings: "rings", maw: true },
-  eel: { r: 0.42, segment: 1.3, rise: 0.5, head: 0.9, markings: "none", fin: true },
-  coatl: { r: 0.5, segment: 1.6, rise: 2.4, head: 1.1, markings: "diamonds", wings: true, crest: true },
-};
+export const SERPENTS = shapesOn("serpent");
 export const serpentOf = (look) => SERPENTS[look.body] ?? SERPENTS.snake;
 
 const BODY = ["body_01", "body_02", "body_03", "body_04", "body_05", "body_06", "body_07", "body_08", "body_09", "body_10"];

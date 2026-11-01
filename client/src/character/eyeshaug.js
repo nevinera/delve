@@ -1,5 +1,6 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "./rig.js";
+import { shapesOn } from "./bodies.js";
 
 // Eyeshaugs: a great round body hovering above the ground, one huge eye on its front, a fanged
 // mouth beneath it, and eye stalks writhing from its crown, each with a small eye at its tip. The
@@ -11,7 +12,7 @@ import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "
 //
 // Shapes are in the eyeshaug's own units, a body 1 across, scaled to the look's height. It faces +z.
 
-export const EYESHAUGS = { eyeshaug: {} };
+export const EYESHAUGS = shapesOn("eyeshaug");
 
 const HOVER = 1.2;
 const R = 0.5;

@@ -1,0 +1,28 @@
+{
+  "skeleton": "crawler",
+  "shape": {
+    "kind": "ant",
+    "y": 2.6,
+    "legs": [
+      [35, 0.35],
+      [0, 0.15],
+      [-35, -0.05]
+    ],
+    "hipOut": 0.25,
+    "reach": 0.8,
+    "rise": -0.15,
+    "thick": 0.45,
+    "hover": true
+  },
+  "look": {
+    "height": [4, 5],
+    "build": [0.4, 0.7],
+    "limbs": [0.4, 0.6],
+    "colors": {
+      "skin": ["#1a1614", "#2a2018"],
+      "secondary": ["#e0b020", "#d09a20", "#c04020"],
+      "hair": ["#1a1410"],
+      "eyes": ["#2a1a10", "#802020"]
+    }
+  }
+}

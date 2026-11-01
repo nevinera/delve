@@ -1,0 +1,27 @@
+{
+  "skeleton": "dragon",
+  "shape": {
+    "H": 4.4,
+    "L": 3.6,
+    "w": 0.8,
+    "legs": 2,
+    "tilt": 0.28,
+    "span": 1.6,
+    "neck": 0.85,
+    "tail": 1.1,
+    "head": 1.05,
+    "horns": "short",
+    "tip": "sting",
+    "breath": false
+  },
+  "look": {
+    "height": [9, 11],
+    "build": [0.3, 0.6],
+    "colors": {
+      "skin": ["#4a5a2a", "#5a4a30", "#3a4a4a"],
+      "secondary": ["#a09060", "#8a7a5a"],
+      "hair": ["#d8ccb0", "#2a2420"],
+      "eyes": ["#e0d020", "#c04020"]
+    }
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "skeleton": "pachyderm",
+  "shape": {
+    "H": 10,
+    "L": 5.4,
+    "w": 1.35,
+    "neck": [-0.2, 1.2],
+    "head": 7.8,
+    "muzzle": 0.3,
+    "pitch": 0.25,
+    "girth": [1.5, 1.35],
+    "neckGirth": 1.4,
+    "limb": 1.5,
+    "ears": "small",
+    "tail": "tuft",
+    "feet": "pad",
+    "trunk": true,
+    "ivory": "curved",
+    "hump": 0.25,
+    "shaggy": true
+  },
+  "look": {
+    "height": [12, 14],
+    "build": [0.5, 0.8],
+    "colors": {
+      "skin": ["#5a3e28", "#4a3020", "#6a4a30"],
+      "hair": ["#4a3020", "#3a2618", "#6a4a2a"],
+      "secondary": ["#3a2a20"],
+      "eyes": ["#2a2018"]
+    }
+  }
+}

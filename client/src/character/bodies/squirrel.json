@@ -1,0 +1,30 @@
+{
+  "skeleton": "canine",
+  "shape": {
+    "H": 0.75,
+    "L": 0.95,
+    "w": 0.2,
+    "neck": [0.22, 0.32],
+    "head": 0.75,
+    "muzzle": 0.5,
+    "pitch": 0.15,
+    "girth": [1.75, 1.85],
+    "neckGirth": 1.5,
+    "limb": 1.1,
+    "ears": "pointed",
+    "tail": "squirrel",
+    "feet": "paw"
+  },
+  "look": {
+    "height": [1.5, 2.2],
+    "build": [0.4, 0.7],
+    "limbs": [0.5, 0.8],
+    "head": [0.5, 0.7],
+    "colors": {
+      "skin": ["#a0582a", "#7a7a78", "#5a3a20"],
+      "hair": ["#b0682e", "#8a8a88", "#6a4a2a"],
+      "secondary": ["#d8b8a0"],
+      "eyes": ["#101010"]
+    }
+  }
+}

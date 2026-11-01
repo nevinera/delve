@@ -1,0 +1,23 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "unarmed": "claw",
+    "height": [6, 7],
+    "build": [0.6, 0.85],
+    "limbs": [0.6, 0.8],
+    "head": [0.45, 0.55],
+    "ears": "pointed",
+    "horns": ["swept", "ram"],
+    "wings": "bat",
+    "tail": "thin",
+    "hair": "bald",
+    "mouth": ["grin", "frown"],
+    "colors": {
+      "skin": ["#7a7a7a", "#6a6a72", "#8a8278"],
+      "eyes": ["#e04020", "#e0c040"],
+      "primary": ["#6a6a6a"],
+      "secondary": ["#5a5a5a"],
+      "horn": ["#4a4a4a", "#5a5a5a"]
+    }
+  }
+}

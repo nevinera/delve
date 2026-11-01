@@ -1,0 +1,12 @@
+{
+  "skeleton": "slime",
+  "shape": {},
+  "look": {
+    "height": [2.5, 4],
+    "build": [0.4, 0.8],
+    "colors": {
+      "skin": ["#5ab04a", "#4a8ac0", "#c04a4a", "#9a5ac0", "#c0b04a"],
+      "eyes": ["#101010", "#2a2a2a"]
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "skeleton": "crawler",
+  "shape": {
+    "kind": "beetle",
+    "y": 1,
+    "legs": [
+      [45, 0.5],
+      [0, -0.1],
+      [-45, -0.6]
+    ],
+    "hipOut": 0.5,
+    "reach": 1.55,
+    "rise": 0.5,
+    "thick": 1.4
+  },
+  "look": {
+    "height": [3.5, 4.5],
+    "build": [0.5, 0.8],
+    "limbs": [0.5, 0.8],
+    "colors": {
+      "skin": ["#1a1a1a", "#2a2018"],
+      "secondary": ["#2a5a3a", "#3a2a5a", "#5a3a1a", "#1a3a5a"],
+      "hair": ["#2a2420", "#3a3028"],
+      "eyes": ["#c0a020", "#d04020"]
+    }
+  }
+}

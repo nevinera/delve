@@ -1,0 +1,35 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "unarmed": "claw",
+    "height": [5.6, 6.4],
+    "build": [0.3, 0.6],
+    "lower": "vortex",
+    "flesh": "spirit",
+    "hair": ["short", "bald", "long", "receding"],
+    "beard": ["none", "none", "full"],
+    "mouth": ["frown", "neutral"],
+    "colors": {
+      "skin": ["#a8b8c8", "#b0c8c0"],
+      "hair": ["#d8e0e8"],
+      "primary": ["#98a8b8", "#a8b8b0"],
+      "secondary": ["#98a8b8"],
+      "eyes": ["#e0f8ff"]
+    },
+    "loadouts": [
+      {
+        "weight": 3
+      },
+      {
+        "weapon": "sword",
+        "weaponStyle": "fine",
+        "armor": {
+          "chest": {
+            "type": "chain",
+            "style": "tattered"
+          }
+        }
+      }
+    ]
+  }
+}

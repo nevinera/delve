@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "body.schema.json",
+  "title": "Body",
+  "description": "A creature body: its skeleton, its shape on that skeleton, and the look its creatures pick from. One file each at client/src/character/bodies/<body>.json.",
+  "type": "object",
+  "required": ["skeleton"],
+  "properties": {
+    "skeleton": {
+      "enum": ["humanoid", "canine", "feline", "ursine", "hoofed", "lizard", "pachyderm", "dragon", "serpent", "fish", "ray", "bat", "crawler", "slime", "bird", "strider", "eyeshaug"]
+    },
+    "shape": { "type": "object", "description": "The skeleton's builder's settings; each skeleton takes its own." },
+    "look": { "type": "object", "description": "Recipe settings as [low, high] ranges, lists to pick from, colors and loadouts." }
+  },
+  "additionalProperties": false
+}

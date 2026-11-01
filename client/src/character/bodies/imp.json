@@ -1,0 +1,32 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "unarmed": "claw",
+    "height": [2.6, 3.2],
+    "build": [0.2, 0.35],
+    "limbs": [0.15, 0.3],
+    "head": [0.75, 0.9],
+    "ears": "long",
+    "horns": "small",
+    "wings": "bat",
+    "tail": "thin",
+    "hair": "bald",
+    "mouth": ["grin", "smirk"],
+    "colors": {
+      "skin": ["#b03a2a", "#a04a3a", "#7a3a6a"],
+      "eyes": ["#f0d040"],
+      "primary": ["#3a2a2a"],
+      "secondary": ["#2a2020"],
+      "horn": ["#2a2020", "#4a3a30"]
+    },
+    "loadouts": [
+      {
+        "weight": 2
+      },
+      {
+        "weapon": "wand",
+        "weaponStyle": "fine"
+      }
+    ]
+  }
+}

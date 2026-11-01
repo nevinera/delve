@@ -1,0 +1,29 @@
+{
+  "skeleton": "feline",
+  "shape": {
+    "H": 1.2,
+    "L": 1.9,
+    "w": 0.24,
+    "neck": [0.32, 0.5],
+    "head": 1.75,
+    "muzzle": 0.22,
+    "pitch": 0,
+    "girth": [0.95, 1],
+    "neckGirth": 1.1,
+    "limb": 1.5,
+    "ears": "kitty",
+    "tail": "cat",
+    "feet": "paw",
+    "pattern": "stripes"
+  },
+  "look": {
+    "height": [0.8, 1],
+    "build": [0.35, 0.65],
+    "colors": {
+      "skin": ["#c87a3a", "#8a8680", "#2a2626", "#e8e2d8", "#a88a68"],
+      "hair": ["#7a4420", "#4a4644", "#1a1818", "#9a8a78", "#5a4430"],
+      "secondary": ["#d08a8a"],
+      "eyes": ["#c8b030", "#70b040", "#d09030"]
+    }
+  }
+}

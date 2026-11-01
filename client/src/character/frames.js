@@ -8,6 +8,7 @@ import { FISH, fishClips, fishMesh, fishRoles } from "./fish.js";
 import { SLIMES, slimeClips, slimeMesh, slimeRoles } from "./slime.js";
 import { STRIDERS, striderClips, striderMesh, striderRoles } from "./strider.js";
 import { quadrupedClips, quadrupedMesh, quadrupedRoles, SPECIES } from "./quadruped.js";
+import { bodiesOn } from "./bodies.js";
 
 // The skeletons bodies are built on, besides body.js's humanoid: for each, how to build a mesh
 // for a look (as body.js's bodyMesh, with the scale its clips move the pelvis by), its clips (as
@@ -26,7 +27,7 @@ const SLIME = { mesh: slimeMesh, clips: slimeClips, roles: slimeRoles, settings:
 export const FRAMES = { canine: FOUR_LEGS, feline: FOUR_LEGS, ursine: FOUR_LEGS, hoofed: FOUR_LEGS, lizard: FOUR_LEGS, pachyderm: FOUR_LEGS, dragon: DRAGON, serpent: SERPENT, fish: SWIMMER, ray: SWIMMER, bat: BAT, crawler: CRAWLER, slime: SLIME, bird: BIRD, strider: STRIDER, eyeshaug: EYESHAUG };
 
 // The skeletons, and the bodies built on each. Bodies not built yet stand as humanoids.
-export const SKELETONS = { humanoid: ["humanoid", "goblin", "troll", "orc", "ogre", "kobold", "gnoll", "lizardfolk", "tauros", "skeleton", "zombie", "giant", "harpy", "gargoyle", "imp", "centaur", "naga", "amphen", "georite", "furite", "aquite", "aerite", "boric", "ursol", "trog", "homari", "tyrshaug", "drakel", "abomination", "ghoul", "mummy", "lich", "banshee", "ghost", "deepshaug", "smoulder", "treant", "dryad", "succubus", "hivelord", "cindershaug", "golem", "mycosi", "drakesh"] };
+export const SKELETONS = { humanoid: ["humanoid", ...bodiesOn("humanoid")] };
 for (const [body, { family }] of Object.entries(SPECIES)) (SKELETONS[family] ??= []).push(body);
 SKELETONS.dragon = Object.keys(DRAGONS);
 SKELETONS.serpent = Object.keys(SERPENTS);

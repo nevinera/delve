@@ -1,0 +1,83 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "height": [3.3, 3.9],
+    "build": [0.25, 0.5],
+    "limbs": [0.2, 0.4],
+    "shoulders": [0.3, 0.5],
+    "arms": [0.75, 0.85],
+    "legs": [0.2, 0.3],
+    "head": [0.8, 0.9],
+    "jaw": [0.3, 0.6],
+    "ears": "long",
+    "nose": "long",
+    "hair": ["bald", "bald", "spiky", "topknot"],
+    "mouth": ["grin", "frown", "smirk"],
+    "colors": {
+      "skin": ["#6a8a3a", "#7a9a40", "#5a7a34", "#8a9a4a"],
+      "hair": ["#1b1310", "#2a1c14"],
+      "eyes": ["#d0a020", "#c06020"],
+      "primary": ["#6b5a3a", "#5a4a3a", "#7a3b2e"],
+      "secondary": ["#4a4038", "#3a3430"]
+    },
+    "loadouts": [
+      {
+        "weapon": "dagger",
+        "weaponStyle": "crude",
+        "armor": {
+          "chest": {
+            "type": "leather",
+            "style": "tattered"
+          },
+          "feet": {
+            "type": "cloth",
+            "style": "tattered"
+          }
+        },
+        "weight": 3
+      },
+      {
+        "weapon": "sword",
+        "weaponStyle": "crude",
+        "offhand": "shield",
+        "offhandStyle": "crude",
+        "armor": {
+          "chest": {
+            "type": "leather",
+            "style": "tattered"
+          },
+          "head": {
+            "type": "leather",
+            "style": "tattered"
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "bow",
+        "weaponStyle": "crude",
+        "armor": {
+          "chest": {
+            "type": "cloth",
+            "style": "tattered"
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "staff",
+        "weaponStyle": "savage",
+        "armor": {
+          "chest": {
+            "type": "cloth",
+            "style": "savage"
+          },
+          "head": {
+            "type": "cloth",
+            "style": "savage"
+          }
+        }
+      }
+    ]
+  }
+}

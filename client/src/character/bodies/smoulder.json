@@ -1,0 +1,55 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "height": [7.5, 8.5],
+    "build": [0.6, 0.8],
+    "limbs": [0.6, 0.8],
+    "shoulders": [0.75, 0.95],
+    "head": [0.4, 0.5],
+    "flesh": "molten",
+    "hair": "spiky",
+    "mouth": "grin",
+    "colors": {
+      "skin": ["#4a3028", "#3a2824"],
+      "hair": ["#ff8020", "#ffc040"],
+      "eyes": ["#fff0a0"],
+      "primary": ["#3a2a24"],
+      "secondary": ["#3a2a24"]
+    },
+    "loadouts": [
+      {
+        "weapon": "maul",
+        "weaponStyle": "savage",
+        "armor": {
+          "chest": {
+            "type": "plate",
+            "style": "savage",
+            "colors": ["#2a2420", "#a04020"]
+          },
+          "shoulders": {
+            "type": "plate",
+            "style": "savage",
+            "colors": ["#2a2420", "#a04020"]
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "greatsword",
+        "weaponStyle": "savage",
+        "armor": {
+          "chest": {
+            "type": "plate",
+            "style": "savage",
+            "colors": ["#2a2420", "#a04020"]
+          },
+          "head": {
+            "type": "plate",
+            "style": "savage",
+            "colors": ["#2a2420", "#a04020"]
+          }
+        }
+      }
+    ]
+  }
+}

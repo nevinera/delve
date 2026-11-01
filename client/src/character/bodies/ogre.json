@@ -1,0 +1,55 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "unarmed": "claw",
+    "height": [9, 10.5],
+    "build": [0.9, 1],
+    "limbs": [0.85, 1],
+    "shoulders": [0.85, 1],
+    "waist": [0.9, 1],
+    "hips": [0.8, 1],
+    "arms": [0.6, 0.75],
+    "legs": [0.2, 0.3],
+    "head": [0.3, 0.4],
+    "jaw": [0.9, 1],
+    "ears": "round",
+    "nose": "broad",
+    "tusks": ["small", "none"],
+    "hair": ["bald", "bald", "topknot"],
+    "mouth": ["frown", "grin"],
+    "colors": {
+      "skin": ["#a08a6a", "#8a9a6a", "#9a7a6a"],
+      "hair": ["#2a1c14", "#4a3020"],
+      "eyes": ["#d0a020"],
+      "primary": ["#5a4a3a", "#6b5a3a"],
+      "secondary": ["#4a4038", "#3a3430"]
+    },
+    "loadouts": [
+      {
+        "weapon": "maul",
+        "weaponStyle": "crude",
+        "armor": {
+          "legs": {
+            "type": "leather",
+            "style": "tattered"
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "mace",
+        "weaponStyle": "savage",
+        "armor": {
+          "chest": {
+            "type": "leather",
+            "style": "tattered"
+          },
+          "shoulders": {
+            "type": "leather",
+            "style": "savage"
+          }
+        }
+      }
+    ]
+  }
+}

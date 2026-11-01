@@ -1,5 +1,6 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "./rig.js";
+import { shapesOn } from "./bodies.js";
 
 // Birds: a feathered body on two legs, wings folded along its sides on the ground and spread to
 // fly. The body tips up from the hips by the species' `tilt`, a neck rising to a round head with a
@@ -20,14 +21,7 @@ import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "
 // beak (hook, straight, short), and features: bald and ruff (a vulture), whiteHead (an eagle), disk
 // and tufts (an owl), comb and plume (a chicken), flipper (a penguin's wings, which don't fold),
 // flightless.
-export const BIRDS = {
-  vulture: { tilt: 0.55, hip: 1.0, body: 1.5, fat: 0.48, neck: 0.75, span: 3.4, chord: 0.95, fingers: 6, beak: "hook", bald: true, ruff: true },
-  owl: { tilt: 1.25, hip: 0.75, body: 1.3, fat: 0.55, neck: 0.15, span: 2.6, chord: 0.95, fingers: 0, beak: "short", disk: true, tufts: true, feathered: true },
-  eagle: { tilt: 0.65, hip: 0.95, body: 1.45, fat: 0.45, neck: 0.45, span: 3.2, chord: 0.85, fingers: 5, beak: "hook", whiteHead: true, feathered: true },
-  crow: { tilt: 0.45, hip: 0.9, body: 1.3, fat: 0.4, neck: 0.35, span: 2.5, chord: 0.75, fingers: 4, beak: "straight" },
-  chicken: { tilt: 0.4, hip: 1.0, body: 1.35, fat: 0.5, neck: 0.55, span: 1.5, chord: 0.7, fingers: 0, beak: "short", comb: true, plume: true, flightless: true },
-  penguin: { tilt: 1.45, hip: 0.3, body: 1.9, fat: 0.6, neck: 0.15, span: 1.0, chord: 0.35, fingers: 0, beak: "straight", flipper: true, flightless: true },
-};
+export const BIRDS = shapesOn("bird");
 
 const HEAD = 0.3;
 

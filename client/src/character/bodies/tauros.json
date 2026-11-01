@@ -1,0 +1,48 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "unarmed": "claw",
+    "height": [8.5, 9.5],
+    "build": [0.8, 1],
+    "limbs": [0.75, 0.95],
+    "shoulders": [0.9, 1],
+    "waist": [0.6, 0.75],
+    "head": [0.55, 0.65],
+    "ears": "round",
+    "muzzle": "bovine",
+    "horns": "bull",
+    "tail": "tuft",
+    "hair": ["short"],
+    "colors": {
+      "skin": ["#5a3a2a", "#3a2a22", "#7a5a3a"],
+      "hair": ["#2a1c14", "#1b1310"],
+      "eyes": ["#c02a1a"],
+      "primary": ["#5a4a3a"],
+      "secondary": ["#4a4038", "#5a3a2a"],
+      "horn": ["#d8ccb0", "#c8b898"]
+    },
+    "loadouts": [
+      {
+        "weapon": "greataxe",
+        "weaponStyle": "savage",
+        "armor": {
+          "shoulders": {
+            "type": "plate",
+            "style": "savage"
+          }
+        },
+        "weight": 3
+      },
+      {
+        "weapon": "maul",
+        "weaponStyle": "savage",
+        "armor": {
+          "legs": {
+            "type": "leather",
+            "style": "tattered"
+          }
+        }
+      }
+    ]
+  }
+}

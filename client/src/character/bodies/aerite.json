@@ -1,0 +1,17 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "height": [8, 9],
+    "build": [0.3, 0.5],
+    "limbs": [0.3, 0.5],
+    "lower": "vortex",
+    "flesh": "air",
+    "hair": "bald",
+    "colors": {
+      "skin": "#d0dae8",
+      "primary": "#d0dae8",
+      "secondary": "#d0dae8",
+      "eyes": "#80c0ff"
+    }
+  }
+}

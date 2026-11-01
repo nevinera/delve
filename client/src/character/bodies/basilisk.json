@@ -1,0 +1,29 @@
+{
+  "skeleton": "lizard",
+  "shape": {
+    "H": 0.8,
+    "L": 2.3,
+    "w": 0.4,
+    "neck": [0.35, 0.8],
+    "head": 1.2,
+    "muzzle": 0.75,
+    "pitch": 0,
+    "girth": [1.3, 0.75],
+    "neckGirth": 1.25,
+    "limb": 1.5,
+    "ears": "none",
+    "tail": "lizard",
+    "feet": "claw",
+    "crest": true
+  },
+  "look": {
+    "height": [1.9, 2.3],
+    "build": [0.5, 0.7],
+    "colors": {
+      "skin": ["#3a5a4a", "#4a4a5a"],
+      "hair": ["#8a2a2a", "#6a2a4a"],
+      "secondary": ["#a8a070"],
+      "eyes": ["#f0f040", "#e04020"]
+    }
+  }
+}

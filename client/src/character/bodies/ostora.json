@@ -1,0 +1,27 @@
+{
+  "skeleton": "strider",
+  "shape": {
+    "hip": 2.4,
+    "body": 1.15,
+    "fat": 0.62,
+    "neck": [0.35, 1.7],
+    "head": 0.32,
+    "skull": 0.2,
+    "tail": 0.5,
+    "arms": 0,
+    "beak": true,
+    "feathered": true,
+    "kick": true
+  },
+  "look": {
+    "height": [8, 10],
+    "build": [0.5, 0.8],
+    "head": [0.4, 0.6],
+    "colors": {
+      "skin": ["#8a7a6a", "#6a5a5a", "#9a8a6a"],
+      "secondary": ["#d8c8a8", "#c0b0a0"],
+      "hair": ["#5a4a3a", "#3a3a3a"],
+      "eyes": ["#101010"]
+    }
+  }
+}

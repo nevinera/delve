@@ -1,5 +1,6 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "./rig.js";
+import { shapesOn } from "./bodies.js";
 
 // Striders: a body held level on two big legs, balanced by a long tail, a neck forward to a long
 // head with jaws. Each leg bends three ways: the thigh forward to the knee, the shin back to the
@@ -17,11 +18,7 @@ import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "
 // ([forward, up]), head (its length), skull (its depth), tail (its length), arms (their length, 0
 // for none), and features: sickle (a raised claw on each foot), crest (feathers along the head and
 // neck), stripes, beak (a bird's head), feathered, kick.
-export const STRIDERS = {
-  raptor: { hip: 1.0, body: 1.3, fat: 0.36, neck: [0.45, 0.45], head: 0.75, skull: 0.24, tail: 2.2, arms: 0.55, sickle: true, crest: true, stripes: true },
-  tyrant: { hip: 1.5, body: 1.9, fat: 0.72, neck: [0.5, 0.45], head: 1.55, skull: 0.62, tail: 2.8, arms: 0.3, stripes: true },
-  ostora: { hip: 2.4, body: 1.15, fat: 0.62, neck: [0.35, 1.7], head: 0.32, skull: 0.2, tail: 0.5, arms: 0, beak: true, feathered: true, kick: true },
-};
+export const STRIDERS = shapesOn("strider");
 
 const TAIL = ["tail_01", "tail_02", "tail_03", "tail_04"];
 

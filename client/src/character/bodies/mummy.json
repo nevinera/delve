@@ -1,0 +1,19 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "unarmed": "claw",
+    "gait": "shamble",
+    "flesh": "wrapped",
+    "height": [5.8, 6.4],
+    "build": [0.2, 0.35],
+    "limbs": [0.2, 0.35],
+    "hair": "bald",
+    "mouth": "thin",
+    "colors": {
+      "skin": ["#d0c4a0", "#c0b490", "#b8a888"],
+      "primary": ["#c8bc98", "#b8ac88"],
+      "secondary": ["#c0b490"],
+      "eyes": ["#40c0f0", "#e0c040", "#40e080"]
+    }
+  }
+}

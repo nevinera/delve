@@ -1,0 +1,31 @@
+{
+  "skeleton": "ursine",
+  "shape": {
+    "H": 2.6,
+    "L": 2.5,
+    "w": 0.45,
+    "neck": [0.15, 0.7],
+    "head": 1.6,
+    "muzzle": 0.3,
+    "pitch": 0.1,
+    "girth": [1.5, 1.45],
+    "neckGirth": 1.8,
+    "limb": 2,
+    "hump": 0.2,
+    "ears": "pointed",
+    "tail": "stub",
+    "feet": "paw",
+    "beak": true,
+    "feathered": true
+  },
+  "look": {
+    "height": [4.4, 5],
+    "build": [0.5, 0.8],
+    "colors": {
+      "skin": ["#6a5038", "#5a4430", "#7a6a50"],
+      "hair": ["#8a7050", "#a08868", "#5a4a3a"],
+      "secondary": ["#d8b850", "#c8a040"],
+      "eyes": ["#f0c020", "#e08020"]
+    }
+  }
+}

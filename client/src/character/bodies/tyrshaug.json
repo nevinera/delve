@@ -1,0 +1,49 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "unarmed": "claw",
+    "height": [6, 6.8],
+    "build": [0.4, 0.6],
+    "limbs": [0.4, 0.55],
+    "shoulders": [0.55, 0.75],
+    "lower": "hocked",
+    "ears": "pointed",
+    "horns": "ram",
+    "tail": "thin",
+    "hair": ["short", "long", "mohawk"],
+    "beard": ["goatee", "goatee", "none"],
+    "mouth": ["grin", "smirk"],
+    "colors": {
+      "skin": ["#a05a4a", "#7a4a6a", "#b07a5a", "#6a3a3a"],
+      "hair": ["#2a1c14", "#1b1310", "#5a2a2a"],
+      "eyes": ["#e0c040", "#d03020"],
+      "primary": ["#5a2a3a", "#3a2a2a"],
+      "secondary": ["#3a2a20", "#4a3020", "#2a2020"],
+      "horn": ["#3a3028", "#5a4a3a"]
+    },
+    "loadouts": [
+      {
+        "weapon": "dagger",
+        "weaponStyle": "savage",
+        "offhand": "dagger",
+        "offhandStyle": "savage",
+        "weight": 2
+      },
+      {
+        "weapon": "staff",
+        "weaponStyle": "savage",
+        "armor": {
+          "chest": {
+            "type": "cloth",
+            "style": "savage"
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "bow",
+        "weaponStyle": "savage"
+      }
+    ]
+  }
+}

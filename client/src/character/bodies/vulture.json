@@ -1,0 +1,27 @@
+{
+  "skeleton": "bird",
+  "shape": {
+    "tilt": 0.55,
+    "hip": 1,
+    "body": 1.5,
+    "fat": 0.48,
+    "neck": 0.75,
+    "span": 3.4,
+    "chord": 0.95,
+    "fingers": 6,
+    "beak": "hook",
+    "bald": true,
+    "ruff": true
+  },
+  "look": {
+    "height": [4, 5.5],
+    "build": [0.5, 0.8],
+    "head": [0.4, 0.6],
+    "colors": {
+      "skin": ["#3a2e28", "#2a2420", "#4a3a2e"],
+      "secondary": ["#c08070", "#a87060", "#d0a090"],
+      "hair": ["#d8c8a0", "#c0b090"],
+      "eyes": ["#8a2010", "#3a1a10"]
+    }
+  }
+}

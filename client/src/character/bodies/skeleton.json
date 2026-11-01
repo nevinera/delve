@@ -1,0 +1,59 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "unarmed": "claw",
+    "height": [5.8, 6.2],
+    "build": [0.1, 0.2],
+    "limbs": [0.2, 0.3],
+    "waist": [0.1, 0.2],
+    "flesh": "bone",
+    "hair": "bald",
+    "colors": {
+      "skin": ["#d8d0b8", "#c8c0a8"],
+      "primary": ["#d0c8b0", "#c8c0a8"],
+      "secondary": ["#c8c0a8"],
+      "eyes": ["#40c0f0", "#f04020"]
+    },
+    "loadouts": [
+      {
+        "weapon": "sword",
+        "weaponStyle": "crude",
+        "offhand": "shield",
+        "offhandStyle": "crude",
+        "weight": 2
+      },
+      {
+        "weapon": "greatsword",
+        "weaponStyle": "crude",
+        "armor": {
+          "head": {
+            "type": "plate",
+            "style": "tattered"
+          },
+          "chest": {
+            "type": "chain",
+            "style": "tattered"
+          }
+        }
+      },
+      {
+        "weapon": "bow",
+        "weaponStyle": "crude"
+      },
+      {
+        "weapon": "staff",
+        "weaponStyle": "savage",
+        "armor": {
+          "chest": {
+            "type": "cloth",
+            "style": "tattered"
+          },
+          "head": {
+            "type": "cloth",
+            "style": "tattered"
+          }
+        }
+      }
+    ]
+  }
+}

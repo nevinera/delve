@@ -1,0 +1,14 @@
+{
+  "skeleton": "ray",
+  "shape": {},
+  "look": {
+    "height": [5, 8],
+    "build": [0.4, 0.7],
+    "colors": {
+      "skin": ["#6a5a48", "#5a5040", "#4a4a40"],
+      "secondary": ["#e0d8c8", "#d8d0c0"],
+      "hair": ["#3a3028", "#8a7a5a"],
+      "eyes": ["#d0a030", "#202020"]
+    }
+  }
+}

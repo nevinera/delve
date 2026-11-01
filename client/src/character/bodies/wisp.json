@@ -1,0 +1,14 @@
+{
+  "skeleton": "slime",
+  "shape": {
+    "wisp": true
+  },
+  "look": {
+    "height": [4, 6],
+    "build": [0.4, 0.8],
+    "colors": {
+      "skin": ["#7ad0ff", "#a0ffb0", "#c0a0ff", "#ffd070"],
+      "eyes": ["#ffffff", "#f0fff0"]
+    }
+  }
+}

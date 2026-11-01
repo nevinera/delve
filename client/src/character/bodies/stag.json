@@ -1,0 +1,28 @@
+{
+  "skeleton": "hoofed",
+  "shape": {
+    "H": 3.3,
+    "L": 2.1,
+    "w": 0.3,
+    "neck": [1.05, 0.75],
+    "head": 1.05,
+    "muzzle": 1.05,
+    "pitch": 0.45,
+    "girth": [0.85, 0.9],
+    "neckGirth": 0.7,
+    "limb": 0.7,
+    "ears": "leaf",
+    "tail": "stub",
+    "feet": "hoof",
+    "antlers": true
+  },
+  "look": {
+    "height": [5.2, 5.8],
+    "build": [0.4, 0.6],
+    "colors": {
+      "skin": ["#8a5a34", "#9a6a40", "#7a4e2e"],
+      "hair": ["#5a3a22", "#4a3020"],
+      "eyes": ["#1a1010"]
+    }
+  }
+}

@@ -1,5 +1,6 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, mirrored, mul, sampled, shade } from "./rig.js";
+import { shapesOn } from "./bodies.js";
 
 // Fish: a shark, barracuda or piranha swims with its body, a ray with its wings and a sea turtle
 // with its flippers, as a ray does. Each floats off the ground as if in water, a `mouth` bone at
@@ -17,43 +18,7 @@ import { TAU, add, ease, hex, hump, mirrored, mul, sampled, shade } from "./rig.
 // back as [front, back, height, sweep back]; caudal: the tail fin's top tip, bottom tip and how
 // deep the notch between them is, as [up, back]; pectoral: the side fins' tip, [out, down, back];
 // bars: dark bars down the back.
-export const FISH = {
-  shark: {
-    family: "fish",
-    rings: [[5.0, 0.08, 0.06, -0.1], [4.5, 0.38, 0.3, -0.02], [3.6, 0.66, 0.58, 0], [2.9, 0.78, 0.72, 0], [2.6, 0.8, 0.75, 0], [2.3, 0.82, 0.78, 0], [1.0, 0.85, 0.82, 0], [-1.0, 0.7, 0.66, 0], [-2.5, 0.45, 0.45, 0.02], [-3.6, 0.22, 0.28, 0.05], [-4.3, 0.12, 0.2, 0.08]],
-    jaw: [[3.1, 0.5, 0.12, -0.5], [3.8, 0.38, 0.1, -0.42], [4.3, 0.18, 0.06, -0.33]],
-    dorsal: [[1.0, -0.7, 1.3, 1.1], [-3.0, -3.5, 0.45, 0.35]],
-    caudal: [[1.9, 1.5], [-1.0, 1.0], 0.5],
-    pectoral: [1.6, 0.7, 1.2],
-    gills: true,
-    bars: false,
-  },
-  barracuda: {
-    family: "fish",
-    rings: [[5.2, 0.04, 0.04, 0.02], [4.4, 0.18, 0.2, 0.02], [3.2, 0.36, 0.46, 0], [1.0, 0.44, 0.6, 0], [-1.0, 0.42, 0.56, 0], [-3.0, 0.24, 0.32, 0], [-4.0, 0.12, 0.18, 0], [-4.3, 0.08, 0.13, 0]],
-    jaw: [[3.0, 0.3, 0.12, -0.3], [4.4, 0.16, 0.08, -0.2], [5.4, 0.05, 0.04, -0.1]],
-    dorsal: [[1.4, 0.4, 0.6, 0.4], [-2.2, -2.9, 0.5, 0.3]],
-    caudal: [[1.2, 1.2], [-1.2, 1.2], 0.7],
-    pectoral: [0.6, 0.25, 0.6],
-    gills: false,
-    bars: true,
-  },
-  // Deep and short, an underbite full of teeth.
-  piranha: {
-    family: "fish",
-    rings: [[4.6, 0.08, 0.2, -0.3], [4.0, 0.36, 1.1, -0.1], [2.8, 0.5, 1.9, 0.1], [1.0, 0.55, 2.2, 0.15], [-0.8, 0.45, 1.8, 0.1], [-2.4, 0.22, 0.85, 0.05], [-3.4, 0.1, 0.32, 0.05]],
-    jaw: [[3.4, 0.36, 0.16, -0.8], [4.4, 0.26, 0.13, -0.62], [5.1, 0.09, 0.07, -0.42]],
-    dorsal: [[0.5, -1.0, 0.9, 0.6]],
-    caudal: [[1.6, 1.2], [-1.6, 1.2], 0.6],
-    pectoral: [0.6, 0.35, 0.6],
-    gills: false,
-    bars: false,
-  },
-  // A ray 6ft across, its tail a little longer than that behind it.
-  stingray: { family: "ray" },
-  // A sea turtle 6ft across its flippers: a domed shell, a head on a short neck, flippers.
-  seaturtle: { family: "ray", turtle: true },
-};
+export const FISH = shapesOn("fish", "ray");
 export const fishOf = (look) => FISH[look.body] ?? FISH.shark;
 
 // The fish's swimming line, above the ground.

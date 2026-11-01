@@ -1,0 +1,51 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "unarmed": "claw",
+    "height": [2.8, 3.4],
+    "build": [0.25, 0.45],
+    "limbs": [0.2, 0.35],
+    "head": [0.6, 0.75],
+    "legs": [0.3, 0.4],
+    "ears": "round",
+    "muzzle": "reptile",
+    "horns": "small",
+    "tail": "reptile",
+    "hair": "bald",
+    "colors": {
+      "skin": ["#9a5a3a", "#8a6a3a", "#7a4a3a"],
+      "eyes": ["#e0c040", "#d06020"],
+      "primary": ["#6b5a3a", "#5a4a3a"],
+      "secondary": ["#4a4038"],
+      "horn": ["#d8ccb0", "#b0a080"]
+    },
+    "loadouts": [
+      {
+        "weapon": "dagger",
+        "weaponStyle": "crude",
+        "armor": {
+          "chest": {
+            "type": "cloth",
+            "style": "tattered"
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "polearm",
+        "weaponStyle": "crude",
+        "armor": {
+          "head": {
+            "type": "leather",
+            "style": "tattered"
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "thrown",
+        "weaponStyle": "crude"
+      }
+    ]
+  }
+}

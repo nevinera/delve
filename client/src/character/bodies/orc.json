@@ -1,0 +1,83 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "height": [6.2, 7],
+    "build": [0.65, 0.9],
+    "limbs": [0.6, 0.8],
+    "shoulders": [0.7, 0.95],
+    "jaw": [0.7, 1],
+    "head": [0.45, 0.6],
+    "ears": "pointed",
+    "nose": "broad",
+    "tusks": ["small", "large"],
+    "hair": ["mohawk", "topknot", "bald", "braids"],
+    "mouth": ["frown", "neutral"],
+    "colors": {
+      "skin": ["#5a7a3a", "#6a7a40", "#7a6a50", "#4a6a3a"],
+      "hair": ["#1b1310", "#2a1c14"],
+      "eyes": ["#c02a1a", "#d0a020"],
+      "primary": ["#5a4a3a", "#6b3a2a"],
+      "secondary": ["#3a3430", "#4a4038"]
+    },
+    "loadouts": [
+      {
+        "weapon": "axe",
+        "weaponStyle": "savage",
+        "offhand": "shield",
+        "offhandStyle": "savage",
+        "armor": {
+          "chest": {
+            "type": "plate",
+            "style": "savage"
+          },
+          "shoulders": {
+            "type": "plate",
+            "style": "savage"
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "greataxe",
+        "weaponStyle": "savage",
+        "armor": {
+          "chest": {
+            "type": "leather",
+            "style": "savage"
+          },
+          "shoulders": {
+            "type": "leather",
+            "style": "savage"
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "sword",
+        "weaponStyle": "crude",
+        "offhand": "axe",
+        "offhandStyle": "crude",
+        "armor": {
+          "chest": {
+            "type": "chain",
+            "style": "tattered"
+          }
+        }
+      },
+      {
+        "weapon": "staff",
+        "weaponStyle": "savage",
+        "armor": {
+          "chest": {
+            "type": "cloth",
+            "style": "savage"
+          },
+          "head": {
+            "type": "leather",
+            "style": "savage"
+          }
+        }
+      }
+    ]
+  }
+}

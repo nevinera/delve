@@ -1,0 +1,58 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "height": [8, 8.8],
+    "build": [0.45, 0.7],
+    "limbs": [0.45, 0.65],
+    "shoulders": [0.55, 0.8],
+    "lower": "horse",
+    "ears": ["round", "pointed"],
+    "hair": ["long", "braids", "ponytail", "mohawk"],
+    "beard": ["none", "none", "full"],
+    "colors": {
+      "skin": ["#c89a70", "#a87a50", "#e0b48c"],
+      "hair": ["#3a2a1a", "#6a4a2a", "#1b1310"],
+      "primary": ["#6b5a3a", "#5a6a3a"],
+      "secondary": ["#7a5a3a", "#5a4030", "#9a8a7a", "#3a3030"]
+    },
+    "loadouts": [
+      {
+        "weapon": "bow",
+        "weaponStyle": "fine",
+        "armor": {
+          "chest": {
+            "type": "leather"
+          }
+        },
+        "weight": 3
+      },
+      {
+        "weapon": "polearm",
+        "weaponStyle": "fine",
+        "armor": {
+          "chest": {
+            "type": "chain"
+          },
+          "shoulders": {
+            "type": "leather"
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "sword",
+        "weaponStyle": "fine",
+        "offhand": "shield",
+        "offhandStyle": "fine",
+        "armor": {
+          "chest": {
+            "type": "plate"
+          },
+          "head": {
+            "type": "plate"
+          }
+        }
+      }
+    ]
+  }
+}

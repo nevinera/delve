@@ -1,0 +1,48 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "unarmed": "claw",
+    "height": [8, 9.5],
+    "build": [0.5, 0.7],
+    "limbs": [0.4, 0.6],
+    "shoulders": [0.7, 0.9],
+    "waist": [0.1, 0.3],
+    "head": [0.5, 0.6],
+    "muzzle": "insect",
+    "horns": "antennae",
+    "lowerArms": "pair",
+    "flesh": "chitin",
+    "hair": "bald",
+    "colors": {
+      "skin": ["#8a7040", "#5a4a30", "#3a3a2a", "#7a5a2a"],
+      "eyes": ["#40c0a0", "#c04020", "#e0c040"],
+      "primary": ["#6a5a30", "#4a3a2a"],
+      "secondary": ["#5a4a30"],
+      "horn": ["#2a2018", "#3a2a20"]
+    },
+    "loadouts": [
+      {
+        "weapon": "polearm",
+        "weaponStyle": "savage",
+        "armor": {
+          "shoulders": {
+            "type": "plate",
+            "style": "savage",
+            "colors": ["#c0a040", "#5a3a20"]
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "sword",
+        "weaponStyle": "savage",
+        "offhand": "sword",
+        "offhandStyle": "savage"
+      },
+      {
+        "weapon": "staff",
+        "weaponStyle": "fine"
+      }
+    ]
+  }
+}

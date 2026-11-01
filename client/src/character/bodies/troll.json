@@ -1,0 +1,69 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "height": [8, 9],
+    "build": [0.75, 0.95],
+    "limbs": [0.6, 0.8],
+    "shoulders": [0.8, 1],
+    "waist": [0.6, 0.8],
+    "arms": [0.8, 0.9],
+    "legs": [0.35, 0.45],
+    "head": [0.2, 0.3],
+    "jaw": [0.8, 1],
+    "ears": "pointed",
+    "nose": "broad",
+    "tusks": "large",
+    "hair": ["mohawk", "bald", "spiky"],
+    "mouth": ["frown", "neutral"],
+    "colors": {
+      "skin": ["#4a7a8a", "#5a8a7a", "#6a8a9a"],
+      "hair": ["#c05a2a", "#d03030", "#1b1310"],
+      "eyes": ["#d03020", "#e0c040"],
+      "primary": ["#5a4a3a", "#6b5a3a"],
+      "secondary": ["#4a4038", "#3a3430"]
+    },
+    "loadouts": [
+      {
+        "weapon": "maul",
+        "weaponStyle": "savage",
+        "armor": {
+          "shoulders": {
+            "type": "leather",
+            "style": "savage"
+          },
+          "legs": {
+            "type": "leather",
+            "style": "tattered"
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "greataxe",
+        "weaponStyle": "savage",
+        "armor": {
+          "chest": {
+            "type": "plate",
+            "style": "savage"
+          },
+          "shoulders": {
+            "type": "plate",
+            "style": "savage"
+          }
+        }
+      },
+      {
+        "weapon": "mace",
+        "weaponStyle": "crude",
+        "offhand": "shield",
+        "offhandStyle": "savage",
+        "armor": {
+          "chest": {
+            "type": "chain",
+            "style": "tattered"
+          }
+        }
+      }
+    ]
+  }
+}

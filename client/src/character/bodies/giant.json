@@ -1,0 +1,36 @@
+{
+  "skeleton": "humanoid",
+  "look": {
+    "height": [16, 20],
+    "build": [0.6, 0.85],
+    "limbs": [0.6, 0.8],
+    "shoulders": [0.7, 0.9],
+    "head": [0.35, 0.45],
+    "jaw": [0.6, 0.9],
+    "hair": ["long", "braids", "bald"],
+    "beard": ["full", "long", "none"],
+    "colors": {
+      "skin": ["#b09070", "#8a9aaa", "#c0a080"],
+      "hair": ["#5a4a3a", "#c0c0c0", "#8a5a2a"],
+      "primary": ["#6b5a3a", "#5a6a7a"],
+      "secondary": ["#4a4038"]
+    },
+    "loadouts": [
+      {
+        "weapon": "maul",
+        "weaponStyle": "crude",
+        "armor": {
+          "chest": {
+            "type": "leather",
+            "style": "fine"
+          }
+        },
+        "weight": 2
+      },
+      {
+        "weapon": "thrown",
+        "weaponStyle": "crude"
+      }
+    ]
+  }
+}

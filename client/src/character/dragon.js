@@ -1,5 +1,6 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade, sub } from "./rig.js";
+import { shapesOn } from "./bodies.js";
 
 // Dragons: a long neck and tail, horns, and wings on the back, each wing an arm (shoulder, elbow,
 // wrist) with three long fingers and skin between them and back to the flank. A dragon stands on
@@ -16,10 +17,7 @@ import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade, sub } f
 // H: the back's height; L: hip to shoulder; w: how far out the legs are; legs: 4 or 2; tilt: how
 // far the body tips up, front first, about the hips; span: the wings' size; neck and tail: their
 // length.
-export const DRAGONS = {
-  dragon: { H: 4, L: 5, w: 1.05, legs: 4, tilt: 0, span: 1.45, neck: 1, tail: 1, head: 1.25, horns: "swept", tip: "spade", breath: true },
-  wyvern: { H: 4.4, L: 3.6, w: 0.8, legs: 2, tilt: 0.28, span: 1.6, neck: 0.85, tail: 1.1, head: 1.05, horns: "short", tip: "sting", breath: false },
-};
+export const DRAGONS = shapesOn("dragon");
 export const dragonOf = (look) => DRAGONS[look.body] ?? DRAGONS.dragon;
 
 // Turns a point about the hips, the front up by the species' tilt.

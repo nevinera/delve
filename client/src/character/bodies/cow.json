@@ -1,0 +1,30 @@
+{
+  "skeleton": "hoofed",
+  "shape": {
+    "H": 3.3,
+    "L": 3.2,
+    "w": 0.42,
+    "neck": [0.25, 0.9],
+    "head": 1.35,
+    "muzzle": 1.1,
+    "pitch": 0.6,
+    "girth": [1.45, 1.45],
+    "neckGirth": 1.2,
+    "limb": 1.1,
+    "ears": "small",
+    "tail": "tuft",
+    "feet": "hoof",
+    "horns": "cow",
+    "pattern": "patches"
+  },
+  "look": {
+    "height": [5, 5.6],
+    "build": [0.5, 0.75],
+    "colors": {
+      "skin": ["#e8e0d0", "#e0d8c8", "#a06a3a"],
+      "hair": ["#2a2420", "#1a1614", "#6a4028"],
+      "secondary": ["#d8a8a0"],
+      "eyes": ["#1a1010"]
+    }
+  }
+}

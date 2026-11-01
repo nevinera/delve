@@ -1,0 +1,31 @@
+{
+  "skeleton": "canine",
+  "shape": {
+    "H": 2.6,
+    "L": 2.1,
+    "w": 0.34,
+    "neck": [0.45, 0.7],
+    "head": 1.2,
+    "muzzle": 0.8,
+    "pitch": 0.1,
+    "girth": [1.1, 1.05],
+    "neckGirth": 1.2,
+    "limb": 1.2,
+    "ears": "pointed",
+    "tail": "thin",
+    "feet": "paw",
+    "crest": true,
+    "breath": true
+  },
+  "look": {
+    "height": [3.8, 4.4],
+    "build": [0.5, 0.75],
+    "flesh": "fire",
+    "colors": {
+      "skin": ["#5a2a1e", "#4a2420", "#3a2a2a"],
+      "hair": ["#2a1a14", "#1a1410"],
+      "secondary": ["#ff8020"],
+      "eyes": ["#a0ff40", "#fff0a0"]
+    }
+  }
+}

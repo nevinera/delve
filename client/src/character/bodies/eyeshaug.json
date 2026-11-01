@@ -1,0 +1,13 @@
+{
+  "skeleton": "eyeshaug",
+  "shape": {},
+  "look": {
+    "height": [6, 8],
+    "build": [0.5, 0.9],
+    "colors": {
+      "skin": ["#7a4a5a", "#5a4a6a", "#6a5a3a", "#4a6a5a"],
+      "secondary": ["#3a0a14", "#2a0a20"],
+      "eyes": ["#d0a020", "#40a040", "#c03030", "#6040c0"]
+    }
+  }
+}
