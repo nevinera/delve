@@ -12,7 +12,12 @@ export const sub = (a, b) => a.map((v, i) => v - b[i]);
 export const mul = (a, k) => a.map((v) => v * k);
 export const lerp = (a, b, t) => add(a, mul(sub(b, a), t));
 export const hex = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255);
-export const shade = (rgb, f) => rgb.map((v) => Math.min(1, v * f));
+// A color made lighter or darker by f; an area tag (paint.js) gets the tone to paint it with.
+export const shade = (rgb, f) => {
+  if (typeof rgb !== "string") return rgb.map((v) => Math.min(1, v * f));
+  const [area, tone = 1] = rgb.split("@");
+  return `${area}@${+(Number(tone) * f).toFixed(3)}`;
+};
 export const TAU = Math.PI * 2;
 export const ease = (t) => (t <= 0 ? 0 : t >= 1 ? 1 : t * t * (3 - 2 * t));
 // Rises to 1 from `a` to `b`, holds, and falls back to 0 from `c` to `d`, eased, u from 0 to 1.

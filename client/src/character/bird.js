@@ -1,6 +1,7 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "./rig.js";
 import { shapesOn } from "./bodies.js";
+import { painterFor } from "./paint.js";
 
 // Birds: a feathered body on two legs, wings folded along its sides on the ground and spread to
 // fly. The body tips up from the hips by the species' `tilt`, a neck rising to a round head with a
@@ -22,6 +23,9 @@ import { shapesOn } from "./bodies.js";
 // and tufts (an owl), comb and plume (a chicken), flipper (a penguin's wings, which don't fold),
 // flightless.
 export const BIRDS = shapesOn("bird");
+
+// The areas its faces are tagged with, in named groups (paint.js).
+export const AREA_GROUPS = { everything: ["plumage", "belly", "beak", "eyes", "dark", "comb"] };
 
 const HEAD = 0.3;
 
@@ -69,10 +73,12 @@ export function birdMesh(look) {
   const at = (name) => canonical[index.get(name)].at;
   const build = 0.85 + 0.3 * look.build;
   const big = 0.8 + 0.4 * look.head;
-  const c = Object.fromEntries(Object.entries(look.colors).map(([key, v]) => [key, hex(v)]));
-  const [plume, belly, horn, dark] = [c.skin, c.secondary, c.hair, [0.06, 0.05, 0.05]];
-  const red = [0.78, 0.12, 0.1];
+  // Faces are tagged with their areas (AREA_GROUPS), and painted by the look's coloration.
+  const c = { skin: "plumage", secondary: "belly", hair: "beak", eyes: "eyes" };
+  const [plume, belly, horn, dark] = [c.skin, c.secondary, c.hair, "dark"];
+  const red = "comb";
   const out = new MeshOut(index);
+  out.paint = painterFor(look, AREA_GROUPS, look.height / s);
   const d = along(sp);
   const [P, C, N, H] = [at("pelvis"), at("spine_01"), at("neck"), at("head")];
   const flat = (corners, color, side) => {

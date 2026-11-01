@@ -1,6 +1,7 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "./rig.js";
 import { shapesOn } from "./bodies.js";
+import { painterFor } from "./paint.js";
 
 // Serpents: a long body on the ground behind the pelvis, a neck rising ahead of it to the head,
 // the jaw on its own bone and a `mouth` bone at the tip of the snout. A cobra spreads a hood
@@ -19,6 +20,9 @@ import { shapesOn } from "./bodies.js";
 // head; head: the head's size; markings: "diamonds", "bands", "rings" or none; hood: a cobra's;
 // legs, fangs, maw, fin, wings and crest as above.
 export const SERPENTS = shapesOn("serpent");
+
+// The areas its faces are tagged with, in named groups (paint.js).
+export const AREA_GROUPS = { everything: ["scales", "belly", "markings", "eyes", "dark", "teeth"] };
 export const serpentOf = (look) => SERPENTS[look.body] ?? SERPENTS.snake;
 
 const BODY = ["body_01", "body_02", "body_03", "body_04", "body_05", "body_06", "body_07", "body_08", "body_09", "body_10"];
@@ -58,9 +62,11 @@ export function serpentMesh(look) {
   const at = (name) => canonical[index.get(name)].at;
   const build = 0.8 + 0.4 * look.build;
   const big = sp.head * (0.8 + 0.4 * look.head);
-  const c = Object.fromEntries(Object.entries(look.colors).map(([key, v]) => [key, hex(v)]));
-  const [scales, belly, mark, dark] = [c.skin, c.secondary, c.hair, [0.08, 0.07, 0.07]];
+  // Faces are tagged with their areas (AREA_GROUPS), and painted by the look's coloration.
+  const c = { skin: "scales", secondary: "belly", hair: "markings", eyes: "eyes" };
+  const [scales, belly, mark, dark] = [c.skin, c.secondary, c.hair, "dark"];
   const out = new MeshOut(index);
+  out.paint = painterFor(look, AREA_GROUPS, look.height / s);
 
   // The body, tail tip to the back of the head, a ring at each joint and between: a point
   // between two joints follows the first; one at a joint is shared with its parent.
@@ -113,7 +119,7 @@ export function serpentMesh(look) {
     for (let k = 0; k < 12; k++) {
       const a = (k / 12) * TAU;
       const [x, y] = [Math.cos(a), Math.sin(a)];
-      out.path([hp(x * 0.55, y * 0.55, 0.45), hp(x * 0.3, y * 0.3, 0.55)], [0.07 * big, 0.005 * big], 4, () => [0.92, 0.88, 0.76], () => [["jaw", 1]]);
+      out.path([hp(x * 0.55, y * 0.55, 0.45), hp(x * 0.3, y * 0.3, 0.55)], [0.07 * big, 0.005 * big], 4, () => "teeth", () => [["jaw", 1]]);
     }
   } else {
   out.tube(skull, 10, (band, angle) => (Math.abs(angle) < 1 ? belly : band === 1 && Math.abs(angle) > 2.4 ? mark : scales), { endColor: shade(scales, 0.7) });
@@ -126,7 +132,7 @@ export function serpentMesh(look) {
   for (const side of [-1, 1]) {
     out.gem(hp(side * 0.34, 0.1, 0.35), 0.07 * big, c.eyes, [["head", 1]]);
     out.gem(hp(side * 0.37, 0.1, 0.37), 0.03 * big, dark, [["head", 1]]);
-    out.path([hp(side * 0.13, -0.1, 0.75), hp(side * 0.13, -0.3, 0.72)], [0.035 * big, 0.004 * big], 4, () => [0.94, 0.92, 0.86], () => [["head", 1]]);
+    out.path([hp(side * 0.13, -0.1, 0.75), hp(side * 0.13, -0.3, 0.72)], [0.035 * big, 0.004 * big], 4, () => "teeth", () => [["head", 1]]);
     // A centipede's fangs curl forward and in under its head.
     if (sp.fangs) out.path([hp(side * 0.3, -0.2, 0.1), hp(side * 0.42, -0.3, 0.55), hp(side * 0.15, -0.32, 0.95)], [0.08, 0.05, 0.005].map((r) => r * big), 5, () => mark, () => [["jaw", 1]], { carry: true });
   }

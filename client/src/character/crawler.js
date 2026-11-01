@@ -1,6 +1,7 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "./rig.js";
 import { shapesOn } from "./bodies.js";
+import { painterFor } from "./paint.js";
 
 // Crawlers: a body low between many jointed legs. A spider has eight long legs round a round
 // body, fangs, a cluster of eyes and a great abdomen behind; a scorpion has eight short legs, two
@@ -21,6 +22,9 @@ import { shapesOn } from "./bodies.js";
 // hip's place along the body, and its reach; rise: how far the knees lift above the hips.
 // kind: the body plan, as above; hover: off the ground, legs hanging; spines: a hivari's.
 export const CRAWLERS = shapesOn("crawler");
+
+// The areas its faces are tagged with, in named groups (paint.js).
+export const AREA_GROUPS = { everything: ["carapace", "markings", "claws", "eyes", "dark", "wings"] };
 export const crawlerOf = (look) => CRAWLERS[look.body] ?? CRAWLERS.spider;
 const isOf = (sp, kind) => sp.kind === kind;
 
@@ -79,9 +83,11 @@ export function crawlerMesh(look) {
   const at = (name) => canonical[index.get(name)].at;
   const build = 0.8 + 0.4 * look.build;
   const limb = (0.8 + 0.4 * look.limbs) * sp.thick;
-  const c = Object.fromEntries(Object.entries(look.colors).map(([key, v]) => [key, hex(v)]));
-  const [body, mark, horn, dark] = [c.skin, c.secondary, c.hair, [0.07, 0.06, 0.06]];
+  // Faces are tagged with their areas (AREA_GROUPS), and painted by the look's coloration.
+  const c = { skin: "carapace", secondary: "markings", hair: "claws", eyes: "eyes" };
+  const [body, mark, horn, dark] = [c.skin, c.secondary, c.hair, "dark"];
   const out = new MeshOut(index);
+  out.paint = painterFor(look, AREA_GROUPS, 1);
   const y = sp.y;
 
   // An egg shape along a line, `length` long, `rx` wide and `ry` deep at its widest, `at` how far
@@ -189,7 +195,7 @@ export function crawlerMesh(look) {
       // A sting at the tail, and two wings on each side, see-through veins drawn as faces both
       // ways.
       out.path([[0, y + 0.05, -2.0], [0, y - 0.05, -2.3]], [0.07, 0.005], 5, () => horn, () => [["abdomen", 1]]);
-      const membrane = [0.82, 0.86, 0.9];
+      const membrane = "wings";
       for (const side of ["l", "r"]) {
         const x = side === "l" ? 1 : -1;
         const root = at(`wing_${side}`);

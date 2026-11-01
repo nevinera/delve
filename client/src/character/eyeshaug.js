@@ -1,6 +1,7 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "./rig.js";
 import { shapesOn } from "./bodies.js";
+import { painterFor } from "./paint.js";
 
 // Eyeshaugs: a great round body hovering above the ground, one huge eye on its front, a fanged
 // mouth beneath it, and eye stalks writhing from its crown, each with a small eye at its tip. The
@@ -13,6 +14,9 @@ import { shapesOn } from "./bodies.js";
 // Shapes are in the eyeshaug's own units, a body 1 across, scaled to the look's height. It faces +z.
 
 export const EYESHAUGS = shapesOn("eyeshaug");
+
+// The areas its faces are tagged with, in named groups (paint.js).
+export const AREA_GROUPS = { everything: ["hide", "mouth", "eyes", "eyeWhites", "dark", "teeth"] };
 
 const HOVER = 1.2;
 const R = 0.5;
@@ -48,10 +52,12 @@ export function eyeshaugMesh(look) {
   const index = new Map(canonical.map((b, i) => [b.name, i]));
   const at = (name) => canonical[index.get(name)].at;
   const big = 0.85 + 0.3 * look.build;
-  const c = Object.fromEntries(Object.entries(look.colors).map(([key, v]) => [key, hex(v)]));
+  // Faces are tagged with their areas (AREA_GROUPS), and painted by the look's coloration.
+  const c = { skin: "hide", secondary: "mouth", eyes: "eyes" };
   const [hide, inner, iris] = [c.skin, c.secondary, c.eyes];
-  const [white, dark, tooth] = [[0.93, 0.9, 0.82], [0.04, 0.03, 0.03], [0.92, 0.9, 0.8]];
+  const [white, dark, tooth] = ["eyeWhites", "dark", "teeth"];
   const out = new MeshOut(index);
+  out.paint = painterFor(look, AREA_GROUPS, 1);
   const C = at("body");
   const r = R * big;
   const bb = [["body", 1]];

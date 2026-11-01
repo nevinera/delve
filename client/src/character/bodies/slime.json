@@ -3,10 +3,62 @@
   "shape": {},
   "look": {
     "height": [2.5, 4],
-    "build": [0.4, 0.8],
-    "colors": {
-      "skin": ["#5ab04a", "#4a8ac0", "#c04a4a", "#9a5ac0", "#c0b04a"],
-      "eyes": ["#101010", "#2a2a2a"]
+    "build": [0.4, 0.8]
+  },
+  "patterns": {
+    "standard": {
+      "colors": {
+        "dark": "#0d0d0f",
+        "eyeWhites": "#f2f2eb"
+      },
+      "areas": {
+        "jelly": "jelly",
+        "eyes": "eyes",
+        "dark": "dark",
+        "eyeWhites": "eyeWhites"
+      }
     }
-  }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "jelly": "#5ab04a",
+        "eyes": "#101010"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "jelly": "#4a8ac0",
+        "eyes": "#2a2a2a"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "jelly": "#c04a4a",
+        "eyes": "#101010"
+      }
+    },
+    {
+      "name": "standard 4",
+      "pattern": "standard",
+      "colors": {
+        "jelly": "#9a5ac0",
+        "eyes": "#2a2a2a"
+      }
+    },
+    {
+      "name": "standard 5",
+      "pattern": "standard",
+      "colors": {
+        "jelly": "#c0b04a",
+        "eyes": "#101010"
+      }
+    }
+  ]
 }

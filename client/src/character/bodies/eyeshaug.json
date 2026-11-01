@@ -3,11 +3,61 @@
   "shape": {},
   "look": {
     "height": [6, 8],
-    "build": [0.5, 0.9],
-    "colors": {
-      "skin": ["#7a4a5a", "#5a4a6a", "#6a5a3a", "#4a6a5a"],
-      "secondary": ["#3a0a14", "#2a0a20"],
-      "eyes": ["#d0a020", "#40a040", "#c03030", "#6040c0"]
+    "build": [0.5, 0.9]
+  },
+  "patterns": {
+    "standard": {
+      "colors": {
+        "eyeWhites": "#ede6d1",
+        "dark": "#0a0808",
+        "teeth": "#ebe6cc"
+      },
+      "areas": {
+        "hide": "hide",
+        "mouth": "mouth",
+        "eyes": "eyes",
+        "eyeWhites": "eyeWhites",
+        "dark": "dark",
+        "teeth": "teeth"
+      }
     }
-  }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "hide": "#7a4a5a",
+        "mouth": "#3a0a14",
+        "eyes": "#d0a020"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "hide": "#5a4a6a",
+        "mouth": "#2a0a20",
+        "eyes": "#40a040"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "hide": "#6a5a3a",
+        "mouth": "#3a0a14",
+        "eyes": "#c03030"
+      }
+    },
+    {
+      "name": "standard 4",
+      "pattern": "standard",
+      "colors": {
+        "hide": "#4a6a5a",
+        "mouth": "#2a0a20",
+        "eyes": "#6040c0"
+      }
+    }
+  ]
 }

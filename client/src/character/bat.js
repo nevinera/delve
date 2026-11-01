@@ -1,6 +1,7 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "./rig.js";
 import { shapesOn } from "./bodies.js";
+import { painterFor } from "./paint.js";
 
 // Bats: a small furred body hanging between two wide wings, always in the air. Each wing is an
 // arm (shoulder, elbow, wrist) with four long fingers and skin between them, back to the feet,
@@ -14,6 +15,9 @@ import { shapesOn } from "./bodies.js";
 // +z, its left toward +x, its body tipped up, hovering.
 
 export const BATS = shapesOn("bat");
+
+// The areas its faces are tagged with, in named groups (paint.js).
+export const AREA_GROUPS = { everything: ["fur", "wings", "claws", "eyes", "dark", "teeth"] };
 
 const HOVER = 4;
 const SPAN = 10;
@@ -52,9 +56,11 @@ export function batMesh(look) {
   const at = (name) => canonical[index.get(name)].at;
   const build = 0.8 + 0.4 * look.build;
   const big = 0.8 + 0.4 * look.head;
-  const c = Object.fromEntries(Object.entries(look.colors).map(([key, v]) => [key, hex(v)]));
-  const [fur, skin, claw, dark] = [c.skin, c.secondary, c.hair, [0.07, 0.06, 0.06]];
+  // Faces are tagged with their areas (AREA_GROUPS), and painted by the look's coloration.
+  const c = { skin: "fur", secondary: "wings", hair: "claws", eyes: "eyes" };
+  const [fur, skin, claw, dark] = [c.skin, c.secondary, c.hair, "dark"];
   const out = new MeshOut(index);
+  out.paint = painterFor(look, AREA_GROUPS, look.height / s);
   const belly = shade(fur, 1.2);
 
   // The body, rump to the neck, tipped up, furred, paler underneath.
@@ -80,7 +86,7 @@ export function batMesh(look) {
   out.tube([ring(0.1, -0.2, 0.18, 0.06, [["jaw", 1]]), ring(0.45, -0.17, 0.1, 0.04, [["jaw", 1]])], 6, () => shade(fur, 0.8));
   for (const x of [-1, 1]) {
     out.gem(hp(x * 0.17, 0.1, 0.3), 0.045 * big, c.eyes, [["head", 1]]);
-    out.path([hp(x * 0.07, -0.12, 0.45), hp(x * 0.07, -0.27, 0.45)], [0.025 * big, 0.003], 4, () => [0.95, 0.93, 0.88], () => [["head", 1]]);
+    out.path([hp(x * 0.07, -0.12, 0.45), hp(x * 0.07, -0.27, 0.45)], [0.025 * big, 0.003], 4, () => "teeth", () => [["head", 1]]);
     // An ear: a tall leaf, its inside darker, both faces drawn.
     const ear = [hp(x * 0.05, 0.24, -0.1), hp(x * 0.5, 0.9, -0.22), hp(x * 0.38, 0.06, -0.16)];
     const inner = [hp(x * 0.12, 0.26, -0.09), hp(x * 0.44, 0.75, -0.19), hp(x * 0.34, 0.13, -0.13)];

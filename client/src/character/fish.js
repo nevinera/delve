@@ -1,6 +1,7 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, mirrored, mul, sampled, shade } from "./rig.js";
 import { shapesOn } from "./bodies.js";
+import { painterFor } from "./paint.js";
 
 // Fish: a shark, barracuda or piranha swims with its body, a ray with its wings and a sea turtle
 // with its flippers, as a ray does. Each floats off the ground as if in water, a `mouth` bone at
@@ -19,6 +20,9 @@ import { shapesOn } from "./bodies.js";
 // deep the notch between them is, as [up, back]; pectoral: the side fins' tip, [out, down, back];
 // bars: dark bars down the back.
 export const FISH = shapesOn("fish", "ray");
+
+// The areas its faces are tagged with, in named groups (paint.js).
+export const AREA_GROUPS = { everything: ["back", "belly", "fins", "eyes", "dark", "teeth"] };
 export const fishOf = (look) => FISH[look.body] ?? FISH.shark;
 
 // The fish's swimming line, above the ground.
@@ -72,8 +76,10 @@ export function fishMesh(look) {
   const index = new Map(canonical.map((b, i) => [b.name, i]));
   const at = (name) => canonical[index.get(name)].at;
   const build = 0.8 + 0.4 * look.build;
-  const c = Object.fromEntries(Object.entries(look.colors).map(([key, v]) => [key, hex(v)]));
+  // Faces are tagged with their areas (AREA_GROUPS), and painted by the look's coloration.
+  const c = { skin: "back", secondary: "belly", hair: "fins", eyes: "eyes" };
   const out = new MeshOut(index);
+  out.paint = painterFor(look, AREA_GROUPS, look.height / s);
   // A flat fin, both faces drawn, its corners each on their own bones.
   const fin = (corners, color, side) => {
     for (let i = 1; i < corners.length - 1; i++) {
@@ -91,7 +97,7 @@ export function fishMesh(look) {
 }
 
 function fishBody(sp, out, at, build, c, fin) {
-  const [back, belly, fins, dark] = [c.skin, c.secondary, c.hair, [0.06, 0.06, 0.07]];
+  const [back, belly, fins, dark] = [c.skin, c.secondary, c.hair, "dark"];
   const z = (name) => at(name)[2];
   // The bones a point along the body follows: half and half at a joint, the bone in front of it
   // alone halfway along.
@@ -124,7 +130,7 @@ function fishBody(sp, out, at, build, c, fin) {
   const jaw = sp.jaw.map(([zz, rx, rz, dy]) => ({ center: [0, y + dy, zz], dir: [0, 0, 1], rx: rx * build, rz: rz * build, bones: [["jaw", 1]] }));
   out.tube(jaw, 8, (i, angle) => (Math.abs(angle) < 1.6 ? belly : shade(belly, 0.8)));
   // Teeth: down from under the snout, up from the jaw.
-  const tooth = [0.95, 0.93, 0.88];
+  const tooth = "teeth";
   const [jawFrom, jawTo] = [sp.jaw[0], sp.jaw[sp.jaw.length - 1]];
   for (let k = 0; k <= 4; k++) {
     const t = 0.15 + 0.17 * k;

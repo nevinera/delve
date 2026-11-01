@@ -1,6 +1,7 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade, sub } from "./rig.js";
 import { shapesOn } from "./bodies.js";
+import { painterFor } from "./paint.js";
 
 // Dragons: a long neck and tail, horns, and wings on the back, each wing an arm (shoulder, elbow,
 // wrist) with three long fingers and skin between them and back to the flank. A dragon stands on
@@ -18,6 +19,9 @@ import { shapesOn } from "./bodies.js";
 // far the body tips up, front first, about the hips; span: the wings' size; neck and tail: their
 // length.
 export const DRAGONS = shapesOn("dragon");
+
+// The areas its faces are tagged with, in named groups (paint.js).
+export const AREA_GROUPS = { everything: ["scales", "belly", "horns", "eyes", "dark", "teeth"] };
 export const dragonOf = (look) => DRAGONS[look.body] ?? DRAGONS.dragon;
 
 // Turns a point about the hips, the front up by the species' tilt.
@@ -118,10 +122,12 @@ export function dragonMesh(look) {
   const build = 0.85 + 0.3 * look.build;
   const limb = 0.85 + 0.3 * look.limbs;
   const big = sp.head * (0.8 + 0.4 * look.head);
-  const c = Object.fromEntries(Object.entries(look.colors).map(([key, v]) => [key, hex(v)]));
-  const [scales, belly, horn, dark] = [c.skin, c.secondary, c.hair, [0.08, 0.07, 0.07]];
+  // Faces are tagged with their areas (AREA_GROUPS), and painted by the look's coloration.
+  const c = { skin: "scales", secondary: "belly", hair: "horns", eyes: "eyes" };
+  const [scales, belly, horn, dark] = [c.skin, c.secondary, c.hair, "dark"];
   const ridge = shade(scales, 0.7);
   const out = new MeshOut(index);
+  out.paint = painterFor(look, AREA_GROUPS, look.height / s);
   const scaled = (angle) => (Math.abs(angle) < 0.9 ? belly : Math.abs(angle) > 2.5 ? ridge : scales);
   const { H, L } = sp;
   const hz = -L / 2;
@@ -166,7 +172,7 @@ export function dragonMesh(look) {
     out.gem(hp(side * 0.3, 0.14, 0.35), 0.06 * big, c.eyes, [["head", 1]]);
     out.gem(hp(side * 0.33, 0.15, 0.37), 0.025 * big, dark, [["head", 1]]);
     // Teeth down the upper jaw.
-    for (const dz of [0.7, 1.0, 1.3]) out.path([hp(side * 0.17, -0.12, dz), hp(side * 0.17, -0.26, dz + 0.03)], [0.035 * big, 0.004 * big], 4, () => [0.92, 0.9, 0.82], () => [["head", 1]]);
+    for (const dz of [0.7, 1.0, 1.3]) out.path([hp(side * 0.17, -0.12, dz), hp(side * 0.17, -0.26, dz + 0.03)], [0.035 * big, 0.004 * big], 4, () => "teeth", () => [["head", 1]]);
     const horns = {
       swept: [[0.22, 0.3, -0.05, 0.13], [0.36, 0.55, -0.6, 0.09], [0.42, 0.68, -1.25, 0.05], [0.4, 0.82, -1.7, 0.008]],
       short: [[0.2, 0.28, -0.05, 0.1], [0.3, 0.45, -0.45, 0.06], [0.33, 0.55, -0.8, 0.008]],

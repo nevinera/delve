@@ -1,6 +1,7 @@
 import { MeshOut } from "./body.js";
 import { TAU, ease, hex, hump, mirrored, mul, sampled, shade } from "./rig.js";
 import { shapesOn } from "./bodies.js";
+import { painterFor } from "./paint.js";
 
 // Slimes: a dome of jelly that squashes and stretches as it moves, hopping, eyes on its front.
 // Its `body` bone sits at the middle of its base, so stretching it squashes the slime onto the
@@ -15,6 +16,9 @@ import { shapesOn } from "./bodies.js";
 // Shapes are in the slime's own feet, a slime 1ft tall, scaled to the look's height. It faces +z.
 
 export const SLIMES = shapesOn("slime");
+
+// The areas its faces are tagged with, in named groups (paint.js).
+export const AREA_GROUPS = { everything: ["jelly", "eyes", "dark", "eyeWhites"] };
 
 // How high a wisp's middle floats, in the wisp's own feet.
 const FLOAT = 0.55;
@@ -43,9 +47,11 @@ export function slimeMesh(look) {
   const canonical = mirrored(joints(sp), 1);
   const index = new Map(canonical.map((b, i) => [b.name, i]));
   const wide = 0.8 + 0.4 * look.build;
-  const c = Object.fromEntries(Object.entries(look.colors).map(([key, v]) => [key, hex(v)]));
-  const [jelly, dark] = [c.skin, [0.05, 0.05, 0.06]];
+  // Faces are tagged with their areas (AREA_GROUPS), and painted by the look's coloration.
+  const c = { skin: "jelly", eyes: "eyes" };
+  const [jelly, dark] = [c.skin, "dark"];
   const out = new MeshOut(index);
+  out.paint = painterFor(look, AREA_GROUPS, 1);
   if (sp.wisp) return scaled(wispBody(out, c, wide), canonical, s, true);
   // The dome, flat underneath, base to crown: [height, radius]; the upper rings sway with the top.
   const rows = [
@@ -66,7 +72,7 @@ export function slimeMesh(look) {
   );
   // Eyes and a mouth.
   for (const x of [-1, 1]) {
-    out.gem([x * 0.16, 0.6, 0.46 * wide], 0.07, [0.95, 0.95, 0.92], [["top", 1]]);
+    out.gem([x * 0.16, 0.6, 0.46 * wide], 0.07, "eyeWhites", [["top", 1]]);
     out.gem([x * 0.16, 0.6, 0.46 * wide + 0.05], 0.035, c.eyes, [["top", 1]]);
   }
   out.path([[-0.12, 0.42, 0.53 * wide], [0, 0.39, 0.56 * wide], [0.12, 0.42, 0.53 * wide]], [0.025, 0.03, 0.025], 4, () => dark, () => [["body", 0.5], ["top", 0.5]]);

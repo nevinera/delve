@@ -80,3 +80,21 @@ A body's `patterns` say how its areas are painted, and its `colorations` fill a 
 | `upper` | back, crown, ears, mane, spines, `tails` |
 | `lower` | belly, muzzle, jaw, `limbs` |
 | `everything` | all of the above, and mane, beard, spines, eyes, pupils, shell, plastron, cap, gills, trunk, beak |
+
+### Other skeletons' areas
+
+Each has one group, `everything`, holding all its areas.
+
+| Skeleton | Areas |
+| --- | --- |
+| `dragon` | scales, belly, horns, eyes, dark, teeth |
+| `serpent` | scales, belly, markings, eyes, dark, teeth |
+| `fish`, `ray` | back, belly, fins, eyes, dark, teeth |
+| `bat` | fur, wings, claws, eyes, dark, teeth |
+| `crawler` | carapace, markings, claws, eyes, dark, wings |
+| `slime` | jelly, eyes, dark, eyeWhites |
+| `bird` | plumage, belly, beak, eyes, dark, comb |
+| `strider` | hide, markings, claws, eyes, dark, teeth |
+| `eyeshaug` | hide, mouth, eyes, eyeWhites, dark, teeth |
+
+Humanoid bodies still take their look's `colors` (skin, hair, eyes and the rest), not colorations.

@@ -1,6 +1,7 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "./rig.js";
 import { shapesOn } from "./bodies.js";
+import { painterFor } from "./paint.js";
 
 // Striders: a body held level on two big legs, balanced by a long tail, a neck forward to a long
 // head with jaws. Each leg bends three ways: the thigh forward to the knee, the shin back to the
@@ -19,6 +20,9 @@ import { shapesOn } from "./bodies.js";
 // for none), and features: sickle (a raised claw on each foot), crest (feathers along the head and
 // neck), stripes, beak (a bird's head), feathered, kick.
 export const STRIDERS = shapesOn("strider");
+
+// The areas its faces are tagged with, in named groups (paint.js).
+export const AREA_GROUPS = { everything: ["hide", "markings", "claws", "eyes", "dark", "teeth"] };
 
 const TAIL = ["tail_01", "tail_02", "tail_03", "tail_04"];
 
@@ -56,11 +60,13 @@ export function striderMesh(look) {
   const at = (name) => canonical[index.get(name)].at;
   const build = 0.85 + 0.3 * look.build;
   const big = 0.85 + 0.3 * look.head;
-  const c = Object.fromEntries(Object.entries(look.colors).map(([key, v]) => [key, hex(v)]));
-  const [hide, mark, claw, dark] = [c.skin, c.secondary, c.hair, [0.08, 0.05, 0.05]];
+  // Faces are tagged with their areas (AREA_GROUPS), and painted by the look's coloration.
+  const c = { skin: "hide", secondary: "markings", hair: "claws", eyes: "eyes" };
+  const [hide, mark, claw, dark] = [c.skin, c.secondary, c.hair, "dark"];
   const pale = shade(hide, 1.35);
-  const tooth = [0.92, 0.9, 0.82];
+  const tooth = "teeth";
   const out = new MeshOut(index);
+  out.paint = painterFor(look, AREA_GROUPS, 1);
   const [P, C, N, H] = [at("pelvis"), at("spine_01"), at("neck"), at("head")];
   const w = sp.fat * build;
   const flat = (corners, color, side) => {

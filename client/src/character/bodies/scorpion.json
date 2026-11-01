@@ -17,12 +17,64 @@
   "look": {
     "height": [4, 5.5],
     "build": [0.4, 0.8],
-    "limbs": [0.4, 0.7],
-    "colors": {
-      "skin": ["#7a5a2a", "#3a2a20", "#8a6a3a", "#2a2a30"],
-      "secondary": ["#c08030", "#d0a040"],
-      "hair": ["#2a1a10", "#1a1414"],
-      "eyes": ["#101010", "#c03020"]
+    "limbs": [0.4, 0.7]
+  },
+  "patterns": {
+    "standard": {
+      "colors": {
+        "dark": "#120f0f",
+        "wings": "#d1dbe6"
+      },
+      "areas": {
+        "carapace": "carapace",
+        "markings": "markings",
+        "claws": "claws",
+        "eyes": "eyes",
+        "dark": "dark",
+        "wings": "wings"
+      }
     }
-  }
+  },
+  "colorations": [
+    {
+      "name": "standard 1",
+      "pattern": "standard",
+      "colors": {
+        "carapace": "#7a5a2a",
+        "markings": "#c08030",
+        "claws": "#2a1a10",
+        "eyes": "#101010"
+      }
+    },
+    {
+      "name": "standard 2",
+      "pattern": "standard",
+      "colors": {
+        "carapace": "#3a2a20",
+        "markings": "#d0a040",
+        "claws": "#1a1414",
+        "eyes": "#c03020"
+      }
+    },
+    {
+      "name": "standard 3",
+      "pattern": "standard",
+      "colors": {
+        "carapace": "#8a6a3a",
+        "markings": "#c08030",
+        "claws": "#2a1a10",
+        "eyes": "#101010"
+      }
+    },
+    {
+      "name": "standard 4",
+      "pattern": "standard",
+      "colors": {
+        "carapace": "#2a2a30",
+        "markings": "#d0a040",
+        "claws": "#1a1414",
+        "eyes": "#c03020"
+      }
+    }
+  ]
 }
