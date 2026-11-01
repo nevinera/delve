@@ -1,5 +1,6 @@
 {
   "skeleton": "hoofed",
+  "scale": 1.32,
   "shape": {
     "H": 1.95,
     "L": 1.9,
@@ -19,7 +20,6 @@
     "snout": true
   },
   "look": {
-    "height": [3, 3.4],
     "build": [0.5, 0.8]
   },
   "patterns": {

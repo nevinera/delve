@@ -1,5 +1,6 @@
 {
   "skeleton": "bird",
+  "scale": 1.07,
   "shape": {
     "tilt": 0.45,
     "hip": 0.9,
@@ -12,7 +13,6 @@
     "beak": "straight"
   },
   "look": {
-    "height": [2, 3],
     "build": [0.4, 0.7],
     "head": [0.4, 0.6]
   },

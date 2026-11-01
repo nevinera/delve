@@ -1,8 +1,8 @@
 {
   "skeleton": "humanoid",
+  "scale": 1.25,
   "look": {
     "unarmed": "claw",
-    "height": [7, 8],
     "build": [0.8, 1],
     "limbs": [0.7, 0.9],
     "shoulders": [0.8, 1],

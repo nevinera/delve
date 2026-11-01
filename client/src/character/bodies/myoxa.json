@@ -1,5 +1,6 @@
 {
   "skeleton": "ursine",
+  "scale": 1.66,
   "shape": {
     "H": 2.6,
     "L": 2.8,
@@ -18,7 +19,6 @@
     "slow": true
   },
   "look": {
-    "height": [4.8, 5.6],
     "build": [0.6, 0.9],
     "flesh": "fungal"
   },

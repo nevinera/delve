@@ -305,6 +305,10 @@ export function creatureProblems(creature, { has, statuses }) {
   const out = named(creature);
   if (!isObject(creature.look)) out.push("needs a look, a character recipe");
   else if (!BODIES.includes(creature.look.body ?? "humanoid")) out.push(`has body ${JSON.stringify(creature.look.body)}, not one of ${BODIES.join(", ")}`);
+  else {
+    const scale = creature.look.scale;
+    if (scale !== undefined && (![scale].flat().every((v) => v >= 0.5 && v <= 2) || (Array.isArray(scale) && scale.length !== 2))) out.push("needs a look scale from 0.5 to 2, or a [low, high] range of them");
+  }
   if (creature.creatureType !== undefined && !CREATURE_TYPES.includes(creature.creatureType)) out.push(`has creatureType ${JSON.stringify(creature.creatureType)}, not one of ${CREATURE_TYPES.join(", ")}`);
   if (creature.classification !== undefined && !CLASSIFICATIONS.includes(creature.classification)) out.push(`has classification ${JSON.stringify(creature.classification)}, not one of ${CLASSIFICATIONS.join(", ")}`);
   if (creature.reaction !== undefined && !["hostile", "neutral"].includes(creature.reaction)) out.push("has a reaction other than hostile or neutral");

@@ -1,8 +1,8 @@
 {
   "skeleton": "eyeshaug",
+  "scale": 3.09,
   "shape": {},
   "look": {
-    "height": [6, 8],
     "build": [0.5, 0.9]
   },
   "patterns": {

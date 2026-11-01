@@ -1,5 +1,6 @@
 {
   "skeleton": "hoofed",
+  "scale": 1.15,
   "shape": {
     "H": 3.3,
     "L": 2.1,
@@ -17,7 +18,6 @@
     "antlers": true
   },
   "look": {
-    "height": [5.2, 5.8],
     "build": [0.4, 0.6]
   },
   "patterns": {

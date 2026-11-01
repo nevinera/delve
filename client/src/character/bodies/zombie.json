@@ -1,7 +1,7 @@
 {
   "skeleton": "humanoid",
+  "scale": 0.98,
   "look": {
-    "height": [5.6, 6.2],
     "build": [0.3, 0.55],
     "flesh": "rotting",
     "gait": "shamble",

@@ -1,5 +1,6 @@
 {
   "skeleton": "crawler",
+  "scale": 1.33,
   "shape": {
     "kind": "scorpion",
     "y": 0.9,
@@ -15,7 +16,6 @@
     "thick": 0.85
   },
   "look": {
-    "height": [4, 5.5],
     "build": [0.4, 0.8],
     "limbs": [0.4, 0.7]
   },

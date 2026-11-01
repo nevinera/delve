@@ -34,7 +34,7 @@
     },
     "look": {
       "type": "object",
-      "description": "a character recipe (client/src/character/recipe.js)"
+      "description": "a character recipe (client/src/character/recipe.js). A creature body's look also takes scale (0.5 to 2, or a [low, high] range) and coloration (a name, or a list of names to pick from)."
     },
     "classification": {
       "enum": [

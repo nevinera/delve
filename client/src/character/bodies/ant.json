@@ -1,5 +1,6 @@
 {
   "skeleton": "crawler",
+  "scale": 1.53,
   "shape": {
     "kind": "ant",
     "y": 0.9,
@@ -14,7 +15,6 @@
     "thick": 0.6
   },
   "look": {
-    "height": [2.5, 3.2],
     "build": [0.4, 0.7],
     "limbs": [0.4, 0.6]
   },

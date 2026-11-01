@@ -1,5 +1,6 @@
 {
   "skeleton": "canine",
+  "scale": 1.01,
   "shape": {
     "H": 2.2,
     "L": 1.7,
@@ -18,7 +19,6 @@
     "laugh": true
   },
   "look": {
-    "height": [2.9, 3.3],
     "build": [0.4, 0.6]
   },
   "patterns": {

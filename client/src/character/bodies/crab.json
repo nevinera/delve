@@ -1,5 +1,6 @@
 {
   "skeleton": "crawler",
+  "scale": 1.76,
   "shape": {
     "kind": "crab",
     "y": 0.9,
@@ -15,7 +16,6 @@
     "thick": 0.95
   },
   "look": {
-    "height": [2.5, 3.5],
     "build": [0.5, 0.8],
     "limbs": [0.5, 0.8]
   },

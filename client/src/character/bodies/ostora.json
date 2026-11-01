@@ -1,5 +1,6 @@
 {
   "skeleton": "strider",
+  "scale": 1.95,
   "shape": {
     "hip": 2.4,
     "body": 1.15,
@@ -14,7 +15,6 @@
     "kick": true
   },
   "look": {
-    "height": [8, 10],
     "build": [0.5, 0.8],
     "head": [0.4, 0.6]
   },

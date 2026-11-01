@@ -1,5 +1,6 @@
 {
   "skeleton": "canine",
+  "scale": 1.41,
   "shape": {
     "H": 0.85,
     "L": 0.85,
@@ -18,7 +19,6 @@
     "hop": true
   },
   "look": {
-    "height": [1.5, 2.5],
     "build": [0.5, 0.9],
     "limbs": [0.5, 0.8],
     "head": [0.5, 0.7]

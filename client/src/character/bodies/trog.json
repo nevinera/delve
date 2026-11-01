@@ -1,7 +1,7 @@
 {
   "skeleton": "humanoid",
+  "scale": 0.82,
   "look": {
-    "height": [4.6, 5.2],
     "build": [0.7, 0.9],
     "limbs": [0.7, 0.9],
     "shoulders": [0.85, 1],

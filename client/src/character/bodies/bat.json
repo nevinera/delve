@@ -1,8 +1,8 @@
 {
   "skeleton": "bat",
+  "scale": 1,
   "shape": {},
   "look": {
-    "height": [8, 12],
     "build": [0.3, 0.7]
   },
   "patterns": {

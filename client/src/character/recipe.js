@@ -3,6 +3,7 @@ import { FLESH_KINDS, HORN_KINDS, MUZZLE_KINDS } from "./body.js";
 import { ARM_PAIRS, LOWER_KINDS, TAIL_KINDS, WING_KINDS } from "./extras.js";
 import { HELD, OFFHANDS, WEAPON_STYLES, WEAPONS } from "./weapons.js";
 import { SHIPPED_BODIES, SHIPPED_LOOKS } from "./bodies.js";
+import { nativeHeight } from "./frames.js";
 
 // Character recipes: how a kind of character looks, as plain JSON, so a world can describe its
 // enemies' looks and the client builds their models (body.js). A recipe gives each setting either a
@@ -15,7 +16,9 @@ import { SHIPPED_BODIES, SHIPPED_LOOKS } from "./bodies.js";
 //   the recipe's own go over. Goblins and trolls are humanoids shaped differently; wolves stand on
 //   four legs (quadruped.js), and take only height, build, limbs, head and colors (skin the fur,
 //   hair its darker back and tail, eyes).
-// - height: in feet, to the top of the head.
+// - height: in feet, to the top of the head. A creature body's is its own size: its builder's
+//   shape times the body's `scale`.
+// - scale: a creature's size against its body's, 0.5 to 2, 1 by default.
 // - build: 0 slight to 1 heavy, the thickness of the trunk and limbs.
 // - limbs: 0 thin to 1 thick, the limbs on top of build.
 // - shoulders, waist, hips, jaw: 0 narrow to 1 broad.
@@ -199,17 +202,25 @@ export function resolveRecipe(own = {}, random = Math.random) {
   if (!OFFHANDS.includes(look.offhand) || HELD[look.weapon]?.twoHanded) look.offhand = DEFAULT_LOOK.offhand;
   if (!WEAPON_STYLES.includes(look.weaponStyle)) look.weaponStyle = DEFAULT_LOOK.weaponStyle;
   if (!WEAPON_STYLES.includes(look.offhandStyle)) look.offhandStyle = DEFAULT_LOOK.offhandStyle;
-  // A body painted by colorations (bodies.md) wears the one the recipe names, or one picked by
-  // weight; the recipe's colors go over its colors by name.
-  const colorations = SHIPPED_BODIES[own.body]?.colorations ?? [];
+  // A body painted by colorations (bodies.md) wears the one the recipe names, or one of those it
+  // names, or of all of them, picked by weight; the recipe's colors go over its colors by name.
+  const shipped = SHIPPED_BODIES[own.body];
+  const named = [own.coloration].flat();
+  const colorations = (shipped?.colorations ?? []).filter((c, _, all) => named.includes(c.name) || !all.some((a) => named.includes(a.name)));
   if (colorations.length) {
     let left = random() * colorations.reduce((sum, c) => sum + weight(c), 0);
-    const picked = colorations.find((c) => c.name === own.coloration) ?? colorations.find((c) => (left -= weight(c)) < 0) ?? colorations.at(-1);
+    const picked = colorations.find((c) => (left -= weight(c)) < 0) ?? colorations.at(-1);
     look.coloration = picked.name;
     // The old slot names still reach the colors they painted.
     const renamed = { skin: "coat", hair: "back", secondary: "bare" };
     const paints = Object.entries({ ...outfit.colors, ...own.colors }).filter(([, v]) => isColor(v)).map(([k, v]) => [k in picked.colors ? k : (renamed[k] ?? k), v]);
     if (paints.length) look.paints = Object.fromEntries(paints);
+  }
+  // A creature stands at its body's size times its own scale, unless its recipe gives a height.
+  if (shipped) {
+    const scale = pick(own.scale ?? 1);
+    look.scale = Number.isFinite(scale) ? Math.min(2, Math.max(0.5, scale)) : 1;
+    if (own.height === undefined) look.height = nativeHeight(look) * (shipped.scale ?? 1) * look.scale;
   }
   return look;
 }

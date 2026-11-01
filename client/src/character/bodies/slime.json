@@ -1,8 +1,8 @@
 {
   "skeleton": "slime",
+  "scale": 3.25,
   "shape": {},
   "look": {
-    "height": [2.5, 4],
     "build": [0.4, 0.8]
   },
   "patterns": {

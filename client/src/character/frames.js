@@ -40,3 +40,13 @@ SKELETONS.eyeshaug = Object.keys(EYESHAUGS);
 for (const [body, { family }] of Object.entries(FISH)) (SKELETONS[family] ??= []).push(body);
 
 export const skeletonOf = (body) => Object.keys(SKELETONS).find((name) => SKELETONS[name].includes(body)) ?? "humanoid";
+
+// A body's own height in feet, as its builder shapes it before scaling it to a look's height: 6 for
+// a humanoid. Worked out once for each body, from the first look asked about.
+const natives = new Map();
+export function nativeHeight(look) {
+  const frame = FRAMES[skeletonOf(look.body)];
+  if (!frame) return 6;
+  if (!natives.has(look.body)) natives.set(look.body, 1 / frame.mesh({ ...look, height: 1 }).scale);
+  return natives.get(look.body);
+}

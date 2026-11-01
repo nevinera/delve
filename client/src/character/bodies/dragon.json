@@ -1,5 +1,6 @@
 {
   "skeleton": "dragon",
+  "scale": 1.88,
   "shape": {
     "H": 4,
     "L": 5,
@@ -15,7 +16,6 @@
     "breath": true
   },
   "look": {
-    "height": [13, 16],
     "build": [0.4, 0.7]
   },
   "patterns": {

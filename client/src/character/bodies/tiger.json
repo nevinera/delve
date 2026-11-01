@@ -1,5 +1,6 @@
 {
   "skeleton": "feline",
+  "scale": 1.34,
   "shape": {
     "H": 1.9,
     "L": 2.75,
@@ -16,7 +17,6 @@
     "feet": "paw"
   },
   "look": {
-    "height": [3.4, 4],
     "build": [0.45, 0.7]
   },
   "patterns": {

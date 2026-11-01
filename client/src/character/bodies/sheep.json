@@ -1,5 +1,6 @@
 {
   "skeleton": "hoofed",
+  "scale": 1.17,
   "shape": {
     "H": 1.9,
     "L": 1.7,
@@ -17,7 +18,6 @@
     "wool": true
   },
   "look": {
-    "height": [3, 3.4],
     "build": [0.5, 0.7]
   },
   "patterns": {

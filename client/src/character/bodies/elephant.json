@@ -1,5 +1,6 @@
 {
   "skeleton": "pachyderm",
+  "scale": 1.06,
   "shape": {
     "H": 9,
     "L": 5.4,
@@ -18,7 +19,6 @@
     "ivory": true
   },
   "look": {
-    "height": [11, 13],
     "build": [0.4, 0.7]
   },
   "patterns": {

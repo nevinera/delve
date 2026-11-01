@@ -1,5 +1,6 @@
 {
   "skeleton": "serpent",
+  "scale": 1.86,
   "shape": {
     "r": 1.6,
     "segment": 2.4,
@@ -9,7 +10,6 @@
     "maw": true
   },
   "look": {
-    "height": [18, 24],
     "build": [0.4, 0.7]
   },
   "patterns": {

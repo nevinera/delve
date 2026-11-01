@@ -1,10 +1,10 @@
 {
   "skeleton": "humanoid",
+  "scale": 0.95,
   "look": {
     "unarmed": "claw",
     "gait": "shamble",
     "flesh": "rotting",
-    "height": [5.4, 6],
     "build": [0.05, 0.2],
     "limbs": [0.05, 0.2],
     "waist": [0.1, 0.3],

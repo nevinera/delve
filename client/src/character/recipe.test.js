@@ -5,14 +5,24 @@ import { SHIPPED_BODIES } from "./bodies.js";
 describe("resolveRecipe", () => {
   it("takes a creature's look from its body, under the recipe's own settings", () => {
     const goblin = resolveRecipe({ body: "goblin" });
-    expect(goblin.height).toBeGreaterThanOrEqual(BODY_LOOKS.goblin.height[0]);
-    expect(goblin.height).toBeLessThanOrEqual(BODY_LOOKS.goblin.height[1]);
+    expect(goblin.height).toBeCloseTo(6 * SHIPPED_BODIES.goblin.scale);
     expect(goblin.ears).toBe("long");
     const troll = resolveRecipe({ body: "troll", height: 10, colors: { eyes: "#ffffff" } });
     expect(troll.height).toBe(10);
     expect(troll.paints.eyes).toBe("#ffffff");
     expect(SHIPPED_BODIES.troll.colorations.map((c) => c.name)).toContain(troll.coloration);
     expect(resolveRecipe({ body: "troll", coloration: "troll 2" }).coloration).toBe("troll 2");
+    for (let i = 0; i < 20; i++) expect(["troll 1", "troll 3"]).toContain(resolveRecipe({ body: "troll", coloration: ["troll 1", "troll 3"] }).coloration);
+  });
+
+  it("sizes a creature by its body's scale and its own, 0.5 to 2", () => {
+    const wolf = resolveRecipe({ body: "wolf" }).height;
+    expect(resolveRecipe({ body: "wolf", scale: 1.5 }).height).toBeCloseTo(wolf * 1.5);
+    expect(resolveRecipe({ body: "wolf", scale: 9 }).height).toBeCloseTo(wolf * 2);
+    const some = resolveRecipe({ body: "wolf", scale: [0.8, 1.2] });
+    expect(some.scale).toBeGreaterThanOrEqual(0.8);
+    expect(some.scale).toBeLessThanOrEqual(1.2);
+    expect(resolveRecipe({ body: "elephant" }).height).toBeGreaterThan(10);
   });
 
   it("fills in the defaults", () => {

@@ -1,7 +1,7 @@
 {
   "skeleton": "humanoid",
+  "scale": 1.42,
   "look": {
-    "height": [8, 9],
     "build": [0.4, 0.6],
     "limbs": [0.4, 0.6],
     "lower": "vortex",

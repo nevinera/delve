@@ -27,6 +27,11 @@
         "eyeshaug"
       ]
     },
+    "scale": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "The body's size against its shape's own: its creatures stand this many times the height its builder shapes, before their own scale."
+    },
     "shape": {
       "type": "object",
       "description": "The skeleton's builder's settings; each skeleton takes its own."

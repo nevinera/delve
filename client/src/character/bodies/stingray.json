@@ -1,8 +1,8 @@
 {
   "skeleton": "ray",
+  "scale": 1.08,
   "shape": {},
   "look": {
-    "height": [5, 8],
     "build": [0.4, 0.7]
   },
   "patterns": {

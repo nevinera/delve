@@ -9,12 +9,14 @@ client/src/character/bodies/<body>.json
 ```json
 {
   "skeleton": "feline",
+  "scale": 1.34,
   "shape": { "H": 1.9, "L": 2.75, "head": 1.7, "ears": "cat", "tail": "cat" },
-  "look": { "height": [3.4, 4], "build": [0.45, 0.7], "colors": { "skin": ["#d07a2a"], "hair": ["#1a1410"] } }
+  "look": { "build": [0.45, 0.7] }
 }
 ```
 
 - `skeleton`: which builder makes the body, and so which bones and clips it has.
+- `scale`: the body's default size against its shape's. A creature stands at the height its builder shapes, times this, times its own `scale` (see [game data](game-data.md)). A humanoid's shape is 6 ft tall.
 - `shape`: the builder's settings for this body. Each skeleton takes its own, listed at the top of its builder.
 - `look`: a recipe's settings (see [game data](game-data.md)), as ranges and lists that each creature picks from. A humanoid body has no `shape`; its look's settings (ears, horns, tail and the rest) are its shape.
 

@@ -1,5 +1,6 @@
 {
   "skeleton": "canine",
+  "scale": 1.05,
   "shape": {
     "H": 2.05,
     "L": 1.75,
@@ -16,7 +17,6 @@
     "feet": "paw"
   },
   "look": {
-    "height": [2.9, 3.3],
     "build": [0.4, 0.6],
     "limbs": [0.4, 0.6],
     "head": [0.45, 0.55]

@@ -1,5 +1,6 @@
 {
   "skeleton": "lizard",
+  "scale": 1.43,
   "shape": {
     "H": 0.55,
     "L": 2.8,
@@ -18,7 +19,6 @@
     "jaw": 2.4
   },
   "look": {
-    "height": [1.3, 1.5],
     "build": [0.5, 0.7]
   },
   "patterns": {

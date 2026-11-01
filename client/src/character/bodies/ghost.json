@@ -1,8 +1,8 @@
 {
   "skeleton": "humanoid",
+  "scale": 1,
   "look": {
     "unarmed": "claw",
-    "height": [5.6, 6.4],
     "build": [0.3, 0.6],
     "lower": "vortex",
     "flesh": "spirit",

@@ -1,5 +1,6 @@
 {
   "skeleton": "bird",
+  "scale": 0.96,
   "shape": {
     "tilt": 0.4,
     "hip": 1,
@@ -15,7 +16,6 @@
     "flightless": true
   },
   "look": {
-    "height": [2, 3],
     "build": [0.5, 0.9],
     "head": [0.4, 0.6]
   },

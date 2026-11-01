@@ -1,10 +1,10 @@
 {
   "skeleton": "ray",
+  "scale": 1.17,
   "shape": {
     "turtle": true
   },
   "look": {
-    "height": [6, 8],
     "build": [0.5, 0.8]
   },
   "patterns": {

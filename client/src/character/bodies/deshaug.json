@@ -1,5 +1,6 @@
 {
   "skeleton": "canine",
+  "scale": 1.17,
   "shape": {
     "H": 2.6,
     "L": 2.1,
@@ -18,7 +19,6 @@
     "breath": true
   },
   "look": {
-    "height": [3.8, 4.4],
     "build": [0.5, 0.75],
     "flesh": "fire"
   },
