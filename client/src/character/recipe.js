@@ -237,6 +237,42 @@ export const BODY_LOOKS = {
     limbs: [0.5, 0.8],
     colors: { skin: ["#1a1a1a", "#2a2018"], secondary: ["#2a5a3a", "#3a2a5a", "#5a3a1a", "#1a3a5a"], hair: ["#2a2420", "#3a3028"], eyes: ["#c0a020", "#d04020"] },
   },
+  vulture: {
+    height: [4, 5.5],
+    build: [0.5, 0.8],
+    head: [0.4, 0.6],
+    colors: { skin: ["#3a2e28", "#2a2420", "#4a3a2e"], secondary: ["#c08070", "#a87060", "#d0a090"], hair: ["#d8c8a0", "#c0b090"], eyes: ["#8a2010", "#3a1a10"] },
+  },
+  owl: {
+    height: [3, 4.5],
+    build: [0.5, 0.9],
+    head: [0.6, 0.9],
+    colors: { skin: ["#7a5a3a", "#8a7a6a", "#5a4a3a", "#d8d0c8"], secondary: ["#d8c8a8", "#e8e0d0"], hair: ["#3a3028", "#504030"], eyes: ["#f0b020", "#e08010"] },
+  },
+  eagle: {
+    height: [4, 5.5],
+    build: [0.5, 0.8],
+    head: [0.4, 0.6],
+    colors: { skin: ["#4a3020", "#5a3a22", "#3a2818"], secondary: ["#f0ece0", "#e8e4d8"], hair: ["#e0b020", "#d8a830"], eyes: ["#d8a020", "#c09018"] },
+  },
+  crow: {
+    height: [2, 3],
+    build: [0.4, 0.7],
+    head: [0.4, 0.6],
+    colors: { skin: ["#18181e", "#202028", "#1a1a20"], secondary: ["#22222a", "#2a2a32"], hair: ["#101012", "#1a1a1c"], eyes: ["#101010", "#3a2a10"] },
+  },
+  chicken: {
+    height: [2, 3],
+    build: [0.5, 0.9],
+    head: [0.4, 0.6],
+    colors: { skin: ["#e8e4dc", "#a05a28", "#3a2a20", "#c88a40"], secondary: ["#e8e0d0", "#b06a30", "#4a3a2a"], hair: ["#e0b040", "#d8a030"], eyes: ["#c07010", "#a05010"] },
+  },
+  penguin: {
+    height: [3, 5],
+    build: [0.5, 0.9],
+    head: [0.4, 0.6],
+    colors: { skin: ["#1a1c22", "#22242a"], secondary: ["#f0f0ec", "#e8e8e4"], hair: ["#e08a20", "#303030"], eyes: ["#101010"] },
+  },
   wisp: {
     height: [4, 6],
     build: [0.4, 0.8],
