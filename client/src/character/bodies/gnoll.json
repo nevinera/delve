@@ -60,11 +60,28 @@
         "hair": "hair",
         "eyes": "eyes"
       }
+    },
+    "spotted": {
+      "areas": {
+        "skin": {
+          "color": "skin",
+          "marks": [
+            {
+              "kind": "spots",
+              "color": "spot",
+              "amount": 0.3,
+              "size": 0.05
+            }
+          ]
+        },
+        "hair": "hair",
+        "eyes": "eyes"
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "gnoll 1",
       "pattern": "standard",
       "colors": {
         "skin": "#a08050",
@@ -73,21 +90,51 @@
       }
     },
     {
-      "name": "standard 2",
-      "pattern": "standard",
+      "name": "gnoll 2",
+      "pattern": "spotted",
       "colors": {
-        "skin": "#8a7a5a",
+        "skin": "#6a5a48",
         "hair": "#2a2018",
-        "eyes": "#c04020"
+        "eyes": "#c04020",
+        "spot": "#1e1610"
       }
     },
     {
-      "name": "standard 3",
+      "name": "gnoll 3",
       "pattern": "standard",
       "colors": {
-        "skin": "#b09060",
-        "hair": "#3a2a1a",
+        "skin": "#c0a070",
+        "hair": "#5a3a20",
         "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "gnoll 4",
+      "pattern": "spotted",
+      "colors": {
+        "skin": "#8a5a3a",
+        "hair": "#3a2a1a",
+        "eyes": "#c04020",
+        "spot": "#2a1a10"
+      }
+    },
+    {
+      "name": "gnoll 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#9a9a80",
+        "hair": "#2a2018",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "gnoll 6",
+      "pattern": "spotted",
+      "colors": {
+        "skin": "#b08a50",
+        "hair": "#5a3a20",
+        "eyes": "#c04020",
+        "spot": "#3a2414"
       }
     }
   ]

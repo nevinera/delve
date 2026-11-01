@@ -26,22 +26,69 @@
         "dark": "dark",
         "teeth": "teeth"
       }
+    },
+    "banded": {
+      "colors": {
+        "dark": "#141212",
+        "teeth": "#ebe0c2"
+      },
+      "areas": {
+        "scales": {
+          "color": "scales",
+          "marks": [
+            {
+              "kind": "stripes",
+              "color": "band",
+              "width": 0.04,
+              "gap": 0.06,
+              "wave": 0
+            },
+            {
+              "kind": "stripes",
+              "color": "band2",
+              "width": 0.012,
+              "gap": 0.088,
+              "wave": 0
+            }
+          ]
+        },
+        "belly": "belly",
+        "markings": "markings",
+        "eyes": "eyes",
+        "dark": "dark",
+        "teeth": "teeth"
+      }
+    },
+    "blotched": {
+      "colors": {
+        "dark": "#141212",
+        "teeth": "#ebe0c2"
+      },
+      "areas": {
+        "scales": {
+          "color": "scales",
+          "marks": [
+            {
+              "kind": "patches",
+              "color": "band",
+              "amount": 0.4,
+              "size": 0.06
+            }
+          ]
+        },
+        "belly": "belly",
+        "markings": "markings",
+        "eyes": "eyes",
+        "dark": "dark",
+        "teeth": "teeth"
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "grass",
       "pattern": "standard",
-      "colors": {
-        "scales": "#6a6a3a",
-        "belly": "#d8c890",
-        "markings": "#2a2418",
-        "eyes": "#e0c020"
-      }
-    },
-    {
-      "name": "standard 2",
-      "pattern": "standard",
+      "weight": 3,
       "colors": {
         "scales": "#4a5a3a",
         "belly": "#c8b880",
@@ -50,13 +97,48 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "olive",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
-        "scales": "#7a5a3a",
+        "scales": "#6a6a3a",
+        "belly": "#d8c890",
+        "markings": "#2a2418",
+        "eyes": "#e0c020"
+      }
+    },
+    {
+      "name": "desert",
+      "pattern": "standard",
+      "weight": 2,
+      "colors": {
+        "scales": "#9a7a4a",
         "belly": "#d8c890",
         "markings": "#5a3a20",
         "eyes": "#e0c020"
+      }
+    },
+    {
+      "name": "coral",
+      "pattern": "banded",
+      "colors": {
+        "scales": "#c03020",
+        "belly": "#e0d090",
+        "markings": "#1a1414",
+        "band": "#141212",
+        "band2": "#e0c040",
+        "eyes": "#101010"
+      }
+    },
+    {
+      "name": "python",
+      "pattern": "blotched",
+      "colors": {
+        "scales": "#9a8a5a",
+        "belly": "#e0d8b0",
+        "markings": "#3a2a1a",
+        "band": "#4a3a20",
+        "eyes": "#e0a020"
       }
     }
   ]

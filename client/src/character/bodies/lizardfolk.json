@@ -50,7 +50,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "lizardfolk 1",
       "pattern": "standard",
       "colors": {
         "skin": "#4a7a4a",
@@ -58,7 +58,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "lizardfolk 2",
       "pattern": "standard",
       "colors": {
         "skin": "#3a6a5a",
@@ -66,10 +66,42 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "lizardfolk 3",
       "pattern": "standard",
       "colors": {
         "skin": "#6a7a3a",
+        "eyes": "#c0e040"
+      }
+    },
+    {
+      "name": "lizardfolk 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#5a5a3a",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "lizardfolk 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#3a5a6a",
+        "eyes": "#e06020"
+      }
+    },
+    {
+      "name": "lizardfolk 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#7a6a3a",
+        "eyes": "#c0e040"
+      }
+    },
+    {
+      "name": "lizardfolk 7",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#4a4a5a",
         "eyes": "#e0c040"
       }
     }

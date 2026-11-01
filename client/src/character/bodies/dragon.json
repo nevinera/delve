@@ -36,8 +36,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "red",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "scales": "#8a2a1e",
         "belly": "#c8a070",
@@ -46,33 +47,93 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "black",
+      "pattern": "standard",
+      "colors": {
+        "scales": "#24242a",
+        "belly": "#4a4038",
+        "horns": "#c8c0a8",
+        "eyes": "#c0e040"
+      }
+    },
+    {
+      "name": "green",
       "pattern": "standard",
       "colors": {
         "scales": "#3a6a34",
-        "belly": "#b09060",
+        "belly": "#b0a060",
         "horns": "#3a3430",
-        "eyes": "#e06020"
+        "eyes": "#e0c020"
       }
     },
     {
-      "name": "standard 3",
+      "name": "blue",
       "pattern": "standard",
       "colors": {
-        "scales": "#2a2a30",
-        "belly": "#c8a070",
-        "horns": "#e0d6b8",
-        "eyes": "#f0c020"
+        "scales": "#2a4a8a",
+        "belly": "#a8b8c8",
+        "horns": "#e0dccc",
+        "eyes": "#e0f0ff"
       }
     },
     {
-      "name": "standard 4",
+      "name": "white",
       "pattern": "standard",
       "colors": {
-        "scales": "#9a6a2a",
-        "belly": "#b09060",
-        "horns": "#3a3430",
-        "eyes": "#e06020"
+        "scales": "#dcdcd8",
+        "belly": "#c8d0d8",
+        "horns": "#a8b0b8",
+        "eyes": "#60a0e0"
+      }
+    },
+    {
+      "name": "gold",
+      "pattern": "standard",
+      "colors": {
+        "scales": "#c8a040",
+        "belly": "#f0d890",
+        "horns": "#8a6a30",
+        "eyes": "#f06020"
+      }
+    },
+    {
+      "name": "bronze",
+      "pattern": "standard",
+      "colors": {
+        "scales": "#8a6030",
+        "belly": "#c09060",
+        "horns": "#4a3020",
+        "eyes": "#40c0c0"
+      }
+    },
+    {
+      "name": "copper",
+      "pattern": "standard",
+      "colors": {
+        "scales": "#a8582a",
+        "belly": "#d09060",
+        "horns": "#5a3a20",
+        "eyes": "#40c080"
+      }
+    },
+    {
+      "name": "silver",
+      "pattern": "standard",
+      "colors": {
+        "scales": "#a8acb4",
+        "belly": "#dcdcd8",
+        "horns": "#5a5e66",
+        "eyes": "#4060c0"
+      }
+    },
+    {
+      "name": "twilight",
+      "pattern": "standard",
+      "colors": {
+        "scales": "#4a2a6a",
+        "belly": "#8a7aa0",
+        "horns": "#2a2030",
+        "eyes": "#e040e0"
       }
     }
   ]

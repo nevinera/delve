@@ -19,12 +19,37 @@
         "dark": "dark",
         "teeth": "teeth"
       }
+    },
+    "spotted": {
+      "colors": {
+        "dark": "#0f0f12",
+        "teeth": "#f2ede0"
+      },
+      "areas": {
+        "back": {
+          "color": "back",
+          "marks": [
+            {
+              "kind": "spots",
+              "color": "spot",
+              "amount": 0.3,
+              "size": 0.04
+            }
+          ]
+        },
+        "belly": "belly",
+        "fins": "fins",
+        "eyes": "eyes",
+        "dark": "dark",
+        "teeth": "teeth"
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "brown",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "back": "#6a5a48",
         "belly": "#e0d8c8",
@@ -33,23 +58,14 @@
       }
     },
     {
-      "name": "standard 2",
-      "pattern": "standard",
+      "name": "spotted",
+      "pattern": "spotted",
       "colors": {
-        "back": "#5a5040",
-        "belly": "#d8d0c0",
-        "fins": "#8a7a5a",
+        "back": "#2a2a34",
+        "belly": "#e8e8e0",
+        "fins": "#2a2a34",
+        "spot": "#e8e8e0",
         "eyes": "#202020"
-      }
-    },
-    {
-      "name": "standard 3",
-      "pattern": "standard",
-      "colors": {
-        "back": "#4a4a40",
-        "belly": "#e0d8c8",
-        "fins": "#3a3028",
-        "eyes": "#d0a030"
       }
     }
   ]

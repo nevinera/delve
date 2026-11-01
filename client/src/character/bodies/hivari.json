@@ -37,8 +37,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "amber",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "carapace": "#8a7040",
         "markings": "#c0a040",
@@ -47,7 +48,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "violet",
       "pattern": "standard",
       "colors": {
         "carapace": "#5a4a30",
@@ -57,7 +58,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "moss",
       "pattern": "standard",
       "colors": {
         "carapace": "#3a3a2a",

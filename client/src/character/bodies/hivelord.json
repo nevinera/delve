@@ -53,7 +53,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "hivelord 1",
       "pattern": "standard",
       "colors": {
         "skin": "#8a7040",
@@ -62,7 +62,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "hivelord 2",
       "pattern": "standard",
       "colors": {
         "skin": "#5a4a30",
@@ -71,7 +71,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "hivelord 3",
       "pattern": "standard",
       "colors": {
         "skin": "#3a3a2a",
@@ -80,12 +80,21 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "hivelord 4",
       "pattern": "standard",
       "colors": {
         "skin": "#7a5a2a",
         "eyes": "#40c0a0",
         "horn": "#3a2a20"
+      }
+    },
+    {
+      "name": "hivelord 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#4a5a2a",
+        "eyes": "#c04020",
+        "horn": "#2a2018"
       }
     }
   ]

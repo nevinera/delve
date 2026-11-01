@@ -26,12 +26,38 @@
         "dark": "dark",
         "teeth": "teeth"
       }
+    },
+    "banded": {
+      "colors": {
+        "dark": "#141212",
+        "teeth": "#ebe0c2"
+      },
+      "areas": {
+        "scales": {
+          "color": "scales",
+          "marks": [
+            {
+              "kind": "stripes",
+              "color": "band",
+              "width": 0.02,
+              "gap": 0.08,
+              "wave": 0
+            }
+          ]
+        },
+        "belly": "belly",
+        "markings": "markings",
+        "eyes": "eyes",
+        "dark": "dark",
+        "teeth": "teeth"
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "desert",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "scales": "#5a4a2a",
         "belly": "#e0d0a0",
@@ -40,22 +66,23 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "black",
       "pattern": "standard",
       "colors": {
-        "scales": "#3a3a30",
-        "belly": "#d0c090",
+        "scales": "#1e1c1c",
+        "belly": "#3a3430",
         "markings": "#e0d0a0",
         "eyes": "#e0c020"
       }
     },
     {
-      "name": "standard 3",
-      "pattern": "standard",
+      "name": "king",
+      "pattern": "banded",
       "colors": {
-        "scales": "#7a6a3a",
-        "belly": "#e0d0a0",
-        "markings": "#1a1814",
+        "scales": "#2a2a20",
+        "belly": "#e0d090",
+        "markings": "#e0d090",
+        "band": "#e0d090",
         "eyes": "#e04020"
       }
     }

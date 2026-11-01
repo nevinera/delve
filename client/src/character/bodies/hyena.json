@@ -64,43 +64,102 @@
           ]
         }
       }
+    },
+    "striped": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212"
+      },
+      "areas": {
+        "everything": "coat",
+        "back": {
+          "color": "back",
+          "marks": [
+            {
+              "kind": "stripes",
+              "color": "spot",
+              "width": 0.04,
+              "gap": 0.06,
+              "wave": 0.2,
+              "break": 0.2
+            }
+          ]
+        },
+        "crown": "back",
+        "lower": "belly",
+        "limbs": "coat",
+        "shins": {
+          "color": "coat",
+          "tone": 0.85
+        },
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose",
+        "ears": "back",
+        "tailTip": "back",
+        "coat": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "stripes",
+              "color": "spot",
+              "width": 0.04,
+              "gap": 0.06,
+              "wave": 0.2,
+              "break": 0.2
+            }
+          ]
+        },
+        "legs": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "stripes",
+              "color": "spot",
+              "width": 0.04,
+              "gap": 0.06,
+              "wave": 0.2,
+              "break": 0.2,
+              "across": "horizontal"
+            }
+          ]
+        }
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "spotted",
       "pattern": "standard",
+      "weight": 3,
       "colors": {
         "coat": "#a08a60",
         "back": "#3a2a1a",
         "belly": "#d0b37d",
-        "bare": "#2a2018",
         "eyes": "#c8a040",
         "spot": "#2e2215"
       }
     },
     {
-      "name": "standard 2",
+      "name": "pale",
       "pattern": "standard",
       "colors": {
         "coat": "#b09a6a",
         "back": "#2a2018",
         "belly": "#e5c88a",
-        "bare": "#2a2018",
         "eyes": "#a07030",
         "spot": "#221a13"
       }
     },
     {
-      "name": "standard 3",
-      "pattern": "standard",
+      "name": "striped",
+      "pattern": "striped",
       "colors": {
-        "coat": "#8a7a58",
-        "back": "#3a2a1a",
-        "belly": "#b39f72",
-        "bare": "#2a2018",
+        "coat": "#b0a080",
+        "back": "#4a3a2a",
+        "belly": "#d8c8a8",
         "eyes": "#c8a040",
-        "spot": "#2e2215"
+        "spot": "#1e1a14"
       }
     }
   ]

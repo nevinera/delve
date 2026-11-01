@@ -49,7 +49,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "amphen 1",
       "pattern": "standard",
       "colors": {
         "skin": "#5a8a3a",
@@ -57,7 +57,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "amphen 2",
       "pattern": "standard",
       "colors": {
         "skin": "#4a7a5a",
@@ -65,7 +65,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "amphen 3",
       "pattern": "standard",
       "colors": {
         "skin": "#7a8a3a",
@@ -73,10 +73,26 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "amphen 4",
       "pattern": "standard",
       "colors": {
         "skin": "#3a6a6a",
+        "eyes": "#e06020"
+      }
+    },
+    {
+      "name": "amphen 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#6a6a3a",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "amphen 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#4a5a8a",
         "eyes": "#e06020"
       }
     }

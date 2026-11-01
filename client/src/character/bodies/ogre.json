@@ -60,7 +60,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "ogre 1",
       "pattern": "standard",
       "colors": {
         "skin": "#a08a6a",
@@ -69,21 +69,48 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "ogre 2",
       "pattern": "standard",
       "colors": {
         "skin": "#8a9a6a",
         "hair": "#4a3020",
+        "eyes": "#c04020"
+      }
+    },
+    {
+      "name": "ogre 3",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#9a7a6a",
+        "hair": "#1b1310",
         "eyes": "#d0a020"
       }
     },
     {
-      "name": "standard 3",
+      "name": "ogre 4",
       "pattern": "standard",
       "colors": {
-        "skin": "#9a7a6a",
+        "skin": "#b0906a",
+        "hair": "#2a1c14",
+        "eyes": "#c04020"
+      }
+    },
+    {
+      "name": "ogre 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#7a8a5a",
         "hair": "#2a1c14",
         "eyes": "#d0a020"
+      }
+    },
+    {
+      "name": "ogre 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#9a8a8a",
+        "hair": "#4a3020",
+        "eyes": "#c04020"
       }
     }
   ]

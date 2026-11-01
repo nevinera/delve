@@ -31,8 +31,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "jade",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "scales": "#2a8a5a",
         "belly": "#e0c040",
@@ -41,7 +42,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "sky",
       "pattern": "standard",
       "colors": {
         "scales": "#3a7a8a",
@@ -51,13 +52,13 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "sun",
       "pattern": "standard",
       "colors": {
-        "scales": "#4a9a4a",
-        "belly": "#e0c040",
-        "markings": "#e0a020",
-        "eyes": "#e0c020"
+        "scales": "#d0a030",
+        "belly": "#e04020",
+        "markings": "#3060c0",
+        "eyes": "#101010"
       }
     }
   ]

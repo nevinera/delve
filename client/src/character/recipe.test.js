@@ -12,7 +12,7 @@ describe("resolveRecipe", () => {
     expect(troll.height).toBe(10);
     expect(troll.paints.eyes).toBe("#ffffff");
     expect(SHIPPED_BODIES.troll.colorations.map((c) => c.name)).toContain(troll.coloration);
-    expect(resolveRecipe({ body: "troll", coloration: "standard 2" }).coloration).toBe("standard 2");
+    expect(resolveRecipe({ body: "troll", coloration: "troll 2" }).coloration).toBe("troll 2");
   });
 
   it("fills in the defaults", () => {

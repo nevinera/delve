@@ -37,8 +37,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "yellowjacket",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "carapace": "#1a1614",
         "markings": "#e0b020",
@@ -47,7 +48,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "hornet",
       "pattern": "standard",
       "colors": {
         "carapace": "#2a2018",
@@ -57,7 +58,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "scarlet",
       "pattern": "standard",
       "colors": {
         "carapace": "#1a1614",

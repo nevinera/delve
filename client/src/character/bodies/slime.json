@@ -21,15 +21,16 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "green",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "jelly": "#5ab04a",
         "eyes": "#101010"
       }
     },
     {
-      "name": "standard 2",
+      "name": "blue",
       "pattern": "standard",
       "colors": {
         "jelly": "#4a8ac0",
@@ -37,7 +38,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "red",
       "pattern": "standard",
       "colors": {
         "jelly": "#c04a4a",
@@ -45,7 +46,7 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "purple",
       "pattern": "standard",
       "colors": {
         "jelly": "#9a5ac0",
@@ -53,11 +54,19 @@
       }
     },
     {
-      "name": "standard 5",
+      "name": "amber",
       "pattern": "standard",
       "colors": {
         "jelly": "#c0b04a",
         "eyes": "#101010"
+      }
+    },
+    {
+      "name": "tar",
+      "pattern": "standard",
+      "colors": {
+        "jelly": "#2a2a30",
+        "eyes": "#e0e0d8"
       }
     }
   ]

@@ -37,7 +37,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "imp 1",
       "pattern": "standard",
       "colors": {
         "skin": "#b03a2a",
@@ -46,20 +46,47 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "imp 2",
       "pattern": "standard",
       "colors": {
         "skin": "#a04a3a",
+        "eyes": "#f08020",
+        "horn": "#4a3a30"
+      }
+    },
+    {
+      "name": "imp 3",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#7a3a6a",
+        "eyes": "#f0d040",
+        "horn": "#2a2020"
+      }
+    },
+    {
+      "name": "imp 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#c05a2a",
+        "eyes": "#f08020",
+        "horn": "#2a2020"
+      }
+    },
+    {
+      "name": "imp 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#8a2a2a",
         "eyes": "#f0d040",
         "horn": "#4a3a30"
       }
     },
     {
-      "name": "standard 3",
+      "name": "imp 6",
       "pattern": "standard",
       "colors": {
-        "skin": "#7a3a6a",
-        "eyes": "#f0d040",
+        "skin": "#5a3a5a",
+        "eyes": "#f08020",
         "horn": "#2a2020"
       }
     }

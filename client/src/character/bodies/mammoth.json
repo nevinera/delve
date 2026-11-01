@@ -52,36 +52,24 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "woolly",
       "pattern": "standard",
+      "weight": 3,
       "colors": {
         "coat": "#5a3e28",
         "back": "#4a3020",
         "belly": "#755134",
-        "bare": "#3a2a20",
         "eyes": "#2a2018"
       }
     },
     {
-      "name": "standard 2",
+      "name": "frost",
       "pattern": "standard",
       "colors": {
-        "coat": "#4a3020",
-        "back": "#3a2618",
-        "belly": "#603e2a",
-        "bare": "#3a2a20",
-        "eyes": "#2a2018"
-      }
-    },
-    {
-      "name": "standard 3",
-      "pattern": "standard",
-      "colors": {
-        "coat": "#6a4a30",
-        "back": "#6a4a2a",
-        "belly": "#8a603e",
-        "bare": "#3a2a20",
-        "eyes": "#2a2018"
+        "coat": "#c8c0b4",
+        "back": "#b0a898",
+        "belly": "#d8d0c4",
+        "eyes": "#2a3a6a"
       }
     }
   ]

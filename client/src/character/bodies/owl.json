@@ -33,12 +33,45 @@
         "dark": "dark",
         "comb": "comb"
       }
+    },
+    "speckled": {
+      "colors": {
+        "dark": "#0f0d0d",
+        "comb": "#c71f1a"
+      },
+      "areas": {
+        "plumage": {
+          "color": "plumage",
+          "marks": [
+            {
+              "kind": "speckled",
+              "color": "speck",
+              "amount": 0.2
+            }
+          ]
+        },
+        "belly": {
+          "color": "belly",
+          "marks": [
+            {
+              "kind": "speckled",
+              "color": "speck",
+              "amount": 0.15
+            }
+          ]
+        },
+        "beak": "beak",
+        "eyes": "eyes",
+        "dark": "dark",
+        "comb": "comb"
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "tawny",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "plumage": "#7a5a3a",
         "belly": "#d8c8a8",
@@ -47,33 +80,35 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "barn",
+      "pattern": "standard",
+      "weight": 2,
+      "colors": {
+        "plumage": "#c8a070",
+        "belly": "#f0e8d8",
+        "beak": "#d8c8b0",
+        "eyes": "#101010"
+      }
+    },
+    {
+      "name": "grey",
       "pattern": "standard",
       "colors": {
         "plumage": "#8a7a6a",
-        "belly": "#e8e0d0",
+        "belly": "#c8c0b4",
         "beak": "#504030",
         "eyes": "#e08010"
       }
     },
     {
-      "name": "standard 3",
-      "pattern": "standard",
+      "name": "snowy",
+      "pattern": "speckled",
       "colors": {
-        "plumage": "#5a4a3a",
-        "belly": "#d8c8a8",
+        "plumage": "#e8e4dc",
+        "belly": "#f0ece4",
+        "speck": "#2a2624",
         "beak": "#3a3028",
-        "eyes": "#f0b020"
-      }
-    },
-    {
-      "name": "standard 4",
-      "pattern": "standard",
-      "colors": {
-        "plumage": "#d8d0c8",
-        "belly": "#e8e0d0",
-        "beak": "#504030",
-        "eyes": "#e08010"
+        "eyes": "#f0c020"
       }
     }
   ]

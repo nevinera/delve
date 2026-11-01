@@ -63,7 +63,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "centaur 1",
       "pattern": "standard",
       "colors": {
         "skin": "#c89a70",
@@ -71,7 +71,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "centaur 2",
       "pattern": "standard",
       "colors": {
         "skin": "#a87a50",
@@ -79,11 +79,27 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "centaur 3",
       "pattern": "standard",
       "colors": {
         "skin": "#e0b48c",
         "hair": "#1b1310"
+      }
+    },
+    {
+      "name": "centaur 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#8a5a3a",
+        "hair": "#8a6a3a"
+      }
+    },
+    {
+      "name": "centaur 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#d8a880",
+        "hair": "#c8b090"
       }
     }
   ]

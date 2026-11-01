@@ -88,7 +88,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "orc 1",
       "pattern": "standard",
       "colors": {
         "skin": "#5a7a3a",
@@ -97,7 +97,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "orc 2",
       "pattern": "standard",
       "colors": {
         "skin": "#6a7a40",
@@ -106,20 +106,56 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "orc 3",
       "pattern": "standard",
       "colors": {
         "skin": "#7a6a50",
-        "hair": "#1b1310",
+        "hair": "#3a2a1a",
+        "eyes": "#e06020"
+      }
+    },
+    {
+      "name": "orc 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#4a6a3a",
+        "hair": "#6a6a6a",
         "eyes": "#c02a1a"
       }
     },
     {
-      "name": "standard 4",
+      "name": "orc 5",
       "pattern": "standard",
       "colors": {
-        "skin": "#4a6a3a",
+        "skin": "#7a5a48",
+        "hair": "#1b1310",
+        "eyes": "#d0a020"
+      }
+    },
+    {
+      "name": "orc 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#8a6a5a",
+        "hair": "#1b1310",
+        "eyes": "#e06020"
+      }
+    },
+    {
+      "name": "orc 7",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#5a5a3a",
         "hair": "#2a1c14",
+        "eyes": "#c02a1a"
+      }
+    },
+    {
+      "name": "orc 8",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#6a4a3a",
+        "hair": "#3a2a1a",
         "eyes": "#d0a020"
       }
     }

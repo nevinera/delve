@@ -40,40 +40,98 @@
         "nose": "nose",
         "ears": "back"
       }
+    },
+    "banded": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212"
+      },
+      "areas": {
+        "everything": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "stripes",
+              "color": "stripe",
+              "width": 0.05,
+              "gap": 0.07,
+              "wave": 0.3,
+              "break": 0.15
+            }
+          ]
+        },
+        "back": {
+          "color": "back",
+          "marks": [
+            {
+              "kind": "stripes",
+              "color": "stripe",
+              "width": 0.05,
+              "gap": 0.07,
+              "wave": 0.3,
+              "break": 0.15
+            }
+          ]
+        },
+        "crown": "back",
+        "lower": "belly",
+        "limbs": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "stripes",
+              "color": "stripe",
+              "width": 0.05,
+              "gap": 0.07,
+              "wave": 0.3,
+              "break": 0.15,
+              "across": "horizontal"
+            }
+          ]
+        },
+        "shins": {
+          "color": "coat",
+          "tone": 0.85
+        },
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose",
+        "ears": "back"
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "green",
       "pattern": "standard",
+      "weight": 3,
       "colors": {
         "coat": "#4a6a3a",
         "back": "#2a4a2a",
         "belly": "#c8c090",
-        "bare": "#c8c090",
         "eyes": "#e0c020"
       }
     },
     {
-      "name": "standard 2",
+      "name": "desert",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
-        "coat": "#6a6a3a",
-        "back": "#4a4a2a",
-        "belly": "#b0b080",
-        "bare": "#b0b080",
+        "coat": "#8a7a50",
+        "back": "#6a5a3a",
+        "belly": "#d0c49a",
         "eyes": "#d08020"
       }
     },
     {
-      "name": "standard 3",
-      "pattern": "standard",
+      "name": "banded",
+      "pattern": "banded",
       "colors": {
-        "coat": "#3a5a4a",
-        "back": "#2a4a2a",
-        "belly": "#c8c090",
-        "bare": "#c8c090",
-        "eyes": "#e0c020"
+        "coat": "#3a3430",
+        "back": "#2a2622",
+        "belly": "#c8b080",
+        "stripe": "#d0903a",
+        "eyes": "#101010"
       }
     }
   ]

@@ -46,12 +46,39 @@
         "dark": "dark",
         "teeth": "teeth"
       }
+    },
+    "striped": {
+      "colors": {
+        "dark": "#0f0f12",
+        "teeth": "#f2ede0"
+      },
+      "areas": {
+        "back": {
+          "color": "back",
+          "marks": [
+            {
+              "kind": "stripes",
+              "color": "stripe",
+              "width": 0.03,
+              "gap": 0.05,
+              "wave": 0.3,
+              "break": 0.3
+            }
+          ]
+        },
+        "belly": "belly",
+        "fins": "fins",
+        "eyes": "eyes",
+        "dark": "dark",
+        "teeth": "teeth"
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "grey",
       "pattern": "standard",
+      "weight": 3,
       "colors": {
         "back": "#5a6a78",
         "belly": "#e8e8e0",
@@ -60,22 +87,23 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "blue",
       "pattern": "standard",
       "colors": {
-        "back": "#6a7280",
-        "belly": "#d8dcd8",
-        "fins": "#5a6470",
+        "back": "#3a5a8a",
+        "belly": "#e8e8e0",
+        "fins": "#3a5078",
         "eyes": "#101014"
       }
     },
     {
-      "name": "standard 3",
-      "pattern": "standard",
+      "name": "tiger",
+      "pattern": "striped",
       "colors": {
-        "back": "#4a5a6a",
-        "belly": "#e8e8e0",
-        "fins": "#4a5a68",
+        "back": "#7a7a68",
+        "belly": "#e0dcc8",
+        "fins": "#5a5a4a",
+        "stripe": "#3a3a30",
         "eyes": "#101014"
       }
     }

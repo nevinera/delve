@@ -65,7 +65,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "drakesh 1",
       "pattern": "standard",
       "colors": {
         "skin": "#8a2a1e",
@@ -74,7 +74,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "drakesh 2",
       "pattern": "standard",
       "colors": {
         "skin": "#2a2a30",
@@ -83,7 +83,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "drakesh 3",
       "pattern": "standard",
       "colors": {
         "skin": "#2a4a7a",
@@ -92,7 +92,7 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "drakesh 4",
       "pattern": "standard",
       "colors": {
         "skin": "#3a6a34",
@@ -101,12 +101,21 @@
       }
     },
     {
-      "name": "standard 5",
+      "name": "drakesh 5",
       "pattern": "standard",
       "colors": {
         "skin": "#9a6a2a",
         "eyes": "#f0c020",
         "horn": "#d8ccb0"
+      }
+    },
+    {
+      "name": "drakesh 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#c8c8c4",
+        "eyes": "#60a0e0",
+        "horn": "#3a3430"
       }
     }
   ]

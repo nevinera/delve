@@ -28,7 +28,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "treant 1",
       "pattern": "standard",
       "colors": {
         "skin": "#5a4030",
@@ -38,7 +38,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "treant 2",
       "pattern": "standard",
       "colors": {
         "skin": "#6a5038",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "treant 3",
       "pattern": "standard",
       "colors": {
         "skin": "#4a3a2a",
@@ -58,7 +58,7 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "treant 4",
       "pattern": "standard",
       "colors": {
         "skin": "#5a4030",

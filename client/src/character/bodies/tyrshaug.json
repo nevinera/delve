@@ -54,7 +54,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "tyrshaug 1",
       "pattern": "standard",
       "colors": {
         "skin": "#a05a4a",
@@ -64,7 +64,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "tyrshaug 2",
       "pattern": "standard",
       "colors": {
         "skin": "#7a4a6a",
@@ -74,7 +74,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "tyrshaug 3",
       "pattern": "standard",
       "colors": {
         "skin": "#b07a5a",
@@ -84,11 +84,31 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "tyrshaug 4",
       "pattern": "standard",
       "colors": {
         "skin": "#6a3a3a",
         "hair": "#2a1c14",
+        "eyes": "#d03020",
+        "horn": "#5a4a3a"
+      }
+    },
+    {
+      "name": "tyrshaug 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#8a5a3a",
+        "hair": "#1b1310",
+        "eyes": "#e0c040",
+        "horn": "#3a3028"
+      }
+    },
+    {
+      "name": "tyrshaug 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#5a4a5a",
+        "hair": "#5a2a2a",
         "eyes": "#d03020",
         "horn": "#5a4a3a"
       }

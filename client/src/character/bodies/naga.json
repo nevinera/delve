@@ -55,7 +55,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "naga 1",
       "pattern": "standard",
       "colors": {
         "skin": "#3a7a6a",
@@ -64,7 +64,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "naga 2",
       "pattern": "standard",
       "colors": {
         "skin": "#4a6a8a",
@@ -73,10 +73,46 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "naga 3",
       "pattern": "standard",
       "colors": {
         "skin": "#5a8a5a",
+        "hair": "#3a2a4a",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "naga 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#6a5a3a",
+        "hair": "#1a1a1a",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "naga 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#2a5a7a",
+        "hair": "#1a3a4a",
+        "eyes": "#40e0c0"
+      }
+    },
+    {
+      "name": "naga 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#7a8a4a",
+        "hair": "#2a4a3a",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "naga 7",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#5a4a6a",
         "hair": "#3a2a4a",
         "eyes": "#e0c040"
       }

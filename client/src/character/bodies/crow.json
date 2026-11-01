@@ -34,8 +34,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "black",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "plumage": "#18181e",
         "belly": "#22222a",
@@ -44,23 +45,13 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "hooded",
       "pattern": "standard",
       "colors": {
         "plumage": "#202028",
-        "belly": "#2a2a32",
+        "belly": "#8a8a88",
         "beak": "#1a1a1c",
         "eyes": "#3a2a10"
-      }
-    },
-    {
-      "name": "standard 3",
-      "pattern": "standard",
-      "colors": {
-        "plumage": "#1a1a20",
-        "belly": "#22222a",
-        "beak": "#101012",
-        "eyes": "#101010"
       }
     }
   ]

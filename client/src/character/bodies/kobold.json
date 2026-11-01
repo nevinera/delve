@@ -56,7 +56,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "kobold 1",
       "pattern": "standard",
       "colors": {
         "skin": "#9a5a3a",
@@ -65,7 +65,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "kobold 2",
       "pattern": "standard",
       "colors": {
         "skin": "#8a6a3a",
@@ -74,11 +74,56 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "kobold 3",
       "pattern": "standard",
       "colors": {
         "skin": "#7a4a3a",
+        "eyes": "#c02a1a",
+        "horn": "#8a7a60"
+      }
+    },
+    {
+      "name": "kobold 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#6a6a4a",
         "eyes": "#e0c040",
+        "horn": "#d8ccb0"
+      }
+    },
+    {
+      "name": "kobold 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#a07040",
+        "eyes": "#d06020",
+        "horn": "#d8ccb0"
+      }
+    },
+    {
+      "name": "kobold 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#5a4a5a",
+        "eyes": "#c02a1a",
+        "horn": "#b0a080"
+      }
+    },
+    {
+      "name": "kobold 7",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#8a3a2a",
+        "eyes": "#e0c040",
+        "horn": "#8a7a60"
+      }
+    },
+    {
+      "name": "kobold 8",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#b08a50",
+        "eyes": "#d06020",
         "horn": "#d8ccb0"
       }
     }

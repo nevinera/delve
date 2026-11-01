@@ -53,7 +53,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "tauros 1",
       "pattern": "standard",
       "colors": {
         "skin": "#5a3a2a",
@@ -63,7 +63,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "tauros 2",
       "pattern": "standard",
       "colors": {
         "skin": "#3a2a22",
@@ -73,13 +73,43 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "tauros 3",
       "pattern": "standard",
       "colors": {
         "skin": "#7a5a3a",
         "hair": "#2a1c14",
+        "eyes": "#d0a020",
+        "horn": "#8a7a60"
+      }
+    },
+    {
+      "name": "tauros 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#8a7a6a",
+        "hair": "#5a4a3a",
         "eyes": "#c02a1a",
         "horn": "#d8ccb0"
+      }
+    },
+    {
+      "name": "tauros 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#2a2422",
+        "hair": "#2a1c14",
+        "eyes": "#c02a1a",
+        "horn": "#c8b898"
+      }
+    },
+    {
+      "name": "tauros 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#9a6a3a",
+        "hair": "#1b1310",
+        "eyes": "#d0a020",
+        "horn": "#8a7a60"
       }
     }
   ]

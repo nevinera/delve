@@ -27,7 +27,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "deepshaug 1",
       "pattern": "standard",
       "colors": {
         "skin": "#2a1a3a",
@@ -35,7 +35,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "deepshaug 2",
       "pattern": "standard",
       "colors": {
         "skin": "#2a1a3a",

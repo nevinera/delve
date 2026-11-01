@@ -36,8 +36,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "griffon",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "plumage": "#3a2e28",
         "belly": "#c08070",
@@ -46,23 +47,13 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "black",
       "pattern": "standard",
       "colors": {
         "plumage": "#2a2420",
         "belly": "#a87060",
         "beak": "#c0b090",
         "eyes": "#3a1a10"
-      }
-    },
-    {
-      "name": "standard 3",
-      "pattern": "standard",
-      "colors": {
-        "plumage": "#4a3a2e",
-        "belly": "#d0a090",
-        "beak": "#d8c8a0",
-        "eyes": "#8a2010"
       }
     }
   ]

@@ -63,46 +63,44 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "fly agaric",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "coat": "#d8ccb0",
         "back": "#a03a2a",
         "belly": "#ffffe5",
-        "bare": "#8a8070",
         "eyes": "#101010"
       }
     },
     {
-      "name": "standard 2",
+      "name": "bolete",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "coat": "#c8c0a8",
         "back": "#8a5a30",
         "belly": "#fffada",
-        "bare": "#8a8070",
         "eyes": "#e0c040"
       }
     },
     {
-      "name": "standard 3",
+      "name": "amethyst",
       "pattern": "standard",
       "colors": {
         "coat": "#a8a090",
         "back": "#6a4a7a",
         "belly": "#dad0bb",
-        "bare": "#8a8070",
         "eyes": "#101010"
       }
     },
     {
-      "name": "standard 4",
+      "name": "chanterelle",
       "pattern": "standard",
       "colors": {
         "coat": "#d8ccb0",
         "back": "#c08a40",
         "belly": "#ffffe5",
-        "bare": "#8a8070",
         "eyes": "#e0c040"
       }
     }

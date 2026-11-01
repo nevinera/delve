@@ -46,24 +46,23 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "green",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "coat": "#3a5a4a",
         "back": "#8a2a2a",
         "belly": "#a8a070",
-        "bare": "#a8a070",
         "eyes": "#f0f040"
       }
     },
     {
-      "name": "standard 2",
+      "name": "violet",
       "pattern": "standard",
       "colors": {
         "coat": "#4a4a5a",
         "back": "#6a2a4a",
         "belly": "#a8a070",
-        "bare": "#a8a070",
         "eyes": "#e04020"
       }
     }

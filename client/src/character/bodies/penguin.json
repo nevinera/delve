@@ -36,22 +36,12 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "emperor",
       "pattern": "standard",
       "colors": {
         "plumage": "#1a1c22",
         "belly": "#f0f0ec",
         "beak": "#e08a20",
-        "eyes": "#101010"
-      }
-    },
-    {
-      "name": "standard 2",
-      "pattern": "standard",
-      "colors": {
-        "plumage": "#22242a",
-        "belly": "#e8e8e4",
-        "beak": "#303030",
         "eyes": "#101010"
       }
     }

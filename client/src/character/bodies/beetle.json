@@ -32,12 +32,47 @@
         "dark": "dark",
         "wings": "wings"
       }
+    },
+    "spotted": {
+      "colors": {
+        "dark": "#120f0f",
+        "wings": "#d1dbe6"
+      },
+      "areas": {
+        "carapace": {
+          "color": "carapace",
+          "marks": [
+            {
+              "kind": "spots",
+              "color": "spot",
+              "amount": 0.25,
+              "size": 0.08
+            }
+          ]
+        },
+        "markings": {
+          "color": "markings",
+          "marks": [
+            {
+              "kind": "spots",
+              "color": "spot",
+              "amount": 0.25,
+              "size": 0.08
+            }
+          ]
+        },
+        "claws": "claws",
+        "eyes": "eyes",
+        "dark": "dark",
+        "wings": "wings"
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "black",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "carapace": "#1a1a1a",
         "markings": "#2a5a3a",
@@ -46,33 +81,34 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "scarab",
       "pattern": "standard",
       "colors": {
-        "carapace": "#2a2018",
-        "markings": "#3a2a5a",
-        "claws": "#3a3028",
-        "eyes": "#d04020"
-      }
-    },
-    {
-      "name": "standard 3",
-      "pattern": "standard",
-      "colors": {
-        "carapace": "#1a1a1a",
-        "markings": "#5a3a1a",
+        "carapace": "#2a6a5a",
+        "markings": "#c0a030",
         "claws": "#2a2420",
         "eyes": "#c0a020"
       }
     },
     {
-      "name": "standard 4",
+      "name": "bronze",
       "pattern": "standard",
       "colors": {
-        "carapace": "#2a2018",
-        "markings": "#1a3a5a",
+        "carapace": "#6a4a20",
+        "markings": "#c08a30",
         "claws": "#3a3028",
         "eyes": "#d04020"
+      }
+    },
+    {
+      "name": "ladybird",
+      "pattern": "spotted",
+      "colors": {
+        "carapace": "#c02a1a",
+        "markings": "#c02a1a",
+        "claws": "#1a1414",
+        "spot": "#101010",
+        "eyes": "#101010"
       }
     }
   ]

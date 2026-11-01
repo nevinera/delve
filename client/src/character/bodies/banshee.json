@@ -26,7 +26,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "banshee 1",
       "pattern": "standard",
       "colors": {
         "skin": "#a8c8d8",
@@ -35,7 +35,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "banshee 2",
       "pattern": "standard",
       "colors": {
         "skin": "#b8d8c8",
@@ -44,7 +44,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "banshee 3",
       "pattern": "standard",
       "colors": {
         "skin": "#c8c8e0",

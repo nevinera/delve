@@ -383,8 +383,8 @@ loadAnimations().then((data) => {
 // For scripted screenshots: shows a body, `count` looks of it, all held `fraction` of the way into
 // a pick ("role:attack" or "clip:Name").
 window.lab = {
-  show({ body = state.body, count = state.count, seed = state.seed, pick = state.pick, fraction = 0.5, loadouts = state.loadouts } = {}) {
-    Object.assign(state, { count, seed, pick, loadouts });
+  show({ body = state.body, count = state.count, seed = state.seed, pick = state.pick, fraction = 0.5, loadouts = state.loadouts, coloration = state.coloration } = {}) {
+    Object.assign(state, { count, seed, pick, loadouts, coloration });
     $("count").value = String(count);
     $("countValue").textContent = String(count);
     pickBody(body);

@@ -45,61 +45,153 @@
         "hooves": "hoof",
         "tails": "back"
       }
+    },
+    "pinto": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212",
+        "hoof": "#2d2828"
+      },
+      "areas": {
+        "everything": "coat",
+        "back": "back",
+        "crown": "back",
+        "lower": "belly",
+        "limbs": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "patches",
+              "color": "patch",
+              "amount": 0.45,
+              "size": 0.25
+            }
+          ]
+        },
+        "shins": {
+          "color": "coat",
+          "tone": 0.85
+        },
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose",
+        "ears": "back",
+        "mane": "back",
+        "hooves": "hoof",
+        "tails": "back",
+        "body": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "patches",
+              "color": "patch",
+              "amount": 0.45,
+              "size": 0.25
+            }
+          ]
+        }
+      }
+    },
+    "dapple": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212",
+        "hoof": "#2d2828"
+      },
+      "areas": {
+        "everything": "coat",
+        "back": "back",
+        "crown": "back",
+        "lower": "belly",
+        "limbs": "coat",
+        "shins": {
+          "color": "coat",
+          "tone": 0.85
+        },
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose",
+        "ears": "back",
+        "mane": "back",
+        "hooves": "hoof",
+        "tails": "back",
+        "body": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "spots",
+              "color": "spot",
+              "amount": 0.4,
+              "size": 0.035
+            }
+          ]
+        }
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "bay",
       "pattern": "standard",
+      "weight": 3,
       "colors": {
         "coat": "#6a4028",
         "back": "#1e1a18",
         "belly": "#8a5334",
-        "bare": "#3a2a20",
         "eyes": "#1a1010"
       }
     },
     {
-      "name": "standard 2",
+      "name": "chestnut",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
-        "coat": "#3a2a20",
-        "back": "#3a2a20",
-        "belly": "#4b372a",
-        "bare": "#3a2a20",
+        "coat": "#8a4a24",
+        "back": "#6a3418",
+        "belly": "#a05a30",
         "eyes": "#1a1010"
       }
     },
     {
-      "name": "standard 3",
+      "name": "black",
       "pattern": "standard",
-      "colors": {
-        "coat": "#8a7a6a",
-        "back": "#d8d0c0",
-        "belly": "#b39f8a",
-        "bare": "#3a2a20",
-        "eyes": "#1a1010"
-      }
-    },
-    {
-      "name": "standard 4",
-      "pattern": "standard",
-      "colors": {
-        "coat": "#c8b898",
-        "back": "#1e1a18",
-        "belly": "#ffefc6",
-        "bare": "#3a2a20",
-        "eyes": "#1a1010"
-      }
-    },
-    {
-      "name": "standard 5",
-      "pattern": "standard",
+      "weight": 2,
       "colors": {
         "coat": "#2a2420",
-        "back": "#3a2a20",
+        "back": "#1e1a18",
         "belly": "#372f2a",
-        "bare": "#3a2a20",
+        "eyes": "#1a1010"
+      }
+    },
+    {
+      "name": "dapple grey",
+      "pattern": "dapple",
+      "colors": {
+        "coat": "#8a8a88",
+        "back": "#4a4a4a",
+        "belly": "#b8b8b4",
+        "spot": "#d0d0cc",
+        "eyes": "#1a1010"
+      }
+    },
+    {
+      "name": "palomino",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#d0a860",
+        "back": "#f0e8d8",
+        "belly": "#e0c080",
+        "eyes": "#1a1010"
+      }
+    },
+    {
+      "name": "pinto",
+      "pattern": "pinto",
+      "colors": {
+        "coat": "#6a4028",
+        "back": "#1e1a18",
+        "belly": "#8a5334",
+        "patch": "#ece8e0",
         "eyes": "#1a1010"
       }
     }

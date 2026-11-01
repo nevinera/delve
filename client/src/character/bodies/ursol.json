@@ -56,7 +56,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "ursol 1",
       "pattern": "standard",
       "colors": {
         "skin": "#6a4a30",
@@ -65,7 +65,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "ursol 2",
       "pattern": "standard",
       "colors": {
         "skin": "#5a3e28",
@@ -74,7 +74,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "ursol 3",
       "pattern": "standard",
       "colors": {
         "skin": "#8a6a48",
@@ -83,12 +83,30 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "ursol 4",
       "pattern": "standard",
       "colors": {
         "skin": "#3a2a20",
-        "hair": "#4a3020",
+        "hair": "#2a1e14",
+        "eyes": "#2a1a10"
+      }
+    },
+    {
+      "name": "ursol 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#9a8a70",
+        "hair": "#7a6a50",
         "eyes": "#d0a020"
+      }
+    },
+    {
+      "name": "ursol 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#2a2420",
+        "hair": "#1e1a18",
+        "eyes": "#2a1a10"
       }
     }
   ]

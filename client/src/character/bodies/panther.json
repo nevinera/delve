@@ -44,40 +44,98 @@
           "tone": 0.8
         }
       }
+    },
+    "spotted": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212"
+      },
+      "areas": {
+        "everything": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "spots",
+              "color": "spot",
+              "amount": 0.3,
+              "size": 0.05
+            }
+          ]
+        },
+        "lower": {
+          "color": "belly",
+          "marks": [
+            {
+              "kind": "spots",
+              "color": "spot",
+              "amount": 0.15,
+              "size": 0.05
+            }
+          ]
+        },
+        "limbs": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "spots",
+              "color": "spot",
+              "amount": 0.3,
+              "size": 0.04
+            }
+          ]
+        },
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose",
+        "ears": "back",
+        "tailTip": "spot"
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "black",
       "pattern": "standard",
+      "weight": 3,
       "colors": {
         "coat": "#2a2626",
         "back": "#1a1818",
-        "belly": "#aca69a",
-        "bare": "#3a2a20",
+        "belly": "#3a3434",
         "eyes": "#d0c040"
       }
     },
     {
-      "name": "standard 2",
-      "pattern": "standard",
+      "name": "leopard",
+      "pattern": "spotted",
+      "weight": 2,
       "colors": {
-        "coat": "#c89a50",
-        "back": "#8a6a3a",
-        "belly": "#e3cea9",
-        "bare": "#3a2a20",
+        "coat": "#d0a050",
+        "back": "#b08040",
+        "belly": "#efe4cc",
+        "spot": "#2a1e14",
         "eyes": "#90b040"
       }
     },
     {
-      "name": "standard 3",
-      "pattern": "standard",
+      "name": "snow leopard",
+      "pattern": "spotted",
       "colors": {
-        "coat": "#a8885a",
-        "back": "#1a1818",
-        "belly": "#d8c8ac",
-        "bare": "#3a2a20",
-        "eyes": "#d0c040"
+        "coat": "#d8d4cc",
+        "back": "#b8b4ac",
+        "belly": "#f0eee8",
+        "spot": "#4a4644",
+        "eyes": "#80b0c0"
+      }
+    },
+    {
+      "name": "jaguar",
+      "pattern": "spotted",
+      "colors": {
+        "coat": "#c08a40",
+        "back": "#a07030",
+        "belly": "#e8d8b8",
+        "spot": "#1a1410",
+        "eyes": "#c8b030"
       }
     }
   ]

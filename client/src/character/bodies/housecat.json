@@ -69,67 +69,150 @@
           ]
         }
       }
+    },
+    "plain": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212"
+      },
+      "areas": {
+        "everything": "coat",
+        "lower": "belly",
+        "limbs": "coat",
+        "shins": {
+          "color": "coat",
+          "tone": 0.85
+        },
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose",
+        "ears": "back"
+      }
+    },
+    "tuxedo": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212"
+      },
+      "areas": {
+        "everything": "coat",
+        "lower": "belly",
+        "limbs": "coat",
+        "paws": "belly",
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose"
+      }
+    },
+    "calico": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212"
+      },
+      "areas": {
+        "everything": {
+          "color": "belly",
+          "marks": [
+            {
+              "kind": "patches",
+              "color": "coat",
+              "amount": 0.35,
+              "size": 0.2
+            },
+            {
+              "kind": "patches",
+              "color": "back",
+              "amount": 0.3,
+              "size": 0.14
+            }
+          ]
+        },
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose"
+      }
+    },
+    "siamese": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212"
+      },
+      "areas": {
+        "everything": "coat",
+        "lower": "belly",
+        "head": "point",
+        "limbs": "point",
+        "tails": "point",
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose"
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "orange tabby",
       "pattern": "standard",
+      "weight": 3,
       "colors": {
         "coat": "#c87a3a",
         "back": "#7a4420",
         "belly": "#e3c3a1",
-        "bare": "#d08a8a",
         "eyes": "#c8b030",
         "stripe": "#553016"
       }
     },
     {
-      "name": "standard 2",
+      "name": "grey tabby",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "coat": "#8a8680",
         "back": "#4a4644",
         "belly": "#cec7ba",
-        "bare": "#d08a8a",
         "eyes": "#70b040",
         "stripe": "#343130"
       }
     },
     {
-      "name": "standard 3",
-      "pattern": "standard",
+      "name": "black",
+      "pattern": "plain",
+      "weight": 2,
       "colors": {
-        "coat": "#2a2626",
+        "coat": "#242121",
         "back": "#1a1818",
-        "belly": "#aca69a",
-        "bare": "#d08a8a",
-        "eyes": "#d09030",
-        "stripe": "#121111"
+        "belly": "#2a2626",
+        "eyes": "#d09030"
       }
     },
     {
-      "name": "standard 4",
-      "pattern": "standard",
+      "name": "tuxedo",
+      "pattern": "tuxedo",
+      "weight": 2,
       "colors": {
-        "coat": "#e8e2d8",
-        "back": "#9a8a78",
-        "belly": "#efe8d8",
-        "bare": "#d08a8a",
-        "eyes": "#c8b030",
-        "stripe": "#6c6154"
+        "coat": "#1e1c1c",
+        "belly": "#ece8e0",
+        "eyes": "#70b040"
       }
     },
     {
-      "name": "standard 5",
-      "pattern": "standard",
+      "name": "calico",
+      "pattern": "calico",
       "colors": {
-        "coat": "#a88a68",
-        "back": "#5a4430",
-        "belly": "#d8c9b1",
-        "bare": "#d08a8a",
-        "eyes": "#70b040",
-        "stripe": "#3f3022"
+        "coat": "#d08840",
+        "back": "#2a2424",
+        "belly": "#ece6dc",
+        "eyes": "#c8b030"
+      }
+    },
+    {
+      "name": "siamese",
+      "pattern": "siamese",
+      "colors": {
+        "coat": "#e8dcc8",
+        "belly": "#f2ead8",
+        "point": "#4a3428",
+        "eyes": "#5aa0e0"
       }
     }
   ]

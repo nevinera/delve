@@ -39,7 +39,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "harpy 1",
       "pattern": "standard",
       "colors": {
         "skin": "#c8a888",
@@ -48,21 +48,48 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "harpy 2",
       "pattern": "standard",
       "colors": {
         "skin": "#a88868",
         "hair": "#3a3a4a",
-        "eyes": "#e0c040"
+        "eyes": "#e08020"
       }
     },
     {
-      "name": "standard 3",
+      "name": "harpy 3",
       "pattern": "standard",
       "colors": {
         "skin": "#d0b8a0",
         "hair": "#8a6a4a",
         "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "harpy 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#b89878",
+        "hair": "#6a2a2a",
+        "eyes": "#e08020"
+      }
+    },
+    {
+      "name": "harpy 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#a07858",
+        "hair": "#2a2a2a",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "harpy 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#d8c0a8",
+        "hair": "#c8c0b0",
+        "eyes": "#e08020"
       }
     }
   ]

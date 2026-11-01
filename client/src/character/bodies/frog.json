@@ -43,51 +43,123 @@
         "nose": "nose",
         "ears": "back"
       }
+    },
+    "dart": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212"
+      },
+      "areas": {
+        "everything": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "spots",
+              "color": "spot",
+              "amount": 0.3,
+              "size": 0.06
+            }
+          ]
+        },
+        "back": "back",
+        "crown": "back",
+        "lower": "belly",
+        "limbs": {
+          "color": "coat",
+          "marks": [
+            {
+              "kind": "spots",
+              "color": "spot",
+              "amount": 0.3,
+              "size": 0.05
+            }
+          ]
+        },
+        "shins": {
+          "color": "coat",
+          "tone": 0.85
+        },
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose",
+        "ears": "back"
+      }
+    },
+    "toad": {
+      "colors": {
+        "pupil": "#141212",
+        "nose": "#141212"
+      },
+      "areas": {
+        "everything": {
+          "color": "coat",
+          "shade": 0.12,
+          "marks": [
+            {
+              "kind": "speckled",
+              "color": "back",
+              "amount": 0.25
+            }
+          ]
+        },
+        "back": "back",
+        "crown": "back",
+        "lower": "belly",
+        "limbs": "coat",
+        "shins": {
+          "color": "coat",
+          "tone": 0.85
+        },
+        "eyes": "eyes",
+        "pupils": "pupil",
+        "nose": "nose",
+        "ears": "back"
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "green",
       "pattern": "standard",
+      "weight": 3,
       "colors": {
         "coat": "#4a7a3a",
         "back": "#2a4a2a",
         "belly": "#d8d0a0",
-        "bare": "#d8d0a0",
         "eyes": "#d0a020"
       }
     },
     {
-      "name": "standard 2",
-      "pattern": "standard",
+      "name": "toad",
+      "pattern": "toad",
+      "weight": 2,
       "colors": {
-        "coat": "#6a7a2a",
-        "back": "#4a4a20",
-        "belly": "#c8c890",
-        "bare": "#c8c890",
-        "eyes": "#c0c030"
-      }
-    },
-    {
-      "name": "standard 3",
-      "pattern": "standard",
-      "colors": {
-        "coat": "#5a5a3a",
-        "back": "#2a4a2a",
-        "belly": "#d8d0a0",
-        "bare": "#d8d0a0",
+        "coat": "#6a5a3a",
+        "back": "#4a3a28",
+        "belly": "#c8b890",
         "eyes": "#d0a020"
       }
     },
     {
-      "name": "standard 4",
-      "pattern": "standard",
+      "name": "blue dart",
+      "pattern": "dart",
       "colors": {
-        "coat": "#3a6a5a",
-        "back": "#4a4a20",
-        "belly": "#c8c890",
-        "bare": "#c8c890",
-        "eyes": "#c0c030"
+        "coat": "#2a6ad0",
+        "back": "#1a4aa0",
+        "belly": "#2a5ab0",
+        "spot": "#101010",
+        "eyes": "#101010"
+      }
+    },
+    {
+      "name": "red dart",
+      "pattern": "dart",
+      "colors": {
+        "coat": "#d03020",
+        "back": "#a02018",
+        "belly": "#c02a1a",
+        "spot": "#101010",
+        "eyes": "#101010"
       }
     }
   ]

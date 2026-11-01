@@ -52,7 +52,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "trog 1",
       "pattern": "standard",
       "colors": {
         "skin": "#7a7a72",
@@ -61,7 +61,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "trog 2",
       "pattern": "standard",
       "colors": {
         "skin": "#6a6a66",
@@ -70,7 +70,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "trog 3",
       "pattern": "standard",
       "colors": {
         "skin": "#8a8478",
@@ -79,12 +79,30 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "trog 4",
       "pattern": "standard",
       "colors": {
         "skin": "#5a5e5a",
         "hair": "#4a4038",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "trog 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#6a7068",
+        "hair": "#2a2a2a",
         "eyes": "#d04020"
+      }
+    },
+    {
+      "name": "trog 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#7a7064",
+        "hair": "#4a4038",
+        "eyes": "#e0c040"
       }
     }
   ]

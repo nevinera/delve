@@ -24,8 +24,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "flesh",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "hide": "#7a4a5a",
         "mouth": "#3a0a14",
@@ -33,7 +34,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "violet",
       "pattern": "standard",
       "colors": {
         "hide": "#5a4a6a",
@@ -42,7 +43,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "mud",
       "pattern": "standard",
       "colors": {
         "hide": "#6a5a3a",
@@ -51,7 +52,7 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "sea",
       "pattern": "standard",
       "colors": {
         "hide": "#4a6a5a",

@@ -40,7 +40,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "lich 1",
       "pattern": "standard",
       "colors": {
         "skin": "#d8d0b8",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "lich 2",
       "pattern": "standard",
       "colors": {
         "skin": "#c8c0a8",

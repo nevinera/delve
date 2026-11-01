@@ -47,8 +47,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "silver",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "back": "#6a7a88",
         "belly": "#e0e4e8",
@@ -57,23 +58,13 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "yellowfin",
       "pattern": "standard",
       "colors": {
         "back": "#7a8890",
         "belly": "#d0d8dc",
         "fins": "#c8b850",
         "eyes": "#c0c8d0"
-      }
-    },
-    {
-      "name": "standard 3",
-      "pattern": "standard",
-      "colors": {
-        "back": "#5a7078",
-        "belly": "#e0e4e8",
-        "fins": "#5a6a70",
-        "eyes": "#d0c040"
       }
     }
   ]

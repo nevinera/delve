@@ -36,8 +36,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "sea",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "plumage": "#4a3020",
         "belly": "#f0ece0",
@@ -46,23 +47,13 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "golden",
       "pattern": "standard",
       "colors": {
-        "plumage": "#5a3a22",
-        "belly": "#e8e4d8",
+        "plumage": "#5a3a20",
+        "belly": "#8a6030",
         "beak": "#d8a830",
         "eyes": "#c09018"
-      }
-    },
-    {
-      "name": "standard 3",
-      "pattern": "standard",
-      "colors": {
-        "plumage": "#3a2818",
-        "belly": "#f0ece0",
-        "beak": "#e0b020",
-        "eyes": "#d8a020"
       }
     }
   ]

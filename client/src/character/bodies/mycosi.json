@@ -41,7 +41,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "mycosi 1",
       "pattern": "standard",
       "colors": {
         "skin": "#e0d8c0",
@@ -50,7 +50,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "mycosi 2",
       "pattern": "standard",
       "colors": {
         "skin": "#d8ccb0",
@@ -59,7 +59,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "mycosi 3",
       "pattern": "standard",
       "colors": {
         "skin": "#c8c0a8",
@@ -68,11 +68,29 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "mycosi 4",
       "pattern": "standard",
       "colors": {
         "skin": "#e0d8c0",
         "hair": "#6a4a7a",
+        "eyes": "#2a2a2a"
+      }
+    },
+    {
+      "name": "mycosi 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#d0c8b8",
+        "hair": "#3a5a8a",
+        "eyes": "#101010"
+      }
+    },
+    {
+      "name": "mycosi 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#c8c0a8",
+        "hair": "#8a8a6a",
         "eyes": "#2a2a2a"
       }
     }

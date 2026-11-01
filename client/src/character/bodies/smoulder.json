@@ -60,7 +60,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "smoulder 1",
       "pattern": "standard",
       "colors": {
         "skin": "#4a3028",
@@ -69,7 +69,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "smoulder 2",
       "pattern": "standard",
       "colors": {
         "skin": "#3a2824",

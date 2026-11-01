@@ -47,24 +47,23 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "river",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "coat": "#3a4a2a",
         "back": "#2a3420",
         "belly": "#b0a878",
-        "bare": "#b0a878",
         "eyes": "#c8a020"
       }
     },
     {
-      "name": "standard 2",
+      "name": "swamp",
       "pattern": "standard",
       "colors": {
         "coat": "#4a4a30",
         "back": "#2a2e20",
         "belly": "#a09868",
-        "bare": "#a09868",
         "eyes": "#c8a020"
       }
     }

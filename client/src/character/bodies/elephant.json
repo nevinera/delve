@@ -49,35 +49,12 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "grey",
       "pattern": "standard",
       "colors": {
         "coat": "#8a8580",
         "back": "#6a655e",
         "belly": "#b3ada6",
-        "bare": "#6a655e",
-        "eyes": "#2a2018"
-      }
-    },
-    {
-      "name": "standard 2",
-      "pattern": "standard",
-      "colors": {
-        "coat": "#7a756e",
-        "back": "#5a554e",
-        "belly": "#9f988f",
-        "bare": "#6a655e",
-        "eyes": "#2a2018"
-      }
-    },
-    {
-      "name": "standard 3",
-      "pattern": "standard",
-      "colors": {
-        "coat": "#9a8a80",
-        "back": "#6a655e",
-        "belly": "#c8b3a6",
-        "bare": "#6a655e",
         "eyes": "#2a2018"
       }
     }

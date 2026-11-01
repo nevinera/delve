@@ -81,7 +81,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "boric 1",
       "pattern": "standard",
       "colors": {
         "skin": "#7a5a40",
@@ -90,7 +90,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "boric 2",
       "pattern": "standard",
       "colors": {
         "skin": "#6a4a38",
@@ -99,7 +99,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "boric 3",
       "pattern": "standard",
       "colors": {
         "skin": "#8a6a50",
@@ -108,11 +108,29 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "boric 4",
       "pattern": "standard",
       "colors": {
         "skin": "#5a4030",
+        "hair": "#6a5a4a",
+        "eyes": "#d0a020"
+      }
+    },
+    {
+      "name": "boric 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#9a7060",
         "hair": "#2a1c14",
+        "eyes": "#c02a1a"
+      }
+    },
+    {
+      "name": "boric 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#4a3a30",
+        "hair": "#3a2a1a",
         "eyes": "#d0a020"
       }
     }

@@ -26,12 +26,37 @@
         "dark": "dark",
         "teeth": "teeth"
       }
+    },
+    "spotted": {
+      "colors": {
+        "dark": "#141212",
+        "teeth": "#ebe0c2"
+      },
+      "areas": {
+        "scales": {
+          "color": "scales",
+          "marks": [
+            {
+              "kind": "spots",
+              "color": "spot",
+              "amount": 0.35,
+              "size": 0.025
+            }
+          ]
+        },
+        "belly": "belly",
+        "markings": "markings",
+        "eyes": "eyes",
+        "dark": "dark",
+        "teeth": "teeth"
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "green moray",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "scales": "#3a4a3a",
         "belly": "#a0a070",
@@ -40,21 +65,22 @@
       }
     },
     {
-      "name": "standard 2",
-      "pattern": "standard",
+      "name": "spotted",
+      "pattern": "spotted",
       "colors": {
-        "scales": "#4a4a30",
-        "belly": "#c0b080",
-        "markings": "#3a3a28",
+        "scales": "#c8b880",
+        "belly": "#e0d8b0",
+        "markings": "#3a2a18",
+        "spot": "#3a2a18",
         "eyes": "#101010"
       }
     },
     {
-      "name": "standard 3",
+      "name": "electric",
       "pattern": "standard",
       "colors": {
         "scales": "#2a3a4a",
-        "belly": "#a0a070",
+        "belly": "#c08040",
         "markings": "#2a3428",
         "eyes": "#e0c040"
       }

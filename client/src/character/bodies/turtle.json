@@ -51,36 +51,24 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "pond",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "coat": "#6a7a4a",
         "back": "#4a5a2a",
         "belly": "#c8c090",
-        "bare": "#c8c090",
         "eyes": "#1a1010"
       }
     },
     {
-      "name": "standard 2",
+      "name": "snapping",
       "pattern": "standard",
       "colors": {
-        "coat": "#5a6a3a",
-        "back": "#5a4a2a",
-        "belly": "#b0b080",
-        "bare": "#b0b080",
+        "coat": "#5a5a48",
+        "back": "#3a3a30",
+        "belly": "#a8a080",
         "eyes": "#c8a020"
-      }
-    },
-    {
-      "name": "standard 3",
-      "pattern": "standard",
-      "colors": {
-        "coat": "#7a7a5a",
-        "back": "#3a4a3a",
-        "belly": "#c8c090",
-        "bare": "#c8c090",
-        "eyes": "#1a1010"
       }
     }
   ]

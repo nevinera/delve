@@ -34,8 +34,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "swamp",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "hide": "#5a5a3a",
         "markings": "#3a3a28",
@@ -44,7 +45,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "rust",
       "pattern": "standard",
       "colors": {
         "hide": "#6a4a32",
@@ -54,7 +55,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "moss",
       "pattern": "standard",
       "colors": {
         "hide": "#4a5a3a",

@@ -49,7 +49,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "succubus 1",
       "pattern": "standard",
       "colors": {
         "skin": "#a04a6a",
@@ -59,7 +59,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "succubus 2",
       "pattern": "standard",
       "colors": {
         "skin": "#7a3a7a",
@@ -69,7 +69,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "succubus 3",
       "pattern": "standard",
       "colors": {
         "skin": "#c06a6a",
@@ -79,13 +79,23 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "succubus 4",
       "pattern": "standard",
       "colors": {
         "skin": "#5a3a6a",
         "hair": "#1a1018",
         "eyes": "#e04040",
         "horn": "#4a3a40"
+      }
+    },
+    {
+      "name": "succubus 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#b05a4a",
+        "hair": "#1a1018",
+        "eyes": "#f0d040",
+        "horn": "#2a2020"
       }
     }
   ]

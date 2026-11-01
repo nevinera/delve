@@ -29,7 +29,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "homari 1",
       "pattern": "standard",
       "colors": {
         "skin": "#a83a2a",
@@ -37,7 +37,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "homari 2",
       "pattern": "standard",
       "colors": {
         "skin": "#3a5a6a",
@@ -45,7 +45,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "homari 3",
       "pattern": "standard",
       "colors": {
         "skin": "#8a4a2a",
@@ -53,11 +53,19 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "homari 4",
       "pattern": "standard",
       "colors": {
         "skin": "#4a6a5a",
         "eyes": "#202020"
+      }
+    },
+    {
+      "name": "homari 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#2a4a8a",
+        "eyes": "#101010"
       }
     }
   ]

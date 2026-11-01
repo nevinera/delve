@@ -43,8 +43,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "red-bellied",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "back": "#6a7078",
         "belly": "#c03a2a",
@@ -53,23 +54,13 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "black",
       "pattern": "standard",
       "colors": {
-        "back": "#5a6068",
-        "belly": "#d05a30",
-        "fins": "#3a3a40",
+        "back": "#2a2a30",
+        "belly": "#4a3a3a",
+        "fins": "#1a1a20",
         "eyes": "#d03020"
-      }
-    },
-    {
-      "name": "standard 3",
-      "pattern": "standard",
-      "colors": {
-        "back": "#7a7a70",
-        "belly": "#c03a2a",
-        "fins": "#5a5a60",
-        "eyes": "#e0a020"
       }
     }
   ]

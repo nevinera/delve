@@ -47,7 +47,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "abomination 1",
       "pattern": "standard",
       "colors": {
         "skin": "#a8b098",
@@ -55,7 +55,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "abomination 2",
       "pattern": "standard",
       "colors": {
         "skin": "#9a9aa8",
@@ -63,7 +63,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "abomination 3",
       "pattern": "standard",
       "colors": {
         "skin": "#b0a890",
@@ -71,7 +71,7 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "abomination 4",
       "pattern": "standard",
       "colors": {
         "skin": "#8a9a8a",

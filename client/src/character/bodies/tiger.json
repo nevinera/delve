@@ -73,39 +73,49 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "bengal",
       "pattern": "standard",
+      "weight": 3,
       "colors": {
         "coat": "#d07a2a",
         "back": "#1a1410",
-        "belly": "#e6c39c",
-        "bare": "#3a2a20",
+        "belly": "#ece0c8",
         "eyes": "#c8a040",
         "stripe": "#120e0b"
       }
     },
     {
-      "name": "standard 2",
+      "name": "siberian",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
-        "coat": "#c86a20",
+        "coat": "#d89050",
         "back": "#2a1a10",
-        "belly": "#e3be98",
-        "bare": "#3a2a20",
-        "eyes": "#80b0d0",
+        "belly": "#f0e4d0",
+        "eyes": "#c8a040",
         "stripe": "#1d120b"
       }
     },
     {
-      "name": "standard 3",
+      "name": "white",
       "pattern": "standard",
       "colors": {
-        "coat": "#e0e0d8",
-        "back": "#1a1410",
-        "belly": "#ece7d8",
-        "bare": "#3a2a20",
+        "coat": "#e8e6de",
+        "back": "#3a3430",
+        "belly": "#f4f2ea",
+        "eyes": "#80b0d0",
+        "stripe": "#2a2622"
+      }
+    },
+    {
+      "name": "golden",
+      "pattern": "standard",
+      "colors": {
+        "coat": "#e8c070",
+        "back": "#8a5a2a",
+        "belly": "#f4ead4",
         "eyes": "#c8a040",
-        "stripe": "#120e0b"
+        "stripe": "#a06a30"
       }
     }
   ]

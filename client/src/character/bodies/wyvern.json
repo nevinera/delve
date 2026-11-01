@@ -36,8 +36,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "forest",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "scales": "#4a5a2a",
         "belly": "#a09060",
@@ -46,8 +47,9 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "mud",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "scales": "#5a4a30",
         "belly": "#8a7a5a",
@@ -56,13 +58,33 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "slate",
       "pattern": "standard",
       "colors": {
         "scales": "#3a4a4a",
         "belly": "#a09060",
         "horns": "#d8ccb0",
         "eyes": "#e0d020"
+      }
+    },
+    {
+      "name": "crimson",
+      "pattern": "standard",
+      "colors": {
+        "scales": "#6a2a1e",
+        "belly": "#b08060",
+        "horns": "#2a2420",
+        "eyes": "#f0c020"
+      }
+    },
+    {
+      "name": "venom",
+      "pattern": "standard",
+      "colors": {
+        "scales": "#3a4a20",
+        "belly": "#c0c040",
+        "horns": "#d8ccb0",
+        "eyes": "#a0e020"
       }
     }
   ]

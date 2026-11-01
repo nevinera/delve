@@ -74,7 +74,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "troll 1",
       "pattern": "standard",
       "colors": {
         "skin": "#4a7a8a",
@@ -83,7 +83,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "troll 2",
       "pattern": "standard",
       "colors": {
         "skin": "#5a8a7a",
@@ -92,12 +92,57 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "troll 3",
       "pattern": "standard",
       "colors": {
         "skin": "#6a8a9a",
         "hair": "#1b1310",
+        "eyes": "#40c0a0"
+      }
+    },
+    {
+      "name": "troll 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#3a6a8a",
+        "hair": "#3a6ab0",
         "eyes": "#d03020"
+      }
+    },
+    {
+      "name": "troll 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#5a7a9a",
+        "hair": "#e0c040",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "troll 6",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#7a9a8a",
+        "hair": "#2a8a5a",
+        "eyes": "#40c0a0"
+      }
+    },
+    {
+      "name": "troll 7",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#4a8a6a",
+        "hair": "#c05a2a",
+        "eyes": "#d03020"
+      }
+    },
+    {
+      "name": "troll 8",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#6a7a8a",
+        "hair": "#c05a2a",
+        "eyes": "#e0c040"
       }
     }
   ]

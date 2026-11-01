@@ -30,7 +30,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "ghoul 1",
       "pattern": "standard",
       "colors": {
         "skin": "#7a8a8a",
@@ -39,7 +39,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "ghoul 2",
       "pattern": "standard",
       "colors": {
         "skin": "#8a8a7a",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "ghoul 3",
       "pattern": "standard",
       "colors": {
         "skin": "#6a7a7a",

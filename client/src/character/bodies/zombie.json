@@ -39,7 +39,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "zombie 1",
       "pattern": "standard",
       "colors": {
         "skin": "#8a9a7a",
@@ -48,7 +48,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "zombie 2",
       "pattern": "standard",
       "colors": {
         "skin": "#7a8a6a",
@@ -57,7 +57,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "zombie 3",
       "pattern": "standard",
       "colors": {
         "skin": "#9a9a8a",

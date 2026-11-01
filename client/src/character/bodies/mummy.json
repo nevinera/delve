@@ -24,7 +24,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "mummy 1",
       "pattern": "standard",
       "colors": {
         "skin": "#d0c4a0",
@@ -32,7 +32,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "mummy 2",
       "pattern": "standard",
       "colors": {
         "skin": "#c0b490",
@@ -40,7 +40,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "mummy 3",
       "pattern": "standard",
       "colors": {
         "skin": "#b8a888",

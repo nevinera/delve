@@ -33,12 +33,45 @@
         "dark": "dark",
         "comb": "comb"
       }
+    },
+    "speckled": {
+      "colors": {
+        "dark": "#0f0d0d",
+        "comb": "#c71f1a"
+      },
+      "areas": {
+        "plumage": {
+          "color": "plumage",
+          "marks": [
+            {
+              "kind": "speckled",
+              "color": "speck",
+              "amount": 0.35
+            }
+          ]
+        },
+        "belly": {
+          "color": "belly",
+          "marks": [
+            {
+              "kind": "speckled",
+              "color": "speck",
+              "amount": 0.35
+            }
+          ]
+        },
+        "beak": "beak",
+        "eyes": "eyes",
+        "dark": "dark",
+        "comb": "comb"
+      }
     }
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "white",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "plumage": "#e8e4dc",
         "belly": "#e8e0d0",
@@ -47,8 +80,9 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "red",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "plumage": "#a05a28",
         "belly": "#b06a30",
@@ -57,23 +91,24 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "black",
       "pattern": "standard",
       "colors": {
-        "plumage": "#3a2a20",
-        "belly": "#4a3a2a",
+        "plumage": "#2a2420",
+        "belly": "#3a3028",
         "beak": "#e0b040",
         "eyes": "#c07010"
       }
     },
     {
-      "name": "standard 4",
-      "pattern": "standard",
+      "name": "speckled",
+      "pattern": "speckled",
       "colors": {
-        "plumage": "#c88a40",
-        "belly": "#e8e0d0",
-        "beak": "#d8a030",
-        "eyes": "#a05010"
+        "plumage": "#3a3030",
+        "belly": "#4a3a34",
+        "speck": "#e8e4dc",
+        "beak": "#e0b040",
+        "eyes": "#c07010"
       }
     }
   ]

@@ -23,8 +23,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "brown",
       "pattern": "standard",
+      "weight": 3,
       "colors": {
         "fur": "#4a3a30",
         "wings": "#3a2a28",
@@ -33,32 +34,33 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "black",
+      "pattern": "standard",
+      "weight": 2,
+      "colors": {
+        "fur": "#2a2428",
+        "wings": "#2a2024",
+        "claws": "#2a2020",
+        "eyes": "#d03020"
+      }
+    },
+    {
+      "name": "grey",
       "pattern": "standard",
       "colors": {
-        "fur": "#3a3030",
-        "wings": "#4a3430",
-        "claws": "#2a2020",
+        "fur": "#5a5450",
+        "wings": "#3a3434",
+        "claws": "#1a1414",
         "eyes": "#e0c040"
       }
     },
     {
-      "name": "standard 3",
+      "name": "albino",
       "pattern": "standard",
       "colors": {
-        "fur": "#5a4a3a",
-        "wings": "#2a2020",
-        "claws": "#1a1414",
-        "eyes": "#101010"
-      }
-    },
-    {
-      "name": "standard 4",
-      "pattern": "standard",
-      "colors": {
-        "fur": "#2a2428",
-        "wings": "#3a2a28",
-        "claws": "#2a2020",
+        "fur": "#e8e0d8",
+        "wings": "#d0b0a8",
+        "claws": "#c0a8a0",
         "eyes": "#d03020"
       }
     }

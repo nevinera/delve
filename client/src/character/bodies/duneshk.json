@@ -30,8 +30,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "sand",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "scales": "#b09060",
         "belly": "#d8c090",
@@ -40,22 +41,12 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "red sand",
       "pattern": "standard",
       "colors": {
-        "scales": "#a08050",
-        "belly": "#e0c8a0",
-        "markings": "#8a6a40",
-        "eyes": "#101010"
-      }
-    },
-    {
-      "name": "standard 3",
-      "pattern": "standard",
-      "colors": {
-        "scales": "#c0a070",
-        "belly": "#d8c090",
-        "markings": "#8a6a40",
+        "scales": "#b0704a",
+        "belly": "#d8a880",
+        "markings": "#7a4a2a",
         "eyes": "#101010"
       }
     }

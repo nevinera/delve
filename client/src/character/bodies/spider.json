@@ -37,28 +37,20 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "widow",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
-        "carapace": "#2a2420",
+        "carapace": "#1a1a1a",
         "markings": "#a03020",
-        "claws": "#5a4a3a",
+        "claws": "#2a2a2a",
         "eyes": "#d02020"
       }
     },
     {
-      "name": "standard 2",
+      "name": "wolf",
       "pattern": "standard",
-      "colors": {
-        "carapace": "#3a3028",
-        "markings": "#c0a040",
-        "claws": "#2a2a2a",
-        "eyes": "#40d040"
-      }
-    },
-    {
-      "name": "standard 3",
-      "pattern": "standard",
+      "weight": 2,
       "colors": {
         "carapace": "#4a3a2a",
         "markings": "#6a6a6a",
@@ -67,13 +59,23 @@
       }
     },
     {
-      "name": "standard 4",
+      "name": "tarantula",
       "pattern": "standard",
       "colors": {
-        "carapace": "#1a1a1a",
-        "markings": "#a03020",
-        "claws": "#2a2a2a",
-        "eyes": "#40d040"
+        "carapace": "#2a2420",
+        "markings": "#c07030",
+        "claws": "#5a4a3a",
+        "eyes": "#d02020"
+      }
+    },
+    {
+      "name": "cave",
+      "pattern": "standard",
+      "colors": {
+        "carapace": "#b8b0a0",
+        "markings": "#8a8070",
+        "claws": "#6a6050",
+        "eyes": "#d02020"
       }
     }
   ]

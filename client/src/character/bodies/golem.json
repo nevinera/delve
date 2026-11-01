@@ -28,7 +28,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "golem 1",
       "pattern": "standard",
       "colors": {
         "skin": "#8a8a88",
@@ -36,7 +36,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "golem 2",
       "pattern": "standard",
       "colors": {
         "skin": "#9a9488",
@@ -44,7 +44,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "golem 3",
       "pattern": "standard",
       "colors": {
         "skin": "#7a7a80",

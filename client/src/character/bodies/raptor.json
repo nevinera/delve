@@ -36,8 +36,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "green",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "hide": "#6a7a3a",
         "markings": "#3a3a2a",
@@ -46,8 +47,9 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "tan",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "hide": "#8a6a3a",
         "markings": "#4a2a1a",
@@ -56,13 +58,33 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "red",
       "pattern": "standard",
       "colors": {
-        "hide": "#5a6a5a",
-        "markings": "#3a3a2a",
-        "claws": "#3a6ab0",
+        "hide": "#8a3a2a",
+        "markings": "#3a1a10",
+        "claws": "#d0a030",
         "eyes": "#e0c020"
+      }
+    },
+    {
+      "name": "blue",
+      "pattern": "standard",
+      "colors": {
+        "hide": "#3a5a8a",
+        "markings": "#1a2a4a",
+        "claws": "#d8d0b0",
+        "eyes": "#e0c020"
+      }
+    },
+    {
+      "name": "obsidian",
+      "pattern": "standard",
+      "colors": {
+        "hide": "#2a2a2e",
+        "markings": "#c03020",
+        "claws": "#d8d0b0",
+        "eyes": "#e04020"
       }
     }
   ]

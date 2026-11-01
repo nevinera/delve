@@ -9,7 +9,7 @@ client/src/character/bodies/<body>.json
 ```json
 {
   "skeleton": "feline",
-  "shape": { "H": 1.9, "L": 2.75, "head": 1.7, "ears": "cat", "tail": "cat", "pattern": "stripes" },
+  "shape": { "H": 1.9, "L": 2.75, "head": 1.7, "ears": "cat", "tail": "cat" },
   "look": { "height": [3.4, 4], "build": [0.45, 0.7], "colors": { "skin": ["#d07a2a"], "hair": ["#1a1410"] } }
 }
 ```
@@ -57,6 +57,7 @@ A body's `patterns` say how its areas are painted, and its `colorations` fill a 
 ]
 ```
 
+- A body made for one kind of animal has a few colorations named for what they look like ("bengal", "white"). A body for a folk, like goblins, has many, numbered ("goblin 1"). A body for one very particular creature, like an elephant, has one.
 - A pattern's colors are the names its rules use, up to 10. Its `colors` give defaults, and a coloration's go over them.
 - The builder tags every face with an area. `groups` name sets of areas and other groups. The skeleton has its own groups, and a body or pattern can add more. No group shares an area's name.
 - An area takes its own rule, or else the rule of the smallest group holding it that has one, or else the color of its own name.

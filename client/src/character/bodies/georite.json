@@ -26,7 +26,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "georite 1",
       "pattern": "standard",
       "colors": {
         "skin": "#7a6a5a",
@@ -34,7 +34,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "georite 2",
       "pattern": "standard",
       "colors": {
         "skin": "#6a6a6a",
@@ -42,7 +42,7 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "georite 3",
       "pattern": "standard",
       "colors": {
         "skin": "#8a7a5a",

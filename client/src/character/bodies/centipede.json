@@ -31,8 +31,9 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "giant red",
       "pattern": "standard",
+      "weight": 2,
       "colors": {
         "scales": "#7a3a1a",
         "belly": "#c08040",
@@ -41,7 +42,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "tiger",
       "pattern": "standard",
       "colors": {
         "scales": "#5a2a1a",
@@ -51,22 +52,12 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "black",
       "pattern": "standard",
       "colors": {
-        "scales": "#3a2a20",
+        "scales": "#2a2420",
         "belly": "#c08040",
-        "markings": "#2a1a10",
-        "eyes": "#101010"
-      }
-    },
-    {
-      "name": "standard 4",
-      "pattern": "standard",
-      "colors": {
-        "scales": "#8a6a2a",
-        "belly": "#b07030",
-        "markings": "#e0a040",
+        "markings": "#c03020",
         "eyes": "#101010"
       }
     }

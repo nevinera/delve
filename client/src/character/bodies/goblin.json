@@ -88,7 +88,7 @@
   },
   "colorations": [
     {
-      "name": "standard 1",
+      "name": "goblin 1",
       "pattern": "standard",
       "colors": {
         "skin": "#6a8a3a",
@@ -97,7 +97,7 @@
       }
     },
     {
-      "name": "standard 2",
+      "name": "goblin 2",
       "pattern": "standard",
       "colors": {
         "skin": "#7a9a40",
@@ -106,21 +106,57 @@
       }
     },
     {
-      "name": "standard 3",
+      "name": "goblin 3",
       "pattern": "standard",
       "colors": {
         "skin": "#5a7a34",
+        "hair": "#3a2a1a",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "goblin 4",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#8a9a4a",
+        "hair": "#5a4a3a",
+        "eyes": "#c02a1a"
+      }
+    },
+    {
+      "name": "goblin 5",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#4a6a30",
         "hair": "#1b1310",
         "eyes": "#d0a020"
       }
     },
     {
-      "name": "standard 4",
+      "name": "goblin 6",
       "pattern": "standard",
       "colors": {
-        "skin": "#8a9a4a",
-        "hair": "#2a1c14",
+        "skin": "#9aa858",
+        "hair": "#1b1310",
         "eyes": "#c06020"
+      }
+    },
+    {
+      "name": "goblin 7",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#6a7a5a",
+        "hair": "#2a1c14",
+        "eyes": "#e0c040"
+      }
+    },
+    {
+      "name": "goblin 8",
+      "pattern": "standard",
+      "colors": {
+        "skin": "#7a8a2a",
+        "hair": "#3a2a1a",
+        "eyes": "#c02a1a"
       }
     }
   ]
