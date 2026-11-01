@@ -187,7 +187,8 @@ export class Builder {
   // landAt(x, z): the land's height, without what's built on it, for how fast flying goes and how
   // the camera looks down (moveBuilder's). clear(head, at): where the camera can be, looking from
   // `head` to `at`, kept out of rock. keep(was, now): the state to move to instead of `now`, from
-  // `was`, where something's in the way that moveBuilder doesn't know of. ghost(): whether they're
+  // `was`, where something's in the way that moveBuilder doesn't know of, told { soaring }, whether
+  // space is double-tapped and held. ghost(): whether they're
   // a ghost, flying anywhere, through everything.
   constructor({ scene, camera, canvas, groundAt, landAt = groundAt, waterAt = () => null, at, state, push, clear = (head, to) => to, keep = (was, now) => now, ghost = () => false }) {
     this.push = push;
@@ -259,7 +260,7 @@ export class Builder {
     const was = this.state;
     this.state = this.ghost()
       ? moveBuilder({ ...this.state, flying: true }, input, dt, () => -Infinity, undefined, undefined, this.landAt)
-      : this.keep(was, moveBuilder(this.state, input, dt, this.groundAt, this.push, this.waterAt, this.landAt));
+      : this.keep(was, moveBuilder(this.state, input, dt, this.groundAt, this.push, this.waterAt, this.landAt), { soaring: this.fast.has(" ") });
     if (this.drag?.button === 2) this.cam.yaw = 0;
     const now = this.state;
     const speed = dt > 0 ? Math.hypot(now.x - was.x, now.z - was.z) / dt : 0;

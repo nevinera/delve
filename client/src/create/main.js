@@ -222,11 +222,11 @@ function start(world, changes, fresh) {
     const { x, y, z } = builder.state;
     return caves.solid(x, y + MID_FT, z);
   };
-  // Flying, cave rock's in the way too, sliding along it where it can, unless they're a ghost or
-  // already in it.
-  const keep = (was, now) => {
+  // Flying, cave rock's in the way too, sliding along it where it can, unless they're a ghost,
+  // already in it, or soaring up (space double-tapped), which goes on up through it.
+  const keep = (was, now, { soaring = false } = {}) => {
     const stuck = (s) => rockAt(s.x, s.z, s.y);
-    if (!now.flying || ghost() || !stuck(now) || stuck(was)) return now;
+    if (!now.flying || ghost() || !stuck(now) || stuck(was) || (soaring && now.y > was.y)) return now;
     const tries = [{ y: was.y }, { x: was.x, y: was.y }, { z: was.z, y: was.y }, { x: was.x, z: was.z }, { x: was.x, y: was.y, z: was.z }];
     return tries.map((t) => ({ ...now, ...t })).find((s) => !stuck(s)) ?? { ...now, x: was.x, y: was.y, z: was.z };
   };
