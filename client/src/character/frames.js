@@ -23,7 +23,7 @@ const BIRD = { mesh: birdMesh, clips: birdClips, roles: birdRoles, settings: ["h
 const STRIDER = { mesh: striderMesh, clips: striderClips, roles: striderRoles, settings: ["height", "build", "head"], colors: ["skin", "secondary", "hair", "eyes"] };
 const EYESHAUG = { mesh: eyeshaugMesh, clips: eyeshaugClips, roles: eyeshaugRoles, settings: ["height", "build"], colors: ["skin", "secondary", "eyes"] };
 const SLIME = { mesh: slimeMesh, clips: slimeClips, roles: slimeRoles, settings: ["height", "build"], colors: ["skin", "eyes"] };
-export const FRAMES = { canine: FOUR_LEGS, ursine: FOUR_LEGS, hoofed: FOUR_LEGS, lizard: FOUR_LEGS, pachyderm: FOUR_LEGS, dragon: DRAGON, serpent: SERPENT, fish: SWIMMER, ray: SWIMMER, bat: BAT, crawler: CRAWLER, slime: SLIME, bird: BIRD, strider: STRIDER, eyeshaug: EYESHAUG };
+export const FRAMES = { canine: FOUR_LEGS, feline: FOUR_LEGS, ursine: FOUR_LEGS, hoofed: FOUR_LEGS, lizard: FOUR_LEGS, pachyderm: FOUR_LEGS, dragon: DRAGON, serpent: SERPENT, fish: SWIMMER, ray: SWIMMER, bat: BAT, crawler: CRAWLER, slime: SLIME, bird: BIRD, strider: STRIDER, eyeshaug: EYESHAUG };
 
 // The skeletons, and the bodies built on each. Bodies not built yet stand as humanoids.
 export const SKELETONS = { humanoid: ["humanoid", "goblin", "troll", "orc", "ogre", "kobold", "gnoll", "lizardfolk", "tauros", "skeleton", "zombie", "giant", "harpy", "gargoyle", "imp", "centaur", "naga", "amphen", "georite", "furite", "aquite", "aerite", "boric", "ursol", "trog", "homari", "tyrshaug", "drakel", "abomination", "ghoul", "mummy", "lich", "banshee", "ghost", "deepshaug", "smoulder", "treant", "dryad", "succubus", "hivelord", "cindershaug", "golem", "mycosi", "drakesh"] };

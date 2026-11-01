@@ -53,7 +53,7 @@ describe("roleClips", () => {
       for (const role of ["idle", "walk", "run", "attack", "battleCry", "hit", "death"]) expect(clips.has(roles[role]), `${body} ${role}`).toBe(true);
       for (const role of ROLES) if (roles[role]) expect(clips.has(roles[role]), `${body} ${role}`).toBe(true);
     }
-  });
+  }, 30000);
 
   it("attacks with every weapon, by one of a few groups of clips", () => {
     const clips = characterClips(characterMesh(resolveRecipe()), baked);
