@@ -9,8 +9,13 @@ body.monster-lab-page {
 .monster-lab {
   display: grid;
   grid-template-columns: 170px minmax(0, 1fr) 300px;
+  grid-template-areas: "bodies view panel";
   height: 100vh;
 }
+
+.monster-bodies { grid-area: bodies; }
+.monster-view { grid-area: view; }
+.monster-panel { grid-area: panel; }
 
 .monster-bodies {
   overflow-y: auto;
@@ -57,9 +62,13 @@ body.monster-lab-page {
 }
 
 .monster-stage {
+  /* Out of the flow, so the size the renderer gives it never feeds back into the layout. */
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
+  touch-action: none;
 }
 
 .monster-now {
@@ -126,4 +135,39 @@ body.monster-lab-page {
 
 .monster-help {
   color: #888;
+}
+
+/* Phones: the stage on top, the controls under it, then the bodies. */
+@media (max-width: 800px) {
+  .monster-lab {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "view" "panel" "bodies";
+    grid-template-rows: 55vh auto auto;
+    height: auto;
+  }
+
+  .monster-view {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #9cc0de;
+  }
+
+  .monster-bodies,
+  .monster-panel {
+    overflow: visible;
+    border: 0;
+  }
+
+  .monster-bodies button {
+    display: inline-block;
+    width: auto;
+    margin: 2px;
+    padding: 4px 8px;
+    border-color: #444;
+  }
+
+  .monster-help {
+    display: none;
+  }
 }
