@@ -27,6 +27,7 @@ import { Things } from "./things.js";
 import { GithubAuthError, GithubClient } from "../github/github.js";
 import { BranchMoved, fromRepo, loadRepo, nextVersion, recordOpened, repoChanges, sameRepo, saveRepo } from "./repo.js";
 import { CAVES_PATH, Caves } from "./caves.js";
+import { Layout, layoutPath } from "./caveLayout.js";
 import { Overhead } from "./overhead.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
@@ -38,7 +39,7 @@ import { Overhead } from "./overhead.js";
 const $ = (id) => document.getElementById(id);
 const SKY = 0x9cc4e4;
 const UNDERGROUND = 0x000000; // the sky, with the camera under the ground
-const GHOST_TOOLS = new Set(["erase", "layout"]); // tools the builder's always a ghost with
+const GHOST_TOOLS = new Set(["erase", "chamber", "tunnel"]); // tools the builder's always a ghost with
 const CAVE_TOOLS = new Set(["dig", "caveFill", "caveSmooth", "teleport"]); // tools they're a ghost with in rock
 const STAND_RINGS = 3; // how many rings of cells round where they teleport to are looked in for room to stand
 const OVERHEAD_EVERY_MS = 1000; // how often the ground drawn over the camera underground's read again
@@ -179,6 +180,9 @@ function start(world, changes, fresh) {
   const overhead = new Overhead(scene, (x, z) => renditions.heightAt(x, z));
   let lastOverhead = 0;
   for (const [path, bytes] of world.files) if (CAVES_PATH.exec(path)?.[1] === continent) caves.load(bytes);
+  // The rooms and tunnels planned, to carve (caveLayout.js).
+  const layoutBytes = world.files.get(layoutPath(continent));
+  const layout = new Layout(layoutBytes ? JSON.parse(strFromU8(layoutBytes)) : null);
   ground.holes = (tx, tz) => caves.holes(tx, tz);
   caves.onMouths = (plates) => ground.refresh(plates);
   const things = new Things(scene, placed, (x, z, under) => caves.groundAt(x, z, under));
@@ -247,7 +251,7 @@ function start(world, changes, fresh) {
     }
     return null;
   };
-  tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves, standable });
+  tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves, layout, standable });
   // The bottom bar's display toggles.
   $("showGrid").checked = grid.value === 1;
   $("showGrid").addEventListener("change", () => (grid.value = $("showGrid").checked ? 1 : 0));
@@ -312,14 +316,14 @@ function start(world, changes, fresh) {
   const FPS = 30;
   let lastSave = 0;
   let lastHud = 0;
-  let [saving, lastChangeSave, marksSaved, biomesSaved, waterSaved] = [null, 0, 0, 0, "0,0"];
-  const unsaved = () => renditions.unsaved.size || placed.changed.size || library.dirty.size || caves.changed.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || waterVersion() !== waterSaved;
+  let [saving, lastChangeSave, marksSaved, biomesSaved, waterSaved, layoutSaved] = [null, 0, 0, 0, "0,0", layout.version];
+  const unsaved = () => renditions.unsaved.size || placed.changed.size || library.dirty.size || caves.changed.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || waterVersion() !== waterSaved || layout.version !== layoutSaved;
   // Saves what's changed into `changes`, writing files on the worker: once what's being saved is,
   // where something is.
   const save = async () => {
     while (saving) await saving;
     if (!unsaved()) return;
-    const [version, biomesVersion, waterNow] = [tools.marks.version, tools.biomes.version, waterVersion()];
+    const [version, biomesVersion, waterNow, layoutNow] = [tools.marks.version, tools.biomes.version, waterVersion(), layout.version];
     saving = renditions
       .unsavedFiles(continent)
       .then(async (files) => {
@@ -327,8 +331,9 @@ function start(world, changes, fresh) {
         changes.set(planningPath(continent), strToU8(`${JSON.stringify(tools.marks.toJSON())}\n`));
         changes.set(biomesPath(continent), strToU8(`${JSON.stringify(tools.biomes.toJSON())}\n`));
         changes.set(waterPath(continent), strToU8(`${JSON.stringify(waterFile())}\n`));
+        if (layout.nodes.size || layout.arcs.size || layout.carved.size || layoutBytes) changes.set(layoutPath(continent), strToU8(`${JSON.stringify(layout.toJSON())}\n`));
         await store.set("changes", changes);
-        [marksSaved, biomesSaved, waterSaved] = [version, biomesVersion, waterNow];
+        [marksSaved, biomesSaved, waterSaved, layoutSaved] = [version, biomesVersion, waterNow, layoutNow];
       })
       .catch((e) => console.error("couldn't save the changes", e))
       .finally(() => {

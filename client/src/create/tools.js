@@ -12,6 +12,7 @@ import { Measure } from "./measure.js";
 import { Build } from "./build.js";
 import { Dig } from "./dig.js";
 import { CaveBrush } from "./caveBrush.js";
+import { CavePlan } from "./cavePlan.js";
 import { Paths } from "./paths.js";
 import { TITLE_MAX } from "./pins.js";
 import { STROKE_MAX_FT, Stroke } from "./stroke.js";
@@ -42,7 +43,8 @@ import { WaterBodies } from "./water.js";
 //   them, and c and v turn raise and lower's, shift+c and shift+v a little.
 // - build's tools place objects, templates and slabs, and pick them to change (build.js).
 // - caves' tools dig caves and erase them (dig.js), smooth caves' rock and add to it
-//   (caveBrush.js), and teleport the builder into them.
+//   (caveBrush.js), teleport the builder into them, and plan rooms and tunnels to carve
+//   (cavePlan.js).
 // - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
 //   more each time the ring's moved its radius. Its undo takes back the last scattering.
 
@@ -58,6 +60,7 @@ const OPENS_PINS = new Set([null, "pin"]); // tools with which clicking a pin op
 const BUILD = new Set(["pick", "object", "template", "slab", "stairs", "ramp"]);
 const DIGS = new Set(["dig", "erase"]);
 const CAVE_BRUSHES = new Set(["caveSmooth", "caveFill"]);
+const PLANS = new Set(["chamber", "tunnel"]);
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
 
@@ -97,7 +100,7 @@ function drawShape(canvas, shape) {
 export class Tools {
   // standable(ray): where the builder can stand in the cave a THREE.Ray points at, [x, y, z], or
   // null, for the teleport tool.
-  constructor({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves, standable }) {
+  constructor({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves, layout, standable }) {
     this.standable = standable;
     Object.assign(this, { camera, canvas, builder, renditions, ground });
     this.tool = null;
@@ -139,6 +142,7 @@ export class Tools {
     this.build.onPick = (tool) => this.tool !== tool && this.pick(tool);
     this.dig = new Dig({ scene, caves, camera, ray: () => this.build.ray() });
     this.caveBrush = new CaveBrush({ caves, ray: () => this.build.ray() });
+    this.plan = new CavePlan({ scene, camera, canvas, caves, layout, ray: () => this.build.ray() });
     this.paths = new Paths(scene, canvas.parentElement, renditions, (x, z) => this.surface(x, z), (text) => ($("pathStatus").textContent = text));
     this.moving = null; // pins being dragged, { from, pins: [[pin, x, z]], before, moved }
     this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }
@@ -311,6 +315,7 @@ export class Tools {
     canvas.addEventListener("pointermove", (e) => {
       this.point(e);
       if (BUILD.has(this.tool)) this.build.move(e);
+      if (PLANS.has(this.tool)) this.plan.move(e);
       if (this.moving) this.movePins();
       for (const areas of Object.values(this.outlined)) {
         if (!areas.dragging) continue;
@@ -373,6 +378,10 @@ export class Tools {
       if (CAVE_BRUSHES.has(this.tool)) {
         canvas.setPointerCapture(e.pointerId);
         return this.caveBrush.press(this.tool);
+      }
+      if (PLANS.has(this.tool)) {
+        canvas.setPointerCapture(e.pointerId);
+        return this.plan.down(e);
       }
       if (this.tool === "teleport") {
         const ray = this.build.ray();
@@ -438,6 +447,7 @@ export class Tools {
       if (BUILD.has(this.tool)) this.build.up();
       if (this.dig.down) this.dig.letGo();
       if (this.caveBrush.down) this.caveBrush.letGo();
+      if (PLANS.has(this.tool)) this.plan.up();
       if (this.clicked?.pin) this.openPin(this.clicked.pin);
       else if (this.clicked?.at) {
         const before = this.marks.toJSON();
@@ -471,6 +481,7 @@ export class Tools {
       if (BUILD.has(this.tool) && this.build.key(e)) return e.preventDefault();
       if (CAVE_BRUSHES.has(this.tool) && this.caveBrush.key(e)) return e.preventDefault();
       if (DIGS.has(this.tool) && this.dig.key(e, this.tool)) return e.preventDefault();
+      if (PLANS.has(this.tool) && this.plan.key(e)) return e.preventDefault();
       if (e.key === "Escape" && areas?.draft) areas.drop();
       else if (e.key === "Escape") this.pick(null);
       else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "select") this.marks.deleteSelected();
@@ -604,6 +615,7 @@ export class Tools {
     this.measuring = null;
     this.paths.setShown(tool === "path");
     if (BUILD.has(tool) || BUILD.has(this.build.tool)) this.build.setTool(BUILD.has(tool) ? tool : null);
+    this.plan.setTool(PLANS.has(tool) ? tool : null);
     this.box = null;
     this.boxEl.hidden = true;
     this.drawing = null;
@@ -807,6 +819,7 @@ export class Tools {
     if (BUILD.has(this.tool)) this.build.tick();
     this.dig.tick(this.tool);
     this.caveBrush.tick(CAVE_BRUSHES.has(this.tool));
+    this.plan.tick();
     for (const [tool, areas] of Object.entries(this.outlined)) {
       const to = this.tool === tool && areas.draft && this.hit();
       areas.tick(dt, this.camera, w, h, to ? [to[0], to[2]] : null, this.tool === tool);

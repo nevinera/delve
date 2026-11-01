@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "cave-layout.schema.json",
+  "title": "caves/layout.json",
+  "description": "A continent's planned cave rooms and tunnels, at places/continents/<c>/caves/layout.json.",
+  "type": "object",
+  "required": ["version", "nodes", "arcs"],
+  "properties": {
+    "version": { "const": 1 },
+    "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
+    "arcs": { "type": "array", "items": { "$ref": "#/$defs/arc" } },
+    "carved": {
+      "type": "object",
+      "description": "Each node or arc by id as it was when last carved; an arc's copy adds ends.",
+      "additionalProperties": { "type": "object" }
+    }
+  },
+  "$defs": {
+    "point": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+    "rock": { "type": "integer", "minimum": 0, "maximum": 3, "description": "0 jagged, 1 smooth, 2 carved, 3 mined" },
+    "style": { "enum": ["mineshaft", "borehole", "lavatube"] },
+    "node": {
+      "type": "object",
+      "required": ["id", "at"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^n\\d+$" },
+        "at": { "$ref": "#/$defs/point", "description": "the middle of the room's floor, in feet" },
+        "size": { "enum": ["s", "m", "l", "xl", "xxl", "3xl", "4xl"] },
+        "shape": { "enum": ["cathedral", "round", "flat"] },
+        "style": { "$ref": "#/$defs/style" },
+        "rock": { "$ref": "#/$defs/rock" },
+        "hewn": { "type": "boolean" }
+      }
+    },
+    "arc": {
+      "type": "object",
+      "required": ["id", "from", "to"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^a\\d+$" },
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "bends": { "type": "array", "items": { "$ref": "#/$defs/point" } },
+        "size": { "type": "number", "minimum": 4, "maximum": 60, "description": "width in feet" },
+        "shape": { "enum": ["straight", "wiggly", "zigzag", "deadends"] },
+        "style": { "$ref": "#/$defs/style" },
+        "rock": { "$ref": "#/$defs/rock" },
+        "hewn": { "type": "boolean" }
+      }
+    }
+  }
+}

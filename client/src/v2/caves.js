@@ -38,8 +38,9 @@ export const CAVES_PATH = /^places\/continents\/([\w-]+)\/caves\/(-?\d+)_(-?\d+)
 const quarter = (v) => Math.round(v * 4) / 4;
 
 // The height a shape covers over (x, z), [low, high], or null where it misses. A shape is
-// { kind: "sphere", at: [x, y, z], radius } or { kind: "box", at, half: [x, y, z], yaw } (radians,
-// as an object's), in continent feet.
+// { kind: "sphere", at: [x, y, z], radius }, { kind: "box", at, half: [x, y, z], yaw } (radians,
+// as an object's), or { kind: "dome", at, radii: [x, y, z], yaw }: half an ellipsoid standing on
+// a flat floor at `at`. All in continent feet.
 export function reach(shape, x, z) {
   const [cx, cy, cz] = shape.at;
   if (shape.kind === "sphere") {
@@ -51,6 +52,12 @@ export function reach(shape, x, z) {
   const [c, s] = [Math.cos(shape.yaw ?? 0), Math.sin(shape.yaw ?? 0)];
   const [dx, dz] = [x - cx, z - cz];
   const [u, v] = [dx * c - dz * s, dx * s + dz * c];
+  if (shape.kind === "dome") {
+    const [rx, ry, rz] = shape.radii;
+    const d2 = (u / rx) ** 2 + (v / rz) ** 2;
+    if (d2 >= 1) return null;
+    return [cy, cy + ry * Math.sqrt(1 - d2)];
+  }
   if (Math.abs(u) > shape.half[0] || Math.abs(v) > shape.half[2]) return null;
   return [cy - shape.half[1], cy + shape.half[1]];
 }
@@ -58,7 +65,7 @@ export function reach(shape, x, z) {
 // The shape's reach across the ground, [x0, z0, x1, z1].
 export function shapeBounds(shape) {
   const [cx, , cz] = shape.at;
-  const r = shape.kind === "sphere" ? shape.radius : Math.hypot(shape.half[0], shape.half[2]);
+  const r = shape.kind === "sphere" ? shape.radius : shape.kind === "dome" ? Math.max(shape.radii[0], shape.radii[2]) : Math.hypot(shape.half[0], shape.half[2]);
   return [cx - r, cz - r, cx + r, cz + r];
 }
 
@@ -104,9 +111,9 @@ export function fillRock(column, low, high, minAir = MIN_ROCK_FT) {
 // Carves `shape` into the caves: opens air (`fill` false) or fills rock. columnsOf(tx, tz, make):
 // the tile's columns, made when `make` and it has none, or null; groundAt(ci, cj): the ground's
 // height at a continent cell's middle, or null where its cells aren't read. New air takes the
-// theme of the air it's dug from, the one most of it meets, or `theme`; and is hewn as `hewn`.
-// Gives the "tx,tz" of the tiles changed.
-export function carve(shape, columnsOf, groundAt, { fill = false, theme = 0, hewn = false } = {}) {
+// theme of the air it's dug from, the one most of it meets, or `theme` (always, with `own`); and
+// is hewn as `hewn`. Gives the "tx,tz" of the tiles changed.
+export function carve(shape, columnsOf, groundAt, { fill = false, theme = 0, hewn = false, own = false } = {}) {
   const [x0, z0, x1, z1] = shapeBounds(shape);
   const cuts = [];
   for (let cj = Math.floor(z0 / CELL_FT); cj <= Math.floor(z1 / CELL_FT); cj++) {
@@ -136,7 +143,7 @@ export function carve(shape, columnsOf, groundAt, { fill = false, theme = 0, hew
     const found = at(cut, false);
     for (const s of found?.columns[found.k] ?? []) if (s.ceiling >= cut.low && s.floor <= cut.high) met.set(s.theme, (met.get(s.theme) ?? 0) + 1);
   }
-  const span = { theme: met.size ? [...met].sort((a, b) => b[1] - a[1])[0][0] : theme, hewn };
+  const span = { theme: met.size && !own ? [...met].sort((a, b) => b[1] - a[1])[0][0] : theme, hewn };
   for (const cut of cuts) {
     const found = at(cut, true);
     found.columns[found.k] = openAir(found.columns[found.k], cut.low, cut.high, span);

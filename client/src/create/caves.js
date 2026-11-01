@@ -117,6 +117,23 @@ export class Caves {
     return this.change((columnsOf) => carve(shape, columnsOf, groundAt, { fill, theme, hewn }), join);
   }
 
+  // Carves a cave layout's plan (caveLayout.js's carvePlan): its fills, then its opens, each
+  // opening its own rock. Undoes as one, calling `undone` when it's undone. Gives the undo's entry,
+  // or null where nothing changed.
+  carvePlan({ fills, opens }, undone) {
+    const groundAt = (ci, cj) => (Number.isFinite(this.groundCell(ci, cj)) ? this.groundCell(ci, cj) : null);
+    const work = (columnsOf) => {
+      const changed = new Set();
+      for (const shape of fills) for (const key of carve(shape, columnsOf, groundAt, { fill: true })) changed.add(key);
+      for (const { shape, theme, hewn } of opens) for (const key of carve(shape, columnsOf, groundAt, { theme, hewn, own: true })) changed.add(key);
+      return changed;
+    };
+    if (!this.change(work, false, false)) return null;
+    const entry = this.undos.at(-1);
+    entry.undone = undone;
+    return entry;
+  }
+
   // Adds rock round continent feet `at` (on the rock), facing `normal`, out to `radius`, up to
   // `amountFt` (v2/caves.js's growCave). Gives whether anything changed.
   grow(at, normal, radius, { amountFt, join = false }) {
@@ -189,6 +206,7 @@ export class Caves {
       else this.tiles.delete(key);
     }
     this.touched(new Set(entry.tiles.keys()));
+    entry.undone?.();
     return true;
   }
 

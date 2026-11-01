@@ -525,6 +525,27 @@ body.create {
   display: none;
 }
 
+.create-plan-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  font: 12px monospace;
+  color: #ffe14d;
+  background: #14141cb0;
+  padding: 1px 4px;
+  border-radius: 3px;
+  pointer-events: none;
+  translate: 8px -50%;
+}
+
+.create-plan-label.steep {
+  color: #ff6a5a;
+}
+
+.create-plan-label[hidden] {
+  display: none;
+}
+
 .create-template-make {
   width: min(280px, calc(100vw - 32px));
   padding: 12px;

@@ -108,6 +108,14 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 8 L46 8 L46 22 L2 22 Z" fill="#8a7a66"/><path d="M14 8 C 14 20, 34 20, 34 8 Z" fill="#1c1a20"/><path d="M24 2 L24 15 M19 10 L24 15 L29 10" stroke="#ffe14d" stroke-width="2" fill="none"/></svg>
         <span>teleport</span><kbd class="create-key">M</kbd>
       </button>
+      <button type="button" data-tool="chamber" data-key="n" aria-pressed="false" title="plan rooms on a grid, to carve">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M4 4 L44 4 M4 12 L44 12 M4 20 L44 20 M12 2 L12 22 M24 2 L24 22 M36 2 L36 22" stroke="#5a7aa8" stroke-width="1"/><ellipse cx="24" cy="12" rx="9" ry="6" fill="none" stroke="#ffa040" stroke-width="2"/><circle cx="24" cy="12" r="2" fill="#ffe14d"/></svg>
+        <span>plan chamber</span><kbd class="create-key">N</kbd>
+      </button>
+      <button type="button" data-tool="tunnel" data-key="l" aria-pressed="false" title="plan tunnels between rooms, to carve">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M4 4 L44 4 M4 12 L44 12 M4 20 L44 20 M12 2 L12 22 M24 2 L24 22 M36 2 L36 22" stroke="#5a7aa8" stroke-width="1"/><path d="M8 18 C 18 18, 28 6, 40 6" fill="none" stroke="#66ccff" stroke-width="2.5"/><circle cx="8" cy="18" r="2.5" fill="#e8e4dc"/><circle cx="40" cy="6" r="2.5" fill="#e8e4dc"/></svg>
+        <span>plan tunnel</span><kbd class="create-key">L</kbd>
+      </button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" data-key="h" aria-pressed="false" title="raise and lower the ground">
@@ -415,6 +423,53 @@
       <div class="create-way">
         <button type="button" data-cave-undo>undo</button>
       </div>
+    </div>
+    <div data-config="chamber tunnel" hidden>
+      <p class="create-note" data-only="chamber">Click a point of the grid to place a room on it, and click a room to select it; drag it to move it. Points snap within 64 ft: fly closer to reach further ones.</p>
+      <p class="create-note" data-only="tunnel">Click a room, then another, to join them with a tunnel. Click a tunnel to select it, and drag its bends to curve it. It's red where it climbs steeper than 45°.</p>
+      <p id="planWhat" class="create-note"></p>
+      <label>rock
+        <select id="planRock"><option value="0">jagged</option><option value="1">smooth</option><option value="2">carved</option><option value="3">mined</option></select>
+      </label>
+      <label title="cut flat-faced, as by hand"><input type="checkbox" id="planHewn"> hewn</label>
+      <div class="create-modes" role="group" aria-label="size" data-plan-for="node">
+        <button type="button" data-plan-size="s" aria-pressed="false" title="16 ft">s</button>
+        <button type="button" data-plan-size="m" aria-pressed="false" title="32 ft">m</button>
+        <button type="button" data-plan-size="l" aria-pressed="false" title="64 ft">l</button>
+        <button type="button" data-plan-size="xl" aria-pressed="false" title="128 ft">xl</button>
+        <button type="button" data-plan-size="xxl" aria-pressed="false" title="256 ft">xxl</button>
+        <button type="button" data-plan-size="3xl" aria-pressed="false" title="512 ft">3xl</button>
+        <button type="button" data-plan-size="4xl" aria-pressed="false" title="1,024 ft">4xl</button>
+      </div>
+      <label data-plan-for="arc">width <output id="planArcSizeOut"></output>
+        <input id="planArcSize" type="range" step="1" value="10">
+      </label>
+      <div class="create-modes" role="group" aria-label="shape" data-plan-for="node">
+        <button type="button" data-plan-shape="cathedral" aria-pressed="false" title="tall and vaulted, narrowing upward">cathedral</button>
+        <button type="button" data-plan-shape="round" aria-pressed="false" title="wide, with a domed roof">round</button>
+        <button type="button" data-plan-shape="flat" aria-pressed="false" title="wide and low, flat-roofed">flat</button>
+      </div>
+      <div class="create-modes" role="group" aria-label="shape" data-plan-for="arc">
+        <button type="button" data-plan-shape="straight" aria-pressed="false">straight</button>
+        <button type="button" data-plan-shape="wiggly" aria-pressed="false">wiggly</button>
+        <button type="button" data-plan-shape="zigzag" aria-pressed="false">zigzag</button>
+        <button type="button" data-plan-shape="deadends" aria-pressed="false" title="short side passages that stop in the rock">dead ends</button>
+      </div>
+      <div class="create-modes" role="group" aria-label="style">
+        <button type="button" data-plan-style="mineshaft" aria-pressed="false" title="square, a level floor">mineshaft</button>
+        <button type="button" data-plan-style="borehole" aria-pressed="false" title="round">borehole</button>
+        <button type="button" data-plan-style="lavatube" aria-pressed="false" title="a flattened tube that swells and narrows">lava tube</button>
+      </div>
+      <div class="create-way">
+        <button type="button" id="planCarve" title="carve everything changed since it was last carved">carve</button>
+        <button type="button" id="planUncarve" title="fill in what's selected">uncarve</button>
+        <button type="button" id="planRecarve" title="fill in and carve again what's selected">recarve</button>
+      </div>
+      <div class="create-way">
+        <button type="button" id="planDelete">delete</button>
+        <button type="button" id="planUndo">undo</button>
+      </div>
+      <p id="planStatus" class="create-note" role="status"></p>
     </div>
     <div data-config="teleport" hidden>
       <p class="create-note">Click a cave to go there, standing on its floor: from in it, where you click; from outside it, the cave your aim first meets past rock.</p>
