@@ -41,13 +41,13 @@ export class Caves {
     this.materials = [caveMaterial(), new THREE.MeshLambertMaterial({ vertexColors: true })];
     // The rock's faces sit a little back, so lines drawn over their edges show.
     for (const material of this.materials) Object.assign(material, { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
+    // The grid's drawn on its own, after the rest, hidden only by the builder (drawOver); the lines
+    // with the rest.
     this.overlays = { grid: new THREE.Group(), lines: new THREE.Group() };
-    for (const group of Object.values(this.overlays)) {
-      group.visible = false;
-      scene.add(group);
-    }
-    this.pointMaterial = new THREE.PointsMaterial({ size: POINT_PX, sizeAttenuation: false, vertexColors: true, depthTest: false, transparent: true });
-    this.gridMaterial = new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, transparent: true, opacity: 0.6 });
+    for (const group of Object.values(this.overlays)) group.visible = false;
+    scene.add(this.overlays.lines);
+    this.pointMaterial = new THREE.PointsMaterial({ size: POINT_PX, sizeAttenuation: false, vertexColors: true, depthWrite: false, transparent: true });
+    this.gridMaterial = new THREE.LineBasicMaterial({ vertexColors: true, depthWrite: false, transparent: true, opacity: 0.6 });
     this.lineMaterial = new THREE.LineBasicMaterial({ color: LINE_RGB, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
     this.onMouths = null; // (plate keys) => void, when the ground at mouths changes
     this.world = {
@@ -207,6 +207,22 @@ export class Caves {
       if (performance.now() - start > BUILD_MS) break;
       this.make(key);
     }
+  }
+
+  // Draws the grid, if it's shown, over what `renderer` drew last, hidden only by `over` (an
+  // object in the scene, the builder), seen by `camera`.
+  drawOver(renderer, camera, over) {
+    if (!this.overlays.grid.visible) return;
+    renderer.autoClear = false;
+    renderer.clearDepth();
+    const color = renderer.state.buffers.color;
+    color.setMask(false);
+    color.setLocked(true);
+    renderer.render(over, camera);
+    color.setLocked(false);
+    color.setMask(true);
+    renderer.render(this.overlays.grid, camera);
+    renderer.autoClear = true;
   }
 
   // Shows or hides an overlay: "grid" or "lines".

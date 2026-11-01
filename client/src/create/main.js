@@ -27,6 +27,7 @@ import { Things } from "./things.js";
 import { GithubAuthError, GithubClient } from "../github/github.js";
 import { BranchMoved, fromRepo, loadRepo, nextVersion, recordOpened, repoChanges, sameRepo, saveRepo } from "./repo.js";
 import { CAVES_PATH, Caves } from "./caves.js";
+import { Overhead } from "./overhead.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
 // The world comes from a zip you upload (script/convert-v2.mjs makes one from a v1 world) or a
@@ -37,6 +38,7 @@ import { CAVES_PATH, Caves } from "./caves.js";
 const $ = (id) => document.getElementById(id);
 const SKY = 0x9cc4e4;
 const UNDERGROUND = 0x000000; // the sky, with the camera under the ground
+const OVERHEAD_EVERY_MS = 1000; // how often the ground drawn over the camera underground's read again
 // Where fog starts and closes in, as shares of how far off ground's drawn.
 const FOG = { near: 0.5, far: 1.02 };
 const [NEAR_FT, NEAR_PER_FT, NEAR_MOST_FT] = [0.5, 0.001, 100]; // the camera's near plane, by how high it is
@@ -171,6 +173,8 @@ function start(world, changes, fresh) {
   // The caves dug by hand: the builder stands on their floors, and the ground at their mouths is
   // theirs to draw.
   const caves = new Caves(scene, renditions);
+  const overhead = new Overhead(scene, (x, z) => renditions.heightAt(x, z));
+  let lastOverhead = 0;
   for (const [path, bytes] of world.files) if (CAVES_PATH.exec(path)?.[1] === continent) caves.load(bytes);
   ground.holes = (tx, tz) => caves.holes(tx, tz);
   caves.onMouths = (plates) => ground.refresh(plates);
@@ -412,7 +416,8 @@ function start(world, changes, fresh) {
     // and nothing on it.
     const [cx, cz] = [camera.position.x, camera.position.z];
     const buried = camera.position.y < groundAt(cx, cz) && !caves.mouth(Math.floor(cx / CELL_FT), Math.floor(cz / CELL_FT));
-    ground.setWired(buried);
+    ground.group.visible = !buried;
+    timed("ground", () => overhead.tick(buried && $("showOverhead").checked, x, z, now - lastOverhead > OVERHEAD_EVERY_MS && (lastOverhead = now)));
     for (const shown of [sea.mesh, falls.group, things.group, things.outlines]) shown.visible = !buried;
     if (buried) for (const shown of [scatter.group, clutter.group, surfaces.group]) shown.visible = false;
     const sky = buried ? UNDERGROUND : under ? UNDERWATER.color : SKY;
@@ -422,7 +427,10 @@ function start(world, changes, fresh) {
     sun.position.set(x + 500, 1000, z + 300);
     sun.target.position.set(x, 0, z);
     compass.tick(camera);
-    timed("render", () => renderer.render(scene, camera));
+    timed("render", () => {
+      renderer.render(scene, camera);
+      caves.drawOver(renderer, camera, builder.figure.model);
+    });
     if (now - lastInfo > INFO_EVERY_MS) {
       const at = tools.hit();
       // From the builder's feet, not the camera behind them.
