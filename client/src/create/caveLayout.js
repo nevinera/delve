@@ -21,11 +21,12 @@ export const BEND_FT = 32; // an arc gets a bend for about every this much of it
 export const STEEP_DEG = 45; // arcs are drawn red where they climb steeper than this
 const LEVEL = 0.7; // how far, of a room's radius, a tunnel runs level into it
 const CLEAR = 1.6; // how many times that from a room a tunnel's first bend has to be
-const OPENING_DEPTH = 0.8; // how far, of its radius, an opening's floor is under the ground
+const MOUTH_REACH = 6; // how far, in its widths, a tunnel can open through the ground from an opening
 
 export const NODE_DEFAULTS = { size: "m", shape: "round", style: "borehole", rock: 0, hewn: false };
 export const ARC_DEFAULTS = { size: 12, shape: "wiggly", style: "borehole", rock: 0, hewn: false };
 
+const isOpening = (node) => node.shape === "opening";
 const add = (a, b) => a.map((v, i) => v + b[i]);
 const mul = (a, k) => a.map((v) => v * k);
 const lerp = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
@@ -90,15 +91,16 @@ export class Layout {
   }
 
   // An element as carving sees it: a copy, without whether it's locked, which carving doesn't
-  // care about, and an arc's with its ends, the floors it runs between, and how far into each it
-  // runs level (arcCurve).
+  // care about, and an arc's with its ends, the floors it runs between, how far into each it runs
+  // level (arcCurve), and `openings`, whether each is an opening.
   copyOf(id) {
     const element = this.nodes.get(id) ?? this.arcs.get(id);
     if (!element) return null;
     const { locked, ...copy } = structuredClone(element);
     if (!copy.from) return copy;
     const [from, to] = [this.nodes.get(copy.from), this.nodes.get(copy.to)];
-    return { ...copy, ends: [floorOf(from), floorOf(to)], level: [from, to].map((node) => LEVEL * (NODE_SIZES[node.size] / 2)) };
+    const ends = [from, to];
+    return { ...copy, ends: ends.map((node) => [...node.at]), level: ends.map((node) => (isOpening(node) ? 0 : LEVEL * (NODE_SIZES[node.size] / 2))), openings: ends.map(isOpening) };
   }
 
   // Whether an element's changed since it was last carved: new, moved or otherwise changed, or
@@ -116,8 +118,8 @@ export class Layout {
 }
 
 // The shapes an element (as Layout's copyOf gives it) carves, as v2/caves.js's carve takes them.
-// For now every room carves as a round borehole room, every tunnel as a wiggly borehole tunnel,
-// whatever their details say, and every opening as an opening.
+// For now every room carves as a round borehole room and every tunnel as a wiggly borehole
+// tunnel, whatever their details say; an opening carves nothing.
 export const shapesOf = (copy) => (copy.ends ? arcShapes({ ...copy, ...PLAIN_ARC }) : nodeShapes(copy.shape === "opening" ? copy : { ...copy, ...PLAIN_NODE }));
 const PLAIN_NODE = { shape: "round", style: "borehole" };
 const PLAIN_ARC = { shape: "wiggly", style: "borehole" };
@@ -128,8 +130,8 @@ const PLAIN_ARC = { shape: "wiggly", style: "borehole" };
 // lumpy.
 export function nodeShapes({ id, at, size, shape, style }) {
   const R = NODE_SIZES[size] / 2;
-  // An opening: a dome sunk into the ground, its top breaking through.
-  if (shape === "opening") return [{ kind: "dome", at: add(at, [0, -OPENING_DEPTH * R, 0]), radii: [0.6 * R, 1.2 * R, 0.6 * R], yaw: 0 }];
+  // An opening carves nothing of its own: it's where its tunnels come up through the ground.
+  if (shape === "opening") return [];
   const seed = hashString(id);
   const random = (k) => hash2(k, 0, seed);
   const yaw = random(0) * Math.PI;
@@ -150,10 +152,6 @@ export function nodeShapes({ id, at, size, shape, style }) {
   }
   return [round(1, 0, [0.85 * R, 0.8 * R, 0.75 * R]), ...bays(5, 0.6 * R, [0.35 * R, 0.5 * R, 0.35 * R])];
 }
-
-// The middle of a node's floor: its `at`, or for an opening, the floor of the hollow it sinks
-// into the ground (nodeShapes).
-const floorOf = (node) => (node.shape === "opening" ? add(node.at, [0, -OPENING_DEPTH * (NODE_SIZES[node.size] / 2), 0]) : [...node.at]);
 
 // The line an arc (as Layout's copyOf gives it) runs along, floor to floor through its bends,
 // leaving each end level, out across the room's floor as far as `level` says, so it meets the
@@ -270,15 +268,16 @@ function fits(shape, groundAt) {
   return [[x, z], [x0, z0], [x1, z0], [x0, z1], [x1, z1]].every(([a, b]) => top <= groundAt(a, b) - ROOF_FT);
 }
 
-const boxOf = (shapes) => shapes.map(shapeBox).reduce((a, b) => [a[0].map((v, k) => Math.min(v, b[0][k])), a[1].map((v, k) => Math.max(v, b[1][k]))]);
-const overlap = (a, b) => [0, 1, 2].every((k) => a[0][k] <= b[1][k] && b[0][k] <= a[1][k]);
+// The box round some shapes, or null round none (an opening's).
+const boxOf = (shapes) => (shapes.length ? shapes.map(shapeBox).reduce((a, b) => [a[0].map((v, k) => Math.min(v, b[0][k])), a[1].map((v, k) => Math.max(v, b[1][k]))]) : null);
+const overlap = (a, b) => Boolean(a && b) && [0, 1, 2].every((k) => a[0][k] <= b[1][k] && b[0][k] <= a[1][k]);
 
 // What carving changes: rock filled back into what each changed element carved last time, then
 // the shapes each opens afresh, it, the elements joined to it, and every unchanged element whose
 // last carving the filling cuts into, and the carved copies after. `ids`: the elements to carve (all changed ones, by
-// default); `uncarve`: the elements to fill in and not carve again. Only openings open through the
-// ground; given groundAt(x, z), the ground's height, a room that would come within ROOF_FT of
-// it isn't carved, and is listed in `unfit`.
+// default); `uncarve`: the elements to fill in and not carve again. Only tunnels near openings
+// open through the ground; given groundAt(x, z), the ground's height, a room that would come
+// within ROOF_FT of it isn't carved, and is listed in `unfit`.
 export function carvePlan(layout, { ids = layout.changes(), uncarve = [] } = {}, groundAt = null) {
   const redo = new Set(ids.filter((id) => !uncarve.includes(id)));
   for (const id of ids) for (const other of linkedOf(layout, id)) if (layout.get(other)) redo.add(other);
@@ -298,13 +297,14 @@ export function carvePlan(layout, { ids = layout.changes(), uncarve = [] } = {},
     const copy = layout.copyOf(id);
     if (!copy) continue;
     carved.set(id, copy);
-    const mouth = copy.shape === "opening";
     const shapes = shapesOf(copy);
-    if (groundAt && !copy.ends && !mouth && shapes.some((s) => !fits(s, groundAt))) {
+    if (groundAt && !copy.ends && shapes.some((s) => !fits(s, groundAt))) {
       unfit.push(id);
       continue;
     }
-    for (const shape of shapes) opens.push({ shape, stone: allStone(copy.rock, copy.hewn), mouth });
+    // A tunnel opens through the ground only near an opening at its end.
+    const near = (shape) => (copy.openings ?? []).some((open, k) => open && Math.hypot(shape.at[0] - copy.ends[k][0], shape.at[2] - copy.ends[k][2]) <= MOUTH_REACH * copy.size);
+    for (const shape of shapes) opens.push({ shape, stone: allStone(copy.rock, copy.hewn), mouth: near(shape) });
   }
   return { fills, opens, carved, unfit };
 }

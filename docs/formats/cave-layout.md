@@ -11,7 +11,7 @@ places/continents/<continent>/caves/layout.json
 A node is a room. Its `at` is the middle of its floor, in feet.
 
 - `size`: the width of the sphere the room fits in. `s` 16 ft, `m` 32, `l` 64, `xl` 128, `xxl` 256, `3xl` 512, `4xl` 1024.
-- `shape`: `cathedral` (tall, with aisles), `round` (a dome with bays), `flat` (low and wide), or `opening`, a cave's mouth: a node on the ground, its `at` on it. Only an opening may reach up through the ground, and a node on the ground is always one.
+- `shape`: `cathedral` (tall, with aisles), `round` (a dome with bays), `flat` (low and wide), or `opening`, a cave's mouth: a node on the ground, its `at` on it, where its tunnels come up through the ground. A node on the ground is always one.
 - `style`: `borehole`, `lavatube` or `mineshaft`. A mineshaft room is cut square.
 - `rock`: the caves' theme, 0 jagged, 1 smooth, 2 carved, 3 mined.
 - `hewn`: whether the rock is cut flat-faced.
@@ -29,7 +29,7 @@ A node or arc with `locked` true can't be moved, changed or deleted in /create, 
 
 ## Carving
 
-For now every room carves as a round borehole room and every tunnel as a wiggly borehole tunnel, whatever their details say. A tunnel runs level into each room it joins, across 0.7 of the room's radius, so it meets the floor; bends nearer than that give way. It meets an opening at the floor of the hollow the opening sinks into the ground. Only openings open through the ground: other air stops 4 ft under it, and a room that would come that near it isn't carved. /create carves each change as it's made, with the elements joined to it.
+For now every room carves as a round borehole room and every tunnel as a wiggly borehole tunnel, whatever their details say. A tunnel runs level into each room it joins, across 0.7 of the room's radius, so it meets the floor; bends nearer than that give way. An opening carves nothing of its own: a tunnel runs up to it, and within 6 of its widths of it, opens through the ground. All other air stops 4 ft under the ground, and a room that would come that near it isn't carved. /create carves each change as it's made, with the elements joined to it.
 
 The same details always carve the same cave: the noise for each room and tunnel is seeded from its id. `carved` keeps each node or arc as it was when last carved (an arc's copy adds `ends`, its nodes' `at`). Carving a changed one fills its old shapes with rock, then opens its new ones, and carves again its unchanged neighbours that the fill touched. Uncarving fills an element's old shapes and drops it from `carved`.
 

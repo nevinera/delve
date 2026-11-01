@@ -111,6 +111,16 @@ describe("cave layout", () => {
     expect(redone.size).toBe(shapesOf(layout.copyOf(arc.id)).length + shapesOf(layout.copyOf(a.id)).length + shapesOf(layout.copyOf(b.id)).length);
   });
 
+  it("carves round an opening, which has no shapes of its own", () => {
+    const layout = new Layout();
+    const room = layout.addNode([0, -100, 0]);
+    const opening = layout.addNode([200, 0, 0], { shape: "opening" });
+    layout.addArc(room.id, opening.id);
+    layout.carved = carvePlan(layout).carved;
+    room.at = [0, -92, 0];
+    expect(() => carvePlan(layout)).not.toThrow();
+  });
+
   it("doesn't count locking as a change", () => {
     const layout = new Layout();
     const node = layout.addNode([0, -100, 0]);
@@ -119,7 +129,7 @@ describe("cave layout", () => {
     expect(layout.changes()).toEqual([]);
   });
 
-  it("opens only openings through the ground, and leaves out rooms too near it", () => {
+  it("opens the ground only where a tunnel comes up to an opening, and leaves out rooms too near it", () => {
     const caves = new Caves(scene, flat(0));
     const layout = new Layout();
     const deep = layout.addNode([64, -60, 64], { size: "m" });
@@ -130,7 +140,7 @@ describe("cave layout", () => {
     expect(plan.unfit).toEqual([shallow.id]);
     caves.carvePlan(plan, () => {});
     expect(spansAt(caves, 192, 64)).toEqual([]);
-    // The opening's air reaches over the ground; the tunnel's, part way along, stays under it.
+    // The tunnel comes up through the ground at the opening, and part way along, stays under it.
     expect(Math.max(...spansAt(caves, 64, 192).map((s) => s.ceiling))).toBeGreaterThan(0);
     expect(Math.max(...spansAt(caves, 64, 100).map((s) => s.ceiling))).toBeLessThanOrEqual(-4);
   });
