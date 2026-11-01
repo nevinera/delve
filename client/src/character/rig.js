@@ -63,3 +63,47 @@ export function sampled(mesh, name, duration, pose, speed = 0) {
   clip.userData = { speed };
   return clip;
 }
+
+// A mesh (as bodyMesh gives it, with its bones) with part of another mesh copied onto it: the
+// faces whose corners are carried only by the source's bones in `map` and partly by one in `core`,
+// each corner moved by move(p), and carried by the bones `map` names in its place. A bone `map`
+// names that the target hasn't is added, at its source bone's place moved, under the bone `map`
+// names for its source's parent.
+export function graft(target, source, map, core, move) {
+  const names = source.bones.map((b) => b.name);
+  const index = new Map(target.bones.map((b, i) => [b.name, i]));
+  const bones = [...target.bones];
+  for (const b of source.bones) {
+    if (!(b.name in map) || index.has(map[b.name])) continue;
+    index.set(map[b.name], bones.length);
+    bones.push({ name: map[b.name], parent: map[b.parent], at: move(b.at) });
+  }
+  const carried = (v, set) => [0, 1, 2, 3].every((n) => !source.skinWeight[v * 4 + n] || set(names[source.skinIndex[v * 4 + n]]));
+  const kept = [];
+  for (let v = 0; v < source.positions.length / 3; v += 3) {
+    const corners = [v, v + 1, v + 2];
+    if (corners.every((c) => carried(c, (name) => name in map)) && corners.some((c) => !carried(c, (name) => !core.includes(name)))) kept.push(...corners);
+  }
+  const join = (a, b, size, f) => {
+    const out = new a.constructor(a.length + kept.length * size);
+    out.set(a);
+    kept.forEach((v, i) => f(v, out, a.length + i * size));
+    return out;
+  };
+  return {
+    ...target,
+    positions: join(target.positions, source.positions, 3, (v, out, at) => out.set(move([...source.positions.slice(v * 3, v * 3 + 3)]), at)),
+    colors: join(target.colors, source.colors, 3, (v, out, at) => out.set(source.colors.slice(v * 3, v * 3 + 3), at)),
+    skinIndex: join(target.skinIndex, source.skinIndex, 4, (v, out, at) => out.set([0, 1, 2, 3].map((n) => (source.skinWeight[v * 4 + n] ? index.get(map[names[source.skinIndex[v * 4 + n]]]) : 0)), at)),
+    skinWeight: join(target.skinWeight, source.skinWeight, 4, (v, out, at) => out.set(source.skinWeight.slice(v * 4, v * 4 + 4), at)),
+    mail: join(target.mail, source.mail, 1, (v, out, at) => (out[at] = source.mail[v])),
+    bones,
+  };
+}
+
+// p turned by `angle` about the vertical line through `about`.
+export const turnedY = (p, about, angle) => {
+  const [x, z] = [p[0] - about[0], p[2] - about[2]];
+  const [c, s] = [Math.cos(angle), Math.sin(angle)];
+  return [about[0] + x * c + z * s, p[1], about[2] - x * s + z * c];
+};

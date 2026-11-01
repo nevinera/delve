@@ -112,3 +112,11 @@ describe("the second list's four-legged species", () => {
     expect(of("turtle").roles.hit).toBe("Hide");
   });
 });
+
+describe("grafted heads", () => {
+  it("gives a hydra five heads and a chimera a goat's and a snake's besides its own", () => {
+    const names = (body) => quadrupedMesh(resolveRecipe({ body })).bones.map((b) => b.name);
+    expect(names("hydra").filter((n) => /^head\d?$/.test(n))).toHaveLength(5);
+    expect(names("chimera")).toEqual(expect.arrayContaining(["head", "head2", "snake_head", "snake_jaw"]));
+  });
+});

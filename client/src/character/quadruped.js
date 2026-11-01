@@ -1,5 +1,6 @@
 import { MeshOut, fleshWear, hashAt } from "./body.js";
-import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "./rig.js";
+import { TAU, add, ease, graft, hex, hump, lerp, mirrored, mul, sampled, shade, sub, turnedY } from "./rig.js";
+import { serpentMesh } from "./serpent.js";
 
 // Four-legged bodies, in families that move differently: canine (up on its toes: wolves, big cats,
 // rats), ursine (flat-footed and heavy: bears), hoofed (stags, boars, horses), lizard (legs out to
@@ -25,7 +26,9 @@ import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "
 // goat's, a cow's or a sheep's curl; wool: a fleece in the hair color; beard: a goat's;
 // noseHorn: a rhino's; wide: how much wider the muzzle is (a hippo's); shaggy: a coat of long
 // hair over the body (a mammoth's); shell: a turtle's; beak and feathered: an owlbear's head;
-// knuckles: walking on its fists; cap: a mushroom's cap over its back.
+// knuckles: walking on its fists; cap: a mushroom's cap over its back; heads: how many necks and
+// heads a hydra has, fanned out from its shoulders; chimera: a goat's neck and head rising from the
+// back and a snake's head at the end of the tail.
 export const SPECIES = {
   wolf: { family: "canine", H: 2.05, L: 1.75, w: 0.3, neck: [0.52, 0.78], head: 1, muzzle: 1, pitch: 0.1, girth: [1, 1], neckGirth: 1, limb: 1, ears: "pointed", tail: "bushy", feet: "paw" },
   panther: { family: "canine", H: 1.75, L: 1.95, w: 0.27, neck: [0.38, 0.6], head: 0.95, muzzle: 0.45, pitch: 0, girth: [0.9, 0.85], neckGirth: 1.05, limb: 1, ears: "short", tail: "long", feet: "paw" },
@@ -54,6 +57,8 @@ export const SPECIES = {
   tortoise: { family: "lizard", H: 1.1, L: 2.2, w: 0.65, neck: [0.25, 0.9], head: 1.05, muzzle: 0.45, pitch: 0.05, girth: [1.45, 1], neckGirth: 1, limb: 2.3, reach: 0.35, ears: "none", tail: "stub", feet: "claw", shell: "high" },
   gorilla: { family: "ursine", H: 3.2, L: 1.9, w: 0.48, neck: [0.15, 0.45], head: 1.2, muzzle: 0.25, pitch: 0.05, girth: [1.5, 1.35], neckGirth: 1.6, limb: 2.1, ears: "none", tail: "none", feet: "paw", rump: 0.68, knuckles: true, chestBeat: true },
   owlbear: { family: "ursine", H: 2.6, L: 2.5, w: 0.45, neck: [0.15, 0.7], head: 1.6, muzzle: 0.3, pitch: 0.1, girth: [1.5, 1.45], neckGirth: 1.8, limb: 2, hump: 0.2, ears: "pointed", tail: "stub", feet: "paw", beak: true, feathered: true },
+  hydra: { family: "lizard", H: 1.1, L: 2.8, w: 0.5, neck: [2.0, 1.4], head: 1.15, muzzle: 1.0, pitch: 0.25, girth: [1.4, 0.9], neckGirth: 1.1, limb: 1.7, ears: "none", tail: "lizard", feet: "claw", crest: true, heads: 5 },
+  chimera: { family: "canine", H: 2.7, L: 2.4, w: 0.33, neck: [0.4, 0.62], head: 1.2, muzzle: 0.55, pitch: 0.05, girth: [1.05, 1], neckGirth: 1.15, limb: 1.2, ears: "short", tail: "long", feet: "paw", ruff: true, chimera: true },
   myoxa: { family: "ursine", H: 2.6, L: 2.8, w: 0.5, neck: [0.05, 0.75], head: 1.3, muzzle: 0.45, pitch: 0.25, girth: [1.6, 1.4], neckGirth: 1.6, limb: 2.2, ears: "none", tail: "stub", feet: "paw", cap: true, slow: true },
 };
 export const FAMILIES = ["canine", "ursine", "hoofed", "lizard", "pachyderm"];
@@ -442,7 +447,39 @@ export function quadrupedMesh(look) {
 
   const mesh = out.arrays();
   for (let i = 0; i < mesh.positions.length; i++) mesh.positions[i] *= s;
-  return { ...mesh, bones: canonical.map((b) => ({ ...b, at: mul(b.at, s) })), scale: s };
+  const whole = { ...mesh, bones: canonical.map((b) => ({ ...b, at: mul(b.at, s) })), scale: s };
+  if (sp.heads) return hydraHeads(sp, whole);
+  if (sp.chimera) return chimeraParts(look, whole);
+  return whole;
+}
+
+// The angles a hydra's extra necks fan out at from its shoulders, the first head straight ahead.
+const fan = (heads) => Array.from({ length: heads - 1 }, (_, i) => (i % 2 ? -1 : 1) * 0.55 * (1 + Math.floor(i / 2)));
+const HEAD_PARTS = ["neck_01", "head", "jaw"];
+const headMap = (i, base) => ({ spine_03: base, neck_01: `neck${i}_01`, head: `head${i}`, jaw: `jaw${i}` });
+
+// A copy of the neck and head for each extra head, turned out to the side.
+function hydraHeads(sp, mesh) {
+  const base = mesh.bones.find((b) => b.name === "spine_03").at;
+  return fan(sp.heads).reduce((out, angle, i) => graft(out, mesh, headMap(i + 2, "spine_03"), HEAD_PARTS, (p) => turnedY(p, base, angle)), mesh);
+}
+
+// A goat's neck and head out of the middle of the back, and a snake's head on the end of the tail,
+// looking back.
+function chimeraParts(look, mesh) {
+  const bone = (m, name) => m.bones.find((b) => b.name === name).at;
+  const goat = quadrupedMesh({ ...look, body: "goat", height: look.height * 0.9 });
+  const back = add(bone(mesh, "spine_02"), [0, 0.12 * look.height, -0.05 * look.height]);
+  const withGoat = graft(mesh, goat, headMap(2, "spine_02"), HEAD_PARTS, (p) => add(sub(p, bone(goat, "spine_03")), back));
+  const snake = serpentMesh({ ...look, body: "snake", height: look.height * 0.5 });
+  const [neck, tip] = [bone(snake, "neck_03"), bone(mesh, "tail_end")];
+  // Turned to face back along the tail and tipped up.
+  const [c, s] = [Math.cos(0.6), Math.sin(0.6)];
+  const move = (p) => {
+    const [x, y, z] = sub(p, neck);
+    return add(tip, [-x, y * c + z * s, -(z * c - y * s)]);
+  };
+  return graft(withGoat, snake, { neck_03: "tail_end", head: "snake_head", jaw: "snake_jaw" }, ["head", "jaw"], move);
 }
 
 // The legs' turns for a gait at phase u (0-1 through its cycle): each leg swings `swing` radians
@@ -791,12 +828,35 @@ export function quadrupedClips(mesh, look) {
   // A slow species does everything a third slower.
   const slow = sp.slow ? 1.35 : 1;
   const clips = Object.entries(familyClips(sp)).map(([name, [duration, pose, speed, breath]]) => {
-    const moved = sp.trunk ? withTrunk(name, duration, pose) : pose;
+    const moved = sp.trunk ? withTrunk(name, duration, pose) : sp.heads || sp.chimera ? withHeads(sp, duration, pose) : pose;
     const clip = sampled(mesh, name, duration * slow, (t) => moved(t / slow), (speed ?? 0) / slow);
     if (breath) clip.userData.breath = breath.map((t) => t * slow);
     return clip;
   });
   return new Map(clips.map((c) => [c.name, c]));
+}
+
+// The extra heads' turns on top of a pose: each moves as the first does, a little behind it, swaying
+// on its own; a chimera's snake head sways and opens its jaws with the first.
+function withHeads(sp, duration, pose) {
+  const heads = sp.heads ? sp.heads - 1 : 1;
+  return (t) => {
+    const q = pose(t);
+    const bones = { ...q.bones };
+    for (let i = 0; i < heads; i++) {
+      const lag = pose(Math.max(0, t - 0.06 * (i + 1))).bones;
+      const sway = 0.15 * Math.sin((TAU * t) / 2.5 + 1.7 * i);
+      const [neck, head, jaw] = [lag.neck_01 ?? [0, 0, 0], lag.head ?? [0, 0, 0], lag.jaw ?? [0, 0, 0]];
+      bones[`neck${i + 2}_01`] = [neck[0], neck[1] + sway, neck[2]];
+      bones[`head${i + 2}`] = head;
+      bones[`jaw${i + 2}`] = jaw;
+    }
+    if (sp.chimera) {
+      bones.snake_head = [0, 0.3 * Math.sin((TAU * t) / 1.7), 0];
+      bones.snake_jaw = q.bones.jaw ?? [0, 0, 0];
+    }
+    return { ...q, bones };
+  };
 }
 
 // A trunk's turns on top of a pose: it sways, curls up for a trumpet, and tucks back to charge

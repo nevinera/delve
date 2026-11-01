@@ -237,6 +237,20 @@ export const BODY_LOOKS = {
     limbs: [0.5, 0.8],
     colors: { skin: ["#1a1a1a", "#2a2018"], secondary: ["#2a5a3a", "#3a2a5a", "#5a3a1a", "#1a3a5a"], hair: ["#2a2420", "#3a3028"], eyes: ["#c0a020", "#d04020"] },
   },
+  hydra: {
+    height: [7, 9],
+    build: [0.6, 0.9],
+    limbs: [0.6, 0.9],
+    head: [0.4, 0.6],
+    colors: { skin: ["#3a5a3a", "#2a4a4a", "#4a3a5a"], secondary: ["#a0a070", "#8a9a70"], hair: ["#2a3a2a", "#3a2a3a"], eyes: ["#e0c020", "#d04010"] },
+  },
+  chimera: {
+    height: [5, 6.5],
+    build: [0.6, 0.9],
+    limbs: [0.6, 0.9],
+    head: [0.4, 0.6],
+    colors: { skin: ["#b08a4a", "#a07a40"], secondary: ["#3a2a20"], hair: ["#5a3a1a", "#4a2a14"], eyes: ["#e0a020"] },
+  },
   raptor: {
     height: [5, 6.5],
     build: [0.4, 0.7],
