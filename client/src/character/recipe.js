@@ -171,6 +171,16 @@ export const BODY_LOOKS = {
     build: [0.3, 0.6],
     colors: { skin: ["#4a5a2a", "#5a4a30", "#3a4a4a"], secondary: ["#a09060", "#8a7a5a"], hair: ["#d8ccb0", "#2a2420"], eyes: ["#e0d020", "#c04020"] },
   },
+  snake: {
+    height: [5, 7],
+    build: [0.4, 0.7],
+    colors: { skin: ["#6a6a3a", "#4a5a3a", "#7a5a3a"], secondary: ["#d8c890", "#c8b880"], hair: ["#2a2418", "#3a2a1a", "#5a3a20"], eyes: ["#e0c020", "#d07020"] },
+  },
+  cobra: {
+    height: [6, 8],
+    build: [0.3, 0.6],
+    colors: { skin: ["#5a4a2a", "#3a3a30", "#7a6a3a"], secondary: ["#e0d0a0", "#d0c090"], hair: ["#1a1814", "#e0d0a0"], eyes: ["#e04020", "#e0c020"] },
+  },
   orc: {
     height: [6.2, 7],
     build: [0.65, 0.9],
