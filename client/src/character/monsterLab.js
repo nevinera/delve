@@ -7,7 +7,7 @@ import { BODY_LOOKS, resolveRecipe } from "./recipe.js";
 
 // The monster lab, for looking over creature bodies: every body the client builds, listed by
 // skeleton; several looks of the picked one side by side, each from its own seed and, in turn,
-// each of its loadouts; all playing one of its roles (each look the clip it has for it) or any one
+// each of its loadouts; all playing every role each has in turn, or one of its roles (each look the clip it has for it) or any one
 // of its clips, at any speed, paused, scrubbed or stepped a frame at a time, from any side.
 
 const FRAME_S = 1 / 30;
@@ -54,11 +54,12 @@ function flame() {
 }
 
 const bodies = Object.values(SKELETONS).flat();
-const state = { body: location.hash.slice(1) || "goblin", seed: 1, count: 4, loadouts: "each", pick: "role:idle", speed: 1, paused: false, loop: true, cycle: false };
+const state = { body: location.hash.slice(1) || "goblin", seed: 1, count: 4, loadouts: "each", pick: "all", speed: 1, paused: false, loop: true, cycle: false };
 if (!bodies.includes(state.body)) state.body = "goblin";
 let baked = null;
 let looks = []; // { look, mesh, mixer, clips, roles, action, clip, flame }
 let cycled = 0; // how long the role's played, going through every one
+let turn = 0; // which of its roles each look plays, playing everything in turn
 
 function seeded(n) {
   let s = n >>> 0 || 1;
@@ -81,6 +82,7 @@ function lookFor(k) {
 }
 
 function build() {
+  turn = 0;
   for (const l of looks) {
     scene.remove(l.mesh);
     disposeCharacter(l.mesh);
@@ -123,6 +125,7 @@ function fillClips() {
   const names = [...first.clips.keys()].sort();
   const select = $("clip");
   select.replaceChildren(
+    el("option", { value: "all", textContent: "everything, in turn" }),
     el("optgroup", { label: "roles" }, ...roles.map((r) => el("option", { value: `role:${r}`, textContent: `${r}: ${first.roles[r] ?? "-"}` }))),
     el("optgroup", { label: "every clip" }, ...names.map((n) => el("option", { value: `clip:${n}`, textContent: n }))),
   );
@@ -134,13 +137,26 @@ function fillLooks() {
   $("looks").replaceChildren(...looks.map(({ look }, k) => el("div", { className: "monster-look", textContent: `${k + 1}: ${describe(look)}` })));
 }
 
-// The clip each look plays for the pick, or null.
-function clipOf(l) {
-  const [kind, name] = state.pick.split(":");
-  return l.clips.get(kind === "role" ? l.roles[name] : name) ?? null;
+// The roles a look has a clip for, in ROLES' order.
+const rolesOf = (l) => ROLES.filter((r) => l.roles[r] && l.clips.has(l.roles[r]));
+
+// The role each look plays for the pick: playing everything, its turn'th, or idle once it's
+// played them all, while looks with more go on.
+function roleOf(l) {
+  if (state.pick === "all") return rolesOf(l)[turn] ?? "idle";
+  return state.pick.startsWith("role:") ? state.pick.slice(5) : null;
 }
 
-const loops = () => state.loop && (!state.pick.startsWith("role:") || LOOP_ROLES.has(state.pick.slice(5)) || !state.cycle);
+// The clip each look plays for the pick, or null.
+function clipOf(l) {
+  const role = roleOf(l);
+  return l.clips.get(role ? l.roles[role] : state.pick.slice(5)) ?? null;
+}
+
+function loops(l) {
+  if (state.pick === "all") return LOOP_ROLES.has(roleOf(l));
+  return state.loop && (!state.pick.startsWith("role:") || LOOP_ROLES.has(state.pick.slice(5)) || !state.cycle);
+}
 
 // Starts every look's clip for the pick, `fraction` of the way through.
 function start(fraction = 0) {
@@ -151,13 +167,18 @@ function start(fraction = 0) {
     l.action = null;
     if (!l.clip) continue;
     l.action = l.mixer.clipAction(l.clip);
-    l.action.reset().setLoop(loops() ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+    l.action.reset().setLoop(loops(l) ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
     l.action.clampWhenFinished = true;
     l.action.play();
     l.action.time = fraction * l.clip.duration;
     l.mixer.update(0);
   }
   const shown = looks.find((l) => l.clip);
+  if (state.pick === "all") {
+    $("now").textContent = `${state.body}: everything (${looks.map((l) => roleOf(l)).filter((r, k, all) => all.indexOf(r) === k).join(", ")})`;
+    showTime();
+    return;
+  }
   $("now").textContent = shown ? `${state.body}: ${state.pick.replace(":", " ")}${state.pick.startsWith("role:") ? ` (${shown.clip.name})` : ""}` : `${state.body}: no ${state.pick.replace(":", " ")}`;
   showTime();
 }
@@ -224,6 +245,15 @@ function step(dt) {
   if (state.paused) return;
   for (const l of looks) l.mixer.update(dt * state.speed);
   showTime();
+  if (state.pick === "all") {
+    // Each role plays a while, or once and a beat, then every look goes on to its next.
+    cycled += dt * state.speed;
+    const limit = Math.max(0, ...looks.filter((l) => l.clip).map((l) => (LOOP_ROLES.has(roleOf(l)) ? CYCLE_S : l.clip.duration + 0.8)));
+    if (cycled < limit) return;
+    turn = (turn + 1) % Math.max(1, ...looks.map((l) => rolesOf(l).length));
+    start();
+    return;
+  }
   if (!state.cycle) return;
   // Going through every role: each plays a while, or once and a beat.
   cycled += dt * state.speed;
@@ -273,6 +303,7 @@ for (const name of Object.keys(VIEWS)) {
 
 $("clip").addEventListener("change", () => {
   state.pick = $("clip").value;
+  turn = 0;
   start();
 });
 $("time").addEventListener("input", () => {
