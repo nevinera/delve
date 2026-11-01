@@ -181,6 +181,21 @@ export const BODY_LOOKS = {
     build: [0.3, 0.6],
     colors: { skin: ["#5a4a2a", "#3a3a30", "#7a6a3a"], secondary: ["#e0d0a0", "#d0c090"], hair: ["#1a1814", "#e0d0a0"], eyes: ["#e04020", "#e0c020"] },
   },
+  shark: {
+    height: [10, 14],
+    build: [0.4, 0.7],
+    colors: { skin: ["#5a6a78", "#6a7280", "#4a5a6a"], secondary: ["#e8e8e0", "#d8dcd8"], hair: ["#4a5a68", "#5a6470"], eyes: ["#101014"] },
+  },
+  barracuda: {
+    height: [5, 7],
+    build: [0.3, 0.6],
+    colors: { skin: ["#6a7a88", "#7a8890", "#5a7078"], secondary: ["#e0e4e8", "#d0d8dc"], hair: ["#5a6a70", "#c8b850"], eyes: ["#d0c040", "#c0c8d0"] },
+  },
+  stingray: {
+    height: [5, 8],
+    build: [0.4, 0.7],
+    colors: { skin: ["#6a5a48", "#5a5040", "#4a4a40"], secondary: ["#e0d8c8", "#d8d0c0"], hair: ["#3a3028", "#8a7a5a"], eyes: ["#d0a030", "#202020"] },
+  },
   orc: {
     height: [6.2, 7],
     build: [0.65, 0.9],
