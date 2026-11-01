@@ -237,6 +237,11 @@ export const BODY_LOOKS = {
     limbs: [0.5, 0.8],
     colors: { skin: ["#1a1a1a", "#2a2018"], secondary: ["#2a5a3a", "#3a2a5a", "#5a3a1a", "#1a3a5a"], hair: ["#2a2420", "#3a3028"], eyes: ["#c0a020", "#d04020"] },
   },
+  eyeshaug: {
+    height: [6, 8],
+    build: [0.5, 0.9],
+    colors: { skin: ["#7a4a5a", "#5a4a6a", "#6a5a3a", "#4a6a5a"], secondary: ["#3a0a14", "#2a0a20"], eyes: ["#d0a020", "#40a040", "#c03030", "#6040c0"] },
+  },
   hydra: {
     height: [7, 9],
     build: [0.6, 0.9],

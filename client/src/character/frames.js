@@ -2,6 +2,7 @@ import { BATS, batClips, batMesh, batRoles } from "./bat.js";
 import { BIRDS, birdClips, birdMesh, birdRoles } from "./bird.js";
 import { CRAWLERS, crawlerClips, crawlerMesh, crawlerRoles } from "./crawler.js";
 import { DRAGONS, dragonClips, dragonMesh, dragonRoles } from "./dragon.js";
+import { EYESHAUGS, eyeshaugClips, eyeshaugMesh, eyeshaugRoles } from "./eyeshaug.js";
 import { SERPENTS, serpentClips, serpentMesh, serpentRoles } from "./serpent.js";
 import { FISH, fishClips, fishMesh, fishRoles } from "./fish.js";
 import { SLIMES, slimeClips, slimeMesh, slimeRoles } from "./slime.js";
@@ -20,8 +21,9 @@ const BAT = { mesh: batMesh, clips: batClips, roles: batRoles, settings: ["heigh
 const CRAWLER = { mesh: crawlerMesh, clips: crawlerClips, roles: crawlerRoles, settings: ["height", "build", "limbs"], colors: ["skin", "secondary", "hair", "eyes"] };
 const BIRD = { mesh: birdMesh, clips: birdClips, roles: birdRoles, settings: ["height", "build", "head"], colors: ["skin", "secondary", "hair", "eyes"] };
 const STRIDER = { mesh: striderMesh, clips: striderClips, roles: striderRoles, settings: ["height", "build", "head"], colors: ["skin", "secondary", "hair", "eyes"] };
+const EYESHAUG = { mesh: eyeshaugMesh, clips: eyeshaugClips, roles: eyeshaugRoles, settings: ["height", "build"], colors: ["skin", "secondary", "eyes"] };
 const SLIME = { mesh: slimeMesh, clips: slimeClips, roles: slimeRoles, settings: ["height", "build"], colors: ["skin", "eyes"] };
-export const FRAMES = { canine: FOUR_LEGS, ursine: FOUR_LEGS, hoofed: FOUR_LEGS, lizard: FOUR_LEGS, pachyderm: FOUR_LEGS, dragon: DRAGON, serpent: SERPENT, fish: SWIMMER, ray: SWIMMER, bat: BAT, crawler: CRAWLER, slime: SLIME, bird: BIRD, strider: STRIDER };
+export const FRAMES = { canine: FOUR_LEGS, ursine: FOUR_LEGS, hoofed: FOUR_LEGS, lizard: FOUR_LEGS, pachyderm: FOUR_LEGS, dragon: DRAGON, serpent: SERPENT, fish: SWIMMER, ray: SWIMMER, bat: BAT, crawler: CRAWLER, slime: SLIME, bird: BIRD, strider: STRIDER, eyeshaug: EYESHAUG };
 
 // The skeletons, and the bodies built on each. Bodies not built yet stand as humanoids.
 export const SKELETONS = { humanoid: ["humanoid", "goblin", "troll", "orc", "ogre", "kobold", "gnoll", "lizardfolk", "tauros", "skeleton", "zombie", "giant", "harpy", "gargoyle", "imp", "centaur", "naga", "amphen", "georite", "furite", "aquite", "aerite", "boric", "ursol", "trog", "homari", "tyrshaug", "drakel", "abomination", "ghoul", "mummy", "lich", "banshee", "ghost", "deepshaug", "smoulder", "treant", "dryad", "succubus", "hivelord", "cindershaug", "golem", "mycosi", "drakesh"] };
@@ -33,6 +35,7 @@ SKELETONS.crawler = Object.keys(CRAWLERS);
 SKELETONS.slime = Object.keys(SLIMES);
 SKELETONS.bird = Object.keys(BIRDS);
 SKELETONS.strider = Object.keys(STRIDERS);
+SKELETONS.eyeshaug = Object.keys(EYESHAUGS);
 for (const [body, { family }] of Object.entries(FISH)) (SKELETONS[family] ??= []).push(body);
 
 export const skeletonOf = (body) => Object.keys(SKELETONS).find((name) => SKELETONS[name].includes(body)) ?? "humanoid";
