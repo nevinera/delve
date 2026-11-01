@@ -201,6 +201,24 @@ export const BODY_LOOKS = {
     build: [0.3, 0.7],
     colors: { skin: ["#4a3a30", "#3a3030", "#5a4a3a", "#2a2428"], secondary: ["#3a2a28", "#4a3430", "#2a2020"], hair: ["#1a1414", "#2a2020"], eyes: ["#d03020", "#e0c040", "#101010"] },
   },
+  spider: {
+    height: [3.5, 5],
+    build: [0.4, 0.8],
+    limbs: [0.3, 0.6],
+    colors: { skin: ["#2a2420", "#3a3028", "#4a3a2a", "#1a1a1a"], secondary: ["#a03020", "#c0a040", "#6a6a6a"], hair: ["#5a4a3a", "#2a2a2a"], eyes: ["#d02020", "#40d040"] },
+  },
+  scorpion: {
+    height: [4, 5.5],
+    build: [0.4, 0.8],
+    limbs: [0.4, 0.7],
+    colors: { skin: ["#7a5a2a", "#3a2a20", "#8a6a3a", "#2a2a30"], secondary: ["#c08030", "#d0a040"], hair: ["#2a1a10", "#1a1414"], eyes: ["#101010", "#c03020"] },
+  },
+  beetle: {
+    height: [3.5, 4.5],
+    build: [0.5, 0.8],
+    limbs: [0.5, 0.8],
+    colors: { skin: ["#1a1a1a", "#2a2018"], secondary: ["#2a5a3a", "#3a2a5a", "#5a3a1a", "#1a3a5a"], hair: ["#2a2420", "#3a3028"], eyes: ["#c0a020", "#d04020"] },
+  },
   orc: {
     height: [6.2, 7],
     build: [0.65, 0.9],

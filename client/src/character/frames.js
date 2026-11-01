@@ -1,4 +1,5 @@
 import { BATS, batClips, batMesh, batRoles } from "./bat.js";
+import { CRAWLERS, crawlerClips, crawlerMesh, crawlerRoles } from "./crawler.js";
 import { DRAGONS, dragonClips, dragonMesh, dragonRoles } from "./dragon.js";
 import { SERPENTS, serpentClips, serpentMesh, serpentRoles } from "./serpent.js";
 import { FISH, fishClips, fishMesh, fishRoles } from "./fish.js";
@@ -13,7 +14,8 @@ const DRAGON = { mesh: dragonMesh, clips: dragonClips, roles: dragonRoles, setti
 const SERPENT = { mesh: serpentMesh, clips: serpentClips, roles: serpentRoles, settings: ["height", "build", "head"], colors: ["skin", "secondary", "hair", "eyes"] };
 const SWIMMER = { mesh: fishMesh, clips: fishClips, roles: fishRoles, settings: ["height", "build"], colors: ["skin", "secondary", "hair", "eyes"] };
 const BAT = { mesh: batMesh, clips: batClips, roles: batRoles, settings: ["height", "build", "head"], colors: ["skin", "secondary", "hair", "eyes"] };
-export const FRAMES = { canine: FOUR_LEGS, ursine: FOUR_LEGS, hoofed: FOUR_LEGS, lizard: FOUR_LEGS, pachyderm: FOUR_LEGS, dragon: DRAGON, serpent: SERPENT, fish: SWIMMER, ray: SWIMMER, bat: BAT };
+const CRAWLER = { mesh: crawlerMesh, clips: crawlerClips, roles: crawlerRoles, settings: ["height", "build", "limbs"], colors: ["skin", "secondary", "hair", "eyes"] };
+export const FRAMES = { canine: FOUR_LEGS, ursine: FOUR_LEGS, hoofed: FOUR_LEGS, lizard: FOUR_LEGS, pachyderm: FOUR_LEGS, dragon: DRAGON, serpent: SERPENT, fish: SWIMMER, ray: SWIMMER, bat: BAT, crawler: CRAWLER };
 
 // The skeletons, and the bodies built on each. Bodies not built yet stand as humanoids.
 export const SKELETONS = { humanoid: ["humanoid", "goblin", "troll", "orc", "ogre", "kobold", "gnoll", "lizardfolk", "minotaur", "skeleton", "zombie", "giant", "harpy", "gargoyle", "imp", "centaur", "naga", "frogman", "earthElemental", "fireElemental", "waterElemental", "airElemental"] };
@@ -21,6 +23,7 @@ for (const [body, { family }] of Object.entries(SPECIES)) (SKELETONS[family] ??=
 SKELETONS.dragon = Object.keys(DRAGONS);
 SKELETONS.serpent = Object.keys(SERPENTS);
 SKELETONS.bat = Object.keys(BATS);
+SKELETONS.crawler = Object.keys(CRAWLERS);
 for (const [body, { family }] of Object.entries(FISH)) (SKELETONS[family] ??= []).push(body);
 
 export const skeletonOf = (body) => Object.keys(SKELETONS).find((name) => SKELETONS[name].includes(body)) ?? "humanoid";
