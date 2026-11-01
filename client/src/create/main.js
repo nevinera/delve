@@ -195,10 +195,8 @@ function start(world, changes, fresh) {
   const walkAt = (x, z) => things.standAt(x, z, feetY() + STEP_FT);
   // Cave rock's in the way where it's between a step up and the builder's head, going only across
   // or only along where it's in the way of both.
-  const rockAt = (x, z) => {
-    const y = feetY();
-    return [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => caves.inRock(x + dx * BUILDER_RADIUS_FT, z + dz * BUILDER_RADIUS_FT, y + STEP_FT, y + HEAD_FT));
-  };
+  const rockAt = (x, z, y = feetY()) =>
+    [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => caves.inRock(x + dx * BUILDER_RADIUS_FT, z + dz * BUILDER_RADIUS_FT, y + STEP_FT, y + HEAD_FT));
   const push = (x, z) => {
     const [a, b] = things.pushOut(...scatter.pushOut(x, z, BUILDER_RADIUS_FT), feetY(), BUILDER_RADIUS_FT);
     if (!builder || !rockAt(a, b)) return [a, b];
@@ -206,7 +204,15 @@ function start(world, changes, fresh) {
     return [[a, z0], [x0, b]].find(([u, v]) => !rockAt(u, v)) ?? [x0, z0];
   };
   const clear = (head, at) => caves.clear(head, at);
-  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push, clear });
+  // Flying, cave rock's in the way too, sliding along it where it can, unless they're a ghost or
+  // already in it.
+  const keep = (was, now) => {
+    const stuck = (s) => rockAt(s.x, s.z, s.y);
+    if (!now.flying || $("ghost").checked || !stuck(now) || stuck(was)) return now;
+    const tries = [{ y: was.y }, { x: was.x, y: was.y }, { z: was.z, y: was.y }, { x: was.x, z: was.z }, { x: was.x, y: was.y, z: was.z }];
+    return tries.map((t) => ({ ...now, ...t })).find((s) => !stuck(s)) ?? { ...now, x: was.x, y: was.y, z: was.z };
+  };
+  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push, clear, keep });
   const tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves });
   // The bottom bar's display toggles.
   $("showGrid").checked = grid.value === 1;

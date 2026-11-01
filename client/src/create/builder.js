@@ -168,9 +168,11 @@ export class Builder {
   // Starts at `state` (as moveBuilder takes it), or else on the ground at continent feet `at`.
   // landAt(x, z): the land's height, without what's built on it, for how fast flying goes and how
   // the camera looks down (moveBuilder's). clear(head, at): where the camera can be, looking from
-  // `head` to `at`, kept out of rock.
-  constructor({ scene, camera, canvas, groundAt, landAt = groundAt, waterAt = () => null, at, state, push, clear = (head, to) => to }) {
+  // `head` to `at`, kept out of rock. keep(was, now): the state to move to instead of `now`, from
+  // `was`, where something's in the way that moveBuilder doesn't know of.
+  constructor({ scene, camera, canvas, groundAt, landAt = groundAt, waterAt = () => null, at, state, push, clear = (head, to) => to, keep = (was, now) => now }) {
     this.push = push;
+    this.keep = keep;
     this.landAt = landAt;
     this.clear = clear;
     this.waterAt = waterAt;
@@ -222,7 +224,7 @@ export class Builder {
     };
     this.takeoff = false;
     const was = this.state;
-    this.state = moveBuilder(this.state, input, dt, this.groundAt, this.push, this.waterAt, this.landAt);
+    this.state = this.keep(was, moveBuilder(this.state, input, dt, this.groundAt, this.push, this.waterAt, this.landAt));
     if (this.drag?.button === 2) this.cam.yaw = 0;
     const now = this.state;
     const speed = dt > 0 ? Math.hypot(now.x - was.x, now.z - was.z) / dt : 0;

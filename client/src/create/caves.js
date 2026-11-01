@@ -13,16 +13,17 @@ export { CAVES_PATH };
 // out of; and the camera kept inside them. Each dig or fill can be undone, up to UNDOS of them.
 //
 // Two overlays show how the rock comes from the spans, each shown or hidden as a whole: the grid,
-// a point of light at each column's middle for each span's floor and ceiling, seen through the
-// rock; and lines, every edge of the rock's faces drawn glowing over them.
+// a point of light at each column's middle for each span's floor and ceiling, joined to the
+// neighbouring columns' by lines (floors gold, ceilings silver), seen through the rock; and lines,
+// every edge of the rock's faces drawn glowing over them.
 
 const MESH_TILES = FULL_TILES;
 const BUILD_MS = 8; // how long making meshes may take a frame
 const UNDOS = 50;
 const CAMERA_FT = 1; // how far the camera's kept from rock
 const PICK_FT = 1200;
-const FLOOR_RGB = [0.3, 1, 0.55]; // the grid's points: floors green, ceilings orange
-const CEILING_RGB = [1, 0.55, 0.15];
+const FLOOR_RGB = [1, 0.78, 0.2]; // the grid: floors gold, ceilings silver
+const CEILING_RGB = [0.8, 0.84, 0.9];
 const POINT_PX = 4;
 const LINE_RGB = 0x5ad8ff;
 
@@ -46,6 +47,7 @@ export class Caves {
       scene.add(group);
     }
     this.pointMaterial = new THREE.PointsMaterial({ size: POINT_PX, sizeAttenuation: false, vertexColors: true, depthTest: false, transparent: true });
+    this.gridMaterial = new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, transparent: true, opacity: 0.6 });
     this.lineMaterial = new THREE.LineBasicMaterial({ color: LINE_RGB, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
     this.onMouths = null; // (plate keys) => void, when the ground at mouths changes
     this.world = {
@@ -236,33 +238,47 @@ export class Caves {
     lines.position.copy(mesh.position);
     this.overlays.lines.add(lines);
     mesh.userData.overlays = [lines];
-    const points = this.points(tx, tz);
-    if (points) {
-      this.overlays.grid.add(points);
-      mesh.userData.overlays.push(points);
+    for (const overlay of this.grid(tx, tz)) {
+      this.overlays.grid.add(overlay);
+      mesh.userData.overlays.push(overlay);
     }
   }
 
-  // Tile (tx, tz)'s grid: a point at each column's middle for each span's floor and ceiling, or
-  // null where it has no caves.
-  points(tx, tz) {
+  // Tile (tx, tz)'s grid, as overlays: a point at each column's middle for each span's floor and
+  // ceiling, and a line from each to the same in the columns beside it (+x and +z) whose spans
+  // overlap it. None where it has no caves.
+  grid(tx, tz) {
     const columns = this.tiles.get(`${tx},${tz}`);
-    if (!columns) return null;
-    const [positions, colors] = [[], []];
+    if (!columns) return [];
+    const [points, pointColors, lines, lineColors] = [[], [], [], []];
+    const middle = (ci, cj) => [(ci + 0.5) * CELL_FT, (cj + 0.5) * CELL_FT];
     columns.forEach((spans, n) => {
-      const [x, z] = [(tx * TILE_CELLS + (n % TILE_CELLS) + 0.5) * CELL_FT, (tz * TILE_CELLS + Math.floor(n / TILE_CELLS) + 0.5) * CELL_FT];
+      const [ci, cj] = [tx * TILE_CELLS + (n % TILE_CELLS), tz * TILE_CELLS + Math.floor(n / TILE_CELLS)];
+      const [x, z] = middle(ci, cj);
       for (const span of spans ?? []) {
-        positions.push(x, span.floor, z, x, span.ceiling, z);
-        colors.push(...FLOOR_RGB, ...CEILING_RGB);
+        points.push(x, span.floor, z, x, span.ceiling, z);
+        pointColors.push(...FLOOR_RGB, ...CEILING_RGB);
+        for (const [di, dj] of [[1, 0], [0, 1]]) {
+          const [x2, z2] = middle(ci + di, cj + dj);
+          for (const other of this.spans(ci + di, cj + dj)) {
+            if (other.floor > span.ceiling || other.ceiling < span.floor) continue;
+            lines.push(x, span.floor, z, x2, other.floor, z2, x, span.ceiling, z, x2, other.ceiling, z2);
+            lineColors.push(...FLOOR_RGB, ...FLOOR_RGB, ...CEILING_RGB, ...CEILING_RGB);
+          }
+        }
       }
     });
-    if (!positions.length) return null;
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-    geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-    const points = new THREE.Points(geometry, this.pointMaterial);
-    points.renderOrder = 10;
-    return points;
+    if (!points.length) return [];
+    const geometry = (positions, colors) => {
+      const g = new THREE.BufferGeometry();
+      g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      g.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+      return g;
+    };
+    const out = [new THREE.Points(geometry(points, pointColors), this.pointMaterial)];
+    if (lines.length) out.push(new THREE.LineSegments(geometry(lines, lineColors), this.gridMaterial));
+    for (const overlay of out) overlay.renderOrder = 10;
+    return out;
   }
 
   drop(mesh) {
