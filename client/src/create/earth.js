@@ -62,7 +62,7 @@ export class Earth {
             const ground = this.groundAt(p[0], p[2]);
             if (!f || p[1] >= ground) continue;
             positions.push(...p);
-            colors.push(...rgb.map((v) => v * f));
+            colors.push(...rgb.map((v) => v * f * f));
             if (!this.lines[level]) continue;
             // To the next point along each way, where both ends are seen.
             for (let axis = 0; axis < 3; axis++) {
