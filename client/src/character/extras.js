@@ -16,9 +16,19 @@ export const TAILS = {
   bushy: { points: [[0, 3.2, -0.35], [0, 2.85, -0.6], [0, 2.4, -0.7], [0, 2.0, -0.7]], radii: [0.08, 0.12, 0.11, 0.02], hairy: true },
 };
 export const TAIL_KINDS = ["none", ...Object.keys(TAILS)];
-// What stands below the waist in place of legs: a horse's body (a centaur), a serpent's tail (a
-// naga) or a whirl down to a point (an elemental).
-export const LOWER_KINDS = ["legs", "horse", "serpent", "vortex"];
+// What stands below the waist: legs, or goat's legs on hocks (body.js bends them), or in place of
+// legs a horse's body (a centaur), a drake's (drakesh), a serpent's tail (a naga) or a whirl down
+// to a point (an elemental).
+export const LOWER_KINDS = ["legs", "hocked", "horse", "drake", "serpent", "vortex"];
+// A second pair of arms, below the first, held out and forward so they show.
+export const ARM_PAIRS = ["none", "pair"];
+// The second pair's joints: [name, parent, at], mirrored to _r.
+const LOWER_ARMS = [
+  ["clavicle2_l", "spine_02", [0.15, 4.12, 0.06]],
+  ["upperarm2_l", "clavicle2_l", [0.62, 4.04, 0.2]],
+  ["lowerarm2_l", "upperarm2_l", [0.92, 3.25, 0.32]],
+  ["hand2_l", "lowerarm2_l", [1.05, 2.55, 0.75]],
+];
 
 // A serpent's tail from the hips down to the ground and back along it, and a whirl to the ground:
 // points and thickness, a bone from each but the last.
@@ -31,6 +41,14 @@ const HORSE = {
   fore: [[0.38, 2.5, -0.05], [0.4, 1.35, 0.02], [0.4, 0.35, 0.0], [0.4, 0.0, 0.08]],
   hind: [[0.42, 2.7, -2.75], [0.44, 1.05, -3.0], [0.44, 0.35, -2.9], [0.44, 0.0, -2.82]],
   tail: [[0, 3.15, -3.35], [0, 2.75, -3.65], [0, 2.0, -3.8], [0, 1.35, -3.75]],
+};
+// A drake's body, lower and longer, on sprawling clawed legs, with a heavy tail along the ground.
+const DRAKE = {
+  barrel: [[0.35, 2.75, 0.35, 0.38], [0.1, 2.6, 0.6, 0.62], [-0.7, 2.45, 0.68, 0.62], [-1.6, 2.4, 0.64, 0.58], [-2.4, 2.42, 0.55, 0.5], [-2.9, 2.45, 0.4, 0.36], [-3.15, 2.45, 0.24, 0.22]],
+  fore: [[0.55, 2.25, -0.1], [0.85, 1.35, 0.12], [0.8, 0.35, 0.02], [0.82, 0.0, 0.35]],
+  hind: [[0.6, 2.3, -2.6], [0.8, 1.45, -2.25], [0.75, 0.45, -2.75], [0.76, 0.0, -2.45]],
+  tail: [[0, 2.45, -3.15], [0, 2.2, -3.9], [0, 1.6, -4.7], [0, 0.85, -5.4], [0, 0.35, -6.0], [0, 0.15, -6.6]],
+  tailRadii: [0.3, 0.26, 0.2, 0.13, 0.07, 0.01],
 };
 export const WING_KINDS = ["none", "bat", "feather"];
 
@@ -51,12 +69,14 @@ export function extraJoints(look) {
   const chain = (prefix, points) => points.slice(0, -1).forEach((at, i) => joints.push([`${prefix}_0${i + 1}`, i ? `${prefix}_0${i}` : "pelvis", at]));
   if (look.lower === "serpent") chain("lower", SERPENT.points);
   if (look.lower === "vortex") chain("lower", VORTEX.points);
-  if (look.lower === "horse") {
-    for (const [leg, points] of [["fore", HORSE.fore], ["hind", HORSE.hind]]) {
+  const beast = { horse: HORSE, drake: DRAKE }[look.lower];
+  if (beast) {
+    for (const [leg, points] of [["fore", beast.fore], ["hind", beast.hind]]) {
       points.slice(0, -1).forEach((at, i) => joints.push([`${leg}_0${i + 1}_l`, i ? `${leg}_0${i}_l` : "pelvis", at]));
     }
-    chain("horsetail", HORSE.tail);
+    chain("horsetail", beast.tail);
   }
+  if (look.lowerArms === "pair") joints.push(...LOWER_ARMS);
   const tail = TAILS[look.tail];
   if (tail) tail.points.slice(0, -1).forEach((at, i) => joints.push([`tail_0${i + 1}`, i ? `tail_0${i}` : "pelvis", at]));
   if (WING_KINDS.includes(look.wings) && look.wings !== "none") {
@@ -104,22 +124,29 @@ function buildLower(out, look, at, s, c, trunk) {
     out.path(points, shape.radii.map((r) => r * trunk), sides, color, (i) => [[names[Math.min(i, n - 1)], 1]], { carry: true });
   };
   if (look.lower === "serpent") along("lower", SERPENT, (band, angle) => (Math.abs(angle) < 0.9 ? shade(c.skin, 1.25) : band % 2 ? c.skin : shade(c.skin, 0.85)));
-  if (look.lower === "vortex") along("lower", VORTEX, (band) => shade(c.skin, 1 - 0.08 * band));
-  if (look.lower !== "horse") return;
-  const coat = c.secondary;
-  const barrel = HORSE.barrel.map(([z, y, rx, rz]) => ({ center: [0, y * s, z * s], dir: [0, 0, -1], rx: rx * trunk, rz: rz * trunk, bones: [["pelvis", 1]] }));
-  out.tube(barrel, 12, () => coat);
+  if (look.lower === "vortex") along("lower", VORTEX, (band) => shade(c.secondary, 1 - 0.08 * band));
+  const beast = { horse: HORSE, drake: DRAKE }[look.lower];
+  if (!beast) return;
+  const drake = look.lower === "drake";
+  // A horse's coat is the secondary color, a drake's scales its skin, paler beneath.
+  const coat = drake ? c.skin : c.secondary;
+  const barrel = beast.barrel.map(([z, y, rx, rz]) => ({ center: [0, y * s, z * s], dir: [0, 0, -1], rx: rx * trunk, rz: rz * trunk, bones: [["pelvis", 1]] }));
+  out.tube(barrel, 12, (band, angle) => (drake && Math.abs(angle) > 2.2 ? shade(c.skin, 1.25) : coat));
+  const claws = drake ? shade(c.horn, 0.8) : [0.12, 0.1, 0.09];
   for (const side of ["l", "r"]) {
     for (const leg of ["fore", "hind"]) {
       const names = [1, 2, 3].map((i) => `${leg}_0${i}_${side}`);
       const x = side === "l" ? 1 : -1;
-      const points = [...names.map(at), mul(HORSE[leg].at(-1), s).map((v, i) => (i ? v : x * v))];
-      const radii = (leg === "fore" ? [0.24, 0.12, 0.09, 0.1] : [0.3, 0.12, 0.09, 0.1]).map((r) => r * trunk);
-      out.path([add(points[0], [0, 0.35 * s, 0]), ...points], [radii[0] * 1.2, ...radii], 8, (band) => (band >= 3 ? [0.12, 0.1, 0.09] : coat), (i) => [[names[Math.min(Math.max(i - 1, 0), 2)], 1]], { carry: true });
+      const points = [...names.map(at), mul(beast[leg].at(-1), s).map((v, i) => (i ? v : x * v))];
+      const radii = (leg === "fore" ? [0.24, 0.12, 0.09, 0.1] : [0.3, 0.12, 0.09, 0.1]).map((r) => r * trunk * (drake ? 1.25 : 1));
+      out.path([add(points[0], [0, 0.35 * s, 0]), ...points], [radii[0] * 1.2, ...radii], 8, (band) => (band >= 3 ? claws : coat), (i) => [[names[Math.min(Math.max(i - 1, 0), 2)], 1]], { carry: true });
     }
   }
-  const tailNames = [1, 2, 3].map((i) => `horsetail_0${i}`);
-  out.path([...tailNames.map(at), mul(HORSE.tail.at(-1), s)], [0.12, 0.16, 0.14, 0.03].map((r) => r * s), 6, () => c.hair, (i) => [[tailNames[Math.min(i, 2)], 1]], { carry: true });
+  const tailNames = beast.tail.slice(0, -1).map((_, i) => `horsetail_0${i + 1}`);
+  const tailBones = (i) => [[tailNames[Math.min(i, tailNames.length - 1)], 1]];
+  const tailPoints = [...tailNames.map(at), mul(beast.tail.at(-1), s)];
+  if (drake) out.path(tailPoints, beast.tailRadii.map((r) => r * trunk), 8, (band, angle) => (Math.abs(angle) > 2.2 ? shade(c.skin, 1.25) : c.skin), tailBones, { carry: true });
+  else out.path(tailPoints, [0.12, 0.16, 0.14, 0.03].map((r) => r * s), 6, () => c.hair, tailBones, { carry: true });
 }
 
 // Bat wings: the arm, three fingers and skin between them, both faces drawn.

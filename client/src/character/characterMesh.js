@@ -31,6 +31,8 @@ material.onBeforeCompile = (shader) => {
     }`,
   );
 };
+// Spirits and shadows are see-through.
+const ghostMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true, transparent: true, opacity: 0.55, depthWrite: false });
 // Weapons have no mail mark.
 const weaponMaterial = new THREE.MeshLambertMaterial({ vertexColors: true, flatShading: true });
 
@@ -58,7 +60,7 @@ export function characterMesh(look) {
     if (parent) bones.get(parent).add(bone);
     bones.set(name, bone);
   }
-  const mesh = new THREE.SkinnedMesh(geometry, material);
+  const mesh = new THREE.SkinnedMesh(geometry, look.flesh === "spirit" || look.flesh === "shadow" ? ghostMaterial : material);
   const root = bones.get("root");
   mesh.add(root);
   mesh.bind(new THREE.Skeleton([...bones.values()]));

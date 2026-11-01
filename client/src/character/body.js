@@ -31,7 +31,11 @@ const JOINTS = [
   ["ball_l", "foot_l", [0.36, 0.08, 0.48]],
 ];
 // Where bones with no child end, for their direction.
-export const ENDS = { head: [0, 6, 0], hand_l: [0.97, 2.18, 0.17], ball_l: [0.36, 0.06, 0.75] };
+export const ENDS = { head: [0, 6, 0], hand_l: [0.97, 2.18, 0.17], hand2_l: [1.1, 2.2, 1.2], ball_l: [0.36, 0.06, 0.75] };
+// Goat's legs (lower "hocked"): the knee forward, the hock back above the ground, and a long
+// pastern down to the hoof.
+const HOCKED = { calf_l: [0.34, 1.95, 0.3], foot_l: [0.35, 0.78, -0.32], ball_l: [0.36, 0.1, 0.06] };
+const HOOF_END = [0.36, 0.02, 0.22];
 const TRUNK_SIDES = 32;
 // The bust's middle on each side (height in feet for a 6ft body, angle from the front), how far it
 // spreads toward the middle of the chest and out toward the arm, above and below its middle, and
@@ -48,6 +52,7 @@ const BUST = { y: 4.27, angle: 0.62, inner: 0.5, outer: 0.62, above: 0.36, below
 // and how far it stands out at most.
 const REAR = { y: 3.1, angle: 0.42, inner: 0.42, outer: 0.7, above: 0.4, below: 0.36, depth: 0.13 };
 const ARM = ["clavicle_l", "upperarm_l", "lowerarm_l", "hand_l"];
+const ARM2 = ["clavicle2_l", "upperarm2_l", "lowerarm2_l", "hand2_l"];
 const LEG = ["thigh_l", "calf_l", "foot_l", "ball_l"];
 
 export const BONE_NAMES = JOINTS.flatMap(([name]) => (name.endsWith("_l") ? [name, name.replace(/_l$/, "_r")] : [name]));
@@ -81,12 +86,77 @@ export function worn(color, style, h) {
   if (style === "fire") return pick([[1, 0.92, 0.45], [1, 0.75, 0.2], [1, 0.55, 0.12], [0.95, 0.35, 0.08], [0.75, 0.18, 0.05]]);
   if (style === "water") return pick([[0.55, 0.8, 0.95], [0.3, 0.6, 0.85], [0.2, 0.45, 0.75], [0.15, 0.35, 0.65]]);
   if (style === "air") return pick([[0.95, 0.97, 1], [0.85, 0.9, 0.95], [0.75, 0.82, 0.9], [0.65, 0.72, 0.82]]);
+  // Fur, shell, chitin, bark and fungus: the flesh's own color, varied, with what marks each.
+  if (style === "fur") return shade(color, 0.72 + 0.45 * h);
+  if (style === "shell") return h < 0.12 ? shade(color, 0.45) : h > 0.9 ? shade(color, 1.25) : shade(color, 0.85 + 0.25 * h);
+  if (style === "chitin") return h > 0.85 ? color.map((v) => Math.min(1, v * 1.2 + 0.18)) : shade(color, 0.7 + 0.3 * h);
+  if (style === "bark") return h < 0.22 ? shade(color, 0.45) : h > 0.92 ? [0.32, 0.45, 0.2] : shade(color, 0.8 + 0.3 * h);
+  if (style === "fungal") return h > 0.86 ? [0.93, 0.9, 0.8] : shade(color, 0.85 + 0.25 * h);
+  // Wrapped in old linen: pale strips, yellowed, with dark gaps between.
+  if (style === "wrapped") return h < 0.1 ? [0.22, 0.18, 0.14] : pick([[0.86, 0.82, 0.7], [0.8, 0.75, 0.6], [0.74, 0.68, 0.52], [0.66, 0.6, 0.46]]);
+  // A spirit is pale and see-through (characterMesh.js), a shadow dark; both waver.
+  if (style === "spirit") return color.map((v) => Math.min(1, v * (0.75 + 0.35 * h) + 0.2));
+  if (style === "shadow" && Math.max(...color) < 0.8) return pick([[0.16, 0.1, 0.24], [0.12, 0.07, 0.2], [0.2, 0.12, 0.3], [0.08, 0.05, 0.14]]);
+  // Molten: dark rock split by glowing cracks.
+  if (style === "molten") return h < 0.18 ? pick([[1, 0.6, 0.15]]) : shade(color, 0.45 + 0.35 * h);
   // Rotting flesh: grey-green patches and dark sores.
-  if (style === "rot") return h < 0.25 ? color.map((v, i) => v * 0.5 + [0.48, 0.52, 0.32][i] * 0.5) : h > 0.95 ? [0.3, 0.14, 0.12] : shade(color, 0.88 + 0.2 * h);
+  if (style === "rot" || style === "stitched") return h < 0.25 ? color.map((v, i) => v * 0.5 + [0.48, 0.52, 0.32][i] * 0.5) : h > 0.95 ? [0.3, 0.14, 0.12] : shade(color, 0.88 + 0.2 * h);
   if (style === "tattered") return h < 0.15 ? [color[0] * 0.55 + 0.06, color[1] * 0.55 + 0.05, color[2] * 0.55 + 0.03] : shade(color, 0.72 + 0.33 * h);
   const rust = style === "savage" ? 0.25 : 0.35;
   const dim = 0.7 + 0.3 * h;
   return color.map((v, i) => (v * (1 - rust) + [0.42, 0.28, 0.18][i] * rust) * dim);
+}
+
+// How each flesh but living wears every face (MeshOut's `wear`), and how far it jitters corners,
+// in feet for a 6ft body.
+const FLESH_WEAR = {
+  rotting: { jitter: 0.008 },
+  stitched: { jitter: 0.008 },
+  stone: { jitter: 0.03 },
+  fire: { jitter: 0.035 },
+  water: { jitter: 0.012 },
+  air: { jitter: 0.02 },
+  fur: { jitter: 0.025 },
+  shell: { jitter: 0.006 },
+  chitin: { jitter: 0.004 },
+  wrapped: { jitter: 0.012 },
+  spirit: { jitter: 0.015 },
+  shadow: { jitter: 0.03 },
+  bark: { jitter: 0.03 },
+  fungal: { jitter: 0.01 },
+  molten: { jitter: 0.03 },
+};
+const UNCLOTHED = ["fur", "shell", "chitin", "bark", "fungal", "wrapped", "molten", "spirit", "shadow"];
+export const FLESH_KINDS = ["living", "bone", ...Object.keys(FLESH_WEAR)];
+
+// Crude stitches across the trunk and where the arms and legs join it, each a dark cord with
+// short cross-stitches over it.
+function stitches(out, trunkRings, parts, s) {
+  const thread = [0.12, 0.08, 0.07];
+  const around = (ring, angle, proud) => add(ring.center, [Math.sin(angle) * (ring.rx + proud), 0, Math.cos(angle) * (ring.rz + proud)]);
+  const seam = (points, bones) => {
+    out.path(points, points.map(() => 0.018 * s), 4, () => thread, () => bones);
+    for (let i = 0; i < points.length - 1; i++) {
+      const mid = points[i].map((v, k) => (v + points[i + 1][k]) / 2);
+      const across = norm(cross(sub(points[i + 1], points[i]), [0, 0, 1]));
+      out.path([add(mid, mul(across, -0.06 * s)), add(mid, mul(across, 0.06 * s))], [0.012 * s, 0.012 * s], 4, () => thread, () => bones);
+    }
+  };
+  // Down the chest from the neck to the belly, a little off the middle, and across the belly.
+  const chest = trunkRings.filter((r) => r.center[1] > 3.5 * s && r.center[1] < 4.8 * s);
+  seam(chest.map((r, i) => around(r, 0.25 + 0.06 * Math.sin(i), 0.03 * s)).reverse(), chest[0].bones);
+  const belly = trunkRings.find((r) => r.center[1] > 3.6 * s);
+  seam([-1.1, -0.6, -0.1, 0.4, 0.9].map((a) => around(belly, a, 0.03 * s)), belly.bones);
+  // Round the top of each arm.
+  for (const side of ["l", "r"]) {
+    const ring = parts[`arm_${side}`]?.rings[2];
+    if (!ring) continue;
+    const [u, w] = [norm(cross(ring.dir, [0, 0, 1])), [0, 0, 1]];
+    seam(Array.from({ length: 7 }, (_, k) => {
+      const a = (k / 6) * Math.PI * 1.2 - 0.6;
+      return add(ring.center, add(mul(u, Math.cos(a) * (ring.rx + 0.03 * s)), mul(w, Math.sin(a) * (ring.rz + 0.03 * s))));
+    }), ring.bones);
+  }
 }
 
 // The skeleton for a look: [{ name, parent, at }], parents first, `at` the bind position.
@@ -94,7 +164,8 @@ export function skeleton(look) {
   const s = look.height / 6;
   const { shoulders, hips } = widths(look);
   const joints = new Map();
-  for (const [name, parent, at] of [...JOINTS, ...extraJoints(look)]) {
+  for (const [name, parent, joint] of [...JOINTS, ...extraJoints(look)]) {
+    const at = look.lower === "hocked" ? (HOCKED[name] ?? joint) : joint;
     joints.set(name, { name, parent, at });
     if (name.endsWith("_l")) {
       joints.set(name.replace(/_l$/, "_r"), { name: name.replace(/_l$/, "_r"), parent: parent.replace(/_l$/, "_r"), at: [-at[0], at[1], at[2]] });
@@ -109,8 +180,10 @@ export function skeleton(look) {
   }
   for (const [chain, width] of [
     [ARM, shoulders],
+    [ARM2, shoulders],
     [LEG, hips],
   ]) {
+    if (!joints.has(chain[0])) continue;
     for (const side of ["l", "r"]) {
       const moved = chain.filter((name) => !name.startsWith("clavicle"));
       const dx = joints.get(moved[0].replace(/_l$/, `_${side}`)).at[0] * (width - 1);
@@ -146,14 +219,19 @@ export function bodyMesh(look) {
   const limb = trunk * (0.8 + 0.4 * look.limbs) * (bony ? 0.45 : 1);
   // How the flesh wears every face: rotting, or an element's (rough stone, licking fire, rippling
   // water, wisps of air).
-  const rot = { rotting: { jitter: 0.008 }, stone: { jitter: 0.03 }, fire: { jitter: 0.035 }, water: { jitter: 0.012 }, air: { jitter: 0.02 } }[look.flesh];
-  if (rot) Object.assign(rot, { style: look.flesh === "rotting" ? "rot" : look.flesh, seed: 31, jitter: rot.jitter * s });
+  const rot = { ...FLESH_WEAR[look.flesh] };
+  if (FLESH_WEAR[look.flesh]) Object.assign(rot, { style: look.flesh === "rotting" ? "rot" : look.flesh, seed: 31, jitter: rot.jitter * s });
   // Without legs, there's no leg armor.
-  const legged = look.lower === "legs" || !look.lower;
+  const legged = look.lower === "legs" || look.lower === "hocked" || !look.lower;
+  const hocked = look.lower === "hocked";
+  if (hocked) look = { ...look, armor: Object.fromEntries(Object.entries(look.armor ?? {}).filter(([slot]) => slot !== "feet")) };
   if (!legged) look = { ...look, armor: Object.fromEntries(Object.entries(look.armor ?? {}).filter(([slot]) => slot !== "legs" && slot !== "feet")) };
   const c = Object.fromEntries(Object.entries(look.colors).map(([k, v]) => [k, hex(v)]));
-  const boots = shade(c.secondary, 0.55);
-  const belt = shade(c.primary, 0.45);
+  // Fur, shell and the like wear no clothes: shirt, trousers and boots are all the flesh.
+  const bare = UNCLOTHED.includes(look.flesh);
+  if (bare) c.primary = c.secondary = c.skin;
+  const boots = bare ? c.skin : shade(c.secondary, 0.55);
+  const belt = bare ? c.skin : shade(c.primary, 0.45);
   const out = new MeshOut(index);
 
   // The end of a bone: its child's joint, or its own end point.
@@ -222,26 +300,31 @@ export function bodyMesh(look) {
 
   for (const side of ["l", "r"]) {
     const n = (name) => name.replace(/_l$/, `_${side}`);
-    const grip = gripping(look, side);
-    // Arm, sleeved to the wrist, starting under the trunk's shoulder.
-    const arm = [
-      along(n("upperarm_l"), 0, { rx: 0.15 * limb, rz: 0.17 * limb, bones: [[n("upperarm_l"), 0.6], ["spine_03", 0.4]] }),
-      along(n("upperarm_l"), 0.04, { rx: 0.2 * limb, rz: 0.21 * limb, bones: [[n("upperarm_l"), 0.7], ["spine_03", 0.3]] }),
-      along(n("upperarm_l"), 0.15, { rx: 0.19 * limb, rz: 0.19 * limb }),
-      // The elbow bends across three rings, the middle one fuller since blending between two
-      // bones draws it in.
-      along(n("upperarm_l"), 0.8, { rx: 0.15 * limb, rz: 0.15 * limb, bones: [[n("upperarm_l"), 0.85], [n("lowerarm_l"), 0.15]] }),
-      along(n("upperarm_l"), 1, { rx: 0.16 * limb, rz: 0.16 * limb, bones: [[n("upperarm_l"), 0.5], [n("lowerarm_l"), 0.5]] }),
-      along(n("lowerarm_l"), 0.2, { rx: 0.145 * limb, rz: 0.145 * limb, bones: [[n("lowerarm_l"), 0.85], [n("upperarm_l"), 0.15]] }),
-      along(n("lowerarm_l"), 0.85, { rx: 0.1 * limb, rz: 0.1 * limb }),
-      along(n("lowerarm_l"), 1, { rx: 0.09 * limb, rz: 0.09 * limb, bones: [[n("lowerarm_l"), 0.5], [n("hand_l"), 0.5]] }),
-      // The palm, wrist to knuckles, shorter in a fist so the grip runs below it.
-      along(n("hand_l"), 0.15, { rx: 0.05 * s, rz: 0.095 * s }),
-      along(n("hand_l"), 0.33, { rx: 0.055 * s, rz: 0.115 * s }),
-      along(n("hand_l"), grip ? 0.44 : 0.53, { rx: 0.045 * s, rz: 0.11 * s }),
-    ];
-    parts[`arm_${side}`] = { rings: arm, sides: 10, color: (band) => (band < 7 ? c.primary : c.skin), opts: { capStart: true, capEnd: true } };
-    hand(parts, side, at(n("hand_l")), endOf(n("hand_l")), s, grip, c);
+    // Arm, sleeved to the wrist, starting under the trunk's shoulder; a second pair below the
+    // first holds nothing.
+    for (const pair of look.lowerArms === "pair" ? ["", "2"] : [""]) {
+      const n = (name) => name.replace(/arm_l$|hand_l$/, (m) => m.replace("_l", `${pair}_l`)).replace(/_l$/, `_${side}`);
+      const grip = pair ? null : gripping(look, side);
+      const arm = [
+        along(n("upperarm_l"), 0, { rx: 0.15 * limb, rz: 0.17 * limb, bones: [[n("upperarm_l"), 0.6], [pair ? "spine_02" : "spine_03", 0.4]] }),
+        along(n("upperarm_l"), 0.04, { rx: 0.2 * limb, rz: 0.21 * limb, bones: [[n("upperarm_l"), 0.7], [pair ? "spine_02" : "spine_03", 0.3]] }),
+        along(n("upperarm_l"), 0.15, { rx: 0.19 * limb, rz: 0.19 * limb }),
+        // The elbow bends across three rings, the middle one fuller since blending between two
+        // bones draws it in.
+        along(n("upperarm_l"), 0.8, { rx: 0.15 * limb, rz: 0.15 * limb, bones: [[n("upperarm_l"), 0.85], [n("lowerarm_l"), 0.15]] }),
+        along(n("upperarm_l"), 1, { rx: 0.16 * limb, rz: 0.16 * limb, bones: [[n("upperarm_l"), 0.5], [n("lowerarm_l"), 0.5]] }),
+        along(n("lowerarm_l"), 0.2, { rx: 0.145 * limb, rz: 0.145 * limb, bones: [[n("lowerarm_l"), 0.85], [n("upperarm_l"), 0.15]] }),
+        along(n("lowerarm_l"), 0.85, { rx: 0.1 * limb, rz: 0.1 * limb }),
+        along(n("lowerarm_l"), 1, { rx: 0.09 * limb, rz: 0.09 * limb, bones: [[n("lowerarm_l"), 0.5], [n("hand_l"), 0.5]] }),
+        // The palm, wrist to knuckles, shorter in a fist so the grip runs below it.
+        along(n("hand_l"), 0.15, { rx: 0.05 * s, rz: 0.095 * s }),
+        along(n("hand_l"), 0.33, { rx: 0.055 * s, rz: 0.115 * s }),
+        along(n("hand_l"), grip ? 0.44 : 0.53, { rx: 0.045 * s, rz: 0.11 * s }),
+      ];
+      const sleeve = (band) => (band < 7 ? (pair ? c.skin : c.primary) : c.skin);
+      parts[`arm${pair}_${side}`] = { rings: arm, sides: 10, color: sleeve, opts: { capStart: true, capEnd: true } };
+      hand(parts, side, at(n("hand_l")), endOf(n("hand_l")), s, grip, c, look.hands, n("hand_l"));
+    }
 
     // Leg, booted from mid-calf.
     const leg = [
@@ -260,7 +343,7 @@ export function bodyMesh(look) {
       const depth = under.depth * 0.5 * (1 + Math.cos(Math.PI * under.down));
       leg[0].push = (angle) => (Math.abs(angle) < 1.4 ? depth * 0.5 * (1 + Math.cos((Math.PI * angle) / 1.4)) : 0);
     }
-    parts[`leg_${side}`] = { rings: leg, sides: 8, color: (band) => (band < 5 ? c.secondary : boots), opts: { capStart: true } };
+    parts[`leg_${side}`] = { rings: leg, sides: 8, color: (band) => (band < 5 || hocked ? c.secondary : boots), opts: { capStart: true } };
     // Foot, heel to toe, its rings standing upright.
     const [fx, , fz] = at(n("foot_l"));
     const fwd = [0, 0, 1];
@@ -271,6 +354,16 @@ export function bodyMesh(look) {
       { center: [fx, 0.07 * s, fz + 0.7 * s], dir: fwd, rx: 0.1 * s, rz: 0.06 * s, bones: [[n("ball_l"), 1]] },
     ];
     parts[`foot_${side}`] = { rings: foot, sides: 8, color: () => boots, opts: { capStart: true, capEnd: true } };
+    if (hocked) {
+      // A long pastern from the hock down to a hoof.
+      const x = side === "l" ? 1 : -1;
+      const hoof = mul([x * HOOF_END[0], HOOF_END[1], HOOF_END[2]], s);
+      const [hock, ball] = [at(n("foot_l")), at(n("ball_l"))];
+      const points = [hock, add(hock, mul(sub(ball, hock), 0.5)), ball, hoof];
+      const radii = [0.12, 0.085, 0.1, 0.12].map((r) => r * limb);
+      const hoofColor = shade(c.horn, 0.45);
+      parts[`foot_${side}`] = { rings: pathRings(points, radii, (i) => [[i < 2 ? n("foot_l") : n("ball_l"), 1]]), sides: 8, color: (band) => (band >= 2 ? hoofColor : c.secondary), opts: { capStart: true, capEnd: true } };
+    }
   }
 
   // How far forward the trunk's front reaches at a point's x and height, where it's in front of
@@ -290,7 +383,7 @@ export function bodyMesh(look) {
     const reach = (ring) => ring.center[2] + Math.cos(angle) * (ring.rz + (ring.push?.(angle) ?? 0));
     return mix(reach(lower), reach(upper)) + armored;
   };
-  out.wear = rot;
+  out.wear = FLESH_WEAR[look.flesh] ? rot : null;
   parts.head = head(out, look, at("head"), s, c, chestFront);
   buildExtras(out, look, at, s, c, trunk);
   // How far the trunk reaches from its middle at a height and angle round it, or 0 off its ends.
@@ -304,7 +397,9 @@ export function bodyMesh(look) {
   };
   dressArmor(out, parts, look, { s, trunk, limb, along, level, shoulders, hips, trunkSides: TRUNK_SIDES, trunkReach, n: (name, side) => name.replace(/_l$/, `_${side}`) });
   if (!legged) for (const name of ["leg_l", "leg_r", "foot_l", "foot_r"]) delete parts[name];
-  out.wear = rot;
+  out.wear = null;
+  if (look.flesh === "stitched") stitches(out, trunkRings, parts, s);
+  out.wear = FLESH_WEAR[look.flesh] ? rot : null;
   for (const { rings, sides, color, opts } of Object.values(parts)) out.tube(rings, sides, color, opts);
   out.wear = null;
   const mesh = out.arrays();
@@ -320,12 +415,12 @@ function proportion(bones, mesh, look) {
   if (arms === 1 && legs === 1 && head === 1) return bones;
   const byName = new Map(bones.map((b) => [b.name, b]));
   const at = (name) => byName.get(name).at;
-  const child = { upperarm: "lowerarm", lowerarm: "hand", thigh: "calf", calf: "foot" };
+  const child = { upperarm: "lowerarm", lowerarm: "hand", upperarm2: "lowerarm2", lowerarm2: "hand2", thigh: "calf", calf: "foot" };
   // Each bone's stretch: [how much, along what], or every way where there's no direction.
   const stretchOf = (name) => {
     const [part, side] = name.split("_");
     if (child[part]) return [part.endsWith("arm") ? arms : legs, norm(sub(at(`${child[part]}_${side}`), at(name)))];
-    if (part === "hand") return [arms, null];
+    if (part === "hand" || part === "hand2") return [arms, null];
     if (name === "head") return [head, null];
     return [1, null];
   };
@@ -461,14 +556,23 @@ const OPEN_THUMB = [
 // The grip's middle, and how far round it the fingers wrap: the grip's radius and a finger's.
 const GRIP = { u: 0.3, w: 0.02, wrap: 0.085 };
 
-function hand(parts, side, wrist, end, s, grip, c) {
-  const bone = `hand_${side}`;
+function hand(parts, side, wrist, end, s, grip, c, kind = "hands", bone = `hand_${side}`) {
   const down = norm(sub(end, wrist));
   // The palm faces the body, and the thumb is forward.
   const toward = norm(sub([side === "l" ? -1 : 1, 0, 0], mul(down, side === "l" ? -down[0] : down[0])));
   const ahead = cross(side === "l" ? toward : down, side === "l" ? down : toward);
   const p = (u, v, w) => add(wrist, add(mul(down, u * s), add(mul(toward, v * s), mul(ahead, w * s))));
   const part = (points, radii) => ({ rings: pathRings(points, radii, () => [[bone, 1]]), sides: 5, color: () => c.skin, opts: { capEnd: true } });
+  if (kind === "pincers") {
+    // A claw of two blades, the upper heavier, open a little, a thumb's place lost.
+    const shell = shade(c.skin, 0.9);
+    const blade = (v, length, r) => [p(0.2, 0, 0.02), p(0.38, v * 0.6, 0.04), p(0.2 + length, v, 0.06)].map((point, i) => ({ point, r: [r, r * 0.8, r * 0.1][i] }));
+    for (const [k, [v, length, r]] of [[0, [0.14, 0.95, 0.17]], [1, [-0.12, 0.7, 0.11]]]) {
+      const points = blade(v, length, r);
+      parts[`${bone}_${k}`] = { rings: pathRings(points.map((q) => q.point), points.map((q) => q.r * s), () => [[bone, 1]]), sides: 6, color: () => shell, opts: { capStart: true, capEnd: true } };
+    }
+    return;
+  }
   // Where the grip runs through a finger's plane: lower for fingers further along it.
   const middle = (w) => GRIP.u + (grip?.slope ?? 0) * (w - GRIP.w);
   FINGERS.forEach(({ w, length, r }, i) => {
@@ -527,14 +631,15 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
   const long = ["long", "ponytail", "braids", "afro", "bob", "mullet", "dreadlocks"].includes(hair);
   // Angles from the front: a mohawk keeps only a strip down the middle, front to back, and a
   // receding hairline only the sides and back.
-  const scalp = (a) => (hair === "mohawk" ? a < 0.35 || a > Math.PI - 0.35 : hair === "receding" ? a > 1.4 : hair !== "bald");
+  const bare = ["bald", "cap", "branches"].includes(hair);
+  const scalp = (a) => (hair === "mohawk" ? a < 0.35 || a > Math.PI - 0.35 : hair === "receding" ? a > 1.4 : !bare);
   const color = (band, angle) => {
     const a = Math.abs(angle);
     if (bearded && ((band === 1 && a < 2.1) || (band === 0 && a < 1.6))) return c.hair;
     if (scalp(a) && (band >= 4 || (band === 3 && a > 0.9) || (band === 2 && a > 1.9) || (long && band === 1 && a > 2.1))) return c.hair;
     return c.skin;
   };
-  const part = { rings, sides: 10, color, opts: { capEnd: true, endColor: hair === "bald" || hair === "receding" ? c.skin : c.hair } };
+  const part = { rings, sides: 10, color, opts: { capEnd: true, endColor: bare || hair === "receding" ? c.skin : c.hair } };
   // Hair that would stand through a helmet or hood goes.
   const covered = Boolean(look.armor?.head);
 
@@ -573,8 +678,8 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
     });
     for (let k = 0; k < sides; k++) out.face([center, rim[k], rim[(k + 1) % sides]], color, bones, inside);
   };
-  // A frog's eyes bulge from the top of its head instead.
-  for (const x of muzzle?.bulging ? [] : [-0.14, 0.14]) {
+  // A frog's eyes bulge from the top of its head instead, and an insect's are at its sides.
+  for (const x of muzzle?.bulging || muzzle?.compound ? [] : [-0.14, 0.14]) {
     const [cx, cy, cz] = front(0.34, x);
     if (bony) {
       // Dark sockets with a glow deep in each.
@@ -591,9 +696,9 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
   const p = (x, dy, z) => [hx + x * s, hy + dy * s, hz + z * s];
   // Ears, pointed or long, flat blades out from the sides of the head and up a little; round ones
   // aren't drawn.
-  const EAR = { pointed: [[0.36, 0.34, -0.02], [0.5, 0.45, -0.07], [0.62, 0.58, -0.12]], long: [[0.36, 0.34, -0.02], [0.6, 0.42, -0.06], [0.82, 0.48, -0.1], [1.0, 0.52, -0.13]] }[look.ears];
+  const EAR = { pointed: [[0.36, 0.34, -0.02], [0.5, 0.45, -0.07], [0.62, 0.58, -0.12]], long: [[0.36, 0.34, -0.02], [0.6, 0.42, -0.06], [0.82, 0.48, -0.1], [1.0, 0.52, -0.13]], bear: [[0.27, 0.58, -0.06], [0.33, 0.7, -0.08], [0.36, 0.78, -0.09]] }[look.ears];
   if (EAR) {
-    const radii = look.ears === "long" ? [0.13, 0.11, 0.07, 0.01] : [0.11, 0.07, 0.01];
+    const radii = { long: [0.13, 0.11, 0.07, 0.01], bear: [0.08, 0.11, 0.05] }[look.ears] ?? [0.11, 0.07, 0.01];
     for (const side of [-1, 1]) out.path(EAR.map(([x, dy, z]) => p(side * x, dy, z)), radii.map((r) => r * s), 6, () => c.skin, () => bones, { capStart: true, capEnd: true, depth: radii.map(() => 0.035 * s) });
   }
   const neck = [["neck_01", 0.5], ["spine_03", 0.5]];
@@ -661,6 +766,36 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
       const rope = [p(x * 0.36, 0.5, z * 0.38), p(x * 0.43, 0.3, z * 0.45), p(x * 0.45, 0.05, z * 0.47), p(x * 0.44, 0.1 - reach, z * 0.47 - 0.03)];
       out.path(rope, [0.05, 0.045, 0.04, 0.03].map((r) => r * s), 5, () => c.hair, (i) => (i < 2 ? bones : neck), { capEnd: true });
     }
+  }
+  if (hair === "cap") {
+    // A mushroom's cap for a crown: wide, domed, in the hair color with pale spots, gills
+    // beneath.
+    const dome = [ring(0.5, 0.3, 0.3, -0.02), ring(0.48, 0.78, 0.78, -0.02), ring(0.6, 0.86, 0.86, -0.02), ring(0.82, 0.7, 0.7, -0.02), ring(1.02, 0.42, 0.42, -0.02), ring(1.1, 0.08, 0.08, -0.02)];
+    const spotted = (band, angle) => (band === 0 ? shade(c.hair, 0.5) : band >= 2 && hashAt([band, Math.round(angle * 3)], 7) > 0.7 ? [0.93, 0.9, 0.82] : c.hair);
+    out.tube(dome, 14, spotted, { capStart: true, capEnd: true });
+  }
+  if (hair === "branches") {
+    // Branches up and out from the crown, each forking once, with tufts of leaves.
+    const leaf = c.leaf;
+    for (const [turn, lean] of [[0, 0.5], [1.4, 0.75], [-1.4, 0.75], [2.6, 0.6], [-2.6, 0.6]]) {
+      const way = [Math.sin(turn) * lean, 1, Math.cos(turn) * lean * 0.6];
+      const base = p(way[0] * 0.2, 0.62, -0.04 + way[2] * 0.2);
+      const mid = add(base, mul(way, 0.45 * s));
+      const tip = add(mid, mul([way[0] * 1.4, 0.9, way[2]], 0.4 * s));
+      const fork = add(mid, mul([-way[0] * 0.3 + 0.2 * Math.sign(way[0] || 1), 0.8, -0.3], 0.35 * s));
+      out.path([base, mid, tip], [0.07, 0.045, 0.01].map((r) => r * s), 5, () => c.hair, () => bones, { carry: true });
+      out.path([mid, fork], [0.035 * s, 0.006 * s], 4, () => c.hair, () => bones);
+      for (const [end, r] of [[tip, 0.16], [fork, 0.12]]) out.gem(end, r * s, hashAt(end, 3) > 0.5 ? leaf : shade(leaf, 0.8), bones);
+    }
+  }
+  if (hair === "leaves") {
+    // Leaves over the crown and spilling down the back, in tufts of two greens.
+    const leaf = (point, r) => out.gem(point, r * s, hashAt(point, 5) > 0.5 ? c.hair : shade(c.hair, 0.75), bones);
+    for (let k = 0; k < 14; k++) {
+      const [turn, rise] = [(k * 2.4) % (Math.PI * 2), 0.25 + (k % 4) * 0.3];
+      leaf(p(Math.sin(turn) * Math.cos(rise) * 0.4, 0.35 + Math.sin(rise) * 0.42, -0.04 + Math.cos(turn) * Math.cos(rise) * 0.42), 0.12);
+    }
+    for (let k = 0; k < 6; k++) leaf(add(p((k % 2 ? 0.16 : -0.16), 0.2 - k * 0.15, -0.42 - k * 0.02), [0, 0, 0]), 0.1 - k * 0.008);
   }
   if (hair === "ponytail") {
     const tail = [p(0, 0.55, -0.36), p(0, 0.35, -0.55), p(0, -0.05, -0.6), p(0, -0.45, -0.52)];
@@ -824,12 +959,25 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
         out.gem(p(side * 0.27, 0.57, 0.31), 0.03 * s, [0.05, 0.05, 0.06], bones);
       }
     }
+    if (muzzle.compound) {
+      for (const side of [-1, 1]) {
+        out.gem(p(side * 0.3, 0.38, 0.2), 0.17 * s, shade(c.eyes, 0.7), bones);
+        out.gem(p(side * 0.33, 0.4, 0.26), 0.11 * s, c.eyes, bones);
+      }
+    }
+    if (muzzle.mandibles) {
+      // Curved blades either side of the mouth, closing in toward their tips.
+      for (const side of [-1, 1]) {
+        const points = [p(side * 0.16, 0.06, 0.3), p(side * 0.2, 0.03, 0.48), p(side * 0.13, 0.01, 0.62), p(side * 0.03, 0.0, 0.66)];
+        out.path(points, [0.05, 0.045, 0.03, 0.005].map((r) => r * s), 5, () => shade(c.horn, 0.6), () => bones, { carry: true });
+      }
+    }
     if (muzzle.nose === "dark") out.gem(p(0, muzzle.upper.at(-1)[1] + 0.03, muzzle.upper.at(-1)[0] + 0.02), 0.045 * s, [0.08, 0.07, 0.07], bones);
   }
   // Horns from the top of the head: rows of [across, up, forward] and thickness.
-  const horn = HORNS[look.horns];
-  if (horn) {
-    const color = c.horn ?? [0.85, 0.8, 0.68];
+  const horns = HORNS[look.horns];
+  for (const horn of horns ? (Array.isArray(horns[0][0]) ? horns : [horns]) : []) {
+    const color = look.horns === "antennae" ? shade(c.skin, 0.7) : (c.horn ?? [0.85, 0.8, 0.68]);
     for (const side of [-1, 1]) out.path(horn.map(([x, dy, z]) => p(side * x, dy, z)), horn.map((r) => r[3] * s), 6, (band) => (band >= horn.length - 2 ? shade(color, 0.8) : color), () => bones, { carry: true });
   }
   // Tusks up from the lower jaw either side of the mouth, curving out.
@@ -838,7 +986,9 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
     const ivory = [0.9, 0.86, 0.72];
     const reach = tusk / 0.035;
     for (const side of [-1, 1]) {
-      const base = lower(0.07, side * 0.13);
+      // From the sides of a snout, or the lower jaw.
+      const snout = muzzle?.snoutTusks && muzzle.upper[1];
+      const base = snout ? p(side * snout[2] * 0.9, snout[1] - snout[3] * 0.6, snout[0] + 0.1) : lower(0.07, side * 0.13);
       const points = [base, add(base, [side * 0.02 * s, 0.07 * reach * s, 0.05 * s]), add(base, [side * 0.05 * s, 0.15 * reach * s, 0.06 * s])];
       out.path(points, [tusk, tusk * 0.7, tusk * 0.1].map((r) => r * s), 6, () => ivory, () => bones, { capStart: true, capEnd: true });
     }
@@ -906,6 +1056,17 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
   if (look.jewelry.includes("earrings")) {
     for (const x of [-0.385, 0.385]) out.gem(p(x, 0.14, 0), 0.045 * s, c.metal, bones);
   }
+  if (look.jewelry.includes("crown")) {
+    // A band round the brow with points standing up from it.
+    const band = (dy, r) => ({ center: p(0, dy, -0.02), dir: [0, 1, 0], rx: r * s, rz: (r + 0.03) * s, bones });
+    out.tube([band(0.6, 0.37), band(0.7, 0.36)], 12, () => c.metal, { open: true });
+    for (let k = 0; k < 7; k++) {
+      const turn = (k / 7) * Math.PI * 2;
+      const [x, z] = [Math.sin(turn) * 0.37, Math.cos(turn) * 0.4 - 0.02];
+      out.path([p(x, 0.68, z), p(x * 1.05, 0.88, z * 1.05)], [0.05 * s, 0.004 * s], 4, () => c.metal, () => bones, { capStart: true });
+    }
+    out.gem(p(0, 0.65, 0.4), 0.04 * s, hex(look.colors.paint ?? "#a03030"), bones);
+  }
   if (look.jewelry.includes("necklace")) {
     const ringAt = (dy, r) => ({ center: p(0, dy, 0.02), dir: [0, 1, 0], rx: r * s, rz: r * s, bones: neck });
     out.tube([ringAt(-0.31, 0.25), ringAt(-0.25, 0.22)], 10, () => c.metal, { open: true });
@@ -922,6 +1083,12 @@ const MUZZLES = {
   bovine: { upper: [[0.25, 0.18, 0.27, 0.24], [0.42, 0.14, 0.26, 0.2], [0.58, 0.11, 0.22, 0.16]], lower: [[0.25, 0.0, 0.18, 0.08], [0.48, 0.0, 0.14, 0.06]], nose: "pad" },
   // Wide and flat, with eyes bulging up from the top of the head.
   frog: { upper: [[0.2, 0.16, 0.38, 0.15], [0.4, 0.14, 0.33, 0.11], [0.54, 0.13, 0.22, 0.07]], lower: [[0.2, 0.04, 0.36, 0.08], [0.5, 0.06, 0.24, 0.05]], bulging: true },
+  // A boar's: short and thick, ending in a flat pad, tusks up from its sides.
+  boar: { upper: [[0.25, 0.2, 0.27, 0.22], [0.45, 0.16, 0.22, 0.18], [0.62, 0.14, 0.17, 0.15], [0.7, 0.14, 0.15, 0.14]], lower: [[0.25, 0.02, 0.18, 0.08], [0.55, 0.04, 0.12, 0.05]], nose: "pad", snoutTusks: true },
+  // A bear's: broad at the face, short, a dark nose.
+  bear: { upper: [[0.25, 0.22, 0.28, 0.23], [0.45, 0.19, 0.21, 0.17], [0.6, 0.17, 0.14, 0.12], [0.68, 0.17, 0.1, 0.09]], lower: [[0.25, 0.04, 0.2, 0.08], [0.6, 0.06, 0.11, 0.05]], teeth: true, nose: "dark" },
+  // An insect's: a short mouth between mandibles, and great compound eyes at the sides.
+  insect: { upper: [[0.2, 0.2, 0.2, 0.16], [0.34, 0.16, 0.13, 0.1]], lower: [[0.2, 0.04, 0.14, 0.06], [0.3, 0.05, 0.1, 0.04]], mandibles: true, compound: true },
 };
 export const MUZZLE_KINDS = ["none", ...Object.keys(MUZZLES)];
 // Horns, root to tip: [across, up, forward, thickness] from the head's joint.
@@ -930,6 +1097,15 @@ const HORNS = {
   bull: [[0.3, 0.6, 0.05, 0.085], [0.52, 0.66, 0.08, 0.07], [0.7, 0.8, 0.12, 0.05], [0.76, 0.98, 0.16, 0.008]],
   ram: [[0.26, 0.66, -0.02, 0.085], [0.42, 0.78, -0.22, 0.075], [0.55, 0.6, -0.36, 0.06], [0.54, 0.38, -0.18, 0.045], [0.48, 0.32, 0.06, 0.008]],
   swept: [[0.2, 0.68, 0.06, 0.07], [0.28, 0.85, -0.2, 0.055], [0.33, 0.93, -0.55, 0.035], [0.34, 0.88, -0.85, 0.005]],
+  // Thin feelers from the brow, up and forward.
+  antennae: [[0.1, 0.6, 0.28, 0.025], [0.2, 0.95, 0.45, 0.018], [0.3, 1.25, 0.6, 0.014], [0.38, 1.45, 0.82, 0.008]],
+  // A stag's: a beam back and up with tines forward from it, each a path of its own.
+  antlers: [
+    [[0.15, 0.68, 0.0, 0.05], [0.36, 0.95, -0.06, 0.04], [0.56, 1.25, -0.12, 0.03], [0.66, 1.58, -0.06, 0.008]],
+    [[0.3, 0.88, -0.04, 0.03], [0.36, 1.08, 0.22, 0.006]],
+    [[0.5, 1.17, -0.1, 0.025], [0.45, 1.45, 0.1, 0.005]],
+    [[0.6, 1.38, -0.1, 0.02], [0.8, 1.6, -0.15, 0.004]],
+  ],
 };
 export const HORN_KINDS = ["none", ...Object.keys(HORNS)];
 

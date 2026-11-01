@@ -92,4 +92,33 @@ describe("creature extras", () => {
       expect(names.includes("wing_01_r"), body).toBe(look.wings !== "none");
     }
   });
+
+  it("gives the second pair of arms, goat's legs and a drake's body bones of their own", () => {
+    const names = (look) => skeleton(resolveRecipe(look)).map((b) => b.name);
+    expect(names({ lowerArms: "pair" })).toEqual(expect.arrayContaining(["upperarm2_l", "hand2_r"]));
+    expect(names({ lower: "drake" })).toEqual(expect.arrayContaining(["fore_01_l", "hind_03_r", "horsetail_05"]));
+    const at = (look) => Object.fromEntries(skeleton(resolveRecipe(look)).map((b) => [b.name, b.at]));
+    // Goat's legs bend the knee forward and the hock back.
+    const [legs, hocked] = [at({}), at({ lower: "hocked" })];
+    expect(hocked.calf_l[2]).toBeGreaterThan(legs.calf_l[2]);
+    expect(hocked.foot_l[2]).toBeLessThan(legs.foot_l[2]);
+  });
+
+  it("stands every new body on the ground, and builds every new flesh, hand, muzzle and hair", () => {
+    for (const body of ["boric", "ursol", "trog", "homari", "tyrshaug", "drakel", "abomination", "ghoul", "mummy", "lich", "banshee", "ghost", "deepshaug", "smoulder", "treant", "dryad", "succubus", "hivelord", "cindershaug", "golem", "mycosi", "drakesh"]) {
+      const look = resolveRecipe({ body }, () => 0.5);
+      const { positions } = bodyMesh(look);
+      const ys = positions.filter((_, i) => i % 3 === 1);
+      expect(Math.min(...ys), body).toBeLessThan(0.15 * look.height);
+      expect(Math.min(...ys), body).toBeGreaterThan(-0.05 * look.height);
+    }
+    const looks = { flesh: ["fur", "shell", "chitin", "wrapped", "spirit", "shadow", "bark", "fungal", "molten", "stitched"], hands: ["pincers"], muzzle: ["boar", "bear", "insect"], hair: ["cap", "branches", "leaves"], horns: ["antennae", "antlers"] };
+    for (const [key, values] of Object.entries(looks)) {
+      for (const value of values) {
+        const look = resolveRecipe({ [key]: value });
+        expect(look[key]).toBe(value);
+        expect(bodyMesh(look).positions.every(Number.isFinite), value).toBe(true);
+      }
+    }
+  });
 });

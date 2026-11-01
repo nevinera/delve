@@ -51,12 +51,15 @@ export function characterClips(mesh, baked) {
   const rest = mesh.skeleton.getBoneByName("pelvis").position;
   // A tail and wings sway through every clip, since the baked clips don't move them.
   const extras = mesh.skeleton.bones.map((b) => b.name).filter((name) => /^(tail|wing|lower|fore|hind|horsetail)_0/.test(name));
+  const lowerArms = mesh.skeleton.getBoneByName("upperarm2_l") ? ["clavicle_l", "upperarm_l", "lowerarm_l", "hand_l"].flatMap((b) => [b, b.replace(/_l$/, "_r")]) : [];
   const euler = new THREE.Euler();
   const turn = new THREE.Quaternion();
   const clips = new Map();
   for (const name of clipNames(baked)) {
     const { times, rotations, pelvis } = POSED[name] ? posedClip(name, mesh.userData.joints, s, baked.fps) : decodeClip(baked, name);
     const tracks = Object.entries(rotations).map(([bone, values]) => new THREE.QuaternionKeyframeTrack(`${bone}.quaternion`, times, values));
+    // A second pair of arms moves as the first.
+    for (const bone of lowerArms) if (rotations[bone]) tracks.push(new THREE.QuaternionKeyframeTrack(`${bone.replace(/_([lr])$/, "2_$1")}.quaternion`, times, rotations[bone]));
     const positions = pelvis.map((v, i) => rest.getComponent(i % 3) + v * s);
     tracks.push(new THREE.VectorKeyframeTrack("pelvis.position", times, positions));
     const duration = times[times.length - 1] || 1 / baked.fps;
