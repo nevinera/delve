@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { CLIMB_FT, FAST, RUN_FT, SLIDE_FT, SWIM_FT, SWIM_SPEED, moveBuilder } from "./builder.js";
+import { CLIMB_FT, FAST, RUN_FT, SLIDE_FT, SWIM_FT, SWIM_SPEED, heightAfter, moveBuilder } from "./builder.js";
 
 const still = { forward: 0, strafe: 0, turn: 0, rise: false, drop: false, takeoff: false };
 const flat = () => 100;
@@ -74,6 +74,16 @@ describe("the builder", () => {
   it("swims where it comes to, flying down into deep water", () => {
     const s = moveBuilder({ x: 0, y: 101, z: 0, yaw: 0, flying: true }, { ...still, drop: true }, 1, () => 50, undefined, () => 100);
     expect(s).toMatchObject({ y: 101 - CLIMB_FT, flying: false, swimming: true });
+  });
+
+  it("flies as fast as climbing for as long would have it going, where it's told", () => {
+    // Climbing from the land for each second, a step at a time.
+    let h = 0;
+    for (let t = 0; t < 4; t += 0.001) h += Math.max(CLIMB_FT, h * 0.8) * 0.001;
+    expect(heightAfter(4)).toBeCloseTo(h, -1);
+    expect(heightAfter(0.5)).toBeCloseTo(CLIMB_FT / 2);
+    const s = moveBuilder({ x: 0, y: -50, z: 0, yaw: 0, flying: true }, { ...still, forward: 1, above: 200 }, 0.1, () => -Infinity, undefined, undefined, () => 0);
+    expect(s.z).toBeCloseTo(20);
   });
 
   it("flies the way it's pitched, and walks level whatever the pitch", () => {

@@ -22,7 +22,9 @@ import { WALK_DEG } from "./growth.js";
 // way.
 //
 // Standing, double-tapping F takes them down into the earth, flying, where they're a ghost (ghost())
-// till they come out of the rock; the camera stays under the ground with them.
+// till they come out of the rock; the camera stays under the ground with them. There, with no
+// height to go faster by, holding the same keys goes faster the longer they're held, as fast as
+// climbing that long would have them going (heightAfter).
 //
 // Left-drag swings the camera round the builder, right-drag turns the builder with it, both tip
 // it up and down, and the wheel zooms. The higher the builder flies, the more the camera looks down (cameraFor).
@@ -50,12 +52,14 @@ const CAMERA = { distance: 30, min: 4, max: 2000, pitch: 0.35, minPitch: -1.3, m
 const ALOFT = { tilt: 0.7, tiltFt: 600, highFt: 20000, topFt: 100000 };
 const DRAG = 0.006; // radians per pixel
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " ", "f"]);
+const MOVE_KEYS = ["w", "s", "q", "e", " ", "f"]; // the keys that move them, not turn them
 const SWIM_LEVEL = 0.12; // how far, in radians, the camera can look either way of where it rests while swimming or flying on the level
 
 // One step of the builder's moving. state: { x, y, z, yaw, flying, swimming, falling }, continent
 // feet and radians, falling the speed they're falling at, feet a second, or 0. input: { forward, strafe, turn } each -1, 0 or 1, rise and drop (space or F held: 0, 1,
 // or FAST double-tapped), ahead (how many times as fast forward goes, 1 or FAST), takeoff (space
-// was just pressed), and pitch, how far up the way they swim or fly goes, in radians. groundAt(x, z)
+// was just pressed), pitch, how far up the way they swim or fly goes, in radians, and above, how
+// high over the land to fly as fast as, where it isn't how high they are. groundAt(x, z)
 // gives the ground's height, or null off the tiles, where the sea's bed is SEA_LEVEL_FT, and
 // waterAt(x, z) the water's surface there, or null where there's none. Walking, push(x, z) moves
 // where they'd be out of what's in the way. landAt(x, z), the land's height without what's built
@@ -67,7 +71,7 @@ export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z],
   let { x, y, z, yaw, flying } = state;
   let falling = state.falling ?? 0;
   yaw += input.turn * TURN_RATE * dt;
-  const above = Math.max(0, y - standAt(x, z, landAt, waterAt));
+  const above = input.above ?? Math.max(0, y - standAt(x, z, landAt, waterAt));
   let swimming = !flying && deep(x, z, groundAt, waterAt);
   if (!flying && !swimming && input.takeoff) {
     flying = true;
@@ -119,6 +123,14 @@ export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z],
     }
   }
   return { x, y, z, yaw, flying, swimming: !flying && deep(x, z, groundAt, waterAt), falling };
+}
+
+// How high over the land climbing from it for `seconds` takes the builder.
+export function heightAfter(seconds) {
+  const steady = CLIMB_FT / CLIMB_PER_FT; // the height climbing starts to speed up from
+  const t = steady / CLIMB_FT;
+  if (seconds <= t) return CLIMB_FT * seconds;
+  return Math.min(CEILING_FT, steady * Math.exp(CLIMB_PER_FT * (seconds - t)));
 }
 
 // How steep the ground's face is at (x, z), rise over run.
@@ -194,6 +206,7 @@ export class Builder {
     this.fast = new Set(); // the keys held since being double-tapped
     this.takeoff = false;
     this.dive = false; // F double-tapped standing
+    [this.moving, this.holding] = ["", 0]; // the moving keys held, and for how long
     this.paints = false; // whether a tool has the left button, leaving looking round to the right
     this.figure = new Figure(scene);
     window.addEventListener("keydown", (e) => this.onKey(e, true));
@@ -232,6 +245,11 @@ export class Builder {
       takeoff: this.takeoff,
       pitch,
     };
+    // In the earth, the same keys held go faster the longer they are.
+    const moving = MOVE_KEYS.filter((k) => this.held.has(k)).join("");
+    this.holding = moving && moving === this.moving ? this.holding + dt : 0;
+    this.moving = moving;
+    if (this.ghost()) input.above = heightAfter(this.holding);
     this.takeoff = false;
     if (this.dive) {
       const { x, z } = this.state;
