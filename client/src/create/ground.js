@@ -52,6 +52,8 @@ export const EMPTY_FT = -100; // the sea floor's height where there are no tiles
 const TINT = 0.8; // how far toward its biome's color ground's mixed, showing biomes
 const CHUNK_CELLS_HALF = CHUNK_CELLS / 2;
 const SHORE_CELLS = 4; // how far from water ground can be shore
+const WIRE_RGB = 0x9aa0a8; // the lines ground's drawn as, seen from underground
+const WIRE_OPACITY = 0.08;
 
 // A continent's renditions, from its platter files, and its ground at cell scale, from its plate
 // files, read on a worker (plateWorker.js) as they're wanted. onRead() is called each time a plate
@@ -1110,6 +1112,21 @@ export class Ground {
     this.tint = null; // showing biomes, each biome's linear RGB, by index into BIOME_NAMES
     this.tints = 0; // counts changes to how ground's tinted, to tell tinted faces kept are stale
     this.holes = null; // (tx, tz) => the cells of a tile not to draw in full, a Set of indices, or null
+    this.wire = new THREE.MeshBasicMaterial({ color: WIRE_RGB, wireframe: true, transparent: true, opacity: WIRE_OPACITY, depthTest: false, depthWrite: false });
+    this.wired = false; // whether the ground's drawn as lines (setWired)
+  }
+
+  // Draws the ground as faint lines, every face's edges seen through whatever's in front, and its
+  // water not at all, or as it was. Made while it's wired, ground's wired the next time this is.
+  setWired(wired) {
+    if (!wired && !this.wired) return;
+    this.wired = wired;
+    this.group.traverse((mesh) => {
+      if (!mesh.isMesh) return;
+      if (mesh.userData.kind === "water") mesh.visible = !wired && this.shown.water;
+      else if (wired && !mesh.userData.solid) [mesh.userData.solid, mesh.material] = [mesh.material, this.wire];
+      else if (!wired && mesh.userData.solid) [mesh.material, mesh.userData.solid] = [mesh.userData.solid, null];
+    });
   }
 
   // Draws all but the ground in full tinted by biome, with `tint` (each biome's linear RGB), or
@@ -1453,7 +1470,8 @@ export class Ground {
         kept.geometry.dispose();
         kept.geometry = geometry();
         kept.userData.grid = grid;
-        disposeGround(kept.material);
+        disposeGround(kept.userData.solid ?? kept.material);
+        kept.userData.solid = null;
         kept.material = withGrid(groundMaterial(this.renderer, { tile: groundTile(tx, tz, cells), origin: [0, 0] }), CELL_FT);
       }
       return;
@@ -1503,7 +1521,7 @@ export class Ground {
     object.traverse((mesh) => {
       if (!mesh.isMesh) return;
       mesh.geometry.dispose();
-      if (mesh.userData.kind === "full") disposeGround(mesh.material);
+      if (mesh.userData.kind === "full") disposeGround(mesh.userData.solid ?? mesh.material);
     });
     this.plates.delete(key);
   }

@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { strFromU8, strToU8, unzipSync, zip, zipSync } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
-import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
+import { CELL_FT, PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { BIOME_NAMES } from "../v2/biomes.js";
 import { waterPath } from "../v2/water.js";
 import { BIOMES, biomesPath } from "./biomes.js";
@@ -36,6 +36,7 @@ import { CAVES_PATH, Caves } from "./caves.js";
 
 const $ = (id) => document.getElementById(id);
 const SKY = 0x9cc4e4;
+const UNDERGROUND = 0x000000; // the sky, with the camera under the ground
 // Where fog starts and closes in, as shares of how far off ground's drawn.
 const FOG = { near: 0.5, far: 1.02 };
 const [NEAR_FT, NEAR_PER_FT, NEAR_MOST_FT] = [0.5, 0.001, 100]; // the camera's near plane, by how high it is
@@ -212,7 +213,7 @@ function start(world, changes, fresh) {
     const tries = [{ y: was.y }, { x: was.x, y: was.y }, { z: was.z, y: was.y }, { x: was.x, z: was.z }, { x: was.x, y: was.y, z: was.z }];
     return tries.map((t) => ({ ...now, ...t })).find((s) => !stuck(s)) ?? { ...now, x: was.x, y: was.y, z: was.z };
   };
-  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push, clear, keep });
+  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push, clear, keep, ghost: () => $("ghost").checked });
   const tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves });
   // The bottom bar's display toggles.
   $("showGrid").checked = grid.value === 1;
@@ -407,8 +408,16 @@ function start(world, changes, fresh) {
     // Under water, murky, close in.
     const surface = waterAt(camera.position.x, camera.position.z);
     const under = surface != null && camera.position.y < surface;
-    scene.fog.color.set(under ? UNDERWATER.color : SKY);
-    scene.background.set(under ? UNDERWATER.color : SKY);
+    // Under the ground, but where a cave opens over the camera, dark, the ground drawn as lines,
+    // and nothing on it.
+    const [cx, cz] = [camera.position.x, camera.position.z];
+    const buried = camera.position.y < groundAt(cx, cz) && !caves.mouth(Math.floor(cx / CELL_FT), Math.floor(cz / CELL_FT));
+    ground.setWired(buried);
+    for (const shown of [sea.mesh, falls.group, things.group, things.outlines]) shown.visible = !buried;
+    if (buried) for (const shown of [scatter.group, clutter.group, surfaces.group]) shown.visible = false;
+    const sky = buried ? UNDERGROUND : under ? UNDERWATER.color : SKY;
+    scene.fog.color.set(sky);
+    scene.background.set(sky);
     if (under) [scene.fog.near, scene.fog.far] = [UNDERWATER.nearFt, UNDERWATER.farFt];
     sun.position.set(x + 500, 1000, z + 300);
     sun.target.position.set(x, 0, z);

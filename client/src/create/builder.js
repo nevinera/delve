@@ -169,9 +169,11 @@ export class Builder {
   // landAt(x, z): the land's height, without what's built on it, for how fast flying goes and how
   // the camera looks down (moveBuilder's). clear(head, at): where the camera can be, looking from
   // `head` to `at`, kept out of rock. keep(was, now): the state to move to instead of `now`, from
-  // `was`, where something's in the way that moveBuilder doesn't know of.
-  constructor({ scene, camera, canvas, groundAt, landAt = groundAt, waterAt = () => null, at, state, push, clear = (head, to) => to, keep = (was, now) => now }) {
+  // `was`, where something's in the way that moveBuilder doesn't know of. ghost(): whether they're
+  // a ghost, flying anywhere, through everything.
+  constructor({ scene, camera, canvas, groundAt, landAt = groundAt, waterAt = () => null, at, state, push, clear = (head, to) => to, keep = (was, now) => now, ghost = () => false }) {
     this.push = push;
+    this.ghost = ghost;
     this.keep = keep;
     this.landAt = landAt;
     this.clear = clear;
@@ -224,7 +226,9 @@ export class Builder {
     };
     this.takeoff = false;
     const was = this.state;
-    this.state = this.keep(was, moveBuilder(this.state, input, dt, this.groundAt, this.push, this.waterAt, this.landAt));
+    this.state = this.ghost()
+      ? moveBuilder({ ...this.state, flying: true }, input, dt, () => -Infinity, undefined, undefined, this.landAt)
+      : this.keep(was, moveBuilder(this.state, input, dt, this.groundAt, this.push, this.waterAt, this.landAt));
     if (this.drag?.button === 2) this.cam.yaw = 0;
     const now = this.state;
     const speed = dt > 0 ? Math.hypot(now.x - was.x, now.z - was.z) / dt : 0;
@@ -243,7 +247,7 @@ export class Builder {
     const at = head.clone().addScaledVector(away, distance);
     // Over the ground, and over the water but while swimming.
     const floor = (this.state.swimming ? (this.groundAt(at.x, at.z) ?? SEA_LEVEL_FT) : this.standAt(at.x, at.z)) + 2;
-    if (at.y < floor) at.y = floor;
+    if (at.y < floor && !this.ghost()) at.y = floor;
     at.copy(this.clear(head, at));
     this.camera.position.copy(at);
     this.camera.lookAt(at.clone().sub(away));
