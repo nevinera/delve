@@ -1078,6 +1078,11 @@ export const BODY_LOOKS = {
     build: [0.45, 0.7],
     colors: { skin: ["#d07a2a", "#c86a20", "#e0e0d8"], hair: ["#1a1410", "#2a1a10"], secondary: ["#3a2a20"], eyes: ["#c8a040", "#80b0d0"] },
   },
+  housecat: {
+    height: [0.8, 1],
+    build: [0.35, 0.65],
+    colors: { skin: ["#c87a3a", "#8a8680", "#2a2626", "#e8e2d8", "#a88a68"], hair: ["#7a4420", "#4a4644", "#1a1818", "#9a8a78", "#5a4430"], secondary: ["#d08a8a"], eyes: ["#c8b030", "#70b040", "#d09030"] },
+  },
   deshaug: {
     height: [3.8, 4.4],
     build: [0.5, 0.75],

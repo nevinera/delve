@@ -32,7 +32,7 @@ import { serpentMesh } from "./serpent.js";
 // springing it forward.
 export const SPECIES = {
   wolf: { family: "canine", H: 2.05, L: 1.75, w: 0.3, neck: [0.52, 0.78], head: 1, muzzle: 1, pitch: 0.1, girth: [1, 1], neckGirth: 1, limb: 1, ears: "pointed", tail: "bushy", feet: "paw" },
-  panther: { family: "feline", H: 1.6, L: 2.5, w: 0.28, neck: [0.28, 0.58], head: 1.1, muzzle: 0.32, pitch: 0, girth: [0.95, 0.95], neckGirth: 1.2, limb: 1.35, ears: "cat", tail: "cat", feet: "paw" },
+  panther: { family: "feline", H: 1.6, L: 2.5, w: 0.28, neck: [0.28, 0.58], head: 1.45, muzzle: 0.32, pitch: 0, girth: [0.95, 0.95], neckGirth: 1.2, limb: 1.35, ears: "cat", tail: "cat", feet: "paw" },
   rat: { family: "canine", H: 1.15, L: 1.5, w: 0.28, neck: [0.15, 0.55], head: 1, muzzle: 1.05, pitch: 0.15, girth: [1.3, 1.2], neckGirth: 1.3, limb: 1, ears: "round", tail: "thin", feet: "paw" },
   bear: { family: "ursine", H: 2.3, L: 2.6, w: 0.45, neck: [0.1, 0.8], head: 1.45, muzzle: 0.55, pitch: 0.2, girth: [1.55, 1.5], neckGirth: 1.7, limb: 2.1, hump: 0.3, ears: "round", tail: "stub", feet: "paw" },
   boar: { family: "hoofed", H: 1.95, L: 1.9, w: 0.3, neck: [0.02, 0.62], head: 1.25, muzzle: 0.9, pitch: 0.35, girth: [1.3, 1.35], neckGirth: 1.6, limb: 1.1, hump: 0.15, ears: "small", tail: "tuft", feet: "hoof", tusks: true, snout: true },
@@ -43,8 +43,9 @@ export const SPECIES = {
   elephant: { family: "pachyderm", H: 9, L: 5.4, w: 1.3, neck: [-0.3, 1.2], head: 7.4, muzzle: 0.3, pitch: 0.25, girth: [1.45, 1.3], neckGirth: 1.35, limb: 1.6, ears: "fan", tail: "tuft", feet: "pad", trunk: true, ivory: true },
   crocodile: { family: "lizard", H: 0.55, L: 2.8, w: 0.42, neck: [0.05, 0.75], head: 1.15, muzzle: 2.1, pitch: 0, girth: [1.45, 0.6], neckGirth: 1.4, limb: 1.4, ears: "none", tail: "lizard", feet: "claw", crest: true, jaw: 2.4 },
   hyena: { family: "canine", H: 2.2, L: 1.7, w: 0.3, neck: [0.45, 0.7], head: 1.15, muzzle: 0.8, pitch: 0.15, girth: [1, 1.1], neckGirth: 1.25, limb: 1.05, ears: "round", tail: "bushy", feet: "paw", rump: 0.78, pattern: "spots", laugh: true },
-  lion: { family: "feline", H: 2.05, L: 2.6, w: 0.32, neck: [0.32, 0.6], head: 1.35, muzzle: 0.42, pitch: 0.05, girth: [1.1, 1.1], neckGirth: 1.3, limb: 1.6, ears: "cat", tail: "cat", tuft: true, feet: "paw", ruff: true },
-  tiger: { family: "feline", H: 1.9, L: 2.75, w: 0.32, neck: [0.28, 0.6], head: 1.3, muzzle: 0.36, pitch: 0.02, girth: [1.12, 1.1], neckGirth: 1.35, limb: 1.65, ears: "cat", tail: "cat", feet: "paw", pattern: "stripes" },
+  lion: { family: "feline", H: 2.05, L: 2.6, w: 0.32, neck: [0.32, 0.6], head: 1.75, muzzle: 0.42, pitch: 0.05, girth: [1.1, 1.1], neckGirth: 1.3, limb: 1.6, ears: "cat", tail: "cat", tuft: true, feet: "paw", ruff: true },
+  tiger: { family: "feline", H: 1.9, L: 2.75, w: 0.32, neck: [0.28, 0.6], head: 1.7, muzzle: 0.36, pitch: 0.02, girth: [1.12, 1.1], neckGirth: 1.35, limb: 1.65, ears: "cat", tail: "cat", feet: "paw", pattern: "stripes" },
+  housecat: { family: "feline", H: 1.2, L: 1.9, w: 0.24, neck: [0.32, 0.5], head: 1.75, muzzle: 0.22, pitch: 0, girth: [0.95, 1], neckGirth: 1.1, limb: 1.5, ears: "kitty", tail: "cat", feet: "paw", pattern: "stripes" },
   deshaug: { family: "canine", H: 2.6, L: 2.1, w: 0.34, neck: [0.45, 0.7], head: 1.2, muzzle: 0.8, pitch: 0.1, girth: [1.1, 1.05], neckGirth: 1.2, limb: 1.2, ears: "pointed", tail: "thin", feet: "paw", crest: true, breath: true },
   coalhound: { family: "canine", H: 2.8, L: 2.2, w: 0.36, neck: [0.4, 0.7], head: 1.25, muzzle: 0.85, pitch: 0.1, girth: [1.2, 1.15], neckGirth: 1.3, limb: 1.3, ears: "pointed", tail: "bushy", feet: "paw", crest: true },
   rhino: { family: "pachyderm", H: 4.2, L: 4.2, w: 0.8, neck: [-0.3, 1.7], head: 3.6, muzzle: 0.85, pitch: 0.35, girth: [1.7, 1.6], neckGirth: 1.5, limb: 1.8, ears: "small", tail: "tuft", feet: "pad", noseHorn: true },
@@ -277,7 +278,17 @@ export function quadrupedMesh(look) {
     const wide = dz <= 0.3 ? 1 : (sp.wide ?? (sp.snout ? 1.5 : sp.family === "hoofed" || sp.family === "ursine" ? 1.3 : 1));
     return { center: hp(0, dy, dz), dir: pitched(sp, 1, 0).map((v, i) => (i ? v : 0)), rx: rx * big * wide, rz: rz * big * flat * wide, bones };
   };
-  const skull = [
+  // A cat's face stays wide to the end: full cheeks and a blunt muzzle.
+  const feline = sp.family === "feline";
+  const skull = (feline ? [
+    [-0.14, 0.05, 0.13, 0.13],
+    [-0.06, 0.07, 0.27, 0.26],
+    [0.08, 0.05, 0.3, 0.26],
+    [0.24, 0.0, 0.28, 0.21],
+    [0.44, -0.06, 0.2, 0.14],
+    [0.62, -0.1, 0.14, 0.1],
+    [0.75, -0.12, 0.08, 0.06],
+  ] : [
     [-0.14, 0.05, 0.12, 0.12],
     [-0.06, 0.07, 0.25, 0.25],
     [0.08, 0.05, 0.27, 0.26],
@@ -285,7 +296,7 @@ export function quadrupedMesh(look) {
     [0.44, -0.05, 0.13, 0.1],
     [0.62, -0.1, 0.1, 0.07],
     [0.75, -0.13, 0.07, 0.05],
-  ].map(([dz, dy, rx, rz]) => headRing(dz, dy, rx * (scaly ? 1.2 : 1), rz * (sp.jaw ? (dz > 0.2 ? 0.5 : 0.7) : 1), headBones));
+  ]).map(([dz, dy, rx, rz]) => headRing(dz, dy, rx * (scaly ? 1.2 : 1), rz * (sp.jaw ? (dz > 0.2 ? 0.5 : 0.7) : 1), headBones));
   const nose = sp.snout ? bare : dark;
   out.tube(skull, 10, (band, angle) => (sp.feathered ? (band % 2 ? back : shade(back, 0.85)) : band >= 4 && Math.abs(angle) > 2.3 ? back : band >= 3 && Math.abs(angle) < 0.9 ? belly : fur), { capStart: true, capEnd: true, endColor: nose });
   if (sp.beak) {
@@ -313,13 +324,13 @@ export function quadrupedMesh(look) {
     [0.4, -0.18, 0.11, 0.05],
     [0.66, -0.22, 0.06, 0.035],
     ...(sp.jaw ? [[0.76, -0.2, 0.05, 0.025]] : []),
-  ].map(([dz, dy, rx, rz]) => headRing(dz, dy - (sp.jaw ? 0.03 * (sp.jaw - 1) : 0), rx * (scaly ? 1.3 : 1) * (sp.jaw ? 1.15 : 1), rz * (sp.jaw ?? 1), [["jaw", 1]]));
+  ].map(([dz, dy, rx, rz]) => headRing(dz, dy - (sp.jaw ? 0.03 * (sp.jaw - 1) : 0), rx * (scaly ? 1.3 : feline ? 1.35 : 1) * (sp.jaw ? 1.15 : 1), rz * (sp.jaw ?? 1), [["jaw", 1]]));
   out.tube(jaw, 8, (band, angle) => (sp.jaw && Math.abs(angle) > 0.9 ? fur : belly), { capStart: true, capEnd: true });
   if (!sp.snout && !scaly && !sp.beak) out.gem(hp(0, -0.11, 0.78), 0.05 * big, dark, headBones);
   for (const side of [-1, 1]) {
     // Eyes, forward on the skull, or at the sides for a lizard.
     const [ex, ey, ez] = scaly ? [0.2, 0.12, 0.12] : sp.beak ? [0.15, 0.16, 0.24] : [0.15, 0.1, 0.25];
-    const eye = sp.beak ? 1.8 : 1;
+    const eye = sp.beak ? 1.8 : feline ? 1.3 : 1;
     out.wear = null;
     out.gem(hp(side * ex, ey, ez), 0.04 * big * eye, c.eyes, headBones);
     out.gem(hp(side * (ex + 0.02), ey + 0.01, ez + 0.02), 0.018 * big * eye, dark, headBones);
@@ -344,6 +355,7 @@ export function quadrupedMesh(look) {
     const EARS = {
       pointed: [[0.13, 0.22, 0.02, 0.09], [0.16, 0.38, -0.01, 0.055], [0.18, 0.54, -0.05, 0.008]],
       short: [[0.14, 0.2, 0.02, 0.08], [0.16, 0.3, 0.0, 0.05], [0.17, 0.38, -0.02, 0.008]],
+      kitty: [[0.15, 0.2, -0.03, 0.1], [0.17, 0.3, -0.04, 0.07], [0.18, 0.4, -0.05, 0.01]],
       cat: [[0.17, 0.2, -0.04, 0.1], [0.2, 0.29, -0.05, 0.085], [0.21, 0.34, -0.06, 0.02]],
       round: [[0.18, 0.2, -0.02, 0.11], [0.24, 0.31, -0.04, 0.12], [0.27, 0.38, -0.05, 0.03]],
       small: [[0.16, 0.18, 0.0, 0.07], [0.24, 0.27, -0.03, 0.05], [0.3, 0.3, -0.04, 0.008]],
