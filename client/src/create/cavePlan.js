@@ -2,15 +2,16 @@ import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
-import { ARC_DEFAULTS, ARC_FT, NODE_DEFAULTS, NODE_SIZES, STEEP_DEG, arcCurve, arcSteepness } from "./caveLayout.js";
+import { ARC_DEFAULTS, ARC_FT, NODE_DEFAULTS, NODE_SIZES, STEEP_DEG, arcCurve, arcSteepness, carvePlan } from "./caveLayout.js";
 
 // The caves' plan tools, in the earth: chamber places rooms (nodes) on the points of the grid
 // round the camera, or an opening on the ground where the pointer meets it from under it, and
 // drags them elsewhere; tunnel joins two rooms with a tunnel (an arc), clicked one then the other,
 // and drags a selected tunnel's bends to curve it. Both select: a click picks one, shift-click
 // adds or takes away, and shift-drag boxes them in. The panel shows the details of what's
-// selected, to change all of it at once, or of what's placed next. Nothing's carved yet. Each
-// change undoes on its own.
+// selected, to change all of it at once, or of what's placed next. Each change carves what it
+// changed straight away (caveLayout.js's carvePlan), and undoes on its own. What's locked can't
+// be moved, changed or deleted, so it isn't carved again, keeping work done on it by hand.
 //
 // The plan's drawn as glowing blue lines, as thick, in feet, as what they stand for is big, so
 // they thin with distance: a room as a ring on its floor and a stalk as high as it is, a tunnel
@@ -28,6 +29,7 @@ const SELECTED_RGB = [1, 0.88, 0.3];
 const START_RGB = [0.5, 1, 0.63];
 const STEEP_RGB = [1, 0.25, 0.2];
 const OPENING_RGB = [0.45, 1, 0.9];
+const LOCKED_RGB = [0.75, 0.55, 1];
 const GLOW = 3; // how much wider the glow is than the line
 const UNDOS = 100;
 const SPOKES = 8; // how many spokes a room's ring has
@@ -40,8 +42,10 @@ const arcLine = (arc) => Math.max(0.25, arc.size / 20);
 export class CavePlan {
   // ray(): the pointer's THREE.Raycaster, or null off the view. groundHit(): where the pointer
   // meets the ground, [x, y, z], or null. groundAt(x, z): the ground's height.
-  constructor({ scene, camera, canvas, layout, ray, groundHit, groundAt }) {
-    Object.assign(this, { scene, camera, canvas, layout, ray, groundHit, groundAt });
+  // caves: the Caves to carve.
+  constructor({ scene, camera, canvas, layout, caves, ray, groundHit, groundAt }) {
+    Object.assign(this, { scene, camera, canvas, layout, caves, ray, groundHit, groundAt });
+    this.settled = false; // whether what was planned before has been carved
     this.tool = null; // "chamber" or "tunnel" while one's picked
     this.selected = new Set(); // the ids of the nodes and arcs selected
     this.focus = null; // the one selected last, whose details show
@@ -79,12 +83,13 @@ export class CavePlan {
       const picked = [...this.selected].map((id) => this.layout.get(id)).filter(Boolean);
       if (!picked.length) return (this.details[kind][key] = value);
       // Sizes and shapes are a room's or a tunnel's own; an opening's shape is always that.
-      const takes = (e) => (key !== "size" && key !== "shape") || (kindOf(e) === kind && !(key === "shape" && isOpening(e)));
+      const takes = (e) => !e.locked && ((key !== "size" && key !== "shape") || (kindOf(e) === kind && !(key === "shape" && isOpening(e))));
       const changing = picked.filter((e) => takes(e) && e[key] !== value);
       if (!changing.length) return;
       this.remember();
       for (const e of changing) e[key] = value;
       this.layout.version++;
+      this.carve();
     };
     $("planRock").addEventListener("change", () => changeDetail("rock", Number($("planRock").value)));
     $("planHewn").addEventListener("change", () => changeDetail("hewn", $("planHewn").checked));
@@ -93,6 +98,8 @@ export class CavePlan {
     for (const button of document.querySelectorAll("[data-plan-shape]")) button.addEventListener("click", () => changeDetail("shape", button.dataset.planShape));
     for (const button of document.querySelectorAll("[data-plan-style]")) button.addEventListener("click", () => changeDetail("style", button.dataset.planStyle));
     $("planDelete").addEventListener("click", () => this.deleteSelected());
+    $("planLock").addEventListener("click", () => this.lock(true));
+    $("planUnlock").addEventListener("click", () => this.lock(false));
     $("planUndo").addEventListener("click", () => this.undo());
     $("planArcSize").min = String(ARC_FT[0]);
     $("planArcSize").max = String(ARC_FT[1]);
@@ -131,13 +138,38 @@ export class CavePlan {
     this.layout.carved = carved;
     for (const id of [...this.selected]) if (!this.layout.get(id)) this.selected.delete(id);
     this.status("");
+    this.carve();
   }
 
   deleteSelected() {
-    if (!this.selected.size) return;
+    const deleting = [...this.selected].filter((id) => !this.layout.get(id)?.locked);
+    if (!deleting.length) return this.status(this.selected.size ? "unlock it to delete it" : "");
     this.remember();
-    for (const id of this.selected) this.layout.remove(id);
+    for (const id of deleting) this.layout.remove(id);
     this.select(null);
+    this.carve();
+  }
+
+  // Locks what's selected, or unlocks it.
+  lock(on) {
+    const changing = [...this.selected].map((id) => this.layout.get(id)).filter((e) => e && Boolean(e.locked) !== on);
+    if (!changing.length) return;
+    this.remember();
+    for (const e of changing) {
+      if (on) e.locked = true;
+      else delete e.locked;
+    }
+    this.layout.version++;
+  }
+
+  // Carves what's changed since it was last carved: fills in what it carved before, then carves it
+  // as it is now, with the neighbours that touches.
+  carve() {
+    const plan = carvePlan(this.layout, undefined, this.groundAt);
+    if (plan.fills.length || plan.opens.length) this.caves.carvePlan(plan, () => {});
+    this.layout.carved = plan.carved;
+    this.layout.version++;
+    this.status(plan.unfit.length ? `${plan.unfit.join(", ")} won't fit under the ground, so ${plan.unfit.length > 1 ? "aren't" : "isn't"} carved` : "");
   }
 
   status(text) {
@@ -242,7 +274,7 @@ export class CavePlan {
   down(e) {
     const at = this.pointerPx(e);
     const bend = this.pickBend(at);
-    if (bend !== null) return (this.drag = { id: this.focus, bend, before: this.layout.toJSON(), moved: false });
+    if (bend !== null && !this.layout.get(this.focus)?.locked) return (this.drag = { id: this.focus, bend, before: this.layout.toJSON(), moved: false });
     const node = this.pickNode(at);
     const arc = !node && this.pickArc(at)?.id;
     const picked = node || arc;
@@ -257,14 +289,15 @@ export class CavePlan {
           this.remember();
           const made = this.layout.addArc(this.start, node, this.details.arc);
           this.start = null;
-          return this.select(made.id);
+          this.select(made.id);
+          return this.carve();
         }
         this.start = node;
         return this.select(node);
       }
       if (!this.selected.has(node)) this.select(node);
       this.focus = node;
-      this.drag = { id: node, before: this.layout.toJSON(), moved: false };
+      if (!this.layout.nodes.get(node).locked) this.drag = { id: node, before: this.layout.toJSON(), moved: false };
       return;
     }
     if (arc) return this.select(arc);
@@ -272,7 +305,8 @@ export class CavePlan {
     if (spot) {
       this.remember();
       const details = spot.opening ? { ...this.details.node, shape: "opening" } : { ...this.details.node, shape: this.details.node.shape === "opening" ? NODE_DEFAULTS.shape : this.details.node.shape };
-      return this.select(this.layout.addNode(spot.at, details).id);
+      this.select(this.layout.addNode(spot.at, details).id);
+      return this.carve();
     }
     this.start = null;
     this.select(null);
@@ -331,6 +365,8 @@ export class CavePlan {
     if (this.drag?.moved) {
       this.history.push(this.drag.before);
       if (this.history.length > UNDOS) this.history.shift();
+      this.drag = null;
+      this.carve();
     }
     this.drag = null;
   }
@@ -370,6 +406,10 @@ export class CavePlan {
 
   // Each frame: the plan's shown in the earth, and with a plan tool.
   tick(inEarth) {
+    if (!this.settled) {
+      this.settled = true;
+      this.carve();
+    }
     this.group.visible = inEarth || Boolean(this.tool);
     if (!this.group.visible) return (this.label.hidden = true);
     const { clientWidth: w, clientHeight: h } = this.canvas;
@@ -417,7 +457,7 @@ export class CavePlan {
     return this.materials.get(key);
   }
 
-  // Draws the nodes and arcs: each room a ring round its floor as wide as it is, with thin spokes
+  // Draws the nodes and arcs, what's locked in violet: each room a ring round its floor as wide as it is, with thin spokes
   // in to its middle and a stalk up as high, each opening a ring on the ground with a stalk down into it, each tunnel along its
   // line, red where it's steep; what's selected in yellow, a tunnel's start in green, and the one
   // arc selected with its bends.
@@ -429,7 +469,7 @@ export class CavePlan {
     }
     for (const node of this.layout.nodes.values()) {
       const opening = isOpening(node);
-      const rgb = this.selected.has(node.id) ? SELECTED_RGB : node.id === this.start ? START_RGB : opening ? OPENING_RGB : CORE_RGB;
+      const rgb = this.selected.has(node.id) ? SELECTED_RGB : node.id === this.start ? START_RGB : node.locked ? LOCKED_RGB : opening ? OPENING_RGB : CORE_RGB;
       const [ring, stalk, ...spokes] = nodeLines(node);
       this.line(ring, nodeLine(node), rgb);
       this.line(stalk, nodeLine(node), rgb);
@@ -438,7 +478,7 @@ export class CavePlan {
     for (const arc of this.layout.arcs.values()) {
       const selected = this.selected.has(arc.id);
       const steep = arcSteepness(this.layout.copyOf(arc.id), 96);
-      const rgb = selected ? SELECTED_RGB : CORE_RGB;
+      const rgb = selected ? SELECTED_RGB : arc.locked ? LOCKED_RGB : CORE_RGB;
       this.line(
         steep.map((p) => p.at),
         arcLine(arc),
@@ -476,7 +516,11 @@ export class CavePlan {
       if (kind === "node") button.disabled = Boolean(opening) !== (button.dataset.planShape === "opening");
     }
     for (const button of document.querySelectorAll("[data-plan-style]")) button.setAttribute("aria-pressed", String(button.dataset.planStyle === d.style));
-    $("planDelete").disabled = !count;
+    const picked = [...this.selected].map((id) => this.layout.get(id)).filter(Boolean);
+    $("planDelete").disabled = !picked.some((e) => !e.locked);
+    $("planLock").disabled = !picked.some((e) => !e.locked);
+    $("planUnlock").disabled = !picked.some((e) => e.locked);
+    if (focus?.locked) $("planWhat").textContent += ", locked";
   }
 
   // The one arc selected's steepest climb, by it.

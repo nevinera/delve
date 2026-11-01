@@ -26,6 +26,7 @@ const FLOOR_RGB = [1, 0.78, 0.2]; // the grid: floors gold, ceilings silver
 const CEILING_RGB = [0.8, 0.84, 0.9];
 const POINT_PX = 4;
 const LINE_RGB = 0x5ad8ff;
+const EARTH_LINE_RGB = 0x8a8a8a;
 
 export class Caves {
   constructor(scene, renditions) {
@@ -125,7 +126,7 @@ export class Caves {
     const work = (columnsOf) => {
       const changed = new Set();
       for (const shape of fills) for (const key of carve(shape, columnsOf, groundAt, { fill: true })) changed.add(key);
-      for (const { shape, stone } of opens) for (const key of carve(shape, columnsOf, groundAt, { stone, own: true })) changed.add(key);
+      for (const { shape, stone, mouth } of opens) for (const key of carve(shape, columnsOf, groundAt, { stone, own: true, mouth })) changed.add(key);
       return changed;
     };
     if (!this.change(work, false, false)) return null;
@@ -291,6 +292,16 @@ export class Caves {
   // Shows or hides an overlay: "grid" or "lines".
   show(overlay, shown) {
     this.overlays[overlay].visible = shown;
+  }
+
+  // Draws the caves as they look from the earth, or as they look from in them or the open: from
+  // the earth, the rock's faces' edges alone, in dull gray.
+  fromEarth(on) {
+    this.group.visible = !on;
+    if (on) this.overlays.lines.visible = true;
+    this.lineMaterial.color.set(on ? EARTH_LINE_RGB : LINE_RGB);
+    this.lineMaterial.blending = on ? THREE.NormalBlending : THREE.AdditiveBlending;
+    this.lineMaterial.opacity = on ? 0.5 : 0.7;
   }
 
   make(key) {

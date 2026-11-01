@@ -134,7 +134,7 @@ export class Tools {
       groundHit: () => this.hit(),
     });
     this.build.onPick = (tool) => this.tool !== tool && this.pick(tool);
-    this.plan = new CavePlan({ scene, camera, canvas, layout, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT });
+    this.plan = new CavePlan({ scene, camera, canvas, layout, caves, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT });
     this.paths = new Paths(scene, canvas.parentElement, renditions, (x, z) => this.surface(x, z), (text) => ($("pathStatus").textContent = text));
     this.moving = null; // pins being dragged, { from, pins: [[pin, x, z]], before, moved }
     this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }

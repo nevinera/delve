@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { allStone, shapeBounds } from "../v2/caves.js";
+import { ROOF_FT, allStone, shapeBounds } from "../v2/caves.js";
 import { hash2, hashString, valueNoise } from "../world/noise.js";
 
 // A continent's cave layout (docs/formats/cave-layout.md): rooms (nodes) joined by tunnels
@@ -79,13 +79,14 @@ export class Layout {
     this.version++;
   }
 
-  // An element as carving sees it: a copy, an arc's with its ends' places.
+  // An element as carving sees it: a copy, an arc's with its ends' places, and without whether
+  // it's locked, which carving doesn't care about.
   copyOf(id) {
-    const node = this.nodes.get(id);
-    if (node) return structuredClone(node);
-    const arc = this.arcs.get(id);
-    if (!arc) return null;
-    return { ...structuredClone(arc), ends: [[...this.nodes.get(arc.from).at], [...this.nodes.get(arc.to).at]] };
+    const element = this.nodes.get(id) ?? this.arcs.get(id);
+    if (!element) return null;
+    const { locked, ...copy } = structuredClone(element);
+    if (!copy.from) return copy;
+    return { ...copy, ends: [[...this.nodes.get(copy.from).at], [...this.nodes.get(copy.to).at]] };
   }
 
   // Whether an element's changed since it was last carved: new, moved or otherwise changed, or
@@ -103,7 +104,11 @@ export class Layout {
 }
 
 // The shapes an element (as Layout's copyOf gives it) carves, as v2/caves.js's carve takes them.
-export const shapesOf = (copy) => (copy.ends ? arcShapes(copy) : nodeShapes(copy));
+// For now every room carves as a round borehole room, every tunnel as a wiggly borehole tunnel,
+// whatever their details say, and every opening as an opening.
+export const shapesOf = (copy) => (copy.ends ? arcShapes({ ...copy, ...PLAIN_ARC }) : nodeShapes(copy.shape === "opening" ? copy : { ...copy, ...PLAIN_NODE }));
+const PLAIN_NODE = { shape: "round", style: "borehole" };
+const PLAIN_ARC = { shape: "wiggly", style: "borehole" };
 
 // A room: shapes standing on its floor, sized to fit the sphere of its size. Cathedral is tall and
 // vaulted, narrowing upward, with lower aisles round it; round is a wide low dome with bays round
@@ -111,6 +116,8 @@ export const shapesOf = (copy) => (copy.ends ? arcShapes(copy) : nodeShapes(copy
 // lumpy.
 export function nodeShapes({ id, at, size, shape, style }) {
   const R = NODE_SIZES[size] / 2;
+  // An opening: a dome sunk into the ground, its top breaking through.
+  if (shape === "opening") return [{ kind: "dome", at: add(at, [0, -0.8 * R, 0]), radii: [0.6 * R, 1.2 * R, 0.6 * R], yaw: 0 }];
   const seed = hashString(id);
   const random = (k) => hash2(k, 0, seed);
   const yaw = random(0) * Math.PI;
@@ -224,14 +231,23 @@ export function shapeBox(shape) {
   return [[x0, y - shape.half[1], z0], [x1, y + shape.half[1], z1]];
 }
 
+// Whether a shape stays ROOF_FT under the ground, over its middle and its corners.
+function fits(shape, groundAt) {
+  const [[x0, , z0], [x1, top, z1]] = shapeBox(shape);
+  const [x, , z] = shape.at;
+  return [[x, z], [x0, z0], [x1, z0], [x0, z1], [x1, z1]].every(([a, b]) => top <= groundAt(a, b) - ROOF_FT);
+}
+
 const boxOf = (shapes) => shapes.map(shapeBox).reduce((a, b) => [a[0].map((v, k) => Math.min(v, b[0][k])), a[1].map((v, k) => Math.max(v, b[1][k]))]);
 const overlap = (a, b) => [0, 1, 2].every((k) => a[0][k] <= b[1][k] && b[0][k] <= a[1][k]);
 
 // What carving changes: rock filled back into what each changed element carved last time, then
 // the shapes each opens afresh, it and every unchanged element whose last carving the filling
 // cuts into, and the carved copies after. `ids`: the elements to carve (all changed ones, by
-// default); `uncarve`: the elements to fill in and not carve again.
-export function carvePlan(layout, { ids = layout.changes(), uncarve = [] } = {}) {
+// default); `uncarve`: the elements to fill in and not carve again. Only openings open through the
+// ground; given groundAt(x, z), the ground's height, a room that would come within ROOF_FT of
+// it isn't carved, and is listed in `unfit`.
+export function carvePlan(layout, { ids = layout.changes(), uncarve = [] } = {}, groundAt = null) {
   const redo = new Set(ids.filter((id) => !uncarve.includes(id)));
   const filled = [...new Set([...ids, ...uncarve])].filter((id) => layout.carved.has(id));
   const fills = filled.flatMap((id) => shapesOf(layout.carved.get(id)));
@@ -244,12 +260,18 @@ export function carvePlan(layout, { ids = layout.changes(), uncarve = [] } = {})
   }
   const carved = new Map(layout.carved);
   for (const id of [...ids, ...uncarve]) carved.delete(id);
-  const opens = [];
+  const [opens, unfit] = [[], []];
   for (const id of redo) {
     const copy = layout.copyOf(id);
     if (!copy) continue;
     carved.set(id, copy);
-    for (const shape of shapesOf(copy)) opens.push({ shape, stone: allStone(copy.rock, copy.hewn) });
+    const mouth = copy.shape === "opening";
+    const shapes = shapesOf(copy);
+    if (groundAt && !copy.ends && !mouth && shapes.some((s) => !fits(s, groundAt))) {
+      unfit.push(id);
+      continue;
+    }
+    for (const shape of shapes) opens.push({ shape, stone: allStone(copy.rock, copy.hewn), mouth });
   }
-  return { fills, opens, carved };
+  return { fills, opens, carved, unfit };
 }

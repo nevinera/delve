@@ -404,7 +404,7 @@
     <div data-config="chamber tunnel" hidden>
       <p class="create-note" data-only="chamber">Click a point of the grid to place a room on it, or the ground from under it to place an opening there. Drag a room or opening to move it. Points snap within 64 ft: fly closer to reach further ones.</p>
       <p class="create-note" data-only="tunnel">Click a room, then another, to join them with a tunnel. Drag a selected tunnel's bends to curve it. It's red where it climbs steeper than 45°.</p>
-      <p class="create-note">Click to select, shift-click to select more or fewer, shift-drag to box them in. Changes here change everything selected. Nothing's carved yet.</p>
+      <p class="create-note">Click to select, shift-click to select more or fewer, shift-drag to box them in. Changes here change everything selected, and carve straight away: for now every room carves as a round room and every tunnel as a wiggly one. Locked ones, in violet, can't be changed.</p>
       <p id="planWhat" class="create-note"></p>
       <label>rock
         <select id="planRock"><option value="0">jagged</option><option value="1">smooth</option><option value="2">carved</option><option value="3">mined</option></select>
@@ -438,6 +438,10 @@
         <button type="button" data-plan-style="mineshaft" aria-pressed="false" title="square, a level floor">mineshaft</button>
         <button type="button" data-plan-style="borehole" aria-pressed="false" title="round">borehole</button>
         <button type="button" data-plan-style="lavatube" aria-pressed="false" title="a flattened tube that swells and narrows">lava tube</button>
+      </div>
+      <div class="create-way">
+        <button type="button" id="planLock" title="keep what's selected from being moved, changed or deleted, so work done on it by hand stays">lock</button>
+        <button type="button" id="planUnlock" title="let what's selected be changed again; changing it carves it afresh, losing work done on it by hand">unlock</button>
       </div>
       <div class="create-way">
         <button type="button" id="planDelete">delete</button>

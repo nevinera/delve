@@ -29,7 +29,8 @@
         "shape": { "enum": ["cathedral", "round", "flat", "opening"] },
         "style": { "$ref": "#/$defs/style" },
         "rock": { "$ref": "#/$defs/rock" },
-        "hewn": { "type": "boolean" }
+        "hewn": { "type": "boolean" },
+        "locked": { "type": "boolean", "description": "kept from being moved, changed or deleted, so it isn't carved again" }
       }
     },
     "arc": {
@@ -44,7 +45,8 @@
         "shape": { "enum": ["straight", "wiggly", "zigzag", "deadends"] },
         "style": { "$ref": "#/$defs/style" },
         "rock": { "$ref": "#/$defs/rock" },
-        "hewn": { "type": "boolean" }
+        "hewn": { "type": "boolean" },
+        "locked": { "type": "boolean", "description": "kept from being moved, changed or deleted, so it isn't carved again" }
       }
     }
   }

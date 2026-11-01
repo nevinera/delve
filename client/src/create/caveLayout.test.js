@@ -99,6 +99,30 @@ describe("cave layout", () => {
     expect(spansAt(caves, 2, 2)).toEqual([]);
   });
 
+  it("doesn't count locking as a change", () => {
+    const layout = new Layout();
+    const node = layout.addNode([0, -100, 0]);
+    layout.carved = carvePlan(layout).carved;
+    node.locked = true;
+    expect(layout.changes()).toEqual([]);
+  });
+
+  it("opens only openings through the ground, and leaves out rooms too near it", () => {
+    const caves = new Caves(scene, flat(0));
+    const layout = new Layout();
+    const deep = layout.addNode([64, -60, 64], { size: "m" });
+    const shallow = layout.addNode([192, -10, 64], { size: "m" });
+    const opening = layout.addNode([64, 0, 192], { size: "m", shape: "opening" });
+    layout.addArc(deep.id, opening.id, { size: 8 });
+    const plan = carvePlan(layout, undefined, () => 0);
+    expect(plan.unfit).toEqual([shallow.id]);
+    caves.carvePlan(plan, () => {});
+    expect(spansAt(caves, 192, 64)).toEqual([]);
+    // The opening's air reaches over the ground; the tunnel's, part way along, stays under it.
+    expect(Math.max(...spansAt(caves, 64, 192).map((s) => s.ceiling))).toBeGreaterThan(0);
+    expect(Math.max(...spansAt(caves, 64, 100).map((s) => s.ceiling))).toBeLessThanOrEqual(-4);
+  });
+
   it("gives every element some shapes", () => {
     const layout = new Layout();
     for (const shape of ["cathedral", "round", "flat"]) for (const style of ["mineshaft", "borehole", "lavatube"]) expect(shapesOf(layout.copyOf(layout.addNode([0, 0, 0], { shape, style }).id)).length).toBeGreaterThan(0);

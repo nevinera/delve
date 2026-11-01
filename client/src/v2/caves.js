@@ -40,6 +40,7 @@ const C2_MOST = 31; // the most spans a cell has in c2; digits over it are runs 
 const C2_RUN = 33; // the longest run of empty cells a c2 digit stands for
 export const MAX_SPAN_FT = (TWO - 1) / 4;
 const MOUTH_FT = 2; // air opened through the ground reaches this far over it
+export const ROOF_FT = 4; // the least rock over air that doesn't open through the ground
 const MIN_ROCK_FT = 0.25; // spans closer than this join
 const MAX_SPANS = 63;
 const MIN_AIR_FT = 2;
@@ -128,8 +129,9 @@ export function fillRock(column, low, high, minAir = MIN_ROCK_FT) {
 // the tile's columns, made when `make` and it has none, or null; groundAt(ci, cj): the ground's
 // height at a continent cell's middle, or null where its cells aren't read. New air takes the
 // stone of the air it's dug from, the one most of it meets, or `stone` (always, with `own`).
-// Gives the "tx,tz" of the tiles changed.
-export function carve(shape, columnsOf, groundAt, { fill = false, stone = allStone(0, false), own = false } = {}) {
+// Without `mouth`, air stops ROOF_FT under the ground instead of opening through it. Gives the
+// "tx,tz" of the tiles changed.
+export function carve(shape, columnsOf, groundAt, { fill = false, stone = allStone(0, false), own = false, mouth = true } = {}) {
   const [x0, z0, x1, z1] = shapeBounds(shape);
   const cuts = [];
   for (let cj = Math.floor(z0 / CELL_FT); cj <= Math.floor(z1 / CELL_FT); cj++) {
@@ -137,7 +139,7 @@ export function carve(shape, columnsOf, groundAt, { fill = false, stone = allSto
       const r = fill ? reachCell(shape, ci, cj) : reach(shape, (ci + 0.5) * CELL_FT, (cj + 0.5) * CELL_FT);
       const ground = r && groundAt(ci, cj);
       if (ground == null || r[0] >= ground + MOUTH_FT) continue;
-      const [low, high] = [quarter(r[0]), quarter(Math.min(r[1], ground + MOUTH_FT))];
+      const [low, high] = [quarter(r[0]), quarter(Math.min(r[1], mouth || fill ? ground + MOUTH_FT : ground - ROOF_FT))];
       if (high > low) cuts.push({ ci, cj, low, high });
     }
   }

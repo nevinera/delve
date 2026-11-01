@@ -428,6 +428,7 @@ function start(world, changes, fresh) {
     ground.group.visible = !buried;
     // In the rock, the caves' outlines show whether they're toggled on or not.
     caves.show("lines", $("showCaveOutlines").checked || (buried && caves.solid(cx, camera.position.y, cz)));
+    caves.fromEarth(ghost());
     timed("ground", () => overhead.tick(buried, x, z, now - lastOverhead > OVERHEAD_EVERY_MS && (lastOverhead = now)));
     earth.tick(camera, ghost());
     for (const shown of [sea.mesh, falls.group, things.group, things.outlines]) shown.visible = !buried;
