@@ -964,6 +964,94 @@ export const BODY_LOOKS = {
     build: [0.5, 0.7],
     colors: { skin: ["#3a4a2a", "#4a4a30"], hair: ["#2a3420", "#2a2e20"], secondary: ["#b0a878", "#a09868"], eyes: ["#c8a020"] },
   },
+  hyena: {
+    height: [2.9, 3.3],
+    build: [0.4, 0.6],
+    colors: { skin: ["#a08a60", "#b09a6a", "#8a7a58"], hair: ["#3a2a1a", "#2a2018"], secondary: ["#2a2018"], eyes: ["#c8a040", "#a07030"] },
+  },
+  lion: {
+    height: [3.6, 4.2],
+    build: [0.45, 0.7],
+    colors: { skin: ["#c89a58", "#b88a4a", "#d0a868"], hair: ["#7a4a20", "#5a3418", "#a06a30"], secondary: ["#3a2a20"], eyes: ["#c8a040", "#b09030"] },
+  },
+  tiger: {
+    height: [3.4, 4],
+    build: [0.45, 0.7],
+    colors: { skin: ["#d07a2a", "#c86a20", "#e0e0d8"], hair: ["#1a1410", "#2a1a10"], secondary: ["#3a2a20"], eyes: ["#c8a040", "#80b0d0"] },
+  },
+  deshaug: {
+    height: [3.8, 4.4],
+    build: [0.5, 0.75],
+    flesh: "fire",
+    colors: { skin: ["#5a2a1e", "#4a2420", "#3a2a2a"], hair: ["#2a1a14", "#1a1410"], secondary: ["#ff8020"], eyes: ["#a0ff40", "#fff0a0"] },
+  },
+  coalhound: {
+    height: [4, 4.6],
+    build: [0.55, 0.8],
+    flesh: "molten",
+    colors: { skin: ["#3a3430", "#2a2624", "#4a3a30"], hair: ["#1a1614", "#2a2420"], secondary: ["#ff8020"], eyes: ["#ffc040", "#ff6020"] },
+  },
+  rhino: {
+    height: [5.5, 6.5],
+    build: [0.5, 0.8],
+    colors: { skin: ["#8a8580", "#7a756e", "#6a6560"], hair: ["#6a655e"], secondary: ["#a8a094", "#9a9488"], eyes: ["#2a2018"] },
+  },
+  hippo: {
+    height: [4.6, 5.4],
+    build: [0.6, 0.9],
+    colors: { skin: ["#7a6a70", "#6a5a62", "#8a7068"], hair: ["#5a4a50"], secondary: ["#c09090", "#b08880"], eyes: ["#2a2018"] },
+  },
+  mammoth: {
+    height: [12, 14],
+    build: [0.5, 0.8],
+    colors: { skin: ["#5a3e28", "#4a3020", "#6a4a30"], hair: ["#4a3020", "#3a2618", "#6a4a2a"], secondary: ["#3a2a20"], eyes: ["#2a2018"] },
+  },
+  deer: {
+    height: [4.3, 4.8],
+    build: [0.3, 0.5],
+    colors: { skin: ["#a06a3a", "#9a6a40", "#8a5a34"], hair: ["#6a4426", "#5a3a22"], eyes: ["#1a1010"] },
+  },
+  goat: {
+    height: [3.1, 3.5],
+    build: [0.35, 0.55],
+    colors: { skin: ["#e0d8c8", "#8a6a4a", "#3a3028", "#c0b098"], hair: ["#a09080", "#5a4a3a", "#2a2420"], eyes: ["#c8a040"] },
+  },
+  sheep: {
+    height: [3, 3.4],
+    build: [0.5, 0.7],
+    colors: { skin: ["#3a3028", "#e0d8c8", "#2a2420"], hair: ["#e8e0d0", "#d8d0c0", "#f0ece0", "#4a4038"], eyes: ["#c8a040"] },
+  },
+  cow: {
+    height: [5, 5.6],
+    build: [0.5, 0.75],
+    colors: { skin: ["#e8e0d0", "#e0d8c8", "#a06a3a"], hair: ["#2a2420", "#1a1614", "#6a4028"], secondary: ["#d8a8a0"], eyes: ["#1a1010"] },
+  },
+  turtle: {
+    height: [1.4, 1.8],
+    build: [0.4, 0.6],
+    colors: { skin: ["#6a7a4a", "#5a6a3a", "#7a7a5a"], hair: ["#4a5a2a", "#5a4a2a", "#3a4a3a"], secondary: ["#c8c090", "#b0b080"], eyes: ["#1a1010", "#c8a020"] },
+  },
+  tortoise: {
+    height: [2.8, 3.4],
+    build: [0.5, 0.7],
+    colors: { skin: ["#8a7a5a", "#7a6a50"], hair: ["#6a5030", "#5a4a30", "#7a6040"], secondary: ["#c0a878"], eyes: ["#1a1010"] },
+  },
+  gorilla: {
+    height: [4.6, 5.2],
+    build: [0.5, 0.8],
+    colors: { skin: ["#2a2624", "#3a3230", "#1e1c1a"], hair: ["#4a4440", "#8a8480", "#1a1816"], secondary: ["#3a3432"], eyes: ["#2a1a10"] },
+  },
+  owlbear: {
+    height: [4.4, 5],
+    build: [0.5, 0.8],
+    colors: { skin: ["#6a5038", "#5a4430", "#7a6a50"], hair: ["#8a7050", "#a08868", "#5a4a3a"], secondary: ["#d8b850", "#c8a040"], eyes: ["#f0c020", "#e08020"] },
+  },
+  myoxa: {
+    height: [4.8, 5.6],
+    build: [0.6, 0.9],
+    flesh: "fungal",
+    colors: { skin: ["#d8ccb0", "#c8c0a8", "#a8a090"], hair: ["#a03a2a", "#8a5a30", "#6a4a7a", "#c08a40"], secondary: ["#8a8070"], eyes: ["#101010", "#e0c040"] },
+  },
 };
 
 // A look with every choice made: the recipe's settings over its body's (BODY_LOOKS) and the

@@ -102,7 +102,7 @@ function build() {
   const sizes = looks.map(({ mesh }) => {
     mesh.geometry.computeBoundingBox();
     const box = mesh.geometry.boundingBox;
-    return Math.max(box.max.y, box.max.x - box.min.x, 0.65 * (box.max.z - box.min.z));
+    return Math.max(box.max.y, box.max.x - box.min.x, 0.9 * (box.max.z - box.min.z));
   });
   const size = Math.max(...sizes);
   looks.forEach(({ mesh }, k) => {

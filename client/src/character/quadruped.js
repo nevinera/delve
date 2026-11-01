@@ -1,4 +1,4 @@
-import { MeshOut } from "./body.js";
+import { MeshOut, fleshWear, hashAt } from "./body.js";
 import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "./rig.js";
 
 // Four-legged bodies, in families that move differently: canine (up on its toes: wolves, big cats,
@@ -20,6 +20,12 @@ import { TAU, add, ease, hex, hump, lerp, mirrored, mul, sampled, shade } from "
 // from the shoulders, [up, forward]; head: its size; muzzle: how long the face is; pitch: how far
 // the face tips down; girth: [across, deep]; neckGirth and limb: thickness; hump: a rise over the
 // shoulders; jaw: how much deeper the lower jaw is than usual; trunk and ivory: an elephant's.
+// rump: the hips' height to the shoulders' (a hyena's back slopes down to them); pattern: spots or
+// stripes in the hair color, or patches of it all round (a cow's); ruff: a lion's mane; breath: a mouth bone and a breath; horns: a
+// goat's, a cow's or a sheep's curl; wool: a fleece in the hair color; beard: a goat's;
+// noseHorn: a rhino's; wide: how much wider the muzzle is (a hippo's); shaggy: a coat of long
+// hair over the body (a mammoth's); shell: a turtle's; beak and feathered: an owlbear's head;
+// knuckles: walking on its fists; cap: a mushroom's cap over its back.
 export const SPECIES = {
   wolf: { family: "canine", H: 2.05, L: 1.75, w: 0.3, neck: [0.52, 0.78], head: 1, muzzle: 1, pitch: 0.1, girth: [1, 1], neckGirth: 1, limb: 1, ears: "pointed", tail: "bushy", feet: "paw" },
   panther: { family: "canine", H: 1.75, L: 1.95, w: 0.27, neck: [0.38, 0.6], head: 0.95, muzzle: 0.45, pitch: 0, girth: [0.9, 0.85], neckGirth: 1.05, limb: 1, ears: "short", tail: "long", feet: "paw" },
@@ -32,6 +38,23 @@ export const SPECIES = {
   basilisk: { family: "lizard", H: 0.8, L: 2.3, w: 0.4, neck: [0.35, 0.8], head: 1.2, muzzle: 0.75, pitch: 0, girth: [1.3, 0.75], neckGirth: 1.25, limb: 1.5, ears: "none", tail: "lizard", feet: "claw", crest: true },
   elephant: { family: "pachyderm", H: 9, L: 5.4, w: 1.3, neck: [-0.3, 1.2], head: 7.4, muzzle: 0.3, pitch: 0.25, girth: [1.45, 1.3], neckGirth: 1.35, limb: 1.6, ears: "fan", tail: "tuft", feet: "pad", trunk: true, ivory: true },
   crocodile: { family: "lizard", H: 0.55, L: 2.8, w: 0.42, neck: [0.05, 0.75], head: 1.15, muzzle: 2.1, pitch: 0, girth: [1.45, 0.6], neckGirth: 1.4, limb: 1.4, ears: "none", tail: "lizard", feet: "claw", crest: true, jaw: 2.4 },
+  hyena: { family: "canine", H: 2.2, L: 1.7, w: 0.3, neck: [0.45, 0.7], head: 1.15, muzzle: 0.8, pitch: 0.15, girth: [1, 1.1], neckGirth: 1.25, limb: 1.05, ears: "round", tail: "bushy", feet: "paw", rump: 0.78, pattern: "spots", laugh: true },
+  lion: { family: "canine", H: 2.6, L: 2.3, w: 0.32, neck: [0.4, 0.62], head: 1.2, muzzle: 0.55, pitch: 0.05, girth: [1, 0.95], neckGirth: 1.15, limb: 1.15, ears: "short", tail: "tuft", feet: "paw", ruff: true },
+  tiger: { family: "canine", H: 2.5, L: 2.5, w: 0.32, neck: [0.36, 0.62], head: 1.15, muzzle: 0.5, pitch: 0.05, girth: [1, 0.95], neckGirth: 1.15, limb: 1.15, ears: "short", tail: "long", feet: "paw", pattern: "stripes" },
+  deshaug: { family: "canine", H: 2.6, L: 2.1, w: 0.34, neck: [0.45, 0.7], head: 1.2, muzzle: 0.8, pitch: 0.1, girth: [1.1, 1.05], neckGirth: 1.2, limb: 1.2, ears: "pointed", tail: "thin", feet: "paw", crest: true, breath: true },
+  coalhound: { family: "canine", H: 2.8, L: 2.2, w: 0.36, neck: [0.4, 0.7], head: 1.25, muzzle: 0.85, pitch: 0.1, girth: [1.2, 1.15], neckGirth: 1.3, limb: 1.3, ears: "pointed", tail: "bushy", feet: "paw", crest: true },
+  rhino: { family: "pachyderm", H: 4.2, L: 4.2, w: 0.8, neck: [-0.3, 1.7], head: 3.6, muzzle: 0.85, pitch: 0.35, girth: [1.7, 1.6], neckGirth: 1.5, limb: 1.8, ears: "small", tail: "tuft", feet: "pad", noseHorn: true },
+  hippo: { family: "pachyderm", H: 3.3, L: 4.6, w: 0.85, neck: [-0.15, 1.6], head: 4, muzzle: 0.7, pitch: 0.1, girth: [2, 1.75], neckGirth: 1.8, limb: 1.9, ears: "small", tail: "tuft", feet: "pad", wide: 1.7, jaw: 1.6 },
+  mammoth: { family: "pachyderm", H: 10, L: 5.4, w: 1.35, neck: [-0.2, 1.2], head: 7.8, muzzle: 0.3, pitch: 0.25, girth: [1.5, 1.35], neckGirth: 1.4, limb: 1.5, ears: "small", tail: "tuft", feet: "pad", trunk: true, ivory: "curved", hump: 0.25, shaggy: true },
+  deer: { family: "hoofed", H: 2.9, L: 1.9, w: 0.27, neck: [0.95, 0.7], head: 0.95, muzzle: 1.0, pitch: 0.45, girth: [0.8, 0.85], neckGirth: 0.65, limb: 0.62, ears: "leaf", tail: "stub", feet: "hoof" },
+  goat: { family: "hoofed", H: 2.1, L: 1.6, w: 0.25, neck: [0.65, 0.55], head: 0.9, muzzle: 0.9, pitch: 0.55, girth: [0.95, 1], neckGirth: 0.75, limb: 0.65, ears: "leaf", tail: "stub", feet: "hoof", horns: "goat", beard: true },
+  sheep: { family: "hoofed", H: 1.9, L: 1.7, w: 0.28, neck: [0.5, 0.55], head: 0.9, muzzle: 0.8, pitch: 0.55, girth: [1.5, 1.45], neckGirth: 1.15, limb: 0.75, ears: "small", tail: "stub", feet: "hoof", wool: true },
+  cow: { family: "hoofed", H: 3.3, L: 3.2, w: 0.42, neck: [0.25, 0.9], head: 1.35, muzzle: 1.1, pitch: 0.6, girth: [1.45, 1.45], neckGirth: 1.2, limb: 1.1, ears: "small", tail: "tuft", feet: "hoof", horns: "cow", pattern: "patches" },
+  turtle: { family: "lizard", H: 0.75, L: 1.8, w: 0.55, neck: [0.15, 0.85], head: 0.95, muzzle: 0.5, pitch: 0, girth: [1.35, 0.8], neckGirth: 0.9, limb: 1.7, reach: 0.4, ears: "none", tail: "stub", feet: "claw", shell: true },
+  tortoise: { family: "lizard", H: 1.1, L: 2.2, w: 0.65, neck: [0.25, 0.9], head: 1.05, muzzle: 0.45, pitch: 0.05, girth: [1.45, 1], neckGirth: 1, limb: 2.3, reach: 0.35, ears: "none", tail: "stub", feet: "claw", shell: "high" },
+  gorilla: { family: "ursine", H: 3.2, L: 1.9, w: 0.48, neck: [0.15, 0.45], head: 1.2, muzzle: 0.25, pitch: 0.05, girth: [1.5, 1.35], neckGirth: 1.6, limb: 2.1, ears: "none", tail: "none", feet: "paw", rump: 0.68, knuckles: true, chestBeat: true },
+  owlbear: { family: "ursine", H: 2.6, L: 2.5, w: 0.45, neck: [0.15, 0.7], head: 1.6, muzzle: 0.3, pitch: 0.1, girth: [1.5, 1.45], neckGirth: 1.8, limb: 2, hump: 0.2, ears: "pointed", tail: "stub", feet: "paw", beak: true, feathered: true },
+  myoxa: { family: "ursine", H: 2.6, L: 2.8, w: 0.5, neck: [0.05, 0.75], head: 1.3, muzzle: 0.45, pitch: 0.25, girth: [1.6, 1.4], neckGirth: 1.6, limb: 2.2, ears: "none", tail: "stub", feet: "paw", cap: true, slow: true },
 };
 export const FAMILIES = ["canine", "ursine", "hoofed", "lizard", "pachyderm"];
 export const speciesOf = (look) => SPECIES[look.body] ?? SPECIES.wolf;
@@ -44,22 +67,25 @@ function joints(sp) {
   const { H, L, w, neck, family } = sp;
   const [hz, cz] = [-L / 2, L / 2];
   const k = H / 2.05;
+  // The hips' height, below the shoulders' for a sloping back.
+  const Hb = H * (sp.rump ?? 1);
   const spine3 = [0, H + 0.05 * k, cz];
   const head = add(spine3, [0, neck[0], neck[1]]);
   const out = [
     ["root", null, [0, 0, 0]],
-    ["pelvis", "root", [0, H, hz]],
-    ["spine_01", "pelvis", [0, H + 0.07 * k, hz + 0.34 * L]],
-    ["spine_02", "spine_01", [0, H + 0.1 * k, hz + 0.68 * L]],
+    ["pelvis", "root", [0, Hb, hz]],
+    ["spine_01", "pelvis", [0, Hb + (H - Hb) * 0.34 + 0.07 * k, hz + 0.34 * L]],
+    ["spine_02", "spine_01", [0, Hb + (H - Hb) * 0.68 + 0.1 * k, hz + 0.68 * L]],
     ["spine_03", "spine_02", spine3],
     ["neck_01", "spine_03", add(spine3, [0, 0.38 * neck[0], 0.51 * neck[1]])],
     ["head", "neck_01", head],
     ["jaw", "head", add(head, mul(pitched(sp, 0.12, -0.12), sp.head))],
   ];
   // Tail bones, back from the rump.
-  const tails = { bushy: [[0.1, -0.35], [-0.3, -0.45], [-0.4, -0.3]], long: [[-0.1, -0.45], [-0.55, -0.35], [-0.45, -0.45], [0.05, -0.4]], thin: [[-0.05, -0.4], [-0.3, -0.45], [-0.35, -0.5], [-0.25, -0.5]], stub: [[0.05, -0.3]], tuft: [[-0.1, -0.2], [-0.25, -0.05]], horse: [[0.0, -0.35], [-0.6, -0.15], [-0.9, -0.05]], lizard: [[-0.1, -0.5], [-0.12, -0.6], [-0.1, -0.6], [-0.08, -0.6], [-0.05, -0.55]] }[sp.tail];
+  if (sp.breath) out.push(["mouth", "head", add(head, mul(pitched(sp, 0.08 + 0.67 * sp.muzzle, -0.15), sp.head))]);
+  const tails = { none: [[0, -0.05]], bushy: [[0.1, -0.35], [-0.3, -0.45], [-0.4, -0.3]], long: [[-0.1, -0.45], [-0.55, -0.35], [-0.45, -0.45], [0.05, -0.4]], thin: [[-0.05, -0.4], [-0.3, -0.45], [-0.35, -0.5], [-0.25, -0.5]], stub: [[0.05, -0.3]], tuft: [[-0.1, -0.2], [-0.25, -0.05]], horse: [[0.0, -0.35], [-0.6, -0.15], [-0.9, -0.05]], lizard: [[-0.1, -0.5], [-0.12, -0.6], [-0.1, -0.6], [-0.08, -0.6], [-0.05, -0.55]] }[sp.tail];
   const scale = sp.tail === "lizard" ? L / 2 : k;
-  let at = [0, H + 0.05 * k, hz - 0.3 * k];
+  let at = [0, Hb + 0.05 * k, hz - 0.3 * k];
   tails.forEach(([dy, dz], i) => {
     out.push([`tail_0${i + 1}`, i ? `tail_0${i}` : "pelvis", at]);
     at = add(at, mul([0, dy, dz], scale));
@@ -81,13 +107,15 @@ function joints(sp) {
   }
   // Legs: upright under the body, or out to the sides.
   if (family === "lizard") {
-    const r = 0.75 * (sp.L / 2.3) * (sp.limb / 1.25);
+    const r = 0.75 * (sp.L / 2.3) * (sp.limb / 1.25) * (sp.reach ?? 1);
+    // A turtle's legs come out from under its shell, the elbows and knees low.
+    const knee = sp.shell ? 0.5 * H : H - 0.12 * k;
     out.push(
-      ["upperarm_l", "spine_03", [w, H - 0.1 * k, cz - 0.05]],
-      ["lowerarm_l", "upperarm_l", [w + r, H - 0.12 * k, cz + 0.02]],
+      ["upperarm_l", "spine_03", [w, sp.shell ? 0.6 * H : H - 0.1 * k, cz - 0.05]],
+      ["lowerarm_l", "upperarm_l", [w + r, knee, cz + 0.02]],
       ["hand_l", "lowerarm_l", [w + 1.6 * r, 0.08 * k, cz + 0.12]],
-      ["thigh_l", "pelvis", [w, H - 0.08 * k, hz]],
-      ["calf_l", "thigh_l", [w + 1.1 * r, H - 0.1 * k, hz + 0.08]],
+      ["thigh_l", "pelvis", [w, sp.shell ? 0.6 * H : H - 0.08 * k, hz]],
+      ["calf_l", "thigh_l", [w + 1.1 * r, sp.shell ? knee : H - 0.1 * k, hz + 0.08]],
       ["foot_l", "calf_l", [w + 1.7 * r, 0.08 * k, hz - 0.05]],
       ["ball_l", "foot_l", [w + 1.8 * r, 0.04 * k, hz + 0.12]],
     );
@@ -96,8 +124,8 @@ function joints(sp) {
       ["upperarm_l", "spine_03", [w, H - 0.25 * k, cz + 0.05]],
       ["lowerarm_l", "upperarm_l", [w, 0.5 * (H - 0.25 * k), cz - 0.05]],
       ["hand_l", "lowerarm_l", [w, 0.14 * k, cz + 0.02]],
-      ["thigh_l", "pelvis", [w, H - 0.1 * k, hz]],
-      ["calf_l", "thigh_l", [w, 0.52 * H, hz + 0.25 * k]],
+      ["thigh_l", "pelvis", [w, Hb - 0.1 * k, hz]],
+      ["calf_l", "thigh_l", [w, 0.52 * Hb, hz + 0.25 * k]],
       ["foot_l", "calf_l", [w, 0.12 * k, hz - 0.08 * k]],
       ["ball_l", "foot_l", [w, 0.06 * k, hz + 0.3 * k]],
     );
@@ -115,7 +143,7 @@ function joints(sp) {
   } else {
     const hoofed = family === "hoofed";
     const front = H - (hoofed ? 0.25 : 0.2) * k;
-    const back = H - 0.1 * k;
+    const back = Hb - 0.1 * k;
     out.push(
       ["upperarm_l", "spine_03", [w, front, cz + 0.1 * k]],
       ["lowerarm_l", "upperarm_l", [w, (hoofed ? 0.62 : 0.57) * front, cz + 0.02 * k]],
@@ -123,7 +151,7 @@ function joints(sp) {
       ["thigh_l", "pelvis", [w, back, hz]],
       ["calf_l", "thigh_l", [w, (hoofed ? 0.76 : 0.615) * back, hz + (hoofed ? 0.32 : 0.3) * k]],
       ["foot_l", "calf_l", [w, (hoofed ? 0.36 : 0.36) * back, hz - (hoofed ? 0.12 : 0.15) * k]],
-      ["ball_l", "foot_l", [w, (hoofed ? 0.1 : 0.06) * H, hz - 0.08 * k]],
+      ["ball_l", "foot_l", [w, (hoofed ? 0.1 : 0.06) * Hb, hz - 0.08 * k]],
     );
   }
   return out;
@@ -162,13 +190,28 @@ export function quadrupedMesh(look) {
   const scaly = sp.family === "lizard";
   const [fur, back, belly, bare, dark] = [c.skin, c.hair, scaly ? c.secondary : shade(c.skin, 1.3), c.secondary, [0.08, 0.07, 0.07]];
   const out = new MeshOut(index);
+  // Fire, molten rock, fungus and the like mark every face but the eyes.
+  const wear = fleshWear(look.flesh, look.height / 6 / s);
+  out.wear = wear;
   // Rings facing +z, their front down: angle 0 is the belly, ±π the back.
   const ring = (center, rx, rz, bones, push) => ({ center, dir: [0, 0, 1], rx, rz, bones, push });
-  const furColor = (angle) => (Math.abs(angle) > 2.1 ? back : Math.abs(angle) < 0.8 ? belly : fur);
+  const plain = (angle) => (sp.wool ? back : sp.pattern === "patches" ? fur : Math.abs(angle) > 2.1 ? back : Math.abs(angle) < 0.8 ? belly : fur);
+  // Spots and stripes in the hair color, over the sides and back.
+  const furColor = (angle, band = 0) => {
+    // A cow's patches go all round.
+    if (sp.pattern === "patches") return hashAt([Math.round(band / 2), Math.round(angle * 1.2)], 13) > 0.55 ? back : fur;
+    if (Math.abs(angle) < 0.9) return plain(angle);
+    if (sp.pattern === "spots" && hashAt([band, Math.round(angle * 5)], 11) > 0.68) return shade(back, 0.8);
+    if (sp.pattern === "stripes" && (band + Math.round(angle * 1.5)) % 2) return shade(back, 0.7);
+    return plain(angle);
+  };
 
   // The body, rump to the shoulders, deep at the chest, a darker saddle along the back; then the
   // neck, along the line from the shoulders to the head.
   const [hz, L, H] = [-sp.L / 2, sp.L, sp.H];
+  // The back's height at t along it, from the hips to the shoulders.
+  const Hb = H * (sp.rump ?? 1);
+  const backAt = (t) => Hb + (H - Hb) * Math.min(1, Math.max(0, t));
   const rise = (bias) => (sp.hump ? (angle) => sp.hump * bias * k * Math.max(0, -Math.cos(angle)) ** 2 : undefined);
   const trunk = [
     [-0.23, 0, 0.12, 0.12, [["pelvis", 1]]],
@@ -180,13 +223,37 @@ export function quadrupedMesh(look) {
     [0.97, -0.1, 0.41, 0.58, [["spine_03", 1]], 1],
     [1.14, 0, 0.37, 0.5, [["spine_03", 1]], 0.7],
   // A deeper body hangs below the spine rather than rising above it.
-  ].map(([t, dy, rx, rz, bones, h = 0]) => ring([0, H + (dy * gy - 0.6 * rz * Math.max(0, gy - 1)) * bulk, hz + t * L], rx * gx * bulk, rz * gy * bulk, bones, rise(h)));
+  ].map(([t, dy, rx, rz, bones, h = 0]) => ring([0, backAt(t) + (dy * gy - 0.6 * rz * Math.max(0, gy - 1)) * bulk, hz + t * L], rx * gx * bulk, rz * gy * bulk, bones, rise(h)));
   const neckRows = [
     [0.45, 0.3, 0.36, [["spine_03", 0.4], ["neck_01", 0.6]]],
     [0.7, 0.27, 0.3, [["neck_01", 1]]],
     [0.9, 0.25, 0.27, [["neck_01", 0.4], ["head", 0.6]]],
   ].map(([u, rx, rz, bones]) => ring(add(lerp(at("spine_03"), at("head"), u), [0, -0.04 * k, 0]), rx * sp.neckGirth * build * bulk, rz * sp.neckGirth * build * bulk * (scaly ? sp.girth[1] * 1.3 : 1), bones));
-  out.tube([...trunk, ...neckRows], 12, (band, angle) => furColor(angle), { capStart: true });
+  out.tube([...trunk, ...neckRows], 12, (band, angle) => furColor(angle, band), { capStart: true });
+  // A lion's mane round the neck and behind the head; a mammoth's long coat over the body.
+  if (sp.ruff) {
+    const ruff = [[0.05, 0.6], [0.35, 1.25], [0.65, 1.4], [0.92, 1.15], [1.05, 0.5]].map(([u, r]) => ring(add(lerp(at("spine_03"), at("head"), u), [0, 0.02 * k, -0.05 * k]), 0.36 * r * sp.neckGirth * bulk, 0.36 * r * sp.neckGirth * bulk, u < 0.5 ? [["spine_03", 0.4], ["neck_01", 0.6]] : [["neck_01", 0.4], ["head", 0.6]]));
+    out.tube(ruff, 12, (band) => (band % 2 ? back : shade(back, 0.85)), { capStart: true, capEnd: true });
+  }
+  if (sp.shaggy) {
+    const coat = trunk.slice(1).map((r) => ({ ...r, center: add(r.center, [0, -0.1 * r.rz, 0]), rx: r.rx * 1.12, rz: r.rz * 1.2 }));
+    out.tube(coat, 12, (band, angle) => (Math.abs(angle) < 0.6 ? shade(back, 0.8) : back), { capStart: true, capEnd: true });
+  }
+  // A turtle's shell, over the body from the rump to the shoulders, in plates.
+  if (sp.shell) {
+    const high = sp.shell === "high" ? 1.35 : 1;
+    const plates = [[-0.32, 0.45], [-0.18, 0.85], [0.1, 1], [0.45, 1.02], [0.8, 0.95], [1.05, 0.8], [1.18, 0.4]].map(([t, r]) => {
+      const row = trunk[2];
+      return { center: [0, backAt(t) + row.rz * 0.6 * high, hz + t * L], dir: [0, 0, 1], rx: row.rx * 1.55 * r, rz: row.rz * 1.7 * r * high, bones: [[t < 0.4 ? "pelvis" : t < 0.7 ? "spine_02" : "spine_03", 1]], push: (angle) => -Math.max(0, Math.cos(angle)) * row.rz * 0.5 * high };
+    });
+    out.tube(plates, 14, (band, angle) => (Math.abs(angle) < 1.3 ? shade(belly, 0.9) : (band + Math.round(angle * 2)) % 2 ? back : shade(back, 0.8)), { capStart: true, capEnd: true });
+  }
+  // A mushroom's cap over the back, spotted, gills beneath.
+  if (sp.cap) {
+    const middle = add(trunk[4].center, [0, trunk[4].rz * 0.6, 0]);
+    const dome = [[-0.05, 0.4], [-0.02, 1.15], [0.15, 1.25], [0.4, 1.05], [0.6, 0.6], [0.68, 0.1]].map(([dy, r]) => ({ center: add(middle, [0, dy * L, 0]), dir: [0, 1, 0], rx: r * 0.5 * L, rz: r * 0.48 * L, bones: [["spine_01", 1]] }));
+    out.tube(dome, 14, (band, angle) => (band === 0 ? shade(back, 0.5) : band >= 2 && hashAt([band, Math.round(angle * 3)], 7) > 0.68 ? [0.93, 0.9, 0.82] : back), { capStart: true, capEnd: true });
+  }
 
   // The head, back of the skull to the nose, the lower jaw on its own bone. Places on the head are
   // [across, up, forward] from its joint for a head of size 1, the face stretched by the muzzle.
@@ -195,7 +262,7 @@ export function quadrupedMesh(look) {
   const flat = scaly ? 0.65 : 1;
   const hp = (x, dy, dz, tip) => add(at("head"), add([x * big, 0, 0], mul(pitched(sp, snout(dz), dy * flat, tip), big)));
   const headRing = (dz, dy, rx, rz, bones) => {
-    const wide = dz <= 0.3 ? 1 : sp.snout ? 1.5 : sp.family === "hoofed" || sp.family === "ursine" ? 1.3 : 1;
+    const wide = dz <= 0.3 ? 1 : (sp.wide ?? (sp.snout ? 1.5 : sp.family === "hoofed" || sp.family === "ursine" ? 1.3 : 1));
     return { center: hp(0, dy, dz), dir: pitched(sp, 1, 0).map((v, i) => (i ? v : 0)), rx: rx * big * wide, rz: rz * big * flat * wide, bones };
   };
   const skull = [
@@ -208,7 +275,26 @@ export function quadrupedMesh(look) {
     [0.75, -0.13, 0.07, 0.05],
   ].map(([dz, dy, rx, rz]) => headRing(dz, dy, rx * (scaly ? 1.2 : 1), rz * (sp.jaw ? (dz > 0.2 ? 0.5 : 0.7) : 1), headBones));
   const nose = sp.snout ? bare : dark;
-  out.tube(skull, 10, (band, angle) => (band >= 4 && Math.abs(angle) > 2.3 ? back : band >= 3 && Math.abs(angle) < 0.9 ? belly : fur), { capStart: true, capEnd: true, endColor: nose });
+  out.tube(skull, 10, (band, angle) => (sp.feathered ? (band % 2 ? back : shade(back, 0.85)) : band >= 4 && Math.abs(angle) > 2.3 ? back : band >= 3 && Math.abs(angle) < 0.9 ? belly : fur), { capStart: true, capEnd: true, endColor: nose });
+  if (sp.beak) {
+    // A hooked beak over the face, its lower half on the jaw.
+    out.path([hp(0, 0.02, 0.3), hp(0, 0.0, 0.5), hp(0, -0.08, 0.62), hp(0, -0.22, 0.6)], [0.13, 0.1, 0.05, 0.005].map((r) => r * big), 8, () => bare, () => headBones, { capStart: true, capEnd: true, carry: true });
+    out.path([hp(0, -0.12, 0.3), hp(0, -0.16, 0.48)], [0.09 * big, 0.01 * big], 6, () => shade(bare, 0.8), () => [["jaw", 1]], { capStart: true });
+  }
+  if (sp.noseHorn) {
+    // A great horn on the end of the snout and a smaller one behind it.
+    const horn = shade(bare, 0.9);
+    out.path([hp(0, -0.02, 0.62), hp(0, 0.2, 0.68), hp(0, 0.42, 0.62)], [0.1, 0.06, 0.006].map((r) => r * big), 6, () => horn, () => headBones, { capStart: true, carry: true });
+    out.path([hp(0, 0.02, 0.4), hp(0, 0.18, 0.42)], [0.07 * big, 0.006 * big], 6, () => horn, () => headBones, { capStart: true });
+  }
+  const HORNS = {
+    goat: [[0.08, 0.2, 0.0, 0.045], [0.12, 0.42, -0.12, 0.035], [0.16, 0.52, -0.32, 0.025], [0.2, 0.45, -0.5, 0.005]],
+    cow: [[0.12, 0.2, -0.02, 0.05], [0.3, 0.22, 0.0, 0.04], [0.42, 0.32, 0.04, 0.03], [0.45, 0.45, 0.04, 0.005]],
+  }[sp.horns];
+  if (HORNS) {
+    for (const side of [-1, 1]) out.path(HORNS.map(([x, dy, dz]) => hp(side * x, dy, dz, 0)), HORNS.map((r) => r[3] * big), 6, () => [0.78, 0.72, 0.6], () => headBones, { capStart: true, carry: true });
+  }
+  if (sp.beard) out.path([hp(0, -0.2, 0.45), hp(0, -0.34, 0.42), hp(0, -0.44, 0.36)], [0.04, 0.035, 0.005].map((r) => r * big), 5, () => back, () => [["jaw", 1]], { capStart: true });
   // A deep lower jaw (a crocodile's) runs the length of the snout, scaled above and pale below.
   const jaw = [
     [0.14, -0.12, 0.15, 0.07],
@@ -217,12 +303,15 @@ export function quadrupedMesh(look) {
     ...(sp.jaw ? [[0.76, -0.2, 0.05, 0.025]] : []),
   ].map(([dz, dy, rx, rz]) => headRing(dz, dy - (sp.jaw ? 0.03 * (sp.jaw - 1) : 0), rx * (scaly ? 1.3 : 1) * (sp.jaw ? 1.15 : 1), rz * (sp.jaw ?? 1), [["jaw", 1]]));
   out.tube(jaw, 8, (band, angle) => (sp.jaw && Math.abs(angle) > 0.9 ? fur : belly), { capStart: true, capEnd: true });
-  if (!sp.snout && !scaly) out.gem(hp(0, -0.11, 0.78), 0.05 * big, dark, headBones);
+  if (!sp.snout && !scaly && !sp.beak) out.gem(hp(0, -0.11, 0.78), 0.05 * big, dark, headBones);
   for (const side of [-1, 1]) {
     // Eyes, forward on the skull, or at the sides for a lizard.
-    const [ex, ey, ez] = scaly ? [0.2, 0.12, 0.12] : [0.15, 0.1, 0.25];
-    out.gem(hp(side * ex, ey, ez), 0.04 * big, c.eyes, headBones);
-    out.gem(hp(side * (ex + 0.02), ey + 0.01, ez + 0.02), 0.018 * big, dark, headBones);
+    const [ex, ey, ez] = scaly ? [0.2, 0.12, 0.12] : sp.beak ? [0.15, 0.16, 0.24] : [0.15, 0.1, 0.25];
+    const eye = sp.beak ? 1.8 : 1;
+    out.wear = null;
+    out.gem(hp(side * ex, ey, ez), 0.04 * big * eye, c.eyes, headBones);
+    out.gem(hp(side * (ex + 0.02), ey + 0.01, ez + 0.02), 0.018 * big * eye, dark, headBones);
+    out.wear = wear;
     ear(side);
     if (sp.tusks) {
       // Up from the lower jaw, curving out.
@@ -232,8 +321,8 @@ export function quadrupedMesh(look) {
     if (sp.antlers) antlers(side);
     if (sp.ivory) {
       // Forward from the upper jaw, curving up.
-      const points = [hp(side * 0.17, -0.2, 0.4), hp(side * 0.24, -0.42, 0.75), hp(side * 0.27, -0.42, 1.1), hp(side * 0.25, -0.25, 1.35)];
-      out.path(points, [0.05, 0.045, 0.035, 0.005].map((r) => r * big), 6, () => [0.92, 0.88, 0.76], () => headBones, { carry: true });
+      const points = sp.ivory === "curved" ? [hp(side * 0.17, -0.2, 0.4), hp(side * 0.3, -0.36, 0.75), hp(side * 0.42, -0.32, 1.1), hp(side * 0.32, -0.08, 1.3), hp(side * 0.14, 0.12, 1.25)] : [hp(side * 0.17, -0.2, 0.4), hp(side * 0.24, -0.42, 0.75), hp(side * 0.27, -0.42, 1.1), hp(side * 0.25, -0.25, 1.35)];
+      out.path(points, (sp.ivory === "curved" ? [0.06, 0.055, 0.045, 0.03, 0.005] : [0.05, 0.045, 0.035, 0.005]).map((r) => r * big), 6, () => [0.92, 0.88, 0.76], () => headBones, { carry: true });
     }
   }
 
@@ -300,6 +389,8 @@ export function quadrupedMesh(look) {
       // Wide round pads.
       if (sp.feet === "pad") return [[[wx, 0.1 * k, wz], 0.09, b], [[wx, 0.0, wz + 0.02], 0.095, b, shade(fur, 0.75)]];
       if (sp.feet === "claw") return [[[wx + x * 0.06, 0.04, wz + 0.1], 0.07, b], [[wx + x * 0.1, 0.02, wz + 0.22], 0.035, b, shade(fur, 0.7)]];
+      // A fist on its knuckles.
+      if (sp.knuckles && toward === 0) return [[[wx, 0.12, wz + 0.04], 0.1, b], [[wx, 0.06, wz + 0.1], 0.1, b, shade(fur, 0.7)]];
       const flatFoot = sp.family === "ursine";
       return [[[wx, flatFoot ? 0.09 : 0.11, wz + 0.07 + toward], 0.085, b], [[wx, 0.05, wz + (flatFoot ? 0.3 : 0.2) + toward], flatFoot ? 0.07 : 0.06, b, flatFoot ? shade(fur, 0.6) : undefined]];
     };
@@ -336,6 +427,7 @@ export function quadrupedMesh(look) {
   const tailPoints = [...tailNames, "tail_end"].map(at);
   const tailBones = tailPoints.map((_, i) => [[tailNames[Math.min(i, tailNames.length - 1)], 1]]);
   const thick = {
+    none: [0.01, 0.005],
     bushy: [0.1, 0.15, 0.16, 0.02],
     long: [0.08, 0.07, 0.06, 0.05, 0.02],
     thin: [0.07, 0.05, 0.035, 0.02, 0.006],
@@ -457,6 +549,16 @@ function familyClips(sp) {
           return { bones: { neck_01: [-0.2 * go, 0, 0], jaw: [0.9 * open, 0, 0], ...both("upperarm", [0, 0, 0.3 * go]), ...tail(u, 0.3 * go) }, pelvis: [0, 0.15 * go * k, 1.2 * go * k] };
         },
       ],
+      // Into its shell: head, legs and tail drawn in, the shell down on the ground, then out again.
+      Hide: [
+        1.6,
+        (t) => {
+          const u = t / 1.6;
+          const tuck = hump(u, 0, 0.2, 0.75, 1);
+          const small = [1 - 0.75 * tuck, 1 - 0.75 * tuck, 1 - 0.75 * tuck];
+          return { bones: { neck_01: [0.3 * tuck, 0, 0] }, scale: { neck_01: small, upperarm_l: small, upperarm_r: small, thigh_l: small, thigh_r: small, tail_01: small }, pelvis: [0, -0.5 * sp.H * tuck, 0] };
+        },
+      ],
       // Hissing, the front up off the ground and the jaw wide: the cast.
       Hiss: [
         2,
@@ -496,6 +598,33 @@ function familyClips(sp) {
       Howl: [2.2, call(2.2, 0.45)],
       Roar: [1.8, call(1.8, -0.15)],
     });
+    if (sp.laugh) {
+      // A hyena's cackle: head low and bobbing, the jaw snapping open and shut.
+      clips.Laugh = [
+        2,
+        (t) => {
+          const u = t / 2;
+          const on = hump(u, 0, 0.1, 0.85, 1);
+          const bob = Math.max(0, Math.sin(TAU * u * 7)) * on;
+          return { bones: { neck_01: [0.15 * on - 0.25 * bob, 0, 0], head: [-0.2 * bob, 0, 0], jaw: [0.55 * bob, 0, 0], spine_02: [0.06 * bob, 0, 0], ...tail(u * 3, 0.2 * on) }, pelvis: [0, -0.03 * bob * k, 0] };
+        },
+      ];
+    }
+    if (sp.breath) {
+      // Drawing breath, head up, then fire: the head thrust forward and low, sweeping across.
+      clips.Breathe = [
+        2.6,
+        (t) => {
+          const u = t / 2.6;
+          const draw = hump(u, 0, 0.18, 0.22, 0.3);
+          const blow = hump(u, 0.24, 0.3, 0.8, 0.92);
+          const sweep = Math.sin(TAU * ((u - 0.3) / 0.5) * 0.5 - Math.PI / 2) * blow;
+          return { bones: { neck_01: [-0.4 * draw + 0.25 * blow, 0.4 * sweep, 0], head: [0.2 * draw - 0.1 * blow, 0.15 * sweep, 0], jaw: [0.6 * hump(u, 0.25, 0.3, 0.82, 0.9), 0, 0], ...both("upperarm", [-0.15 * blow, 0, 0]), ...both("thigh", [0.1 * blow, 0, 0]) }, pelvis: [0, -0.06 * blow * k, 0] };
+        },
+        0,
+        [0.3 * 2.6, 0.84 * 2.6],
+      ];
+    }
   }
   if (sp.family === "ursine") {
     Object.assign(clips, {
@@ -514,6 +643,28 @@ function familyClips(sp) {
       ],
       Roar: [1.8, call(1.8, -0.15)],
     });
+    if (sp.chestBeat) {
+      // Up on its legs, beating its chest with each fist in turn, roaring.
+      clips.ChestBeat = [
+        2.4,
+        (t) => {
+          const u = t / 2.4;
+          const up = hump(u, 0, 0.2, 0.8, 1);
+          const beat = Math.sin(TAU * u * 5) * hump(u, 0.2, 0.25, 0.75, 0.8);
+          return { bones: { ...rear(up, 0.9), upperarm_l: [-1.5 * up + 0.3 * beat, 0, -0.4 * up], upperarm_r: [-1.5 * up - 0.3 * beat, 0, 0.4 * up], lowerarm_l: [1.6 * up, 0, 0], lowerarm_r: [1.6 * up, 0, 0], jaw: [0.5 * up, 0, 0], neck_01: [-0.2 * up, 0, 0] }, pelvis: [0, 0.1 * up * k, -0.1 * up * k] };
+        },
+      ];
+      // A double-fisted slam: up, then both arms brought down hard.
+      clips.Slam = [
+        1.3,
+        (t) => {
+          const u = t / 1.3;
+          const up = hump(u, 0.05, 0.35, 0.45, 0.6);
+          const down = hump(u, 0.45, 0.55, 0.65, 1);
+          return { bones: { ...rear(up, 0.7), ...both("upperarm", [-2.2 * up + 0.4 * down, 0, 0]), ...both("lowerarm", [0.4 * up, 0, 0]), neck_01: [0.2 * down, 0, 0] }, pelvis: [0, -0.1 * down * k, 0.3 * down * k] };
+        },
+      ];
+    }
   }
   if (sp.family === "pachyderm") {
     // Ears out from the head by `flare`, flapping by `flap`.
@@ -549,6 +700,15 @@ function familyClips(sp) {
           const up = hump(u, 0.05, 0.4, 0.5, 0.62);
           const slam = hump(u, 0.55, 0.62, 0.7, 0.95);
           return { bones: { ...rear(up, 0.4), ...both("upperarm", [-0.7 * up, 0, 0]), ...both("lowerarm", [0.9 * up, 0, 0]), ...ears(1.1 * up), neck_01: [-0.1 * up + 0.1 * slam, 0, 0] }, pelvis: [0, (0.05 * up - 0.04 * slam) * k, 0.1 * slam * k] };
+        },
+      ],
+      // Head down, a heavy burst forward.
+      Charge: [
+        1.5,
+        (t) => {
+          const u = t / 1.5;
+          const go = hump(u, 0.1, 0.35, 0.65, 1);
+          return { bones: { ...legs(sp, (u * 3) % 1, 0.45 * go, 0.5 * go, { back_l: 0, front_l: 0.25, back_r: 0.5, front_r: 0.75 }), neck_01: [0.4 * go, 0, 0], head: [0.15 * go, 0, 0], ...ears(0.6 * go) }, pelvis: [0, -0.04 * go * k, 1.4 * go * k] };
         },
       ],
       // A trumpet: head up, ears flared wide.
@@ -628,7 +788,14 @@ function gallop(sp, duration, swing) {
 // The clips for a four-legged mesh, by name.
 export function quadrupedClips(mesh, look) {
   const sp = speciesOf(look);
-  const clips = Object.entries(familyClips(sp)).map(([name, [duration, pose, speed]]) => sampled(mesh, name, duration, sp.trunk ? withTrunk(name, duration, pose) : pose, speed));
+  // A slow species does everything a third slower.
+  const slow = sp.slow ? 1.35 : 1;
+  const clips = Object.entries(familyClips(sp)).map(([name, [duration, pose, speed, breath]]) => {
+    const moved = sp.trunk ? withTrunk(name, duration, pose) : pose;
+    const clip = sampled(mesh, name, duration * slow, (t) => moved(t / slow), (speed ?? 0) / slow);
+    if (breath) clip.userData.breath = breath.map((t) => t * slow);
+    return clip;
+  });
   return new Map(clips.map((c) => [c.name, c]));
 }
 
@@ -650,9 +817,11 @@ function withTrunk(name, duration, pose) {
 export function quadrupedRoles(look) {
   const sp = speciesOf(look);
   const base = { idle: "Idle_Loop", walk: "Walk_Loop", run: "Run_Fwd_Loop", hit: "Hit", death: "Death", shoot: null, cast: null, battleCry: "Roar" };
-  if (sp.family === "lizard") return { ...base, attack: "Bite", bigAttack: "Lunge", cast: look.body === "basilisk" ? "Hiss" : null, battleCry: "Hiss" };
+  if (sp.family === "lizard") return { ...base, attack: "Bite", bigAttack: "Lunge", cast: look.body === "basilisk" ? "Hiss" : null, battleCry: "Hiss", hit: sp.shell ? "Hide" : "Hit" };
+  if (sp.chestBeat) return { ...base, attack: "Bite", bigAttack: "Slam", battleCry: "ChestBeat" };
   if (sp.family === "ursine") return { ...base, attack: "Bite", bigAttack: "Rear", cast: "Roar" };
-  if (sp.family === "pachyderm") return { ...base, attack: "Gore", bigAttack: "Stomp" };
+  if (sp.family === "pachyderm") return sp.trunk ? { ...base, attack: "Gore", bigAttack: "Stomp" } : { ...base, attack: sp.noseHorn ? "Gore" : "Bite", bigAttack: "Charge" };
   if (sp.family === "hoofed") return sp.tail === "horse" ? { ...base, attack: "Kick", bigAttack: "Rear" } : { ...base, attack: "Gore", bigAttack: "Charge" };
-  return { ...base, attack: "Bite", bigAttack: "Leap", cast: look.body === "wolf" ? "Howl" : null, battleCry: look.body === "wolf" ? "Howl" : "Roar" };
+  const howls = look.body === "wolf" || look.body === "deshaug";
+  return { ...base, attack: "Bite", bigAttack: "Leap", cast: look.body === "wolf" ? "Howl" : null, breath: sp.breath ? "Breathe" : null, battleCry: sp.laugh ? "Laugh" : howls ? "Howl" : "Roar" };
 }

@@ -87,3 +87,28 @@ describe("roleClips", () => {
     expect(Math.abs(at("hand_l").y - at("hand_r").y)).toBeGreaterThan(0.4);
   });
 });
+
+describe("the second list's four-legged species", () => {
+  it("stands each on the ground", () => {
+    for (const body of ["hyena", "lion", "tiger", "deshaug", "coalhound", "rhino", "hippo", "mammoth", "deer", "goat", "sheep", "cow", "turtle", "tortoise", "gorilla", "owlbear", "myoxa"]) {
+      const look = resolveRecipe({ body });
+      const ys = quadrupedMesh(look).positions.filter((_, i) => i % 3 === 1);
+      expect(Math.abs(Math.min(...ys)), body).toBeLessThan(look.height * 0.1);
+      expect(Math.max(...ys), body).toBeGreaterThan(look.height * 0.8);
+    }
+  });
+
+  it("breathes fire from a deshaug's mouth, laughs as a hyena, beats its chest as a gorilla and hides in a turtle's shell", () => {
+    const of = (body) => {
+      const look = resolveRecipe({ body });
+      const mesh = characterMesh(look);
+      return { mesh, clips: characterClips(mesh, baked), roles: roleClips(look, mesh.userData.skeleton) };
+    };
+    const deshaug = of("deshaug");
+    expect(deshaug.mesh.skeleton.getBoneByName("mouth")).toBeTruthy();
+    expect(deshaug.clips.get(deshaug.roles.breath).userData.breath).toHaveLength(2);
+    expect(of("hyena").roles.battleCry).toBe("Laugh");
+    expect(of("gorilla").roles.battleCry).toBe("ChestBeat");
+    expect(of("turtle").roles.hit).toBe("Hide");
+  });
+});

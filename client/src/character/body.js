@@ -126,6 +126,12 @@ const FLESH_WEAR = {
   fungal: { jitter: 0.01 },
   molten: { jitter: 0.03 },
 };
+// How a flesh wears every face, for MeshOut's `wear`, jittering corners by its jitter times `s`;
+// null for living flesh and bone.
+export function fleshWear(flesh, s) {
+  const wear = FLESH_WEAR[flesh];
+  return wear ? { style: flesh === "rotting" ? "rot" : flesh, seed: 31, jitter: wear.jitter * s } : null;
+}
 const UNCLOTHED = ["fur", "shell", "chitin", "bark", "fungal", "wrapped", "molten", "spirit", "shadow"];
 export const FLESH_KINDS = ["living", "bone", ...Object.keys(FLESH_WEAR)];
 
