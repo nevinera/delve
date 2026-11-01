@@ -1,4 +1,5 @@
 import { dressArmor } from "./armor.js";
+import { buildExtras, extraJoints } from "./extras.js";
 import { HELD, heldBy } from "./weapons.js";
 
 // A character's body as mesh data, without three.js, so it can be tested: a skeleton and a low-poly
@@ -74,6 +75,8 @@ export function hashAt(point, seed = 0) {
 
 // A color as wear leaves it (MeshOut's `wear`): faded and patched, grimy, or rusted, by `h` (0-1).
 export function worn(color, style, h) {
+  // Rotting flesh: grey-green patches and dark sores.
+  if (style === "rot") return h < 0.25 ? color.map((v, i) => v * 0.5 + [0.48, 0.52, 0.32][i] * 0.5) : h > 0.95 ? [0.3, 0.14, 0.12] : shade(color, 0.88 + 0.2 * h);
   if (style === "tattered") return h < 0.15 ? [color[0] * 0.55 + 0.06, color[1] * 0.55 + 0.05, color[2] * 0.55 + 0.03] : shade(color, 0.72 + 0.33 * h);
   const rust = style === "savage" ? 0.25 : 0.35;
   const dim = 0.7 + 0.3 * h;
@@ -85,13 +88,19 @@ export function skeleton(look) {
   const s = look.height / 6;
   const { shoulders, hips } = widths(look);
   const joints = new Map();
-  for (const [name, parent, at] of JOINTS) {
+  for (const [name, parent, at] of [...JOINTS, ...extraJoints(look)]) {
     joints.set(name, { name, parent, at });
     if (name.endsWith("_l")) {
       joints.set(name.replace(/_l$/, "_r"), { name: name.replace(/_l$/, "_r"), parent: parent.replace(/_l$/, "_r"), at: [-at[0], at[1], at[2]] });
     }
   }
-  // Shoulders and hips move their whole limb out or in.
+  // Shoulders and hips move their whole limb out or in; wings go out with the shoulders.
+  for (const side of ["l", "r"]) {
+    for (const n of [1, 2, 3]) {
+      const j = joints.get(`wing_0${n}_${side}`);
+      if (j) j.at = [j.at[0] * shoulders, j.at[1], j.at[2]];
+    }
+  }
   for (const [chain, width] of [
     [ARM, shoulders],
     [LEG, hips],
@@ -126,7 +135,10 @@ export function bodyMesh(look) {
   const at = (name) => bones[index.get(name)].at;
   const s = look.height / 6;
   const trunk = s * (0.85 + 0.4 * look.build);
-  const limb = trunk * (0.8 + 0.4 * look.limbs);
+  // Bare bones: thin limbs, a spine for a waist, ribs; rotting flesh is mottled and sore.
+  const bony = look.flesh === "bone";
+  const limb = trunk * (0.8 + 0.4 * look.limbs) * (bony ? 0.45 : 1);
+  const rot = look.flesh === "rotting" ? { style: "rot", seed: 31, jitter: 0.008 * s } : null;
   const c = Object.fromEntries(Object.entries(look.colors).map(([k, v]) => [k, hex(v)]));
   const boots = shade(c.secondary, 0.55);
   const belt = shade(c.primary, 0.45);
@@ -177,6 +189,12 @@ export function bodyMesh(look) {
     level(4.97, { rx: 0.2 * trunk, rz: 0.2 * trunk, bones: [["spine_03", 0.5], ["neck_01", 0.5]] }),
     level(5.25, { rx: 0.18 * trunk, rz: 0.18 * trunk, bones: [["neck_01", 1]] }),
   ];
+  if (bony) {
+    for (const ring of trunkRings) {
+      const y = ring.center[1] / s;
+      if (y > 3.3 && y < 3.9) [ring.rx, ring.rz] = [0.16 * s, 0.14 * s];
+    }
+  }
   for (const ring of trunkRings) {
     const pushes = [bustPush(look, ring, s), rearPush(look, ring, s)].filter(Boolean);
     if (pushes.length) ring.push = (angle) => pushes.reduce((sum, push) => sum + push(angle), 0);
@@ -184,6 +202,7 @@ export function bodyMesh(look) {
   // Trousers to the belt, then the shirt to the neck.
   const trunkColor = (band) => {
     const y = trunkRings[band].center[1] / s;
+    if (bony && y > 3.9 && y < 4.7) return band % 2 ? shade(c.primary, 0.35) : c.primary;
     return y < 3.3 ? c.secondary : y < 3.4 ? belt : y < 4.95 ? c.primary : c.skin;
   };
   // Each part of the body, kept as rings and colors until armor has been put over it.
@@ -259,7 +278,9 @@ export function bodyMesh(look) {
     const reach = (ring) => ring.center[2] + Math.cos(angle) * (ring.rz + (ring.push?.(angle) ?? 0));
     return mix(reach(lower), reach(upper)) + armored;
   };
+  out.wear = rot;
   parts.head = head(out, look, at("head"), s, c, chestFront);
+  buildExtras(out, look, at, s, c, trunk);
   // How far the trunk reaches from its middle at a height and angle round it, or 0 off its ends.
   const trunkReach = (y, angle) => {
     const above = trunkRings.findIndex((r) => r.center[1] >= y);
@@ -270,7 +291,9 @@ export function bodyMesh(look) {
     return reach(lower) + (reach(upper) - reach(lower)) * t;
   };
   dressArmor(out, parts, look, { s, trunk, limb, along, level, shoulders, hips, trunkSides: TRUNK_SIDES, trunkReach, n: (name, side) => name.replace(/_l$/, `_${side}`) });
+  out.wear = rot;
   for (const { rings, sides, color, opts } of Object.values(parts)) out.tube(rings, sides, color, opts);
+  out.wear = null;
   const mesh = out.arrays();
   return { ...mesh, bones: proportion(bones, mesh, look) };
 }
@@ -517,9 +540,15 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
   const tip = add(front(tipY, 0), [0, 0, outFt * s]);
   const [top, left, right] = [front(topY, 0), front(0.22, -baseX), front(0.22, baseX)];
   const inside = [hx, hy + 0.3 * s, hz];
-  out.face([top, left, tip], c.skin, bones, inside);
-  out.face([top, tip, right], c.skin, bones, inside);
-  out.face([left, right, tip], shade(c.skin, 0.85), bones, inside);
+  const bony = look.flesh === "bone";
+  const muzzle = MUZZLES[look.muzzle];
+  if (!muzzle) {
+    // A skull has a dark hole for a nose.
+    const nose = bony ? [0.12, 0.1, 0.1] : c.skin;
+    out.face([top, left, tip], nose, bones, inside);
+    out.face([top, tip, right], nose, bones, inside);
+    out.face([left, right, tip], shade(nose, 0.85), bones, inside);
+  }
   // Eyes, a little proud of the face so they don't sink into it: an almond-shaped white, pointed
   // at either side, then a round iris as tall as the white and a pupil, each a little further out.
   // `pointed` pinches the outline to points at the sides.
@@ -533,6 +562,12 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
   };
   for (const x of [-0.14, 0.14]) {
     const [cx, cy, cz] = front(0.34, x);
+    if (bony) {
+      // Dark sockets with a glow deep in each.
+      disc([cx, cy, cz + 0.02 * s], 0.115 * s, 0.1 * s, 10, [0.06, 0.05, 0.05]);
+      disc([cx, cy, cz + 0.025 * s], 0.025 * s, 0.025 * s, 6, c.eyes);
+      continue;
+    }
     disc([cx, cy, cz + 0.022 * s], 0.08 * s, 0.037 * s, 12, [0.93, 0.92, 0.88], true);
     disc([cx, cy, cz + 0.027 * s], 0.032 * s, 0.032 * s, 8, c.eyes);
     disc([cx, cy, cz + 0.031 * s], 0.014 * s, 0.014 * s, 6, [0.05, 0.05, 0.06]);
@@ -750,7 +785,32 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
       lipStrip(across(0.1, flat, 0.012), line, 0.018);
     },
   };
-  (shapes[look.mouth] ?? shapes.neutral)();
+  if (!muzzle) (bony ? shapes.grin : (shapes[look.mouth] ?? shapes.neutral))();
+  if (muzzle) {
+    // A snout out from the middle of the face, its lower jaw beneath it, teeth along its sides.
+    const snout = muzzle.upper.map(([z, dy, rx, rz]) => ({ center: p(0, dy, z), dir: [0, 0, 1], rx: rx * s, rz: rz * s, bones }));
+    out.tube(snout, 10, (band, angle) => (Math.abs(angle) < 0.9 ? shade(c.skin, 1.15) : c.skin), { endColor: muzzle.nose === "pad" ? shade(c.skin, 0.45) : c.skin });
+    const jawRings = muzzle.lower.map(([z, dy, rx, rz]) => ({ center: p(0, dy, z), dir: [0, 0, 1], rx: rx * s, rz: rz * s, bones }));
+    out.tube(jawRings, 8, () => shade(c.skin, 1.1));
+    const [z0, , , ] = muzzle.upper[1];
+    const [z1, dy1, rx1, rz1] = muzzle.upper.at(-2);
+    if (muzzle.teeth) {
+      for (const side of [-1, 1]) {
+        for (let t = 0; t <= 1; t += 0.5) {
+          const z = z0 + (z1 - z0) * t;
+          const base = p(side * rx1 * (1.2 - 0.3 * t), dy1 - rz1 * 0.6, z);
+          out.path([base, add(base, [0, -0.07 * s, 0])], [0.02 * s, 0.003 * s], 4, () => [0.93, 0.9, 0.82], () => bones);
+        }
+      }
+    }
+    if (muzzle.nose === "dark") out.gem(p(0, muzzle.upper.at(-1)[1] + 0.03, muzzle.upper.at(-1)[0] + 0.02), 0.045 * s, [0.08, 0.07, 0.07], bones);
+  }
+  // Horns from the top of the head: rows of [across, up, forward] and thickness.
+  const horn = HORNS[look.horns];
+  if (horn) {
+    const color = c.horn ?? [0.85, 0.8, 0.68];
+    for (const side of [-1, 1]) out.path(horn.map(([x, dy, z]) => p(side * x, dy, z)), horn.map((r) => r[3] * s), 6, (band) => (band >= horn.length - 2 ? shade(color, 0.8) : color), () => bones, { carry: true });
+  }
   // Tusks up from the lower jaw either side of the mouth, curving out.
   const tusk = { small: 0.035, large: 0.055 }[look.tusks];
   if (tusk) {
@@ -832,6 +892,23 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
   }
   return part;
 }
+
+// Snouts, as rings forward from the head ([forward, up, across, deep] in a 6ft body's feet from
+// the head's joint): the upper jaw and nose, and the lower jaw.
+const MUZZLES = {
+  canine: { upper: [[0.25, 0.23, 0.25, 0.21], [0.5, 0.2, 0.2, 0.16], [0.74, 0.17, 0.14, 0.11], [0.88, 0.17, 0.09, 0.08]], lower: [[0.25, 0.05, 0.2, 0.08], [0.75, 0.06, 0.1, 0.05]], teeth: true, nose: "dark" },
+  reptile: { upper: [[0.25, 0.21, 0.24, 0.15], [0.52, 0.17, 0.19, 0.11], [0.8, 0.14, 0.14, 0.08], [0.95, 0.13, 0.09, 0.05]], lower: [[0.25, 0.06, 0.2, 0.08], [0.88, 0.07, 0.09, 0.04]], teeth: true },
+  bovine: { upper: [[0.25, 0.18, 0.27, 0.24], [0.42, 0.14, 0.26, 0.2], [0.58, 0.11, 0.22, 0.16]], lower: [[0.25, 0.0, 0.18, 0.08], [0.48, 0.0, 0.14, 0.06]], nose: "pad" },
+};
+export const MUZZLE_KINDS = ["none", ...Object.keys(MUZZLES)];
+// Horns, root to tip: [across, up, forward, thickness] from the head's joint.
+const HORNS = {
+  small: [[0.18, 0.68, 0.12, 0.05], [0.22, 0.82, 0.08, 0.035], [0.25, 0.93, 0.02, 0.005]],
+  bull: [[0.3, 0.6, 0.05, 0.085], [0.52, 0.66, 0.08, 0.07], [0.7, 0.8, 0.12, 0.05], [0.76, 0.98, 0.16, 0.008]],
+  ram: [[0.26, 0.66, -0.02, 0.085], [0.42, 0.78, -0.22, 0.075], [0.55, 0.6, -0.36, 0.06], [0.54, 0.38, -0.18, 0.045], [0.48, 0.32, 0.06, 0.008]],
+  swept: [[0.2, 0.68, 0.06, 0.07], [0.28, 0.85, -0.2, 0.055], [0.33, 0.93, -0.55, 0.035], [0.34, 0.88, -0.85, 0.005]],
+};
+export const HORN_KINDS = ["none", ...Object.keys(HORNS)];
 
 // Rings along a line of points, for MeshOut.path.
 function pathRings(points, radii, bones, depth = null) {

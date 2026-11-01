@@ -1,4 +1,6 @@
 import { ARMOR_COLORS, ARMOR_SLOTS, ARMOR_STYLES, ARMOR_TYPES } from "./armor.js";
+import { HORN_KINDS, MUZZLE_KINDS } from "./body.js";
+import { TAIL_KINDS, WING_KINDS } from "./extras.js";
 import { HELD, OFFHANDS, WEAPON_STYLES, WEAPONS } from "./weapons.js";
 
 // Character recipes: how a kind of character looks, as plain JSON, so a world can describe its
@@ -19,6 +21,9 @@ import { HELD, OFFHANDS, WEAPON_STYLES, WEAPONS } from "./weapons.js";
 // - arms, legs: 0 short to 1 long, the arms (hands too) and legs, 0.5 as usual.
 // - head: 0 small to 1 large, 0.5 as usual.
 // - ears: an EARS shape; nose: a NOSE shape; tusks: a TUSKS size.
+// - muzzle: a snout over the nose and mouth (MUZZLE): canine, reptile or bovine.
+// - horns: a HORNS shape; tail: a TAIL shape; wings: bat or feather (WINGS).
+// - flesh: living, rotting (mottled and sore) or bone (a skeleton: thin limbs, ribs, sockets).
 // - bust: 0 to 1.
 // - rear: 0 flat to 1 full.
 // - hair: a HAIR style; beard: a BEARD style; mouth: a MOUTH style; jewelry: a list of JEWELRY; face: a list of FACE
@@ -33,10 +38,10 @@ import { HELD, OFFHANDS, WEAPON_STYLES, WEAPONS } from "./weapons.js";
 // - loadouts: for a creature, a list of outfits, each spawn wearing one: each has any of weapon,
 //   offhand, weaponStyle, offhandStyle, armor and colors, and a `weight` (1 unless given) for how
 //   often it's picked. An outfit goes over its body's look, and the recipe's own settings over it.
-// - colors: { skin, hair, eyes, primary, secondary, metal, steel, wood, paint }, each "#rrggbb" or
+// - colors: { skin, hair, eyes, primary, secondary, metal, steel, wood, paint, horn }, each "#rrggbb" or
 //   a list to pick from. primary is the shirt or tunic, secondary the trousers; boots and belt are
 //   darker shades of those. metal is jewelry, fittings and glasses, steel blades, wood hafts and
-//   staves, paint warpaint.
+//   staves, paint warpaint, horn horns.
 
 export const HAIR = ["bald", "short", "receding", "spiky", "topknot", "bun", "ponytail", "pigtails", "bob", "mullet", "long", "braids", "dreadlocks", "mohawk", "afro"];
 export const BEARD = ["none", "goatee", "handlebar", "full", "long"];
@@ -46,6 +51,11 @@ export const FACE = ["glasses", "sideburns", "scar", "eyepatch", "warpaint"];
 export const EARS = ["round", "pointed", "long"];
 export const NOSE = ["human", "long", "broad"];
 export const TUSKS = ["none", "small", "large"];
+export const MUZZLE = MUZZLE_KINDS;
+export const HORNS = HORN_KINDS;
+export const TAIL = TAIL_KINDS;
+export const WINGS = WING_KINDS;
+export const FLESH = ["living", "rotting", "bone"];
 
 export const DEFAULT_LOOK = {
   body: "humanoid",
@@ -62,6 +72,11 @@ export const DEFAULT_LOOK = {
   ears: "round",
   nose: "human",
   tusks: "none",
+  muzzle: "none",
+  horns: "none",
+  tail: "none",
+  wings: "none",
+  flesh: "living",
   bust: 0,
   rear: 0.3,
   hair: "short",
@@ -85,6 +100,7 @@ export const DEFAULT_LOOK = {
     steel: "#b8bcc4",
     wood: "#6b4a2a",
     paint: "#2a4a9a",
+    horn: "#d8ccb0",
   },
 };
 
@@ -143,6 +159,196 @@ export const BODY_LOOKS = {
     height: [9, 11],
     build: [0.3, 0.6],
     colors: { skin: ["#4a5a2a", "#5a4a30", "#3a4a4a"], secondary: ["#a09060", "#8a7a5a"], hair: ["#d8ccb0", "#2a2420"], eyes: ["#e0d020", "#c04020"] },
+  },
+  orc: {
+    height: [6.2, 7],
+    build: [0.65, 0.9],
+    limbs: [0.6, 0.8],
+    shoulders: [0.7, 0.95],
+    jaw: [0.7, 1],
+    head: [0.45, 0.6],
+    ears: "pointed",
+    nose: "broad",
+    tusks: ["small", "large"],
+    hair: ["mohawk", "topknot", "bald", "braids"],
+    mouth: ["frown", "neutral"],
+    colors: { skin: ["#5a7a3a", "#6a7a40", "#7a6a50", "#4a6a3a"], hair: ["#1b1310", "#2a1c14"], eyes: ["#c02a1a", "#d0a020"], primary: ["#5a4a3a", "#6b3a2a"], secondary: ["#3a3430", "#4a4038"] },
+    loadouts: [
+      { weapon: "axe", weaponStyle: "savage", offhand: "shield", offhandStyle: "savage", armor: { chest: { type: "plate", style: "savage" }, shoulders: { type: "plate", style: "savage" } }, weight: 2 },
+      { weapon: "greataxe", weaponStyle: "savage", armor: { chest: { type: "leather", style: "savage" }, shoulders: { type: "leather", style: "savage" } }, weight: 2 },
+      { weapon: "sword", weaponStyle: "crude", offhand: "axe", offhandStyle: "crude", armor: { chest: { type: "chain", style: "tattered" } } },
+      { weapon: "staff", weaponStyle: "savage", armor: { chest: { type: "cloth", style: "savage" }, head: { type: "leather", style: "savage" } } },
+    ],
+  },
+  ogre: {
+    height: [9, 10.5],
+    build: [0.9, 1],
+    limbs: [0.85, 1],
+    shoulders: [0.85, 1],
+    waist: [0.9, 1],
+    hips: [0.8, 1],
+    arms: [0.6, 0.75],
+    legs: [0.2, 0.3],
+    head: [0.3, 0.4],
+    jaw: [0.9, 1],
+    ears: "round",
+    nose: "broad",
+    tusks: ["small", "none"],
+    hair: ["bald", "bald", "topknot"],
+    mouth: ["frown", "grin"],
+    colors: { skin: ["#a08a6a", "#8a9a6a", "#9a7a6a"], hair: ["#2a1c14", "#4a3020"], eyes: ["#d0a020"], primary: ["#5a4a3a", "#6b5a3a"], secondary: ["#4a4038", "#3a3430"] },
+    loadouts: [
+      { weapon: "maul", weaponStyle: "crude", armor: { legs: { type: "leather", style: "tattered" } }, weight: 2 },
+      { weapon: "mace", weaponStyle: "savage", armor: { chest: { type: "leather", style: "tattered" }, shoulders: { type: "leather", style: "savage" } } },
+    ],
+  },
+  kobold: {
+    height: [2.8, 3.4],
+    build: [0.25, 0.45],
+    limbs: [0.2, 0.35],
+    head: [0.6, 0.75],
+    legs: [0.3, 0.4],
+    ears: "round",
+    muzzle: "reptile",
+    horns: "small",
+    tail: "reptile",
+    hair: "bald",
+    colors: { skin: ["#9a5a3a", "#8a6a3a", "#7a4a3a"], eyes: ["#e0c040", "#d06020"], primary: ["#6b5a3a", "#5a4a3a"], secondary: ["#4a4038"], horn: ["#d8ccb0", "#b0a080"] },
+    loadouts: [
+      { weapon: "dagger", weaponStyle: "crude", armor: { chest: { type: "cloth", style: "tattered" } }, weight: 2 },
+      { weapon: "polearm", weaponStyle: "crude", armor: { head: { type: "leather", style: "tattered" } }, weight: 2 },
+      { weapon: "thrown", weaponStyle: "crude" },
+    ],
+  },
+  gnoll: {
+    height: [6.8, 7.6],
+    build: [0.45, 0.65],
+    limbs: [0.4, 0.6],
+    shoulders: [0.65, 0.85],
+    arms: [0.7, 0.8],
+    head: [0.5, 0.6],
+    ears: "pointed",
+    muzzle: "canine",
+    tail: "bushy",
+    hair: ["mohawk", "mohawk", "short"],
+    colors: { skin: ["#a08050", "#8a7a5a", "#b09060"], hair: ["#3a2a1a", "#2a2018"], eyes: ["#e0c040", "#c04020"], primary: ["#6b5a3a", "#5a4a3a"], secondary: ["#4a4038"] },
+    loadouts: [
+      { weapon: "polearm", weaponStyle: "savage", armor: { chest: { type: "leather", style: "savage" } }, weight: 2 },
+      { weapon: "bow", weaponStyle: "crude", armor: { chest: { type: "leather", style: "tattered" } }, weight: 2 },
+      { weapon: "axe", weaponStyle: "savage", offhand: "shield", offhandStyle: "crude", armor: { shoulders: { type: "leather", style: "savage" } } },
+    ],
+  },
+  lizardfolk: {
+    height: [6, 7],
+    build: [0.45, 0.65],
+    limbs: [0.45, 0.6],
+    head: [0.5, 0.6],
+    ears: "round",
+    muzzle: "reptile",
+    tail: "reptile",
+    hair: "bald",
+    colors: { skin: ["#4a7a4a", "#3a6a5a", "#6a7a3a"], eyes: ["#e0c040", "#e06020"], primary: ["#6b5a3a", "#3a5a4a"], secondary: ["#4a4038"] },
+    loadouts: [
+      { weapon: "polearm", weaponStyle: "crude", offhand: "none", weight: 2 },
+      { weapon: "mace", weaponStyle: "crude", offhand: "shield", offhandStyle: "crude", armor: { chest: { type: "leather", style: "tattered" } }, weight: 2 },
+      { weapon: "thrown", weaponStyle: "crude" },
+    ],
+  },
+  minotaur: {
+    height: [8.5, 9.5],
+    build: [0.8, 1],
+    limbs: [0.75, 0.95],
+    shoulders: [0.9, 1],
+    waist: [0.6, 0.75],
+    head: [0.55, 0.65],
+    ears: "round",
+    muzzle: "bovine",
+    horns: "bull",
+    tail: "tuft",
+    hair: ["short"],
+    colors: { skin: ["#5a3a2a", "#3a2a22", "#7a5a3a"], hair: ["#2a1c14", "#1b1310"], eyes: ["#c02a1a"], primary: ["#5a4a3a"], secondary: ["#4a4038", "#5a3a2a"], horn: ["#d8ccb0", "#c8b898"] },
+    loadouts: [
+      { weapon: "greataxe", weaponStyle: "savage", armor: { shoulders: { type: "plate", style: "savage" } }, weight: 3 },
+      { weapon: "maul", weaponStyle: "savage", armor: { legs: { type: "leather", style: "tattered" } } },
+    ],
+  },
+  skeleton: {
+    height: [5.8, 6.2],
+    build: [0.1, 0.2],
+    limbs: [0.2, 0.3],
+    waist: [0.1, 0.2],
+    flesh: "bone",
+    hair: "bald",
+    colors: { skin: ["#d8d0b8", "#c8c0a8"], primary: ["#d0c8b0", "#c8c0a8"], secondary: ["#c8c0a8"], eyes: ["#40c0f0", "#f04020"] },
+    loadouts: [
+      { weapon: "sword", weaponStyle: "crude", offhand: "shield", offhandStyle: "crude", weight: 2 },
+      { weapon: "greatsword", weaponStyle: "crude", armor: { head: { type: "plate", style: "tattered" }, chest: { type: "chain", style: "tattered" } } },
+      { weapon: "bow", weaponStyle: "crude" },
+      { weapon: "staff", weaponStyle: "savage", armor: { chest: { type: "cloth", style: "tattered" }, head: { type: "cloth", style: "tattered" } } },
+    ],
+  },
+  zombie: {
+    height: [5.6, 6.2],
+    build: [0.3, 0.55],
+    flesh: "rotting",
+    hair: ["bald", "receding", "long", "short"],
+    mouth: ["grin", "frown"],
+    colors: { skin: ["#8a9a7a", "#7a8a6a", "#9a9a8a"], hair: ["#3a3430", "#5a5048"], eyes: ["#e0e0a0", "#c0d040"], primary: ["#5a5a4a", "#4a4a5a", "#6a5a4a"], secondary: ["#3a3a3a", "#4a4038"] },
+    loadouts: [{ weight: 3 }, { weapon: "axe", weaponStyle: "crude", armor: { chest: { type: "cloth", style: "tattered" } } }],
+  },
+  giant: {
+    height: [16, 20],
+    build: [0.6, 0.85],
+    limbs: [0.6, 0.8],
+    shoulders: [0.7, 0.9],
+    head: [0.35, 0.45],
+    jaw: [0.6, 0.9],
+    hair: ["long", "braids", "bald"],
+    beard: ["full", "long", "none"],
+    colors: { skin: ["#b09070", "#8a9aaa", "#c0a080"], hair: ["#5a4a3a", "#c0c0c0", "#8a5a2a"], primary: ["#6b5a3a", "#5a6a7a"], secondary: ["#4a4038"] },
+    loadouts: [
+      { weapon: "maul", weaponStyle: "crude", armor: { chest: { type: "leather", style: "fine" } }, weight: 2 },
+      { weapon: "thrown", weaponStyle: "crude" },
+    ],
+  },
+  harpy: {
+    height: [5, 5.6],
+    build: [0.15, 0.3],
+    limbs: [0.15, 0.3],
+    bust: [0.2, 0.4],
+    ears: "pointed",
+    wings: "feather",
+    hair: ["long", "dreadlocks", "bun"],
+    mouth: ["grin", "smirk"],
+    colors: { skin: ["#c8a888", "#a88868", "#d0b8a0"], hair: ["#5a4a3a", "#3a3a4a", "#8a6a4a"], eyes: ["#e0c040"], primary: ["#5a4a3a", "#6a5a4a"], secondary: ["#3a3430"] },
+    loadouts: [{ weapon: "fist", weaponStyle: "crude", offhand: "fist", offhandStyle: "crude", weight: 2 }, { weapon: "dagger", weaponStyle: "crude" }],
+  },
+  gargoyle: {
+    height: [6, 7],
+    build: [0.6, 0.85],
+    limbs: [0.6, 0.8],
+    head: [0.45, 0.55],
+    ears: "pointed",
+    horns: ["swept", "ram"],
+    wings: "bat",
+    tail: "thin",
+    hair: "bald",
+    mouth: ["grin", "frown"],
+    colors: { skin: ["#7a7a7a", "#6a6a72", "#8a8278"], eyes: ["#e04020", "#e0c040"], primary: ["#6a6a6a"], secondary: ["#5a5a5a"], horn: ["#4a4a4a", "#5a5a5a"] },
+  },
+  imp: {
+    height: [2.6, 3.2],
+    build: [0.2, 0.35],
+    limbs: [0.15, 0.3],
+    head: [0.75, 0.9],
+    ears: "long",
+    horns: "small",
+    wings: "bat",
+    tail: "thin",
+    hair: "bald",
+    mouth: ["grin", "smirk"],
+    colors: { skin: ["#b03a2a", "#a04a3a", "#7a3a6a"], eyes: ["#f0d040"], primary: ["#3a2a2a"], secondary: ["#2a2020"], horn: ["#2a2020", "#4a3a30"] },
+    loadouts: [{ weight: 2 }, { weapon: "wand", weaponStyle: "fine" }],
   },
   wolf: {
     height: [2.9, 3.3],
@@ -252,6 +458,9 @@ export function resolveRecipe(own = {}, random = Math.random) {
   if (!EARS.includes(look.ears)) look.ears = DEFAULT_LOOK.ears;
   if (!NOSE.includes(look.nose)) look.nose = DEFAULT_LOOK.nose;
   if (!TUSKS.includes(look.tusks)) look.tusks = DEFAULT_LOOK.tusks;
+  for (const [key, options] of Object.entries({ muzzle: MUZZLE, horns: HORNS, tail: TAIL, wings: WINGS, flesh: FLESH })) {
+    if (!options.includes(look[key])) look[key] = DEFAULT_LOOK[key];
+  }
   if (!WEAPONS.includes(look.weapon)) look.weapon = DEFAULT_LOOK.weapon;
   if (!OFFHANDS.includes(look.offhand) || HELD[look.weapon]?.twoHanded) look.offhand = DEFAULT_LOOK.offhand;
   if (!WEAPON_STYLES.includes(look.weaponStyle)) look.weaponStyle = DEFAULT_LOOK.weaponStyle;

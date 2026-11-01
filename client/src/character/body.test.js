@@ -78,3 +78,18 @@ describe("proportions", () => {
     expect(long.pelvis[1]).toBeGreaterThan(short.pelvis[1] * 1.1);
   });
 });
+
+describe("creature extras", () => {
+  it("builds every humanoid creature, its tail and wings on bones of their own", async () => {
+    const { SKELETONS } = await import("./frames.js");
+    for (const body of SKELETONS.humanoid) {
+      const look = resolveRecipe({ body, loadouts: [] });
+      const mesh = bodyMesh(look);
+      expect(mesh.positions.every(Number.isFinite), body).toBe(true);
+      expect(Math.max(...mesh.skinIndex), body).toBeLessThan(mesh.bones.length);
+      const names = mesh.bones.map((b) => b.name);
+      expect(names.includes("tail_01"), body).toBe(look.tail !== "none");
+      expect(names.includes("wing_01_r"), body).toBe(look.wings !== "none");
+    }
+  });
+});

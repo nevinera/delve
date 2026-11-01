@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import url from "./animations.json?url";
 import { POSED, posedClip, posedSpeed } from "./posed.js";
+import { extraSway } from "./extras.js";
 import { FRAMES } from "./frames.js";
 import { attackGroup } from "./weapons.js";
 
@@ -48,13 +49,23 @@ export function characterClips(mesh, baked) {
   if (frame) return frame.clips(mesh, mesh.userData.look);
   const s = mesh.userData.scale;
   const rest = mesh.skeleton.getBoneByName("pelvis").position;
+  // A tail and wings sway through every clip, since the baked clips don't move them.
+  const extras = mesh.skeleton.bones.map((b) => b.name).filter((name) => /^(tail|wing)_0/.test(name));
+  const euler = new THREE.Euler();
+  const turn = new THREE.Quaternion();
   const clips = new Map();
   for (const name of clipNames(baked)) {
     const { times, rotations, pelvis } = POSED[name] ? posedClip(name, mesh.userData.joints, s, baked.fps) : decodeClip(baked, name);
     const tracks = Object.entries(rotations).map(([bone, values]) => new THREE.QuaternionKeyframeTrack(`${bone}.quaternion`, times, values));
     const positions = pelvis.map((v, i) => rest.getComponent(i % 3) + v * s);
     tracks.push(new THREE.VectorKeyframeTrack("pelvis.position", times, positions));
-    const clip = new THREE.AnimationClip(name, times[times.length - 1] || 1 / baked.fps, tracks);
+    const duration = times[times.length - 1] || 1 / baked.fps;
+    for (const [bone, sway] of Object.entries(extraSway(extras, duration))) {
+      const values = new Float32Array(times.length * 4);
+      times.forEach((t, f) => turn.setFromEuler(euler.set(...sway(t))).toArray(values, f * 4));
+      tracks.push(new THREE.QuaternionKeyframeTrack(`${bone}.quaternion`, times, values));
+    }
+    const clip = new THREE.AnimationClip(name, duration, tracks);
     clip.userData = { speed: POSED[name] ? posedSpeed(name) : baked.clips[name].speed };
     clips.set(name, clip);
   }
