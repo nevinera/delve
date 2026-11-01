@@ -2,18 +2,17 @@ import "./creatures.css";
 import * as THREE from "three";
 import { ROLES, characterClips, loadAnimations, roleClips } from "./animations.js";
 import { SKELETONS, characterMesh, disposeCharacter, skeletonOf } from "./characterMesh.js";
-import { appearance, randomLook, resolveRecipe } from "./recipe.js";
+import { BODY_LOOKS, appearance, randomLook, resolveRecipe } from "./recipe.js";
 
 // The creatures page: each body the client builds, grouped by skeleton, playing the clip for each
 // of a creature's roles (animations.js's ROLES) in a tile of its own. One canvas over the page draws
 // every tile on screen, each from its own scene.
 
 // Each body as shown, with something to hold. Each gets a new look from its recipe on "new looks".
+const GEAR = { goblin: { weapon: "dagger" }, troll: { weapon: "maul" } };
 const MODELS = [
   { name: "human", recipe: () => ({ ...appearance(randomLook()), weapon: "sword", offhand: "shield" }) },
-  { name: "goblin", recipe: () => ({ body: "goblin", weapon: "dagger" }) },
-  { name: "troll", recipe: () => ({ body: "troll", weapon: "maul" }) },
-  { name: "wolf", recipe: () => ({ body: "wolf" }) },
+  ...Object.keys(BODY_LOOKS).map((body) => ({ name: body, recipe: () => ({ body, ...GEAR[body] }) })),
 ];
 const LOOPS = new Set(["idle", "walk", "run"]);
 const HOLD_S = 1; // how long a clip that doesn't loop holds its last frame before playing again

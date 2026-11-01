@@ -550,7 +550,7 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
   if (hair === "bob" && !covered) {
     // A shell of hair to the jaw, open for the face below a fringe across the forehead.
     const shell = [ring(0.04, 0.38, 0.42, -0.02), ring(0.25, 0.43, 0.46, 0.02), ring(0.45, 0.44, 0.47, 0), ring(0.66, 0.4, 0.44, -0.02), ring(0.78, 0.25, 0.3, -0.03)];
-    out.tube(shell, 10, () => c.hair, { capEnd: true, skip: (band, angle) => (band === 0 && Math.abs(angle) < 1.3) || (band === 1 && Math.abs(angle) < 1.1) });
+    out.tube(shell, 10, () => c.hair, { capStart: false, skip: (band, angle) => (band === 0 && Math.abs(angle) < 1.3) || (band === 1 && Math.abs(angle) < 1.1) });
   }
   if (hair === "topknot" && !covered) {
     const knot = [ring(0.7, 0.1, 0.1, -0.06), ring(0.8, 0.14, 0.14, -0.06), ring(0.93, 0.12, 0.12, -0.06), ring(1.0, 0.05, 0.05, -0.06)];
@@ -781,7 +781,7 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
     const across = norm(cross(sub(p(0.41, 0.56, 0), p(-0.14, 0.34, 0.42)), sub(p(0, 0.5, -0.43), p(-0.14, 0.34, 0.42))));
     const middle = p(0.02, 0.45, 0.01);
     const band = (shift) => ({ center: add(middle, mul(across, shift * s)), dir: across, rx: 0.425 * s, rz: 0.445 * s, bones });
-    out.tube([band(-0.022), band(0.022)], 12, () => patch);
+    out.tube([band(-0.022), band(0.022)], 12, () => patch, { open: true });
   }
   if (marked("glasses")) {
     // Round wire rims before the eyes, a bridge over the nose and arms back to the ears.
@@ -794,7 +794,7 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
       });
     };
     for (const side of [-1, 1]) {
-      out.path(rim(side * 0.14), Array(11).fill(0.012 * s), 4, () => metal, () => bones);
+      out.path(rim(side * 0.14), Array(11).fill(0.012 * s), 4, () => metal, () => bones, { open: true });
       const [ex, ey, ez] = front(0.34, side * 0.235);
       out.path([[ex, ey, ez + 0.06 * s], p(side * 0.38, 0.36, 0.2), p(side * 0.39, 0.33, -0.02)], Array(3).fill(0.01 * s), 4, () => metal, () => bones);
     }
@@ -807,7 +807,7 @@ function head(out, look, [hx, hy, hz], s, c, chestFront) {
   }
   if (look.jewelry.includes("necklace")) {
     const ringAt = (dy, r) => ({ center: p(0, dy, 0.02), dir: [0, 1, 0], rx: r * s, rz: r * s, bones: neck });
-    out.tube([ringAt(-0.31, 0.25), ringAt(-0.25, 0.22)], 10, () => c.metal);
+    out.tube([ringAt(-0.31, 0.25), ringAt(-0.25, 0.22)], 10, () => c.metal, { open: true });
     out.gem([hx, hy - 0.52 * s, hz + 0.34 * s * (0.85 + 0.4 * look.build)], 0.07 * s, c.metal, [["spine_03", 1]]);
   }
   return part;
@@ -854,12 +854,13 @@ export class MeshOut {
   }
 
   // Bands of faces between rings of `sides` corners, each colored by color(band, angle), angle 0
-  // facing the ring's front. Caps close the first or last ring to a point; skip(band, angle) leaves
-  // faces out. A ring's weights(angle), where it has one, weights each corner by its angle instead
+  // facing the ring's front. Each end is closed with a rounded cap unless capStart or capEnd is
+  // false, or the tube is `open` (a shell over something, or a ring round it); skip(band, angle)
+  // leaves faces out. A ring's weights(angle), where it has one, weights each corner by its angle instead
   // of the ring's bones. With `carry`, each ring after the first takes its side from the ring
   // before, so a tube that bends round toward +x doesn't turn its rings over partway. With `inward`,
   // the faces look in, for the inside of something open, like a skirt.
-  tube(rings, sides, color, { capStart = false, capEnd = false, endColor = null, skip = null, carry = false, inward = false } = {}) {
+  tube(rings, sides, color, { capStart = true, capEnd = true, open = false, endColor = null, skip = null, carry = false, inward = false } = {}) {
     let last = null;
     const points = rings.map((r) => {
       // The ring's side axis is +x where it can be; its front is square to that and the bone.
@@ -893,23 +894,38 @@ export class MeshOut {
         this.face([a, cc, d], col, wa, inside, [wa, wc, wd], inward);
       }
     }
+    // A dome over the end ring: two smaller rings out past it, then a point, as deep as the ring's
+    // narrower radius.
     const cap = (i, outward, capColor) => {
       const r = rings[i];
-      const tip = add(r.center, mul(r.dir, outward * Math.min(r.rx, r.rz) * 0.5));
+      const depth = outward * Math.min(r.rx, r.rz) * 0.7;
       const inside = rings[i - outward]?.center ?? sub(r.center, mul(r.dir, outward));
-      for (let k = 0; k < sides; k++) {
-        const k1 = (k + 1) % sides;
-        this.face([points[i][k], points[i][k1], tip], capColor, ringBones[i], inside, [cornerBones[i][k], cornerBones[i][k1], ringBones[i]]);
+      const dome = [Math.PI / 6, Math.PI / 3].map((a) => points[i].map((q) => add(add(r.center, mul(sub(q, r.center), Math.cos(a))), mul(r.dir, depth * Math.sin(a)))));
+      const tip = add(r.center, mul(r.dir, depth));
+      const layers = [points[i], ...dome];
+      const w = cornerBones[i];
+      for (let j = 0; j < layers.length; j++) {
+        for (let k = 0; k < sides; k++) {
+          const k1 = (k + 1) % sides;
+          const [a, b] = [layers[j][k], layers[j][k1]];
+          if (j === layers.length - 1) {
+            this.face([a, b, tip], capColor, ringBones[i], inside, [w[k], w[k1], ringBones[i]]);
+          } else {
+            const [c2, d] = [layers[j + 1][k1], layers[j + 1][k]];
+            this.face([a, b, c2], capColor, ringBones[i], inside, [w[k], w[k1], w[k1]]);
+            this.face([a, c2, d], capColor, ringBones[i], inside, [w[k], w[k1], w[k]]);
+          }
+        }
       }
     };
-    if (capStart) cap(0, -1, color(0, Math.PI));
-    if (capEnd) cap(rings.length - 1, 1, endColor ?? color(rings.length - 2, Math.PI));
+    if (capStart && !open && !inward) cap(0, -1, color(0, Math.PI));
+    if (capEnd && !open && !inward) cap(rings.length - 1, 1, endColor ?? color(rings.length - 2, Math.PI));
   }
 
   // A tube along a line of points, `radii` round each (or `depth` deep, square to the side, where
   // given), its rings following bones(i).
-  path(points, radii, sides, color, bones, { capStart = false, capEnd = false, depth = null, carry = false } = {}) {
-    this.tube(pathRings(points, radii, bones, depth), sides, color, { capStart, capEnd, carry });
+  path(points, radii, sides, color, bones, { capStart = true, capEnd = true, open = false, depth = null, carry = false } = {}) {
+    this.tube(pathRings(points, radii, bones, depth), sides, color, { capStart, capEnd, open, carry });
   }
 
   // A small eight-faced gem.

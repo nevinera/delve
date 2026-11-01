@@ -124,6 +124,51 @@ export const BODY_LOOKS = {
     head: [0.45, 0.55],
     colors: { skin: ["#7a6e60", "#8a8478", "#6a5e52", "#9a948a"], hair: ["#3e3a36", "#4a4038", "#2e2a28"], eyes: ["#c8a040", "#b08030"] },
   },
+  panther: {
+    height: [2.4, 2.8],
+    build: [0.4, 0.6],
+    colors: { skin: ["#2a2626", "#c89a50", "#a8885a"], hair: ["#1a1818", "#8a6a3a"], eyes: ["#d0c040", "#90b040"] },
+  },
+  rat: {
+    height: [1.3, 1.6],
+    build: [0.5, 0.8],
+    colors: { skin: ["#5a524a", "#6a6058", "#4a4440"], hair: ["#3a3430", "#2e2a28"], secondary: ["#c89090", "#b08080"], eyes: ["#d02020", "#1a1010"] },
+  },
+  bear: {
+    height: [4.2, 4.8],
+    build: [0.5, 0.8],
+    colors: { skin: ["#5a3e28", "#4a3020", "#6a4a30", "#2a2420"], hair: ["#3a2818", "#2a1e14"], eyes: ["#2a1a10"] },
+  },
+  boar: {
+    height: [3, 3.4],
+    build: [0.5, 0.8],
+    colors: { skin: ["#4a3a30", "#3a302a", "#5a4a3a"], hair: ["#2a2420", "#1e1a18"], secondary: ["#8a6a60", "#7a5a50"], eyes: ["#2a1a10"] },
+  },
+  stag: {
+    height: [5.2, 5.8],
+    build: [0.4, 0.6],
+    colors: { skin: ["#8a5a34", "#9a6a40", "#7a4e2e"], hair: ["#5a3a22", "#4a3020"], eyes: ["#1a1010"] },
+  },
+  horse: {
+    height: [7, 7.8],
+    build: [0.4, 0.6],
+    colors: { skin: ["#6a4028", "#3a2a20", "#8a7a6a", "#c8b898", "#2a2420"], hair: ["#1e1a18", "#3a2a20", "#d8d0c0"], eyes: ["#1a1010"] },
+  },
+  lizard: {
+    height: [1.3, 1.6],
+    build: [0.4, 0.6],
+    colors: { skin: ["#4a6a3a", "#6a6a3a", "#3a5a4a"], hair: ["#2a4a2a", "#4a4a2a"], secondary: ["#c8c090", "#b0b080"], eyes: ["#e0c020", "#d08020"] },
+  },
+  basilisk: {
+    height: [1.9, 2.3],
+    build: [0.5, 0.7],
+    colors: { skin: ["#3a5a4a", "#4a4a5a"], hair: ["#8a2a2a", "#6a2a4a"], secondary: ["#a8a070"], eyes: ["#f0f040", "#e04020"] },
+  },
+  crocodile: {
+    height: [1.3, 1.5],
+    build: [0.5, 0.7],
+    colors: { skin: ["#3a4a2a", "#4a4a30"], hair: ["#2a3420", "#2a2e20"], secondary: ["#b0a878", "#a09868"], eyes: ["#c8a020"] },
+  },
 };
 
 // A look with every choice made: the recipe's settings over its body's (BODY_LOOKS) and the

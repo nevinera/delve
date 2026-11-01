@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import url from "./animations.json?url";
 import { POSED, posedClip, posedSpeed } from "./posed.js";
-import { quadrupedClips } from "./quadruped.js";
+import { FRAMES } from "./frames.js";
 import { HELD } from "./weapons.js";
 
 // Animation clips for characters (characterMesh.js), baked onto the skeleton from Quaternius'
@@ -44,7 +44,8 @@ export const clipNames = (baked) => [...Object.keys(baked.clips), ...Object.keys
 // Every clip as a three.js AnimationClip for this character, by name. A clip that moves along the
 // ground keeps its speed, for a 6ft body, in userData.speed.
 export function characterClips(mesh, baked) {
-  if (mesh.userData.skeleton === "quadruped") return quadrupedClips(mesh);
+  const frame = FRAMES[mesh.userData.skeleton];
+  if (frame) return frame.clips(mesh, mesh.userData.look);
   const s = mesh.userData.scale;
   const rest = mesh.skeleton.getBoneByName("pelvis").position;
   const clips = new Map();
@@ -68,9 +69,7 @@ export const ROLES = ["idle", "walk", "run", "attack", "bigAttack", "cast", "sho
 // (characterMesh.js's skeletonOf), or null where it has none. A humanoid's attacks go with what
 // it holds.
 export function roleClips(look, skeleton) {
-  if (skeleton === "quadruped") {
-    return { idle: "Idle_Loop", walk: "Walk_Loop", run: "Run_Fwd_Loop", attack: "Bite", bigAttack: "Leap", cast: "Howl", shoot: null, hit: "Hit", death: "Death" };
-  }
+  if (FRAMES[skeleton]) return FRAMES[skeleton].roles(look);
   const twoHanded = HELD[look.weapon]?.twoHanded && !["bow", "crossbow", "gun", "staff"].includes(look.weapon);
   const unarmed = look.weapon === "none";
   return {

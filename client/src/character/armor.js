@@ -49,6 +49,7 @@ function shell(out, rings, sides, thick, color, { mail = false, skip = null, cap
   const last = pushed.length - 1;
   out.mail = mail;
   out.tube(all, sides, (band, angle) => (band === 0 || band > last ? (edge ?? color(0, angle)) : color(band - 1, angle)), {
+    capStart: false,
     capEnd,
     endColor: capEnd ? color(last - 1, Math.PI) : null,
     skip: skip && ((band, angle) => band > 0 && band <= last && skip(band - 1, angle)),
@@ -117,7 +118,7 @@ function skirt(out, ctx, heights, widths, color, mail = false, follow = 0.45, fu
     return { ...ring, push: room };
   });
   out.mail = mail;
-  out.tube(rings, 16, color, {});
+  out.tube(rings, 16, color, { open: true });
   const lining = rings.map((r) => ({ ...r, rx: r.rx - 0.01 * s, rz: r.rz - 0.01 * s }));
   out.tube(lining, 16, (band, angle) => color(band, angle).map((v) => v * 0.55), { inward: true });
   out.mail = false;
@@ -331,7 +332,7 @@ function hood(out, parts, ctx, main, trim, mail) {
     ctx.level(4.62, { rx: 0.7 * shoulders * trunk, rz: 0.4 * trunk, bones: [["spine_03", 1]] }),
   ];
   out.mail = mail;
-  out.tube(cowl, 12, (band) => (band === 2 ? trim : main), {});
+  out.tube(cowl, 12, (band) => (band === 2 ? trim : main), { open: true });
   out.mail = false;
 }
 
