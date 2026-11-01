@@ -2,7 +2,7 @@ import * as THREE from "three";
 
 // What's drawn in the earth, while the builder's in its rock: the points of the planning grid
 // round the camera, three grids of them, fading with distance, the two coarser joined by faint
-// white lines.
+// white lines; none of it over the ground.
 
 // Each grid: a point every `every` ft, seen out to `out` ft, `px` across, and `lines` whether its
 // points are joined.
@@ -14,7 +14,9 @@ const GRIDS = [
 const LINE_RGB = [0.05, 0.05, 0.05];
 
 export class Earth {
-  constructor(scene) {
+  // groundAt(x, z): the ground's height.
+  constructor(scene, groundAt) {
+    this.groundAt = groundAt;
     this.group = new THREE.Group();
     this.group.visible = false;
     scene.add(this.group);
@@ -57,7 +59,8 @@ export class Earth {
           for (let k = -n; k <= n; k++) {
             const p = [base[0] + i * every, base[1] + j * every, base[2] + k * every];
             const f = fade(p);
-            if (!f) continue;
+            const ground = this.groundAt(p[0], p[2]);
+            if (!f || p[1] >= ground) continue;
             positions.push(...p);
             colors.push(...rgb.map((v) => v * f));
             if (!this.lines[level]) continue;
@@ -65,6 +68,9 @@ export class Earth {
             for (let axis = 0; axis < 3; axis++) {
               const q = [...p];
               q[axis] += every;
+              // Up to the ground, where it reaches it.
+              if (axis === 1) q[1] = Math.min(q[1], ground);
+              else if (q[1] >= this.groundAt(q[0], q[2])) continue;
               const g = fade(q);
               if (!g) continue;
               ends.push(...p, ...q);

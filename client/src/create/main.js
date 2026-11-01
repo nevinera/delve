@@ -177,7 +177,7 @@ function start(world, changes, fresh) {
   // theirs to draw.
   const caves = new Caves(scene, renditions);
   const overhead = new Overhead(scene, (x, z) => renditions.heightAt(x, z));
-  const earth = new Earth(scene);
+  const earth = new Earth(scene, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT);
   let lastOverhead = 0;
   for (const [path, bytes] of world.files) if (CAVES_PATH.exec(path)?.[1] === continent) caves.load(bytes);
   // The rooms and tunnels planned, to carve (caveLayout.js).
