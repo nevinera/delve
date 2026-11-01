@@ -1,8 +1,9 @@
 import { MeshOut } from "./body.js";
 import { TAU, add, ease, hex, hump, mirrored, mul, sampled, shade } from "./rig.js";
 
-// Fish: a shark or a barracuda swims with its body, a ray with its wings. Each floats off the
-// ground as if in water, a `mouth` bone at the front of its mouth.
+// Fish: a shark, barracuda or piranha swims with its body, a ray with its wings and a sea turtle
+// with its flippers, as a ray does. Each floats off the ground as if in water, a `mouth` bone at
+// the front of its mouth.
 //
 // A look (recipe.js) gives its height (for a fish, its length nose to tail; for a ray, across its
 // wings), build (thicker or thinner) and colors: skin the back, secondary the belly, hair the fins
@@ -37,8 +38,21 @@ export const FISH = {
     gills: false,
     bars: true,
   },
+  // Deep and short, an underbite full of teeth.
+  piranha: {
+    family: "fish",
+    rings: [[4.6, 0.08, 0.2, -0.3], [4.0, 0.36, 1.1, -0.1], [2.8, 0.5, 1.9, 0.1], [1.0, 0.55, 2.2, 0.15], [-0.8, 0.45, 1.8, 0.1], [-2.4, 0.22, 0.85, 0.05], [-3.4, 0.1, 0.32, 0.05]],
+    jaw: [[3.4, 0.36, 0.16, -0.8], [4.4, 0.26, 0.13, -0.62], [5.1, 0.09, 0.07, -0.42]],
+    dorsal: [[0.5, -1.0, 0.9, 0.6]],
+    caudal: [[1.6, 1.2], [-1.6, 1.2], 0.6],
+    pectoral: [0.6, 0.35, 0.6],
+    gills: false,
+    bars: false,
+  },
   // A ray 6ft across, its tail a little longer than that behind it.
   stingray: { family: "ray" },
+  // A sea turtle 6ft across its flippers: a domed shell, a head on a short neck, flippers.
+  seaturtle: { family: "ray", turtle: true },
 };
 export const fishOf = (look) => FISH[look.body] ?? FISH.shark;
 
@@ -56,10 +70,10 @@ function joints(sp) {
     return [
       ["root", null, [0, 0, 0]],
       ["pelvis", "root", [0, y, 0]],
-      ["head", "pelvis", [0, y, 1.0]],
-      ["mouth", "head", [0, y - 0.1, 1.3]],
-      ["wing_01_l", "pelvis", [0.9, y, 0]],
-      ["wing_02_l", "wing_01_l", [2.0, y, -0.15]],
+      ["head", "pelvis", [0, y, sp.turtle ? 1.35 : 1.0]],
+      ["mouth", "head", [0, y - 0.1, sp.turtle ? 2.3 : 1.3]],
+      ["wing_01_l", "pelvis", sp.turtle ? [0.75, y, 0.6] : [0.9, y, 0]],
+      ["wing_02_l", "wing_01_l", sp.turtle ? [1.6, y - 0.05, 0.3] : [2.0, y, -0.15]],
       ["tail_01", "pelvis", [0, y, -1.5]],
       ["tail_02", "tail_01", [0, y, -3.0]],
       ["tail_03", "tail_02", [0, y, -4.5]],
@@ -103,7 +117,8 @@ export function fishMesh(look) {
       for (const toward of [false, true]) out.face(tri.map(([p]) => p), color, tri[0][1], inside, tri.map(([, b]) => b), toward);
     }
   };
-  if (sp.family === "ray") rayBody(sp, out, at, build, c, fin);
+  if (sp.turtle) turtleBody(sp, out, at, build, c, fin);
+  else if (sp.family === "ray") rayBody(sp, out, at, build, c, fin);
   else fishBody(sp, out, at, build, c, fin);
   const mesh = out.arrays();
   for (let i = 0; i < mesh.positions.length; i++) mesh.positions[i] *= s;
@@ -251,6 +266,26 @@ function rayBody(sp, out, at, build, c, fin) {
   out.path([add(barb, [0, 0.08, 0.3]), add(barb, [0, 0.14, -0.5]), add(barb, [0, 0.18, -0.9])], [0.06, 0.04, 0.005], 5, () => mark, () => [["tail_02", 1]]);
 }
 
+// A sea turtle: a domed shell in plates, pale beneath, a head on a short neck, long front
+// flippers on the wing bones and short back ones.
+function turtleBody(sp, out, at, build, c, fin) {
+  const [back, belly, mark] = [c.skin, c.secondary, c.hair];
+  const y = RAY_SWIM;
+  const shell = [[-1.45, 0.25, 0.12], [-1.2, 0.95, 0.42], [-0.6, 1.25, 0.6], [0.2, 1.3, 0.62], [0.9, 1.05, 0.5], [1.3, 0.6, 0.3], [1.45, 0.15, 0.08]].map(([z, rx, rz]) => ({ center: [0, y + 0.05, z], dir: [0, 0, 1], rx: rx * build, rz: rz * build, bones: [["pelvis", 1]], push: (angle) => -Math.max(0, Math.cos(angle)) * rz * build * 0.55 }));
+  out.tube(shell, 14, (band, angle) => (Math.abs(angle) < 1.2 ? belly : (band + Math.round(angle * 2)) % 2 ? mark : back), { capStart: true, capEnd: true });
+  const head = [["head", 1]];
+  out.path([[0, y, 1.1], [0, y + 0.03, 1.5], [0, y + 0.08, 1.9], [0, y + 0.06, 2.25]], [0.26, 0.24, 0.27, 0.1].map((r) => r * build), 8, () => shade(back, 1.15), () => head, { capEnd: true });
+  for (const x of [-1, 1]) out.gem([x * 0.2 * build, y + 0.16, 1.95], 0.06, c.eyes, head);
+  const skin = shade(back, 1.15);
+  for (const side of ["l", "r"]) {
+    const x = side === "l" ? 1 : -1;
+    const [S, W] = [at(`wing_01_${side}`), at(`wing_02_${side}`)];
+    const bone = (n) => [[`wing_0${n}_${side}`, 1]];
+    fin([[add(S, [0, 0, 0.3]), bone(1)], [add(W, [0, 0, 0.25]), bone(2)], [add(W, [x * 1.8, -0.05, -0.9]), bone(2)], [add(W, [0, 0, -0.35]), bone(2)], [add(S, [0, 0, -0.35]), bone(1)]], skin, [0, 1, 0]);
+    fin([[[x * 0.7, y, -0.9], [["pelvis", 1]]], [[x * 1.5, y - 0.05, -1.6], [["tail_01", 1]]], [[x * 0.4, y, -1.35], [["pelvis", 1]]]], skin, [0, 1, 0]);
+  }
+}
+
 const both = (name, [x, y, z]) => ({ [`${name}_l`]: [x, y, z], [`${name}_r`]: [x, -y, -z] });
 
 // The body bent side to side in a wave running back to the tail, at phase u.
@@ -363,8 +398,8 @@ function fishPoses(sp) {
   };
 }
 
-function rayPoses() {
-  return {
+function rayPoses(sp) {
+  const clips = {
     Idle_Loop: [
       3,
       (t) => {
@@ -436,11 +471,24 @@ function rayPoses() {
       },
     ],
   };
+  if (sp.turtle) {
+    // The head drawn in, then thrust out to snap at what's ahead.
+    clips.Bite = [
+      0.9,
+      (t) => {
+        const u = t / 0.9;
+        const draw = hump(u, 0, 0.3, 0.35, 0.45);
+        const snap = hump(u, 0.35, 0.5, 0.6, 1);
+        return { bones: { head: [0.2 * snap, 0, 0], ...beat(u, 0.1) }, scale: { head: [1, 1, 1 - 0.35 * draw + 0.25 * snap] }, pelvis: [0, 0, 0.4 * snap] };
+      },
+    ];
+  }
+  return clips;
 }
 
 export function fishClips(mesh, look) {
   const sp = fishOf(look);
-  const poses = sp.family === "ray" ? rayPoses() : fishPoses(sp);
+  const poses = sp.family === "ray" ? rayPoses(sp) : fishPoses(sp);
   const clips = Object.entries(poses).map(([name, [duration, pose, speed]]) => sampled(mesh, name, duration, pose, speed));
   return new Map(clips.map((c) => [c.name, c]));
 }
@@ -449,6 +497,7 @@ export function fishClips(mesh, look) {
 export function fishRoles(look) {
   const sp = fishOf(look);
   const swims = { idle: "Idle_Loop", walk: "Swim_Loop", run: "Swim_Fast_Loop", fly: null, cast: null, shoot: null, breath: null, hit: "Hit", death: "Death" };
+  if (sp.turtle) return { ...swims, attack: "Bite", bigAttack: "Smother", battleCry: "Flare" };
   if (sp.family === "ray") return { ...swims, attack: "Sting", bigAttack: "Smother", battleCry: "Flare" };
   return { ...swims, attack: "Bite", bigAttack: sp === FISH.barracuda ? "Dart" : "Thrash", battleCry: "Frenzy" };
 }

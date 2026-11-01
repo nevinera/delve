@@ -1096,6 +1096,16 @@ export const BODY_LOOKS = {
     build: [0.3, 0.6],
     colors: { skin: ["#2a8a5a", "#3a7a8a", "#4a9a4a"], secondary: ["#e0c040", "#e0a040"], hair: ["#c03030", "#3050c0", "#e0a020"], eyes: ["#e0c020", "#101010"] },
   },
+  piranha: {
+    height: [1.2, 1.8],
+    build: [0.5, 0.8],
+    colors: { skin: ["#6a7078", "#5a6068", "#7a7a70"], secondary: ["#c03a2a", "#d05a30"], hair: ["#5a5a60", "#3a3a40"], eyes: ["#e0a020", "#d03020"] },
+  },
+  seaturtle: {
+    height: [6, 8],
+    build: [0.5, 0.8],
+    colors: { skin: ["#5a6a3a", "#6a5a3a", "#4a5a4a"], secondary: ["#d8c890", "#e0d0a0"], hair: ["#4a4a2a", "#5a4a2a"], eyes: ["#101010"] },
+  },
 };
 
 // A look with every choice made: the recipe's settings over its body's (BODY_LOOKS) and the
