@@ -88,6 +88,10 @@
       </button>
     </div>
     <div class="create-tools" data-work="caves" hidden>
+      <button type="button" data-tool="goto" data-key="h" aria-pressed="false" title="go to where you click, standing on the ground there">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M24 3 L24 17 M18 11 L24 17 L30 11 M14 21 L34 21" stroke="#c8d4e8" stroke-width="2" fill="none"/></svg>
+        <span>go to</span><kbd class="create-key">H</kbd>
+      </button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" data-key="h" aria-pressed="false" title="raise and lower the ground">
@@ -389,6 +393,9 @@
         <button type="button" id="marksDelete">delete</button>
       </div>
     </div>
+    <div data-config="goto" hidden>
+      <p class="create-note">Click the ground, from over it or from in the earth under it, to go there, standing on it.</p>
+    </div>
     <div data-config="raise flatten smooth noise pools clear eraser" hidden>
       <div class="create-shapes" role="group" aria-label="shape" data-only="raise">
         <button type="button" data-shape="round" aria-pressed="true" title="round"><canvas width="32" height="20" data-shape="round"></canvas></button>
@@ -509,7 +516,6 @@
       <legend>caves</legend>
       <label title="each column's cave floors (gold) and ceilings (silver), points joined by lines, seen through the rock"><input type="checkbox" id="showHeightGrid"> height-grid</label>
       <label title="the edges of every face of the caves' rock, glowing; always shown from in the rock"><input type="checkbox" id="showCaveOutlines"> cave-outlines</label>
-      <label title="fly anywhere, through the ground and cave rock"><input type="checkbox" id="ghost"> ghost</label>
     </fieldset>
     <fieldset>
       <legend>debug</legend>
@@ -524,14 +530,15 @@
   <dl>
     <dt>T / G / Y / I</dt><dd>planning, geo, build or caves</dd>
     <dt>H J K L N M</dt><dd>pick a tool, as shown on its button</dd>
-    <dt>W / S</dt><dd>run, fly or swim forward and back; swimming, the way the camera looks, so look down to dive</dd>
+    <dt>W / S</dt><dd>run, fly or swim forward and back; flying and swimming, the way the camera looks, so look down to dive</dd>
     <dt>A / D</dt><dd>turn</dd>
     <dt>Q / E</dt><dd>strafe</dd>
     <dt>space</dt><dd>take off, then rise; in deep water, swim up</dd>
     <dt>F</dt><dd>fall; in deep water, swim down</dd>
     <dt>space space / F F / W W</dt><dd>double-tap and hold to go three times as fast up, down or forward</dd>
+    <dt>F F standing</dt><dd>go down into the earth, a ghost in the rock till you fly up out of the ground</dd>
     <dt>left-drag</dt><dd>look around, or work the tool picked</dd>
-    <dt>right-drag</dt><dd>turn</dd>
+    <dt>right-drag</dt><dd>turn, and look up or down</dd>
     <dt>wheel</dt><dd>zoom</dd>
     <dt>ctrl or cmd</dt><dd>work the tool the other way</dd>
     <dt>[ / ]</dt><dd>make the tool smaller or bigger</dd>
@@ -548,7 +555,7 @@
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, measure measures distances and circles, and path finds the shortest way on foot from one place to another, to find where ranges and cliffs can be crossed. Click a pin's head to open it</dd>
     <dt>build</dt><dd>place objects and templates, from the ones used lately or the library, draw floors, walls, rooms and roofs as slabs, draw stairs and ramps, and pick what's placed to move, turn, delete or make a template of</dd>
-    <dt>caves</dt><dd>plan and shape caves (being rebuilt)</dd>
+    <dt>caves</dt><dd>plan and shape caves (being rebuilt); go to takes you to where you click</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, draw streams and rivers, and clear it away</dd>
   </dl>
 </div>

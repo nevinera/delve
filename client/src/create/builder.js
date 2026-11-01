@@ -21,6 +21,9 @@ import { WALK_DEG } from "./growth.js";
 // height. Double-tapping space, F or W and holding the second press goes FAST times as fast that
 // way.
 //
+// Standing, double-tapping F takes them down into the earth, flying, where they're a ghost (ghost())
+// till they come out of the rock; the camera stays under the ground with them.
+//
 // Left-drag swings the camera round the builder, right-drag turns the builder with it, both tip
 // it up and down, and the wheel zooms. The higher the builder flies, the more the camera looks down (cameraFor).
 
@@ -40,6 +43,7 @@ export const GRAVITY_FT = 32; // a second, each second, falling
 const STEEPEST = Math.tan((WALK_DEG * Math.PI) / 180); // rise over run
 const DOUBLE_TAP_MS = 300;
 const EYE_FT = 5.5;
+const DIVE_FT = 8; // how far into the earth double-tapping F takes them at once, deep enough to be in its rock
 const CAMERA = { distance: 30, min: 4, max: 2000, pitch: 0.35, minPitch: -1.3, maxPitch: 1.45 };
 // How the camera changes with height: tipped down by up to `tilt` radians, all of it by `tiltFt`
 // up, then, from `highFt`, toward looking straight down, all the way at `topFt`, to plan from.
@@ -189,6 +193,7 @@ export class Builder {
     this.taps = {}; // key -> when it was last pressed
     this.fast = new Set(); // the keys held since being double-tapped
     this.takeoff = false;
+    this.dive = false; // F double-tapped standing
     this.paints = false; // whether a tool has the left button, leaving looking round to the right
     this.figure = new Figure(scene);
     window.addEventListener("keydown", (e) => this.onKey(e, true));
@@ -228,6 +233,11 @@ export class Builder {
       pitch,
     };
     this.takeoff = false;
+    if (this.dive) {
+      const { x, z } = this.state;
+      this.state = { ...this.state, y: Math.min(this.state.y, this.landAt(x, z) ?? SEA_LEVEL_FT) - DIVE_FT, flying: true, swimming: false, falling: 0 };
+      this.dive = false;
+    }
     const was = this.state;
     this.state = this.ghost()
       ? moveBuilder({ ...this.state, flying: true }, input, dt, () => -Infinity, undefined, undefined, this.landAt)
@@ -253,6 +263,8 @@ export class Builder {
     const floor = (this.state.swimming ? (this.groundAt(at.x, at.z) ?? SEA_LEVEL_FT) : this.standAt(at.x, at.z)) + 2;
     if (at.y < floor && !this.ghost()) at.y = floor;
     at.copy(this.clear(head, at));
+    // In the earth, under the ground.
+    if (this.ghost()) at.y = Math.min(at.y, (this.landAt(at.x, at.z) ?? SEA_LEVEL_FT) - 2);
     this.camera.position.copy(at);
     this.camera.lookAt(at.clone().sub(away));
   }
@@ -273,6 +285,7 @@ export class Builder {
     if (now - (this.taps[key] ?? -Infinity) < DOUBLE_TAP_MS) this.fast.add(key);
     this.taps[key] = now;
     if (key === " " && !this.state.flying) this.takeoff = true;
+    if (key === "f" && this.fast.has("f") && !this.state.flying && !this.state.swimming) this.dive = true;
   }
 
   onDown(e) {

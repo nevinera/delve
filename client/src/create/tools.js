@@ -39,6 +39,7 @@ import { WaterBodies } from "./water.js";
 //   them where the pointer is, and a ring on the ground shows where they reach. [ and ] resize
 //   them, and c and v turn raise and lower's, shift+c and shift+v a little.
 // - build's tools place objects, templates and slabs, and pick them to change (build.js).
+// - caves' go to stands the builder on the ground where it's clicked, from over it or under it.
 // - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
 //   more each time the ring's moved its radius. Its undo takes back the last scattering.
 
@@ -354,6 +355,11 @@ export class Tools {
       if (BUILD.has(this.tool)) {
         canvas.setPointerCapture(e.pointerId);
         return this.build.down(e);
+      }
+      if (this.tool === "goto") {
+        const at = this.hit();
+        if (at) this.builder.state = { ...this.builder.state, x: at[0], y: at[1], z: at[2], flying: false, swimming: false, falling: 0 };
+        return;
       }
       if (this.tool === "pin") {
         const at = this.hit();
@@ -737,15 +743,17 @@ export class Tools {
   // Where the tool works at (x, z): sea level for lines being worked on, or the surface.
   drawAt = (x, z) => (this.marks.flat ? SEA_LEVEL_FT : this.surface(x, z));
 
-  // Where the pointer meets the ground (or the sea), or `surface` given, [x, y, z], or null.
+  // Where the pointer meets the ground (or the sea), or `surface` given, [x, y, z], or null: from
+  // over it or, in the earth, from under it.
   hit(surface = (x, z) => this.surface(x, z)) {
     if (!this.pointer) return null;
     const ray = new THREE.Raycaster();
     ray.setFromCamera(this.pointer, this.camera);
     const { origin, direction } = ray.ray;
+    const side = origin.y < surface(origin.x, origin.z) ? -1 : 1;
     const above = (t) => {
       const [x, z] = [origin.x + direction.x * t, origin.z + direction.z * t];
-      return origin.y + direction.y * t - surface(x, z);
+      return side * (origin.y + direction.y * t - surface(x, z));
     };
     let [t0, t] = [0, 0];
     while (t < PICK_FT) {

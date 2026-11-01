@@ -29,6 +29,7 @@ import { BranchMoved, fromRepo, loadRepo, nextVersion, recordOpened, repoChanges
 import { CAVES_PATH, Caves } from "./caves.js";
 import { Layout, layoutPath } from "./caveLayout.js";
 import { Overhead } from "./overhead.js";
+import { Earth } from "./earth.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
 // The world comes from a zip you upload (script/convert-v2.mjs makes one from a v1 world) or a
@@ -50,6 +51,7 @@ const HUD_EVERY_MS = 250;
 const BUILDER_RADIUS_FT = 1; // how much room the builder takes, walking among trees and objects
 const STEP_FT = 2.5; // how far up the builder steps onto a slab, or a cave's floor
 const HEAD_FT = 6; // how tall the builder is, for cave rock in the way
+const MID_FT = 3; // how far up the builder they're in the earth where it's rock
 const INFO_EVERY_MS = 100;
 
 // The world's kept in IndexedDB (store.js): the zip opened last, or the files of the repo's commit
@@ -175,6 +177,7 @@ function start(world, changes, fresh) {
   // theirs to draw.
   const caves = new Caves(scene, renditions);
   const overhead = new Overhead(scene, (x, z) => renditions.heightAt(x, z));
+  const earth = new Earth(scene);
   let lastOverhead = 0;
   for (const [path, bytes] of world.files) if (CAVES_PATH.exec(path)?.[1] === continent) caves.load(bytes);
   // The rooms and tunnels planned, to carve (caveLayout.js).
@@ -214,8 +217,11 @@ function start(world, changes, fresh) {
   };
   const clear = (head, at) => caves.clear(head, at);
   let tools = null;
-  // They're a ghost with the ghost toggle on.
-  const ghost = () => $("ghost").checked;
+  // They're a ghost in the earth: in rock under the ground, not in a cave's air.
+  const ghost = () => {
+    const { x, y, z } = builder.state;
+    return caves.solid(x, y + MID_FT, z);
+  };
   // Flying, cave rock's in the way too, sliding along it where it can, unless they're a ghost or
   // already in it.
   const keep = (was, now) => {
@@ -378,8 +384,6 @@ function start(world, changes, fresh) {
     last = now;
     frames++;
     timed("move", () => builder.tick(dt));
-    // Shut in rock, and not a ghost, they're put on the ground over it.
-    if (!ghost() && rockAt(builder.state.x, builder.state.z, builder.state.y)) builder.state = { ...builder.state, y: groundAt(builder.state.x, builder.state.z), flying: false, falling: 0 };
     timed("tool", () => tools.tick(dt));
     const { x, y, z } = builder.state;
     timed("ground", () => {
@@ -425,6 +429,7 @@ function start(world, changes, fresh) {
     // In the rock, the caves' outlines show whether they're toggled on or not.
     caves.show("lines", $("showCaveOutlines").checked || (buried && caves.solid(cx, camera.position.y, cz)));
     timed("ground", () => overhead.tick(buried, x, z, now - lastOverhead > OVERHEAD_EVERY_MS && (lastOverhead = now)));
+    earth.tick(camera, ghost());
     for (const shown of [sea.mesh, falls.group, things.group, things.outlines]) shown.visible = !buried;
     if (buried) for (const shown of [scatter.group, clutter.group, surfaces.group]) shown.visible = false;
     const sky = buried ? UNDERGROUND : under ? UNDERWATER.color : SKY;
