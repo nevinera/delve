@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { CAVES_PATH, TILE_CELLS, allStone, carve, cavesPath, growCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
-import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
+import { CELL_FT, CHUNK_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial, setBrush } from "./caveMaterial.js";
 import { caveMesh, cutMesh, opensAt, zipped } from "./caveMesh.js";
 import { EMPTY_FT, FULL_TILES } from "./ground.js";
@@ -55,6 +55,7 @@ export class Caves {
     // tile's ground mesh drawn in full, or null, whose material the joins take.
     this.entrances = new Map();
     this.entranceCells = new Set(); // "ci,cj"
+    this.held = new Set(); // "cx,cz" of the ground's chunks round entrances, kept from moving
     this.groundMesh = null;
     // Each entrance's ground joined to its rock, colored and drawn as the ground is; and for now,
     // the ground's edge in teal and the rock's in pink.
@@ -130,9 +131,20 @@ export class Caves {
       plates.add(`${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`);
     }
     this.entranceCells = next;
+    this.held = new Set([...this.entrances.values()].flatMap((e) => (e.chunks ?? []).map(([cx, cz]) => `${cx},${cz}`)));
     this.joinsMade = null;
     this.version++;
     if (plates.size) this.onMouths?.(plates);
+  }
+
+  // Whether the ground within `pad` ft of (x, z) is in a chunk kept from moving round an entrance,
+  // edges and all.
+  holds(x, z, pad = 0) {
+    if (!this.held.size) return false;
+    for (let cz = Math.floor((z - pad) / CHUNK_FT); cz <= Math.floor((z + pad) / CHUNK_FT); cz++) {
+      for (let cx = Math.floor((x - pad) / CHUNK_FT); cx <= Math.floor((x + pad) / CHUNK_FT); cx++) if (this.held.has(`${cx},${cz}`)) return true;
+    }
+    return false;
   }
 
   // Tile (tx, tz)'s cells whose ground isn't drawn, where caves open through it or entrances reach

@@ -73,8 +73,6 @@ export class CavePlan {
     this.details = { node: { ...NODE_DEFAULTS }, arc: { ...ARC_DEFAULTS }, entrance: { ...ENTRANCE_DEFAULTS } };
     this.drawn = null; // what the drawing was made from
     this.joined = new Map(); // entrance id -> what its join with the ground was worked out from
-    this.moved = new Set(); // ids of the entrances the ground's moved round, to carve again
-    this.groundNote = null; // (text) => void, for what moving the ground did to entrances
 
     this.group = new THREE.Group();
     this.group.visible = false;
@@ -211,57 +209,21 @@ export class CavePlan {
 
   // Carves what's changed since it was last carved: fills in what it carved before, then carves it
   // as it is now, with the neighbours that touches.
-  carve(ids = null) {
-    const plan = carvePlan(this.layout, ids ? { ids } : undefined, this.groundAt);
+  carve() {
+    const plan = carvePlan(this.layout, undefined, this.groundAt);
     if (plan.fills.length || plan.opens.length) this.caves.carvePlan(plan, () => {});
     this.layout.carved = plan.carved;
     this.layout.version++;
-    this.joinEntrances(ids ?? []);
+    this.joinEntrances();
     const notes = [];
     if (plan.unfit.length) notes.push(`${plan.unfit.join(", ")} won't fit under the ground, so ${plan.unfit.length > 1 ? "aren't" : "isn't"} carved`);
     if (plan.short.length) notes.push(`${plan.short.join(", ")} ${plan.short.length > 1 ? "are" : "is"} shorter than ${TUNNEL_SPAN} times ${plan.short.length > 1 ? "their" : "its"} width, so ${plan.short.length > 1 ? "aren't" : "isn't"} carved: curve ${plan.short.length > 1 ? "them" : "it"} out further`);
     this.status(notes.join("; "));
   }
 
-  // After the ground's moved within `bounds`, [x0, z0, x1, z1] continent feet: false where that's
-  // left an entrance that's locked, or joined to what is, out of the open or its far end out from
-  // under the ground, for the move to be undone. Other entrances it's left so are taken away, their
-  // rock filled back in; and the rest it reaches are carved again once the ground settles. Either
-  // is told to groundNote(text), set by what moves the ground.
-  groundMoved([x0, z0, x1, z1]) {
-    const near = (e) => {
-      const reach = e.width + 4;
-      const xs = [e.mouth[0], e.at[0]];
-      const zs = [e.mouth[2], e.at[2]];
-      return Math.min(...xs) - reach <= x1 && Math.max(...xs) + reach >= x0 && Math.min(...zs) - reach <= z1 && Math.max(...zs) + reach >= z0;
-    };
-    const reached = [...this.layout.nodes.values()].filter((e) => isEntrance(e) && this.layout.carved.has(e.id) && near(e));
-    const buried = reached.filter((e) => entranceProblem(e, this.groundAt));
-    if (buried.some((e) => !this.free(e.id))) {
-      this.groundNote?.(`that would bury ${buried.filter((e) => !this.free(e.id)).map((e) => e.id).join(", ")}, which ${buried.length > 1 ? "are" : "is"} locked`);
-      return false;
-    }
-    if (buried.length) {
-      this.remember();
-      for (const e of buried) this.layout.remove(e.id);
-      this.carve();
-      this.groundNote?.(`${buried.map((e) => e.id).join(", ")} ${buried.length > 1 ? "were" : "was"} buried, so ${buried.length > 1 ? "they're" : "it's"} taken away`);
-    }
-    for (const e of reached) if (!buried.includes(e)) this.moved.add(e.id);
-    return true;
-  }
-
-  // Carves again the entrances the ground's moved round since it last settled.
-  groundSettled() {
-    const ids = [...this.moved].filter((id) => this.layout.nodes.has(id));
-    this.moved.clear();
-    if (ids.length) this.carve(ids);
-  }
-
   // Works out again how each entrance that's changed, or whose ground has, meets the ground
   // (entranceJoin.js), for the caves files to keep; and drops those that are gone or not carved.
-  // `ground`: ids whose ground has changed.
-  joinEntrances(ground = []) {
+  joinEntrances() {
     const entrances = [...this.layout.nodes.values()].filter((e) => isEntrance(e) && this.layout.carved.has(e.id));
     const ids = new Set(entrances.map((e) => e.id));
     for (const id of [...this.caves.entrances.keys()]) {
@@ -271,7 +233,7 @@ export class CavePlan {
     }
     for (const e of entrances) {
       const made = JSON.stringify([e.mouth, e.yaw, e.length, e.slope, e.width, e.style]);
-      if (this.joined.get(e.id) === made && !ground.includes(e.id) && this.caves.entrances.has(e.id)) continue;
+      if (this.joined.get(e.id) === made && this.caves.entrances.has(e.id)) continue;
       this.joined.set(e.id, made);
       const plate = [0, 2].map((k) => Math.floor(e.mouth[k] / (PLATE_TILES * TILE_FT))).join(",");
       this.caves.setEntrance(e.id, entranceJoin(e, this.caves.world, this.groundAt), plate);

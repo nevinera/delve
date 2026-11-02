@@ -1,5 +1,5 @@
 import { TILE_CELLS } from "../v2/caves.js";
-import { CELL_FT, TILE_FT } from "../v2/sizes.js";
+import { CELL_FT, CHUNK_FT, TILE_FT } from "../v2/sizes.js";
 import { entranceCells } from "./caveLayout.js";
 import { caveMesh, chains, cutMesh, fitPlane, zipSteps } from "./caveMesh.js";
 
@@ -10,7 +10,9 @@ import { caveMesh, chains, cutMesh, fitPlane, zipSteps } from "./caveMesh.js";
 //   entrance's mouth; the rock is cut back to its other side, near it (caveMesh.js's cutMesh);
 // - ground: the ground's edge round the cells left out, its corners in order;
 // - rock: the rock's edge where it's cut back, in order;
-// - steps: how the two are zipped together (caveMesh.js's zipSteps), ground and rock as turned.
+// - steps: how the two are zipped together (caveMesh.js's zipSteps), ground and rock as turned;
+// - chunks: the ground's chunks round it, [cx, cz] each, mouth to far end and the cells left out,
+//   that nothing moves (ground.js's raise and clear), so none of this goes stale.
 // Null where the entrance doesn't open through the ground, or its edges don't close.
 //
 // world: as caveMesh.js's, with the caves as carved; groundAt(x, z): the ground's height.
@@ -48,7 +50,27 @@ export function entranceJoin(entrance, world, groundAt) {
   const rock = chains(seam).reduce((best, line) => (!best || Math.hypot(...middle(line).map((v, k) => v - plane.center[k])) < Math.hypot(...middle(best).map((v, k) => v - plane.center[k])) ? line : best), null);
   if (!rock || rock.length < 3) return null;
   const { a, b, steps } = zipSteps(ground, rock, plane);
-  return { cells, plane, ground: a, rock: b, steps };
+  return { cells, plane, ground: a, rock: b, steps, chunks: heldChunks(entrance, cells) };
+}
+
+// The chunks within the entrance's width and a cell of the line from its mouth to its far end,
+// and those the cells left out are in, edges and all.
+function heldChunks(entrance, cells) {
+  const reach = entrance.width + CELL_FT;
+  const [ax, az, bx, bz] = [entrance.mouth[0], entrance.mouth[2], entrance.at[0], entrance.at[2]];
+  const length = Math.hypot(bx - ax, bz - az);
+  const held = new Set();
+  for (let d = 0; d <= length + CELL_FT; d += CELL_FT) {
+    const t = Math.min(1, d / (length || 1));
+    const [x, z] = [ax + (bx - ax) * t, az + (bz - az) * t];
+    for (let cz = Math.floor((z - reach) / CHUNK_FT); cz <= Math.floor((z + reach) / CHUNK_FT); cz++) {
+      for (let cx = Math.floor((x - reach) / CHUNK_FT); cx <= Math.floor((x + reach) / CHUNK_FT); cx++) held.add(`${cx},${cz}`);
+    }
+  }
+  for (const [ci, cj] of cells) {
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) held.add(`${Math.floor(((ci + di) * CELL_FT) / CHUNK_FT)},${Math.floor(((cj + dj) * CELL_FT) / CHUNK_FT)}`);
+  }
+  return [...held].map((key) => key.split(",").map(Number)).sort((p, q) => p[1] - q[1] || p[0] - q[0]);
 }
 
 const longest = (lines) => lines.reduce((best, line) => (!best || line.length > best.length ? line : best), null);

@@ -135,7 +135,6 @@ export class Tools {
     });
     this.build.onPick = (tool) => this.tool !== tool && this.pick(tool);
     this.plan = new CavePlan({ scene, camera, canvas, layout, caves, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT });
-    this.plan.groundNote = (text) => ($("brushStatus").textContent = text);
     this.paths = new Paths(scene, canvas.parentElement, renditions, (x, z) => this.surface(x, z), (text) => ($("pathStatus").textContent = text));
     this.moving = null; // pins being dragged, { from, pins: [[pin, x, z]], before, moved }
     this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }
@@ -417,7 +416,6 @@ export class Tools {
       }
       const at = this.hit(this.drawAt);
       if (BRUSHES.has(this.tool)) {
-        $("brushStatus").textContent = "";
         // Flatten pulls toward the ground's height where the stroke began.
         this.stroke = { invert: e.ctrlKey || e.metaKey, from: at ? this.renditions.heightAt(at[0], at[2]) ?? EMPTY_FT : null };
         this.marks.erased = false;
@@ -429,7 +427,6 @@ export class Tools {
       this.showStroke();
     });
     canvas.addEventListener("pointerup", () => {
-      if (this.stroke) this.plan.groundSettled();
       this.stroke = null;
       if (BUILD.has(this.tool)) this.build.up();
       if (PLANS.has(this.tool)) this.plan.up();
@@ -861,10 +858,7 @@ export class Tools {
           : this.tool === "noise"
             ? noiseBrush({ ...this.settings, lower: this.stroke.invert }, x, z, dt)
             : pullBrush(this.tool, this.settings, x, z, dt, groundAt, this.stroke.from);
-      const moved = this.renditions.raise(brush.at, brush.bounds, brush.level);
-      // Ground that would bury a locked entrance doesn't move.
-      if (!this.plan.groundMoved(brush.bounds)) this.renditions.raise((px, pz) => -brush.at(px, pz), brush.bounds, brush.level, false);
-      this.ground.refresh(moved);
+      this.ground.refresh(this.renditions.raise(brush.at, brush.bounds, brush.level));
     }
     const positions = this.ring.geometry.attributes.position;
     const lift = Math.max(1, this.camera.position.distanceTo(new THREE.Vector3(...at)) * 0.002);

@@ -79,5 +79,6 @@ After the tiles, a plate with entrances whose mouths are in it has an `entrances
 - `ground`: the ground's edge round the cells left out, `[x, y, z]` points in order, closing on itself.
 - `rock`: the rock's edge where the plane cuts it, the same way round, starting across from `ground`'s first point.
 - `steps`: how the two edges join, a letter a triangle: `a` takes the next point on `ground`, `b` the next on `rock`. Readers color the triangles as the ground is, and draw them with it.
+- `chunks`: the ground's 32 ft chunks round it, `[cx, cz]` each, from its mouth to its far end and round the cells left out. /create moves no ground in them, edges included, so the entrance stays as it was carved.
 
 An entrance on a plate's edge is kept only in its mouth's plate, so readers redraw the ground beside it once that plate loads.
