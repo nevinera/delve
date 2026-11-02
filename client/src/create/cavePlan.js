@@ -5,31 +5,35 @@ import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { NET_SLUG } from "../v2/caves.js";
 import { CAMERA } from "./builder.js";
 import { reachOf } from "./caveQualities.js";
-import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, ROCK_FT, EXCLUSIVE, carvePlan, configOf, entranceEnd, entranceProblem, entranceRing, fits, mouthBehind, passageWarnings, rockProblem, segmentShapes, steep } from "./caveLayout.js";
+import { alert } from "./alerts.js";
+import { ENTRANCE_DEFAULTS, ENTRANCE_FT, POINT_DEFAULTS, JOIN_FT, POINT_FT, ROCK_FT, EXCLUSIVE, carvePlan, configOf, entranceEnd, entranceProblem, entranceRing, fits, mouthBehind, passageWarnings, rockProblem, segmentShapes, steep } from "./caveLayout.js";
 
-// The caves' layout tools (caveLayout.js). Select picks an entrance or point by its dot, or
-// nothing, and never places one. Entrance, from above the ground, places an entrance
+// The caves' layout tools (caveLayout.js), and the panel for the network you're in. Select picks
+// an entrance or point by its dot, or nothing, and never places one. Entrance, from above the ground, places an entrance
 // held where the pointer meets it, HOLD_FT in from its mouth: a tube into the hillside, facing the
 // way the camera looks, turned with C and V, ending at a point passages go on from. Its mouth has
 // to be out in the air but for the bottom of it, and it's red where it isn't. A new entrance
-// starts a new cave network, named in the panel, or goes into one picked there. A click picks an
-// entrance; the panel shows its details, or those of the next one placed, and changing them
+// starts a new cave network, named in its options, or goes into one picked there. A click picks an
+// entrance; the options show its details, or those of the next one placed, and changing them
 // changes it. Each change carves what it changed straight away (caveLayout.js's carvePlan), and
-// undoes on its own.
+// undoes on its own. What can't be done alerts why when you try it (alerts.js), never while you
+// only aim.
 //
-// Passage, from inside a cave, lays out passages: the new point goes the way you look, REACH_FT
+// Add, from inside a cave, lays out passages: the new point goes the way you look, REACH_FT
 // from your feet, level when you look straight ahead (the camera at rest, the pointer in the
 // middle), the scroll wheel setting how far, and the passage goes on to it from the nearest
 // spot on a passage to you, splitting it there unless a point's within its passage's width
-// (Layout's joinAt). Aimed near another passage, it snaps to it, to make a loop. A ghost of it shows as you aim, red where it
-// can't go, too near a passage it doesn't join or another network (caveLayout.js's rockProblem)
-// among others, and orange, with a warning, where it's too steep to walk. Passages too steep to
-// walk are drawn orange. The new point's selected, so the panel can size it; a click on another's
-// dot picks it.
+// (Layout's joinAt). Aimed near another passage, it snaps to it, to make a loop. A ghost of it
+// shows as you aim, red where it can't go, too near a passage it doesn't join or another network
+// (caveLayout.js's rockProblem) among others, and orange where it's too steep to walk. Passages
+// too steep to walk are drawn orange. Add has its own options, taken from the point nearest you
+// when it's picked, and the points it places take them; a point it splits a passage with takes
+// its nearer end's.
 //
-// A network can be burned in, locking its layout so its rock can be polished by hand, its lines
-// drawn dim; unlocking, asked first in the panel, carves it again from its layout, throwing away
-// its hand edits.
+// The current network is the one you're in, or were last in. The panel shows it and switches it
+// between layout and polish: polish locks its layout so its rock can be edited by hand, its lines
+// drawn dim; going back to layout, asked first in a dialog, carves it again from its layout,
+// throwing away its hand edits.
 //
 // The layout's drawn as dots, an entrance's at its mouth and a point's on its floor, joined by
 // faint lines; the one hovered or selected shows its size in faint lines too: an entrance its
@@ -53,7 +57,8 @@ const UNDOS = 100;
 const REACH_FT = [8, 32, 96]; // how far past you a passage reaches: least, at first, most
 const REACH_STEP_FT = 4;
 const LEVEL_RAD = 0.06; // how far either way of straight ahead a passage aimed is level
-const NEW = ""; // the network picker's value for a new network
+const NEW = ""; // the entrance network picker's value for a new network
+const ROCKS = 4; // rock types, 0 to 3, picked with the number keys 2 to 5
 const $ = (id) => document.getElementById(id);
 
 // A network's name as a slug: lowercase words joined by hyphens.
@@ -69,9 +74,10 @@ export class CavePlan {
   // meets the ground, [x, y, z], or null. groundAt(x, z): the ground's height.
   // caves: the Caves to carve.
   // here(): where you stand, [x, y, z].
-  constructor({ scene, camera, canvas, layout, caves, ray, groundHit, groundAt, here }) {
-    Object.assign(this, { camera, canvas, layout, caves, ray, groundHit, groundAt, here });
-    this.tool = null; // "caveSelect", "entrance" or "passage" while it's picked
+  // seq(): the next number in the order cave changes are made, shared with polish's, for undo.
+  constructor({ scene, camera, canvas, layout, caves, ray, groundHit, groundAt, here, seq }) {
+    Object.assign(this, { camera, canvas, layout, caves, ray, groundHit, groundAt, here, seq });
+    this.tool = null; // "caveSelect", "entrance" or "caveAdd" while it's picked
     this.reach = REACH_FT[1]; // how far past you a passage reaches
     this.ghost = null; // the passage aimed, { from, to, at, ends, problem }
     this.selected = null; // the id of the element selected
@@ -79,13 +85,14 @@ export class CavePlan {
     this.pointer = null; // where the pointer is on the canvas, [x, y] px, or null
     this.hovered = null; // the id of the entrance or point the pointer's on
     this.turn = 0; // degrees an entrance is turned from the way the camera looks
-    this.shownProblem = null; // why what's pointed at can't go there, as last shown
-    this.history = []; // the layout as it was before each change, latest last
+    this.history = []; // { seq, layout }: the layout as it was before each change, latest last
     this.details = { ...ENTRANCE_DEFAULTS };
+    this.adding = configOf(POINT_DEFAULTS); // add's options, which the points it places take
     this.net = NEW; // the network new entrances go into, or NEW
+    this.current = null; // the network you're in, or were last in, or null
+    this.shown = false; // whether the layout's drawn (the panel's layout checkbox)
     this.drawn = null; // what the drawing was made from
     this.listed = null; // the networks the picker lists
-    this.asking = false; // whether the panel asks to unlock the network picked
 
     this.group = new THREE.Group();
     this.group.visible = false;
@@ -106,7 +113,8 @@ export class CavePlan {
 
   bind() {
     const changeDetail = (key, value) => {
-      if (this.lockedProblem(this.layout.get(this.selected)?.net)) return this.status(this.lockedProblem(this.layout.get(this.selected).net));
+      if (this.tool === "caveAdd") return key in this.adding && (this.adding[key] = value);
+      if (this.lockedProblem(this.layout.get(this.selected)?.net)) return alert(this.lockedProblem(this.layout.get(this.selected).net));
       const point = this.layout.points.get(this.selected);
       if (point) {
         if (point[key] === value || !(key in point)) return;
@@ -120,7 +128,7 @@ export class CavePlan {
       if (e[key] === value) return;
       // An entrance changed has to fit where it is.
       const problem = entranceProblem({ ...e, [key]: value }, this.groundAt);
-      if (problem) return this.status(problem);
+      if (problem) return alert(problem);
       this.remember();
       e[key] = value;
       const end = this.layout.points.get(e.point);
@@ -129,7 +137,8 @@ export class CavePlan {
       this.layout.version++;
       this.carve();
     };
-    $("planRock").addEventListener("change", () => changeDetail("rock", Number($("planRock").value)));
+    this.changeDetail = changeDetail;
+    for (const button of document.querySelectorAll('[data-rocks="plan"] [data-rock]')) button.addEventListener("click", () => changeDetail("rock", Number(button.dataset.rock)));
     for (const button of document.querySelectorAll("[data-entrance-style]")) button.addEventListener("click", () => changeDetail("style", button.dataset.entranceStyle));
     for (const button of document.querySelectorAll("[data-entrance-length]")) button.addEventListener("click", () => changeDetail("length", Number(button.dataset.entranceLength)));
     for (const button of document.querySelectorAll("[data-entrance-slope]")) button.addEventListener("click", () => changeDetail("slope", button.dataset.entranceSlope));
@@ -144,7 +153,7 @@ export class CavePlan {
     // Qualities toggle, but for those only one of which a point can have.
     for (const button of document.querySelectorAll("[data-quality]")) {
       button.addEventListener("click", () => {
-        const point = this.layout.points.get(this.selected);
+        const point = this.tool === "caveAdd" ? this.adding : this.layout.points.get(this.selected);
         if (!point) return;
         const q = button.dataset.quality;
         const others = EXCLUSIVE.find((group) => group.includes(q)) ?? [q];
@@ -152,16 +161,27 @@ export class CavePlan {
       });
     }
     $("planNet").addEventListener("change", () => (this.net = $("planNet").value));
-    $("planRename").addEventListener("click", () => this.rename());
-    $("planBurn").addEventListener("click", () => this.burn());
-    $("planUnlockYes").addEventListener("click", () => this.unlock());
-    $("planUnlockNo").addEventListener("click", () => (this.asking = false));
+    $("caveRename").addEventListener("change", () => this.rename());
+    $("cavePhaseSwitch").addEventListener("click", () => this.switchPhase());
+    $("caveUnlockYes").addEventListener("click", () => {
+      $("caveUnlockAsk").close();
+      this.unlock();
+    });
+    $("caveUnlockNo").addEventListener("click", () => $("caveUnlockAsk").close());
     $("planDelete").addEventListener("click", () => this.deleteSelected());
-    $("planUndo").addEventListener("click", () => this.undo());
   }
 
-  // Picks a layout tool, or none.
+  // Picks a layout tool, or none. Add takes its options from the point nearest you.
   setTool(tool) {
+    if (tool === "caveAdd" && this.tool !== tool) {
+      const here = this.here();
+      let near = null;
+      for (const net of this.layout.networks.keys()) {
+        const spot = this.layout.nearest(net, here);
+        if (spot && (!near || spot.d < near.d)) near = spot;
+      }
+      if (near) this.adding = configNear(this.layout, near);
+    }
     this.tool = tool;
     this.hover = null;
     this.ghost = null;
@@ -169,41 +189,52 @@ export class CavePlan {
   }
 
   remember() {
-    this.history.push(this.layout.toJSON());
+    // A copy: changes are made in place, and would change what's kept.
+    this.history.push({ seq: this.seq(), layout: structuredClone(this.layout.toJSON()) });
     if (this.history.length > UNDOS) this.history.shift();
   }
 
+  // Undoes the last layout change: gives false where there's none.
   undo() {
     const last = this.history.pop();
-    if (!last) return this.status("nothing to undo");
-    const carved = this.layout.carved;
-    this.layout.load(last);
-    this.layout.carved = carved;
-    if (!this.layout.get(this.selected)) this.selected = null;
-    this.status("");
+    if (!last) return false;
+    this.restore(last);
     this.carve(false);
+    return true;
+  }
+
+  // Puts the layout back as it was in history entry `last`, keeping what's carved.
+  restore(last) {
+    const carved = this.layout.carved;
+    this.layout.load(last.layout);
+    this.layout.carved = carved;
+    this.layout.version++;
+    if (!this.layout.get(this.selected)) this.selected = null;
+    if (!this.layout.networks.has(this.net)) this.net = NEW;
+    if (!this.layout.networks.has(this.current)) this.current = null;
   }
 
   deleteSelected() {
     if (!this.selected) return;
     const locked = this.lockedProblem(this.layout.get(this.selected)?.net);
-    if (locked) return this.status(locked);
+    if (locked) return alert(locked);
     this.remember();
     this.layout.remove(this.selected);
     this.selected = null;
     this.carve();
   }
 
-  // Renames the network picked to the name typed.
+  // Renames the current network to the name typed.
   rename() {
-    const [from, to] = [this.net, slugOf($("planNetName").value)];
-    if (from === NEW) return;
+    const [from, to] = [this.current, slugOf($("caveRename").value)];
+    $("caveRename").value = "";
+    if (!from || !to) return;
     const problem = this.lockedProblem(from) ?? this.nameProblem(to);
-    if (problem) return this.status(problem);
+    if (problem) return alert(problem);
     this.remember();
     this.layout.renameNetwork(from, to);
-    this.net = to;
-    $("planNetName").value = "";
+    if (this.net === from) this.net = to;
+    this.current = to;
     this.carve();
   }
 
@@ -212,32 +243,36 @@ export class CavePlan {
     return net && this.layout.locked(net) ? `${net} is being polished; you can't change its layout until it's back in layout` : null;
   }
 
-  // Burns the network picked in, or asks to unlock it.
-  burn() {
-    if (this.net === NEW) return;
-    if (this.layout.locked(this.net)) return (this.asking = true);
+  // Starts polishing the current network, or asks, in a dialog, to take it back to layout.
+  switchPhase() {
+    const net = this.current;
+    if (!net) return;
+    if (this.layout.locked(net)) {
+      $("caveUnlockNet").textContent = net;
+      return $("caveUnlockAsk").showModal();
+    }
     this.remember();
-    this.layout.setPhase(this.net, "polish");
-    this.status(`${this.net} is being polished`);
+    this.layout.setPhase(net, "polish");
+    alert(`${net} is being polished`);
   }
 
-  // Unlocks the network picked, carving it again from its layout. Its hand edits are gone, so
-  // nothing before this can be undone.
+  // Takes the current network back to layout, carving it again from its layout. Its hand edits
+  // are gone, so nothing before this can be undone.
   unlock() {
-    this.asking = false;
-    const net = this.net;
+    const net = this.current;
+    if (!net || !this.layout.locked(net)) return;
     this.layout.setPhase(net, "layout");
     const plan = carvePlan(this.layout, { afresh: net }, this.groundAt);
     this.caves.carvePlan(plan, () => {});
     if (this.caves.refused) {
       this.layout.setPhase(net, "polish");
-      return this.status(this.caves.refused);
+      return alert(this.caves.refused);
     }
     this.layout.carved = plan.carved;
     this.layout.version++;
     this.history = [];
     this.onUnlock?.(net);
-    this.status(`${net} is back in layout and carved again from it`);
+    alert(`${net} is back in layout and carved again from it`);
   }
 
   // Why a network can't be named `slug`, or null.
@@ -255,25 +290,14 @@ export class CavePlan {
     const plan = carvePlan(this.layout, undefined, this.groundAt);
     if ((plan.fills.length || plan.opens.length) && !this.caves.carvePlan(plan, () => {}) && this.caves.refused) {
       const last = revert && this.history.pop();
-      if (last) {
-        const carved = this.layout.carved;
-        this.layout.load(last);
-        this.layout.carved = carved;
-        this.layout.version++;
-        if (!this.layout.get(this.selected)) this.selected = null;
-        if (!this.layout.networks.has(this.net)) this.net = NEW;
-      }
-      this.status(this.caves.refused);
+      if (last) this.restore(last);
+      alert(this.caves.refused);
       return false;
     }
     this.layout.carved = plan.carved;
     this.layout.version++;
-    this.status(plan.unfit.length ? `${plan.unfit.join(", ")} won't fit under the ground, so ${plan.unfit.length > 1 ? "aren't" : "isn't"} carved` : "");
+    if (plan.unfit.length) alert(`${plan.unfit.join(", ")} won't fit under the ground, so ${plan.unfit.length > 1 ? "aren't" : "isn't"} carved`);
     return true;
-  }
-
-  status(text) {
-    $("planStatus").textContent = text;
   }
 
   // Where `p` (continent feet) is on the canvas, [x, y] in pixels, or null behind the camera.
@@ -316,29 +340,20 @@ export class CavePlan {
   }
 
 
-  // Where go to takes the builder for the pointer at [px, py]: the floor of a point, or of an
-  // entrance's far end, or null.
-  target(px) {
-    const id = this.pick(px);
-    const e = id && this.layout.entrances.get(id);
-    const point = e ? this.layout.points.get(e.point) : id && this.layout.points.get(id);
-    return point ? [...point.at] : null;
-  }
-
   // The left button down, with a layout tool picked.
   down(e) {
     const picked = this.pick(this.pointerPx(e));
     if (picked || this.tool === "caveSelect") return (this.selected = picked);
-    if (this.tool === "passage") return this.placePassage();
+    if (this.tool === "caveAdd") return this.placePassage();
     const spot = this.tool === "entrance" && this.entranceAt();
-    if (spot?.problem) return this.status(spot.problem);
-    if (spot && this.lockedProblem(this.net)) return this.status(this.lockedProblem(this.net));
+    if (spot?.problem) return alert(spot.problem);
+    if (spot && this.lockedProblem(this.net)) return alert(this.lockedProblem(this.net));
     if (spot) {
       // A new network's named as the entrance that starts it is placed.
       const slug = this.net === NEW ? slugOf($("planNetName").value) : this.net;
       if (this.net === NEW) {
         const problem = this.nameProblem(slug);
-        if (problem) return this.status(problem);
+        if (problem) return alert(problem);
       }
       this.remember();
       if (this.net === NEW) {
@@ -347,6 +362,7 @@ export class CavePlan {
         $("planNetName").value = "";
       }
       this.selected = this.layout.addEntrance(slug, spot.entrance).id;
+      this.current = slug;
       return this.carve();
     }
     this.selected = null;
@@ -357,13 +373,13 @@ export class CavePlan {
     const ghost = this.ghost;
     if (!ghost) {
       const open = [...this.layout.networks.keys()].some((net) => !this.layout.locked(net));
-      return this.status(open || !this.layout.networks.size ? "place an entrance first, then lay passages out from inside" : "every network is being polished; take one back to layout to lay passages out in it");
+      return alert(open || !this.layout.networks.size ? "place an entrance first, then add passages from inside" : "every network is being polished; take one back to layout to add passages to it");
     }
-    if (ghost.problem) return this.status(ghost.problem);
+    if (ghost.problem) return alert(ghost.problem);
     this.remember();
-    this.selected = this.layout.extend(ghost.from, ghost.to ? { to: ghost.to } : { at: ghost.at }).id;
-    this.net = this.layout.points.get(this.selected).net;
-    if (this.carve() && ghost.warnings.length) this.status(ghost.warnings.join("; "));
+    this.selected = this.layout.extend(ghost.from, ghost.to ? { to: ghost.to } : { at: ghost.at, config: this.adding }).id;
+    this.current = this.layout.points.get(this.selected).net;
+    if (this.carve() && ghost.warnings.length) alert(ghost.warnings.join("; "));
     this.aim();
   }
 
@@ -392,7 +408,7 @@ export class CavePlan {
     let to = this.layout.nearest(from.net, at, skip);
     if (to && to.d < sizeFt(start, 0) + sizeFt(configNear(this.layout, to), lengthOf(this.layout, to)) + ROCK_FT && Math.hypot(...to.at.map((v, k) => v - from.at[k])) > JOIN_FT) at = to.at;
     else to = null;
-    const ends = [{ ...start, at: from.at }, { ...start, at }];
+    const ends = [{ ...start, at: from.at }, { ...(to ? configNear(this.layout, to) : this.adding), at }];
     const length = Math.hypot(...at.map((v, k) => v - from.at[k]));
     const joins = [from, to].filter(Boolean).flatMap((spot) => {
       const segment = this.layout.segments.get(spot.id);
@@ -426,7 +442,7 @@ export class CavePlan {
   }
 
   wheel(e) {
-    if (this.tool !== "passage") return false;
+    if (this.tool !== "caveAdd") return false;
     this.reach = Math.max(REACH_FT[0], Math.min(REACH_FT[2], this.reach + Math.sign(e.deltaY) * REACH_STEP_FT));
     return true;
   }
@@ -434,23 +450,20 @@ export class CavePlan {
   move(e) {
     if (e?.clientX !== undefined) this.pointer = this.pointerPx(e);
     this.hover = this.tool === "entrance" ? this.entranceAt() : null;
-    if (this.tool === "passage") this.aim();
+    if (this.tool === "caveAdd") this.aim();
     this.drawPreview();
-    // Why what's pointed at can't go there, while it can't.
-    const problem = this.hover?.problem ?? this.ghost?.problem ?? (this.ghost?.warnings.join("; ") || null);
-    if (problem !== this.shownProblem) this.status(problem ?? "");
-    this.shownProblem = problem;
   }
 
   up() {}
 
   // Gives whether it took the key.
   key(e) {
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
-      this.undo();
+    const k = e.key.toLowerCase();
+    const rock = Number(e.key) - 2;
+    if (rock >= 0 && rock < ROCKS && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      this.changeDetail("rock", rock);
       return true;
     }
-    const k = e.key.toLowerCase();
     if (this.tool === "entrance" && (k === "c" || k === "v") && !e.ctrlKey && !e.metaKey && !e.altKey) {
       this.turn += (e.shiftKey ? FINE_TURN_DEG : TURN_DEG) * (k === "c" ? 1 : -1);
       this.hover = this.entranceAt();
@@ -468,13 +481,18 @@ export class CavePlan {
     return false;
   }
 
-  // Each frame: the layout's shown in the earth, and with a layout tool.
+  // Each frame: the current network follows you into the one you're in, and the layout's drawn
+  // in the earth, and where it's shown.
   tick(inEarth) {
     if (!this.settled) {
       this.settled = true;
       this.carve(false);
     }
-    this.group.visible = inEarth || Boolean(this.tool) || this.caves.view === "config";
+    const [x, y, z] = this.here();
+    const net = y < this.groundAt(x, z) ? this.caves.netAt(x, z) : null;
+    if (net && this.layout.networks.has(net)) this.current = net;
+    if (!this.layout.networks.has(this.current)) this.current = null;
+    this.group.visible = inEarth || this.shown;
     if (!this.group.visible) return;
     const { clientWidth: w, clientHeight: h } = this.canvas;
     this.lineMaterial.resolution.set(w, h);
@@ -483,8 +501,22 @@ export class CavePlan {
     if (made !== this.drawn) this.draw(made);
     for (const dot of this.drawing.children) if (dot.geometry === DOT_GEOMETRY) dot.scale.setScalar(this.camera.position.distanceTo(dot.position) * DOT_SCALE);
     // You and the camera move without the pointer moving.
-    if (this.tool === "passage") this.move();
+    if (this.tool === "caveAdd") this.move();
     if (this.tool) this.showDetails();
+  }
+
+  // The panel: the current network, its counts and phase.
+  showPanel() {
+    const net = this.current;
+    const count = (things) => [...things.values()].filter((t) => t.net === net).length;
+    const [points, entrances] = net ? [count(this.layout.points), count(this.layout.entrances)] : [0, 0];
+    $("caveNet").textContent = net ?? "no network";
+    $("cavePhase").textContent = net ? `in ${this.layout.networks.get(net).phase}` : "";
+    $("caveCounts").textContent = net ? `${points} point${points === 1 ? "" : "s"}, ${entrances} entrance${entrances === 1 ? "" : "s"}` : "place an entrance to start one";
+    $("cavePhaseSwitch").hidden = !net;
+    $("cavePhaseSwitch").textContent = this.layout.locked(net) ? "back to layout" : "start polishing";
+    $("caveRename").hidden = !net;
+    $("caveRename").placeholder = `rename ${net ?? ""} to`;
   }
 
   // A faint line through `points` (continent feet), colored `rgb`.
@@ -545,7 +577,7 @@ export class CavePlan {
       child.geometry.dispose();
     }
     const spot = this.tool === "entrance" && this.hover?.entrance && this.hover;
-    const ghost = this.tool === "passage" && this.ghost;
+    const ghost = this.tool === "caveAdd" && this.ghost;
     if (!spot && !ghost) return;
     const [positions, colors] = [[], []];
     const lines = spot ? entranceLines(spot.entrance, this.groundAt, spot.problem) : passageLines(ghost);
@@ -566,10 +598,11 @@ export class CavePlan {
     }
   }
 
-  // The panel: the networks to pick from, what the details are of, and their values.
+  // The options: the networks to pick from, what the details are of, and their values; with add,
+  // its own.
   showDetails() {
-    const selected = this.selected && this.layout.get(this.selected);
-    if (selected) this.net = selected.net;
+    const adding = this.tool === "caveAdd";
+    const selected = (!adding && this.selected && this.layout.get(this.selected)) || null;
     const nets = [...this.layout.networks.keys()].sort();
     if (nets.join(",") !== this.listed) {
       this.listed = nets.join(",");
@@ -577,18 +610,15 @@ export class CavePlan {
     }
     if (!this.layout.networks.has(this.net)) this.net = NEW;
     $("planNet").value = this.net;
-    $("planRename").hidden = this.net === NEW;
-    $("planBurn").hidden = this.net === NEW || this.asking;
-    $("planBurn").textContent = this.layout.locked(this.net) ? "back to layout" : "start polishing";
-    $("planUnlockAsk").hidden = !this.asking || this.net === NEW;
-    $("planNetName").placeholder = this.net === NEW ? "new network's name" : `rename ${this.net} to`;
-    const e = selected && this.layout.entrances.get(this.selected);
-    const point = selected && this.layout.points.get(this.selected);
+    $("planNetName").hidden = this.net !== NEW;
+    const e = (selected && this.layout.entrances.get(this.selected)) ?? null;
+    const point = adding ? this.adding : ((selected && this.layout.points.get(this.selected)) ?? null);
     const d = e ?? point ?? this.details;
     const placing = this.tool === "entrance";
-    $("planWhat").textContent = e ? `entrance ${e.id} into ${e.net}` : point ? `point ${point.id} in ${point.net}` : placing ? "the next entrance" : "nothing selected";
+    $("planWhat").textContent = adding ? "the points added" : e ? `entrance ${e.id} into ${e.net}` : point ? `point ${point.id} in ${point.net}` : placing ? "the next entrance" : "nothing selected";
     $("planEntranceDetails").hidden = Boolean(point) || (!placing && !e);
     $("planPointDetails").hidden = !point;
+    document.querySelector('[data-rocks="plan"]').hidden = !point && !e && !placing;
     $("planReachOut").textContent = `${this.reach} ft`;
     if (point) {
       for (const key of ["width", "height"]) {
@@ -597,7 +627,7 @@ export class CavePlan {
       }
       for (const button of document.querySelectorAll("[data-quality]")) button.setAttribute("aria-pressed", String(point.qualities.includes(button.dataset.quality)));
     }
-    if (document.activeElement !== $("planRock")) $("planRock").value = String(d.rock);
+    for (const button of document.querySelectorAll('[data-rocks="plan"] [data-rock]')) button.setAttribute("aria-pressed", String(Number(button.dataset.rock) === d.rock));
     for (const button of document.querySelectorAll("[data-entrance-style]")) button.setAttribute("aria-pressed", String(button.dataset.entranceStyle === d.style));
     for (const button of document.querySelectorAll("[data-entrance-length]")) button.setAttribute("aria-pressed", String(Number(button.dataset.entranceLength) === d.length));
     for (const button of document.querySelectorAll("[data-entrance-slope]")) button.setAttribute("aria-pressed", String(button.dataset.entranceSlope === d.slope));

@@ -250,10 +250,6 @@ function start(world, changes, fresh) {
   $("showCurtains").addEventListener("change", showLines);
   // Showing biomes outlines their areas and tints the ground but that drawn in full.
   const TINT = BIOME_NAMES.map((name) => new THREE.Color(BIOMES[name]).toArray());
-  caves.setView($("caveView").value);
-  $("caveView").addEventListener("change", () => caves.setView($("caveView").value));
-  caves.show("grid", $("showHeightGrid").checked);
-  $("showHeightGrid").addEventListener("change", () => caves.show("grid", $("showHeightGrid").checked));
   $("showBiomes").addEventListener("change", () => {
     tools.showBiomes($("showBiomes").checked);
     ground.setTint($("showBiomes").checked ? TINT : null);
@@ -435,8 +431,8 @@ function start(world, changes, fresh) {
     const buried = camera.position.y < groundAt(cx, cz) && !caves.mouth(Math.floor(cx / VOXEL_FT), Math.floor(cz / VOXEL_FT));
     ground.group.visible = !buried;
     caves.groundGroup.visible = !buried;
-    // In the rock, the caves' outlines show whether they're toggled on or not.
-    caves.show("lines", $("showCaveOutlines").checked || (buried && caves.solid(cx, camera.position.y, cz)));
+    // In the rock, the caves' outlines show.
+    caves.show("lines", buried && caves.solid(cx, camera.position.y, cz));
     caves.fromEarth(ghost());
     timed("ground", () => overhead.tick(buried, x, z, now - lastOverhead > OVERHEAD_EVERY_MS && (lastOverhead = now)));
     earth.tick(camera, ghost());
@@ -452,10 +448,7 @@ function start(world, changes, fresh) {
     sun.position.set(x + 500, 1000, z + 300);
     sun.target.position.set(x, 0, z);
     compass.tick(camera);
-    timed("render", () => {
-      renderer.render(scene, camera);
-      caves.drawOver(renderer, camera, builder.figure.model);
-    });
+    timed("render", () => renderer.render(scene, camera));
     if (now - lastInfo > INFO_EVERY_MS) {
       // A cave's rock, from in one, or else the ground.
       const at = tools.caveHit()?.at ?? tools.hit();

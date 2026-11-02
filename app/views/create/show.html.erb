@@ -1,5 +1,6 @@
 <div id="stage">
   <canvas id="view"></canvas>
+  <div id="alerts" class="create-alerts" role="status" aria-live="polite"></div>
   <header class="create-bar">
     <strong id="worldName"></strong>
     <span id="hud"></span>
@@ -87,8 +88,26 @@
         <span>ramp</span><kbd class="create-key">N</kbd>
       </button>
     </div>
+    <section class="create-cave-system" data-work="caves" aria-label="cave network" hidden>
+      <p class="create-cave-name"><strong id="caveNet">no network</strong> <span id="cavePhase"></span></p>
+      <p id="caveCounts" class="create-note"></p>
+      <div class="create-way">
+        <button type="button" id="cavePhaseSwitch" title="layout regenerates the network from its points; polish lets you edit its rock by hand">start polishing</button>
+        <button type="button" id="caveUndo" title="undo the last cave change (ctrl+z)">undo</button>
+      </div>
+      <div class="create-way">
+        <input id="caveRename" type="text" spellcheck="false" autocomplete="off" placeholder="rename to" aria-label="rename the network">
+      </div>
+      <div class="create-cave-view">
+        <div class="create-modes" role="group" aria-label="rock drawn">
+          <button type="button" data-cave-view="finished" aria-pressed="true" title="the rock as players see it">finished</button>
+          <button type="button" data-cave-view="blocks" aria-pressed="false" title="the rock's 2 ft blocks">blocks</button>
+        </div>
+        <label class="create-check" title="the networks' points, entrances and the lines between"><input type="checkbox" id="caveLayoutShown"> layout</label>
+      </div>
+    </section>
     <div class="create-tools" data-work="caves" hidden>
-      <button type="button" data-tool="caveSelect" data-key="h" aria-pressed="false" title="select a cave's points and entrances, to change or delete them">
+      <button type="button" data-tool="caveSelect" data-key="h" aria-pressed="false" title="select a cave's points and entrances, to see or change them">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M6 16 L22 12 L42 14" stroke="#4da6ff" stroke-width="1" fill="none" opacity="0.5"/><circle cx="22" cy="12" r="3.5" fill="#ffe14d"/><rect x="14" y="4" width="16" height="16" fill="none" stroke="#ffe14d" stroke-width="1.5" stroke-dasharray="3 2"/></svg>
         <span>select</span><kbd class="create-key">H</kbd>
       </button>
@@ -96,17 +115,29 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M4 22 L24 4 L44 22" stroke="#a09080" stroke-width="2" fill="none"/><path d="M18 22 L18 15 A6 6 0 0 1 30 15 L30 22" stroke="#7fffe6" stroke-width="2" fill="#203040"/></svg>
         <span>place entrance</span><kbd class="create-key">J</kbd>
       </button>
-      <button type="button" data-tool="passage" data-key="k" aria-pressed="false" title="lay out passages from inside a cave, where you look">
+      <button type="button" data-tool="caveAdd" data-key="k" data-phase="layout" aria-pressed="false" title="add passages from inside a cave, where you look">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M6 16 L22 12 L42 14" stroke="#4da6ff" stroke-width="2" fill="none"/><circle cx="22" cy="12" r="3" stroke="#4da6ff" stroke-width="2" fill="#203040"/><path d="M36 20 L36 10 A6 6 0 0 1 48 10" stroke="#4da6ff" stroke-width="1.5" stroke-dasharray="2 2" fill="none"/></svg>
-        <span>passage</span><kbd class="create-key">K</kbd>
+        <span>add</span><kbd class="create-key">K</kbd>
       </button>
-      <button type="button" data-tool="polish" data-key="l" aria-pressed="false" title="edit the rock of a cave network being polished, by hand">
+      <button type="button" data-tool="caveBlocks" data-key="k" data-phase="polish" aria-pressed="false" title="break blocks with a click, place them with a right-click">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><rect x="10" y="10" width="8" height="8" stroke="#a09080" stroke-width="1.5" fill="#203040"/><rect x="18" y="10" width="8" height="8" stroke="#a09080" stroke-width="1.5" fill="#203040"/><rect x="18" y="2" width="8" height="8" stroke="#7fffe6" stroke-width="1.5" stroke-dasharray="2 2" fill="none"/><path d="M30 20 L40 6" stroke="#c8d4e8" stroke-width="2"/></svg>
-        <span>polish</span><kbd class="create-key">L</kbd>
+        <span>blocks</span><kbd class="create-key">K</kbd>
       </button>
-      <button type="button" data-tool="goto" data-key="n" aria-pressed="false" title="go to a cave's point or entrance, standing on its floor">
-        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M24 3 L24 17 M18 11 L24 17 L30 11 M14 21 L34 21" stroke="#c8d4e8" stroke-width="2" fill="none"/></svg>
-        <span>go to</span><kbd class="create-key">N</kbd>
+      <button type="button" data-tool="caveSculpt" data-key="l" data-phase="polish" aria-pressed="false" title="carve with a shape, or fill with a right-click">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><circle cx="20" cy="12" r="8" stroke="#7fffe6" stroke-width="1.5" stroke-dasharray="2 2" fill="#203040"/><path d="M30 20 L40 6" stroke="#c8d4e8" stroke-width="2"/></svg>
+        <span>sculpt</span><kbd class="create-key">L</kbd>
+      </button>
+      <button type="button" data-tool="caveSmooth" data-key="u" data-phase="polish" aria-pressed="false" title="fill small hollows and knock off bumps">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M4 18 L12 18 L12 14 L20 14 L20 18 L28 18 L28 10 L36 10 L36 18 L44 18" stroke="#a09080" stroke-width="1.5" fill="none"/><path d="M4 17 C 16 14, 30 13, 44 16" stroke="#7fffe6" stroke-width="2" fill="none"/></svg>
+        <span>smooth</span><kbd class="create-key">U</kbd>
+      </button>
+      <button type="button" data-tool="caveFlatten" data-key="o" data-phase="polish" aria-pressed="false" title="level floors, looking down, or ceilings, looking up, to where you began">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M4 18 L14 18 L14 12 L24 12 L24 16 L44 16" stroke="#a09080" stroke-width="1.5" fill="none"/><path d="M4 14 L44 14" stroke="#7fffe6" stroke-width="2"/></svg>
+        <span>flatten</span><kbd class="create-key">O</kbd>
+      </button>
+      <button type="button" data-tool="cavePaint" data-key="p" data-phase="polish" aria-pressed="false" title="change the rock, not its shape">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><rect x="6" y="12" width="24" height="8" fill="#8a7a66"/><rect x="6" y="12" width="12" height="8" fill="#b0a088"/><path d="M34 4 L26 14" stroke="#c8d4e8" stroke-width="3"/></svg>
+        <span>paint</span><kbd class="create-key">P</kbd>
       </button>
     </div>
     <div class="create-tools" data-work="geo">
@@ -409,27 +440,21 @@
         <button type="button" id="marksDelete">delete</button>
       </div>
     </div>
-    <div data-config="caveSelect entrance passage" hidden>
-      <p class="create-note" data-only="passage">reach <output id="planReachOut"></output> (scroll wheel)</p>
-      <label>network <select id="planNet"><option value="">new network</option></select></label>
-      <div class="create-way">
-        <input id="planNetName" type="text" spellcheck="false" autocomplete="off" placeholder="new network's name">
-        <button type="button" id="planRename" hidden>rename</button>
-      </div>
-      <div class="create-way">
-        <button type="button" id="planBurn" hidden title="fix the network's layout, to polish it by hand">start polishing</button>
-      </div>
-      <div id="planUnlockAsk" hidden>
-        <p class="create-note">Going back to layout carves the network again from its layout, throwing away every hand edit in it and every object and template placed in it. This can't be undone.</p>
+    <div data-config="caveSelect entrance caveAdd" hidden>
+      <p class="create-note" data-only="caveAdd">reach <output id="planReachOut"></output> (scroll wheel)</p>
+      <div data-only="entrance">
+        <label>network <select id="planNet"><option value="">new network</option></select></label>
         <div class="create-way">
-          <button type="button" id="planUnlockYes">back to layout</button>
-          <button type="button" id="planUnlockNo">keep polishing</button>
+          <input id="planNetName" type="text" spellcheck="false" autocomplete="off" placeholder="new network's name">
         </div>
       </div>
       <p id="planWhat" class="create-note"></p>
-      <label>rock
-        <select id="planRock"><option value="0">jagged</option><option value="1">smooth</option><option value="2">carved</option><option value="3">mined</option></select>
-      </label>
+      <div class="create-rocks" role="group" aria-label="rock" data-rocks="plan">
+        <button type="button" data-rock="0" aria-pressed="false" title="jagged"><span class="create-swatch"></span>jagged<kbd class="create-key">2</kbd></button>
+        <button type="button" data-rock="1" aria-pressed="false" title="smooth"><span class="create-swatch"></span>smooth<kbd class="create-key">3</kbd></button>
+        <button type="button" data-rock="2" aria-pressed="false" title="carved"><span class="create-swatch"></span>carved<kbd class="create-key">4</kbd></button>
+        <button type="button" data-rock="3" aria-pressed="false" title="mined"><span class="create-swatch"></span>mined<kbd class="create-key">5</kbd></button>
+      </div>
       <div id="planPointDetails" hidden>
         <label>width <output id="planPoint-widthOut"></output>
           <input id="planPoint-width" type="range" step="2" value="18">
@@ -466,40 +491,37 @@
         <button type="button" data-entrance-slope="down" aria-pressed="false" title="down 1 ft in every 5">down</button>
       </div>
       </div>
-      <div class="create-way">
+      <div class="create-way" data-only="caveSelect">
         <button type="button" id="planDelete">delete</button>
-        <button type="button" id="planUndo">undo</button>
       </div>
-      <p id="planStatus" class="create-note" role="status"></p>
     </div>
-    <div data-config="polish" hidden>
-      <div class="create-modes" role="group" aria-label="brush">
-        <button type="button" data-polish-shape="voxel" aria-pressed="false">voxel</button>
+    <div data-config="caveBlocks caveSculpt caveSmooth caveFlatten cavePaint" hidden>
+      <div class="create-modes" role="group" aria-label="shape" data-only="caveSculpt">
         <button type="button" data-polish-shape="sphere" aria-pressed="false">sphere</button>
         <button type="button" data-polish-shape="cube" aria-pressed="false">cube</button>
         <button type="button" data-polish-shape="cylinder" aria-pressed="false">cylinder</button>
-        <button type="button" data-polish-shape="box" aria-pressed="false">box</button>
+        <button type="button" data-polish-shape="box" aria-pressed="false" title="click two corners, then Enter">box</button>
       </div>
-      <div class="create-modes" role="group" aria-label="what it does">
-        <button type="button" data-polish-op="carve" aria-pressed="false" title="open air">carve</button>
-        <button type="button" data-polish-op="fill" aria-pressed="false" title="fill rock">fill</button>
-        <button type="button" data-polish-op="smooth" aria-pressed="false" title="fill small hollows and knock off bumps">smooth</button>
-        <button type="button" data-polish-op="paint" aria-pressed="false" title="change the stone, not the shape">paint</button>
-        <button type="button" data-polish-op="flatten" aria-pressed="false" title="level floors, looking down, or ceilings, looking up, to where you began">flatten</button>
-      </div>
-      <label>size <output id="polishSizeOut"></output>
+      <label data-not="caveBlocks">size <output id="polishSizeOut"></output>
         <input id="polishSize" type="range" step="1" value="2">
       </label>
-      <label>rock
-        <select id="polishRock"><option value="0">jagged</option><option value="1">smooth</option><option value="2">carved</option><option value="3">mined</option></select>
-      </label>
-      <div class="create-way">
-        <button type="button" id="polishUndo">undo</button>
+      <div data-only="caveBlocks caveSculpt">
+        <div class="create-rocks" role="group" aria-label="rock" data-rocks="fill">
+        <button type="button" data-rock="same" aria-pressed="false" title="the rock around it">same<kbd class="create-key">1</kbd></button>
+        <button type="button" data-rock="0" aria-pressed="false" title="jagged"><span class="create-swatch"></span>jagged<kbd class="create-key">2</kbd></button>
+        <button type="button" data-rock="1" aria-pressed="false" title="smooth"><span class="create-swatch"></span>smooth<kbd class="create-key">3</kbd></button>
+        <button type="button" data-rock="2" aria-pressed="false" title="carved"><span class="create-swatch"></span>carved<kbd class="create-key">4</kbd></button>
+        <button type="button" data-rock="3" aria-pressed="false" title="mined"><span class="create-swatch"></span>mined<kbd class="create-key">5</kbd></button>
       </div>
-      <p id="polishStatus" class="create-note" role="status"></p>
-    </div>
-    <div data-config="goto" hidden>
-      <p class="create-note">Click a cave's point or entrance to go to its floor. To get out of the earth, fly up with space double-tapped.</p>
+      </div>
+      <div data-only="cavePaint">
+        <div class="create-rocks" role="group" aria-label="rock" data-rocks="paint">
+        <button type="button" data-rock="0" aria-pressed="false" title="jagged"><span class="create-swatch"></span>jagged<kbd class="create-key">2</kbd></button>
+        <button type="button" data-rock="1" aria-pressed="false" title="smooth"><span class="create-swatch"></span>smooth<kbd class="create-key">3</kbd></button>
+        <button type="button" data-rock="2" aria-pressed="false" title="carved"><span class="create-swatch"></span>carved<kbd class="create-key">4</kbd></button>
+        <button type="button" data-rock="3" aria-pressed="false" title="mined"><span class="create-swatch"></span>mined<kbd class="create-key">5</kbd></button>
+      </div>
+      </div>
     </div>
     <div data-config="raise flatten smooth noise pools clear eraser" hidden>
       <div class="create-shapes" role="group" aria-label="shape" data-only="raise">
@@ -619,12 +641,6 @@
       <label title="biome areas, and the ground but that nearest tinted by biome"><input type="checkbox" id="showBiomes"> biomes</label>
     </fieldset>
     <fieldset>
-      <legend>caves</legend>
-      <label title="how the caves are drawn: their rock finished, as players see it, as its 2 ft blocks, or mixed, finished with the blocks outlined through it; or config, their layout alone">rock <select id="caveView"><option value="finished">finished</option><option value="blocks">blocks</option><option value="mixed">mixed</option><option value="config">config</option></select></label>
-      <label title="each column's cave floors (gold) and ceilings (silver), points joined by lines, seen through the rock"><input type="checkbox" id="showHeightGrid"> height-grid</label>
-      <label title="the edges of every face of the caves' rock, glowing; always shown from in the rock"><input type="checkbox" id="showCaveOutlines"> cave-outlines</label>
-    </fieldset>
-    <fieldset>
       <legend>debug</legend>
       <label title="frame rate, the slowest frame and what it spent its time on, and draw calls"><input type="checkbox" data-show-debug="frame"> frame</label>
       <label title="how many tiles are drawn how finely, and how far off"><input type="checkbox" data-show-debug="ground"> ground</label>
@@ -662,7 +678,7 @@
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, measure measures distances and circles, and path finds the shortest way on foot from one place to another, to find where ranges and cliffs can be crossed. Click a pin's head to open it</dd>
     <dt>build</dt><dd>place objects and templates, from the ones used lately or the library, draw floors, walls, rooms and roofs as slabs, draw stairs and ramps, and pick what's placed to move, turn, delete or make a template of</dd>
-    <dt>caves</dt><dd>lay out caves: select picks points and entrances to change or delete, never placing anything; place entrance puts an entrance into a hillside, starting or joining a cave network; passage lays passages out from inside, to where you look; polish edits the rock of a network being polished by hand; go to takes you to the point or entrance you click</dd>
+    <dt>caves</dt><dd>lay out and polish cave networks. The panel shows the network you're in, or were last in, and switches it between layout and polish. Select picks points and entrances to see or change them; place entrance, from above the ground, starts or joins a network; in layout, add lays passages out from inside, to where you look; in polish, blocks, sculpt, smooth, flatten and paint edit the rock by hand. Number keys pick the rock: 1 the rock around it, 2 to 5 jagged, smooth, carved and mined</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, draw streams and rivers, and clear it away</dd>
   </dl>
 </div>
@@ -694,6 +710,13 @@
     <button type="button" id="templateMakeCancel">cancel</button>
   </div>
 </div>
+<dialog id="caveUnlockAsk" class="create-ask">
+  <p>Going back to layout carves <strong id="caveUnlockNet"></strong> again from its layout, throwing away every hand edit in it and every object and template placed in it. This can't be undone.</p>
+  <div class="create-way">
+    <button type="button" id="caveUnlockYes">back to layout</button>
+    <button type="button" id="caveUnlockNo" autofocus>keep polishing</button>
+  </div>
+</dialog>
 <div id="pinEdit" class="create-pin-edit" popover>
   <input id="pinTitle" type="text" placeholder="title" aria-label="title">
   <textarea id="pinContent" placeholder="notes, in markdown" aria-label="notes"></textarea>

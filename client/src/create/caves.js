@@ -13,23 +13,15 @@ export { CAVES_PATH };
 // out of; and the camera kept inside them. Each dig or fill can be undone, up to UNDOS of them.
 //
 // The rock's drawn as one of VIEWS: finished, smoothed as players see it (caveMesh), or blocks,
-// its voxels as cubes (caveBlocks), mixed, finished with the blocks' edges faint through it, or
-// config, not at all, leaving the layout (cavePlan.js) alone.
-//
-// Two overlays show how the rock comes from the spans, each shown or hidden as a whole: the grid,
-// a point of light at each column's middle for each span's floor and ceiling, joined to the
-// neighbouring columns' by lines (floors gold, ceilings silver), seen through the rock; and lines,
-// every edge of the rock's faces drawn glowing over them.
+// its voxels as cubes (caveBlocks). Its lines, every edge of the rock's faces drawn glowing, show
+// from in the rock.
 
-export const VIEWS = ["finished", "blocks", "mixed", "config"];
+export const VIEWS = ["finished", "blocks"];
 const MESH_TILES = FULL_TILES;
 const BUILD_MS = 8; // how long making meshes may take a frame
 const UNDOS = 50;
 const CAMERA_FT = 1; // how far the camera's kept from rock
 const PICK_FT = 1200;
-const FLOOR_RGB = [1, 0.78, 0.2]; // the grid: floors gold, ceilings silver
-const CEILING_RGB = [0.8, 0.84, 0.9];
-const POINT_PX = 4;
 const LINE_RGB = 0x5ad8ff;
 const EARTH_LINE_RGB = 0x8a8a8a;
 
@@ -48,14 +40,9 @@ export class Caves {
     this.view = VIEWS[0];
     // The rock's faces sit a little back, so lines drawn over their edges show.
     this.material = Object.assign(caveMaterial(), { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
-    // The grid's drawn on its own, after the rest, hidden only by the builder (drawOver); the lines
-    // with the rest.
-    this.overlays = { grid: new THREE.Group(), lines: new THREE.Group() };
-    for (const group of Object.values(this.overlays)) group.visible = false;
+    this.overlays = { lines: new THREE.Group() };
+    this.overlays.lines.visible = false;
     scene.add(this.overlays.lines);
-    this.pointMaterial = new THREE.PointsMaterial({ size: POINT_PX, sizeAttenuation: false, vertexColors: true, depthWrite: false, transparent: true });
-    this.gridMaterial = new THREE.LineBasicMaterial({ vertexColors: true, depthWrite: false, transparent: true, opacity: 0.6 });
-    this.blockLineMaterial = new THREE.LineBasicMaterial({ color: LINE_RGB, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
     this.lineMaterial = new THREE.LineBasicMaterial({ color: LINE_RGB, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
     this.onMouths = null; // (plate keys) => void, when the ground at mouths changes
     // The ground the caves draw round mouths, in the ground's own material, groundMaterial(tx, tz),
@@ -390,22 +377,6 @@ export class Caves {
     }
   }
 
-  // Draws the grid, if it's shown, over what `renderer` drew last, hidden only by `over` (an
-  // object in the scene, the builder), seen by `camera`.
-  drawOver(renderer, camera, over) {
-    if (!this.overlays.grid.visible) return;
-    renderer.autoClear = false;
-    renderer.clearDepth();
-    const color = renderer.state.buffers.color;
-    color.setMask(false);
-    color.setLocked(true);
-    renderer.render(over, camera);
-    color.setLocked(false);
-    color.setMask(true);
-    renderer.render(this.overlays.grid, camera);
-    renderer.autoClear = true;
-  }
-
   // Draws the rock as `view`, one of VIEWS.
   setView(view) {
     if (view === this.view || !VIEWS.includes(view)) return;
@@ -413,7 +384,7 @@ export class Caves {
     for (const key of this.meshes.keys()) this.stale.add(key);
   }
 
-  // Shows or hides an overlay: "grid" or "lines".
+  // Shows or hides an overlay: "lines".
   show(overlay, shown) {
     this.overlays[overlay].visible = shown;
   }
@@ -421,7 +392,7 @@ export class Caves {
   // Draws the caves as they look from the earth, or as they look from in them or the open: from
   // the earth, the rock's faces' edges alone, in dull gray.
   fromEarth(on) {
-    this.group.visible = !on && this.view !== "config";
+    this.group.visible = !on;
     if (on) this.overlays.lines.visible = true;
     this.lineMaterial.color.set(on ? EARTH_LINE_RGB : LINE_RGB);
     this.lineMaterial.blending = on ? THREE.NormalBlending : THREE.AdditiveBlending;
@@ -460,18 +431,6 @@ export class Caves {
     lines.position.copy(mesh.position);
     this.overlays.lines.add(lines);
     mesh.userData.overlays = [lines];
-    if (this.view === "mixed") {
-      const blocks = caveBlocks(tx, tz, this.world);
-      const faces = new THREE.BufferGeometry();
-      faces.setAttribute("position", new THREE.BufferAttribute(blocks.positions, 3));
-      faces.setIndex(new THREE.BufferAttribute(blocks.indices, 1));
-      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(faces), this.blockLineMaterial);
-      faces.dispose();
-      edges.position.copy(mesh.position);
-      edges.renderOrder = 9;
-      this.group.add(edges);
-      mesh.userData.overlays.push(edges);
-    }
     if (data.ground) {
       const earth = new THREE.BufferGeometry();
       earth.setAttribute("position", new THREE.BufferAttribute(data.ground.positions, 3));
@@ -483,47 +442,6 @@ export class Caves {
       this.groundGroup.add(surface);
       mesh.userData.overlays.push(surface);
     }
-    for (const overlay of this.grid(tx, tz)) {
-      this.overlays.grid.add(overlay);
-      mesh.userData.overlays.push(overlay);
-    }
-  }
-
-  // Tile (tx, tz)'s grid, as overlays: a point at each column's middle for each span's floor and
-  // ceiling, and a line from each to the same in the columns beside it (+x and +z) whose spans
-  // overlap it. None where it has no caves.
-  grid(tx, tz) {
-    const columns = this.tiles.get(`${tx},${tz}`);
-    if (!columns) return [];
-    const [points, pointColors, lines, lineColors] = [[], [], [], []];
-    const middle = (ci, cj) => [(ci + 0.5) * VOXEL_FT, (cj + 0.5) * VOXEL_FT];
-    columns.forEach((spans, n) => {
-      const [ci, cj] = [tx * TILE_COLUMNS + (n % TILE_COLUMNS), tz * TILE_COLUMNS + Math.floor(n / TILE_COLUMNS)];
-      const [x, z] = middle(ci, cj);
-      for (const span of spans ?? []) {
-        points.push(x, span.floor, z, x, span.ceiling, z);
-        pointColors.push(...FLOOR_RGB, ...CEILING_RGB);
-        for (const [di, dj] of [[1, 0], [0, 1]]) {
-          const [x2, z2] = middle(ci + di, cj + dj);
-          for (const other of this.spans(ci + di, cj + dj)) {
-            if (other.floor > span.ceiling || other.ceiling < span.floor) continue;
-            lines.push(x, span.floor, z, x2, other.floor, z2, x, span.ceiling, z, x2, other.ceiling, z2);
-            lineColors.push(...FLOOR_RGB, ...FLOOR_RGB, ...CEILING_RGB, ...CEILING_RGB);
-          }
-        }
-      }
-    });
-    if (!points.length) return [];
-    const geometry = (positions, colors) => {
-      const g = new THREE.BufferGeometry();
-      g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-      g.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-      return g;
-    };
-    const out = [new THREE.Points(geometry(points, pointColors), this.pointMaterial)];
-    if (lines.length) out.push(new THREE.LineSegments(geometry(lines, lineColors), this.gridMaterial));
-    for (const overlay of out) overlay.renderOrder = 10;
-    return out;
   }
 
   // Has the ground leave out tile (tx, tz)'s `cells` (a Set of indices, or null), redrawing it

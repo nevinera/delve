@@ -181,12 +181,12 @@ export class Layout {
     return split;
   }
 
-  // A passage on from spot `from` (as `nearest` gives it): to a new point at `at`, with the config
-  // of the point it goes on from, or, with spot `to`, joining the passage there. Gives the
+  // A passage on from spot `from` (as `nearest` gives it): to a new point at `at`, with `config`,
+  // or the config of the point it goes on from, or, with spot `to`, joining the passage there. Gives the
   // passage's far point.
-  extend(from, { at = null, to = null } = {}) {
+  extend(from, { at = null, to = null, config = null } = {}) {
     const start = this.pointAt(from);
-    const end = to ? this.pointAt(to) : this.addPoint(start.net, at.map((v) => Math.round(v * 4) / 4), configOf(start));
+    const end = to ? this.pointAt(to) : this.addPoint(start.net, at.map((v) => Math.round(v * 4) / 4), structuredClone(config ?? configOf(start)));
     this.addSegment(start.net, start.id, end.id);
     return end;
   }

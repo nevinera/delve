@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { VOXEL_FT } from "../v2/caves.js";
+import { CAVE_THEMES, VOXEL_FT } from "../v2/caves.js";
 import { slabHome } from "../world/slabs.js";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
 import { PICK_PX } from "./areas.js";
@@ -13,7 +13,9 @@ import { Marks } from "./marks.js";
 import { scatterPools } from "./marsh.js";
 import { Measure } from "./measure.js";
 import { CavePlan } from "./cavePlan.js";
-import { CavePolish } from "./cavePolish.js";
+import { CavePolish, TOOLS as POLISH_TOOLS } from "./cavePolish.js";
+import { alert } from "./alerts.js";
+import { THEME_LOOK } from "./caveMesh.js";
 import { Build } from "./build.js";
 import { Paths } from "./paths.js";
 import { TITLE_MAX } from "./pins.js";
@@ -44,9 +46,13 @@ import { WaterBodies } from "./water.js";
 //   them where the pointer is, and a ring on the ground shows where they reach. [ and ] resize
 //   them, and c and v turn raise and lower's, shift+c and shift+v a little.
 // - build's tools place objects, templates and slabs, and pick them to change (build.js).
-// - caves' go to stands the builder on the floor of a cave's point or entrance where it's clicked;
-//   place entrance and passage lay out cave networks (cavePlan.js), and polish edits a burned in
-//   network's rock by hand, the right button placing voxels (cavePolish.js).
+// - caves' tools work on the network you're in, or were last in, shown in the panel above them.
+//   Select is picked whenever no other is. Select, place entrance and, in layout, add lay out cave
+//   networks (cavePlan.js); in polish, blocks, sculpt, smooth, flatten and paint edit a network's
+//   rock by hand, the right button filling (cavePolish.js). Only the tools for the network's phase
+//   show, and place entrance only works above the ground. Picking a tool picks how the rock's
+//   drawn and whether the layout shows, which the panel can change after. Their changes undo
+//   together, latest first.
 // - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
 //   more each time the ring's moved its radius. Its undo takes back the last scattering.
 
@@ -60,7 +66,19 @@ const BRUSHES = new Set(["raise", "flatten", "smooth", "noise", "pools", "clear"
 const PLANNING = new Set(["marker", "eraser", "select", "measure"]); // tools that work on lines drawn at sea level
 const OPENS_PINS = new Set([null, "pin"]); // tools with which clicking a pin opens it
 const BUILD = new Set(["pick", "object", "template", "slab", "stairs", "ramp"]);
-const PLANS = new Set(["caveSelect", "entrance", "passage"]);
+const PLANS = new Set(["caveSelect", "entrance", "caveAdd"]);
+const POLISH = new Set(POLISH_TOOLS);
+// How each caves tool draws the rock and whether it shows the layout; null leaves it as it is.
+const CAVE_VIEWS = {
+  caveSelect: [null, true],
+  entrance: ["finished", true],
+  caveAdd: ["finished", true],
+  caveBlocks: ["blocks", false],
+  caveSculpt: ["blocks", false],
+  caveSmooth: ["blocks", false],
+  caveFlatten: ["blocks", false],
+  cavePaint: ["finished", false],
+};
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
 
@@ -139,9 +157,17 @@ export class Tools {
       caveHit: () => this.caveHit(),
     });
     this.build.onPick = (tool) => this.tool !== tool && this.pick(tool);
-    this.plan = new CavePlan({ scene, camera, canvas, layout, caves, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, here: () => [builder.state.x, builder.state.y, builder.state.z] });
+    // The order caves changes are made in, so layout and polish changes undo together.
+    let caveSeq = 0;
+    const seq = () => ++caveSeq;
+    this.plan = new CavePlan({ scene, camera, canvas, layout, caves, seq, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, here: () => [builder.state.x, builder.state.y, builder.state.z] });
     builder.wheel = (e) => PLANS.has(this.tool) && this.plan.wheel(e);
-    this.polish = new CavePolish({ scene, caves, layout, camera, ray: () => this.build.ray() });
+    this.polish = new CavePolish({ scene, caves, layout, camera, seq, ray: () => this.build.ray() });
+    $("caveUndo").addEventListener("click", () => this.caveUndo());
+    for (const swatch of document.querySelectorAll("[data-rock] .create-swatch")) swatch.style.background = `rgb(${THEME_LOOK[CAVE_THEMES[Number(swatch.parentElement.dataset.rock)]].rgb.join(",")})`;
+    this.caveViewButtons = [...document.querySelectorAll("[data-cave-view]")];
+    for (const button of this.caveViewButtons) button.addEventListener("click", () => this.setCaveView(button.dataset.caveView, null));
+    $("caveLayoutShown").addEventListener("change", () => this.setCaveView(null, $("caveLayoutShown").checked));
     // A thing under the ground in a cave network's chunk is that network's, and goes there only
     // while it's being polished.
     placed.caveOf = (thing) => {
@@ -170,12 +196,15 @@ export class Tools {
     // Each type of work shows its own tools.
     const works = [...document.querySelectorAll(".create-work [data-work]")];
     this.works = works;
+    this.work = null; // the type of work shown
     for (const button of works) {
       button.addEventListener("click", () => {
         pressed(works, button);
-        for (const tools of document.querySelectorAll(".create-tools[data-work]")) tools.hidden = tools.dataset.work !== button.dataset.work;
+        this.work = button.dataset.work;
+        for (const tools of document.querySelectorAll(".create-tools[data-work], .create-cave-system[data-work]")) tools.hidden = tools.dataset.work !== button.dataset.work;
         // A tool of another type of work is put down.
         if (this.tool && !document.querySelector(`.create-tools:not([hidden]) [data-tool="${this.tool}"]`)) this.pick(null);
+        else if (!this.tool && this.work === "caves") this.pick(null);
       });
     }
     const toolButtons = [...document.querySelectorAll("[data-tool]")];
@@ -327,7 +356,7 @@ export class Tools {
       this.point(e);
       if (BUILD.has(this.tool)) this.build.move(e);
       if (PLANS.has(this.tool)) this.plan.move(e);
-      if (this.tool === "polish") this.polish.move();
+      if (POLISH.has(this.tool)) this.polish.move();
       if (this.moving) this.movePins();
       for (const areas of Object.values(this.outlined)) {
         if (!areas.dragging) continue;
@@ -367,7 +396,7 @@ export class Tools {
       if (pin) this.openPin(pin);
     });
     canvas.addEventListener("pointerdown", (e) => {
-      if (e.button === 2 && this.tool === "polish") return this.polish.down(e);
+      if (e.button === 2 && POLISH.has(this.tool)) return this.polish.down(e);
       if (e.button !== 0) return;
       this.point(e);
       // Clicking away from an open pin only closes it. (The canvas's own handlers keep the browser
@@ -388,15 +417,9 @@ export class Tools {
         canvas.setPointerCapture(e.pointerId);
         return this.plan.down(e);
       }
-      if (this.tool === "polish") {
+      if (POLISH.has(this.tool)) {
         canvas.setPointerCapture(e.pointerId);
         return this.polish.down(e);
-      }
-      if (this.tool === "goto") {
-        const r = canvas.getBoundingClientRect();
-        const at = this.plan.target([e.clientX - r.left, e.clientY - r.top]);
-        if (at) this.builder.state = { ...this.builder.state, x: at[0], y: at[1], z: at[2], flying: false, swimming: false, falling: 0 };
-        return;
       }
       if (this.tool === "pin") {
         const at = this.hit();
@@ -455,7 +478,7 @@ export class Tools {
       this.stroke = null;
       if (BUILD.has(this.tool)) this.build.up();
       if (PLANS.has(this.tool)) this.plan.up();
-      if (this.tool === "polish") this.polish.up();
+      if (POLISH.has(this.tool)) this.polish.up();
       if (this.clicked?.pin) this.openPin(this.clicked.pin);
       else if (this.clicked?.at) {
         const before = this.marks.toJSON();
@@ -487,8 +510,12 @@ export class Tools {
       if (e.target.matches?.("input, textarea, select") || e.target.closest?.(":popover-open")) return;
       const areas = this.outlined[this.tool];
       if (BUILD.has(this.tool) && this.build.key(e)) return e.preventDefault();
+      if ((PLANS.has(this.tool) || POLISH.has(this.tool)) && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        this.caveUndo();
+        return e.preventDefault();
+      }
       if (PLANS.has(this.tool) && this.plan.key(e)) return e.preventDefault();
-      if (this.tool === "polish" && this.polish.key(e)) return e.preventDefault();
+      if (POLISH.has(this.tool) && this.polish.key(e)) return e.preventDefault();
       if (e.key === "Escape" && areas?.draft) areas.drop();
       else if (e.key === "Escape") this.pick(null);
       else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "select") this.marks.deleteSelected();
@@ -591,8 +618,44 @@ export class Tools {
   hotkey(key) {
     const work = this.works.find((b) => b.dataset.key === key);
     if (work) return work.click();
-    const tool = document.querySelector(`.create-tools:not([hidden]) [data-tool][data-key="${key}"]`);
+    const tool = document.querySelector(`.create-tools:not([hidden]) [data-tool][data-key="${key}"]:not([hidden], [disabled])`);
     if (tool) this.pick(tool.dataset.tool);
+  }
+
+  // Undoes the latest caves change, of the layout's or polish's.
+  caveUndo() {
+    const [plan, polish] = [this.plan.history.at(-1)?.seq ?? 0, this.polish.undos.at(-1)?.seq ?? 0];
+    if (!plan && !polish) return alert("nothing to undo");
+    if (plan > polish) this.plan.undo();
+    else this.polish.undo();
+  }
+
+  // Draws the caves' rock as `view`, "finished" or "blocks", and shows the layout or not
+  // (`layout`); null leaves either as it is.
+  setCaveView(view, layout) {
+    if (view) {
+      this.caves.setView(view);
+      this.caveViewButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.caveView === view)));
+    }
+    if (layout !== null) {
+      this.plan.shown = layout;
+      $("caveLayoutShown").checked = layout;
+    }
+  }
+
+  // The caves' panel and tools, as the current network is: only the tools for its phase, and
+  // place entrance only above the ground.
+  showCaves() {
+    this.plan.showPanel();
+    const phase = this.layout.networks.get(this.plan.current)?.phase ?? "layout";
+    const { x, y, z } = this.builder.state;
+    const under = y < (this.renditions.heightAt(x, z) ?? EMPTY_FT);
+    for (const button of document.querySelectorAll('.create-tools[data-work="caves"] [data-tool]')) {
+      button.hidden = Boolean(button.dataset.phase) && button.dataset.phase !== phase;
+      button.disabled = button.dataset.tool === "entrance" && under;
+    }
+    const picked = document.querySelector(`.create-tools[data-work="caves"] [data-tool="${this.tool}"]`);
+    if (picked && (picked.hidden || picked.disabled)) this.pick(null);
   }
 
   // Turns the tool to `angle` radians from east toward south.
@@ -604,6 +667,8 @@ export class Tools {
   }
 
   pick(tool) {
+    // Caves' select is picked whenever no other caves tool is.
+    if (!tool && this.work === "caves") tool = "caveSelect";
     this.tool = tool;
     this.toolButtons.forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.tool === tool)));
     for (const panel of document.querySelectorAll("[data-config]")) panel.hidden = !panel.dataset.config.split(" ").includes(tool ?? "none");
@@ -623,7 +688,8 @@ export class Tools {
     this.paths.setShown(tool === "path");
     if (BUILD.has(tool) || BUILD.has(this.build.tool)) this.build.setTool(BUILD.has(tool) ? tool : null);
     this.plan.setTool(PLANS.has(tool) ? tool : null);
-    this.polish.setTool(tool === "polish");
+    this.polish.setTool(POLISH.has(tool) ? tool : null);
+    if (CAVE_VIEWS[tool]) this.setCaveView(...CAVE_VIEWS[tool]);
     this.box = null;
     this.boxEl.hidden = true;
     this.drawing = null;
@@ -849,6 +915,7 @@ export class Tools {
     if (BUILD.has(this.tool)) this.build.tick();
     this.plan.tick(this.inEarth());
     this.polish.tick();
+    if (this.work === "caves") this.showCaves();
     for (const [tool, areas] of Object.entries(this.outlined)) {
       const to = this.tool === tool && areas.draft && this.hit();
       areas.tick(dt, this.camera, w, h, to ? [to[0], to[2]] : null, this.tool === tool);

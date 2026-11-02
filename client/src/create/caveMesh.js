@@ -43,7 +43,7 @@ const CAVE = 1;
 const SKY = 2;
 // relax: how far toward its neighbours' a vertex is drawn (passes: how many times over); bumpFt:
 // how far noise pushes it in or out, the noise's features about waveFt apart.
-const THEME_LOOK = {
+export const THEME_LOOK = {
   jagged: { rgb: [112, 104, 96], floor: [142, 132, 118], relax: 0.25, passes: 1, bumpFt: 2.4, waveFt: 5 },
   smooth: { rgb: [118, 110, 100], floor: [148, 138, 122], relax: 1, passes: 2, bumpFt: 0.4, waveFt: 12 },
   carved: { rgb: [146, 134, 114], floor: [176, 162, 136], relax: 1, passes: 1, bumpFt: 0, waveFt: 1 },
