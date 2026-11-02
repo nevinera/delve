@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { TILE_CELLS, carve, cavesPath, growCave, smoothCave, emptyColumns, fillRock, openAir } from "../v2/caves.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
-import { caveMesh, fitPlane, joinedPieces, mouthCells, openEdges } from "./caveMesh.js";
+import { caveMesh, cutMesh, fitPlane, joinedPieces, mouthCells, openEdges } from "./caveMesh.js";
 import { Caves } from "./caves.js";
 
 // Flat ground at `height`, everywhere, with its cells all one color.
@@ -194,5 +194,27 @@ describe("planes", () => {
     expect(normal[1]).toBeCloseTo(1 / length);
     expect(normal[2]).toBeCloseTo(0);
     expect(reach[0][1] - reach[0][0]).toBeCloseTo(20 * length, 0);
+  });
+});
+
+describe("cutting a mesh", () => {
+  it("cuts triangles back to one side of a plane, near it, splitting those across it", () => {
+    // Two triangles on the ground, one across x = 1 and one across it too, but away past the
+    // plane's reach.
+    const mesh = {
+      positions: Float32Array.from([0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 20, 0, 0, 22, 2, 0, 20]),
+      colors: new Float32Array(18),
+      themes: new Float32Array(6),
+      indices: Uint32Array.from([0, 1, 2, 3, 4, 5]),
+    };
+    const cut = { center: [1, 0, 1], normal: [1, 0, 0], across: [0, 0, 1], along: [0, 1, 0], reach: [[-2, 2], [-2, 2]] };
+    const { mesh: left, seam } = cutMesh(mesh, cut, [0, 0, 0]);
+    // The first keeps its part this side of x = 1, as two triangles; the second stays whole.
+    expect(left.indices.length).toBe(9);
+    expect([...left.indices.slice(6)]).toEqual([3, 4, 5]);
+    for (const i of left.indices.slice(0, 3)) expect(left.positions[i * 3]).toBeLessThanOrEqual(1 + 1e-6);
+    expect(seam).toHaveLength(6);
+    expect(seam[0]).toBeCloseTo(1);
+    expect(seam[3]).toBeCloseTo(1);
   });
 });

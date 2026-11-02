@@ -406,3 +406,55 @@ export function fitPlane(points) {
   });
   return { center, normal, across, along, reach };
 }
+
+// A mesh's triangles cut back to one side of a plane, near it: `cut` is { center, normal,
+// across, along, reach } (fitPlane's), the normal facing the side to cut away, and only triangles
+// whose middles lie over the plane's reach, `margin` ft past it either way, and no further than
+// `depth` ft out on that side, are cut. A triangle across the plane keeps the part on this side,
+// with new vertices where it crosses. `offset`: where the mesh's positions are from, continent
+// feet. Gives the mesh ({ positions, colors, themes, indices }) cut, and `seam`, the segments
+// along the cut, continent feet.
+export function cutMesh({ positions, colors, themes, indices }, cut, offset, { margin = 4, depth = 80 } = {}) {
+  const { center, normal, across, along, reach } = cut;
+  const [P, C, T] = [Array.from(positions), Array.from(colors), Array.from(themes)];
+  const at = (i) => [P[i * 3] + offset[0], P[i * 3 + 1] + offset[1], P[i * 3 + 2] + offset[2]];
+  const dot = (p, axis) => (p[0] - center[0]) * axis[0] + (p[1] - center[1]) * axis[1] + (p[2] - center[2]) * axis[2];
+  const near = (p) => {
+    const [u, v, d] = [dot(p, across), dot(p, along), dot(p, normal)];
+    return u >= reach[0][0] - margin && u <= reach[0][1] + margin && v >= reach[1][0] - margin && v <= reach[1][1] + margin && d >= -depth && d <= depth;
+  };
+  // A vertex a share `t` of the way from i to j, added.
+  const between = (i, j, t) => {
+    for (let k = 0; k < 3; k++) {
+      P.push(P[i * 3 + k] + (P[j * 3 + k] - P[i * 3 + k]) * t);
+      C.push(C[i * 3 + k] + (C[j * 3 + k] - C[i * 3 + k]) * t);
+    }
+    T.push(t < 0.5 ? T[i] : T[j]);
+    return P.length / 3 - 1;
+  };
+  const out = [];
+  const seam = [];
+  for (let n = 0; n < indices.length; n += 3) {
+    const tri = [indices[n], indices[n + 1], indices[n + 2]];
+    const points = tri.map(at);
+    const middle = [0, 1, 2].map((k) => (points[0][k] + points[1][k] + points[2][k]) / 3);
+    if (!near(middle)) {
+      out.push(...tri);
+      continue;
+    }
+    const d = points.map((p) => dot(p, normal));
+    const kept = d.filter((v) => v <= 0).length;
+    if (kept === 3) out.push(...tri);
+    if (kept === 0 || kept === 3) continue;
+    // Turned so the odd one out is first, keeping the triangle's winding.
+    const odd = kept === 1 ? d.findIndex((v) => v <= 0) : d.findIndex((v) => v > 0);
+    const [a, b, c] = [0, 1, 2].map((k) => tri[(odd + k) % 3]);
+    const [da, db, dc] = [0, 1, 2].map((k) => d[(odd + k) % 3]);
+    const ab = between(a, b, da / (da - db));
+    const ac = between(a, c, da / (da - dc));
+    if (kept === 1) out.push(a, ab, ac);
+    else out.push(ab, b, c, ab, c, ac);
+    seam.push(...at(ab), ...at(ac));
+  }
+  return { mesh: { positions: Float32Array.from(P), colors: Float32Array.from(C), themes: Float32Array.from(T), indices: Uint32Array.from(out) }, seam };
+}

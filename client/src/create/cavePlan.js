@@ -211,7 +211,11 @@ export class CavePlan {
     if (plan.fills.length || plan.opens.length) this.caves.carvePlan(plan, () => {});
     this.layout.carved = plan.carved;
     this.layout.version++;
-    this.caves.setEntranceCells([...this.layout.nodes.values()].filter(isEntrance).flatMap((e) => entranceCells(e, this.groundAt)));
+    const entrances = [...this.layout.nodes.values()].filter(isEntrance);
+    this.caves.setEntranceCells(
+      entrances.flatMap((e) => entranceCells(e, this.groundAt)),
+      entrances.map((e) => e.mouth),
+    );
     const notes = [];
     if (plan.unfit.length) notes.push(`${plan.unfit.join(", ")} won't fit under the ground, so ${plan.unfit.length > 1 ? "aren't" : "isn't"} carved`);
     if (plan.short.length) notes.push(`${plan.short.join(", ")} ${plan.short.length > 1 ? "are" : "is"} shorter than ${TUNNEL_SPAN} times ${plan.short.length > 1 ? "their" : "its"} width, so ${plan.short.length > 1 ? "aren't" : "isn't"} carved: curve ${plan.short.length > 1 ? "them" : "it"} out further`);

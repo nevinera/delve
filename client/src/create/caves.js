@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { CAVES_PATH, TILE_CELLS, allStone, carve, cavesPath, growCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
 import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial, setBrush } from "./caveMaterial.js";
-import { caveMesh, fitPlane, joinedPieces, openEdges, opensAt } from "./caveMesh.js";
+import { caveMesh, cutMesh, fitPlane, joinedPieces, openEdges, opensAt } from "./caveMesh.js";
 import { EMPTY_FT, FULL_TILES } from "./ground.js";
 
 export { CAVES_PATH };
@@ -52,9 +52,10 @@ export class Caves {
     this.onMouths = null; // (plate keys) => void, when the ground at mouths changes
     this.entranceCells = new Set(); // "ci,cj" of ground cells entrances reach into, left out of the ground
     // For now, where surfaces end at entrances: the rock's open edges in orange, the ground's in
-    // teal. groundMesh(tx, tz): a tile's ground mesh drawn in full, or null.
+    // teal, and where the rock's cut back in pink. groundMesh(tx, tz): a tile's ground mesh drawn
+    // in full, or null.
     this.groundMesh = null;
-    this.ends = [0xff8c1a, 0x1ad1c4].map((color) => {
+    this.ends = [0xff8c1a, 0x1ad1c4, 0xff2bd6].map((color) => {
       const lines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true }));
       lines.renderOrder = 14;
       lines.frustumCulled = false;
@@ -62,13 +63,9 @@ export class Caves {
       return lines;
     });
     this.endsMade = null; // what the ends were found from
-    // And the plane nearest each of the ground's openings, in magenta.
-    this.planes = new THREE.Group();
-    scene.add(this.planes);
-    this.planeMaterials = [
-      new THREE.MeshBasicMaterial({ color: 0xff2bd6, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false }),
-      new THREE.LineBasicMaterial({ color: 0xff2bd6, depthTest: false, transparent: true }),
-    ];
+    this.mouths = []; // the entrances' mouths, continent feet
+    this.cuts = []; // where the rock's cut back at entrances (cutBack)
+    this.seams = new Map(); // "tx,tz" -> the segments along a tile's cuts
     this.world = {
       spans: (ci, cj) => this.spans(ci, cj),
       ground: (ci, cj) => this.groundCell(ci, cj),
@@ -117,8 +114,9 @@ export class Caves {
   // Tile (tx, tz)'s cells whose ground isn't drawn, where caves open through it or entrances reach
   // into it, as a Set of indices, or null for none.
   // Sets the ground cells entrances reach into (caveLayout.js's entranceCells), [ci, cj] each,
-  // redrawing the ground where they change.
-  setEntranceCells(cells) {
+  // redrawing the ground where they change, and the entrances' mouths.
+  setEntranceCells(cells, mouths = []) {
+    this.mouths = mouths;
     const next = new Set(cells.map(([ci, cj]) => `${ci},${cj}`));
     const plates = new Set();
     for (const key of [...next, ...this.entranceCells]) {
@@ -325,30 +323,36 @@ export class Caves {
       this.ends[k].geometry = new THREE.BufferGeometry();
       this.ends[k].geometry.setAttribute("position", new THREE.Float32BufferAttribute(openEdges(data, inCore), 3));
     });
-    this.drawPlanes();
+    this.cutBack(core);
   }
 
-  // The plane nearest each of the ground's openings (the teal ends), drawn as far as it reaches.
-  drawPlanes() {
-    for (const child of [...this.planes.children]) {
-      this.planes.remove(child);
-      child.geometry.dispose();
-    }
+  // Where the rock is cut back at entrances: at the plane nearest each of the ground's openings
+  // (the teal ends), on the side its entrance's mouth is. Changed, the tiles round them are made
+  // again (make cuts them); unchanged, the cuts' seams are drawn in pink.
+  cutBack(core) {
     const segments = this.ends[1].geometry.attributes.position?.array ?? [];
+    const cuts = [];
     for (const points of joinedPieces(segments)) {
       if (points.length < 3) continue;
-      const { center, across, along, reach } = fitPlane(points);
-      const at = (u, v) => center.map((c, k) => c + across[k] * u + along[k] * v);
-      const [[u0, u1], [v0, v1]] = reach;
-      const corners = [at(u0, v0), at(u1, v0), at(u1, v1), at(u0, v1)];
-      const face = new THREE.BufferGeometry();
-      face.setAttribute("position", new THREE.Float32BufferAttribute([...corners[0], ...corners[1], ...corners[2], ...corners[0], ...corners[2], ...corners[3]], 3));
-      const outline = new THREE.BufferGeometry();
-      outline.setAttribute("position", new THREE.Float32BufferAttribute(corners.flatMap((p, i) => [...p, ...corners[(i + 1) % 4]]), 3));
-      const [mesh, lines] = [new THREE.Mesh(face, this.planeMaterials[0]), new THREE.LineSegments(outline, this.planeMaterials[1])];
-      lines.renderOrder = 14;
-      this.planes.add(mesh, lines);
+      const plane = fitPlane(points);
+      const mouth = this.mouths.reduce((a, b) => (!a || Math.hypot(...b.map((v, k) => v - plane.center[k])) < Math.hypot(...a.map((v, k) => v - plane.center[k])) ? b : a), null);
+      if (!mouth) continue;
+      const side = mouth.reduce((sum, v, k) => sum + (v - plane.center[k]) * plane.normal[k], 0) < 0 ? -1 : 1;
+      cuts.push({ ...plane, normal: plane.normal.map((v) => v * side) });
     }
+    const made = JSON.stringify(cuts);
+    if (made !== JSON.stringify(this.cuts)) {
+      this.cuts = cuts;
+      for (const key of core) {
+        const [tx, tz] = key.split(",").map(Number);
+        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) this.stale.add(`${tx + dx},${tz + dz}`);
+      }
+      return;
+    }
+    const seams = [...this.seams.values()].flat();
+    this.ends[2].geometry.dispose();
+    this.ends[2].geometry = new THREE.BufferGeometry();
+    this.ends[2].geometry.setAttribute("position", new THREE.Float32BufferAttribute(seams, 3));
   }
 
   // Draws the grid, if it's shown, over what `renderer` drew last, hidden only by `over` (an
@@ -392,8 +396,17 @@ export class Caves {
     this.stale.delete(key);
     const old = this.meshes.get(key);
     if (old) this.drop(old);
-    const data = caveMesh(tx, tz, this.world);
+    let data = caveMesh(tx, tz, this.world);
+    this.seams.delete(key);
     if (!data) return this.meshes.set(key, null);
+    // Cut back at entrances.
+    const seam = [];
+    for (const cut of this.cuts) {
+      const done = cutMesh(data, cut, [tx * TILE_FT, 0, tz * TILE_FT]);
+      data = done.mesh;
+      seam.push(...done.seam);
+    }
+    if (seam.length) this.seams.set(key, seam);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(data.positions, 3));
     geometry.setAttribute("color", new THREE.BufferAttribute(data.colors, 3));
