@@ -392,12 +392,27 @@ export class CavePlan {
     const start = configNear(this.layout, from);
     const ends = [{ ...start, at: from.at }, { ...start, at }];
     const length = Math.hypot(...at.map((v, k) => v - from.at[k]));
-    const problem = length < JOIN_FT ? "a passage has to be longer than that" : segmentShapes({ ends }).every((shape) => fits(shape, this.groundAt)) ? null : "a passage has to stay under the ground";
+    const problem =
+      length < JOIN_FT ? "a passage has to be longer than that" : to && this.tooClose(from, to) ? "a passage can't join a point within two links of where it starts" : segmentShapes({ ends }).every((shape) => fits(shape, this.groundAt)) ? null : "a passage has to stay under the ground";
     const joins = [from, to].filter(Boolean).flatMap((spot) => {
       const segment = this.layout.segments.get(spot.id);
       return segment ? [segment.from, segment.to] : [spot.id];
     });
     this.ghost = { from, to, at, ends, problem, warnings: passageWarnings(this.layout, from.net, ends, joins) };
+  }
+
+  // Whether a passage from spot `from` to spot `to` (each a point or a spot on a segment, as
+  // nearest gives them) would join points within two links of each other. A spot on a segment
+  // becomes a point a link from each of its ends.
+  tooClose(from, to) {
+    const ends = (spot) => {
+      const segment = this.layout.segments.get(spot.id);
+      return segment ? [segment.from, segment.to] : [spot.id];
+    };
+    const steps = 2 - this.layout.segments.has(from.id) - this.layout.segments.has(to.id);
+    if (steps < 0) return false;
+    const near = new Set(this.layout.around(ends(from), steps));
+    return ends(to).some((id) => near.has(id));
   }
 
   wheel(e) {
