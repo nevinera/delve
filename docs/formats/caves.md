@@ -75,7 +75,7 @@ After the tiles, a plate with entrances whose mouths are in it has an `entrances
 
 - `id`: the entrance's node in the cave layout.
 - `cells`: the ground cells left out round its mouth, `[ci, cj]` each, continent cells.
-- `plane`: the plane nearest the ground's edge round them: `center`, `normal` (facing out of the mouth), `across` and `along` (lying in it), and `reach`, how far the edge goes each way from the center, `[[low, high] across, [low, high] along]`. Readers cut the cave rock away on the normal's side of it, near the mouth, in the tiles beside the cells.
+- `plane`: the plane nearest the ground's edge round them: `center`, `normal` (facing out of the mouth), `across` and `along` (lying in it), and `reach`, how far the edge goes each way from the center, `[[low, high] across, [low, high] along]`. Readers take the air over the ground in the cells left out, and the cells round them, for rock, so the tube closes there with no rim, then cut the cave rock away on the normal's side of the plane, near the mouth, in the tiles beside the cells.
 - `ground`: the ground's edge round the cells left out, `[x, y, z]` points in order, closing on itself.
 - `rock`: the rock's edge where the plane cuts it, the same way round, starting across from `ground`'s first point.
 - `steps`: how the two edges join, a letter a triangle: `a` takes the next point on `ground`, `b` the next on `rock`. Readers color the triangles as the ground is, and draw them with it.

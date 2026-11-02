@@ -37,19 +37,19 @@ export function entranceJoin(entrance, world, groundAt) {
   const fitted = fitPlane(ground);
   const side = entrance.mouth.reduce((sum, v, k) => sum + (v - fitted.center[k]) * fitted.normal[k], 0) < 0 ? -1 : 1;
   const normal = fitted.normal.map((v) => v * side);
-  // Set back into the hill past the ground's edge and the rock's rim, pinned to the ground's
-  // corners there, so it cuts the tube where it's clean.
-  const inset = Math.max(...ground.map((p) => Math.abs(p.reduce((sum, v, k) => sum + (v - fitted.center[k]) * normal[k], 0)))) + CELL_FT;
-  const plane = { ...fitted, normal, center: fitted.center.map((v, k) => v - normal[k] * inset) };
+  const plane = { ...fitted, normal };
   // The rock cut back, in the tiles round the cells left out.
   const tiles = new Set();
   for (const [ci, cj] of cells) {
     for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) tiles.add(`${Math.floor((ci + di) / TILE_CELLS)},${Math.floor((cj + dj) / TILE_CELLS)}`);
   }
+  // The rock as it'll be drawn: closed over the ground round the cells left out.
+  const sealed = ringed(out);
+  const closedOver = { ...world, sealed: (ci, cj) => sealed.has(`${ci},${cj}`) || Boolean(world.sealed?.(ci, cj)) };
   const seam = [];
   for (const key of tiles) {
     const [tx, tz] = key.split(",").map(Number);
-    const mesh = caveMesh(tx, tz, world);
+    const mesh = caveMesh(tx, tz, closedOver);
     if (mesh) seam.push(...cutMesh(mesh, plane, [tx * TILE_FT, 0, tz * TILE_FT]).seam);
   }
   // The tube's cut: the seam's longest line, closed across the gaps the rock's tiles leave between
@@ -99,3 +99,13 @@ function crosses(line, { center, across, along }) {
 }
 
 const longest = (lines) => lines.reduce((best, line) => (!best || line.length > best.length ? line : best), null);
+
+// Cells "ci,cj", and those round them.
+export function ringed(cells) {
+  const out = new Set();
+  for (const key of cells) {
+    const [ci, cj] = key.split(",").map(Number);
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) out.add(`${ci + di},${cj + dj}`);
+  }
+  return out;
+}

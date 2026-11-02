@@ -27,7 +27,9 @@ import { CELL_FT } from "../v2/sizes.js";
 // world: what a mesh needs to know, by continent cell (ci, cj): spans(ci, cj), lowest first;
 // ground(ci, cj), the ground's height at its middle, -Infinity where it's not known; corner(ci,
 // cj), at its northwest corner; mouth(ci, cj), whether the ground there opens into a cave;
-// and caved(tx, tz), whether a tile has any caves.
+// caved(tx, tz), whether a tile has any caves; and optionally sealed(ci, cj), whether the air over
+// the ground there is taken for rock, so a cave through it closes there with no rim, as round
+// entrances, whose rock is cut back and joined to the ground instead (entranceJoin.js).
 
 const STEP_FT = 2;
 const ROCK = 0;
@@ -77,9 +79,10 @@ export function caveMesh(tx, tz, world) {
   const spans = kept((ci, cj) => world.spans(ci, cj));
   const ground = kept((ci, cj) => world.ground(ci, cj));
   const mouthAt = kept((ci, cj) => world.mouth(ci, cj));
+  const sealed = kept((ci, cj) => Boolean(world.sealed?.(ci, cj)));
   const state = (ci, cj, y) => {
     for (const s of spans(ci, cj)) if (s.floor <= y && y <= s.ceiling) return CAVE;
-    return y > ground(ci, cj) ? SKY : ROCK;
+    return y > ground(ci, cj) && !sealed(ci, cj) ? SKY : ROCK;
   };
   // Whether the surface runs along the edge between two grid points, and which way it faces: 1
   // toward the second, -1 toward the first, 0 for none.

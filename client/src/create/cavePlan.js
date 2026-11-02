@@ -3,7 +3,7 @@ import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { ARC_DEFAULTS, ARC_FT, ENTRANCE_DEFAULTS, ENTRANCE_FT, NODE_DEFAULTS, NODE_SIZES, STEEP_DEG, arcCurve, arcSteepness, SPACING, TUNNEL_SPAN, carvePlan, entranceEnd, entranceProblem, entranceRing, isEntrance, longEnough, mouthBehind, nodeRadius, respacedBends, tooNear } from "./caveLayout.js";
-import { PLATE_TILES, TILE_FT } from "../v2/sizes.js";
+import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { entranceJoin } from "./entranceJoin.js";
 
 // The caves' plan tools: chamber places rooms (nodes) on the points of the grid round the camera,
@@ -73,6 +73,7 @@ export class CavePlan {
     this.details = { node: { ...NODE_DEFAULTS }, arc: { ...ARC_DEFAULTS }, entrance: { ...ENTRANCE_DEFAULTS } };
     this.drawn = null; // what the drawing was made from
     this.joined = new Map(); // entrance id -> what its join with the ground was worked out from
+    this.waiting = false; // whether an entrance's join waits on the ground being read round it
 
     this.group = new THREE.Group();
     this.group.visible = false;
@@ -231,10 +232,20 @@ export class CavePlan {
       this.caves.setEntrance(id, null);
       this.joined.delete(id);
     }
+    this.waiting = false;
     for (const e of entrances) {
       const made = JSON.stringify([e.mouth, e.yaw, e.length, e.slope, e.width, e.style]);
-      if (this.joined.get(e.id) === made && this.caves.entrances.has(e.id)) continue;
+      const kept = this.caves.entrances.get(e.id);
+      if (this.joined.get(e.id) === made && kept) continue;
+      // Worked out from the ground in full, once it's read round it, not the coarser ground first.
+      if (!this.caves.groundRead(e.mouth, e.at, e.width + CELL_FT)) {
+        this.waiting = true;
+        continue;
+      }
+      // One read from the files, on ground as it was then, is kept as it is.
+      const read = !this.joined.has(e.id) && kept?.ground.every(([x, y, z]) => Math.abs(this.groundAt(x, z) - y) < 0.05);
       this.joined.set(e.id, made);
+      if (read) continue;
       const plate = [0, 2].map((k) => Math.floor(e.mouth[k] / (PLATE_TILES * TILE_FT))).join(",");
       this.caves.setEntrance(e.id, entranceJoin(e, this.caves.world, this.groundAt), plate);
     }
@@ -538,6 +549,7 @@ export class CavePlan {
       this.settled = true;
       this.carve();
     }
+    if (this.waiting) this.joinEntrances();
     this.group.visible = inEarth || Boolean(this.tool);
     if (!this.group.visible) return (this.label.hidden = true);
     const { clientWidth: w, clientHeight: h } = this.canvas;

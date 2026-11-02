@@ -3,6 +3,7 @@ import { CAVES_PATH, TILE_CELLS, allStone, carve, cavesPath, growCave, smoothCav
 import { CELL_FT, CHUNK_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial, setBrush } from "./caveMaterial.js";
 import { caveMesh, cutMesh, opensAt, zipped } from "./caveMesh.js";
+import { ringed } from "./entranceJoin.js";
 import { EMPTY_FT, FULL_TILES } from "./ground.js";
 
 export { CAVES_PATH };
@@ -55,6 +56,7 @@ export class Caves {
     // tile's ground mesh drawn in full, or null, whose material the joins take.
     this.entrances = new Map();
     this.entranceCells = new Set(); // "ci,cj"
+    this.sealed = new Set(); // "ci,cj" of those and the cells round them, where the rock's closed over the ground
     this.held = new Set(); // "cx,cz" of the ground's chunks round entrances, kept from moving
     this.groundMesh = null;
     // Each entrance's ground joined to its rock, colored and drawn as the ground is; and for now,
@@ -74,6 +76,7 @@ export class Caves {
       ground: (ci, cj) => this.groundCell(ci, cj),
       corner: (ci, cj) => this.renditions.heightAt(ci * CELL_FT, cj * CELL_FT) ?? EMPTY_FT,
       mouth: (ci, cj) => this.opens(ci, cj),
+      sealed: (ci, cj) => this.sealed.has(`${ci},${cj}`),
       caved: (tx, tz) => this.tiles.has(`${tx},${tz}`),
     };
   }
@@ -131,6 +134,7 @@ export class Caves {
       plates.add(`${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`);
     }
     this.entranceCells = next;
+    this.sealed = ringed(next);
     this.held = new Set([...this.entrances.values()].flatMap((e) => (e.chunks ?? []).map(([cx, cz]) => `${cx},${cz}`)));
     this.joinsMade = null;
     this.version++;
@@ -145,6 +149,18 @@ export class Caves {
       for (let cx = Math.floor((x - pad) / CHUNK_FT); cx <= Math.floor((x + pad) / CHUNK_FT); cx++) if (this.held.has(`${cx},${cz}`)) return true;
     }
     return false;
+  }
+
+  // Whether the ground's been read in full within `reach` ft of the line from continent feet `from`
+  // to `to`, asking for what hasn't.
+  groundRead(from, to, reach) {
+    let read = true;
+    for (let tz = Math.floor((Math.min(from[2], to[2]) - reach) / TILE_FT); tz <= Math.floor((Math.max(from[2], to[2]) + reach) / TILE_FT); tz++) {
+      for (let tx = Math.floor((Math.min(from[0], to[0]) - reach) / TILE_FT); tx <= Math.floor((Math.max(from[0], to[0]) + reach) / TILE_FT); tx++) {
+        if (this.renditions.tile(tx, tz) && !this.renditions.cells(tx, tz)) read = false;
+      }
+    }
+    return read;
   }
 
   // Tile (tx, tz)'s cells whose ground isn't drawn, where caves open through it or entrances reach
@@ -345,7 +361,13 @@ export class Caves {
       geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
       geometry.setIndex(indices);
       geometry.computeVertexNormals();
-      this.joins.add(new THREE.Mesh(geometry, ground.material));
+      // In the ground tile's own frame, which its material's patterns are laid out in.
+      ground.updateWorldMatrix(true, false);
+      geometry.applyMatrix4(ground.matrixWorld.clone().invert());
+      const mesh = new THREE.Mesh(geometry, ground.material);
+      mesh.matrixAutoUpdate = false;
+      mesh.matrix.copy(ground.matrixWorld);
+      this.joins.add(mesh);
     });
     edges.forEach((points, k) => {
       this.edges[k].geometry.dispose();
