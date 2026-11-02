@@ -31,7 +31,7 @@ Its `at` is always where `mouth`, `yaw`, `length` and `slope` put it. Its mouth 
 
 ## Arcs
 
-An arc is a tunnel between two nodes, `from` and `to`. It runs floor to floor through its `bends`, points in feet: only where they are across counts, not their heights. Between its level runs into its rooms it climbs or falls evenly all the way, so drawing it out longer makes it gentler. One shorter than 30 times its width along its line isn't carved.
+An arc is a tunnel between two nodes, `from` and `to`. It runs floor to floor through its `bends`, points in feet: only where they are across counts, not their heights. Between its level runs into its rooms it climbs or falls evenly all the way, so drawing it out longer makes it gentler. One shorter than 10 times its width along its line isn't carved.
 
 Rooms' middles keep at least 5 times the sum of their radii apart (an entrance's room's radius is its width).
 

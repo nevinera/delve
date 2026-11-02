@@ -118,14 +118,14 @@ describe("cave layout", () => {
     expect(redone.size).toBe(shapesOf(layout.copyOf(arc.id)).length + shapesOf(layout.copyOf(a.id)).length + shapesOf(layout.copyOf(b.id)).length);
   });
 
-  it("doesn't carve a tunnel shorter than 30 times its width, nor keep it as carved", () => {
+  it("doesn't carve a tunnel shorter than 10 times its width, nor keep it as carved", () => {
     const layout = new Layout();
     const [a, b] = [layout.addNode([0, -100, 0]), layout.addNode([200, -100, 0])];
-    const arc = layout.addArc(a.id, b.id, { size: 12 });
+    const arc = layout.addArc(a.id, b.id, { size: 24 });
     const plan = carvePlan(layout);
     expect(plan.short).toEqual([arc.id]);
     expect(plan.carved.has(arc.id)).toBe(false);
-    arc.size = 6;
+    arc.size = 16;
     expect(carvePlan(layout).short).toEqual([]);
   });
 
