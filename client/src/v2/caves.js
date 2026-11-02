@@ -361,9 +361,10 @@ export const emptyColumns = () => new Array(COLUMNS).fill(null);
 
 // A plate's caves file, as text: `tiles`, index in the plate -> columns. Tiles with no air are
 // left out, and each tile's cells take whichever form is shortest.
-export function encodeCaves([px, pz], tiles) {
+export function encodeCaves([px, pz], tiles, entrances = []) {
   const lines = [`caves ${VERSION} ${px} ${pz}`];
   for (const [index, columns] of [...tiles].filter(([, columns]) => columns.some(Boolean)).sort((a, b) => a[0] - b[0])) lines.push(`tile ${index}`, cellsLine(columns));
+  if (entrances.length) lines.push("entrances", ...[...entrances].sort((a, b) => (a.id < b.id ? -1 : 1)).map((e) => JSON.stringify(e, (k, v) => (typeof v === "number" ? Math.round(v * 100) / 100 + 0 : v))));
   return new TextEncoder().encode(`${lines.join("\n")}\n`);
 }
 
@@ -443,8 +444,11 @@ export function decodeCaves(bytes) {
   if (word !== "caves") throw new Error(`not a caves file (${JSON.stringify(lines[0].slice(0, 20))})`);
   if (Number(version) !== VERSION) throw new Error(`caves file version ${version} isn't known`);
   const tiles = new Map();
-  for (let k = 1; k < lines.length; k++) if (lines[k].startsWith("tile ")) tiles.set(Number(lines[k].slice(5)), readCells(lines[++k]));
-  return { coords: [Number(px), Number(pz)], tiles };
+  const entrances = [];
+  let k = 1;
+  for (; k < lines.length && lines[k] !== "entrances"; k++) if (lines[k].startsWith("tile ")) tiles.set(Number(lines[k].slice(5)), readCells(lines[++k]));
+  for (k++; k < lines.length; k++) if (lines[k]) entrances.push(JSON.parse(lines[k]));
+  return { coords: [Number(px), Number(pz)], tiles, entrances };
 }
 
 function decodeBinaryCaves(gz) {
@@ -467,7 +471,7 @@ function decodeBinaryCaves(gz) {
     });
     tiles.set(index, columns);
   }
-  return { coords, tiles };
+  return { coords, tiles, entrances: [] };
 }
 
 // Tile (tx, tz)'s index in its plate.

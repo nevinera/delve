@@ -27,6 +27,16 @@ function tunnel(depth = 0) {
 }
 
 describe("caves files, unzipped", () => {
+  it("keeps entrances after the tiles, a line each, to a hundredth of a foot", () => {
+    const join = { cells: [[3, 4], [4, 4]], plane: { center: [1.004, -2, 3], normal: [0, 1, 0] }, ground: [[0, 1.2345, 0], [1, 1, 0], [1, 1, 1]], rock: [[0, 0, 0], [1, -0.001, 1], [0, 0, 1]], steps: "abab" };
+    const bytes = encodeCaves([-1, 2], new Map([[9, tunnel()]]), [{ id: "n7", ...join }]);
+    const lines = new TextDecoder().decode(bytes).trim().split("\n");
+    expect(lines.at(-2)).toBe("entrances");
+    const { tiles, entrances } = decodeCaves(bytes);
+    expect(tiles.get(9)).toEqual(tunnel());
+    expect(entrances).toEqual([{ id: "n7", ...join, plane: { center: [1, -2, 3], normal: [0, 1, 0] }, ground: [[0, 1.23, 0], [1, 1, 0], [1, 1, 1]], rock: [[0, 0, 0], [1, 0, 1], [0, 0, 1]] }]);
+  });
+
   it("lists few spans by cell", () => {
     const columns = emptyColumns();
     columns[5] = [{ floor: -10.25, ceiling: -2, stone: [2, 6, 0] }, { floor: 4, ceiling: 9.5, stone: [0, 0, 7] }];

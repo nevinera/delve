@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { TILE_CELLS, carve, cavesPath, growCave, smoothCave, emptyColumns, fillRock, openAir } from "../v2/caves.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
-import { caveMesh, chains, cutMesh, fitPlane, joinedPieces, mouthCells, openEdges, stitch } from "./caveMesh.js";
+import { caveMesh, chains, cutMesh, fitPlane, joinedPieces, mouthCells, openEdges, zipSteps, zipped } from "./caveMesh.js";
 import { Caves } from "./caves.js";
 
 // Flat ground at `height`, everywhere, with its cells all one color.
@@ -235,7 +235,9 @@ describe("stitching", () => {
 
   it("joins two rings round an opening with triangles all the way round, facing the normal", () => {
     const plane = { center: [0, 0, 0], normal: [0, 1, 0], across: [1, 0, 0], along: [0, 0, 1] };
-    const { positions, indices } = stitch(ring(10, 16), ring(4, 9, 0, true), plane);
+    const { a, b, steps } = zipSteps(ring(10, 16), ring(4, 9, 0, true), plane);
+    expect(steps.replace(/b/g, "")).toHaveLength(16);
+    const { positions, indices } = zipped(a, b, steps, plane.normal);
     expect(indices.length / 3).toBe(16 + 9);
     for (let n = 0; n < indices.length; n += 3) {
       const p = [0, 1, 2].map((k) => positions.slice(indices[n + k] * 3, indices[n + k] * 3 + 3));

@@ -491,11 +491,12 @@ export function chains(segments) {
   return out;
 }
 
-// Triangles joining two lines of points round the same opening, each closing on itself, as
-// { positions, indices }, continent feet: both turned to run the same way round the plane
-// (fitPlane's) and to start across from each other, then zipped together, going on along
-// whichever is behind for how far round it's come. Faces look toward the plane's normal.
-export function stitch(first, second, { center, normal, across, along }) {
+// How to join two lines of points round the same opening, each closing on itself: both turned
+// to run the same way round the plane (fitPlane's) and to start across from each other, and the
+// steps zipping them together, one letter a step, "a" going on along the first, "b" along the
+// second, whichever is behind for how far round it's come. Gives { a, b, steps }, the lines as
+// turned; zipped makes the triangles.
+export function zipSteps(first, second, { center, across, along }) {
   const flat = (p) => [0, 1].map((k) => [across, along][k].reduce((sum, v, i) => sum + v * (p[i] - center[i]), 0));
   const area = (line) => line.reduce((sum, p, i) => {
     const [a, b] = [flat(p), flat(line[(i + 1) % line.length])];
@@ -517,6 +518,17 @@ export function stitch(first, second, { center, normal, across, along }) {
     return [...line.map((_, i) => (i ? (done += steps[i - 1]) : 0) / total), 1];
   };
   const [sa, sb] = [shares(a), shares(b)];
+  let [i, j, steps] = [0, 0, ""];
+  while (i < a.length || j < b.length) {
+    if (j >= b.length || (i < a.length && sa[i + 1] <= sb[j + 1])) [i, steps] = [i + 1, steps + "a"];
+    else [j, steps] = [j + 1, steps + "b"];
+  }
+  return { a, b, steps };
+}
+
+// The triangles zipSteps' steps make between lines `a` and `b`, as { positions, indices },
+// continent feet, facing toward `normal`.
+export function zipped(a, b, steps, normal) {
   const positions = [...a.flat(), ...b.flat()];
   const indices = [];
   const face = (i, j, k) => {
@@ -527,16 +539,12 @@ export function stitch(first, second, { center, normal, across, along }) {
     else indices.push(i, j, k);
   };
   let [i, j] = [0, 0];
-  while (i < a.length || j < b.length) {
-    const [ai, aj] = [i % a.length, (i + 1) % a.length];
-    const [bi, bj] = [a.length + (j % b.length), a.length + ((j + 1) % b.length)];
-    if (j >= b.length || (i < a.length && sa[i + 1] <= sb[j + 1])) {
-      face(ai, aj, bi);
-      i++;
-    } else {
-      face(ai, bj, bi);
-      j++;
-    }
+  for (const step of steps) {
+    const [ai, bi] = [i % a.length, a.length + (j % b.length)];
+    if (step === "a") face(ai, (i + 1) % a.length, bi);
+    else face(ai, a.length + ((j + 1) % b.length), bi);
+    if (step === "a") i++;
+    else j++;
   }
   return { positions, indices };
 }
