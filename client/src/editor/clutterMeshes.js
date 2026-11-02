@@ -191,12 +191,42 @@ const reedTops = [
   [-0.08, 0.85, 0.06],
 ];
 
+// A vine along `points` (x, y, z), about 1ft long: a thin stem with small leaves along it, turned
+// every which way.
+function vineAlong(points, seed) {
+  const curve = new THREE.CatmullRomCurve3(points.map((p) => new THREE.Vector3(...p)));
+  const parts = [new THREE.TubeGeometry(curve, 16, 0.012, 4, false)];
+  const rand = random(seed);
+  for (let t = 0.04; t < 1; t += 0.05 + rand() * 0.04) {
+    const leaf = new THREE.PlaneGeometry(0.06, 0.04).rotateX(rand() * Math.PI).rotateY(rand() * Math.PI * 2).rotateZ(rand() * Math.PI);
+    parts.push(leaf.translate(...curve.getPoint(t).toArray()));
+  }
+  return mergeGeometries(parts.map((g) => g.toNonIndexed()));
+}
+
+// A vine hanging in a loop between two points 1ft apart, drawn upward, as it's turned to hang.
+function vineLoop(seed) {
+  const rand = random(seed);
+  const sag = 0.4 + rand() * 0.3;
+  return vineAlong([-0.5, -0.25, 0, 0.25, 0.5].map((x) => [x, sag * (1 - 4 * x * x), (rand() - 0.5) * 0.12]), seed);
+}
+
+// A strand of vine 1ft long, swaying a little, drawn upward, as it's turned to hang.
+function vineStrand(seed) {
+  const rand = random(seed);
+  return vineAlong([0, 0.25, 0.5, 0.75, 1].map((y) => [(rand() - 0.5) * 0.12 * y, y, (rand() - 0.5) * 0.12 * y]), seed);
+}
+
 const SHAPES = {
   tuft: () => blades(9, { width: 0.12, spread: 0.12, seed: 1 }),
   stems: () => blades(3, { width: 0.04, height: [0.75, 1], lean: 0.15, seed: 2 }),
   blooms: () => mergeGeometries([0, 1, 2].map(bloomAt)),
   pebble: () => new THREE.IcosahedronGeometry(0.5, 0).scale(1, 0.45, 0.8).translate(0, 0.12, 0),
   stone: () => new THREE.DodecahedronGeometry(0.55, 0).scale(1, 0.9, 0.8).translate(0, 0.35, 0),
+  // Rock jutting from a face: most of it out, the rest sunk in.
+  crag: [() => new THREE.DodecahedronGeometry(0.5, 0).scale(1, 0.6, 0.75).rotateY(0.4).translate(0, 0.12, 0), () => new THREE.IcosahedronGeometry(0.5, 0).scale(0.8, 0.75, 0.6).translate(0, 0.15, 0)],
+  vineLoop: [7, 8, 9].map((seed) => () => vineLoop(seed)),
+  vine: [10, 11, 12].map((seed) => () => vineStrand(seed)),
   bush: () => new THREE.IcosahedronGeometry(0.5, 1).scale(1, 0.8, 1).translate(0, 0.38, 0),
   fern: [3, 4, 5, 6].map((seed) => () => fronds(6 + (seed % 3), seed)),
   stalks: () =>
@@ -288,7 +318,7 @@ export function clutterMeshes(instances, origin) {
         // Each instance takes a variant from its turn, which is already random.
         const placed = list.filter((item) => item.colors[p] && Math.floor(item.yaw * 1000) % shapes.length === v);
         if (!placed.length) return;
-        const solid = part.shape === "stone" || part.shape === "pebble";
+        const solid = part.shape === "stone" || part.shape === "pebble" || part.shape === "crag";
         const mesh = new THREE.InstancedMesh(geometry, solid ? flat : part.shape === "fern" ? leafy : material, placed.length);
         placed.forEach((item, n) => {
           q.setFromUnitVectors(UP, normal.set(...item.normal)).multiply(turn.setFromAxisAngle(UP, item.yaw));

@@ -71,7 +71,8 @@ export function opensAt(world, ci, cj) {
   return world.spans(ci, cj).some((s) => s.floor < h && h < s.ceiling);
 }
 
-// Tile (tx, tz)'s cave rock as { positions, colors, themes, indices }, or null where there's none.
+// Tile (tx, tz)'s cave rock as { positions, colors, themes, days, grounds, indices, ground, lips },
+// or null where there's none; lips, where the lip round the tile's mouths is, continent feet.
 export function caveMesh(tx, tz, world) {
   let near = false;
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) near ||= world.caved(tx + dx, tz + dz);
@@ -409,7 +410,7 @@ export function caveMesh(tx, tz, world) {
   }
   const surface = earthMesh(earth);
   if (!indices.length && !surface) return null;
-  const mesh = { positions: Float32Array.from(positions), colors: Float32Array.from(colors), themes: Float32Array.from(themes), days: Float32Array.from(days), grounds: Float32Array.from(grounds), indices: Uint32Array.from(indices), ground: surface };
+  const mesh = { positions: Float32Array.from(positions), colors: Float32Array.from(colors), themes: Float32Array.from(themes), days: Float32Array.from(days), grounds: Float32Array.from(grounds), indices: Uint32Array.from(indices), ground: surface, lips: Float32Array.from(lipCubes().flatMap((cube) => placeOf(...cube))) };
   return BLEND_FLOORS ? mesh : unblended(mesh, rockColors, walkable);
 }
 

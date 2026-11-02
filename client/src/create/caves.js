@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { CAVES_PATH, TILE_COLUMNS, VOXEL_FT, allStone, carve, cavesPath, decodeCaves, emptyColumns, encodeCaves, floorAt, sharedChunks, tileIndex } from "../v2/caves.js";
 import { CELL_FT, CHUNK_FT, PLATE_TILES, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial } from "./caveMaterial.js";
+import { mouthClutter } from "./mouthClutter.js";
 import { caveBlocks, caveMesh, opensAt } from "./caveMesh.js";
 import { EMPTY_FT, FULL_TILES } from "./ground.js";
 
@@ -50,6 +51,13 @@ export class Caves {
     this.groundGroup = new THREE.Group();
     scene.add(this.groundGroup);
     this.groundMaterial = null;
+    // What clutter round mouths needs (mouthClutter.js): the cave layout's entrances, the biome at
+    // continent feet (x, z), and editor/clutterMeshes.js's clutterMeshes to draw it, or null not to.
+    this.entrances = () => [];
+    this.biomeAt = () => "plains";
+    this.clutterMeshes = null;
+    this.clutterGroup = new THREE.Group();
+    scene.add(this.clutterGroup);
     this.bands = new Map(); // "tx,tz" -> { version, cells }: band() as last worked out
     this.shownBands = new Map(); // "tx,tz" -> the band's cells the ground leaves out, as drawn
     this.world = {
@@ -455,6 +463,11 @@ export class Caves {
     lines.position.copy(mesh.position);
     this.overlays.lines.add(lines);
     mesh.userData.overlays = [lines];
+    if (data.lips?.length && this.clutterMeshes) {
+      const clutter = this.clutterMeshes(mouthClutter(tx, tz, data, { entrances: this.entrances(), biomeAt: this.biomeAt }), [0, 0]);
+      for (const piece of clutter) this.clutterGroup.add(piece);
+      mesh.userData.clutter = clutter;
+    }
     if (data.ground) {
       const earth = new THREE.BufferGeometry();
       earth.setAttribute("position", new THREE.BufferAttribute(data.ground.positions, 3));
@@ -488,6 +501,11 @@ export class Caves {
     for (const overlay of mesh.userData.overlays ?? []) {
       overlay.parent?.remove(overlay);
       overlay.geometry.dispose();
+    }
+    // Clutter's shapes are shared, kept by clutterMeshes.js.
+    for (const piece of mesh.userData.clutter ?? []) {
+      piece.parent?.remove(piece);
+      piece.dispose();
     }
   }
 

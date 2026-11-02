@@ -13,6 +13,7 @@ import { EMPTY_FT, FAR_FT, FINE, Ground, REACH_FT, Renditions } from "./ground.j
 import { grid } from "./grid.js";
 import { planningPath } from "./marks.js";
 import { Clutter } from "./clutter.js";
+import { clutterMeshes } from "../editor/clutterMeshes.js";
 import { Falls } from "./falls.js";
 import { Scatter } from "./scatter.js";
 import { Sea } from "./sea.js";
@@ -187,6 +188,10 @@ function start(world, changes, fresh) {
   // The cave networks laid out, to carve (caveLayout.js).
   const layoutBytes = world.files.get(layoutPath(continent));
   const layout = new Layout(layoutBytes ? JSON.parse(strFromU8(layoutBytes)) : null);
+  // Clutter round cave mouths goes by their entrances, and the biome round them.
+  caves.entrances = () => [...layout.entrances.values()];
+  caves.biomeAt = (x, z) => BIOME_NAMES[renditions.biomes.at(x, z)];
+  caves.clutterMeshes = clutterMeshes;
   ground.holes = (tx, tz) => caves.holes(tx, tz);
   // Where caves open through the ground depends on its height, which is finer once a plate's read.
   const groundRead = renditions.onRead;

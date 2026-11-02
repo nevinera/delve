@@ -21,6 +21,7 @@ const STRAW = [[0.1, 0.14], [0.3, 0.45], [0.5, 0.62]];
 const GREY = [[0.08, 0.12], [0.03, 0.1], [0.38, 0.55]];
 const BROWN = [[0.06, 0.1], [0.3, 0.5], [0.2, 0.32]];
 const PALE = [[0.1, 0.14], [0.15, 0.3], [0.75, 0.88]];
+const CAVE_ROCK = [[0.07, 0.11], [0.05, 0.12], [0.3, 0.45]];
 
 // size: [min, max] in feet, the kind's overall height (or width, for flat kinds; frond length,
 // for ferns, which stand about 0.6 of that). lie: lies along
@@ -52,6 +53,11 @@ export const CLUTTER = {
   paleMushrooms: { size: [0.3, 0.6], parts: [{ shape: "stalks", colors: [PALE] }, { shape: "caps", colors: [PALE] }] },
   litter: { size: [1.5, 3], lie: true, parts: [{ shape: "patch", colors: [[[0.05, 0.1], [0.45, 0.65], [0.25, 0.4]]] }] },
   twig: { size: [1, 2.2], parts: [{ shape: "twig", colors: [BROWN] }] },
+  // Round cave mouths (create/mouthClutter.js): rock jutting from the hill face and the mouth's
+  // walls, and vines, in loops hanging from the mouth's roof or strands hanging down it.
+  crag: { size: [0.8, 2.6], parts: [{ shape: "crag", colors: [GREY, CAVE_ROCK] }] },
+  vineLoop: { size: [2, 5], parts: [{ shape: "vineLoop", colors: [DARK_GREEN, GREEN] }] },
+  vine: { size: [3, 8], parts: [{ shape: "vine", colors: [DARK_GREEN, GREEN] }] },
   thistle: {
     size: [1.2, 2],
     parts: [
