@@ -441,7 +441,9 @@
       </div>
     </div>
     <div data-config="caveSelect entrance caveAdd" hidden>
-      <p class="create-note" data-only="caveAdd">reach <output id="planReachOut"></output> (scroll wheel)</p>
+      <label data-only="caveAdd">length <output id="planReachOut"></output> <span class="create-note">(scroll wheel)</span>
+        <input id="planReach" type="range" step="4" value="32">
+      </label>
       <div data-only="entrance">
         <label>network <select id="planNet"><option value="">new network</option></select></label>
         <div class="create-way">

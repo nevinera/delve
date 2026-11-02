@@ -21,7 +21,7 @@ import { ENTRANCE_DEFAULTS, ENTRANCE_FT, POINT_DEFAULTS, JOIN_FT, POINT_FT, ROCK
 //
 // Add, from inside a cave, lays out passages: the new point goes the way you look, REACH_FT
 // from your feet, level when you look straight ahead (the camera at rest, the pointer in the
-// middle), the scroll wheel setting how far, and the passage goes on to it from the nearest
+// middle), the length slider or the scroll wheel setting how far, and the passage goes on to it from the nearest
 // spot on a passage to you, splitting it there unless a point's within its passage's width
 // (Layout's joinAt). Aimed near another passage, it snaps to it, to make a loop. A ghost of it
 // shows as you aim, red where it can't go, too near a passage it doesn't join or another network
@@ -145,6 +145,8 @@ export class CavePlan {
     $("planEntranceWidth").addEventListener("input", () => changeDetail("width", Number($("planEntranceWidth").value)));
     $("planEntranceWidth").min = String(ENTRANCE_FT[0]);
     $("planEntranceWidth").max = String(ENTRANCE_FT[1]);
+    [$("planReach").min, $("planReach").max, $("planReach").step] = [REACH_FT[0], REACH_FT[2], REACH_STEP_FT].map(String);
+    $("planReach").addEventListener("input", () => (this.reach = Number($("planReach").value)));
     for (const key of ["width", "height"]) {
       const input = $(`planPoint-${key}`);
       [input.min, input.max] = POINT_FT[key].map(String);
@@ -627,6 +629,7 @@ export class CavePlan {
     $("planPointDetails").hidden = !point;
     document.querySelector('[data-rocks="plan"]').hidden = !point && !e && !placing;
     $("planReachOut").textContent = `${this.reach} ft`;
+    if (document.activeElement !== $("planReach")) $("planReach").value = String(this.reach);
     if (point) {
       for (const key of ["width", "height"]) {
         if (document.activeElement !== $(`planPoint-${key}`)) $(`planPoint-${key}`).value = String(point[key]);
