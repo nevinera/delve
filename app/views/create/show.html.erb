@@ -406,9 +406,7 @@
       </div>
     </div>
     <div data-config="entrance passage" hidden>
-      <p class="create-note" data-only="passage">From inside a cave, click to lay a passage out to where you look, <output id="planReachOut"></output> past you; the scroll wheel sets how far. It goes on from the nearest spot on a passage to you, splitting it there unless a point's within 8 ft. Aim near another passage to join it, making a loop. The new point's selected, to size here; shift-click picks another.</p>
-      <p class="create-note" data-only="entrance">From above the ground, click a hillside to place an entrance there, held 10 ft in from its mouth: a tube into the hill, facing the way you look, ending at a point that passages go on from. C and V turn it, shift for finer turns. Its mouth has to be out in the open but for the bottom of it, and its far end under the ground; it's red where it isn't.</p>
-      <p class="create-note" data-only="entrance">Every cave is in a network. Name a new network before placing the entrance that starts it, or pick one to add another entrance to it. Click an entrance to select it: changes here change it, and carve straight away.</p>
+      <p class="create-note" data-only="passage">reach <output id="planReachOut"></output> (scroll wheel)</p>
       <label>network <select id="planNet"><option value="">new network</option></select></label>
       <div class="create-way">
         <input id="planNetName" type="text" spellcheck="false" autocomplete="off" placeholder="new network's name">
@@ -472,7 +470,6 @@
       <p id="planStatus" class="create-note" role="status"></p>
     </div>
     <div data-config="polish" hidden>
-      <p class="create-note">Edit the rock of a network being polished by hand, from inside it. With the voxel brush, click to break a voxel and right-click to place one. Drag the other brushes; [ and ] size them. For the box, click two voxels for its corners; then [ and ] move the face nearest facing you, Enter works it, and Esc drops it. Each click or drag undoes on its own, back 10.</p>
       <div class="create-modes" role="group" aria-label="brush">
         <button type="button" data-polish-shape="voxel" aria-pressed="false">voxel</button>
         <button type="button" data-polish-shape="sphere" aria-pressed="false">sphere</button>
