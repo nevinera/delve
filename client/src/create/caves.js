@@ -356,10 +356,15 @@ export class Caves {
       const { positions, indices } = zipped(entrance.ground, entrance.rock, entrance.steps, entrance.plane.normal);
       const colors = [];
       for (let i = 0; i < positions.length; i += 3) colors.push(...this.groundColor(positions[i], positions[i + 2]));
+      // Seen from both sides, outside and from in the tube: each triangle twice, turned, on its
+      // own vertices so each side's lit as it faces.
+      const count = positions.length / 3;
+      const back = [];
+      for (let n = 0; n < indices.length; n += 3) back.push(count + indices[n], count + indices[n + 2], count + indices[n + 1]);
       const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
-      geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
-      geometry.setIndex(indices);
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute([...positions, ...positions], 3));
+      geometry.setAttribute("color", new THREE.Float32BufferAttribute([...colors, ...colors], 3));
+      geometry.setIndex([...indices, ...back]);
       geometry.computeVertexNormals();
       // In the ground tile's own frame, which its material's patterns are laid out in.
       ground.updateWorldMatrix(true, false);
