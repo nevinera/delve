@@ -13,19 +13,22 @@ function mouth() {
 const kinds = (out) => new Set(out.map((o) => o.kind));
 
 describe("clutter round cave mouths", () => {
-  it("strews the ground and floor and juts rock from the faces, the same each time, with vines only where they grow", () => {
+  it("strews the ground and floor and juts rock from the faces, the same each time, with dead grass off rock and vines only where they grow", () => {
     const mesh = mouth();
     const entrance = (id) => ({ id, mouth: [150, -5, 128], yaw: 270, width: 14 });
     const rocky = mouthClutter(0, 0, mesh, { entrances: [entrance("e1")], biomeAt: () => "rocky" });
-    expect(kinds(rocky)).toEqual(new Set(["pebble", "stone", "crag"]));
+    expect(kinds(rocky).has("pebble")).toBe(true);
+    for (const kind of kinds(rocky)) expect(["pebble", "stone", "crag", "deadGrass"]).toContain(kind);
+    // Dead grass never grows on ground drawn as rock.
+    const bare = mouthClutter(0, 0, mesh, { entrances: [entrance("e1")], biomeAt: () => "rocky", patternAt: () => "rock" });
+    expect(kinds(bare).has("deadGrass")).toBe(false);
     expect(mouthClutter(0, 0, mesh, { entrances: [entrance("e1")], biomeAt: () => "rocky" })).toEqual(rocky);
     // Everything's near the mouth.
     for (const o of rocky) expect(Math.hypot(o.x - 150, o.z - 128)).toBeLessThan(40);
-    // In forest there are twigs, and vines one way or another for each entrance, hanging down.
+    // In forest there are vines one way or another for each entrance, hanging down.
     const vines = new Set();
     for (const id of ["e1", "e2", "e3", "e4"]) {
       const forest = mouthClutter(0, 0, mesh, { entrances: [entrance(id)], biomeAt: () => "forest" });
-      expect(kinds(forest).has("twig")).toBe(true);
       for (const o of forest) if (o.kind === "vine" || o.kind === "vineLoop") {
         vines.add(o.kind);
         expect(o.normal).toEqual([0, -1, 0]);

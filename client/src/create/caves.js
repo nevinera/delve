@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { CAVES_PATH, TILE_COLUMNS, VOXEL_FT, allStone, carve, cavesPath, decodeCaves, emptyColumns, encodeCaves, floorAt, sharedChunks, tileIndex } from "../v2/caves.js";
 import { CELL_FT, CHUNK_FT, PLATE_TILES, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial } from "./caveMaterial.js";
+import { PATTERNS } from "../v2/look.js";
 import { mouthClutter } from "./mouthClutter.js";
 import { caveBlocks, caveMesh, opensAt } from "./caveMesh.js";
 import { EMPTY_FT, FULL_TILES } from "./ground.js";
@@ -213,6 +214,15 @@ export class Caves {
     const [nx, nz] = [(h(x - CELL_FT, z) - h(x + CELL_FT, z)) / (2 * CELL_FT), (h(x, z - CELL_FT) - h(x, z + CELL_FT)) / (2 * CELL_FT)];
     const length = Math.hypot(nx, 1, nz);
     return { color: count ? color.map((c) => c / count) : [0.2, 0.2, 0.2], normal: [nx / length, 1 / length, nz / length] };
+  }
+
+  // The ground's pattern at continent feet (x, z), look.js's PATTERNS, or null where its cells
+  // aren't read.
+  patternAt(x, z) {
+    const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
+    const kinds = this.renditions.cells?.(tx, tz)?.kinds;
+    if (!kinds) return null;
+    return PATTERNS[kinds[Math.floor(z / CELL_FT - tz * CELLS) * CELLS + Math.floor(x / CELL_FT - tx * CELLS)]] ?? null;
   }
 
   // Opens air in `shape` (v2/caves.js's carve), or fills it with rock with `fill`. Gives whether
@@ -464,7 +474,7 @@ export class Caves {
     this.overlays.lines.add(lines);
     mesh.userData.overlays = [lines];
     if (data.lips?.length && this.clutterMeshes) {
-      const clutter = this.clutterMeshes(mouthClutter(tx, tz, data, { entrances: this.entrances(), biomeAt: this.biomeAt }), [0, 0]);
+      const clutter = this.clutterMeshes(mouthClutter(tx, tz, data, { entrances: this.entrances(), biomeAt: this.biomeAt, patternAt: (x, z) => this.patternAt(x, z) }), [0, 0]);
       for (const piece of clutter) this.clutterGroup.add(piece);
       mesh.userData.clutter = clutter;
     }

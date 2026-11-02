@@ -55,6 +55,7 @@ export const CLUTTER = {
   twig: { size: [1, 2.2], parts: [{ shape: "twig", colors: [BROWN] }] },
   // Round cave mouths (create/mouthClutter.js): rock jutting from the hill face and the mouth's
   // walls, and vines, in loops hanging from the mouth's roof or strands hanging down it.
+  deadGrass: { size: [0.8, 1.7], parts: [{ shape: "tuft", colors: [STRAW, [[0.07, 0.11], [0.3, 0.45], [0.3, 0.42]]] }] },
   crag: { size: [0.8, 2.6], parts: [{ shape: "crag", colors: [GREY, CAVE_ROCK] }] },
   vineLoop: { size: [3, 7], parts: [{ shape: "vineLoop", colors: [DARK_GREEN, GREEN] }] },
   vine: { size: [4, 11], parts: [{ shape: "vine", colors: [DARK_GREEN, GREEN] }] },

@@ -1,5 +1,5 @@
 import { CLUTTER, colorIn } from "../world/clutter.js";
-import { hash2 } from "../world/noise.js";
+import { fbm, hash2 } from "../world/noise.js";
 import { TILE_FT } from "../v2/sizes.js";
 
 // Clutter round cave mouths, as world/clutter.js's kinds: pebbles, stones and twigs on the ground
@@ -8,41 +8,54 @@ import { TILE_FT } from "../v2/sizes.js";
 // (caveMesh.js), never stored, so it's the same every time it's drawn. Each face of the mesh is
 // ground or hill face (the ground the caves draw round a mouth, flat or steep), or floor, wall or
 // ceiling (the rock, by the way it faces), and each rule puts `per` of a kind on each 100 sq ft of
-// one of those ("earth" for ground or hill face) at the lip, fewer further off, none past `reach` ft, in `biomes` where it says.
+// one of those ("earth" for ground or hill face) at the lip, thinning out to none `reach` ft off,
+// in `biomes` where it says. All but vines and the plants by an entrance's base are gathered into
+// patches about PATCH_FT across, with bare ground between, as much in all as without them.
 // Vines go one of VINES ways for each entrance, by a hash of it: loops along its roof, or strands
 // down one side, or over one corner, all from the upper part of the mouth ("upper": its walls and
 // roof over halfway up). Most entrances, by the hash, have bushes or ferns by one side of their
 // base (`flank`).
 
+// A few tufts of dead grass round the foot of crags on ground that isn't rock and isn't steep, in
+// plains and rocky biomes: up to `most`, for `share` of the crags.
+const TUFTS = { kind: "deadGrass", share: 0.8, most: 4, flat: 0.5, biomes: ["plains", "rocky"] };
+
 const RULES = [
-  { kind: "pebble", on: "ground", per: 12, reach: 10 },
-  { kind: "stone", on: "ground", per: 3, reach: 8 },
-  { kind: "twig", on: "ground", per: 3, reach: 10, biomes: ["forest", "swamp"] },
-  { kind: "litter", on: "ground", per: 1.5, reach: 8, biomes: ["forest"] },
-  { kind: "crag", on: "face", per: 8, reach: 8 },
-  { kind: "pebble", on: "floor", per: 14, reach: 14 },
-  { kind: "stone", on: "floor", per: 4, reach: 12 },
-  { kind: "twig", on: "floor", per: 2, reach: 8, biomes: ["forest", "swamp"] },
-  { kind: "crag", on: "wall", per: 8, reach: 6 },
-  { kind: "crag", on: "ceiling", per: 1.5, reach: 4 },
-  { kind: "bush", on: "earth", per: 10, reach: 9, biomes: ["plains", "forest"], flank: true },
-  { kind: "fern", on: "earth", per: 14, reach: 9, biomes: ["forest"], flank: true },
-  { kind: "swampFern", on: "earth", per: 10, reach: 9, biomes: ["swamp"], flank: true },
-  { kind: "vineLoop", on: "upper", per: 12, reach: 5, biomes: ["forest", "swamp"], vines: "loops" },
-  { kind: "vine", on: "upper", per: 20, reach: 5, biomes: ["forest", "swamp"], vines: "side" },
-  { kind: "vine", on: "upper", per: 28, reach: 4, biomes: ["forest", "swamp"], vines: "corner" },
+  { kind: "pebble", on: "ground", per: 4, reach: 15 },
+  { kind: "stone", on: "ground", per: 1, reach: 12 },
+  { kind: "twig", on: "ground", per: 1, reach: 15, biomes: ["forest", "swamp"] },
+  { kind: "litter", on: "ground", per: 0.5, reach: 12, biomes: ["forest"] },
+  { kind: "crag", on: "face", per: 3, reach: 12, feet: TUFTS },
+  { kind: "crag", on: "ground", per: 1, reach: 12, feet: TUFTS },
+  // Dead grass, on ground that isn't rock (`bare`) and no steeper than `flat` (its normal's up
+  // share): a little anywhere near, more along the seam where the ground meets the mouth's rock.
+  { kind: "deadGrass", on: "ground", per: 3, reach: 15, flat: 0.87, bare: true, biomes: ["plains", "rocky"] },
+  { kind: "deadGrass", on: "earth", per: 24, reach: 3, flat: 0.5, bare: true, biomes: ["plains", "rocky"] },
+  { kind: "pebble", on: "floor", per: 5, reach: 20 },
+  { kind: "stone", on: "floor", per: 1.5, reach: 18 },
+  { kind: "twig", on: "floor", per: 0.7, reach: 12, biomes: ["forest", "swamp"] },
+  { kind: "crag", on: "wall", per: 3, reach: 8 },
+  { kind: "crag", on: "ceiling", per: 0.5, reach: 6 },
+  { kind: "bush", on: "earth", per: 5, reach: 12, biomes: ["plains", "forest"], flank: true },
+  { kind: "fern", on: "earth", per: 7, reach: 12, biomes: ["forest"], flank: true },
+  { kind: "swampFern", on: "earth", per: 5, reach: 12, biomes: ["swamp"], flank: true },
+  { kind: "vineLoop", on: "upper", per: 8, reach: 5, biomes: ["forest", "swamp"], vines: "loops" },
+  { kind: "vine", on: "upper", per: 12, reach: 5, biomes: ["forest", "swamp"], vines: "side" },
+  { kind: "vine", on: "upper", per: 18, reach: 4, biomes: ["forest", "swamp"], vines: "corner" },
 ];
 const VINES = ["loops", "side", "corner"];
 const HANGS = new Set(["vineLoop", "vine"]); // kinds that hang straight down, whichever way their face looks
 const STANDS = new Set(["bush", "fern", "swampFern"]); // and that grow straight up
 const UP = [0, 1, 0];
 const SEED = 0x6d6f7574;
+const PATCH_FT = 10;
 const DOWN = [0, -1, 0];
 
 // Tile (tx, tz)'s clutter round mouths, [{ kind, x, z, y, yaw, scale, normal, colors }], from
 // `mesh`, caveMesh's for the tile, `entrances`, the cave layout's (caveLayout.js), and biomeAt(x, z),
-// the biome's name there.
-export function mouthClutter(tx, tz, mesh, { entrances, biomeAt }) {
+// the biome's name there, and patternAt(x, z), the ground's pattern there (look.js's PATTERNS), or
+// null where it's not known.
+export function mouthClutter(tx, tz, mesh, { entrances, biomeAt, patternAt = () => null }) {
   const lips = mesh.lips;
   if (!lips?.length) return [];
   const [ox, oz] = [tx * TILE_FT, tz * TILE_FT];
@@ -91,8 +104,12 @@ export function mouthClutter(tx, tz, mesh, { entrances, biomeAt }) {
         if (near > rule.reach || (rule.biomes && !rule.biomes.includes(biome))) return;
         if (rule.vines && !vinesHere(rule, entrance, middle, normal)) return;
         if (rule.flank && !flankHere(entrance, middle)) return;
+        if (rule.flat && normal[1] < rule.flat) return;
+        if (rule.bare && patternAt(middle[0], middle[2]) === "rock") return;
         if (rule.on !== on && !(rule.on === "upper" && (on === "wall" || on === "ceiling")) && !(rule.on === "earth" && (on === "ground" || on === "face"))) return;
-        const per = (rule.per * area * (1 - near / rule.reach)) / 100;
+        const fade = (1 - near / rule.reach) ** 2;
+        const patch = rule.vines || rule.flank ? 1 : 2 * Math.max(0, Math.min(1, fbm(middle[0], middle[2], SEED ^ Math.imul(r + 1, 0x632be5ab), { wavelength: PATCH_FT, octaves: 2 }) * 2.5 + 0.5));
+        const per = (rule.per * area * fade * patch) / 100;
         const roll = (m, q) => hash2(qi, qj, SEED ^ Math.imul(r * 1024 + m * 32 + q + 1, 0x2545f491));
         const count = Math.floor(per) + (roll(0, 0) < per % 1 ? 1 : 0);
         const spec = CLUTTER[rule.kind];
@@ -109,8 +126,27 @@ export function mouthClutter(tx, tz, mesh, { entrances, biomeAt }) {
             yaw: roll(m, 3) * Math.PI * 2,
             scale: spec.size[0] + (spec.size[1] - spec.size[0]) * roll(m, 4),
             normal: HANGS.has(rule.kind) ? DOWN : STANDS.has(rule.kind) ? UP : normal,
-            colors: spec.parts.map((part, p) => (part.chance !== undefined && roll(m, 5 + p * 4) >= part.chance ? null : colorIn(part.colors, (q) => roll(m, 6 + p * 4 + q)))),
+            colors: colorsOf(spec, (q) => roll(m, 5 + q)),
           });
+          const feet = rule.feet;
+          if (!feet || roll(m, 20) >= feet.share || normal[1] < feet.flat || !feet.biomes.includes(biome) || patternAt(at[0], at[2]) === "rock") continue;
+          const tuft = CLUTTER[feet.kind];
+          const scale = out.at(-1).scale;
+          for (let f = 0; f < Math.ceil(roll(m, 21) * feet.most); f++) {
+            const turn = roll(m, 22 + f) * Math.PI * 2;
+            const reach = scale * (0.45 + 0.35 * roll(m, 26 + f));
+            const [dx, dz] = [Math.cos(turn) * reach, Math.sin(turn) * reach];
+            out.push({
+              kind: feet.kind,
+              x: at[0] + dx,
+              y: at[1] - (normal[0] * dx + normal[2] * dz) / normal[1],
+              z: at[2] + dz,
+              yaw: turn * 3,
+              scale: tuft.size[0] + (tuft.size[1] - tuft.size[0]) * roll(m, 30 + f),
+              normal: UP,
+              colors: colorsOf(tuft, (q) => roll(m, 34 + f * 8 + q)),
+            });
+          }
         }
       });
     }
@@ -118,6 +154,11 @@ export function mouthClutter(tx, tz, mesh, { entrances, biomeAt }) {
   if (mesh.ground) place(mesh.ground.positions, mesh.ground.indices, (n) => (n[1] > 0.75 ? "ground" : "face"));
   place(mesh.positions, mesh.indices, (n) => (n[1] > 0.6 ? "floor" : n[1] < -0.5 ? "ceiling" : "wall"));
   return out;
+}
+
+// The colors of each of a kind's parts, null for those it hasn't, from roll(n), 0 to 1 each.
+function colorsOf(spec, roll) {
+  return spec.parts.map((part, p) => (part.chance !== undefined && roll(p * 4) >= part.chance ? null : colorIn(part.colors, (q) => roll(1 + p * 4 + q))));
 }
 
 // Whether vines by `rule` grow on the face at `middle`, facing `normal`, as its nearest entrance's
