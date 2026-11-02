@@ -235,7 +235,8 @@ function start(world, changes, fresh) {
     const tries = [{ y: was.y }, { x: was.x, y: was.y }, { z: was.z, y: was.y }, { x: was.x, z: was.z }, { x: was.x, y: was.y, z: was.z }];
     return tries.map((t) => ({ ...now, ...t })).find((s) => !stuck(s)) ?? { ...now, x: was.x, y: was.y, z: was.z };
   };
-  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push, clear, keep, ghost });
+  const inCave = (p) => p.y < groundAt(p.x, p.z) && caves.near(p.x, p.z) && !caves.solid(p.x, p.y, p.z);
+  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push, clear, inCave, keep, ghost });
   tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves, layout, inEarth: ghost });
   // The bottom bar's display toggles.
   $("showGrid").checked = grid.value === 1;

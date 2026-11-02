@@ -190,11 +190,12 @@ export class Builder {
   // `was`, where something's in the way that moveBuilder doesn't know of, told { soaring }, whether
   // space is double-tapped and held. ghost(): whether they're
   // a ghost, flying anywhere, through everything.
-  constructor({ scene, camera, canvas, groundAt, landAt = groundAt, waterAt = () => null, at, state, push, clear = (head, to) => to, keep = (was, now) => now, ghost = () => false }) {
+  constructor({ scene, camera, canvas, groundAt, landAt = groundAt, waterAt = () => null, at, state, push, clear = (head, to) => to, inCave = () => false, keep = (was, now) => now, ghost = () => false }) {
     this.push = push;
     this.ghost = ghost;
     this.keep = keep;
     this.landAt = landAt;
+    this.inCave = inCave; // inCave(head): whether a point's in a cave's air, under the ground
     this.clear = clear;
     this.waterAt = waterAt;
     this.camera = camera;
@@ -278,14 +279,16 @@ export class Builder {
     const head = new THREE.Vector3(x, y + EYE_FT, z);
     const away = new THREE.Vector3(-Math.sin(look) * Math.cos(pitch), Math.sin(pitch), -Math.cos(look) * Math.cos(pitch));
     const at = head.clone().addScaledVector(away, distance);
-    // Over the ground, and over the water but while swimming.
+    // Over the ground, and over the water but while swimming; in a cave, kept in by its rock
+    // (clear) instead, the ground over it being far above.
     const floor = (this.state.swimming ? (this.groundAt(at.x, at.z) ?? SEA_LEVEL_FT) : this.standAt(at.x, at.z)) + 2;
-    if (at.y < floor && !this.ghost()) at.y = floor;
+    if (at.y < floor && !this.ghost() && !this.inCave(head)) at.y = floor;
     at.copy(this.clear(head, at));
     // In the earth, under the ground.
     if (this.ghost()) at.y = Math.min(at.y, (this.landAt(at.x, at.z) ?? SEA_LEVEL_FT) - 2);
+    // Moved in or up, it still looks at the builder.
     this.camera.position.copy(at);
-    this.camera.lookAt(at.clone().sub(away));
+    this.camera.lookAt(at.distanceTo(head) > 0.01 ? head : at.clone().sub(away));
   }
 
   onKey(e, down) {
