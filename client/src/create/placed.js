@@ -48,7 +48,7 @@ export function readyObject(object) {
 const keptFootprint = (footprint) => Object.fromEntries(Object.entries(footprint).map(([shape, v]) => [shape, Array.isArray(v) ? v.map((n) => round(n, 3)) : round(v, 3)]));
 
 // An object as the file keeps it.
-function keptObject({ type, at, y, yaw, scale, colors, texts, template, footprint, height }) {
+function keptObject({ type, at, y, yaw, scale, colors, texts, template, cave, footprint, height }) {
   return {
     type,
     at: at.map((v) => round(v)),
@@ -58,6 +58,7 @@ function keptObject({ type, at, y, yaw, scale, colors, texts, template, footprin
     ...(colors ? { colors } : {}),
     ...(texts && Object.keys(texts).length ? { texts } : {}),
     ...(template ? { template } : {}),
+    ...(cave ? { cave } : {}),
     ...(footprint ? { footprint: keptFootprint(footprint), height: round(height, 3) } : {}),
   };
 }
@@ -156,6 +157,26 @@ export class Placed {
     }
     if (entry === last) this.version++;
     else this.kept(entry);
+  }
+
+  // Takes away everything placed in cave network `net`, for good: it can't be undone, and the
+  // undos are cleared, since they could put things back in rock carved again.
+  dropCave(net) {
+    let dropped = 0;
+    for (const [key, plate] of this.plates) {
+      for (const list of [plate.objects, plate.slabs]) {
+        const kept = list.filter((thing) => thing.cave !== net);
+        if (kept.length === list.length) continue;
+        dropped += list.length - kept.length;
+        list.splice(0, list.length, ...kept);
+        this.changed.add(key);
+      }
+    }
+    if (dropped) {
+      this.undos = [];
+      this.version++;
+    }
+    return dropped;
   }
 
   // Undoes the last change. Gives whether there was one.

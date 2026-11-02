@@ -339,7 +339,7 @@ export class Build {
     if (!ray) return null;
     const on = this.things.pick(ray);
     const cave = this.caveHit();
-    if (cave && (!on || on.point.distanceTo(ray.ray.origin) > new THREE.Vector3(...cave.at).distanceTo(ray.ray.origin))) return { at: cave.at, thing: null, cave: true, ceiling: cave.ceiling };
+    if (cave && (!on || on.point.distanceTo(ray.ray.origin) > new THREE.Vector3(...cave.at).distanceTo(ray.ray.origin))) return { at: cave.at, thing: null, cave: cave.net ?? true, ceiling: cave.ceiling, problem: cave.problem };
     const ground = this.groundHit();
     if (on && (!ground || on.point.distanceTo(ray.ray.origin) <= new THREE.Vector3(...ground).distanceTo(ray.ray.origin))) return { at: on.point.toArray(), thing: on.thing };
     return ground && { at: ground, thing: null };
@@ -415,6 +415,7 @@ export class Build {
   down(e) {
     this.free = e.shiftKey;
     const hit = this.hit();
+    if ((this.tool === "object" || this.tool === "template") && hit?.problem) return this.say(hit.problem);
     if (this.tool === "object" && hit && this.armed.object) return this.placeObject(hit);
     if (this.tool === "template" && hit && this.armed.template) return this.placeTemplate(hit);
     if (this.tool === "slab" && (this.slab.mode === "door" || this.slab.mode === "window")) return this.holeDown(hit);
@@ -606,10 +607,11 @@ export class Build {
     // In the ghost's colors.
     const { id: _, ...made } = makeObject(type, [x, z], this.yaw, this.scale);
     const colors = this.ghostObject?.type === type ? this.ghostObject.colors : made.colors;
-    const object = readyObject({ ...made, ...(colors ? { colors } : {}), ...(hit.thing || hit.cave ? { y } : {}) });
+    const object = readyObject({ ...made, ...(colors ? { colors } : {}), ...(hit.thing || hit.cave ? { y } : {}), ...(typeof hit.cave === "string" ? { cave: hit.cave } : {}) });
     // From a cave's ceiling, it hangs.
     if (object && hit.ceiling) object.y = y - object.height;
     if (!object) return;
+    this.say("");
     this.placed.put([object]);
     this.library.used("objects", type);
     if ($("objectRandom").checked) this.yaw = Math.random() * Math.PI * 2;
@@ -632,6 +634,9 @@ export class Build {
     const { slabs, objects } = placedTemplate(template, this.anchor(template, hit), (this.yaw * 180) / Math.PI);
     // What's pasted names no template.
     if (this.armed.template.startsWith(CLIPBOARD_PREFIX)) for (const thing of [...slabs, ...objects]) delete thing.template;
+    // In a cave, they're its network's, to go with it if it's unlocked.
+    if (typeof hit.cave === "string") for (const thing of [...slabs, ...objects]) thing.cave = hit.cave;
+    this.say("");
     this.placed.put([...slabs, ...objects.map(readyObject).filter(Boolean)]);
     this.library.used("templates", this.armed.template);
   }

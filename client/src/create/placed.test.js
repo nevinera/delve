@@ -31,6 +31,19 @@ describe("placed things", () => {
     expect(again.plate("0,0").slabs).toEqual(placed.plate("0,0").slabs);
   });
 
+  it("keeps the cave network a thing's in, and takes a network's things away for good", () => {
+    const placed = new Placed();
+    const [lantern, rocks, outside] = [{ ...boulder(10, 10), y: -40, cave: "wailing-hollow" }, { ...floor(5, -42, 5), cave: "wailing-hollow" }, boulder(20, 20)];
+    placed.put([lantern, rocks, outside]);
+    const json = JSON.parse(strFromU8(placed.unsavedFiles("main").get(placedPath("main", [0, 0]))));
+    expect(json.objects[0].cave).toBe("wailing-hollow");
+    expect(json.slabs[0].cave).toBe("wailing-hollow");
+    expect(placed.dropCave("wailing-hollow")).toBe(2);
+    expect(placed.plate("0,0")).toEqual({ objects: [outside], slabs: [] });
+    expect(placed.undo()).toBe(false);
+    expect(placed.unsavedFiles("main").size).toBe(1);
+  });
+
   it("moves a thing to the plate it's moved into, and undoes changes in turn", () => {
     const placed = new Placed();
     const rock = boulder(10, 10);

@@ -229,7 +229,7 @@ export class CavePlan {
     this.layout.carved = plan.carved;
     this.layout.version++;
     this.history = [];
-    this.onUnlock?.();
+    this.onUnlock?.(net);
     this.status(`${net} is unlocked and carved again from its layout`);
   }
 

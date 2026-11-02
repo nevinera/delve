@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { VOXEL_FT } from "../v2/caves.js";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
 import { PICK_PX } from "./areas.js";
 import { Biomes } from "./biomes.js";
@@ -97,7 +98,7 @@ function drawShape(canvas, shape) {
 export class Tools {
   constructor({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves, layout, inEarth }) {
     this.inEarth = inEarth;
-    Object.assign(this, { camera, canvas, builder, renditions, ground, caves });
+    Object.assign(this, { camera, canvas, builder, renditions, ground, caves, layout, placed });
     this.tool = null;
     this.settings = { shape: "round", radius: 0, strength: 0, noise: 0, lower: false, angle: 0, grain: 0, craggy: false };
     this.pools = { count: 0, size: 0 }; // the pools tool's settings
@@ -139,7 +140,11 @@ export class Tools {
     this.plan = new CavePlan({ scene, camera, canvas, layout, caves, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, here: () => [builder.state.x, builder.state.y, builder.state.z] });
     builder.wheel = (e) => PLANS.has(this.tool) && this.plan.wheel(e);
     this.polish = new CavePolish({ scene, caves, layout, camera, ray: () => this.build.ray() });
-    this.plan.onUnlock = () => (this.polish.undos = []);
+    // Unlocking a network throws away its hand edits, and what's placed in it.
+    this.plan.onUnlock = (net) => {
+      this.polish.undos = [];
+      this.placed.dropCave(net);
+    };
     this.paths = new Paths(scene, canvas.parentElement, renditions, (x, z) => this.surface(x, z), (text) => ($("pathStatus").textContent = text));
     this.moving = null; // pins being dragged, { from, pins: [[pin, x, z]], before, moved }
     this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }
@@ -765,8 +770,10 @@ export class Tools {
   }
 
   // The surface the pointer finds at (x, z): the ground, or the sea over it.
-  // From in a cave, where the pointer meets its rock, { at, ceiling }, ceiling where there's rock
-  // just over it and air just under it; or null.
+  // From in a cave, where the pointer meets its rock, { at, ceiling, net, problem }: ceiling
+  // where there's rock just over it and air just under it, net the network of the air it's
+  // aimed through, and problem why things can't be placed there, or null where they can; or null.
+  // Things go only in burned in networks.
   caveHit() {
     if (!this.pointer) return null;
     const { position: p } = this.camera;
@@ -776,7 +783,11 @@ export class Tools {
     const at = this.caves.hit(ray.ray);
     if (!at) return null;
     const [x, y, z] = at;
-    return { at, ceiling: this.caves.solid(x, y + 0.5, z) && !this.caves.solid(x, y - 0.5, z) };
+    const way = ray.ray.direction.toArray();
+    const [ax, ay, az] = at.map((v, k) => v - way[k] * 0.5);
+    const net = this.caves.spans(Math.floor(ax / VOXEL_FT), Math.floor(az / VOXEL_FT))?.find((s) => s.floor <= ay && ay <= s.ceiling)?.net ?? null;
+    const problem = net && !this.layout.locked(net) ? `${net} isn't burned in; burn it in before placing things in it` : null;
+    return { at, ceiling: this.caves.solid(x, y + 0.5, z) && !this.caves.solid(x, y - 0.5, z), net, problem };
   }
 
   surface(x, z) {
