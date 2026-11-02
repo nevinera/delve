@@ -50,6 +50,7 @@ export class Caves {
     this.gridMaterial = new THREE.LineBasicMaterial({ vertexColors: true, depthWrite: false, transparent: true, opacity: 0.6 });
     this.lineMaterial = new THREE.LineBasicMaterial({ color: LINE_RGB, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
     this.onMouths = null; // (plate keys) => void, when the ground at mouths changes
+    this.entranceCells = new Set(); // "ci,cj" of ground cells entrances reach into, left out of the ground
     this.world = {
       spans: (ci, cj) => this.spans(ci, cj),
       ground: (ci, cj) => this.groundCell(ci, cj),
@@ -95,13 +96,33 @@ export class Caves {
     return false;
   }
 
-  // Tile (tx, tz)'s cells whose ground the caves draw, as a Set of indices, or null for none.
+  // Tile (tx, tz)'s cells whose ground isn't drawn, where caves open through it or entrances reach
+  // into it, as a Set of indices, or null for none.
+  // Sets the ground cells entrances reach into (caveLayout.js's entranceCells), [ci, cj] each,
+  // redrawing the ground where they change.
+  setEntranceCells(cells) {
+    const next = new Set(cells.map(([ci, cj]) => `${ci},${cj}`));
+    const plates = new Set();
+    for (const key of [...next, ...this.entranceCells]) {
+      if (next.has(key) && this.entranceCells.has(key)) continue;
+      const [ci, cj] = key.split(",").map(Number);
+      plates.add(`${Math.floor(ci / TILE_CELLS / PLATE_TILES)},${Math.floor(cj / TILE_CELLS / PLATE_TILES)}`);
+    }
+    this.entranceCells = next;
+    if (plates.size) this.onMouths?.(plates);
+  }
+
   holes(tx, tz) {
     let near = false;
     for (let dz = -1; dz <= 1 && !near; dz++) for (let dx = -1; dx <= 1 && !near; dx++) near = this.tiles.has(`${tx + dx},${tz + dz}`);
     if (!near) return null;
     const out = new Set();
-    for (let j = 0; j < TILE_CELLS; j++) for (let i = 0; i < TILE_CELLS; i++) if (this.opens(tx * TILE_CELLS + i, tz * TILE_CELLS + j)) out.add(j * TILE_CELLS + i);
+    for (let j = 0; j < TILE_CELLS; j++) {
+      for (let i = 0; i < TILE_CELLS; i++) {
+        const [ci, cj] = [tx * TILE_CELLS + i, tz * TILE_CELLS + j];
+        if (this.opens(ci, cj) || this.entranceCells.has(`${ci},${cj}`)) out.add(j * TILE_CELLS + i);
+      }
+    }
     return out.size ? out : null;
   }
 

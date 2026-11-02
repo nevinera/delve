@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
-import { ARC_DEFAULTS, ARC_FT, ENTRANCE_DEFAULTS, ENTRANCE_FT, NODE_DEFAULTS, NODE_SIZES, STEEP_DEG, arcCurve, arcSteepness, SPACING, TUNNEL_SPAN, carvePlan, entranceEnd, entranceProblem, entranceRing, isEntrance, longEnough, mouthBehind, nodeRadius, respacedBends, tooNear } from "./caveLayout.js";
+import { ARC_DEFAULTS, ARC_FT, ENTRANCE_DEFAULTS, ENTRANCE_FT, NODE_DEFAULTS, NODE_SIZES, STEEP_DEG, arcCurve, arcSteepness, SPACING, TUNNEL_SPAN, carvePlan, entranceCells, entranceEnd, entranceProblem, entranceRing, isEntrance, longEnough, mouthBehind, nodeRadius, respacedBends, tooNear } from "./caveLayout.js";
 
 // The caves' plan tools: chamber places rooms (nodes) on the points of the grid round the camera,
 // in the earth, and drags them elsewhere; tunnel joins two rooms with a tunnel (an arc), clicked
@@ -210,6 +210,7 @@ export class CavePlan {
     if (plan.fills.length || plan.opens.length) this.caves.carvePlan(plan, () => {});
     this.layout.carved = plan.carved;
     this.layout.version++;
+    this.caves.setEntranceCells([...this.layout.nodes.values()].filter(isEntrance).flatMap((e) => entranceCells(e, this.groundAt)));
     const notes = [];
     if (plan.unfit.length) notes.push(`${plan.unfit.join(", ")} won't fit under the ground, so ${plan.unfit.length > 1 ? "aren't" : "isn't"} carved`);
     if (plan.short.length) notes.push(`${plan.short.join(", ")} ${plan.short.length > 1 ? "are" : "is"} shorter than ${TUNNEL_SPAN} times ${plan.short.length > 1 ? "their" : "its"} width, so ${plan.short.length > 1 ? "aren't" : "isn't"} carved: curve ${plan.short.length > 1 ? "them" : "it"} out further`);

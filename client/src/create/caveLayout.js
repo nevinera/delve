@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { ROOF_FT, allStone, shapeBounds } from "../v2/caves.js";
+import { CELL_FT } from "../v2/sizes.js";
 import { hash2, hashString, valueNoise } from "../world/noise.js";
 
 // A continent's cave layout (docs/formats/cave-layout.md): rooms (nodes) joined by tunnels
@@ -27,6 +28,7 @@ const CLEAR = 1.6; // how many times that from a room a tunnel's first bend has 
 export const ENTRANCE_LENGTHS = [16, 32, 48, 64];
 export const ENTRANCE_FT = [6, 24]; // the entrances' widths
 const DOWN = 0.2; // how far a sloping entrance drops for each foot in
+const NEAR_TUBE_FT = 0.5; // ground cells this near an entrance's tube are left out with those in it
 const LOW_RING = Math.PI / 4; // how far round from the bottom an entrance's mouth can be in the ground
 
 export const NODE_DEFAULTS = { size: "m", shape: "round", style: "borehole", rock: 0, hewn: false };
@@ -322,6 +324,44 @@ function entranceShapes({ mouth, at, yaw, width: W, style }) {
   }
   if (style === "mine") out.push({ kind: "box", at: add(at, [0, W / 2, 0]), half: [W, W / 2, W], yaw: a });
   else out.push({ kind: "dome", at, radii: [W, W, W], yaw: a });
+  return out;
+}
+
+// Whether continent feet `p` is inside an entrance's tube, as entranceShapes carves it, or within
+// `margin` ft of it: from its mouth to its far end, an arch as wide as it is tall (natural) or a
+// square (mine) over its floor.
+export function inTube({ mouth, at, yaw, width: W, style }, p, margin = 0) {
+  const a = (yaw * Math.PI) / 180;
+  const [dx, dz] = [p[0] - mouth[0], p[2] - mouth[2]];
+  const d = dx * Math.sin(a) + dz * Math.cos(a);
+  const across = dx * Math.cos(a) - dz * Math.sin(a);
+  const length = Math.hypot(at[0] - mouth[0], at[2] - mouth[2]);
+  if (d < -margin || d > length + margin || Math.abs(across) >= W / 2 + margin) return false;
+  const up = p[1] - (mouth[1] + ((at[1] - mouth[1]) * Math.min(length, Math.max(0, d))) / (length || 1));
+  const top = style === "mine" ? W : W * Math.sqrt(Math.max(0, 1 - ((2 * across) / W) ** 2));
+  return up > -margin && up < top + margin;
+}
+
+// The ground cells, as [ci, cj], whose surface reaches into an entrance's tube anywhere, or within
+// NEAR_TUBE_FT of it: each cell's ground tried every half foot across it, its edges and corners
+// too. groundAt(x, z): the ground's height.
+export function entranceCells(entrance, groundAt) {
+  const { mouth, at, width: W } = entrance;
+  const [x0, x1] = [Math.min(mouth[0], at[0]) - W, Math.max(mouth[0], at[0]) + W];
+  const [z0, z1] = [Math.min(mouth[2], at[2]) - W, Math.max(mouth[2], at[2]) + W];
+  const out = [];
+  for (let cj = Math.floor(z0 / CELL_FT); cj <= Math.floor(z1 / CELL_FT); cj++) {
+    for (let ci = Math.floor(x0 / CELL_FT); ci <= Math.floor(x1 / CELL_FT); ci++) {
+      let reaches = false;
+      for (let v = 0; v <= CELL_FT && !reaches; v += 0.5) {
+        for (let u = 0; u <= CELL_FT && !reaches; u += 0.5) {
+          const [x, z] = [ci * CELL_FT + u, cj * CELL_FT + v];
+          reaches = inTube(entrance, [x, groundAt(x, z), z], NEAR_TUBE_FT);
+        }
+      }
+      if (reaches) out.push([ci, cj]);
+    }
+  }
   return out;
 }
 

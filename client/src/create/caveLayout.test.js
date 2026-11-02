@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { TILE_CELLS } from "../v2/caves.js";
 import { CELL_FT } from "../v2/sizes.js";
-import { ENTRANCE_DEFAULTS, Layout, arcCurve, arcShapes, arcSteepness, carvePlan, entranceEnd, entranceProblem, mouthBehind, nodeShapes, respacedBends, shapesOf, tooNear } from "./caveLayout.js";
+import { ENTRANCE_DEFAULTS, Layout, arcCurve, arcShapes, arcSteepness, carvePlan, entranceCells, entranceEnd, entranceProblem, mouthBehind, nodeShapes, respacedBends, shapesOf, tooNear } from "./caveLayout.js";
 import { Caves } from "./caves.js";
 
 // Flat ground at `height`, everywhere, with its cells all one color.
@@ -178,6 +178,17 @@ describe("cave layout", () => {
     expect(entranceProblem(entrance({ mouth: [0, -5, 0] }), hill)).toMatch(/mouth/);
     expect(entranceProblem(entrance(), () => 0)).toMatch(/far end/);
     expect(entranceProblem(entrance({ yaw: 270 }), hill)).toMatch(/far end/);
+  });
+
+  it("finds the ground cells reaching into an entrance's tube", () => {
+    const cells = entranceCells(entrance(), hill).map(([ci, cj]) => `${ci},${cj}`);
+    // Where the hill rises through the tube, but not downhill of it, nor where it's deep in.
+    expect(cells).toContain("2,0");
+    expect(cells).toContain("2,-1");
+    expect(cells).not.toContain("-2,0");
+    expect(cells).not.toContain("8,0");
+    // Not beside it.
+    expect(cells).not.toContain("2,3");
   });
 
   it("carves an entrance's tube out through the hillside, and joins tunnels to its room", () => {

@@ -30,7 +30,6 @@ import { CAVES_PATH, Caves } from "./caves.js";
 import { Layout, layoutPath } from "./caveLayout.js";
 import { Overhead } from "./overhead.js";
 import { Earth } from "./earth.js";
-import { EntranceArt } from "./entranceArt.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
 // The world comes from a zip you upload (script/convert-v2.mjs makes one from a v1 world) or a
@@ -184,7 +183,6 @@ function start(world, changes, fresh) {
   // The rooms and tunnels planned, to carve (caveLayout.js).
   const layoutBytes = world.files.get(layoutPath(continent));
   const layout = new Layout(layoutBytes ? JSON.parse(strFromU8(layoutBytes)) : null);
-  const entranceArt = new EntranceArt(scene, layout, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT);
   ground.holes = (tx, tz) => caves.holes(tx, tz);
   caves.onMouths = (plates) => ground.refresh(plates);
   const things = new Things(scene, placed, (x, z, under) => caves.groundAt(x, z, under));
@@ -433,7 +431,6 @@ function start(world, changes, fresh) {
     caves.fromEarth(ghost());
     timed("ground", () => overhead.tick(buried, x, z, now - lastOverhead > OVERHEAD_EVERY_MS && (lastOverhead = now)));
     earth.tick(camera, ghost());
-    entranceArt.tick(ghost());
     for (const shown of [sea.mesh, falls.group, things.group, things.outlines]) shown.visible = !buried;
     if (buried) for (const shown of [scatter.group, clutter.group, surfaces.group]) shown.visible = false;
     const sky = buried ? UNDERGROUND : under ? UNDERWATER.color : SKY;
