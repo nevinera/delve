@@ -39,6 +39,8 @@ const STEEP_RGB = [1, 0.25, 0.2];
 const OPENING_RGB = [0.45, 1, 0.9];
 const WARN_RGB = [1, 0.6, 0.15];
 const LOCKED_RGB = [0.35, 0.4, 0.5];
+const ARC_FT = 0.15; // a segment's line, thin and faint beside the points'
+const ARC_OPACITY = 0.45;
 const TURN_DEG = 15; // how far C and V turn an entrance, or with shift FINE_TURN_DEG
 const FINE_TURN_DEG = 5;
 const HOLD_FT = 10; // how far in from an entrance's mouth the pointer holds it
@@ -92,7 +94,7 @@ export class CavePlan {
       new THREE.LineBasicMaterial({ vertexColors: true }),
       new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, depthWrite: false, transparent: true, opacity: 0.25 }),
     ];
-    this.materials = new Map(); // "width,glow" -> LineMaterial
+    this.materials = new Map(); // "width,glow,faint" -> LineMaterial
     this.bind();
   }
 
@@ -474,29 +476,31 @@ export class CavePlan {
     if (this.tool) this.showDetails();
   }
 
-  // A line through `points` (continent feet), `width` ft thick, colored `rgb`, glowing.
-  line(points, width, rgb) {
-    for (const glow of [true, false]) {
+  // A line through `points` (continent feet), `width` ft thick, colored `rgb`, glowing, or faint
+  // and not glowing with `faint`.
+  line(points, width, rgb, faint = false) {
+    for (const glow of faint ? [false] : [true, false]) {
       const geometry = new LineGeometry();
       geometry.setPositions(points.flat());
       geometry.setColors(points.flatMap(() => (!glow ? rgb : rgb === CORE_RGB ? GLOW_RGB : rgb.map((v) => v * 0.4))));
-      const line = new Line2(geometry, this.material(glow ? width * GLOW : width, glow));
+      const line = new Line2(geometry, this.material(glow ? width * GLOW : width, glow, faint));
       line.renderOrder = glow ? 11 : 12;
       line.computeLineDistances();
       this.drawing.add(line);
     }
   }
 
-  material(width, glow) {
-    const key = `${width.toFixed(2)},${glow}`;
+  material(width, glow, faint = false) {
+    const key = `${width.toFixed(2)},${glow},${faint}`;
     if (!this.materials.has(key)) {
-      this.materials.set(key, new LineMaterial({ linewidth: width, worldUnits: true, vertexColors: true, depthTest: false, depthWrite: false, transparent: true, opacity: glow ? 0.35 : 1, blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending }));
+      this.materials.set(key, new LineMaterial({ linewidth: width, worldUnits: true, vertexColors: true, depthTest: false, depthWrite: false, transparent: true, opacity: glow ? 0.35 : faint ? ARC_OPACITY : 1, blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending }));
     }
     return this.materials.get(key);
   }
 
   // Draws the entrances, each its tube and mouth's ring, the points, each a ring round its floor,
-  // and the segments, each along its line; what's selected in yellow.
+  // and the segments, each a faint line between them, only showing what's joined; what's selected
+  // in yellow.
   draw(made) {
     this.drawn = made;
     for (const child of [...this.drawing.children]) {
@@ -508,7 +512,7 @@ export class CavePlan {
     for (const p of this.layout.points.values()) this.line(pointRing(p), Math.max(0.25, p.width / 32), rgbOf(p.id, CORE_RGB));
     for (const s of this.layout.segments.values()) {
       const [a, b] = [s.from, s.to].map((id) => this.layout.points.get(id));
-      this.line([a.at, b.at], 0.5, rgbOf(s.id, steep(a, b) ? WARN_RGB : CORE_RGB));
+      this.line([a.at, b.at], ARC_FT, rgbOf(s.id, steep(a, b) ? WARN_RGB : CORE_RGB), true);
     }
   }
 
