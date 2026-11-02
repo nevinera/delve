@@ -547,6 +547,7 @@ $("openFile").addEventListener("change", async () => {
   if (!file) return;
   const bytes = new Uint8Array(await file.arrayBuffer());
   if (showing || source) {
+    if (!window.confirm(`Open ${file.name}? It replaces the world kept in this browser, which is lost unless you've downloaded or saved it.`)) return;
     try {
       readWorld(bytes);
     } catch (e) {
