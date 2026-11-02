@@ -2,7 +2,8 @@ import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
-import { ARC_DEFAULTS, ARC_FT, ENTRANCE_DEFAULTS, ENTRANCE_FT, NODE_DEFAULTS, NODE_SIZES, STEEP_DEG, arcCurve, arcSteepness, SPACING, TUNNEL_SPAN, carvePlan, entranceEnd, entranceProblem, entranceRing, isEntrance, longEnough, mouthBehind, nodeRadius, respacedBends, tooNear } from "./caveLayout.js";
+import { ARC_DEFAULTS, ARC_FT, ENTRANCE_DEFAULTS, ENTRANCE_FT, Layout, NODE_DEFAULTS, NODE_SIZES, STEEP_DEG, arcCurve, arcSteepness, SPACING, TUNNEL_SPAN, carvePlan, entranceEnd, entranceProblem, entranceRing, isEntrance, longEnough, mouthBehind, nodeRadius, respacedBends, tooNear } from "./caveLayout.js";
+import { TILE_CELLS } from "../v2/caves.js";
 import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { entranceJoin } from "./entranceJoin.js";
 
@@ -74,6 +75,8 @@ export class CavePlan {
     this.drawn = null; // what the drawing was made from
     this.joined = new Map(); // entrance id -> what its join with the ground was worked out from
     this.waiting = false; // whether an entrance's join waits on the ground being read round it
+    this.tried = null; // entrance id -> { made, join }, worked out on the carving about to be made
+    this.resting = null; // { made, since }: the entrance pointed at, and since when, to try it once still
 
     this.group = new THREE.Group();
     this.group.visible = false;
@@ -179,7 +182,7 @@ export class CavePlan {
     this.layout.carved = carved;
     for (const id of [...this.selected]) if (!this.layout.get(id)) this.selected.delete(id);
     this.status("");
-    this.carve();
+    this.carve(false);
   }
 
   // Whether an element can be changed: it isn't locked, nor anything joined to it.
@@ -210,16 +213,91 @@ export class CavePlan {
 
   // Carves what's changed since it was last carved: fills in what it carved before, then carves it
   // as it is now, with the neighbours that touches.
-  carve() {
+  // A change that'd leave an entrance's mouth with no join to the ground (entranceJoin.js) isn't
+  // made: it's undone, and said why, but with `check` false, as when undoing.
+  carve(check = true) {
     const plan = carvePlan(this.layout, undefined, this.groundAt);
+    const broken = this.tryJoins(plan);
+    if (check && broken.length) return this.refuse(broken);
     if (plan.fills.length || plan.opens.length) this.caves.carvePlan(plan, () => {});
     this.layout.carved = plan.carved;
     this.layout.version++;
     this.joinEntrances();
+    this.tried = null;
     const notes = [];
     if (plan.unfit.length) notes.push(`${plan.unfit.join(", ")} won't fit under the ground, so ${plan.unfit.length > 1 ? "aren't" : "isn't"} carved`);
     if (plan.short.length) notes.push(`${plan.short.join(", ")} ${plan.short.length > 1 ? "are" : "is"} shorter than ${TUNNEL_SPAN} times ${plan.short.length > 1 ? "their" : "its"} width, so ${plan.short.length > 1 ? "aren't" : "isn't"} carved: curve ${plan.short.length > 1 ? "them" : "it"} out further`);
     this.status(notes.join("; "));
+  }
+
+  // How the entrances `plan` would carve or carve round meet the ground, carved on a copy of the
+  // caves, kept for joinEntrances: those it makes and changes, and those with joins whose rock it
+  // reaches. Gives the ids of those it'd leave with no join, of those that have one now or are new.
+  tryJoins(plan) {
+    this.tried = new Map();
+    if (!plan.fills.length && !plan.opens.length) return [];
+    const trial = this.caves.trial(plan);
+    const broken = [];
+    for (const e of this.layout.nodes.values()) {
+      if (!isEntrance(e) || !plan.carved.has(e.id)) continue;
+      const made = madeOf(e);
+      const kept = this.caves.entrances.get(e.id);
+      const fresh = this.joined.get(e.id) !== made;
+      const reached = kept?.cells.some(([ci, cj]) => {
+        const [tx, tz] = [Math.floor(ci / TILE_CELLS), Math.floor(cj / TILE_CELLS)];
+        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) if (trial.changed.has(`${tx + dx},${tz + dz}`)) return true;
+        return false;
+      });
+      if (!(fresh || reached) || !this.caves.groundRead(e.mouth, e.at, e.width + CELL_FT)) continue;
+      const join = entranceJoin(e, trial.world, this.groundAt);
+      this.tried.set(e.id, { made, join });
+      if (!join && (kept || !this.layout.carved.has(e.id))) broken.push(e.id);
+    }
+    return broken;
+  }
+
+  // The entrance pointed at, once it's held still REST_MS, is tried on a copy of the caves, and
+  // shown red where its mouth would have no join to the ground.
+  tryHover() {
+    const hover = this.tool === "entrance" ? this.hover : null;
+    if (!hover?.entrance || hover.problem || hover.tried) return;
+    const made = madeOf(hover.entrance);
+    if (this.resting?.made !== made) return (this.resting = { made, since: performance.now() });
+    if (performance.now() - this.resting.since < REST_MS) return;
+    hover.tried = true;
+    if (this.joinsAt(hover.entrance)) return;
+    hover.problem = UNEVEN_NOTE;
+    this.drawPreview();
+    this.status(hover.problem);
+    this.shownProblem = hover.problem;
+  }
+
+  // Whether entrance `entrance`, placed, would join the ground: true where that can't be told yet.
+  joinsAt(entrance) {
+    if (!this.caves.groundRead(entrance.mouth, entrance.at, entrance.width + CELL_FT)) return true;
+    const layout = new Layout();
+    layout.load(this.layout.toJSON());
+    const { at, ...details } = entrance;
+    const node = layout.addNode(at, details);
+    const plan = carvePlan(layout, { ids: [node.id] }, this.groundAt);
+    return Boolean(entranceJoin({ ...entrance, id: node.id }, this.caves.trial(plan).world, this.groundAt));
+  }
+
+  // Undoes the change just made, which would leave entrances `ids` with no join to the ground.
+  refuse(ids) {
+    const last = this.history.pop();
+    const carved = this.layout.carved;
+    this.layout.nodes.clear();
+    this.layout.arcs.clear();
+    this.layout.load(last);
+    this.layout.carved = carved;
+    for (const id of [...this.selected]) if (!this.layout.get(id)) this.selected.delete(id);
+    const placed = ids.filter((id) => !this.layout.get(id));
+    this.status(
+      placed.length
+        ? UNEVEN_NOTE
+        : `that would break where ${ids.join(", ")} ${ids.length > 1 ? "meet" : "meets"} the ground, so it isn't made`,
+    );
   }
 
   // Works out again how each entrance that's changed, or whose ground has, meets the ground
@@ -234,8 +312,16 @@ export class CavePlan {
     }
     this.waiting = false;
     for (const e of entrances) {
-      const made = JSON.stringify([e.mouth, e.yaw, e.length, e.slope, e.width, e.style]);
+      const made = madeOf(e);
       const kept = this.caves.entrances.get(e.id);
+      const plate = [0, 2].map((k) => Math.floor(e.mouth[k] / (PLATE_TILES * TILE_FT))).join(",");
+      // Worked out on the trial carving already.
+      const tried = this.tried?.get(e.id);
+      if (tried?.made === made) {
+        this.joined.set(e.id, made);
+        this.caves.setEntrance(e.id, tried.join, plate);
+        continue;
+      }
       if (this.joined.get(e.id) === made && kept) continue;
       // Worked out from the ground in full, once it's read round it, not the coarser ground first.
       if (!this.caves.groundRead(e.mouth, e.at, e.width + CELL_FT)) {
@@ -246,7 +332,6 @@ export class CavePlan {
       const read = !this.joined.has(e.id) && kept?.axis && kept.ground.every(([x, y, z]) => Math.abs(this.groundAt(x, z) - y) < 0.05);
       this.joined.set(e.id, made);
       if (read) continue;
-      const plate = [0, 2].map((k) => Math.floor(e.mouth[k] / (PLATE_TILES * TILE_FT))).join(",");
       this.caves.setEntrance(e.id, entranceJoin(e, this.caves.world, this.groundAt), plate);
     }
   }
@@ -547,9 +632,10 @@ export class CavePlan {
   tick(inEarth) {
     if (!this.settled) {
       this.settled = true;
-      this.carve();
+      this.carve(false);
     }
     if (this.waiting) this.joinEntrances();
+    this.tryHover();
     this.group.visible = inEarth || Boolean(this.tool);
     if (!this.group.visible) return (this.label.hidden = true);
     const { clientWidth: w, clientHeight: h } = this.canvas;
@@ -753,3 +839,9 @@ function toSegment([px, py], [ax, ay], [bx, by]) {
   const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
   return Math.hypot(px - ax - t * dx, py - ay - t * dy);
 }
+
+const REST_MS = 150; // how long an entrance's pointed at, still, before it's tried
+const UNEVEN_NOTE = "the ground's too uneven there to join an entrance's mouth to it";
+
+// What an entrance's join with the ground is worked out from, as a string.
+const madeOf = (e) => JSON.stringify([e.mouth, e.yaw, e.length, e.slope, e.width, e.style]);

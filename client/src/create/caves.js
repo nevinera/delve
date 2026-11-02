@@ -211,18 +211,43 @@ export class Caves {
   // Carves a cave layout's plan (caveLayout.js's carvePlan): its fills, then its opens, each
   // opening its own rock. Undoes as one, calling `undone` when it's undone. Gives the undo's entry,
   // or null where nothing changed.
-  carvePlan({ fills, opens }, undone) {
+  carvePlan(plan, undone) {
+    if (!this.change(this.carving(plan), false, false)) return null;
+    const entry = this.undos.at(-1);
+    entry.undone = undone;
+    return entry;
+  }
+
+  // What carves plan { fills, opens } (caveLayout.js's carvePlan), given columnsOf(tx, tz, make):
+  // the "tx,tz" of the tiles it changed.
+  carving({ fills, opens }) {
     const groundAt = (ci, cj) => (Number.isFinite(this.groundCell(ci, cj)) ? this.groundCell(ci, cj) : null);
-    const work = (columnsOf) => {
+    return (columnsOf) => {
       const changed = new Set();
       for (const shape of fills) for (const key of carve(shape, columnsOf, groundAt, { fill: true })) changed.add(key);
       for (const { shape, stone, mouth } of opens) for (const key of carve(shape, columnsOf, groundAt, { stone, own: true, mouth })) changed.add(key);
       return changed;
     };
-    if (!this.change(work, false, false)) return null;
-    const entry = this.undos.at(-1);
-    entry.undone = undone;
-    return entry;
+  }
+
+  // The caves as they'd be with `plan` carved, leaving them as they are: { world, changed }, a
+  // world as caveMesh.js's, and the "tx,tz" of the tiles that'd change.
+  trial(plan) {
+    const scratch = new Map();
+    const changed = this.carving(plan)((tx, tz, make) => {
+      const key = `${tx},${tz}`;
+      if (!scratch.has(key)) scratch.set(key, this.tiles.has(key) ? structuredClone(this.tiles.get(key)) : null);
+      if (!scratch.get(key) && make) scratch.set(key, emptyColumns());
+      return scratch.get(key);
+    });
+    const tileOf = (key) => (scratch.has(key) ? scratch.get(key) : this.tiles.get(key));
+    const spans = (ci, cj) => {
+      const [tx, tz] = [Math.floor(ci / TILE_CELLS), Math.floor(cj / TILE_CELLS)];
+      return tileOf(`${tx},${tz}`)?.[(cj - tz * TILE_CELLS) * TILE_CELLS + ci - tx * TILE_CELLS] ?? EMPTY;
+    };
+    const world = { ...this.world, spans, caved: (tx, tz) => Boolean(tileOf(`${tx},${tz}`)) };
+    world.mouth = (ci, cj) => spans(ci, cj).length > 0 && opensAt(world, ci, cj);
+    return { world, changed };
   }
 
   // Adds rock round continent feet `at` (on the rock), facing `normal`, out to `radius`, up to

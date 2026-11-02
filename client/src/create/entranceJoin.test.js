@@ -98,6 +98,19 @@ describe("entrance joins", () => {
     for (const [ci, cj] of join.cells) expect(held.has(`${Math.floor((ci * CELL_FT) / CHUNK_FT)},${Math.floor((cj * CELL_FT) / CHUNK_FT)}`)).toBe(true);
   });
 
+  it("works out the same join on a trial carving as on the caves carved, leaving them as they are", () => {
+    const e = entrance();
+    const caves = new Caves({ add() {} }, hillside);
+    const layout = new Layout();
+    const { at, ...rest } = e;
+    layout.addNode(at, rest);
+    const plan = carvePlan(layout, undefined, groundAt);
+    const tried = entranceJoin(e, caves.trial(plan).world, groundAt);
+    expect(caves.tiles.size).toBe(0);
+    caves.carvePlan(plan, () => {});
+    expect(tried).toEqual(entranceJoin(e, caves.world, groundAt));
+  });
+
   it("has nothing to join where the tube doesn't reach the ground", () => {
     const { e } = joined();
     const caves = new Caves({ add() {} }, hillside);
