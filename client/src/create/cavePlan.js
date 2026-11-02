@@ -340,6 +340,14 @@ export class CavePlan {
     const at = this.pointerPx(e);
     const bend = this.pickBend(at);
     if (bend !== null && this.free(this.focus)) return (this.drag = { id: this.focus, bend, y: this.heightAtBend(this.focus, bend), before: this.layout.toJSON(), moved: false });
+    // An entrance that fits goes where it's pointed, over whatever plan lines show through there.
+    const entrance = this.tool === "entrance" && !e.shiftKey && this.entranceAt();
+    if (entrance && !entrance.problem) {
+      this.remember();
+      const { at: end, ...details } = entrance.entrance;
+      this.select(this.layout.addNode(end, details).id);
+      return this.carve();
+    }
     const node = this.pickNode(at);
     const arc = !node && this.pickArc(at)?.id;
     const picked = node || arc;
@@ -368,16 +376,7 @@ export class CavePlan {
       return;
     }
     if (arc) return this.select(arc);
-    if (this.tool === "entrance") {
-      const spot = this.entranceAt();
-      if (spot?.problem) return this.status(spot.problem);
-      if (spot) {
-        this.remember();
-        const { at, ...details } = spot.entrance;
-        this.select(this.layout.addNode(at, details).id);
-        return this.carve();
-      }
-    }
+    if (entrance?.problem) return this.status(entrance.problem);
     const spot = this.tool === "chamber" && this.snap(at);
     if (spot?.problem) return this.status(spot.problem);
     if (spot) {
