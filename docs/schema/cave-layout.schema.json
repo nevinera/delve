@@ -13,7 +13,7 @@
     "segments": { "type": "array", "items": { "$ref": "#/$defs/segment" } },
     "carved": {
       "type": "object",
-      "description": "Each entrance or segment by id as it was when last carved; a segment's copy adds ends, copies of its points.",
+      "description": "Each entrance or segment by id as it was when last carved; a segment's copy adds ends, copies of its points, and near, copies of the points within 3 segments of them.",
       "additionalProperties": { "type": "object" }
     }
   },

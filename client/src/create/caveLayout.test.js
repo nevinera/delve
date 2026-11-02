@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { VOXEL_FT } from "../v2/caves.js";
-import { ENTRANCE_DEFAULTS, Layout, carvePlan, entranceEnd, entranceProblem, mouthBehind, shapesOf } from "./caveLayout.js";
+import { ENTRANCE_DEFAULTS, Layout, REACH_SEGMENTS, carvePlan, seedOf, entranceEnd, entranceProblem, mouthBehind, shapesOf } from "./caveLayout.js";
 import { slugOf } from "./cavePlan.js";
 import { Caves } from "./caves.js";
 
@@ -50,15 +50,13 @@ describe("cave layout", () => {
     expect(layout.changes()).toEqual([e.id]);
   });
 
-  it("carves a segment again when a point it joins changes", () => {
+  it("carves a segment again when a point it joins, or one near, changes", () => {
     const layout = new Layout();
     const [a, b, c] = [[0, -40, 0], [32, -40, 0], [64, -40, 0]].map((at) => layout.addPoint("n", at));
     const [ab, bc] = [layout.addSegment("n", a.id, b.id), layout.addSegment("n", b.id, c.id)];
     layout.carved = carvePlan(layout).carved;
     expect(layout.changes()).toEqual([]);
     c.width = 20;
-    expect(layout.changes()).toEqual([bc.id]);
-    b.at = [32, -42, 0];
     expect(layout.changes().sort()).toEqual([ab.id, bc.id]);
   });
 
@@ -137,6 +135,30 @@ describe("cave layout", () => {
     layout.extend(layout.nearest("n", end.at), { to: layout.nearest("n", [64, -40, -20], new Set([end.id])) });
     expect(layout.points.size).toBe(count + 1);
     expect(layout.nearest("nowhere", [0, 0, 0])).toBe(null);
+  });
+
+  it("carves again what a change reaches, and only that, coming out as if carved afresh", () => {
+    const layout = new Layout();
+    const points = Array.from({ length: 12 }, (_, i) => layout.addPoint("n", [i * 32, -60, (i % 3) * 8]));
+    const segments = points.slice(1).map((p, i) => layout.addSegment("n", points[i].id, p.id));
+    const caves = new Caves(scene, { heightAt: () => 0 });
+    const carve = (into, plan) => {
+      into.carvePlan(plan, () => {});
+      layout.carved = plan.carved;
+    };
+    carve(caves, carvePlan(layout));
+    // Point 6 changes: the segments on it and REACH_SEGMENTS either way of those carve again.
+    points[6].width = 20;
+    const reached = segments.filter((_, i) => i >= 5 - REACH_SEGMENTS && i <= 6 + REACH_SEGMENTS).map((s) => s.id);
+    expect(layout.changes().sort()).toEqual(reached.sort());
+    carve(caves, carvePlan(layout));
+    const fresh = new Caves(scene, { heightAt: () => 0 });
+    layout.carved = new Map();
+    fresh.carvePlan(carvePlan(layout), () => {});
+    expect([...caves.tiles.keys()].sort()).toEqual([...fresh.tiles.keys()].sort());
+    for (const [key, columns] of caves.tiles) expect(columns).toEqual(fresh.tiles.get(key));
+    expect(seedOf("s4")).toBe(seedOf("s4"));
+    expect(seedOf("s4")).not.toBe(seedOf("s5"));
   });
 
   it("names networks as slugs", () => {

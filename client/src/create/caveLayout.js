@@ -24,6 +24,7 @@ export const PHASES = ["layout", "polish"];
 export const POINT_FT = { width: [12, 64], height: [10, 48] }; // the passage's sizes a point can have
 export const JOIN_FT = 8; // how near an existing point a passage joins it, not splitting
 const CONFIG = ["width", "height", "qualities", "rock", "hewn"]; // what a point keeps of its section
+export const REACH_SEGMENTS = 3; // how many segments either way a segment's shape can depend on
 
 // A value as JSON with its objects' keys sorted, to compare.
 const stable = (value) => JSON.stringify(value, (k, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1))) : v));
@@ -180,14 +181,39 @@ export class Layout {
   }
 
   // An element as carving sees it, which carving it opens just the same again: a copy of it, a
-  // segment's with its points', `ends`; null for a point, which carves nothing of its own.
+  // segment's with its points', `ends`, and the points within REACH_SEGMENTS of them, `near`,
+  // by id, which its shape can depend on, so changing one carves it again; null for a point,
+  // which carves nothing of its own.
   copyOf(id) {
     if (this.points.has(id)) return null;
     const element = this.entrances.get(id) ?? this.segments.get(id);
     if (!element) return null;
     const copy = structuredClone(element);
-    if (this.segments.has(id)) copy.ends = [copy.from, copy.to].map((p) => structuredClone(this.points.get(p)));
+    if (this.segments.has(id)) {
+      copy.ends = [copy.from, copy.to].map((p) => structuredClone(this.points.get(p)));
+      copy.near = this.around([copy.from, copy.to], REACH_SEGMENTS)
+        .filter((p) => p !== copy.from && p !== copy.to)
+        .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
+        .map((p) => structuredClone(this.points.get(p)));
+    }
     return copy;
+  }
+
+  // The ids of the points within `steps` segments of points `ids`, with them.
+  around(ids, steps) {
+    const seen = new Set(ids);
+    let edge = [...ids];
+    for (let step = 0; step < steps && edge.length; step++) {
+      const next = [];
+      for (const id of edge) {
+        for (const s of this.joined(id)) {
+          const other = s.from === id ? s.to : s.from;
+          if (!seen.has(other)) seen.add(other), next.push(other);
+        }
+      }
+      edge = next;
+    }
+    return [...seen];
   }
 
   // Whether an element's changed since it was last carved: new, changed, or deleted.
@@ -202,6 +228,14 @@ export class Layout {
 }
 
 export const isEntrance = (copy) => Boolean(copy.mouth);
+// A number to seed an element's randomness from, by its id alone, so it comes out the same
+// whatever else changes.
+export function seedOf(id) {
+  let h = 2166136261;
+  for (const c of id) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
+  return h >>> 0;
+}
+
 export const configOf = (point) => structuredClone(Object.fromEntries(CONFIG.map((key) => [key, point[key]])));
 
 // The shapes an element (as Layout's copyOf gives it) carves, as v2/caves.js's carve takes them.
