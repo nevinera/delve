@@ -1,5 +1,5 @@
 import { ROOF_FT, allStone, shapeBounds } from "../v2/caves.js";
-import { OFFSHOOT_FT, ROCK_FT, rockBetween, segmentShapes, steep } from "./caveQualities.js";
+import { OFFSHOOT_FT, ROCK_FT, middleOf, rockBetween, segmentShapes, steep } from "./caveQualities.js";
 import { WALK_DEG } from "./growth.js";
 
 export { EXCLUSIVE, QUALITIES, ROCK_FT, rockBetween, segmentShapes, seedOf, steep } from "./caveQualities.js";
@@ -294,14 +294,15 @@ export function passageWarnings(layout, net, ends) {
 }
 
 // Why a passage `ends` ({ at, width, height } twice) laid out in network `net` can't go there, too
-// near a passage it doesn't join, or another network, or null. `joins`: the ids of the points it
-// joins, whose segments it can come near.
-export function rockProblem(layout, net, ends, joins = []) {
+// near another passage, or another network, or null. `junctions`: for the ends it joins others
+// at, { end, points }, the end's index in `ends` and the ids of the points whose passages it
+// meets there, within a link, which it only needs rock between away from the junction.
+export function rockProblem(layout, net, ends, junctions = []) {
   let nearest = null;
   for (const s of layout.segments.values()) {
-    if (joins.includes(s.from) || joins.includes(s.to)) continue;
-    const gap = rockBetween(ends, [s.from, s.to].map((id) => layout.points.get(id)));
+    const away = junctions.filter((j) => j.points.includes(s.from) || j.points.includes(s.to)).map((j) => middleOf(ends[j.end]));
     const least = s.net === net ? ROCK_FT : NETWORK_GAP_FT;
+    const gap = rockBetween(ends, [s.from, s.to].map((id) => layout.points.get(id)), away, least);
     if (gap < least && (!nearest || gap - least < nearest.short)) nearest = { s, gap, short: gap - least };
   }
   if (!nearest) return null;

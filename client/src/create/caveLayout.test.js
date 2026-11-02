@@ -179,7 +179,13 @@ describe("cave layout", () => {
     // Over it, 16 ft up and 10 ft across: 6 ft of rock.
     const over = [end([0, -44, 10]), end([64, -44, 10])];
     expect(rockProblem(layout, "n", over)).toBe(`only 6 ft of rock between it and the passage from ${a.id} to ${ab.to}; leave 8 ft`);
-    expect(rockProblem(layout, "n", over, [a.id])).toBe(null);
+    // Going on from a, it needs no rock by a, but does where it runs alongside a-b further on.
+    const junction = { end: 0, points: [a.id] };
+    expect(rockProblem(layout, "n", over, [junction])).toMatch(/^only 6 ft of rock/);
+    expect(rockProblem(layout, "n", [end([0, -60, 0]), end([0, -60, 64])], [junction])).toBe(null);
+    // Within 45° of a-b, they meet too near the junction.
+    expect(rockProblem(layout, "n", [end([0, -60, 0]), end([64, -60, 40])], [junction])).toMatch(/between it and the passage/);
+    expect(rockProblem(layout, "n", [end([0, -60, 0]), end([40, -60, 64])], [junction])).toBe(null);
     // Near another network.
     expect(rockProblem(layout, "n", [end([0, -60, 380]), end([64, -60, 380])])).toBe("only 8 ft of rock between it and far-run; leave 32 ft between networks");
     expect(passageWarnings(layout, "n", [end([0, -60, 200]), end([10, -40, 200])])).toEqual(["steeper than 50°, so it can't be walked"]);

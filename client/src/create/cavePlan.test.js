@@ -20,14 +20,14 @@ describe("cave passage tool", () => {
     expect(tooClose(ab.id, c.id)).toBe(true);
   });
 
-  it("lets a passage go on from a point near the passages within two links of it", () => {
+  it("lets a passage go on from a point near the passages within a link of it", () => {
     // Wide passages, short links: going on from c, it starts in a-b's rock.
     const layout = new Layout();
     const [a, b, c] = [0, 16, 32].map((x) => layout.addPoint("n", [x, -60, 0], { width: 20, height: 12 }));
     const ab = layout.addSegment("n", a.id, b.id);
     layout.addSegment("n", b.id, c.id);
     const ends = [{ ...c, at: c.at }, { ...c, at: [32, -60, 60] }];
-    expect(rockProblem(layout, "n", ends, [c.id])).toBe(`no rock between it and the passage from ${ab.from} to ${ab.to}; leave 8 ft`);
-    expect(rockProblem(layout, "n", ends, nearFrom(layout, { id: c.id }))).toBe(null);
+    expect(rockProblem(layout, "n", ends, [{ end: 0, points: [c.id] }])).toBe(`no rock between it and the passage from ${ab.from} to ${ab.to}; leave 8 ft`);
+    expect(rockProblem(layout, "n", ends, [{ end: 0, points: nearFrom(layout, { id: c.id }) }])).toBe(null);
   });
 });

@@ -423,13 +423,13 @@ export class CavePlan {
     else to = null;
     const ends = [{ ...start, at: from.at }, { ...(to ? configNear(this.layout, to) : this.adding), at }];
     const length = Math.hypot(...at.map((v, k) => v - from.at[k]));
-    const joins = [...nearFrom(this.layout, from), ...(to ? spotEnds(this.layout, to) : [])];
+    const junctions = [from, to].map((spot, end) => spot && { end, points: nearFrom(this.layout, spot) }).filter(Boolean);
     const problem =
       length < JOIN_FT
         ? "a passage has to be longer than that"
         : to && this.tooClose(from, to)
           ? "a passage can't join a point within two links of where it starts"
-          : (rockProblem(this.layout, from.net, ends, joins) ?? (segmentShapes({ ends }).every((shape) => fits(shape, this.groundAt)) ? null : "a passage has to stay under the ground"));
+          : (rockProblem(this.layout, from.net, ends, junctions) ?? (segmentShapes({ ends }).every((shape) => fits(shape, this.groundAt)) ? null : "a passage has to stay under the ground"));
     this.ghost = { from, to, at, ends, problem, warnings: passageWarnings(this.layout, from.net, ends) };
   }
 
@@ -711,8 +711,8 @@ function spotEnds(layout, spot) {
   return segment ? [segment.from, segment.to] : [spot.id];
 }
 
-// The ids of the points whose passages are within two links of spot `from`, which a passage
-// from it can come near.
+// The ids of the points whose passages are within a link of spot `from`, which a passage from it
+// meets there.
 export function nearFrom(layout, from) {
   return layout.around(spotEnds(layout, from), 1 - layout.segments.has(from.id));
 }

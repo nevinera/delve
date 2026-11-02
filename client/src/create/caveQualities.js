@@ -20,6 +20,8 @@ import { WALK_DEG } from "./growth.js";
 export const QUALITIES = ["twisty", "very twisty", "bumpy", "ledges", "cluttered", "offshoots", "switchbacks"];
 export const EXCLUSIVE = [["twisty", "very twisty"]]; // qualities only one of which a point can have
 export const ROCK_FT = 8; // the least rock to leave between passages that aren't joined
+export const JUNCTION_DEG = 45; // the least angle between passages from a junction
+const JUNCTION_SPREAD = 1 / Math.sin((JUNCTION_DEG * Math.PI) / 180);
 export const OFFSHOOT_FT = 60; // how far a side passage can wander
 const WALKABLE_DEG = 35; // how steep a switchback's legs are at most, leaving room under WALK_DEG
 const SIDE = { width: 8, height: 8, pocket: 6 }; // a side passage's size, and the pocket it can end in
@@ -63,13 +65,42 @@ export function reachOf(point, length) {
 // How much rock there is between two passages, each its two ends ({ at, width, height,
 // qualities }): taken as a round tube along the middle of each, as wide as its passage's wider
 // way and padded by how far its qualities reach, so no less than there is.
-export function rockBetween(p, q) {
-  const middle = (end) => [end.at[0], end.at[1] + end.height / 2, end.at[2]];
-  const radius = (ends) => {
-    const length = Math.hypot(...ends[1].at.map((v, k) => v - ends[0].at[k]));
-    return Math.max(...ends.map((end) => Math.max(end.width, end.height) / 2 + reachOf(end, length)));
-  };
-  return segmentGap(p.map(middle), q.map(middle)) - radius(p) - radius(q);
+// `away`: the middles of junctions they meet at, round which as far as JUNCTION_SPREAD times the
+// rock they'd need is left out of both, so that branches from a junction only need rock between
+// them once they're apart, which keeps them JUNCTION_DEG apart; Infinity where nothing's left.
+export function rockBetween(p, q, away = [], least = ROCK_FT) {
+  const [rp, rq] = [radiusOf(p), radiusOf(q)];
+  const zone = JUNCTION_SPREAD * (rp + rq + least);
+  const [ps, qs] = [p, q].map((ends) => outside([ends.map(middleOf)], away, zone));
+  let gap = Infinity;
+  for (const a of ps) for (const b of qs) gap = Math.min(gap, segmentGap(a, b));
+  return gap - rp - rq;
+}
+
+export const middleOf = (end) => [end.at[0], end.at[1] + end.height / 2, end.at[2]];
+const radiusOf = (ends) => {
+  const length = Math.hypot(...ends[1].at.map((v, k) => v - ends[0].at[k]));
+  return Math.max(...ends.map((end) => Math.max(end.width, end.height) / 2 + reachOf(end, length)));
+};
+
+// The pieces of line segments `pieces` ([a, b] each) left outside spheres of radius `r` round `centres`.
+function outside(pieces, centres, r) {
+  for (const c of centres) {
+    pieces = pieces.flatMap(([a, b]) => {
+      const d = a.map((v, k) => b[k] - v);
+      const f = a.map((v, k) => v - c[k]);
+      const [qa, qb, qc] = [d.reduce((s, v) => s + v * v, 0), 2 * d.reduce((s, v, k) => s + v * f[k], 0), f.reduce((s, v) => s + v * v, 0) - r * r];
+      const disc = qb * qb - 4 * qa * qc;
+      if (qa < 1e-9 || disc <= 0) return qc > 0 || qa >= 1e-9 ? [[a, b]] : [];
+      const [t0, t1] = [(-qb - Math.sqrt(disc)) / (2 * qa), (-qb + Math.sqrt(disc)) / (2 * qa)];
+      const at = (t) => a.map((v, k) => v + d[k] * t);
+      const left = [];
+      if (t0 > 0) left.push([a, at(Math.min(1, t0))]);
+      if (t1 < 1) left.push([at(Math.max(0, t1)), b]);
+      return left;
+    });
+  }
+  return pieces;
 }
 
 const twistFt = (length, very) => (very ? Math.min(0.35 * length, 20) : Math.min(0.2 * length, 10));
