@@ -1,9 +1,8 @@
 import * as THREE from "three";
 import { CAVES_PATH, TILE_CELLS, allStone, carve, cavesPath, growCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
-import { CELL_FT, CHUNK_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
+import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial, setBrush } from "./caveMaterial.js";
-import { caveMesh, cutMesh, lip, opensAt } from "./caveMesh.js";
-import { ringed } from "./entranceJoin.js";
+import { caveMesh, opensAt } from "./caveMesh.js";
 import { EMPTY_FT, FULL_TILES } from "./ground.js";
 
 export { CAVES_PATH };
@@ -51,36 +50,19 @@ export class Caves {
     this.gridMaterial = new THREE.LineBasicMaterial({ vertexColors: true, depthWrite: false, transparent: true, opacity: 0.6 });
     this.lineMaterial = new THREE.LineBasicMaterial({ color: LINE_RGB, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
     this.onMouths = null; // (plate keys) => void, when the ground at mouths changes
-    // Entrances where they meet the ground (entranceJoin.js), by id, each with `plate`, the "px,pz"
-    // of the file that keeps it; and from them, the ground cells left out, once the rock round
-    // them is made again, so the ground doesn't open before it. groundMesh(tx, tz): a tile's
-    // ground mesh drawn in full, or null, whose material the joins take.
-    this.entrances = new Map();
-    this.shown = new Set(); // ids of the entrances whose cells the ground leaves out
-    this.entranceCells = new Set(); // "ci,cj"
-    this.sealed = new Set(); // "ci,cj" of all entrances' cells and those round them, where the rock's closed over the ground
-    this.held = new Set(); // "cx,cz" of the ground's chunks round entrances, kept from moving
-    this.groundMesh = null;
-    // Each entrance's ground joined to its rock, colored and drawn as the ground is, once the
-    // ground's left its cells out.
-    this.joins = new THREE.Group();
-    scene.add(this.joins);
-    this.joinsMade = null; // what the joins were drawn from
     this.world = {
       spans: (ci, cj) => this.spans(ci, cj),
       ground: (ci, cj) => this.groundCell(ci, cj),
       corner: (ci, cj) => this.renditions.heightAt(ci * CELL_FT, cj * CELL_FT) ?? EMPTY_FT,
       mouth: (ci, cj) => this.opens(ci, cj),
-      sealed: (ci, cj) => this.sealed.has(`${ci},${cj}`),
       caved: (tx, tz) => this.tiles.has(`${tx},${tz}`),
     };
   }
 
   // Takes plate (px, pz)'s caves file's bytes.
   load(bytes) {
-    const { coords, tiles, entrances } = decodeCaves(bytes);
+    const { coords, tiles } = decodeCaves(bytes);
     for (const [index, columns] of tiles) this.tiles.set(`${coords[0] * PLATE_TILES + (index % PLATE_TILES)},${coords[1] * PLATE_TILES + Math.floor(index / PLATE_TILES)}`, columns);
-    for (const { id, ...join } of entrances) this.setEntrance(id, join, coords.join(","), true);
     this.version++;
   }
 
@@ -113,80 +95,8 @@ export class Caves {
     return false;
   }
 
-  // Sets how entrance `id` meets the ground (entranceJoin.js), or with null, that it doesn't; kept
-  // in plate `plate`'s file ("px,pz"). The ground's redrawn where its cells left out change, and
-  // the rock's made again round them, cut back. With `saved`, its file isn't marked to save.
-  setEntrance(id, join, plate = null, saved = false) {
-    const before = this.entrances.get(id);
-    if (join) this.entrances.set(id, { ...join, plate });
-    else this.entrances.delete(id);
-    for (const owner of [before?.plate, join && plate]) if (owner && !saved) this.changed.add(owner);
-    this.shown.delete(id);
-    const next = new Set([...this.entrances.values()].flatMap((e) => e.cells.map(([ci, cj]) => `${ci},${cj}`)));
-    const plates = new Set();
-    for (const [ci, cj] of [...(before?.cells ?? []), ...(join?.cells ?? [])]) {
-      const [tx, tz] = [Math.floor(ci / TILE_CELLS), Math.floor(cj / TILE_CELLS)];
-      for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) this.stale.add(`${tx + dx},${tz + dz}`);
-      plates.add(`${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`);
-    }
-    this.entranceCells = this.shownCells();
-    this.sealed = ringed(next);
-    this.held = new Set([...this.entrances.values()].flatMap((e) => (e.chunks ?? []).map(([cx, cz]) => `${cx},${cz}`)));
-    this.joinsMade = null;
-    this.version++;
-    if (plates.size) this.onMouths?.(plates);
-  }
-
-  // Whether the ground within `pad` ft of (x, z) is in a chunk kept from moving round an entrance,
-  // edges and all.
-  holds(x, z, pad = 0) {
-    if (!this.held.size) return false;
-    for (let cz = Math.floor((z - pad) / CHUNK_FT); cz <= Math.floor((z + pad) / CHUNK_FT); cz++) {
-      for (let cx = Math.floor((x - pad) / CHUNK_FT); cx <= Math.floor((x + pad) / CHUNK_FT); cx++) if (this.held.has(`${cx},${cz}`)) return true;
-    }
-    return false;
-  }
-
-  // Whether the ground's been read in full within `reach` ft of the line from continent feet `from`
-  // to `to`, asking for what hasn't.
-  groundRead(from, to, reach) {
-    let read = true;
-    for (let tz = Math.floor((Math.min(from[2], to[2]) - reach) / TILE_FT); tz <= Math.floor((Math.max(from[2], to[2]) + reach) / TILE_FT); tz++) {
-      for (let tx = Math.floor((Math.min(from[0], to[0]) - reach) / TILE_FT); tx <= Math.floor((Math.max(from[0], to[0]) + reach) / TILE_FT); tx++) {
-        if (this.renditions.tile(tx, tz) && !this.renditions.cells(tx, tz)) read = false;
-      }
-    }
-    return read;
-  }
-
-  // The cells of the entrances shown, "ci,cj".
-  shownCells() {
-    return new Set([...this.shown].flatMap((id) => this.entrances.get(id).cells.map(([ci, cj]) => `${ci},${cj}`)));
-  }
-
-  // Shows the entrances whose rock's been made again round them, cut back: the ground's to leave
-  // their cells out. `wanted`: the "tx,tz" of the tiles with rock to draw, and near(key) whether
-  // one's near enough to be drawn.
-  showEntrances(wanted, near) {
-    const plates = new Set();
-    for (const [id, entrance] of this.entrances) {
-      if (this.shown.has(id)) continue;
-      const tiles = new Set();
-      for (const [ci, cj] of entrance.cells) {
-        const [tx, tz] = [Math.floor(ci / TILE_CELLS), Math.floor(cj / TILE_CELLS)];
-        for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) tiles.add(`${tx + dx},${tz + dz}`);
-      }
-      if (![...tiles].every((key) => !wanted.has(key) || (near(key) && this.meshes.has(key) && !this.stale.has(key)))) continue;
-      this.shown.add(id);
-      for (const [ci, cj] of entrance.cells) plates.add(`${Math.floor(ci / TILE_CELLS / PLATE_TILES)},${Math.floor(cj / TILE_CELLS / PLATE_TILES)}`);
-    }
-    if (!plates.size) return;
-    this.entranceCells = this.shownCells();
-    this.onMouths?.(plates);
-  }
-
-  // Tile (tx, tz)'s cells whose ground isn't drawn, where caves open through it or entrances reach
-  // into it, as a Set of indices, or null for none.
+  // Tile (tx, tz)'s cells whose ground isn't drawn, where caves open through it, as a Set of
+  // indices, or null for none.
   holes(tx, tz) {
     let near = false;
     for (let dz = -1; dz <= 1 && !near; dz++) for (let dx = -1; dx <= 1 && !near; dx++) near = this.tiles.has(`${tx + dx},${tz + dz}`);
@@ -195,7 +105,7 @@ export class Caves {
     for (let j = 0; j < TILE_CELLS; j++) {
       for (let i = 0; i < TILE_CELLS; i++) {
         const [ci, cj] = [tx * TILE_CELLS + i, tz * TILE_CELLS + j];
-        if (this.opens(ci, cj) || this.entranceCells.has(`${ci},${cj}`)) out.add(j * TILE_CELLS + i);
+        if (this.opens(ci, cj)) out.add(j * TILE_CELLS + i);
       }
     }
     return out.size ? out : null;
@@ -228,26 +138,6 @@ export class Caves {
       for (const { shape, stone, mouth } of opens) for (const key of carve(shape, columnsOf, groundAt, { stone, own: true, mouth })) changed.add(key);
       return changed;
     };
-  }
-
-  // The caves as they'd be with `plan` carved, leaving them as they are: { world, changed }, a
-  // world as caveMesh.js's, and the "tx,tz" of the tiles that'd change.
-  trial(plan) {
-    const scratch = new Map();
-    const changed = this.carving(plan)((tx, tz, make) => {
-      const key = `${tx},${tz}`;
-      if (!scratch.has(key)) scratch.set(key, this.tiles.has(key) ? structuredClone(this.tiles.get(key)) : null);
-      if (!scratch.get(key) && make) scratch.set(key, emptyColumns());
-      return scratch.get(key);
-    });
-    const tileOf = (key) => (scratch.has(key) ? scratch.get(key) : this.tiles.get(key));
-    const spans = (ci, cj) => {
-      const [tx, tz] = [Math.floor(ci / TILE_CELLS), Math.floor(cj / TILE_CELLS)];
-      return tileOf(`${tx},${tz}`)?.[(cj - tz * TILE_CELLS) * TILE_CELLS + ci - tx * TILE_CELLS] ?? EMPTY;
-    };
-    const world = { ...this.world, spans, caved: (tx, tz) => Boolean(tileOf(`${tx},${tz}`)) };
-    world.mouth = (ci, cj) => spans(ci, cj).length > 0 && opensAt(world, ci, cj);
-    return { world, changed };
   }
 
   // Adds rock round continent feet `at` (on the rock), facing `normal`, out to `radius`, up to
@@ -369,8 +259,6 @@ export class Caves {
       this.drop(mesh);
       this.meshes.delete(key);
     }
-    this.showEntrances(wanted, near);
-    this.drawJoins();
     const todo = [...wanted].filter((key) => near(key) && (!this.meshes.has(key) || this.stale.has(key)));
     if (!todo.length) return;
     const distance = (key) => {
@@ -383,69 +271,6 @@ export class Caves {
       if (performance.now() - start > BUILD_MS) break;
       this.make(key);
     }
-  }
-
-  // Draws each entrance shown's ground joined to its rock (caveMesh.js's lip), in the ground's
-  // colors and its tile's material, once the ground there's left its cells out.
-  drawJoins() {
-    const shown = [...this.shown].map((id) => this.entrances.get(id));
-    const grounds = shown.map((e) => {
-      const [tx, tz] = [Math.floor(e.plane.center[0] / TILE_FT), Math.floor(e.plane.center[2] / TILE_FT)];
-      return { mesh: this.groundMesh?.(tx, tz) ?? null, tx, tz };
-    });
-    const made = `${this.version} ${[...this.shown]} ${grounds.map(({ mesh }) => `${mesh?.geometry.uuid}:${mesh?.userData.holes}`)}`;
-    if (made === this.joinsMade) return;
-    this.joinsMade = made;
-    for (const child of [...this.joins.children]) {
-      this.joins.remove(child);
-      child.geometry.dispose();
-    }
-    shown.forEach((entrance, n) => {
-      // Once the ground there's left its cells out.
-      const { mesh: ground, tx, tz } = grounds[n];
-      const holes = new Set(ground?.userData.holes?.split(",") ?? []);
-      const inTile = entrance.cells.filter(([ci, cj]) => Math.floor(ci / TILE_CELLS) === tx && Math.floor(cj / TILE_CELLS) === tz);
-      if (!ground || !inTile.every(([ci, cj]) => holes.has(String((cj - tz * TILE_CELLS) * TILE_CELLS + ci - tx * TILE_CELLS)))) return;
-      const { positions, indices } = lip(entrance.ground, entrance.rock, entrance.steps, {
-        normalAt: (x, z) => this.groundNormal(x, z),
-        middle: [0, 1, 2].map((k) => entrance.rock.reduce((sum, p) => sum + p[k], 0) / entrance.rock.length),
-        axis: entrance.axis ?? entrance.plane.normal.map((v) => -v),
-      });
-      const colors = [];
-      for (let i = 0; i < positions.length; i += 3) colors.push(...this.groundColor(positions[i], positions[i + 2]));
-      // Seen from both sides, outside and from in the tube: each triangle twice, turned, on its
-      // own vertices so each side's lit as it faces.
-      const count = positions.length / 3;
-      const back = [];
-      for (let n = 0; n < indices.length; n += 3) back.push(count + indices[n], count + indices[n + 2], count + indices[n + 1]);
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute("position", new THREE.Float32BufferAttribute([...positions, ...positions], 3));
-      geometry.setAttribute("color", new THREE.Float32BufferAttribute([...colors, ...colors], 3));
-      geometry.setIndex([...indices, ...back]);
-      geometry.computeVertexNormals();
-      this.joins.add(new THREE.Mesh(geometry, ground.material));
-    });
-  }
-
-  // The ground's upward normal at (x, z), as [x, y, z].
-  groundNormal(x, z) {
-    const h = (px, pz) => this.renditions.heightAt(px, pz) ?? EMPTY_FT;
-    const [dx, dz] = [(h(x + 1, z) - h(x - 1, z)) / 2, (h(x, z + 1) - h(x, z - 1)) / 2];
-    const length = Math.hypot(dx, 1, dz);
-    return [-dx / length, 1 / length, -dz / length];
-  }
-
-  // The ground's color at (x, z), linear, as the ground's drawn: its cell's.
-  groundColor(x, z) {
-    const [ci, cj] = [Math.floor(x / CELL_FT), Math.floor(z / CELL_FT)];
-    const [tx, tz] = [Math.floor(ci / TILE_CELLS), Math.floor(cj / TILE_CELLS)];
-    const cells = this.renditions.cells(tx, tz);
-    if (!cells?.colors) return [0.2, 0.2, 0.2];
-    const k = ((cj - tz * TILE_CELLS) * TILE_CELLS + ci - tx * TILE_CELLS) * 3;
-    return [0, 1, 2].map((m) => {
-      const v = cells.colors[k + m] / 255;
-      return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
-    });
   }
 
   // Draws the grid, if it's shown, over what `renderer` drew last, hidden only by `over` (an
@@ -489,13 +314,8 @@ export class Caves {
     this.stale.delete(key);
     const old = this.meshes.get(key);
     if (old) this.drop(old);
-    let data = caveMesh(tx, tz, this.world);
+    const data = caveMesh(tx, tz, this.world);
     if (!data) return this.meshes.set(key, null);
-    // Cut back at the entrances whose ground's left out in or beside it.
-    for (const entrance of this.entrances.values()) {
-      const near = entrance.cells.some(([ci, cj]) => Math.abs(Math.floor(ci / TILE_CELLS) - tx) <= 1 && Math.abs(Math.floor(cj / TILE_CELLS) - tz) <= 1);
-      if (near) data = cutMesh(data, entrance.plane, [tx * TILE_FT, 0, tz * TILE_FT]).mesh;
-    }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(data.positions, 3));
     geometry.setAttribute("color", new THREE.BufferAttribute(data.colors, 3));
@@ -685,8 +505,7 @@ export class Caves {
           if (columns) tiles.set(tileIndex(tx, tz), columns);
         }
       }
-      const entrances = [...this.entrances].filter(([, e]) => e.plate === key).map(([id, { plate, ...join }]) => ({ id, ...join }));
-      files.set(cavesPath(continent, [px, pz]), tiles.size || entrances.length ? encodeCaves([px, pz], tiles, entrances) : null);
+      files.set(cavesPath(continent, [px, pz]), tiles.size ? encodeCaves([px, pz], tiles) : null);
     }
     this.changed.clear();
     return files;

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { TILE_CELLS, carve, cavesPath, growCave, smoothCave, emptyColumns, fillRock, openAir } from "../v2/caves.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
-import { caveMesh, chains, cutMesh, fitPlane, joinedPieces, mouthCells, openEdges, lip, zipSteps } from "./caveMesh.js";
+import { caveMesh, mouthCells } from "./caveMesh.js";
 import { Caves } from "./caves.js";
 
 // Flat ground at `height`, everywhere, with its cells all one color.
@@ -162,92 +162,5 @@ describe("caves", () => {
     const at = caves.hit(new THREE.Ray(new THREE.Vector3(128, 20, 128), new THREE.Vector3(0, -1, 0)));
     expect(at[1]).toBeCloseTo(0, 1);
     expect(TILE_FT / CELL_FT).toBe(TILE_CELLS);
-  });
-});
-
-describe("open edges", () => {
-  it("finds the edges only one triangle has, across meshes that meet", () => {
-    const a = { positions: [0, 0, 0, 1, 0, 0, 0, 0, 1], indices: [0, 1, 2], offset: [0, 0, 0] };
-    expect(openEdges([a]).length / 6).toBe(3);
-    // A second triangle in another mesh, sharing the edge from (1, 0, 0) to (0, 0, 1).
-    const b = { positions: [0, 0, 0, 0, 0, -1, -1, 0, 0], indices: [0, 1, 2], offset: [1, 0, 1] };
-    expect(openEdges([a, b]).length / 6).toBe(4);
-  });
-});
-
-describe("planes", () => {
-  it("gathers segments into the pieces they join into", () => {
-    const pieces = joinedPieces([0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 5, 0, 5, 6, 0, 5]);
-    expect(pieces.map((p) => p.length).sort()).toEqual([2, 3]);
-  });
-
-  it("fits the plane nearest some points", () => {
-    // A loop on the plane y = 0.5 x, tilted up toward +x.
-    const points = Array.from({ length: 24 }, (_, i) => {
-      const [x, z] = [10 * Math.cos((i / 24) * Math.PI * 2), 6 * Math.sin((i / 24) * Math.PI * 2)];
-      return [x, 0.5 * x + 3, z];
-    });
-    const { center, normal, reach } = fitPlane(points);
-    expect(center[1]).toBeCloseTo(3);
-    const length = Math.hypot(1, 0.5);
-    expect(normal[0]).toBeCloseTo(-0.5 / length);
-    expect(normal[1]).toBeCloseTo(1 / length);
-    expect(normal[2]).toBeCloseTo(0);
-    expect(reach[0][1] - reach[0][0]).toBeCloseTo(20 * length, 0);
-  });
-});
-
-describe("cutting a mesh", () => {
-  it("cuts triangles back to one side of a plane, near it, splitting those across it", () => {
-    // Two triangles on the ground, one across x = 1 and one across it too, but away past the
-    // plane's reach.
-    const mesh = {
-      positions: Float32Array.from([0, 0, 0, 0, 0, 2, 2, 0, 0, 0, 0, 20, 0, 0, 22, 2, 0, 20]),
-      colors: new Float32Array(18),
-      themes: new Float32Array(6),
-      indices: Uint32Array.from([0, 1, 2, 3, 4, 5]),
-    };
-    const cut = { center: [1, 0, 1], normal: [1, 0, 0], across: [0, 0, 1], along: [0, 1, 0], reach: [[-2, 2], [-2, 2]] };
-    const { mesh: left, seam } = cutMesh(mesh, cut, [0, 0, 0]);
-    // The first keeps its part this side of x = 1, as two triangles; the second stays whole.
-    expect(left.indices.length).toBe(9);
-    expect([...left.indices.slice(6)]).toEqual([3, 4, 5]);
-    for (const i of left.indices.slice(0, 3)) expect(left.positions[i * 3]).toBeLessThanOrEqual(1 + 1e-6);
-    expect(seam).toHaveLength(6);
-    expect(seam[0]).toBeCloseTo(1);
-    expect(seam[3]).toBeCloseTo(1);
-  });
-});
-
-describe("stitching", () => {
-  const ring = (r, n, y = 0, backward = false) => {
-    const points = Array.from({ length: n }, (_, i) => [r * Math.cos((i / n) * Math.PI * 2), y, r * Math.sin((i / n) * Math.PI * 2)]);
-    return backward ? points.reverse() : points;
-  };
-  const segments = (line) => line.flatMap((p, i) => [...p, ...line[(i + 1) % line.length]]);
-
-  it("walks segments into lines, in order", () => {
-    const loop = ring(5, 12);
-    const [line] = chains(segments(loop));
-    expect(line).toHaveLength(12);
-    for (let i = 0; i < 12; i++) expect(Math.hypot(...line[i].map((v, k) => v - line[(i + 1) % 12][k]))).toBeCloseTo(Math.hypot(...loop[0].map((v, k) => v - loop[1][k])));
-  });
-
-  it("curves a lip from one ring to the other, leaving the ground flat and reaching the rock along the tube", () => {
-    const plane = { center: [0, 0, 0], normal: [0, 1, 0], across: [1, 0, 0], along: [0, 0, 1] };
-    const { a, b, steps } = zipSteps(ring(10, 16), ring(4, 9, 0, true), plane);
-    const rings = 4;
-    const { positions, indices } = lip(a, b, steps, { normalAt: () => [0, 1, 0], middle: [0, 0, 0], axis: [0, -1, 0], rings });
-    const spokes = steps.length + 1;
-    expect(positions.length / 3).toBe(spokes * (rings + 1));
-    expect(indices.length / 3).toBe(steps.length * rings * 2);
-    const at = (n) => positions.slice(n * 3, n * 3 + 3);
-    // The first spoke runs from the ground's first point to the rock's, dipping on the way.
-    expect(at(0)).toEqual(a[0]);
-    expect(at(rings)).toEqual(b[0]);
-    const near = at(1);
-    expect(Math.abs(near[1])).toBeLessThan(0.5);
-    expect(Math.hypot(near[0], near[2])).toBeLessThan(10);
-    expect(at(rings - 1)[1]).toBeGreaterThan(0);
   });
 });

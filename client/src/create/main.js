@@ -184,8 +184,6 @@ function start(world, changes, fresh) {
   const layoutBytes = world.files.get(layoutPath(continent));
   const layout = new Layout(layoutBytes ? JSON.parse(strFromU8(layoutBytes)) : null);
   ground.holes = (tx, tz) => caves.holes(tx, tz);
-  caves.groundMesh = (tx, tz) => ground.fullMesh(tx, tz);
-  renditions.held = (x, z, pad) => caves.holds(x, z, pad);
   caves.onMouths = (plates) => ground.refresh(plates);
   const things = new Things(scene, placed, (x, z, under) => caves.groundAt(x, z, under));
   // Level slabs press the ground down under them (press.js).

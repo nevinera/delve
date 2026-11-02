@@ -71,7 +71,6 @@ export class Renditions {
     // 9 × 9 chunk corners, and "px,pz" -> 9 × 9 tile corners.
     this.offsets = { [CELLS]: new Map(), [CHUNKS]: new Map(), [TILES]: new Map() };
     this.changed = new Set(); // "px,pz" of plates whose ground's been moved
-    this.held = null; // (x, z, pad) => whether the ground within pad ft of (x, z) is kept from moving
     this.unsaved = new Set(); // the same, since they were last saved (filesFor)
     this.writes = new Map(); // id -> resolve, for files being written on the worker
     this.made = new Map(); // "px,pz" -> indexes in the plate of tiles made where there were none
@@ -264,8 +263,7 @@ export class Renditions {
   }
 
   // Clears away the tiles whose middles are within `radius` ft of (x, z), and the one there, back to
-  // empty sea, with their plates and platters where they're left with none, but for those with
-  // ground held from moving. Gives the "px,pz" of
+  // empty sea, with their plates and platters where they're left with none. Gives the "px,pz" of
   // the plates they were in.
   clear(x, z, radius) {
     const moved = new Set();
@@ -273,7 +271,6 @@ export class Renditions {
       for (let tx = Math.floor((x - radius) / TILE_FT); tx <= Math.floor((x + radius) / TILE_FT); tx++) {
         const under = tx === Math.floor(x / TILE_FT) && tz === Math.floor(z / TILE_FT);
         if (!this.tile(tx, tz) || (!under && Math.hypot((tx + 0.5) * TILE_FT - x, (tz + 0.5) * TILE_FT - z) > radius)) continue;
-        if (this.held?.((tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT, TILE_FT / 2)) continue;
         const [px, pz] = [Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES)];
         const key = `${px},${pz}`;
         const index = tileIndexInPlate(tx, tz);
@@ -525,12 +522,6 @@ export class Renditions {
   // there are none.
   raise(at, [x0, z0, x1, z1], level, grow = true) {
     const moved = new Set();
-    // Held ground doesn't move, nor what's curved from moves near enough to reach into it.
-    if (this.held) {
-      const free = at;
-      const pad = 2 * (level === CELLS ? CELL_FT : level === CHUNKS ? CHUNK_FT : TILE_FT);
-      at = (x, z) => (this.held(x, z, pad) ? 0 : free(x, z));
-    }
     // at() on a grid `n` squares a side, `step` ft apart from (ox, oz), and `ring` more corners
     // round it, or null where it's all 0. With `half`, each corner's the average of at() over the
     // square `half` ft either way of it, taken `every` ft.

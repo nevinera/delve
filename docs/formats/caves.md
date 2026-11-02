@@ -16,7 +16,7 @@ Under the ground everything is rock, except where a cave opens air. Each 4 ft ce
 
 A stone type is a theme, 0 jagged, 1 smooth, 2 carved or 3 mined, plus 4 if it's hewn (cut flat-faced, as by hand). Where the rock faces up it takes the floor type of the nearest span, where it faces down the ceiling type, and where it faces sideways the wall type.
 
-Only an entrance, a node in the [cave layout](cave-layout.md), may reach up through the ground. Where it does, the file keeps how its tube meets the ground, worked out in /create, so readers draw it without working it out again.
+Only an entrance, a node in the [cave layout](cave-layout.md), may reach up through the ground.
 
 ## Numbers
 
@@ -29,9 +29,6 @@ caves 1 <px> <pz>
 tile <index>
 <cells>
 tile <index>
-...
-entrances
-<entrance>
 ...
 ```
 
@@ -68,18 +65,3 @@ No cell may have more than 31 spans.
 `c1z`, `c2z` and `c3z` are followed by a space and a zstd frame in base64 (3 bytes to 4 digits, the last group short). Unzipped, it's what follows `c1`, `c2` or `c3`.
 
 Readers also take the gzipped binary files written before (`DLC1`), each span's one theme and hewn taken for all three of its stone types.
-
-## Entrances
-
-After the tiles, a plate with entrances whose mouths are in it has an `entrances` line, then one line for each, a JSON object. Numbers are in continent feet, to a hundredth.
-
-- `id`: the entrance's node in the cave layout.
-- `cells`: the ground cells left out round its mouth, `[ci, cj]` each, continent cells.
-- `plane`: the plane nearest the ground's edge round them: `center`, `normal` (facing out of the mouth), `across` and `along` (lying in it), and `reach`, how far the edge goes each way from the center, `[[low, high] across, [low, high] along]`. Readers take the air over the ground in the cells left out, and the cells round them, for rock, so the tube closes there with no rim, then cut the cave rock away on the normal's side of the plane, near the mouth, in the tiles beside the cells.
-- `ground`: the ground's edge round the cells left out, `[x, y, z]` points in order, closing on itself.
-- `rock`: the rock's edge where the plane cuts it, the same way round, starting across from `ground`'s first point.
-- `steps`: how the two edges join, a letter a step: `a` takes the next point on `ground`, `b` the next on `rock`. Each step's pair of points is joined by a curve that leaves the ground along its slope, toward the middle of `rock`, and reaches the rock along `axis`. Readers color the lip they make as the ground is, and draw it with it, from both sides.
-- `axis`: the way into the tube from its mouth, a unit `[x, y, z]`.
-- `chunks`: the ground's 32 ft chunks round it, `[cx, cz]` each, from its mouth to its far end and round the cells left out. /create moves no ground in them, edges included, so the entrance stays as it was carved.
-
-An entrance on a plate's edge is kept only in its mouth's plate, so readers redraw the ground beside it once that plate loads.
