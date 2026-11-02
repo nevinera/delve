@@ -64,6 +64,7 @@ export class CavePlan {
     this.hover = null; // the grid point the pointer snaps to, { at, problem }, or the entrance it'd place, { entrance, problem }
     this.pointer = null; // where the pointer last was, [x, y] pixels
     this.turn = 0; // degrees an entrance is turned from the way the camera looks
+    this.shownProblem = null; // why what's pointed at can't go there, as last shown
     this.drag = null; // { id, bend } or { id } for a node, with the layout as it was, while dragging
     this.box = null; // { from, to } in pixels, while shift-dragging a box
     this.history = []; // the layout as it was before each change, latest last
