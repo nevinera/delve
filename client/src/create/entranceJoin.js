@@ -11,6 +11,7 @@ import { caveMesh, chains, cutMesh, fitPlane, zipSteps } from "./caveMesh.js";
 // - ground: the ground's edge round the cells left out at the mouth, its corners in order;
 // - rock: the rock's edge where it's cut back, in order;
 // - steps: how the two are zipped together (caveMesh.js's zipSteps), ground and rock as turned;
+// - axis: the way into the tube from its mouth, a unit [x, y, z], that the lip (caveMesh.js's lip) curves into;
 // - chunks: the ground's chunks round it, [cx, cz] each, mouth to far end and the cells left out,
 //   that nothing moves (ground.js's raise and clear), so none of this goes stale.
 // Null where the entrance doesn't open through the ground, or its edges don't close.
@@ -58,7 +59,9 @@ export function entranceJoin(entrance, world, groundAt) {
   if (!rock || rock.length < 3 || Math.hypot(...rock[0].map((v, k) => v - rock.at(-1)[k])) > GAP_FT) return null;
   if (crosses(ground, plane) || crosses(rock, plane)) return null;
   const { a, b, steps } = zipSteps(ground, rock, plane);
-  return { cells, plane, ground: a, rock: b, steps, chunks: heldChunks(entrance, cells) };
+  const along = entrance.at.map((v, k) => v - entrance.mouth[k]);
+  const axis = along.map((v) => v / (Math.hypot(...along) || 1));
+  return { cells, plane, ground: a, rock: b, steps, axis, chunks: heldChunks(entrance, cells) };
 }
 
 // The chunks within the entrance's width and a cell of the line from its mouth to its far end,

@@ -243,7 +243,7 @@ export class CavePlan {
         continue;
       }
       // One read from the files, on ground as it was then, is kept as it is.
-      const read = !this.joined.has(e.id) && kept?.ground.every(([x, y, z]) => Math.abs(this.groundAt(x, z) - y) < 0.05);
+      const read = !this.joined.has(e.id) && kept?.axis && kept.ground.every(([x, y, z]) => Math.abs(this.groundAt(x, z) - y) < 0.05);
       this.joined.set(e.id, made);
       if (read) continue;
       const plate = [0, 2].map((k) => Math.floor(e.mouth[k] / (PLATE_TILES * TILE_FT))).join(",");

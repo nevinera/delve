@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { CAVES_PATH, TILE_CELLS, allStone, carve, cavesPath, growCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
 import { CELL_FT, CHUNK_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial, setBrush } from "./caveMaterial.js";
-import { caveMesh, cutMesh, opensAt, zipped } from "./caveMesh.js";
+import { caveMesh, cutMesh, lip, opensAt } from "./caveMesh.js";
 import { ringed } from "./entranceJoin.js";
 import { EMPTY_FT, FULL_TILES } from "./ground.js";
 
@@ -336,7 +336,7 @@ export class Caves {
     }
   }
 
-  // Draws each entrance's ground joined to its rock (caveMesh.js's zipped), in the ground's
+  // Draws each entrance's ground joined to its rock (caveMesh.js's lip), in the ground's
   // colors and its tile's material, once the ground's drawn there; and the edges.
   drawJoins() {
     const tileOf = (e) => [Math.floor(e.plane.center[0] / TILE_FT), Math.floor(e.plane.center[2] / TILE_FT)];
@@ -353,7 +353,11 @@ export class Caves {
       [entrance.ground, entrance.rock].forEach((line, k) => line.forEach((p, i) => edges[k].push(...p, ...line[(i + 1) % line.length])));
       const ground = grounds[n];
       if (!ground) return;
-      const { positions, indices } = zipped(entrance.ground, entrance.rock, entrance.steps, entrance.plane.normal);
+      const { positions, indices } = lip(entrance.ground, entrance.rock, entrance.steps, {
+        normalAt: (x, z) => this.groundNormal(x, z),
+        middle: [0, 1, 2].map((k) => entrance.rock.reduce((sum, p) => sum + p[k], 0) / entrance.rock.length),
+        axis: entrance.axis ?? entrance.plane.normal.map((v) => -v),
+      });
       const colors = [];
       for (let i = 0; i < positions.length; i += 3) colors.push(...this.groundColor(positions[i], positions[i + 2]));
       // Seen from both sides, outside and from in the tube: each triangle twice, turned, on its
@@ -379,6 +383,14 @@ export class Caves {
       this.edges[k].geometry = new THREE.BufferGeometry();
       this.edges[k].geometry.setAttribute("position", new THREE.Float32BufferAttribute(points, 3));
     });
+  }
+
+  // The ground's upward normal at (x, z), as [x, y, z].
+  groundNormal(x, z) {
+    const h = (px, pz) => this.renditions.heightAt(px, pz) ?? EMPTY_FT;
+    const [dx, dz] = [(h(x + 1, z) - h(x - 1, z)) / 2, (h(x, z + 1) - h(x, z - 1)) / 2];
+    const length = Math.hypot(dx, 1, dz);
+    return [-dx / length, 1 / length, -dz / length];
   }
 
   // The ground's color at (x, z), linear, as the ground's drawn: its cell's.

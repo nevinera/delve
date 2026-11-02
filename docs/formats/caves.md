@@ -78,7 +78,8 @@ After the tiles, a plate with entrances whose mouths are in it has an `entrances
 - `plane`: the plane nearest the ground's edge round them: `center`, `normal` (facing out of the mouth), `across` and `along` (lying in it), and `reach`, how far the edge goes each way from the center, `[[low, high] across, [low, high] along]`. Readers take the air over the ground in the cells left out, and the cells round them, for rock, so the tube closes there with no rim, then cut the cave rock away on the normal's side of the plane, near the mouth, in the tiles beside the cells.
 - `ground`: the ground's edge round the cells left out, `[x, y, z]` points in order, closing on itself.
 - `rock`: the rock's edge where the plane cuts it, the same way round, starting across from `ground`'s first point.
-- `steps`: how the two edges join, a letter a triangle: `a` takes the next point on `ground`, `b` the next on `rock`. Readers color the triangles as the ground is, and draw them with it.
+- `steps`: how the two edges join, a letter a step: `a` takes the next point on `ground`, `b` the next on `rock`. Each step's pair of points is joined by a curve that leaves the ground along its slope, toward the middle of `rock`, and reaches the rock along `axis`. Readers color the lip they make as the ground is, and draw it with it, from both sides.
+- `axis`: the way into the tube from its mouth, a unit `[x, y, z]`.
 - `chunks`: the ground's 32 ft chunks round it, `[cx, cz]` each, from its mouth to its far end and round the cells left out. /create moves no ground in them, edges included, so the entrance stays as it was carved.
 
 An entrance on a plate's edge is kept only in its mouth's plate, so readers redraw the ground beside it once that plate loads.

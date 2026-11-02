@@ -529,25 +529,53 @@ export function zipSteps(first, second, { center, across, along }) {
   return { a, b, steps };
 }
 
-// The triangles zipSteps' steps make between lines `a` and `b`, as { positions, indices },
-// continent feet, facing toward `normal`.
-export function zipped(a, b, steps, normal) {
-  const positions = [...a.flat(), ...b.flat()];
-  const indices = [];
-  const face = (i, j, k) => {
-    const p = [i, j, k].map((n) => positions.slice(n * 3, n * 3 + 3));
-    const [u, v] = [p[1].map((x, m) => x - p[0][m]), p[2].map((x, m) => x - p[0][m])];
-    const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
-    if (n[0] * normal[0] + n[1] * normal[1] + n[2] * normal[2] < 0) indices.push(i, k, j);
-    else indices.push(i, j, k);
+// The lip zipSteps' steps make between the ground's edge `a` and the rock's cut `b`, as
+// { positions, indices }, continent feet: a curve from each point of one to the point of the
+// other it's zipped to, leaving the ground along its slope (normalAt(x, z), its upward normal),
+// toward `middle`, the middle of the cut, and reaching the rock along `axis`, the way into the
+// tube; `rings` segments each. Its triangles face either way.
+export function lip(a, b, steps, { normalAt, middle, axis, rings = LIP_RINGS }) {
+  const unit = (v) => {
+    const length = Math.hypot(...v) || 1;
+    return v.map((x) => x / length);
   };
+  // Where the ground at `p` leaves toward the middle, along its slope.
+  const leaving = (p) => {
+    const n = normalAt(p[0], p[2]);
+    const d = middle.map((v, k) => v - p[k]);
+    const up = d[0] * n[0] + d[1] * n[1] + d[2] * n[2];
+    const flat = d.map((v, k) => v - n[k] * up);
+    return unit(Math.hypot(...flat) > 1e-6 ? flat : d);
+  };
+  const from = a.map(leaving);
+  // The spokes, ground point to rock point, in the order the steps go round.
+  const spokes = [[0, 0]];
   let [i, j] = [0, 0];
   for (const step of steps) {
-    const [ai, bi] = [i % a.length, a.length + (j % b.length)];
-    if (step === "a") face(ai, (i + 1) % a.length, bi);
-    else face(ai, a.length + ((j + 1) % b.length), bi);
     if (step === "a") i++;
     else j++;
+    spokes.push([i % a.length, j % b.length]);
+  }
+  const positions = [];
+  for (const [i, j] of spokes) {
+    const [g, r] = [a[i], b[j]];
+    const reach = Math.hypot(...g.map((v, k) => v - r[k]));
+    for (let n = 0; n <= rings; n++) {
+      const t = n / rings;
+      // Hermite: from g along its slope, into r along the tube.
+      const [h00, h10, h01, h11] = [2 * t ** 3 - 3 * t ** 2 + 1, t ** 3 - 2 * t ** 2 + t, -2 * t ** 3 + 3 * t ** 2, t ** 3 - t ** 2];
+      for (let k = 0; k < 3; k++) positions.push(h00 * g[k] + h10 * reach * from[i][k] + h01 * r[k] + h11 * reach * axis[k]);
+    }
+  }
+  const indices = [];
+  const side = rings + 1;
+  for (let s = 0; s + 1 < spokes.length; s++) {
+    for (let n = 0; n < rings; n++) {
+      const [p, q] = [s * side + n, (s + 1) * side + n];
+      indices.push(p, q, p + 1, p + 1, q, q + 1);
+    }
   }
   return { positions, indices };
 }
+
+export const LIP_RINGS = 4; // segments along each of a lip's curves
