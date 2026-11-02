@@ -103,7 +103,7 @@ export class Build {
   // something.
   constructor({ scene, camera, canvas, placed, things, library, groundAt, ray, groundHit, caveHit = () => null }) {
     Object.assign(this, { scene, camera, canvas, placed, things, library, groundAt, ray, groundHit, caveHit });
-    this.cave = null; // the cave network the last click was in, if any
+    placed.onRefuse = (text) => this.say(text);
     mountSwatches();
     // The handles moving and turning what's picked as one: arrows and planes that move it, and a
     // ring round them that turns it about the upright line through its middle (objects only yaw).
@@ -340,7 +340,7 @@ export class Build {
     if (!ray) return null;
     const on = this.things.pick(ray);
     const cave = this.caveHit();
-    if (cave && (!on || on.point.distanceTo(ray.ray.origin) > new THREE.Vector3(...cave.at).distanceTo(ray.ray.origin))) return { at: cave.at, thing: null, cave: cave.net ?? true, ceiling: cave.ceiling, problem: cave.problem };
+    if (cave && (!on || on.point.distanceTo(ray.ray.origin) > new THREE.Vector3(...cave.at).distanceTo(ray.ray.origin))) return { at: cave.at, thing: null, cave: true, ceiling: cave.ceiling, problem: cave.problem };
     const ground = this.groundHit();
     if (on && (!ground || on.point.distanceTo(ray.ray.origin) <= new THREE.Vector3(...ground).distanceTo(ray.ray.origin))) return { at: on.point.toArray(), thing: on.thing };
     return ground && { at: ground, thing: null };
@@ -416,9 +416,8 @@ export class Build {
   down(e) {
     this.free = e.shiftKey;
     const hit = this.hit();
-    // In a cave, things go only in a network being polished, and are its.
+    // In a cave, things go only in a network being polished.
     if (["object", "template", "slab", "stairs", "ramp"].includes(this.tool) && hit?.problem) return this.say(hit.problem);
-    this.cave = typeof hit?.cave === "string" ? hit.cave : null;
     if (this.tool === "object" && hit && this.armed.object) return this.placeObject(hit);
     if (this.tool === "template" && hit && this.armed.template) return this.placeTemplate(hit);
     if (this.tool === "slab" && (this.slab.mode === "door" || this.slab.mode === "window")) return this.holeDown(hit);
@@ -604,12 +603,9 @@ export class Build {
     this.showPicked();
   }
 
-  // Places new things, each the cave network's the last click was in, if it was in one, to go
-  // with it when it goes back to layout.
+  // Places new things, clearing what was said, unless they're refused (Placed's onRefuse).
   putNew(things) {
-    if (this.cave) for (const thing of things) thing.cave = this.cave;
-    this.say("");
-    this.placed.put(things);
+    if (this.placed.put(things)) this.say("");
   }
 
   placeObject(hit) {
@@ -1406,8 +1402,8 @@ export class Build {
     const { x, z } = this.pivot.position;
     this.placed.alter(
       picked,
-      (thing) => {
-        shift(thing, d.x, d.z, d.y, heights.get(thing));
+      (thing, was) => {
+        shift(thing, d.x, d.z, d.y, heights.get(was));
         turnAbout(thing, x, z, THREE.MathUtils.radToDeg(turn));
       },
       handling.joined,

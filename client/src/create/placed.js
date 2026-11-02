@@ -69,6 +69,26 @@ export class Placed {
     this.changed = new Set(); // "px,pz" of plates changed since they were saved
     this.version = 0; // counts changes, to tell when what's drawn is stale
     this.undos = [];
+    // caveOf(thing): the cave network a thing's in, or null; caveProblem(net): why things can't
+    // go in that network, or null; onRefuse(text): told when a change is refused for it.
+    this.caveOf = null;
+    this.caveProblem = () => null;
+    this.onRefuse = () => {};
+  }
+
+  // Tags `things` with the cave networks they're in, giving why one can't be there, or null.
+  tagCaves(things) {
+    if (!this.caveOf) return null;
+    for (const thing of things) {
+      const cave = this.caveOf(thing);
+      if (cave) thing.cave = cave;
+      else delete thing.cave;
+    }
+    for (const thing of things) {
+      const problem = thing.cave && this.caveProblem(thing.cave);
+      if (problem) return problem;
+    }
+    return null;
   }
 
   // Takes plate (px, pz)'s file's bytes.
@@ -122,11 +142,17 @@ export class Placed {
     this.version++;
   }
 
-  // Places `things`, objects and slabs.
+  // Places `things`, objects and slabs. Gives whether it did.
   put(things) {
-    if (!things.length) return;
+    if (!things.length) return false;
+    const problem = this.tagCaves(things);
+    if (problem) {
+      this.onRefuse(problem);
+      return false;
+    }
     for (const thing of things) this.add(thing);
     this.kept({ added: things });
+    return true;
   }
 
   // Takes `things` away.
@@ -138,23 +164,34 @@ export class Placed {
 
   // Takes `before` away and places `after` in their stead, as one change.
   swap(before, after) {
+    const problem = this.tagCaves(after);
+    if (problem) return this.onRefuse(problem);
     for (const thing of before) this.remove(thing);
     for (const thing of after) this.add(thing);
     this.kept({ added: after, removed: before });
   }
 
-  // Changes `things` with change(thing), kept with the plates they're in after. Changes made
-  // together (`join`) undo as one, as for a drag.
+  // Changes `things` with change(copy, thing), made on a copy of each, kept with the plates they're in after. Changes made
+  // together (`join`) undo as one, as for a drag. A change that would put one where it can't be,
+  // in a cave, isn't made.
   alter(things, change, join = false) {
     if (!things.length) return;
+    const changed = things.map((thing) => {
+      const copy = structuredClone(thing);
+      change(copy, thing);
+      return copy;
+    });
+    const problem = this.tagCaves(changed);
+    if (problem) return this.onRefuse(problem);
     const last = this.undos.at(-1);
     const entry = join && last?.altered ? last : { altered: new Map() };
-    for (const thing of things) {
+    things.forEach((thing, i) => {
       if (!entry.altered.has(thing)) entry.altered.set(thing, structuredClone(thing));
       this.remove(thing);
-      change(thing);
+      for (const key of Object.keys(thing)) delete thing[key];
+      Object.assign(thing, changed[i]);
       this.add(thing);
-    }
+    });
     if (entry === last) this.version++;
     else this.kept(entry);
   }

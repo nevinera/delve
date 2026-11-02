@@ -1,11 +1,13 @@
 import * as THREE from "three";
 import { VOXEL_FT } from "../v2/caves.js";
+import { slabHome } from "../world/slabs.js";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
 import { PICK_PX } from "./areas.js";
 import { Biomes } from "./biomes.js";
 import { Courses } from "./courses.js";
 import { CELLS, SHAPES, TURNS, noiseBrush, pullBrush, raiseBrush } from "./geo.js";
 import { EMPTY_FT } from "./ground.js";
+import { isSlab } from "./placed.js";
 import { Draw } from "./draw.js";
 import { Marks } from "./marks.js";
 import { scatterPools } from "./marsh.js";
@@ -140,6 +142,13 @@ export class Tools {
     this.plan = new CavePlan({ scene, camera, canvas, layout, caves, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, here: () => [builder.state.x, builder.state.y, builder.state.z] });
     builder.wheel = (e) => PLANS.has(this.tool) && this.plan.wheel(e);
     this.polish = new CavePolish({ scene, caves, layout, camera, ray: () => this.build.ray() });
+    // A thing under the ground in a cave network's chunk is that network's, and goes there only
+    // while it's being polished.
+    placed.caveOf = (thing) => {
+      const [x, y, z] = isSlab(thing) ? slabHome(thing) : [thing.at[0], thing.y, thing.at[1]];
+      return Number.isFinite(y) && y < (renditions.heightAt(x, z) ?? EMPTY_FT) ? caves.netAt(x, z) : null;
+    };
+    placed.caveProblem = (net) => (layout.locked(net) ? null : `${net} is still in layout; you can't add objects until it's being polished`);
     // Unlocking a network throws away its hand edits, and what's placed in it.
     this.plan.onUnlock = (net) => {
       this.polish.undos = [];

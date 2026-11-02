@@ -170,5 +170,6 @@ describe("caves", () => {
     // The next chunk over's free.
     expect(caves.dig({ kind: "box", at: [50, -60, 10], half: [4, 4, 4], yaw: 0 }, { net: "b" })).toBe(true);
     expect(caves.refused).toBe(null);
+    expect([caves.netAt(31, 31), caves.netAt(33, 5), caves.netAt(70, 5)]).toEqual(["a", "b", null]);
   });
 });

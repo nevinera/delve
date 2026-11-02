@@ -275,6 +275,17 @@ export class Caves {
     return true;
   }
 
+  // The network whose 32 ft chunk (x, z) is in, or null where none has one.
+  netAt(x, z) {
+    const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
+    const columns = this.tiles.get(`${tx},${tz}`);
+    if (!columns) return null;
+    const n = CHUNK_FT / VOXEL_FT;
+    const [i0, j0] = [Math.floor((x - tx * TILE_FT) / CHUNK_FT) * n, Math.floor((z - tz * TILE_FT) / CHUNK_FT) * n];
+    for (let j = j0; j < j0 + n; j++) for (let i = i0; i < i0 + n; i++) if (columns[j * TILE_COLUMNS + i]?.length) return columns[j * TILE_COLUMNS + i][0].net;
+    return null;
+  }
+
   // Why tiles `changed` can't stay as they are, or null: a chunk shared by networks that wasn't
   // shared in `before`.
   shareProblem(changed, before) {

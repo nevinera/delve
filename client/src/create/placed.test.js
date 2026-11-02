@@ -44,6 +44,24 @@ describe("placed things", () => {
     expect(placed.unsavedFiles("main").size).toBe(1);
   });
 
+  it("tags things with the cave network they're moved into, and refuses one still in layout", () => {
+    const placed = new Placed();
+    const said = [];
+    // Under ground west of x = 100 is polished-hollow's; east of x = 200, raw-hollow's, still in layout.
+    placed.caveOf = (o) => (o.y < 0 ? (o.at[0] < 100 ? "polished-hollow" : o.at[0] > 200 ? "raw-hollow" : null) : null);
+    placed.caveProblem = (net) => (net === "raw-hollow" ? "raw-hollow is still in layout" : null);
+    placed.onRefuse = (text) => said.push(text);
+    const rock = { ...boulder(10, 10), y: -40 };
+    expect(placed.put([rock])).toBe(true);
+    expect(rock.cave).toBe("polished-hollow");
+    placed.alter([rock], (o) => (o.at = [150, 10]));
+    expect(rock.cave).toBe(undefined);
+    placed.alter([rock], (o) => (o.at = [250, 10]));
+    expect(rock.at).toEqual([150, 10]);
+    expect(said).toEqual(["raw-hollow is still in layout"]);
+    expect(placed.put([{ ...boulder(250, 10), y: -40 }])).toBe(false);
+  });
+
   it("moves a thing to the plate it's moved into, and undoes changes in turn", () => {
     const placed = new Placed();
     const rock = boulder(10, 10);
