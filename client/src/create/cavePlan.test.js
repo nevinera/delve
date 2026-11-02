@@ -7,7 +7,8 @@ describe("cave passage tool", () => {
     const layout = new Layout();
     const [a, b, c, d] = [0, 32, 64, 96].map((x) => layout.addPoint("n", [x, -60, 0]));
     const [ab, bc, cd] = [[a, b], [b, c], [c, d]].map(([p, q]) => layout.addSegment("n", p.id, q.id));
-    const tooClose = (from, to) => CavePlan.prototype.tooClose.call({ layout }, { id: from }, { id: to });
+    const plan = { layout, closeTo: CavePlan.prototype.closeTo };
+    const tooClose = (from, to) => CavePlan.prototype.tooClose.call(plan, { id: from }, { id: to });
     expect(tooClose(a.id, c.id)).toBe(true);
     expect(tooClose(a.id, d.id)).toBe(false);
     // A spot on a segment is a point a link from each of its ends.

@@ -4,7 +4,8 @@ import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { NET_SLUG } from "../v2/caves.js";
 import { CAMERA } from "./builder.js";
-import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, EXCLUSIVE, carvePlan, configOf, entranceEnd, entranceProblem, entranceRing, fits, mouthBehind, passageWarnings, segmentShapes, steep } from "./caveLayout.js";
+import { reachOf } from "./caveQualities.js";
+import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, ROCK_FT, EXCLUSIVE, carvePlan, configOf, entranceEnd, entranceProblem, entranceRing, fits, mouthBehind, passageWarnings, segmentShapes, steep } from "./caveLayout.js";
 
 // The caves' layout tools (caveLayout.js). Entrance, from above the ground, places an entrance
 // held where the pointer meets it, HOLD_FT in from its mouth: a tube into the hillside, facing the
@@ -49,7 +50,6 @@ const UNDOS = 100;
 const REACH_FT = [8, 32, 96]; // how far past you a passage reaches: least, at first, most
 const REACH_STEP_FT = 4;
 const LEVEL_RAD = 0.06; // how far either way of straight ahead a passage aimed is level
-const SNAP_FT = 12; // how near another passage a passage aimed snaps to it
 const NEW = ""; // the network picker's value for a new network
 const $ = (id) => document.getElementById(id);
 
@@ -385,13 +385,15 @@ export class CavePlan {
     let up = Math.asin(ray.direction.y) + CAMERA.pitch;
     if (Math.abs(up) < LEVEL_RAD) up = 0;
     let at = here.map((v, k) => v + this.reach * [Math.sin(yaw) * Math.cos(up), Math.sin(up), Math.cos(yaw) * Math.cos(up)][k]);
-    // Near another passage, to it, but not back along where it goes on from.
-    const skip = new Set([from.id]);
-    for (const s of this.layout.segments.values()) if (s.from === from.id || s.to === from.id) skip.add(s.id);
-    let to = this.layout.nearest(from.net, at, skip);
-    if (to && to.d <= SNAP_FT && Math.hypot(...to.at.map((v, k) => v - from.at[k])) > JOIN_FT) at = to.at;
-    else to = null;
+    // Near enough another passage that there'd be less than ROCK_FT of rock between them, to it,
+    // but not to the passages within two links of where it goes on from.
     const start = configNear(this.layout, from);
+    const skip = new Set([from.id]);
+    const close = this.closeTo(from);
+    for (const id of [...this.layout.points.keys(), ...this.layout.segments.keys()]) if (close({ id })) skip.add(id);
+    let to = this.layout.nearest(from.net, at, skip);
+    if (to && to.d < sizeFt(start, 0) + sizeFt(configNear(this.layout, to), lengthOf(this.layout, to)) + ROCK_FT && Math.hypot(...to.at.map((v, k) => v - from.at[k])) > JOIN_FT) at = to.at;
+    else to = null;
     const ends = [{ ...start, at: from.at }, { ...start, at }];
     const length = Math.hypot(...at.map((v, k) => v - from.at[k]));
     const problem =
@@ -407,14 +409,18 @@ export class CavePlan {
   // nearest gives them) would join points within two links of each other. A spot on a segment
   // becomes a point a link from each of its ends.
   tooClose(from, to) {
+    return this.closeTo(from)(to);
+  }
+
+  // tooClose for passages from `from`, as a test of where they go to, worked out once.
+  closeTo(from) {
     const ends = (spot) => {
       const segment = this.layout.segments.get(spot.id);
       return segment ? [segment.from, segment.to] : [spot.id];
     };
-    const steps = 2 - this.layout.segments.has(from.id) - this.layout.segments.has(to.id);
-    if (steps < 0) return false;
-    const near = new Set(this.layout.around(ends(from), steps));
-    return ends(to).some((id) => near.has(id));
+    const steps = 2 - this.layout.segments.has(from.id);
+    const near = [steps - 1, steps].map((n) => new Set(n < 0 ? [] : this.layout.around(ends(from), n)));
+    return (to) => ends(to).some((id) => near[this.layout.segments.has(to.id) ? 0 : 1].has(id));
   }
 
   wheel(e) {
@@ -587,6 +593,17 @@ export class CavePlan {
 
 // The config of the point a passage from spot `spot` (Layout's nearest) goes on from: the point's,
 // or on a segment, its nearer end's.
+// How far a passage with `config`, along a segment `length` ft long, reaches from its line.
+const sizeFt = (config, length) => Math.max(config.width, config.height) / 2 + reachOf(config, length);
+
+// How long the segment spot `spot` is on is, or 0 for a point.
+function lengthOf(layout, spot) {
+  const segment = layout.segments.get(spot.id);
+  if (!segment) return 0;
+  const [a, b] = [segment.from, segment.to].map((id) => layout.points.get(id).at);
+  return Math.hypot(...b.map((v, k) => v - a[k]));
+}
+
 function configNear(layout, spot) {
   const segment = layout.segments.get(spot.id);
   if (!segment) return configOf(layout.points.get(spot.id));
