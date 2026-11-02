@@ -51,11 +51,16 @@ export class Caves {
     this.lineMaterial = new THREE.LineBasicMaterial({ color: LINE_RGB, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
     this.onMouths = null; // (plate keys) => void, when the ground at mouths changes
     this.entranceCells = new Set(); // "ci,cj" of ground cells entrances reach into, left out of the ground
-    // For now, the rock's open edges at entrances, where its surface ends, in orange.
-    this.ends = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xff8c1a, depthTest: false, transparent: true }));
-    this.ends.renderOrder = 14;
-    this.ends.frustumCulled = false;
-    scene.add(this.ends);
+    // For now, where surfaces end at entrances: the rock's open edges in orange, the ground's in
+    // teal. groundMesh(tx, tz): a tile's ground mesh drawn in full, or null.
+    this.groundMesh = null;
+    this.ends = [0xff8c1a, 0x1ad1c4].map((color) => {
+      const lines = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color, depthTest: false, transparent: true }));
+      lines.renderOrder = 14;
+      lines.frustumCulled = false;
+      scene.add(lines);
+      return lines;
+    });
     this.endsMade = null; // what the ends were found from
     this.world = {
       spans: (ci, cj) => this.spans(ci, cj),
@@ -289,28 +294,30 @@ export class Caves {
     }
   }
 
-  // Finds the rock's open edges in the tiles entrances reach into, once their meshes are made,
-  // reading the meshes round them too so seams between tiles aren't taken for ends.
+  // Finds the rock's and the ground's open edges in the tiles entrances reach into, once their
+  // meshes are made, reading the meshes round them too so seams between tiles aren't taken for
+  // ends.
   findEnds() {
     const core = new Set([...this.entranceCells].map((key) => key.split(",").map((v) => Math.floor(Number(v) / TILE_CELLS)).join(",")));
-    const made = `${this.version} ${[...core].sort()} ${[...this.meshes.keys()].filter((key) => this.meshes.get(key)).length}`;
+    const round = [...core].flatMap((key) => {
+      const [tx, tz] = key.split(",").map(Number);
+      return [-1, 0, 1].flatMap((dz) => [-1, 0, 1].map((dx) => [tx + dx, tz + dz]));
+    });
+    const sets = [(tx, tz) => this.meshes.get(`${tx},${tz}`), (tx, tz) => this.groundMesh?.(tx, tz)].map((meshAt) => [...new Set(round.map(([tx, tz]) => meshAt(tx, tz)).filter(Boolean))]);
+    const made = `${[...core].sort()} ${sets.flat().map((mesh) => mesh.geometry.uuid)}`;
     if (made === this.endsMade) return;
     this.endsMade = made;
-    const meshes = [];
-    for (const key of core) {
-      const [tx, tz] = key.split(",").map(Number);
-      for (let dz = -1; dz <= 1; dz++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          const mesh = this.meshes.get(`${tx + dx},${tz + dz}`);
-          if (!mesh || meshes.some((m) => m.mesh === mesh)) continue;
-          meshes.push({ mesh, positions: mesh.geometry.attributes.position.array, indices: mesh.geometry.index.array, offset: [mesh.position.x, 0, mesh.position.z] });
-        }
-      }
-    }
     const inCore = (a, b) => core.has(`${Math.floor((a[0] + b[0]) / 2 / TILE_FT)},${Math.floor((a[2] + b[2]) / 2 / TILE_FT)}`);
-    this.ends.geometry.dispose();
-    this.ends.geometry = new THREE.BufferGeometry();
-    this.ends.geometry.setAttribute("position", new THREE.Float32BufferAttribute(openEdges(meshes, inCore), 3));
+    sets.forEach((meshes, k) => {
+      const data = meshes.map((mesh) => {
+        mesh.updateMatrixWorld();
+        const positions = mesh.geometry.attributes.position.clone().applyMatrix4(mesh.matrixWorld).array;
+        return { positions, indices: mesh.geometry.index.array, offset: [0, 0, 0] };
+      });
+      this.ends[k].geometry.dispose();
+      this.ends[k].geometry = new THREE.BufferGeometry();
+      this.ends[k].geometry.setAttribute("position", new THREE.Float32BufferAttribute(openEdges(data, inCore), 3));
+    });
   }
 
   // Draws the grid, if it's shown, over what `renderer` drew last, hidden only by `over` (an

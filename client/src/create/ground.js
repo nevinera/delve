@@ -1496,6 +1496,12 @@ export class Ground {
     });
   }
 
+  // Tile (tx, tz)'s mesh where it's drawn in full, or null.
+  fullMesh(tx, tz) {
+    const group = this.plates.get(`${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`);
+    return group?.children.find((mesh) => mesh.userData.kind === "full" && mesh.userData.tile === `${tx},${tz}`) ?? null;
+  }
+
   drop(key) {
     const object = this.plates.get(key);
     if (!object) return;
