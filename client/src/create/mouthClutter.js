@@ -8,10 +8,11 @@ import { TILE_FT } from "../v2/sizes.js";
 // (caveMesh.js), never stored, so it's the same every time it's drawn. Each face of the mesh is
 // ground or hill face (the ground the caves draw round a mouth, flat or steep), or floor, wall or
 // ceiling (the rock, by the way it faces), and each rule puts `per` of a kind on each 100 sq ft of
-// one of those at the lip, fewer further off, none past `reach` ft, in `biomes` where it says.
+// one of those ("earth" for ground or hill face) at the lip, fewer further off, none past `reach` ft, in `biomes` where it says.
 // Vines go one of VINES ways for each entrance, by a hash of it: loops along its roof, or strands
 // down one side, or over one corner, all from the upper part of the mouth ("upper": its walls and
-// roof over halfway up).
+// roof over halfway up). Most entrances, by the hash, have bushes or ferns by one side of their
+// base (`flank`).
 
 const RULES = [
   { kind: "pebble", on: "ground", per: 12, reach: 10 },
@@ -24,12 +25,17 @@ const RULES = [
   { kind: "twig", on: "floor", per: 2, reach: 8, biomes: ["forest", "swamp"] },
   { kind: "crag", on: "wall", per: 8, reach: 6 },
   { kind: "crag", on: "ceiling", per: 1.5, reach: 4 },
-  { kind: "vineLoop", on: "upper", per: 10, reach: 5, biomes: ["forest", "swamp"], vines: "loops" },
-  { kind: "vine", on: "upper", per: 16, reach: 5, biomes: ["forest", "swamp"], vines: "side" },
-  { kind: "vine", on: "upper", per: 24, reach: 4, biomes: ["forest", "swamp"], vines: "corner" },
+  { kind: "bush", on: "earth", per: 10, reach: 9, biomes: ["plains", "forest"], flank: true },
+  { kind: "fern", on: "earth", per: 14, reach: 9, biomes: ["forest"], flank: true },
+  { kind: "swampFern", on: "earth", per: 10, reach: 9, biomes: ["swamp"], flank: true },
+  { kind: "vineLoop", on: "upper", per: 12, reach: 5, biomes: ["forest", "swamp"], vines: "loops" },
+  { kind: "vine", on: "upper", per: 20, reach: 5, biomes: ["forest", "swamp"], vines: "side" },
+  { kind: "vine", on: "upper", per: 28, reach: 4, biomes: ["forest", "swamp"], vines: "corner" },
 ];
 const VINES = ["loops", "side", "corner"];
 const HANGS = new Set(["vineLoop", "vine"]); // kinds that hang straight down, whichever way their face looks
+const STANDS = new Set(["bush", "fern", "swampFern"]); // and that grow straight up
+const UP = [0, 1, 0];
 const SEED = 0x6d6f7574;
 const DOWN = [0, -1, 0];
 
@@ -59,8 +65,9 @@ export function mouthClutter(tx, tz, mesh, { entrances, biomeAt }) {
     if (!best) return null;
     const { e } = best;
     const a = (e.yaw * Math.PI) / 180;
-    const hash = [...e.id].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 0x01000193), 0x811c9dc5);
-    return { e, vines: VINES[(hash >>> 0) % VINES.length], side: hash & 0x10000 ? 1 : -1, right: [Math.cos(a), -Math.sin(a)] };
+    const id = [...e.id].reduce((h, c) => Math.imul(h ^ c.charCodeAt(0), 0x01000193), 0x811c9dc5);
+    const roll = (q) => hash2(id, q, SEED);
+    return { e, vines: VINES[Math.floor(roll(0) * VINES.length)], side: roll(1) < 0.5 ? 1 : -1, flank: roll(2) < 2 / 3 ? (roll(3) < 0.5 ? 1 : -1) : 0, right: [Math.cos(a), -Math.sin(a)] };
   };
   const out = [];
   const place = (positions, indices, surface) => {
@@ -83,7 +90,8 @@ export function mouthClutter(tx, tz, mesh, { entrances, biomeAt }) {
       RULES.forEach((rule, r) => {
         if (near > rule.reach || (rule.biomes && !rule.biomes.includes(biome))) return;
         if (rule.vines && !vinesHere(rule, entrance, middle, normal)) return;
-        if (rule.on !== on && !(rule.on === "upper" && (on === "wall" || on === "ceiling"))) return;
+        if (rule.flank && !flankHere(entrance, middle)) return;
+        if (rule.on !== on && !(rule.on === "upper" && (on === "wall" || on === "ceiling")) && !(rule.on === "earth" && (on === "ground" || on === "face"))) return;
         const per = (rule.per * area * (1 - near / rule.reach)) / 100;
         const roll = (m, q) => hash2(qi, qj, SEED ^ Math.imul(r * 1024 + m * 32 + q + 1, 0x2545f491));
         const count = Math.floor(per) + (roll(0, 0) < per % 1 ? 1 : 0);
@@ -100,7 +108,7 @@ export function mouthClutter(tx, tz, mesh, { entrances, biomeAt }) {
             z: at[2],
             yaw: roll(m, 3) * Math.PI * 2,
             scale: spec.size[0] + (spec.size[1] - spec.size[0]) * roll(m, 4),
-            normal: HANGS.has(rule.kind) ? DOWN : normal,
+            normal: HANGS.has(rule.kind) ? DOWN : STANDS.has(rule.kind) ? UP : normal,
             colors: spec.parts.map((part, p) => (part.chance !== undefined && roll(m, 5 + p * 4) >= part.chance ? null : colorIn(part.colors, (q) => roll(m, 6 + p * 4 + q)))),
           });
         }
@@ -123,4 +131,13 @@ function vinesHere(rule, entrance, middle, normal) {
   if (rule.vines === "loops") return true;
   const across = ((middle[0] - e.mouth[0]) * right[0] + (middle[2] - e.mouth[2]) * right[1]) / (e.width / 2);
   return rule.vines === "side" ? across * side > 0.3 : across * side > 0.4 && up > 0.6;
+}
+
+// Whether `middle` is by the side of its nearest entrance's base that its bushes and ferns grow
+// on, where it has them.
+function flankHere(entrance, middle) {
+  if (!entrance?.e.mouth || !entrance.flank) return false;
+  const { e, right, flank } = entrance;
+  const across = ((middle[0] - e.mouth[0]) * right[0] + (middle[2] - e.mouth[2]) * right[1]) / (e.width / 2);
+  return (middle[1] - e.mouth[1]) / e.width < 0.5 && across * flank > 0.4;
 }
