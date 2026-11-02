@@ -140,6 +140,21 @@ export class Caves {
     return cells;
   }
 
+  // After plate `key`'s ("px,pz") ground is read at cell scale: the bands and rock of the tiles in
+  // it and beside it are worked out again, as where caves open through the ground, and how the
+  // rock meets it there, depends on its height, which was coarser before.
+  groundRead(key) {
+    const [px, pz] = key.split(",").map(Number);
+    const [x0, z0] = [px * PLATE_TILES - 1, pz * PLATE_TILES - 1];
+    const [x1, z1] = [(px + 1) * PLATE_TILES, (pz + 1) * PLATE_TILES];
+    for (const tile of this.meshes.keys()) {
+      const [tx, tz] = tile.split(",").map(Number);
+      if (tx < x0 || tx > x1 || tz < z0 || tz > z1) continue;
+      this.bands.delete(tile);
+      this.stale.add(tile);
+    }
+  }
+
   // Tile (tx, tz)'s ground cells that the ground leaves out, as a Set of indices, or null for none:
   // the band round mouths, once the caves have drawn the ground there.
   holes(tx, tz) {

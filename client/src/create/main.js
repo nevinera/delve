@@ -188,6 +188,12 @@ function start(world, changes, fresh) {
   const layoutBytes = world.files.get(layoutPath(continent));
   const layout = new Layout(layoutBytes ? JSON.parse(strFromU8(layoutBytes)) : null);
   ground.holes = (tx, tz) => caves.holes(tx, tz);
+  // Where caves open through the ground depends on its height, which is finer once a plate's read.
+  const groundRead = renditions.onRead;
+  renditions.onRead = (key) => {
+    groundRead(key);
+    caves.groundRead(key);
+  };
   caves.onMouths = (plates) => ground.refresh(plates);
   caves.groundMaterial = (tx, tz) => ground.fullMesh(tx, tz)?.material ?? null;
   const things = new Things(scene, placed, (x, z, under) => caves.groundAt(x, z, under));

@@ -54,8 +54,8 @@ const CHUNK_CELLS_HALF = CHUNK_CELLS / 2;
 const SHORE_CELLS = 4; // how far from water ground can be shore
 
 // A continent's renditions, from its platter files, and its ground at cell scale, from its plate
-// files, read on a worker (plateWorker.js) as they're wanted. onRead() is called each time a plate
-// file has been read. The ground moved by hand (raise) is moved in the renditions and the plate
+// files, read on a worker (plateWorker.js) as they're wanted. onRead(key) is called each time a
+// plate file ("px,pz") has been read. The ground moved by hand (raise) is moved in the renditions and the plate
 // files read, and kept as offsets, to move plate files read later. Where there are no tiles, the
 // sea floor's flat at EMPTY_FT, and moving it makes tiles there.
 export class Renditions {
@@ -703,7 +703,7 @@ export class Renditions {
     this.offset(key, plate);
     this.keep(key, plate);
     this.checkShores(key);
-    this.onRead();
+    this.onRead(key);
   }
 
   // Keeps a read plate file, the latest used last, dropping the least lately used past KEEP_PLATES.
