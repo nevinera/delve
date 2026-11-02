@@ -309,3 +309,29 @@ const CUBE_EDGES = [
   [0, 2], [1, 3], [4, 6], [5, 7], // along z
   [0, 4], [1, 5], [2, 6], [3, 7], // up
 ];
+
+// The edges of some meshes' triangles that only one triangle has: where the rock's surface ends,
+// as at a cave's mouth. Each mesh is { positions, indices, offset: [x, y, z] }, and meshes that
+// meet share their edges, so seams between tiles aren't ends. keep(a, b): whether to give the
+// edge between continent feet points a and b. Gives segments, [x, y, z, x, y, z] after another.
+export function openEdges(meshes, keep = () => true) {
+  const key = (p) => p.map((v) => Math.round(v * 100)).join(",");
+  const edges = new Map(); // "a|b", ends sorted -> { a, b, count }
+  for (const { positions, indices, offset } of meshes) {
+    const at = (i) => [positions[i * 3] + offset[0], positions[i * 3 + 1] + offset[1], positions[i * 3 + 2] + offset[2]];
+    for (let t = 0; t < indices.length; t += 3) {
+      for (let k = 0; k < 3; k++) {
+        const [a, b] = [at(indices[t + k]), at(indices[t + ((k + 1) % 3)])];
+        const [ka, kb] = [key(a), key(b)];
+        if (ka === kb) continue;
+        const id = ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`;
+        const found = edges.get(id);
+        if (found) found.count++;
+        else edges.set(id, { a, b, count: 1 });
+      }
+    }
+  }
+  const out = [];
+  for (const { a, b, count } of edges.values()) if (count === 1 && keep(a, b)) out.push(...a, ...b);
+  return out;
+}

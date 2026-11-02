@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { TILE_CELLS, carve, cavesPath, growCave, smoothCave, emptyColumns, fillRock, openAir } from "../v2/caves.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
-import { caveMesh, mouthCells } from "./caveMesh.js";
+import { caveMesh, mouthCells, openEdges } from "./caveMesh.js";
 import { Caves } from "./caves.js";
 
 // Flat ground at `height`, everywhere, with its cells all one color.
@@ -162,5 +162,15 @@ describe("caves", () => {
     const at = caves.hit(new THREE.Ray(new THREE.Vector3(128, 20, 128), new THREE.Vector3(0, -1, 0)));
     expect(at[1]).toBeCloseTo(0, 1);
     expect(TILE_FT / CELL_FT).toBe(TILE_CELLS);
+  });
+});
+
+describe("open edges", () => {
+  it("finds the edges only one triangle has, across meshes that meet", () => {
+    const a = { positions: [0, 0, 0, 1, 0, 0, 0, 0, 1], indices: [0, 1, 2], offset: [0, 0, 0] };
+    expect(openEdges([a]).length / 6).toBe(3);
+    // A second triangle in another mesh, sharing the edge from (1, 0, 0) to (0, 0, 1).
+    const b = { positions: [0, 0, 0, 0, 0, -1, -1, 0, 0], indices: [0, 1, 2], offset: [1, 0, 1] };
+    expect(openEdges([a, b]).length / 6).toBe(4);
   });
 });

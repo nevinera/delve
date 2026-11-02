@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { CAVES_PATH, TILE_CELLS, allStone, carve, cavesPath, growCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
 import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial, setBrush } from "./caveMaterial.js";
-import { caveMesh, opensAt } from "./caveMesh.js";
+import { caveMesh, openEdges, opensAt } from "./caveMesh.js";
 import { EMPTY_FT, FULL_TILES } from "./ground.js";
 
 export { CAVES_PATH };
@@ -51,6 +51,12 @@ export class Caves {
     this.lineMaterial = new THREE.LineBasicMaterial({ color: LINE_RGB, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
     this.onMouths = null; // (plate keys) => void, when the ground at mouths changes
     this.entranceCells = new Set(); // "ci,cj" of ground cells entrances reach into, left out of the ground
+    // For now, the rock's open edges at entrances, where its surface ends, in orange.
+    this.ends = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: 0xff8c1a, depthTest: false, transparent: true }));
+    this.ends.renderOrder = 14;
+    this.ends.frustumCulled = false;
+    scene.add(this.ends);
+    this.endsMade = null; // what the ends were found from
     this.world = {
       spans: (ci, cj) => this.spans(ci, cj),
       ground: (ci, cj) => this.groundCell(ci, cj),
@@ -270,7 +276,7 @@ export class Caves {
       this.meshes.delete(key);
     }
     const todo = [...wanted].filter((key) => near(key) && (!this.meshes.has(key) || this.stale.has(key)));
-    if (!todo.length) return;
+    if (!todo.length) return this.findEnds();
     const distance = (key) => {
       const [tx, tz] = key.split(",").map(Number);
       return Math.hypot(tx + 0.5 - x / TILE_FT, tz + 0.5 - z / TILE_FT);
@@ -281,6 +287,30 @@ export class Caves {
       if (performance.now() - start > BUILD_MS) break;
       this.make(key);
     }
+  }
+
+  // Finds the rock's open edges in the tiles entrances reach into, once their meshes are made,
+  // reading the meshes round them too so seams between tiles aren't taken for ends.
+  findEnds() {
+    const core = new Set([...this.entranceCells].map((key) => key.split(",").map((v) => Math.floor(Number(v) / TILE_CELLS)).join(",")));
+    const made = `${this.version} ${[...core].sort()} ${[...this.meshes.keys()].filter((key) => this.meshes.get(key)).length}`;
+    if (made === this.endsMade) return;
+    this.endsMade = made;
+    const meshes = [];
+    for (const key of core) {
+      const [tx, tz] = key.split(",").map(Number);
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dx = -1; dx <= 1; dx++) {
+          const mesh = this.meshes.get(`${tx + dx},${tz + dz}`);
+          if (!mesh || meshes.some((m) => m.mesh === mesh)) continue;
+          meshes.push({ mesh, positions: mesh.geometry.attributes.position.array, indices: mesh.geometry.index.array, offset: [mesh.position.x, 0, mesh.position.z] });
+        }
+      }
+    }
+    const inCore = (a, b) => core.has(`${Math.floor((a[0] + b[0]) / 2 / TILE_FT)},${Math.floor((a[2] + b[2]) / 2 / TILE_FT)}`);
+    this.ends.geometry.dispose();
+    this.ends.geometry = new THREE.BufferGeometry();
+    this.ends.geometry.setAttribute("position", new THREE.Float32BufferAttribute(openEdges(meshes, inCore), 3));
   }
 
   // Draws the grid, if it's shown, over what `renderer` drew last, hidden only by `over` (an
