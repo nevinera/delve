@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { CAVES_PATH, TILE_CELLS, allStone, carve, cavesPath, growCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
 import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial, setBrush } from "./caveMaterial.js";
-import { caveMesh, cutMesh, fitPlane, joinedPieces, openEdges, opensAt } from "./caveMesh.js";
+import { caveMesh, chains, cutMesh, fitPlane, joinedPieces, openEdges, opensAt, stitch } from "./caveMesh.js";
 import { EMPTY_FT, FULL_TILES } from "./ground.js";
 
 export { CAVES_PATH };
@@ -66,6 +66,10 @@ export class Caves {
     this.mouths = []; // the entrances' mouths, continent feet
     this.cuts = []; // where the rock's cut back at entrances (cutBack)
     this.seams = new Map(); // "tx,tz" -> the segments along a tile's cuts
+    // The ground joined to the rock at each entrance, from the ground's opening (teal) to the
+    // rock's cut (pink), colored and drawn as the ground is.
+    this.joins = new THREE.Group();
+    scene.add(this.joins);
     this.world = {
       spans: (ci, cj) => this.spans(ci, cj),
       ground: (ci, cj) => this.groundCell(ci, cj),
@@ -353,6 +357,45 @@ export class Caves {
     this.ends[2].geometry.dispose();
     this.ends[2].geometry = new THREE.BufferGeometry();
     this.ends[2].geometry.setAttribute("position", new THREE.Float32BufferAttribute(seams, 3));
+    this.join(cuts, chains(segments), chains(seams));
+  }
+
+  // Joins each entrance's ground opening to its rock's cut (stitch), for each cut the opening and
+  // the cut nearest it, in the ground's colors and its tile's material.
+  join(cuts, openings, seams) {
+    for (const child of [...this.joins.children]) {
+      this.joins.remove(child);
+      child.geometry.dispose();
+    }
+    const middle = (line) => [0, 1, 2].map((k) => line.reduce((sum, p) => sum + p[k], 0) / line.length);
+    const nearest = (lines, at) => lines.reduce((best, line) => (!best || Math.hypot(...middle(line).map((v, k) => v - at[k])) < Math.hypot(...middle(best).map((v, k) => v - at[k])) ? line : best), null);
+    for (const cut of cuts) {
+      const [opening, seam] = [nearest(openings, cut.center), nearest(seams, cut.center)];
+      const ground = this.groundMesh?.(Math.floor(cut.center[0] / TILE_FT), Math.floor(cut.center[2] / TILE_FT));
+      if (!opening || !seam || !ground) continue;
+      const { positions, indices } = stitch(opening, seam, cut);
+      const colors = [];
+      for (let i = 0; i < positions.length; i += 3) colors.push(...this.groundColor(positions[i], positions[i + 2]));
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+      geometry.setAttribute("color", new THREE.Float32BufferAttribute(colors, 3));
+      geometry.setIndex(indices);
+      geometry.computeVertexNormals();
+      this.joins.add(new THREE.Mesh(geometry, ground.material));
+    }
+  }
+
+  // The ground's color at (x, z), linear, as the ground's drawn: its cell's.
+  groundColor(x, z) {
+    const [ci, cj] = [Math.floor(x / CELL_FT), Math.floor(z / CELL_FT)];
+    const [tx, tz] = [Math.floor(ci / TILE_CELLS), Math.floor(cj / TILE_CELLS)];
+    const cells = this.renditions.cells(tx, tz);
+    if (!cells?.colors) return [0.2, 0.2, 0.2];
+    const k = ((cj - tz * TILE_CELLS) * TILE_CELLS + ci - tx * TILE_CELLS) * 3;
+    return [0, 1, 2].map((m) => {
+      const v = cells.colors[k + m] / 255;
+      return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+    });
   }
 
   // Draws the grid, if it's shown, over what `renderer` drew last, hidden only by `over` (an

@@ -458,3 +458,85 @@ export function cutMesh({ positions, colors, themes, indices }, cut, offset, { m
   }
   return { mesh: { positions: Float32Array.from(P), colors: Float32Array.from(C), themes: Float32Array.from(T), indices: Uint32Array.from(out) }, seam };
 }
+
+// Segments ([x, y, z, x, y, z] after another) walked into the lines they join up into, each its
+// points in order: round and back to its start where it closes (the start not given twice).
+export function chains(segments) {
+  const key = (p) => p.map((v) => Math.round(v * 100)).join(",");
+  const points = new Map();
+  const next = new Map(); // key -> keys joined to it
+  for (let i = 0; i < segments.length; i += 6) {
+    const [a, b] = [segments.slice(i, i + 3), segments.slice(i + 3, i + 6)];
+    const [ka, kb] = [key(a), key(b)];
+    if (ka === kb) continue;
+    points.set(ka, Array.from(a));
+    points.set(kb, Array.from(b));
+    for (const [k, other] of [[ka, kb], [kb, ka]]) next.set(k, [...(next.get(k) ?? []), other]);
+  }
+  const walked = new Set();
+  const out = [];
+  // Open lines from their ends first, then what's left, which closes.
+  const starts = [...next.keys()].sort((a, b) => next.get(a).length - next.get(b).length);
+  for (const start of starts) {
+    if (walked.has(start)) continue;
+    const line = [];
+    let at = start;
+    while (at && !walked.has(at)) {
+      walked.add(at);
+      line.push(points.get(at));
+      at = next.get(at).find((k) => !walked.has(k));
+    }
+    if (line.length > 1) out.push(line);
+  }
+  return out;
+}
+
+// Triangles joining two lines of points round the same opening, each closing on itself, as
+// { positions, indices }, continent feet: both turned to run the same way round the plane
+// (fitPlane's) and to start across from each other, then zipped together, going on along
+// whichever is behind for how far round it's come. Faces look toward the plane's normal.
+export function stitch(first, second, { center, normal, across, along }) {
+  const flat = (p) => [0, 1].map((k) => [across, along][k].reduce((sum, v, i) => sum + v * (p[i] - center[i]), 0));
+  const area = (line) => line.reduce((sum, p, i) => {
+    const [a, b] = [flat(p), flat(line[(i + 1) % line.length])];
+    return sum + a[0] * b[1] - b[0] * a[1];
+  }, 0);
+  const angle = (p) => Math.atan2(...flat(p).reverse());
+  // The same way round, each starting where it's nearest angle 0.
+  const turned = (line) => {
+    const run = area(line) < 0 ? [...line].reverse() : line;
+    const start = run.reduce((best, p, i) => (Math.abs(angle(p)) < Math.abs(angle(run[best])) ? i : best), 0);
+    return [...run.slice(start), ...run.slice(0, start)];
+  };
+  const [a, b] = [turned(first), turned(second)];
+  // How far round each point is, as a share of the way.
+  const shares = (line) => {
+    const steps = line.map((p, i) => Math.hypot(...p.map((v, k) => v - line[(i + 1) % line.length][k])));
+    const total = steps.reduce((sum, v) => sum + v, 0) || 1;
+    let done = 0;
+    return [...line.map((_, i) => (i ? (done += steps[i - 1]) : 0) / total), 1];
+  };
+  const [sa, sb] = [shares(a), shares(b)];
+  const positions = [...a.flat(), ...b.flat()];
+  const indices = [];
+  const face = (i, j, k) => {
+    const p = [i, j, k].map((n) => positions.slice(n * 3, n * 3 + 3));
+    const [u, v] = [p[1].map((x, m) => x - p[0][m]), p[2].map((x, m) => x - p[0][m])];
+    const n = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+    if (n[0] * normal[0] + n[1] * normal[1] + n[2] * normal[2] < 0) indices.push(i, k, j);
+    else indices.push(i, j, k);
+  };
+  let [i, j] = [0, 0];
+  while (i < a.length || j < b.length) {
+    const [ai, aj] = [i % a.length, (i + 1) % a.length];
+    const [bi, bj] = [a.length + (j % b.length), a.length + ((j + 1) % b.length)];
+    if (j >= b.length || (i < a.length && sa[i + 1] <= sb[j + 1])) {
+      face(ai, aj, bi);
+      i++;
+    } else {
+      face(ai, bj, bi);
+      j++;
+    }
+  }
+  return { positions, indices };
+}

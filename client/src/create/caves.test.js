@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { TILE_CELLS, carve, cavesPath, growCave, smoothCave, emptyColumns, fillRock, openAir } from "../v2/caves.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
-import { caveMesh, cutMesh, fitPlane, joinedPieces, mouthCells, openEdges } from "./caveMesh.js";
+import { caveMesh, chains, cutMesh, fitPlane, joinedPieces, mouthCells, openEdges, stitch } from "./caveMesh.js";
 import { Caves } from "./caves.js";
 
 // Flat ground at `height`, everywhere, with its cells all one color.
@@ -216,5 +216,31 @@ describe("cutting a mesh", () => {
     expect(seam).toHaveLength(6);
     expect(seam[0]).toBeCloseTo(1);
     expect(seam[3]).toBeCloseTo(1);
+  });
+});
+
+describe("stitching", () => {
+  const ring = (r, n, y = 0, backward = false) => {
+    const points = Array.from({ length: n }, (_, i) => [r * Math.cos((i / n) * Math.PI * 2), y, r * Math.sin((i / n) * Math.PI * 2)]);
+    return backward ? points.reverse() : points;
+  };
+  const segments = (line) => line.flatMap((p, i) => [...p, ...line[(i + 1) % line.length]]);
+
+  it("walks segments into lines, in order", () => {
+    const loop = ring(5, 12);
+    const [line] = chains(segments(loop));
+    expect(line).toHaveLength(12);
+    for (let i = 0; i < 12; i++) expect(Math.hypot(...line[i].map((v, k) => v - line[(i + 1) % 12][k]))).toBeCloseTo(Math.hypot(...loop[0].map((v, k) => v - loop[1][k])));
+  });
+
+  it("joins two rings round an opening with triangles all the way round, facing the normal", () => {
+    const plane = { center: [0, 0, 0], normal: [0, 1, 0], across: [1, 0, 0], along: [0, 0, 1] };
+    const { positions, indices } = stitch(ring(10, 16), ring(4, 9, 0, true), plane);
+    expect(indices.length / 3).toBe(16 + 9);
+    for (let n = 0; n < indices.length; n += 3) {
+      const p = [0, 1, 2].map((k) => positions.slice(indices[n + k] * 3, indices[n + k] * 3 + 3));
+      const [u, v] = [p[1].map((x, m) => x - p[0][m]), p[2].map((x, m) => x - p[0][m])];
+      expect(u[2] * v[0] - u[0] * v[2]).toBeGreaterThan(0);
+    }
   });
 });
