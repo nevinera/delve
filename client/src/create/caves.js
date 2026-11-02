@@ -22,7 +22,14 @@ export const VIEWS = ["finished", "blocks"];
 const MESH_TILES = FULL_TILES;
 const BUILD_MS = 8; // how long making meshes may take a frame
 const UNDOS = 50;
-const CAMERA_FT = 1; // how far the camera's kept from rock
+// How far the camera's kept from rock, all round: the rock's drawn smoothed and bumped up to
+// about this far into its voxels' air.
+const CAMERA_FT = 2.5;
+const DRAWN_FT = 1; // how far the camera's kept short of drawn rock it'd look through
+const EITHER_SIDE = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }); // for rays to meet rock from behind
+// Which ways round the camera rock's looked for: along the axes and the cube's corners.
+const ROUND = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1],
+  ...[-1, 1].flatMap((a) => [-1, 1].flatMap((b) => [-1, 1].map((c) => [a, b, c].map((v) => v / Math.sqrt(3)))))];
 const PICK_FT = 1200;
 const LINE_RGB = 0x5ad8ff;
 const EARTH_LINE_RGB = 0x8a8a8a;
@@ -593,18 +600,59 @@ export class Caves {
     return null;
   }
 
-  // Where the camera can be, looking from `head` to `at` (Vector3s): `at`, or short of the first
-  // rock between, near caves.
+  // Where the camera can be, looking from `head` to `at` (Vector3s): `at`, or short of where it'd
+  // come near rock between, near caves. Close to the head the room it's kept grows from nothing,
+  // so it isn't pulled into the builder under a low roof.
   clear(head, at) {
     if (!this.near(head.x, head.z) || this.solid(head.x, head.y, head.z)) return at;
     const way = at.clone().sub(head);
     const length = way.length();
     way.normalize();
-    for (let t = 0.5; t < length + CAMERA_FT; t += 0.5) {
-      const p = head.clone().addScaledVector(way, t);
-      if (this.solid(p.x, p.y, p.z)) return head.clone().addScaledVector(way, Math.max(0, t - CAMERA_FT));
+    const p = new THREE.Vector3();
+    const near = (t) => {
+      p.copy(head).addScaledVector(way, t);
+      const room = Math.min(CAMERA_FT, t);
+      return this.solid(p.x, p.y, p.z) || ROUND.some(([dx, dy, dz]) => this.solid(p.x + dx * room, p.y + dy * room, p.z + dz * room));
+    };
+    let reach = length;
+    for (let t = 0.5; t <= length; t += 0.5) {
+      if (near(t)) {
+        reach = t - 0.5;
+        break;
+      }
     }
-    return at;
+    if (reach === length && near(length)) reach = Math.max(0, length - 0.5);
+    // Round a mouth the voxels are open to the sky, but the rock's drawn closing over them.
+    const drawn = this.drawnHit(head, way, reach + DRAWN_FT);
+    if (drawn !== null) reach = Math.min(reach, Math.max(0, drawn - DRAWN_FT));
+    return reach === length ? at : head.clone().addScaledVector(way, reach);
+  }
+
+  // How far along a ray from `head` the way `way` (a unit Vector3) the drawn rock or the ground
+  // round a mouth is, either side of it, within `far`, or null.
+  drawnHit(head, way, far) {
+    const box = new THREE.Box3();
+    const meshes = [];
+    for (const mesh of this.meshes.values()) {
+      if (!mesh) continue;
+      for (const drawn of [mesh, ...(mesh.userData.overlays ?? [])]) {
+        if (!drawn.isMesh) continue;
+        if (!drawn.geometry.boundingBox) drawn.geometry.computeBoundingBox();
+        box.copy(drawn.geometry.boundingBox).translate(drawn.position);
+        if (box.distanceToPoint(head) <= far) meshes.push(drawn);
+      }
+    }
+    if (!meshes.length) return null;
+    const raycaster = new THREE.Raycaster(head, way, 0, far);
+    let nearest = null;
+    for (const drawn of meshes) {
+      const material = drawn.material;
+      drawn.material = EITHER_SIDE;
+      const [hit] = raycaster.intersectObject(drawn, false);
+      drawn.material = material;
+      if (hit && (nearest === null || hit.distance < nearest)) nearest = hit.distance;
+    }
+    return nearest;
   }
 
   // Where a ray (THREE.Ray) first meets rock, the ground's or a cave's, [x, y, z], or null.
