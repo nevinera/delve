@@ -805,7 +805,7 @@ body.create {
   border-bottom: 1px solid #44444e;
 }
 
-.create-cave-system[hidden] {
+#side .create-cave-system[hidden] {
   display: none;
 }
 
