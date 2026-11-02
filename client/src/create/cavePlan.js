@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
-import { ARC_DEFAULTS, ARC_FT, ENTRANCE_DEFAULTS, ENTRANCE_FT, NODE_DEFAULTS, NODE_SIZES, STEEP_DEG, arcCurve, arcSteepness, carvePlan, entranceEnd, entranceProblem, entranceRing, isEntrance, mouthBehind } from "./caveLayout.js";
+import { ARC_DEFAULTS, ARC_FT, ENTRANCE_DEFAULTS, ENTRANCE_FT, NODE_DEFAULTS, NODE_SIZES, STEEP_DEG, arcCurve, arcSteepness, SPACING, TUNNEL_SPAN, carvePlan, entranceEnd, entranceProblem, entranceRing, isEntrance, longEnough, mouthBehind, nodeRadius, respacedBends, tooNear } from "./caveLayout.js";
 
 // The caves' plan tools: chamber places rooms (nodes) on the points of the grid round the camera,
 // in the earth, and drags them elsewhere; tunnel joins two rooms with a tunnel (an arc), clicked
@@ -10,7 +10,11 @@ import { ARC_DEFAULTS, ARC_FT, ENTRANCE_DEFAULTS, ENTRANCE_FT, NODE_DEFAULTS, NO
 // ground, places an entrance held where the pointer meets it, HOLD_FT in from its mouth: a tube into the hillside, facing the way
 // the camera looks, turned with C and V, with a room at its far end for tunnels to join. Its
 // mouth has to be out in the air but for the bottom of it, and it's red where it isn't. Both select: a click picks one, shift-click
-// adds or takes away, and shift-drag boxes them in. The panel shows the details of what's
+// adds or takes away, and shift-drag boxes them in. A room drags across its floor's level, or
+// with alt up and down, snapping to the grid; a bend across its level, the tunnel's heights
+// worked out to climb evenly, and letting go lays its bends out afresh along it. Rooms keep
+// SPACING times the sum of their radii apart, and a tunnel shorter than TUNNEL_SPAN times its
+// width is red, and isn't carved. The panel shows the details of what's
 // selected, to change all of it at once, or of what's placed next. Each change carves what it
 // changed straight away (caveLayout.js's carvePlan), with what's joined to it, and undoes on its
 // own. What's locked can't be moved, changed or deleted, and nor can what's joined to it, so it
@@ -57,7 +61,7 @@ export class CavePlan {
     this.selected = new Set(); // the ids of the nodes and arcs selected
     this.focus = null; // the one selected last, whose details show
     this.start = null; // the node a tunnel's being drawn from
-    this.hover = null; // the grid point the pointer snaps to, { at }, or the entrance it'd place, { entrance, problem }
+    this.hover = null; // the grid point the pointer snaps to, { at, problem }, or the entrance it'd place, { entrance, problem }
     this.pointer = null; // where the pointer last was, [x, y] pixels
     this.turn = 0; // degrees an entrance is turned from the way the camera looks
     this.drag = null; // { id, bend } or { id } for a node, with the layout as it was, while dragging
@@ -206,7 +210,10 @@ export class CavePlan {
     if (plan.fills.length || plan.opens.length) this.caves.carvePlan(plan, () => {});
     this.layout.carved = plan.carved;
     this.layout.version++;
-    this.status(plan.unfit.length ? `${plan.unfit.join(", ")} won't fit under the ground, so ${plan.unfit.length > 1 ? "aren't" : "isn't"} carved` : "");
+    const notes = [];
+    if (plan.unfit.length) notes.push(`${plan.unfit.join(", ")} won't fit under the ground, so ${plan.unfit.length > 1 ? "aren't" : "isn't"} carved`);
+    if (plan.short.length) notes.push(`${plan.short.join(", ")} ${plan.short.length > 1 ? "are" : "is"} shorter than ${TUNNEL_SPAN} times ${plan.short.length > 1 ? "their" : "its"} width, so ${plan.short.length > 1 ? "aren't" : "isn't"} carved: curve ${plan.short.length > 1 ? "them" : "it"} out further`);
+    this.status(notes.join("; "));
   }
 
   status(text) {
@@ -251,7 +258,14 @@ export class CavePlan {
     const point = best ?? nearest;
     const ground = this.groundHit();
     if (!point || (ground && c.distanceTo(new THREE.Vector3(...ground)) < point.d)) return null;
-    return { at: point.p };
+    return { at: point.p, problem: this.spacingProblem(point.p, nodeRadius(this.details.node)) };
+  }
+
+  // Why a room `radius` ft out can't be at `at`, or null: the room it'd be too near. `self`, the
+  // room being moved.
+  spacingProblem(at, radius, self = null) {
+    const near = tooNear(this.layout, at, radius, self);
+    return near && `too near ${near.id}: rooms keep ${SPACING} times the sum of their radii apart, ${Math.round(SPACING * (radius + nodeRadius(near)))} ft here`;
   }
 
   // The entrance the pointer would place, its floor HOLD_FT in where the pointer meets the
@@ -264,7 +278,7 @@ export class CavePlan {
     this.camera.getWorldDirection(facing);
     const yaw = (((Math.round((Math.atan2(facing.x, facing.z) * 180) / Math.PI) + this.turn) % 360) + 360) % 360;
     const entrance = placed({ ...this.details.entrance, mouth: mouthBehind(ground, { ...this.details.entrance, yaw }, HOLD_FT), yaw });
-    return { entrance, problem: entranceProblem(entrance, this.groundAt) };
+    return { entrance, problem: entranceProblem(entrance, this.groundAt) ?? this.spacingProblem(entrance.at, nodeRadius(entrance)) };
   }
 
   // The node at the pointer, nearest the camera: its middle, or any of its lines.
@@ -324,7 +338,7 @@ export class CavePlan {
   down(e) {
     const at = this.pointerPx(e);
     const bend = this.pickBend(at);
-    if (bend !== null && this.free(this.focus)) return (this.drag = { id: this.focus, bend, before: this.layout.toJSON(), moved: false });
+    if (bend !== null && this.free(this.focus)) return (this.drag = { id: this.focus, bend, y: this.heightAtBend(this.focus, bend), before: this.layout.toJSON(), moved: false });
     const node = this.pickNode(at);
     const arc = !node && this.pickArc(at)?.id;
     const picked = node || arc;
@@ -364,6 +378,7 @@ export class CavePlan {
       }
     }
     const spot = this.tool === "chamber" && this.snap(at);
+    if (spot?.problem) return this.status(spot.problem);
     if (spot) {
       this.remember();
       this.select(this.layout.addNode(spot.at, this.details.node).id);
@@ -380,27 +395,35 @@ export class CavePlan {
       return;
     }
     this.pointer = at;
-    const node = this.drag && this.drag.bend === undefined && this.layout.nodes.get(this.drag.id);
-    this.hover = this.tool === "chamber" || node ? this.snap(at) : this.tool === "entrance" ? this.entranceAt() : null;
+    this.hover = this.drag ? null : this.tool === "chamber" ? this.snap(at) : this.tool === "entrance" ? this.entranceAt() : null;
     this.drawPreview();
     if (!this.drag) return;
     const element = this.layout.get(this.drag.id);
     if (!element) return (this.drag = null);
+    const ray = this.ray();
+    if (!ray) return;
     if (this.drag.bend !== undefined) {
-      // A bend drags across the view, at the distance it's at.
-      const bend = element.bends[this.drag.bend];
-      const ray = this.ray();
-      if (!ray) return;
-      const facing = new THREE.Vector3();
-      this.camera.getWorldDirection(facing);
-      const plane = new THREE.Plane().setFromNormalAndCoplanarPoint(facing, new THREE.Vector3(...bend));
+      // A bend drags across the level the tunnel's at there.
+      const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -this.drag.y);
       const to = ray.ray.intersectPlane(plane, new THREE.Vector3());
       if (!to) return;
-      element.bends[this.drag.bend] = [to.x, to.y, to.z].map((v) => Math.round(v * 4) / 4);
+      element.bends[this.drag.bend] = [to.x, this.drag.y, to.z].map((v) => Math.round(v * 4) / 4);
     } else {
-      const spot = this.hover;
-      if (!spot || spot.at.every((v, k) => v === element.at[k])) return;
-      element.at = [...spot.at];
+      // A room drags across its floor's level, or with alt up and down, onto the grid.
+      const p = new THREE.Vector3(...element.at);
+      let normal = new THREE.Vector3(0, 1, 0);
+      if (e.altKey) {
+        this.camera.getWorldDirection(normal);
+        normal = new THREE.Vector3(normal.x, 0, normal.z).normalize();
+      }
+      const to = ray.ray.intersectPlane(new THREE.Plane().setFromNormalAndCoplanarPoint(normal, p), new THREE.Vector3());
+      if (!to) return;
+      const at = e.altKey ? [element.at[0], Math.round(to.y / 8) * 8, element.at[2]] : [Math.round(to.x / 8) * 8, element.at[1], Math.round(to.z / 8) * 8];
+      if (at.every((v, k) => v === element.at[k])) return;
+      const problem = this.spacingProblem(at, nodeRadius(element), element.id);
+      this.status(problem ?? "");
+      if (problem) return;
+      element.at = at;
     }
     this.drag.moved = true;
     this.layout.version++;
@@ -425,12 +448,21 @@ export class CavePlan {
       this.boxEl.hidden = true;
     }
     if (this.drag?.moved) {
+      // A tunnel drawn out longer gets more bends, a shorter one fewer.
+      if (this.drag.bend !== undefined && this.layout.arcs.has(this.drag.id)) this.layout.arcs.get(this.drag.id).bends = respacedBends(this.layout.copyOf(this.drag.id));
       this.history.push(this.drag.before);
       if (this.history.length > UNDOS) this.history.shift();
       this.drag = null;
       this.carve();
     }
     this.drag = null;
+  }
+
+  // How high an arc's line is where it passes its bend `i`.
+  heightAtBend(id, i) {
+    const bend = this.layout.arcs.get(id).bends[i];
+    const points = arcCurve(this.layout.copyOf(id)).getSpacedPoints(128);
+    return points.reduce((a, b) => (Math.hypot(b.x - bend[0], b.z - bend[2]) < Math.hypot(a.x - bend[0], a.z - bend[2]) ? b : a)).y;
   }
 
   // Selects just `id`, or nothing.
@@ -488,6 +520,7 @@ export class CavePlan {
     if (this.snapMark.visible) {
       this.snapMark.position.set(...this.hover.at);
       this.snapMark.scale.setScalar(Math.max(0.4, c.distanceTo(this.snapMark.position) * 0.012));
+      this.snapMark.material.color.setRGB(...(this.hover.problem ? STEEP_RGB : [1, 1, 1]));
     }
     const made = `${this.layout.version} ${[...this.selected]} ${this.start}`;
     if (made !== this.drawn) this.draw(made);
@@ -527,7 +560,7 @@ export class CavePlan {
 
   // Draws the nodes and arcs, what's locked in violet: each room a ring round its floor as wide as it is, with thin spokes
   // in to its middle and a stalk up as high, each entrance its tube and its room's ring, each tunnel along its
-  // line, red where it's steep; what's selected in yellow, a tunnel's start in green, and the one
+  // line, red where it's steep, or all of it where it's too short to carve; what's selected in yellow, a tunnel's start in green, and the one
   // arc selected with its bends.
   draw(made) {
     this.drawn = made;
@@ -548,8 +581,9 @@ export class CavePlan {
     }
     for (const arc of this.layout.arcs.values()) {
       const selected = this.selected.has(arc.id);
-      const steep = arcSteepness(this.layout.copyOf(arc.id), 96);
-      const rgb = selected ? SELECTED_RGB : arc.locked ? LOCKED_RGB : CORE_RGB;
+      const copy = this.layout.copyOf(arc.id);
+      const steep = arcSteepness(copy, 96);
+      const rgb = !longEnough(copy) ? STEEP_RGB : selected ? SELECTED_RGB : arc.locked ? LOCKED_RGB : CORE_RGB;
       this.line(
         steep.map((p) => p.at),
         arcLine(arc),

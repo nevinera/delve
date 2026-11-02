@@ -19,6 +19,9 @@ export const STYLES = ["mineshaft", "borehole", "lavatube"];
 export const ARC_FT = [4, 60]; // the tunnels' widths
 export const BEND_FT = 32; // an arc gets a bend for about every this much of its length
 export const STEEP_DEG = 45; // arcs are drawn red where they climb steeper than this
+export const SPACING = 5; // how many times the sum of their radii rooms' middles are apart, at least
+export const TUNNEL_SPAN = 30; // how many times its width a tunnel's length is, at least, to be carved
+const SAMPLE_FT = 4; // how finely an arc's line is laid out
 const LEVEL = 0.7; // how far, of a room's radius, a tunnel runs level into it
 const CLEAR = 1.6; // how many times that from a room a tunnel's first bend has to be
 export const ENTRANCE_LENGTHS = [16, 32, 48, 64];
@@ -157,19 +160,56 @@ export function nodeShapes(node) {
   return [round(1, 0, [0.85 * R, 0.8 * R, 0.75 * R]), ...bays(5, 0.6 * R, [0.35 * R, 0.5 * R, 0.35 * R])];
 }
 
-// The line an arc (as Layout's copyOf gives it) runs along, floor to floor through its bends,
-// leaving each end level, out across the room's floor as far as `level` says, so it meets the
-// floor and not the walls or ceiling. Bends that near an end, or not far past, give way to it.
+// The line an arc (as Layout's copyOf gives it) runs along, floor to floor: across, through its
+// bends (only where they are across, not how high), leaving each end level, out across the room's
+// floor as far as `level` says, so it meets the floor and not the walls or ceiling, and between
+// those climbing or falling evenly all the way. Bends that near an end, or not far past, give way.
 export function arcCurve({ ends, bends, level = [0, 0] }) {
   const flat = (a, b) => Math.hypot(b[0] - a[0], b[2] - a[2]);
   const kept = bends.filter((b) => flat(ends[0], b) > level[0] * CLEAR && flat(ends[1], b) > level[1] * CLEAR);
   const out = (end, toward, reach) => {
     const d = flat(end, toward);
-    return reach && d > reach * CLEAR ? [[end[0] + ((toward[0] - end[0]) / d) * reach, end[1], end[2] + ((toward[2] - end[2]) / d) * reach]] : [];
+    return reach && d > reach * CLEAR ? [[end[0] + ((toward[0] - end[0]) / d) * reach, 0, end[2] + ((toward[2] - end[2]) / d) * reach]] : [];
   };
   const [first, last] = [kept[0] ?? ends[1], kept.at(-1) ?? ends[0]];
-  const points = [ends[0], ...out(ends[0], first, level[0]), ...kept, ...out(ends[1], last, level[1]), ends[1]].map((p) => new THREE.Vector3(...p));
+  const [out0, out1] = [out(ends[0], first, level[0]), out(ends[1], last, level[1])];
+  const across = [ends[0], ...out0, ...kept, ...out1, ends[1]].map((p) => new THREE.Vector3(p[0], 0, p[2]));
+  const plan = new THREE.CatmullRomCurve3(across, false, "centripetal");
+  const length = plan.getLength();
+  const [run0, run1] = [out0.length ? level[0] : 0, out1.length ? level[1] : 0];
+  const climb = Math.max(1e-6, length - run0 - run1);
+  const count = Math.max(2, Math.ceil(length / SAMPLE_FT));
+  const points = plan.getSpacedPoints(count).map((p, i) => {
+    const t = Math.min(1, Math.max(0, ((i / count) * length - run0) / climb));
+    return new THREE.Vector3(p.x, ends[0][1] + (ends[1][1] - ends[0][1]) * t, p.z);
+  });
   return new THREE.CatmullRomCurve3(points, false, "centripetal");
+}
+
+// An arc's bends laid out afresh along its line: one for about every BEND_FT, evenly, past its
+// level runs, so a tunnel drawn out longer gets more of them.
+export function respacedBends(copy) {
+  const curve = arcCurve(copy);
+  const length = curve.getLength();
+  const [from, to] = [(copy.level?.[0] ?? 0) * CLEAR, length - (copy.level?.[1] ?? 0) * CLEAR];
+  const count = Math.max(0, Math.round((to - from) / BEND_FT) - 1);
+  return Array.from({ length: count }, (_, i) => {
+    const p = curve.getPointAt(Math.min(1, Math.max(0, (from + ((to - from) * (i + 1)) / (count + 1)) / (length || 1))));
+    return [p.x, p.y, p.z].map((v) => Math.round(v * 4) / 4);
+  });
+}
+
+// Whether an arc is long enough to carve: TUNNEL_SPAN times its width along its line.
+export const longEnough = (copy) => arcCurve(copy).getLength() >= TUNNEL_SPAN * copy.size;
+
+// The room too near where a room `radius` ft out would be at `at`, SPACING times the sum of their
+// radii, or null; `self`, its id where it's being moved, so it's not too near itself.
+export function tooNear(layout, at, radius, self = null) {
+  for (const node of layout.nodes.values()) {
+    if (node.id === self) continue;
+    if (Math.hypot(node.at[0] - at[0], node.at[1] - at[1], node.at[2] - at[2]) < SPACING * (radius + nodeRadius(node))) return node;
+  }
+  return null;
 }
 
 // How steep the arc's line is at each of `count` + 1 points along it, in degrees, with the points.
@@ -342,7 +382,8 @@ const overlap = (a, b) => Boolean(a && b) && [0, 1, 2].every((k) => a[0][k] <= b
 // last carving the filling cuts into, and the carved copies after. `ids`: the elements to carve (all changed ones, by
 // default); `uncarve`: the elements to fill in and not carve again. Only entrances' tubes
 // open through the ground; given groundAt(x, z), the ground's height, a room that would come
-// within ROOF_FT of it isn't carved, and is listed in `unfit`.
+// within ROOF_FT of it isn't carved, and is listed in `unfit`; nor is a tunnel shorter than
+// TUNNEL_SPAN times its width, listed in `short`.
 export function carvePlan(layout, { ids = layout.changes(), uncarve = [] } = {}, groundAt = null) {
   const redo = new Set(ids.filter((id) => !uncarve.includes(id)));
   for (const id of ids) for (const other of linkedOf(layout, id)) if (layout.get(other)) redo.add(other);
@@ -357,17 +398,22 @@ export function carvePlan(layout, { ids = layout.changes(), uncarve = [] } = {},
   }
   const carved = new Map(layout.carved);
   for (const id of [...ids, ...uncarve]) carved.delete(id);
-  const [opens, unfit] = [[], []];
+  const [opens, unfit, short] = [[], [], []];
   for (const id of redo) {
     const copy = layout.copyOf(id);
     if (!copy) continue;
-    carved.set(id, copy);
+    // What isn't carved isn't kept as carved, so there's nothing of it to fill in later.
+    if (copy.ends && !longEnough(copy)) {
+      short.push(id);
+      continue;
+    }
     const shapes = shapesOf(copy);
     if (groundAt && !copy.ends && shapes.some((s) => !s.open && !fits(s, groundAt))) {
       unfit.push(id);
       continue;
     }
+    carved.set(id, copy);
     for (const shape of shapes) opens.push({ shape, stone: allStone(copy.rock, copy.hewn), mouth: Boolean(shape.open) });
   }
-  return { fills, opens, carved, unfit };
+  return { fills, opens, carved, unfit, short };
 }
