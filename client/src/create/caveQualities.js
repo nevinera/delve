@@ -66,12 +66,15 @@ export function reachOf(point, length) {
 // qualities }): taken as a round tube along the middle of each, as wide as its passage's wider
 // way and padded by how far its qualities reach, so no less than there is.
 // `away`: the middles of junctions they meet at, round which as far as JUNCTION_SPREAD times the
-// rock they'd need is left out of both, so that branches from a junction only need rock between
-// them once they're apart, which keeps them JUNCTION_DEG apart; Infinity where nothing's left.
-export function rockBetween(p, q, away = [], least = ROCK_FT) {
+// rock and room they'd need is left out of both, so that branches from a junction only need rock
+// between them once they're apart, which keeps them JUNCTION_DEG apart; `own`, junctions of p's
+// only, left out of it alone, where it's in what's open round its own end anyway. Infinity where
+// nothing's left.
+export function rockBetween(p, q, away = [], least = ROCK_FT, own = []) {
   const [rp, rq] = [radiusOf(p), radiusOf(q)];
   const zone = JUNCTION_SPREAD * (rp + rq + least);
-  const [ps, qs] = [p, q].map((ends) => outside([ends.map(middleOf)], away, zone));
+  const ps = outside([p.map(middleOf)], [...away, ...own], zone);
+  const qs = outside([q.map(middleOf)], away, zone);
   let gap = Infinity;
   for (const a of ps) for (const b of qs) gap = Math.min(gap, segmentGap(a, b));
   return gap - rp - rq;

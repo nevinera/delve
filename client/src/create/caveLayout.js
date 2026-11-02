@@ -296,13 +296,17 @@ export function passageWarnings(layout, net, ends) {
 // Why a passage `ends` ({ at, width, height } twice) laid out in network `net` can't go there, too
 // near another passage, or another network, or null. `junctions`: for the ends it joins others
 // at, { end, points }, the end's index in `ends` and the ids of the points whose passages it
-// meets there, within a link, which it only needs rock between away from the junction.
+// meets there, within a link, which it only needs rock between away from the junction. Round a
+// junction it needs no rock between it and any other passage of its network: what's there is
+// the junction's already.
 export function rockProblem(layout, net, ends, junctions = []) {
   let nearest = null;
   for (const s of layout.segments.values()) {
-    const away = junctions.filter((j) => j.points.includes(s.from) || j.points.includes(s.to)).map((j) => middleOf(ends[j.end]));
+    const meets = (j) => j.points.includes(s.from) || j.points.includes(s.to);
+    const away = junctions.filter(meets).map((j) => middleOf(ends[j.end]));
+    const own = s.net === net ? junctions.filter((j) => !meets(j)).map((j) => middleOf(ends[j.end])) : [];
     const least = s.net === net ? ROCK_FT : NETWORK_GAP_FT;
-    const gap = rockBetween(ends, [s.from, s.to].map((id) => layout.points.get(id)), away, least);
+    const gap = rockBetween(ends, [s.from, s.to].map((id) => layout.points.get(id)), away, least, own);
     if (gap < least && (!nearest || gap - least < nearest.short)) nearest = { s, gap, short: gap - least };
   }
   if (!nearest) return null;
