@@ -397,6 +397,10 @@ export class CavePlan {
     this.pointer = at;
     this.hover = this.drag ? null : this.tool === "chamber" ? this.snap(at) : this.tool === "entrance" ? this.entranceAt() : null;
     this.drawPreview();
+    // Why what's pointed at can't go there, while it can't.
+    const problem = this.hover?.problem ?? null;
+    if (problem !== this.shownProblem) this.status(problem ?? "");
+    this.shownProblem = problem;
     if (!this.drag) return;
     const element = this.layout.get(this.drag.id);
     if (!element) return (this.drag = null);
@@ -609,10 +613,12 @@ export class CavePlan {
     const spot = this.tool === "entrance" && this.hover?.entrance && this.hover;
     if (!spot) return;
     const [positions, colors] = [[], []];
+    // All of it red where what's wrong isn't a part of it: too near another room, say.
+    const whole = spot.problem && !spot.problem.includes("mouth") && !spot.problem.includes("far end");
     for (const { points, open } of entranceLines(spot.entrance, this.groundAt, spot.problem)) {
       for (let i = 1; i < points.length; i++) {
         positions.push(...points[i - 1], ...points[i]);
-        for (let k = 0; k < 2; k++) colors.push(...(open ? OPENING_RGB : STEEP_RGB));
+        for (let k = 0; k < 2; k++) colors.push(...(open && !whole ? OPENING_RGB : STEEP_RGB));
       }
     }
     for (const material of this.previewMaterials) {
