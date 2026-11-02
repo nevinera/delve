@@ -34,7 +34,11 @@ export function entranceJoin(entrance, world, groundAt) {
   if (!ground || ground.length < 3) return null;
   const fitted = fitPlane(ground);
   const side = entrance.mouth.reduce((sum, v, k) => sum + (v - fitted.center[k]) * fitted.normal[k], 0) < 0 ? -1 : 1;
-  const plane = { ...fitted, normal: fitted.normal.map((v) => v * side) };
+  const normal = fitted.normal.map((v) => v * side);
+  // Set back into the hill past the ground's edge and the rock's rim, pinned to the ground's
+  // corners there, so it cuts the tube where it's clean.
+  const inset = Math.max(...ground.map((p) => Math.abs(p.reduce((sum, v, k) => sum + (v - fitted.center[k]) * normal[k], 0)))) + CELL_FT;
+  const plane = { ...fitted, normal, center: fitted.center.map((v, k) => v - normal[k] * inset) };
   // The rock cut back, in the tiles round the cells left out.
   const tiles = new Set();
   for (const [ci, cj] of cells) {
@@ -46,9 +50,11 @@ export function entranceJoin(entrance, world, groundAt) {
     const mesh = caveMesh(tx, tz, world);
     if (mesh) seam.push(...cutMesh(mesh, plane, [tx * TILE_FT, 0, tz * TILE_FT]).seam);
   }
-  const middle = (line) => [0, 1, 2].map((k) => line.reduce((sum, p) => sum + p[k], 0) / line.length);
-  const rock = chains(seam).reduce((best, line) => (!best || Math.hypot(...middle(line).map((v, k) => v - plane.center[k])) < Math.hypot(...middle(best).map((v, k) => v - plane.center[k])) ? line : best), null);
-  if (!rock || rock.length < 3) return null;
+  // The tube's cut: the seam's longest line, closed across the gaps the rock's tiles leave between
+  // them, so long as it doesn't cross itself.
+  const rock = longest(chains(seam));
+  if (!rock || rock.length < 3 || Math.hypot(...rock[0].map((v, k) => v - rock.at(-1)[k])) > GAP_FT) return null;
+  if (crosses(ground, plane) || crosses(rock, plane)) return null;
   const { a, b, steps } = zipSteps(ground, rock, plane);
   return { cells, plane, ground: a, rock: b, steps, chunks: heldChunks(entrance, cells) };
 }
@@ -71,6 +77,23 @@ function heldChunks(entrance, cells) {
     for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) held.add(`${Math.floor(((ci + di) * CELL_FT) / CHUNK_FT)},${Math.floor(((cj + dj) * CELL_FT) / CHUNK_FT)}`);
   }
   return [...held].map((key) => key.split(",").map(Number)).sort((p, q) => p[1] - q[1] || p[0] - q[0]);
+}
+
+const GAP_FT = 2 * CELL_FT; // the widest gap between a line's ends that it's closed across
+
+// Whether line `line`, closed, crosses itself, flattened onto `plane`.
+function crosses(line, { center, across, along }) {
+  const flat = line.map((p) => [across, along].map((axis) => axis.reduce((sum, v, k) => sum + v * (p[k] - center[k]), 0)));
+  const turn = (a, b, c) => (c[1] - a[1]) * (b[0] - a[0]) - (b[1] - a[1]) * (c[0] - a[0]);
+  const n = flat.length;
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 2; j < n; j++) {
+      if (i === 0 && j === n - 1) continue;
+      const [a, b, c, d] = [flat[i], flat[i + 1], flat[j], flat[(j + 1) % n]];
+      if (turn(a, c, d) * turn(b, c, d) < 0 && turn(a, b, c) * turn(a, b, d) < 0) return true;
+    }
+  }
+  return false;
 }
 
 const longest = (lines) => lines.reduce((best, line) => (!best || line.length > best.length ? line : best), null);
