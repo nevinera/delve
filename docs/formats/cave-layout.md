@@ -36,7 +36,7 @@ Its point's `at` is always where `mouth`, `yaw`, `length` and `slope` put it. It
 A point holds the config of the passage round it. Its `at` is the middle of the passage's floor there, in feet.
 
 - `width` and `height`: the passage's, in feet.
-- `qualities`: a list of the qualities its section has.
+- `qualities`: a list of the qualities its section has: `twisty` or `very twisty`, `bumpy`, `ledges`, `cluttered`, `offshoots` and `switchbacks`. Each shapes the point's half of each segment on it, fading across the middle where the segment's two points differ.
 - `rock` and `hewn`, as for entrances.
 
 ## Segments
@@ -47,6 +47,6 @@ A segment joins two points, `from` and `to`, with a passage.
 
 A segment carves a tube from its `from` point's floor to its `to` point's, its width and height easing from one point's to the other's. An entrance's tube opens through the ground wherever it would have less than 1 ft of rock over it. Air whose floor is over the ground isn't carved. All other air stops 4 ft under the ground, and a segment that would come that near it isn't carved. /create carves each change as it's made. Everything an element carves is in its network.
 
-`carved` keeps each entrance and segment as it was when last carved, by id: a copy of it, a segment's with `ends`, copies of its two points, and `near`, copies of the other points within 3 segments of them, by id. A segment's shape can depend on those points and nothing further, and any randomness in it is seeded from its id alone. An element is carved again when its copy now differs from the one kept, so a change to a point carves again the segments within 3 of it. Carving a changed one fills its old shapes with rock, then opens its new ones, and carves again its unchanged neighbours that the fill touched.
+`carved` keeps each entrance and segment as it was when last carved, by id: a copy of it, a segment's with `ends`, copies of its two points, and `near`, copies of the other points within 3 segments of them, by id. With `offshoots` on either point, it adds `others`: the ends of the segments in its network whose passages come within 68 ft of it, which its side passages keep 8 ft of rock from. A segment's shape can depend on those points and nothing further, and any randomness in it is seeded from its id alone. An element is carved again when its copy now differs from the one kept, so a change to a point carves again the segments within 3 of it. Carving a changed one fills its old shapes with rock, then opens its new ones, and carves again its unchanged neighbours that the fill touched.
 
 Shapes are domes, `{kind: "dome", at, radii: [rx, ry, rz], yaw}`, a half ellipsoid whose `at` is the middle of its flat floor, and boxes, `{kind: "box", at, half: [x, y, z], yaw}`.

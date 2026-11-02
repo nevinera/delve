@@ -1,5 +1,8 @@
 import { ROOF_FT, allStone, shapeBounds } from "../v2/caves.js";
+import { OFFSHOOT_FT, ROCK_FT, rockBetween, segmentShapes, steep } from "./caveQualities.js";
 import { WALK_DEG } from "./growth.js";
+
+export { EXCLUSIVE, QUALITIES, ROCK_FT, rockBetween, segmentShapes, seedOf, steep } from "./caveQualities.js";
 
 // A continent's cave layout (docs/formats/cave-layout.md): its cave networks, each named by a
 // slug, and the elements laid out in them: entrances, tubes in from the ground; points, each
@@ -25,7 +28,6 @@ export const PHASES = ["layout", "polish"];
 export const POINT_FT = { width: [12, 64], height: [10, 48] }; // the passage's sizes a point can have
 export const JOIN_FT = 8; // how near an existing point a passage joins it, not splitting
 const CONFIG = ["width", "height", "qualities", "rock", "hewn"]; // what a point keeps of its section
-export const ROCK_FT = 8; // the least rock to leave between passages that aren't joined
 export const NETWORK_GAP_FT = 32; // the least rock to leave between networks
 export const REACH_SEGMENTS = 3; // how many segments either way a segment's shape can depend on
 
@@ -33,6 +35,7 @@ export const REACH_SEGMENTS = 3; // how many segments either way a segment's sha
 const stable = (value) => JSON.stringify(value, (k, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1))) : v));
 const add = (a, b) => a.map((v, i) => v + b[i]);
 const lerp = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
+const byId = (a, b) => Number(a.slice(1)) - Number(b.slice(1));
 
 export class Layout {
   // A layout from before cave networks (version 1) is dropped, with `dropped` true, as its caves are.
@@ -196,8 +199,17 @@ export class Layout {
       copy.ends = [copy.from, copy.to].map((p) => structuredClone(this.points.get(p)));
       copy.near = this.around([copy.from, copy.to], REACH_SEGMENTS)
         .filter((p) => p !== copy.from && p !== copy.to)
-        .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
+        .sort(byId)
         .map((p) => structuredClone(this.points.get(p)));
+      // Side passages keep clear of the passages they could reach.
+      if (copy.ends.some((end) => end.qualities.includes("offshoots"))) {
+        copy.others = [...this.segments.values()]
+          .filter((s) => s.id !== id && s.net === copy.net)
+          .map((s) => ({ id: s.id, ends: [s.from, s.to].map((p) => this.points.get(p)) }))
+          .filter((s) => rockBetween(copy.ends, s.ends) < OFFSHOOT_FT + ROCK_FT)
+          .sort((a, b) => byId(a.id, b.id))
+          .map((s) => structuredClone(s.ends));
+      }
     }
     return copy;
   }
@@ -231,18 +243,6 @@ export class Layout {
 }
 
 export const isEntrance = (copy) => Boolean(copy.mouth);
-// Whether a passage from point `a` to point `b` is too steep to walk.
-export const steep = (a, b) => Math.abs(b.at[1] - a.at[1]) > Math.tan((WALK_DEG * Math.PI) / 180) * Math.hypot(b.at[0] - a.at[0], b.at[2] - a.at[2]);
-
-// How much rock there is between two passages, each its two ends ({ at, width, height }): taken
-// as a round tube along the middle of each, as wide as its passage's wider way, so no less than
-// there is. Qualities will pad it by how far they reach.
-export function rockBetween(p, q) {
-  const middle = (end) => [end.at[0], end.at[1] + end.height / 2, end.at[2]];
-  const radius = (ends) => Math.max(...ends.map((end) => Math.max(end.width, end.height) / 2));
-  return segmentGap(p.map(middle), q.map(middle)) - radius(p) - radius(q);
-}
-
 // The warnings for a passage `ends` ({ at, width, height } twice) laid out in network `net`: too
 // steep to walk, or too near a passage it doesn't join, or another network. `joins`: the ids of the
 // points it joins, whose segments it can come near.
@@ -264,60 +264,12 @@ export function passageWarnings(layout, net, ends, joins = []) {
   return out;
 }
 
-// The least distance between segments p and q, each two points.
-function segmentGap([p0, p1], [q0, q1]) {
-  const sub = (a, b) => a.map((v, k) => v - b[k]);
-  const dot = (a, b) => a.reduce((sum, v, k) => sum + v * b[k], 0);
-  const [d1, d2, r] = [sub(p1, p0), sub(q1, q0), sub(p0, q0)];
-  const [a, e, f] = [dot(d1, d1), dot(d2, d2), dot(d2, r)];
-  const clamp = (v) => Math.max(0, Math.min(1, v));
-  let s, t;
-  if (a <= 1e-9 && e <= 1e-9) [s, t] = [0, 0];
-  else if (a <= 1e-9) [s, t] = [0, clamp(f / e)];
-  else {
-    const c = dot(d1, r);
-    if (e <= 1e-9) [s, t] = [clamp(-c / a), 0];
-    else {
-      const b = dot(d1, d2);
-      const denom = a * e - b * b;
-      s = denom > 1e-9 ? clamp((b * f - c * e) / denom) : 0;
-      t = (b * s + f) / e;
-      if (t < 0) [s, t] = [clamp(-c / a), 0];
-      else if (t > 1) [s, t] = [clamp((b - c) / a), 1];
-    }
-  }
-  return Math.hypot(...sub(p0.map((v, k) => v + d1[k] * s), q0.map((v, k) => v + d2[k] * t)));
-}
-
-// A number to seed an element's randomness from, by its id alone, so it comes out the same
-// whatever else changes.
-export function seedOf(id) {
-  let h = 2166136261;
-  for (const c of id) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
-  return h >>> 0;
-}
-
 export const configOf = (point) => structuredClone(Object.fromEntries(CONFIG.map((key) => [key, point[key]])));
 
 // The shapes an element (as Layout's copyOf gives it) carves, as v2/caves.js's carve takes them.
 export function shapesOf(copy) {
   if (isEntrance(copy)) return entranceShapes({ ...copy, at: entranceEnd(copy) });
   return segmentShapes(copy);
-}
-
-// A segment: a tube from its first point's floor to its second's, as wide and high as each, eased
-// between them, a dome every few feet.
-export function segmentShapes({ ends: [a, b] }) {
-  const length = Math.hypot(...b.at.map((v, k) => v - a.at[k]));
-  const yaw = Math.atan2(b.at[0] - a.at[0], b.at[2] - a.at[2]);
-  const count = Math.max(1, Math.ceil(length / (Math.min(a.width, b.width) / 3)));
-  const out = [];
-  for (let i = 0; i <= count; i++) {
-    const t = i / count;
-    const [w, h] = [a.width + (b.width - a.width) * t, a.height + (b.height - a.height) * t];
-    out.push({ kind: "dome", at: lerp(a.at, b.at, t), radii: [w / 2, h, Math.max(w / 2, length / count)], yaw });
-  }
-  return out;
 }
 
 // Where an entrance's far end is, from its mouth (the middle of the mouth's floor): `length` ft in

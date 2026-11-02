@@ -55,7 +55,7 @@
         "at": { "$ref": "#/$defs/xyz", "description": "the middle of the passage's floor, feet" },
         "width": { "type": "number", "description": "the passage's width, feet" },
         "height": { "type": "number", "description": "the passage's height, feet" },
-        "qualities": { "type": "array", "items": { "type": "string" } },
+        "qualities": { "type": "array", "items": { "enum": ["twisty", "very twisty", "bumpy", "ledges", "cluttered", "offshoots", "switchbacks"] } },
         "rock": { "$ref": "#/$defs/rock" },
         "hewn": { "type": "boolean" }
       }

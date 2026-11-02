@@ -4,7 +4,7 @@ import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { NET_SLUG } from "../v2/caves.js";
 import { CAMERA } from "./builder.js";
-import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, carvePlan, configOf, entranceEnd, entranceProblem, entranceRing, fits, mouthBehind, passageWarnings, segmentShapes, steep } from "./caveLayout.js";
+import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, EXCLUSIVE, carvePlan, configOf, entranceEnd, entranceProblem, entranceRing, fits, mouthBehind, passageWarnings, segmentShapes, steep } from "./caveLayout.js";
 
 // The caves' layout tools (caveLayout.js). Entrance, from above the ground, places an entrance
 // held where the pointer meets it, HOLD_FT in from its mouth: a tube into the hillside, facing the
@@ -126,6 +126,16 @@ export class CavePlan {
       const input = $(`planPoint-${key}`);
       [input.min, input.max] = POINT_FT[key].map(String);
       input.addEventListener("input", () => changeDetail(key, Number(input.value)));
+    }
+    // Qualities toggle, but for those only one of which a point can have.
+    for (const button of document.querySelectorAll("[data-quality]")) {
+      button.addEventListener("click", () => {
+        const point = this.layout.points.get(this.selected);
+        if (!point) return;
+        const q = button.dataset.quality;
+        const others = EXCLUSIVE.find((group) => group.includes(q)) ?? [q];
+        changeDetail("qualities", point.qualities.includes(q) ? point.qualities.filter((x) => x !== q) : [...point.qualities.filter((x) => !others.includes(x)), q]);
+      });
     }
     $("planNet").addEventListener("change", () => (this.net = $("planNet").value));
     $("planRename").addEventListener("click", () => this.rename());
@@ -477,6 +487,7 @@ export class CavePlan {
         if (document.activeElement !== $(`planPoint-${key}`)) $(`planPoint-${key}`).value = String(point[key]);
         $(`planPoint-${key}Out`).textContent = `${point[key]} ft`;
       }
+      for (const button of document.querySelectorAll("[data-quality]")) button.setAttribute("aria-pressed", String(point.qualities.includes(button.dataset.quality)));
     }
     if (document.activeElement !== $("planRock")) $("planRock").value = String(d.rock);
     $("planHewn").checked = d.hewn;
