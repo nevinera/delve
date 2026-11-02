@@ -373,8 +373,8 @@ export function caveMesh(tx, tz, world) {
   // A face across a grid edge, from the four cubes round it, facing `way` along the edge: the
   // ground's, rock against the sky in the band, or the rock's.
   const quad = (cubes, way, ground = false) => {
-    // A face of the rock all on the rim lies on the ground, which is drawn there.
-    if (!ground && cubes.every((cube) => crossing(...cube).rim)) return;
+    // A face of the rock all on the rim lies on the ground, so it's drawn as the ground.
+    ground ||= cubes.every((cube) => crossing(...cube).rim);
     const [v0, v1, v2, v3] = cubes.map((cube) => (ground ? earthVertex : vertex)(...cube));
     const out = ground ? earth.indices : indices;
     // The cubes run round the edge so that this order faces back along it.
