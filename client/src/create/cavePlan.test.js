@@ -23,8 +23,8 @@ describe("cave passage tool", () => {
     const layout = new Layout();
     layout.addNetwork("n");
     const point = layout.addPoint("n", [0, -60, 0], { width: 18 });
-    const plan = { layout, history: [], seq: () => 1 };
-    CavePlan.prototype.remember.call(plan);
+    const plan = { layout, history: [] };
+    CavePlan.prototype.remember.call(plan, "n");
     point.width = 30;
     layout.setPhase("n", "polish");
     const kept = plan.history[0].layout;

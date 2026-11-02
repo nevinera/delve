@@ -74,9 +74,8 @@ export class CavePlan {
   // meets the ground, [x, y, z], or null. groundAt(x, z): the ground's height.
   // caves: the Caves to carve.
   // here(): where you stand, [x, y, z].
-  // seq(): the next number in the order cave changes are made, shared with polish's, for undo.
-  constructor({ scene, camera, canvas, layout, caves, ray, groundHit, groundAt, here, seq }) {
-    Object.assign(this, { camera, canvas, layout, caves, ray, groundHit, groundAt, here, seq });
+  constructor({ scene, camera, canvas, layout, caves, ray, groundHit, groundAt, here }) {
+    Object.assign(this, { camera, canvas, layout, caves, ray, groundHit, groundAt, here });
     this.tool = null; // "caveSelect", "entrance" or "caveAdd" while it's picked
     this.reach = REACH_FT[1]; // how far past you a passage reaches
     this.ghost = null; // the passage aimed, { from, to, at, ends, problem }
@@ -85,7 +84,7 @@ export class CavePlan {
     this.pointer = null; // where the pointer is on the canvas, [x, y] px, or null
     this.hovered = null; // the id of the entrance or point the pointer's on
     this.turn = 0; // degrees an entrance is turned from the way the camera looks
-    this.history = []; // { seq, layout }: the layout as it was before each change, latest last
+    this.history = []; // { net, layout }: the layout as it was before each change to network `net`, latest last
     this.details = { ...ENTRANCE_DEFAULTS };
     this.adding = configOf(POINT_DEFAULTS); // add's options, which the points it places take
     this.net = NEW; // the network new entrances go into, or NEW
@@ -118,7 +117,7 @@ export class CavePlan {
       const point = this.layout.points.get(this.selected);
       if (point) {
         if (point[key] === value || !(key in point)) return;
-        this.remember();
+        this.remember(point.net);
         point[key] = value;
         this.layout.version++;
         return this.carve();
@@ -129,7 +128,7 @@ export class CavePlan {
       // An entrance changed has to fit where it is.
       const problem = entranceProblem({ ...e, [key]: value }, this.groundAt);
       if (problem) return alert(problem);
-      this.remember();
+      this.remember(e.net);
       e[key] = value;
       const end = this.layout.points.get(e.point);
       end.at = entranceEnd(e);
@@ -188,26 +187,37 @@ export class CavePlan {
     this.drawPreview();
   }
 
-  remember() {
+  // Keeps the layout as it is, before a change to network `net`. Switching phase isn't kept:
+  // it's never undone.
+  remember(net) {
     // A copy: changes are made in place, and would change what's kept.
-    this.history.push({ seq: this.seq(), layout: structuredClone(this.layout.toJSON()) });
+    this.history.push({ net, layout: structuredClone(this.layout.toJSON()) });
     if (this.history.length > UNDOS) this.history.shift();
   }
 
-  // Undoes the last layout change: gives false where there's none.
+  // Undoes the last layout change, but not one to a network being polished. Gives false where
+  // there's nothing it can undo.
   undo() {
-    const last = this.history.pop();
+    const last = this.history.at(-1);
     if (!last) return false;
+    if (this.layout.locked(last.net)) {
+      alert(`the last layout change was to ${last.net}, which is being polished`);
+      return true;
+    }
+    this.history.pop();
     this.restore(last);
     this.carve(false);
     return true;
   }
 
-  // Puts the layout back as it was in history entry `last`, keeping what's carved.
+  // Puts the layout back as it was in history entry `last`, keeping what's carved and each
+  // network's phase as it is now.
   restore(last) {
     const carved = this.layout.carved;
+    const phases = new Map([...this.layout.networks].map(([slug, n]) => [slug, n.phase]));
     this.layout.load(last.layout);
     this.layout.carved = carved;
+    for (const [slug, n] of this.layout.networks) if (phases.has(slug)) n.phase = phases.get(slug);
     this.layout.version++;
     if (!this.layout.get(this.selected)) this.selected = null;
     if (!this.layout.networks.has(this.net)) this.net = NEW;
@@ -218,7 +228,7 @@ export class CavePlan {
     if (!this.selected) return;
     const locked = this.lockedProblem(this.layout.get(this.selected)?.net);
     if (locked) return alert(locked);
-    this.remember();
+    this.remember(this.layout.get(this.selected).net);
     this.layout.remove(this.selected);
     this.selected = null;
     this.carve();
@@ -231,7 +241,7 @@ export class CavePlan {
     if (!from || !to) return;
     const problem = this.lockedProblem(from) ?? this.nameProblem(to);
     if (problem) return alert(problem);
-    this.remember();
+    this.remember(to);
     this.layout.renameNetwork(from, to);
     if (this.net === from) this.net = to;
     this.current = to;
@@ -251,13 +261,12 @@ export class CavePlan {
       $("caveUnlockNet").textContent = net;
       return $("caveUnlockAsk").showModal();
     }
-    this.remember();
     this.layout.setPhase(net, "polish");
     alert(`${net} is being polished`);
   }
 
   // Takes the current network back to layout, carving it again from its layout. Its hand edits
-  // are gone, so nothing before this can be undone.
+  // are gone, and their undos with them (onUnlock); its layout changes can still be undone.
   unlock() {
     const net = this.current;
     if (!net || !this.layout.locked(net)) return;
@@ -270,7 +279,6 @@ export class CavePlan {
     }
     this.layout.carved = plan.carved;
     this.layout.version++;
-    this.history = [];
     this.onUnlock?.(net);
     alert(`${net} is back in layout and carved again from it`);
   }
@@ -355,7 +363,7 @@ export class CavePlan {
         const problem = this.nameProblem(slug);
         if (problem) return alert(problem);
       }
-      this.remember();
+      this.remember(slug);
       if (this.net === NEW) {
         this.layout.addNetwork(slug);
         this.net = slug;
@@ -376,7 +384,7 @@ export class CavePlan {
       return alert(open || !this.layout.networks.size ? "place an entrance first, then add passages from inside" : "every network is being polished; take one back to layout to add passages to it");
     }
     if (ghost.problem) return alert(ghost.problem);
-    this.remember();
+    this.remember(ghost.from.net);
     this.selected = this.layout.extend(ghost.from, ghost.to ? { to: ghost.to } : { at: ghost.at, config: this.adding }).id;
     this.current = this.layout.points.get(this.selected).net;
     if (this.carve() && ghost.warnings.length) alert(ghost.warnings.join("; "));

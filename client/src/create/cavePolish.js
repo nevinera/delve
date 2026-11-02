@@ -34,15 +34,14 @@ const voxelOf = (p) => p.map((v) => Math.floor(v / VOXEL_FT));
 const middleOf = (voxel) => voxel.map((i) => (i + 0.5) * VOXEL_FT);
 
 export class CavePolish {
-  // ray(): the pointer's THREE.Raycaster, or null off the view. seq(): the next number in the
-  // order cave changes are made, shared with the layout's, for undo.
-  constructor({ scene, caves, layout, ray, camera, seq }) {
-    Object.assign(this, { caves, layout, ray, camera, seq });
+  // ray(): the pointer's THREE.Raycaster, or null off the view.
+  constructor({ scene, caves, layout, ray, camera }) {
+    Object.assign(this, { caves, layout, ray, camera });
     this.tool = null; // one of TOOLS while it's picked
     this.brush = { shape: "sphere", size: 2, fill: null, paint: 0 }; // fill: the rock blocks and sculpt use, or null for the same
     this.stroke = null; // the drag being worked: { before, net, op, level, down, last }
     this.box = null; // the box brush's corners, { a, b, net, op }, voxels
-    this.undos = []; // { seq, before }
+    this.undos = []; // the tiles each edit changed, as they were before it
     this.previewed = null; // what smooth's outlines were worked out for
     this.ghost = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: GHOST_RGB, depthTest: false, transparent: true, opacity: 0.8 }));
     this.adds = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: ADD_RGB, depthTest: false, transparent: true, opacity: 0.8 }));
@@ -188,15 +187,15 @@ export class CavePolish {
 
   remember(before) {
     if (!before) return;
-    this.undos.push({ seq: this.seq(), before });
+    this.undos.push(before);
     if (this.undos.length > UNDOS) this.undos.shift();
   }
 
   // Undoes the last hand edit: gives false where there's none.
   undo() {
-    const last = this.undos.pop();
-    if (!last) return false;
-    this.caves.restore(last.before);
+    const before = this.undos.pop();
+    if (!before) return false;
+    this.caves.restore(before);
     this.previewed = null;
     return true;
   }
