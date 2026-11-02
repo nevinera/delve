@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CAVES_PATH, TILE_COLUMNS, VOXEL_FT, allStone, carve, cavesPath, decodeCaves, emptyColumns, encodeCaves, sharedChunks, tileIndex } from "../v2/caves.js";
+import { CAVES_PATH, TILE_COLUMNS, VOXEL_FT, allStone, carve, cavesPath, decodeCaves, emptyColumns, encodeCaves, floorAt, sharedChunks, tileIndex } from "../v2/caves.js";
 import { CELL_FT, CHUNK_FT, PLATE_TILES, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial } from "./caveMaterial.js";
 import { caveBlocks, caveMesh, opensAt } from "./caveMesh.js";
@@ -576,7 +576,8 @@ export class Caves {
     const g = this.renditions.heightAt(x, z) ?? EMPTY_FT;
     const spans = this.spans(Math.floor(x / VOXEL_FT), Math.floor(z / VOXEL_FT));
     if (!spans.length) return g;
-    const floors = spans.filter((s) => s.floor <= g).map((s) => s.floor);
+    const spansAt = (ci, cj) => this.spans(ci, cj);
+    const floors = spans.filter((s) => s.floor <= g).map((s) => floorAt(spansAt, x, z, s));
     if (!spans.some((s) => s.floor < g && g < s.ceiling)) floors.push(g);
     const below = floors.filter((y) => y <= under);
     return below.length ? Math.max(...below) : Math.min(...floors);

@@ -1,6 +1,6 @@
 import { gzipSync } from "fflate";
 import { beforeAll, describe, expect, it } from "vitest";
-import { MAX_SPAN_FT, NET_SLUG, TILE_COLUMNS, decodeCaves, emptyColumns, encodeCaves, openAir } from "./caves.js";
+import { MAX_SPAN_FT, NET_SLUG, TILE_COLUMNS, allStone, decodeCaves, emptyColumns, encodeCaves, floorAt, openAir, smoothFloor } from "./caves.js";
 import { loadZipper } from "./zstd.js";
 
 const COLUMNS = TILE_COLUMNS * TILE_COLUMNS;
@@ -98,5 +98,32 @@ describe("caves files, zipped", () => {
       expect(line.split(" ")[0]).toMatch(/^c[23]z$/);
       expect(back).toEqual(columns);
     }
+  });
+});
+
+describe("smooth cave floors", () => {
+  // A passage along x, 20 ft up, with its floor at floors(ci) in column ci.
+  const passage = (floors, hewn = false) => (ci, cj) => (Math.abs(cj) <= 3 && floors(ci) !== null ? [{ floor: floors(ci), ceiling: 20, stone: allStone(0, hewn), net: "n" }] : []);
+  const at = (spansAt, x) => floorAt(spansAt, x, 1, spansAt(Math.floor(x / 2), 0)[0]);
+
+  it("runs a stepped slope's floor up evenly, not in stairs", () => {
+    // Up a voxel every two columns: 1 ft a column.
+    const stairs = passage((ci) => 2 * Math.floor(ci / 2));
+    const heights = [10, 11, 12, 13, 14, 15, 16].map((x) => at(stairs, x));
+    const rises = heights.slice(1).map((h, i) => h - heights[i]);
+    for (const rise of rises) expect(rise).toBeCloseTo(0.5, 0);
+    expect(heights[0]).toBeGreaterThan(stairs(5, 0)[0].floor - 2);
+  });
+
+  it("keeps a flat floor flat, a ledge sharp, and a hewn floor stepped", () => {
+    const flat = passage(() => 0);
+    expect(at(flat, 7)).toBe(0);
+    // A 6 ft drop at column 10, 20 ft along.
+    const ledge = passage((ci) => (ci < 10 ? 6 : 0));
+    expect(at(ledge, 30)).toBe(0);
+    expect(at(ledge, 5)).toBe(6);
+    expect(smoothFloor(ledge, 9, 0, ledge(9, 0)[0])).toBe(6);
+    const hewn = passage((ci) => 2 * Math.floor(ci / 2), true);
+    expect(at(hewn, 11)).toBe(4);
   });
 });

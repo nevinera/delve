@@ -1,5 +1,5 @@
 import { hash2, facets, valueNoise } from "../world/noise.js";
-import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, isHewn, stonePart, themeOf } from "../v2/caves.js";
+import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, floorAt, isHewn, smoothFloor, stonePart, themeOf } from "../v2/caves.js";
 
 // Mesh data for a tile's caves (v2/caves.js), without three.js, so it can be tested. The rock's
 // surface runs between the air of the caves' spans and the rock round them, smoothed by surface
@@ -9,7 +9,9 @@ import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, isHewn, stonePart, themeOf } from 
 // between an open column and a solid one, it's where the open column's height would run out,
 // going by how it shrinks from the column behind it (wallAt), so walls aren't held to the
 // columns' grid. A cube by hewn stone (its floor, wall or ceiling, as it faces) keeps its vertex at the columns' corner instead, so hewn
-// rock is squared off. Faces look into the air, so from outside a cave its rock isn't drawn.
+// rock is squared off. A floor's vertex is on the smooth floor walked on (v2/caves.js's floorAt),
+// not the voxels' steps, so feet meet it. Faces look into the air, so from outside a cave its rock
+// isn't drawn.
 //
 // Each theme draws the rock its own way (THEME_LOOK): vertices are drawn toward their
 // neighbours', rounding off the columns' grid, then pushed in or out by noise along the way the
@@ -150,7 +152,7 @@ export function caveMesh(tx, tz, world) {
     }
     let [sx, sy, sz, n] = [0, 0, 0, 0];
     let [upY, ups] = [0, 0]; // crossings on the up edges alone
-    let floor = false; // whether the vertex is on a span's floor
+    let floor = null; // the span whose floor the vertex is on, if it's on one
     const touched = []; // the spans the cube's crossings meet
     for (const [p, q] of CUBE_EDGES) {
       const [u, v] = [corners[p], corners[q]];
@@ -164,7 +166,7 @@ export function caveMesh(tx, tz, world) {
         const span = spans(u[0], u[1]).find((s) => (s.floor >= lowY && s.floor <= highY) || (s.ceiling >= lowY && s.ceiling <= highY));
         if (span) {
           y = span.floor >= lowY && span.floor <= highY && sv === CAVE ? span.floor : span.ceiling;
-          if (sv === CAVE && y === span.floor) floor = true;
+          if (sv === CAVE && y === span.floor) floor = span;
         }
       }
       for (const w of [u, v]) {
@@ -230,6 +232,13 @@ export function caveMesh(tx, tz, world) {
     kept.set(key, out);
     return out;
   };
+  // Floors smoothed, kept by column and floor.
+  const smoothed = new Map();
+  const smoothOf = (at, ci, cj, span) => {
+    const key = `${ci},${cj},${span.floor}`;
+    if (!smoothed.has(key)) smoothed.set(key, smoothFloor(at, ci, cj, span));
+    return smoothed.get(key);
+  };
   const [ox, oz] = [ci0 * VOXEL_FT, cj0 * VOXEL_FT];
   // The vertex in grid cube (a, b, c), drawn as its theme draws it.
   const vertex = (a, b, c) => {
@@ -244,6 +253,8 @@ export function caveMesh(tx, tz, world) {
       at = at.map((v, i) => v + (smooth[i] - v) * look.relax);
       const bump = themeBump(here.theme, at, look) * look.bumpFt;
       at = at.map((v, i) => v + here.toward[i] * bump);
+      // A floor's on the floor walked on.
+      if (here.floor) at = [at[0], floorAt(spans, at[0], at[2], here.floor, smoothOf), at[2]];
     }
     const index = positions.length / 3;
     positions.push(at[0] - ox, at[1], at[2] - oz);

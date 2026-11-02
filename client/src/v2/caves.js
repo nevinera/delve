@@ -192,6 +192,46 @@ export function cellAt(columnsOf, ci, cj, make) {
   return columns && { columns, k: (cj - tz * TILE_COLUMNS) * TILE_COLUMNS + ci - tx * TILE_COLUMNS, key: `${tx},${tz}` };
 }
 
+// The smooth floor walked on and drawn, from the voxels' stepped floors, so slopes aren't stairs.
+// Each floor is smoothed to the mean of the floors joined to it within SMOOTH_COLUMNS columns
+// round it, kept within a voxel of where it is; between columns' middles, the surface runs evenly.
+// A floor joins one in a column beside it where that's within a voxel for each column away and
+// their air overlaps; a bigger drop is a ledge, kept sharp. Hewn floors aren't smoothed.
+// spansAt(ci, cj): a column's spans.
+const SMOOTH_COLUMNS = 2;
+const joinedFloor = (spans, span, reach) => spans.find((s) => Math.abs(s.floor - span.floor) <= reach && s.floor < span.ceiling && s.ceiling > span.floor);
+
+// Span `span`'s floor in column (ci, cj), smoothed.
+export function smoothFloor(spansAt, ci, cj, span) {
+  if (isHewn(span.stone[2])) return span.floor;
+  let [sum, n] = [0, 0];
+  for (let dj = -SMOOTH_COLUMNS; dj <= SMOOTH_COLUMNS; dj++) {
+    for (let di = -SMOOTH_COLUMNS; di <= SMOOTH_COLUMNS; di++) {
+      const s = di || dj ? joinedFloor(spansAt(ci + di, cj + dj), span, VOXEL_FT * Math.max(Math.abs(di), Math.abs(dj))) : span;
+      if (s) [sum, n] = [sum + s.floor, n + 1];
+    }
+  }
+  return Math.max(span.floor - VOXEL_FT, Math.min(span.floor + VOXEL_FT, sum / n));
+}
+
+// The smooth floor of span `span` of the column (x, z) is in, at continent feet (x, z): between
+// the smoothed floors at the middles of the four columns round it, those not joined to it taking
+// its own. `smooth` is smoothFloor, or a kept copy of it.
+export function floorAt(spansAt, x, z, span, smooth = smoothFloor) {
+  const [ci, cj] = [Math.floor(x / VOXEL_FT), Math.floor(z / VOXEL_FT)];
+  if (isHewn(span.stone[2])) return span.floor;
+  const own = smooth(spansAt, ci, cj, span);
+  const [u, v] = [x / VOXEL_FT - 0.5, z / VOXEL_FT - 0.5];
+  const [i0, j0] = [Math.floor(u), Math.floor(v)];
+  const at = (i, j) => {
+    if (i === ci && j === cj) return own;
+    const s = joinedFloor(spansAt(i, j), span, VOXEL_FT);
+    return s && !isHewn(s.stone[2]) ? smooth(spansAt, i, j, s) : own;
+  };
+  const [fu, fv] = [u - i0, v - j0];
+  return (at(i0, j0) * (1 - fu) + at(i0 + 1, j0) * fu) * (1 - fv) + (at(i0, j0 + 1) * (1 - fu) + at(i0 + 1, j0 + 1) * fu) * fv;
+}
+
 // Closes the pockets of air with a column within a column of [x0, z0, x1, z1]: air joined through
 // the sides of columns, smaller than POCKET_FT3 and nowhere reaching the ground. at(cell, make)
 // is carve's; the "tx,tz" of tiles changed are added to `changed`.

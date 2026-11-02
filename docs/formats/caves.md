@@ -21,6 +21,14 @@ A stone type is a theme, 0 jagged, 1 smooth, 2 carved or 3 mined, plus 4 if it's
 
 Only an entrance in the [cave layout](cave-layout.md) may reach up through the ground.
 
+## Smooth floors
+
+Floors are walked on and drawn smooth, not as the voxels' 2 ft steps. Nothing about it is kept in the file; readers work it out from the spans, the same way everywhere (`smoothFloor` and `floorAt` in `client/src/v2/caves.js`):
+
+- A floor's smoothed height is the mean of the floors joined to it within 2 columns each way, its own included, kept within 2 ft of its own. A floor in another column joins it where it's within 2 ft for each column away and their air overlaps. A bigger drop is a ledge, and stays sharp.
+- Between the middles of columns, the floor runs evenly from one smoothed height to the next. A column beside it with no floor joined within 2 ft takes the floor's own.
+- A hewn floor isn't smoothed.
+
 ## Mouths
 
 Where an entrance opens through the ground, the caves draw the ground near it, not the ground's own mesh. Each 4 ft ground cell with an open column in it, or next to one, is drawn by the caves: a 2 ft square for each column that's still closed, on the ground's heights, in the ground's look. Open columns are left out, so the mouth is a hole in the ground with the cave behind it. Nothing about mouths is kept in the file; they come from the spans.
