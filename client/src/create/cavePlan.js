@@ -423,10 +423,7 @@ export class CavePlan {
     else to = null;
     const ends = [{ ...start, at: from.at }, { ...(to ? configNear(this.layout, to) : this.adding), at }];
     const length = Math.hypot(...at.map((v, k) => v - from.at[k]));
-    const joins = [from, to].filter(Boolean).flatMap((spot) => {
-      const segment = this.layout.segments.get(spot.id);
-      return segment ? [segment.from, segment.to] : [spot.id];
-    });
+    const joins = [...nearFrom(this.layout, from), ...(to ? spotEnds(this.layout, to) : [])];
     const problem =
       length < JOIN_FT
         ? "a passage has to be longer than that"
@@ -445,14 +442,11 @@ export class CavePlan {
 
   // tooClose for passages from `from`, as a test of where they go to, worked out once.
   closeTo(from) {
-    const ends = (spot) => {
-      const segment = this.layout.segments.get(spot.id);
-      return segment ? [segment.from, segment.to] : [spot.id];
-    };
     const steps = 2 - this.layout.segments.has(from.id);
-    const near = [steps - 1, steps].map((n) => new Set(n < 0 ? [] : this.layout.around(ends(from), n)));
-    return (to) => ends(to).some((id) => near[this.layout.segments.has(to.id) ? 0 : 1].has(id));
+    const near = [steps - 1, steps].map((n) => new Set(n < 0 ? [] : this.layout.around(spotEnds(this.layout, from), n)));
+    return (to) => spotEnds(this.layout, to).some((id) => near[this.layout.segments.has(to.id) ? 0 : 1].has(id));
   }
+
 
   wheel(e) {
     if (this.tool !== "caveAdd") return false;
@@ -711,3 +705,14 @@ function entranceLines(entrance, groundAt, problem = null) {
   return out;
 }
 
+// The ids of the points of spot `spot` in `layout`: the point, or a segment's two.
+function spotEnds(layout, spot) {
+  const segment = layout.segments.get(spot.id);
+  return segment ? [segment.from, segment.to] : [spot.id];
+}
+
+// The ids of the points whose passages are within two links of spot `from`, which a passage
+// from it can come near.
+export function nearFrom(layout, from) {
+  return layout.around(spotEnds(layout, from), 1 - layout.segments.has(from.id));
+}

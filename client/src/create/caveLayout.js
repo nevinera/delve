@@ -307,7 +307,7 @@ export function rockProblem(layout, net, ends, joins = []) {
   if (!nearest) return null;
   const { s, gap } = nearest;
   const left = gap > 0 ? `only ${Math.floor(gap)} ft of rock` : "no rock";
-  return s.net === net ? `${left} between it and ${s.id}; leave ${ROCK_FT} ft` : `${left} between it and ${s.net}; leave ${NETWORK_GAP_FT} ft between networks`;
+  return s.net === net ? `${left} between it and the passage from ${s.from} to ${s.to}; leave ${ROCK_FT} ft` : `${left} between it and ${s.net}; leave ${NETWORK_GAP_FT} ft between networks`;
 }
 
 export const configOf = (point) => structuredClone(Object.fromEntries(CONFIG.map((key) => [key, point[key]])));

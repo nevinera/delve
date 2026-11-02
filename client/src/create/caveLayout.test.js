@@ -178,7 +178,7 @@ describe("cave layout", () => {
     layout.addSegment("far-run", c.id, d.id);
     // Over it, 16 ft up and 10 ft across: 6 ft of rock.
     const over = [end([0, -44, 10]), end([64, -44, 10])];
-    expect(rockProblem(layout, "n", over)).toBe(`only 6 ft of rock between it and ${ab.id}; leave 8 ft`);
+    expect(rockProblem(layout, "n", over)).toBe(`only 6 ft of rock between it and the passage from ${a.id} to ${ab.to}; leave 8 ft`);
     expect(rockProblem(layout, "n", over, [a.id])).toBe(null);
     // Near another network.
     expect(rockProblem(layout, "n", [end([0, -60, 380]), end([64, -60, 380])])).toBe("only 8 ft of rock between it and far-run; leave 32 ft between networks");
