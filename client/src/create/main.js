@@ -436,21 +436,18 @@ function start(world, changes, fresh) {
     // Under water, murky, close in.
     const surface = waterAt(camera.position.x, camera.position.z);
     const under = surface != null && camera.position.y < surface;
-    // Under the ground, but where a cave opens over the camera, dark, the ground drawn as lines,
-    // and nothing on it.
+    // In the rock under the ground, dark, the ground over it drawn as a ceiling (overhead), and
+    // nothing on it. In a cave's air the world's drawn as ever, so it shows out of the mouth.
     const [cx, cz] = [camera.position.x, camera.position.z];
-    const buried = camera.position.y < groundAt(cx, cz) && !caves.mouth(Math.floor(cx / VOXEL_FT), Math.floor(cz / VOXEL_FT));
+    const buried = camera.position.y < groundAt(cx, cz) && caves.solid(cx, camera.position.y, cz) && !caves.mouth(Math.floor(cx / VOXEL_FT), Math.floor(cz / VOXEL_FT));
     ground.group.visible = !buried;
     caves.groundGroup.visible = !buried;
     // In the rock, the caves' outlines show.
-    caves.show("lines", buried && caves.solid(cx, camera.position.y, cz));
+    caves.show("lines", buried);
     caves.fromEarth(ghost());
     timed("ground", () => overhead.tick(buried, x, z, now - lastOverhead > OVERHEAD_EVERY_MS && (lastOverhead = now)));
     earth.tick(camera, ghost());
-    for (const shown of [sea.mesh, falls.group]) shown.visible = !buried;
-    // In a cave, what's placed in it shows; the rock hides what's on the ground over it.
-    const inCave = buried && !caves.solid(cx, camera.position.y, cz);
-    for (const shown of [things.group, things.outlines]) shown.visible = !buried || inCave;
+    for (const shown of [sea.mesh, falls.group, things.group, things.outlines]) shown.visible = !buried;
     if (buried) for (const shown of [scatter.group, clutter.group, surfaces.group]) shown.visible = false;
     const sky = buried ? UNDERGROUND : under ? UNDERWATER.color : SKY;
     scene.fog.color.set(sky);
