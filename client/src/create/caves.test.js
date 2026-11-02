@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { TILE_CELLS, carve, cavesPath, growCave, smoothCave, emptyColumns, fillRock, openAir } from "../v2/caves.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
-import { caveMesh, mouthCells, openEdges } from "./caveMesh.js";
+import { caveMesh, fitPlane, joinedPieces, mouthCells, openEdges } from "./caveMesh.js";
 import { Caves } from "./caves.js";
 
 // Flat ground at `height`, everywhere, with its cells all one color.
@@ -172,5 +172,27 @@ describe("open edges", () => {
     // A second triangle in another mesh, sharing the edge from (1, 0, 0) to (0, 0, 1).
     const b = { positions: [0, 0, 0, 0, 0, -1, -1, 0, 0], indices: [0, 1, 2], offset: [1, 0, 1] };
     expect(openEdges([a, b]).length / 6).toBe(4);
+  });
+});
+
+describe("planes", () => {
+  it("gathers segments into the pieces they join into", () => {
+    const pieces = joinedPieces([0, 0, 0, 1, 0, 0, 1, 0, 0, 1, 0, 1, 5, 0, 5, 6, 0, 5]);
+    expect(pieces.map((p) => p.length).sort()).toEqual([2, 3]);
+  });
+
+  it("fits the plane nearest some points", () => {
+    // A loop on the plane y = 0.5 x, tilted up toward +x.
+    const points = Array.from({ length: 24 }, (_, i) => {
+      const [x, z] = [10 * Math.cos((i / 24) * Math.PI * 2), 6 * Math.sin((i / 24) * Math.PI * 2)];
+      return [x, 0.5 * x + 3, z];
+    });
+    const { center, normal, reach } = fitPlane(points);
+    expect(center[1]).toBeCloseTo(3);
+    const length = Math.hypot(1, 0.5);
+    expect(normal[0]).toBeCloseTo(-0.5 / length);
+    expect(normal[1]).toBeCloseTo(1 / length);
+    expect(normal[2]).toBeCloseTo(0);
+    expect(reach[0][1] - reach[0][0]).toBeCloseTo(20 * length, 0);
   });
 });

@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { CAVES_PATH, TILE_CELLS, allStone, carve, cavesPath, growCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
 import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial, setBrush } from "./caveMaterial.js";
-import { caveMesh, openEdges, opensAt } from "./caveMesh.js";
+import { caveMesh, fitPlane, joinedPieces, openEdges, opensAt } from "./caveMesh.js";
 import { EMPTY_FT, FULL_TILES } from "./ground.js";
 
 export { CAVES_PATH };
@@ -62,6 +62,13 @@ export class Caves {
       return lines;
     });
     this.endsMade = null; // what the ends were found from
+    // And the plane nearest each of the ground's openings, in magenta.
+    this.planes = new THREE.Group();
+    scene.add(this.planes);
+    this.planeMaterials = [
+      new THREE.MeshBasicMaterial({ color: 0xff2bd6, transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false }),
+      new THREE.LineBasicMaterial({ color: 0xff2bd6, depthTest: false, transparent: true }),
+    ];
     this.world = {
       spans: (ci, cj) => this.spans(ci, cj),
       ground: (ci, cj) => this.groundCell(ci, cj),
@@ -318,6 +325,30 @@ export class Caves {
       this.ends[k].geometry = new THREE.BufferGeometry();
       this.ends[k].geometry.setAttribute("position", new THREE.Float32BufferAttribute(openEdges(data, inCore), 3));
     });
+    this.drawPlanes();
+  }
+
+  // The plane nearest each of the ground's openings (the teal ends), drawn as far as it reaches.
+  drawPlanes() {
+    for (const child of [...this.planes.children]) {
+      this.planes.remove(child);
+      child.geometry.dispose();
+    }
+    const segments = this.ends[1].geometry.attributes.position?.array ?? [];
+    for (const points of joinedPieces(segments)) {
+      if (points.length < 3) continue;
+      const { center, across, along, reach } = fitPlane(points);
+      const at = (u, v) => center.map((c, k) => c + across[k] * u + along[k] * v);
+      const [[u0, u1], [v0, v1]] = reach;
+      const corners = [at(u0, v0), at(u1, v0), at(u1, v1), at(u0, v1)];
+      const face = new THREE.BufferGeometry();
+      face.setAttribute("position", new THREE.Float32BufferAttribute([...corners[0], ...corners[1], ...corners[2], ...corners[0], ...corners[2], ...corners[3]], 3));
+      const outline = new THREE.BufferGeometry();
+      outline.setAttribute("position", new THREE.Float32BufferAttribute(corners.flatMap((p, i) => [...p, ...corners[(i + 1) % 4]]), 3));
+      const [mesh, lines] = [new THREE.Mesh(face, this.planeMaterials[0]), new THREE.LineSegments(outline, this.planeMaterials[1])];
+      lines.renderOrder = 14;
+      this.planes.add(mesh, lines);
+    }
   }
 
   // Draws the grid, if it's shown, over what `renderer` drew last, hidden only by `over` (an

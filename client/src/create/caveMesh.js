@@ -335,3 +335,74 @@ export function openEdges(meshes, keep = () => true) {
   for (const { a, b, count } of edges.values()) if (count === 1 && keep(a, b)) out.push(...a, ...b);
   return out;
 }
+
+// Segments ([x, y, z, x, y, z] after another) gathered into the pieces they join up into, each
+// piece its points, once each.
+export function joinedPieces(segments) {
+  const key = (p) => p.map((v) => Math.round(v * 100)).join(",");
+  const points = new Map(); // key -> point
+  const parent = new Map();
+  const root = (k) => {
+    while (parent.get(k) !== k) {
+      parent.set(k, parent.get(parent.get(k)));
+      k = parent.get(k);
+    }
+    return k;
+  };
+  for (let i = 0; i < segments.length; i += 6) {
+    const [a, b] = [segments.slice(i, i + 3), segments.slice(i + 3, i + 6)];
+    const [ka, kb] = [key(a), key(b)];
+    for (const [k, p] of [[ka, a], [kb, b]]) {
+      if (points.has(k)) continue;
+      points.set(k, p);
+      parent.set(k, k);
+    }
+    parent.set(root(ka), root(kb));
+  }
+  const pieces = new Map();
+  for (const [k, p] of points) pieces.set(root(k), [...(pieces.get(root(k)) ?? []), p]);
+  return [...pieces.values()];
+}
+
+// The plane nearest passing through all of `points` (least squares): { center, normal, across,
+// along, reach: [[low, high] across, [low, high] along] }, the normal facing up, `across` and
+// `along` lying in the plane, and reach how far the points go each way from the center.
+export function fitPlane(points) {
+  const n = points.length;
+  const center = [0, 1, 2].map((k) => points.reduce((sum, p) => sum + p[k], 0) / n);
+  const m = [0, 1, 2].map((i) => [0, 1, 2].map((j) => points.reduce((sum, p) => sum + (p[i] - center[i]) * (p[j] - center[j]), 0)));
+  // Its spread's axes (Jacobi turns), least spread last.
+  const axes = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  for (let sweep = 0; sweep < 32; sweep++) {
+    for (const [p, q] of [[0, 1], [0, 2], [1, 2]]) {
+      if (Math.abs(m[p][q]) < 1e-12) continue;
+      const theta = (m[q][q] - m[p][p]) / (2 * m[p][q]);
+      const t = Math.sign(theta || 1) / (Math.abs(theta) + Math.sqrt(theta * theta + 1));
+      const [c, s] = [1 / Math.sqrt(t * t + 1), t / Math.sqrt(t * t + 1)];
+      for (let k = 0; k < 3; k++) {
+        const [mkp, mkq] = [m[k][p], m[k][q]];
+        m[k][p] = c * mkp - s * mkq;
+        m[k][q] = s * mkp + c * mkq;
+      }
+      for (let k = 0; k < 3; k++) {
+        const [mpk, mqk] = [m[p][k], m[q][k]];
+        m[p][k] = c * mpk - s * mqk;
+        m[q][k] = s * mpk + c * mqk;
+      }
+      for (let k = 0; k < 3; k++) {
+        const [ap, aq] = [axes[k][p], axes[k][q]];
+        axes[k][p] = c * ap - s * aq;
+        axes[k][q] = s * ap + c * aq;
+      }
+    }
+  }
+  const order = [0, 1, 2].sort((a, b) => m[b][b] - m[a][a]);
+  const column = (j) => [axes[0][j], axes[1][j], axes[2][j]];
+  let [across, along, normal] = order.map(column);
+  if (normal[1] < 0) [normal, along] = [normal.map((v) => -v), along.map((v) => -v)];
+  const reach = [across, along].map((axis) => {
+    const d = points.map((p) => (p[0] - center[0]) * axis[0] + (p[1] - center[1]) * axis[1] + (p[2] - center[2]) * axis[2]);
+    return [Math.min(...d), Math.max(...d)];
+  });
+  return { center, normal, across, along, reach };
+}
