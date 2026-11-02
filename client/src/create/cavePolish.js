@@ -165,7 +165,7 @@ export class CavePolish {
   work(shape, op, net, stroke = null) {
     const groundAt = (ci, cj) => (Number.isFinite(this.caves.groundCell(ci, cj)) ? this.caves.groundCell(ci, cj) : null);
     const stone = allStone(this.brush.rock, this.brush.hewn);
-    return this.caves.edit((columnsOf) => {
+    const before = this.caves.edit((columnsOf) => {
       if (op === "carve") return carve(shape, columnsOf, groundAt, { net, mouth: false });
       if (op === "fill") return carve(shape, columnsOf, groundAt, { fill: true });
       return reshape(shape, columnsOf, (spans, low, high, around) => {
@@ -174,6 +174,8 @@ export class CavePolish {
         return smooth(spans, low, high, net, around);
       });
     });
+    if (this.caves.refused) this.status(this.caves.refused);
+    return before;
   }
 
   remember(before) {

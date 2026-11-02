@@ -174,7 +174,7 @@ export class CavePlan {
     this.layout.carved = carved;
     if (!this.layout.get(this.selected)) this.selected = null;
     this.status("");
-    this.carve();
+    this.carve(false);
   }
 
   deleteSelected() {
@@ -222,6 +222,10 @@ export class CavePlan {
     this.layout.setPhase(net, "layout");
     const plan = carvePlan(this.layout, { afresh: net }, this.groundAt);
     this.caves.carvePlan(plan, () => {});
+    if (this.caves.refused) {
+      this.layout.setPhase(net, "polish");
+      return this.status(this.caves.refused);
+    }
     this.layout.carved = plan.carved;
     this.layout.version++;
     this.history = [];
@@ -238,13 +242,27 @@ export class CavePlan {
   }
 
   // Carves what's changed since it was last carved: fills in what it carved before, then carves it
-  // as it is now, with what that fills in.
-  carve() {
+  // as it is now, with what that fills in. Where the caves refuse it, the change to the layout
+  // goes back, unless it was an undo (`revert` false), and it gives false.
+  carve(revert = true) {
     const plan = carvePlan(this.layout, undefined, this.groundAt);
-    if (plan.fills.length || plan.opens.length) this.caves.carvePlan(plan, () => {});
+    if ((plan.fills.length || plan.opens.length) && !this.caves.carvePlan(plan, () => {}) && this.caves.refused) {
+      const last = revert && this.history.pop();
+      if (last) {
+        const carved = this.layout.carved;
+        this.layout.load(last);
+        this.layout.carved = carved;
+        this.layout.version++;
+        if (!this.layout.get(this.selected)) this.selected = null;
+        if (!this.layout.networks.has(this.net)) this.net = NEW;
+      }
+      this.status(this.caves.refused);
+      return false;
+    }
     this.layout.carved = plan.carved;
     this.layout.version++;
     this.status(plan.unfit.length ? `${plan.unfit.join(", ")} won't fit under the ground, so ${plan.unfit.length > 1 ? "aren't" : "isn't"} carved` : "");
+    return true;
   }
 
   status(text) {
@@ -345,8 +363,7 @@ export class CavePlan {
     this.remember();
     this.selected = this.layout.extend(ghost.from, ghost.to ? { to: ghost.to } : { at: ghost.at }).id;
     this.net = this.layout.points.get(this.selected).net;
-    this.carve();
-    if (ghost.warnings.length) this.status(ghost.warnings.join("; "));
+    if (this.carve() && ghost.warnings.length) this.status(ghost.warnings.join("; "));
     this.aim();
   }
 
@@ -429,7 +446,7 @@ export class CavePlan {
   tick(inEarth) {
     if (!this.settled) {
       this.settled = true;
-      this.carve();
+      this.carve(false);
     }
     this.group.visible = inEarth || Boolean(this.tool) || this.caves.view === "config";
     if (!this.group.visible) return;

@@ -160,4 +160,15 @@ describe("caves", () => {
     expect(caves.tiles.size).toBe(0);
     expect(caves.unsavedFiles("main").get(cavesPath("main", [2, 3]))).toBe(null);
   });
+  it("refuses a carving that puts a second network in a chunk, even above the first", () => {
+    const caves = new Caves({ add() {} }, { heightAt: () => 0 });
+    expect(caves.dig({ kind: "box", at: [10, -60, 10], half: [4, 4, 4], yaw: 0 }, { net: "a" })).toBe(true);
+    const was = structuredClone([...caves.tiles]);
+    expect(caves.dig({ kind: "box", at: [20, -20, 20], half: [4, 4, 4], yaw: 0 }, { net: "b" })).toBe(false);
+    expect(caves.refused).toMatch(/a and b would share the 32 ft chunk at 0, 0/);
+    expect([...caves.tiles]).toEqual(was);
+    // The next chunk over's free.
+    expect(caves.dig({ kind: "box", at: [50, -60, 10], half: [4, 4, 4], yaw: 0 }, { net: "b" })).toBe(true);
+    expect(caves.refused).toBe(null);
+  });
 });

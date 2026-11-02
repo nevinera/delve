@@ -15,7 +15,7 @@ Under the ground everything is rock, except where a cave opens air. The caves ar
 - three stone types: its ceiling's, its walls' and its floor's.
 - the cave network it's in.
 
-Every cave is in a named network. A network's name is a slug: lowercase letters and digits in words joined by hyphens, such as `wailing-hollow`. Each 32 ft chunk of the caves belongs to one network. Two networks can cross over each other in plan, with at least 32 ft between their chunks up and down.
+Every cave is in a named network. A network's name is a slug: lowercase letters and digits in words joined by hyphens, such as `wailing-hollow`. Each 32 ft chunk of the caves belongs to one network, all the way down, so one network can't run above another. /create refuses a carving that would put a second network in a chunk.
 
 A stone type is a theme, 0 jagged, 1 smooth, 2 carved or 3 mined, plus 4 if it's hewn (cut flat-faced, as by hand). Where the rock faces up it takes the floor type of the nearest span, where it faces down the ceiling type, and where it faces sideways the wall type.
 

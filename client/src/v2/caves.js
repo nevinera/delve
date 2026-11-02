@@ -1,5 +1,5 @@
 import { bytesToDigits, digit, digits, digitsToBytes, readDigits } from "./digits.js";
-import { PLATE_TILES, TILE_FT } from "./sizes.js";
+import { CHUNK_FT, PLATE_TILES, TILE_FT } from "./sizes.js";
 import { unzip, zip } from "./zstd.js";
 
 // Caves (docs/formats/caves.md): air under the ground. Each tile that has any keeps a column of
@@ -242,6 +242,21 @@ function closePockets([x0, z0, x1, z1], at, groundAt, changed) {
       }
     }
   }
+}
+
+// Each 32 ft chunk's spans belong to one network, all the way down: a chunk index in a tile
+// (z * TILE_CHUNKS + x) -> the networks with spans in it, for each chunk more than one has.
+const CHUNK_COLUMNS = CHUNK_FT / VOXEL_FT;
+export function sharedChunks(columns) {
+  const nets = new Map();
+  for (let k = 0; k < columns.length; k++) {
+    for (const s of columns[k] ?? []) {
+      const c = Math.floor(Math.floor(k / TILE_COLUMNS) / CHUNK_COLUMNS) * (TILE_COLUMNS / CHUNK_COLUMNS) + Math.floor((k % TILE_COLUMNS) / CHUNK_COLUMNS);
+      if (!nets.has(c)) nets.set(c, new Set());
+      nets.get(c).add(s.net);
+    }
+  }
+  return new Map([...nets].filter(([, n]) => n.size > 1).map(([c, n]) => [c, [...n].sort()]));
 }
 
 // A new tile's columns: all rock.

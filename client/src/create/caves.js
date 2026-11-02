@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { CAVES_PATH, TILE_COLUMNS, VOXEL_FT, allStone, carve, cavesPath, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
-import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
+import { CAVES_PATH, TILE_COLUMNS, VOXEL_FT, allStone, carve, cavesPath, decodeCaves, emptyColumns, encodeCaves, sharedChunks, tileIndex } from "../v2/caves.js";
+import { CELL_FT, CHUNK_FT, PLATE_TILES, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial } from "./caveMaterial.js";
 import { caveBlocks, caveMesh, opensAt } from "./caveMesh.js";
 import { EMPTY_FT, FULL_TILES } from "./ground.js";
@@ -39,6 +39,7 @@ export class Caves {
     this.tiles = new Map(); // "tx,tz" -> columns, TILE_COLUMNS² spans each, or null for rock
     this.changed = new Set(); // "px,pz" of plates changed since they were saved
     this.undos = [];
+    this.refused = null; // why the last change was put back
     this.version = 0;
     this.group = new THREE.Group();
     scene.add(this.group);
@@ -241,8 +242,10 @@ export class Caves {
 
   // Makes a change, work(columnsOf), which gives the "tx,tz" of the tiles it changed, so it can
   // be undone: with what came before it (`join`), and with what comes after it till letGo
-  // (`joinable`). Gives whether anything changed.
+  // (`joinable`). Gives whether anything changed. A change that would put a second network in a
+  // 32 ft chunk is put back, with why in `refused`.
   change(work, join, joinable = true) {
+    this.refused = null;
     const before = new Map();
     const changed = work((tx, tz, make) => {
       const key = `${tx},${tz}`;
@@ -251,6 +254,14 @@ export class Caves {
     });
     for (const [key, columns] of before) if (!changed.has(key) && columns === null) this.tiles.delete(key);
     if (!changed.size) return false;
+    this.refused = this.shareProblem(changed, before);
+    if (this.refused) {
+      for (const [key, columns] of before) {
+        if (columns) this.tiles.set(key, columns);
+        else this.tiles.delete(key);
+      }
+      return false;
+    }
     // A drag undoes as one: what was there when it began. Each dig can be joined by those after
     // it (`join`) till letGo.
     const last = this.undos.at(-1);
@@ -262,6 +273,21 @@ export class Caves {
     }
     this.touched(changed);
     return true;
+  }
+
+  // Why tiles `changed` can't stay as they are, or null: a chunk shared by networks that wasn't
+  // shared in `before`.
+  shareProblem(changed, before) {
+    for (const key of changed) {
+      const was = before.get(key) ? sharedChunks(before.get(key)) : new Map();
+      for (const [c, nets] of sharedChunks(this.tiles.get(key))) {
+        if (was.get(c)?.length === nets.length) continue;
+        const [tx, tz] = key.split(",").map(Number);
+        const [x, z] = [tx * TILE_FT + (c % TILE_CHUNKS) * CHUNK_FT, tz * TILE_FT + Math.floor(c / TILE_CHUNKS) * CHUNK_FT];
+        return `can't carve: ${nets.join(" and ")} would share the 32 ft chunk at ${x}, ${z}, and each chunk belongs to one network, even one above another`;
+      }
+    }
+    return null;
   }
 
   // Makes a hand edit, work(columnsOf) as change takes it, undone not by undo but by restore:
