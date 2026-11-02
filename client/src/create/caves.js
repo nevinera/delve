@@ -442,6 +442,7 @@ export class Caves {
     geometry.setAttribute("color", new THREE.BufferAttribute(data.colors, 3));
     geometry.setAttribute("caveTheme", new THREE.BufferAttribute(data.themes, 1));
     geometry.setAttribute("caveDay", new THREE.BufferAttribute(data.days ?? new Float32Array(data.themes.length), 1));
+    geometry.setAttribute("caveGround", new THREE.BufferAttribute(data.grounds ?? new Float32Array(data.themes.length * 3), 3));
     geometry.setIndex(new THREE.BufferAttribute(data.indices, 1));
     if (data.normals) geometry.setAttribute("normal", new THREE.BufferAttribute(data.normals, 3));
     else geometry.computeVertexNormals();
@@ -460,6 +461,7 @@ export class Caves {
       earth.setAttribute("color", new THREE.BufferAttribute(data.ground.colors, 3));
       earth.setAttribute("normal", new THREE.BufferAttribute(data.ground.normals, 3));
       if (data.ground.rocks) earth.setAttribute("groundRock", new THREE.BufferAttribute(data.ground.rocks, 1));
+      if (data.ground.stones) earth.setAttribute("groundStone", new THREE.BufferAttribute(data.ground.stones, 3));
       earth.setIndex(new THREE.BufferAttribute(data.ground.indices, 1));
       const surface = new THREE.Mesh(earth, material);
       surface.position.copy(mesh.position);

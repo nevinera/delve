@@ -10,8 +10,9 @@ import { groundCells } from "./terrainMesh.js";
 // with distance before it would shimmer.
 //
 // Ground the caves draw round a mouth (caveMesh.js) takes on the rock's look toward its lip
-// (groundRock, 0 to 1/2 at the lip): its pattern fades, and the rock's grain comes in at half, as
-// the rock has it there.
+// (groundRock, 1 at the lip): the rock's color (groundStone), its pattern fading and the rock's
+// grain coming in, halfway at the lip, give or take a noise (lipNoise) the rock shares
+// (caveMaterial.js).
 //
 // Roads and highways in use are drawn over that from their middles (the tile's roads), so their
 // surface and edges are sharp, finer than the cells: packed earth, patchy, rutted and covered in
@@ -60,8 +61,8 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
     shader.uniforms.groundDetail = { value: detail };
     if (cells) Object.assign(shader.uniforms, material.userData.uniforms, { groundPatterns: { value: patterns } });
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nattribute float groundRock;\nvarying vec2 vGroundXZ;\nvarying vec3 vGroundAt;\nvarying float vGroundRock;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGroundAt = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvGroundXZ = vGroundAt.xz;\nvGroundRock = groundRock;");
+      .replace("#include <common>", "#include <common>\nattribute float groundRock;\nattribute vec3 groundStone;\nvarying vec3 vGroundStone;\nvarying vec2 vGroundXZ;\nvarying vec3 vGroundAt;\nvarying float vGroundRock;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGroundAt = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvGroundXZ = vGroundAt.xz;\nvGroundRock = groundRock;\nvGroundStone = groundStone;");
     const [fine, mid, broad] = SCALES_FT.map((ft) => (1 / ft).toFixed(5));
     const cellFt = (tile?.cellFt ?? 1).toFixed(1);
     shader.fragmentShader = shader.fragmentShader
@@ -72,6 +73,7 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
         varying vec2 vGroundXZ;
         varying vec3 vGroundAt;
         varying float vGroundRock;
+        varying vec3 vGroundStone;
         // The grain of jagged cave rock (caveMaterial.js's caveStone), about 0 to 1.
         float rockHash(vec3 p) {
           p = fract(p * 0.3183099 + 0.1);
@@ -87,6 +89,11 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
             mix(mix(rockHash(i + vec3(0, 0, 1)), rockHash(i + vec3(1, 0, 1)), f.x), mix(rockHash(i + vec3(0, 1, 1)), rockHash(i + vec3(1, 1, 1)), f.x), f.y),
             f.z);
         }
+// How far, give or take, the blend between a mouth's rock and the ground round it strays at p
+// (the same in groundMaterial.js and caveMaterial.js, so they agree at the lip): about -0.7 to 0.7.
+float lipNoise( vec3 p ) {
+  return ( 0.65 * rockNoise( p * 0.45 ) + 0.35 * rockNoise( p * 1.3 ) - 0.5 ) * 1.4;
+}
         float rockGrain(vec3 p) {
           float sum = 0.0;
           float amp = 0.5;
@@ -119,6 +126,11 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
       .replace(
         "#include <color_fragment>",
         `#include <color_fragment>
+        float toRock = 0.0;
+        if (vGroundRock > 0.0) {
+          toRock = clamp(vGroundRock * (0.5 + lipNoise(vGroundAt)), 0.0, 1.0);
+          diffuseColor.rgb = mix(diffuseColor.rgb, diffuse * vGroundStone, toRock);
+        }
         float grain = texture2D(groundDetail, vGroundXZ * ${fine}).r;
         float blotch = texture2D(groundDetail, vGroundXZ * ${mid} + 0.31).g;
         float sweep = texture2D(groundDetail, vGroundXZ * ${broad} + 0.67).g;
@@ -131,12 +143,12 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
           vec2 xz = vGroundXZ;
           vec4 g = mix(mix(groundAt(cell, xz), groundAt(cell + vec2(1.0, 0.0), xz), f.x), mix(groundAt(cell + vec2(0.0, 1.0), xz), groundAt(cell + 1.0, xz), f.x), f.y);
           vec3 pattern = mix(g.rgb, texture(groundPatterns, vec3(xz * PATTERN_SCALE[${LITTER}], ${LITTER}.0)).rgb, smoothstep(0.1, 0.6, g.w));
-          diffuseColor.rgb *= mix(vec3(1.0), pattern * 2.0, near * (1.0 - 2.0 * vGroundRock));
+          diffuseColor.rgb *= mix(vec3(1.0), pattern * 2.0, near * max(0.0, 1.0 - 2.0 * toRock));
           grain = mix(grain, 0.5, near);
         }
         #endif
         diffuseColor.rgb *= 0.6 + 0.3 * grain + 0.35 * blotch + 0.25 * sweep;
-        if (vGroundRock > 0.0) diffuseColor.rgb *= 1.0 + 0.4 * (rockGrain(vGroundAt * 1.1) - 0.5) * vGroundRock;
+        if (toRock > 0.0) diffuseColor.rgb *= 1.0 + 0.4 * (rockGrain(vGroundAt * 1.1) - 0.5) * toRock;
         #ifdef GROUND_ROADS
         {
           // The nearest road, by how far inside its edge this is (negative outside).

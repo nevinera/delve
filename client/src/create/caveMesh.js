@@ -30,9 +30,9 @@ import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, floorAt, smoothFloor, stonePart, t
 // cave, but for those on the band's edge, which stay on the ground's corners. The band's columns
 // nest in the ground's cells, so its edge lies on the ground's cells' edges and meets the ground
 // drawn round it. Within LIP_CUBES of the lip, where ground meets rock, the rock's smoothed as the
-// ground is, its bumps fading, and the two blend: the rock takes on the ground's color and the
-// day's light (days, caveMaterial.js's caveDay), and the ground the rock's color, halfway each
-// at the lip.
+// ground is, its bumps fading, and the two blend: the rock takes on the ground's color (grounds)
+// and the day's light (days, caveMaterial.js's caveDay), and the ground the rock's (stones,
+// groundMaterial.js's groundStone), halfway each at the lip, give or take a noise both share.
 //
 // The mesh covers the tile's grid edges, and reaches to its east and south neighbours' columns,
 // so tiles meet without gaps. Positions are feet from the tile's northwest corner.
@@ -133,6 +133,7 @@ export function caveMesh(tx, tz, world) {
   const colors = [];
   const themes = [];
   const days = []; // each vertex's share of the day's light, near a mouth's lip
+  const grounds = []; // and the ground's color there
   const indices = [];
   const rockColors = []; // each vertex's color as rock, and whether it's on a floor walked on
   const walkable = [];
@@ -337,8 +338,9 @@ export function caveMesh(tx, tz, world) {
     const shade = 1 + (hash2(a * 3 + c, b * 5 - c) * 2 - 1) * SHADE;
     const near = nearLip(a, b, c);
     // The ground's color is linear and the rock's isn't (caveMaterial.js makes it linear for the day).
-    const earthy = near && world.groundLook(a + 1, b + 1).color.map(unlinear);
-    colors.push(...rgb.map((v, m) => Math.min(1, (v / 255) * shade) * (1 - near / 2) + (near ? (earthy[m] * near) / 2 : 0)));
+    colors.push(...rgb.map((v) => Math.min(1, (v / 255) * shade)));
+    // The ground's color is linear and the rock's isn't (caveMaterial.js makes it linear for the day).
+    grounds.push(...(near ? world.groundLook(a + 1, b + 1).color.map(unlinear) : [0, 0, 0]));
     days.push(near);
     rockColors.push(...look.rgb.map((v) => Math.min(1, (v / 255) * shade)));
     walkable.push(here.floor && !steep);
@@ -346,7 +348,7 @@ export function caveMesh(tx, tz, world) {
     return index;
   };
   // The ground's own vertices, at the same places as the rock's, in the ground's look.
-  const earth = { positions: [], colors: [], normals: [], rocks: [], indices: [], pinned: [] };
+  const earth = { positions: [], colors: [], normals: [], rocks: [], stones: [], indices: [], pinned: [] };
   const earthVertices = new Map();
   const earthVertex = (a, b, c) => {
     const key = cubeKey(a, b, c);
@@ -356,10 +358,11 @@ export function caveMesh(tx, tz, world) {
     const index = earth.positions.length / 3;
     const { color, normal } = world.groundLook(a + 1, b + 1);
     const rock = THEME_LOOK[crossing(a, b, c).theme].rgb;
-    const share = nearLip(a, b, c) / 2;
+    const near = nearLip(a, b, c);
     earth.positions.push(at[0] - ox, at[1], at[2] - oz);
-    earth.colors.push(...color.map((v, m) => v * (1 - share) + linear(rock[m] / 255) * share));
-    earth.rocks.push(share);
+    earth.colors.push(...color);
+    earth.stones.push(...rock.map((v) => linear(v / 255)));
+    earth.rocks.push(near);
     earth.normals.push(...normal);
     earth.pinned.push(crossing(a, b, c).pinned);
     earthVertices.set(key, index);
@@ -405,14 +408,14 @@ export function caveMesh(tx, tz, world) {
   }
   const surface = earthMesh(earth);
   if (!indices.length && !surface) return null;
-  const mesh = { positions: Float32Array.from(positions), colors: Float32Array.from(colors), themes: Float32Array.from(themes), days: Float32Array.from(days), indices: Uint32Array.from(indices), ground: surface };
+  const mesh = { positions: Float32Array.from(positions), colors: Float32Array.from(colors), themes: Float32Array.from(themes), days: Float32Array.from(days), grounds: Float32Array.from(grounds), indices: Uint32Array.from(indices), ground: surface };
   return BLEND_FLOORS ? mesh : unblended(mesh, rockColors, walkable);
 }
 
 // A mesh with each face floor or rock, not blending: floor where its corners are all on floor
 // walked on and it's no steeper than WALK_DEG itself, and rock otherwise. Its faces keep their own
 // corners, with the normals the shared corners had, so it's lit as smoothly.
-function unblended({ positions, colors, themes, days, indices, ground }, rockColors, walkable) {
+function unblended({ positions, colors, themes, days, grounds, indices, ground }, rockColors, walkable) {
   const normals = new Float32Array(positions.length);
   const corner = (i) => [positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]];
   const faceNormal = (t) => {
@@ -425,7 +428,7 @@ function unblended({ positions, colors, themes, days, indices, ground }, rockCol
     for (let k = 0; k < 3; k++) for (let m = 0; m < 3; m++) normals[indices[t + k] * 3 + m] += n[m];
   }
   const walkCos = Math.cos((WALK_DEG * Math.PI) / 180);
-  const out = { positions: new Float32Array(indices.length * 3), colors: new Float32Array(indices.length * 3), normals: new Float32Array(indices.length * 3), themes: new Float32Array(indices.length), days: new Float32Array(indices.length), indices: Uint32Array.from(indices.keys()), ground };
+  const out = { positions: new Float32Array(indices.length * 3), colors: new Float32Array(indices.length * 3), normals: new Float32Array(indices.length * 3), themes: new Float32Array(indices.length), days: new Float32Array(indices.length), grounds: new Float32Array(indices.length * 3), indices: Uint32Array.from(indices.keys()), ground };
   for (let t = 0; t < indices.length; t += 3) {
     const n = faceNormal(t);
     const floor = [0, 1, 2].every((k) => walkable[indices[t + k]]) && n[1] / (Math.hypot(...n) || 1) >= walkCos;
@@ -436,6 +439,7 @@ function unblended({ positions, colors, themes, days, indices, ground }, rockCol
         out.positions[(t + k) * 3 + m] = positions[i * 3 + m];
         out.colors[(t + k) * 3 + m] = (floor ? colors : rockColors)[i * 3 + m];
         out.normals[(t + k) * 3 + m] = normals[i * 3 + m] / length;
+        out.grounds[(t + k) * 3 + m] = grounds[i * 3 + m];
       }
       out.themes[t + k] = themes[i];
       out.days[t + k] = days[i];
@@ -444,10 +448,10 @@ function unblended({ positions, colors, themes, days, indices, ground }, rockCol
   return out;
 }
 
-// The ground caveMesh draws, { positions, colors, normals, rocks, indices }, or null for none: those
-// of its vertices drawn off the ground's corners lit by the faces round them, the rest as the
-// ground; rocks, how far each has taken on the rock's look (groundMaterial.js's groundRock).
-function earthMesh({ positions, colors, normals, rocks, indices, pinned }) {
+// The ground caveMesh draws, { positions, colors, normals, rocks, stones, indices }, or null for
+// none: those of its vertices drawn off the ground's corners lit by the faces round them, the rest
+// as the ground; rocks, how near each is to the lip, and stones, the rock's color there.
+function earthMesh({ positions, colors, normals, rocks, stones, indices, pinned }) {
   if (!indices.length) return null;
   const moved = new Float32Array(normals.length);
   for (let t = 0; t < indices.length; t += 3) {
@@ -463,7 +467,7 @@ function earthMesh({ positions, colors, normals, rocks, indices, pinned }) {
     const length = Math.hypot(...n);
     if (length) for (let m = 0; m < 3; m++) normals[v * 3 + m] = n[m] / length;
   }
-  return { positions: Float32Array.from(positions), colors: Float32Array.from(colors), normals: Float32Array.from(normals), rocks: Float32Array.from(rocks), indices: Uint32Array.from(indices) };
+  return { positions: Float32Array.from(positions), colors: Float32Array.from(colors), normals: Float32Array.from(normals), rocks: Float32Array.from(rocks), stones: Float32Array.from(stones), indices: Uint32Array.from(indices) };
 }
 
 // The ground the caves draw in tile (tx, tz), in the band round mouths, as { positions, colors,
