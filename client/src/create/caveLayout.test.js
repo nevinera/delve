@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { VOXEL_FT } from "../v2/caves.js";
-import { ENTRANCE_DEFAULTS, Layout, REACH_SEGMENTS, carvePlan, seedOf, entranceEnd, entranceProblem, mouthBehind, shapesOf } from "./caveLayout.js";
+import { ENTRANCE_DEFAULTS, Layout, REACH_SEGMENTS, carvePlan, passageWarnings, rockBetween, seedOf, steep, entranceEnd, entranceProblem, mouthBehind, shapesOf } from "./caveLayout.js";
 import { slugOf } from "./cavePlan.js";
 import { Caves } from "./caves.js";
 
@@ -159,6 +159,26 @@ describe("cave layout", () => {
     for (const [key, columns] of caves.tiles) expect(columns).toEqual(fresh.tiles.get(key));
     expect(seedOf("s4")).toBe(seedOf("s4"));
     expect(seedOf("s4")).not.toBe(seedOf("s5"));
+  });
+
+  it("warns of passages too steep to walk, or too near others", () => {
+    const end = (at, width = 12, height = 10) => ({ at, width, height });
+    expect(steep(end([0, 0, 0]), end([10, 11, 0]))).toBe(false);
+    expect(steep(end([0, 0, 0]), end([10, 13, 0]))).toBe(true);
+    // Side by side, 30 ft apart in the middle: 30 less 6 and 6 of rock.
+    expect(rockBetween([end([0, 0, 0]), end([40, 0, 0])], [end([0, 0, 30]), end([40, 0, 30])])).toBeCloseTo(18);
+    const layout = new Layout();
+    const [a, b] = [[0, -60, 0], [64, -60, 0]].map((at) => layout.addPoint("n", at));
+    const ab = layout.addSegment("n", a.id, b.id);
+    const [c, d] = [[0, -60, 400], [64, -60, 400]].map((at) => layout.addPoint("far-run", at));
+    layout.addSegment("far-run", c.id, d.id);
+    // Over it, 16 ft up and 10 ft across: 6 ft of rock.
+    const over = [end([0, -44, 10]), end([64, -44, 10])];
+    expect(passageWarnings(layout, "n", over)).toEqual([`only 6 ft of rock between it and ${ab.id}; leave 8 ft`]);
+    expect(passageWarnings(layout, "n", over, [a.id])).toEqual([]);
+    // Near another network.
+    expect(passageWarnings(layout, "n", [end([0, -60, 380]), end([64, -60, 380])])).toEqual(["only 8 ft of rock between it and far-run; leave 32 ft between networks"]);
+    expect(passageWarnings(layout, "n", [end([0, -60, 200]), end([10, -40, 200])])).toEqual(["steeper than 50°, so it can't be walked"]);
   });
 
   it("names networks as slugs", () => {

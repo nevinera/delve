@@ -4,7 +4,7 @@ import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { NET_SLUG } from "../v2/caves.js";
 import { CAMERA } from "./builder.js";
-import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, carvePlan, configOf, entranceEnd, entranceProblem, entranceRing, fits, mouthBehind, segmentShapes } from "./caveLayout.js";
+import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, carvePlan, configOf, entranceEnd, entranceProblem, entranceRing, fits, mouthBehind, passageWarnings, segmentShapes, steep } from "./caveLayout.js";
 
 // The caves' layout tools (caveLayout.js). Entrance, from above the ground, places an entrance
 // held where the pointer meets it, HOLD_FT in from its mouth: a tube into the hillside, facing the
@@ -20,7 +20,9 @@ import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, carvePlan, configOf,
 // middle), the scroll wheel setting how far, and the passage goes on to it from the nearest
 // spot on a passage to you, splitting it there unless a point's within JOIN_FT. Aimed near
 // another passage, it snaps to it, to make a loop. A ghost of it shows as you aim, red where it
-// can't go. The new point's selected, so the panel can size it; shift-click picks another.
+// can't go, and orange, with a warning, where it can but shouldn't: too steep to walk, or too
+// near a passage it doesn't join, or another network (caveLayout.js's passageWarnings).
+// Passages too steep to walk are drawn orange. The new point's selected, so the panel can size it; shift-click picks another.
 //
 // The layout's drawn as glowing lines, as thick, in feet, as what they stand for is big, so they
 // thin with distance: an entrance as its mouth's ring and its tube, a point as a ring on its floor.
@@ -31,6 +33,7 @@ const GLOW_RGB = [0.05, 0.18, 0.7];
 const SELECTED_RGB = [1, 0.88, 0.3];
 const STEEP_RGB = [1, 0.25, 0.2];
 const OPENING_RGB = [0.45, 1, 0.9];
+const WARN_RGB = [1, 0.6, 0.15];
 const TURN_DEG = 15; // how far C and V turn an entrance, or with shift FINE_TURN_DEG
 const FINE_TURN_DEG = 5;
 const HOLD_FT = 10; // how far in from an entrance's mouth the pointer holds it
@@ -288,6 +291,7 @@ export class CavePlan {
     this.selected = this.layout.extend(ghost.from, ghost.to ? { to: ghost.to } : { at: ghost.at }).id;
     this.net = this.layout.points.get(this.selected).net;
     this.carve();
+    if (ghost.warnings.length) this.status(ghost.warnings.join("; "));
     this.aim();
   }
 
@@ -316,7 +320,11 @@ export class CavePlan {
     const ends = [{ ...start, at: from.at }, { ...start, at }];
     const length = Math.hypot(...at.map((v, k) => v - from.at[k]));
     const problem = length < JOIN_FT ? "a passage has to be longer than that" : segmentShapes({ ends }).every((shape) => fits(shape, this.groundAt)) ? null : "a passage has to stay under the ground";
-    this.ghost = { from, to, at, ends, problem };
+    const joins = [from, to].filter(Boolean).flatMap((spot) => {
+      const segment = this.layout.segments.get(spot.id);
+      return segment ? [segment.from, segment.to] : [spot.id];
+    });
+    this.ghost = { from, to, at, ends, problem, warnings: passageWarnings(this.layout, from.net, ends, joins) };
   }
 
   wheel(e) {
@@ -330,7 +338,7 @@ export class CavePlan {
     if (this.tool === "passage") this.aim();
     this.drawPreview();
     // Why what's pointed at can't go there, while it can't.
-    const problem = this.hover?.problem ?? this.ghost?.problem ?? null;
+    const problem = this.hover?.problem ?? this.ghost?.problem ?? (this.ghost?.warnings.join("; ") || null);
     if (problem !== this.shownProblem) this.status(problem ?? "");
     this.shownProblem = problem;
   }
@@ -410,7 +418,10 @@ export class CavePlan {
     const rgbOf = (id, rgb) => (id === this.selected ? SELECTED_RGB : rgb);
     for (const e of this.layout.entrances.values()) for (const { points } of entranceLines(e, () => -Infinity)) this.line(points, Math.max(0.25, e.width / 32), rgbOf(e.id, OPENING_RGB));
     for (const p of this.layout.points.values()) this.line(pointRing(p), Math.max(0.25, p.width / 32), rgbOf(p.id, CORE_RGB));
-    for (const s of this.layout.segments.values()) this.line([this.layout.points.get(s.from).at, this.layout.points.get(s.to).at], 0.5, rgbOf(s.id, CORE_RGB));
+    for (const s of this.layout.segments.values()) {
+      const [a, b] = [s.from, s.to].map((id) => this.layout.points.get(id));
+      this.line([a.at, b.at], 0.5, rgbOf(s.id, steep(a, b) ? WARN_RGB : CORE_RGB));
+    }
   }
 
   // Draws the entrance the pointer would place, red where it can't go.
@@ -427,7 +438,7 @@ export class CavePlan {
     for (const { points, open } of lines) {
       for (let i = 1; i < points.length; i++) {
         positions.push(...points[i - 1], ...points[i]);
-        for (let k = 0; k < 2; k++) colors.push(...(open ? OPENING_RGB : STEEP_RGB));
+        for (let k = 0; k < 2; k++) colors.push(...(!open ? STEEP_RGB : ghost?.warnings.length ? WARN_RGB : OPENING_RGB));
       }
     }
     for (const material of this.previewMaterials) {

@@ -1,4 +1,5 @@
 import { ROOF_FT, allStone, shapeBounds } from "../v2/caves.js";
+import { WALK_DEG } from "./growth.js";
 
 // A continent's cave layout (docs/formats/cave-layout.md): its cave networks, each named by a
 // slug, and the elements laid out in them: entrances, tubes in from the ground; points, each
@@ -24,6 +25,8 @@ export const PHASES = ["layout", "polish"];
 export const POINT_FT = { width: [12, 64], height: [10, 48] }; // the passage's sizes a point can have
 export const JOIN_FT = 8; // how near an existing point a passage joins it, not splitting
 const CONFIG = ["width", "height", "qualities", "rock", "hewn"]; // what a point keeps of its section
+export const ROCK_FT = 8; // the least rock to leave between passages that aren't joined
+export const NETWORK_GAP_FT = 32; // the least rock to leave between networks
 export const REACH_SEGMENTS = 3; // how many segments either way a segment's shape can depend on
 
 // A value as JSON with its objects' keys sorted, to compare.
@@ -228,6 +231,64 @@ export class Layout {
 }
 
 export const isEntrance = (copy) => Boolean(copy.mouth);
+// Whether a passage from point `a` to point `b` is too steep to walk.
+export const steep = (a, b) => Math.abs(b.at[1] - a.at[1]) > Math.tan((WALK_DEG * Math.PI) / 180) * Math.hypot(b.at[0] - a.at[0], b.at[2] - a.at[2]);
+
+// How much rock there is between two passages, each its two ends ({ at, width, height }): taken
+// as a round tube along the middle of each, as wide as its passage's wider way, so no less than
+// there is. Qualities will pad it by how far they reach.
+export function rockBetween(p, q) {
+  const middle = (end) => [end.at[0], end.at[1] + end.height / 2, end.at[2]];
+  const radius = (ends) => Math.max(...ends.map((end) => Math.max(end.width, end.height) / 2));
+  return segmentGap(p.map(middle), q.map(middle)) - radius(p) - radius(q);
+}
+
+// The warnings for a passage `ends` ({ at, width, height } twice) laid out in network `net`: too
+// steep to walk, or too near a passage it doesn't join, or another network. `joins`: the ids of the
+// points it joins, whose segments it can come near.
+export function passageWarnings(layout, net, ends, joins = []) {
+  const out = [];
+  if (steep(...ends)) out.push(`steeper than ${WALK_DEG}°, so it can't be walked`);
+  let nearest = null;
+  for (const s of layout.segments.values()) {
+    if (joins.includes(s.from) || joins.includes(s.to)) continue;
+    const gap = rockBetween(ends, [s.from, s.to].map((id) => layout.points.get(id)));
+    const least = s.net === net ? ROCK_FT : NETWORK_GAP_FT;
+    if (gap < least && (!nearest || gap - least < nearest.short)) nearest = { s, gap, short: gap - least };
+  }
+  if (nearest) {
+    const { s, gap } = nearest;
+    const left = gap > 0 ? `only ${Math.floor(gap)} ft of rock` : "no rock";
+    out.push(s.net === net ? `${left} between it and ${s.id}; leave ${ROCK_FT} ft` : `${left} between it and ${s.net}; leave ${NETWORK_GAP_FT} ft between networks`);
+  }
+  return out;
+}
+
+// The least distance between segments p and q, each two points.
+function segmentGap([p0, p1], [q0, q1]) {
+  const sub = (a, b) => a.map((v, k) => v - b[k]);
+  const dot = (a, b) => a.reduce((sum, v, k) => sum + v * b[k], 0);
+  const [d1, d2, r] = [sub(p1, p0), sub(q1, q0), sub(p0, q0)];
+  const [a, e, f] = [dot(d1, d1), dot(d2, d2), dot(d2, r)];
+  const clamp = (v) => Math.max(0, Math.min(1, v));
+  let s, t;
+  if (a <= 1e-9 && e <= 1e-9) [s, t] = [0, 0];
+  else if (a <= 1e-9) [s, t] = [0, clamp(f / e)];
+  else {
+    const c = dot(d1, r);
+    if (e <= 1e-9) [s, t] = [clamp(-c / a), 0];
+    else {
+      const b = dot(d1, d2);
+      const denom = a * e - b * b;
+      s = denom > 1e-9 ? clamp((b * f - c * e) / denom) : 0;
+      t = (b * s + f) / e;
+      if (t < 0) [s, t] = [clamp(-c / a), 0];
+      else if (t > 1) [s, t] = [clamp((b - c) / a), 1];
+    }
+  }
+  return Math.hypot(...sub(p0.map((v, k) => v + d1[k] * s), q0.map((v, k) => v + d2[k] * t)));
+}
+
 // A number to seed an element's randomness from, by its id alone, so it comes out the same
 // whatever else changes.
 export function seedOf(id) {
