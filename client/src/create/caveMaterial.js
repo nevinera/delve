@@ -7,20 +7,24 @@ import { CAVE_THEMES } from "../v2/caves.js";
 // height that shades the color and tilts the way the rock seems to face. Jagged rock is drawn
 // flat across each face, so it breaks into facets. Smooth rock has a wet sheen at glancing angles.
 // Caves fade into the dark with distance instead of into the sky. A brush's patch (setBrush) is
-// drawn lighter: the rock within its radius of its middle that faces about its way.
+// drawn lighter: the rock within its radius of its middle that faces about its way. Rock near a
+// mouth's lip (caveDay, 0 to 1) is lit by the day instead, as the ground round it is.
 
 const LIGHT = 0x6a7088; // what cave rock's colors are lit by, about the surface's by night
 const FOG = { color: 0x0c0d12, nearFt: 20, farFt: 160 };
 const SHADE = { down: 0.5, up: 1.2 }; // the light on what faces down, and up
+const DAY = { light: 0.85, down: 0.55, up: 1 }; // the day's light on rock at a mouth's lip, and on what faces down and up
 
 const f = (v) => v.toFixed(4);
 const THEME = Object.fromEntries(CAVE_THEMES.map((name, n) => [name, f(n)]));
 
 const VERTEX = `
 attribute float caveTheme;
+attribute float caveDay;
 varying vec3 vCavePos;
 varying vec3 vCaveNormal;
 varying float vCaveTheme;
+varying float vCaveDay;
 `;
 
 const FRAGMENT = `
@@ -29,6 +33,7 @@ uniform vec3 caveBrushNormal;
 varying vec3 vCavePos;
 varying vec3 vCaveNormal;
 varying float vCaveTheme;
+varying float vCaveDay;
 
 float caveHash( vec3 p ) {
   p = fract( p * 0.3183099 + 0.1 );
@@ -100,8 +105,14 @@ const SHADING = `
     vec3 facet = normalize( cross( dFdx( vCavePos ), dFdy( vCavePos ) ) );
     caveBase = dot( facet, caveBase ) < 0.0 ? -facet : facet;
   }
-  vec3 caveN = caveBump( caveBase, vCavePos, stone.x, stone.y );
-  diffuseColor.rgb *= ( 0.8 + 0.4 * stone.x ) * mix( ${f(SHADE.down)}, ${f(SHADE.up)}, caveN.y * 0.5 + 0.5 );
+  // By a mouth's lip, the stone's grain fades to half, as the ground's own does there.
+  float grainShare = 1.0 - 0.5 * vCaveDay;
+  vec3 caveN = caveBump( caveBase, vCavePos, stone.x, stone.y * grainShare );
+  diffuseColor.rgb *= ( 1.0 + 0.4 * ( stone.x - 0.5 ) * grainShare ) * mix( ${f(SHADE.down)}, ${f(SHADE.up)}, caveN.y * 0.5 + 0.5 );
+  if ( vCaveDay > 0.0 ) {
+    vec3 dayLit = pow( vColor.rgb, vec3( 2.2 ) ) * ${f(DAY.light)} * ( 1.0 + 0.4 * ( stone.x - 0.5 ) * grainShare ) * mix( ${f(DAY.down)}, ${f(DAY.up)}, caveN.y * 0.5 + 0.5 );
+    diffuseColor.rgb = mix( diffuseColor.rgb, dayLit, vCaveDay );
+  }
   if ( caveBrush.w > 0.0 ) {
     float near = 1.0 - distance( vCavePos, caveBrush.xyz ) / caveBrush.w;
     float faces = smoothstep( 0.0, 0.4, dot( normalize( vCaveNormal ), caveBrushNormal ) );
@@ -130,7 +141,7 @@ export function caveMaterial() {
   material.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, material.userData.uniforms);
     shader.vertexShader = shader.vertexShader
-      .replace("void main() {", `${VERTEX}\nvoid main() {\n\tvCavePos = ( modelMatrix * vec4( position, 1.0 ) ).xyz;\n\tvCaveNormal = normal;\n\tvCaveTheme = caveTheme;`);
+      .replace("void main() {", `${VERTEX}\nvoid main() {\n\tvCavePos = ( modelMatrix * vec4( position, 1.0 ) ).xyz;\n\tvCaveNormal = normal;\n\tvCaveTheme = caveTheme;\n\tvCaveDay = caveDay;`);
     shader.fragmentShader = shader.fragmentShader
       .replace("void main() {", `${FRAGMENT}\nvoid main() {`)
       .replace("#include <color_fragment>", `#include <color_fragment>\n${SHADING}`)

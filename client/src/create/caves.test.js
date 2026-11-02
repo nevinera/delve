@@ -65,30 +65,36 @@ describe("cave columns", () => {
 });
 
 describe("caves", () => {
-  it("meshes dug rock and the ground round its mouth, the rim on the ground at the columns' corners", () => {
+  it("meshes dug rock and the ground round its mouth as one surface, the band's edge on the ground's corners", () => {
     const caves = new Caves({ add() {} }, flat(5));
     caves.dig({ kind: "sphere", at: [128, 0, 128], radius: 10 });
     const mesh = caveMesh(0, 0, caves.world);
     expect(mesh.indices.length).toBeGreaterThan(0);
-    // Every vertex over the ground is on it, at a column's corner.
-    for (let n = 0; n < mesh.positions.length; n += 3) {
-      if (mesh.positions[n + 1] < 5) continue;
-      expect(mesh.positions[n + 1]).toBeCloseTo(5);
-      expect(mesh.positions[n] % VOXEL_FT).toBeCloseTo(0);
-    }
-    // The caves draw the ground in a band round where they open through it: a face over each
-    // column that isn't open, on the ground.
+    // Nothing's over the ground.
+    for (let n = 1; n < mesh.positions.length; n += 3) expect(mesh.positions[n]).toBeLessThan(5.01);
+    // The caves draw the ground in a band round where they open through it, a hole where they do,
+    // its edge on the ground's corners, its lip rounded down into the cave.
     const cells = TILE_FT / CELL_FT;
     const band = caves.band(0, 0);
     expect(band.has(32 * cells + 32)).toBe(true);
-    expect(band.has(32 * cells + 30)).toBe(true);
+    expect(band.has(32 * cells + 28)).toBe(true);
     expect(band.has(32 * cells + 40)).toBe(false);
     const { ground } = mesh;
+    let [edge, lowered] = [0, 0];
     for (let n = 0; n < ground.positions.length; n += 3) {
-      expect(ground.positions[n + 1]).toBeCloseTo(5);
-      expect(ground.positions[n] % VOXEL_FT).toBeCloseTo(0);
+      const [x, y, z] = [ground.positions[n], ground.positions[n + 1], ground.positions[n + 2]];
+      expect(y).toBeLessThan(5.01);
+      const [ci, cj] = [Math.round(x / VOXEL_FT), Math.round(z / VOXEL_FT)];
+      const onEdge = [[-1, -1], [0, -1], [-1, 0], [0, 0]].some(([di, dj]) => !caves.world.band(ci + di, cj + dj));
+      if (onEdge) {
+        expect(y).toBeCloseTo(5);
+        expect(x % VOXEL_FT).toBeCloseTo(0);
+        edge++;
+      } else if (y < 4.5) lowered++;
     }
-    expect(ground.indices.length / 6).toBeLessThan(band.size * 4);
+    expect(edge).toBeGreaterThan(0);
+    expect(lowered).toBeGreaterThan(0);
+    expect(ground.rocks.some((r) => r > 0)).toBe(true);
     // The ground leaves the band out once the caves have drawn it there.
     expect(caves.holes(0, 0)).toBe(null);
     caves.groundMaterial = () => new THREE.MeshLambertMaterial();

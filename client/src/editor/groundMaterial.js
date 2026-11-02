@@ -9,6 +9,10 @@ import { groundCells } from "./terrainMesh.js";
 // colors are. A pattern only changes the light and shade of the color under it, and it fades out
 // with distance before it would shimmer.
 //
+// Ground the caves draw round a mouth (caveMesh.js) takes on the rock's look toward its lip
+// (groundRock, 0 to 1/2 at the lip): its pattern fades, and the rock's grain comes in at half, as
+// the rock has it there.
+//
 // Roads and highways in use are drawn over that from their middles (the tile's roads), so their
 // surface and edges are sharp, finer than the cells: packed earth, patchy, rutted and covered in
 // hoof and foot prints, paler and more trodden on highways.
@@ -56,8 +60,8 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
     shader.uniforms.groundDetail = { value: detail };
     if (cells) Object.assign(shader.uniforms, material.userData.uniforms, { groundPatterns: { value: patterns } });
     shader.vertexShader = shader.vertexShader
-      .replace("#include <common>", "#include <common>\nvarying vec2 vGroundXZ;")
-      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGroundXZ = (modelMatrix * vec4(transformed, 1.0)).xz;");
+      .replace("#include <common>", "#include <common>\nattribute float groundRock;\nvarying vec2 vGroundXZ;\nvarying vec3 vGroundAt;\nvarying float vGroundRock;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvGroundAt = (modelMatrix * vec4(transformed, 1.0)).xyz;\nvGroundXZ = vGroundAt.xz;\nvGroundRock = groundRock;");
     const [fine, mid, broad] = SCALES_FT.map((ft) => (1 / ft).toFixed(5));
     const cellFt = (tile?.cellFt ?? 1).toFixed(1);
     shader.fragmentShader = shader.fragmentShader
@@ -66,6 +70,33 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
         `#include <common>
         uniform sampler2D groundDetail;
         varying vec2 vGroundXZ;
+        varying vec3 vGroundAt;
+        varying float vGroundRock;
+        // The grain of jagged cave rock (caveMaterial.js's caveStone), about 0 to 1.
+        float rockHash(vec3 p) {
+          p = fract(p * 0.3183099 + 0.1);
+          p *= 17.0;
+          return fract(p.x * p.y * p.z * (p.x + p.y + p.z));
+        }
+        float rockNoise(vec3 x) {
+          vec3 i = floor(x);
+          vec3 f = fract(x);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(
+            mix(mix(rockHash(i), rockHash(i + vec3(1, 0, 0)), f.x), mix(rockHash(i + vec3(0, 1, 0)), rockHash(i + vec3(1, 1, 0)), f.x), f.y),
+            mix(mix(rockHash(i + vec3(0, 0, 1)), rockHash(i + vec3(1, 0, 1)), f.x), mix(rockHash(i + vec3(0, 1, 1)), rockHash(i + vec3(1, 1, 1)), f.x), f.y),
+            f.z);
+        }
+        float rockGrain(vec3 p) {
+          float sum = 0.0;
+          float amp = 0.5;
+          for (int i = 0; i < 4; i++) {
+            sum += amp * rockNoise(p);
+            p *= 2.03;
+            amp *= 0.5;
+          }
+          return sum / 0.9375;
+        }
         #ifdef GROUND_PATTERNS
         uniform highp sampler2DArray groundPatterns;
         uniform sampler2D groundCells;
@@ -100,11 +131,12 @@ export function groundMaterial(renderer, { tile, neighbours, origin } = {}) {
           vec2 xz = vGroundXZ;
           vec4 g = mix(mix(groundAt(cell, xz), groundAt(cell + vec2(1.0, 0.0), xz), f.x), mix(groundAt(cell + vec2(0.0, 1.0), xz), groundAt(cell + 1.0, xz), f.x), f.y);
           vec3 pattern = mix(g.rgb, texture(groundPatterns, vec3(xz * PATTERN_SCALE[${LITTER}], ${LITTER}.0)).rgb, smoothstep(0.1, 0.6, g.w));
-          diffuseColor.rgb *= mix(vec3(1.0), pattern * 2.0, near);
+          diffuseColor.rgb *= mix(vec3(1.0), pattern * 2.0, near * (1.0 - 2.0 * vGroundRock));
           grain = mix(grain, 0.5, near);
         }
         #endif
         diffuseColor.rgb *= 0.6 + 0.3 * grain + 0.35 * blotch + 0.25 * sweep;
+        if (vGroundRock > 0.0) diffuseColor.rgb *= 1.0 + 0.4 * (rockGrain(vGroundAt * 1.1) - 0.5) * vGroundRock;
         #ifdef GROUND_ROADS
         {
           // The nearest road, by how far inside its edge this is (negative outside).

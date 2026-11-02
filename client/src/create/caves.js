@@ -441,6 +441,7 @@ export class Caves {
     geometry.setAttribute("position", new THREE.BufferAttribute(data.positions, 3));
     geometry.setAttribute("color", new THREE.BufferAttribute(data.colors, 3));
     geometry.setAttribute("caveTheme", new THREE.BufferAttribute(data.themes, 1));
+    geometry.setAttribute("caveDay", new THREE.BufferAttribute(data.days ?? new Float32Array(data.themes.length), 1));
     geometry.setIndex(new THREE.BufferAttribute(data.indices, 1));
     if (data.normals) geometry.setAttribute("normal", new THREE.BufferAttribute(data.normals, 3));
     else geometry.computeVertexNormals();
@@ -458,6 +459,7 @@ export class Caves {
       earth.setAttribute("position", new THREE.BufferAttribute(data.ground.positions, 3));
       earth.setAttribute("color", new THREE.BufferAttribute(data.ground.colors, 3));
       earth.setAttribute("normal", new THREE.BufferAttribute(data.ground.normals, 3));
+      if (data.ground.rocks) earth.setAttribute("groundRock", new THREE.BufferAttribute(data.ground.rocks, 1));
       earth.setIndex(new THREE.BufferAttribute(data.ground.indices, 1));
       const surface = new THREE.Mesh(earth, material);
       surface.position.copy(mesh.position);
@@ -619,7 +621,7 @@ export class Caves {
 const EMPTY = Object.freeze([]);
 const CELLS = TILE_FT / CELL_FT; // the ground's cells a tile a side
 const PER = CELL_FT / VOXEL_FT; // columns a ground cell a side
-const BAND_CELLS = 1; // how many ground cells round where a cave opens the caves draw the ground in
+const BAND_CELLS = 2; // how many ground cells round where a cave opens the caves draw the ground in
 
 // An sRGB byte's linear value.
 const linear = (byte) => {
