@@ -25,10 +25,10 @@ import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, floorAt, smoothFloor, stonePart, t
 // draw the ground too, in a band of the ground's cells (world.band), which the ground's full tiles
 // leave out. There the ground is part of the same surface nets, rock against the sky as well as
 // against the caves' air, so ground and rock share their vertices where they meet, and the hole's
-// outline and its lip are smoothed with the rest. The ground's vertices start on its own heights at
-// the columns' corners and are drawn toward their neighbours' (LIP), rounding the edge into the
-// cave, but for those on the band's edge, which stay on the ground's corners. The band's columns
-// nest in the ground's cells, so its edge lies on the ground's cells' edges and meets the ground
+// outline and its lip are smoothed with the rest. The ground's vertices are on its own heights at
+// the columns' corners, but by the lip, where they're drawn toward their neighbours' (LIP),
+// rounding the edge into the cave; those on the band's edge always stay on the ground's corners.
+// The band's columns nest in the ground's cells, so its edge lies on the ground's cells' edges and meets the ground
 // drawn round it. Within LIP_CUBES of the lip, where ground meets rock, the rock's smoothed as the
 // ground is, its bumps fading, and the two blend: the rock takes on the ground's color (grounds)
 // and the day's light (days, caveMaterial.js's caveDay), and the ground the rock's (stones,
@@ -301,9 +301,11 @@ export function caveMesh(tx, tz, world) {
     const look = THEME_LOOK[here.theme];
     let at = here.at;
     if (here.rim) {
-      if (!here.pinned) {
+      // Only by the lip: further off, the ground's as the ground drawn round it is.
+      const near = here.pinned ? 0 : nearLip(a, b, c);
+      if (near) {
         const smooth = relaxed(a, b, c, LIP.passes);
-        at = at.map((v, i) => v + (smooth[i] - v) * LIP.relax);
+        at = at.map((v, i) => v + (smooth[i] - v) * LIP.relax * near);
       }
     } else {
       const near = nearLip(a, b, c);
@@ -348,7 +350,7 @@ export function caveMesh(tx, tz, world) {
     return index;
   };
   // The ground's own vertices, at the same places as the rock's, in the ground's look.
-  const earth = { positions: [], colors: [], normals: [], rocks: [], stones: [], indices: [], pinned: [] };
+  const earth = { positions: [], colors: [], normals: [], rocks: [], stones: [], indices: [] };
   const earthVertices = new Map();
   const earthVertex = (a, b, c) => {
     const key = cubeKey(a, b, c);
@@ -364,7 +366,6 @@ export function caveMesh(tx, tz, world) {
     earth.stones.push(...rock.map((v) => linear(v / 255)));
     earth.rocks.push(near);
     earth.normals.push(...normal);
-    earth.pinned.push(crossing(a, b, c).pinned);
     earthVertices.set(key, index);
     return index;
   };
@@ -449,9 +450,9 @@ function unblended({ positions, colors, themes, days, grounds, indices, ground }
 }
 
 // The ground caveMesh draws, { positions, colors, normals, rocks, stones, indices }, or null for
-// none: those of its vertices drawn off the ground's corners lit by the faces round them, the rest
-// as the ground; rocks, how near each is to the lip, and stones, the rock's color there.
-function earthMesh({ positions, colors, normals, rocks, stones, indices, pinned }) {
+// none: its vertices lit as the ground, but toward the lip, as the faces round them; rocks, how
+// near each is to the lip, and stones, the rock's color there.
+function earthMesh({ positions, colors, normals, rocks, stones, indices }) {
   if (!indices.length) return null;
   const moved = new Float32Array(normals.length);
   for (let t = 0; t < indices.length; t += 3) {
@@ -461,11 +462,13 @@ function earthMesh({ positions, colors, normals, rocks, stones, indices, pinned 
     const n = [uy * vz - uz * vy, uz * vx - ux * vz, ux * vy - uy * vx];
     for (const v of [p, q, r]) for (let m = 0; m < 3; m++) moved[v + m] += n[m];
   }
-  for (let v = 0; v < pinned.length; v++) {
-    if (pinned[v]) continue;
-    const n = [moved[v * 3], moved[v * 3 + 1], moved[v * 3 + 2]];
-    const length = Math.hypot(...n);
-    if (length) for (let m = 0; m < 3; m++) normals[v * 3 + m] = n[m] / length;
+  for (let v = 0; v < rocks.length; v++) {
+    if (!rocks[v]) continue;
+    const length = Math.hypot(moved[v * 3], moved[v * 3 + 1], moved[v * 3 + 2]);
+    if (!length) continue;
+    const n = [0, 1, 2].map((m) => normals[v * 3 + m] * (1 - rocks[v]) + (moved[v * 3 + m] / length) * rocks[v]);
+    const total = Math.hypot(...n) || 1;
+    for (let m = 0; m < 3; m++) normals[v * 3 + m] = n[m] / total;
   }
   return { positions: Float32Array.from(positions), colors: Float32Array.from(colors), normals: Float32Array.from(normals), rocks: Float32Array.from(rocks), stones: Float32Array.from(stones), indices: Uint32Array.from(indices) };
 }
