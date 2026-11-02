@@ -8,7 +8,7 @@ import { caveMesh, chains, cutMesh, fitPlane, zipSteps } from "./caveMesh.js";
 // - cells: the ground cells left out, [ci, cj] each (caveLayout.js's entranceCells);
 // - plane: the plane nearest the edge of the ground left (fitPlane's), its normal facing the
 //   entrance's mouth; the rock is cut back to its other side, near it (caveMesh.js's cutMesh);
-// - ground: the ground's edge round the cells left out, its corners in order;
+// - ground: the ground's edge round the cells left out at the mouth, its corners in order;
 // - rock: the rock's edge where it's cut back, in order;
 // - steps: how the two are zipped together (caveMesh.js's zipSteps), ground and rock as turned;
 // - chunks: the ground's chunks round it, [cx, cz] each, mouth to far end and the cells left out,
@@ -30,7 +30,9 @@ export function entranceJoin(entrance, world, groundAt) {
     if (!left(ci - 1, cj)) edges.push(...corner(ci, cj), ...corner(ci, cj + 1));
     if (!left(ci + 1, cj)) edges.push(...corner(ci + 1, cj), ...corner(ci + 1, cj + 1));
   }
-  const ground = longest(chains(edges));
+  // The one round the mouth, where the tube's thin roof opens the ground elsewhere too.
+  const middle = (line) => [0, 1, 2].map((k) => line.reduce((sum, p) => sum + p[k], 0) / line.length);
+  const ground = chains(edges).reduce((best, line) => (!best || Math.hypot(...middle(line).map((v, k) => v - entrance.mouth[k])) < Math.hypot(...middle(best).map((v, k) => v - entrance.mouth[k])) ? line : best), null);
   if (!ground || ground.length < 3) return null;
   const fitted = fitPlane(ground);
   const side = entrance.mouth.reduce((sum, v, k) => sum + (v - fitted.center[k]) * fitted.normal[k], 0) < 0 ? -1 : 1;
