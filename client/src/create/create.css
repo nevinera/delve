@@ -129,6 +129,11 @@ body.create {
   flex: 1;
 }
 
+.create-way input[type="text"] {
+  flex: 2;
+  min-width: 0;
+}
+
 .create-tools button {
   display: flex;
   flex-direction: column;

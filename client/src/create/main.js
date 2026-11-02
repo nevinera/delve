@@ -184,7 +184,7 @@ function start(world, changes, fresh) {
     const match = CAVES_PATH.exec(path);
     if (match?.[1] === continent) caves.load(bytes, [Number(match[2]), Number(match[3])]);
   }
-  // The rooms and tunnels planned, to carve (caveLayout.js).
+  // The cave networks laid out, to carve (caveLayout.js).
   const layoutBytes = world.files.get(layoutPath(continent));
   const layout = new Layout(layoutBytes ? JSON.parse(strFromU8(layoutBytes)) : null);
   ground.holes = (tx, tz) => caves.holes(tx, tz);
@@ -317,7 +317,7 @@ function start(world, changes, fresh) {
         changes.set(planningPath(continent), strToU8(`${JSON.stringify(tools.marks.toJSON())}\n`));
         changes.set(biomesPath(continent), strToU8(`${JSON.stringify(tools.biomes.toJSON())}\n`));
         changes.set(waterPath(continent), strToU8(`${JSON.stringify(waterFile())}\n`));
-        if (layout.nodes.size || layout.arcs.size || layout.carved.size || layoutBytes) changes.set(layoutPath(continent), strToU8(`${JSON.stringify(layout.toJSON())}\n`));
+        if (layout.networks.size || layout.carved.size || layoutBytes) changes.set(layoutPath(continent), strToU8(`${JSON.stringify(layout.toJSON())}\n`));
         await store.set("changes", changes);
         [marksSaved, biomesSaved, waterSaved, layoutSaved] = [version, biomesVersion, waterNow, layoutNow];
       })

@@ -1,176 +1,78 @@
 import { describe, expect, it } from "vitest";
 import { VOXEL_FT } from "../v2/caves.js";
-import { ENTRANCE_DEFAULTS, Layout, arcCurve, arcShapes, arcSteepness, carvePlan, entranceEnd, entranceProblem, mouthBehind, nodeShapes, respacedBends, shapesOf, tooNear } from "./caveLayout.js";
+import { ENTRANCE_DEFAULTS, Layout, carvePlan, entranceEnd, entranceProblem, mouthBehind, shapesOf } from "./caveLayout.js";
+import { slugOf } from "./cavePlan.js";
 import { Caves } from "./caves.js";
 
-// Flat ground at `height`, everywhere.
-const flat = (height) => ({ heightAt: () => height });
 // A hillside rising 0.6 ft for each foot east.
 const hill = (x) => 0.6 * x;
 const hillside = { heightAt: (x) => hill(x) };
-const entrance = (details) => {
-  const e = { ...ENTRANCE_DEFAULTS, mouth: [0, 0, 0], yaw: 90, ...details };
-  return { ...e, at: entranceEnd(e) };
-};
+const entrance = (details) => ({ ...ENTRANCE_DEFAULTS, mouth: [0, 0, 0], yaw: 90, ...details });
 const scene = { add: () => {} };
 const spansAt = (caves, x, z) => caves.spans(Math.floor(x / VOXEL_FT), Math.floor(z / VOXEL_FT));
 
 describe("cave layout", () => {
-  it("bends an arc about every 32 ft, and takes a node's arcs with it", () => {
+  it("starts a network with an entrance, ending at a point passages go on from", () => {
     const layout = new Layout();
-    const [a, b] = [layout.addNode([0, -100, 0]), layout.addNode([128, -100, 0])];
-    const arc = layout.addArc(a.id, b.id);
-    expect(arc.bends).toHaveLength(3);
-    expect(arc.bends[1]).toEqual([64, -100, 0]);
-    layout.remove(a.id);
-    expect(layout.arcs.size).toBe(0);
+    layout.addNetwork("wailing-hollow");
+    const e = layout.addEntrance("wailing-hollow", entrance());
+    const point = layout.points.get(e.point);
+    expect(point.net).toBe("wailing-hollow");
+    expect(point.at).toEqual(entranceEnd(e));
+    expect(layout.changes().sort()).toEqual([e.id]);
+    // Removing the entrance takes its point, and the network left empty.
+    layout.remove(e.id);
+    expect(layout.points.size).toBe(0);
+    expect(layout.networks.size).toBe(0);
   });
 
-  it("knows what's changed since it was carved: new, moved, or deleted", () => {
+  it("keeps networks, entrances, points and segments in its file", () => {
     const layout = new Layout();
-    const [a, b] = [layout.addNode([0, -100, 0]), layout.addNode([400, -100, 0])];
-    const arc = layout.addArc(a.id, b.id);
-    expect(layout.changes().sort()).toEqual([a.id, b.id, arc.id].sort());
+    layout.addNetwork("deep-run");
+    const e = layout.addEntrance("deep-run", entrance());
+    const far = layout.addPoint("deep-run", [80, -10, 0]);
+    layout.addSegment("deep-run", e.point, far.id);
+    layout.carved = carvePlan(layout).carved;
+    const back = new Layout(JSON.parse(JSON.stringify(layout.toJSON())));
+    expect(back.toJSON()).toEqual(layout.toJSON());
+    expect(back.changes()).toEqual([]);
+    expect(back.addPoint("deep-run", [0, 0, 0]).id).toBe("p5");
+  });
+
+  it("renames a network and everything in it, so it's carved again", () => {
+    const layout = new Layout();
+    layout.addNetwork("deep-run");
+    const e = layout.addEntrance("deep-run", entrance());
+    layout.carved = carvePlan(layout).carved;
+    layout.renameNetwork("deep-run", "deeper-run");
+    expect([...layout.networks.keys()]).toEqual(["deeper-run"]);
+    expect(layout.points.get(e.point).net).toBe("deeper-run");
+    expect(layout.changes()).toEqual([e.id]);
+  });
+
+  it("carves a segment again when a point it joins changes", () => {
+    const layout = new Layout();
+    const [a, b, c] = [[0, -40, 0], [32, -40, 0], [64, -40, 0]].map((at) => layout.addPoint("n", at));
+    const [ab, bc] = [layout.addSegment("n", a.id, b.id), layout.addSegment("n", b.id, c.id)];
     layout.carved = carvePlan(layout).carved;
     expect(layout.changes()).toEqual([]);
-    // Moving a node changes its arcs.
-    b.at = [400, -92, 0];
-    expect(layout.changes().sort()).toEqual([b.id, arc.id].sort());
-    layout.carved = carvePlan(layout).carved;
-    layout.remove(arc.id);
-    expect(layout.changes()).toEqual([arc.id]);
+    c.width = 20;
+    expect(layout.changes()).toEqual([bc.id]);
+    b.at = [32, -42, 0];
+    expect(layout.changes().sort()).toEqual([ab.id, bc.id]);
   });
 
-  it("makes the same shapes from the same element", () => {
+  it("leaves out segments too near the ground", () => {
     const layout = new Layout();
-    const node = layout.addNode([0, -100, 0], { size: "l", shape: "cathedral" });
-    expect(nodeShapes(layout.copyOf(node.id))).toEqual(nodeShapes(structuredClone(layout.copyOf(node.id))));
-    const other = layout.addNode([200, -60, 40]);
-    const arc = layout.addArc(node.id, other.id, { shape: "deadends", style: "lavatube" });
-    expect(arcShapes(layout.copyOf(arc.id))).toEqual(arcShapes(layout.copyOf(arc.id)));
-  });
-
-  it("says how steep an arc climbs", () => {
-    const layout = new Layout();
-    const [a, b] = [layout.addNode([0, -100, 0]), layout.addNode([0, 0, 64])];
-    const arc = layout.addArc(a.id, b.id);
-    const steepest = Math.max(...arcSteepness(layout.copyOf(arc.id)).map((p) => p.deg));
-    expect(steepest).toBeGreaterThan(45);
-  });
-
-  it("carves rooms with flat floors and tunnels between them, and carving again changes nothing", () => {
-    const caves = new Caves(scene, flat(0));
-    const layout = new Layout();
-    const [a, b] = [layout.addNode([0, -100, 0], { size: "l" }), layout.addNode([400, -100, 0], { size: "m" })];
-    layout.addArc(a.id, b.id, { size: 12, shape: "straight" });
-    const plan = carvePlan(layout);
-    expect(caves.carvePlan(plan)).toBeTruthy();
-    layout.carved = plan.carved;
-    // The room's floor is flat, on the node.
-    for (const x of [-12, 0, 12]) expect(spansAt(caves, x + 2, 2)[0].floor).toBe(-100);
-    // The tunnel's open halfway between.
-    expect(spansAt(caves, 202, 2).length).toBe(1);
-    expect(carvePlan(layout).opens).toHaveLength(0);
-  });
-
-  it("fills in what a moved room carved, and carves again what that filling cut into", () => {
-    const caves = new Caves(scene, flat(0));
-    const layout = new Layout();
-    const [a, b] = [layout.addNode([0, -100, 0], { size: "l" }), layout.addNode([400, -100, 0])];
-    const arc = layout.addArc(a.id, b.id, { size: 12, shape: "straight" });
-    const far = layout.addNode([2000, -100, 0]);
-    let plan = carvePlan(layout);
-    caves.carvePlan(plan);
-    layout.carved = plan.carved;
-    a.at = [0, -100, -400];
-    plan = carvePlan(layout);
-    const redone = [...plan.carved.keys()].filter((id) => plan.carved.get(id) !== layout.carved.get(id));
-    expect(redone.sort()).toEqual([a.id, arc.id, b.id].sort());
-    expect(redone).not.toContain(far.id);
-    caves.carvePlan(plan, () => {});
-    layout.carved = plan.carved;
-    expect(spansAt(caves, 2, 2)).toEqual([]);
-    expect(spansAt(caves, 2, -398)[0].floor).toBe(-100);
-  });
-
-  it("undoes a carve as one, saying so", () => {
-    const caves = new Caves(scene, flat(0));
-    const layout = new Layout();
-    layout.addNode([0, -100, 0]);
-    let undone = false;
-    caves.carvePlan(carvePlan(layout), () => (undone = true));
-    expect(spansAt(caves, 2, 2).length).toBe(1);
-    caves.undo();
-    expect(undone).toBe(true);
-    expect(spansAt(caves, 2, 2)).toEqual([]);
-  });
-
-  it("carves again what's joined to what changed, and nothing else", () => {
-    const layout = new Layout();
-    const [a, b, c] = [layout.addNode([0, -100, 0]), layout.addNode([400, -100, 0]), layout.addNode([0, -100, 800])];
-    const arc = layout.addArc(a.id, b.id);
-    layout.carved = carvePlan(layout).carved;
-    arc.size = 10;
-    expect(layout.linked(arc.id)).toEqual([a.id, b.id]);
-    expect(layout.linked(a.id)).toEqual([arc.id]);
-    const redone = new Set(carvePlan(layout).opens.map(({ shape }) => shape));
-    expect(redone.size).toBe(shapesOf(layout.copyOf(arc.id)).length + shapesOf(layout.copyOf(a.id)).length + shapesOf(layout.copyOf(b.id)).length);
-  });
-
-  it("doesn't carve a tunnel shorter than 10 times its width, nor keep it as carved", () => {
-    const layout = new Layout();
-    const [a, b] = [layout.addNode([0, -100, 0]), layout.addNode([200, -100, 0])];
-    const arc = layout.addArc(a.id, b.id, { size: 24 });
-    const plan = carvePlan(layout);
-    expect(plan.short).toEqual([arc.id]);
-    expect(plan.carved.has(arc.id)).toBe(false);
-    arc.size = 16;
-    expect(carvePlan(layout).short).toEqual([]);
-  });
-
-  it("climbs evenly between its level runs, however its bends lie", () => {
-    const layout = new Layout();
-    const [a, b] = [layout.addNode([0, -200, 0]), layout.addNode([400, -100, 0])];
-    const arc = layout.addArc(a.id, b.id);
-    // Drawn out into a loop, high bends and low.
-    arc.bends = [[100, 50, 200], [300, -300, 200]];
-    const points = arcCurve(layout.copyOf(arc.id)).getSpacedPoints(200);
-    const climbs = points.slice(1).map((p, i) => (p.y - points[i].y) / Math.hypot(p.x - points[i].x, p.z - points[i].z));
-    // Leaving out where it turns from level to sloping.
-    const sloped = climbs.filter((c) => c > 0.01).sort((p, q) => p - q);
-    const middle = sloped.slice(Math.floor(sloped.length * 0.05), Math.ceil(sloped.length * 0.95));
-    expect(middle.at(-1) - middle[0]).toBeLessThan(0.02);
-    expect(Math.min(...climbs)).toBeGreaterThan(-0.01);
-    // Laid out afresh, a longer line gets more bends.
-    expect(respacedBends(layout.copyOf(arc.id)).length).toBeGreaterThan(2);
-  });
-
-  it("keeps rooms five times the sum of their radii apart", () => {
-    const layout = new Layout();
-    const a = layout.addNode([0, -100, 0], { size: "m" });
-    expect(tooNear(layout, [100, -100, 0], 16)).toBe(a);
-    expect(tooNear(layout, [170, -100, 0], 16)).toBe(null);
-    expect(tooNear(layout, [8, -100, 0], 16, a.id)).toBe(null);
-  });
-
-  it("doesn't count locking as a change", () => {
-    const layout = new Layout();
-    const node = layout.addNode([0, -100, 0]);
-    layout.carved = carvePlan(layout).carved;
-    node.locked = true;
-    expect(layout.changes()).toEqual([]);
-  });
-
-  it("leaves out rooms too near the ground", () => {
-    const layout = new Layout();
-    const deep = layout.addNode([64, -60, 64], { size: "m" });
-    const shallow = layout.addNode([192, -10, 64], { size: "m" });
+    const [a, b, c] = [[0, -60, 0], [32, -60, 0], [64, -6, 0]].map((at) => layout.addPoint("n", at));
+    const deep = layout.addSegment("n", a.id, b.id);
+    const shallow = layout.addSegment("n", b.id, c.id);
     const plan = carvePlan(layout, undefined, () => 0);
     expect(plan.unfit).toEqual([shallow.id]);
     expect(plan.carved.has(deep.id)).toBe(true);
   });
 
-  it("puts an entrance only where its mouth is in the open and its room under the ground", () => {
+  it("puts an entrance only where its mouth is in the open and its far end under the ground", () => {
     expect(entranceEnd({ mouth: [0, 0, 0], yaw: 90, length: 32, slope: "down" })).toEqual([32, -6.5, 0]);
     expect(mouthBehind([10, 0, 0], { yaw: 90, slope: "down" }, 10).map((v) => v + 0)).toEqual([0, 2, 0]);
     expect(entranceProblem(entrance(), hill)).toBe(null);
@@ -182,18 +84,18 @@ describe("cave layout", () => {
   it("drops a layout from before cave networks", () => {
     const old = new Layout({ version: 1, nodes: [{ id: "n1", at: [0, -40, 0] }], arcs: [], carved: {} });
     expect(old.dropped).toBe(true);
-    expect(old.nodes.size).toBe(0);
+    expect(old.networks.size).toBe(0);
     const kept = new Layout(new Layout().toJSON());
     expect(kept.dropped).toBe(false);
   });
 
-  it("carves an entrance's tube out through the hillside, and joins tunnels to its room", () => {
+  it("carves an entrance's tube out through the hillside, in its network, and a passage on from it", () => {
     const caves = new Caves(scene, hillside);
     const layout = new Layout();
-    const { at, ...details } = entrance();
-    const way = layout.addNode(at, details);
-    const room = layout.addNode([160, 40, 0], { size: "m" });
-    layout.addArc(way.id, room.id, { size: 8 });
+    layout.addNetwork("hill-cave");
+    const e = layout.addEntrance("hill-cave", entrance());
+    const far = layout.addPoint("hill-cave", [100, 0, 0]);
+    layout.addSegment("hill-cave", e.point, far.id);
     const plan = carvePlan(layout, undefined, hill);
     expect(plan.unfit).toEqual([]);
     caves.carvePlan(plan, () => {});
@@ -201,14 +103,18 @@ describe("cave layout", () => {
     expect(Math.max(...spansAt(caves, 6, 0).map((s) => s.ceiling))).toBeGreaterThan(hill(6));
     expect(spansAt(caves, 48, 0)[0].floor).toBeCloseTo(0, 0);
     expect(Math.max(...spansAt(caves, 40, 0).map((s) => s.ceiling))).toBeLessThanOrEqual(hill(40) - 4);
+    // The passage goes on past it.
+    expect(spansAt(caves, 90, 0).length).toBe(1);
+    expect(spansAt(caves, 90, 0)[0].net).toBe("hill-cave");
   });
 
-  it("gives every element some shapes", () => {
+  it("gives every entrance some shapes", () => {
     const layout = new Layout();
-    for (const shape of ["cathedral", "round", "flat"]) for (const style of ["mineshaft", "borehole", "lavatube"]) expect(shapesOf(layout.copyOf(layout.addNode([0, 0, 0], { shape, style }).id)).length).toBeGreaterThan(0);
-    for (const style of ["natural", "mine"]) {
-      const { at, ...details } = entrance({ style });
-      expect(shapesOf(layout.copyOf(layout.addNode(at, details).id)).length).toBeGreaterThan(1);
-    }
+    for (const style of ["natural", "mine"]) expect(shapesOf(layout.copyOf(layout.addEntrance("n", entrance({ style })).id)).length).toBeGreaterThan(1);
+  });
+
+  it("names networks as slugs", () => {
+    expect(slugOf("  Wailing Hollow! ")).toBe("wailing-hollow");
+    expect(slugOf("--")).toBe("");
   });
 });

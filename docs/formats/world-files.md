@@ -22,8 +22,8 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 | `places/continents/<c>/plates/<layer>/<px>_<pz>.plate` | 16×16 tiles of a layer, with their objects and [slabs](slabs.md) | [plates](plates.md) |
 | `places/continents/<c>/plates/<px>_<pz>.plate` | in version 2 worlds: 8×8 tiles' ground, biomes, slots, water and cuts | [v2 plates](v2-plates.md) |
 | `places/continents/<c>/placed/<px>_<pz>.json` | in version 2 worlds: objects and slabs placed by hand | [placed](placed.md) |
-| `places/continents/<c>/caves/<px>_<pz>.caves` | in version 2 worlds: caves' air, cell by cell | [caves](caves.md) |
-| `places/continents/<c>/caves/layout.json` | in version 2 worlds: the planned rooms and tunnels | [cave layout](cave-layout.md) |
+| `places/continents/<c>/caves/<px>_<pz>.caves` | in version 2 worlds: caves' air, column by column, by network | [caves](caves.md) |
+| `places/continents/<c>/caves/layout.json` | in version 2 worlds: the cave networks laid out | [cave layout](cave-layout.md) |
 | `places/continents/<c>/water.json` | in version 2 worlds: the water's bodies and courses | `client/src/v2/water.js` |
 | `places/continents/<c>/platters/<px>_<pz>.platter` | in version 2 worlds: renditions of 64×64 tiles and 8×8 plates | [v2 platters](v2-platters.md) |
 | `places/continents/<c>/index.json` | which tiles exist, their layers and the zones touching them | [schema](../schema/continent-index.schema.json) |

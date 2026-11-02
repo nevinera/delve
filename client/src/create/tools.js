@@ -40,9 +40,8 @@ import { WaterBodies } from "./water.js";
 //   them where the pointer is, and a ring on the ground shows where they reach. [ and ] resize
 //   them, and c and v turn raise and lower's, shift+c and shift+v a little.
 // - build's tools place objects, templates and slabs, and pick them to change (build.js).
-// - caves' go to stands the builder on a planned room's or tunnel's floor where it's clicked;
-//   chamber and tunnel plan rooms and tunnels
-//   (cavePlan.js).
+// - caves' go to stands the builder on the floor of a cave's point or entrance where it's clicked;
+//   place entrance lays out cave networks (cavePlan.js).
 // - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
 //   more each time the ring's moved its radius. Its undo takes back the last scattering.
 
@@ -56,7 +55,7 @@ const BRUSHES = new Set(["raise", "flatten", "smooth", "noise", "pools", "clear"
 const PLANNING = new Set(["marker", "eraser", "select", "measure"]); // tools that work on lines drawn at sea level
 const OPENS_PINS = new Set([null, "pin"]); // tools with which clicking a pin opens it
 const BUILD = new Set(["pick", "object", "template", "slab", "stairs", "ramp"]);
-const PLANS = new Set(["chamber", "tunnel", "entrance"]);
+const PLANS = new Set(["entrance"]);
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
 

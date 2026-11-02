@@ -1,53 +1,52 @@
 # Cave layout
 
-A version 2 world can keep a plan of each continent's caves: rooms (nodes) joined by tunnels (arcs). /create's chamber (J), tunnel (K) and place entrance (L) tools edit it, and carving it opens the caves in the [caves](caves.md) files. Code: `client/src/create/caveLayout.js`, `client/src/create/cavePlan.js`. Schema: [cave-layout.schema.json](../schema/cave-layout.schema.json).
+A version 2 world keeps the layout of each continent's caves: its cave networks, and in each, the entrances, points and segments that carving opens into the [caves](caves.md) files. /create's place entrance tool (J, in caves) edits it. Code: `client/src/create/caveLayout.js`, `client/src/create/cavePlan.js`. Schema: [cave-layout.schema.json](../schema/cave-layout.schema.json).
 
 ```
 places/continents/<continent>/caves/layout.json
 ```
 
-Its `version` is 2. /create drops a layout of version 1 when it reads one, as it drops the caves files from then, and saves an empty one in its place. Everything this layout carves is in the network `unnamed` for now.
+Its `version` is 2. /create drops a layout of version 1, from before networks, when it reads one, as it drops the caves files from then, and saves an empty one in its place. The game server doesn't read this file.
 
-## Nodes
+## Networks
 
-A node is a room. Its `at` is the middle of its floor, in feet.
+`networks` lists the cave networks, each `{ slug, phase }`.
 
-- `size`: the width of the sphere the room fits in. `s` 16 ft, `m` 32, `l` 64, `xl` 128, `xxl` 256, `3xl` 512, `4xl` 1024.
-- `shape`: `cathedral` (tall, with aisles), `round` (a dome with bays), `flat` (low and wide), or `entrance` (see below).
-- `style`: `borehole`, `lavatube` or `mineshaft`. A mineshaft room is cut square.
-- `rock`: the caves' theme, 0 jagged, 1 smooth, 2 carved, 3 mined.
-- `hewn`: whether the rock is cut flat-faced.
+- `slug`: the network's name, lowercase words of letters and digits joined by hyphens, such as `wailing-hollow`. The caves files name it on each of its tile lines.
+- `phase`: `layout`, while its passages are laid out and carved again as they change, or `polish`, once it's burned in.
+
+Every element below has a `net`, the slug of its network, and an `id`: `e`, `p` or `s` and a number.
 
 ## Entrances
 
-An entrance is a node with `shape` `entrance`: a tube from its `mouth`, the middle of the mouth's floor on a hillside, level or sloping into the hill, and a room at its far end, its `at`, that tunnels join as they join any room.
+A network starts from an entrance: a tube from its `mouth`, the middle of the mouth's floor on a hillside, level or sloping into the hill, to its `point`, a point at its far end that passages go on from.
 
 - `yaw`: the way the tube runs in, in degrees, 0 toward +z, 90 toward +x.
 - `length`: how far in the far end is, in feet across: 16, 32, 48 or 64.
 - `slope`: `level`, or `down`, dropping 1 ft for every 5 in.
-- `width`: the tube's width and height in feet, 6 to 24. The room at its far end is twice as wide.
+- `width`: the tube's width and height in feet, 8 to 24.
 - `style`: `natural`, round, or `mine`, square.
-- `rock` and `hewn`, as for rooms.
+- `rock`: the rock's theme, 0 jagged, 1 smooth, 2 carved, 3 mined.
+- `hewn`: whether the rock is cut flat-faced.
 
-Its `at` is always where `mouth`, `yaw`, `length` and `slope` put it. Its mouth has to be out in the open, all but the bottom quarter of its rim, and its room under the ground, at least 4 ft.
+Its point's `at` is always where `mouth`, `yaw`, `length` and `slope` put it. Its mouth has to be out in the open, all but the bottom quarter of its rim, and its far end under the ground, at least 4 ft.
 
-## Arcs
+## Points
 
-An arc is a tunnel between two nodes, `from` and `to`. It runs floor to floor through its `bends`, points in feet: only where they are across counts, not their heights. Between its level runs into its rooms it climbs or falls evenly all the way, so drawing it out longer makes it gentler. One shorter than 10 times its width along its line isn't carved.
+A point holds the config of the passage round it. Its `at` is the middle of the passage's floor there, in feet.
 
-Rooms' middles keep at least 5 times the sum of their radii apart (an entrance's room's radius is its width).
+- `width` and `height`: the passage's, in feet.
+- `qualities`: a list of the qualities its section has.
+- `rock` and `hewn`, as for entrances.
 
-- `size`: its width in feet, 4 to 60.
-- `shape`: `straight`, `wiggly`, `zigzag` or `deadends` (short side passages that stop in the rock).
-- `style`: a `mineshaft` is square, a `borehole` round, a `lavatube` round and swelling.
-- `rock` and `hewn`, as for nodes.
+## Segments
 
-A node or arc with `locked` true can't be moved, changed or deleted in /create, and nor can the elements joined to it (a node's arcs, an arc's nodes), so it isn't carved again and keeps work done on it by hand.
+A segment joins two points, `from` and `to`, with a passage.
 
 ## Carving
 
-For now every room carves as a round borehole room and every tunnel as a wiggly borehole tunnel, whatever their details say. A tunnel runs level into each room it joins, across 0.7 of the room's radius, so it meets the floor; bends nearer than that give way. An entrance's tube opens through the ground wherever it would have less than 1 ft of rock over it. Air whose floor is over the ground isn't carved. All other air stops 4 ft under the ground, and a room that would come that near it isn't carved. /create carves each change as it's made, with the elements joined to it.
+A segment carves a tube from its `from` point's floor to its `to` point's, its width and height easing from one point's to the other's. An entrance's tube opens through the ground wherever it would have less than 1 ft of rock over it. Air whose floor is over the ground isn't carved. All other air stops 4 ft under the ground, and a segment that would come that near it isn't carved. /create carves each change as it's made. Everything an element carves is in its network.
 
-The same details always carve the same cave: the noise for each room and tunnel is seeded from its id. `carved` keeps each node or arc as it was when last carved (an arc's copy adds `ends`, its nodes' `at`). Carving a changed one fills its old shapes with rock, then opens its new ones, and carves again its unchanged neighbours that the fill touched. Uncarving fills an element's old shapes and drops it from `carved`.
+`carved` keeps each entrance and segment as it was when last carved, by id: a copy of it, a segment's with `ends`, copies of its two points. An element is carved again when its copy now differs from the one kept. Carving a changed one fills its old shapes with rock, then opens its new ones, and carves again its unchanged neighbours that the fill touched.
 
-Rooms are made of domes: `{kind: "dome", at, radii: [rx, ry, rz], yaw}`, a half ellipsoid whose `at` is the middle of its flat floor.
+Shapes are domes, `{kind: "dome", at, radii: [rx, ry, rz], yaw}`, a half ellipsoid whose `at` is the middle of its flat floor, and boxes, `{kind: "box", at, half: [x, y, z], yaw}`.

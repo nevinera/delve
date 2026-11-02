@@ -19,7 +19,7 @@ Every cave is in a named network. A network's name is a slug: lowercase letters 
 
 A stone type is a theme, 0 jagged, 1 smooth, 2 carved or 3 mined, plus 4 if it's hewn (cut flat-faced, as by hand). Where the rock faces up it takes the floor type of the nearest span, where it faces down the ceiling type, and where it faces sideways the wall type.
 
-Only an entrance, a node in the [cave layout](cave-layout.md), may reach up through the ground.
+Only an entrance in the [cave layout](cave-layout.md) may reach up through the ground.
 
 ## Numbers
 

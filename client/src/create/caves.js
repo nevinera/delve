@@ -145,7 +145,7 @@ export class Caves {
     return (columnsOf) => {
       const changed = new Set();
       for (const shape of fills) for (const key of carve(shape, columnsOf, groundAt, { fill: true })) changed.add(key);
-      for (const { shape, stone, mouth } of opens) for (const key of carve(shape, columnsOf, groundAt, { stone, own: true, mouth })) changed.add(key);
+      for (const { shape, stone, mouth, net } of opens) for (const key of carve(shape, columnsOf, groundAt, { stone, own: true, mouth, net })) changed.add(key);
       return changed;
     };
   }

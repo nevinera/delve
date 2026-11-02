@@ -2,56 +2,72 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "cave-layout.schema.json",
   "title": "caves/layout.json",
-  "description": "A continent's planned cave rooms and tunnels, at places/continents/<c>/caves/layout.json.",
+  "description": "A continent's cave networks and what's laid out in them, at places/continents/<c>/caves/layout.json.",
   "type": "object",
-  "required": ["version", "nodes", "arcs"],
+  "required": ["version", "networks", "entrances", "points", "segments"],
   "properties": {
     "version": { "const": 2 },
-    "nodes": { "type": "array", "items": { "$ref": "#/$defs/node" } },
-    "arcs": { "type": "array", "items": { "$ref": "#/$defs/arc" } },
+    "networks": { "type": "array", "items": { "$ref": "#/$defs/network" } },
+    "entrances": { "type": "array", "items": { "$ref": "#/$defs/entrance" } },
+    "points": { "type": "array", "items": { "$ref": "#/$defs/point" } },
+    "segments": { "type": "array", "items": { "$ref": "#/$defs/segment" } },
     "carved": {
       "type": "object",
-      "description": "Each node or arc by id as it was when last carved; an arc's copy adds ends.",
+      "description": "Each entrance or segment by id as it was when last carved; a segment's copy adds ends, copies of its points.",
       "additionalProperties": { "type": "object" }
     }
   },
   "$defs": {
-    "point": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+    "xyz": { "type": "array", "items": { "type": "number" }, "minItems": 3, "maxItems": 3 },
+    "slug": { "type": "string", "pattern": "^[a-z0-9]+(-[a-z0-9]+)*$" },
     "rock": { "type": "integer", "minimum": 0, "maximum": 3, "description": "0 jagged, 1 smooth, 2 carved, 3 mined" },
-    "style": { "enum": ["mineshaft", "borehole", "lavatube"] },
-    "node": {
+    "network": {
       "type": "object",
-      "required": ["id", "at"],
+      "required": ["slug"],
       "properties": {
-        "id": { "type": "string", "pattern": "^n\\d+$" },
-        "at": { "$ref": "#/$defs/point", "description": "the middle of the room's floor, in feet" },
-        "size": { "enum": ["s", "m", "l", "xl", "xxl", "3xl", "4xl"] },
-        "shape": { "enum": ["cathedral", "round", "flat", "entrance"] },
-        "style": { "description": "a room's style, or an entrance's: natural or mine", "anyOf": [{ "$ref": "#/$defs/style" }, { "enum": ["natural", "mine"] }] },
-        "rock": { "$ref": "#/$defs/rock" },
-        "hewn": { "type": "boolean" },
-        "locked": { "type": "boolean", "description": "kept from being moved, changed or deleted, so it isn't carved again" },
-        "mouth": { "$ref": "#/$defs/point", "description": "an entrance's: the middle of its mouth's floor" },
-        "yaw": { "type": "number", "description": "an entrance's: the way it runs in, degrees, 0 toward +z" },
-        "length": { "enum": [16, 32, 48, 64], "description": "an entrance's: how far in its far end is, feet across" },
-        "slope": { "enum": ["level", "down"], "description": "an entrance's: down drops 1 ft for every 5 in" },
-        "width": { "type": "number", "minimum": 6, "maximum": 24, "description": "an entrance's tube's width and height, feet" }
+        "slug": { "$ref": "#/$defs/slug" },
+        "phase": { "enum": ["layout", "polish"] }
       }
     },
-    "arc": {
+    "entrance": {
       "type": "object",
-      "required": ["id", "from", "to"],
+      "required": ["id", "net", "mouth", "yaw", "point"],
       "properties": {
-        "id": { "type": "string", "pattern": "^a\\d+$" },
-        "from": { "type": "string" },
-        "to": { "type": "string" },
-        "bends": { "type": "array", "items": { "$ref": "#/$defs/point" } },
-        "size": { "type": "number", "minimum": 4, "maximum": 60, "description": "width in feet" },
-        "shape": { "enum": ["straight", "wiggly", "zigzag", "deadends"] },
-        "style": { "$ref": "#/$defs/style" },
+        "id": { "type": "string", "pattern": "^e\\d+$" },
+        "net": { "$ref": "#/$defs/slug" },
+        "mouth": { "$ref": "#/$defs/xyz", "description": "the middle of its mouth's floor" },
+        "yaw": { "type": "number", "description": "the way it runs in, degrees, 0 toward +z" },
+        "length": { "enum": [16, 32, 48, 64], "description": "how far in its far end is, feet across" },
+        "slope": { "enum": ["level", "down"], "description": "down drops 1 ft for every 5 in" },
+        "width": { "type": "number", "minimum": 8, "maximum": 24, "description": "its tube's width and height, feet" },
+        "style": { "enum": ["natural", "mine"] },
         "rock": { "$ref": "#/$defs/rock" },
         "hewn": { "type": "boolean" },
-        "locked": { "type": "boolean", "description": "kept from being moved, changed or deleted, so it isn't carved again" }
+        "point": { "type": "string", "description": "the point at its far end" }
+      }
+    },
+    "point": {
+      "type": "object",
+      "required": ["id", "net", "at"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^p\\d+$" },
+        "net": { "$ref": "#/$defs/slug" },
+        "at": { "$ref": "#/$defs/xyz", "description": "the middle of the passage's floor, feet" },
+        "width": { "type": "number", "description": "the passage's width, feet" },
+        "height": { "type": "number", "description": "the passage's height, feet" },
+        "qualities": { "type": "array", "items": { "type": "string" } },
+        "rock": { "$ref": "#/$defs/rock" },
+        "hewn": { "type": "boolean" }
+      }
+    },
+    "segment": {
+      "type": "object",
+      "required": ["id", "net", "from", "to"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^s\\d+$" },
+        "net": { "$ref": "#/$defs/slug" },
+        "from": { "type": "string" },
+        "to": { "type": "string" }
       }
     }
   }
