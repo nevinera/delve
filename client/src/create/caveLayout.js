@@ -18,14 +18,14 @@ export const LAYOUT_PATH = /^places\/continents\/([\w-]+)\/caves\/layout\.json$/
 
 const VERSION = 2;
 export const ENTRANCE_LENGTHS = [16, 32, 48, 64];
-export const ENTRANCE_FT = [8, 24]; // the entrances' widths
+export const ENTRANCE_FT = [16, 24]; // the entrances' widths
 const DOWN = 0.2; // how far a sloping entrance drops for each foot in
 const LOW_RING = Math.PI / 4; // how far round from the bottom an entrance's mouth can be in the ground
 
-export const ENTRANCE_DEFAULTS = { style: "natural", width: 12, length: 48, slope: "level", rock: 0, hewn: false };
-export const POINT_DEFAULTS = { width: 12, height: 10, qualities: [], rock: 0, hewn: false };
+export const ENTRANCE_DEFAULTS = { style: "natural", width: 18, length: 48, slope: "level", rock: 0, hewn: false };
+export const POINT_DEFAULTS = { width: 18, height: 22, qualities: [], rock: 0, hewn: false };
 export const PHASES = ["layout", "polish"];
-export const POINT_FT = { width: [12, 64], height: [10, 48] }; // the passage's sizes a point can have
+export const POINT_FT = { width: [16, 64], height: [16, 48] }; // the passage's sizes a point can have
 export const JOIN_FT = 8; // how near an existing point a passage joins it, not splitting
 const CONFIG = ["width", "height", "qualities", "rock", "hewn"]; // what a point keeps of its section
 export const NETWORK_GAP_FT = 32; // the least rock to leave between networks

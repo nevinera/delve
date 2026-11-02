@@ -39,7 +39,7 @@
         "yaw": { "type": "number", "description": "the way it runs in, degrees, 0 toward +z" },
         "length": { "enum": [16, 32, 48, 64], "description": "how far in its far end is, feet across" },
         "slope": { "enum": ["level", "down"], "description": "down drops 1 ft for every 5 in" },
-        "width": { "type": "number", "minimum": 8, "maximum": 24, "description": "its tube's width and height, feet" },
+        "width": { "type": "number", "minimum": 16, "maximum": 24, "description": "its tube's width and height, feet" },
         "style": { "enum": ["natural", "mine"] },
         "rock": { "$ref": "#/$defs/rock" },
         "hewn": { "type": "boolean" },

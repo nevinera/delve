@@ -115,6 +115,7 @@ describe("cave layout", () => {
     const layout = new Layout();
     const [a, b] = [[0, -40, 0], [64, -40, 0]].map((at) => layout.addPoint("n", at));
     a.width = 20;
+    b.width = 12;
     const ab = layout.addSegment("n", a.id, b.id);
     layout.addPoint("other", [20, -40, 0]);
     // From the middle of the segment: split there, the new point taking its nearer end's config.
@@ -171,9 +172,9 @@ describe("cave layout", () => {
     // Side by side, 30 ft apart in the middle: 30 less 6 and 6 of rock.
     expect(rockBetween([end([0, 0, 0]), end([40, 0, 0])], [end([0, 0, 30]), end([40, 0, 30])])).toBeCloseTo(18);
     const layout = new Layout();
-    const [a, b] = [[0, -60, 0], [64, -60, 0]].map((at) => layout.addPoint("n", at));
+    const [a, b] = [[0, -60, 0], [64, -60, 0]].map((at) => layout.addPoint("n", at, { width: 12, height: 10 }));
     const ab = layout.addSegment("n", a.id, b.id);
-    const [c, d] = [[0, -60, 400], [64, -60, 400]].map((at) => layout.addPoint("far-run", at));
+    const [c, d] = [[0, -60, 400], [64, -60, 400]].map((at) => layout.addPoint("far-run", at, { width: 12, height: 10 }));
     layout.addSegment("far-run", c.id, d.id);
     // Over it, 16 ft up and 10 ft across: 6 ft of rock.
     const over = [end([0, -44, 10]), end([64, -44, 10])];
@@ -187,7 +188,7 @@ describe("cave layout", () => {
   it("keeps a burned in network's rock, and carves it afresh when it's unlocked", () => {
     const layout = new Layout();
     layout.addNetwork("n");
-    const [a, b] = [[0, -60, 0], [64, -60, 0]].map((at) => layout.addPoint("n", at));
+    const [a, b] = [[0, -60, 0], [64, -60, 0]].map((at) => layout.addPoint("n", at, { width: 12, height: 10 }));
     layout.addSegment("n", a.id, b.id);
     const caves = new Caves(scene, { heightAt: () => 0 });
     const carve = (plan) => {
