@@ -449,7 +449,8 @@ export class Caves {
     geometry.setAttribute("color", new THREE.BufferAttribute(data.colors, 3));
     geometry.setAttribute("caveTheme", new THREE.BufferAttribute(data.themes, 1));
     geometry.setIndex(new THREE.BufferAttribute(data.indices, 1));
-    geometry.computeVertexNormals();
+    if (data.normals) geometry.setAttribute("normal", new THREE.BufferAttribute(data.normals, 3));
+    else geometry.computeVertexNormals();
     const mesh = new THREE.Mesh(geometry, this.material);
     mesh.position.set(tx * TILE_FT, 0, tz * TILE_FT);
     mesh.userData.tile = key;

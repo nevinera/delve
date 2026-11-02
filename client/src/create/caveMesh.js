@@ -52,6 +52,7 @@ const THEME_LOOK = {
 };
 const SHADE = 0.1; // how much each vertex's color varies, lighter or darker
 const WALK_SLOPE = Math.tan((WALK_DEG * Math.PI) / 180);
+const BLEND_FLOORS = false; // whether floor and rock colors blend across faces, or each face is one or the other
 
 // Whether column (ci, cj)'s ground lies in a cave's air.
 export function opensAt(world, ci, cj) {
@@ -116,6 +117,8 @@ export function caveMesh(tx, tz, world) {
   const colors = [];
   const themes = [];
   const indices = [];
+  const rockColors = []; // each vertex's color as rock, and whether it's on a floor walked on
+  const walkable = [];
   // How far up or down from y a column's air reaches, to the nearer of its floor and ceiling, or 0
   // where it's rock.
   const reachAt = (ci, cj, y) => {
@@ -270,6 +273,8 @@ export function caveMesh(tx, tz, world) {
     const rgb = here.floor && !steep ? look.floor : look.rgb;
     const shade = 1 + (hash2(a * 3 + c, b * 5 - c) * 2 - 1) * SHADE;
     colors.push(...rgb.map((v) => Math.min(1, (v / 255) * shade)));
+    rockColors.push(...look.rgb.map((v) => Math.min(1, (v / 255) * shade)));
+    walkable.push(here.floor && !steep);
     vertices.set(key, index);
     return index;
   };
@@ -308,7 +313,42 @@ export function caveMesh(tx, tz, world) {
   }
   const surface = bandGround(tx, tz, world);
   if (!indices.length && !surface) return null;
-  return { positions: Float32Array.from(positions), colors: Float32Array.from(colors), themes: Float32Array.from(themes), indices: Uint32Array.from(indices), ground: surface };
+  const mesh = { positions: Float32Array.from(positions), colors: Float32Array.from(colors), themes: Float32Array.from(themes), indices: Uint32Array.from(indices), ground: surface };
+  return BLEND_FLOORS ? mesh : unblended(mesh, rockColors, walkable);
+}
+
+// A mesh with each face floor or rock, not blending: floor where its corners are all on floor
+// walked on and it's no steeper than WALK_DEG itself, and rock otherwise. Its faces keep their own
+// corners, with the normals the shared corners had, so it's lit as smoothly.
+function unblended({ positions, colors, themes, indices, ground }, rockColors, walkable) {
+  const normals = new Float32Array(positions.length);
+  const corner = (i) => [positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]];
+  const faceNormal = (t) => {
+    const [p, q, r] = [0, 1, 2].map((k) => corner(indices[t + k]));
+    const [u, v] = [q.map((x, k) => x - p[k]), r.map((x, k) => x - p[k])];
+    return [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+  };
+  for (let t = 0; t < indices.length; t += 3) {
+    const n = faceNormal(t);
+    for (let k = 0; k < 3; k++) for (let m = 0; m < 3; m++) normals[indices[t + k] * 3 + m] += n[m];
+  }
+  const walkCos = Math.cos((WALK_DEG * Math.PI) / 180);
+  const out = { positions: new Float32Array(indices.length * 3), colors: new Float32Array(indices.length * 3), normals: new Float32Array(indices.length * 3), themes: new Float32Array(indices.length), indices: Uint32Array.from(indices.keys()), ground };
+  for (let t = 0; t < indices.length; t += 3) {
+    const n = faceNormal(t);
+    const floor = [0, 1, 2].every((k) => walkable[indices[t + k]]) && n[1] / (Math.hypot(...n) || 1) >= walkCos;
+    for (let k = 0; k < 3; k++) {
+      const i = indices[t + k];
+      const length = Math.hypot(normals[i * 3], normals[i * 3 + 1], normals[i * 3 + 2]) || 1;
+      for (let m = 0; m < 3; m++) {
+        out.positions[(t + k) * 3 + m] = positions[i * 3 + m];
+        out.colors[(t + k) * 3 + m] = (floor ? colors : rockColors)[i * 3 + m];
+        out.normals[(t + k) * 3 + m] = normals[i * 3 + m] / length;
+      }
+      out.themes[t + k] = themes[i];
+    }
+  }
+  return out;
 }
 
 // The ground the caves draw in tile (tx, tz), in the band round mouths, as { positions, colors,
