@@ -457,10 +457,12 @@ function start(world, changes, fresh) {
       caves.drawOver(renderer, camera, builder.figure.model);
     });
     if (now - lastInfo > INFO_EVERY_MS) {
-      const at = tools.hit();
+      // A cave's rock, from in one, or else the ground.
+      const at = tools.caveHit()?.at ?? tools.hit();
       // From the builder's feet, not the camera behind them.
       $("infoPoint").textContent = at ? feet(Math.hypot(at[0] - x, at[1] - y, at[2] - z)) : "-";
       $("infoHoriz").textContent = at ? feet(Math.hypot(at[0] - x, at[2] - z)) : "-";
+      $("infoSpot").textContent = at ? at.map((v) => Math.round(v)).join(", ") : "-";
       $("infoHeight").textContent = feet(y - SEA_LEVEL_FT);
       $("infoGround").textContent = feet(renditions.heightAt(x, z) ?? EMPTY_FT);
       $("infoFacing").textContent = facing(builder.state.yaw);
