@@ -262,6 +262,22 @@ export class Caves {
     return true;
   }
 
+  // Makes a hand edit, work(columnsOf) as change takes it, undone not by undo but by restore:
+  // gives the tiles it changed as they were before it, or null where nothing changed.
+  edit(work) {
+    if (!this.change(work, false, false)) return null;
+    return this.undos.pop().tiles;
+  }
+
+  // Puts tiles back as they were, as edit gave them.
+  restore(tiles) {
+    for (const [key, columns] of tiles) {
+      if (columns) this.tiles.set(key, columns);
+      else this.tiles.delete(key);
+    }
+    this.touched(new Set(tiles.keys()));
+  }
+
   // Ends a drag, so the next dig undoes on its own.
   letGo() {
     const last = this.undos.at(-1);
@@ -271,11 +287,7 @@ export class Caves {
   undo() {
     const entry = this.undos.pop();
     if (!entry) return false;
-    for (const [key, columns] of entry.tiles) {
-      if (columns) this.tiles.set(key, columns);
-      else this.tiles.delete(key);
-    }
-    this.touched(new Set(entry.tiles.keys()));
+    this.restore(entry.tiles);
     entry.undone?.();
     return true;
   }

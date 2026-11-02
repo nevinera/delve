@@ -55,12 +55,13 @@ const POCKET_FT3 = 512; // an 8 ft cube
 export const cavesPath = (continent, [px, pz]) => `places/continents/${continent}/caves/${px}_${pz}.caves`;
 export const CAVES_PATH = /^places\/continents\/([\w-]+)\/caves\/(-?\d+)_(-?\d+)\.caves$/;
 
-const snap = (v) => Math.round(v / VOXEL_FT) * VOXEL_FT;
+export const snap = (v) => Math.round(v / VOXEL_FT) * VOXEL_FT;
 
 // The height a shape covers over (x, z), [low, high], or null where it misses. A shape is
 // { kind: "sphere", at: [x, y, z], radius }, { kind: "box", at, half: [x, y, z], yaw } (radians,
-// as an object's), or { kind: "dome", at, radii: [x, y, z], yaw }: half an ellipsoid standing on
-// a flat floor at `at`. All in continent feet.
+// as an object's), { kind: "dome", at, radii: [x, y, z], yaw }: half an ellipsoid standing on
+// a flat floor at `at`, or { kind: "cylinder", at, radius, half: [r, h, r] }: upright, `at` its
+// middle, h its half height. All in continent feet.
 export function reach(shape, x, z) {
   const [cx, cy, cz] = shape.at;
   if (shape.kind === "sphere") {
@@ -68,6 +69,10 @@ export function reach(shape, x, z) {
     if (d2 >= shape.radius ** 2) return null;
     const h = Math.sqrt(shape.radius ** 2 - d2);
     return [cy - h, cy + h];
+  }
+  if (shape.kind === "cylinder") {
+    if ((x - cx) ** 2 + (z - cz) ** 2 >= shape.radius ** 2) return null;
+    return [cy - shape.half[1], cy + shape.half[1]];
   }
   const [c, s] = [Math.cos(shape.yaw ?? 0), Math.sin(shape.yaw ?? 0)];
   const [dx, dz] = [x - cx, z - cz];
@@ -85,7 +90,7 @@ export function reach(shape, x, z) {
 // The shape's reach across the ground, [x0, z0, x1, z1].
 export function shapeBounds(shape) {
   const [cx, , cz] = shape.at;
-  const r = shape.kind === "sphere" ? shape.radius : shape.kind === "dome" ? Math.max(shape.radii[0], shape.radii[2]) : Math.hypot(shape.half[0], shape.half[2]);
+  const r = shape.kind === "sphere" || shape.kind === "cylinder" ? shape.radius : shape.kind === "dome" ? Math.max(shape.radii[0], shape.radii[2]) : Math.hypot(shape.half[0], shape.half[2]);
   return [cx - r, cz - r, cx + r, cz + r];
 }
 
@@ -181,7 +186,7 @@ export function carve(shape, columnsOf, groundAt, { fill = false, stone = allSto
 
 // Continent column (ci, cj)'s place in columnsOf's tiles: { columns, k, key }, k its index in its
 // tile's columns and key its tile's "tx,tz", or null where its tile has none (and not `make`).
-function cellAt(columnsOf, ci, cj, make) {
+export function cellAt(columnsOf, ci, cj, make) {
   const [tx, tz] = [Math.floor(ci / TILE_COLUMNS), Math.floor(cj / TILE_COLUMNS)];
   const columns = columnsOf(tx, tz, make);
   return columns && { columns, k: (cj - tz * TILE_COLUMNS) * TILE_COLUMNS + ci - tx * TILE_COLUMNS, key: `${tx},${tz}` };

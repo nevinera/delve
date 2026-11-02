@@ -10,6 +10,7 @@ import { Marks } from "./marks.js";
 import { scatterPools } from "./marsh.js";
 import { Measure } from "./measure.js";
 import { CavePlan } from "./cavePlan.js";
+import { CavePolish } from "./cavePolish.js";
 import { Build } from "./build.js";
 import { Paths } from "./paths.js";
 import { TITLE_MAX } from "./pins.js";
@@ -41,7 +42,8 @@ import { WaterBodies } from "./water.js";
 //   them, and c and v turn raise and lower's, shift+c and shift+v a little.
 // - build's tools place objects, templates and slabs, and pick them to change (build.js).
 // - caves' go to stands the builder on the floor of a cave's point or entrance where it's clicked;
-//   place entrance and passage lay out cave networks (cavePlan.js).
+//   place entrance and passage lay out cave networks (cavePlan.js), and polish edits a burned in
+//   network's rock by hand, the right button placing voxels (cavePolish.js).
 // - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
 //   more each time the ring's moved its radius. Its undo takes back the last scattering.
 
@@ -135,6 +137,7 @@ export class Tools {
     this.build.onPick = (tool) => this.tool !== tool && this.pick(tool);
     this.plan = new CavePlan({ scene, camera, canvas, layout, caves, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, here: () => [builder.state.x, builder.state.y, builder.state.z] });
     builder.wheel = (e) => PLANS.has(this.tool) && this.plan.wheel(e);
+    this.polish = new CavePolish({ scene, caves, layout, camera, ray: () => this.build.ray() });
     this.paths = new Paths(scene, canvas.parentElement, renditions, (x, z) => this.surface(x, z), (text) => ($("pathStatus").textContent = text));
     this.moving = null; // pins being dragged, { from, pins: [[pin, x, z]], before, moved }
     this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }
@@ -308,6 +311,7 @@ export class Tools {
       this.point(e);
       if (BUILD.has(this.tool)) this.build.move(e);
       if (PLANS.has(this.tool)) this.plan.move(e);
+      if (this.tool === "polish") this.polish.move();
       if (this.moving) this.movePins();
       for (const areas of Object.values(this.outlined)) {
         if (!areas.dragging) continue;
@@ -347,6 +351,7 @@ export class Tools {
       if (pin) this.openPin(pin);
     });
     canvas.addEventListener("pointerdown", (e) => {
+      if (e.button === 2 && this.tool === "polish") return this.polish.down(e);
       if (e.button !== 0) return;
       this.point(e);
       // Clicking away from an open pin only closes it. (The canvas's own handlers keep the browser
@@ -366,6 +371,10 @@ export class Tools {
       if (PLANS.has(this.tool)) {
         canvas.setPointerCapture(e.pointerId);
         return this.plan.down(e);
+      }
+      if (this.tool === "polish") {
+        canvas.setPointerCapture(e.pointerId);
+        return this.polish.down(e);
       }
       if (this.tool === "goto") {
         const r = canvas.getBoundingClientRect();
@@ -430,6 +439,7 @@ export class Tools {
       this.stroke = null;
       if (BUILD.has(this.tool)) this.build.up();
       if (PLANS.has(this.tool)) this.plan.up();
+      if (this.tool === "polish") this.polish.up();
       if (this.clicked?.pin) this.openPin(this.clicked.pin);
       else if (this.clicked?.at) {
         const before = this.marks.toJSON();
@@ -462,6 +472,7 @@ export class Tools {
       const areas = this.outlined[this.tool];
       if (BUILD.has(this.tool) && this.build.key(e)) return e.preventDefault();
       if (PLANS.has(this.tool) && this.plan.key(e)) return e.preventDefault();
+      if (this.tool === "polish" && this.polish.key(e)) return e.preventDefault();
       if (e.key === "Escape" && areas?.draft) areas.drop();
       else if (e.key === "Escape") this.pick(null);
       else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "select") this.marks.deleteSelected();
@@ -596,6 +607,7 @@ export class Tools {
     this.paths.setShown(tool === "path");
     if (BUILD.has(tool) || BUILD.has(this.build.tool)) this.build.setTool(BUILD.has(tool) ? tool : null);
     this.plan.setTool(PLANS.has(tool) ? tool : null);
+    this.polish.setTool(tool === "polish");
     this.box = null;
     this.boxEl.hidden = true;
     this.drawing = null;
@@ -800,6 +812,7 @@ export class Tools {
     this.paths.tick(this.camera, w, h);
     if (BUILD.has(this.tool)) this.build.tick();
     this.plan.tick(this.inEarth());
+    this.polish.tick();
     for (const [tool, areas] of Object.entries(this.outlined)) {
       const to = this.tool === tool && areas.draft && this.hit();
       areas.tick(dt, this.camera, w, h, to ? [to[0], to[2]] : null, this.tool === tool);
