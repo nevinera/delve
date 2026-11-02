@@ -21,6 +21,10 @@ A stone type is a theme, 0 jagged, 1 smooth, 2 carved or 3 mined, plus 4 if it's
 
 Only an entrance in the [cave layout](cave-layout.md) may reach up through the ground.
 
+## Mouths
+
+Where an entrance opens through the ground, the caves draw the ground near it, not the ground's own mesh. Each 4 ft ground cell with an open column in it, or next to one, is drawn by the caves: a 2 ft square for each column that's still closed, on the ground's heights, in the ground's look. Open columns are left out, so the mouth is a hole in the ground with the cave behind it. Nothing about mouths is kept in the file; they come from the spans.
+
 ## Numbers
 
 Numbers are base64 digits, as in [plates](v2-plates.md): `A`–`Z` `a`–`z` `0`–`9` `+` `/` stand for 0 to 63, most significant digit first. Heights and lengths are in quarter feet. A height written absolutely is the height plus 32,768.

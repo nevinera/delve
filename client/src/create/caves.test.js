@@ -65,7 +65,7 @@ describe("cave columns", () => {
 });
 
 describe("caves", () => {
-  it("meshes dug rock, its rim on the ground at the columns' corners", () => {
+  it("meshes dug rock and the ground round its mouth, the rim on the ground at the columns' corners", () => {
     const caves = new Caves({ add() {} }, flat(5));
     caves.dig({ kind: "sphere", at: [128, 0, 128], radius: 10 });
     const mesh = caveMesh(0, 0, caves.world);
@@ -76,10 +76,24 @@ describe("caves", () => {
       expect(mesh.positions[n + 1]).toBeCloseTo(5);
       expect(mesh.positions[n] % VOXEL_FT).toBeCloseTo(0);
     }
-    // The ground leaves out the cells whose columns all open.
+    // The caves draw the ground in a band round where they open through it: a face over each
+    // column that isn't open, on the ground.
     const cells = TILE_FT / CELL_FT;
-    expect(caves.holes(0, 0).has(32 * cells + 32)).toBe(true);
-    expect(caves.holes(0, 0).has(32 * cells + 40)).toBe(false);
+    const band = caves.band(0, 0);
+    expect(band.has(32 * cells + 32)).toBe(true);
+    expect(band.has(32 * cells + 30)).toBe(true);
+    expect(band.has(32 * cells + 40)).toBe(false);
+    const { ground } = mesh;
+    for (let n = 0; n < ground.positions.length; n += 3) {
+      expect(ground.positions[n + 1]).toBeCloseTo(5);
+      expect(ground.positions[n] % VOXEL_FT).toBeCloseTo(0);
+    }
+    expect(ground.indices.length / 6).toBeLessThan(band.size * 4);
+    // The ground leaves the band out once the caves have drawn it there.
+    expect(caves.holes(0, 0)).toBe(null);
+    caves.groundMaterial = () => new THREE.MeshLambertMaterial();
+    caves.make("0,0");
+    expect(caves.holes(0, 0)).toBe(band);
     expect(caves.holes(5, 5)).toBe(null);
     // Nothing's meshed far from caves.
     expect(caveMesh(4, 4, caves.world)).toBe(null);

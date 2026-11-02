@@ -15,17 +15,21 @@ import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, isHewn, stonePart, themeOf } from 
 // neighbours', rounding off the columns' grid, then pushed in or out by noise along the way the
 // rock faces. Both come from the tiles alone, never from the mesh, so tiles agree at seams.
 //
-// Where a cave opens through the ground (a mouth: ground inside a span's air), the ground's full
-// tiles leave out the cells whose columns all open, and the cave's rim, its vertices in cubes that
-// reach the sky by an opened column, sits on the ground's surface at the columns' corners.
+// Round where a cave opens through the ground (a mouth: ground inside a span's air), the caves
+// draw the ground too, in a band of the ground's cells (world.band), which the ground's full tiles
+// leave out. There the ground is a face over each column that isn't open, on the ground's own
+// heights at the columns' corners, and the cave's rim, its vertices in cubes that reach the sky,
+// sits on those corners too, so the two are one surface. The band's columns nest in the ground's
+// cells, so its edge lies on the ground's cells' edges and meets the ground drawn round it.
 //
 // The mesh covers the tile's grid edges, and reaches to its east and south neighbours' columns,
 // so tiles meet without gaps. Positions are feet from the tile's northwest corner.
 //
 // world: what a mesh needs to know, by continent column (ci, cj), VOXEL_FT square: spans(ci, cj),
 // lowest first; ground(ci, cj), the ground's height at its middle, -Infinity where it's not known;
-// corner(ci, cj), at its northwest corner; mouth(ci, cj), whether the ground there opens into a
-// cave; caved(tx, tz), whether a tile has any caves.
+// corner(ci, cj), at its northwest corner; band(ci, cj), whether the caves draw the ground there;
+// groundLook(ci, cj), the ground's color and normal at the column's northwest corner, { color,
+// normal }; and caved(tx, tz), whether a tile has any caves.
 
 const STEP_FT = VOXEL_FT;
 const ROCK = 0;
@@ -66,7 +70,7 @@ export function caveMesh(tx, tz, world) {
   };
   const spans = kept((ci, cj) => world.spans(ci, cj));
   const ground = kept((ci, cj) => world.ground(ci, cj));
-  const mouthAt = kept((ci, cj) => world.mouth(ci, cj));
+  const bandAt = kept((ci, cj) => world.band(ci, cj));
   const state = (ci, cj, y) => {
     for (const s of spans(ci, cj)) if (s.floor <= y && y <= s.ceiling) return CAVE;
     return y > ground(ci, cj) ? SKY : ROCK;
@@ -79,11 +83,11 @@ export function caveMesh(tx, tz, world) {
   };
 
   // The heights the surface could be at in a column's neighbourhood: grid steps from under the
-  // lowest floor to over the highest ceiling, or the ground, near a mouth.
+  // lowest floor to over the highest ceiling, or the ground, in the band round a mouth.
   const own = kept((ci, cj) => {
     let [lo, hi] = [Infinity, -Infinity];
     for (const s of spans(ci, cj)) [lo, hi] = [Math.min(lo, s.floor), Math.max(hi, s.ceiling)];
-    if (mouthAt(ci, cj)) {
+    if (bandAt(ci, cj)) {
       const g = ground(ci, cj);
       [lo, hi] = [Math.min(lo, g), Math.max(hi, g)];
     }
@@ -190,9 +194,9 @@ export function caveMesh(tx, tz, world) {
       const theme = touched.length ? CAVE_THEMES[themeOf(touched[0].stone[part])] : null;
       // Hewn rock: walls on the columns' edges, floors and ceilings at their heights.
       if (hewn) [x, y, z] = [a + 0.5, ups ? upY / ups : y, b + 0.5];
-      // The rim, where the cave reaches the sky by an opened column: on the ground's own corner, so
-      // it meets the ground drawn in full.
-      const rim = states.includes(SKY) && corners.some(([ci, cj]) => mouthAt(ci, cj));
+      // The rim, where the cave reaches the sky in the band round a mouth: on the ground's own
+      // corner, where the ground drawn with it has its corner.
+      const rim = states.includes(SKY) && corners.some(([ci, cj]) => bandAt(ci, cj));
       if (rim) [x, y, z] = [a + 0.5, world.corner(a + 1, b + 1), b + 0.5];
       found = { at: [(x + 0.5) * VOXEL_FT, y, (z + 0.5) * VOXEL_FT], toward: way, hewn, theme: THEME_LOOK[theme] ? theme : CAVE_THEMES[0], floor, rim };
     }
@@ -250,8 +254,11 @@ export function caveMesh(tx, tz, world) {
     vertices.set(key, index);
     return index;
   };
-  // A face across a grid edge, from the four cubes round it, facing `way` along the edge.
+  // A face across a grid edge, from the four cubes round it, facing `way` along the edge, but for
+  // one lying on the ground.
   const quad = (cubes, way) => {
+    // A face all on the rim lies on the ground, which is drawn there already.
+    if (cubes.every((cube) => crossing(...cube).rim)) return;
     const [v0, v1, v2, v3] = cubes.map((cube) => vertex(...cube));
     // The cubes run round the edge so that this order faces back along it.
     if (way > 0) indices.push(v0, v2, v1, v0, v3, v2);
@@ -280,8 +287,33 @@ export function caveMesh(tx, tz, world) {
       }
     }
   }
+  const surface = bandGround(tx, tz, world);
+  if (!indices.length && !surface) return null;
+  return { positions: Float32Array.from(positions), colors: Float32Array.from(colors), themes: Float32Array.from(themes), indices: Uint32Array.from(indices), ground: surface };
+}
+
+// The ground the caves draw in tile (tx, tz), in the band round mouths, as { positions, colors,
+// normals, indices }, or null where there's none: a face over each column whose ground isn't in a
+// cave's air, its corners on the ground's own heights.
+export function bandGround(tx, tz, world) {
+  const [ci0, cj0] = [tx * TILE_COLUMNS, tz * TILE_COLUMNS];
+  const [positions, colors, normals, indices] = [[], [], [], []];
+  for (let j = 0; j < TILE_COLUMNS; j++) {
+    for (let i = 0; i < TILE_COLUMNS; i++) {
+      const [ci, cj] = [ci0 + i, cj0 + j];
+      if (!world.band(ci, cj) || opensAt(world, ci, cj)) continue;
+      const n = positions.length / 3;
+      for (const [di, dj] of [[0, 0], [0, 1], [1, 1], [1, 0]]) {
+        const { color, normal } = world.groundLook(ci + di, cj + dj);
+        positions.push((i + di) * VOXEL_FT, world.corner(ci + di, cj + dj), (j + dj) * VOXEL_FT);
+        colors.push(...color);
+        normals.push(...normal);
+      }
+      indices.push(n, n + 1, n + 2, n, n + 2, n + 3);
+    }
+  }
   if (!indices.length) return null;
-  return { positions: Float32Array.from(positions), colors: Float32Array.from(colors), themes: Float32Array.from(themes), indices: Uint32Array.from(indices) };
+  return { positions: Float32Array.from(positions), colors: Float32Array.from(colors), normals: Float32Array.from(normals), indices: Uint32Array.from(indices) };
 }
 
 // How far a theme pushes the rock at continent feet [x, y, z], in about [-0.5, 0.5]: broken
@@ -303,9 +335,11 @@ const CUBE_EDGES = [
 // Tile (tx, tz)'s cave rock as its voxels, as caveMesh gives it but blocky: a face on each side of
 // each VOXEL_FT cube of air whose neighbour is rock, runs of faces up a column's side joined into
 // one. Air over the ground isn't the caves', so it has no faces against it. Each face is flat,
-// shaded a little lighter or darker than its neighbours so the blocks show.
+// shaded a little lighter or darker than its neighbours so the blocks show. The ground in the band
+// round mouths is drawn as caveMesh draws it (bandGround).
 export function caveBlocks(tx, tz, world) {
-  if (!world.caved(tx, tz)) return null;
+  const surface = bandGround(tx, tz, world);
+  if (!world.caved(tx, tz)) return surface && { positions: new Float32Array(), colors: new Float32Array(), themes: new Float32Array(), indices: new Uint32Array(), ground: surface };
   const [ci0, cj0] = [tx * TILE_COLUMNS, tz * TILE_COLUMNS];
   const positions = [];
   const colors = [];
@@ -357,6 +391,6 @@ export function caveBlocks(tx, tz, world) {
       }
     }
   }
-  if (!indices.length) return null;
-  return { positions: Float32Array.from(positions), colors: Float32Array.from(colors), themes: Float32Array.from(themes), indices: Uint32Array.from(indices) };
+  if (!indices.length && !surface) return null;
+  return { positions: Float32Array.from(positions), colors: Float32Array.from(colors), themes: Float32Array.from(themes), indices: Uint32Array.from(indices), ground: surface };
 }

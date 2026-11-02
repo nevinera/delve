@@ -189,6 +189,7 @@ function start(world, changes, fresh) {
   const layout = new Layout(layoutBytes ? JSON.parse(strFromU8(layoutBytes)) : null);
   ground.holes = (tx, tz) => caves.holes(tx, tz);
   caves.onMouths = (plates) => ground.refresh(plates);
+  caves.groundMaterial = (tx, tz) => ground.fullMesh(tx, tz)?.material ?? null;
   const things = new Things(scene, placed, (x, z, under) => caves.groundAt(x, z, under));
   // Level slabs press the ground down under them (press.js).
   renditions.pressesOver = (tx, tz) => pressesOver(placed.near((tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT, TILE_FT).slabs, tx, tz);
@@ -432,6 +433,7 @@ function start(world, changes, fresh) {
     const [cx, cz] = [camera.position.x, camera.position.z];
     const buried = camera.position.y < groundAt(cx, cz) && !caves.mouth(Math.floor(cx / VOXEL_FT), Math.floor(cz / VOXEL_FT));
     ground.group.visible = !buried;
+    caves.groundGroup.visible = !buried;
     // In the rock, the caves' outlines show whether they're toggled on or not.
     caves.show("lines", $("showCaveOutlines").checked || (buried && caves.solid(cx, camera.position.y, cz)));
     caves.fromEarth(ghost());

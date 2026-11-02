@@ -55,11 +55,23 @@ export class Caves {
     this.gridMaterial = new THREE.LineBasicMaterial({ vertexColors: true, depthWrite: false, transparent: true, opacity: 0.6 });
     this.lineMaterial = new THREE.LineBasicMaterial({ color: LINE_RGB, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
     this.onMouths = null; // (plate keys) => void, when the ground at mouths changes
+    // The ground the caves draw round mouths, in the ground's own material, groundMaterial(tx, tz),
+    // or null till the ground's drawn there; shown whether the rock is or not.
+    this.groundGroup = new THREE.Group();
+    scene.add(this.groundGroup);
+    this.groundMaterial = null;
+    this.bands = new Map(); // "tx,tz" -> { version, cells }: band() as last worked out
+    this.shownBands = new Map(); // "tx,tz" -> the band's cells the ground leaves out, as drawn
     this.world = {
       spans: (ci, cj) => this.spans(ci, cj),
       ground: (ci, cj) => this.groundCell(ci, cj),
       corner: (ci, cj) => this.renditions.heightAt(ci * VOXEL_FT, cj * VOXEL_FT) ?? EMPTY_FT,
-      mouth: (ci, cj) => this.opens(ci, cj),
+      band: (ci, cj) => {
+        const [i, j] = [Math.floor(ci / PER), Math.floor(cj / PER)];
+        const [tx, tz] = [Math.floor(i / CELLS), Math.floor(j / CELLS)];
+        return this.band(tx, tz)?.has((j - tz * CELLS) * CELLS + i - tx * CELLS) ?? false;
+      },
+      groundLook: (ci, cj) => this.groundLook(ci, cj),
       caved: (tx, tz) => this.tiles.has(`${tx},${tz}`),
     };
   }
@@ -102,23 +114,85 @@ export class Caves {
     return false;
   }
 
-  // Tile (tx, tz)'s ground cells that aren't drawn, where caves open through all of the columns in
-  // them, as a Set of indices, or null for none.
-  holes(tx, tz) {
+  // Tile (tx, tz)'s ground cells the caves draw, in the band round mouths, as a Set of indices, or
+  // null for none: those within BAND_CELLS of a cell where a cave opens through the ground.
+  band(tx, tz) {
+    const key = `${tx},${tz}`;
+    const kept = this.bands.get(key);
+    if (kept?.version === this.version) return kept.cells;
     let near = false;
     for (let dz = -1; dz <= 1 && !near; dz++) for (let dx = -1; dx <= 1 && !near; dx++) near = this.tiles.has(`${tx + dx},${tz + dz}`);
-    if (!near) return null;
-    const out = new Set();
-    const [n, per] = [TILE_FT / CELL_FT, CELL_FT / VOXEL_FT];
-    for (let j = 0; j < n; j++) {
-      for (let i = 0; i < n; i++) {
-        const [ci, cj] = [tx * TILE_COLUMNS + i * per, tz * TILE_COLUMNS + j * per];
-        let all = true;
-        for (let b = 0; b < per && all; b++) for (let a = 0; a < per && all; a++) all = this.opens(ci + a, cj + b);
-        if (all) out.add(j * n + i);
+    let cells = null;
+    if (near) {
+      const R = BAND_CELLS;
+      const side = CELLS + 2 * R;
+      // Which cells, the tile's and those round it, a cave opens through.
+      const open = new Uint8Array(side * side);
+      for (let j = -R; j < CELLS + R; j++) {
+        for (let i = -R; i < CELLS + R; i++) {
+          const [ci, cj] = [(tx * CELLS + i) * PER, (tz * CELLS + j) * PER];
+          let opens = false;
+          for (let b = 0; b < PER && !opens; b++) for (let a = 0; a < PER && !opens; a++) opens = this.opens(ci + a, cj + b);
+          open[(j + R) * side + i + R] = opens ? 1 : 0;
+        }
+      }
+      cells = new Set();
+      for (let j = 0; j < CELLS; j++) {
+        for (let i = 0; i < CELLS; i++) {
+          let near = false;
+          for (let b = -R; b <= R && !near; b++) for (let a = -R; a <= R && !near; a++) near = open[(j + R + b) * side + i + R + a] === 1;
+          if (near) cells.add(j * CELLS + i);
+        }
+      }
+      if (!cells.size) cells = null;
+    }
+    this.bands.set(key, { version: this.version, cells });
+    return cells;
+  }
+
+  // Tile (tx, tz)'s ground cells that the ground leaves out, as a Set of indices, or null for none:
+  // the band round mouths, once the caves have drawn the ground there.
+  holes(tx, tz) {
+    return this.shownBands.get(`${tx},${tz}`) ?? null;
+  }
+
+  // The ground's look at column corner (ci, cj), as the ground drawn in full has it at its cells'
+  // corners, eased between them: { color, normal }, linear color.
+  groundLook(ci, cj) {
+    const [u, v] = [ci / PER, cj / PER];
+    const [i, j] = [Math.floor(u), Math.floor(v)];
+    const [fu, fv] = [u - i, v - j];
+    const color = [0, 0, 0];
+    const normal = [0, 0, 0];
+    for (const [a, b, w] of [[0, 0, (1 - fu) * (1 - fv)], [1, 0, fu * (1 - fv)], [0, 1, (1 - fu) * fv], [1, 1, fu * fv]]) {
+      if (!w) continue;
+      const corner = this.groundCorner(i + a, j + b);
+      for (let m = 0; m < 3; m++) [color[m], normal[m]] = [color[m] + corner.color[m] * w, normal[m] + corner.normal[m] * w];
+    }
+    const length = Math.hypot(...normal) || 1;
+    return { color, normal: normal.map((n) => n / length) };
+  }
+
+  // The ground's look at cell corner (i, j), as the ground drawn in full has it: its color the
+  // mean of the cells round it, and its normal from the heights a cell either way.
+  groundCorner(i, j) {
+    const color = [0, 0, 0];
+    let count = 0;
+    for (let b = j - 1; b <= j; b++) {
+      for (let a = i - 1; a <= i; a++) {
+        const [tx, tz] = [Math.floor(a / CELLS), Math.floor(b / CELLS)];
+        const colors = this.renditions.cells?.(tx, tz)?.colors;
+        if (!colors) continue;
+        const k = ((b - tz * CELLS) * CELLS + a - tx * CELLS) * 3;
+        for (let m = 0; m < 3; m++) color[m] += linear(colors[k + m]);
+        count++;
       }
     }
-    return out.size ? out : null;
+    const h = (x, z) => this.renditions.heightAt(x, z) ?? EMPTY_FT;
+    const [x, z] = [i * CELL_FT, j * CELL_FT];
+    const [nx, nz] = [(h(x - CELL_FT, z) - h(x + CELL_FT, z)) / (2 * CELL_FT), (h(x, z - CELL_FT) - h(x, z + CELL_FT)) / (2 * CELL_FT)];
+    const length = Math.hypot(nx, 1, nz);
+    return { color: count ? color.map((c) => c / count) : [0.2, 0.2, 0.2], normal: [nx / length, 1 / length, nz / length] };
   }
 
   // Opens air in `shape` (v2/caves.js's carve), or fills it with rock with `fill`. Gives whether
@@ -225,6 +299,7 @@ export class Caves {
       if (near(key)) continue;
       this.drop(mesh);
       this.meshes.delete(key);
+      this.showBand(...key.split(",").map(Number), null);
     }
     const wanted = new Set();
     for (const key of this.tiles.keys()) {
@@ -235,6 +310,7 @@ export class Caves {
       if (wanted.has(key)) continue;
       this.drop(mesh);
       this.meshes.delete(key);
+      this.showBand(...key.split(",").map(Number), null);
     }
     const todo = [...wanted].filter((key) => near(key) && (!this.meshes.has(key) || this.stale.has(key)));
     if (!todo.length) return;
@@ -294,6 +370,15 @@ export class Caves {
     const old = this.meshes.get(key);
     if (old) this.drop(old);
     const data = (this.view === "blocks" ? caveBlocks : caveMesh)(tx, tz, this.world);
+    // The ground left out where the caves draw it, once they do.
+    const band = data?.ground ? this.band(tx, tz) : null;
+    const material = band && this.groundMaterial?.(tx, tz);
+    if (band && !material) {
+      // Not till the ground's drawn there, to take its material.
+      this.stale.add(key);
+      return this.meshes.set(key, null);
+    }
+    this.showBand(tx, tz, band);
     if (!data) return this.meshes.set(key, null);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(data.positions, 3));
@@ -310,6 +395,17 @@ export class Caves {
     lines.position.copy(mesh.position);
     this.overlays.lines.add(lines);
     mesh.userData.overlays = [lines];
+    if (data.ground) {
+      const earth = new THREE.BufferGeometry();
+      earth.setAttribute("position", new THREE.BufferAttribute(data.ground.positions, 3));
+      earth.setAttribute("color", new THREE.BufferAttribute(data.ground.colors, 3));
+      earth.setAttribute("normal", new THREE.BufferAttribute(data.ground.normals, 3));
+      earth.setIndex(new THREE.BufferAttribute(data.ground.indices, 1));
+      const surface = new THREE.Mesh(earth, material);
+      surface.position.copy(mesh.position);
+      this.groundGroup.add(surface);
+      mesh.userData.overlays.push(surface);
+    }
     for (const overlay of this.grid(tx, tz)) {
       this.overlays.grid.add(overlay);
       mesh.userData.overlays.push(overlay);
@@ -351,6 +447,17 @@ export class Caves {
     if (lines.length) out.push(new THREE.LineSegments(geometry(lines, lineColors), this.gridMaterial));
     for (const overlay of out) overlay.renderOrder = 10;
     return out;
+  }
+
+  // Has the ground leave out tile (tx, tz)'s `cells` (a Set of indices, or null), redrawing it
+  // where they've changed.
+  showBand(tx, tz, cells) {
+    const key = `${tx},${tz}`;
+    const before = this.shownBands.get(key) ?? null;
+    if ([...(before ?? [])].join(",") === [...(cells ?? [])].join(",")) return;
+    if (cells) this.shownBands.set(key, cells);
+    else this.shownBands.delete(key);
+    this.onMouths?.(new Set([`${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`]));
   }
 
   drop(mesh) {
@@ -492,3 +599,12 @@ export class Caves {
 }
 
 const EMPTY = Object.freeze([]);
+const CELLS = TILE_FT / CELL_FT; // the ground's cells a tile a side
+const PER = CELL_FT / VOXEL_FT; // columns a ground cell a side
+const BAND_CELLS = 1; // how many ground cells round where a cave opens the caves draw the ground in
+
+// An sRGB byte's linear value.
+const linear = (byte) => {
+  const v = byte / 255;
+  return v <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4;
+};
