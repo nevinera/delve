@@ -6,7 +6,7 @@ import { caveBlocks, caveMesh } from "./caveMesh.js";
 import { Caves } from "./caves.js";
 
 // Flat ground at `height`, everywhere, with its cells all one color.
-const flat = (height) => ({ heightAt: () => height });
+const flat = (height) => ({ heightAt: () => height, cellHeightAt: () => height });
 
 describe("cave columns", () => {
   it("opens air, joining what it meets, and fills it again", () => {
@@ -161,7 +161,7 @@ describe("caves", () => {
     expect(caves.unsavedFiles("main").get(cavesPath("main", [2, 3]))).toBe(null);
   });
   it("refuses a carving that puts a second network in a chunk, even above the first", () => {
-    const caves = new Caves({ add() {} }, { heightAt: () => 0 });
+    const caves = new Caves({ add() {} }, { heightAt: () => 0, cellHeightAt: () => 0 });
     expect(caves.dig({ kind: "box", at: [10, -60, 10], half: [4, 4, 4], yaw: 0 }, { net: "a" })).toBe(true);
     const was = structuredClone([...caves.tiles]);
     expect(caves.dig({ kind: "box", at: [20, -20, 20], half: [4, 4, 4], yaw: 0 }, { net: "b" })).toBe(false);

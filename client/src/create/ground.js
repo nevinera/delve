@@ -778,6 +778,20 @@ export class Renditions {
     return tile && between(tile.heights, CORNERS, (x - tx * TILE_FT) / CHUNK_FT, (z - tz * TILE_FT) / CHUNK_FT);
   }
 
+  // The ground's height at continent feet (x, z) between cell corners, its plate read now where
+  // it's not been, or heightAt's where its plate has to be fetched first.
+  cellHeightAt(x, z) {
+    const key = `${Math.floor(x / PLATE_FT)},${Math.floor(z / PLATE_FT)}`;
+    if (!this.decoded.has(key) && (this.plateFiles.has(key) || this.made.has(key))) {
+      const plate = this.readNow(key);
+      if (plate) {
+        this.keep(key, plate);
+        this.onRead(key);
+      }
+    }
+    return this.heightAt(x, z);
+  }
+
   // For each of tile (tx, tz)'s cells, the highest water within SHORE_CELLS of it, NaN for none,
   // and the highest running water's (look.js's RUNNING), with `water` the tile's, and its
   // neighbours' as waterCellAt has them: [levels, running levels].

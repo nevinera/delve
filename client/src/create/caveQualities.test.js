@@ -10,7 +10,7 @@ const across = (shapes) => shapes.map((s) => Math.abs(s.at[2]));
 const up = (shapes) => shapes.map((s) => s.at[1] + 60);
 // The air a segment opens, in voxel columns' feet.
 function air(copy) {
-  const caves = new Caves({ add() {} }, { heightAt: () => 0 });
+  const caves = new Caves({ add() {} }, { heightAt: () => 0, cellHeightAt: () => 0 });
   for (const shape of segmentShapes(copy)) caves.dig(shape);
   let ft = 0;
   for (const columns of caves.tiles.values()) for (const spans of columns) for (const s of spans ?? []) ft += s.ceiling - s.floor;

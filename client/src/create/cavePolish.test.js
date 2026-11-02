@@ -22,7 +22,7 @@ describe("cave polish", () => {
   });
 
   it("paints the spans a shape covers, and undoes by restoring", () => {
-    const caves = new Caves({ add() {} }, { heightAt: () => 0 });
+    const caves = new Caves({ add() {} }, { heightAt: () => 0, cellHeightAt: () => 0 });
     caves.dig({ kind: "box", at: [10, -50, 10], half: [6, 6, 6], yaw: 0 }, { net: "n" });
     const was = structuredClone([...caves.tiles]);
     const red = allStone(2);

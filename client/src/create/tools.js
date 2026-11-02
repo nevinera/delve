@@ -159,7 +159,7 @@ export class Tools {
       caveHit: () => this.caveHit(),
     });
     this.build.onPick = (tool) => this.tool !== tool && this.pick(tool);
-    this.plan = new CavePlan({ scene, camera, canvas, layout, caves, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, here: () => [builder.state.x, builder.state.y, builder.state.z] });
+    this.plan = new CavePlan({ scene, camera, canvas, layout, caves, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.cellHeightAt(x, z) ?? EMPTY_FT, here: () => [builder.state.x, builder.state.y, builder.state.z] });
     builder.wheel = (e) => PLANS.has(this.tool) && this.plan.wheel(e);
     this.polish = new CavePolish({ scene, caves, layout, camera, ray: () => this.build.ray() });
     $("caveUndo").addEventListener("click", () => this.caveUndo());

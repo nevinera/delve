@@ -182,7 +182,7 @@ export class CavePolish {
 
   // The ground's height in column (ci, cj), or null where there's none.
   groundAt() {
-    return (ci, cj) => (Number.isFinite(this.caves.groundCell(ci, cj)) ? this.caves.groundCell(ci, cj) : null);
+    return (ci, cj) => this.caves.groundFine(ci, cj);
   }
 
   // Keeps `before`, as an edit to network `net` gave it, to undo.

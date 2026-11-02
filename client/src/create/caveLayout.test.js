@@ -6,7 +6,7 @@ import { Caves } from "./caves.js";
 
 // A hillside rising 0.6 ft for each foot east.
 const hill = (x) => 0.6 * x;
-const hillside = { heightAt: (x) => hill(x) };
+const hillside = { heightAt: (x) => hill(x), cellHeightAt: (x) => hill(x) };
 const entrance = (details) => ({ ...ENTRANCE_DEFAULTS, mouth: [0, 0, 0], yaw: 90, ...details });
 const scene = { add: () => {} };
 const spansAt = (caves, x, z) => caves.spans(Math.floor(x / VOXEL_FT), Math.floor(z / VOXEL_FT));
@@ -145,7 +145,7 @@ describe("cave layout", () => {
     const layout = new Layout();
     const points = Array.from({ length: 12 }, (_, i) => layout.addPoint("n", [i * 32, -60, (i % 3) * 8]));
     const segments = points.slice(1).map((p, i) => layout.addSegment("n", points[i].id, p.id));
-    const caves = new Caves(scene, { heightAt: () => 0 });
+    const caves = new Caves(scene, { heightAt: () => 0, cellHeightAt: () => 0 });
     const carve = (into, plan) => {
       into.carvePlan(plan, () => {});
       layout.carved = plan.carved;
@@ -156,7 +156,7 @@ describe("cave layout", () => {
     const reached = segments.filter((_, i) => i >= 5 - REACH_SEGMENTS && i <= 6 + REACH_SEGMENTS).map((s) => s.id);
     expect(layout.changes().sort()).toEqual(reached.sort());
     carve(caves, carvePlan(layout));
-    const fresh = new Caves(scene, { heightAt: () => 0 });
+    const fresh = new Caves(scene, { heightAt: () => 0, cellHeightAt: () => 0 });
     layout.carved = new Map();
     fresh.carvePlan(carvePlan(layout), () => {});
     expect([...caves.tiles.keys()].sort()).toEqual([...fresh.tiles.keys()].sort());
@@ -190,7 +190,7 @@ describe("cave layout", () => {
     layout.addNetwork("n");
     const [a, b] = [[0, -60, 0], [64, -60, 0]].map((at) => layout.addPoint("n", at, { width: 12, height: 10 }));
     layout.addSegment("n", a.id, b.id);
-    const caves = new Caves(scene, { heightAt: () => 0 });
+    const caves = new Caves(scene, { heightAt: () => 0, cellHeightAt: () => 0 });
     const carve = (plan) => {
       caves.carvePlan(plan, () => {});
       layout.carved = plan.carved;

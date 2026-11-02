@@ -93,6 +93,13 @@ export class Caves {
     return this.renditions.heightAt((ci + 0.5) * VOXEL_FT, (cj + 0.5) * VOXEL_FT) ?? -Infinity;
   }
 
+  // The ground's height at column (ci, cj)'s middle from its cells, reading them now where they've
+  // not been read, or null where it's not known: what carving goes by.
+  groundFine(ci, cj) {
+    const height = this.renditions.cellHeightAt((ci + 0.5) * VOXEL_FT, (cj + 0.5) * VOXEL_FT);
+    return Number.isFinite(height) ? height : null;
+  }
+
   // Whether the ground at column (ci, cj) opens into a cave.
   opens(ci, cj) {
     return this.spans(ci, cj).length > 0 && opensAt(this.world, ci, cj);
@@ -203,7 +210,7 @@ export class Caves {
   // Opens air in `shape` (v2/caves.js's carve), or fills it with rock with `fill`. Gives whether
   // anything changed.
   dig(shape, { fill = false, theme = 0, join = false, net = undefined } = {}) {
-    const groundAt = (ci, cj) => (Number.isFinite(this.groundCell(ci, cj)) ? this.groundCell(ci, cj) : null);
+    const groundAt = (ci, cj) => this.groundFine(ci, cj);
     return this.change((columnsOf) => carve(shape, columnsOf, groundAt, { fill, stone: allStone(theme), net }), join);
   }
 
@@ -220,7 +227,7 @@ export class Caves {
   // What carves plan { fills, opens, clear } (caveLayout.js's carvePlan), given columnsOf(tx, tz,
   // make): the "tx,tz" of the tiles it changed. `clear`: a network all of whose air goes first.
   carving({ fills, opens, clear = null }) {
-    const groundAt = (ci, cj) => (Number.isFinite(this.groundCell(ci, cj)) ? this.groundCell(ci, cj) : null);
+    const groundAt = (ci, cj) => this.groundFine(ci, cj);
     return (columnsOf) => {
       const changed = new Set();
       if (clear) {
