@@ -27,7 +27,6 @@ A network starts from an entrance: a tube from its `mouth`, the middle of the mo
 - `width`: the tube's width and height in feet, 8 to 24.
 - `style`: `natural`, round, or `mine`, square.
 - `rock`: the rock's theme, 0 jagged, 1 smooth, 2 carved, 3 mined.
-- `hewn`: whether the rock is cut flat-faced.
 
 Its point's `at` is always where `mouth`, `yaw`, `length` and `slope` put it. Its mouth has to be out in the open, all but the bottom quarter of its rim, and its far end under the ground, at least 4 ft.
 
@@ -37,7 +36,7 @@ A point holds the config of the passage round it. Its `at` is the middle of the 
 
 - `width` and `height`: the passage's, in feet.
 - `qualities`: a list of the qualities its section has: `twisty` or `very twisty`, `bumpy`, `ledges`, `cluttered`, `offshoots` and `switchbacks`. Each shapes the point's half of each segment on it, fading across the middle where the segment's two points differ.
-- `rock` and `hewn`, as for entrances.
+- `rock`, as for entrances.
 
 ## Segments
 

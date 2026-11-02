@@ -17,7 +17,7 @@ Under the ground everything is rock, except where a cave opens air. The caves ar
 
 Every cave is in a named network. A network's name is a slug: lowercase letters and digits in words joined by hyphens, such as `wailing-hollow`. Each 32 ft chunk of the caves belongs to one network, all the way down, so one network can't run above another. /create refuses a carving that would put a second network in a chunk.
 
-A stone type is a theme, 0 jagged, 1 smooth, 2 carved or 3 mined, plus 4 if it's hewn (cut flat-faced, as by hand). Where the rock faces up it takes the floor type of the nearest span, where it faces down the ceiling type, and where it faces sideways the wall type.
+A stone type is a theme, 0 jagged, 1 smooth, 2 carved or 3 mined. Readers take older files' 4 to 7 as the theme less 4. Where the rock faces up it takes the floor type of the nearest span, where it faces down the ceiling type, and where it faces sideways the wall type.
 
 Only an entrance in the [cave layout](cave-layout.md) may reach up through the ground.
 
@@ -27,7 +27,6 @@ Floors are walked on and drawn smooth, not as the voxels' 2 ft steps. Nothing ab
 
 - A floor's smoothed height is the mean of the floors joined to it within 2 columns each way, its own included, kept within 2 ft of its own. A floor in another column joins it where it's within 2 ft for each column away and their air overlaps. A bigger drop is a ledge, and stays sharp.
 - Between the middles of columns, the floor runs evenly from one smoothed height to the next. A column beside it with no floor joined within 2 ft takes the floor's own.
-- A hewn floor isn't smoothed.
 
 ## Mouths
 

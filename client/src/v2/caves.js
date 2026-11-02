@@ -7,8 +7,7 @@ import { unzip, zip } from "./zstd.js";
 // and overhangs are just more spans. Rock is everywhere under the ground that no span opens.
 // A span is { floor, ceiling, stone: [ceiling, wall, floor], net }: heights in feet, on the
 // VOXEL_FT steps, the stone types of its ceiling, walls and floor, each a theme (an index into
-// CAVE_THEMES) plus HEWN where it's cut flat-faced, as by hand, and the slug of the cave network
-// it's in. Spans are under MAX_SPAN_FT high.
+// CAVE_THEMES), and the slug of the cave network it's in. Spans are under MAX_SPAN_FT high.
 //
 // They're kept in a text file for each plate that has any, as docs/formats/caves.md has it:
 //
@@ -22,13 +21,10 @@ import { unzip, zip } from "./zstd.js";
 // air near it smaller than POCKET_FT3, that don't open through the ground, close too.
 
 export const CAVE_THEMES = ["jagged", "smooth", "carved", "mined"];
-export const HEWN = 4;
-// A stone type's theme, whether it's hewn, and the type for both.
+// A stone type's theme.
 export const themeOf = (stone) => stone & 3;
-export const isHewn = (stone) => stone >= HEWN;
-export const stoneOf = (theme, hewn) => theme + (hewn ? HEWN : 0);
 // The stone types a span of one theme has.
-export const allStone = (theme, hewn) => Array(3).fill(stoneOf(theme, hewn));
+export const allStone = (theme) => Array(3).fill(theme);
 // Which of a span's stone types rock facing `up` (the up part of the unit way out of the rock)
 // takes: the floor's facing up, the ceiling's facing down, the wall's sideways.
 export const stonePart = (up) => (up > 0.5 ? 2 : up < -0.5 ? 0 : 1);
@@ -95,8 +91,8 @@ export function shapeBounds(shape) {
 }
 
 // A column with air opened from `low` to `high`, no higher than MAX_SPAN_FT: spans it meets join
-// it, taking the lowest's themes, each type staying hewn only if both are; `span` gives a new
-// span's stone and net.
+// it, taking the lowest's themes; `span` gives a new span's stone
+// and net.
 export function openAir(column, low, high, span) {
   high = Math.min(high, low + MAX_SPAN_FT);
   const out = [];
@@ -107,7 +103,7 @@ export function openAir(column, low, high, span) {
       out.push(s);
       continue;
     }
-    const stone = (met ? joined : s).stone.map((t, i) => themeOf(t) + (t & span.stone[i] & HEWN));
+    const stone = [...(met ? joined : s).stone];
     joined = { ...joined, floor: Math.min(joined.floor, s.floor), ceiling: Math.min(Math.max(joined.ceiling, s.ceiling), Math.min(joined.floor, s.floor) + MAX_SPAN_FT), stone };
     met = true;
   }
@@ -143,7 +139,7 @@ export function fillRock(column, low, high, minAir = MIN_ROCK_FT) {
 // `stone` (always, with `own`).
 // With `mouth`, air opens through the ground where it would leave less than THIN_ROOF_FT of rock
 // over it; without, it stops ROOF_FT under the ground. Gives the "tx,tz" of the tiles changed.
-export function carve(shape, columnsOf, groundAt, { fill = false, stone = allStone(0, false), own = false, mouth = true, net = UNNAMED } = {}) {
+export function carve(shape, columnsOf, groundAt, { fill = false, stone = allStone(0), own = false, mouth = true, net = UNNAMED } = {}) {
   const [x0, z0, x1, z1] = shapeBounds(shape);
   const cuts = [];
   for (let cj = Math.floor(z0 / VOXEL_FT); cj <= Math.floor(z1 / VOXEL_FT); cj++) {
@@ -196,14 +192,13 @@ export function cellAt(columnsOf, ci, cj, make) {
 // Each floor is smoothed to the mean of the floors joined to it within SMOOTH_COLUMNS columns
 // round it, kept within a voxel of where it is; between columns' middles, the surface runs evenly.
 // A floor joins one in a column beside it where that's within a voxel for each column away and
-// their air overlaps; a bigger drop is a ledge, kept sharp. Hewn floors aren't smoothed.
+// their air overlaps; a bigger drop is a ledge, kept sharp.
 // spansAt(ci, cj): a column's spans.
 const SMOOTH_COLUMNS = 2;
 const joinedFloor = (spans, span, reach) => spans.find((s) => Math.abs(s.floor - span.floor) <= reach && s.floor < span.ceiling && s.ceiling > span.floor);
 
 // Span `span`'s floor in column (ci, cj), smoothed.
 export function smoothFloor(spansAt, ci, cj, span) {
-  if (isHewn(span.stone[2])) return span.floor;
   let [sum, n] = [0, 0];
   for (let dj = -SMOOTH_COLUMNS; dj <= SMOOTH_COLUMNS; dj++) {
     for (let di = -SMOOTH_COLUMNS; di <= SMOOTH_COLUMNS; di++) {
@@ -219,14 +214,13 @@ export function smoothFloor(spansAt, ci, cj, span) {
 // its own. `smooth` is smoothFloor, or a kept copy of it.
 export function floorAt(spansAt, x, z, span, smooth = smoothFloor) {
   const [ci, cj] = [Math.floor(x / VOXEL_FT), Math.floor(z / VOXEL_FT)];
-  if (isHewn(span.stone[2])) return span.floor;
   const own = smooth(spansAt, ci, cj, span);
   const [u, v] = [x / VOXEL_FT - 0.5, z / VOXEL_FT - 0.5];
   const [i0, j0] = [Math.floor(u), Math.floor(v)];
   const at = (i, j) => {
     if (i === ci && j === cj) return own;
     const s = joinedFloor(spansAt(i, j), span, VOXEL_FT);
-    return s && !isHewn(s.stone[2]) ? smooth(spansAt, i, j, s) : own;
+    return s ? smooth(spansAt, i, j, s) : own;
   };
   const [fu, fv] = [u - i0, v - j0];
   return (at(i0, j0) * (1 - fu) + at(i0 + 1, j0) * fu) * (1 - fv) + (at(i0, j0 + 1) * (1 - fu) + at(i0 + 1, j0 + 1) * fu) * fv;
@@ -363,7 +357,7 @@ function readCells(line, net) {
   const columns = emptyColumns();
   const span = (at, startDigits, base) => {
     const floor = (readDigits(text, at + 3, startDigits) + base) / 4;
-    return { floor, ceiling: floor + readDigits(text, at + 3 + startDigits, 2) / 4, stone: [0, 1, 2].map((i) => readDigits(text, at + i, 1)), net };
+    return { floor, ceiling: floor + readDigits(text, at + 3 + startDigits, 2) / 4, stone: [0, 1, 2].map((i) => themeOf(readDigits(text, at + i, 1))), net };
   };
   if (tag === "c1") {
     for (let n = readDigits(text, 0, 2), at = 3; n > 0; n--, at += 15) (columns[readDigits(text, at, 3)] ??= []).push(span(at + 3, 6, -OFFSET));

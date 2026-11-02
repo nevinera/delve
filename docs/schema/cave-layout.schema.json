@@ -42,7 +42,6 @@
         "width": { "type": "number", "minimum": 16, "maximum": 24, "description": "its tube's width and height, feet" },
         "style": { "enum": ["natural", "mine"] },
         "rock": { "$ref": "#/$defs/rock" },
-        "hewn": { "type": "boolean" },
         "point": { "type": "string", "description": "the point at its far end" }
       }
     },
@@ -56,8 +55,7 @@
         "width": { "type": "number", "description": "the passage's width, feet" },
         "height": { "type": "number", "description": "the passage's height, feet" },
         "qualities": { "type": "array", "items": { "enum": ["twisty", "very twisty", "bumpy", "ledges", "cluttered", "offshoots", "switchbacks"] } },
-        "rock": { "$ref": "#/$defs/rock" },
-        "hewn": { "type": "boolean" }
+        "rock": { "$ref": "#/$defs/rock" }
       }
     },
     "segment": {

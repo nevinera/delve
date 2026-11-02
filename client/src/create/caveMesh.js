@@ -1,6 +1,6 @@
 import { hash2, facets, valueNoise } from "../world/noise.js";
 import { WALK_DEG } from "./growth.js";
-import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, floorAt, isHewn, smoothFloor, stonePart, themeOf } from "../v2/caves.js";
+import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, floorAt, smoothFloor, stonePart, themeOf } from "../v2/caves.js";
 
 // Mesh data for a tile's caves (v2/caves.js), without three.js, so it can be tested. The rock's
 // surface runs between the air of the caves' spans and the rock round them, smoothed by surface
@@ -9,8 +9,7 @@ import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, floorAt, isHewn, smoothFloor, ston
 // each grid edge it crosses. Up and down, a crossing is exactly at a floor or ceiling. Across,
 // between an open column and a solid one, it's where the open column's height would run out,
 // going by how it shrinks from the column behind it (wallAt), so walls aren't held to the
-// columns' grid. A cube by hewn stone (its floor, wall or ceiling, as it faces) keeps its vertex at the columns' corner instead, so hewn
-// rock is squared off. A floor's vertex is on the smooth floor walked on (v2/caves.js's floorAt),
+// columns' grid. A floor's vertex is on the smooth floor walked on (v2/caves.js's floorAt),
 // not the voxels' steps, so feet meet it. Faces look into the air, so from outside a cave its rock
 // isn't drawn.
 //
@@ -137,7 +136,7 @@ export function caveMesh(tx, tz, world) {
   const vertices = new Map(); // grid cube -> vertex
   const cubeKey = (a, b, c) => ((c + 65536) * (SIDE + 8) + b - cj0 + PAD + 4) * (SIDE + 8) + a - ci0 + PAD + 4;
   // Where the surface crosses grid cube (a, b, c), as it is in the tiles: { at: [x, y, z]
-  // continent feet, toward: the way to the air, hewn, theme, floor, rim }, or null where it
+  // continent feet, toward: the way to the air, theme, floor, rim }, or null where it
   // doesn't. The cube's corners are columns a..a+1, b..b+1, heights c..c+1 steps.
   const crossings = new Map();
   const crossing = (a, b, c) => {
@@ -160,7 +159,6 @@ export function caveMesh(tx, tz, world) {
       }
     }
     let [sx, sy, sz, n] = [0, 0, 0, 0];
-    let [upY, ups] = [0, 0]; // crossings on the up edges alone
     let floor = null; // the span whose floor the vertex is on, if it's on one
     const touched = []; // the spans the cube's crossings meet
     for (const [p, q] of CUBE_EDGES) {
@@ -192,7 +190,6 @@ export function caveMesh(tx, tz, world) {
       sz += cz;
       sy += y;
       n++;
-      if (upright) [upY, ups] = [upY + y, ups + 1];
     }
     let found = null;
     if (n) {
@@ -201,25 +198,21 @@ export function caveMesh(tx, tz, world) {
       const way = [(toward[0] * VOXEL_FT) / length, (toward[1] * STEP_FT) / length, (toward[2] * VOXEL_FT) / length];
       // The stone of the floor, wall or ceiling, as the rock faces.
       const part = stonePart(way[1]);
-      const hewn = touched.some((span) => isHewn(span.stone[part]));
       const theme = touched.length ? CAVE_THEMES[themeOf(touched[0].stone[part])] : null;
-      // Hewn rock: walls on the columns' edges, floors and ceilings at their heights.
-      if (hewn) [x, y, z] = [a + 0.5, ups ? upY / ups : y, b + 0.5];
       // The rim, where the cave reaches the sky in the band round a mouth: on the ground's own
       // corner, where the ground drawn with it has its corner.
       const rim = states.includes(SKY) && corners.some(([ci, cj]) => bandAt(ci, cj));
       if (rim) [x, y, z] = [a + 0.5, world.corner(a + 1, b + 1), b + 0.5];
-      found = { at: [(x + 0.5) * VOXEL_FT, y, (z + 0.5) * VOXEL_FT], toward: way, hewn, theme: THEME_LOOK[theme] ? theme : CAVE_THEMES[0], floor, rim };
+      found = { at: [(x + 0.5) * VOXEL_FT, y, (z + 0.5) * VOXEL_FT], toward: way, theme: THEME_LOOK[theme] ? theme : CAVE_THEMES[0], floor, rim };
     }
     crossings.set(key, found);
     return found;
   };
-  // A crossing drawn toward its neighbours', `passes` times over. Hewn rock and the rim stay where
-  // they are.
+  // A crossing drawn toward its neighbours', `passes` times over. The rim stays where it is.
   const relaxedBy = [new Map()];
   const relaxed = (a, b, c, passes) => {
     const here = crossing(a, b, c);
-    if (!passes || here.hewn || here.rim) return here.at;
+    if (!passes || here.rim) return here.at;
     const kept = (relaxedBy[passes] ??= new Map());
     const key = cubeKey(a, b, c);
     if (kept.has(key)) return kept.get(key);
@@ -257,7 +250,7 @@ export function caveMesh(tx, tz, world) {
     const here = crossing(a, b, c);
     const look = THEME_LOOK[here.theme];
     let at = here.at;
-    if (!here.hewn && !here.rim) {
+    if (!here.rim) {
       const smooth = relaxed(a, b, c, look.passes);
       at = at.map((v, i) => v + (smooth[i] - v) * look.relax);
       const bump = themeBump(here.theme, at, look) * look.bumpFt;

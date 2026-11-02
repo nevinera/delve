@@ -200,9 +200,9 @@ export class Caves {
 
   // Opens air in `shape` (v2/caves.js's carve), or fills it with rock with `fill`. Gives whether
   // anything changed.
-  dig(shape, { fill = false, theme = 0, hewn = false, join = false, net = undefined } = {}) {
+  dig(shape, { fill = false, theme = 0, join = false, net = undefined } = {}) {
     const groundAt = (ci, cj) => (Number.isFinite(this.groundCell(ci, cj)) ? this.groundCell(ci, cj) : null);
-    return this.change((columnsOf) => carve(shape, columnsOf, groundAt, { fill, stone: allStone(theme, hewn), net }), join);
+    return this.change((columnsOf) => carve(shape, columnsOf, groundAt, { fill, stone: allStone(theme), net }), join);
   }
 
   // Carves a cave layout's plan (caveLayout.js's carvePlan): its fills, then its opens, each

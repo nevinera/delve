@@ -22,10 +22,10 @@ function tunnel(depth = 0, shallow = 5000) {
   const columns = emptyColumns();
   const net = "deep-hollow";
   for (let i = 0; i < TILE_COLUMNS; i++) {
-    columns[64 * TILE_COLUMNS + i] = [{ floor: -40 + 2 * Math.round(depth * i), ceiling: -30 + 2 * Math.round(depth * i), stone: [0, 1, 6], net }];
+    columns[64 * TILE_COLUMNS + i] = [{ floor: -40 + 2 * Math.round(depth * i), ceiling: -30 + 2 * Math.round(depth * i), stone: [0, 1, 2], net }];
     if (i % 2) columns[64 * TILE_COLUMNS + i].push({ floor: -20, ceiling: 2, stone: [3, 3, 3], net });
   }
-  for (let k = 0; k < shallow; k++) columns[k] = [{ floor: -8, ceiling: -4, stone: [5, 5, 1], net }];
+  for (let k = 0; k < shallow; k++) columns[k] = [{ floor: -8, ceiling: -4, stone: [1, 1, 3], net }];
   return columns;
 }
 
@@ -33,7 +33,7 @@ describe("caves files, unzipped", () => {
   it("lists few spans by column", () => {
     const columns = emptyColumns();
     const net = "deep-hollow";
-    columns[5] = [{ floor: -10, ceiling: -2, stone: [2, 6, 0], net }, { floor: 4, ceiling: 10, stone: [0, 0, 7], net }];
+    columns[5] = [{ floor: -10, ceiling: -2, stone: [2, 3, 0], net }, { floor: 4, ceiling: 10, stone: [0, 0, 3], net }];
     columns[COLUMNS - 1] = [{ floor: -900, ceiling: 100, stone: [1, 1, 1], net }];
     const { line, back } = roundTrip(columns);
     expect(line.startsWith("c1 AD ")).toBe(true);
@@ -103,7 +103,7 @@ describe("caves files, zipped", () => {
 
 describe("smooth cave floors", () => {
   // A passage along x, 20 ft up, with its floor at floors(ci) in column ci.
-  const passage = (floors, hewn = false) => (ci, cj) => (Math.abs(cj) <= 3 && floors(ci) !== null ? [{ floor: floors(ci), ceiling: 20, stone: allStone(0, hewn), net: "n" }] : []);
+  const passage = (floors) => (ci, cj) => (Math.abs(cj) <= 3 && floors(ci) !== null ? [{ floor: floors(ci), ceiling: 20, stone: allStone(0), net: "n" }] : []);
   const at = (spansAt, x) => floorAt(spansAt, x, 1, spansAt(Math.floor(x / 2), 0)[0]);
 
   it("runs a stepped slope's floor up evenly, not in stairs", () => {
@@ -115,7 +115,7 @@ describe("smooth cave floors", () => {
     expect(heights[0]).toBeGreaterThan(stairs(5, 0)[0].floor - 2);
   });
 
-  it("keeps a flat floor flat, a ledge sharp, and a hewn floor stepped", () => {
+  it("keeps a flat floor flat and a ledge sharp", () => {
     const flat = passage(() => 0);
     expect(at(flat, 7)).toBe(0);
     // A 6 ft drop at column 10, 20 ft along.
@@ -123,7 +123,5 @@ describe("smooth cave floors", () => {
     expect(at(ledge, 30)).toBe(0);
     expect(at(ledge, 5)).toBe(6);
     expect(smoothFloor(ledge, 9, 0, ledge(9, 0)[0])).toBe(6);
-    const hewn = passage((ci) => 2 * Math.floor(ci / 2), true);
-    expect(at(hewn, 11)).toBe(4);
   });
 });

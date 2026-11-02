@@ -22,12 +22,12 @@ export const ENTRANCE_FT = [16, 24]; // the entrances' widths
 const DOWN = 0.2; // how far a sloping entrance drops for each foot in
 const LOW_RING = Math.PI / 4; // how far round from the bottom an entrance's mouth can be in the ground
 
-export const ENTRANCE_DEFAULTS = { style: "natural", width: 18, length: 48, slope: "level", rock: 0, hewn: false };
-export const POINT_DEFAULTS = { width: 18, height: 22, qualities: [], rock: 0, hewn: false };
+export const ENTRANCE_DEFAULTS = { style: "natural", width: 18, length: 48, slope: "level", rock: 0 };
+export const POINT_DEFAULTS = { width: 18, height: 22, qualities: [], rock: 0 };
 export const PHASES = ["layout", "polish"];
 export const POINT_FT = { width: [16, 64], height: [16, 48] }; // the passage's sizes a point can have
 export const JOIN_FT = 8; // how near an existing point a passage joins it, not splitting
-const CONFIG = ["width", "height", "qualities", "rock", "hewn"]; // what a point keeps of its section
+const CONFIG = ["width", "height", "qualities", "rock"]; // what a point keeps of its section
 export const NETWORK_GAP_FT = 32; // the least rock to leave between networks
 export const REACH_SEGMENTS = 3; // how many segments either way a segment's shape can depend on
 
@@ -53,8 +53,8 @@ export class Layout {
 
   load({ networks = [], entrances = [], points = [], segments = [], carved = {} }) {
     this.networks = new Map(networks.map((n) => [n.slug, { phase: PHASES[0], ...n }]));
-    this.entrances = new Map(entrances.map((e) => [e.id, { ...ENTRANCE_DEFAULTS, ...e }]));
-    this.points = new Map(points.map((p) => [p.id, { ...structuredClone(POINT_DEFAULTS), ...p }]));
+    this.entrances = new Map(entrances.map(({ hewn, ...e }) => [e.id, { ...ENTRANCE_DEFAULTS, ...e }]));
+    this.points = new Map(points.map(({ hewn, ...p }) => [p.id, { ...structuredClone(POINT_DEFAULTS), ...p }]));
     this.segments = new Map(segments.map((s) => [s.id, { ...s }]));
     this.carved = new Map(Object.entries(carved));
     for (const id of [...this.ids(), ...this.carved.keys()]) this.next = Math.max(this.next, Number(id.slice(1)) + 1);
@@ -97,7 +97,7 @@ export class Layout {
   // An entrance into network `net`, and the point at its far end, where passages start.
   addEntrance(net, details) {
     const entrance = { id: `e${this.next++}`, net, ...ENTRANCE_DEFAULTS, ...details };
-    const point = this.addPoint(net, entranceEnd(entrance), { width: entrance.width, height: entrance.width, rock: entrance.rock, hewn: entrance.hewn });
+    const point = this.addPoint(net, entranceEnd(entrance), { width: entrance.width, height: entrance.width, rock: entrance.rock });
     entrance.point = point.id;
     this.entrances.set(entrance.id, entrance);
     this.version++;
@@ -423,8 +423,8 @@ export function carvePlan(layout, { ids = layout.changes(), afresh = null } = {}
       continue;
     }
     carved.set(id, copy);
-    const [rock, hewn] = isEntrance(copy) ? [copy.rock, copy.hewn] : [copy.ends[0].rock, copy.ends[0].hewn];
-    for (const shape of shapes) opens.push({ shape, stone: allStone(rock, hewn), mouth: Boolean(shape.open), net: copy.net });
+    const rock = isEntrance(copy) ? copy.rock : copy.ends[0].rock;
+    for (const shape of shapes) opens.push({ shape, stone: allStone(rock), mouth: Boolean(shape.open), net: copy.net });
   }
   return { fills, opens, carved, unfit, clear: afresh };
 }

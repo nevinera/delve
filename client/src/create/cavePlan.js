@@ -125,12 +125,11 @@ export class CavePlan {
       e[key] = value;
       const end = this.layout.points.get(e.point);
       end.at = entranceEnd(e);
-      if (key === "rock" || key === "hewn") end[key] = value;
+      if (key === "rock") end[key] = value;
       this.layout.version++;
       this.carve();
     };
     $("planRock").addEventListener("change", () => changeDetail("rock", Number($("planRock").value)));
-    $("planHewn").addEventListener("change", () => changeDetail("hewn", $("planHewn").checked));
     for (const button of document.querySelectorAll("[data-entrance-style]")) button.addEventListener("click", () => changeDetail("style", button.dataset.entranceStyle));
     for (const button of document.querySelectorAll("[data-entrance-length]")) button.addEventListener("click", () => changeDetail("length", Number(button.dataset.entranceLength)));
     for (const button of document.querySelectorAll("[data-entrance-slope]")) button.addEventListener("click", () => changeDetail("slope", button.dataset.entranceSlope));
@@ -599,7 +598,6 @@ export class CavePlan {
       for (const button of document.querySelectorAll("[data-quality]")) button.setAttribute("aria-pressed", String(point.qualities.includes(button.dataset.quality)));
     }
     if (document.activeElement !== $("planRock")) $("planRock").value = String(d.rock);
-    $("planHewn").checked = d.hewn;
     for (const button of document.querySelectorAll("[data-entrance-style]")) button.setAttribute("aria-pressed", String(button.dataset.entranceStyle === d.style));
     for (const button of document.querySelectorAll("[data-entrance-length]")) button.setAttribute("aria-pressed", String(Number(button.dataset.entranceLength) === d.length));
     for (const button of document.querySelectorAll("[data-entrance-slope]")) button.setAttribute("aria-pressed", String(button.dataset.entranceSlope === d.slope));

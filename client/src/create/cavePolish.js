@@ -11,7 +11,7 @@ import { VOXEL_FT, allStone, carve, cellAt, reach, shapeBounds, snap } from "../
 // - fill: fills rock.
 // - smooth: each floor and ceiling moves toward the ones beside it, filling small hollows and
 //   knocking off bumps.
-// - paint: sets the stone (rock and hewn) without changing the shape.
+// - paint: sets the rock without changing the shape.
 // - flatten: levels floors, looking down, or ceilings, looking up, to the height the drag began
 //   at.
 // Each click or drag undoes on its own, back UNDOS of them.
@@ -30,7 +30,7 @@ export class CavePolish {
   constructor({ scene, caves, layout, ray, camera }) {
     Object.assign(this, { caves, layout, ray, camera });
     this.on = false;
-    this.brush = { shape: "voxel", op: "carve", size: 2, rock: 0, hewn: false };
+    this.brush = { shape: "voxel", op: "carve", size: 2, rock: 0 };
     this.stroke = null; // the drag being worked: { before, net, level, last }
     this.box = null; // the box brush's corners, { a, b, net }, voxels
     this.undos = [];
@@ -49,7 +49,6 @@ export class CavePolish {
     $("polishSize").max = String(SIZES[1]);
     $("polishSize").addEventListener("input", () => this.set("size", Number($("polishSize").value)));
     $("polishRock").addEventListener("change", () => this.set("rock", Number($("polishRock").value)));
-    $("polishHewn").addEventListener("change", () => this.set("hewn", $("polishHewn").checked));
     $("polishUndo").addEventListener("click", () => this.undo());
     this.show();
   }
@@ -78,7 +77,6 @@ export class CavePolish {
     $("polishSize").value = String(this.brush.size);
     $("polishSizeOut").textContent = `${this.brush.size * VOXEL_FT} ft`;
     $("polishRock").value = String(this.brush.rock);
-    $("polishHewn").checked = this.brush.hewn;
   }
 
   // What the pointer's aimed at: where it meets rock, the voxel of rock there and of air before
@@ -164,7 +162,7 @@ export class CavePolish {
   // Works `op` in `shape`, in network `net`: gives the tiles it changed as they were, or null.
   work(shape, op, net, stroke = null) {
     const groundAt = (ci, cj) => (Number.isFinite(this.caves.groundCell(ci, cj)) ? this.caves.groundCell(ci, cj) : null);
-    const stone = allStone(this.brush.rock, this.brush.hewn);
+    const stone = allStone(this.brush.rock);
     const before = this.caves.edit((columnsOf) => {
       if (op === "carve") return carve(shape, columnsOf, groundAt, { net, mouth: false });
       if (op === "fill") return carve(shape, columnsOf, groundAt, { fill: true });
