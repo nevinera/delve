@@ -1,7 +1,7 @@
 import * as THREE from "three";
-import { CAVES_PATH, TILE_CELLS, allStone, carve, cavesPath, growCave, smoothCave, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
+import { CAVES_PATH, TILE_COLUMNS, VOXEL_FT, allStone, carve, cavesPath, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
 import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
-import { caveMaterial, setBrush } from "./caveMaterial.js";
+import { caveMaterial } from "./caveMaterial.js";
 import { caveMesh, opensAt } from "./caveMesh.js";
 import { EMPTY_FT, FULL_TILES } from "./ground.js";
 
@@ -31,7 +31,7 @@ const EARTH_LINE_RGB = 0x8a8a8a;
 export class Caves {
   constructor(scene, renditions) {
     this.renditions = renditions;
-    this.tiles = new Map(); // "tx,tz" -> columns, TILE_CELLS² spans each, or null for rock
+    this.tiles = new Map(); // "tx,tz" -> columns, TILE_COLUMNS² spans each, or null for rock
     this.changed = new Set(); // "px,pz" of plates changed since they were saved
     this.undos = [];
     this.version = 0;
@@ -53,16 +53,18 @@ export class Caves {
     this.world = {
       spans: (ci, cj) => this.spans(ci, cj),
       ground: (ci, cj) => this.groundCell(ci, cj),
-      corner: (ci, cj) => this.renditions.heightAt(ci * CELL_FT, cj * CELL_FT) ?? EMPTY_FT,
+      corner: (ci, cj) => this.renditions.heightAt(ci * VOXEL_FT, cj * VOXEL_FT) ?? EMPTY_FT,
       mouth: (ci, cj) => this.opens(ci, cj),
       caved: (tx, tz) => this.tiles.has(`${tx},${tz}`),
     };
   }
 
-  // Takes plate (px, pz)'s caves file's bytes.
-  load(bytes) {
-    const { coords, tiles } = decodeCaves(bytes);
-    for (const [index, columns] of tiles) this.tiles.set(`${coords[0] * PLATE_TILES + (index % PLATE_TILES)},${coords[1] * PLATE_TILES + Math.floor(index / PLATE_TILES)}`, columns);
+  // Takes plate (px, pz)'s caves file's bytes. One from before cave networks has no caves, and its
+  // plate's marked changed, so saving clears it.
+  load(bytes, [px, pz]) {
+    const { tiles, old } = decodeCaves(bytes);
+    if (old) this.changed.add(`${px},${pz}`);
+    for (const [index, columns] of tiles) this.tiles.set(`${px * PLATE_TILES + (index % PLATE_TILES)},${pz * PLATE_TILES + Math.floor(index / PLATE_TILES)}`, columns);
     this.version++;
   }
 
@@ -72,40 +74,43 @@ export class Caves {
     return this.tiles.get(key) ?? null;
   }
 
-  // Continent cell (ci, cj)'s spans, lowest first.
+  // Continent column (ci, cj)'s spans, lowest first.
   spans(ci, cj) {
-    const [tx, tz] = [Math.floor(ci / TILE_CELLS), Math.floor(cj / TILE_CELLS)];
+    const [tx, tz] = [Math.floor(ci / TILE_COLUMNS), Math.floor(cj / TILE_COLUMNS)];
     const columns = this.tiles.get(`${tx},${tz}`);
-    return columns?.[(cj - tz * TILE_CELLS) * TILE_CELLS + ci - tx * TILE_CELLS] ?? EMPTY;
+    return columns?.[(cj - tz * TILE_COLUMNS) * TILE_COLUMNS + ci - tx * TILE_COLUMNS] ?? EMPTY;
   }
 
-  // The ground's height at cell (ci, cj)'s middle, -Infinity where it's not known.
+  // The ground's height at column (ci, cj)'s middle, -Infinity where it's not known.
   groundCell(ci, cj) {
-    return this.renditions.heightAt((ci + 0.5) * CELL_FT, (cj + 0.5) * CELL_FT) ?? -Infinity;
+    return this.renditions.heightAt((ci + 0.5) * VOXEL_FT, (cj + 0.5) * VOXEL_FT) ?? -Infinity;
   }
 
-  // Whether the ground at cell (ci, cj) opens into a cave, so isn't drawn.
+  // Whether the ground at column (ci, cj) opens into a cave.
   opens(ci, cj) {
     return this.spans(ci, cj).length > 0 && opensAt(this.world, ci, cj);
   }
 
-  // Whether the ground at cell (ci, cj) opens into a cave, or is beside where it does.
+  // Whether the ground at column (ci, cj) opens into a cave, or is beside where it does.
   mouth(ci, cj) {
     for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if (this.opens(ci + di, cj + dj)) return true;
     return false;
   }
 
-  // Tile (tx, tz)'s cells whose ground isn't drawn, where caves open through it, as a Set of
-  // indices, or null for none.
+  // Tile (tx, tz)'s ground cells that aren't drawn, where caves open through all of the columns in
+  // them, as a Set of indices, or null for none.
   holes(tx, tz) {
     let near = false;
     for (let dz = -1; dz <= 1 && !near; dz++) for (let dx = -1; dx <= 1 && !near; dx++) near = this.tiles.has(`${tx + dx},${tz + dz}`);
     if (!near) return null;
     const out = new Set();
-    for (let j = 0; j < TILE_CELLS; j++) {
-      for (let i = 0; i < TILE_CELLS; i++) {
-        const [ci, cj] = [tx * TILE_CELLS + i, tz * TILE_CELLS + j];
-        if (this.opens(ci, cj)) out.add(j * TILE_CELLS + i);
+    const [n, per] = [TILE_FT / CELL_FT, CELL_FT / VOXEL_FT];
+    for (let j = 0; j < n; j++) {
+      for (let i = 0; i < n; i++) {
+        const [ci, cj] = [tx * TILE_COLUMNS + i * per, tz * TILE_COLUMNS + j * per];
+        let all = true;
+        for (let b = 0; b < per && all; b++) for (let a = 0; a < per && all; a++) all = this.opens(ci + a, cj + b);
+        if (all) out.add(j * n + i);
       }
     }
     return out.size ? out : null;
@@ -138,39 +143,6 @@ export class Caves {
       for (const { shape, stone, mouth } of opens) for (const key of carve(shape, columnsOf, groundAt, { stone, own: true, mouth })) changed.add(key);
       return changed;
     };
-  }
-
-  // Adds rock round continent feet `at` (on the rock), facing `normal`, out to `radius`, up to
-  // `amountFt` (v2/caves.js's growCave). Gives whether anything changed.
-  grow(at, normal, radius, { amountFt, join = false }) {
-    const groundAt = (ci, cj) => (Number.isFinite(this.groundCell(ci, cj)) ? this.groundCell(ci, cj) : null);
-    return this.change((columnsOf) => growCave({ at, normal, radius, amountFt }, columnsOf, groundAt), join);
-  }
-
-  // Smooths the rock round continent feet `at` (on the rock), facing `normal`, out to `radius`
-  // (v2/caves.js's smoothCave). Gives whether anything changed.
-  smooth(at, normal, radius, { strength = 0.5, join = false } = {}) {
-    const groundAt = (ci, cj) => (Number.isFinite(this.groundCell(ci, cj)) ? this.groundCell(ci, cj) : null);
-    return this.change((columnsOf) => smoothCave({ at, normal, radius, strength }, columnsOf, groundAt), join);
-  }
-
-  // The way the rock at continent feet `at` faces, out of it into the air, as a unit [x, y, z]:
-  // from which points round it, `aroundFt` off, are air, so bumps smaller than that don't sway
-  // it. Null where all round's rock or air.
-  normalAt([x, y, z], aroundFt) {
-    let [nx, ny, nz] = [0, 0, 0];
-    for (let dz = -1; dz <= 1; dz++) {
-      for (let dy = -1; dy <= 1; dy++) {
-        for (let dx = -1; dx <= 1; dx++) {
-          if (!(dx || dy || dz)) continue;
-          const length = Math.hypot(dx, dy, dz);
-          const sign = this.solid(x + (dx / length) * aroundFt, y + (dy / length) * aroundFt, z + (dz / length) * aroundFt) ? -1 : 1;
-          [nx, ny, nz] = [nx + (sign * dx) / length, ny + (sign * dy) / length, nz + (sign * dz) / length];
-        }
-      }
-    }
-    const length = Math.hypot(nx, ny, nz);
-    return length > 1e-6 ? [nx / length, ny / length, nz / length] : null;
   }
 
   // Makes a change, work(columnsOf), which gives the "tx,tz" of the tiles it changed, so it can
@@ -289,11 +261,6 @@ export class Caves {
     renderer.autoClear = true;
   }
 
-  // Shows a brush's patch on the rock (caveMaterial.js's setBrush), or none, with at null.
-  brush(at, normal, radius) {
-    setBrush(this.material, at, normal, radius);
-  }
-
   // Shows or hides an overlay: "grid" or "lines".
   show(overlay, shown) {
     this.overlays[overlay].visible = shown;
@@ -344,9 +311,9 @@ export class Caves {
     const columns = this.tiles.get(`${tx},${tz}`);
     if (!columns) return [];
     const [points, pointColors, lines, lineColors] = [[], [], [], []];
-    const middle = (ci, cj) => [(ci + 0.5) * CELL_FT, (cj + 0.5) * CELL_FT];
+    const middle = (ci, cj) => [(ci + 0.5) * VOXEL_FT, (cj + 0.5) * VOXEL_FT];
     columns.forEach((spans, n) => {
-      const [ci, cj] = [tx * TILE_CELLS + (n % TILE_CELLS), tz * TILE_CELLS + Math.floor(n / TILE_CELLS)];
+      const [ci, cj] = [tx * TILE_COLUMNS + (n % TILE_COLUMNS), tz * TILE_COLUMNS + Math.floor(n / TILE_COLUMNS)];
       const [x, z] = middle(ci, cj);
       for (const span of spans ?? []) {
         points.push(x, span.floor, z, x, span.ceiling, z);
@@ -396,7 +363,7 @@ export class Caves {
   air(x, z) {
     const g = this.renditions.heightAt(x, z) ?? EMPTY_FT;
     const out = [];
-    for (const s of this.spans(Math.floor(x / CELL_FT), Math.floor(z / CELL_FT))) out.push([s.floor, s.ceiling]);
+    for (const s of this.spans(Math.floor(x / VOXEL_FT), Math.floor(z / VOXEL_FT))) out.push([s.floor, s.ceiling]);
     out.push([g, Infinity]);
     out.sort((a, b) => a[0] - b[0]);
     const joined = [];
@@ -412,7 +379,7 @@ export class Caves {
   // the ground where no cave opens it, or the lowest where none is under it.
   groundAt(x, z, under = Infinity) {
     const g = this.renditions.heightAt(x, z) ?? EMPTY_FT;
-    const spans = this.spans(Math.floor(x / CELL_FT), Math.floor(z / CELL_FT));
+    const spans = this.spans(Math.floor(x / VOXEL_FT), Math.floor(z / VOXEL_FT));
     if (!spans.length) return g;
     const floors = spans.filter((s) => s.floor <= g).map((s) => s.floor);
     if (!spans.some((s) => s.floor < g && g < s.ceiling)) floors.push(g);

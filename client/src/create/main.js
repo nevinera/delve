@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { strFromU8, strToU8, unzipSync, zip, zipSync } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
-import { CELL_FT, PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
+import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { BIOME_NAMES } from "../v2/biomes.js";
 import { waterPath } from "../v2/water.js";
 import { BIOMES, biomesPath } from "./biomes.js";
@@ -27,6 +27,7 @@ import { Things } from "./things.js";
 import { GithubAuthError, GithubClient } from "../github/github.js";
 import { BranchMoved, fromRepo, loadRepo, nextVersion, recordOpened, repoChanges, sameRepo, saveRepo } from "./repo.js";
 import { CAVES_PATH, Caves } from "./caves.js";
+import { VOXEL_FT } from "../v2/caves.js";
 import { Layout, layoutPath } from "./caveLayout.js";
 import { Overhead } from "./overhead.js";
 import { Earth } from "./earth.js";
@@ -179,7 +180,10 @@ function start(world, changes, fresh) {
   const overhead = new Overhead(scene, (x, z) => renditions.heightAt(x, z));
   const earth = new Earth(scene, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT);
   let lastOverhead = 0;
-  for (const [path, bytes] of world.files) if (CAVES_PATH.exec(path)?.[1] === continent) caves.load(bytes);
+  for (const [path, bytes] of world.files) {
+    const match = CAVES_PATH.exec(path);
+    if (match?.[1] === continent) caves.load(bytes, [Number(match[2]), Number(match[3])]);
+  }
   // The rooms and tunnels planned, to carve (caveLayout.js).
   const layoutBytes = world.files.get(layoutPath(continent));
   const layout = new Layout(layoutBytes ? JSON.parse(strFromU8(layoutBytes)) : null);
@@ -296,7 +300,7 @@ function start(world, changes, fresh) {
   const FPS = 30;
   let lastSave = 0;
   let lastHud = 0;
-  let [saving, lastChangeSave, marksSaved, biomesSaved, waterSaved, layoutSaved] = [null, 0, 0, 0, "0,0", layout.version];
+  let [saving, lastChangeSave, marksSaved, biomesSaved, waterSaved, layoutSaved] = [null, 0, 0, 0, "0,0", layout.dropped ? -1 : layout.version];
   const unsaved = () => renditions.unsaved.size || placed.changed.size || library.dirty.size || caves.changed.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || waterVersion() !== waterSaved || layout.version !== layoutSaved;
   // Saves what's changed into `changes`, writing files on the worker: once what's being saved is,
   // where something is.
@@ -424,7 +428,7 @@ function start(world, changes, fresh) {
     // Under the ground, but where a cave opens over the camera, dark, the ground drawn as lines,
     // and nothing on it.
     const [cx, cz] = [camera.position.x, camera.position.z];
-    const buried = camera.position.y < groundAt(cx, cz) && !caves.mouth(Math.floor(cx / CELL_FT), Math.floor(cz / CELL_FT));
+    const buried = camera.position.y < groundAt(cx, cz) && !caves.mouth(Math.floor(cx / VOXEL_FT), Math.floor(cz / VOXEL_FT));
     ground.group.visible = !buried;
     // In the rock, the caves' outlines show whether they're toggled on or not.
     caves.show("lines", $("showCaveOutlines").checked || (buried && caves.solid(cx, camera.position.y, cz)));

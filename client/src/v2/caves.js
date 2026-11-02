@@ -1,14 +1,14 @@
-import { gunzipSync } from "fflate";
 import { bytesToDigits, digit, digits, digitsToBytes, readDigits } from "./digits.js";
-import { CELL_FT, PLATE_TILES, TILE_FT } from "./sizes.js";
+import { PLATE_TILES, TILE_FT } from "./sizes.js";
 import { unzip, zip } from "./zstd.js";
 
-// Caves (docs/formats/caves.md): air under the ground, dug by hand. Each tile that has any keeps a
-// column of air spans for each of its cells, any number of them, lowest first, so ledges, arches
+// Caves (docs/formats/caves.md): air under the ground. Each tile that has any keeps a column of
+// air spans for each VOXEL_FT square of it, any number of them, lowest first, so ledges, arches
 // and overhangs are just more spans. Rock is everywhere under the ground that no span opens.
-// A span is { floor, ceiling, stone: [ceiling, wall, floor] }: heights in feet, and the stone types
-// of its ceiling, walls and floor, each a theme (an index into CAVE_THEMES) plus HEWN where it's
-// cut flat-faced, as by hand. Spans are under MAX_SPAN_FT high.
+// A span is { floor, ceiling, stone: [ceiling, wall, floor], net }: heights in feet, on the
+// VOXEL_FT steps, the stone types of its ceiling, walls and floor, each a theme (an index into
+// CAVE_THEMES) plus HEWN where it's cut flat-faced, as by hand, and the slug of the cave network
+// it's in. Spans are under MAX_SPAN_FT high.
 //
 // They're kept in a text file for each plate that has any, as docs/formats/caves.md has it:
 //
@@ -16,6 +16,7 @@ import { unzip, zip } from "./zstd.js";
 //
 // Digging opens air in a shape, a sphere or a box, column by column, and filling puts rock back.
 // Air opened through the ground runs up out of it, so digging in from the surface makes a mouth.
+// Air is opened and filled a whole voxel at a time: its heights are rounded to VOXEL_FT.
 // Filling leaves no crumbs of air: it fills every column the shape touches any of, not just
 // those whose middles it covers; air it leaves thinner than MIN_AIR_FT closes; and pockets of
 // air near it smaller than POCKET_FT3, that don't open through the ground, close too.
@@ -31,9 +32,13 @@ export const allStone = (theme, hewn) => Array(3).fill(stoneOf(theme, hewn));
 // Which of a span's stone types rock facing `up` (the up part of the unit way out of the rock)
 // takes: the floor's facing up, the ceiling's facing down, the wall's sideways.
 export const stonePart = (up) => (up > 0.5 ? 2 : up < -0.5 ? 0 : 1);
-export const TILE_CELLS = TILE_FT / CELL_FT;
-const COLUMNS = TILE_CELLS * TILE_CELLS;
-const VERSION = 1;
+export const VOXEL_FT = 2;
+export const TILE_COLUMNS = TILE_FT / VOXEL_FT;
+const COLUMNS = TILE_COLUMNS * TILE_COLUMNS;
+const VERSION = 2;
+// The network air carved without one is in, till networks are laid out.
+export const UNNAMED = "unnamed";
+export const NET_SLUG = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const OFFSET = 32768; // added to heights written absolutely, in quarter feet
 const TWO = 64 * 64; // what 2 digits hold
 const C2_MOST = 31; // the most spans a cell has in c2; digits over it are runs of empty cells
@@ -50,7 +55,7 @@ const POCKET_FT3 = 512; // an 8 ft cube
 export const cavesPath = (continent, [px, pz]) => `places/continents/${continent}/caves/${px}_${pz}.caves`;
 export const CAVES_PATH = /^places\/continents\/([\w-]+)\/caves\/(-?\d+)_(-?\d+)\.caves$/;
 
-const quarter = (v) => Math.round(v * 4) / 4;
+const snap = (v) => Math.round(v / VOXEL_FT) * VOXEL_FT;
 
 // The height a shape covers over (x, z), [low, high], or null where it misses. A shape is
 // { kind: "sphere", at: [x, y, z], radius }, { kind: "box", at, half: [x, y, z], yaw } (radians,
@@ -86,7 +91,7 @@ export function shapeBounds(shape) {
 
 // A column with air opened from `low` to `high`, no higher than MAX_SPAN_FT: spans it meets join
 // it, taking the lowest's themes, each type staying hewn only if both are; `span` gives a new
-// span's stone.
+// span's stone and net.
 export function openAir(column, low, high, span) {
   high = Math.min(high, low + MAX_SPAN_FT);
   const out = [];
@@ -98,17 +103,17 @@ export function openAir(column, low, high, span) {
       continue;
     }
     const stone = (met ? joined : s).stone.map((t, i) => themeOf(t) + (t & span.stone[i] & HEWN));
-    joined = { floor: Math.min(joined.floor, s.floor), ceiling: Math.min(Math.max(joined.ceiling, s.ceiling), Math.min(joined.floor, s.floor) + MAX_SPAN_FT), stone };
+    joined = { ...joined, floor: Math.min(joined.floor, s.floor), ceiling: Math.min(Math.max(joined.ceiling, s.ceiling), Math.min(joined.floor, s.floor) + MAX_SPAN_FT), stone };
     met = true;
   }
   out.push(joined);
   return out.sort((a, b) => a.floor - b.floor).slice(-MAX_SPANS);
 }
 
-// The height a shape covers over any of cell (ci, cj): its reach at the point in the cell
+// The height a shape covers over any of column (ci, cj): its reach at the point in the column
 // nearest its middle.
 function reachCell(shape, ci, cj) {
-  const near = (v, i) => Math.min((i + 1) * CELL_FT, Math.max(i * CELL_FT, v));
+  const near = (v, i) => Math.min((i + 1) * VOXEL_FT, Math.max(i * VOXEL_FT, v));
   return reach(shape, near(shape.at[0], ci), near(shape.at[2], cj));
 }
 
@@ -128,21 +133,22 @@ export function fillRock(column, low, high, minAir = MIN_ROCK_FT) {
 
 // Carves `shape` into the caves: opens air (`fill` false) or fills rock. columnsOf(tx, tz, make):
 // the tile's columns, made when `make` and it has none, or null; groundAt(ci, cj): the ground's
-// height at a continent cell's middle, or null where its cells aren't read. New air takes the
-// stone of the air it's dug from, the one most of it meets, or `stone` (always, with `own`).
+// height at a continent column's middle, or null where its cells aren't read. New air is in
+// network `net`, and takes the stone of the air it's dug from, the one most of it meets, or
+// `stone` (always, with `own`).
 // With `mouth`, air opens through the ground where it would leave less than THIN_ROOF_FT of rock
 // over it; without, it stops ROOF_FT under the ground. Gives the "tx,tz" of the tiles changed.
-export function carve(shape, columnsOf, groundAt, { fill = false, stone = allStone(0, false), own = false, mouth = true } = {}) {
+export function carve(shape, columnsOf, groundAt, { fill = false, stone = allStone(0, false), own = false, mouth = true, net = UNNAMED } = {}) {
   const [x0, z0, x1, z1] = shapeBounds(shape);
   const cuts = [];
-  for (let cj = Math.floor(z0 / CELL_FT); cj <= Math.floor(z1 / CELL_FT); cj++) {
-    for (let ci = Math.floor(x0 / CELL_FT); ci <= Math.floor(x1 / CELL_FT); ci++) {
-      const r = fill ? reachCell(shape, ci, cj) : reach(shape, (ci + 0.5) * CELL_FT, (cj + 0.5) * CELL_FT);
+  for (let cj = Math.floor(z0 / VOXEL_FT); cj <= Math.floor(z1 / VOXEL_FT); cj++) {
+    for (let ci = Math.floor(x0 / VOXEL_FT); ci <= Math.floor(x1 / VOXEL_FT); ci++) {
+      const r = fill ? reachCell(shape, ci, cj) : reach(shape, (ci + 0.5) * VOXEL_FT, (cj + 0.5) * VOXEL_FT);
       const ground = r && groundAt(ci, cj);
       // Air over the ground isn't the caves': only rock filled up to a mouth's lip is.
       if (ground == null || r[0] >= ground + (fill ? MOUTH_FT : 0)) continue;
       const top = fill ? Math.min(r[1], ground + MOUTH_FT) : mouth ? (r[1] > ground - THIN_ROOF_FT ? ground + MOUTH_FT : r[1]) : Math.min(r[1], ground - ROOF_FT);
-      const [low, high] = [quarter(r[0]), quarter(top)];
+      const [low, high] = [snap(r[0]), snap(top)];
       if (high > low) cuts.push({ ci, cj, low, high });
     }
   }
@@ -164,7 +170,7 @@ export function carve(shape, columnsOf, groundAt, { fill = false, stone = allSto
     const found = at(cut, false);
     for (const s of found?.columns[found.k] ?? []) if (s.ceiling >= cut.low && s.floor <= cut.high) met.set(`${s.stone}`, (met.get(`${s.stone}`) ?? 0) + 1);
   }
-  const span = { stone: met.size && !own ? [...met].sort((a, b) => b[1] - a[1])[0][0].split(",").map(Number) : stone };
+  const span = { stone: met.size && !own ? [...met].sort((a, b) => b[1] - a[1])[0][0].split(",").map(Number) : stone, net };
   for (const cut of cuts) {
     const found = at(cut, true);
     found.columns[found.k] = openAir(found.columns[found.k], cut.low, cut.high, span);
@@ -173,138 +179,15 @@ export function carve(shape, columnsOf, groundAt, { fill = false, stone = allSto
   return changed;
 }
 
-// Continent cell (ci, cj)'s place in columnsOf's tiles: { columns, k, key }, k its index in its
+// Continent column (ci, cj)'s place in columnsOf's tiles: { columns, k, key }, k its index in its
 // tile's columns and key its tile's "tx,tz", or null where its tile has none (and not `make`).
 function cellAt(columnsOf, ci, cj, make) {
-  const [tx, tz] = [Math.floor(ci / TILE_CELLS), Math.floor(cj / TILE_CELLS)];
+  const [tx, tz] = [Math.floor(ci / TILE_COLUMNS), Math.floor(cj / TILE_COLUMNS)];
   const columns = columnsOf(tx, tz, make);
-  return columns && { columns, k: (cj - tz * TILE_CELLS) * TILE_CELLS + ci - tx * TILE_CELLS, key: `${tx},${tz}` };
+  return columns && { columns, k: (cj - tz * TILE_COLUMNS) * TILE_COLUMNS + ci - tx * TILE_COLUMNS, key: `${tx},${tz}` };
 }
 
-// Smooths the cave's rock round continent feet `at`, out to `radius` across, where it faces
-// `normal` (unit, out of the rock): a floor (facing up) or a ceiling (facing down) eases toward
-// its neighbours' heights, by `strength` (0 to 1) at the middle and less further out; a wall
-// evens its outline at that height, air that's mostly rock round it closing and rock that's
-// mostly air round it opening. groundAt is carve's; ceilings opening through the ground aren't
-// smoothed. Gives the "tx,tz" of the tiles changed.
-export function smoothCave({ at: [x, y, z], normal, radius, strength = 0.5 }, columnsOf, groundAt) {
-  const facing = normal[1] > 0.5 ? "floor" : normal[1] < -0.5 ? "ceiling" : "wall";
-  const spansAt = (ci, cj) => {
-    const found = cellAt(columnsOf, ci, cj, false);
-    return found?.columns[found.k] ?? [];
-  };
-  const cells = [];
-  for (let cj = Math.floor((z - radius) / CELL_FT); cj <= Math.floor((z + radius) / CELL_FT); cj++) {
-    for (let ci = Math.floor((x - radius) / CELL_FT); ci <= Math.floor((x + radius) / CELL_FT); ci++) {
-      const d = Math.hypot((ci + 0.5) * CELL_FT - x, (cj + 0.5) * CELL_FT - z) / radius;
-      if (d < 1) cells.push({ ci, cj, weight: strength * (1 - d * d) });
-    }
-  }
-  const changed = new Set();
-  const set = (ci, cj, column) => {
-    const found = cellAt(columnsOf, ci, cj, column !== null);
-    if (!found) return;
-    found.columns[found.k] = column?.length ? column.sort((a, b) => a.floor - b.floor) : null;
-    changed.add(found.key);
-  };
-  const SIDES = [[1, 0], [-1, 0], [0, 1], [0, -1]];
-  if (facing === "wall") {
-    // Air at y in each column, and how many of the eight round it have it.
-    const airAt = (ci, cj) => spansAt(ci, cj).find((s) => s.floor <= y && y <= s.ceiling) ?? null;
-    const round = (ci, cj) => {
-      const out = [];
-      for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) if (di || dj) out.push(airAt(ci + di, cj + dj));
-      return out.filter(Boolean);
-    };
-    const plans = cells.map(({ ci, cj }) => ({ ci, cj, air: airAt(ci, cj), round: round(ci, cj) }));
-    for (const { ci, cj, air, round: near } of plans) {
-      if (air && near.length <= 3) set(ci, cj, fillRock(spansAt(ci, cj), Math.max(air.floor, y - radius), Math.min(air.ceiling, y + radius), MIN_AIR_FT) ?? null);
-      else if (!air && near.length >= 5) {
-        const mean = (key) => quarter(near.reduce((sum, s) => sum + s[key], 0) / near.length);
-        const [low, high] = [Math.max(mean("floor"), y - radius), Math.min(mean("ceiling"), y + radius)];
-        if (high - low > MIN_AIR_FT) set(ci, cj, openAir(spansAt(ci, cj), low, high, { stone: near[0].stone }));
-      }
-    }
-    return changed;
-  }
-  // The span whose floor (or ceiling) is this surface in each column: the nearest to y, within
-  // the radius.
-  const key = facing;
-  const surfaceAt = (ci, cj) => {
-    let best = null;
-    for (const s of spansAt(ci, cj)) if (Math.abs(s[key] - y) <= radius && (!best || Math.abs(s[key] - y) < Math.abs(best[key] - y))) best = s;
-    return best;
-  };
-  const plans = [];
-  for (const { ci, cj, weight } of cells) {
-    const span = surfaceAt(ci, cj);
-    if (!span) continue;
-    const ground = groundAt(ci, cj);
-    if (key === "ceiling" && (ground == null || span.ceiling >= ground)) continue;
-    // Its neighbours' heights, where their air meets its.
-    const heights = [span[key]];
-    for (const [di, dj] of SIDES) {
-      const other = spansAt(ci + di, cj + dj).filter((s) => s.floor < span.ceiling && s.ceiling > span.floor);
-      if (other.length) heights.push(other.reduce((a, b) => (Math.abs(b[key] - span[key]) < Math.abs(a[key] - span[key]) ? b : a))[key]);
-    }
-    const mean = heights.reduce((a, b) => a + b, 0) / heights.length;
-    let to = quarter(span[key] + (mean - span[key]) * weight);
-    to = key === "floor" ? Math.min(to, span.ceiling - MIN_AIR_FT) : Math.max(to, span.floor + MIN_AIR_FT);
-    if (to !== span[key]) plans.push({ ci, cj, span, to });
-  }
-  for (const { ci, cj, span, to } of plans) set(ci, cj, spansAt(ci, cj).map((s) => (s === span ? { ...s, [key]: to } : s)));
-  return changed;
-}
-
-// Adds rock to the cave's rock round continent feet `at`, out to `radius` across, where it faces
-// `normal` (unit, out of the rock): a floor rises and a ceiling comes down by up to `amountFt`,
-// that at the middle and less further out; a wall comes out, its air filled a column at a time
-// where the column's middle is within half a column and `amountFt` of it. Air left too thin
-// closes, and so do pockets left near it (closePockets). groundAt is carve's. Gives the "tx,tz"
-// of the tiles changed.
-export function growCave({ at: [x, y, z], normal, radius, amountFt }, columnsOf, groundAt) {
-  const facing = normal[1] > 0.5 ? "floor" : normal[1] < -0.5 ? "ceiling" : "wall";
-  const at = ({ ci, cj }, make) => cellAt(columnsOf, ci, cj, make);
-  const spansAt = (ci, cj) => {
-    const found = at({ ci, cj }, false);
-    return found?.columns[found.k] ?? [];
-  };
-  const changed = new Set();
-  const set = (ci, cj, column) => {
-    const found = at({ ci, cj }, false);
-    if (!found) return;
-    found.columns[found.k] = column?.length ? column : null;
-    changed.add(found.key);
-  };
-  const flat = Math.hypot(normal[0], normal[2]) || 1;
-  const [nx, nz] = [normal[0] / flat, normal[2] / flat];
-  for (let cj = Math.floor((z - radius) / CELL_FT); cj <= Math.floor((z + radius) / CELL_FT); cj++) {
-    for (let ci = Math.floor((x - radius) / CELL_FT); ci <= Math.floor((x + radius) / CELL_FT); ci++) {
-      const [cx, cz] = [(ci + 0.5) * CELL_FT, (cj + 0.5) * CELL_FT];
-      const d = Math.hypot(cx - x, cz - z) / radius;
-      if (facing !== "wall") {
-        if (d >= 1) continue;
-        const by = amountFt * (1 - d * d);
-        let best = null;
-        for (const s of spansAt(ci, cj)) if (Math.abs(s[facing] - y) <= radius && (!best || Math.abs(s[facing] - y) < Math.abs(best[facing] - y))) best = s;
-        if (!best) continue;
-        const [low, high] = facing === "floor" ? [best.floor, quarter(best.floor + by)] : [quarter(best.ceiling - by), best.ceiling];
-        if (high > low) set(ci, cj, fillRock(spansAt(ci, cj), low, high, MIN_AIR_FT));
-        continue;
-      }
-      // A wall: the columns just off it, within the ring up and down.
-      const out = (cx - x) * nx + (cz - z) * nz;
-      const along = Math.hypot(cx - x - out * nx, cz - z - out * nz);
-      if (out < 0 || out > CELL_FT / 2 + amountFt || along >= radius) continue;
-      const h = Math.sqrt(radius * radius - along * along);
-      if (spansAt(ci, cj).some((s) => s.ceiling > y - h && s.floor < y + h)) set(ci, cj, fillRock(spansAt(ci, cj), quarter(y - h), quarter(y + h), MIN_AIR_FT));
-    }
-  }
-  if (changed.size) closePockets([x - radius, z - radius, x + radius, z + radius], at, groundAt, changed);
-  return changed;
-}
-
-// Closes the pockets of air with a column within a cell of [x0, z0, x1, z1]: air joined through
+// Closes the pockets of air with a column within a column of [x0, z0, x1, z1]: air joined through
 // the sides of columns, smaller than POCKET_FT3 and nowhere reaching the ground. at(cell, make)
 // is carve's; the "tx,tz" of tiles changed are added to `changed`.
 function closePockets([x0, z0, x1, z1], at, groundAt, changed) {
@@ -314,8 +197,8 @@ function closePockets([x0, z0, x1, z1], at, groundAt, changed) {
   };
   const kept = new Set(); // spans in air too big to close
   const closed = new Set();
-  for (let cj = Math.floor(z0 / CELL_FT) - 1; cj <= Math.floor(z1 / CELL_FT) + 1; cj++) {
-    for (let ci = Math.floor(x0 / CELL_FT) - 1; ci <= Math.floor(x1 / CELL_FT) + 1; ci++) {
+  for (let cj = Math.floor(z0 / VOXEL_FT) - 1; cj <= Math.floor(z1 / VOXEL_FT) + 1; cj++) {
+    for (let ci = Math.floor(x0 / VOXEL_FT) - 1; ci <= Math.floor(x1 / VOXEL_FT) + 1; ci++) {
       for (const start of spansAt(ci, cj)) {
         if (kept.has(start) || closed.has(start)) continue;
         // The air joined to it, till it's big enough to keep, opens through the ground, or meets
@@ -328,7 +211,7 @@ function closePockets([x0, z0, x1, z1], at, groundAt, changed) {
         while (todo.length && !keep) {
           const here = todo.pop();
           pocket.push(here);
-          volume += (here.span.ceiling - here.span.floor) * CELL_FT * CELL_FT;
+          volume += (here.span.ceiling - here.span.floor) * VOXEL_FT * VOXEL_FT;
           const ground = groundAt(here.ci, here.cj);
           keep = volume >= POCKET_FT3 || ground == null || here.span.ceiling >= ground;
           for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
@@ -359,12 +242,24 @@ function closePockets([x0, z0, x1, z1], at, groundAt, changed) {
 // A new tile's columns: all rock.
 export const emptyColumns = () => new Array(COLUMNS).fill(null);
 
-// A plate's caves file, as text: `tiles`, index in the plate -> columns. Tiles with no air are
-// left out, and each tile's cells take whichever form is shortest.
-export function encodeCaves([px, pz], tiles, entrances = []) {
+// A plate's caves file, as text: `tiles`, index in the plate -> columns. Each tile's spans are
+// written a network at a time, on a line of their own, those of a tile highest first; tiles with
+// no air are left out, and each tile's cells take whichever form is shortest.
+export function encodeCaves([px, pz], tiles) {
   const lines = [`caves ${VERSION} ${px} ${pz}`];
-  for (const [index, columns] of [...tiles].filter(([, columns]) => columns.some(Boolean)).sort((a, b) => a[0] - b[0])) lines.push(`tile ${index}`, cellsLine(columns));
-  if (entrances.length) lines.push("entrances", ...[...entrances].sort((a, b) => (a.id < b.id ? -1 : 1)).map((e) => JSON.stringify(e, (k, v) => (typeof v === "number" ? Math.round(v * 100) / 100 + 0 : v))));
+  const parts = [];
+  for (const [index, columns] of tiles) {
+    const nets = new Map(); // net -> its columns
+    columns.forEach((column, k) => {
+      for (const s of column ?? []) {
+        if (!nets.has(s.net)) nets.set(s.net, emptyColumns());
+        (nets.get(s.net)[k] ??= []).push(s);
+      }
+    });
+    for (const [net, own] of nets) parts.push({ index, net, own, top: Math.max(...own.flatMap((c) => (c ?? []).map((s) => s.ceiling))) });
+  }
+  parts.sort((a, b) => a.index - b.index || b.top - a.top || (a.net < b.net ? -1 : 1));
+  for (const { index, net, own } of parts) lines.push(`tile ${index} ${net}`, cellsLine(own));
   return new TextEncoder().encode(`${lines.join("\n")}\n`);
 }
 
@@ -389,7 +284,7 @@ function cellsLine(columns) {
     forms.push(["c2", `${digits(base + OFFSET, 3)} ${counts} ${spans.map((s) => spanDigits(s, 2, base)).join("")}`]);
   }
   if (spans.length < TWO) {
-    const listed = columns.flatMap((column, k) => (column ?? []).map((s) => ` ${digit(k % TILE_CELLS)}${digit(Math.floor(k / TILE_CELLS))}${spanDigits(s, 6, -OFFSET)}`));
+    const listed = columns.flatMap((column, k) => (column ?? []).map((s) => ` ${digits(k, 3)}${spanDigits(s, 6, -OFFSET)}`));
     forms.push(["c1", digits(spans.length, 2) + listed.join("")]);
   }
   for (const [tag, text] of [...forms]) {
@@ -400,21 +295,18 @@ function cellsLine(columns) {
   return `${tag} ${text}`;
 }
 
-// A tile's columns from its cells' line, as cellsLine writes it.
-function readCells(line) {
+// A tile's columns from its cells' line, as cellsLine writes it, its spans in network `net`.
+function readCells(line, net) {
   const space = line.indexOf(" ");
   let [tag, text] = [line.slice(0, space), line.slice(space + 1)];
   if (tag.endsWith("z")) [tag, text] = [tag.slice(0, -1), new TextDecoder().decode(unzip(digitsToBytes(text)))];
   const columns = emptyColumns();
   const span = (at, startDigits, base) => {
     const floor = (readDigits(text, at + 3, startDigits) + base) / 4;
-    return { floor, ceiling: floor + readDigits(text, at + 3 + startDigits, 2) / 4, stone: [0, 1, 2].map((i) => readDigits(text, at + i, 1)) };
+    return { floor, ceiling: floor + readDigits(text, at + 3 + startDigits, 2) / 4, stone: [0, 1, 2].map((i) => readDigits(text, at + i, 1)), net };
   };
   if (tag === "c1") {
-    for (let n = readDigits(text, 0, 2), at = 3; n > 0; n--, at += 14) {
-      const k = readDigits(text, at + 1, 1) * TILE_CELLS + readDigits(text, at, 1);
-      (columns[k] ??= []).push(span(at + 2, 6, -OFFSET));
-    }
+    for (let n = readDigits(text, 0, 2), at = 3; n > 0; n--, at += 15) (columns[readDigits(text, at, 3)] ??= []).push(span(at + 3, 6, -OFFSET));
     return columns;
   }
   const c2 = tag === "c2";
@@ -435,43 +327,27 @@ function readCells(line) {
   return columns;
 }
 
-// A caves file's { coords: [px, pz], tiles: index -> columns }, from its text, or from the gzipped
-// binary files written before, each span's theme and hewn taken for all three of its stone types.
+// A caves file's { coords: [px, pz], tiles: index -> columns, old }, from its text: each tile's
+// networks' spans in the one set of columns, lowest first. Files from before networks (version 1,
+// or the gzipped binary files before that) are read as having no caves, with `old` true.
 export function decodeCaves(bytes) {
-  if (bytes[0] === 0x1f && bytes[1] === 0x8b) return decodeBinaryCaves(bytes);
+  const tiles = new Map();
+  if (bytes[0] === 0x1f && bytes[1] === 0x8b) return { coords: null, tiles, old: true };
   const lines = new TextDecoder().decode(bytes).split("\n");
   const [word, version, px, pz] = lines[0].split(" ");
   if (word !== "caves") throw new Error(`not a caves file (${JSON.stringify(lines[0].slice(0, 20))})`);
+  const coords = [Number(px), Number(pz)];
+  if (Number(version) < VERSION) return { coords, tiles, old: true };
   if (Number(version) !== VERSION) throw new Error(`caves file version ${version} isn't known`);
-  const tiles = new Map();
-  const entrances = [];
-  let k = 1;
-  for (; k < lines.length && lines[k] !== "entrances"; k++) if (lines[k].startsWith("tile ")) tiles.set(Number(lines[k].slice(5)), readCells(lines[++k]));
-  for (k++; k < lines.length; k++) if (lines[k]) entrances.push(JSON.parse(lines[k]));
-  return { coords: [Number(px), Number(pz)], tiles, entrances };
-}
-
-function decodeBinaryCaves(gz) {
-  const bytes = gunzipSync(gz);
-  const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  if (String.fromCharCode(...bytes.slice(0, 4)) !== "DLC1") throw new Error("not a caves file");
-  const coords = [view.getInt32(8, true), view.getInt32(12, true)];
-  const tiles = new Map();
-  let at = 17;
-  for (let t = 0; t < bytes[16]; t++) {
-    const index = bytes[at++];
-    const counts = bytes.slice(at, at + COLUMNS);
-    at += COLUMNS;
-    const columns = emptyColumns();
-    counts.forEach((count, k) => {
-      if (!count) return;
-      const column = [];
-      for (let n = 0; n < count; n++, at += 10) column.push({ floor: view.getInt32(at, true) / 4, ceiling: view.getInt32(at + 4, true) / 4, stone: Array(3).fill(stoneOf(bytes[at + 8], bytes[at + 9])) });
-      columns[k] = column;
-    });
-    tiles.set(index, columns);
+  for (let k = 1; k < lines.length; k++) {
+    if (!lines[k].startsWith("tile ")) continue;
+    const [, index, net] = lines[k].split(" ");
+    const columns = readCells(lines[++k], net);
+    const into = tiles.get(Number(index));
+    if (!into) tiles.set(Number(index), columns);
+    else columns.forEach((column, c) => column && (into[c] = [...(into[c] ?? []), ...column].sort((a, b) => a.floor - b.floor)));
   }
-  return { coords, tiles, entrances: [] };
+  return { coords, tiles, old: false };
 }
 
 // Tile (tx, tz)'s index in its plate.

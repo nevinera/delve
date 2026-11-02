@@ -6,6 +6,8 @@ A version 2 world can keep a plan of each continent's caves: rooms (nodes) joine
 places/continents/<continent>/caves/layout.json
 ```
 
+Its `version` is 2. /create drops a layout of version 1 when it reads one, as it drops the caves files from then, and saves an empty one in its place. Everything this layout carves is in the network `unnamed` for now.
+
 ## Nodes
 
 A node is a room. Its `at` is the middle of its floor, in feet.

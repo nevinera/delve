@@ -1,20 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { TILE_CELLS } from "../v2/caves.js";
-import { CELL_FT } from "../v2/sizes.js";
-import { ENTRANCE_DEFAULTS, Layout, arcCurve, arcShapes, arcSteepness, carvePlan, entranceCells, entranceEnd, entranceProblem, mouthBehind, nodeShapes, respacedBends, shapesOf, tooNear } from "./caveLayout.js";
+import { VOXEL_FT } from "../v2/caves.js";
+import { ENTRANCE_DEFAULTS, Layout, arcCurve, arcShapes, arcSteepness, carvePlan, entranceEnd, entranceProblem, mouthBehind, nodeShapes, respacedBends, shapesOf, tooNear } from "./caveLayout.js";
 import { Caves } from "./caves.js";
 
-// Flat ground at `height`, everywhere, with its cells all one color.
-const flat = (height) => ({ heightAt: () => height, cells: () => ({ colors: new Uint8Array(TILE_CELLS * TILE_CELLS * 3).fill(100) }) });
+// Flat ground at `height`, everywhere.
+const flat = (height) => ({ heightAt: () => height });
 // A hillside rising 0.6 ft for each foot east.
 const hill = (x) => 0.6 * x;
-const hillside = { heightAt: (x) => hill(x), cells: () => ({ colors: new Uint8Array(TILE_CELLS * TILE_CELLS * 3).fill(100) }) };
+const hillside = { heightAt: (x) => hill(x) };
 const entrance = (details) => {
   const e = { ...ENTRANCE_DEFAULTS, mouth: [0, 0, 0], yaw: 90, ...details };
   return { ...e, at: entranceEnd(e) };
 };
 const scene = { add: () => {} };
-const spansAt = (caves, x, z) => caves.spans(Math.floor(x / CELL_FT), Math.floor(z / CELL_FT));
+const spansAt = (caves, x, z) => caves.spans(Math.floor(x / VOXEL_FT), Math.floor(z / VOXEL_FT));
 
 describe("cave layout", () => {
   it("bends an arc about every 32 ft, and takes a node's arcs with it", () => {
@@ -180,15 +179,12 @@ describe("cave layout", () => {
     expect(entranceProblem(entrance({ yaw: 270 }), hill)).toMatch(/far end/);
   });
 
-  it("finds the ground cells reaching into an entrance's tube", () => {
-    const cells = entranceCells(entrance(), hill).map(([ci, cj]) => `${ci},${cj}`);
-    // Where the hill rises through the tube, but not downhill of it, nor where it's deep in.
-    expect(cells).toContain("2,0");
-    expect(cells).toContain("2,-1");
-    expect(cells).not.toContain("-2,0");
-    expect(cells).not.toContain("8,0");
-    // Not beside it.
-    expect(cells).not.toContain("2,3");
+  it("drops a layout from before cave networks", () => {
+    const old = new Layout({ version: 1, nodes: [{ id: "n1", at: [0, -40, 0] }], arcs: [], carved: {} });
+    expect(old.dropped).toBe(true);
+    expect(old.nodes.size).toBe(0);
+    const kept = new Layout(new Layout().toJSON());
+    expect(kept.dropped).toBe(false);
   });
 
   it("carves an entrance's tube out through the hillside, and joins tunnels to its room", () => {

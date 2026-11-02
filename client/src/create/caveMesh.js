@@ -1,6 +1,5 @@
 import { hash2, facets, valueNoise } from "../world/noise.js";
-import { CAVE_THEMES, TILE_CELLS, isHewn, stonePart, themeOf } from "../v2/caves.js";
-import { CELL_FT } from "../v2/sizes.js";
+import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, isHewn, stonePart, themeOf } from "../v2/caves.js";
 
 // Mesh data for a tile's caves (v2/caves.js), without three.js, so it can be tested. The rock's
 // surface runs between the air of the caves' spans and the rock round them, smoothed by surface
@@ -17,19 +16,18 @@ import { CELL_FT } from "../v2/sizes.js";
 // rock faces. Both come from the tiles alone, never from the mesh, so tiles agree at seams.
 //
 // Where a cave opens through the ground (a mouth: ground inside a span's air), the ground's full
-// tiles leave those cells out (mouthCells), and the cave's rim, its vertices in cubes that reach
-// the sky by an opened column, sits on the ground's corners, so the two meet along the cells'
-// edges.
+// tiles leave out the cells whose columns all open, and the cave's rim, its vertices in cubes that
+// reach the sky by an opened column, sits on the ground's surface at the columns' corners.
 //
 // The mesh covers the tile's grid edges, and reaches to its east and south neighbours' columns,
 // so tiles meet without gaps. Positions are feet from the tile's northwest corner.
 //
-// world: what a mesh needs to know, by continent cell (ci, cj): spans(ci, cj), lowest first;
-// ground(ci, cj), the ground's height at its middle, -Infinity where it's not known; corner(ci,
-// cj), at its northwest corner; mouth(ci, cj), whether the ground there opens into a cave;
-// caved(tx, tz), whether a tile has any caves.
+// world: what a mesh needs to know, by continent column (ci, cj), VOXEL_FT square: spans(ci, cj),
+// lowest first; ground(ci, cj), the ground's height at its middle, -Infinity where it's not known;
+// corner(ci, cj), at its northwest corner; mouth(ci, cj), whether the ground there opens into a
+// cave; caved(tx, tz), whether a tile has any caves.
 
-const STEP_FT = 2;
+const STEP_FT = VOXEL_FT;
 const ROCK = 0;
 const CAVE = 1;
 const SKY = 2;
@@ -43,18 +41,10 @@ const THEME_LOOK = {
 };
 const SHADE = 0.1; // how much each vertex's color varies, lighter or darker
 
-// Whether cell (ci, cj)'s ground lies in a cave's air.
+// Whether column (ci, cj)'s ground lies in a cave's air.
 export function opensAt(world, ci, cj) {
   const h = world.ground(ci, cj);
   return world.spans(ci, cj).some((s) => s.floor < h && h < s.ceiling);
-}
-
-// The cells of tile (tx, tz), by index in row order, whose ground the caves draw, as a Set, for
-// the ground to leave out. Empty where the tile's caves don't reach the ground.
-export function mouthCells(tx, tz, world) {
-  const out = new Set();
-  for (let j = 0; j < TILE_CELLS; j++) for (let i = 0; i < TILE_CELLS; i++) if (world.mouth(tx * TILE_CELLS + i, tz * TILE_CELLS + j)) out.add(j * TILE_CELLS + i);
-  return out;
 }
 
 // Tile (tx, tz)'s cave rock as { positions, colors, themes, indices }, or null where there's none.
@@ -62,10 +52,10 @@ export function caveMesh(tx, tz, world) {
   let near = false;
   for (let dz = -1; dz <= 1; dz++) for (let dx = -1; dx <= 1; dx++) near ||= world.caved(tx + dx, tz + dz);
   if (!near) return null;
-  const [ci0, cj0] = [tx * TILE_CELLS, tz * TILE_CELLS];
+  const [ci0, cj0] = [tx * TILE_COLUMNS, tz * TILE_COLUMNS];
   // Each column's answers, kept for the tile and a border round it.
   const PAD = 3;
-  const SIDE = TILE_CELLS + 2 * PAD;
+  const SIDE = TILE_COLUMNS + 2 * PAD;
   const kept = (fn) => {
     const values = new Array(SIDE * SIDE);
     return (ci, cj) => {
@@ -192,8 +182,8 @@ export function caveMesh(tx, tz, world) {
     let found = null;
     if (n) {
       let [x, y, z] = [sx / n, sy / n, sz / n];
-      const length = Math.hypot(toward[0] * CELL_FT, toward[1] * STEP_FT, toward[2] * CELL_FT) || 1;
-      const way = [(toward[0] * CELL_FT) / length, (toward[1] * STEP_FT) / length, (toward[2] * CELL_FT) / length];
+      const length = Math.hypot(toward[0] * VOXEL_FT, toward[1] * STEP_FT, toward[2] * VOXEL_FT) || 1;
+      const way = [(toward[0] * VOXEL_FT) / length, (toward[1] * STEP_FT) / length, (toward[2] * VOXEL_FT) / length];
       // The stone of the floor, wall or ceiling, as the rock faces.
       const part = stonePart(way[1]);
       const hewn = touched.some((span) => isHewn(span.stone[part]));
@@ -204,7 +194,7 @@ export function caveMesh(tx, tz, world) {
       // it meets the ground drawn in full.
       const rim = states.includes(SKY) && corners.some(([ci, cj]) => mouthAt(ci, cj));
       if (rim) [x, y, z] = [a + 0.5, world.corner(a + 1, b + 1), b + 0.5];
-      found = { at: [(x + 0.5) * CELL_FT, y, (z + 0.5) * CELL_FT], toward: way, hewn, theme: THEME_LOOK[theme] ? theme : CAVE_THEMES[0], floor, rim };
+      found = { at: [(x + 0.5) * VOXEL_FT, y, (z + 0.5) * VOXEL_FT], toward: way, hewn, theme: THEME_LOOK[theme] ? theme : CAVE_THEMES[0], floor, rim };
     }
     crossings.set(key, found);
     return found;
@@ -236,7 +226,7 @@ export function caveMesh(tx, tz, world) {
     kept.set(key, out);
     return out;
   };
-  const [ox, oz] = [ci0 * CELL_FT, cj0 * CELL_FT];
+  const [ox, oz] = [ci0 * VOXEL_FT, cj0 * VOXEL_FT];
   // The vertex in grid cube (a, b, c), drawn as its theme draws it.
   const vertex = (a, b, c) => {
     const key = cubeKey(a, b, c);
@@ -268,8 +258,8 @@ export function caveMesh(tx, tz, world) {
     else indices.push(v0, v1, v2, v0, v2, v3);
   };
 
-  for (let j = 0; j < TILE_CELLS; j++) {
-    for (let i = 0; i < TILE_CELLS; i++) {
+  for (let j = 0; j < TILE_COLUMNS; j++) {
+    for (let i = 0; i < TILE_COLUMNS; i++) {
       const [ci, cj] = [ci0 + i, cj0 + j];
       const reachY = range(ci, cj);
       if (!reachY) continue;

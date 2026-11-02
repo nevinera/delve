@@ -1,6 +1,5 @@
 import * as THREE from "three";
 import { ROOF_FT, allStone, shapeBounds } from "../v2/caves.js";
-import { CELL_FT } from "../v2/sizes.js";
 import { hash2, hashString, valueNoise } from "../world/noise.js";
 
 // A continent's cave layout (docs/formats/cave-layout.md): rooms (nodes) joined by tunnels
@@ -25,10 +24,10 @@ export const TUNNEL_SPAN = 10; // how many times its width a tunnel's length is,
 const SAMPLE_FT = 4; // how finely an arc's line is laid out
 const LEVEL = 0.7; // how far, of a room's radius, a tunnel runs level into it
 const CLEAR = 1.6; // how many times that from a room a tunnel's first bend has to be
+const VERSION = 2;
 export const ENTRANCE_LENGTHS = [16, 32, 48, 64];
 export const ENTRANCE_FT = [6, 24]; // the entrances' widths
 const DOWN = 0.2; // how far a sloping entrance drops for each foot in
-const NEAR_TUBE_FT = 0.5; // ground cells this near an entrance's tube are left out with those in it
 const LOW_RING = Math.PI / 4; // how far round from the bottom an entrance's mouth can be in the ground
 
 export const NODE_DEFAULTS = { size: "m", shape: "round", style: "borehole", rock: 0, hewn: false };
@@ -41,13 +40,15 @@ const mul = (a, k) => a.map((v) => v * k);
 const lerp = (a, b, t) => a.map((v, i) => v + (b[i] - v) * t);
 
 export class Layout {
+  // A layout from before cave networks (version 1) is dropped, with `dropped` true, as its caves are.
   constructor(json = null) {
     this.nodes = new Map();
     this.arcs = new Map();
     this.carved = new Map(); // id -> the element as it was when last carved (an arc's with `ends`)
     this.next = 1;
     this.version = 0;
-    if (json) this.load(json);
+    this.dropped = Boolean(json) && !(json.version >= VERSION);
+    if (json && !this.dropped) this.load(json);
   }
 
   load({ nodes = [], arcs = [], carved = {} }) {
@@ -59,7 +60,7 @@ export class Layout {
   }
 
   toJSON() {
-    return { version: 1, nodes: [...this.nodes.values()], arcs: [...this.arcs.values()], carved: Object.fromEntries(this.carved) };
+    return { version: VERSION, nodes: [...this.nodes.values()], arcs: [...this.arcs.values()], carved: Object.fromEntries(this.carved) };
   }
 
   get(id) {
@@ -340,29 +341,6 @@ export function inTube({ mouth, at, yaw, width: W, style }, p, margin = 0) {
   const up = p[1] - (mouth[1] + ((at[1] - mouth[1]) * Math.min(length, Math.max(0, d))) / (length || 1));
   const top = style === "mine" ? W : W * Math.sqrt(Math.max(0, 1 - ((2 * across) / W) ** 2));
   return up > -margin && up < top + margin;
-}
-
-// The ground cells, as [ci, cj], whose surface reaches into an entrance's tube anywhere, or within
-// NEAR_TUBE_FT of it: each cell's ground tried every half foot across it, its edges and corners
-// too. groundAt(x, z): the ground's height.
-export function entranceCells(entrance, groundAt) {
-  const { mouth, at, width: W } = entrance;
-  const [x0, x1] = [Math.min(mouth[0], at[0]) - W, Math.max(mouth[0], at[0]) + W];
-  const [z0, z1] = [Math.min(mouth[2], at[2]) - W, Math.max(mouth[2], at[2]) + W];
-  const out = [];
-  for (let cj = Math.floor(z0 / CELL_FT); cj <= Math.floor(z1 / CELL_FT); cj++) {
-    for (let ci = Math.floor(x0 / CELL_FT); ci <= Math.floor(x1 / CELL_FT); ci++) {
-      let reaches = false;
-      for (let v = 0; v <= CELL_FT && !reaches; v += 0.5) {
-        for (let u = 0; u <= CELL_FT && !reaches; u += 0.5) {
-          const [x, z] = [ci * CELL_FT + u, cj * CELL_FT + v];
-          reaches = inTube(entrance, [x, groundAt(x, z), z], NEAR_TUBE_FT);
-        }
-      }
-      if (reaches) out.push([ci, cj]);
-    }
-  }
-  return out;
 }
 
 // The points round an entrance's mouth, as tall and wide as its tube, each { at, low, open }:
