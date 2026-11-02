@@ -439,7 +439,10 @@ function start(world, changes, fresh) {
     caves.fromEarth(ghost());
     timed("ground", () => overhead.tick(buried, x, z, now - lastOverhead > OVERHEAD_EVERY_MS && (lastOverhead = now)));
     earth.tick(camera, ghost());
-    for (const shown of [sea.mesh, falls.group, things.group, things.outlines]) shown.visible = !buried;
+    for (const shown of [sea.mesh, falls.group]) shown.visible = !buried;
+    // In a cave, what's placed in it shows; the rock hides what's on the ground over it.
+    const inCave = buried && !caves.solid(cx, camera.position.y, cz);
+    for (const shown of [things.group, things.outlines]) shown.visible = !buried || inCave;
     if (buried) for (const shown of [scatter.group, clutter.group, surfaces.group]) shown.visible = false;
     const sky = buried ? UNDERGROUND : under ? UNDERWATER.color : SKY;
     scene.fog.color.set(sky);

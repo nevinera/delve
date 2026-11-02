@@ -97,7 +97,7 @@ function drawShape(canvas, shape) {
 export class Tools {
   constructor({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves, layout, inEarth }) {
     this.inEarth = inEarth;
-    Object.assign(this, { camera, canvas, builder, renditions, ground });
+    Object.assign(this, { camera, canvas, builder, renditions, ground, caves });
     this.tool = null;
     this.settings = { shape: "round", radius: 0, strength: 0, noise: 0, lower: false, angle: 0, grain: 0, craggy: false };
     this.pools = { count: 0, size: 0 }; // the pools tool's settings
@@ -133,6 +133,7 @@ export class Tools {
         return ray;
       },
       groundHit: () => this.hit(),
+      caveHit: () => this.caveHit(),
     });
     this.build.onPick = (tool) => this.tool !== tool && this.pick(tool);
     this.plan = new CavePlan({ scene, camera, canvas, layout, caves, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, here: () => [builder.state.x, builder.state.y, builder.state.z] });
@@ -764,6 +765,20 @@ export class Tools {
   }
 
   // The surface the pointer finds at (x, z): the ground, or the sea over it.
+  // From in a cave, where the pointer meets its rock, { at, ceiling }, ceiling where there's rock
+  // just over it and air just under it; or null.
+  caveHit() {
+    if (!this.pointer) return null;
+    const { position: p } = this.camera;
+    if (p.y >= (this.renditions.heightAt(p.x, p.z) ?? EMPTY_FT) || this.caves.solid(p.x, p.y, p.z)) return null;
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(this.pointer, this.camera);
+    const at = this.caves.hit(ray.ray);
+    if (!at) return null;
+    const [x, y, z] = at;
+    return { at, ceiling: this.caves.solid(x, y + 0.5, z) && !this.caves.solid(x, y - 0.5, z) };
+  }
+
   surface(x, z) {
     return Math.max(this.renditions.heightAt(x, z) ?? EMPTY_FT, SEA_LEVEL_FT);
   }

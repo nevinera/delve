@@ -98,9 +98,11 @@ function sizesOf(type) {
 
 export class Build {
   // ray(): the pointer's ray (a Raycaster), or null off the view. groundHit(): where it meets the
-  // ground, [x, y, z], or null. say(text): tells the builder something.
-  constructor({ scene, camera, canvas, placed, things, library, groundAt, ray, groundHit }) {
-    Object.assign(this, { scene, camera, canvas, placed, things, library, groundAt, ray, groundHit });
+  // ground, [x, y, z], or null. caveHit(): from in a cave, where the pointer meets its rock,
+  // { at, ceiling }, ceiling where that's a ceiling, or null. say(text): tells the builder
+  // something.
+  constructor({ scene, camera, canvas, placed, things, library, groundAt, ray, groundHit, caveHit = () => null }) {
+    Object.assign(this, { scene, camera, canvas, placed, things, library, groundAt, ray, groundHit, caveHit });
     mountSwatches();
     // The handles moving and turning what's picked as one: arrows and planes that move it, and a
     // ring round them that turns it about the upright line through its middle (objects only yaw).
@@ -330,11 +332,14 @@ export class Build {
     for (const part of document.querySelectorAll("[data-slab-roof]")) part.hidden = !roofed;
   }
 
-  // Where the pointer meets a slab or object, or the ground: { at: [x, y, z], thing }, or null.
+  // Where the pointer meets a slab or object, or the ground, or from in a cave, its rock:
+  // { at: [x, y, z], thing, cave, ceiling }, or null.
   hit() {
     const ray = this.ray();
     if (!ray) return null;
     const on = this.things.pick(ray);
+    const cave = this.caveHit();
+    if (cave && (!on || on.point.distanceTo(ray.ray.origin) > new THREE.Vector3(...cave.at).distanceTo(ray.ray.origin))) return { at: cave.at, thing: null, cave: true, ceiling: cave.ceiling };
     const ground = this.groundHit();
     if (on && (!ground || on.point.distanceTo(ray.ray.origin) <= new THREE.Vector3(...ground).distanceTo(ray.ray.origin))) return { at: on.point.toArray(), thing: on.thing };
     return ground && { at: ground, thing: null };
@@ -601,7 +606,9 @@ export class Build {
     // In the ghost's colors.
     const { id: _, ...made } = makeObject(type, [x, z], this.yaw, this.scale);
     const colors = this.ghostObject?.type === type ? this.ghostObject.colors : made.colors;
-    const object = readyObject({ ...made, ...(colors ? { colors } : {}), ...(hit.thing ? { y } : {}) });
+    const object = readyObject({ ...made, ...(colors ? { colors } : {}), ...(hit.thing || hit.cave ? { y } : {}) });
+    // From a cave's ceiling, it hangs.
+    if (object && hit.ceiling) object.y = y - object.height;
     if (!object) return;
     this.placed.put([object]);
     this.library.used("objects", type);
@@ -612,7 +619,7 @@ export class Build {
   // Where the armed template would be placed with the pointer at `hit`: its anchor, [x, y, z].
   anchor(template, hit) {
     const [x, z] = [Math.round(hit.at[0] / SNAP_FT) * SNAP_FT, Math.round(hit.at[2] / SNAP_FT) * SNAP_FT];
-    if (hit.thing) return [x, hit.at[1], z];
+    if (hit.thing || hit.cave) return [x, hit.at[1], z];
     const { cells } = placedTemplate(template, [x, 0, z], (this.yaw * 180) / Math.PI);
     const every = Math.max(1, Math.ceil(cells.length / MOST_CELLS));
     const heights = cells.filter((_, n) => n % every === 0).map(([ci, cj]) => this.groundAt((ci + 0.5) * TEMPLATE_CELL_FT, (cj + 0.5) * TEMPLATE_CELL_FT));
@@ -1139,7 +1146,10 @@ export class Build {
         }
       }
     }
-    if (this.tool === "object") this.ghost.position.set(...this.objectAt(hit));
+    if (this.tool === "object") {
+      const [x, y, z] = this.objectAt(hit);
+      this.ghost.position.set(x, hit.ceiling ? y - (this.ghostObject?.height ?? 0) : y, z);
+    }
     else {
       const template = this.library.template(type);
       if (template) this.ghost.position.set(...this.anchor(template, hit));

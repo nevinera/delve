@@ -1,5 +1,5 @@
 import { BANDIT } from "./builtin/bandit.js";
-import { CAVE } from "./builtin/cave.js";
+import { DENS, MINES, NATURAL_CAVES } from "./builtin/cave.js";
 import { COAST } from "./builtin/coast.js";
 import { FARM } from "./builtin/farm.js";
 import { FORT } from "./builtin/fort.js";
@@ -28,6 +28,7 @@ const SEE_THROUGH = new Set([
   ...["bcoas004", "bcoas010", "bcoas012"], // net rack, fish drying rack, harbour lamp
   ...["bband005", "bband006", "bband012"], // bedroll, weapon rack, cook spit
   ...["bcave001", "bcave002", "bcave007", "bcave009", "bcave011"], // candles, glowing mushrooms, mine rails, pickaxe
+  ...["bcave018", "bcave022", "bcave023", "bcave025", "bcave026", "bcave027"], // shovel and pick, hanging roots, loose rocks, nest, hide bedding, gnawed scraps
   ...["bgobl008", "bgobl010", "bgobl013"], // pipes, scaffold, goblin lamp
   ...["bwood001", "bwood003", "bwood004", "bwood005", "bwood006", "bwood007", "bwood013"], // mushroom ring, fern, wildflowers, berry bush, reeds, lily pads, spider web
   ...["bfort001", "bfort006", "bfort009", "bfort011"], // banner pole, ballista, weapon rack, portcullis
@@ -37,7 +38,7 @@ const SEE_THROUGH = new Set([
   "bques004", // lectern with scroll
 ]);
 
-export const BUILTIN_OBJECT_COLLECTIONS = [FARM, VILLAGE, HOUSEHOLD, MILL, COAST, BANDIT, CAVE, GOBLIN, WOODLAND, FORT, ROADS, RUINS, MARKET, QUEST].map((c) => ({
+export const BUILTIN_OBJECT_COLLECTIONS = [FARM, VILLAGE, HOUSEHOLD, MILL, COAST, BANDIT, MINES, NATURAL_CAVES, DENS, GOBLIN, WOODLAND, FORT, ROADS, RUINS, MARKET, QUEST].map((c) => ({
   ...c,
   objects: c.objects.map((o) => (SEE_THROUGH.has(o.id) ? { ...o, blocksSight: false } : o)),
 }));

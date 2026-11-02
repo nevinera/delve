@@ -27,7 +27,7 @@ Plate `(px, pz)` covers `[px * 2048, (px + 1) * 2048)` each way, in continent fe
 
 - `type` is a built-in kind such as `boulder`, or `built:<id>` for one of the world's objects.
 - `at` is `[x, z]` in continent feet.
-- `y`, when there is one, is the height it stands at, as on a slab. An object without one stands on what's under it.
+- `y`, when there is one, is the height it stands at, as on a slab or a cave's floor. One hung from a cave's ceiling stands that far below it, its top at the ceiling. An object without one stands on what's under it.
 - `yaw` is radians about up. `scale` is feet for a built-in kind, or a factor for a built object.
 - `colors` and `texts` are as the world's tiles keep them ([plates](plates.md#place-lines)).
 - `template`, when there is one, is the template it was placed from.
