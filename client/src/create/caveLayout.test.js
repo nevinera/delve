@@ -113,6 +113,32 @@ describe("cave layout", () => {
     for (const style of ["natural", "mine"]) expect(shapesOf(layout.copyOf(layout.addEntrance("n", entrance({ style })).id)).length).toBeGreaterThan(1);
   });
 
+  it("goes on from the nearest spot on a passage, splitting it there unless a point is near", () => {
+    const layout = new Layout();
+    const [a, b] = [[0, -40, 0], [64, -40, 0]].map((at) => layout.addPoint("n", at));
+    a.width = 20;
+    const ab = layout.addSegment("n", a.id, b.id);
+    layout.addPoint("other", [20, -40, 0]);
+    // From the middle of the segment: split there, the new point taking its nearer end's config.
+    const spot = layout.nearest("n", [24, -20, 10]);
+    expect(spot).toMatchObject({ id: ab.id, at: [24, -40, 0] });
+    const end = layout.extend(spot, { at: [24, -40, 40] });
+    expect(layout.segments.has(ab.id)).toBe(false);
+    const split = layout.points.get([...layout.segments.values()].find((s) => s.to === end.id).from);
+    expect(split.at).toEqual([24, -40, 0]);
+    expect(split.width).toBe(20);
+    expect(end.width).toBe(20);
+    expect(layout.joined(split.id).length).toBe(3);
+    // Near a point, from the point itself.
+    const near = layout.extend(layout.nearest("n", [60, -40, 2]), { at: [64, -40, -40] });
+    expect(layout.joined(b.id).map((s) => s.to)).toContain(near.id);
+    // A loop: joining another passage.
+    const count = layout.points.size;
+    layout.extend(layout.nearest("n", end.at), { to: layout.nearest("n", [64, -40, -20], new Set([end.id])) });
+    expect(layout.points.size).toBe(count + 1);
+    expect(layout.nearest("nowhere", [0, 0, 0])).toBe(null);
+  });
+
   it("names networks as slugs", () => {
     expect(slugOf("  Wailing Hollow! ")).toBe("wailing-hollow");
     expect(slugOf("--")).toBe("");

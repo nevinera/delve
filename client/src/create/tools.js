@@ -41,7 +41,7 @@ import { WaterBodies } from "./water.js";
 //   them, and c and v turn raise and lower's, shift+c and shift+v a little.
 // - build's tools place objects, templates and slabs, and pick them to change (build.js).
 // - caves' go to stands the builder on the floor of a cave's point or entrance where it's clicked;
-//   place entrance lays out cave networks (cavePlan.js).
+//   place entrance and passage lay out cave networks (cavePlan.js).
 // - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
 //   more each time the ring's moved its radius. Its undo takes back the last scattering.
 
@@ -55,7 +55,7 @@ const BRUSHES = new Set(["raise", "flatten", "smooth", "noise", "pools", "clear"
 const PLANNING = new Set(["marker", "eraser", "select", "measure"]); // tools that work on lines drawn at sea level
 const OPENS_PINS = new Set([null, "pin"]); // tools with which clicking a pin opens it
 const BUILD = new Set(["pick", "object", "template", "slab", "stairs", "ramp"]);
-const PLANS = new Set(["entrance"]);
+const PLANS = new Set(["entrance", "passage"]);
 const TURN_DEG = 15;
 const FINE_TURN_DEG = 2;
 
@@ -133,7 +133,8 @@ export class Tools {
       groundHit: () => this.hit(),
     });
     this.build.onPick = (tool) => this.tool !== tool && this.pick(tool);
-    this.plan = new CavePlan({ scene, camera, canvas, layout, caves, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT });
+    this.plan = new CavePlan({ scene, camera, canvas, layout, caves, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, here: () => [builder.state.x, builder.state.y, builder.state.z] });
+    builder.wheel = (e) => PLANS.has(this.tool) && this.plan.wheel(e);
     this.paths = new Paths(scene, canvas.parentElement, renditions, (x, z) => this.surface(x, z), (text) => ($("pathStatus").textContent = text));
     this.moving = null; // pins being dragged, { from, pins: [[pin, x, z]], before, moved }
     this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }

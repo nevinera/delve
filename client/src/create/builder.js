@@ -46,7 +46,7 @@ const STEEPEST = Math.tan((WALK_DEG * Math.PI) / 180); // rise over run
 const DOUBLE_TAP_MS = 300;
 const EYE_FT = 5.5;
 const DIVE_FT = 8; // how far into the earth double-tapping F takes them at once, deep enough to be in its rock
-const CAMERA = { distance: 30, min: 4, max: 2000, pitch: 0.35, minPitch: -1.3, maxPitch: 1.45 };
+export const CAMERA = { distance: 30, min: 4, max: 2000, pitch: 0.35, minPitch: -1.3, maxPitch: 1.45 };
 // How the camera changes with height: tipped down by up to `tilt` radians, all of it by `tiltFt`
 // up, then, from `highFt`, toward looking straight down, all the way at `topFt`, to plan from.
 const ALOFT = { tilt: 0.7, tiltFt: 600, highFt: 20000, topFt: 100000 };
@@ -323,8 +323,10 @@ export class Builder {
     this.cam.pitch = Math.max(CAMERA.minPitch, Math.min(CAMERA.maxPitch, this.cam.pitch + dy * DRAG));
   }
 
+  // The wheel zooms the camera, unless wheel(e), a tool's, takes it.
   onWheel(e) {
     e.preventDefault();
+    if (this.wheel?.(e)) return;
     this.cam.distance = Math.max(CAMERA.min, Math.min(CAMERA.max, this.cam.distance * Math.exp(e.deltaY * 0.001)));
   }
 }

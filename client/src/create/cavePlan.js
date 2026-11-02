@@ -3,7 +3,8 @@ import { Line2 } from "three/examples/jsm/lines/Line2.js";
 import { LineGeometry } from "three/examples/jsm/lines/LineGeometry.js";
 import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { NET_SLUG } from "../v2/caves.js";
-import { ENTRANCE_DEFAULTS, ENTRANCE_FT, carvePlan, entranceEnd, entranceProblem, entranceRing, mouthBehind } from "./caveLayout.js";
+import { CAMERA } from "./builder.js";
+import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, carvePlan, configOf, entranceEnd, entranceProblem, entranceRing, fits, mouthBehind, segmentShapes } from "./caveLayout.js";
 
 // The caves' layout tools (caveLayout.js). Entrance, from above the ground, places an entrance
 // held where the pointer meets it, HOLD_FT in from its mouth: a tube into the hillside, facing the
@@ -13,6 +14,13 @@ import { ENTRANCE_DEFAULTS, ENTRANCE_FT, carvePlan, entranceEnd, entranceProblem
 // entrance; the panel shows its details, or those of the next one placed, and changing them
 // changes it. Each change carves what it changed straight away (caveLayout.js's carvePlan), and
 // undoes on its own.
+//
+// Passage, from inside a cave, lays out passages: the new point goes the way you look, REACH_FT
+// from your feet, level when you look straight ahead (the camera at rest, the pointer in the
+// middle), the scroll wheel setting how far, and the passage goes on to it from the nearest
+// spot on a passage to you, splitting it there unless a point's within JOIN_FT. Aimed near
+// another passage, it snaps to it, to make a loop. A ghost of it shows as you aim, red where it
+// can't go. The new point's selected, so the panel can size it; shift-click picks another.
 //
 // The layout's drawn as glowing lines, as thick, in feet, as what they stand for is big, so they
 // thin with distance: an entrance as its mouth's ring and its tube, a point as a ring on its floor.
@@ -28,6 +36,10 @@ const FINE_TURN_DEG = 5;
 const HOLD_FT = 10; // how far in from an entrance's mouth the pointer holds it
 const GLOW = 3; // how much wider the glow is than the line
 const UNDOS = 100;
+const REACH_FT = [8, 32, 96]; // how far past you a passage reaches: least, at first, most
+const REACH_STEP_FT = 4;
+const LEVEL_RAD = 0.06; // how far either way of straight ahead a passage aimed is level
+const SNAP_FT = 12; // how near another passage a passage aimed snaps to it
 const NEW = ""; // the network picker's value for a new network
 const $ = (id) => document.getElementById(id);
 
@@ -43,9 +55,12 @@ export class CavePlan {
   // ray(): the pointer's THREE.Raycaster, or null off the view. groundHit(): where the pointer
   // meets the ground, [x, y, z], or null. groundAt(x, z): the ground's height.
   // caves: the Caves to carve.
-  constructor({ scene, camera, canvas, layout, caves, ray, groundHit, groundAt }) {
-    Object.assign(this, { camera, canvas, layout, caves, ray, groundHit, groundAt });
-    this.tool = null; // "entrance" while it's picked
+  // here(): where you stand, [x, y, z].
+  constructor({ scene, camera, canvas, layout, caves, ray, groundHit, groundAt, here }) {
+    Object.assign(this, { camera, canvas, layout, caves, ray, groundHit, groundAt, here });
+    this.tool = null; // "entrance" or "passage" while it's picked
+    this.reach = REACH_FT[1]; // how far past you a passage reaches
+    this.ghost = null; // the passage aimed, { from, to, at, ends, problem }
     this.selected = null; // the id of the element selected
     this.hover = null; // the entrance the pointer would place, { entrance, problem }
     this.turn = 0; // degrees an entrance is turned from the way the camera looks
@@ -74,6 +89,14 @@ export class CavePlan {
 
   bind() {
     const changeDetail = (key, value) => {
+      const point = this.layout.points.get(this.selected);
+      if (point) {
+        if (point[key] === value || !(key in point)) return;
+        this.remember();
+        point[key] = value;
+        this.layout.version++;
+        return this.carve();
+      }
       const e = this.layout.entrances.get(this.selected);
       if (!e) return (this.details[key] = value);
       if (e[key] === value) return;
@@ -82,9 +105,9 @@ export class CavePlan {
       if (problem) return this.status(problem);
       this.remember();
       e[key] = value;
-      const point = this.layout.points.get(e.point);
-      point.at = entranceEnd(e);
-      if (key === "rock" || key === "hewn") point[key] = value;
+      const end = this.layout.points.get(e.point);
+      end.at = entranceEnd(e);
+      if (key === "rock" || key === "hewn") end[key] = value;
       this.layout.version++;
       this.carve();
     };
@@ -96,6 +119,11 @@ export class CavePlan {
     $("planEntranceWidth").addEventListener("input", () => changeDetail("width", Number($("planEntranceWidth").value)));
     $("planEntranceWidth").min = String(ENTRANCE_FT[0]);
     $("planEntranceWidth").max = String(ENTRANCE_FT[1]);
+    for (const key of ["width", "height"]) {
+      const input = $(`planPoint-${key}`);
+      [input.min, input.max] = POINT_FT[key].map(String);
+      input.addEventListener("input", () => changeDetail(key, Number(input.value)));
+    }
     $("planNet").addEventListener("change", () => (this.net = $("planNet").value));
     $("planRename").addEventListener("click", () => this.rename());
     $("planDelete").addEventListener("click", () => this.deleteSelected());
@@ -106,6 +134,7 @@ export class CavePlan {
   setTool(tool) {
     this.tool = tool;
     this.hover = null;
+    this.ghost = null;
     this.drawPreview();
   }
 
@@ -225,8 +254,10 @@ export class CavePlan {
 
   // The left button down, with a layout tool picked.
   down(e) {
+    if (this.tool === "passage" && !e.shiftKey) return this.placePassage();
     const picked = this.pick(this.pointerPx(e));
     if (picked) return (this.selected = picked);
+    if (this.tool === "passage") return (this.selected = null);
     const spot = this.tool === "entrance" && this.entranceAt();
     if (spot?.problem) return this.status(spot.problem);
     if (spot) {
@@ -248,11 +279,58 @@ export class CavePlan {
     this.selected = null;
   }
 
+  // Lays out the passage aimed, and selects its far point.
+  placePassage() {
+    const ghost = this.ghost;
+    if (!ghost) return this.status("place an entrance first, then lay passages out from inside");
+    if (ghost.problem) return this.status(ghost.problem);
+    this.remember();
+    this.selected = this.layout.extend(ghost.from, ghost.to ? { to: ghost.to } : { at: ghost.at }).id;
+    this.net = this.layout.points.get(this.selected).net;
+    this.carve();
+    this.aim();
+  }
+
+  // The passage aimed, as `ghost`: from the nearest spot on a passage to you to where you look,
+  // `reach` ft past you, or to the spot on another passage that's near it.
+  aim() {
+    const ray = this.ray()?.ray;
+    const here = this.here();
+    let from = null;
+    for (const net of this.layout.networks.keys()) {
+      const spot = this.layout.nearest(net, here);
+      if (spot && (!from || spot.d < from.d)) from = { ...spot, net };
+    }
+    if (!ray || !from) return (this.ghost = null);
+    const yaw = Math.atan2(ray.direction.x, ray.direction.z);
+    let up = Math.asin(ray.direction.y) + CAMERA.pitch;
+    if (Math.abs(up) < LEVEL_RAD) up = 0;
+    let at = here.map((v, k) => v + this.reach * [Math.sin(yaw) * Math.cos(up), Math.sin(up), Math.cos(yaw) * Math.cos(up)][k]);
+    // Near another passage, to it, but not back along where it goes on from.
+    const skip = new Set([from.id]);
+    for (const s of this.layout.segments.values()) if (s.from === from.id || s.to === from.id) skip.add(s.id);
+    let to = this.layout.nearest(from.net, at, skip);
+    if (to && to.d <= SNAP_FT && Math.hypot(...to.at.map((v, k) => v - from.at[k])) > JOIN_FT) at = to.at;
+    else to = null;
+    const start = configNear(this.layout, from);
+    const ends = [{ ...start, at: from.at }, { ...start, at }];
+    const length = Math.hypot(...at.map((v, k) => v - from.at[k]));
+    const problem = length < JOIN_FT ? "a passage has to be longer than that" : segmentShapes({ ends }).every((shape) => fits(shape, this.groundAt)) ? null : "a passage has to stay under the ground";
+    this.ghost = { from, to, at, ends, problem };
+  }
+
+  wheel(e) {
+    if (this.tool !== "passage") return false;
+    this.reach = Math.max(REACH_FT[0], Math.min(REACH_FT[2], this.reach + Math.sign(e.deltaY) * REACH_STEP_FT));
+    return true;
+  }
+
   move() {
     this.hover = this.tool === "entrance" ? this.entranceAt() : null;
+    if (this.tool === "passage") this.aim();
     this.drawPreview();
     // Why what's pointed at can't go there, while it can't.
-    const problem = this.hover?.problem ?? null;
+    const problem = this.hover?.problem ?? this.ghost?.problem ?? null;
     if (problem !== this.shownProblem) this.status(problem ?? "");
     this.shownProblem = problem;
   }
@@ -289,12 +367,14 @@ export class CavePlan {
       this.settled = true;
       this.carve();
     }
-    this.group.visible = inEarth || Boolean(this.tool);
+    this.group.visible = inEarth || Boolean(this.tool) || this.caves.view === "config";
     if (!this.group.visible) return;
     const { clientWidth: w, clientHeight: h } = this.canvas;
     for (const material of this.materials.values()) material.resolution.set(w, h);
     const made = `${this.layout.version} ${this.selected}`;
     if (made !== this.drawn) this.draw(made);
+    // You and the camera move without the pointer moving.
+    if (this.tool === "passage") this.move();
     if (this.tool) this.showDetails();
   }
 
@@ -340,9 +420,11 @@ export class CavePlan {
       child.geometry.dispose();
     }
     const spot = this.tool === "entrance" && this.hover?.entrance && this.hover;
-    if (!spot) return;
+    const ghost = this.tool === "passage" && this.ghost;
+    if (!spot && !ghost) return;
     const [positions, colors] = [[], []];
-    for (const { points, open } of entranceLines(spot.entrance, this.groundAt, spot.problem)) {
+    const lines = spot ? entranceLines(spot.entrance, this.groundAt, spot.problem) : passageLines(ghost);
+    for (const { points, open } of lines) {
       for (let i = 1; i < points.length; i++) {
         positions.push(...points[i - 1], ...points[i]);
         for (let k = 0; k < 2; k++) colors.push(...(open ? OPENING_RGB : STEEP_RGB));
@@ -373,8 +455,18 @@ export class CavePlan {
     $("planRename").hidden = this.net === NEW;
     $("planNetName").placeholder = this.net === NEW ? "new network's name" : `rename ${this.net} to`;
     const e = selected && this.layout.entrances.get(this.selected);
-    const d = e ?? this.details;
-    $("planWhat").textContent = e ? `entrance ${e.id} into ${e.net}` : selected ? `point ${selected.id} in ${selected.net}` : "the next entrance";
+    const point = selected && this.layout.points.get(this.selected);
+    const d = e ?? point ?? this.details;
+    $("planWhat").textContent = e ? `entrance ${e.id} into ${e.net}` : point ? `point ${point.id} in ${point.net}` : this.tool === "passage" ? "no point selected" : "the next entrance";
+    $("planEntranceDetails").hidden = Boolean(point) || (this.tool === "passage" && !e);
+    $("planPointDetails").hidden = !point;
+    $("planReachOut").textContent = `${this.reach} ft`;
+    if (point) {
+      for (const key of ["width", "height"]) {
+        if (document.activeElement !== $(`planPoint-${key}`)) $(`planPoint-${key}`).value = String(point[key]);
+        $(`planPoint-${key}Out`).textContent = `${point[key]} ft`;
+      }
+    }
     if (document.activeElement !== $("planRock")) $("planRock").value = String(d.rock);
     $("planHewn").checked = d.hewn;
     for (const button of document.querySelectorAll("[data-entrance-style]")) button.setAttribute("aria-pressed", String(button.dataset.entranceStyle === d.style));
@@ -384,6 +476,36 @@ export class CavePlan {
     $("planEntranceWidthOut").textContent = `${d.width} ft`;
     $("planDelete").disabled = !selected;
   }
+}
+
+// The config of the point a passage from spot `spot` (Layout's nearest) goes on from: the point's,
+// or on a segment, its nearer end's.
+function configNear(layout, spot) {
+  const segment = layout.segments.get(spot.id);
+  if (!segment) return configOf(layout.points.get(spot.id));
+  const ends = [segment.from, segment.to].map((id) => layout.points.get(id));
+  const d = (p) => Math.hypot(...p.at.map((v, k) => v - spot.at[k]));
+  return configOf(d(ends[0]) <= d(ends[1]) ? ends[0] : ends[1]);
+}
+
+// A passage aimed's lines, continent feet, each { points, open }: along its floor, a ring round
+// its far end's floor, and an arch at each end as wide and high as its passage; `open` false
+// where it can't go.
+function passageLines({ ends, problem }) {
+  const open = !problem;
+  const [a, b] = ends.map((end) => end.at);
+  const yaw = Math.atan2(b[0] - a[0], b[2] - a[2]);
+  const side = [Math.cos(yaw), 0, -Math.sin(yaw)];
+  const arch = ({ at, width, height }) => Array.from({ length: 17 }, (_, i) => {
+    const t = (i / 16) * Math.PI;
+    return at.map((v, k) => v + side[k] * Math.cos(t) * (width / 2) + (k === 1 ? Math.sin(t) * height : 0));
+  });
+  const ring = pointRing(ends[1]);
+  return [
+    { points: [a, b], open },
+    ...ends.flatMap((end) => arch(end).map((p, i, all) => ({ points: [p, all[Math.min(i + 1, all.length - 1)]], open }))),
+    ...ring.slice(1).map((p, i) => ({ points: [ring[i], p], open })),
+  ];
 }
 
 // A ring round a point's floor, as wide as its passage, continent feet.

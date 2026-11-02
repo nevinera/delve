@@ -96,6 +96,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M4 22 L24 4 L44 22" stroke="#a09080" stroke-width="2" fill="none"/><path d="M18 22 L18 15 A6 6 0 0 1 30 15 L30 22" stroke="#7fffe6" stroke-width="2" fill="#203040"/></svg>
         <span>place entrance</span><kbd class="create-key">J</kbd>
       </button>
+      <button type="button" data-tool="passage" data-key="k" aria-pressed="false" title="lay out passages from inside a cave, where you look">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M6 16 L22 12 L42 14" stroke="#4da6ff" stroke-width="2" fill="none"/><circle cx="22" cy="12" r="3" stroke="#4da6ff" stroke-width="2" fill="#203040"/><path d="M36 20 L36 10 A6 6 0 0 1 48 10" stroke="#4da6ff" stroke-width="1.5" stroke-dasharray="2 2" fill="none"/></svg>
+        <span>passage</span><kbd class="create-key">K</kbd>
+      </button>
     </div>
     <div class="create-tools" data-work="geo">
       <button type="button" data-tool="raise" data-key="h" aria-pressed="false" title="raise and lower the ground">
@@ -397,9 +401,10 @@
         <button type="button" id="marksDelete">delete</button>
       </div>
     </div>
-    <div data-config="entrance" hidden>
-      <p class="create-note">From above the ground, click a hillside to place an entrance there, held 10 ft in from its mouth: a tube into the hill, facing the way you look, ending at a point that passages go on from. C and V turn it, shift for finer turns. Its mouth has to be out in the open but for the bottom of it, and its far end under the ground; it's red where it isn't.</p>
-      <p class="create-note">Every cave is in a network. Name a new network before placing the entrance that starts it, or pick one to add another entrance to it. Click an entrance to select it: changes here change it, and carve straight away.</p>
+    <div data-config="entrance passage" hidden>
+      <p class="create-note" data-only="passage">From inside a cave, click to lay a passage out to where you look, <output id="planReachOut"></output> past you; the scroll wheel sets how far. It goes on from the nearest spot on a passage to you, splitting it there unless a point's within 8 ft. Aim near another passage to join it, making a loop. The new point's selected, to size here; shift-click picks another.</p>
+      <p class="create-note" data-only="entrance">From above the ground, click a hillside to place an entrance there, held 10 ft in from its mouth: a tube into the hill, facing the way you look, ending at a point that passages go on from. C and V turn it, shift for finer turns. Its mouth has to be out in the open but for the bottom of it, and its far end under the ground; it's red where it isn't.</p>
+      <p class="create-note" data-only="entrance">Every cave is in a network. Name a new network before placing the entrance that starts it, or pick one to add another entrance to it. Click an entrance to select it: changes here change it, and carve straight away.</p>
       <label>network <select id="planNet"><option value="">new network</option></select></label>
       <div class="create-way">
         <input id="planNetName" type="text" spellcheck="false" autocomplete="off" placeholder="new network's name">
@@ -410,6 +415,15 @@
         <select id="planRock"><option value="0">jagged</option><option value="1">smooth</option><option value="2">carved</option><option value="3">mined</option></select>
       </label>
       <label title="cut flat-faced, as by hand"><input type="checkbox" id="planHewn"> hewn</label>
+      <div id="planPointDetails" hidden>
+        <label>width <output id="planPoint-widthOut"></output>
+          <input id="planPoint-width" type="range" step="2" value="12">
+        </label>
+        <label>height <output id="planPoint-heightOut"></output>
+          <input id="planPoint-height" type="range" step="2" value="10">
+        </label>
+      </div>
+      <div id="planEntranceDetails">
       <div class="create-modes" role="group" aria-label="style">
         <button type="button" data-entrance-style="natural" aria-pressed="false" title="a round cave mouth">natural</button>
         <button type="button" data-entrance-style="mine" aria-pressed="false" title="a square mine entrance">mine</button>
@@ -426,6 +440,7 @@
       <div class="create-modes" role="group" aria-label="slope">
         <button type="button" data-entrance-slope="level" aria-pressed="false">level</button>
         <button type="button" data-entrance-slope="down" aria-pressed="false" title="down 1 ft in every 5">down</button>
+      </div>
       </div>
       <div class="create-way">
         <button type="button" id="planDelete">delete</button>
@@ -554,7 +569,7 @@
     </fieldset>
     <fieldset>
       <legend>caves</legend>
-      <label title="how the caves' rock is drawn: finished, as players see it, or as its 2 ft blocks">rock <select id="caveView"><option value="finished">finished</option><option value="blocks">blocks</option></select></label>
+      <label title="how the caves are drawn: their rock finished, as players see it, or as its 2 ft blocks, or config, their layout alone">rock <select id="caveView"><option value="finished">finished</option><option value="blocks">blocks</option><option value="config">config</option></select></label>
       <label title="each column's cave floors (gold) and ceilings (silver), points joined by lines, seen through the rock"><input type="checkbox" id="showHeightGrid"> height-grid</label>
       <label title="the edges of every face of the caves' rock, glowing; always shown from in the rock"><input type="checkbox" id="showCaveOutlines"> cave-outlines</label>
     </fieldset>
@@ -596,7 +611,7 @@
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, measure measures distances and circles, and path finds the shortest way on foot from one place to another, to find where ranges and cliffs can be crossed. Click a pin's head to open it</dd>
     <dt>build</dt><dd>place objects and templates, from the ones used lately or the library, draw floors, walls, rooms and roofs as slabs, draw stairs and ramps, and pick what's placed to move, turn, delete or make a template of</dd>
-    <dt>caves</dt><dd>lay out caves: place entrance puts an entrance into a hillside, starting or joining a cave network; go to takes you to the point or entrance you click</dd>
+    <dt>caves</dt><dd>lay out caves: place entrance puts an entrance into a hillside, starting or joining a cave network; passage lays passages out from inside, to where you look; go to takes you to the point or entrance you click</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, draw streams and rivers, and clear it away</dd>
   </dl>
 </div>

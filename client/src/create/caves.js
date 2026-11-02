@@ -13,14 +13,14 @@ export { CAVES_PATH };
 // out of; and the camera kept inside them. Each dig or fill can be undone, up to UNDOS of them.
 //
 // The rock's drawn as one of VIEWS: finished, smoothed as players see it (caveMesh), or blocks,
-// its voxels as cubes (caveBlocks).
+// its voxels as cubes (caveBlocks), or config, not at all, leaving the layout (cavePlan.js) alone.
 //
 // Two overlays show how the rock comes from the spans, each shown or hidden as a whole: the grid,
 // a point of light at each column's middle for each span's floor and ceiling, joined to the
 // neighbouring columns' by lines (floors gold, ceilings silver), seen through the rock; and lines,
 // every edge of the rock's faces drawn glowing over them.
 
-export const VIEWS = ["finished", "blocks"];
+export const VIEWS = ["finished", "blocks", "config"];
 const MESH_TILES = FULL_TILES;
 const BUILD_MS = 8; // how long making meshes may take a frame
 const UNDOS = 50;
@@ -357,7 +357,7 @@ export class Caves {
   // Draws the caves as they look from the earth, or as they look from in them or the open: from
   // the earth, the rock's faces' edges alone, in dull gray.
   fromEarth(on) {
-    this.group.visible = !on;
+    this.group.visible = !on && this.view !== "config";
     if (on) this.overlays.lines.visible = true;
     this.lineMaterial.color.set(on ? EARTH_LINE_RGB : LINE_RGB);
     this.lineMaterial.blending = on ? THREE.NormalBlending : THREE.AdditiveBlending;

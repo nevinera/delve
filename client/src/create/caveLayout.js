@@ -21,6 +21,9 @@ const LOW_RING = Math.PI / 4; // how far round from the bottom an entrance's mou
 export const ENTRANCE_DEFAULTS = { style: "natural", width: 12, length: 48, slope: "level", rock: 0, hewn: false };
 export const POINT_DEFAULTS = { width: 12, height: 10, qualities: [], rock: 0, hewn: false };
 export const PHASES = ["layout", "polish"];
+export const POINT_FT = { width: [12, 64], height: [10, 48] }; // the passage's sizes a point can have
+export const JOIN_FT = 8; // how near an existing point a passage joins it, not splitting
+const CONFIG = ["width", "height", "qualities", "rock", "hewn"]; // what a point keeps of its section
 
 // A value as JSON with its objects' keys sorted, to compare.
 const stable = (value) => JSON.stringify(value, (k, v) => (v && typeof v === "object" && !Array.isArray(v) ? Object.fromEntries(Object.entries(v).sort(([a], [b]) => (a < b ? -1 : 1))) : v));
@@ -126,6 +129,51 @@ export class Layout {
     this.version++;
   }
 
+  // The nearest spot on network `net`'s passages to `p`, continent feet, as { id, at, d }: a point's
+  // id, or a segment's with the spot on its line; null in a network with no points. Leaves out
+  // `skip`, a set of ids.
+  nearest(net, p, skip = new Set()) {
+    let best = null;
+    const consider = (id, at) => {
+      const d = Math.hypot(...at.map((v, k) => v - p[k]));
+      if (!best || d < best.d) best = { id, at, d };
+    };
+    for (const point of this.points.values()) if (point.net === net && !skip.has(point.id)) consider(point.id, point.at);
+    for (const s of this.segments.values()) {
+      if (s.net !== net || skip.has(s.id)) continue;
+      const [a, b] = [this.points.get(s.from).at, this.points.get(s.to).at];
+      const ab = b.map((v, k) => v - a[k]);
+      const t = Math.max(0, Math.min(1, ab.reduce((sum, v, k) => sum + v * (p[k] - a[k]), 0) / (ab.reduce((sum, v) => sum + v * v, 0) || 1)));
+      consider(s.id, lerp(a, b, t));
+    }
+    return best;
+  }
+
+  // The point at a spot `nearest` gave: the point itself, or on a segment, the end within JOIN_FT
+  // of it, or a new point splitting the segment there, with the config of its nearer end.
+  pointAt({ id, at }) {
+    const segment = this.segments.get(id);
+    if (!segment) return this.points.get(id);
+    const ends = [segment.from, segment.to].map((p) => this.points.get(p));
+    const [near] = ends.map((point) => ({ point, d: Math.hypot(...point.at.map((v, k) => v - at[k])) })).sort((a, b) => a.d - b.d);
+    if (near.d <= JOIN_FT) return near.point;
+    const split = this.addPoint(segment.net, at.map((v) => Math.round(v * 4) / 4), configOf(near.point));
+    this.segments.delete(id);
+    this.addSegment(segment.net, segment.from, split.id);
+    this.addSegment(segment.net, split.id, segment.to);
+    return split;
+  }
+
+  // A passage on from spot `from` (as `nearest` gives it): to a new point at `at`, with the config
+  // of the point it goes on from, or, with spot `to`, joining the passage there. Gives the
+  // passage's far point.
+  extend(from, { at = null, to = null } = {}) {
+    const start = this.pointAt(from);
+    const end = to ? this.pointAt(to) : this.addPoint(start.net, at.map((v) => Math.round(v * 4) / 4), configOf(start));
+    this.addSegment(start.net, start.id, end.id);
+    return end;
+  }
+
   // A point's segments.
   joined(pointId) {
     return [...this.segments.values()].filter((s) => s.from === pointId || s.to === pointId);
@@ -154,6 +202,7 @@ export class Layout {
 }
 
 export const isEntrance = (copy) => Boolean(copy.mouth);
+export const configOf = (point) => structuredClone(Object.fromEntries(CONFIG.map((key) => [key, point[key]])));
 
 // The shapes an element (as Layout's copyOf gives it) carves, as v2/caves.js's carve takes them.
 export function shapesOf(copy) {
@@ -259,7 +308,7 @@ export function shapeBox(shape) {
 }
 
 // Whether a shape stays ROOF_FT under the ground, over its middle and its corners.
-function fits(shape, groundAt) {
+export function fits(shape, groundAt) {
   const [[x0, , z0], [x1, top, z1]] = shapeBox(shape);
   const [x, , z] = shape.at;
   return [[x, z], [x0, z0], [x1, z0], [x0, z1], [x1, z1]].every(([a, b]) => top <= groundAt(a, b) - ROOF_FT);
