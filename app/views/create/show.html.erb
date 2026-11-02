@@ -88,9 +88,9 @@
       </button>
     </div>
     <div class="create-tools" data-work="caves" hidden>
-      <button type="button" data-tool="goto" data-key="h" aria-pressed="false" title="go to a cave's point or entrance, standing on its floor">
-        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M24 3 L24 17 M18 11 L24 17 L30 11 M14 21 L34 21" stroke="#c8d4e8" stroke-width="2" fill="none"/></svg>
-        <span>go to</span><kbd class="create-key">H</kbd>
+      <button type="button" data-tool="caveSelect" data-key="h" aria-pressed="false" title="select a cave's points and entrances, to change or delete them">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M6 16 L22 12 L42 14" stroke="#4da6ff" stroke-width="1" fill="none" opacity="0.5"/><circle cx="22" cy="12" r="3.5" fill="#ffe14d"/><rect x="14" y="4" width="16" height="16" fill="none" stroke="#ffe14d" stroke-width="1.5" stroke-dasharray="3 2"/></svg>
+        <span>select</span><kbd class="create-key">H</kbd>
       </button>
       <button type="button" data-tool="entrance" data-key="j" aria-pressed="false" title="place an entrance into a hillside, from above the ground, starting or joining a cave network">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M4 22 L24 4 L44 22" stroke="#a09080" stroke-width="2" fill="none"/><path d="M18 22 L18 15 A6 6 0 0 1 30 15 L30 22" stroke="#7fffe6" stroke-width="2" fill="#203040"/></svg>
@@ -103,6 +103,10 @@
       <button type="button" data-tool="polish" data-key="l" aria-pressed="false" title="edit the rock of a cave network being polished, by hand">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><rect x="10" y="10" width="8" height="8" stroke="#a09080" stroke-width="1.5" fill="#203040"/><rect x="18" y="10" width="8" height="8" stroke="#a09080" stroke-width="1.5" fill="#203040"/><rect x="18" y="2" width="8" height="8" stroke="#7fffe6" stroke-width="1.5" stroke-dasharray="2 2" fill="none"/><path d="M30 20 L40 6" stroke="#c8d4e8" stroke-width="2"/></svg>
         <span>polish</span><kbd class="create-key">L</kbd>
+      </button>
+      <button type="button" data-tool="goto" data-key="n" aria-pressed="false" title="go to a cave's point or entrance, standing on its floor">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M24 3 L24 17 M18 11 L24 17 L30 11 M14 21 L34 21" stroke="#c8d4e8" stroke-width="2" fill="none"/></svg>
+        <span>go to</span><kbd class="create-key">N</kbd>
       </button>
     </div>
     <div class="create-tools" data-work="geo">
@@ -405,7 +409,7 @@
         <button type="button" id="marksDelete">delete</button>
       </div>
     </div>
-    <div data-config="entrance passage" hidden>
+    <div data-config="caveSelect entrance passage" hidden>
       <p class="create-note" data-only="passage">reach <output id="planReachOut"></output> (scroll wheel)</p>
       <label>network <select id="planNet"><option value="">new network</option></select></label>
       <div class="create-way">
@@ -659,7 +663,7 @@
     <dt>manage</dt><dd>upload a world, download it with your changes, or start a new, empty one</dd>
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, measure measures distances and circles, and path finds the shortest way on foot from one place to another, to find where ranges and cliffs can be crossed. Click a pin's head to open it</dd>
     <dt>build</dt><dd>place objects and templates, from the ones used lately or the library, draw floors, walls, rooms and roofs as slabs, draw stairs and ramps, and pick what's placed to move, turn, delete or make a template of</dd>
-    <dt>caves</dt><dd>lay out caves: place entrance puts an entrance into a hillside, starting or joining a cave network; passage lays passages out from inside, to where you look; polish edits the rock of a network being polished by hand; go to takes you to the point or entrance you click</dd>
+    <dt>caves</dt><dd>lay out caves: select picks points and entrances to change or delete, never placing anything; place entrance puts an entrance into a hillside, starting or joining a cave network; passage lays passages out from inside, to where you look; polish edits the rock of a network being polished by hand; go to takes you to the point or entrance you click</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, draw streams and rivers, and clear it away</dd>
   </dl>
 </div>

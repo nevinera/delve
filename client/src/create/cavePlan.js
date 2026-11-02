@@ -7,7 +7,8 @@ import { CAMERA } from "./builder.js";
 import { reachOf } from "./caveQualities.js";
 import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, ROCK_FT, EXCLUSIVE, carvePlan, configOf, entranceEnd, entranceProblem, entranceRing, fits, mouthBehind, passageWarnings, rockProblem, segmentShapes, steep } from "./caveLayout.js";
 
-// The caves' layout tools (caveLayout.js). Entrance, from above the ground, places an entrance
+// The caves' layout tools (caveLayout.js). Select picks an entrance or point by its dot, or
+// nothing, and never places one. Entrance, from above the ground, places an entrance
 // held where the pointer meets it, HOLD_FT in from its mouth: a tube into the hillside, facing the
 // way the camera looks, turned with C and V, ending at a point passages go on from. Its mouth has
 // to be out in the air but for the bottom of it, and it's red where it isn't. A new entrance
@@ -70,7 +71,7 @@ export class CavePlan {
   // here(): where you stand, [x, y, z].
   constructor({ scene, camera, canvas, layout, caves, ray, groundHit, groundAt, here }) {
     Object.assign(this, { camera, canvas, layout, caves, ray, groundHit, groundAt, here });
-    this.tool = null; // "entrance" or "passage" while it's picked
+    this.tool = null; // "caveSelect", "entrance" or "passage" while it's picked
     this.reach = REACH_FT[1]; // how far past you a passage reaches
     this.ghost = null; // the passage aimed, { from, to, at, ends, problem }
     this.selected = null; // the id of the element selected
@@ -328,7 +329,7 @@ export class CavePlan {
   // The left button down, with a layout tool picked.
   down(e) {
     const picked = this.pick(this.pointerPx(e));
-    if (picked) return (this.selected = picked);
+    if (picked || this.tool === "caveSelect") return (this.selected = picked);
     if (this.tool === "passage") return this.placePassage();
     const spot = this.tool === "entrance" && this.entranceAt();
     if (spot?.problem) return this.status(spot.problem);
@@ -585,8 +586,9 @@ export class CavePlan {
     const e = selected && this.layout.entrances.get(this.selected);
     const point = selected && this.layout.points.get(this.selected);
     const d = e ?? point ?? this.details;
-    $("planWhat").textContent = e ? `entrance ${e.id} into ${e.net}` : point ? `point ${point.id} in ${point.net}` : this.tool === "passage" ? "no point selected" : "the next entrance";
-    $("planEntranceDetails").hidden = Boolean(point) || (this.tool === "passage" && !e);
+    const placing = this.tool === "entrance";
+    $("planWhat").textContent = e ? `entrance ${e.id} into ${e.net}` : point ? `point ${point.id} in ${point.net}` : placing ? "the next entrance" : "nothing selected";
+    $("planEntranceDetails").hidden = Boolean(point) || (!placing && !e);
     $("planPointDetails").hidden = !point;
     $("planReachOut").textContent = `${this.reach} ft`;
     if (point) {
