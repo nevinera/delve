@@ -533,7 +533,7 @@ export function zipSteps(first, second, { center, across, along }) {
 // { positions, indices }, continent feet: a curve from each point of one to the point of the
 // other it's zipped to, leaving the ground along its slope (normalAt(x, z), its upward normal),
 // toward `middle`, the middle of the cut, and reaching the rock along `axis`, the way into the
-// tube; `rings` segments each. Its triangles face either way.
+// tube; `rings` segments each, the rings between smoothed round. Its triangles face either way.
 export function lip(a, b, steps, { normalAt, middle, axis, rings = LIP_RINGS }) {
   const unit = (v) => {
     const length = Math.hypot(...v) || 1;
@@ -567,8 +567,22 @@ export function lip(a, b, steps, { normalAt, middle, axis, rings = LIP_RINGS }) 
       for (let k = 0; k < 3; k++) positions.push(h00 * g[k] + h10 * reach * from[i][k] + h01 * r[k] + h11 * reach * axis[k]);
     }
   }
-  const indices = [];
+  // The rings between smoothed round the loop, most in the middle, so the ground's square
+  // corners ease out before the rock and neighbouring curves don't fold over each other.
   const side = rings + 1;
+  const count = spokes.length - 1; // the last spoke is the first again
+  for (let n = 1; n < rings; n++) {
+    const weight = Math.sin((Math.PI * n) / rings);
+    for (let pass = 0; pass < LIP_SMOOTHING; pass++) {
+      const before = positions.slice();
+      for (let s = 0; s < count; s++) {
+        const [p, prev, next] = [s, (s + count - 1) % count, (s + 1) % count].map((k) => (k * side + n) * 3);
+        for (let k = 0; k < 3; k++) positions[p + k] = before[p + k] + weight * 0.5 * ((before[prev + k] + before[next + k]) / 2 - before[p + k]);
+      }
+      for (let k = 0; k < 3; k++) positions[(count * side + n) * 3 + k] = positions[n * 3 + k];
+    }
+  }
+  const indices = [];
   for (let s = 0; s + 1 < spokes.length; s++) {
     for (let n = 0; n < rings; n++) {
       const [p, q] = [s * side + n, (s + 1) * side + n];
@@ -579,3 +593,4 @@ export function lip(a, b, steps, { normalAt, middle, axis, rings = LIP_RINGS }) 
 }
 
 export const LIP_RINGS = 4; // segments along each of a lip's curves
+const LIP_SMOOTHING = 8; // passes smoothing a lip's rings round its loop
