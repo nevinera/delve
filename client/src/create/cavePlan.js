@@ -19,8 +19,8 @@ import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, ROCK_FT, EXCLUSIVE, 
 // Passage, from inside a cave, lays out passages: the new point goes the way you look, REACH_FT
 // from your feet, level when you look straight ahead (the camera at rest, the pointer in the
 // middle), the scroll wheel setting how far, and the passage goes on to it from the nearest
-// spot on a passage to you, splitting it there unless a point's within JOIN_FT. Aimed near
-// another passage, it snaps to it, to make a loop. A ghost of it shows as you aim, red where it
+// spot on a passage to you, splitting it there unless a point's within its passage's width
+// (Layout's joinAt). Aimed near another passage, it snaps to it, to make a loop. A ghost of it shows as you aim, red where it
 // can't go, too near a passage it doesn't join or another network (caveLayout.js's rockProblem)
 // among others, and orange, with a warning, where it's too steep to walk. Passages too steep to
 // walk are drawn orange. The new point's selected, so the panel can size it; a click on another's
@@ -376,7 +376,7 @@ export class CavePlan {
     for (const net of this.layout.networks.keys()) {
       if (this.layout.locked(net)) continue;
       const spot = this.layout.nearest(net, here);
-      if (spot && (!from || spot.d < from.d)) from = { ...spot, net };
+      if (spot && (!from || spot.d < from.d)) from = { ...this.layout.joinAt(spot), net };
     }
     if (!ray || !from) return (this.ghost = null);
     const yaw = Math.atan2(ray.direction.x, ray.direction.z);

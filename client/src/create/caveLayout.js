@@ -156,14 +156,24 @@ export class Layout {
     return best;
   }
 
-  // The point at a spot `nearest` gave: the point itself, or on a segment, the end within JOIN_FT
-  // of it, or a new point splitting the segment there, with the config of its nearer end.
-  pointAt({ id, at }) {
+  // The spot a passage from spot `spot` (as `nearest` gives it) goes from: the end of its segment
+  // nearer it, where that's within its passage's width (JOIN_FT at least), so a point isn't put
+  // where its passage would overlap another's; or else the spot itself.
+  joinAt(spot) {
+    const segment = this.segments.get(spot.id);
+    if (!segment) return spot;
+    const [near] = [segment.from, segment.to].map((id) => this.points.get(id)).map((point) => ({ point, d: Math.hypot(...point.at.map((v, k) => v - spot.at[k])) })).sort((a, b) => a.d - b.d);
+    return near.d <= Math.max(JOIN_FT, near.point.width) ? { ...spot, id: near.point.id, at: near.point.at, d: spot.d } : spot;
+  }
+
+  // The point at a spot `nearest` gave: the point itself, or on a segment, the end joinAt gives,
+  // or a new point splitting the segment there, with the config of its nearer end.
+  pointAt(spot) {
+    const { id, at } = this.joinAt(spot);
     const segment = this.segments.get(id);
     if (!segment) return this.points.get(id);
     const ends = [segment.from, segment.to].map((p) => this.points.get(p));
     const [near] = ends.map((point) => ({ point, d: Math.hypot(...point.at.map((v, k) => v - at[k])) })).sort((a, b) => a.d - b.d);
-    if (near.d <= JOIN_FT) return near.point;
     const split = this.addPoint(segment.net, at.map((v) => Math.round(v * 4) / 4), configOf(near.point));
     this.segments.delete(id);
     this.addSegment(segment.net, segment.from, split.id);

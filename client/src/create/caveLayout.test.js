@@ -127,6 +127,9 @@ describe("cave layout", () => {
     expect(split.width).toBe(20);
     expect(end.width).toBe(20);
     expect(layout.joined(split.id).length).toBe(3);
+    // Within a point's passage's width of it, from the point; past that, splitting.
+    expect(layout.joinAt(layout.nearest("n", [9, -40, 3])).id).toBe(a.id);
+    expect(layout.segments.has(layout.joinAt(layout.nearest("n", [46, -40, 3])).id)).toBe(true);
     // Near a point, from the point itself.
     const near = layout.extend(layout.nearest("n", [60, -40, 2]), { at: [64, -40, -40] });
     expect(layout.joined(b.id).map((s) => s.to)).toContain(near.id);
