@@ -18,17 +18,4 @@ describe("cave passage tool", () => {
     expect(tooClose(ab.id, d.id)).toBe(false);
     expect(tooClose(ab.id, c.id)).toBe(true);
   });
-
-  it("keeps what the layout was before a change, though the change is made in place", () => {
-    const layout = new Layout();
-    layout.addNetwork("n");
-    const point = layout.addPoint("n", [0, -60, 0], { width: 18 });
-    const plan = { layout, history: [] };
-    CavePlan.prototype.remember.call(plan, "n");
-    point.width = 30;
-    layout.setPhase("n", "polish");
-    const kept = plan.history[0].layout;
-    expect(kept.points.find((p) => p.id === point.id).width).toBe(18);
-    expect(kept.networks.find((n) => n.slug === "n").phase).toBe("layout");
-  });
 });

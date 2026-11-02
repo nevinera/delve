@@ -84,7 +84,8 @@ export class CavePlan {
     this.pointer = null; // where the pointer is on the canvas, [x, y] px, or null
     this.hovered = null; // the id of the entrance or point the pointer's on
     this.turn = 0; // degrees an entrance is turned from the way the camera looks
-    this.history = []; // { net, layout }: the layout as it was before each change to network `net`, latest last
+    this.histories = new Map(); // network -> what it was before each change to it, latest last (Layout's networkJSON)
+    this.lastChanged = null; // the network the latest change was to
     this.details = { ...ENTRANCE_DEFAULTS };
     this.adding = configOf(POINT_DEFAULTS); // add's options, which the points it places take
     this.net = NEW; // the network new entrances go into, or NEW
@@ -187,41 +188,43 @@ export class CavePlan {
     this.drawPreview();
   }
 
-  // Keeps the layout as it is, before a change to network `net`. Switching phase isn't kept:
-  // it's never undone.
+  // Keeps network `net` as it is, before a change to it. Switching phase isn't kept: it's never
+  // undone.
   remember(net) {
-    // A copy: changes are made in place, and would change what's kept.
-    this.history.push({ net, layout: structuredClone(this.layout.toJSON()) });
-    if (this.history.length > UNDOS) this.history.shift();
+    if (!this.histories.has(net)) this.histories.set(net, []);
+    const history = this.histories.get(net);
+    history.push(this.layout.networkJSON(net));
+    if (history.length > UNDOS) history.shift();
+    this.lastChanged = net;
   }
 
-  // Undoes the last layout change, but not one to a network being polished. Gives false where
-  // there's nothing it can undo.
-  undo() {
-    const last = this.history.at(-1);
+  // Undoes the last layout change to network `net`. Gives false where there's none.
+  undo(net) {
+    const last = this.histories.get(net)?.pop();
     if (!last) return false;
-    if (this.layout.locked(last.net)) {
-      alert(`the last layout change was to ${last.net}, which is being polished`);
-      return true;
-    }
-    this.history.pop();
-    this.restore(last);
+    this.restore(net, last);
     this.carve(false);
     return true;
   }
 
-  // Puts the layout back as it was in history entry `last`, keeping what's carved and each
-  // network's phase as it is now.
-  restore(last) {
-    const carved = this.layout.carved;
-    const phases = new Map([...this.layout.networks].map(([slug, n]) => [slug, n.phase]));
-    this.layout.load(last.layout);
-    this.layout.carved = carved;
-    for (const [slug, n] of this.layout.networks) if (phases.has(slug)) n.phase = phases.get(slug);
-    this.layout.version++;
+  // Puts network `net` back as it was in `last` (Layout's networkJSON), keeping what's carved and
+  // its phase; its history follows it where that has it named differently.
+  restore(net, last) {
+    this.layout.putNetwork(net, last);
+    const slug = last.network?.slug ?? null;
+    if (slug !== net) this.moveHistory(net, slug);
+    if (this.current === net) this.current = slug;
+    if (this.net === net) this.net = slug ?? NEW;
     if (!this.layout.get(this.selected)) this.selected = null;
     if (!this.layout.networks.has(this.net)) this.net = NEW;
     if (!this.layout.networks.has(this.current)) this.current = null;
+  }
+
+  // Moves network `from`'s history to `to`, or drops it with `to` null.
+  moveHistory(from, to) {
+    const history = this.histories.get(from);
+    this.histories.delete(from);
+    if (to && history) this.histories.set(to, history);
   }
 
   deleteSelected() {
@@ -241,8 +244,9 @@ export class CavePlan {
     if (!from || !to) return;
     const problem = this.lockedProblem(from) ?? this.nameProblem(to);
     if (problem) return alert(problem);
-    this.remember(to);
+    this.remember(from);
     this.layout.renameNetwork(from, to);
+    this.moveHistory(from, to);
     if (this.net === from) this.net = to;
     this.current = to;
     this.carve();
@@ -297,8 +301,9 @@ export class CavePlan {
   carve(revert = true) {
     const plan = carvePlan(this.layout, undefined, this.groundAt);
     if ((plan.fills.length || plan.opens.length) && !this.caves.carvePlan(plan, () => {}) && this.caves.refused) {
-      const last = revert && this.history.pop();
-      if (last) this.restore(last);
+      const net = this.lastChanged;
+      const last = revert && this.histories.get(net)?.pop();
+      if (last) this.restore(net, last);
       alert(this.caves.refused);
       return false;
     }

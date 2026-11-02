@@ -51,9 +51,10 @@ import { WaterBodies } from "./water.js";
 //   networks (cavePlan.js); in polish, blocks, sculpt, smooth, flatten and paint edit a network's
 //   rock by hand, the right button filling (cavePolish.js). Only the tools for the network's phase
 //   show, and place entrance only works above the ground. Picking a tool picks how the rock's
-//   drawn and whether the layout shows, which the panel can change after. Undo undoes hand edits
-//   while the current network's being polished, and layout changes otherwise; switching phase
-//   isn't undone, and going back to layout drops the hand edits' undos.
+//   drawn and whether the layout shows, which the panel can change after. Each network has its own
+//   undo: undo undoes the current network's hand edits while it's being polished, and its layout
+//   changes otherwise; switching phase isn't undone, and going back to layout drops the hand
+//   edits' undos.
 // - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
 //   more each time the ring's moved its radius. Its undo takes back the last scattering.
 
@@ -175,7 +176,7 @@ export class Tools {
     placed.caveProblem = (net) => (layout.locked(net) ? null : `${net} is still in layout; you can't add objects until it's being polished`);
     // Unlocking a network throws away its hand edits, and what's placed in it.
     this.plan.onUnlock = (net) => {
-      this.polish.undos = [];
+      this.polish.undos.delete(net);
       this.placed.dropCave(net);
     };
     this.paths = new Paths(scene, canvas.parentElement, renditions, (x, z) => this.surface(x, z), (text) => ($("pathStatus").textContent = text));
@@ -620,11 +621,12 @@ export class Tools {
     if (tool) this.pick(tool.dataset.tool);
   }
 
-  // Undoes the latest caves change: a hand edit while the current network's being polished, or
-  // else a layout change.
+  // Undoes the current network's latest change: a hand edit while it's being polished, or else
+  // a layout change.
   caveUndo() {
-    const done = this.layout.locked(this.plan.current) ? this.polish.undo() : this.plan.undo();
-    if (!done) alert("nothing to undo");
+    const net = this.plan.current;
+    const done = net && (this.layout.locked(net) ? this.polish.undo(net) : this.plan.undo(net));
+    if (!done) alert(net ? `nothing to undo in ${net}` : "nothing to undo");
   }
 
   // Draws the caves' rock as `view`, "finished" or "blocks", and shows the layout or not

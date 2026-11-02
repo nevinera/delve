@@ -213,3 +213,39 @@ describe("cave layout", () => {
     expect(slugOf("--")).toBe("");
   });
 });
+
+describe("a network kept and put back", () => {
+  it("puts one network back as it was, keeping its phase and leaving the others alone", () => {
+    const layout = new Layout();
+    layout.addNetwork("a");
+    layout.addNetwork("b");
+    const a = layout.addPoint("a", [0, -60, 0], { width: 18 });
+    const b = layout.addPoint("b", [500, -60, 0], { width: 18 });
+    const kept = layout.networkJSON("a");
+    a.width = 30;
+    layout.addPoint("a", [32, -60, 0]);
+    b.width = 40;
+    layout.setPhase("a", "polish");
+    layout.putNetwork("a", kept);
+    expect([...layout.points.values()].filter((p) => p.net === "a").map((p) => p.width)).toEqual([18]);
+    expect(layout.points.get(b.id).width).toBe(40);
+    expect(layout.networks.get("a").phase).toBe("polish");
+  });
+
+  it("takes back a rename, and a network that didn't exist", () => {
+    const layout = new Layout();
+    layout.addNetwork("a");
+    layout.addPoint("a", [0, -60, 0]);
+    const kept = layout.networkJSON("a");
+    layout.renameNetwork("a", "c");
+    layout.putNetwork("c", kept);
+    expect([...layout.networks.keys()]).toEqual(["a"]);
+    expect([...layout.points.values()].every((p) => p.net === "a")).toBe(true);
+    const none = layout.networkJSON("d");
+    layout.addNetwork("d");
+    layout.addPoint("d", [99, -60, 0]);
+    layout.putNetwork("d", none);
+    expect(layout.networks.has("d")).toBe(false);
+    expect([...layout.points.values()].some((p) => p.net === "d")).toBe(false);
+  });
+});

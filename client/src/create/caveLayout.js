@@ -94,6 +94,25 @@ export class Layout {
     this.version++;
   }
 
+  // Network `net` as it is, copied: its record (null where there's none) and its elements, to put
+  // back with putNetwork.
+  networkJSON(net) {
+    const mine = (elements) => [...elements.values()].filter((e) => e.net === net);
+    return structuredClone({ network: this.networks.get(net) ?? null, entrances: mine(this.entrances), points: mine(this.points), segments: mine(this.segments) });
+  }
+
+  // Puts network `net` back as `json` (networkJSON's) has it, maybe under another name, or gone
+  // where it has no record, leaving every other network as it is. The network keeps the phase it's
+  // in now.
+  putNetwork(net, json) {
+    const phase = this.networks.get(net)?.phase;
+    for (const elements of [this.entrances, this.points, this.segments]) for (const [id, e] of [...elements]) if (e.net === net) elements.delete(id);
+    this.networks.delete(net);
+    if (json.network) this.networks.set(json.network.slug, { ...structuredClone(json.network), phase: phase ?? json.network.phase });
+    for (const [elements, list] of [[this.entrances, json.entrances], [this.points, json.points], [this.segments, json.segments]]) for (const e of list) elements.set(e.id, structuredClone(e));
+    this.version++;
+  }
+
   // An entrance into network `net`, and the point at its far end, where passages start.
   addEntrance(net, details) {
     const entrance = { id: `e${this.next++}`, net, ...ENTRANCE_DEFAULTS, ...details };

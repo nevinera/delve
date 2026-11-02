@@ -18,7 +18,7 @@ import { setBrush } from "./caveMaterial.js";
 // Smooth, flatten and paint work on the rock's surface within their size of where you aim, and
 // that patch of it is lit. Blocks and sculpt carve and fill with the rock picked, or "same", the
 // rock round where they work; paint with the rock picked. The number keys pick: 1 same, 2 to 5
-// the rocks. Each click or drag undoes on its own, back UNDOS of them.
+// the rocks. Each click or drag undoes on its own, back UNDOS of them in each network.
 
 export const SHAPES = ["sphere", "cube", "cylinder", "box"];
 export const TOOLS = ["caveBlocks", "caveSculpt", "caveSmooth", "caveFlatten", "cavePaint"];
@@ -41,7 +41,7 @@ export class CavePolish {
     this.brush = { shape: "sphere", size: 2, fill: null, paint: 0 }; // fill: the rock blocks and sculpt use, or null for the same
     this.stroke = null; // the drag being worked: { before, net, op, level, down, last }
     this.box = null; // the box brush's corners, { a, b, net, op }, voxels
-    this.undos = []; // the tiles each edit changed, as they were before it
+    this.undos = new Map(); // network -> the tiles each edit to it changed, as they were before it
     this.previewed = null; // what smooth's outlines were worked out for
     this.ghost = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: GHOST_RGB, depthTest: false, transparent: true, opacity: 0.8 }));
     this.adds = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: ADD_RGB, depthTest: false, transparent: true, opacity: 0.8 }));
@@ -119,7 +119,7 @@ export class CavePolish {
     if (this.tool === "caveBlocks") {
       const at = middleOf(op === "fill" ? aimed.air : aimed.rock);
       const cube = { kind: "box", at, half: [0.9, 0.9, 0.9], yaw: 0 };
-      return this.remember(this.work(cube, op, aimed.net));
+      return this.remember(aimed.net, this.work(cube, op, aimed.net));
     }
     if (this.tool === "caveSculpt" && this.brush.shape === "box") {
       if (!this.box || this.box.b) this.box = { a: aimed.rock, b: null, net: aimed.net, op };
@@ -139,7 +139,7 @@ export class CavePolish {
 
   up() {
     if (!this.stroke) return;
-    if (this.stroke.before.size) this.remember(this.stroke.before);
+    if (this.stroke.before.size) this.remember(this.stroke.net, this.stroke.before);
     this.stroke = null;
     this.previewed = null;
   }
@@ -185,15 +185,18 @@ export class CavePolish {
     return (ci, cj) => (Number.isFinite(this.caves.groundCell(ci, cj)) ? this.caves.groundCell(ci, cj) : null);
   }
 
-  remember(before) {
+  // Keeps `before`, as an edit to network `net` gave it, to undo.
+  remember(net, before) {
     if (!before) return;
-    this.undos.push(before);
-    if (this.undos.length > UNDOS) this.undos.shift();
+    if (!this.undos.has(net)) this.undos.set(net, []);
+    const undos = this.undos.get(net);
+    undos.push(before);
+    if (undos.length > UNDOS) undos.shift();
   }
 
-  // Undoes the last hand edit: gives false where there's none.
-  undo() {
-    const before = this.undos.pop();
+  // Undoes the last hand edit to network `net`: gives false where there's none.
+  undo(net) {
+    const before = this.undos.get(net)?.pop();
     if (!before) return false;
     this.caves.restore(before);
     this.previewed = null;
@@ -216,7 +219,7 @@ export class CavePolish {
       return true;
     }
     if (e.key === "Enter" && this.boxShape()) {
-      this.remember(this.work(this.boxShape(), this.box.op, this.box.net));
+      this.remember(this.box.net, this.work(this.boxShape(), this.box.op, this.box.net));
       return true;
     }
     if (e.key === "Escape" && this.box) {
