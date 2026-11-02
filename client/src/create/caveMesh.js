@@ -52,7 +52,7 @@ const THEME_LOOK = {
 };
 const SHADE = 0.1; // how much each vertex's color varies, lighter or darker
 const WALK_SLOPE = Math.tan((WALK_DEG * Math.PI) / 180);
-const BLEND_FLOORS = false; // whether floor and rock colors blend across faces, or each face is one or the other
+const BLEND_FLOORS = true; // whether floor and rock colors blend across faces, or each face is one or the other
 
 // Whether column (ci, cj)'s ground lies in a cave's air.
 export function opensAt(world, ci, cj) {
