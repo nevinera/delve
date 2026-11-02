@@ -41,6 +41,7 @@ const C2_RUN = 33; // the longest run of empty cells a c2 digit stands for
 export const MAX_SPAN_FT = (TWO - 1) / 4;
 const MOUTH_FT = 2; // air opened through the ground reaches this far over it
 export const ROOF_FT = 4; // the least rock over air that doesn't open through the ground
+export const THIN_ROOF_FT = 1; // with `mouth`, the least rock over air that doesn't
 const MIN_ROCK_FT = 0.25; // spans closer than this join
 const MAX_SPANS = 63;
 const MIN_AIR_FT = 2;
@@ -129,8 +130,8 @@ export function fillRock(column, low, high, minAir = MIN_ROCK_FT) {
 // the tile's columns, made when `make` and it has none, or null; groundAt(ci, cj): the ground's
 // height at a continent cell's middle, or null where its cells aren't read. New air takes the
 // stone of the air it's dug from, the one most of it meets, or `stone` (always, with `own`).
-// With `mouth`, air opens through the ground where it would leave less than ROOF_FT of rock over
-// it; without, it stops ROOF_FT under the ground. Gives the "tx,tz" of the tiles changed.
+// With `mouth`, air opens through the ground where it would leave less than THIN_ROOF_FT of rock
+// over it; without, it stops ROOF_FT under the ground. Gives the "tx,tz" of the tiles changed.
 export function carve(shape, columnsOf, groundAt, { fill = false, stone = allStone(0, false), own = false, mouth = true } = {}) {
   const [x0, z0, x1, z1] = shapeBounds(shape);
   const cuts = [];
@@ -138,8 +139,9 @@ export function carve(shape, columnsOf, groundAt, { fill = false, stone = allSto
     for (let ci = Math.floor(x0 / CELL_FT); ci <= Math.floor(x1 / CELL_FT); ci++) {
       const r = fill ? reachCell(shape, ci, cj) : reach(shape, (ci + 0.5) * CELL_FT, (cj + 0.5) * CELL_FT);
       const ground = r && groundAt(ci, cj);
-      if (ground == null || r[0] >= ground + MOUTH_FT) continue;
-      const top = fill ? Math.min(r[1], ground + MOUTH_FT) : mouth ? (r[1] > ground - ROOF_FT ? ground + MOUTH_FT : r[1]) : Math.min(r[1], ground - ROOF_FT);
+      // Air over the ground isn't the caves': only rock filled up to a mouth's lip is.
+      if (ground == null || r[0] >= ground + (fill ? MOUTH_FT : 0)) continue;
+      const top = fill ? Math.min(r[1], ground + MOUTH_FT) : mouth ? (r[1] > ground - THIN_ROOF_FT ? ground + MOUTH_FT : r[1]) : Math.min(r[1], ground - ROOF_FT);
       const [low, high] = [quarter(r[0]), quarter(top)];
       if (high > low) cuts.push({ ci, cj, low, high });
     }
