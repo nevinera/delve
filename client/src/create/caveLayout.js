@@ -259,12 +259,15 @@ export class Layout {
 }
 
 export const isEntrance = (copy) => Boolean(copy.mouth);
-// The warnings for a passage `ends` ({ at, width, height } twice) laid out in network `net`: too
-// steep to walk, or too near a passage it doesn't join, or another network. `joins`: the ids of the
-// points it joins, whose segments it can come near.
-export function passageWarnings(layout, net, ends, joins = []) {
-  const out = [];
-  if (steep(...ends)) out.push(`steeper than ${WALK_DEG}°, so it can't be walked`);
+// The warnings for a passage `ends` ({ at, width, height } twice): too steep to walk.
+export function passageWarnings(layout, net, ends) {
+  return steep(...ends) ? [`steeper than ${WALK_DEG}°, so it can't be walked`] : [];
+}
+
+// Why a passage `ends` ({ at, width, height } twice) laid out in network `net` can't go there, too
+// near a passage it doesn't join, or another network, or null. `joins`: the ids of the points it
+// joins, whose segments it can come near.
+export function rockProblem(layout, net, ends, joins = []) {
   let nearest = null;
   for (const s of layout.segments.values()) {
     if (joins.includes(s.from) || joins.includes(s.to)) continue;
@@ -272,12 +275,10 @@ export function passageWarnings(layout, net, ends, joins = []) {
     const least = s.net === net ? ROCK_FT : NETWORK_GAP_FT;
     if (gap < least && (!nearest || gap - least < nearest.short)) nearest = { s, gap, short: gap - least };
   }
-  if (nearest) {
-    const { s, gap } = nearest;
-    const left = gap > 0 ? `only ${Math.floor(gap)} ft of rock` : "no rock";
-    out.push(s.net === net ? `${left} between it and ${s.id}; leave ${ROCK_FT} ft` : `${left} between it and ${s.net}; leave ${NETWORK_GAP_FT} ft between networks`);
-  }
-  return out;
+  if (!nearest) return null;
+  const { s, gap } = nearest;
+  const left = gap > 0 ? `only ${Math.floor(gap)} ft of rock` : "no rock";
+  return s.net === net ? `${left} between it and ${s.id}; leave ${ROCK_FT} ft` : `${left} between it and ${s.net}; leave ${NETWORK_GAP_FT} ft between networks`;
 }
 
 export const configOf = (point) => structuredClone(Object.fromEntries(CONFIG.map((key) => [key, point[key]])));

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { VOXEL_FT } from "../v2/caves.js";
-import { ENTRANCE_DEFAULTS, Layout, REACH_SEGMENTS, carvePlan, passageWarnings, rockBetween, seedOf, steep, entranceEnd, entranceProblem, mouthBehind, shapesOf } from "./caveLayout.js";
+import { ENTRANCE_DEFAULTS, Layout, REACH_SEGMENTS, carvePlan, passageWarnings, rockBetween, rockProblem, seedOf, steep, entranceEnd, entranceProblem, mouthBehind, shapesOf } from "./caveLayout.js";
 import { slugOf } from "./cavePlan.js";
 import { Caves } from "./caves.js";
 
@@ -174,10 +174,10 @@ describe("cave layout", () => {
     layout.addSegment("far-run", c.id, d.id);
     // Over it, 16 ft up and 10 ft across: 6 ft of rock.
     const over = [end([0, -44, 10]), end([64, -44, 10])];
-    expect(passageWarnings(layout, "n", over)).toEqual([`only 6 ft of rock between it and ${ab.id}; leave 8 ft`]);
-    expect(passageWarnings(layout, "n", over, [a.id])).toEqual([]);
+    expect(rockProblem(layout, "n", over)).toBe(`only 6 ft of rock between it and ${ab.id}; leave 8 ft`);
+    expect(rockProblem(layout, "n", over, [a.id])).toBe(null);
     // Near another network.
-    expect(passageWarnings(layout, "n", [end([0, -60, 380]), end([64, -60, 380])])).toEqual(["only 8 ft of rock between it and far-run; leave 32 ft between networks"]);
+    expect(rockProblem(layout, "n", [end([0, -60, 380]), end([64, -60, 380])])).toBe("only 8 ft of rock between it and far-run; leave 32 ft between networks");
     expect(passageWarnings(layout, "n", [end([0, -60, 200]), end([10, -40, 200])])).toEqual(["steeper than 50°, so it can't be walked"]);
   });
 

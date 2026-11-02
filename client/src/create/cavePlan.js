@@ -5,7 +5,7 @@ import { LineMaterial } from "three/examples/jsm/lines/LineMaterial.js";
 import { NET_SLUG } from "../v2/caves.js";
 import { CAMERA } from "./builder.js";
 import { reachOf } from "./caveQualities.js";
-import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, ROCK_FT, EXCLUSIVE, carvePlan, configOf, entranceEnd, entranceProblem, entranceRing, fits, mouthBehind, passageWarnings, segmentShapes, steep } from "./caveLayout.js";
+import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, ROCK_FT, EXCLUSIVE, carvePlan, configOf, entranceEnd, entranceProblem, entranceRing, fits, mouthBehind, passageWarnings, rockProblem, segmentShapes, steep } from "./caveLayout.js";
 
 // The caves' layout tools (caveLayout.js). Entrance, from above the ground, places an entrance
 // held where the pointer meets it, HOLD_FT in from its mouth: a tube into the hillside, facing the
@@ -21,31 +21,33 @@ import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, ROCK_FT, EXCLUSIVE, 
 // middle), the scroll wheel setting how far, and the passage goes on to it from the nearest
 // spot on a passage to you, splitting it there unless a point's within JOIN_FT. Aimed near
 // another passage, it snaps to it, to make a loop. A ghost of it shows as you aim, red where it
-// can't go, and orange, with a warning, where it can but shouldn't: too steep to walk, or too
-// near a passage it doesn't join, or another network (caveLayout.js's passageWarnings).
-// Passages too steep to walk are drawn orange. The new point's selected, so the panel can size it; shift-click picks another.
+// can't go, too near a passage it doesn't join or another network (caveLayout.js's rockProblem)
+// among others, and orange, with a warning, where it's too steep to walk. Passages too steep to
+// walk are drawn orange. The new point's selected, so the panel can size it; a click on another's
+// dot picks it.
 //
 // A network can be burned in, locking its layout so its rock can be polished by hand, its lines
 // drawn dim; unlocking, asked first in the panel, carves it again from its layout, throwing away
 // its hand edits.
 //
-// The layout's drawn as glowing lines, as thick, in feet, as what they stand for is big, so they
-// thin with distance: an entrance as its mouth's ring and its tube, a point as a ring on its floor.
+// The layout's drawn as dots, an entrance's at its mouth and a point's on its floor, joined by
+// faint lines; the one hovered or selected shows its size in faint lines too: an entrance its
+// mouth's ring and its tube, a point a ring on its floor and a rod as tall as its passage.
 
-const PICK_PX = 10; // how near the pointer an element is picked
+const PICK_PX = 14; // how near the pointer an entrance or point is picked
 const CORE_RGB = [0.3, 0.65, 1];
-const GLOW_RGB = [0.05, 0.18, 0.7];
 const SELECTED_RGB = [1, 0.88, 0.3];
 const STEEP_RGB = [1, 0.25, 0.2];
 const OPENING_RGB = [0.45, 1, 0.9];
 const WARN_RGB = [1, 0.6, 0.15];
 const LOCKED_RGB = [0.35, 0.4, 0.5];
-const ARC_FT = 0.15; // a segment's line, thin and faint beside the points'
-const ARC_OPACITY = 0.45;
+const LINE_FT = 0.12; // the faint lines: segments, and rings and rods round what's hovered
+const LINE_OPACITY = 0.3;
+const DOT_GEOMETRY = new THREE.SphereGeometry(1, 16, 10); // an entrance or point, to pick
+const DOT_SCALE = 0.02; // a dot's radius for each foot it is from the camera, so it's the same size on screen
 const TURN_DEG = 15; // how far C and V turn an entrance, or with shift FINE_TURN_DEG
 const FINE_TURN_DEG = 5;
 const HOLD_FT = 10; // how far in from an entrance's mouth the pointer holds it
-const GLOW = 3; // how much wider the glow is than the line
 const UNDOS = 100;
 const REACH_FT = [8, 32, 96]; // how far past you a passage reaches: least, at first, most
 const REACH_STEP_FT = 4;
@@ -73,6 +75,8 @@ export class CavePlan {
     this.ghost = null; // the passage aimed, { from, to, at, ends, problem }
     this.selected = null; // the id of the element selected
     this.hover = null; // the entrance the pointer would place, { entrance, problem }
+    this.pointer = null; // where the pointer is on the canvas, [x, y] px, or null
+    this.hovered = null; // the id of the entrance or point the pointer's on
     this.turn = 0; // degrees an entrance is turned from the way the camera looks
     this.shownProblem = null; // why what's pointed at can't go there, as last shown
     this.history = []; // the layout as it was before each change, latest last
@@ -94,7 +98,8 @@ export class CavePlan {
       new THREE.LineBasicMaterial({ vertexColors: true }),
       new THREE.LineBasicMaterial({ vertexColors: true, depthTest: false, depthWrite: false, transparent: true, opacity: 0.25 }),
     ];
-    this.materials = new Map(); // "width,glow,faint" -> LineMaterial
+    this.lineMaterial = new LineMaterial({ linewidth: LINE_FT, worldUnits: true, vertexColors: true, depthTest: false, depthWrite: false, transparent: true, opacity: LINE_OPACITY });
+    this.dotMaterials = new Map(); // "r,g,b" -> MeshBasicMaterial
     this.bind();
   }
 
@@ -296,26 +301,20 @@ export class CavePlan {
     return { entrance, problem: entranceProblem(entrance, this.groundAt) };
   }
 
-  // The element at the pointer, nearest the camera: an entrance, by any of its lines, or a point,
-  // by its middle or its ring.
+  // The entrance or point whose dot is at the pointer, nearest the camera.
   pick([px, py]) {
     let best = null;
-    const consider = (id, at, lines) => {
-      const middle = this.screen(at);
-      const near =
-        (middle && Math.hypot(middle[0] - px, middle[1] - py) <= PICK_PX) ||
-        lines.some((points) => {
-          const seen = points.map((p) => this.screen(p));
-          return seen.some((a, i) => i > 0 && a && seen[i - 1] && toSegment([px, py], seen[i - 1], a) <= PICK_PX / 2 + 2);
-        });
-      if (!near) return;
+    const consider = (id, at) => {
+      const seen = this.screen(at);
+      if (!seen || Math.hypot(seen[0] - px, seen[1] - py) > PICK_PX) return;
       const d = this.camera.position.distanceTo(new THREE.Vector3(...at));
       if (!best || d < best.d) best = { id, d };
     };
-    for (const e of this.layout.entrances.values()) consider(e.id, e.mouth, entranceLines(e, () => -Infinity).map((line) => line.points));
-    for (const p of this.layout.points.values()) consider(p.id, p.at, [pointRing(p)]);
+    for (const e of this.layout.entrances.values()) consider(e.id, e.mouth);
+    for (const p of this.layout.points.values()) consider(p.id, p.at);
     return best?.id ?? null;
   }
+
 
   // Where go to takes the builder for the pointer at [px, py]: the floor of a point, or of an
   // entrance's far end, or null.
@@ -328,10 +327,9 @@ export class CavePlan {
 
   // The left button down, with a layout tool picked.
   down(e) {
-    if (this.tool === "passage" && !e.shiftKey) return this.placePassage();
     const picked = this.pick(this.pointerPx(e));
     if (picked) return (this.selected = picked);
-    if (this.tool === "passage") return (this.selected = null);
+    if (this.tool === "passage") return this.placePassage();
     const spot = this.tool === "entrance" && this.entranceAt();
     if (spot?.problem) return this.status(spot.problem);
     if (spot && this.lockedProblem(this.net)) return this.status(this.lockedProblem(this.net));
@@ -396,13 +394,17 @@ export class CavePlan {
     else to = null;
     const ends = [{ ...start, at: from.at }, { ...start, at }];
     const length = Math.hypot(...at.map((v, k) => v - from.at[k]));
-    const problem =
-      length < JOIN_FT ? "a passage has to be longer than that" : to && this.tooClose(from, to) ? "a passage can't join a point within two links of where it starts" : segmentShapes({ ends }).every((shape) => fits(shape, this.groundAt)) ? null : "a passage has to stay under the ground";
     const joins = [from, to].filter(Boolean).flatMap((spot) => {
       const segment = this.layout.segments.get(spot.id);
       return segment ? [segment.from, segment.to] : [spot.id];
     });
-    this.ghost = { from, to, at, ends, problem, warnings: passageWarnings(this.layout, from.net, ends, joins) };
+    const problem =
+      length < JOIN_FT
+        ? "a passage has to be longer than that"
+        : to && this.tooClose(from, to)
+          ? "a passage can't join a point within two links of where it starts"
+          : (rockProblem(this.layout, from.net, ends, joins) ?? (segmentShapes({ ends }).every((shape) => fits(shape, this.groundAt)) ? null : "a passage has to stay under the ground"));
+    this.ghost = { from, to, at, ends, problem, warnings: passageWarnings(this.layout, from.net, ends) };
   }
 
   // Whether a passage from spot `from` to spot `to` (each a point or a spot on a segment, as
@@ -429,7 +431,8 @@ export class CavePlan {
     return true;
   }
 
-  move() {
+  move(e) {
+    if (e?.clientX !== undefined) this.pointer = this.pointerPx(e);
     this.hover = this.tool === "entrance" ? this.entranceAt() : null;
     if (this.tool === "passage") this.aim();
     this.drawPreview();
@@ -474,51 +477,64 @@ export class CavePlan {
     this.group.visible = inEarth || Boolean(this.tool) || this.caves.view === "config";
     if (!this.group.visible) return;
     const { clientWidth: w, clientHeight: h } = this.canvas;
-    for (const material of this.materials.values()) material.resolution.set(w, h);
-    const made = `${this.layout.version} ${this.selected}`;
+    this.lineMaterial.resolution.set(w, h);
+    this.hovered = this.pointer && this.tool ? this.pick(this.pointer) : null;
+    const made = `${this.layout.version} ${this.selected} ${this.hovered}`;
     if (made !== this.drawn) this.draw(made);
+    for (const dot of this.drawing.children) if (dot.geometry === DOT_GEOMETRY) dot.scale.setScalar(this.camera.position.distanceTo(dot.position) * DOT_SCALE);
     // You and the camera move without the pointer moving.
     if (this.tool === "passage") this.move();
     if (this.tool) this.showDetails();
   }
 
-  // A line through `points` (continent feet), `width` ft thick, colored `rgb`, glowing, or faint
-  // and not glowing with `faint`.
-  line(points, width, rgb, faint = false) {
-    for (const glow of faint ? [false] : [true, false]) {
-      const geometry = new LineGeometry();
-      geometry.setPositions(points.flat());
-      geometry.setColors(points.flatMap(() => (!glow ? rgb : rgb === CORE_RGB ? GLOW_RGB : rgb.map((v) => v * 0.4))));
-      const line = new Line2(geometry, this.material(glow ? width * GLOW : width, glow, faint));
-      line.renderOrder = glow ? 11 : 12;
-      line.computeLineDistances();
-      this.drawing.add(line);
-    }
+  // A faint line through `points` (continent feet), colored `rgb`.
+  line(points, rgb) {
+    const geometry = new LineGeometry();
+    geometry.setPositions(points.flat());
+    geometry.setColors(points.flatMap(() => rgb));
+    const line = new Line2(geometry, this.lineMaterial);
+    line.renderOrder = 12;
+    line.computeLineDistances();
+    this.drawing.add(line);
   }
 
-  material(width, glow, faint = false) {
-    const key = `${width.toFixed(2)},${glow},${faint}`;
-    if (!this.materials.has(key)) {
-      this.materials.set(key, new LineMaterial({ linewidth: width, worldUnits: true, vertexColors: true, depthTest: false, depthWrite: false, transparent: true, opacity: glow ? 0.35 : faint ? ARC_OPACITY : 1, blending: glow ? THREE.AdditiveBlending : THREE.NormalBlending }));
-    }
-    return this.materials.get(key);
+  // A dot at `at` (continent feet), colored `rgb`: an entrance or point, to pick.
+  dot(at, rgb) {
+    const key = rgb.join(",");
+    if (!this.dotMaterials.has(key)) this.dotMaterials.set(key, new THREE.MeshBasicMaterial({ color: new THREE.Color(...rgb), depthTest: false, depthWrite: false, transparent: true }));
+    const dot = new THREE.Mesh(DOT_GEOMETRY, this.dotMaterials.get(key));
+    dot.position.set(...at);
+    dot.renderOrder = 13;
+    this.drawing.add(dot);
   }
 
   // Draws the entrances, each its tube and mouth's ring, the points, each a ring round its floor,
   // and the segments, each a faint line between them, only showing what's joined; what's selected
-  // in yellow.
+  // in yellow. Entrances and points are dots, with faint rings and rods for their size where
+  // they're hovered or selected.
   draw(made) {
     this.drawn = made;
     for (const child of [...this.drawing.children]) {
       this.drawing.remove(child);
-      child.geometry.dispose();
+      if (child.geometry !== DOT_GEOMETRY) child.geometry.dispose();
     }
     const rgbOf = (id, rgb) => (id === this.selected ? SELECTED_RGB : this.layout.locked(this.layout.get(id)?.net) ? LOCKED_RGB : rgb);
-    for (const e of this.layout.entrances.values()) for (const { points } of entranceLines(e, () => -Infinity)) this.line(points, Math.max(0.25, e.width / 32), rgbOf(e.id, OPENING_RGB));
-    for (const p of this.layout.points.values()) this.line(pointRing(p), Math.max(0.25, p.width / 32), rgbOf(p.id, CORE_RGB));
+    const shown = (id) => id === this.selected || id === this.hovered;
+    for (const e of this.layout.entrances.values()) {
+      this.dot(e.mouth, rgbOf(e.id, OPENING_RGB));
+      this.line([e.mouth, this.layout.points.get(e.point).at], rgbOf(e.id, OPENING_RGB));
+      if (shown(e.id)) for (const { points } of entranceLines(e, () => -Infinity)) this.line(points, rgbOf(e.id, OPENING_RGB));
+    }
+    for (const p of this.layout.points.values()) {
+      this.dot(p.at, rgbOf(p.id, CORE_RGB));
+      if (shown(p.id)) {
+        this.line(pointRing(p), rgbOf(p.id, CORE_RGB));
+        this.line([p.at, [p.at[0], p.at[1] + p.height, p.at[2]]], rgbOf(p.id, CORE_RGB));
+      }
+    }
     for (const s of this.layout.segments.values()) {
       const [a, b] = [s.from, s.to].map((id) => this.layout.points.get(id));
-      this.line([a.at, b.at], ARC_FT, rgbOf(s.id, steep(a, b) ? WARN_RGB : CORE_RGB), true);
+      this.line([a.at, b.at], rgbOf(s.id, steep(a, b) ? WARN_RGB : CORE_RGB));
     }
   }
 
@@ -652,9 +668,3 @@ function entranceLines(entrance, groundAt, problem = null) {
   return out;
 }
 
-// How far point p is from the segment a to b, in pixels.
-function toSegment([px, py], [ax, ay], [bx, by]) {
-  const [dx, dy] = [bx - ax, by - ay];
-  const t = Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy || 1)));
-  return Math.hypot(px - ax - t * dx, py - ay - t * dy);
-}
