@@ -1,4 +1,5 @@
 import { hash2, facets, valueNoise } from "../world/noise.js";
+import { WALK_DEG } from "./growth.js";
 import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, floorAt, isHewn, smoothFloor, stonePart, themeOf } from "../v2/caves.js";
 
 // Mesh data for a tile's caves (v2/caves.js), without three.js, so it can be tested. The rock's
@@ -12,6 +13,10 @@ import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, floorAt, isHewn, smoothFloor, ston
 // rock is squared off. A floor's vertex is on the smooth floor walked on (v2/caves.js's floorAt),
 // not the voxels' steps, so feet meet it. Faces look into the air, so from outside a cave its rock
 // isn't drawn.
+//
+// Floors that can be walked on, no steeper than WALK_DEG, are drawn lighter (THEME_LOOK's floor),
+// and all else the rock's own color, so you can see where you can go; the colors blend across
+// the faces between.
 //
 // Each theme draws the rock its own way (THEME_LOOK): vertices are drawn toward their
 // neighbours', rounding off the columns' grid, then pushed in or out by noise along the way the
@@ -40,12 +45,13 @@ const SKY = 2;
 // relax: how far toward its neighbours' a vertex is drawn (passes: how many times over); bumpFt:
 // how far noise pushes it in or out, the noise's features about waveFt apart.
 const THEME_LOOK = {
-  jagged: { rgb: [112, 104, 96], floor: [92, 86, 78], relax: 0.25, passes: 1, bumpFt: 2.4, waveFt: 5 },
-  smooth: { rgb: [118, 110, 100], floor: [98, 92, 84], relax: 1, passes: 2, bumpFt: 0.4, waveFt: 12 },
-  carved: { rgb: [146, 134, 114], floor: [124, 114, 98], relax: 1, passes: 1, bumpFt: 0, waveFt: 1 },
-  mined: { rgb: [104, 96, 88], floor: [86, 78, 70], relax: 0.8, passes: 1, bumpFt: 0.7, waveFt: 3 },
+  jagged: { rgb: [112, 104, 96], floor: [142, 132, 118], relax: 0.25, passes: 1, bumpFt: 2.4, waveFt: 5 },
+  smooth: { rgb: [118, 110, 100], floor: [148, 138, 122], relax: 1, passes: 2, bumpFt: 0.4, waveFt: 12 },
+  carved: { rgb: [146, 134, 114], floor: [176, 162, 136], relax: 1, passes: 1, bumpFt: 0, waveFt: 1 },
+  mined: { rgb: [104, 96, 88], floor: [134, 124, 110], relax: 0.8, passes: 1, bumpFt: 0.7, waveFt: 3 },
 };
 const SHADE = 0.1; // how much each vertex's color varies, lighter or darker
+const WALK_SLOPE = Math.tan((WALK_DEG * Math.PI) / 180);
 
 // Whether column (ci, cj)'s ground lies in a cave's air.
 export function opensAt(world, ci, cj) {
@@ -259,7 +265,9 @@ export function caveMesh(tx, tz, world) {
     const index = positions.length / 3;
     positions.push(at[0] - ox, at[1], at[2] - oz);
     themes.push(CAVE_THEMES.indexOf(here.theme));
-    const rgb = here.floor ? look.floor : look.rgb;
+    const walked = (x, z) => floorAt(spans, x, z, here.floor, smoothOf);
+    const steep = here.floor && Math.hypot(walked(at[0] + 1, at[2]) - walked(at[0] - 1, at[2]), walked(at[0], at[2] + 1) - walked(at[0], at[2] - 1)) / 2 > WALK_SLOPE;
+    const rgb = here.floor && !steep ? look.floor : look.rgb;
     const shade = 1 + (hash2(a * 3 + c, b * 5 - c) * 2 - 1) * SHADE;
     colors.push(...rgb.map((v) => Math.min(1, (v / 255) * shade)));
     vertices.set(key, index);
