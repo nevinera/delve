@@ -372,7 +372,7 @@ body.create {
   display: none;
 }
 
-.create-tools[data-work="geo"]:not([hidden]) {
+.create-tools:is([data-work="geo"], [data-work="caves"]):not([hidden]) {
   display: grid;
   gap: 4px;
 }
@@ -381,7 +381,7 @@ body.create {
   display: none;
 }
 
-.create-tools[data-work="geo"] button {
+.create-tools:is([data-work="geo"], [data-work="caves"]) button {
   flex-direction: row;
   justify-content: flex-start;
   gap: 4px;
@@ -389,7 +389,7 @@ body.create {
   font-size: 11px;
 }
 
-.create-tools[data-work="geo"] :is(canvas, svg) {
+.create-tools:is([data-work="geo"], [data-work="caves"]) :is(canvas, svg) {
   flex: none;
   width: 28px;
   height: 14px;

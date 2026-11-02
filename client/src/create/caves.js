@@ -13,14 +13,15 @@ export { CAVES_PATH };
 // out of; and the camera kept inside them. Each dig or fill can be undone, up to UNDOS of them.
 //
 // The rock's drawn as one of VIEWS: finished, smoothed as players see it (caveMesh), or blocks,
-// its voxels as cubes (caveBlocks), or config, not at all, leaving the layout (cavePlan.js) alone.
+// its voxels as cubes (caveBlocks), mixed, finished with the blocks' edges faint through it, or
+// config, not at all, leaving the layout (cavePlan.js) alone.
 //
 // Two overlays show how the rock comes from the spans, each shown or hidden as a whole: the grid,
 // a point of light at each column's middle for each span's floor and ceiling, joined to the
 // neighbouring columns' by lines (floors gold, ceilings silver), seen through the rock; and lines,
 // every edge of the rock's faces drawn glowing over them.
 
-export const VIEWS = ["finished", "blocks", "config"];
+export const VIEWS = ["finished", "blocks", "mixed", "config"];
 const MESH_TILES = FULL_TILES;
 const BUILD_MS = 8; // how long making meshes may take a frame
 const UNDOS = 50;
@@ -53,6 +54,7 @@ export class Caves {
     scene.add(this.overlays.lines);
     this.pointMaterial = new THREE.PointsMaterial({ size: POINT_PX, sizeAttenuation: false, vertexColors: true, depthWrite: false, transparent: true });
     this.gridMaterial = new THREE.LineBasicMaterial({ vertexColors: true, depthWrite: false, transparent: true, opacity: 0.6 });
+    this.blockLineMaterial = new THREE.LineBasicMaterial({ color: LINE_RGB, transparent: true, opacity: 0.2, blending: THREE.AdditiveBlending, depthTest: false, depthWrite: false });
     this.lineMaterial = new THREE.LineBasicMaterial({ color: LINE_RGB, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
     this.onMouths = null; // (plate keys) => void, when the ground at mouths changes
     // The ground the caves draw round mouths, in the ground's own material, groundMaterial(tx, tz),
@@ -420,6 +422,18 @@ export class Caves {
     lines.position.copy(mesh.position);
     this.overlays.lines.add(lines);
     mesh.userData.overlays = [lines];
+    if (this.view === "mixed") {
+      const blocks = caveBlocks(tx, tz, this.world);
+      const faces = new THREE.BufferGeometry();
+      faces.setAttribute("position", new THREE.BufferAttribute(blocks.positions, 3));
+      faces.setIndex(new THREE.BufferAttribute(blocks.indices, 1));
+      const edges = new THREE.LineSegments(new THREE.EdgesGeometry(faces), this.blockLineMaterial);
+      faces.dispose();
+      edges.position.copy(mesh.position);
+      edges.renderOrder = 9;
+      this.group.add(edges);
+      mesh.userData.overlays.push(edges);
+    }
     if (data.ground) {
       const earth = new THREE.BufferGeometry();
       earth.setAttribute("position", new THREE.BufferAttribute(data.ground.positions, 3));
