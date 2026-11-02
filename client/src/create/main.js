@@ -248,6 +248,8 @@ function start(world, changes, fresh) {
   $("showCurtains").addEventListener("change", showLines);
   // Showing biomes outlines their areas and tints the ground but that drawn in full.
   const TINT = BIOME_NAMES.map((name) => new THREE.Color(BIOMES[name]).toArray());
+  caves.setView($("caveView").value);
+  $("caveView").addEventListener("change", () => caves.setView($("caveView").value));
   caves.show("grid", $("showHeightGrid").checked);
   $("showHeightGrid").addEventListener("change", () => caves.show("grid", $("showHeightGrid").checked));
   $("showBiomes").addEventListener("change", () => {

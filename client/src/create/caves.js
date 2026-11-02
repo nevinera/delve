@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { CAVES_PATH, TILE_COLUMNS, VOXEL_FT, allStone, carve, cavesPath, decodeCaves, emptyColumns, encodeCaves, tileIndex } from "../v2/caves.js";
 import { CELL_FT, PLATE_TILES, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial } from "./caveMaterial.js";
-import { caveMesh, opensAt } from "./caveMesh.js";
+import { caveBlocks, caveMesh, opensAt } from "./caveMesh.js";
 import { EMPTY_FT, FULL_TILES } from "./ground.js";
 
 export { CAVES_PATH };
@@ -12,11 +12,15 @@ export { CAVES_PATH };
 // left out of the ground drawn in full (Ground's holes); what the builder stands on and is kept
 // out of; and the camera kept inside them. Each dig or fill can be undone, up to UNDOS of them.
 //
+// The rock's drawn as one of VIEWS: finished, smoothed as players see it (caveMesh), or blocks,
+// its voxels as cubes (caveBlocks).
+//
 // Two overlays show how the rock comes from the spans, each shown or hidden as a whole: the grid,
 // a point of light at each column's middle for each span's floor and ceiling, joined to the
 // neighbouring columns' by lines (floors gold, ceilings silver), seen through the rock; and lines,
 // every edge of the rock's faces drawn glowing over them.
 
+export const VIEWS = ["finished", "blocks"];
 const MESH_TILES = FULL_TILES;
 const BUILD_MS = 8; // how long making meshes may take a frame
 const UNDOS = 50;
@@ -39,6 +43,7 @@ export class Caves {
     scene.add(this.group);
     this.meshes = new Map(); // "tx,tz" -> its mesh, or null where there's no rock to draw
     this.stale = new Set(); // "tx,tz" of tiles whose meshes want making again
+    this.view = VIEWS[0];
     // The rock's faces sit a little back, so lines drawn over their edges show.
     this.material = Object.assign(caveMaterial(), { polygonOffset: true, polygonOffsetFactor: 1, polygonOffsetUnits: 1 });
     // The grid's drawn on its own, after the rest, hidden only by the builder (drawOver); the lines
@@ -261,6 +266,13 @@ export class Caves {
     renderer.autoClear = true;
   }
 
+  // Draws the rock as `view`, one of VIEWS.
+  setView(view) {
+    if (view === this.view || !VIEWS.includes(view)) return;
+    this.view = view;
+    for (const key of this.meshes.keys()) this.stale.add(key);
+  }
+
   // Shows or hides an overlay: "grid" or "lines".
   show(overlay, shown) {
     this.overlays[overlay].visible = shown;
@@ -281,7 +293,7 @@ export class Caves {
     this.stale.delete(key);
     const old = this.meshes.get(key);
     if (old) this.drop(old);
-    const data = caveMesh(tx, tz, this.world);
+    const data = (this.view === "blocks" ? caveBlocks : caveMesh)(tx, tz, this.world);
     if (!data) return this.meshes.set(key, null);
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute("position", new THREE.BufferAttribute(data.positions, 3));

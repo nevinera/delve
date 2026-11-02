@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { TILE_COLUMNS, VOXEL_FT, carve, cavesPath, emptyColumns, fillRock, openAir } from "../v2/caves.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
-import { caveMesh } from "./caveMesh.js";
+import { caveBlocks, caveMesh } from "./caveMesh.js";
 import { Caves } from "./caves.js";
 
 // Flat ground at `height`, everywhere, with its cells all one color.
@@ -83,6 +83,30 @@ describe("caves", () => {
     expect(caves.holes(5, 5)).toBe(null);
     // Nothing's meshed far from caves.
     expect(caveMesh(4, 4, caves.world)).toBe(null);
+  });
+
+  it("draws dug rock as blocks, each face on the voxels' grid and facing into the air", () => {
+    const caves = new Caves({ add() {} }, flat(50));
+    // A box 8 ft wide and high, 80 ft long, its floor at 10.
+    caves.dig({ kind: "box", at: [128, 14, 128], half: [40, 4, 4], yaw: 0 });
+    const mesh = caveBlocks(0, 0, caves.world);
+    const at = (n) => [0, 1, 2].map((k) => mesh.positions[n * 3 + k]);
+    for (let t = 0; t < mesh.indices.length; t += 3) {
+      const [a, b, c] = [0, 1, 2].map((k) => at(mesh.indices[t + k]));
+      for (const p of [a, b, c]) for (const v of p) expect(v % VOXEL_FT).toBeCloseTo(0);
+      const [u, v] = [b.map((x, k) => x - a[k]), c.map((x, k) => x - a[k])];
+      const normal = [u[1] * v[2] - u[2] * v[1], u[2] * v[0] - u[0] * v[2], u[0] * v[1] - u[1] * v[0]];
+      const middle = [0, 1, 2].map((k) => (a[k] + b[k] + c[k]) / 3);
+      // A step along the normal from the face is in the air, and a step back is rock.
+      const length = Math.hypot(...normal);
+      const step = (d) => middle.map((x, k) => x + (normal[k] / length) * d);
+      expect(caves.solid(...step(0.5))).toBe(false);
+      expect(caves.solid(...step(-0.5))).toBe(true);
+    }
+    // 40 columns by 4: floor and ceiling a face a column, each wall a face a column along it.
+    expect(mesh.indices.length / 6).toBe(40 * 4 * 2 + 40 * 2 + 4 * 2);
+    caves.setView("blocks");
+    expect(caves.view).toBe("blocks");
   });
 
   it("stands the builder on a cave's floor under the ground, and keeps it out of rock", () => {

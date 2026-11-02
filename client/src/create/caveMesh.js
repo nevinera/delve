@@ -299,3 +299,64 @@ const CUBE_EDGES = [
   [0, 2], [1, 3], [4, 6], [5, 7], // along z
   [0, 4], [1, 5], [2, 6], [3, 7], // up
 ];
+
+// Tile (tx, tz)'s cave rock as its voxels, as caveMesh gives it but blocky: a face on each side of
+// each VOXEL_FT cube of air whose neighbour is rock, runs of faces up a column's side joined into
+// one. Air over the ground isn't the caves', so it has no faces against it. Each face is flat,
+// shaded a little lighter or darker than its neighbours so the blocks show.
+export function caveBlocks(tx, tz, world) {
+  if (!world.caved(tx, tz)) return null;
+  const [ci0, cj0] = [tx * TILE_COLUMNS, tz * TILE_COLUMNS];
+  const positions = [];
+  const colors = [];
+  const themes = [];
+  const indices = [];
+  // Whether the voxel whose middle is at height y in column (ci, cj) is open: air or sky.
+  const open = (ci, cj, y) => y > world.ground(ci, cj) || world.spans(ci, cj).some((s) => s.floor < y && y < s.ceiling);
+  const face = (corners, span, part, shade) => {
+    const theme = CAVE_THEMES[themeOf(span.stone[part])];
+    const look = THEME_LOOK[theme] ?? THEME_LOOK[CAVE_THEMES[0]];
+    const rgb = (part === 2 ? look.floor : look.rgb).map((v) => Math.min(1, (v / 255) * (1 + shade * SHADE)));
+    const n = positions.length / 3;
+    for (const [x, y, z] of corners) {
+      positions.push(x * VOXEL_FT, y, z * VOXEL_FT);
+      colors.push(...rgb);
+      themes.push(CAVE_THEMES.indexOf(theme));
+    }
+    indices.push(n, n + 1, n + 2, n, n + 2, n + 3);
+  };
+  const SIDES = [
+    [1, 0, (i, j) => [[i + 1, j], [i + 1, j + 1]]],
+    [-1, 0, (i, j) => [[i, j + 1], [i, j]]],
+    [0, 1, (i, j) => [[i + 1, j + 1], [i, j + 1]]],
+    [0, -1, (i, j) => [[i, j], [i + 1, j]]],
+  ];
+  for (let j = 0; j < TILE_COLUMNS; j++) {
+    for (let i = 0; i < TILE_COLUMNS; i++) {
+      const [ci, cj] = [ci0 + i, cj0 + j];
+      const ground = world.ground(ci, cj);
+      const shade = (k) => hash2(ci * 7 + k, cj * 13 - k) * 2 - 1;
+      for (const span of world.spans(ci, cj)) {
+        // The floor, facing up, and the ceiling, facing down, under the ground.
+        if (!open(ci, cj, span.floor - VOXEL_FT / 2)) face([[i, span.floor, j], [i, span.floor, j + 1], [i + 1, span.floor, j + 1], [i + 1, span.floor, j]], span, 2, shade(span.floor));
+        if (span.ceiling < ground && !open(ci, cj, span.ceiling + VOXEL_FT / 2)) face([[i, span.ceiling, j], [i + 1, span.ceiling, j], [i + 1, span.ceiling, j + 1], [i, span.ceiling, j + 1]], span, 0, shade(span.ceiling));
+        // Each side, in runs of voxels whose neighbour that way is rock.
+        for (const [di, dj, edge] of SIDES) {
+          const [[ax, az], [bx, bz]] = edge(i, j);
+          let start = null;
+          const top = Math.min(span.ceiling, Math.max(span.floor, Math.ceil(ground / VOXEL_FT) * VOXEL_FT));
+          for (let y = span.floor; y <= top; y += VOXEL_FT) {
+            const shut = y < top && !open(ci + di, cj + dj, y + VOXEL_FT / 2);
+            if (shut && start === null) start = y;
+            if (!shut && start !== null) {
+              face([[ax, start, az], [bx, start, bz], [bx, y, bz], [ax, y, az]], span, 1, shade(start + di * 3 + dj * 5));
+              start = null;
+            }
+          }
+        }
+      }
+    }
+  }
+  if (!indices.length) return null;
+  return { positions: Float32Array.from(positions), colors: Float32Array.from(colors), themes: Float32Array.from(themes), indices: Uint32Array.from(indices) };
+}
