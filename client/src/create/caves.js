@@ -25,6 +25,7 @@ const UNDOS = 50;
 // How far the camera's kept from rock, all round: the rock's drawn smoothed and bumped up to
 // about this far into its voxels' air.
 const CAMERA_FT = 2.5;
+const EDGE_OPACITY = 0.6; // how dark the blocks' edges are
 const DRAWN_FT = 1; // how far the camera's kept short of drawn rock it'd look through
 const EITHER_SIDE = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }); // for rays to meet rock from behind
 // Which ways round the camera rock's looked for: along the axes and the cube's corners.
@@ -52,6 +53,7 @@ export class Caves {
     this.overlays = { lines: new THREE.Group() };
     this.overlays.lines.visible = false;
     scene.add(this.overlays.lines);
+    this.edgeMaterial = new THREE.LineBasicMaterial({ color: 0x000000, transparent: true, opacity: EDGE_OPACITY }); // the blocks' edges
     this.lineMaterial = new THREE.LineBasicMaterial({ color: LINE_RGB, transparent: true, opacity: 0.7, blending: THREE.AdditiveBlending, depthWrite: false });
     this.onMouths = null; // (plate keys) => void, when the ground at mouths changes
     // The ground the caves draw round mouths, in the ground's own material, groundMaterial(tx, tz),
@@ -480,6 +482,14 @@ export class Caves {
     lines.position.copy(mesh.position);
     this.overlays.lines.add(lines);
     mesh.userData.overlays = [lines];
+    if (data.edges?.length) {
+      const edges = new THREE.BufferGeometry();
+      edges.setAttribute("position", new THREE.BufferAttribute(data.edges, 3));
+      const outlines = new THREE.LineSegments(edges, this.edgeMaterial);
+      outlines.position.copy(mesh.position);
+      this.group.add(outlines);
+      mesh.userData.overlays.push(outlines);
+    }
     if (data.lips?.length && this.clutterMeshes) {
       const clutter = this.clutterMeshes(mouthClutter(tx, tz, data, { entrances: this.entrances(), biomeAt: this.biomeAt, patternAt: (x, z) => this.patternAt(x, z) }), [0, 0]);
       for (const piece of clutter) this.clutterGroup.add(piece);

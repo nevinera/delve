@@ -5,7 +5,8 @@ import { setBrush } from "./caveMaterial.js";
 
 // The caves' polish tools: hand edits to the rock of a cave network being polished (cavePlan.js),
 // its 2 ft voxels changed where you aim, from inside it.
-// - blocks: a click breaks the voxel aimed at, and a right-click places one against it.
+// - blocks: a click breaks the voxel aimed at, and a right-click places one against it, the face
+//   aimed at lit, which it's broken through or placed against.
 // - sculpt: the sphere, cube and upright cylinder brushes, sized with [ and ], carve as you drag,
 //   or fill with the right button. The box brush spans two voxels clicked, the button of the
 //   second saying whether it carves or fills; then [ and ] shrink and grow the face nearest
@@ -29,6 +30,7 @@ const ROCKS = 4;
 const UNDOS = 10;
 const GHOST_RGB = 0x7fffe6;
 const ADD_RGB = 0xffa040; // smooth's outlines: blocks it fills
+const [FACE_RGB, FACE_OPACITY] = [0xffffff, 0.35]; // the face blocks aims at
 const $ = (id) => document.getElementById(id);
 const voxelOf = (p) => p.map((v) => Math.floor(v / VOXEL_FT));
 const middleOf = (voxel) => voxel.map((i) => (i + 0.5) * VOXEL_FT);
@@ -45,6 +47,12 @@ export class CavePolish {
     this.previewed = null; // what smooth's outlines were worked out for
     this.ghost = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: GHOST_RGB, depthTest: false, transparent: true, opacity: 0.8 }));
     this.adds = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: ADD_RGB, depthTest: false, transparent: true, opacity: 0.8 }));
+    // Blocks lights the face aimed at, which a block's broken through or placed against.
+    this.face = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: FACE_RGB, transparent: true, opacity: FACE_OPACITY, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    this.face.renderOrder = 12;
+    this.face.frustumCulled = false;
+    this.face.visible = false;
+    scene.add(this.face);
     for (const lines of [this.ghost, this.adds]) {
       lines.renderOrder = 12;
       lines.frustumCulled = false;
@@ -90,16 +98,18 @@ export class CavePolish {
   }
 
   // What the pointer's aimed at: where it meets rock, the voxel of rock there and of air before
-  // it, the network that air's in, which way the ray looks, and whether it looks down.
+  // it, across the face between them, `out` of the rock, the network that air's in, which way
+  // the ray looks, and whether it looks down.
   aim() {
     const ray = this.ray()?.ray;
     const hit = ray && this.caves.hit(ray);
     if (!hit) return null;
     const way = ray.direction.toArray();
-    const air = voxelOf(hit.map((v, k) => v - way[k] * 0.5));
+    const { rock, out } = faceAt(hit, way);
+    const air = rock.map((v, k) => v + out[k]);
     const [x, y, z] = middleOf(air);
     const span = this.caves.spans(Math.floor(x / VOXEL_FT), Math.floor(z / VOXEL_FT))?.find((s) => s.floor <= y && y <= s.ceiling);
-    return { hit, rock: voxelOf(hit.map((v, k) => v + way[k] * 0.5)), air, net: span?.net ?? null, way, down: way[1] < 0 };
+    return { hit, rock, air, out, net: span?.net ?? null, way, down: way[1] < 0 };
   }
 
   // Why an edit can't be made where `aimed` is, or null where it can.
@@ -250,6 +260,7 @@ export class CavePolish {
   // surface tools, the patch of rock lit, and for smooth, the blocks it would change outlined.
   drawGhost(aimed) {
     let geometry = null;
+    let face = null;
     const box = this.boxShape();
     const surface = SURFACE.has(this.tool);
     const r = this.brush.size * VOXEL_FT;
@@ -257,7 +268,11 @@ export class CavePolish {
       const shape = box ?? { at: middleOf(this.box.a), half: [1, 1, 1] };
       geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(...shape.half.map((v) => v * 2 + 0.2))).translate(...shape.at);
     } else if (aimed && !surface && this.tool) {
-      if (this.tool === "caveBlocks" || this.brush.shape === "box") geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(VOXEL_FT, VOXEL_FT, VOXEL_FT)).translate(...middleOf(aimed.rock));
+      if (this.tool === "caveBlocks") {
+        face = faceGeometry(aimed);
+        geometry = new THREE.EdgesGeometry(face);
+      }
+      else if (this.brush.shape === "box") geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(VOXEL_FT, VOXEL_FT, VOXEL_FT)).translate(...middleOf(aimed.rock));
       else if (this.brush.shape === "sphere") geometry = new THREE.WireframeGeometry(new THREE.SphereGeometry(r, 12, 8)).translate(...aimed.hit);
       else if (this.brush.shape === "cylinder") geometry = new THREE.EdgesGeometry(new THREE.CylinderGeometry(r, r, r * 2, 16)).translate(...aimed.hit);
       else geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(r * 2, r * 2, r * 2)).translate(...aimed.hit);
@@ -277,6 +292,9 @@ export class CavePolish {
     this.ghost.visible = Boolean(geometry);
     this.adds.geometry = adds ?? new THREE.BufferGeometry();
     this.adds.visible = Boolean(adds);
+    this.face.geometry.dispose();
+    this.face.geometry = face ?? new THREE.BufferGeometry();
+    this.face.visible = Boolean(face);
   }
 
   // The blocks smoothing `shape` in network `net` would change, worked out on copies of the
@@ -308,6 +326,36 @@ export class CavePolish {
     }
     return { removes: outlines(opened), adds: outlines(filled) };
   }
+}
+
+// The face of the rock a ray the way `way` meets at `hit`, on the voxels' grid: the voxel of rock,
+// and which way `out` of it the face looks, the grid plane nearest the hit the one it's on.
+export function faceAt(hit, way) {
+  const off = hit.map((v) => Math.abs(v / VOXEL_FT - Math.round(v / VOXEL_FT)));
+  const axis = [0, 1, 2].reduce((best, k) => (off[k] < off[best] ? k : best), 0);
+  const out = [0, 0, 0];
+  out[axis] = way[axis] > 0 ? -1 : 1;
+  const rock = voxelOf(hit.map((v, k) => v + way[k] * 0.01));
+  rock[axis] = Math.round(hit[axis] / VOXEL_FT) - (out[axis] > 0 ? 1 : 0);
+  return { rock, out };
+}
+
+// The face `aimed` gives, a square on the voxels' grid, as a geometry.
+function faceGeometry({ rock, out }) {
+  const axis = out.findIndex((v) => v !== 0);
+  const [u, v] = [0, 1, 2].filter((k) => k !== axis);
+  const plane = (rock[axis] + (out[axis] > 0 ? 1 : 0)) * VOXEL_FT;
+  const corners = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([a, b]) => {
+    const p = [0, 0, 0];
+    p[axis] = plane;
+    p[u] = (rock[u] + a) * VOXEL_FT;
+    p[v] = (rock[v] + b) * VOXEL_FT;
+    return p;
+  });
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(corners.flat(), 3));
+  geometry.setIndex([0, 1, 2, 0, 2, 3]);
+  return geometry;
 }
 
 // The edges of `voxels`, each [i, j, k] (x, height, z), as one geometry, or null for none.

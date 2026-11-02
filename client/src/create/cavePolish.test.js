@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { allStone } from "../v2/caves.js";
 import { Caves } from "./caves.js";
-import { flatten, reshape, smooth } from "./cavePolish.js";
+import { faceAt, flatten, reshape, smooth } from "./cavePolish.js";
+import { caveBlocks } from "./caveMesh.js";
 
 const span = (floor, ceiling, net = "n") => ({ floor, ceiling, stone: allStone(0), net });
 
@@ -31,5 +32,26 @@ describe("cave polish", () => {
     expect(caves.spans(2, 2)[0].stone).not.toEqual(red);
     caves.restore(before);
     expect([...caves.tiles]).toEqual(was);
+  });
+});
+
+describe("blocks", () => {
+  it("aims at the face a ray meets, even glancing along the grid", () => {
+    // Looking down and a little along x onto the floor at y 10, in voxel 5's column.
+    expect(faceAt([10.9, 10, 4.2], [0.1, -0.99, 0])).toEqual({ rock: [5, 4, 2], out: [0, 1, 0] });
+    // Looking along +x at a wall at x 12, the hit close to a voxel's corner.
+    expect(faceAt([12, 9.95, 4.05], [0.99, -0.1, 0.1])).toEqual({ rock: [6, 4, 2], out: [-1, 0, 0] });
+  });
+
+  it("outlines every block", () => {
+    const caves = new Caves({ add() {} }, { heightAt: () => 50, cellHeightAt: () => 50 });
+    // A box 8 ft long, 4 wide and high: 4 by 2 by 2 voxels.
+    caves.dig({ kind: "box", at: [124, 14, 124], half: [4, 2, 2], yaw: 0 });
+    const { edges } = caveBlocks(0, 0, caves.world);
+    // Each face of the box has a square of edges round each of its blocks' faces, give or take
+    // those shared: floor and ceiling 4 by 2, the long sides 4 by 2, the ends 2 by 2.
+    const faces = 2 * 8 + 2 * 8 + 2 * 4;
+    expect(edges.length / 6).toBeGreaterThan(faces * 2);
+    for (let n = 1; n < edges.length; n += 3) expect(edges[n]).toBeGreaterThan(11.9);
   });
 });
