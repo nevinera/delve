@@ -202,7 +202,7 @@ export class CavePlan {
 
   // Why network `net`'s layout can't change, or null where it can.
   lockedProblem(net) {
-    return net && this.layout.locked(net) ? `${net} is burned in; unlock it to change its layout` : null;
+    return net && this.layout.locked(net) ? `${net} is being polished; you can't change its layout until it's back in layout` : null;
   }
 
   // Burns the network picked in, or asks to unlock it.
@@ -211,7 +211,7 @@ export class CavePlan {
     if (this.layout.locked(this.net)) return (this.asking = true);
     this.remember();
     this.layout.setPhase(this.net, "polish");
-    this.status(`${this.net} is burned in`);
+    this.status(`${this.net} is being polished`);
   }
 
   // Unlocks the network picked, carving it again from its layout. Its hand edits are gone, so
@@ -230,7 +230,7 @@ export class CavePlan {
     this.layout.version++;
     this.history = [];
     this.onUnlock?.(net);
-    this.status(`${net} is unlocked and carved again from its layout`);
+    this.status(`${net} is back in layout and carved again from it`);
   }
 
   // Why a network can't be named `slug`, or null.
@@ -357,7 +357,7 @@ export class CavePlan {
     const ghost = this.ghost;
     if (!ghost) {
       const open = [...this.layout.networks.keys()].some((net) => !this.layout.locked(net));
-      return this.status(open || !this.layout.networks.size ? "place an entrance first, then lay passages out from inside" : "every network is burned in; unlock one to lay passages out in it");
+      return this.status(open || !this.layout.networks.size ? "place an entrance first, then lay passages out from inside" : "every network is being polished; take one back to layout to lay passages out in it");
     }
     if (ghost.problem) return this.status(ghost.problem);
     this.remember();
@@ -538,7 +538,7 @@ export class CavePlan {
     $("planNet").value = this.net;
     $("planRename").hidden = this.net === NEW;
     $("planBurn").hidden = this.net === NEW || this.asking;
-    $("planBurn").textContent = this.layout.locked(this.net) ? "unlock" : "burn in";
+    $("planBurn").textContent = this.layout.locked(this.net) ? "back to layout" : "start polishing";
     $("planUnlockAsk").hidden = !this.asking || this.net === NEW;
     $("planNetName").placeholder = this.net === NEW ? "new network's name" : `rename ${this.net} to`;
     const e = selected && this.layout.entrances.get(this.selected);

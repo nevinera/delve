@@ -103,6 +103,7 @@ export class Build {
   // something.
   constructor({ scene, camera, canvas, placed, things, library, groundAt, ray, groundHit, caveHit = () => null }) {
     Object.assign(this, { scene, camera, canvas, placed, things, library, groundAt, ray, groundHit, caveHit });
+    this.cave = null; // the cave network the last click was in, if any
     mountSwatches();
     // The handles moving and turning what's picked as one: arrows and planes that move it, and a
     // ring round them that turns it about the upright line through its middle (objects only yaw).
@@ -415,7 +416,9 @@ export class Build {
   down(e) {
     this.free = e.shiftKey;
     const hit = this.hit();
-    if ((this.tool === "object" || this.tool === "template") && hit?.problem) return this.say(hit.problem);
+    // In a cave, things go only in a network being polished, and are its.
+    if (["object", "template", "slab", "stairs", "ramp"].includes(this.tool) && hit?.problem) return this.say(hit.problem);
+    this.cave = typeof hit?.cave === "string" ? hit.cave : null;
     if (this.tool === "object" && hit && this.armed.object) return this.placeObject(hit);
     if (this.tool === "template" && hit && this.armed.template) return this.placeTemplate(hit);
     if (this.tool === "slab" && (this.slab.mode === "door" || this.slab.mode === "window")) return this.holeDown(hit);
@@ -507,7 +510,7 @@ export class Build {
       const { pieces } = this.drawing;
       this.drawing = null;
       this.clearGhost();
-      if (pieces.length && pieces.every((slab) => !slabProblems(slab).length)) this.placed.put(pieces);
+      if (pieces.length && pieces.every((slab) => !slabProblems(slab).length)) this.putNew(pieces);
       else if (pieces.length) this.say("That slab can't be made: it's too big or too small.");
     }
     if (this.moving) this.moving = null;
@@ -601,18 +604,25 @@ export class Build {
     this.showPicked();
   }
 
+  // Places new things, each the cave network's the last click was in, if it was in one, to go
+  // with it when it goes back to layout.
+  putNew(things) {
+    if (this.cave) for (const thing of things) thing.cave = this.cave;
+    this.say("");
+    this.placed.put(things);
+  }
+
   placeObject(hit) {
     const type = this.armed.object;
     const [x, y, z] = this.objectAt(hit);
     // In the ghost's colors.
     const { id: _, ...made } = makeObject(type, [x, z], this.yaw, this.scale);
     const colors = this.ghostObject?.type === type ? this.ghostObject.colors : made.colors;
-    const object = readyObject({ ...made, ...(colors ? { colors } : {}), ...(hit.thing || hit.cave ? { y } : {}), ...(typeof hit.cave === "string" ? { cave: hit.cave } : {}) });
+    const object = readyObject({ ...made, ...(colors ? { colors } : {}), ...(hit.thing || hit.cave ? { y } : {}) });
     // From a cave's ceiling, it hangs.
     if (object && hit.ceiling) object.y = y - object.height;
     if (!object) return;
-    this.say("");
-    this.placed.put([object]);
+    this.putNew([object]);
     this.library.used("objects", type);
     if ($("objectRandom").checked) this.yaw = Math.random() * Math.PI * 2;
     this.ghostOf = "";
@@ -634,10 +644,7 @@ export class Build {
     const { slabs, objects } = placedTemplate(template, this.anchor(template, hit), (this.yaw * 180) / Math.PI);
     // What's pasted names no template.
     if (this.armed.template.startsWith(CLIPBOARD_PREFIX)) for (const thing of [...slabs, ...objects]) delete thing.template;
-    // In a cave, they're its network's, to go with it if it's unlocked.
-    if (typeof hit.cave === "string") for (const thing of [...slabs, ...objects]) thing.cave = hit.cave;
-    this.say("");
-    this.placed.put([...slabs, ...objects.map(readyObject).filter(Boolean)]);
+    this.putNew([...slabs, ...objects.map(readyObject).filter(Boolean)]);
     this.library.used("templates", this.armed.template);
   }
 
@@ -837,7 +844,7 @@ export class Build {
     this.clearGhost();
     const { thickness, surface } = this.slab;
     const pieces = polygonPieces(points, y + thickness, { thickness, surface });
-    if (pieces.length && pieces.every((slab) => !slabProblems(slab).length)) this.placed.put(pieces);
+    if (pieces.length && pieces.every((slab) => !slabProblems(slab).length)) this.putNew(pieces);
     else this.say("That floor can't be made: its edges cross, or it's too small or has too many corners.");
   }
 
@@ -965,7 +972,7 @@ export class Build {
     if (this.stair.rise <= 0) return this.say("The top of the stairs has to be higher than the bottom.");
     const problem = slabProblems(slab)[0];
     if (problem) return this.say(problem.includes("pitch") ? "Those stairs are too steep to walk up." : problem.includes("reaches") ? "Those stairs are too long: one flight reaches at most 64 ft." : `Those stairs can't be made: it ${problem}.`);
-    this.placed.put([slab]);
+    this.putNew([slab]);
     this.stair = null;
     // A ramp being drawn: its bottom edge from a to b, being dragged ("base"), drawn ("top"), then
     // its top edge from c to d being dragged ("topping"), each [x, y, z].
@@ -1038,7 +1045,7 @@ export class Build {
     const pieces = this.roofNow();
     if (!pieces.length) return this.say("Move the pointer across from the first eave to where the other goes, then click.");
     if (pieces.some((slab) => slabProblems(slab).length)) return this.say("That roof can't be made: it's too big.");
-    this.placed.put(pieces);
+    this.putNew(pieces);
     this.roofing = null;
     // A door or window being dragged: { slab, run, h (the face's), a, b ([u, v] corners) }.
     this.holing = null;
@@ -1088,7 +1095,7 @@ export class Build {
     else if (tilt(slab) > MAX_STAIR_DEG) this.say(`That ramp is ${Math.round(tilt(slab))}°, too steep to walk up: ${MAX_STAIR_DEG}° at most.`);
     else if (slabProblems(slab).length) this.say(slabProblems(slab)[0].includes("reaches") ? "That ramp is too big: it reaches at most 64 ft from its first corner." : `That ramp can't be made: it ${slabProblems(slab)[0]}.`);
     else {
-      this.placed.put([slab]);
+      this.putNew([slab]);
       this.ramp = null;
     // A roof being drawn: one eave from a to b ([x, y, z]), being dragged ("edge"), then the other
     // eave `across` feet to the right of it, looking from a to b, following the pointer ("depth").

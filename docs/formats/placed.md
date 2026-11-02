@@ -31,7 +31,7 @@ Plate `(px, pz)` covers `[px * 2048, (px + 1) * 2048)` each way, in continent fe
 - `yaw` is radians about up. `scale` is feet for a built-in kind, or a factor for a built object.
 - `colors` and `texts` are as the world's tiles keep them ([plates](plates.md#place-lines)).
 - `template`, when there is one, is the template it was placed from.
-- `cave`, when there is one, is the cave network it was placed in. /create places things in a network only once it's burned in, and takes them all away if it's unlocked.
+- `cave`, when there is one, is the cave network it was placed in. /create places things in a network only while it's being polished, and takes them all away if it goes back to layout.
 
 - `footprint` and `height` are what stands in the way, in feet, worked out from its type and scale when it's saved, so the game server needs no object library: `{ "circle": r }`, `{ "capsule": [r, half] }` along its own x, `{ "rect": [w, d] }`, or `{ "open": r }` for one that doesn't block. Files saved before they were kept leave them out, and the server works out a built-in kind's itself.
 

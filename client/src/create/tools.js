@@ -786,7 +786,7 @@ export class Tools {
     const way = ray.ray.direction.toArray();
     const [ax, ay, az] = at.map((v, k) => v - way[k] * 0.5);
     const net = this.caves.spans(Math.floor(ax / VOXEL_FT), Math.floor(az / VOXEL_FT))?.find((s) => s.floor <= ay && ay <= s.ceiling)?.net ?? null;
-    const problem = net && !this.layout.locked(net) ? `${net} isn't burned in; burn it in before placing things in it` : null;
+    const problem = net && !this.layout.locked(net) ? `${net} is still in layout; you can't add objects until it's being polished` : null;
     return { at, ceiling: this.caves.solid(x, y + 0.5, z) && !this.caves.solid(x, y - 0.5, z), net, problem };
   }
 

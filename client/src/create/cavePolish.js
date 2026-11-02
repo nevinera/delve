@@ -97,7 +97,7 @@ export class CavePolish {
   // Why an edit can't be made where `aimed` is, or null where it can.
   problem(aimed) {
     if (!aimed?.net) return "aim at a cave's rock, from inside it";
-    if (!this.layout.locked(aimed.net)) return `${aimed.net} isn't burned in; burn it in to polish it by hand`;
+    if (!this.layout.locked(aimed.net)) return `${aimed.net} is still in layout; you can't polish it until it's being polished`;
     return null;
   }
 
