@@ -24,6 +24,10 @@ import { ENTRANCE_DEFAULTS, ENTRANCE_FT, JOIN_FT, POINT_FT, EXCLUSIVE, carvePlan
 // near a passage it doesn't join, or another network (caveLayout.js's passageWarnings).
 // Passages too steep to walk are drawn orange. The new point's selected, so the panel can size it; shift-click picks another.
 //
+// A network can be burned in, locking its layout so its rock can be polished by hand, its lines
+// drawn dim; unlocking, asked first in the panel, carves it again from its layout, throwing away
+// its hand edits.
+//
 // The layout's drawn as glowing lines, as thick, in feet, as what they stand for is big, so they
 // thin with distance: an entrance as its mouth's ring and its tube, a point as a ring on its floor.
 
@@ -34,6 +38,7 @@ const SELECTED_RGB = [1, 0.88, 0.3];
 const STEEP_RGB = [1, 0.25, 0.2];
 const OPENING_RGB = [0.45, 1, 0.9];
 const WARN_RGB = [1, 0.6, 0.15];
+const LOCKED_RGB = [0.35, 0.4, 0.5];
 const TURN_DEG = 15; // how far C and V turn an entrance, or with shift FINE_TURN_DEG
 const FINE_TURN_DEG = 5;
 const HOLD_FT = 10; // how far in from an entrance's mouth the pointer holds it
@@ -73,6 +78,7 @@ export class CavePlan {
     this.net = NEW; // the network new entrances go into, or NEW
     this.drawn = null; // what the drawing was made from
     this.listed = null; // the networks the picker lists
+    this.asking = false; // whether the panel asks to unlock the network picked
 
     this.group = new THREE.Group();
     this.group.visible = false;
@@ -92,6 +98,7 @@ export class CavePlan {
 
   bind() {
     const changeDetail = (key, value) => {
+      if (this.lockedProblem(this.layout.get(this.selected)?.net)) return this.status(this.lockedProblem(this.layout.get(this.selected).net));
       const point = this.layout.points.get(this.selected);
       if (point) {
         if (point[key] === value || !(key in point)) return;
@@ -139,6 +146,9 @@ export class CavePlan {
     }
     $("planNet").addEventListener("change", () => (this.net = $("planNet").value));
     $("planRename").addEventListener("click", () => this.rename());
+    $("planBurn").addEventListener("click", () => this.burn());
+    $("planUnlockYes").addEventListener("click", () => this.unlock());
+    $("planUnlockNo").addEventListener("click", () => (this.asking = false));
     $("planDelete").addEventListener("click", () => this.deleteSelected());
     $("planUndo").addEventListener("click", () => this.undo());
   }
@@ -169,6 +179,8 @@ export class CavePlan {
 
   deleteSelected() {
     if (!this.selected) return;
+    const locked = this.lockedProblem(this.layout.get(this.selected)?.net);
+    if (locked) return this.status(locked);
     this.remember();
     this.layout.remove(this.selected);
     this.selected = null;
@@ -179,13 +191,41 @@ export class CavePlan {
   rename() {
     const [from, to] = [this.net, slugOf($("planNetName").value)];
     if (from === NEW) return;
-    const problem = this.nameProblem(to);
+    const problem = this.lockedProblem(from) ?? this.nameProblem(to);
     if (problem) return this.status(problem);
     this.remember();
     this.layout.renameNetwork(from, to);
     this.net = to;
     $("planNetName").value = "";
     this.carve();
+  }
+
+  // Why network `net`'s layout can't change, or null where it can.
+  lockedProblem(net) {
+    return net && this.layout.locked(net) ? `${net} is burned in; unlock it to change its layout` : null;
+  }
+
+  // Burns the network picked in, or asks to unlock it.
+  burn() {
+    if (this.net === NEW) return;
+    if (this.layout.locked(this.net)) return (this.asking = true);
+    this.remember();
+    this.layout.setPhase(this.net, "polish");
+    this.status(`${this.net} is burned in`);
+  }
+
+  // Unlocks the network picked, carving it again from its layout. Its hand edits are gone, so
+  // nothing before this can be undone.
+  unlock() {
+    this.asking = false;
+    const net = this.net;
+    this.layout.setPhase(net, "layout");
+    const plan = carvePlan(this.layout, { afresh: net }, this.groundAt);
+    this.caves.carvePlan(plan, () => {});
+    this.layout.carved = plan.carved;
+    this.layout.version++;
+    this.history = [];
+    this.status(`${net} is unlocked and carved again from its layout`);
   }
 
   // Why a network can't be named `slug`, or null.
@@ -273,6 +313,7 @@ export class CavePlan {
     if (this.tool === "passage") return (this.selected = null);
     const spot = this.tool === "entrance" && this.entranceAt();
     if (spot?.problem) return this.status(spot.problem);
+    if (spot && this.lockedProblem(this.net)) return this.status(this.lockedProblem(this.net));
     if (spot) {
       // A new network's named as the entrance that starts it is placed.
       const slug = this.net === NEW ? slugOf($("planNetName").value) : this.net;
@@ -295,7 +336,10 @@ export class CavePlan {
   // Lays out the passage aimed, and selects its far point.
   placePassage() {
     const ghost = this.ghost;
-    if (!ghost) return this.status("place an entrance first, then lay passages out from inside");
+    if (!ghost) {
+      const open = [...this.layout.networks.keys()].some((net) => !this.layout.locked(net));
+      return this.status(open || !this.layout.networks.size ? "place an entrance first, then lay passages out from inside" : "every network is burned in; unlock one to lay passages out in it");
+    }
     if (ghost.problem) return this.status(ghost.problem);
     this.remember();
     this.selected = this.layout.extend(ghost.from, ghost.to ? { to: ghost.to } : { at: ghost.at }).id;
@@ -312,6 +356,7 @@ export class CavePlan {
     const here = this.here();
     let from = null;
     for (const net of this.layout.networks.keys()) {
+      if (this.layout.locked(net)) continue;
       const spot = this.layout.nearest(net, here);
       if (spot && (!from || spot.d < from.d)) from = { ...spot, net };
     }
@@ -425,7 +470,7 @@ export class CavePlan {
       this.drawing.remove(child);
       child.geometry.dispose();
     }
-    const rgbOf = (id, rgb) => (id === this.selected ? SELECTED_RGB : rgb);
+    const rgbOf = (id, rgb) => (id === this.selected ? SELECTED_RGB : this.layout.locked(this.layout.get(id)?.net) ? LOCKED_RGB : rgb);
     for (const e of this.layout.entrances.values()) for (const { points } of entranceLines(e, () => -Infinity)) this.line(points, Math.max(0.25, e.width / 32), rgbOf(e.id, OPENING_RGB));
     for (const p of this.layout.points.values()) this.line(pointRing(p), Math.max(0.25, p.width / 32), rgbOf(p.id, CORE_RGB));
     for (const s of this.layout.segments.values()) {
@@ -474,6 +519,9 @@ export class CavePlan {
     if (!this.layout.networks.has(this.net)) this.net = NEW;
     $("planNet").value = this.net;
     $("planRename").hidden = this.net === NEW;
+    $("planBurn").hidden = this.net === NEW || this.asking;
+    $("planBurn").textContent = this.layout.locked(this.net) ? "unlock" : "burn in";
+    $("planUnlockAsk").hidden = !this.asking || this.net === NEW;
     $("planNetName").placeholder = this.net === NEW ? "new network's name" : `rename ${this.net} to`;
     const e = selected && this.layout.entrances.get(this.selected);
     const point = selected && this.layout.points.get(this.selected);

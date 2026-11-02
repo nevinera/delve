@@ -197,9 +197,9 @@ export class Caves {
 
   // Opens air in `shape` (v2/caves.js's carve), or fills it with rock with `fill`. Gives whether
   // anything changed.
-  dig(shape, { fill = false, theme = 0, hewn = false, join = false } = {}) {
+  dig(shape, { fill = false, theme = 0, hewn = false, join = false, net = undefined } = {}) {
     const groundAt = (ci, cj) => (Number.isFinite(this.groundCell(ci, cj)) ? this.groundCell(ci, cj) : null);
-    return this.change((columnsOf) => carve(shape, columnsOf, groundAt, { fill, stone: allStone(theme, hewn) }), join);
+    return this.change((columnsOf) => carve(shape, columnsOf, groundAt, { fill, stone: allStone(theme, hewn), net }), join);
   }
 
   // Carves a cave layout's plan (caveLayout.js's carvePlan): its fills, then its opens, each
@@ -212,12 +212,25 @@ export class Caves {
     return entry;
   }
 
-  // What carves plan { fills, opens } (caveLayout.js's carvePlan), given columnsOf(tx, tz, make):
-  // the "tx,tz" of the tiles it changed.
-  carving({ fills, opens }) {
+  // What carves plan { fills, opens, clear } (caveLayout.js's carvePlan), given columnsOf(tx, tz,
+  // make): the "tx,tz" of the tiles it changed. `clear`: a network all of whose air goes first.
+  carving({ fills, opens, clear = null }) {
     const groundAt = (ci, cj) => (Number.isFinite(this.groundCell(ci, cj)) ? this.groundCell(ci, cj) : null);
     return (columnsOf) => {
       const changed = new Set();
+      if (clear) {
+        for (const key of [...this.tiles.keys()]) {
+          const [tx, tz] = key.split(",").map(Number);
+          const columns = columnsOf(tx, tz);
+          if (!columns.some((spans) => spans?.some((s) => s.net === clear))) continue;
+          for (let k = 0; k < columns.length; k++) {
+            if (!columns[k]?.length) continue;
+            const kept = columns[k].filter((s) => s.net !== clear);
+            columns[k] = kept.length ? kept : null;
+          }
+          changed.add(key);
+        }
+      }
       for (const shape of fills) for (const key of carve(shape, columnsOf, groundAt, { fill: true })) changed.add(key);
       for (const { shape, stone, mouth, net } of opens) for (const key of carve(shape, columnsOf, groundAt, { stone, own: true, mouth, net })) changed.add(key);
       return changed;

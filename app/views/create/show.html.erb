@@ -410,6 +410,16 @@
         <input id="planNetName" type="text" spellcheck="false" autocomplete="off" placeholder="new network's name">
         <button type="button" id="planRename" hidden>rename</button>
       </div>
+      <div class="create-way">
+        <button type="button" id="planBurn" hidden title="lock the network's layout, to polish it by hand">burn in</button>
+      </div>
+      <div id="planUnlockAsk" hidden>
+        <p class="create-note">Unlocking carves the network again from its layout, throwing away every hand edit in it. This can't be undone.</p>
+        <div class="create-way">
+          <button type="button" id="planUnlockYes">unlock</button>
+          <button type="button" id="planUnlockNo">keep it</button>
+        </div>
+      </div>
       <p id="planWhat" class="create-note"></p>
       <label>rock
         <select id="planRock"><option value="0">jagged</option><option value="1">smooth</option><option value="2">carved</option><option value="3">mined</option></select>

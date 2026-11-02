@@ -181,6 +181,29 @@ describe("cave layout", () => {
     expect(passageWarnings(layout, "n", [end([0, -60, 200]), end([10, -40, 200])])).toEqual(["steeper than 50°, so it can't be walked"]);
   });
 
+  it("keeps a burned in network's rock, and carves it afresh when it's unlocked", () => {
+    const layout = new Layout();
+    layout.addNetwork("n");
+    const [a, b] = [[0, -60, 0], [64, -60, 0]].map((at) => layout.addPoint("n", at));
+    layout.addSegment("n", a.id, b.id);
+    const caves = new Caves(scene, { heightAt: () => 0 });
+    const carve = (plan) => {
+      caves.carvePlan(plan, () => {});
+      layout.carved = plan.carved;
+    };
+    carve(carvePlan(layout));
+    const carved = structuredClone([...caves.tiles]);
+    layout.setPhase("n", "polish");
+    // A hand edit, and a change to the layout, which isn't carved while it's burned in.
+    caves.dig({ kind: "sphere", at: [32, -50, 20], radius: 6 }, { net: "n" });
+    b.width = 20;
+    expect(carvePlan(layout).opens).toEqual([]);
+    b.width = 12;
+    layout.setPhase("n", "layout");
+    carve(carvePlan(layout, { afresh: "n" }));
+    expect([...caves.tiles]).toEqual(carved);
+  });
+
   it("names networks as slugs", () => {
     expect(slugOf("  Wailing Hollow! ")).toBe("wailing-hollow");
     expect(slugOf("--")).toBe("");

@@ -181,6 +181,22 @@ export class Layout {
     return end;
   }
 
+  // Whether network `net` is burned in, its layout kept as it is.
+  locked(net) {
+    return this.networks.get(net)?.phase === "polish";
+  }
+
+  // Burns network `net` in, or unlocks it.
+  setPhase(net, phase) {
+    this.networks.get(net).phase = phase;
+    this.version++;
+  }
+
+  // The ids of network `net`'s entrances and segments, which carve.
+  carvers(net) {
+    return [...this.entrances.values(), ...this.segments.values()].filter((e) => e.net === net).map((e) => e.id);
+  }
+
   // A point's segments.
   joined(pointId) {
     return [...this.segments.values()].filter((s) => s.from === pointId || s.to === pointId);
@@ -367,16 +383,20 @@ const overlap = (a, b) => Boolean(a && b) && [0, 1, 2].every((k) => a[0][k] <= b
 
 // What carving changes: rock filled back into what each changed element carved last time, then
 // the shapes each opens afresh, and every unchanged element whose last carving the filling cuts
-// into, each in its network. `ids`: the elements to carve (all changed ones, by default). Only
+// into, each in its network. `ids`: the elements to carve (all changed ones, by default), but for
+// those in burned in networks, whose rock is kept as polished. Given `afresh`, a network, all its
+// air goes and its layout's carved again from nothing, throwing its hand edits away. Only
 // entrances' tubes open through the ground; given groundAt(x, z), the ground's height, a segment
 // that would come within ROOF_FT of it isn't carved, and is listed in `unfit`.
-export function carvePlan(layout, { ids = layout.changes() } = {}, groundAt = null) {
+export function carvePlan(layout, { ids = layout.changes(), afresh = null } = {}, groundAt = null) {
+  if (afresh) ids = layout.carvers(afresh);
+  ids = ids.filter((id) => !layout.locked(layout.get(id)?.net ?? layout.carved.get(id)?.net));
   const redo = new Set(ids);
-  const fills = ids.filter((id) => layout.carved.has(id)).flatMap((id) => shapesOf(layout.carved.get(id)));
+  const fills = afresh ? [] : ids.filter((id) => layout.carved.has(id)).flatMap((id) => shapesOf(layout.carved.get(id)));
   if (fills.length) {
     const box = boxOf(fills);
     for (const [id, copy] of layout.carved) {
-      if (redo.has(id) || layout.changed(id)) continue;
+      if (redo.has(id) || layout.changed(id) || layout.locked(copy.net)) continue;
       if (overlap(box, boxOf(shapesOf(copy)))) redo.add(id);
     }
   }
@@ -395,5 +415,5 @@ export function carvePlan(layout, { ids = layout.changes() } = {}, groundAt = nu
     const [rock, hewn] = isEntrance(copy) ? [copy.rock, copy.hewn] : [copy.ends[0].rock, copy.ends[0].hewn];
     for (const shape of shapes) opens.push({ shape, stone: allStone(rock, hewn), mouth: Boolean(shape.open), net: copy.net });
   }
-  return { fills, opens, carved, unfit };
+  return { fills, opens, carved, unfit, clear: afresh };
 }

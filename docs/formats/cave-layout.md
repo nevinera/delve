@@ -13,7 +13,7 @@ Its `version` is 2. /create drops a layout of version 1, from before networks, w
 `networks` lists the cave networks, each `{ slug, phase }`.
 
 - `slug`: the network's name, lowercase words of letters and digits joined by hyphens, such as `wailing-hollow`. The caves files name it on each of its tile lines.
-- `phase`: `layout`, while its passages are laid out and carved again as they change, or `polish`, once it's burned in.
+- `phase`: `layout`, while its passages are laid out and carved again as they change, or `polish`, once it's burned in. A burned in network's layout stays as it was, and its rock isn't carved again, so hand edits to it are kept. Unlocking it clears all its air and carves its layout again from nothing.
 
 Every element below has a `net`, the slug of its network, and an `id`: `e`, `p` or `s` and a number.
 
