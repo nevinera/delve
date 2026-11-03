@@ -31,13 +31,14 @@ type Position struct {
 }
 
 // Character is a character as it enters a world. Class is empty until it picks one there, and
-// Position is nil when it hasn't been there.
+// Position is nil when it hasn't been there. SystemAdmin says its owner has that role.
 type Character struct {
-	ID       int64           `json:"id"`
-	Name     string          `json:"name"`
-	Look     json.RawMessage `json:"look"`
-	Class    string          `json:"class"`
-	Position *Position       `json:"position"`
+	ID          int64           `json:"id"`
+	Name        string          `json:"name"`
+	Look        json.RawMessage `json:"look"`
+	Class       string          `json:"class"`
+	Position    *Position       `json:"position"`
+	SystemAdmin bool            `json:"systemAdmin"`
 }
 
 // Character fetches a character entering a world.

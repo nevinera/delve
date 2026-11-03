@@ -30,6 +30,7 @@ type fakeCharacters struct {
 	mu    sync.Mutex
 	at    map[int64]*rails.Position
 	class map[int64]string
+	admin map[int64]bool
 	saves []rails.Position
 }
 
@@ -37,13 +38,13 @@ func characters(at map[int64]*rails.Position) *fakeCharacters {
 	if at == nil {
 		at = map[int64]*rails.Position{}
 	}
-	return &fakeCharacters{at: at, class: map[int64]string{}}
+	return &fakeCharacters{at: at, class: map[int64]string{}, admin: map[int64]bool{}}
 }
 
 func (f *fakeCharacters) Character(_ context.Context, _, id int64) (rails.Character, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return rails.Character{ID: id, Name: fmt.Sprintf("C%d", id), Look: json.RawMessage(`{"skin":1}`), Class: f.class[id], Position: f.at[id]}, nil
+	return rails.Character{ID: id, Name: fmt.Sprintf("C%d", id), Look: json.RawMessage(`{"skin":1}`), Class: f.class[id], Position: f.at[id], SystemAdmin: f.admin[id]}, nil
 }
 
 func (f *fakeCharacters) SaveClass(_ context.Context, _, id int64, class string) error {
@@ -382,5 +383,17 @@ func TestSpawnsOnTheGround(t *testing.T) {
 	}
 	if m := next(t, p); m["type"] != "correct" {
 		t.Errorf("got %v", m)
+	}
+}
+
+func TestAPlayerKnowsItsOwnerIsASystemAdmin(t *testing.T) {
+	people := characters(nil)
+	people.admin[1] = true
+	h := NewHub(fightWorld{}, people)
+	if p := enter(t, h, 1); !p.systemAdmin {
+		t.Fatal("character 1's owner is a system admin")
+	}
+	if p := enter(t, h, 2); p.systemAdmin {
+		t.Fatal("character 2's owner isn't")
 	}
 }

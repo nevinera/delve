@@ -87,6 +87,8 @@ type Player struct {
 	motion motion
 	fight  fighter
 	once   sync.Once
+	// systemAdmin says its owner has that role, which admin commands need.
+	systemAdmin bool
 }
 
 // ID is the player's character id.
@@ -164,6 +166,7 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 	}
 	p := &Player{Send: make(chan []byte, SendQueue), Gone: make(chan struct{}), layer: layer, state: state, motion: motion{joined: h.now()}}
 	p.enterFight(classWithID(layer.world.Classes, character.Class))
+	p.systemAdmin = character.SystemAdmin
 	p.saved = p.position()
 
 	h.mu.Lock()
