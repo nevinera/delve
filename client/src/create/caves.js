@@ -25,7 +25,7 @@ const UNDOS = 50;
 // How far the camera's kept from rock, all round: the rock's drawn smoothed and bumped up to
 // about this far into its voxels' air.
 const CAMERA_FT = 2.5;
-const EDGE_OPACITY = 0.6; // how dark the blocks' edges are
+const EDGE_OPACITY = 0.85; // how dark the blocks' edges are
 const DRAWN_FT = 1; // how far the camera's kept short of drawn rock it'd look through
 const EITHER_SIDE = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide }); // for rays to meet rock from behind
 // Which ways round the camera rock's looked for: along the axes and the cube's corners.
@@ -430,6 +430,9 @@ export class Caves {
   setView(view) {
     if (view === this.view || !VIEWS.includes(view)) return;
     this.view = view;
+    // The blocks' faces sit a touch further back, so their edges show on them.
+    const back = view === "blocks" ? 2 : 1;
+    Object.assign(this.material, { polygonOffsetFactor: back, polygonOffsetUnits: back });
     for (const key of this.meshes.keys()) this.stale.add(key);
   }
 

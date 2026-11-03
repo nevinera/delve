@@ -514,8 +514,6 @@ const CUBE_EDGES = [
   [0, 4], [1, 5], [2, 6], [3, 7], // up
 ];
 
-const EDGE_OUT_FT = 0.03; // how far into the air the blocks' edges are drawn
-
 // Tile (tx, tz)'s cave rock as its voxels, as caveMesh gives it but blocky: a face on each side of
 // each VOXEL_FT cube of air whose neighbour is rock, runs of faces up a column's side joined into
 // one. Air over the ground isn't the caves', so it has no faces against it. Each face is flat,
@@ -531,19 +529,27 @@ export function caveBlocks(tx, tz, world) {
   const themes = [];
   const indices = [];
   const edges = [];
+  const edged = new Set();
   // Whether the voxel whose middle is at height y in column (ci, cj) is open: air or sky.
   const open = (ci, cj, y) => y > world.ground(ci, cj) || world.spans(ci, cj).some((s) => s.floor < y && y < s.ceiling);
-  // The edges of a face's blocks, a hair into the air `out` of it so they aren't lost in it.
-  const edge = (a, b, out) => edges.push(...[a, b].flatMap(([x, y, z]) => [x * VOXEL_FT + out[0] * EDGE_OUT_FT, y + out[1] * EDGE_OUT_FT, z * VOXEL_FT + out[2] * EDGE_OUT_FT]));
-  const outline = (corners, out) => {
+  // The edges of a face's blocks, each drawn once however many faces share it.
+  const edge = (a, b) => {
+    const key = [a, b].map((p) => p.join(",")).sort().join(" ");
+    if (edged.has(key)) return;
+    edged.add(key);
+    edges.push(...[a, b].flatMap(([x, y, z]) => [x * VOXEL_FT, y, z * VOXEL_FT]));
+  };
+  const outline = (corners) => {
     const [a, b, c, d] = corners;
     // A side's a run of blocks up it, with an edge between each.
-    for (let y = a[1]; y <= d[1]; y += VOXEL_FT) if (a[1] !== d[1]) edge([a[0], y, a[2]], [b[0], y, b[2]], out);
-    if (a[1] === d[1]) for (let k = 0; k < 4; k++) edge(corners[k], corners[(k + 1) % 4], out);
-    else edge(a, d, out), edge(b, c, out);
+    if (a[1] === d[1]) for (let k = 0; k < 4; k++) edge(corners[k], corners[(k + 1) % 4]);
+    else {
+      for (let y = a[1]; y <= d[1]; y += VOXEL_FT) edge([a[0], y, a[2]], [b[0], y, b[2]]);
+      for (let y = a[1]; y < d[1]; y += VOXEL_FT) edge([a[0], y, a[2]], [a[0], y + VOXEL_FT, a[2]]), edge([b[0], y, b[2]], [b[0], y + VOXEL_FT, b[2]]);
+    }
   };
-  const face = (corners, span, part, shade, out) => {
-    outline(corners, out);
+  const face = (corners, span, part, shade) => {
+    outline(corners);
     const theme = CAVE_THEMES[themeOf(span.stone[part])];
     const look = THEME_LOOK[theme] ?? THEME_LOOK[CAVE_THEMES[0]];
     const rgb = (part === 2 ? look.floor : look.rgb).map((v) => Math.min(1, (v / 255) * (1 + shade * SHADE)));
@@ -568,8 +574,8 @@ export function caveBlocks(tx, tz, world) {
       const shade = (k) => hash2(ci * 7 + k, cj * 13 - k) * 2 - 1;
       for (const span of world.spans(ci, cj)) {
         // The floor, facing up, and the ceiling, facing down, under the ground.
-        if (!open(ci, cj, span.floor - VOXEL_FT / 2)) face([[i, span.floor, j], [i, span.floor, j + 1], [i + 1, span.floor, j + 1], [i + 1, span.floor, j]], span, 2, shade(span.floor), [0, 1, 0]);
-        if (span.ceiling < ground && !open(ci, cj, span.ceiling + VOXEL_FT / 2)) face([[i, span.ceiling, j], [i + 1, span.ceiling, j], [i + 1, span.ceiling, j + 1], [i, span.ceiling, j + 1]], span, 0, shade(span.ceiling), [0, -1, 0]);
+        if (!open(ci, cj, span.floor - VOXEL_FT / 2)) face([[i, span.floor, j], [i, span.floor, j + 1], [i + 1, span.floor, j + 1], [i + 1, span.floor, j]], span, 2, shade(span.floor));
+        if (span.ceiling < ground && !open(ci, cj, span.ceiling + VOXEL_FT / 2)) face([[i, span.ceiling, j], [i + 1, span.ceiling, j], [i + 1, span.ceiling, j + 1], [i, span.ceiling, j + 1]], span, 0, shade(span.ceiling));
         // Each side, in runs of voxels whose neighbour that way is rock.
         for (const [di, dj, edge] of SIDES) {
           const [[ax, az], [bx, bz]] = edge(i, j);
@@ -579,7 +585,7 @@ export function caveBlocks(tx, tz, world) {
             const shut = y < top && !open(ci + di, cj + dj, y + VOXEL_FT / 2);
             if (shut && start === null) start = y;
             if (!shut && start !== null) {
-              face([[ax, start, az], [bx, start, bz], [bx, y, bz], [ax, y, az]], span, 1, shade(start + di * 3 + dj * 5), [-di, 0, -dj]);
+              face([[ax, start, az], [bx, start, bz], [bx, y, bz], [ax, y, az]], span, 1, shade(start + di * 3 + dj * 5));
               start = null;
             }
           }

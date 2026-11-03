@@ -48,10 +48,8 @@ describe("blocks", () => {
     // A box 8 ft long, 4 wide and high: 4 by 2 by 2 voxels.
     caves.dig({ kind: "box", at: [124, 14, 124], half: [4, 2, 2], yaw: 0 });
     const { edges } = caveBlocks(0, 0, caves.world);
-    // Each face of the box has a square of edges round each of its blocks' faces, give or take
-    // those shared: floor and ceiling 4 by 2, the long sides 4 by 2, the ends 2 by 2.
-    const faces = 2 * 8 + 2 * 8 + 2 * 4;
-    expect(edges.length / 6).toBeGreaterThan(faces * 2);
-    for (let n = 1; n < edges.length; n += 3) expect(edges[n]).toBeGreaterThan(11.9);
+    // Each edge once, on the grid: along the box, 8 lines of 4; up it and across it, 12 lines of 2.
+    expect(edges.length / 6).toBe(8 * 4 + 12 * 2 + 12 * 2);
+    for (const v of edges) expect(v % 2).toBe(0);
   });
 });

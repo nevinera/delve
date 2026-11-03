@@ -30,7 +30,8 @@ const ROCKS = 4;
 const UNDOS = 10;
 const GHOST_RGB = 0x7fffe6;
 const ADD_RGB = 0xffa040; // smooth's outlines: blocks it fills
-const [FACE_RGB, FACE_OPACITY] = [0xffffff, 0.35]; // the face blocks aims at
+const [FACE_RGB, FACE_OPACITY] = [0x3d8bff, 0.7]; // the outline of the face blocks aims at
+const FACE_OUT_FT = 0.05;
 const $ = (id) => document.getElementById(id);
 const voxelOf = (p) => p.map((v) => Math.floor(v / VOXEL_FT));
 const middleOf = (voxel) => voxel.map((i) => (i + 0.5) * VOXEL_FT);
@@ -47,13 +48,10 @@ export class CavePolish {
     this.previewed = null; // what smooth's outlines were worked out for
     this.ghost = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: GHOST_RGB, depthTest: false, transparent: true, opacity: 0.8 }));
     this.adds = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: ADD_RGB, depthTest: false, transparent: true, opacity: 0.8 }));
-    // Blocks lights the face aimed at, which a block's broken through or placed against.
-    this.face = new THREE.Mesh(new THREE.BufferGeometry(), new THREE.MeshBasicMaterial({ color: FACE_RGB, transparent: true, opacity: FACE_OPACITY, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
-    this.face.renderOrder = 12;
-    this.face.frustumCulled = false;
-    this.face.visible = false;
-    scene.add(this.face);
-    for (const lines of [this.ghost, this.adds]) {
+    // Blocks outlines the face aimed at, which a block's broken through or placed against, hidden
+    // behind rock as the rock is.
+    this.face = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: FACE_RGB, transparent: true, opacity: FACE_OPACITY }));
+    for (const lines of [this.ghost, this.adds, this.face]) {
       lines.renderOrder = 12;
       lines.frustumCulled = false;
       lines.visible = false;
@@ -268,10 +266,7 @@ export class CavePolish {
       const shape = box ?? { at: middleOf(this.box.a), half: [1, 1, 1] };
       geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(...shape.half.map((v) => v * 2 + 0.2))).translate(...shape.at);
     } else if (aimed && !surface && this.tool) {
-      if (this.tool === "caveBlocks") {
-        face = faceGeometry(aimed);
-        geometry = new THREE.EdgesGeometry(face);
-      }
+      if (this.tool === "caveBlocks") face = faceGeometry(aimed);
       else if (this.brush.shape === "box") geometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(VOXEL_FT, VOXEL_FT, VOXEL_FT)).translate(...middleOf(aimed.rock));
       else if (this.brush.shape === "sphere") geometry = new THREE.WireframeGeometry(new THREE.SphereGeometry(r, 12, 8)).translate(...aimed.hit);
       else if (this.brush.shape === "cylinder") geometry = new THREE.EdgesGeometry(new THREE.CylinderGeometry(r, r, r * 2, 16)).translate(...aimed.hit);
@@ -340,11 +335,12 @@ export function faceAt(hit, way) {
   return { rock, out };
 }
 
-// The face `aimed` gives, a square on the voxels' grid, as a geometry.
+// The outline of the face `aimed` gives, a square on the voxels' grid, as a geometry.
 function faceGeometry({ rock, out }) {
   const axis = out.findIndex((v) => v !== 0);
   const [u, v] = [0, 1, 2].filter((k) => k !== axis);
-  const plane = (rock[axis] + (out[axis] > 0 ? 1 : 0)) * VOXEL_FT;
+  // A hair out into the air, so it's over the blocks' edges.
+  const plane = (rock[axis] + (out[axis] > 0 ? 1 : 0)) * VOXEL_FT + out[axis] * FACE_OUT_FT;
   const corners = [[0, 0], [1, 0], [1, 1], [0, 1]].map(([a, b]) => {
     const p = [0, 0, 0];
     p[axis] = plane;
@@ -353,8 +349,7 @@ function faceGeometry({ rock, out }) {
     return p;
   });
   const geometry = new THREE.BufferGeometry();
-  geometry.setAttribute("position", new THREE.Float32BufferAttribute(corners.flat(), 3));
-  geometry.setIndex([0, 1, 2, 0, 2, 3]);
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute([0, 1, 1, 2, 2, 3, 3, 0].flatMap((n) => corners[n]), 3));
   return geometry;
 }
 
