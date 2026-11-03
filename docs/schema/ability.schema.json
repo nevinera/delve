@@ -80,6 +80,10 @@
         "ticks": {
           "type": "integer",
           "minimum": 1
+        },
+        "effect": {
+          "$ref": "common.schema.json#/$defs/effect",
+          "description": "what each tick does, when that isn't the ability's effects"
         }
       }
     },

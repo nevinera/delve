@@ -17,7 +17,7 @@ const abilitiesOf = (made) => () => (made.abilities ?? []).map((a) => [a.id, a.n
 const statusesOf = (made) => () => (made.statuses ?? []).map((s) => [s.id, s.name || s.id]);
 const TRIGGERS = ["dealDamage", "takeDamage", "heal", "healed", "overheal", "crit", "nonCrit", "dodge", "parry", "block", "cast", "channelEnd", "spend", "kill", "interrupt", "dispel", "pickup", "healthBelow", "allyHealthBelow", "wouldDie", "statusGained", "statusConsumed", "statusEnds", "dispelled", "holderDies"];
 const triggerOn = (...events) => (e) => e.type === "trigger" && events.includes(e.on);
-const CHANGES = ["cost", "cooldown", "cooldownRate", "castTime", "charges", "range", "radius", "maxTargets", "duration", "damage", "healing", "critChance", "critDamage", "maxStacks"];
+const CHANGES = ["cost", "cooldown", "cooldownRate", "tickRate", "channelDuration", "channelTicks", "castTime", "charges", "range", "radius", "maxTargets", "duration", "damage", "healing", "critChance", "critDamage", "maxStacks"];
 // What a modify can change: the built-in values, and every param the class has named.
 const changesOf = (made) => () => {
   const named = [...(made.abilities ?? []), ...(made.statuses ?? [])].flatMap((o) => (o.effects ?? []).map((e) => e.param)).filter(Boolean);

@@ -359,7 +359,7 @@
           },
           "change": {
             "type": "string",
-            "description": "modify: what changes, one of cost, cooldown, cooldownRate, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, maxStacks, or a param its target names"
+            "description": "modify: what changes, one of cost, cooldown, cooldownRate, tickRate, channelDuration, channelTicks, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, maxStacks, or a param its target names"
           },
           "addEffects": {
             "type": "array",
