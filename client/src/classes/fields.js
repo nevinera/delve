@@ -23,6 +23,7 @@ const changesOf = (made) => () => {
   const named = [...(made.abilities ?? []), ...(made.statuses ?? [])].flatMap((o) => (o.effects ?? []).map((e) => e.param)).filter(Boolean);
   return [...CHANGES, ...new Set(named)];
 };
+const unitsOf = (made) => () => (made.units ?? []).map((u) => [u.id, u.name || u.id]);
 const resourcesOf = (made) => () => (made.resources ?? []).map((r) => [r.key, r.name || r.key]);
 const main = { key: "colors", type: "words", label: "colors", hint: "[main, trim]: two #rrggbb colors, with commas" };
 
@@ -66,7 +67,7 @@ export function writeCondition({ kind, ...c }) {
 }
 
 const effectFields = (made) => [
-  { key: "type", type: "select", options: ["damage", "heal", "resource", "status", "interrupt", "taunt", "move", "dispel", "consume", "cooldown", "resurrect"] },
+  { key: "type", type: "select", options: ["damage", "heal", "resource", "status", "interrupt", "taunt", "move", "dispel", "consume", "cooldown", "summon", "command", "resurrect"] },
   { key: "affects", type: "select", options: ["target", "self", "enemies", "allies"] },
   { key: "around", type: "select", none: "self", options: ["target", "ground"], show: (e) => ["enemies", "allies"].includes(e.affects) },
   { key: "radius", type: "number", label: "radius ft", min: 0, show: (e) => ["enemies", "allies"].includes(e.affects) },
@@ -86,6 +87,15 @@ const effectFields = (made) => [
   { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: is("resource") },
   { key: "status", type: "select", none: "pick one", options: statusesOf(made), show: is("status", "consume") },
   { key: "stacks", type: "number", min: 1, step: 1, hint: "all of them by default", show: is("consume") },
+  { key: "unit", type: "select", none: "pick one", options: unitsOf(made), show: is("summon") },
+  { key: "count", type: "number", min: 1, step: 1, show: is("summon") },
+  { key: "lasts", label: "lasts s", type: "number", min: 0, hint: "left out, until it dies or is dismissed", show: is("summon") },
+  { key: "max", label: "at most out", type: "number", min: 1, step: 1, show: is("summon") },
+  { key: "obeys", type: "check", show: is("summon") },
+  { key: "statuses", label: "arrives with", type: "multi", options: statusesOf(made), show: is("summon") },
+  { key: "ability", type: "select", none: "pick one", options: abilitiesOf(made), show: is("command") },
+  { key: "source", label: "done by", type: "select", none: "the caster", options: ["summons"], show: is("damage", "heal") },
+  { key: "units", type: "multi", options: unitsOf(made), show: (e) => e.type === "command" || e.affects === "summons" },
   { key: "abilities", type: "multi", options: abilitiesOf(made), show: is("cooldown") },
   { key: "tag", label: "or tag", show: is("cooldown") },
   { key: "by", label: "seconds off", type: "number", min: 0, show: is("cooldown") },
@@ -129,6 +139,19 @@ export const classFields = (made) => [
   { key: "armor", type: "list", one: "armor type", blank: () => ({ type: "cloth", level: 1 }), fields: [{ key: "type", type: "select", options: ARMOR_TYPES }, { key: "level", type: "number", min: 1, step: 1 }] },
   { key: "weapons", type: "multi", options: Object.keys(HELD).filter((type) => !["shield", "orb"].includes(type)) },
   { key: "offhands", type: "multi", options: OFFHANDS.filter((type) => type !== "none") },
+  {
+    key: "units",
+    type: "list",
+    one: "unit",
+    blank: () => ({ id: "", name: "" }),
+    fields: [
+      { key: "id" },
+      { key: "name" },
+      { key: "power", type: "group", fields: ["attackPower", "spellPower", "health", "armor"].map((key) => ({ key, type: "number", min: 0, hint: "a share of its summoner's" })) },
+      { key: "abilities", type: "multi", options: abilitiesOf(made) },
+      { key: "autocast", type: "multi", options: abilitiesOf(made) },
+    ],
+  },
   { key: "passives", type: "list", one: "passive", blank: () => ({ status: "", level: 1 }), fields: [{ key: "status", type: "select", none: "pick one", options: statusesOf(made) }, { key: "level", type: "number", min: 1, step: 1 }] },
   { key: "mastery", type: "group", fields: [{ key: "name" }, { key: "description", type: "area" }, { key: "status", type: "select", none: "pick one", options: statusesOf(made) }] },
   { key: "startingGear", label: "starting gear", type: "words", hint: "item ids, with commas" },
@@ -214,6 +237,8 @@ const statusEffectFields = (made, nested = false) => [
   { key: "hit", type: "select", none: "any", options: ["auto", "ability", "melee", "direct", "periodic", "area", "main", "others", "single"], show: is("trigger", "stat", "modify") },
   { key: "atTargets", label: "at targets hit", type: "number", min: 2, step: 1, show: is("trigger", "modify") },
   { key: "casterOnly", label: "only with its caster", type: "check", show: is("trigger", "stat") },
+  { key: "source", type: "select", none: "the holder", options: ["summons", "both"], show: is("trigger", "stat") },
+  { key: "units", type: "multi", options: unitsOf(made), show: (e) => e.source === "summons" || e.source === "both" },
   { key: "threshold", label: "below %", type: "number", min: 0, show: triggerOn("healthBelow", "allyHealthBelow") },
   { key: "atStacks", label: "at stacks", type: "number", min: 1, step: 1, show: triggerOn("statusGained", "statusConsumed") },
   { key: "full", label: "whole channel", type: "check", show: triggerOn("channelEnd") },

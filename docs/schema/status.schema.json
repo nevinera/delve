@@ -223,6 +223,21 @@
             ],
             "description": "stat, trigger or modify: only for this kind of hit"
           },
+          "source": {
+            "enum": [
+              "self",
+              "summons",
+              "both"
+            ],
+            "description": "stat or trigger: whose it is, the holder's by default"
+          },
+          "units": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/id"
+            },
+            "description": "with source: only these units"
+          },
           "atTargets": {
             "type": "integer",
             "minimum": 2,

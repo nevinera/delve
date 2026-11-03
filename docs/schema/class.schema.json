@@ -117,6 +117,13 @@
         "$ref": "status.schema.json"
       }
     },
+    "units": {
+      "type": "array",
+      "description": "what the class summons, written out here",
+      "items": {
+        "$ref": "#/$defs/unit"
+      }
+    },
     "passives": {
       "type": "array",
       "items": {
@@ -169,6 +176,87 @@
     "notes": {
       "type": "string",
       "description": "free-form notes on intent and backstory; the game never reads them"
+    }
+  },
+  "$defs": {
+    "unit": {
+      "type": "object",
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "creatureType": {
+          "$ref": "creature.schema.json#/properties/creatureType"
+        },
+        "reach": {
+          "$ref": "creature.schema.json#/properties/reach"
+        },
+        "look": {
+          "$ref": "creature.schema.json#/properties/look"
+        },
+        "attack": {
+          "$ref": "creature.schema.json#/properties/attack"
+        },
+        "speed": {
+          "$ref": "creature.schema.json#/properties/speed"
+        },
+        "power": {
+          "type": "object",
+          "additionalProperties": false,
+          "description": "shares of its summoner's",
+          "properties": {
+            "attackPower": {
+              "type": "number",
+              "minimum": 0
+            },
+            "spellPower": {
+              "type": "number",
+              "minimum": 0
+            },
+            "health": {
+              "type": "number",
+              "minimum": 0
+            },
+            "armor": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        "abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "description": "from the same class"
+        },
+        "autocast": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "description": "which of its abilities it uses on its own, for one that obeys"
+        },
+        "tags": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "string"
+        }
+      }
     }
   }
 }

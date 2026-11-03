@@ -452,7 +452,9 @@
             "dispel",
             "resurrect",
             "consume",
-            "cooldown"
+            "cooldown",
+            "summon",
+            "command"
           ]
         },
         "affects": {
@@ -460,7 +462,8 @@
             "target",
             "self",
             "enemies",
-            "allies"
+            "allies",
+            "summons"
           ]
         },
         "around": {
@@ -498,6 +501,44 @@
         },
         "status": {
           "$ref": "#/$defs/id"
+        },
+        "unit": {
+          "$ref": "#/$defs/id",
+          "description": "summon: which of the class's units"
+        },
+        "units": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "description": "with affects summons, consume or command: only these units"
+        },
+        "source": {
+          "enum": [
+            "self",
+            "summons"
+          ],
+          "description": "who does it, the caster by default. With summons, they do it"
+        },
+        "lasts": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "summon: seconds it stays. Left out, it stays until it dies or is dismissed"
+        },
+        "obeys": {
+          "type": "boolean",
+          "description": "summon: you command it"
+        },
+        "ability": {
+          "$ref": "#/$defs/id",
+          "description": "command: the ability your summons use"
+        },
+        "statuses": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "description": "summon: statuses it arrives with"
         },
         "duration": {
           "type": "number",

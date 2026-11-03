@@ -18,6 +18,7 @@ export function classProblems(made) {
   const statuses = new Set((made.statuses ?? []).map((s) => s.id));
   const abilities = new Set((made.abilities ?? []).map((a) => a.id));
   const resources = new Set((made.resources ?? []).map((r) => r.key));
+  const units = new Set((made.units ?? []).map((u) => u.id));
   const problems = [];
   const status = (where, id) => {
     if (!statuses.has(id)) problems.push(`${where} ${id ? `points at a status this class doesn't have (${id})` : "needs a status picked"}.`);
@@ -35,6 +36,10 @@ export function classProblems(made) {
     conditions(where, e.when);
     if (e.type === "status" || e.type === "consume") status(where, e.status);
     if (e.type === "resource") resource(where, e.resource);
+    if (e.type === "summon" && !units.has(e.unit)) problems.push(`${where} summons a unit this class doesn't have (${e.unit}).`);
+    (e.units ?? []).filter((id) => !units.has(id)).forEach((id) => problems.push(`${where} points at a unit this class doesn't have (${id}).`));
+    if (e.type === "command" && !abilities.has(e.ability)) problems.push(`${where} commands an ability this class doesn't have (${e.ability}).`);
+    (e.statuses ?? []).forEach((id) => status(where, id));
     if (e.type === "cooldown") (e.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} changes the cooldown of an ability this class doesn't have (${id}).`));
   };
   for (const ability of made.abilities ?? []) {
@@ -45,6 +50,11 @@ export function classProblems(made) {
     const spendsAll = (ability.cost ?? []).filter((c) => c.all).length;
     if (spendsAll > 1) problems.push(`${where} spends all of more than one resource, so it can't tell what to scale with.`);
     if (!spendsAll && (ability.effects ?? []).some((e) => e.durationPerSpent !== undefined || e.amount?.perSpent !== undefined)) problems.push(`${where} scales with points spent, but no cost spends all.`);
+  }
+  for (const u of made.units ?? []) {
+    const where = u.name || "A unit";
+    (u.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} uses an ability this class doesn't have (${id}).`));
+    (u.autocast ?? []).filter((id) => !u.abilities?.includes(id)).forEach((id) => problems.push(`${where} autocasts an ability it doesn't have (${id}).`));
   }
   for (const s of made.statuses ?? []) {
     const where = s.name || "A status";

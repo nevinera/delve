@@ -105,6 +105,24 @@ describe("what's wrong with a class", () => {
     ]);
   });
 
+  it("names what summons and units point at that's gone", () => {
+    const made = {
+      units: [{ id: "ghou0001", name: "Ghoul", abilities: ["claw0001", "gone0001"], autocast: ["bolt0001"] }],
+      abilities: [
+        { id: "claw0001", name: "Claw", effects: [] },
+        { id: "bolt0001", name: "Bolt", effects: [{ type: "summon", unit: "ghou0001", statuses: ["gone0002"] }, { type: "summon", unit: "gone0003" }, { type: "command", ability: "gone0004", units: ["gone0005"] }] },
+      ],
+    };
+    expect(classProblems(made)).toEqual([
+      "Bolt points at a status this class doesn't have (gone0002).",
+      "Bolt summons a unit this class doesn't have (gone0003).",
+      "Bolt points at a unit this class doesn't have (gone0005).",
+      "Bolt commands an ability this class doesn't have (gone0004).",
+      "Ghoul uses an ability this class doesn't have (gone0001).",
+      "Ghoul autocasts an ability it doesn't have (bolt0001).",
+    ]);
+  });
+
   it("names a param its target doesn't have", () => {
     const made = {
       statuses: [
