@@ -8,8 +8,9 @@
 // - multi: `options`, kept as a list of those picked.
 // - words: a list of words, written with commas.
 // - number or word: `word`, a value the check stands for, `after`, the words before the check.
-// - json: for an object with no fields of its own.
-// - group: `fields`, kept as an object under its key, and `collapsed` to fold it until it's opened.
+// - group: `fields`, or a function for them if they'd otherwise go on forever, kept as an object under
+//   its key, `collapsed` to fold it until it's opened, and `read` and `write` as for a list's items.
+// - pairs: an object edited a row at a time, with `keyField` and `valueField` for each row's.
 // - list: `fields` for each item, `blank()` for a new one, `one`, what to call one, `limit`, and
 //   `read` and `write`, for items the form holds differently from the file.
 // - amount, distance: as the game data's are (formats.md). An amount's `more()` is fields for its rarer parts.
@@ -133,6 +134,7 @@ const RENDERERS = {
   number: (field, value, { changed }) => {
     const input = el("input", { type: "number", value: value[field.key] ?? "", step: field.step ?? "any" });
     if (field.min !== undefined) input.min = field.min;
+    if (field.max !== undefined) input.max = field.max;
     input.addEventListener("input", () => (setKey(value, field.key, numberOf(input.value)), changed()));
     return row(field, input);
   },
@@ -194,20 +196,6 @@ const RENDERERS = {
     word.addEventListener("change", () => (setKey(value, field.key, word.checked ? field.word : undefined), reshaped()));
     return row(field, number, el("span", { textContent: field.after }), word);
   },
-  json: (field, value, { changed }) => {
-    const input = el("textarea", { rows: 3, value: value[field.key] === undefined ? "" : JSON.stringify(value[field.key]) });
-    input.addEventListener("input", () => {
-      const text = input.value.trim();
-      try {
-        setKey(value, field.key, text === "" ? undefined : JSON.parse(text));
-        input.classList.remove("form-wrong");
-        changed();
-      } catch {
-        input.classList.add("form-wrong");
-      }
-    });
-    return row(field, input);
-  },
   amount: (field, value, hooks) => {
     const parts = readAmount(value[field.key]);
     const keep = () => setKey(value, field.key, writeAmount(parts));
@@ -233,10 +221,10 @@ const RENDERERS = {
     return el("div", {}, main, advancedFold(field.more(), parts, { changed, reshaped }, { owner: value, name: `amount ${field.key}`, label: "advanced amount" }));
   },
   group: (field, value, hooks) => {
-    const inner = value[field.key] ?? {};
-    const keep = () => setKey(value, field.key, inner);
+    const inner = (field.read ?? ((held) => held ?? {}))(value[field.key]);
+    const keep = () => setKey(value, field.key, field.write ? field.write(inner) : inner);
     const draw = () =>
-      renderFields(field.fields, inner, {
+      renderFields(typeof field.fields === "function" ? field.fields() : field.fields, inner, {
         changed: () => (keep(), hooks.changed()),
         reshaped: () => (keep(), hooks.reshaped()),
       });
@@ -244,16 +232,39 @@ const RENDERERS = {
     if (field.collapsed) return fold({ owner: value, name: `group ${field.key}`, className: "form-collapsed", summary: label, startOpen: !isBlank(value[field.key]), draw });
     return el("fieldset", { className: "form-group" }, el("legend", { textContent: label }), ...draw());
   },
+  pairs: (field, value, hooks) => {
+    const { keyField, valueField } = field;
+    return RENDERERS.list(
+      {
+        ...field,
+        fields: [keyField, valueField],
+        read: undefined,
+        write: undefined,
+        // A row needs a key to be kept, so a new one takes the first that's free.
+        blank: (items) => {
+          const taken = items.map((item) => item[keyField.key]);
+          const free = optionsOf(keyField).find(([option]) => !taken.includes(option));
+          return free ? { [keyField.key]: free[0], [valueField.key]: 1 } : null;
+        },
+        readAll: (held) => Object.entries(held ?? {}).map(([k, v]) => ({ [keyField.key]: k, [valueField.key]: v })),
+        writeAll: (items) => Object.fromEntries(items.filter((item) => item[keyField.key]).map((item) => [item[keyField.key], item[valueField.key] ?? 1])),
+      },
+      value,
+      hooks,
+    );
+  },
   list: (field, value, hooks) => {
     const read = field.read ?? ((item) => item);
     const write = field.write ?? ((item) => item);
-    const items = (value[field.key] ?? []).map(read);
-    const keep = () => setKey(value, field.key, items.map(write));
+    const items = field.readAll ? field.readAll(value[field.key]) : (value[field.key] ?? []).map(read);
+    const keep = () => setKey(value, field.key, field.writeAll ? field.writeAll(items) : items.map(write));
     const changed = () => (keep(), hooks.changed());
     const reshaped = () => (keep(), hooks.reshaped());
     const add = el("button", { type: "button", textContent: `add ${field.one ?? "one"}`, disabled: field.limit !== undefined && items.length >= field.limit });
     add.addEventListener("click", () => {
-      items.push(field.blank());
+      const item = field.blank(items);
+      if (!item) return;
+      items.push(item);
       reshaped();
     });
     const nodes = items.map((item, n) => {

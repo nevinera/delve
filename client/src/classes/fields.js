@@ -1,6 +1,8 @@
 import { SOUNDS, VISUALS } from "../abilities/stock.js";
-import { ARMOR_TYPES } from "../character/armor.js";
-import { HELD, OFFHANDS } from "../character/weapons.js";
+import { ARMOR_SLOTS, ARMOR_STYLES, ARMOR_TYPES } from "../character/armor.js";
+import { BODIES } from "../character/bodies.js";
+import { BEARD, EARS, FACE, FLESH, GAIT, HAIR, HANDS, HORNS, JEWELRY, LOWER, LOWER_ARMS, MOUTH, MUZZLE, NOSE, TAIL, TUSKS, UNARMED, WINGS } from "../character/recipe.js";
+import { HELD, OFFHANDS, WEAPONS, WEAPON_STYLES } from "../character/weapons.js";
 import { BUILT_IN_CHANGES, TALENT_TIERS, TALENT_TIER_STEP } from "./classFile.js";
 
 // What the class editor's forms hold, by the formats in formats.md. Fields that pick a status or a
@@ -71,7 +73,7 @@ const perCountField = (made) => ({
     { key: "holders", label: "units holding", type: "select", none: "none", options: statusesOf(made) },
     { key: "unitsOut", label: "units out", type: "multi", options: unitsOf(made) },
     { key: "resource", type: "select", none: "none", options: resourcesOf(made) },
-    { key: "weights", type: "json", hint: "how many a status counts as, like {\"abcd1234\": 3}", advanced: true },
+    { key: "weights", label: "counts as", type: "pairs", one: "status", keyField: { key: "status", type: "select", options: statusesOf(made) }, valueField: { key: "counts", label: "this many", type: "number", min: 0 }, advanced: true },
     { key: "add", type: "number", hint: "this much per count, not the whole amount again" },
     { key: "max", type: "number", min: 0, hint: "the most it counts" },
   ],
@@ -282,6 +284,74 @@ const effectFields = (made, nested = false) => [
   { key: "hit", label: "only for hits", type: "select", none: "any", options: HITS, show: is("extraTargets"), advanced: OTHER },
 ];
 
+// A character recipe's settings (character/recipe.js), for a unit or a form's look. A setting left out
+// comes from its body.
+const LOOK_COLORS = ["skin", "hair", "eyes", "primary", "secondary", "metal", "steel", "wood", "paint", "horn", "leaf"];
+const pickOne = (key, options, more = {}) => ({ key, type: "select", none: "its body's", options, ...more });
+const dial = (key, hint, heading) => ({ key, type: "number", min: 0, max: 1, hint, advanced: heading });
+const SIZE = "size and build";
+const SHAPE = "shape";
+const FACE_HEADING = "face and hair";
+const GEAR_HEADING = "gear";
+
+const armorFields = () => ARMOR_SLOTS.map((slot) => ({ key: slot, type: "group", collapsed: true, fields: [pickOne("type", ARMOR_TYPES, { none: "none" }), pickOne("style", ARMOR_STYLES, { none: "fine" }), { key: "colors", type: "words", hint: "main, trim: two #rrggbb colors, with commas" }] }));
+const gearFields = (heading) => [
+  pickOne("weapon", WEAPONS, { advanced: heading }),
+  pickOne("offhand", OFFHANDS, { advanced: heading }),
+  pickOne("weaponStyle", WEAPON_STYLES, { label: "weapon style", advanced: heading }),
+  pickOne("offhandStyle", WEAPON_STYLES, { label: "off-hand style", advanced: heading }),
+  { key: "armor", type: "group", collapsed: true, fields: armorFields(), advanced: heading },
+];
+const colorFields = () => ({ key: "colors", type: "group", collapsed: true, fields: LOOK_COLORS.map((key) => ({ key, type: "color" })) });
+
+export const lookFields = () => [
+  pickOne("body", () => ["humanoid", ...Object.keys(BODIES).filter((name) => !name.includes(":"))]),
+  { key: "height", label: "height ft", type: "number", min: 0, hint: "to the top of the head", show: (l) => !BODIES[l.body] },
+  { key: "scale", type: "number", min: 0.5, hint: "a creature's size against its body's, 0.5 to 2", show: (l) => Boolean(BODIES[l.body]) },
+  { key: "coloration", show: (l) => Boolean(BODIES[l.body]), hint: "one of its body's colorations, by name" },
+  colorFields(),
+  dial("build", "0 slight to 1 heavy", SIZE),
+  dial("limbs", "0 thin to 1 thick", SIZE),
+  dial("shoulders", "0 narrow to 1 broad", SIZE),
+  dial("waist", "0 narrow to 1 broad", SIZE),
+  dial("hips", "0 narrow to 1 broad", SIZE),
+  dial("arms", "0 short to 1 long", SIZE),
+  dial("legs", "0 short to 1 long", SIZE),
+  dial("head", "0 small to 1 large", SIZE),
+  dial("bust", "0 to 1", SIZE),
+  dial("rear", "0 flat to 1 full", SIZE),
+  dial("jaw", "0 narrow to 1 broad", FACE_HEADING),
+  pickOne("hair", HAIR, { advanced: FACE_HEADING }),
+  pickOne("beard", BEARD, { advanced: FACE_HEADING }),
+  pickOne("mouth", MOUTH, { advanced: FACE_HEADING }),
+  pickOne("ears", EARS, { advanced: FACE_HEADING }),
+  pickOne("nose", NOSE, { advanced: FACE_HEADING }),
+  pickOne("tusks", TUSKS, { advanced: FACE_HEADING }),
+  { key: "face", type: "multi", options: FACE, advanced: FACE_HEADING },
+  { key: "jewelry", type: "multi", options: JEWELRY, advanced: FACE_HEADING },
+  pickOne("flesh", FLESH, { advanced: SHAPE }),
+  pickOne("muzzle", MUZZLE, { advanced: SHAPE }),
+  pickOne("horns", HORNS, { advanced: SHAPE }),
+  pickOne("tail", TAIL, { advanced: SHAPE }),
+  pickOne("wings", WINGS, { advanced: SHAPE }),
+  pickOne("hands", HANDS, { advanced: SHAPE }),
+  pickOne("lowerArms", LOWER_ARMS, { label: "lower arms", advanced: SHAPE }),
+  pickOne("lower", LOWER, { label: "below the waist", advanced: SHAPE }),
+  pickOne("gait", GAIT, { advanced: SHAPE }),
+  pickOne("unarmed", UNARMED, { advanced: SHAPE }),
+  ...gearFields(GEAR_HEADING),
+  { key: "sheathed", label: "weapons put away", type: "check", advanced: GEAR_HEADING },
+  {
+    key: "loadouts",
+    label: "outfits to pick from",
+    type: "list",
+    one: "outfit",
+    blank: () => ({}),
+    advanced: GEAR_HEADING,
+    fields: [...gearFields(undefined), { ...colorFields() }, { key: "weight", type: "number", min: 0, hint: "how often it's picked, 1 by default" }],
+  },
+];
+
 export const blankEffect = () => ({ type: "damage", affects: "target" });
 
 export const classFields = (made) => [
@@ -322,7 +392,7 @@ export const classFields = (made) => [
       { key: "autocast", type: "multi", options: abilitiesOf(made) },
       { key: "description", type: "area", advanced: true },
       { key: "creatureType", label: "creature type", type: "select", none: "none", options: CREATURE_TYPES, advanced: true },
-      { key: "look", type: "json", hint: "a character recipe, as JSON", advanced: true },
+      { key: "look", type: "group", collapsed: true, advanced: true, fields: lookFields() },
       { key: "speed", label: "speed ft/s", type: "number", min: 0, advanced: true },
       { key: "reach", label: "reach ft", type: "number", min: 0, advanced: true },
       { key: "attack", type: "group", collapsed: true, advanced: true, fields: [{ key: "speed", label: "every s", type: "number", min: 0 }, { key: "range", type: "distance" }, { key: "school", type: "select", none: "physical", options: SCHOOLS }] },
@@ -463,6 +533,34 @@ export const abilityFields = (made) => [
   { key: "notes", type: "area", advanced: "notes" },
 ];
 
+// What a modify replaces in the abilities or statuses it changes: their own fields, with nothing filled
+// in for you and every field showing, and which ones it takes away.
+const OVERRIDES_LEAVE_OUT = ["name", "level", "description", "icon", "tags", "notes"];
+
+export function overridesField(made, kind, fieldsOf, removable, show) {
+  const removedKey = "takes away";
+  return {
+    key: "overrides",
+    label: `replaces settings of those ${kind}`,
+    type: "group",
+    collapsed: true,
+    show,
+    advanced: RULES,
+    read: (held = {}) => {
+      const out = Object.fromEntries(Object.entries(held).filter(([, v]) => v !== null));
+      const gone = Object.keys(held).filter((k) => held[k] === null);
+      return gone.length ? { ...out, [removedKey]: gone } : out;
+    },
+    write: ({ [removedKey]: gone = [], ...held }) => ({ ...held, ...Object.fromEntries(gone.map((k) => [k, null])) }),
+    fields: () => [
+      { key: removedKey, type: "multi", options: removable },
+      ...fieldsOf()
+        .filter((field) => !OVERRIDES_LEAVE_OUT.includes(field.key))
+        .map((field) => ({ ...field, show: undefined, ...(field.type === "select" && field.none === undefined ? { none: "unchanged" } : {}) })),
+    ],
+  };
+}
+
 const statusEffectFields = (made, nested = false) => [
   { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "modify"], more: ["immune", "aura", "stealth", "transform", "store", "extraTargets", "gear", "untargetable", "redirectThreat", "countsAsStealthed", "stealthLinger", "stealthProtected", "none"] },
   { key: "stat", type: "select", none: "pick one", options: COMMON_STATS, more: STATS.filter((s) => !COMMON_STATS.includes(s)), show: is("stat") },
@@ -549,7 +647,8 @@ const statusEffectFields = (made, nested = false) => [
   { key: "spentAs", label: "counts as spending", type: "numberOr", word: "max", after: "or the most", show: is("modify"), advanced: RULES },
   { key: "spendsUpTo", label: "can spend more", type: "number", min: 0, show: is("modify"), advanced: RULES },
   { key: "byExtraSpent", label: "times as much for spending it", type: "number", min: 0, show: is("modify"), advanced: RULES },
-  { key: "overrides", label: "replaces settings", type: "json", hint: "keys of the ability or status to replace, as JSON. null removes one", show: is("modify"), advanced: RULES },
+  overridesField(made, "abilities", () => abilityFields(made), ["castTime", "cooldown", "charges", "cost", "requires", "range", "minRange", "channel", "speed", "creatureTypes"], (e) => e.type === "modify" && !e.statuses?.length),
+  overridesField(made, "statuses", () => statusFields(made), ["duration", "maxStacks", "dispel", "breaksOn", "keptBy", "consumedBy", "limit", "group", "leash", "pose", "aura"], (e) => e.type === "modify" && e.statuses?.length > 0),
 
   { key: "all", label: "all damage", type: "check", show: is("immune"), advanced: OTHER },
   { key: "harmful", label: "harmful statuses", type: "check", show: is("immune"), advanced: OTHER },

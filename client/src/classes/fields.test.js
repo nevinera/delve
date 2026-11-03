@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { abilityFields, classFields, readCondition, statusFields, writeCondition } from "./fields.js";
+import { DEFAULT_LOOK } from "../character/recipe.js";
+import { abilityFields, classFields, lookFields, overridesField, readCondition, statusFields, writeCondition } from "./fields.js";
 import { readAmount, writeAmount } from "./form.js";
 
 const schema = (name) => JSON.parse(readFileSync(new URL(`../../../docs/schema/${name}.schema.json`, import.meta.url)));
@@ -35,6 +36,15 @@ describe("the class editor's fields", () => {
     expect(missing(schema("class").properties, classes, ["id", "abilities", "statuses"])).toEqual([]);
   });
 
+  it("reach every part of a look", () => {
+    expect(Object.keys(DEFAULT_LOOK).filter((key) => !keysOf(lookFields()).has(key))).toEqual([]);
+  });
+
+  it("have no raw JSON inputs", () => {
+    const types = (fields) => fields.flatMap((field) => [field.type, ...(Array.isArray(field.fields) ? types(field.fields) : [])]);
+    for (const fields of [abilities, statuses, classes]) expect(types(fields)).not.toContain("json");
+  });
+
   it("reach every part of an amount", () => {
     const parts = fieldOf(effects, "amount").more().map((field) => field.key);
     const shown = ["base", "attackPower", "spellPower", ...parts];
@@ -51,6 +61,23 @@ describe("the class editor's fields", () => {
   it("never fill in an advanced value by drawing it", () => {
     const pick = (fields) => fields.filter((field) => field.advanced && field.type === "select" && field.none === undefined).map((field) => field.key);
     for (const fields of [abilities, statuses, classes, effects, statusEffects]) expect(pick(fields)).toEqual([]);
+  });
+});
+
+describe("overrides in the form", () => {
+  const field = overridesField(made, "statuses", () => statusFields(made), ["duration"], () => true);
+
+  it("come back the same, with a removed setting as null", () => {
+    for (const overrides of [{ stacking: "stack" }, { duration: null }, { leash: null, effects: [{ type: "stat" }] }]) {
+      expect(field.write(field.read(overrides))).toEqual(overrides);
+    }
+  });
+
+  it("don't fill anything in or hide anything", () => {
+    const fields = field.fields();
+    expect(fields.filter((f) => f.type === "select" && f.none === undefined)).toEqual([]);
+    expect(fields.filter((f) => f.show)).toEqual([]);
+    expect(fields.map((f) => f.key)).not.toContain("name");
   });
 });
 
