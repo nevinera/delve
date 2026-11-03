@@ -143,3 +143,102 @@
   min-width: 360px;
   border-left: 1px solid #333;
 }
+
+.classes-preview[hidden] {
+  display: none;
+}
+
+.preview-view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.preview-stage {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.preview-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.preview-name {
+  position: absolute;
+  top: 8px;
+  left: 12px;
+  color: #123;
+  font-weight: bold;
+  pointer-events: none;
+}
+
+.preview-float {
+  position: absolute;
+  color: #ffe060;
+  font-weight: bold;
+  text-shadow: 0 0 3px #000, 0 1px 2px #000;
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.preview-float-heal {
+  color: #70f070;
+}
+
+.preview-float-status {
+  color: #c0e0ff;
+}
+
+.preview-bar {
+  position: absolute;
+  bottom: 14px;
+  left: 50%;
+  width: 260px;
+  height: 18px;
+  overflow: hidden;
+  background: #222a;
+  border: 1px solid #000;
+  transform: translateX(-50%);
+}
+
+.preview-bar[hidden] {
+  display: none;
+}
+
+.preview-bar-fill {
+  width: 0;
+  height: 100%;
+  background: #e0b040;
+}
+
+.preview-bar-label {
+  position: absolute;
+  inset: 0;
+  color: #fff;
+  line-height: 18px;
+  text-align: center;
+  text-shadow: 0 1px 2px #000;
+}
+
+.preview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border-top: 1px solid #333;
+}
+
+.preview-distance {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.preview-note {
+  color: #f0b060;
+}

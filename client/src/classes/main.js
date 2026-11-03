@@ -1,5 +1,6 @@
 import "../objects/library.css";
 import "./classes.css";
+import { playSound } from "../abilities/sounds.js";
 import { keptSource, onSourceSaved, saveKept } from "../create/keptSave.js";
 import { KeptJson, keptFiles } from "../create/keptWorld.js";
 import { BranchMoved } from "../create/repo.js";
@@ -10,6 +11,7 @@ import { isClassPath } from "../world/paths.js";
 import { classPath, classProblems, classesOf, newAbility, newClass, newStatus } from "./classFile.js";
 import { abilityFields, classFields, statusFields } from "./fields.js";
 import { renderFields } from "./form.js";
+import { AbilityPreview } from "./preview.js";
 
 // The class editor: the classes of the world /create has open. Changes go to the store /create
 // shares with the objects page, and the page's button commits them to the world's repo.
@@ -138,7 +140,21 @@ function showConfig(made) {
   config.append(problems, ...renderFields(fields, thing, { changed, reshaped }), remove);
 }
 
-function showPreview() {}
+// The preview's made the first time an ability's picked, since the page needs it only then.
+let preview = null;
+function showPreview(made, ability) {
+  $("preview").hidden = !ability;
+  if (!ability) return preview?.setAbility(null);
+  preview ??= new AbilityPreview($("preview"));
+  window.classes = { preview, playSound };
+  preview.setClass(made);
+  // Changing a field needn't restart what's playing, or move the camera off where it's been put.
+  const key = JSON.stringify(ability);
+  if (key !== shownAbility) preview.setAbility(ability, made.statuses ?? []);
+  shownAbility = key;
+}
+let shownAbility = null;
+
 
 function show() {
   const classes = classesOf(world);

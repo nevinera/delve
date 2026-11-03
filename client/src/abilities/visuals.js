@@ -4,7 +4,7 @@ import * as THREE from "three";
 // and update(u) draws it u of the way through its length, 0 to 1. A `from` and `to` in feet, for
 // beams, reach between two points; the rest stand where the group's put.
 
-const basic = (color, opacity = 0.9) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide });
+const basic = (color, opacity = 0.9) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide });
 
 const sphere = (radius, color, opacity) => new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 12), basic(color, opacity));
 
