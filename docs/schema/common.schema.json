@@ -570,6 +570,24 @@
               ]
             }
           }
+        },
+        {
+          "type": "object",
+          "required": [
+            "wielding"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "wielding": {
+              "enum": [
+                "shield",
+                "oneHanded",
+                "twoHanded",
+                "dual"
+              ],
+              "description": "what you have equipped"
+            }
+          }
         }
       ]
     },
@@ -648,6 +666,8 @@
         "maxHealth",
         "critChance",
         "critDamage",
+        "critHealing",
+        "critTaken",
         "haste",
         "mastery",
         "versatility",
@@ -790,7 +810,8 @@
             "summon",
             "command",
             "area",
-            "extend"
+            "extend",
+            "extraTargets"
           ]
         },
         "affects": {
@@ -1076,6 +1097,36 @@
             "number"
           ],
           "description": "true: its amount, or a cooldown effect's by, counts once for each one the ability hits. A number: that share more for each one"
+        },
+        "share": {
+          "type": "number",
+          "description": "extraTargets: the share of the hit the others take"
+        },
+        "spendsStack": {
+          "type": [
+            "boolean",
+            "string"
+          ],
+          "description": "extraTargets: takes a stack of this status each time it spills"
+        },
+        "alwaysCrit": {
+          "type": "boolean",
+          "description": "it always crits"
+        },
+        "scalesWithCrit": {
+          "type": "boolean",
+          "description": "it does more the higher your crit chance"
+        },
+        "alwaysCritWhen": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition"
+          },
+          "description": "it always crits while these hold"
+        },
+        "critMultiplier": {
+          "type": "number",
+          "description": "its crits do this many times as much, in place of the usual"
         },
         "maxTotal": {
           "type": "number",

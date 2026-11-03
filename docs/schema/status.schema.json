@@ -157,6 +157,8 @@
               "immune",
               "aura",
               "store",
+              "extraTargets",
+              "gear",
               "none",
               "transform"
             ]
@@ -173,6 +175,25 @@
           "set": {
             "type": "number",
             "description": "modify: makes it this. Applied before `add` and `multiply`"
+          },
+          "fromStat": {
+            "description": "stat, modify: it comes to `share` of this stat of the holder",
+            "type": "string"
+          },
+          "ofCaster": {
+            "type": "boolean",
+            "description": "stat: fromStat reads whoever applied the status"
+          },
+          "allows": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "gear: more equipment the holder can use, like twoHandedOffHand"
+          },
+          "alwaysCrit": {
+            "type": "boolean",
+            "description": "modify: the abilities always crit"
           },
           "spendsStack": {
             "type": [
@@ -470,7 +491,7 @@
           },
           "change": {
             "type": "string",
-            "description": "modify: what changes, one of cost, cooldown, cooldownRate, tickRate, channelDuration, channelTicks, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, maxStacks, mastery, every, others, stacks, amount, absorb, lockout, cone, distance, limit, uses, delay, or a param its target names"
+            "description": "modify: what changes, one of cost, cooldown, cooldownRate, tickRate, channelDuration, channelTicks, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, critHealing, maxStacks, mastery, every, others, stacks, amount, absorb, lockout, cone, distance, limit, uses, delay, or a param its target names"
           },
           "addEffects": {
             "type": "array",
@@ -526,6 +547,10 @@
           },
           "perCount": {
             "$ref": "common.schema.json#/$defs/perCount"
+          },
+          "scalesWithCrit": {
+            "type": "boolean",
+            "description": "modify: the abilities do more the higher your crit chance"
           }
         }
       }

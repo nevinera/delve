@@ -9,7 +9,7 @@ const SCHOOLS = ["physical", "holy", "fire", "nature", "frost", "shadow", "arcan
 const SCHOOL_LISTS = [...SCHOOLS, "all"];
 const DISPELS = ["magic", "curse", "poison", "disease", "enrage", "stun", "root", "silence", "incapacitate", "disorient", "fear", "disarm", "slow"];
 const CREATURE_TYPES = ["beast", "humanoid", "undead", "elemental", "demon", "dragonkin", "giant", "mechanical", "aberration", "critter"];
-const STATS = ["strength", "agility", "intellect", "stamina", "armor", "critRating", "hasteRating", "masteryRating", "versatilityRating", "leechRating", "avoidanceRating", "speedRating", "attackPower", "spellPower", "maxHealth", "critChance", "critDamage", "haste", "mastery", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed", "stealth", "detection", "damageDone", "healingDone", "damageTaken", "healingTaken", "threat"];
+const STATS = ["strength", "agility", "intellect", "stamina", "armor", "critRating", "hasteRating", "masteryRating", "versatilityRating", "leechRating", "avoidanceRating", "speedRating", "attackPower", "spellPower", "maxHealth", "critChance", "critDamage", "critHealing", "critTaken", "haste", "mastery", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed", "stealth", "detection", "damageDone", "healingDone", "damageTaken", "healingTaken", "threat"];
 const WHEN = ["cast", "launch", "impact", "channel"];
 const ON = ["caster", "target", "ground"];
 
@@ -29,8 +29,9 @@ const resourcesOf = (made) => () => (made.resources ?? []).map((r) => [r.key, r.
 const main = { key: "colors", type: "words", label: "colors", hint: "[main, trim]: two #rrggbb colors, with commas" };
 
 const simpleConditionFields = (made) => [
-  { key: "kind", type: "select", label: "needs", options: [["health", "health"], ["status", "a status"], ["stealthed", "stealth"], ["inCombat", "combat"], ["targetIs", "used on"], ["state", "a state"], ["position", "position"], ["since", "time since"], ["resource", "a resource"], ["holders", "units holding"], ["unitsOut", "a unit out"], ["inArea", "in your area"], ["spentAtLeast", "spent at least"], ["targetsHitAtLeast", "hit at least"], ["outcome", "the hit"], ["targetHealthBelowMine", "target under your health"], ["group", "a status group"]] },
+  { key: "kind", type: "select", label: "needs", options: [["health", "health"], ["status", "a status"], ["stealthed", "stealth"], ["inCombat", "combat"], ["targetIs", "used on"], ["state", "a state"], ["position", "position"], ["since", "time since"], ["resource", "a resource"], ["holders", "units holding"], ["unitsOut", "a unit out"], ["inArea", "in your area"], ["spentAtLeast", "spent at least"], ["targetsHitAtLeast", "hit at least"], ["outcome", "the hit"], ["targetHealthBelowMine", "target under your health"], ["group", "a status group"], ["wielding", "what you wield"]] },
   { key: "group", label: "of group", show: (c) => c.kind === "group" },
+  { key: "wielding", type: "select", options: ["shield", "oneHanded", "twoHanded", "dual"], show: (c) => c.kind === "wielding" },
   { key: "state", type: "select", options: ["casting", "inCombat", "slowed", "airborne", "falling", "controlled", "stunned", "outdoors"], show: (c) => c.kind === "state" },
   { key: "position", type: "select", options: ["behind", "inFront"], show: (c) => c.kind === "position" },
   { key: "since", type: "select", options: ["stealth", "attack", "damageTaken", "kill", "combatStart"], show: (c) => c.kind === "since" },
@@ -77,7 +78,7 @@ const conditionFields = (made) => [
 ];
 
 // A condition as the form edits it, with the `kind` the format leaves implicit.
-const PLAIN_CONDITIONS = ["state", "position", "since", "resource", "holders", "unitsOut", "inArea", "spentAtLeast", "targetsHitAtLeast", "outcome", "targetHealthBelowMine", "group"];
+const PLAIN_CONDITIONS = ["state", "position", "since", "resource", "holders", "unitsOut", "inArea", "spentAtLeast", "targetsHitAtLeast", "outcome", "targetHealthBelowMine", "group", "wielding"];
 
 export function readCondition(condition) {
   if ("health" in condition) return { kind: "health", ...condition };
@@ -104,7 +105,7 @@ export function writeCondition({ kind, ...c }) {
 }
 
 const effectFields = (made, nested = false) => [
-  { key: "type", type: "select", options: ["damage", "heal", "resource", "status", "interrupt", "taunt", "move", "dispel", "extend", "consume", "cooldown", "summon", "command", "area", "resurrect"] },
+  { key: "type", type: "select", options: ["damage", "heal", "resource", "status", "interrupt", "taunt", "move", "dispel", "extend", "consume", "extraTargets", "cooldown", "summon", "command", "area", "resurrect"] },
   { key: "affects", type: "select", options: ["target", "self", "enemies", "allies", "hit", "holder", "caster"] },
   { key: "statuses", type: "multi", options: statusesOf(made), show: is("extend", "consume") },
   { key: "seconds", type: "number", show: is("extend", "consume") },
@@ -131,6 +132,8 @@ const effectFields = (made, nested = false) => [
   { key: "maxTotal", label: "at most", type: "number", min: 0, show: (e) => Boolean(e.perTargetHit) },
   { key: "exceptTarget", label: "not the target", type: "check", show: (e) => ["enemies", "allies"].includes(e.affects) },
   { key: "drain", type: "number", hint: "heals you by this share of what it does", show: is("damage") },
+  { key: "alwaysCrit", label: "always crits", type: "check", show: is("damage", "heal") },
+  { key: "share", type: "number", show: is("extraTargets") },
   { key: "split", type: "check", hint: "those hit share the amount", show: is("damage", "heal", "status") },
   { key: "others", type: "number", min: 0, hint: "those besides the main target take this share", show: is("damage", "heal") },
   { key: "school", type: "select", none: "the ability's", options: SCHOOLS, show: is("damage") },
@@ -312,12 +315,16 @@ export const abilityFields = (made) => [
 ];
 
 const statusEffectFields = (made, nested = false) => [
-  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "stealth", "modify", "immune", "aura", "transform", "store", "none"] },
+  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "stealth", "modify", "immune", "aura", "transform", "store", "extraTargets", "gear", "none"] },
   { key: "stat", type: "select", none: "pick one", options: STATS, show: is("stat") },
   { key: "on", label: "keeps", type: "select", options: ["dealDamage", "heal"], show: is("store") },
-  { key: "share", type: "number", show: is("store") },
+  { key: "share", type: "number", show: (e) => e.type === "store" || e.type === "extraTargets" || (e.type === "stat" && e.fromStat) || (e.type === "modify" && e.fromStat) },
   { key: "from", type: "select", none: "caster", options: ["holder"], show: is("store") },
   { key: "drain", type: "number", hint: "heals the caster by this share of what it does", show: is("periodic") },
+  { key: "fromStat", label: "from stat", type: "select", none: "none", options: [...STATS, "primary"], show: (e) => e.type === "stat" || (e.type === "modify" && e.change) },
+  { key: "ofCaster", label: "of whoever applied it", type: "check", show: (e) => e.type === "stat" && e.fromStat },
+  { key: "alwaysCrit", label: "always crits", type: "check", show: is("modify") },
+  { key: "allows", type: "words", show: is("gear") },
   { key: "into", label: "looks like", type: "select", none: "pick one", options: unitsOf(made), show: is("transform") },
   { key: "perTargetHit", label: "more per target hit", type: "number", show: (e) => e.type === "modify" && e.change },
   { key: "maxTotal", label: "at most", type: "number", min: 0, show: (e) => e.type === "modify" && e.change },
