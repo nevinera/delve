@@ -51,8 +51,9 @@ import { WaterBodies } from "./water.js";
 //   networks (cavePlan.js); in polish, blocks, sculpt, smooth, flatten and paint edit a network's
 //   rock by hand, the right button filling (cavePolish.js). Only the tools for the network's phase
 //   show, and place entrance only works above the ground. Picking a tool picks how the rock's
-//   drawn and whether the layout shows, which the panel can change after. Each network has its own
-//   undo: undo undoes the current network's hand edits while it's being polished, and its layout
+//   drawn and whether the layout shows, which the panel can change after, and ` switches how it's
+//   drawn. Each network has its own undo: undo undoes the current network's hand edits while it's
+//   being polished, and its layout
 //   changes otherwise; switching phase isn't undone, and going back to layout drops the hand
 //   edits' undos.
 // - geo's pools: clicking scatters small swamp pools in the ring (marsh.js), and dragging scatters
@@ -511,6 +512,11 @@ export class Tools {
       if (BUILD.has(this.tool) && this.build.key(e)) return e.preventDefault();
       if ((PLANS.has(this.tool) || POLISH.has(this.tool)) && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         this.caveUndo();
+        return e.preventDefault();
+      }
+      // ` switches the caves' rock between finished and blocks.
+      if (e.key === "`" && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        this.setCaveView(this.caves.view === "blocks" ? "finished" : "blocks", null);
         return e.preventDefault();
       }
       if (PLANS.has(this.tool) && this.plan.key(e)) return e.preventDefault();
