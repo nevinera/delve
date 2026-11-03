@@ -20,7 +20,6 @@ const (
 	dummyHealth    = 100000.0
 	dummyResetIdle = 5 * time.Second // a dummy heals up and its tally starts over after this long unhit
 	resourceEvery  = 500 * time.Millisecond
-	playLevel      = 1 // everyone's level, until there's levelling
 )
 
 // vitals are what can be hurt and healed: a player's, or a dummy's.
@@ -49,6 +48,7 @@ type dummy struct {
 // fighter is a player's part in combat.
 type fighter struct {
 	class      *combat.Class
+	level      int
 	stats      combat.Stats
 	vitals     vitals
 	resources  map[string]float64
@@ -57,6 +57,9 @@ type fighter struct {
 	gcdUntil   time.Time
 	cooldowns  map[string][]time.Time // when each spent charge of an ability comes back
 	cast       *casting
+	attacking  int64     // who it's auto-attacking, or 0
+	swingAt    time.Time // when its next swing can start
+	swingWhy   string    // why it last couldn't swing, so it says so once
 }
 
 // casting is a cast or channel under way.
@@ -89,7 +92,7 @@ func classWithID(classes []*combat.Class, id string) *combat.Class {
 }
 
 // enterFight gives a player its class's numbers. With no class, it has plain health and no abilities.
-func (p *Player) enterFight(class *combat.Class) {
+func (p *Player) enterFight(class *combat.Class, level int) {
 	f := &p.fight
 	f.vitals = vitals{ID: p.state.ID, Statuses: map[string]*activeStatus{}}
 	f.resources, f.cooldowns = map[string]float64{}, map[string][]time.Time{}
@@ -99,12 +102,13 @@ func (p *Player) enterFight(class *combat.Class) {
 		return
 	}
 	f.class = class
-	f.stats = combat.StatsFor(f.class, playLevel)
+	f.level = max(level, 1)
+	f.stats = combat.StatsFor(f.class, f.level)
 	f.vitals.MaxHealth, f.vitals.Health = f.stats.MaxHealth, f.stats.MaxHealth
 	for _, r := range f.class.Resources {
 		f.resources[r.Key] = combat.StartResource(r)
 	}
-	p.state.Class, p.state.Health, p.state.MaxHealth = f.class.ID, f.vitals.Health, f.vitals.MaxHealth
+	p.state.Class, p.state.Level, p.state.Health, p.state.MaxHealth = f.class.ID, f.level, f.vitals.Health, f.vitals.MaxHealth
 }
 
 // placeDummies puts a world's training dummies on the layer, standing on the ground.
@@ -161,6 +165,9 @@ func (l *Layer) use(p *Player, m incoming) {
 		f.gcdUntil = now.Add(seconds(gcd))
 	}
 	l.tell(p, encode(used{Type: "used", ID: p.ID(), Class: f.class.ID, Ability: ability.ID, Target: target, Spot: m.Spot, GCD: gcd}))
+	if ability.Range.Melee && ability.Target == "enemy" {
+		l.startAttacking(p, target)
+	}
 	c := &casting{ability: ability, target: target, spot: m.Spot, release: now.Add(seconds(ability.CastTime)), channel: ability.Channel != nil}
 	c.ends = c.release
 	if c.channel {
@@ -180,7 +187,7 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 		return nil, 0, "you have no class"
 	}
 	ability := f.class.Ability(m.Ability)
-	if ability == nil {
+	if ability == nil || !f.class.Knows(ability, f.level) {
 		return nil, 0, "you don't know that"
 	}
 	if f.cast != nil {
@@ -383,14 +390,7 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, now time.Time) {
 		h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: e.Type}
 		switch e.Type {
 		case "damage":
-			n, crit := combat.Roll(e.Amount, f.stats, true, l.hub.roll)
-			on.Health = max(on.Health-n, 0)
-			h.Amount, h.Crit = math.Round(n), crit
-			if d := l.dummy(on.ID, p.state.Continent); d != nil {
-				d.tally(n, now)
-				h.DPS = math.Round(d.dps(now))
-				on.Health = max(on.Health, 1) // it never dies
-			}
+			l.strike(p, on, e.Amount, &h, now)
 		case "heal":
 			n, crit := combat.Roll(e.Amount, f.stats, true, l.hub.roll)
 			on.Health = min(on.Health+n, on.MaxHealth)
@@ -435,6 +435,9 @@ func (p *Player) debugLine(format string, args ...any) {
 // debugHit says what an effect came to and how.
 func (l *Layer) debugHit(p *Player, ability string, e *combat.Effect, on *vitals, h hit) string {
 	line := fmt.Sprintf("%s on %s: %s", ability, l.nameOf(on.ID), e.Type)
+	if h.Missed {
+		return line + " missed"
+	}
 	switch e.Type {
 	case "damage", "heal", "resource":
 		line += fmt.Sprintf(" %g from %s", h.Amount, combat.DescribeAmount(e.Amount, p.fight.stats))
@@ -459,6 +462,98 @@ func (l *Layer) nameOf(id int64) string {
 		return o.state.Name
 	}
 	return "someone"
+}
+
+// strike rolls an attack on an enemy and does what it comes to, noting it in the hit.
+func (l *Layer) strike(p *Player, on *vitals, amount combat.Amount, h *hit, now time.Time) {
+	if combat.Missed(l.hub.roll) {
+		h.Missed = true
+		return
+	}
+	n, crit := combat.Roll(amount, p.fight.stats, true, l.hub.roll)
+	on.Health = max(on.Health-n, 0)
+	h.Amount, h.Crit = math.Round(n), crit
+	if d := l.dummy(on.ID, p.state.Continent); d != nil {
+		d.tally(n, now)
+		h.DPS = math.Round(d.dps(now))
+		on.Health = max(on.Health, 1) // it never dies
+	}
+}
+
+// attack starts or stops a player's auto-attack, as it asks.
+func (l *Layer) attack(p *Player, m incoming) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.players[p.ID()] != p || p.fight.class == nil {
+		return
+	}
+	if m.Target == 0 {
+		l.stopAttacking(p)
+		return
+	}
+	if l.dummy(m.Target, p.state.Continent) == nil {
+		p.send(encode(refused{Type: "refused", Why: "you need an enemy targeted"}))
+		return
+	}
+	l.startAttacking(p, m.Target)
+}
+
+func (l *Layer) startAttacking(p *Player, target int64) {
+	f := &p.fight
+	if f.attacking != target {
+		f.attacking, f.swingWhy = target, ""
+		p.send(encode(attacking{"attacking", target}))
+	}
+}
+
+func (l *Layer) stopAttacking(p *Player) {
+	f := &p.fight
+	if f.attacking != 0 {
+		f.attacking, f.swingWhy = 0, ""
+		p.send(encode(attacking{"attacking", 0}))
+	}
+}
+
+// swing starts an auto-attack swing if it's time and the target's in reach. A swing waits for a
+// cast to end, and for the target to come into reach and in front of you.
+func (l *Layer) swing(p *Player, now time.Time) {
+	f := &p.fight
+	if f.attacking == 0 || f.cast != nil || now.Before(f.swingAt) {
+		return
+	}
+	d := l.dummy(f.attacking, p.state.Continent)
+	if d == nil {
+		l.stopAttacking(p)
+		return
+	}
+	why := ""
+	if distance(p.state.At, d.state.At) > combat.MeleeFt {
+		why = "out of range"
+	} else if !facing(p.state.At, p.state.Yaw, d.state.At) {
+		why = "you're not facing it"
+	}
+	if why != "" {
+		if why != f.swingWhy {
+			p.send(encode(refused{Type: "refused", Why: why}))
+		}
+		f.swingWhy = why
+		return
+	}
+	f.swingWhy = ""
+	f.swingAt = now.Add(seconds(combat.SwingSeconds))
+	target := d.ID
+	l.tell(p, encode(swung{"swung", p.ID(), target}))
+	l.after(now.Add(strikeDelay), nil, func(now time.Time) {
+		d := l.dummy(target, "")
+		if l.players[p.ID()] != p || d == nil {
+			return
+		}
+		h := hit{Type: "hit", From: p.ID(), On: target, Effect: "damage"}
+		l.strike(p, &d.vitals, combat.Amount{Weapon: 1}, &h, now)
+		h.Health, h.MaxHealth = math.Round(d.Health), d.MaxHealth
+		l.sync(&d.vitals)
+		l.tell(p, encode(h))
+	})
 }
 
 func (l *Layer) addResource(f *fighter, key string, n float64) bool {
@@ -638,6 +733,7 @@ func (l *Layer) tick(now time.Time) {
 				f.cast = nil
 			}
 		}
+		l.swing(p, now)
 		l.regen(p, dt, now)
 	}
 	// Landings can add landings, so go by index.
@@ -705,11 +801,11 @@ func (l *Layer) regen(p *Player, dt float64, now time.Time) {
 		}
 	}
 	if f.resChanged && now.Sub(f.sentAt) >= resourceEvery {
-		out := map[string]float64{}
-		for k, v := range f.resources {
-			out[k] = math.Round(v)
+		out, most := map[string]float64{}, map[string]float64{}
+		for _, r := range f.class.Resources {
+			out[r.Key], most[r.Key] = math.Round(f.resources[r.Key]), combat.MaxResource(r)
 		}
-		p.send(encode(resources{"resources", out}))
+		p.send(encode(resources{"resources", out, most}))
 		f.sentAt, f.resChanged = now, false
 	}
 }

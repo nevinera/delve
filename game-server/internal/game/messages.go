@@ -27,12 +27,13 @@ type Character struct {
 	Yaw       float64         `json:"yaw"`
 	Move      Move            `json:"move"`
 	Class     string          `json:"class,omitempty"`
+	Level     int             `json:"level,omitempty"`
 	Dummy     bool            `json:"dummy,omitempty"`
 	Health    float64         `json:"health"`
 	MaxHealth float64         `json:"maxHealth"`
 }
 
-// incoming is a message from a client: move, heartbeat, use, stop or command. T is the client's clock, in
+// incoming is a message from a client: move, heartbeat, use, stop, attack or command. T is the client's clock, in
 // milliseconds.
 type incoming struct {
 	Type    string      `json:"type"`
@@ -57,6 +58,19 @@ type used struct {
 	GCD     float64     `json:"gcd"`
 }
 
+// swung says someone has started an auto-attack swing.
+type swung struct {
+	Type   string `json:"type"`
+	ID     int64  `json:"id"`
+	Target int64  `json:"target"`
+}
+
+// attacking says who you're auto-attacking, 0 for no one.
+type attacking struct {
+	Type   string `json:"type"`
+	Target int64  `json:"target"`
+}
+
 type refused struct {
 	Type    string `json:"type"`
 	Ability string `json:"ability"`
@@ -78,11 +92,12 @@ type cooldown struct {
 type hit struct {
 	Type      string  `json:"type"`
 	From      int64   `json:"from"`
-	Ability   string  `json:"ability"`
+	Ability   string  `json:"ability,omitempty"` // none for an auto-attack
 	On        int64   `json:"on"`
 	Effect    string  `json:"effect"`
 	Amount    float64 `json:"amount,omitempty"`
 	Crit      bool    `json:"crit,omitempty"`
+	Missed    bool    `json:"missed,omitempty"`
 	Resource  string  `json:"resource,omitempty"`
 	Status    string  `json:"status,omitempty"`
 	Class     string  `json:"class,omitempty"`
@@ -108,6 +123,7 @@ type statusGone struct {
 type resources struct {
 	Type      string             `json:"type"`
 	Resources map[string]float64 `json:"resources"`
+	Max       map[string]float64 `json:"max"`
 }
 
 type welcome struct {

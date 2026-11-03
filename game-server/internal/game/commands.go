@@ -158,6 +158,7 @@ func (l *Layer) teleport(p *Player, continent string, at [3]float64) {
 		before[o.ID()] = o
 	}
 	l.stopCast(p)
+	l.stopAttacking(p)
 	log.Printf("character %d: teleported to %s %v", p.ID(), continent, at)
 	p.state.Continent, p.state.At, p.state.Move = continent, at, Move{Gait: "run"}
 	p.motion.teleported(l.hub.now())

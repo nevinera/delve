@@ -6,6 +6,7 @@ package combat
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 )
 
 // Class is the part of classes/<id>.json the game plays.
@@ -16,6 +17,22 @@ type Class struct {
 	Resources    []Resource `json:"resources"`
 	Abilities    []Ability  `json:"abilities"`
 	Statuses     []Status   `json:"statuses"`
+	// What a character chooses gives these abilities, so level alone doesn't.
+	Specializations []Specialization    `json:"specializations"`
+	Talents         map[string][]Talent `json:"talents"`
+}
+
+// Specialization is what a character picks at the level the game sets.
+type Specialization struct {
+	ID        string   `json:"id"`
+	Abilities []string `json:"abilities"`
+}
+
+// Talent is one choice in a talent tier.
+type Talent struct {
+	Grants []struct {
+		Ability string `json:"ability"`
+	} `json:"grants"`
 }
 
 // Resource is one of a class's resources. Kind is mana, energy, rage or points.
@@ -30,6 +47,7 @@ type Resource struct {
 type Ability struct {
 	ID              string   `json:"id"`
 	Name            string   `json:"name"`
+	Level           int      `json:"level"`
 	School          string   `json:"school"`
 	Target          string   `json:"target"` // enemy, ally, self, ground or none
 	Range           Distance `json:"range"`
@@ -150,6 +168,29 @@ func (c *Class) Ability(id string) *Ability {
 		}
 	}
 	return nil
+}
+
+// Knows says whether a character of this level has an ability. One that a specialization or talent
+// gives isn't known until choosing those exists.
+func (c *Class) Knows(a *Ability, level int) bool {
+	if a.Level > level {
+		return false
+	}
+	for _, s := range c.Specializations {
+		if slices.Contains(s.Abilities, a.ID) {
+			return false
+		}
+	}
+	for _, tier := range c.Talents {
+		for _, t := range tier {
+			for _, g := range t.Grants {
+				if g.Ability == a.ID {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }
 
 // Status finds one of the class's statuses.

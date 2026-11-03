@@ -1,4 +1,4 @@
-# A character in one world: the class it picked there and where it is. The game server owns it,
+# A character in one world: the class it picked there, its level and where it is. The game server owns it,
 # reading it as the character enters and writing it back as it plays (.agents/formats.md); nothing
 # else sets it. The row comes with the first write, so a character that hasn't played a world has
 # none, and one that has only picked a class has no position yet.

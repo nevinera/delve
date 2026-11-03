@@ -374,3 +374,119 @@ func TestACharacterWithNoClassEntersWithHealth(t *testing.T) {
 		t.Fatalf("you = %v", you)
 	}
 }
+
+// A class with an ability for level 1, one for level 3, and one each from a spec and a talent.
+func levelledClass() *combat.Class {
+	return &combat.Class{
+		ID:              "lvld0001",
+		Specializations: []combat.Specialization{{ID: "spec", Abilities: []string{"bySpec"}}},
+		Talents: map[string][]combat.Talent{"15": {{Grants: []struct {
+			Ability string `json:"ability"`
+		}{{Ability: "byTalent"}}}}},
+		Abilities: []combat.Ability{{ID: "first", Level: 1}, {ID: "third", Level: 3}, {ID: "bySpec", Level: 1}, {ID: "byTalent", Level: 1}},
+	}
+}
+
+func TestLevelAndChoicesSayWhatYouKnow(t *testing.T) {
+	c := levelledClass()
+	for _, want := range []struct {
+		ability string
+		level   int
+		knows   bool
+	}{{"first", 1, true}, {"third", 1, false}, {"third", 3, true}, {"bySpec", 20, false}, {"byTalent", 20, false}} {
+		if got := c.Knows(c.Ability(want.ability), want.level); got != want.knows {
+			t.Errorf("%s at level %d: knows = %v", want.ability, want.level, got)
+		}
+	}
+}
+
+func TestYouCantUseWhatYouDontKnow(t *testing.T) {
+	_, p, _ := fighting(t)
+	p.fight.class = &combat.Class{ID: "frst0001", Abilities: []combat.Ability{{ID: "zap", Level: 2, Target: "enemy"}}}
+	heard(p, "refused")
+	use(t, p, "zap")
+	refusal(t, p, "you don't know that")
+}
+
+func TestWelcomeSaysYourLevel(t *testing.T) {
+	people := characters(nil)
+	people.class[1], people.level[1] = "frst0001", 4
+	h := NewHub(fightWorld{}, people)
+	if w := next(t, enter(t, h, 1)); w["you"].(map[string]any)["level"] != 4.0 {
+		t.Fatalf("welcome = %v", w)
+	}
+}
+
+func TestAutoAttackSwingsUntilStopped(t *testing.T) {
+	h, p, c := fighting(t)
+	p.state.At[2] += 12 // the dummy's 20 ft north
+	if err := p.Handle([]byte(`{"type":"attack","target":-1}`)); err != nil {
+		t.Fatal(err)
+	}
+	pass(h, c, 2.5)
+	seen := heard(p, "attacking", "swung", "hit")
+	var kinds []string
+	for _, m := range seen {
+		kinds = append(kinds, m["type"].(string))
+	}
+	if !slices.Equal(kinds, []string{"attacking", "swung", "hit", "swung", "hit"}) {
+		t.Fatalf("heard = %v", kinds)
+	}
+	if hit := seen[2]; hit["amount"] != combat.WeaponDamage || hit["ability"] != nil || hit["on"] != -1.0 {
+		t.Fatalf("hit = %v", hit)
+	}
+	if err := p.Handle([]byte(`{"type":"attack","target":0}`)); err != nil {
+		t.Fatal(err)
+	}
+	pass(h, c, 5)
+	got := heard(p, "attacking", "swung")
+	if len(got) != 1 || got[0]["type"] != "attacking" || got[0]["target"] != nil && got[0]["target"] != 0.0 {
+		t.Fatalf("after stopping = %v", got)
+	}
+}
+
+func TestAutoAttackSaysOnceWhenOutOfReachAndWaits(t *testing.T) {
+	h, p, c := fighting(t)
+	if err := p.Handle([]byte(`{"type":"attack","target":-1}`)); err != nil {
+		t.Fatal(err)
+	}
+	pass(h, c, 3)
+	if got := heard(p, "refused", "swung"); len(got) != 1 || got[0]["why"] != "out of range" {
+		t.Fatalf("out of reach = %v", got)
+	}
+	p.state.At[2] += 12
+	pass(h, c, 0.1)
+	if got := heard(p, "swung"); len(got) != 1 {
+		t.Fatalf("back in reach = %v", got)
+	}
+}
+
+func TestAMeleeAbilityStartsAutoAttack(t *testing.T) {
+	_, p, _ := fighting(t)
+	p.state.At[2] += 12
+	use(t, p, "jab")
+	if got := heard(p, "attacking"); len(got) != 1 || got[0]["target"] != -1.0 {
+		t.Fatalf("attacking = %v", got)
+	}
+}
+
+func TestAttacksCanMiss(t *testing.T) {
+	h, p, c := fighting(t)
+	h.roll = func() float64 { return 0 }
+	use(t, p, "zap")
+	pass(h, c, 0.6)
+	hits := heard(p, "hit")
+	if len(hits) != 1 || hits[0]["missed"] != true || hits[0]["amount"] != nil || hits[0]["health"] != dummyHealth {
+		t.Fatalf("hits = %v", hits)
+	}
+}
+
+func TestResourcesSayTheirMost(t *testing.T) {
+	h, p, c := fighting(t)
+	use(t, p, "zap")
+	pass(h, c, 1)
+	got := heard(p, "resources")
+	if len(got) == 0 || got[0]["max"].(map[string]any)["mana"] != 1000.0 {
+		t.Fatalf("resources = %v", got)
+	}
+}

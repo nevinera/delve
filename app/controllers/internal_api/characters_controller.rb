@@ -5,7 +5,7 @@ class InternalApi::CharactersController < InternalApi::BaseController
 
   def show
     record = @world.world_characters.find_by(character: @character)
-    render json: {id: @character.id, name: @character.name, look: @character.look, class: record&.class_id, position: record&.position, systemAdmin: @character.user.system_admin?}
+    render json: {id: @character.id, name: @character.name, look: @character.look, class: record&.class_id, level: record&.level || 1, position: record&.position, systemAdmin: @character.user.system_admin?}
   end
 
   def position

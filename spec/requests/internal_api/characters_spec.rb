@@ -10,7 +10,7 @@ RSpec.describe "The game server's character API", type: :request do
 
   it "gives the character entering a world it hasn't played" do
     get(path, headers:)
-    expect(response.parsed_body).to eq("id" => character.id, "name" => "Arwen", "look" => {"skin" => 3}, "class" => nil, "position" => nil, "systemAdmin" => false)
+    expect(response.parsed_body).to eq("id" => character.id, "name" => "Arwen", "look" => {"skin" => 3}, "class" => nil, "level" => 1, "position" => nil, "systemAdmin" => false)
   end
 
   it "says when the character's owner is a system admin" do

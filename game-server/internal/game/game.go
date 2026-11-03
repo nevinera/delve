@@ -161,7 +161,7 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 		layer.mu.Unlock()
 	}
 	p := &Player{Send: make(chan []byte, SendQueue), Gone: make(chan struct{}), layer: layer, state: state, motion: motion{joined: h.now()}}
-	p.enterFight(classWithID(layer.world.Classes, character.Class))
+	p.enterFight(classWithID(layer.world.Classes, character.Class), character.Level)
 	p.systemAdmin = character.SystemAdmin
 	p.saved = p.position()
 
@@ -327,6 +327,9 @@ func (p *Player) Handle(raw []byte) error {
 		return nil
 	case "command":
 		p.layer.command(p, m.Line)
+		return nil
+	case "attack":
+		p.layer.attack(p, m)
 		return nil
 	case "stop":
 		p.layer.mu.Lock()

@@ -9,7 +9,9 @@ import (
 // A character's numbers until gear and levels feed in.
 const (
 	WeaponDamage = 10.0 // what a swing does, until characters hold real weapons
+	SwingSeconds = 2.0  // how long a swing takes, until characters hold real weapons
 	CritChance   = 0.05
+	MissChance   = 0.05
 	CritScale    = 2.0
 	MeleeFt      = 15.0 // how far melee reaches, until units have their own reach
 	GCDSeconds   = 1.5
@@ -106,6 +108,9 @@ func DescribeAmount(a Amount, s Stats) string {
 	}
 	return strings.Join(parts, " + ")
 }
+
+// Missed rolls whether an attack on an enemy misses.
+func Missed(roll func() float64) bool { return roll() < MissChance }
 
 // Random is the roll to use outside of tests.
 func Random() float64 { return rand.Float64() }
