@@ -624,7 +624,7 @@ Ids are 8 lowercase base-36 characters, and a file's id matches its name. Files 
 Damage, healing and absorbs take an amount, one of:
 
 - a number, or `[min, max]` to roll between;
-- `{ base, attackPower, spellPower, weapon, mastery }`, any of them, added up: `base` is a number or `[min, max]`, `attackPower` and `spellPower` are coefficients of the caster's power, `weapon` a coefficient of a main-hand weapon swing, and `mastery` an amount per point of the caster's mastery percentage.
+- `{ base, attackPower, spellPower, weapon, mastery, maxHealth, shareOfTrigger, perSpent }`, any of them, added up: `base` is a number or `[min, max]`, `attackPower` and `spellPower` are coefficients of the caster's power, `weapon` a coefficient of a main-hand weapon swing, `mastery` an amount per point of the caster's mastery percentage, `maxHealth` a share of the maximum health of whoever it affects, `shareOfTrigger` a share of the hit or heal that set off the trigger or applied the status, and `perSpent` an amount for each point spent (see [Abilities](#abilities), `cost`).
 
 Power grows with level and gear, so an ability gets stronger as you level without new ranks. A creature has attack and spell power from its level, so the same ability works on a mob.
 
@@ -707,19 +707,19 @@ Only a class's `id` and `name` are required for now, so the class editor can sav
 - `target`: what you need targeted to use it. `enemy` or `ally`, or `self`, `ground` (you pick a place within range) or `none`. An `ally` ability with no friendly target lands on you.
 - `icon`: its action bar icon, from the stock set the core world ships.
 - `range`: how far the target can be, a number or `"melee"` (see Distance and areas). `minRange` is how near it can be.
-- `requires`: conditions to use it, each `{ health, below or above }` (`health` is `self` or `target`, in percent) or `{ status, on }` (a status `on` `self` or `target`), or `{ stealthed }` or `{ inCombat }` (true or false, about you). An execute needs `{ "health": "target", "below": 20 }`.
+- `requires`: conditions to use it, each `{ health, below or above }` (`health` is `self` or `target`, in percent) or `{ status, on, stacks }` (a status `on` `self` or `target`, with at least `stacks` stacks if it says), or `{ targetIs }` (what you're using it on: `enemy`, `ally`, `self`, `other`, `player` or `nonPlayer`), or `{ stealthed }` or `{ inCombat }` (true or false, about you), or `{ anyOf: [conditions] }`, which holds when any of them does, or `{ not: condition }`, which holds when it doesn't. An execute needs `{ "health": "target", "below": 20 }`.
 - `creatureTypes`: the creature types it can target, for an ability that only works on beasts, say.
 - `facing`: you must face the target within 90° either side. True by default for `enemy` abilities.
 - `castTime`: 0 is instant. Moving or jumping cancels a cast unless `castWhileMoving` is true.
 - `channel`: `{ duration, ticks }`. You keep casting for `duration` and the effects land on each tick. Moving cancels it too.
 - `gcd`: 1.5 by default, and haste shortens it to no less than 0.75. `gcd: 0` is off the global cooldown. `gcdHasted: false` keeps it fixed, as energy users' is (1 s).
 - `cooldown`, `charges` and `cooldownHasted`: its own cooldown, how many uses it stores, and whether haste shortens it.
-- `cost`: what it spends, each `{ resource, amount }`, or `{ resource: "mana", percent }` of base mana. You can't use it without enough.
+- `cost`: what it spends, each `{ resource, amount }`, or `{ resource: "mana", percent }` of base mana. You can't use it without enough. `all: true` spends all you have of it, needing at least that much. An ability can have one such cost, and what it spends is the "points spent" that `perSpent` amounts, `durationPerSpent` and a status's `addPerSpent` and `multiplyPerSpent` count. A finisher costs `{ "resource": "combo", "amount": 1, "all": true }`.
 - `speed`: a projectile's speed. Its effects aimed at the target land when it arrives, and fizzle if the target dies first.
 - `school`: the school of its damage, unless an effect says otherwise.
 - `effects`: what it does, below.
 - `visuals` and `sounds`: what plays, from the stock sets the core world ships. Each picks an `effect` or `sound`, `when` it plays (`cast`, `launch`, `impact` or `channel`), and `on` (`caster`, `target` or `ground`, the target by default for impacts). Visuals take `colors` and `scale`, and sounds take `volume` and `pitch`, each 1 by default.
-- `tags`: free-form words for sorting.
+- `tags`: free-form words for sorting, and for a status's `modify` to pick abilities by.
 
 #### Effects
 
@@ -734,9 +734,16 @@ Types:
 - `damage`: `amount`, and `school` to override the ability's.
 - `heal`: `amount`.
 - `resource`: gives `amount` of `resource` (negative takes it).
-- `status`: applies `status`, for its own duration unless `duration` says otherwise.
+- `status`: applies `status`, for its own duration unless `duration` says otherwise, and `durationPerSpent` seconds more for each point spent. Amounts in the status's effects count the points this ability spent.
 - `interrupt`: stops a cast, and locks its school out for `lockout` seconds.
 - `dispel`: removes up to `count` statuses, 1 by default, of the kinds `dispels` lists.
+- `cooldown`: changes the caster's cooldowns on `abilities`, by id from the same class, or on abilities with this `tag`. `by` takes that many seconds off, `reset` makes them ready with every charge, and `charges` gives back that many charges.
+- `consume`: takes `status` off those it `affects`, or just `stacks` stacks of it. It's for an ability using up a status of its own, where `dispel` removes by kind.
+- `chance`, on any effect, 0 to 1: how likely it is to happen, 1 by default. `chancePerSpent` adds that much for each point spent, here and on a `trigger`.
+- `when`, on any effect: conditions written as `requires`. The effect only happens while they hold.
+- `softCap`, on any effect that hits several: past this many hit, those hit share this many's worth, split evenly.
+- `perTargetHit`, on any effect: its amount, or a `cooldown` effect's `by`, counts once for each one the ability hits. `maxTotal` is the most it can come to.
+- `exceptTarget`, on any effect: leaves the ability's target out of those it `affects`.
 - `resurrect`: brings a dead ally back, with `health` percent of its health.
 - `taunt`: makes a mob attack you for `duration`.
 - `move`: moves someone, as `kind` says:
@@ -770,6 +777,7 @@ A class's abilities live in its file. `abilities/<id>.json` is for those that ar
 - `duration`: how long it lasts, unless whatever applies it says otherwise. Leave it out for one that lasts until something removes it.
 - `stacking`: what happens when it lands again. `refresh` resets the duration (and keeps up to 30% of what was left), `replace` starts it over, and `stack` adds a stack up to `maxStacks`, refreshing the duration. Effects scale with stacks.
 - `breaksOn`: any of `move`, `damage` and `action` (using an ability or attacking). Food and drink break on `move` and `damage`, and stealth on `damage` and `action`.
+- `consumedBy`: ends it when the holder uses one of these `abilities`, by id from the same class, or an ability with this `tag`. A `modify` on the status still changes that use. `uses` makes it last that many uses, for "your next 3". `stacks` takes that many stacks each use, instead of ending it. The ability doesn't know about it.
 - `pose`: `sit` sits you down while it lasts.
 - `aura`: a visual on the unit while it lasts, `{ effect, colors }`.
 
@@ -777,15 +785,25 @@ Effects:
 
 Any effect can have `when`, conditions written as an ability's `requires`, checked as the fight goes. It only works while they hold.
 
-- `stat`: changes `stat` by `add` or `multiply`. `school` limits a damage or healing stat to one school. Stats:
+- `stat`: changes `stat` by `add` or `multiply`, and `addPerSpent` or `multiplyPerSpent` more for each point spent by the ability that applied it. `school` or `schools` limits a damage or healing stat to those schools, and `abilities`, `tag`, `statuses` and `hit` narrow it the way they narrow a `trigger`. With `statuses` it changes the damage or healing those statuses do. `casterOnly`, on a status you put on someone, limits it to what passes between its holder and the one who applied it, so `damageTaken` counts only what that caster does to the holder, and `damageDone` only what the holder does to that caster. Stats:
   - from gear: `strength`, `agility`, `intellect`, `stamina`, `armor`, `critRating`, `hasteRating`, `masteryRating`, `versatilityRating`, `leechRating`, `avoidanceRating` and `speedRating`;
   - worked out from those: `attackPower`, `spellPower`, `maxHealth`, `critChance`, `critDamage`, `haste`, `mastery`, `versatility`, `leech`, `avoidance`, `dodge`, `parry`, `block`, `movementSpeed`, `attackSpeed`, `stealth` and `detection` (in levels), where percentages add in points;
   - outcomes: `damageDone`, `healingDone`, `damageTaken`, `healingTaken` and `threat`, which multiply.
 - `periodic`: every `every` seconds (shorter with the caster's haste), does `damage`, `heal` or `resource` by `amount`. `school` and `resource` as for ability effects.
 - `absorb`: soaks up `amount` of damage, of `schools` if it lists them, then ends.
 - `control`: one of `stun`, `root`, `silence`, `incapacitate`, `disorient`, `fear` and `disarm`. Damage breaks incapacitate, disorient and fear.
-- `trigger`: when the holder does something (`on`: `dealDamage`, `takeDamage`, `heal`, `crit`, `cast`, `dodge`, `parry` or `block`, or `healthBelow` when its health drops below `threshold` percent), with `chance` (0 to 1, 1 by default), at most once each `cooldown` seconds, applies `effect`, an ability effect that `affects` `self` or `target`.
+- `trigger`: when `on` happens, with `chance` (0 to 1, 1 by default), at most once each `cooldown` seconds, applies `effect`, an ability effect that `affects` `self` or `target`. `on` is one of:
+  - The holder's hits: `dealDamage`, `takeDamage`, `heal`, `healed` (something heals it), `overheal`, `crit`, `nonCrit`, `dodge`, `parry`, `block`.
+  - The holder's actions: `cast`, `channelEnd`, `spend` (it spends a resource), `kill`, `interrupt`, `dispel` (it removes a status), `pickup`.
+  - Health: `healthBelow` or `allyHealthBelow`, when the holder or an ally drops below `threshold` percent, and `wouldDie`, when a hit would kill the holder.
+  - A status's life: `statusGained`, `statusConsumed`, `statusEnds`, `dispelled` and `holderDies`. Name the statuses in `statuses`, or leave it out to mean this status.
+  It can be narrowed, and each filter it has must match. `abilities` or `tag` limits it to those abilities, `statuses` to those statuses, by id from the same class, and `school` or `schools` to those schools. `hit` limits it to a kind of hit: `auto` (a weapon swing), `ability` (not a swing), `melee`, `direct` (not periodic), `periodic`, `area`, `main` (the ability's target), `others` (not its target) or `single` (the only one hit). `atTargets` needs the ability to hit at least that many. `casterOnly`, on a status you put on someone, limits it to what the one who applied it does. `atStacks` needs at least that many stacks of the status, for `statusGained` and `statusConsumed`. `full` needs a channel to run its whole length. `pickup` limits it to a kind of pickup, and `resource` to spending that resource, by key.
 - `stealth`: hides the holder. Others see it only when they detect it, which depends on how near it is, whether they face it, and the gap between its level plus its `stealth` stat and their level plus their `detection` stat. Undetected, it can't be targeted, but areas still hit it. Entering combat, or being hit, ends the status. Stealth's slower movement is a `movementSpeed` stat effect beside it.
+- `modify`: changes abilities the holder uses while it's on, as `stat` changes a stat. The ability itself doesn't know about it. `abilities` picks them by id, from the same class, and `tag` picks all with that tag. Then either:
+  - `change` says what changes, by `add`, `multiply` or `set` (`set` goes first, then `add`, then `multiply`). `cost` covers each thing it spends, `cooldown`, `castTime` and `charges` are its own, `cooldownRate` is how fast its cooldown runs while the status lasts, `range` and `radius` are in feet, `maxTargets` is the `max` of its area effects, `duration` is how long the statuses it applies last, `damage` and `healing` are what its effects do, and `critChance` and `critDamage` add in points. One `modify` makes one change, so two changes are two effects, like `{ "type": "modify", "abilities": ["frst0001"], "change": "cooldown", "add": -2 }`.
+  - `addEffects` lists more ability effects for them to do.
+- `modify` of `statuses`: changes statuses, by id, from the same class, instead of abilities. `change` is `duration` or `maxStacks`, by `add`, `multiply` or `set`, or `statusEffects` lists more effects for them to have, like `{ "type": "modify", "statuses": ["chil0001"], "change": "duration", "add": 2 }`.
+- `param` on an effect names its number, so a `modify` can change just that number: `{ "type": "stat", "stat": "damageTaken", "multiply": 0.8, "param": "reduction" }` on a status, and `{ "type": "modify", "statuses": ["bark0001"], "change": "reduction", "add": -0.1 }` on a talent. Ability effects can have one too, for a `modify` of `abilities`. The number is a stat's `add` or `multiply`, or its `share` with `fromStat`, the `amount` of a periodic, absorb, damage or heal effect, and a trigger's `chance`. An `amount` that's an object takes `multiply` and `set`, not `add`. Several talents changing one `param` all count, in the `set`, `add`, `multiply` order.
 - `none`: nothing, for a status other things look for by name.
 
 ### Items
@@ -1053,7 +1071,7 @@ The game server decides what abilities do, from the class files in the released 
 - **Stats:** at level 1, primary stats are 12 and the others 6, stamina 12, attack power is twice the higher of strength and agility, spell power twice intellect, and health ten times stamina. A weapon swing does 10. A hit has a 5% chance to do double.
 - **Resources:** mana holds 1000 and regains 20 a second, energy holds 100 and regains 10, and rage holds 100, starts empty and falls by 1. Points hold `max` and go by `regen`.
 - **Enemies:** only training dummies, for now. A dummy has 100000 health, never drops below 1, and heals up and starts its damage tally over after 5 s unhit.
-- **Not yet:** the `interrupt`, `taunt`, `move`, `dispel` and `resurrect` effects do nothing, what a status does while it's on (`effects`) doesn't apply, nothing checks line of sight, and nothing misses, or is dodged, parried or blocked.
+- **Not yet:** an `all` cost spends only its least, and `perSpent`, `maxHealth` and `shareOfTrigger` amounts and `perSpent` durations count for nothing. The `interrupt`, `taunt`, `move`, `dispel`, `consume`, `cooldown` and `resurrect` effects do nothing, `consumedBy` does nothing, `when` and `chance` on an ability's effect aren't checked, what a status does while it's on (`effects`) doesn't apply, nothing checks line of sight, and nothing misses, or is dodged, parried or blocked.
 
 ### Rails and the game server
 

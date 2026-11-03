@@ -65,6 +65,31 @@
       },
       "uniqueItems": true
     },
+    "consumedBy": {
+      "type": "object",
+      "description": "it ends when the holder uses one of these abilities, by id from the same class, or with this tag",
+      "properties": {
+        "abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/id"
+          }
+        },
+        "tag": {
+          "type": "string"
+        },
+        "uses": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "how many uses it lasts, 1 by default. These aren't stacks: its effects don't scale with them"
+        },
+        "stacks": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "takes this many stacks each use, instead of ending"
+        }
+      }
+    },
     "pose": {
       "enum": [
         "sit"
@@ -100,6 +125,7 @@
               "control",
               "trigger",
               "stealth",
+              "modify",
               "none"
             ]
           },
@@ -111,6 +137,10 @@
           },
           "multiply": {
             "type": "number"
+          },
+          "set": {
+            "type": "number",
+            "description": "modify: makes it this. Applied before `add` and `multiply`"
           },
           "school": {
             "$ref": "common.schema.json#/$defs/school"
@@ -130,7 +160,8 @@
             "$ref": "common.schema.json#/$defs/amount"
           },
           "resource": {
-            "type": "string"
+            "type": "string",
+            "description": "trigger, for spend: only spending this resource, by key"
           },
           "schools": {
             "type": "array",
@@ -159,19 +190,76 @@
               "dodge",
               "parry",
               "block",
-              "healthBelow"
+              "healthBelow",
+              "statusGained",
+              "statusConsumed",
+              "statusEnds",
+              "holderDies",
+              "kill",
+              "dispel",
+              "dispelled",
+              "interrupt",
+              "channelEnd",
+              "wouldDie",
+              "pickup",
+              "spend",
+              "overheal",
+              "nonCrit",
+              "healed",
+              "allyHealthBelow"
             ]
+          },
+          "hit": {
+            "enum": [
+              "auto",
+              "ability",
+              "melee",
+              "direct",
+              "area",
+              "main",
+              "others",
+              "single",
+              "periodic"
+            ],
+            "description": "stat, trigger or modify: only for this kind of hit"
+          },
+          "atTargets": {
+            "type": "integer",
+            "minimum": 2,
+            "description": "trigger or modify: only when the ability hits at least this many"
+          },
+          "casterOnly": {
+            "type": "boolean",
+            "description": "stat or trigger, on a status you put on someone: only for what passes between its holder and the one who applied it"
           },
           "threshold": {
             "type": "number",
             "minimum": 0,
             "maximum": 100,
-            "description": "percent, for healthBelow"
+            "description": "percent, for healthBelow and allyHealthBelow"
+          },
+          "atStacks": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "trigger, for statusGained or statusConsumed: only when the status has at least this many stacks"
+          },
+          "full": {
+            "type": "boolean",
+            "description": "trigger, for channelEnd: only when the channel runs its whole length"
+          },
+          "pickup": {
+            "type": "string",
+            "description": "trigger, for pickup or overheal: only this kind of pickup"
           },
           "chance": {
             "type": "number",
             "minimum": 0,
             "maximum": 1
+          },
+          "chancePerSpent": {
+            "type": "number",
+            "minimum": 0,
+            "description": "trigger: more chance for each point the ability spends"
           },
           "cooldown": {
             "type": "number",
@@ -185,6 +273,54 @@
             "items": {
               "$ref": "common.schema.json#/$defs/condition"
             }
+          },
+          "addPerSpent": {
+            "type": "number",
+            "description": "stat: `add` more for each point the ability that applied it spent"
+          },
+          "multiplyPerSpent": {
+            "type": "number",
+            "description": "stat: added to `multiply` for each point the ability that applied it spent"
+          },
+          "abilities": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/id"
+            },
+            "description": "modify: the abilities it changes. trigger: only for these. By id, from the same class"
+          },
+          "tag": {
+            "type": "string",
+            "description": "modify: changes every ability with this tag. trigger: only for abilities with this tag"
+          },
+          "statuses": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/id"
+            },
+            "description": "modify: the statuses it changes. trigger: only for these. By id, from the same class"
+          },
+          "change": {
+            "type": "string",
+            "description": "modify: what changes, one of cost, cooldown, cooldownRate, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, maxStacks, or a param its target names"
+          },
+          "addEffects": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/effect"
+            },
+            "description": "modify: effects the abilities also do"
+          },
+          "statusEffects": {
+            "type": "array",
+            "items": {
+              "$ref": "#/properties/effects/items"
+            },
+            "description": "modify of `statuses`: effects they also have"
+          },
+          "param": {
+            "type": "string",
+            "description": "names this effect's number, so a modify can change it"
           }
         }
       }

@@ -20,9 +20,10 @@ export function setKey(object, key, value) {
   else object[key] = value;
 }
 
-const AMOUNT_PARTS = ["attackPower", "spellPower", "weapon", "mastery"];
+const AMOUNT_PARTS = ["attackPower", "spellPower", "weapon", "mastery", "maxHealth", "shareOfTrigger"];
 
-// An amount as the form shows it: { min, max, attackPower, spellPower, weapon, mastery }.
+// An amount as the form shows it: { min, max, attackPower, spellPower, weapon, mastery, maxHealth, shareOfTrigger, perSpent },
+// perSpent being another of these.
 export function readAmount(amount) {
   if (amount === undefined || amount === null) return {};
   if (typeof amount === "number") return { min: amount, max: amount };
@@ -30,15 +31,18 @@ export function readAmount(amount) {
   const base = amount.base === undefined ? {} : readAmount(amount.base);
   const out = { ...base };
   for (const part of AMOUNT_PARTS) if (amount[part] !== undefined) out[part] = amount[part];
+  if (amount.perSpent !== undefined) out.perSpent = readAmount(amount.perSpent);
   return out;
 }
 
 // That back as the shortest amount that says it: a number, [min, max], or parts.
-export function writeAmount({ min, max, ...parts }) {
+export function writeAmount({ min, max, perSpent, ...parts }) {
   const low = min ?? max;
   const high = max ?? min;
   const base = low === undefined ? undefined : low === high ? low : [low, high];
   const others = Object.fromEntries(AMOUNT_PARTS.filter((part) => parts[part] !== undefined).map((part) => [part, parts[part]]));
+  const each = perSpent && writeAmount(perSpent);
+  if (each !== undefined) others.perSpent = each;
   if (!Object.keys(others).length) return base;
   return base === undefined ? others : { base, ...others };
 }
@@ -134,21 +138,23 @@ const RENDERERS = {
   amount: (field, value, { changed }) => {
     const parts = readAmount(value[field.key]);
     const keep = () => (setKey(value, field.key, writeAmount(parts)), changed());
-    const input = (part, label) => {
-      const box = el("input", { type: "number", step: "any", value: parts[part] ?? "", title: label, placeholder: label });
+    parts.perSpent ??= {};
+    const input = (held, part, label) => {
+      const box = el("input", { type: "number", step: "any", value: held[part] ?? "", title: label, placeholder: label });
       box.addEventListener("input", () => {
         const number = numberOf(box.value);
-        if (number === undefined) delete parts[part];
-        else parts[part] = number;
+        if (number === undefined) delete held[part];
+        else held[part] = number;
         keep();
       });
       return box;
     };
+    const inputs = (held, after = "") => [input(held, "min", `min${after}`), input(held, "max", `max${after}`), input(held, "attackPower", `× attack power${after}`), input(held, "spellPower", `× spell power${after}`), input(held, "weapon", `× weapon${after}`), input(held, "mastery", `× mastery${after}`), input(held, "maxHealth", `× max health${after}`), input(held, "shareOfTrigger", `× what set it off${after}`)];
     return el(
       "div",
       { className: "form-row", title: field.hint ?? "" },
       el("span", { className: "form-label", textContent: field.label ?? field.key }),
-      el("div", { className: "form-amount" }, input("min", "min"), input("max", "max"), input("attackPower", "× attack power"), input("spellPower", "× spell power"), input("weapon", "× weapon"), input("mastery", "× mastery")),
+      el("div", { className: "form-amount" }, ...inputs(parts), ...inputs(parts.perSpent, " per point spent")),
     );
   },
   group: (field, value, hooks) => {

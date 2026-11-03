@@ -136,8 +136,9 @@ export function amountText(amount) {
   if (typeof amount === "number" || Array.isArray(amount)) return base(amount);
   const parts = [];
   if (amount.base !== undefined) parts.push(base(amount.base));
-  const names = { attackPower: "attack power", spellPower: "spell power", weapon: "weapon", mastery: "mastery" };
+  const names = { attackPower: "attack power", spellPower: "spell power", weapon: "weapon", mastery: "mastery", maxHealth: "max health", shareOfTrigger: "what set it off" };
   for (const [key, name] of Object.entries(names)) if (amount[key] !== undefined) parts.push(`${amount[key]} × ${name}`);
+  if (amount.perSpent !== undefined) parts.push(`${amountText(amount.perSpent)} per point`);
   return parts.join(" + ");
 }
 

@@ -85,6 +85,7 @@ describe("what's shown", () => {
     expect(amountText(120)).toBe("120");
     expect(amountText([80, 120])).toBe("80-120");
     expect(amountText({ base: 5, spellPower: 1.1 })).toBe("5 + 1.1 × spell power");
+    expect(amountText({ base: 5, perSpent: { attackPower: 0.2 } })).toBe("5 + 0.2 × attack power per point");
   });
 
   it("names what lands, and on whom", () => {

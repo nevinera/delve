@@ -86,6 +86,18 @@
             },
             "mastery": {
               "type": "number"
+            },
+            "maxHealth": {
+              "type": "number",
+              "description": "a share of the maximum health of whoever it affects"
+            },
+            "shareOfTrigger": {
+              "type": "number",
+              "description": "a share of the hit or heal that set off the trigger or applied the status"
+            },
+            "perSpent": {
+              "$ref": "#/$defs/amount",
+              "description": "more for each point the ability spends with an `all` cost, or that the ability which applied the status spent"
             }
           }
         }
@@ -158,6 +170,11 @@
                 "self",
                 "target"
               ]
+            },
+            "stacks": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "at least this many stacks of it"
             }
           }
         },
@@ -182,6 +199,56 @@
           "properties": {
             "inCombat": {
               "type": "boolean"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "anyOf"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "anyOf": {
+              "type": "array",
+              "minItems": 2,
+              "items": {
+                "$ref": "#/$defs/condition"
+              },
+              "description": "holds when any of these does"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "not"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "not": {
+              "$ref": "#/$defs/condition",
+              "description": "holds when this doesn't"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "targetIs"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "targetIs": {
+              "enum": [
+                "enemy",
+                "ally",
+                "self",
+                "other",
+                "player",
+                "nonPlayer"
+              ],
+              "description": "what the ability is used on"
             }
           }
         }
@@ -383,7 +450,9 @@
             "taunt",
             "move",
             "dispel",
-            "resurrect"
+            "resurrect",
+            "consume",
+            "cooldown"
           ]
         },
         "affects": {
@@ -479,6 +548,81 @@
           "exclusiveMinimum": 0,
           "maximum": 100,
           "description": "resurrect: the percent of health it comes back with"
+        },
+        "durationPerSpent": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "status: seconds more for each point the ability spends with an `all` cost"
+        },
+        "stacks": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "consume: how many stacks it takes, all of them by default"
+        },
+        "abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "description": "cooldown: these abilities, by id from the same class"
+        },
+        "tag": {
+          "type": "string",
+          "description": "cooldown: abilities with this tag"
+        },
+        "by": {
+          "type": "number",
+          "minimum": 0,
+          "description": "cooldown: takes this many seconds off"
+        },
+        "reset": {
+          "type": "boolean",
+          "description": "cooldown: makes them ready now, with every charge"
+        },
+        "charges": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "cooldown: gives back this many charges"
+        },
+        "param": {
+          "type": "string",
+          "description": "names this effect's number, so a modify can change it"
+        },
+        "softCap": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "past this many hit, those hit share this many's worth, split evenly"
+        },
+        "perTargetHit": {
+          "type": "boolean",
+          "description": "its amount, or a cooldown effect's by, counts once for each one the ability hits"
+        },
+        "maxTotal": {
+          "type": "number",
+          "minimum": 0,
+          "description": "with perTargetHit: the most it can come to"
+        },
+        "exceptTarget": {
+          "type": "boolean",
+          "description": "leaves the ability's target out of those it affects"
+        },
+        "when": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/condition"
+          },
+          "description": "it only happens while these hold"
+        },
+        "chance": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "how likely it is to happen, 0 to 1, 1 by default"
+        },
+        "chancePerSpent": {
+          "type": "number",
+          "minimum": 0,
+          "description": "more chance for each point the ability spends"
         }
       }
     },

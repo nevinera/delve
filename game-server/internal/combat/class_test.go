@@ -23,6 +23,14 @@ func TestReadsAmountsInEachShape(t *testing.T) {
 	}
 }
 
+func TestReadsAScalingFinisher(t *testing.T) {
+	var a Ability
+	err := json.Unmarshal([]byte(`{"cost":[{"resource":"combo","amount":1,"all":true}],"effects":[{"type":"damage","affects":"target","amount":{"base":3,"perSpent":{"attackPower":0.2}}},{"type":"status","affects":"target","status":"x","duration":6,"durationPerSpent":6}]}`), &a)
+	if err != nil || a.Cost[0].Amount != 1 || a.Effects[0].Amount.Min != 3 {
+		t.Fatalf("read %+v, %v", a, err)
+	}
+}
+
 func TestReadsRanges(t *testing.T) {
 	var a Ability
 	if err := json.Unmarshal([]byte(`{"range": "melee"}`), &a); err != nil || !a.Range.Melee {

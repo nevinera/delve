@@ -13,12 +13,23 @@ const WHEN = ["cast", "launch", "impact", "channel"];
 const ON = ["caster", "target", "ground"];
 
 const is = (...types) => (value) => types.includes(value.type);
+const abilitiesOf = (made) => () => (made.abilities ?? []).map((a) => [a.id, a.name || a.id]);
 const statusesOf = (made) => () => (made.statuses ?? []).map((s) => [s.id, s.name || s.id]);
+const TRIGGERS = ["dealDamage", "takeDamage", "heal", "healed", "overheal", "crit", "nonCrit", "dodge", "parry", "block", "cast", "channelEnd", "spend", "kill", "interrupt", "dispel", "pickup", "healthBelow", "allyHealthBelow", "wouldDie", "statusGained", "statusConsumed", "statusEnds", "dispelled", "holderDies"];
+const triggerOn = (...events) => (e) => e.type === "trigger" && events.includes(e.on);
+const CHANGES = ["cost", "cooldown", "cooldownRate", "castTime", "charges", "range", "radius", "maxTargets", "duration", "damage", "healing", "critChance", "critDamage", "maxStacks"];
+// What a modify can change: the built-in values, and every param the class has named.
+const changesOf = (made) => () => {
+  const named = [...(made.abilities ?? []), ...(made.statuses ?? [])].flatMap((o) => (o.effects ?? []).map((e) => e.param)).filter(Boolean);
+  return [...CHANGES, ...new Set(named)];
+};
 const resourcesOf = (made) => () => (made.resources ?? []).map((r) => [r.key, r.name || r.key]);
 const main = { key: "colors", type: "words", label: "colors", hint: "[main, trim]: two #rrggbb colors, with commas" };
 
-const conditionFields = (made) => [
-  { key: "kind", type: "select", label: "needs", options: [["health", "health"], ["status", "a status"], ["stealthed", "stealth"], ["inCombat", "combat"]] },
+const simpleConditionFields = (made) => [
+  { key: "kind", type: "select", label: "needs", options: [["health", "health"], ["status", "a status"], ["stealthed", "stealth"], ["inCombat", "combat"], ["targetIs", "used on"]] },
+  { key: "targetIs", type: "select", label: "used on", options: ["enemy", "ally", "self", "other", "player", "nonPlayer"], show: (c) => c.kind === "targetIs" },
+  { key: "stacks", type: "number", label: "at stacks", min: 1, step: 1, show: (c) => c.kind === "status" },
   { key: "health", type: "select", options: ["self", "target"], show: (c) => c.kind === "health" },
   { key: "below", type: "number", label: "below %", min: 0, show: (c) => c.kind === "health" },
   { key: "above", type: "number", label: "above %", min: 0, show: (c) => c.kind === "health" },
@@ -27,10 +38,19 @@ const conditionFields = (made) => [
   { key: "yes", type: "check", label: "true", default: true, show: (c) => c.kind === "stealthed" || c.kind === "inCombat" },
 ];
 
+const conditionFields = (made) => [
+  ...simpleConditionFields(made).map((f) => (f.key === "kind" ? { ...f, options: [...f.options, ["anyOf", "any of"], ["not", "not"]] } : f)),
+  { key: "not", type: "list", one: "condition", blank: () => ({ kind: "status", on: "self" }), read: readCondition, write: writeCondition, fields: simpleConditionFields(made), show: (c) => c.kind === "not" },
+  { key: "anyOf", type: "list", one: "condition", blank: () => ({ kind: "status", on: "self" }), read: readCondition, write: writeCondition, fields: simpleConditionFields(made), show: (c) => c.kind === "anyOf" },
+];
+
 // A condition as the form edits it, with the `kind` the format leaves implicit.
 export function readCondition(condition) {
   if ("health" in condition) return { kind: "health", ...condition };
   if ("status" in condition) return { kind: "status", ...condition };
+  if ("anyOf" in condition) return { kind: "anyOf", anyOf: condition.anyOf.map(readCondition) };
+  if ("not" in condition) return { kind: "not", not: [readCondition(condition.not)] };
+  if ("targetIs" in condition) return { kind: "targetIs", targetIs: condition.targetIs };
   const kind = "stealthed" in condition ? "stealthed" : "inCombat" in condition ? "inCombat" : "health";
   return kind === "health" ? { kind, health: "self" } : { kind, yes: condition[kind] };
 }
@@ -38,12 +58,15 @@ export function readCondition(condition) {
 // That back as the format has it.
 export function writeCondition({ kind, ...c }) {
   if (kind === "health") return { health: c.health ?? "self", ...(c.below !== undefined ? { below: c.below } : c.above !== undefined ? { above: c.above } : { below: 100 }) };
-  if (kind === "status") return { status: c.status ?? "", on: c.on ?? "self" };
+  if (kind === "status") return { status: c.status ?? "", on: c.on ?? "self", ...(c.stacks !== undefined ? { stacks: c.stacks } : {}) };
+  if (kind === "not") return { not: writeCondition(c.not?.[0] ?? { kind: "status" }) };
+  if (kind === "targetIs") return { targetIs: c.targetIs ?? "enemy" };
+  if (kind === "anyOf") return { anyOf: (c.anyOf ?? []).map(writeCondition) };
   return { [kind]: c.yes ?? true };
 }
 
 const effectFields = (made) => [
-  { key: "type", type: "select", options: ["damage", "heal", "resource", "status", "interrupt", "taunt", "move", "dispel", "resurrect"] },
+  { key: "type", type: "select", options: ["damage", "heal", "resource", "status", "interrupt", "taunt", "move", "dispel", "consume", "cooldown", "resurrect"] },
   { key: "affects", type: "select", options: ["target", "self", "enemies", "allies"] },
   { key: "around", type: "select", none: "self", options: ["target", "ground"], show: (e) => ["enemies", "allies"].includes(e.affects) },
   { key: "radius", type: "number", label: "radius ft", min: 0, show: (e) => ["enemies", "allies"].includes(e.affects) },
@@ -51,10 +74,25 @@ const effectFields = (made) => [
   { key: "cone", type: "number", label: "cone °", min: 0, hint: "a slice in front of you, around yourself only", show: (e) => ["enemies", "allies"].includes(e.affects) },
   { key: "max", type: "number", label: "at most", min: 1, step: 1, hint: "how many it hits, nearest first", show: (e) => ["enemies", "allies"].includes(e.affects) },
   { key: "amount", type: "amount", show: is("damage", "heal", "resource") },
+  { key: "param", label: "named", hint: "a name other things can change this number by", show: is("damage", "heal") },
+  { key: "when", type: "list", one: "condition", blank: () => ({ kind: "status", on: "self" }), read: readCondition, write: writeCondition, fields: conditionFields(made) },
+  { key: "chance", type: "number", min: 0, hint: "0 to 1, 1 by default" },
+  { key: "chancePerSpent", label: "chance per point", type: "number", min: 0 },
+  { key: "softCap", label: "soft cap", type: "number", min: 1, step: 1, hint: "past this many hit, they share this many's worth", show: is("damage", "heal") },
+  { key: "perTargetHit", label: "per target hit", type: "check", show: is("damage", "heal", "resource", "cooldown") },
+  { key: "maxTotal", label: "at most", type: "number", min: 0, show: (e) => Boolean(e.perTargetHit) },
+  { key: "exceptTarget", label: "not the target", type: "check", show: (e) => ["enemies", "allies"].includes(e.affects) },
   { key: "school", type: "select", none: "the ability's", options: SCHOOLS, show: is("damage") },
   { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: is("resource") },
-  { key: "status", type: "select", none: "pick one", options: statusesOf(made), show: is("status") },
+  { key: "status", type: "select", none: "pick one", options: statusesOf(made), show: is("status", "consume") },
+  { key: "stacks", type: "number", min: 1, step: 1, hint: "all of them by default", show: is("consume") },
+  { key: "abilities", type: "multi", options: abilitiesOf(made), show: is("cooldown") },
+  { key: "tag", label: "or tag", show: is("cooldown") },
+  { key: "by", label: "seconds off", type: "number", min: 0, show: is("cooldown") },
+  { key: "reset", label: "make ready", type: "check", show: is("cooldown") },
+  { key: "charges", label: "charges back", type: "number", min: 1, step: 1, show: is("cooldown") },
   { key: "duration", type: "number", label: "duration s", min: 0, hint: "how long it lasts", show: is("status", "taunt") },
+  { key: "durationPerSpent", type: "number", label: "s per point spent", min: 0, hint: "more for each point an `all` cost spends", show: is("status") },
   { key: "lockout", type: "number", label: "lockout s", min: 0, show: is("interrupt") },
   { key: "kind", type: "select", options: ["charge", "leap", "knockback", "pull", "blink"], show: is("move") },
   { key: "distance", type: "number", label: "distance ft", min: 0, show: (e) => e.type === "move" && ["knockback", "blink"].includes(e.kind) },
@@ -117,7 +155,7 @@ export const abilityFields = (made) => [
   { key: "cooldown", label: "cooldown s", type: "number", min: 0 },
   { key: "charges", type: "number", min: 1, step: 1 },
   { key: "cooldownHasted", label: "cooldown hasted", type: "check" },
-  { key: "cost", type: "list", one: "cost", blank: () => ({ resource: "" }), fields: [{ key: "resource", type: "select", none: "pick one", options: resourcesOf(made) }, { key: "amount", type: "number", min: 0 }, { key: "percent", label: "or % of base", type: "number", min: 0 }] },
+  { key: "cost", type: "list", one: "cost", blank: () => ({ resource: "" }), fields: [{ key: "resource", type: "select", none: "pick one", options: resourcesOf(made) }, { key: "amount", type: "number", min: 0 }, { key: "percent", label: "or % of base", type: "number", min: 0 }, { key: "all", label: "spends all", type: "check", hint: "needs at least that much, and spends all you have" }] },
   { key: "requires", type: "list", one: "condition", blank: () => ({ kind: "health", health: "target" }), read: readCondition, write: writeCondition, fields: conditionFields(made) },
   { key: "creatureTypes", label: "only on", type: "multi", options: CREATURE_TYPES },
   { key: "effects", type: "list", one: "effect", blank: blankEffect, fields: effectFields(made) },
@@ -151,21 +189,40 @@ export const abilityFields = (made) => [
   { key: "notes", type: "area" },
 ];
 
-const statusEffectFields = (made) => [
-  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "stealth", "none"] },
+const statusEffectFields = (made, nested = false) => [
+  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "stealth", "modify", "none"] },
   { key: "stat", type: "select", none: "pick one", options: STATS, show: is("stat") },
-  { key: "add", type: "number", show: is("stat") },
-  { key: "multiply", type: "number", show: is("stat") },
-  { key: "school", type: "select", none: "any", options: SCHOOLS, show: is("stat", "periodic") },
+  { key: "abilities", type: "multi", options: abilitiesOf(made), show: is("modify", "trigger", "stat") },
+  { key: "tag", label: "or tag", show: is("modify", "trigger", "stat") },
+  { key: "statuses", type: "multi", options: statusesOf(made), show: is("modify", "trigger", "stat") },
+  { key: "change", type: "select", none: "adds effects", options: changesOf(made), show: is("modify") },
+  { key: "set", type: "number", show: (e) => e.type === "modify" && e.change },
+  { key: "add", type: "number", show: (e) => e.type === "stat" || (e.type === "modify" && e.change) },
+  { key: "multiply", type: "number", show: (e) => e.type === "stat" || (e.type === "modify" && e.change) },
+  { key: "addEffects", label: "adds effects", type: "list", one: "effect", blank: () => ({ type: "damage", affects: "target" }), fields: effectFields(made), show: (e) => e.type === "modify" && !e.change && !e.statuses?.length },
+  ...(nested ? [] : [{ key: "statusEffects", label: "adds status effects", type: "list", one: "effect", blank: () => ({ type: "stat" }), fields: statusEffectFields(made, true), show: (e) => e.type === "modify" && !e.change && e.statuses?.length }]),
+  { key: "addPerSpent", label: "add per point spent", type: "number", show: is("stat") },
+  { key: "multiplyPerSpent", label: "multiply per point spent", type: "number", show: is("stat") },
+  { key: "school", type: "select", none: "any", options: SCHOOLS, show: is("stat", "periodic", "trigger") },
   { key: "every", label: "every s", type: "number", min: 0, show: is("periodic") },
   { key: "does", type: "select", options: ["damage", "heal", "resource"], show: is("periodic") },
   { key: "amount", type: "amount", show: is("periodic", "absorb") },
   { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: (e) => e.type === "periodic" && e.does === "resource" },
-  { key: "schools", type: "multi", options: SCHOOLS, show: is("absorb") },
+  { key: "schools", type: "multi", options: SCHOOLS, show: is("absorb", "trigger", "stat") },
   { key: "control", type: "select", options: ["stun", "root", "silence", "incapacitate", "disorient", "fear", "disarm"], show: is("control") },
-  { key: "on", type: "select", options: ["dealDamage", "takeDamage", "heal", "crit", "cast", "dodge", "parry", "block", "healthBelow"], show: is("trigger") },
-  { key: "threshold", label: "below %", type: "number", min: 0, show: (e) => e.type === "trigger" && e.on === "healthBelow" },
+  { key: "on", type: "select", options: TRIGGERS, show: is("trigger") },
+  { key: "hit", type: "select", none: "any", options: ["auto", "ability", "melee", "direct", "periodic", "area", "main", "others", "single"], show: is("trigger", "stat", "modify") },
+  { key: "atTargets", label: "at targets hit", type: "number", min: 2, step: 1, show: is("trigger", "modify") },
+  { key: "casterOnly", label: "only with its caster", type: "check", show: is("trigger", "stat") },
+  { key: "threshold", label: "below %", type: "number", min: 0, show: triggerOn("healthBelow", "allyHealthBelow") },
+  { key: "atStacks", label: "at stacks", type: "number", min: 1, step: 1, show: triggerOn("statusGained", "statusConsumed") },
+  { key: "full", label: "whole channel", type: "check", show: triggerOn("channelEnd") },
+  { key: "pickup", show: triggerOn("pickup", "overheal") },
+  { key: "resource", type: "select", none: "any", options: resourcesOf(made), show: triggerOn("spend") },
+  { key: "param", label: "named", hint: "a name other things can change this number by", show: is("stat", "periodic", "absorb") },
   { key: "chance", type: "number", min: 0, hint: "0 to 1, 1 by default", show: is("trigger") },
+  { key: "chancePerSpent", label: "chance per point", type: "number", min: 0, show: is("trigger") },
+  { key: "param", label: "named", hint: "a name other things can change this chance by", show: is("trigger") },
   { key: "cooldown", label: "cooldown s", type: "number", min: 0, show: is("trigger") },
   { key: "effect", type: "group", fields: effectFields(made), show: is("trigger") },
   { key: "when", type: "list", one: "condition", blank: () => ({ kind: "health", health: "self" }), read: readCondition, write: writeCondition, fields: conditionFields(made) },
@@ -181,6 +238,17 @@ export const statusFields = (made) => [
   { key: "stacking", type: "select", none: "refresh", options: ["replace", "stack"] },
   { key: "maxStacks", label: "max stacks", type: "number", min: 1, step: 1, show: (s) => s.stacking === "stack" },
   { key: "breaksOn", label: "breaks on", type: "multi", options: ["move", "damage", "action"] },
+  {
+    key: "consumedBy",
+    label: "used up by",
+    type: "group",
+    fields: [
+      { key: "abilities", type: "multi", options: abilitiesOf(made) },
+      { key: "tag", label: "or tag" },
+      { key: "uses", type: "number", min: 1, step: 1, hint: "how many uses it lasts, 1 by default" },
+      { key: "stacks", type: "number", min: 1, step: 1, hint: "takes this many stacks each use, instead of ending" },
+    ],
+  },
   { key: "pose", type: "select", none: "none", options: ["sit"] },
   { key: "aura", type: "group", fields: [{ key: "effect", type: "select", none: "none", options: VISUALS }, main] },
   { key: "effects", type: "list", one: "effect", blank: () => ({ type: "stat" }), fields: statusEffectFields(made) },

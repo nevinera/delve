@@ -119,6 +119,10 @@
           "percent": {
             "type": "number",
             "exclusiveMinimum": 0
+          },
+          "all": {
+            "type": "boolean",
+            "description": "spends all you have of the resource, needing at least `amount` or `percent`"
           }
         },
         "oneOf": [
