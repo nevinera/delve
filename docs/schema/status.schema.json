@@ -216,10 +216,7 @@
             "description": "trigger, for spend: only spending this resource, by key"
           },
           "schools": {
-            "type": "array",
-            "items": {
-              "$ref": "common.schema.json#/$defs/school"
-            }
+            "$ref": "common.schema.json#/$defs/schools"
           },
           "control": {
             "enum": [

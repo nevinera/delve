@@ -732,7 +732,7 @@ Only a class's `id` and `name` are required for now, so the class editor can sav
 - `cooldown`, `charges` and `cooldownHasted`: its own cooldown, how many uses it stores, and whether haste shortens it.
 - `cost`: what it spends, each `{ resource, amount }`, or `{ resource: "mana", percent }` of base mana. You can't use it without enough. `all: true` spends all you have of it, needing at least that much. An ability can have one such cost, and what it spends is the "points spent" that `perSpent` amounts, `durationPerSpent` and a status's `addPerSpent` and `multiplyPerSpent` count. A finisher costs `{ "resource": "combo", "amount": 1, "all": true }`.
 - `speed`: a projectile's speed. Its effects aimed at the target land when it arrives, and fizzle if the target dies first.
-- `school`: the school of its damage, unless an effect says otherwise.
+- `school`: the school of its damage, unless an effect says otherwise. `schools` instead lists several, or `all` for every school. A hit in several counts as each of them: a bonus to any applies, and immunity has to cover them all.
 - `effects`: what it does, below.
 - `visuals` and `sounds`: what plays, from the stock sets the core world ships. Each picks an `effect` or `sound`, `when` it plays (`cast`, `launch`, `impact` or `channel`), and `on` (`caster`, `target` or `ground`, the target by default for impacts). Visuals take `colors` and `scale`, and sounds take `volume` and `pitch`, each 1 by default.
 - `tags`: free-form words for sorting, and for a status's `modify` to pick abilities by.
@@ -747,7 +747,7 @@ Each effect has a `type` and an `affects`:
 
 Types:
 
-- `damage`: `amount`, and `school` to override the ability's.
+- `damage`: `amount`, and `school` or `schools` to override the ability's.
 - `heal`: `amount`.
 - `resource`: gives `amount` of `resource` (negative takes it).
 - `status`: applies `status`, for its own duration unless `duration` says otherwise, and `durationPerSpent` seconds more for each point spent. Amounts in the status's effects count the points this ability spent.
@@ -818,7 +818,7 @@ Any effect can have `when`, conditions written as an ability's `requires`, check
   - from gear: `strength`, `agility`, `intellect`, `stamina`, `armor`, `critRating`, `hasteRating`, `masteryRating`, `versatilityRating`, `leechRating`, `avoidanceRating` and `speedRating`;
   - worked out from those: `attackPower`, `spellPower`, `maxHealth`, `critChance`, `critDamage`, `haste`, `mastery`, `versatility`, `leech`, `avoidance`, `dodge`, `parry`, `block`, `movementSpeed`, `attackSpeed`, `stealth` and `detection` (in levels), where percentages add in points;
   - outcomes: `damageDone`, `healingDone`, `damageTaken`, `healingTaken` and `threat`, which multiply.
-- `periodic`: every `every` seconds (shorter with the caster's haste), does `damage`, `heal` or `resource` by `amount`. `school` and `resource` as for ability effects.
+- `periodic`: every `every` seconds (shorter with the caster's haste), does `damage`, `heal` or `resource` by `amount`. `school`, `schools` and `resource` as for ability effects.
 - `absorb`: soaks up `amount` of damage, of `schools` if it lists them, then ends.
 - `control`: one of `stun`, `root`, `silence`, `incapacitate`, `disorient`, `fear` and `disarm`. Damage breaks incapacitate, disorient and fear.
 - `trigger`: when `on` happens, with `chance` (0 to 1, 1 by default), at most once each `cooldown` seconds, applies `effect`, an ability effect that `affects` `self` or `target`. `on` is one of:
@@ -1105,7 +1105,7 @@ The game server decides what abilities do, from the class files in the released 
 - **Stats:** at level 1, primary stats are 12 and the others 6, stamina 12, attack power is twice the higher of strength and agility, spell power twice intellect, and health ten times stamina. A weapon swing does 10. A hit has a 5% chance to do double.
 - **Resources:** mana holds 1000 and regains 20 a second, energy holds 100 and regains 10, and rage holds 100, starts empty and falls by 1. Points hold `max` and go by `regen`.
 - **Enemies:** only training dummies, for now. A dummy has 100000 health, never drops below 1, and heals up and starts its damage tally over after 5 s unhit.
-- **Not yet:** an `all` cost spends only its least, and `perSpent`, `byMastery`, `maxHealth` and `shareOfTrigger` amounts and `perSpent` durations count for nothing. The `interrupt`, `taunt`, `move`, `dispel`, `consume`, `cooldown` and `resurrect` effects do nothing, `summon`, `command`, `area`, `aura` and `units` do nothing, `specializations` and `talents` aren't offered, `consumedBy` does nothing, `requires` isn't checked, a status's `group` and `keptBy` and the `transform` and `addTags` effects do nothing, `when`, `chance` and `perCount` on an ability's effect aren't checked, what a status does while it's on (`effects`), including `immune`, doesn't apply, nothing checks line of sight, and nothing misses, or is dodged, parried or blocked.
+- **Not yet:** an `all` cost spends only its least, and `perSpent`, `byMastery`, `maxHealth` and `shareOfTrigger` amounts and `perSpent` durations count for nothing. The `interrupt`, `taunt`, `move`, `dispel`, `consume`, `cooldown` and `resurrect` effects do nothing, `summon`, `command`, `area`, `aura` and `units` do nothing, `specializations` and `talents` aren't offered, `consumedBy` does nothing, `requires` isn't checked, `schools` on an ability or hit counts as no school, a status's `group` and `keptBy` and the `transform` and `addTags` effects do nothing, `when`, `chance` and `perCount` on an ability's effect aren't checked, what a status does while it's on (`effects`), including `immune`, doesn't apply, nothing checks line of sight, and nothing misses, or is dodged, parried or blocked.
 
 ### Rails and the game server
 

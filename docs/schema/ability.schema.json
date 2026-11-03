@@ -26,6 +26,9 @@
     "school": {
       "$ref": "common.schema.json#/$defs/school"
     },
+    "schools": {
+      "$ref": "common.schema.json#/$defs/schools"
+    },
     "target": {
       "enum": [
         "enemy",

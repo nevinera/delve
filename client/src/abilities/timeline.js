@@ -21,7 +21,7 @@ const AFTER_S = 1.2; // how long the scene carries on after the last thing happe
 // Where a visual or sound goes if it doesn't say: impacts on the target, the rest on the caster.
 const defaultOn = (when, ability) => (when !== "impact" ? "caster" : ability.target === "ground" ? "ground" : ability.target === "self" || ability.target === "none" ? "caster" : "target");
 
-export const schoolColors = (ability) => SCHOOL_COLORS[ability.school] ?? SCHOOL_COLORS.physical;
+export const schoolColors = (ability) => SCHOOL_COLORS[ability.school ?? ability.schools?.[0]] ?? SCHOOL_COLORS.physical;
 
 // Which clip it plays as it's let go: a melee attack, a shot if it's physical with a ranged weapon
 // in hand, or a spell.

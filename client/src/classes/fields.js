@@ -6,6 +6,7 @@ import { TALENT_TIERS, TALENT_TIER_STEP } from "./classFile.js";
 // What the class editor's forms hold, by the formats in formats.md. Fields that pick a status or a
 // resource take their options from the class being edited.
 const SCHOOLS = ["physical", "holy", "fire", "nature", "frost", "shadow", "arcane"];
+const SCHOOL_LISTS = [...SCHOOLS, "all"];
 const DISPELS = ["magic", "curse", "poison", "disease", "enrage", "stun", "root", "silence", "incapacitate", "disorient", "fear", "disarm", "slow"];
 const CREATURE_TYPES = ["beast", "humanoid", "undead", "elemental", "demon", "dragonkin", "giant", "mechanical", "aberration", "critter"];
 const STATS = ["strength", "agility", "intellect", "stamina", "armor", "critRating", "hasteRating", "masteryRating", "versatilityRating", "leechRating", "avoidanceRating", "speedRating", "attackPower", "spellPower", "maxHealth", "critChance", "critDamage", "haste", "mastery", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed", "stealth", "detection", "damageDone", "healingDone", "damageTaken", "healingTaken", "threat"];
@@ -122,6 +123,7 @@ const effectFields = (made, nested = false) => [
   { key: "maxTotal", label: "at most", type: "number", min: 0, show: (e) => Boolean(e.perTargetHit) },
   { key: "exceptTarget", label: "not the target", type: "check", show: (e) => ["enemies", "allies"].includes(e.affects) },
   { key: "school", type: "select", none: "the ability's", options: SCHOOLS, show: is("damage") },
+  { key: "schools", label: "or schools", type: "multi", options: SCHOOL_LISTS, show: is("damage") },
   { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: is("resource") },
   { key: "status", type: "select", none: "pick one", options: statusesOf(made), show: is("status", "consume") },
   { key: "stacks", type: "number", min: 1, step: 1, hint: "all of them by default", show: is("consume") },
@@ -249,6 +251,7 @@ export const abilityFields = (made) => [
   { key: "description", type: "area" },
   { key: "icon" },
   { key: "school", type: "select", none: "none", options: SCHOOLS },
+  { key: "schools", label: "or schools", type: "multi", options: SCHOOL_LISTS },
   { key: "target", type: "select", options: ["enemy", "ally", "self", "ground", "none"] },
   { key: "range", type: "distance", show: (a) => a.target !== "self" && a.target !== "none" },
   { key: "minRange", label: "min range", type: "number", min: 0, show: (a) => a.target !== "self" && a.target !== "none" },
@@ -318,7 +321,7 @@ const statusEffectFields = (made, nested = false) => [
   { key: "does", type: "select", options: ["damage", "heal", "resource"], show: is("periodic") },
   { key: "amount", type: "amount", show: is("periodic", "absorb") },
   { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: (e) => e.type === "periodic" && e.does === "resource" },
-  { key: "schools", type: "multi", options: SCHOOLS, show: is("absorb", "trigger", "stat", "immune") },
+  { key: "schools", type: "multi", options: SCHOOL_LISTS, show: is("absorb", "trigger", "stat", "immune", "periodic") },
   { key: "control", type: "select", options: ["stun", "root", "silence", "incapacitate", "disorient", "fear", "disarm"], show: is("control") },
   { key: "on", type: "select", options: TRIGGERS, show: is("trigger") },
   { key: "hit", type: "select", none: "any", options: ["auto", "ability", "melee", "direct", "periodic", "area", "main", "others", "single"], show: is("trigger", "stat", "modify") },
