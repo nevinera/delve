@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "slab.schema.json",
   "title": "Slab",
-  "description": "A flat piece to walk on and to block movement and sight, as a tile's slabs and plates' slab lines hold it; see docs/formats/slabs.md.",
+  "description": "A flat piece to walk on and to block movement and sight, as a world's placed files hold it; see .agents/formats.md.",
   "type": "object",
   "required": [
     "at",

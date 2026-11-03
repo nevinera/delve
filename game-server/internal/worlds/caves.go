@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// Caves files (docs/formats/caves.md, client/src/v2/caves.js): the air a plate's caves open in
+// Caves files (.agents/formats.md, client/src/v2/caves.js): the air a plate's caves open in
 // its 2 ft columns, as spans from a floor up to a ceiling. A character stands on a cave's floor,
 // smoothed as /create smooths it, and can't walk into its rock.
 

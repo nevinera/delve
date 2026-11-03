@@ -256,7 +256,7 @@ module Bot
       }
     end
 
-    # A placed file's slabs and objects (docs/formats/placed.md). An object without its footprint
+    # A placed file's slabs and objects (.agents/formats.md). An object without its footprint
     # and height kept takes its kind's, for a built-in kind; other kinds are in no one's way.
     def read_placed(text)
       json = text ? JSON.parse(text) : {}

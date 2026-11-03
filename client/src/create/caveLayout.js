@@ -4,7 +4,7 @@ import { WALK_DEG } from "./growth.js";
 
 export { EXCLUSIVE, QUALITIES, ROCK_FT, rockBetween, segmentShapes, seedOf, steep } from "./caveQualities.js";
 
-// A continent's cave layout (docs/formats/cave-layout.md): its cave networks, each named by a
+// A continent's cave layout (.agents/formats.md): its cave networks, each named by a
 // slug, and the elements laid out in them: entrances, tubes in from the ground; points, each
 // holding the config of the passage round it; and segments joining two points. Each element
 // keeps its network's slug in `net`. What each element looked like when it was last carved is

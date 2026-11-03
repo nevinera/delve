@@ -1,7 +1,7 @@
 require "zstd-ruby"
 
 module Bot
-  # A plate's caves file (docs/formats/caves.md, client/src/v2/caves.js): the air its caves open
+  # A plate's caves file (.agents/formats.md, client/src/v2/caves.js): the air its caves open
   # in each 2 ft column of its tiles, as [floor, ceiling] spans, lowest first. A bot stands on a
   # cave's floor, smoothed as /create smooths it, and can't walk into its rock.
   module Caves

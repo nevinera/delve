@@ -2,7 +2,7 @@ import { BODIES } from "./bodies.js";
 import { hashAt } from "./body.js";
 import { hex, shade } from "./rig.js";
 
-// Colorations (docs/formats/bodies.md): a builder tags each face it makes with an area of the
+// Colorations (.agents/formats.md): a builder tags each face it makes with an area of the
 // body ("coat", "belly", "eyes"), or an area and a tone it always has there ("shins@0.85"), and a
 // painter turns the tag and where the face sits into a color, by the pattern's rules and the
 // coloration's colors.

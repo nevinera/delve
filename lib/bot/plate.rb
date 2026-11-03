@@ -1,7 +1,7 @@
 require "zstd-ruby"
 
 module Bot
-  # A version 2 plate file's tiles (docs/formats/v2-plates.md, client/src/v2/plate.js): each tile's
+  # A version 2 plate file's tiles (.agents/formats.md, client/src/v2/plate.js): each tile's
   # corner heights, cells' biomes, object slots and water, by its index in the plate.
   module Plate
     CELL_FT = 4.0

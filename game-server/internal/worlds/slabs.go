@@ -6,7 +6,7 @@ import (
 	"sort"
 )
 
-// Slabs, as client/src/world/slabs.js lays them out (docs/formats/slabs.md): where you can stand on
+// Slabs, as client/src/world/slabs.js lays them out (.agents/formats.md): where you can stand on
 // them, and whether a move runs into one.
 
 // slabReachFt is how far a slab's corners can be from its home corner.

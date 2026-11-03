@@ -2,7 +2,7 @@ import { SHIPPED_BODIES } from "../character/bodies.js";
 import { FRAMES } from "../character/frames.js";
 import { colorationProblems } from "../character/paint.js";
 
-// A world's models (docs/formats/bodies.md), models.json: `bodies`, its own bodies by name, and
+// A world's models (.agents/formats.md), models.json: `bodies`, its own bodies by name, and
 // `colorations`, the patterns and colorations it adds to shipped bodies, by the body's name.
 
 const SKELETONS = ["humanoid", ...Object.keys(FRAMES)];

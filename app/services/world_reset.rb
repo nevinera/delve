@@ -1,5 +1,5 @@
 # Empties a world's repo, as one commit on its default branch: every world file
-# (docs/formats/world-files.md) goes, and a new world.json starts a world with one continent, as
+# (.agents/formats.md) goes, and a new world.json starts a world with one continent, as
 # /create's new world does. Other files, like a README or LICENSE, stay. Tags and the released
 # commit stay where they were.
 class WorldReset

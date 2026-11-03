@@ -1,4 +1,4 @@
-// Package token checks the entry tokens Rails signs (docs/formats/game-protocol.md, "Entry tokens").
+// Package token checks the entry tokens Rails signs (.agents/formats.md, "Entry tokens").
 package token
 
 import (

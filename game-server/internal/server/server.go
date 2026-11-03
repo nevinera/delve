@@ -1,5 +1,5 @@
 // Package server builds the game server's HTTP handler: a health check, and the websocket players
-// play over (docs/formats/game-protocol.md).
+// play over (.agents/formats.md).
 package server
 
 import (

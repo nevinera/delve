@@ -2,14 +2,14 @@ import { bytesToDigits, digit, digits, digitsToBytes, readDigits } from "./digit
 import { CHUNK_FT, PLATE_TILES, TILE_FT } from "./sizes.js";
 import { unzip, zip } from "./zstd.js";
 
-// Caves (docs/formats/caves.md): air under the ground. Each tile that has any keeps a column of
+// Caves (.agents/formats.md): air under the ground. Each tile that has any keeps a column of
 // air spans for each VOXEL_FT square of it, any number of them, lowest first, so ledges, arches
 // and overhangs are just more spans. Rock is everywhere under the ground that no span opens.
 // A span is { floor, ceiling, stone: [ceiling, wall, floor], net }: heights in feet, on the
 // VOXEL_FT steps, the stone types of its ceiling, walls and floor, each a theme (an index into
 // CAVE_THEMES), and the slug of the cave network it's in. Spans are under MAX_SPAN_FT high.
 //
-// They're kept in a text file for each plate that has any, as docs/formats/caves.md has it:
+// They're kept in a text file for each plate that has any, as .agents/formats.md has it:
 //
 //   places/continents/<continent>/caves/<px>_<pz>.caves
 //
@@ -322,7 +322,7 @@ export function encodeCaves([px, pz], tiles) {
 // start (over `base`, or written absolutely), and 2 of its length.
 const spanDigits = (s, startDigits, base) => s.stone.map(digit).join("") + digits(Math.round(s.floor * 4) - base, startDigits) + digits(Math.round((s.ceiling - s.floor) * 4), 2);
 
-// A tile's cells in the shortest form they fit (docs/formats/caves.md), zipped where that's shorter.
+// A tile's cells in the shortest form they fit (.agents/formats.md), zipped where that's shorter.
 function cellsLine(columns) {
   const spans = columns.flatMap((column) => column ?? []);
   const starts = spans.map((s) => Math.round(s.floor * 4));

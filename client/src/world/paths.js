@@ -1,4 +1,4 @@
-// Every path in a world, relative to its root (docs/formats/world-files.md). Builders
+// Every path in a world, relative to its root (.agents/formats.md). Builders
 // make a path; parsers take one apart, returning null for a path that isn't theirs.
 
 const CONTINENT = (continent) => `places/continents/${continent}`;
@@ -18,7 +18,7 @@ export const OBJECT_PATH = /^objects\/[0-9a-z]{8}\.json$/;
 export const TEMPLATE_PATH = /^templates\/[0-9a-z]{8}\.json$/;
 export const IMAGE_PATH = /^textures\/[0-9a-z]{8}\.json$/;
 
-// Game data (docs/formats/game-data.md): each kind's directory, holding <id>.json files.
+// Game data (.agents/formats.md): each kind's directory, holding <id>.json files.
 export const GAME_DATA_DIRS = {
   classes: "classes",
   abilities: "abilities",
@@ -32,7 +32,7 @@ export const GAME_DATA_DIRS = {
 export const gameDataPath = (kind, id) => `${GAME_DATA_DIRS[kind]}/${id}.json`;
 const GAME_DATA = /^([\w-]+)\/([0-9a-z]{8})\.json$/;
 
-// The world's models (docs/formats/bodies.md), shared by every continent: its own bodies, and the
+// The world's models (.agents/formats.md), shared by every continent: its own bodies, and the
 // patterns and colorations it adds to shipped bodies.
 export const MODELS_PATH = "models.json";
 

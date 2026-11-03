@@ -6,7 +6,7 @@ require "websocket/driver"
 
 module Bot
   # A websocket to the game server (ws:// or wss://). Messages go up and come down as JSON
-  # (docs/formats/game-protocol.md); #read returns the ones that have come.
+  # (.agents/formats.md); #read returns the ones that have come.
   class Connection
     attr_reader :close_reason
 

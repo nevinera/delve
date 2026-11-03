@@ -4,7 +4,7 @@ import { decodeTile, encodeTile } from "./tileCodec.js";
 import { kindSizes } from "./objects.js";
 import { isPlatePath, isPlatesIndex, plateAt, platesIndexPath, tileAt, tilePath } from "./paths.js";
 
-// A world keeps its tiles in plates (world/plateCodec.js, docs/formats/plates.md), with an index per
+// A world keeps its tiles in plates (world/plateCodec.js), with an index per
 // continent listing each plate's hash, so clients only fetch plates that changed. The editor works
 // on one file per tile (tileCodec.js, gzipped) and turns them into plates only to store the world.
 

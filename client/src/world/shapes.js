@@ -3,7 +3,7 @@ import { pieceGeometry } from "../render/builtMeshes.js";
 import { limitedHull } from "./limitedHull.js";
 import { cutMesh } from "./sightCuts.js";
 
-// The shapes file (docs/formats/shapes.md): for each kind of object that blocks line of sight, a
+// The shapes file: for each kind of object that blocks line of sight, a
 // closed mesh of a few dozen faces standing in for it, so the game server and the client test sight
 // against that and not the object's pieces: the convex hull of its pieces, with any holes cut
 // through it by hand (sightCuts.js). Baked whenever the world is stored.

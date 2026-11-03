@@ -4,7 +4,7 @@ import { platePath } from "./paths.js";
 const BUILT_PREFIX = "built:"; // as objects.js has it, kept here so plates read without the object library
 import { SURFACE_LAYERS } from "./tileCodec.js";
 
-// Plates: tiles kept as text, 16×16 tiles to a file (docs/formats/plates.md). A plate is a header, then
+// Plates: tiles kept as text, 16×16 tiles to a file. A plate is a header, then
 // its tiles in row order, each from its `tile` line to the next, so it reads as a stream of tiles.
 //
 //   plate 2 3,1 surface              format version, plate coords, layer

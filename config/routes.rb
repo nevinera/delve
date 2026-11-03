@@ -46,7 +46,7 @@ Rails.application.routes.draw do
   get "creatures" => "creatures#show"
   get "creature" => "creatures#creature"
 
-  # For the game server (docs/formats/game-protocol.md).
+  # For the game server (.agents/formats.md).
   namespace :internal_api, path: "internal" do
     resources :worlds, only: [] do
       resources :characters, only: [:show] do

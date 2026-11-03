@@ -1,4 +1,4 @@
-// Package rails calls Rails's internal API (docs/formats/game-protocol.md, "Rails and the game
+// Package rails calls Rails's internal API (.agents/formats.md, "Rails and the game
 // server").
 package rails
 

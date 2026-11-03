@@ -555,7 +555,7 @@ func (g *Ground) file(name string) ([]byte, error) {
 	return nil, nil
 }
 
-// readPlaced reads a placed file's slabs and objects (docs/formats/placed.md). An object without
+// readPlaced reads a placed file's slabs and objects (.agents/formats.md). An object without
 // its footprint and height kept takes its kind's, for a built-in kind; other kinds stand in no
 // one's way.
 func readPlaced(data []byte) ([]*Slab, []thing, error) {

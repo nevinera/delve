@@ -3,7 +3,7 @@ import { PLATE_FT } from "../v2/sizes.js";
 import { footprintOf, makeObject, specOf } from "../world/objects.js";
 import { slabHome } from "../world/slabs.js";
 
-// The objects and slabs placed by hand (docs/formats/placed.md), kept in a file for each plate
+// The objects and slabs placed by hand (.agents/formats.md), kept in a file for each plate
 // they're in:
 //
 //   places/continents/<continent>/placed/<px>_<pz>.json

@@ -2,7 +2,7 @@ import { CELL_FT } from "./constants.js";
 import { slabBottom, slabProblems, slabTop } from "./slabs.js";
 
 // Templates: groups of slabs and objects saved together, to place into the world as copies
-// (docs/formats/templates.md). A world keeps its templates as templates/<id>.json, in collections
+// (.agents/formats.md). A world keeps its templates as templates/<id>.json, in collections
 // as its objects are. The world never holds a template itself: placing one copies its slabs and
 // objects into the tiles.
 //

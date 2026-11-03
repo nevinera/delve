@@ -9,7 +9,7 @@ import (
 	"github.com/klauspost/compress/zstd"
 )
 
-// Plate files (docs/formats/v2-plates.md, client/src/v2/plate.js): each tile's corner heights,
+// Plate files (.agents/formats.md, client/src/v2/plate.js): each tile's corner heights,
 // cells' biomes, object slots and water. Cuts aren't read: nothing here needs them.
 
 const (

@@ -5,7 +5,7 @@ import (
 	"math"
 )
 
-// The messages of docs/formats/game-protocol.md.
+// The messages of .agents/formats.md.
 
 // Move is how a character is moving, so others can carry it on between messages.
 type Move struct {

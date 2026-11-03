@@ -350,7 +350,7 @@ function listBodies() {
 }
 listBodies();
 
-// A world's models (docs/formats/bodies.md), read from its repo on GitHub: "owner/repo", with
+// A world's models (.agents/formats.md), read from its repo on GitHub: "owner/repo", with
 // "@branch" or a github.com link to a branch, its default branch otherwise. Left in the address,
 // so a reload or a shared link opens it again.
 const REPO = /^(?:https?:\/\/github\.com\/)?([\w.-]+\/[\w.-]+?)(?:\.git)?(?:(?:@|\/tree\/)([\w./-]+))?\/?$/;

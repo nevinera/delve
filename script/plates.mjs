@@ -1,4 +1,4 @@
-// Moves a world on disk to plates (docs/formats/plates.md): its tiles, one
+// Moves a world on disk to plates: its tiles, one
 // .dlt.gz file each under places/continents/*/tiles/, become .plate files under plates/, with a
 // plates.json index for each continent, and the tile files go. A world already in plates has its
 // plates and indexes made again from its tiles, if it has any, sized by the world's own library.

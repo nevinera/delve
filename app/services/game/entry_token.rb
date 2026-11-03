@@ -1,5 +1,5 @@
 # The signed, short-lived token a player's browser enters the game server with
-# (docs/formats/game-protocol.md, "Entry tokens"). The game server checks it with the same secret.
+# (.agents/formats.md, "Entry tokens"). The game server checks it with the same secret.
 module Game
   class EntryToken
     LIFETIME = 5.minutes

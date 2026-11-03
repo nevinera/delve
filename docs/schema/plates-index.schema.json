@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "plates-index.schema.json",
   "title": "plates.json",
-  "description": "A continent's plates and the hash of each, at places/continents/<c>/plates.json. See docs/formats/plates.md.",
+  "description": "A continent's plates and the hash of each, at places/continents/<c>/plates.json.",
   "type": "object",
   "required": [
     "version",

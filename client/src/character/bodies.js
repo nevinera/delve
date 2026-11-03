@@ -1,4 +1,4 @@
-// The bodies the game ships (docs/formats/bodies.md), one file each in bodies/: its skeleton, the
+// The bodies the game ships (.agents/formats.md), one file each in bodies/: its skeleton, the
 // shape its skeleton's builder makes it from, and the look its creatures are picked from.
 const files = import.meta.glob("./bodies/*.json", { eager: true, import: "default" });
 
@@ -39,7 +39,7 @@ export function followBodies(follow) {
   follow();
 }
 
-// Puts a world's models in use (docs/formats/world-files.md): `bodies`, its own bodies by name,
+// Puts a world's models in use (.agents/formats.md): `bodies`, its own bodies by name,
 // and `colorations`, patterns and colorations it adds to shipped bodies, by the body's name. With
 // none, only the shipped bodies are in use.
 export function useModels({ bodies = {}, colorations = {} } = {}) {

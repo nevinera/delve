@@ -3,7 +3,7 @@ import { turnPoint } from "./builtObjects.js";
 import { TILE_FT } from "./constants.js";
 
 // Slabs: flat pieces placed in the detail editor to walk on and to block movement and sight
-// (docs/formats/slabs.md). Floors, ramps, walls and roofs are all slabs. A tile lists its slabs;
+// (.agents/formats.md). Floors, ramps, walls and roofs are all slabs. A tile lists its slabs;
 // plates keep them as `slab` lines.
 //
 // A slab is { at, turn, outline, thickness, surface }:

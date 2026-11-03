@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "template.schema.json",
   "title": "Template",
-  "description": "A group of slabs and objects saved together, to place into the world as copies (templates/<id>.json); see docs/formats/templates.md. Everything in it is in feet from its anchor, a corner of the world's 8 ft cell grid at the height the template stands on.",
+  "description": "A group of slabs and objects saved together, to place into the world as copies (templates/<id>.json); see .agents/formats.md. Everything in it is in feet from its anchor, a corner of the world's 8 ft cell grid at the height the template stands on.",
   "type": "object",
   "required": [
     "id",

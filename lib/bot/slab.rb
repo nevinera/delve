@@ -1,5 +1,5 @@
 module Bot
-  # A slab, as client/src/world/slabs.js lays it out (docs/formats/slabs.md): where the bot can
+  # A slab, as client/src/world/slabs.js lays it out (.agents/formats.md): where the bot can
   # stand on it, and whether a move runs into it.
   class Slab
     REACH_FT = 64.0

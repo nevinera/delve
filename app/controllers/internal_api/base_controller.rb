@@ -1,4 +1,4 @@
-# The API the game server calls (docs/formats/game-protocol.md, "Rails and the game server"),
+# The API the game server calls (.agents/formats.md, "Rails and the game server"),
 # authenticated with a shared token rather than a signed-in user.
 class InternalApi::BaseController < ActionController::API
   LOCAL_TOKEN = "local-internal-token"

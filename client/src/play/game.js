@@ -1,4 +1,4 @@
-// The play page's connection to the game server (docs/formats/game-protocol.md): it enters with
+// The play page's connection to the game server (.agents/formats.md): it enters with
 // the page's entry token, reports how your character moves, puts your character back where the
 // server says when it corrects you, and hands what it hears about everyone else to `on`.
 

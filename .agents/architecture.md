@@ -21,36 +21,46 @@ The client has one entry point per page (`vite.config.js`):
 | `/animation_lab` | `client/src/character/lab.js` | the animation lab |
 | `/creatures` | `client/src/character/creatures.js` | each creature body playing its clips, by skeleton |
 | `/creature` | `client/src/character/creature.js` | one creature playing each of its roles in turn, with a control for each setting |
+| `/monster_lab` | `client/src/character/monsterLab.js` | the shipped bodies, and a world's own from its `models.json` |
 | `/play/:id` | `client/src/play/main.js` | the game |
 
 `client/src/main.js` is a placeholder for the game.
 
 ## Client code
 
-- `client/src/world/` is shared by every page and has no DOM: world scale (`constants.js`), file formats (`tileCodec.js`, `plateCodec.js`, `landGrid.js`), paths (`paths.js`), the generator, and object, slab, template and water rules.
+- `client/src/v2/` is the current world format, shared by every page: sizes (`sizes.js`), plates, platters, caves, water, slots and biomes.
+- `client/src/world/` is also shared and has no DOM: paths (`paths.js`), object, slab and template rules, built-in objects, and the day and night. It still holds version 1 code that `script/convert-v2.mjs` and `script/plates.mjs` need: `tileCodec.js`, `plateCodec.js`, `plates.js`, `landGrid.js`, `generator.js`.
 - `client/src/create/` is the world editor.
 - `client/src/render/` draws the world with three.js for `/create`, `/play` and the object builder: the ground's and water's materials, trees, objects, slabs, clutter, the sky, graphics settings and the performance overlay.
 - `client/src/play/` is the game page, and its walker, which the character builder uses too.
 - `client/src/objects/` is the object library: collections, its storage in the browser, and the builder pages.
-- `client/src/github/github.js` is the browser's only route to GitHub.
+- `client/src/character/` is bodies, rigs, animations and the character and creature pages.
+- `client/src/github/github.js` is the browser's route to GitHub's API. The play page reads world files from `raw.githubusercontent.com` (`client/src/play/loader.js`).
 
 The format code in `world/` is pure: it takes what it needs as arguments, so the game, `/create`, workers and scripts can all call it. `world/objects.js` keeps a registry of the open world's kinds of object for rendering and placing; the codecs don't read it.
 
 ## Worlds
 
-A world is a directory of files: JSON, plain-text plates, and a few binary files. [A world's files](formats/world-files.md) lists every path and links its format.
+A world is a directory of files: JSON and plain-text plates, platters and caves. [formats.md](formats.md#a-worlds-files) lists every path.
 
-`/create` is the world editor: one view where a builder walks and flies over the world, with tools for the ground, water, biomes, paths, objects and slabs.
+`/create` is the world editor: one view where a builder walks and flies over the world, with tools for the ground, water, biomes, paths, caves, objects and slabs. 
+- **Ground tiers** (`client/src/create/ground.js`) go by tile distance, in squares: full within 4 tiles, cell scale within 8, tile renditions within 16, then plate renditions. What's drawn changes only when the builder leaves their tile, one plate at a time, as one merged mesh per plate for each tier except full tiles.
+- **Controls:** a right sidebar picks the type of work, then the tool, then configures it. A bottom bar shows readouts and display toggles.
 
-A world also defines what you fight and meet: classes, abilities, statuses, items, creatures, NPCs, dialogue, and each continent's spawns. [Game data](formats/game-data.md) describes them. Nothing checks or reads them yet.
-
-Tiles are the heavy part. The editor holds each as a binary [tile file](formats/tile-file.md) while a world is open, and stores them 256 to a text [plate](formats/plates.md). Each plate carries the sizes of the objects in it, so a reader such as the game server can block movement without the world's object library. Tiles also hold [slabs](formats/slabs.md): flat pieces placed by hand for floors, walls and roofs, each kept by one tile and reaching at most 64 ft from its corner. A [template](formats/templates.md) is a group of slabs and objects kept in the world's library, to place as copies. Storing a world also writes [shapes.json](formats/shapes.md): for each kind of object that blocks line of sight, a mesh of a few dozen faces: a hull of at most 32 corners with any holes cut through it by hand (`client/src/world/shapes.js`).
+A world also defines what you fight and meet: classes, abilities, statuses, items, creatures, NPCs, dialogue, and each continent's spawns. [Game data](formats.md#game-data) describes them. Nothing checks or reads them yet.
 
 ## Loading and saving
 
-`/create` opens a world from a zip, and keeps it in IndexedDB with the files changed since. Downloading gives a zip of the world with those changes. It can't open or save a GitHub repo, and nothing checks a world's files.
+`/create` opens a version 2 world from a zip or a GitHub repo (`client/src/create/repo.js`), and keeps it in IndexedDB with the files changed since. Downloading gives a zip of the world with those changes.
 
-`/create` opens a version 2 world the same ways (`client/src/create/repo.js`), with the same protocol, and keeps it in IndexedDB with the files changed since. It saves to GitHub and publishes from its manage tools. It doesn't validate before publishing.
+### GitHub
+
+/create reads and writes a world's repo straight from the browser, through GitHub's REST API (`client/src/github/github.js`, `client/src/create/repo.js`).
+
+- **Tokens:** the browser gets a GitHub App user token from Rails at `GET /github/token`, as `{ token, expires_at, login }`, and fetches a new one shortly before it expires. A 401 means you need to connect GitHub (`connect_url`) or authorize again (`reauth_url`).
+- **Opening:** `/create?from=github/<owner>/<repo>` opens the head of the default branch. It lists every file at that commit with its blob sha, and downloads blobs pinned to that commit, so a branch that moves during the load doesn't mix commits. The world remembers `{ repo, branch, commitSha, shas }`, and opening again skips files whose sha hasn't changed. A repo with no `world.json` opens as a new world named after the repo, and keeps its files.
+- **Saving:** one commit on the branch the world came from. It works out each file's blob sha to find what changed, and refuses if the branch head is no longer `commitSha`. Binary files go up as blobs, and text files (`.plate`, `.platter`, `.json`, `.md`, `.txt`) go inline in the tree. Trees are built in requests of at most 10 MB of inline text and 500 files, each building on the last, because GitHub refuses a request over about 40 MB and times one out after about 10 s. A repo with no commits gets its `world.json` first through the contents API.
+- **Publishing:** a published version is a tag on a saved commit, `v1`, `v2` and so on. Publishing refuses while anything is unsaved, and when the commit is published already. Nothing checks the world first.
 
 ## Importing and releasing versions
 
@@ -79,7 +89,7 @@ Released worlds are listed for everyone signed in, on `/worlds`. A world's owner
 
 ## The game server
 
-The game server (`game-server/`) holds every character in a world. Browsers connect over a websocket, and send what their player does; the server tells each one what the characters near them do. [The game protocol](formats/game-protocol.md) covers entry tokens, the messages and the internal API.
+The game server (`game-server/`) holds every character in a world. Browsers connect over a websocket, and send what their player does; the server tells each one what the characters near them do. [The game protocol](formats.md#the-game-protocol) covers entry tokens, the messages and the internal API.
 
 - `internal/token` checks entry tokens, which Rails signs (`Game::EntryToken`).
 - `internal/worlds` downloads each released commit's zip once, keeps it on disk, and reads a version 2 world's continents and spawn point. It reads a continent's plates and placed files as characters reach them, and samples the ground as `/create`'s builder walks it: heights pressed down by level slabs, water, slabs, objects placed by hand, the trees and objects in the tiles' slots (`fill.go`, by a copy of `client/src/v2/fill.json`), and boulders across courses' cascades from `water.json`. Off the tiles is sea. `testdata/world.mjs` writes its test world and what `/create` makes of it, with the client's own code.
@@ -87,10 +97,3 @@ The game server (`game-server/`) holds every character in a world. Browsers conn
 - `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token, and writes their positions back to it (`WorldCharacter`, one per character per world). The server never writes to the database itself.
 
 Bots play characters, so you can test with others around: `script/game/bot` (code in `lib/bot/`) enters a released world as a character, the way the play page does, and runs a strategy. A bot fetches plate, placed and caves files from GitHub and walks the ground as the game server reads it, standing on cave floors and stopping at slabs, cave rock, trees and objects in its way. It doesn't know about the boulders across cascades. `null` stands still, and `follow` runs after a named character.
-
-## Docs
-
-- `docs/formats/`: file formats and protocols.
-- `docs/schema/`: JSON Schemas for a world's JSON files.
-
-When you change a format, a JSON file's shape or how the pieces fit together, update the matching doc in the same commit.
