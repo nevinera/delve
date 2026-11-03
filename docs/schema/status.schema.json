@@ -391,6 +391,14 @@
             "minimum": 1,
             "description": "trigger, for statusGained or statusConsumed: only when the status has at least this many stacks"
           },
+          "atMax": {
+            "type": "boolean",
+            "description": "trigger, for statusGained: only when the status reaches its maxStacks"
+          },
+          "resets": {
+            "type": "boolean",
+            "description": "trigger, with atStacks or atMax: takes the stacks off when it fires"
+          },
           "full": {
             "type": "boolean",
             "description": "trigger, for channelEnd: only when the channel runs its whole length"

@@ -354,6 +354,8 @@ const statusEffectFields = (made, nested = false) => [
   { key: "resource", type: "select", none: "any", options: resourcesOf(made), show: triggerOn("spend") },
   { key: "param", label: "named", hint: "a name other things can change this number by", show: is("stat", "periodic", "absorb") },
   { key: "chance", type: "number", min: 0, hint: "0 to 1, 1 by default", show: is("trigger") },
+  { key: "atMax", label: "at max stacks", type: "check", show: triggerOn("statusGained") },
+  { key: "resets", label: "takes the stacks off", type: "check", show: (e) => e.type === "trigger" && (e.atMax || e.atStacks) },
   { key: "of", label: "watches", type: "select", none: "the holder", options: ["caster"], show: is("trigger") },
   { key: "notOnHolder", label: "not on the holder", type: "check", show: is("trigger") },
   { key: "every", label: "every nth", type: "number", min: 1, hint: "fires only on every this-many-th time, or for spend every this many points", show: is("trigger") },
