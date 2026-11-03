@@ -122,6 +122,7 @@ const effectFields = (made, nested = false) => [
   { key: "perTargetHit", label: "per target hit", type: "check", show: is("damage", "heal", "resource", "cooldown") },
   { key: "maxTotal", label: "at most", type: "number", min: 0, show: (e) => Boolean(e.perTargetHit) },
   { key: "exceptTarget", label: "not the target", type: "check", show: (e) => ["enemies", "allies"].includes(e.affects) },
+  { key: "drain", type: "number", hint: "heals you by this share of what it does", show: is("damage") },
   { key: "school", type: "select", none: "the ability's", options: SCHOOLS, show: is("damage") },
   { key: "schools", label: "or schools", type: "multi", options: SCHOOL_LISTS, show: is("damage") },
   { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: is("resource") },
@@ -300,8 +301,12 @@ export const abilityFields = (made) => [
 ];
 
 const statusEffectFields = (made, nested = false) => [
-  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "stealth", "modify", "immune", "aura", "transform", "none"] },
+  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "stealth", "modify", "immune", "aura", "transform", "store", "none"] },
   { key: "stat", type: "select", none: "pick one", options: STATS, show: is("stat") },
+  { key: "on", label: "keeps", type: "select", options: ["dealDamage", "heal"], show: is("store") },
+  { key: "share", type: "number", show: is("store") },
+  { key: "from", type: "select", none: "caster", options: ["holder"], show: is("store") },
+  { key: "drain", type: "number", hint: "heals the caster by this share of what it does", show: is("periodic") },
   { key: "into", label: "looks like", type: "select", none: "pick one", options: unitsOf(made), show: is("transform") },
   { key: "addTags", label: "adds tags", type: "words", show: (e) => e.type === "modify" && !e.change },
   { key: "abilities", type: "multi", options: abilitiesOf(made), show: is("modify", "trigger", "stat") },

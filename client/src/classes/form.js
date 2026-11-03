@@ -22,6 +22,9 @@ export function setKey(object, key, value) {
 
 const AMOUNT_PARTS = ["attackPower", "spellPower", "weapon", "mastery", "byMastery", "maxHealth", "shareOfTrigger"];
 
+// Parts the form keeps but doesn't show yet.
+const KEPT_PARTS = ["shareOf", "minimum", "maximum", "byMissingHealth"];
+
 // An amount as the form shows it: { min, max, attackPower, spellPower, weapon, mastery, byMastery, maxHealth, shareOfTrigger, perSpent },
 // perSpent being another of these.
 export function readAmount(amount) {
@@ -30,7 +33,7 @@ export function readAmount(amount) {
   if (Array.isArray(amount)) return { min: amount[0], max: amount[1] };
   const base = amount.base === undefined ? {} : readAmount(amount.base);
   const out = { ...base };
-  for (const part of AMOUNT_PARTS) if (amount[part] !== undefined) out[part] = amount[part];
+  for (const part of [...AMOUNT_PARTS, ...KEPT_PARTS]) if (amount[part] !== undefined) out[part] = amount[part];
   if (amount.perSpent !== undefined) out.perSpent = readAmount(amount.perSpent);
   return out;
 }
@@ -40,7 +43,7 @@ export function writeAmount({ min, max, perSpent, ...parts }) {
   const low = min ?? max;
   const high = max ?? min;
   const base = low === undefined ? undefined : low === high ? low : [low, high];
-  const others = Object.fromEntries(AMOUNT_PARTS.filter((part) => parts[part] !== undefined).map((part) => [part, parts[part]]));
+  const others = Object.fromEntries([...AMOUNT_PARTS, ...KEPT_PARTS].filter((part) => parts[part] !== undefined).map((part) => [part, parts[part]]));
   const each = perSpent && writeAmount(perSpent);
   if (each !== undefined) others.perSpent = each;
   if (!Object.keys(others).length) return base;

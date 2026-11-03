@@ -151,6 +151,7 @@
               "modify",
               "immune",
               "aura",
+              "store",
               "none",
               "transform"
             ]
@@ -167,6 +168,29 @@
           "set": {
             "type": "number",
             "description": "modify: makes it this. Applied before `add` and `multiply`"
+          },
+          "addAmount": {
+            "$ref": "common.schema.json#/$defs/amount",
+            "description": "modify: adds this amount, for one worked out in the fight"
+          },
+          "byMissingHealth": {
+            "$ref": "common.schema.json#/$defs/byMissingHealth",
+            "description": "stat, modify: grows as health falls"
+          },
+          "drain": {
+            "type": "number",
+            "description": "periodic: heals the caster by this share of what it does"
+          },
+          "from": {
+            "enum": [
+              "caster",
+              "holder"
+            ],
+            "description": "store: whose damage or healing it keeps, the caster's by default"
+          },
+          "share": {
+            "type": "number",
+            "description": "store: how much of it it keeps"
           },
           "into": {
             "$ref": "common.schema.json#/$defs/id",

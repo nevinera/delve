@@ -56,6 +56,7 @@ export function classProblems(made) {
   };
   const effect = (where, e) => {
     counted(where, e.perCount);
+    (e.amount?.shareOf?.statuses ?? []).forEach((id) => status(where, id));
     conditions(where, e.when);
     if (e.type === "status" || e.type === "consume") status(where, e.status);
     if (e.type === "resource") resource(where, e.resource);
@@ -125,6 +126,7 @@ export function classProblems(made) {
     for (const e of s.effects ?? []) {
       conditions(where, e.when);
       counted(where, e.perCount);
+      (e.amount?.shareOf?.statuses ?? []).forEach((id) => status(where, id));
       if (e.into && !units.has(e.into)) problems.push(`${where} turns into a unit this class doesn't have (${e.into}).`);
       if (e.type === "periodic" && e.does === "resource") resource(where, e.resource);
       if ((e.type === "trigger" || e.type === "aura") && e.effect) effect(where, e.effect);

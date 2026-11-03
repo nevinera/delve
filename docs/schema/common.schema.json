@@ -99,6 +99,66 @@
               "type": "number",
               "description": "a share of the hit or heal that set off the trigger or applied the status"
             },
+            "shareOf": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "of",
+                "share"
+              ],
+              "description": "a share of something the fight has kept track of",
+              "properties": {
+                "of": {
+                  "enum": [
+                    "recentDamage",
+                    "stored",
+                    "statusLeft",
+                    "effect",
+                    "casterMaxHealth",
+                    "unitMaxHealth",
+                    "maxResource",
+                    "healthSpent"
+                  ]
+                },
+                "share": {
+                  "type": "number"
+                },
+                "seconds": {
+                  "type": "number",
+                  "minimum": 0,
+                  "description": "recentDamage: how far back"
+                },
+                "on": {
+                  "enum": [
+                    "self",
+                    "target"
+                  ],
+                  "description": "recentDamage: who took it, self by default"
+                },
+                "statuses": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/$defs/id"
+                  },
+                  "description": "statusLeft: which, by default the one that set off the trigger"
+                },
+                "resource": {
+                  "type": "string",
+                  "description": "maxResource: which"
+                }
+              }
+            },
+            "minimum": {
+              "$ref": "#/$defs/amount",
+              "description": "it never comes to less than this"
+            },
+            "maximum": {
+              "$ref": "#/$defs/amount",
+              "description": "it never comes to more than this"
+            },
+            "byMissingHealth": {
+              "$ref": "#/$defs/byMissingHealth"
+            },
             "perSpent": {
               "$ref": "#/$defs/amount",
               "description": "more for each point the ability spends with an `all` cost, or that the ability which applied the status spent"
@@ -777,6 +837,10 @@
         "amount": {
           "$ref": "#/$defs/amount"
         },
+        "drain": {
+          "type": "number",
+          "description": "heals the caster by this share of what the effect does"
+        },
         "school": {
           "$ref": "#/$defs/school"
         },
@@ -1103,6 +1167,27 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "description": "the most it counts"
+        }
+      }
+    },
+    "byMissingHealth": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "upTo"
+      ],
+      "description": "grows as health falls, reaching this at no health",
+      "properties": {
+        "upTo": {
+          "type": "number",
+          "description": "how many times as much, or for a percentage stat how much is added"
+        },
+        "of": {
+          "enum": [
+            "self",
+            "target"
+          ],
+          "description": "whose health: whoever it lands on by default"
         }
       }
     }
