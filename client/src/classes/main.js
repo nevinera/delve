@@ -123,9 +123,17 @@ function showConfig(made) {
     showConfig(made);
     config.scrollTop = top;
   };
-  const remove = el("button", { type: "button", textContent: `delete ${part?.kind ?? "class"}`, className: "form-remove" });
-  remove.addEventListener("click", () => {
-    if (!window.confirm(`Delete ${thing.name || `this ${part?.kind ?? "class"}`}?`)) return;
+  const what = part?.kind ?? "class";
+  const remove = el("button", { type: "button", textContent: `delete ${what}`, className: "form-remove" });
+  const sure = el("button", { type: "button", textContent: `yes, delete ${thing.name || `this ${what}`}`, className: "form-remove", hidden: true });
+  const keepIt = el("button", { type: "button", textContent: "keep it", hidden: true });
+  const asking = (on) => {
+    remove.hidden = on;
+    sure.hidden = keepIt.hidden = !on;
+  };
+  remove.addEventListener("click", () => asking(true));
+  keepIt.addEventListener("click", () => asking(false));
+  sure.addEventListener("click", () => {
     if (list) {
       made[list] = made[list].filter((t) => t !== thing);
       if (!made[list].length) delete made[list];
@@ -137,7 +145,7 @@ function showConfig(made) {
       pick(null);
     }
   });
-  config.append(problems, ...renderFields(fields, thing, { changed, reshaped }), remove);
+  config.append(el("div", { className: "classes-delete" }, remove, sure, keepIt), problems, ...renderFields(fields, thing, { changed, reshaped }));
 }
 
 // The preview's made the first time an ability's picked, since the page needs it only then.

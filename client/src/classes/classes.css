@@ -290,3 +290,9 @@
 .preview-note {
   color: #f0b060;
 }
+
+.classes-delete {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 8px;
+}
