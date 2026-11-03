@@ -35,7 +35,8 @@ const main = { key: "colors", type: "words", label: "colors", hint: "[main, trim
 const spendsStack = (made) => ({ type: "select", none: "no", options: () => [["this status", "this status"], ...statusesOf(made)()], read: (v) => (v === true ? "this status" : v), write: (v) => (v === "this status" ? true : v) });
 
 const simpleConditionFields = (made) => [
-  { key: "kind", type: "select", label: "needs", options: [["health", "health"], ["status", "a status"], ["resource", "a resource"], ["targetIs", "used on"], ["inCombat", "combat"], ["stealthed", "stealth"]], more: [["state", "a state"], ["position", "position"], ["since", "time since"], ["holders", "units holding"], ["unitsOut", "a unit out"], ["inArea", "in your area"], ["spentAtLeast", "spent at least"], ["targetsHitAtLeast", "hit at least"], ["outcome", "the hit"], ["targetHealthBelowMine", "target under your health"], ["group", "a status group"], ["wielding", "what you wield"]] },
+  // A new kind starts clean: what the last one held would read as that one again.
+  { key: "kind", type: "select", label: "needs", then: (c) => Object.keys(c).filter((key) => key !== "kind").forEach((key) => delete c[key]), options: [["health", "health"], ["status", "a status"], ["resource", "a resource"], ["targetIs", "used on"], ["inCombat", "combat"], ["stealthed", "stealth"]], more: [["state", "a state"], ["position", "position"], ["since", "time since"], ["holders", "units holding"], ["unitsOut", "a unit out"], ["inArea", "in your area"], ["spentAtLeast", "spent at least"], ["targetsHitAtLeast", "hit at least"], ["outcome", "the hit"], ["targetHealthBelowMine", "target under your health"], ["group", "a status group"], ["wielding", "what you wield"]] },
   { key: "group", label: "of group", show: (c) => c.kind === "group" },
   { key: "wielding", type: "select", options: ["shield", "oneHanded", "twoHanded", "dual"], show: (c) => c.kind === "wielding" },
   { key: "state", type: "select", options: ["casting", "inCombat", "slowed", "airborne", "falling", "controlled", "stunned", "outdoors"], show: (c) => c.kind === "state" },
@@ -91,15 +92,16 @@ const conditionFields = (made, depth = 2) => {
 };
 
 // A condition as the form edits it, with the `kind` the format leaves implicit.
-const PLAIN_CONDITIONS = ["state", "position", "since", "resource", "holders", "unitsOut", "inArea", "spentAtLeast", "targetsHitAtLeast", "outcome", "targetHealthBelowMine", "group", "wielding"];
+const PLAIN_CONDITIONS = { state: "casting", position: "behind", since: "attack", resource: "", holders: "", unitsOut: [], inArea: "", spentAtLeast: 1, targetsHitAtLeast: 2, outcome: "crit", targetHealthBelowMine: true, group: "", wielding: "shield" };
 
 export function readCondition(condition) {
   if ("health" in condition) return { kind: "health", ...condition };
   if ("status" in condition) return { kind: "status", ...condition };
-  if ("anyOf" in condition) return { kind: "anyOf", anyOf: condition.anyOf.map(readCondition) };
-  if ("not" in condition) return { kind: "not", not: [readCondition(condition.not)] };
+  // Their lists read and write their own items.
+  if ("anyOf" in condition) return { kind: "anyOf", anyOf: condition.anyOf };
+  if ("not" in condition) return { kind: "not", not: [condition.not] };
   if ("targetIs" in condition) return { kind: "targetIs", targetIs: condition.targetIs };
-  const plain = PLAIN_CONDITIONS.find((key) => key in condition);
+  const plain = Object.keys(PLAIN_CONDITIONS).find((key) => key in condition);
   if (plain) return { kind: plain, ...condition };
   const kind = "stealthed" in condition ? "stealthed" : "inCombat" in condition ? "inCombat" : "health";
   return kind === "health" ? { kind, health: "self" } : { kind, yes: condition[kind] };
@@ -109,11 +111,11 @@ export function readCondition(condition) {
 export function writeCondition({ kind, ...c }) {
   if (kind === "health") return { health: c.health ?? "self", ...(c.below !== undefined ? { below: c.below } : c.above !== undefined ? { above: c.above } : { below: 100 }) };
   if (kind === "status") return { status: c.status ?? "", on: c.on ?? "self", ...(c.stacks !== undefined ? { stacks: c.stacks } : {}) };
-  if (kind === "not") return { not: writeCondition(c.not?.[0] ?? { kind: "status" }) };
+  if (kind === "not") return { not: c.not?.[0] ?? { status: "", on: "self" } };
   if (kind === "targetIs") return { targetIs: c.targetIs ?? "enemy" };
-  if (kind === "anyOf") return { anyOf: (c.anyOf ?? []).map(writeCondition) };
-  if (kind === "targetHealthBelowMine") return { targetHealthBelowMine: true };
-  if (PLAIN_CONDITIONS.includes(kind)) return c;
+  if (kind === "anyOf") return { anyOf: c.anyOf ?? [] };
+  // One just picked holds its key from the start, so reading it back finds the same kind.
+  if (kind in PLAIN_CONDITIONS) return { [kind]: PLAIN_CONDITIONS[kind], ...c };
   return { [kind]: c.yes ?? true };
 }
 
@@ -455,7 +457,7 @@ export const abilityFields = (made) => [
   { key: "description", type: "area" },
   { key: "icon" },
   { key: "school", type: "select", none: "none", options: SCHOOLS },
-  { key: "target", type: "select", options: ["enemy", "ally", "any", "self", "ground", "none"] },
+  { key: "target", type: "select", options: ["enemy", "ally", "any", "self", "ground", "none"], then: (a) => ["self", "none"].includes(a.target) && delete a.range },
   { key: "range", type: "distance", show: (a) => (a.target !== "self" && a.target !== "none") || a.range !== undefined },
   { key: "castTime", label: "cast s", type: "number", min: 0, hint: "0 is instant" },
   { key: "cooldown", label: "cooldown s", type: "number", min: 0 },

@@ -9,6 +9,7 @@ const common = schema("common").$defs;
 const status = schema("status").properties;
 const ability = schema("ability").properties;
 const made = {};
+const conditionListOf = () => abilityFields(made).find((field) => field.key === "requires");
 
 const keysOf = (fields) => new Set(fields.map((field) => field.key));
 const fieldOf = (fields, key) => fields.find((field) => field.key === key);
@@ -90,6 +91,20 @@ describe("amounts in the form", () => {
 });
 
 describe("conditions in the form", () => {
+  it("hold their inner conditions as the file does, for their lists to read", () => {
+    const list = conditionListOf();
+    const form = readCondition({ not: { position: "behind" } });
+    const items = form.not.map(list.read);
+    expect(items[0].kind).toBe("position");
+    expect(writeCondition({ kind: "not", not: items.map(list.write) })).toEqual({ not: { position: "behind" } });
+  });
+
+  it("stay the kind you pick, before anything else is set", () => {
+    for (const kind of ["state", "position", "since", "resource", "holders", "unitsOut", "inArea", "spentAtLeast", "targetsHitAtLeast", "outcome", "targetHealthBelowMine", "group", "wielding"]) {
+      expect(readCondition(writeCondition({ kind })).kind).toBe(kind);
+    }
+  });
+
   it("come back the same", () => {
     for (const condition of [{ health: "self", below: 30 }, { status: "abcd0001", on: "self", stacks: 2 }, { wielding: "dual" }, { not: { state: "casting", on: "target" } }, { anyOf: [{ stealthed: true }, { inCombat: false }] }, { targetHealthBelowMine: true }]) {
       expect(writeCondition(readCondition(condition))).toEqual(condition);

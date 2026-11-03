@@ -4,7 +4,8 @@
 // - text, area, color, check: as they sound.
 // - number: `min` and `step`.
 // - select: `options`, an array of names or [value, label]s, `more`, rarer options set apart, `none`,
-//   the label for leaving it out, and `read` and `write` for values the form holds differently.
+//   the label for leaving it out, `read` and `write` for values the form holds differently, and
+//   `then(value)` for what picking one does to other fields.
 // - multi: `options`, kept as a list of those picked.
 // - words: a list of words, written with commas.
 // - number or word: `word`, a value the check stands for, `after`, the words before the check.
@@ -89,6 +90,13 @@ function fold({ owner, name, summary, className, startOpen, draw }) {
   return node;
 }
 
+// A field's node, marked with its key.
+function draw(field, value, hooks) {
+  const node = RENDERERS[field.type ?? "text"](field, value, hooks);
+  node.dataset.key = field.key;
+  return node;
+}
+
 // How many of these fields hold something.
 export const countSet = (fields, value) => fields.filter((field) => !isBlank(value[field.key])).length;
 
@@ -97,7 +105,7 @@ function drawAdvanced(fields, value, hooks) {
   const headings = [...new Set(fields.map((field) => field.advanced))];
   return headings.flatMap((heading) => [
     ...(typeof heading === "string" ? [el("div", { className: "form-heading", textContent: heading })] : []),
-    ...fields.filter((field) => field.advanced === heading).map((field) => RENDERERS[field.type ?? "text"](field, value, hooks)),
+    ...fields.filter((field) => field.advanced === heading).map((field) => draw(field, value, hooks)),
   ]);
 }
 
@@ -163,7 +171,11 @@ const RENDERERS = {
     // A value that isn't among them any more still shows, to fix.
     if (shown !== undefined && ![...options, ...more].some(([v]) => v === shown)) select.append(option([shown, `${shown} (missing)`]));
     select.value = shown ?? "";
-    select.addEventListener("change", () => (setKey(value, field.key, select.value === "" ? undefined : write(select.value)), reshaped()));
+    select.addEventListener("change", () => {
+      setKey(value, field.key, select.value === "" ? undefined : write(select.value));
+      field.then?.(value);
+      reshaped();
+    });
     return row(field, select);
   },
   multi: (field, value, { changed }) => {
@@ -291,5 +303,5 @@ export function renderFields(fields, value, hooks) {
   }
   const shown = fields.filter((field) => !field.show || field.show(value));
   const advanced = shown.filter((field) => field.advanced);
-  return [...shown.filter((field) => !field.advanced).map((field) => RENDERERS[field.type ?? "text"](field, value, hooks)), ...(advanced.length ? [advancedFold(advanced, value, hooks)] : [])];
+  return [...shown.filter((field) => !field.advanced).map((field) => draw(field, value, hooks)), ...(advanced.length ? [advancedFold(advanced, value, hooks)] : [])];
 }
