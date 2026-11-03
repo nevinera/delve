@@ -9,19 +9,6 @@
   font: 13px ui-monospace, monospace;
 }
 
-.editor-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 8px 12px;
-  background: #2a2a2a;
-  border-bottom: 1px solid #444;
-}
-
-.editor-bar .spacer {
-  flex: 1;
-}
-
 .editor button,
 .editor input,
 .editor select,
@@ -47,65 +34,6 @@
   border-color: #888;
 }
 
-.editor-cursor {
-  color: #999;
-}
-
-.editor-main {
-  position: relative;
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
-
-.editor-view {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-}
-
-.editor-view-bar {
-  display: flex;
-  gap: 4px;
-  align-items: center;
-  padding: 4px 8px;
-  background: #222;
-  border-bottom: 1px solid #444;
-}
-
-.editor-view-bar .spacer {
-  flex: 1;
-}
-
-.editor-view-bar .editor-check {
-  margin: 0 0 0 12px;
-}
-
-.editor-stage {
-  position: relative;
-  flex: 1;
-  display: flex;
-  min-height: 0;
-}
-
-.editor-scale {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.editor-scale[hidden] {
-  display: none;
-}
-
-/* The steps: a button for each at the top, then a divider, then only the open step's body. */
-.editor-step-tabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
 .editor .editor-step-head {
   text-transform: uppercase;
   letter-spacing: 1px;
@@ -121,25 +49,6 @@
   border-style: dashed;
 }
 
-.editor-divider {
-  width: 100%;
-  border: none;
-  border-top: 1px solid #555;
-  margin: 4px 0;
-}
-
-.editor-steps {
-  display: flex;
-  flex-direction: column;
-}
-
-.editor-step-body {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 6px 0 10px;
-}
-
 .editor-step:not(.open),
 .editor-step-body[hidden],
 .editor-empty[hidden],
@@ -147,62 +56,9 @@
   display: none;
 }
 
-.editor-map[hidden] {
-  display: none;
-}
-
-.editor-map {
-  flex: 1;
-  display: block;
-  min-width: 0;
-  touch-action: none;
-}
-
-.editor-panel {
-  width: 280px;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 12px;
-  overflow-y: auto;
-  background: #2a2a2a;
-  border-left: 1px solid #444;
-}
-
-.editor-panel h2 {
-  margin: 0 0 6px;
-  font-size: 11px;
-  font-weight: normal;
-  letter-spacing: 1px;
-  text-transform: uppercase;
-  color: #888;
-}
-
-.editor-panel p {
-  margin: 6px 0;
-}
-
-.editor-zones {
-  list-style: none;
-  margin: 0 0 8px;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.editor-zones button {
-  width: 100%;
-  text-align: left;
-}
-
 .editor-row {
   display: flex;
   gap: 6px;
-}
-
-.slab-modes {
-  flex-wrap: wrap;
 }
 
 .editor-row[hidden],
@@ -211,87 +67,9 @@
   display: none;
 }
 
-.editor-wrap {
-  flex-wrap: wrap;
-}
-
-/* A panel inside a step, laid out as the step's body is. */
-.editor-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.editor-stack[hidden] {
-  display: none;
-}
-
-.editor-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.editor-subhead {
-  margin-top: 12px !important;
-}
-
-.editor-props {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.editor-props textarea {
-  resize: vertical;
-}
-
 .editor button:disabled {
   opacity: 0.4;
   cursor: default;
-}
-
-.editor-check {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-top: 8px;
-  color: #aaa;
-}
-
-.editor-bar .editor-check {
-  margin-top: 0;
-}
-
-.editor-palette {
-  display: flex;
-  gap: 12px;
-}
-
-.editor-vslider {
-  writing-mode: vertical-lr;
-  direction: rtl;
-  height: 220px;
-  padding: 0 !important;
-}
-
-.editor-choices {
-  display: flex;
-  flex-direction: column;
-}
-
-.editor-choices .editor-check {
-  margin-top: 4px;
-}
-
-.editor-swatch {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-}
-
-.editor-empty {
-  color: #777;
 }
 
 .editor-field {
@@ -308,80 +86,6 @@
 
 .editor-message.info {
   color: #8c8;
-}
-
-.editor-hint {
-  margin-top: auto;
-  color: #888;
-  line-height: 1.5;
-}
-
-/* stats.js's overlay, top left over the 3D view. */
-.editor-stats {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  margin: 0;
-  padding: 6px 8px;
-  background: rgba(0, 0, 0, 0.7);
-  color: #cfe;
-  font-size: 11px;
-  line-height: 1.35;
-  pointer-events: none;
-  z-index: 2;
-}
-
-/* The graphics settings, under their button in the view bar. */
-.editor-popover {
-  position: fixed;
-  inset: auto;
-  margin: 0;
-  padding: 8px 12px 10px;
-  background: #222;
-  color: #ddd;
-  border: 1px solid #555;
-  border-radius: 4px;
-  font-size: 13px;
-}
-
-.editor-popover h3 {
-  margin: 8px 0 0;
-  font-size: 11px;
-  font-weight: normal;
-  text-transform: uppercase;
-  color: #888;
-}
-
-.editor-popover h3:first-child {
-  margin-top: 0;
-}
-
-.editor-popover .editor-range {
-  display: grid;
-  grid-template-columns: 4.5em 1fr 4em;
-  align-items: center;
-  gap: 6px;
-  margin-top: 4px;
-  color: #aaa;
-}
-
-.editor-popover .editor-range output {
-  text-align: right;
-}
-
-.editor-popover .editor-check {
-  margin-top: 4px;
-}
-
-/* The slabs tool's surfaces: a swatch for each preset, and a gear for a custom one. */
-.slab-swatches {
-  display: grid;
-  grid-template-columns: repeat(5, 36px);
-  gap: 4px;
-}
-
-.slab-swatches[hidden] {
-  display: none;
 }
 
 .editor .slab-swatch {
@@ -402,49 +106,12 @@
   outline-offset: 1px;
 }
 
-/* The box dragged to pick slabs in (slabTool.js). */
-.slab-box {
-  position: fixed;
-  border: 1px dashed #ffe066;
-  background: rgba(255, 224, 102, 0.1);
-  pointer-events: none;
-  z-index: 10;
-}
-
-/* The replace dialog, a small modal in the middle of the page. */
-.replace-dialog {
-  inset: 0;
-  margin: auto;
-  min-width: 320px;
-}
-
 .replace-dialog .editor-row {
   margin-top: 10px;
 }
 
-/* The save dialog (main.js): what you changed, then a log of the save as it goes. */
-.save-dialog {
-  inset: 0;
-  margin: auto;
-  width: min(560px, 92vw);
-}
-
 .save-dialog .editor-row {
   margin-top: 10px;
-}
-
-.save-progress {
-  min-height: 1em;
-  margin: 10px 0 4px;
-  color: #aaa;
-}
-
-.save-log {
-  max-height: 40vh;
-  overflow-y: auto;
-  margin: 0;
-  padding-left: 2.4em;
-  line-height: 1.5;
 }
 
 .save-log .error {
@@ -453,43 +120,6 @@
 
 .save-log .done {
   color: #8c8;
-}
-
-/* The publish step (publish.js): facts about the world and its versions, then what the
-   validator found. */
-.editor-facts {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 2px 10px;
-  margin: 0;
-}
-
-.editor-facts dt {
-  color: #888;
-}
-
-.editor-facts dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-}
-
-.editor-problems {
-  max-height: 40vh;
-  overflow-y: auto;
-  margin: 0;
-  padding-left: 2.4em;
-  color: #e88;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.editor-problems .warning {
-  color: #db8;
-}
-
-/* The time popover's readouts, like "waxing crescent", need more room than the graphics ones. */
-#timePanel .editor-range {
-  grid-template-columns: 6em 10em 9.5em;
 }
 
 /* The object builder (objectBuilder.js): a dialog over most of the page, the 3D view beside the
@@ -793,26 +423,6 @@
   color: #8a94a0;
 }
 
-.library-popover {
-  width: calc(100vw - 48px);
-  height: calc(100vh - 48px);
-  max-width: none;
-  max-height: none;
-  padding: 0;
-  border: 1px solid #555;
-  background: #1a1d22;
-  color: inherit;
-}
-
-.library-popover[open] {
-  display: flex;
-  flex-direction: column;
-}
-
-.library-popover::backdrop {
-  background: rgba(0, 0, 0, 0.5);
-}
-
 .library-page {
   display: flex;
   flex-direction: column;
@@ -956,19 +566,6 @@
   min-width: 0;
 }
 
-/* The detail step's place pickers (placePicker.js): collections, one opened to its thumbnails,
-   filling the lower half of the panel. */
-.place-picker {
-  max-height: 50vh;
-  overflow-y: auto;
-  border-top: 1px solid #444;
-  padding-top: 6px;
-}
-
-.place-picker[hidden] {
-  display: none;
-}
-
 .editor .picker-head {
   display: block;
   width: 100%;
@@ -978,13 +575,6 @@
 
 .editor .picker-head.open {
   border-color: #f0c850;
-}
-
-.picker-tiles {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
-  gap: 4px;
-  margin-top: 4px;
 }
 
 .editor .picker-tile {
@@ -999,13 +589,6 @@
   overflow: hidden;
 }
 
-.picker-tile span {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .editor .picker-tile:hover {
   border-color: #888;
 }
@@ -1013,10 +596,4 @@
 .editor .picker-tile.armed {
   border-color: #f0c850;
   box-shadow: 0 0 0 1px #f0c850;
-}
-
-.group-info {
-  margin: 0;
-  color: #888;
-  line-height: 1.4;
 }
