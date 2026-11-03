@@ -98,3 +98,38 @@ func TestReadRefusesOtherWorlds(t *testing.T) {
 		}
 	}
 }
+
+func TestReadClassesSkipsOnesItCantRead(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "w.zip")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	z := zip.NewWriter(f)
+	for name, body := range map[string]string{
+		"top/world.json":        `{"version":2,"continents":[{"key":"main"}],"spawn":{"continent":"main","at":[1,2]}}`,
+		"top/classes/good.json": `{"id":"good","name":"Good"}`,
+		"top/classes/bad.json":  `{"id":"bad","abilities":[{"range":"far"}]}`,
+	} {
+		w, err := z.Create(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := w.Write([]byte(body)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := z.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+	w, err := Read(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(w.Classes) != 1 || w.Classes[0].ID != "good" {
+		t.Fatalf("classes = %+v", w.Classes)
+	}
+}

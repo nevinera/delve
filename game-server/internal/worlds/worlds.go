@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"math"
 	"net/http"
 	"os"
@@ -161,9 +162,7 @@ func Read(path string) (*World, error) {
 	}
 	w.Spawn = *info.Spawn
 	w.Dummies = info.Dummies
-	if w.Classes, err = readClasses(files); err != nil {
-		return nil, err
-	}
+	w.Classes = readClasses(files)
 	return w, nil
 }
 
@@ -177,8 +176,8 @@ func TileOf(x, z float64) [2]int {
 	return [2]int{int(math.Floor(x / TileFt)), int(math.Floor(z / TileFt))}
 }
 
-// readClasses reads classes/<id>.json, in order of id.
-func readClasses(files map[string]*zip.File) ([]*combat.Class, error) {
+// readClasses reads classes/<id>.json, in order of id, leaving out any it can't read.
+func readClasses(files map[string]*zip.File) []*combat.Class {
 	var paths []string
 	for name := range files {
 		if dir, file := filepath.Split(name); dir == "classes/" && strings.HasSuffix(file, ".json") {
@@ -189,12 +188,14 @@ func readClasses(files map[string]*zip.File) ([]*combat.Class, error) {
 	classes := []*combat.Class{}
 	for _, path := range paths {
 		c := &combat.Class{}
+		// One bad class shouldn't keep everyone out of the world.
 		if err := readJSON(files, path, c); err != nil {
-			return nil, err
+			log.Printf("worlds: skipping a class: %v", err)
+			continue
 		}
 		classes = append(classes, c)
 	}
-	return classes, nil
+	return classes
 }
 
 func readJSON(files map[string]*zip.File, path string, out any) error {
