@@ -752,7 +752,11 @@ Types:
 - `exceptTarget`, on any effect: leaves the ability's target out of those it `affects`.
 - `resurrect`: brings a dead ally back, with `health` percent of its health.
 - `taunt`: makes a mob attack you for `duration`.
-- `move`: moves someone, as `kind` says:
+- `move`: moves someone, as `kind` says. `to` is where it goes when that isn't plain: `self`, `target` or `ground`. The kinds:
+  - `dash`: forward, in a straight line.
+  - `leapBack`: backward, through the air.
+  - `knockup`: straight up, landing where it stood.
+  - `behind`: to the back of the target.
   - `charge`: you run to the target at `speed`, stopping in melee range.
   - `leap`: you jump to the target or the ground point, arcing `height` ft up.
   - `knockback`: knocks those it `affects` `distance` ft away from you, `height` ft up.

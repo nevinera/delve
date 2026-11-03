@@ -563,8 +563,20 @@
             "leap",
             "knockback",
             "pull",
-            "blink"
+            "blink",
+            "dash",
+            "knockup",
+            "leapBack",
+            "behind"
           ]
+        },
+        "to": {
+          "enum": [
+            "self",
+            "target",
+            "ground"
+          ],
+          "description": "move: where it goes, for one that isn't plain"
         },
         "distance": {
           "type": "number",
