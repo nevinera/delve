@@ -145,6 +145,17 @@
           "school": {
             "$ref": "common.schema.json#/$defs/school"
           },
+          "category": {
+            "type": "string",
+            "description": "periodic: a word the class picks, like bleed or disease. On a stat or trigger: only for that category"
+          },
+          "categories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "stat or trigger: only for these categories"
+          },
           "every": {
             "type": "number",
             "exclusiveMinimum": 0

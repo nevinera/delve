@@ -742,6 +742,7 @@ Types:
 - `summon`: brings `unit`, `count` of them, for `lasts` seconds, or until it dies or is dismissed if that's left out. `max` is how many can be out at once. `obeys` means you command it. `statuses` are what it arrives with.
 - `command`: your summons, or just `units`, use `ability`.
 - `source: "summons"`, on a damage or heal effect: your summons do it, not you.
+- `category`, on a damage or heal effect or a periodic: a word the class picks, like `bleed` or `disease`. A `stat` or `trigger` with `category` or `categories` only counts those.
 - `consume`: takes `status` off those it `affects`, or just `stacks` stacks of it. It's for an ability using up a status of its own, where `dispel` removes by kind. With `affects: "summons"` it dismisses or sacrifices summons instead, `units` and `count` saying which and how many.
 - `chance`, on any effect, 0 to 1: how likely it is to happen, 1 by default. `chancePerSpent` adds that much for each point spent, here and on a `trigger`.
 - `when`, on any effect: conditions written as `requires`. The effect only happens while they hold.

@@ -664,6 +664,10 @@
           "type": "number",
           "minimum": 0,
           "description": "more chance for each point the ability spends"
+        },
+        "category": {
+          "type": "string",
+          "description": "damage, heal: a word the class picks, like bleed or disease, that stats and triggers can look for"
         }
       }
     },
