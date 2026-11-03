@@ -255,6 +255,242 @@
               "description": "what the ability is used on"
             }
           }
+        },
+        {
+          "type": "object",
+          "required": [
+            "state"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "state": {
+              "enum": [
+                "casting",
+                "inCombat",
+                "slowed",
+                "airborne",
+                "falling",
+                "controlled",
+                "stunned",
+                "outdoors"
+              ]
+            },
+            "on": {
+              "enum": [
+                "self",
+                "target"
+              ],
+              "description": "self by default"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "position"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "position": {
+              "enum": [
+                "behind",
+                "inFront"
+              ],
+              "description": "where you stand from the target"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "since"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "since": {
+              "enum": [
+                "stealth",
+                "attack",
+                "damageTaken",
+                "kill",
+                "combatStart"
+              ],
+              "description": "seconds since this last happened to or by you"
+            },
+            "below": {
+              "type": "number",
+              "minimum": 0
+            },
+            "above": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "below"
+              ]
+            },
+            {
+              "required": [
+                "above"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "resource"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "resource": {
+              "type": "string"
+            },
+            "below": {
+              "type": "number",
+              "minimum": 0
+            },
+            "above": {
+              "type": "number",
+              "minimum": 0
+            },
+            "percent": {
+              "type": "boolean",
+              "description": "below and above are percent of its maximum"
+            }
+          },
+          "oneOf": [
+            {
+              "required": [
+                "below"
+              ]
+            },
+            {
+              "required": [
+                "above"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "holders"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "holders": {
+              "$ref": "#/$defs/id"
+            },
+            "atLeast": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "atMost": {
+              "type": "integer",
+              "minimum": 0
+            }
+          },
+          "description": "how many units hold this status from you",
+          "oneOf": [
+            {
+              "required": [
+                "atLeast"
+              ]
+            },
+            {
+              "required": [
+                "atMost"
+              ]
+            }
+          ]
+        },
+        {
+          "type": "object",
+          "required": [
+            "unitsOut"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "unitsOut": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "$ref": "#/$defs/id"
+              },
+              "description": "you have one of these units out"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "inArea"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "inArea": {
+              "$ref": "#/$defs/id",
+              "description": "the target stands in the area this ability of yours put down"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "spentAtLeast"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "spentAtLeast": {
+              "type": "number",
+              "minimum": 0
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "targetsHitAtLeast"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "targetsHitAtLeast": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "outcome"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "outcome": {
+              "enum": [
+                "crit",
+                "survived"
+              ],
+              "description": "how the hit just made went"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "required": [
+            "targetHealthBelowMine"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "targetHealthBelowMine": {
+              "type": "boolean"
+            }
+          }
         }
       ]
     },

@@ -40,6 +40,10 @@ export function classProblems(made) {
   const conditions = (where, list = []) =>
     list.forEach((c) => {
       if ("status" in c) status(where, c.status);
+      if ("holders" in c) status(where, c.holders);
+      if ("resource" in c) resource(where, c.resource);
+      (c.unitsOut ?? []).filter((id) => !units.has(id)).forEach((id) => problems.push(`${where} points at a unit this class doesn't have (${id}).`));
+      if ("inArea" in c && !(made.abilities ?? []).some((a) => a.id === c.inArea)) problems.push(`${where} points at an ability this class doesn't have (${c.inArea}).`);
       if (c.anyOf) conditions(where, c.anyOf);
       if (c.not) conditions(where, [c.not]);
     });

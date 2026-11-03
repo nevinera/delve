@@ -710,7 +710,19 @@ Only a class's `id` and `name` are required for now, so the class editor can sav
 - `target`: what you need targeted to use it. `enemy` or `ally`, or `self`, `ground` (you pick a place within range) or `none`. An `ally` ability with no friendly target lands on you.
 - `icon`: its action bar icon, from the stock set the core world ships.
 - `range`: how far the target can be, a number or `"melee"` (see Distance and areas). `minRange` is how near it can be.
-- `requires`: conditions to use it, each `{ health, below or above }` (`health` is `self` or `target`, in percent) or `{ status, on, stacks }` (a status `on` `self` or `target`, with at least `stacks` stacks if it says), or `{ targetIs }` (what you're using it on: `enemy`, `ally`, `self`, `other`, `player` or `nonPlayer`), or `{ stealthed }` or `{ inCombat }` (true or false, about you), or `{ anyOf: [conditions] }`, which holds when any of them does, or `{ not: condition }`, which holds when it doesn't. An execute needs `{ "health": "target", "below": 20 }`.
+- `requires`: conditions to use it, each `{ health, below or above }` (`health` is `self` or `target`, in percent) or `{ status, on, stacks }` (a status `on` `self` or `target`, with at least `stacks` stacks if it says), or `{ targetIs }` (what you're using it on: `enemy`, `ally`, `self`, `other`, `player` or `nonPlayer`), or `{ stealthed }` or `{ inCombat }` (true or false, about you), or `{ anyOf: [conditions] }`, which holds when any of them does, or `{ not: condition }`, which holds when it doesn't, or one of these:
+  - `{ state, on }`: `casting`, `inCombat`, `slowed`, `airborne`, `falling`, `controlled`, `stunned` or `outdoors`, for `on` `self` (by default) or `target`.
+  - `{ position }`: you're `behind` the target or `inFront` of it.
+  - `{ since, below or above }`: seconds since your last `stealth`, `attack` or `kill`, since you last took damage (`damageTaken`), or since you entered combat (`combatStart`).
+  - `{ resource, below or above, percent }`: how much of a resource you have, in percent of its maximum with `percent`.
+  - `{ holders, atLeast or atMost }`: how many units hold this status from you.
+  - `{ unitsOut }`: you have one of these units out.
+  - `{ inArea }`: the target stands in the area this ability of yours put down.
+  - `{ spentAtLeast }`, `{ targetsHitAtLeast }`: what the ability spent, and how many it hit.
+  - `{ outcome }`: the hit just made was a `crit`, or the target `survived` it.
+  - `{ targetHealthBelowMine }`: the target has less health than you.
+
+  An execute needs `{ "health": "target", "below": 20 }`.
 - `creatureTypes`: the creature types it can target, for an ability that only works on beasts, say.
 - `facing`: you must face the target within 90° either side. True by default for `enemy` abilities.
 - `castTime`: 0 is instant. Moving or jumping cancels a cast unless `castWhileMoving` is true.
@@ -1088,7 +1100,7 @@ The game server decides what abilities do, from the class files in the released 
 - **Stats:** at level 1, primary stats are 12 and the others 6, stamina 12, attack power is twice the higher of strength and agility, spell power twice intellect, and health ten times stamina. A weapon swing does 10. A hit has a 5% chance to do double.
 - **Resources:** mana holds 1000 and regains 20 a second, energy holds 100 and regains 10, and rage holds 100, starts empty and falls by 1. Points hold `max` and go by `regen`.
 - **Enemies:** only training dummies, for now. A dummy has 100000 health, never drops below 1, and heals up and starts its damage tally over after 5 s unhit.
-- **Not yet:** an `all` cost spends only its least, and `perSpent`, `byMastery`, `maxHealth` and `shareOfTrigger` amounts and `perSpent` durations count for nothing. The `interrupt`, `taunt`, `move`, `dispel`, `consume`, `cooldown` and `resurrect` effects do nothing, `summon`, `command`, `area`, `aura` and `units` do nothing, `specializations` and `talents` aren't offered, `consumedBy` does nothing, `when`, `chance` and `perCount` on an ability's effect aren't checked, what a status does while it's on (`effects`), including `immune`, doesn't apply, nothing checks line of sight, and nothing misses, or is dodged, parried or blocked.
+- **Not yet:** an `all` cost spends only its least, and `perSpent`, `byMastery`, `maxHealth` and `shareOfTrigger` amounts and `perSpent` durations count for nothing. The `interrupt`, `taunt`, `move`, `dispel`, `consume`, `cooldown` and `resurrect` effects do nothing, `summon`, `command`, `area`, `aura` and `units` do nothing, `specializations` and `talents` aren't offered, `consumedBy` does nothing, `requires` isn't checked, `when`, `chance` and `perCount` on an ability's effect aren't checked, what a status does while it's on (`effects`), including `immune`, doesn't apply, nothing checks line of sight, and nothing misses, or is dodged, parried or blocked.
 
 ### Rails and the game server
 

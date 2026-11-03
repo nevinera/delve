@@ -28,14 +28,27 @@ const resourcesOf = (made) => () => (made.resources ?? []).map((r) => [r.key, r.
 const main = { key: "colors", type: "words", label: "colors", hint: "[main, trim]: two #rrggbb colors, with commas" };
 
 const simpleConditionFields = (made) => [
-  { key: "kind", type: "select", label: "needs", options: [["health", "health"], ["status", "a status"], ["stealthed", "stealth"], ["inCombat", "combat"], ["targetIs", "used on"]] },
+  { key: "kind", type: "select", label: "needs", options: [["health", "health"], ["status", "a status"], ["stealthed", "stealth"], ["inCombat", "combat"], ["targetIs", "used on"], ["state", "a state"], ["position", "position"], ["since", "time since"], ["resource", "a resource"], ["holders", "units holding"], ["unitsOut", "a unit out"], ["inArea", "in your area"], ["spentAtLeast", "spent at least"], ["targetsHitAtLeast", "hit at least"], ["outcome", "the hit"], ["targetHealthBelowMine", "target under your health"]] },
+  { key: "state", type: "select", options: ["casting", "inCombat", "slowed", "airborne", "falling", "controlled", "stunned", "outdoors"], show: (c) => c.kind === "state" },
+  { key: "position", type: "select", options: ["behind", "inFront"], show: (c) => c.kind === "position" },
+  { key: "since", type: "select", options: ["stealth", "attack", "damageTaken", "kill", "combatStart"], show: (c) => c.kind === "since" },
+  { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: (c) => c.kind === "resource" },
+  { key: "percent", type: "check", label: "in percent", show: (c) => c.kind === "resource" },
+  { key: "holders", label: "of status", type: "select", none: "pick one", options: statusesOf(made), show: (c) => c.kind === "holders" },
+  { key: "atLeast", type: "number", label: "at least", min: 0, step: 1, show: (c) => c.kind === "holders" },
+  { key: "atMost", type: "number", label: "at most", min: 0, step: 1, show: (c) => c.kind === "holders" },
+  { key: "unitsOut", label: "units", type: "multi", options: unitsOf(made), show: (c) => c.kind === "unitsOut" },
+  { key: "inArea", label: "of ability", type: "select", none: "pick one", options: abilitiesOf(made), show: (c) => c.kind === "inArea" },
+  { key: "spentAtLeast", label: "points", type: "number", min: 0, show: (c) => c.kind === "spentAtLeast" },
+  { key: "targetsHitAtLeast", label: "targets", type: "number", min: 1, step: 1, show: (c) => c.kind === "targetsHitAtLeast" },
+  { key: "outcome", type: "select", options: ["crit", "survived"], show: (c) => c.kind === "outcome" },
   { key: "targetIs", type: "select", label: "used on", options: ["enemy", "ally", "self", "other", "player", "nonPlayer"], show: (c) => c.kind === "targetIs" },
   { key: "stacks", type: "number", label: "at stacks", min: 1, step: 1, show: (c) => c.kind === "status" },
   { key: "health", type: "select", options: ["self", "target"], show: (c) => c.kind === "health" },
-  { key: "below", type: "number", label: "below %", min: 0, show: (c) => c.kind === "health" },
-  { key: "above", type: "number", label: "above %", min: 0, show: (c) => c.kind === "health" },
+  { key: "below", type: "number", label: "below", min: 0, show: (c) => ["health", "since", "resource"].includes(c.kind) },
+  { key: "above", type: "number", label: "above", min: 0, show: (c) => ["health", "since", "resource"].includes(c.kind) },
   { key: "status", type: "select", none: "pick one", options: statusesOf(made), show: (c) => c.kind === "status" },
-  { key: "on", type: "select", options: ["self", "target"], show: (c) => c.kind === "status" },
+  { key: "on", type: "select", options: ["self", "target"], show: (c) => c.kind === "status" || c.kind === "state" },
   { key: "yes", type: "check", label: "true", default: true, show: (c) => c.kind === "stealthed" || c.kind === "inCombat" },
 ];
 
@@ -61,12 +74,16 @@ const conditionFields = (made) => [
 ];
 
 // A condition as the form edits it, with the `kind` the format leaves implicit.
+const PLAIN_CONDITIONS = ["state", "position", "since", "resource", "holders", "unitsOut", "inArea", "spentAtLeast", "targetsHitAtLeast", "outcome", "targetHealthBelowMine"];
+
 export function readCondition(condition) {
   if ("health" in condition) return { kind: "health", ...condition };
   if ("status" in condition) return { kind: "status", ...condition };
   if ("anyOf" in condition) return { kind: "anyOf", anyOf: condition.anyOf.map(readCondition) };
   if ("not" in condition) return { kind: "not", not: [readCondition(condition.not)] };
   if ("targetIs" in condition) return { kind: "targetIs", targetIs: condition.targetIs };
+  const plain = PLAIN_CONDITIONS.find((key) => key in condition);
+  if (plain) return { kind: plain, ...condition };
   const kind = "stealthed" in condition ? "stealthed" : "inCombat" in condition ? "inCombat" : "health";
   return kind === "health" ? { kind, health: "self" } : { kind, yes: condition[kind] };
 }
@@ -78,6 +95,8 @@ export function writeCondition({ kind, ...c }) {
   if (kind === "not") return { not: writeCondition(c.not?.[0] ?? { kind: "status" }) };
   if (kind === "targetIs") return { targetIs: c.targetIs ?? "enemy" };
   if (kind === "anyOf") return { anyOf: (c.anyOf ?? []).map(writeCondition) };
+  if (kind === "targetHealthBelowMine") return { targetHealthBelowMine: true };
+  if (PLAIN_CONDITIONS.includes(kind)) return c;
   return { [kind]: c.yes ?? true };
 }
 
