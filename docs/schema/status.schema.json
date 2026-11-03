@@ -313,7 +313,7 @@
           },
           "resource": {
             "type": "string",
-            "description": "trigger, for spend: only spending this resource, by key"
+            "description": "trigger, for spend: only spending this resource, by key. stat: the resource a resource stat is about"
           },
           "schools": {
             "$ref": "common.schema.json#/$defs/schools"
@@ -504,7 +504,7 @@
           },
           "change": {
             "type": "string",
-            "description": "modify: what changes, one of cost, cooldown, cooldownRate, tickRate, channelDuration, channelTicks, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, critHealing, maxStacks, mastery, every, others, stacks, amount, absorb, lockout, cone, distance, limit, uses, delay, or a param its target names"
+            "description": "modify: what changes, one of cost, cooldown, cooldownRate, tickRate, channelDuration, channelTicks, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, critHealing, resourceGain, byExtraSpent, maxStacks, mastery, every, others, stacks, amount, absorb, lockout, cone, distance, limit, uses, delay, or a param its target names"
           },
           "addEffects": {
             "type": "array",
@@ -523,6 +523,27 @@
           "overrides": {
             "type": "object",
             "description": "modify: replaces these keys of the status's or ability's definition, for things that aren't numbers. null removes one"
+          },
+          "spentAs": {
+            "description": "modify: the abilities count as spending this much, whatever they spent, or max for the most they can",
+            "oneOf": [
+              {
+                "type": "number"
+              },
+              {
+                "const": "max"
+              }
+            ]
+          },
+          "byExtraSpent": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "modify: the abilities do up to this many times as much for spending all of a cost with upTo"
+          },
+          "spendsUpTo": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "modify: the abilities can spend this much more of their cost, if you have it"
           },
           "becomes": {
             "$ref": "common.schema.json#/$defs/id",

@@ -96,6 +96,24 @@
         "effect": {
           "$ref": "common.schema.json#/$defs/effect",
           "description": "what each tick does, when that isn't the ability's effects"
+        },
+        "costPerTick": {
+          "type": "object",
+          "required": [
+            "resource",
+            "amount"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "resource": {
+              "type": "string"
+            },
+            "amount": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          },
+          "description": "what each tick spends. It ends when you can't pay"
         }
       }
     },
@@ -139,6 +157,23 @@
           "all": {
             "type": "boolean",
             "description": "spends all you have of the resource, needing at least `amount` or `percent`"
+          },
+          "upTo": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "it spends more if you have it, up to this much in all"
+          },
+          "perSecond": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "it spends this much each second while it channels, in place of amount"
+          },
+          "when": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/condition"
+            },
+            "description": "this cost only counts while these hold"
           }
         },
         "oneOf": [
@@ -150,6 +185,11 @@
           {
             "required": [
               "percent"
+            ]
+          },
+          {
+            "required": [
+              "perSecond"
             ]
           }
         ]

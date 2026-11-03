@@ -3,7 +3,7 @@ import { gameDataPath, isClassPath } from "../world/paths.js";
 
 // A class, as the world keeps it in classes/<id>.json.
 
-const BUILT_IN_CHANGES = new Set(["cost", "cooldown", "amount", "absorb", "lockout", "cone", "distance", "limit", "uses", "delay", "cooldownRate", "tickRate", "channelDuration", "channelTicks", "castTime", "charges", "range", "radius", "maxTargets", "duration", "damage", "healing", "critChance", "critDamage", "critHealing", "maxStacks", "mastery", "every", "others", "stacks"]);
+const BUILT_IN_CHANGES = new Set(["cost", "cooldown", "amount", "absorb", "lockout", "cone", "distance", "limit", "uses", "delay", "cooldownRate", "tickRate", "channelDuration", "channelTicks", "castTime", "charges", "range", "radius", "maxTargets", "duration", "damage", "healing", "critChance", "critDamage", "critHealing", "resourceGain", "byExtraSpent", "maxStacks", "mastery", "every", "others", "stacks"]);
 
 export const classPath = (id) => gameDataPath("classes", id);
 
@@ -79,7 +79,10 @@ export function classProblems(made) {
   for (const ability of made.abilities ?? []) {
     if (ability.replaces && !abilities.has(ability.replaces)) problems.push(`Ability ${ability.name || ability.id} replaces an ability this class doesn't have (${ability.replaces}).`);
     const where = ability.name || "An ability";
-    (ability.cost ?? []).forEach((c) => resource(where, c.resource));
+    (ability.cost ?? []).forEach((c) => {
+      resource(where, c.resource);
+      conditions(where, c.when);
+    });
     conditions(where, ability.requires);
     (ability.effects ?? []).forEach((e) => effect(where, e));
     const spendsAll = (ability.cost ?? []).filter((c) => c.all).length;
@@ -129,6 +132,7 @@ export function classProblems(made) {
     const where = s.name || "A status";
     conditions(where, s.when);
     (s.effects ?? []).filter((e) => e.becomes && !abilities.has(e.becomes)).forEach((e) => problems.push(`${where} becomes an ability this class doesn't have (${e.becomes}).`));
+    (s.effects ?? []).filter((e) => e.type === "stat" && e.resource).forEach((e) => resource(where, e.resource));
     (s.keptBy?.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} is kept by an ability this class doesn't have (${id}).`));
     (s.consumedBy?.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} is used up by an ability this class doesn't have (${id}).`));
     for (const e of s.effects ?? []) {

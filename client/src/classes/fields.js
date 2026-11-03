@@ -9,7 +9,7 @@ const SCHOOLS = ["physical", "holy", "fire", "nature", "frost", "shadow", "arcan
 const SCHOOL_LISTS = [...SCHOOLS, "all"];
 const DISPELS = ["magic", "curse", "poison", "disease", "enrage", "stun", "root", "silence", "incapacitate", "disorient", "fear", "disarm", "slow"];
 const CREATURE_TYPES = ["beast", "humanoid", "undead", "elemental", "demon", "dragonkin", "giant", "mechanical", "aberration", "critter"];
-const STATS = ["strength", "agility", "intellect", "stamina", "armor", "critRating", "hasteRating", "masteryRating", "versatilityRating", "leechRating", "avoidanceRating", "speedRating", "attackPower", "spellPower", "maxHealth", "critChance", "critDamage", "critHealing", "critTaken", "haste", "mastery", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed", "stealth", "detection", "damageDone", "healingDone", "damageTaken", "healingTaken", "threat"];
+const STATS = ["strength", "agility", "intellect", "stamina", "armor", "critRating", "hasteRating", "masteryRating", "versatilityRating", "leechRating", "avoidanceRating", "speedRating", "attackPower", "spellPower", "maxHealth", "resourceMax", "resourceRegen", "resourceRest", "resourceDecay", "resourceGain", "critChance", "critDamage", "critHealing", "critTaken", "haste", "mastery", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed", "stealth", "detection", "damageDone", "healingDone", "damageTaken", "healingTaken", "threat"];
 const WHEN = ["cast", "launch", "impact", "channel"];
 const ON = ["caster", "target", "ground"];
 
@@ -18,7 +18,7 @@ const abilitiesOf = (made) => () => (made.abilities ?? []).map((a) => [a.id, a.n
 const statusesOf = (made) => () => (made.statuses ?? []).map((s) => [s.id, s.name || s.id]);
 const TRIGGERS = ["dealDamage", "takeDamage", "heal", "healed", "overheal", "crit", "nonCrit", "dodge", "parry", "block", "cast", "channelEnd", "spend", "kill", "interrupt", "dispel", "pickup", "healthBelow", "allyHealthBelow", "wouldDie", "statusGained", "statusConsumed", "statusEnds", "dispelled", "holderDies"];
 const triggerOn = (...events) => (e) => e.type === "trigger" && events.includes(e.on);
-const CHANGES = ["cost", "cooldown", "amount", "absorb", "lockout", "cone", "distance", "limit", "uses", "delay", "cooldownRate", "tickRate", "channelDuration", "channelTicks", "castTime", "charges", "range", "radius", "maxTargets", "duration", "damage", "healing", "critChance", "critDamage", "maxStacks"];
+const CHANGES = ["cost", "cooldown", "amount", "absorb", "lockout", "cone", "distance", "limit", "uses", "delay", "cooldownRate", "tickRate", "channelDuration", "channelTicks", "castTime", "charges", "range", "radius", "maxTargets", "duration", "damage", "healing", "critChance", "critDamage", "critHealing", "resourceGain", "byExtraSpent", "maxStacks"];
 // What a modify can change: the built-in values, and every param the class has named.
 const changesOf = (made) => () => {
   const named = [...(made.abilities ?? []), ...(made.statuses ?? [])].flatMap((o) => (o.effects ?? []).map((e) => e.param)).filter(Boolean);
@@ -133,6 +133,7 @@ const effectFields = (made, nested = false) => [
   { key: "exceptTarget", label: "not the target", type: "check", show: (e) => ["enemies", "allies"].includes(e.affects) },
   { key: "drain", type: "number", hint: "heals you by this share of what it does", show: is("damage") },
   { key: "alwaysCrit", label: "always crits", type: "check", show: is("damage", "heal") },
+  { key: "byExtraSpent", label: "times as much for spending extra", type: "number", min: 0, show: is("damage", "heal") },
   { key: "share", type: "number", show: is("extraTargets") },
   { key: "split", type: "check", hint: "those hit share the amount", show: is("damage", "heal", "status") },
   { key: "others", type: "number", min: 0, hint: "those besides the main target take this share", show: is("damage", "heal") },
@@ -290,7 +291,7 @@ export const abilityFields = (made) => [
   { key: "cooldown", label: "cooldown s", type: "number", min: 0 },
   { key: "charges", type: "number", min: 1, step: 1 },
   { key: "cooldownHasted", label: "cooldown hasted", type: "check" },
-  { key: "cost", type: "list", one: "cost", blank: () => ({ resource: "" }), fields: [{ key: "resource", type: "select", none: "pick one", options: resourcesOf(made) }, { key: "amount", type: "number", min: 0 }, { key: "percent", label: "or % of base", type: "number", min: 0 }, { key: "all", label: "spends all", type: "check", hint: "needs at least that much, and spends all you have" }] },
+  { key: "cost", type: "list", one: "cost", blank: () => ({ resource: "" }), fields: [{ key: "resource", type: "select", none: "pick one", options: resourcesOf(made) }, { key: "amount", type: "number", min: 0 }, { key: "upTo", label: "up to", type: "number", min: 0 }, { key: "perSecond", label: "or per second", type: "number", min: 0 }, { key: "percent", label: "or % of base", type: "number", min: 0 }, { key: "all", label: "spends all", type: "check", hint: "needs at least that much, and spends all you have" }] },
   { key: "requires", type: "list", one: "condition", blank: () => ({ kind: "health", health: "target" }), read: readCondition, write: writeCondition, fields: conditionFields(made) },
   { key: "creatureTypes", label: "only on", type: "multi", options: CREATURE_TYPES },
   { key: "effects", type: "list", one: "effect", blank: blankEffect, fields: effectFields(made) },
@@ -357,7 +358,9 @@ const statusEffectFields = (made, nested = false) => [
   { key: "every", label: "every s", type: "number", min: 0, show: is("periodic", "aura") },
   { key: "does", type: "select", options: ["damage", "heal", "resource"], show: is("periodic") },
   { key: "amount", type: "amount", show: is("periodic", "absorb") },
-  { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: (e) => e.type === "periodic" && e.does === "resource" },
+  { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: (e) => (e.type === "periodic" && e.does === "resource") || (e.type === "stat" && e.stat?.startsWith("resource")) },
+  { key: "spendsUpTo", label: "can spend more", type: "number", min: 0, show: is("modify") },
+  { key: "byExtraSpent", label: "times as much for spending it", type: "number", min: 0, show: is("modify") },
   { key: "schools", type: "multi", options: SCHOOL_LISTS, show: is("absorb", "trigger", "stat", "immune", "periodic") },
   { key: "control", type: "select", options: ["stun", "root", "silence", "incapacitate", "disorient", "fear", "disarm"], show: is("control") },
   { key: "on", type: "select", options: TRIGGERS, show: is("trigger") },
