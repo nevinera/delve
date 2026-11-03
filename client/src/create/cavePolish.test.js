@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { allStone } from "../v2/caves.js";
 import { Caves } from "./caves.js";
-import { faceAt, flatten, reshape, smooth } from "./cavePolish.js";
+import { changeRock, faceAt, flatten, reshape, smooth } from "./cavePolish.js";
 import { caveBlocks } from "./caveMesh.js";
 
 const span = (floor, ceiling, net = "n") => ({ floor, ceiling, stone: allStone(0), net });
@@ -41,6 +41,16 @@ describe("blocks", () => {
     expect(faceAt([10.9, 10, 4.2], [0.1, -0.99, 0])).toEqual({ rock: [5, 4, 2], out: [0, 1, 0] });
     // Looking along +x at a wall at x 12, the hit close to a voxel's corner.
     expect(faceAt([12, 9.95, 4.05], [0.99, -0.1, 0.1])).toEqual({ rock: [6, 4, 2], out: [-1, 0, 0] });
+  });
+
+  it("places a block in the top of an opening two blocks high, leaving the bottom open", () => {
+    const caves = new Caves({ add() {} }, { heightAt: () => 50, cellHeightAt: () => 50 });
+    // A tunnel 4 ft high, its floor at 12.
+    caves.dig({ kind: "box", at: [124, 14, 124], half: [8, 2, 2], yaw: 0 });
+    const groundAt = () => 50;
+    caves.edit((columnsOf) => changeRock(columnsOf, { kind: "box", at: [125, 15, 125], half: [0.9, 0.9, 0.9], yaw: 0 }, "fill", "unnamed", { groundAt, exact: true }));
+    expect(caves.spans(62, 62).map((s) => [s.floor, s.ceiling])).toEqual([[12, 14]]);
+    expect(caves.spans(63, 62).map((s) => [s.floor, s.ceiling])).toEqual([[12, 16]]);
   });
 
   it("outlines every block", () => {

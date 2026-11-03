@@ -127,7 +127,7 @@ export class CavePolish {
     if (this.tool === "caveBlocks") {
       const at = middleOf(op === "fill" ? aimed.air : aimed.rock);
       const cube = { kind: "box", at, half: [0.9, 0.9, 0.9], yaw: 0 };
-      return this.remember(aimed.net, this.work(cube, op, aimed.net));
+      return this.remember(aimed.net, this.work(cube, op, aimed.net, null, { exact: true }));
     }
     if (this.tool === "caveSculpt" && this.brush.shape === "box") {
       if (!this.box || this.box.b) this.box = { a: aimed.rock, b: null, net: aimed.net, op };
@@ -181,9 +181,10 @@ export class CavePolish {
     return { kind: "box", at: low.map((v, k) => (v + high[k]) / 2), half: low.map((v, k) => (high[k] - v) / 2 - 0.1), yaw: 0 };
   }
 
-  // Works `op` in `shape`, in network `net`: gives the tiles it changed as they were, or null.
-  work(shape, op, net, stroke = null) {
-    const before = this.caves.edit((columnsOf) => changeRock(columnsOf, shape, op, net, { groundAt: this.groundAt(), fill: this.brush.fill, paint: this.brush.paint, stroke }));
+  // Works `op` in `shape`, in network `net`, `exact`ly for a block (changeRock's): gives the tiles it
+  // changed as they were, or null.
+  work(shape, op, net, stroke = null, { exact = false } = {}) {
+    const before = this.caves.edit((columnsOf) => changeRock(columnsOf, shape, op, net, { groundAt: this.groundAt(), fill: this.brush.fill, paint: this.brush.paint, stroke, exact }));
     if (this.caves.refused) alert(this.caves.refused);
     return before;
   }
@@ -369,13 +370,14 @@ function outlines(voxels) {
 
 // Works `op` in `shape` on the columns columnsOf gives, in network `net`, as Caves.edit takes it:
 // carve opens air, with the rock `fill` or, null, that of the air it's dug from; fill fills rock,
-// then gives the air round what it filled the rock `fill`, if there is one; smooth, flatten (to
+// then gives the air round what it filled the rock `fill`, if there is one, leaving air however
+// thin `exact`ly (carve's); smooth, flatten (to
 // the `stroke`'s level) and paint (with the rock `paint`) reshape the spans. Gives the "tx,tz" of
 // the tiles changed.
-export function changeRock(columnsOf, shape, op, net, { groundAt, fill = null, paint = 0, stroke = null }) {
+export function changeRock(columnsOf, shape, op, net, { groundAt, fill = null, paint = 0, stroke = null, exact = false }) {
   if (op === "carve") return carve(shape, columnsOf, groundAt, fill === null ? { net, mouth: false } : { net, mouth: false, stone: allStone(fill), own: true });
   if (op === "fill") {
-    const changed = carve(shape, columnsOf, groundAt, { fill: true });
+    const changed = carve(shape, columnsOf, groundAt, { fill: true, exact });
     if (fill === null || !changed.size) return changed;
     const round = { ...shape };
     if (shape.radius) round.radius = shape.radius + VOXEL_FT;

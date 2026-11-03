@@ -138,8 +138,9 @@ export function fillRock(column, low, high, minAir = MIN_ROCK_FT) {
 // network `net`, and takes the stone of the air it's dug from, the one most of it meets, or
 // `stone` (always, with `own`).
 // With `mouth`, air opens through the ground where it would leave less than THIN_ROOF_FT of rock
-// over it; without, it stops ROOF_FT under the ground. Gives the "tx,tz" of the tiles changed.
-export function carve(shape, columnsOf, groundAt, { fill = false, stone = allStone(0), own = false, mouth = true, net = UNNAMED } = {}) {
+// over it; without, it stops ROOF_FT under the ground. Filling `exact`ly leaves crumbs of air as
+// they are, for filling a block at a time. Gives the "tx,tz" of the tiles changed.
+export function carve(shape, columnsOf, groundAt, { fill = false, stone = allStone(0), own = false, mouth = true, net = UNNAMED, exact = false } = {}) {
   const [x0, z0, x1, z1] = shapeBounds(shape);
   const cuts = [];
   for (let cj = Math.floor(z0 / VOXEL_FT); cj <= Math.floor(z1 / VOXEL_FT); cj++) {
@@ -159,10 +160,10 @@ export function carve(shape, columnsOf, groundAt, { fill = false, stone = allSto
     for (const cut of cuts) {
       const found = at(cut, false);
       if (!found?.columns[found.k]) continue;
-      found.columns[found.k] = fillRock(found.columns[found.k], cut.low, cut.high, MIN_AIR_FT);
+      found.columns[found.k] = fillRock(found.columns[found.k], cut.low, cut.high, exact ? MIN_ROCK_FT : MIN_AIR_FT);
       changed.add(found.key);
     }
-    if (changed.size) closePockets([x0, z0, x1, z1], at, groundAt, changed);
+    if (changed.size && !exact) closePockets([x0, z0, x1, z1], at, groundAt, changed);
     return changed;
   }
   // The stone most of the air met has.
