@@ -62,7 +62,7 @@ export class Caves {
     scene.add(this.groundGroup);
     this.groundMaterial = null;
     // What clutter round mouths needs (mouthClutter.js): the cave layout's entrances, the biome at
-    // continent feet (x, z), and editor/clutterMeshes.js's clutterMeshes to draw it, or null not to.
+    // continent feet (x, z), and render/clutterMeshes.js's clutterMeshes to draw it, or null not to.
     this.entrances = () => [];
     this.biomeAt = () => "plains";
     this.clutterMeshes = null;

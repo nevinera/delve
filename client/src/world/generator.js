@@ -11,7 +11,7 @@
 // surface and trees, blended at borders. Trees are planted as tree terrain cells (trees.js).
 // Objects and scatter wait for kits.
 //
-// Roads follow the routes the editor works out for the sketch's paths (editor/roads.js). Each has
+// Roads follow the routes the editor works out for the sketch's paths (world/roads.js). Each has
 // a bed: the ground along it, evened out and held to its grade cap. The road's dug into the ground
 // down to its bed or built up to it, with sides that slope back to the land, and is surfaced in
 // path, raggedly for trails and footpaths, in patches for faint and disused ones.
@@ -106,7 +106,7 @@ export function riverReachFt(width) {
 //
 // Roads and highways in use are pounded smooth: their bed's evened out over `evenTrafficFt`, and
 // the ground's flat `flatFt` past their edges. Each tile lists their middles (tile.roads), for the
-// ground to draw their surface and edges sharply (editor/groundMaterial.js), along with any within
+// ground to draw their surface and edges sharply (render/groundMaterial.js), along with any within
 // `tileMarginFt` of it; their cells are surfaced in path only `coreFt` inside their edges, for
 // the map and far off, and trees keep `clearFt` clear of their edges.
 export const ROAD = {
@@ -245,7 +245,7 @@ export function shapeHeight(ctx, x, z, relief = 0) {
   return base < 0 ? base : base + relief * smoothstep(0, SHORE_FT, base);
 }
 
-// The ground roads are routed over (editor/roads.js), from prepareWorld's ctx: the broad shape with
+// The ground roads are routed over (world/roads.js), from prepareWorld's ctx: the broad shape with
 // the biomes' hills and ridges, leaving out the crags and smaller bumps a road's cut and fill
 // smooths away. `water` is "sea", "lake" (the biomes' lakes and the sketch's) or null; rivers
 // aren't counted, since roads cross them.

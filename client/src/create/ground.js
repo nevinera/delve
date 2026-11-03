@@ -1,9 +1,9 @@
 import * as THREE from "three";
-import { disposeGround, groundMaterial } from "../editor/groundMaterial.js";
+import { disposeGround, groundMaterial } from "../render/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
 import { ACROSS, AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, missingSea, partWater, seaEdges } from "../v2/water.js";
 import { LEDGE_RAISE_FT, LEVEE_FT, courseBox, shape } from "../v2/courses.js";
-import { waterMaterial } from "../editor/waterMaterial.js";
+import { waterMaterial } from "../render/waterMaterial.js";
 import { SHORE_FADE_FT, WATER_LOOKS } from "./waterSurface.js";
 import { PATTERNS, RUNNING, look, painted, slopeOf } from "../v2/look.js";
 import { makeSlots } from "../v2/slots.js";
@@ -17,7 +17,7 @@ import { pressHeights, pressedCorners } from "./press.js";
 
 // The ground round the builder, a tile at a time, finer the nearer the tile is to the builder's:
 // - within FULL_TILES, drawn in full, smooth-shaded at cell scale with the patterns of its kinds of
-//   ground, as walk mode draws it (editor/groundMaterial.js)
+//   ground, as walk mode draws it (render/groundMaterial.js)
 // - within FINE_TILES, flat-shaded at cell scale (its chunks' renditions, v2/plate.js)
 // - within COARSE_TILES, from its rendition, a part a chunk (v2/platter.js)
 // - further, from its plate's rendition, a part a tile, out to plates within FAR_FT;

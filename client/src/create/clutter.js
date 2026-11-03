@@ -1,11 +1,11 @@
 import * as THREE from "three";
-import { clutterMeshes, gatherClutter, setClutterFocus, setClutterRadius } from "../editor/clutterMeshes.js";
+import { clutterMeshes, gatherClutter, setClutterFocus, setClutterRadius } from "../render/clutterMeshes.js";
 import { waterClutter } from "../v2/clutter.js";
 import { RUNNING, slopeOf } from "../v2/look.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 
 // Clutter by the water round the builder (v2/clutter.js): reeds, pebbles, stones, lilies and water
-// weed, drawn with the editor's shapes (editor/clutterMeshes.js), shrinking away to nothing
+// weed, drawn with the editor's shapes (render/clutterMeshes.js), shrinking away to nothing
 // RADIUS_FT off. What's in a tile is kept till its cells are dressed again or its water changes,
 // and the meshes are made again when the builder leaves their tile or that changes, at most every
 // REMAKE_S, and only those within reach drawn as the builder moves.

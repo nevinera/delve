@@ -5,7 +5,7 @@ import { characterClips, loadAnimations, strideRate } from "../character/animati
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
 import { TURN_RATE } from "../character/posed.js";
 import { randomLook } from "../character/recipe.js";
-import { trunkRadius } from "./treeMeshes.js";
+import { trunkRadius } from "../render/treeMeshes.js";
 
 // Walk mode for the 3D view: a person-sized character on the generated ground, with a third-person
 // camera, to get a feel for the land at eye level. Controls: W/S run forward and back,

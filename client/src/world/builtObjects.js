@@ -11,11 +11,11 @@ import { OLD_IMAGES, imagePath, objectPath } from "./paths.js";
 //   out of exports.
 // - source: where it was copied from (a collection's URL or file), or absent.
 // - blocksSight: false for an object you see through, such as a fence or a lamp post; it blocks
-//   line of sight when absent (editor/shapes.js).
+//   line of sight when absent (world/shapes.js).
 // - sightCuts: holes through what blocks sight, such as an arch's or a window's, up to MAX_CUTS,
 //   each { along: [x, y, z], outline } or { from: [x, y, z], outline }: the outline, 3 to
 //   MAX_CUT_CORNERS points in feet from the centre, swept right through the object both ways along
-//   `along`, or out from the point of view `from` as a cone (editor/sightCuts.js).
+//   `along`, or out from the point of view `from` as a cone (world/sightCuts.js).
 // - palette: the colors its pieces use, each { color: "#rrggbb", param, name }. Up to MAX_PARAMS of
 //   them are parameters, which a placement can override; their colors are the defaults. The first
 //   colors added are parameters until there are MAX_PARAMS of them.

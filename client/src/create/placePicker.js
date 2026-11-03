@@ -1,4 +1,4 @@
-import { Thumbnails } from "./thumbnailRenderer.js";
+import { Thumbnails } from "../render/thumbnailRenderer.js";
 
 // The detail step's picker of things to place: a library's collections (objects/collections.js
 // allCollections), one at a time opened to its thumbnails. Clicking a thumbnail arms that type,

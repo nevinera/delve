@@ -3,7 +3,7 @@
 import { createHash } from "crypto";
 import fs from "fs";
 import path from "path";
-import { unzipWorld } from "../client/src/editor/world.js";
+import { unzipWorld } from "../client/src/world/world.js";
 
 const target = process.argv[2];
 if (!target || !fs.existsSync(target)) {

@@ -15,7 +15,7 @@ import (
 // water, and not up slopes too steep to climb. Slabs are ground too, to stand on, and it can't
 // move into one, nor into a tree or an object.
 
-// Speeds and jumping, feet and seconds, as client/src/editor/walker.js moves characters.
+// Speeds and jumping, feet and seconds, as client/src/play/walker.js moves characters.
 const (
 	runFt   = 21.0
 	walkFt  = 7.5

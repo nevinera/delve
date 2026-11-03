@@ -1,8 +1,8 @@
-import "../editor/editor.css";
+import "./library.css";
 import { strFromU8, strToU8, unzipSync } from "fflate";
 import { PLACED_PATH } from "../create/placed.js";
 import { keptWorld, readLibrary, writeLibrary } from "../create/store.js";
-import { LibrarySync } from "../editor/libraryStore.js";
+import { LibrarySync } from "./libraryStore.js";
 import { setBuiltObjects } from "../world/objects.js";
 import { adoptStrays, builtObjects, images } from "./collections.js";
 import { ObjectLibrary } from "./library.js";

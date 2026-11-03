@@ -1,5 +1,5 @@
-import { simplify } from "../world/polyline.js";
-import { CART_WIDTH_FT, gradeCap } from "../world/constants.js";
+import { simplify } from "./polyline.js";
+import { CART_WIDTH_FT, gradeCap } from "./constants.js";
 
 export { CART_WIDTH_FT, gradeCap };
 

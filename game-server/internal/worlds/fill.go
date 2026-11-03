@@ -108,7 +108,7 @@ var objectTypes = map[string]objectType{
 	"driftLog":     {[2]float64{15, 35}, footprint{Capsule: []float64{0.07, 0.5}}, 0.14},
 }
 
-// Trees' trunks and heights by size and kind (client/src/editor/treeMeshes.js).
+// Trees' trunks and heights by size and kind (client/src/render/treeMeshes.js).
 var (
 	treeSizes = map[int]struct{ height, trunk float64 }{1: {60, 2.5}, 2: {90, 4}, 3: {120, 6}}
 	treeKinds = map[string]struct{ height, trunk float64 }{"oak": {1, 1}, "pine": {1.15, 0.8}, "willow": {0.9, 1.2}, "dead": {0.85, 0.8}}

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
-import { waterfallMeshes } from "../editor/waterfalls.js";
+import { waterfallMeshes } from "../render/waterfalls.js";
 import { cascadesOf, fallsOf } from "../v2/courses.js";
 
 // Courses' falls and their cascades' steps (v2/courses.js) within REACH_FT of the builder, drawn

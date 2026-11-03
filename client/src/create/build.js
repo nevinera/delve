@@ -1,11 +1,11 @@
 import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
-import { objectMeshes } from "../editor/objectMeshes.js";
-import { PlacePicker } from "../editor/placePicker.js";
-import { slabMeshes } from "../editor/slabMeshes.js";
-import { polygonPieces, roofPieces, rectanglePieces, roomPieces, wallPieces } from "../editor/slabTool.js";
-import { mountSwatches, pickedSurface } from "../editor/swatches.js";
-import { Thumbnails } from "../editor/thumbnailRenderer.js";
+import { objectMeshes } from "../render/objectMeshes.js";
+import { PlacePicker } from "./placePicker.js";
+import { slabMeshes } from "../render/slabMeshes.js";
+import { polygonPieces, roofPieces, rectanglePieces, roomPieces, wallPieces } from "./slabTool.js";
+import { mountSwatches, pickedSurface } from "./swatches.js";
+import { Thumbnails } from "../render/thumbnailRenderer.js";
 import { newObjectId, turnPoint } from "../world/builtObjects.js";
 import { CELL_FT as TEMPLATE_CELL_FT } from "../world/constants.js";
 import { makeObject, specOf } from "../world/objects.js";

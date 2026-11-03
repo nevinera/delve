@@ -1,8 +1,8 @@
 import { gunzipSync, gzipSync, strFromU8, strToU8 } from "fflate";
-import { decodePlateTile, encodePlate, plateHash, plateOf, platePath, readHeader, splitPlate } from "../world/plateCodec.js";
-import { decodeTile, encodeTile } from "../world/tileCodec.js";
-import { kindSizes } from "../world/objects.js";
-import { isPlatePath, isPlatesIndex, plateAt, platesIndexPath, tileAt, tilePath } from "../world/paths.js";
+import { decodePlateTile, encodePlate, plateHash, plateOf, platePath, readHeader, splitPlate } from "./plateCodec.js";
+import { decodeTile, encodeTile } from "./tileCodec.js";
+import { kindSizes } from "./objects.js";
+import { isPlatePath, isPlatesIndex, plateAt, platesIndexPath, tileAt, tilePath } from "./paths.js";
 
 // A world keeps its tiles in plates (world/plateCodec.js, docs/formats/plates.md), with an index per
 // continent listing each plate's hash, so clients only fetch plates that changed. The editor works

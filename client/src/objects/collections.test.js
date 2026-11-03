@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { World } from "../editor/world.js";
+import { World } from "../world/world.js";
 import { adoptStrays, allCollections, collections, images, keepTemplate, wornImages } from "./collections.js";
 
 describe("collections", () => {

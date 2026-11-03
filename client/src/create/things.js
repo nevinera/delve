@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { objectMeshes } from "../editor/objectMeshes.js";
-import { slabMeshes, slabAt } from "../editor/slabMeshes.js";
+import { objectMeshes } from "../render/objectMeshes.js";
+import { slabMeshes, slabAt } from "../render/slabMeshes.js";
 import { objectShape, pushOut } from "../v2/blocking.js";
 import { TILE_FT } from "../v2/sizes.js";
 import { reachOf } from "../world/objects.js";

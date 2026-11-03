@@ -3,7 +3,7 @@ import { COURSE_TYPES } from "./courses.js";
 import { WATER_TYPES } from "./water.js";
 
 // What the ground looks like, worked out where it's drawn from its biome (biomes.js) and its shape,
-// never stored: its color and the pattern drawn over it up close (editor/groundMaterial.js). Ground
+// never stored: its color and the pattern drawn over it up close (render/groundMaterial.js). Ground
 // is one of these classes, by its slope and height and the water (water.js) on or near it:
 // - bed: under water, its look by the water's type (BEDS);
 // - steep: steeper than STEEP_DEG, too steep to walk;

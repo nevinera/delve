@@ -1,8 +1,8 @@
 import { strFromU8, strToU8, unzipSync, zipSync } from "fflate";
 import { builtObjects, images } from "../objects/collections.js";
 import { packPlates, unpackPlates } from "./plates.js";
-import { SHAPES_PATH, WORLD_PATH, continentOf } from "../world/paths.js";
-import { kindSizes, setBuiltObjects } from "../world/objects.js";
+import { SHAPES_PATH, WORLD_PATH, continentOf } from "./paths.js";
+import { kindSizes, setBuiltObjects } from "./objects.js";
 import { shapesFile, shapesText } from "./shapes.js";
 
 // A whole world directory held in memory, keyed by path within the world (no leading slash). The

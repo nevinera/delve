@@ -9,7 +9,7 @@
 //   node script/convert-v2.mjs <v1 world.zip> <v2 world.zip>
 import fs from "fs";
 import { gunzipSync, unzipSync, zipSync, strFromU8, strToU8 } from "fflate";
-import { unpackPlates } from "../client/src/editor/plates.js";
+import { unpackPlates } from "../client/src/world/plates.js";
 import { decodeTile } from "../client/src/world/tileCodec.js";
 import { tileAt } from "../client/src/world/paths.js";
 import { CORNERS, encodePlatter, indexIn, plateIndexIn, platterOf, platterPath } from "../client/src/v2/platter.js";

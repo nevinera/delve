@@ -3,7 +3,7 @@ import { BUILTIN_OBJECT_COLLECTIONS } from "../world/builtinObjects.js";
 import { BUILTIN_TEMPLATE_COLLECTIONS } from "../world/builtinTemplates.js";
 import { OLD_IMAGES, imagePath, newObjectId, objectPath } from "../world/builtObjects.js";
 import { BUILT_PREFIX } from "../world/objects.js";
-import { COLLECTIONS_PATH, TEMPLATE_COLLECTIONS_PATH } from "../editor/libraryStore.js";
+import { COLLECTIONS_PATH, TEMPLATE_COLLECTIONS_PATH } from "./libraryStore.js";
 import { IMAGE_PATH, OBJECT_PATH, OLD_STRUCTURES, TEMPLATE_PATH, templatePath } from "../world/paths.js";
 import { TEMPLATE_PREFIX } from "../world/templates.js";
 

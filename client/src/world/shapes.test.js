@@ -1,9 +1,9 @@
 import { gzipSync, strFromU8 } from "fflate";
 import { describe, expect, it } from "vitest";
-import { generateTile, prepareWorld } from "../world/generator.js";
-import { LandGrid, PER_TILE } from "../world/landGrid.js";
-import { makeObject, setBuiltObjects } from "../world/objects.js";
-import { encodeTile } from "../world/tileCodec.js";
+import { generateTile, prepareWorld } from "./generator.js";
+import { LandGrid, PER_TILE } from "./landGrid.js";
+import { makeObject, setBuiltObjects } from "./objects.js";
+import { encodeTile } from "./tileCodec.js";
 import { blocksSight, meshOf, objectMesh, shapesFile, shapesText } from "./shapes.js";
 import { World } from "./world.js";
 

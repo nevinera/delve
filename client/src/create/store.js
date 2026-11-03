@@ -1,6 +1,6 @@
 // /create's IndexedDB: the files of the world it has open ("files": the zip opened last, "world",
 // and the files changed since, "changes", path -> bytes), and the world's object library
-// ("library", path -> JSON text, as editor/libraryStore.js keeps it), which the objects page
+// ("library", path -> JSON text, as objects/libraryStore.js keeps it), which the objects page
 // changes too.
 
 const NAME = "create";

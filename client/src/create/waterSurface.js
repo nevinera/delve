@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { setWaterTime, waterMaterial } from "../editor/waterMaterial.js";
+import { setWaterTime, waterMaterial } from "../render/waterMaterial.js";
 import { WATER_TYPES } from "../v2/water.js";
 import { courseBox, flowOf } from "../v2/courses.js";
 import { RUNNING } from "../v2/look.js";
@@ -10,7 +10,7 @@ import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 // tile's wet cells, and a cell more round them at the level of the water next to it, which the
 // ground hides where it rises out of it, so the shore's where the two meet. Each corner's at the
 // average level of the wet cells round it near its cell's, so sloping water's smooth. The water fades in
-// over its first SHORE_FADE_FT of depth there (editor/waterMaterial.js). Each type has its own look.
+// over its first SHORE_FADE_FT of depth there (render/waterMaterial.js). Each type has its own look.
 // Farther off, and where it's not drawn, sea.js's plane stands in for the sea.
 
 const REACH_TILES = 8; // ground.js's FINE_TILES

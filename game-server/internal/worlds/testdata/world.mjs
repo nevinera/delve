@@ -23,7 +23,7 @@ const { Placed } = await client("create/placed.js");
 const { Things } = await client("create/things.js");
 const { pressesOver } = await client("create/press.js");
 const { slabFootholds } = await client("world/slabs.js");
-const { trunkRadius } = await client("editor/treeMeshes.js");
+const { trunkRadius } = await client("render/treeMeshes.js");
 
 const here = new URL(".", import.meta.url);
 const TILE_FT = 256;

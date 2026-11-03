@@ -64,7 +64,7 @@ export const SLAB_PRESETS = {
   rustyIronPlate: { color: "#7a4a32" },
 };
 
-// The ground's patterns (editor/groundMaterial.js), which an advanced surface can wear.
+// The ground's patterns (render/groundMaterial.js), which an advanced surface can wear.
 export const SLAB_PATTERNS = ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss", "litter"];
 
 const HEX = /^#[0-9a-f]{6}$/;

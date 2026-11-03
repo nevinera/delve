@@ -1,5 +1,5 @@
 import { matches } from "../world/builtObjects.js";
-import { Thumbnails } from "./thumbnailRenderer.js";
+import { Thumbnails } from "../render/thumbnailRenderer.js";
 
 // A library's gallery: every object type in the world's collections and the game's builtins, as
 // rendered thumbnails grouped by collection, filtered by a search. Your own collections start with a "+" tile for a new one.

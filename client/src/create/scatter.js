@@ -1,6 +1,6 @@
 import * as THREE from "three";
-import { objectMeshes, setObjectSight } from "../editor/objectMeshes.js";
-import { setTreeSight, treeMeshes, trunkRadius } from "../editor/treeMeshes.js";
+import { objectMeshes, setObjectSight } from "../render/objectMeshes.js";
+import { setTreeSight, treeMeshes, trunkRadius } from "../render/treeMeshes.js";
 import { objectShape, pushOut, treeShape } from "../v2/blocking.js";
 import { boulders, courseBox } from "../v2/courses.js";
 import { fillSlots } from "../v2/fill.js";
@@ -22,7 +22,7 @@ const REACH_TILES = 7;
 const REMAKE_S = 0.5;
 const SLOPE_FT = 2; // how far either way the ground's slope is taken under a slot
 const SHORE_FT = 16; // how far from water a slot can be on the shore
-// As the editor's 3D view has them (editor/renderView.js's SIGHT): how far off crowns turn simpler,
+// As the editor's 3D view has them (render/renderView.js's SIGHT): how far off crowns turn simpler,
 // the change taken across CANOPY_BAND_FT, and how far off small and large objects are drawn.
 const CANOPY_FT = [300, 450];
 const CANOPY_BAND_FT = 40;

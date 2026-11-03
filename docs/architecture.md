@@ -29,8 +29,9 @@ The client has one entry point per page (`vite.config.js`):
 
 - `client/src/world/` is shared by every page and has no DOM: world scale (`constants.js`), file formats (`tileCodec.js`, `plateCodec.js`, `landGrid.js`), paths (`paths.js`), the generator, and object, slab, template and water rules.
 - `client/src/create/` is the world editor.
-- `client/src/editor/` holds code `/create`, `/play`, the object builder and the scripts share: rendering, walking, graphics settings, plates and world zips.
-- `client/src/objects/` is the object library: collections, and the builder pages.
+- `client/src/render/` draws the world with three.js for `/create`, `/play` and the object builder: the ground's and water's materials, trees, objects, slabs, clutter, the sky, graphics settings and the performance overlay.
+- `client/src/play/` is the game page, and its walker, which the character builder uses too.
+- `client/src/objects/` is the object library: collections, its storage in the browser, and the builder pages.
 - `client/src/github/github.js` is the browser's only route to GitHub.
 
 The format code in `world/` is pure: it takes what it needs as arguments, so the game, `/create`, workers and scripts can all call it. `world/objects.js` keeps a registry of the open world's kinds of object for rendering and placing; the codecs don't read it.
@@ -43,7 +44,7 @@ A world is a directory of files: JSON, plain-text plates, and a few binary files
 
 A world also defines what you fight and meet: classes, abilities, statuses, items, creatures, NPCs, dialogue, and each continent's spawns. [Game data](formats/game-data.md) describes them. Nothing checks or reads them yet.
 
-Tiles are the heavy part. The editor holds each as a binary [tile file](formats/tile-file.md) while a world is open, and stores them 256 to a text [plate](formats/plates.md). Each plate carries the sizes of the objects in it, so a reader such as the game server can block movement without the world's object library. Tiles also hold [slabs](formats/slabs.md): flat pieces placed by hand for floors, walls and roofs, each kept by one tile and reaching at most 64 ft from its corner. A [template](formats/templates.md) is a group of slabs and objects kept in the world's library, to place as copies. Storing a world also writes [shapes.json](formats/shapes.md): for each kind of object that blocks line of sight, a mesh of a few dozen faces: a hull of at most 32 corners with any holes cut through it by hand (`client/src/editor/shapes.js`).
+Tiles are the heavy part. The editor holds each as a binary [tile file](formats/tile-file.md) while a world is open, and stores them 256 to a text [plate](formats/plates.md). Each plate carries the sizes of the objects in it, so a reader such as the game server can block movement without the world's object library. Tiles also hold [slabs](formats/slabs.md): flat pieces placed by hand for floors, walls and roofs, each kept by one tile and reaching at most 64 ft from its corner. A [template](formats/templates.md) is a group of slabs and objects kept in the world's library, to place as copies. Storing a world also writes [shapes.json](formats/shapes.md): for each kind of object that blocks line of sight, a mesh of a few dozen faces: a hull of at most 32 corners with any holes cut through it by hand (`client/src/world/shapes.js`).
 
 ## Loading and saving
 
@@ -70,10 +71,10 @@ Released worlds are listed for everyone signed in, on `/worlds`. A world's owner
 
 1. It reads `world.json` and the object library from `raw.githubusercontent.com/<repo>/<released sha>/` (`client/src/play/loader.js`). The page lists the commit's files from its import, so nothing is probed for.
 2. It enters the game server with an entry token from the page, and the server says where your character is. A character new to the world starts at its spawn point, `spawn` in `world.json`, which `/create`'s manage tools set.
-3. It reads your continent's platters, biomes and water, and draws the world as `/create` does (`client/src/play/view.js`, with `client/src/create/ground.js` and the rest): tiles near you in full, coarser further off, out to where the fog closes in, 3,500 ft away. Plate files are fetched as the ground wants them, and placed files for the plates within two plates' width of you. The sky, its day and night, and the fog come from `client/src/editor/sky.js` and `client/src/world/dayNight.js`.
-4. You walk with `client/src/editor/walker.js`, on the ground as the game server has it (`client/src/play/ground.js`): slabs, objects placed by hand, and the trees and objects in tiles' slots are in the way.
+3. It reads your continent's platters, biomes and water, and draws the world as `/create` does (`client/src/play/view.js`, with `client/src/create/ground.js` and the rest): tiles near you in full, coarser further off, out to where the fog closes in, 3,500 ft away. Plate files are fetched as the ground wants them, and placed files for the plates within two plates' width of you. The sky, its day and night, and the fog come from `client/src/render/sky.js` and `client/src/world/dayNight.js`.
+4. You walk with `client/src/play/walker.js`, on the ground as the game server has it (`client/src/play/ground.js`): slabs, objects placed by hand, and the trees and objects in tiles' slots are in the way.
 5. It reports how you move, and draws the characters near you as the server reports theirs (`client/src/play/game.js`, `others.js`).
-6. A menu button in the bottom right opens the menu: graphics settings (`client/src/editor/graphicsPanel.js`, shared with the editor) and leaving the world.
+6. A menu button in the bottom right opens the menu: graphics settings (`client/src/render/graphicsPanel.js`, shared with the editor) and leaving the world.
 7. On a phone (`client/src/play/touch.js`) it plays in landscape only, with a thumbstick, a jump button, and drags that turn you with the camera, on lighter graphics. Menu and chat buttons sit along the bottom, and the menu scrolls.
 
 ## The game server

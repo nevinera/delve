@@ -1,6 +1,6 @@
 import { findRoute, gradeCap, riverLookup } from "./roads.js";
-import { prepareWorld, routeGround } from "../world/generator.js";
-import { TILE_FT } from "../world/constants.js";
+import { prepareWorld, routeGround } from "./generator.js";
+import { TILE_FT } from "./constants.js";
 
 // Works out road routes (roads.js) off the main thread, over the ground generator.js routeGround
 // gives, answering each job as its route's found, then { done }. Routes are kept by their keys, so

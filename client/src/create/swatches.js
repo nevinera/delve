@@ -1,6 +1,6 @@
 import "./swatches.css";
 import { SLAB_PRESETS } from "../world/slabs.js";
-import { presetPixels } from "./slabTextures.js";
+import { presetPixels } from "../render/slabTextures.js";
 
 // A swatch that's a button: it shows what's picked, and opens a pullout of every choice's swatch
 // beside it. A tintable choice, once picked, shows a color picker beside the swatch, its tint. Its

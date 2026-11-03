@@ -1,5 +1,5 @@
-import { BUILT_PREFIX, OBJECT_TYPES, builtOf, specOf } from "../world/objects.js";
-import { pieceGeometry } from "./builtMeshes.js";
+import { BUILT_PREFIX, OBJECT_TYPES, builtOf, specOf } from "./objects.js";
+import { pieceGeometry } from "../render/builtMeshes.js";
 import { limitedHull } from "./limitedHull.js";
 import { cutMesh } from "./sightCuts.js";
 

@@ -1,9 +1,9 @@
 import * as THREE from "three";
-import { setClutterRadius } from "../editor/clutterMeshes.js";
-import { RESOLUTIONS, SIGHT } from "../editor/renderView.js";
-import { HORIZON, Sky } from "../editor/sky.js";
-import { setTreeSight } from "../editor/treeMeshes.js";
-import { Walker } from "../editor/walker.js";
+import { setClutterRadius } from "../render/clutterMeshes.js";
+import { RESOLUTIONS, SIGHT } from "../render/renderView.js";
+import { HORIZON, Sky } from "../render/sky.js";
+import { setTreeSight } from "../render/treeMeshes.js";
+import { Walker } from "./walker.js";
 import { Clutter } from "../create/clutter.js";
 import { Falls } from "../create/falls.js";
 import { EMPTY_FT, FINE, Ground } from "../create/ground.js";
@@ -20,7 +20,7 @@ import { PlayGround } from "./ground.js";
 // The play page's view of a version 2 world: the ground, water, trees, objects and slabs as /create
 // draws them (create/ground.js and the rest), its tiles near you in full and coarser further off,
 // out to where the fog closes in, under the editor's sky, which passes through day and night as
-// its walk mode's does. You walk as the editor's walker (editor/walker.js), on the ground as the
+// its walk mode's does. You walk as the editor's walker (play/walker.js), on the ground as the
 // game server has it (ground.js). It has what the walker, the graphics panel, the game connection
 // and others.js want of a RenderView. Positions are continent feet: `origin` is [0, 0].
 

@@ -6,7 +6,7 @@
 // Corners snap to cell corners, so an edge drawn along the grid is exact to the cell.
 
 import polygonClipping from "polygon-clipping";
-import { CELLS } from "../world/constants.js";
+import { CELLS } from "./constants.js";
 
 const EPSILON = 1e-9;
 

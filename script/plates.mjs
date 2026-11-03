@@ -6,8 +6,8 @@
 //   node script/plates.mjs <world directory>
 import fs from "fs";
 import path from "path";
-import { packPlates, unpackPlates } from "../client/src/editor/plates.js";
-import { World } from "../client/src/editor/world.js";
+import { packPlates, unpackPlates } from "../client/src/world/plates.js";
+import { World } from "../client/src/world/world.js";
 import { builtObjects, images } from "../client/src/objects/collections.js";
 import { setBuiltObjects } from "../client/src/world/objects.js";
 import { isPlatePath, tileAt } from "../client/src/world/paths.js";

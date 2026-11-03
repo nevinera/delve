@@ -49,6 +49,8 @@ export const thumbsIndexPath = (continent) => `${thumbsDir(continent)}/index.jso
 export const chunkPath = (continent, cx, cz) => `${thumbsDir(continent)}/${cx}/${cz}.png`;
 // A tile file: how the editor holds a tile while a world is open. Stored worlds keep tiles in plates.
 export const tilePath = (continent, layer, tx, tz) => `${CONTINENT(continent)}/tiles/${layer}/${tx}/${tz}.dlt.gz`;
+// The surface tile file at (tx, tz).
+export const surfacePath = (continent, tx, tz) => tilePath(continent, "surface", tx, tz);
 
 const TILE = /^places\/continents\/([\w-]+)\/tiles\/([\w-]+)\/(-?\d+)\/(-?\d+)\.dlt\.gz$/;
 const PLATE = /^places\/continents\/([\w-]+)\/plates\/([\w-]+)\/(-?\d+)_(-?\d+)\.plate$/;

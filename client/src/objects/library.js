@@ -2,9 +2,9 @@ import { collectionJson, emptyObject, imagePath, newObjectId, objectPath, readCo
 import { templatePath } from "../world/paths.js";
 import { templateProblems } from "../world/templates.js";
 import { BUILT_PREFIX, setBuiltObjects, specOf } from "../world/objects.js";
-import { slug } from "../editor/zones.js";
-import { ObjectBuilder } from "../editor/objectBuilder.js";
-import { ObjectGallery } from "../editor/objectGallery.js";
+import { slug } from "../world/zones.js";
+import { ObjectBuilder } from "./objectBuilder.js";
+import { ObjectGallery } from "./objectGallery.js";
 import { BUILTIN_IMAGES } from "../world/builtinImages.js";
 import { KINDS, addCollection, adoptStrays, allCollections, builtObjects, builtTemplates, collections, images, ownCollections, wornImages } from "./collections.js";
 

@@ -31,7 +31,7 @@ const MOSS = [[0.2, 0.26], [0.4, 0.55], [0.3, 0.4]];
 // parts: a shape each (objectMeshes.js) and the color ranges to pick from, HSL 0-1.
 // kit: instead of parts' shapes, a built object made of pieces (kitObjects.js), unitFt of its feet
 // to one of the type's; its first part's color tints the whole of it.
-// blocksSight: false for a type you see through; others block line of sight (editor/shapes.js).
+// blocksSight: false for a type you see through; others block line of sight (world/shapes.js).
 export const OBJECT_TYPES = {
   boulder: { size: [3, 8], footprint: { circle: 0.45 }, height: 0.8, parts: [{ shape: "boulder", colors: [GREY] }] },
   outcrop: { size: [2.5, 4], footprint: { rect: [2.6, 1.6] }, height: 1, parts: [{ shape: "outcrop", colors: [GREY] }] },

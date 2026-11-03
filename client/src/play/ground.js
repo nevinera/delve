@@ -1,10 +1,10 @@
-import { trunkRadius } from "../editor/treeMeshes.js";
+import { trunkRadius } from "../render/treeMeshes.js";
 import { EMPTY_FT } from "../create/ground.js";
 import { TILE_FT } from "../v2/sizes.js";
 import { blocks } from "../world/objects.js";
 import { slabFootholds, slabHitsTrunk } from "../world/slabs.js";
 
-// The ground the play page's walker (editor/walker.js) walks on: a version 2 world's, as /create
+// The ground the play page's walker (play/walker.js) walks on: a version 2 world's, as /create
 // draws it and the game server checks it (game-server/internal/worlds/ground.go). Heights come
 // from plate files once they're read, pressed down by level slabs; off the tiles is the sea's bed.
 // Slabs, objects placed by hand, and the trees and objects in tiles' slots are in the way.

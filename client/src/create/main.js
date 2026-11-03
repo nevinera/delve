@@ -13,7 +13,7 @@ import { EMPTY_FT, FAR_FT, FINE, Ground, REACH_FT, Renditions } from "./ground.j
 import { grid } from "./grid.js";
 import { planningPath } from "./marks.js";
 import { Clutter } from "./clutter.js";
-import { clutterMeshes } from "../editor/clutterMeshes.js";
+import { clutterMeshes } from "../render/clutterMeshes.js";
 import { Falls } from "./falls.js";
 import { Scatter } from "./scatter.js";
 import { Sea } from "./sea.js";
@@ -23,7 +23,7 @@ import { Library } from "./library.js";
 import { PLACED_PATH, Placed } from "./placed.js";
 import { pressesOver } from "./press.js";
 import { readLibrary, store, writeLibrary } from "./store.js";
-import { LibrarySync } from "../editor/libraryStore.js";
+import { LibrarySync } from "../objects/libraryStore.js";
 import { Things } from "./things.js";
 import { GithubAuthError, GithubClient } from "../github/github.js";
 import { BranchMoved, fromRepo, loadRepo, nextVersion, recordOpened, repoChanges, sameRepo, saveRepo } from "./repo.js";
@@ -153,7 +153,7 @@ function start(world, changes, fresh) {
   const clipboardKey = `clipboard:${name}`;
   library.keepClipboard = (template) => store.set(clipboardKey, template).catch(() => {});
   // The library's kept in this browser apart from the rest of the world, where the objects page
-  // changes it too (editor/libraryStore.js): a world opened anew puts its library there, and one
+  // changes it too (objects/libraryStore.js): a world opened anew puts its library there, and one
   // opened again takes what's there. Changes go there, and come from there.
   const sync = new LibrarySync(
     library,

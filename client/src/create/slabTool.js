@@ -3,9 +3,9 @@ import * as THREE from "three";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
 import { CELL_FT, CELLS } from "../world/constants.js";
 import { MAX_SLAB_CORNERS, SLAB_REACH_FT, crosses, cutSlab, fitFloor, raiseWall, slabBottom, slabFace, slabHitsTrunk, slabProblems, slabTile, slabTop } from "../world/slabs.js";
-import { slabAt, slabGeometry, slabMeshes } from "./slabMeshes.js";
-import { repeatFt } from "./slabTextures.js";
-import { treeHeight, trunkRadius } from "./treeMeshes.js";
+import { slabAt, slabGeometry, slabMeshes } from "../render/slabMeshes.js";
+import { repeatFt } from "../render/slabTextures.js";
+import { treeHeight, trunkRadius } from "../render/treeMeshes.js";
 
 // The detail step's slabs tool (world/slabs.js), working on a DetailView's tiles. Its mode is one
 // of:

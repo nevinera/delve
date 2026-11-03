@@ -1,9 +1,9 @@
 import { gunzipSync, gzipSync, strFromU8 } from "fflate";
 import { describe, expect, it } from "vitest";
-import { generateTile, prepareWorld } from "../world/generator.js";
-import { LandGrid, PER_TILE } from "../world/landGrid.js";
-import { kindSizes } from "../world/objects.js";
-import { decodeTile, encodeTile } from "../world/tileCodec.js";
+import { generateTile, prepareWorld } from "./generator.js";
+import { LandGrid, PER_TILE } from "./landGrid.js";
+import { kindSizes } from "./objects.js";
+import { decodeTile, encodeTile } from "./tileCodec.js";
 import { packPlates, unpackPlates } from "./plates.js";
 
 // Gzipped tiles of a small island, two of them in plate (0, 0) and one in plate (1, 0).

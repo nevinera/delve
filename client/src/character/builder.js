@@ -68,7 +68,7 @@ const MOVES = {
   run: () => ["Run_Fwd_Loop"],
   dance: () => ["Dance_Loop"],
   attack: () => wield().attacks[Math.floor(Math.random() * wield().attacks.length)],
-  // As the walker jumps (editor/walker.js): up at takeoff, falling back under gravity.
+  // As the walker jumps (play/walker.js): up at takeoff, falling back under gravity.
   jump: () => [{ clip: "Jump_Start", from: 0.1, speed: 1.5, for: 0.35, takeoff: true }, { clip: "Jump_Loop", air: true }, { clip: "Jump_Land", speed: 1.6, for: 0.55 }],
   sit: () => ["Sit_Ground_Enter", { clip: "Sit_Ground_Idle_Loop", for: 3 }, "Sit_Ground_Exit"],
 };

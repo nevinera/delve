@@ -1,6 +1,5 @@
-import { nextId } from "./features.js";
-import { interiorPoint } from "../world/lakes.js";
-import { sketchPath, zoneAt, zonePath } from "../world/paths.js";
+import { interiorPoint } from "./lakes.js";
+import { sketchPath, zoneAt, zonePath } from "./paths.js";
 
 // Zones live at places/continents/<continent>/zones/<key>.json, each a name and a region. The key
 // is fixed when the zone is made; the name can change. Everything drawn on the land, pins and
@@ -126,4 +125,12 @@ export function slug(text) {
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-|-$/g, "");
+}
+
+// The first id `prefix` with a number after it that none of the sketch's pins and paths has.
+function nextId(sketch, prefix) {
+  const used = new Set([...sketch.pins, ...sketch.paths].map((f) => f.id));
+  let n = 1;
+  while (used.has(`${prefix}${n}`)) n++;
+  return `${prefix}${n}`;
 }

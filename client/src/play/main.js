@@ -1,5 +1,5 @@
 import "./play.css";
-import { graphicsPanel } from "../editor/graphicsPanel.js";
+import { graphicsPanel } from "../render/graphicsPanel.js";
 import { builtObjects, images } from "../objects/collections.js";
 import { resolveRecipe } from "../character/recipe.js";
 import { Renditions } from "../create/ground.js";
