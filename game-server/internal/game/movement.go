@@ -86,6 +86,7 @@ type motion struct {
 	correcting  bool // waiting for the client to take a correction
 	correctedAt time.Time
 	corrections []time.Time
+	arriving    bool // teleported, and no report has arrived from there yet
 }
 
 // footing is how a report stood on the ground.
@@ -128,6 +129,10 @@ func (m *motion) check(r incoming, from [3]float64, now time.Time, g Ground) (ve
 		// Before its first report, the client may have started moving, as fast as anyone can.
 		allowed := slackFt + runFt*sprint*now.Sub(m.joined).Seconds()*speedLeeway
 		if moved := horizontal(from, r.At); moved > allowed {
+			// Reports sent before the client heard of the teleport don't count against it.
+			if m.arriving && now.Sub(m.joined) < correctWait {
+				return ignore, ""
+			}
 			return m.violation(now, fmt.Sprintf("first report is %.0f ft from where you entered", moved))
 		}
 		// Without the ground, the height is the client's to know: take it.
@@ -317,6 +322,11 @@ func (m *motion) take(r incoming, t float64, f footing) verdict {
 	}
 	m.at, m.t = r.At, t
 	return accept
+}
+
+// teleported starts the checks over from where the server has just put the character.
+func (m *motion) teleported(now time.Time) {
+	*m = motion{joined: now, arriving: true, corrections: m.corrections}
 }
 
 // violation counts a correction, or drops the client when there have been too many.

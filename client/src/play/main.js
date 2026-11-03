@@ -88,6 +88,9 @@ async function play() {
     hit: fight("hit"),
     resources: fight("resources_"),
     health: fight("health_"),
+    log: fight("logged"),
+    // Another continent's land isn't loaded, so the page comes back up there.
+    teleport: (message) => (message.continent === you.continent ? connection.correct(message) : window.location.reload()),
     closed: () => {
       status("You've left the game. Reload the page to enter again.");
       others?.clear();

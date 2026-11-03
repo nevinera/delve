@@ -32,7 +32,7 @@ type Character struct {
 	MaxHealth float64         `json:"maxHealth"`
 }
 
-// incoming is a message from a client: move, heartbeat, use or stop. T is the client's clock, in
+// incoming is a message from a client: move, heartbeat, use, stop or command. T is the client's clock, in
 // milliseconds.
 type incoming struct {
 	Type    string      `json:"type"`
@@ -43,6 +43,7 @@ type incoming struct {
 	Ability string      `json:"ability"`
 	Target  int64       `json:"target"`
 	Spot    *[3]float64 `json:"spot"`
+	Line    string      `json:"line"`
 }
 
 // used says someone has started using an ability. The client plays its timeline from this.
@@ -136,6 +137,21 @@ type moved struct {
 	At   [3]float64 `json:"at"`
 	Yaw  float64    `json:"yaw"`
 	Move Move       `json:"move"`
+}
+
+// logLine is a line for a player's log. Kind is system or error.
+type logLine struct {
+	Type string `json:"type"`
+	Kind string `json:"kind"`
+	Text string `json:"text"`
+}
+
+// teleported says the server has moved you.
+type teleported struct {
+	Type      string     `json:"type"`
+	Continent string     `json:"continent"`
+	At        [3]float64 `json:"at"`
+	Yaw       float64    `json:"yaw"`
 }
 
 type correction struct {

@@ -3,6 +3,7 @@ import { chestOf, AbilityStage, clipNameFor } from "../abilities/stage.js";
 import { roleClips } from "../character/animations.js";
 import { skeletonOf } from "../character/characterMesh.js";
 import { strFromU8 } from "fflate";
+import { PlayLog } from "./log.js";
 
 // Fighting on the play page: frames for you and your target, an action bar, a cast bar, what lands
 // floating over who it lands on, and a log. The game server decides everything: this asks it to use
@@ -11,7 +12,6 @@ import { strFromU8 } from "fflate";
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 const FLOAT_S = 1.2;
 const REFUSED_S = 2;
-const LOG_LINES = 40;
 const PICK_PX = 60; // how far from someone's chest on screen a click still picks them
 const TARGET_FT = 150; // how far Tab looks for someone to target
 const RETICLE_STEP_FT = 1;
@@ -91,9 +91,9 @@ export class PlayCombat {
     this.bar = el("div", { className: "combat-actions" });
     this.castBar = el("div", { className: "combat-cast", hidden: true }, el("div", { className: "combat-cast-fill" }), el("span", { className: "combat-cast-label" }));
     this.say = el("div", { className: "combat-say" });
-    this.log = el("div", { className: "combat-log" });
+    this.log = new PlayLog((line) => this.connection.command(line));
     this.floatLayer = el("div", { className: "combat-floats" });
-    this.hud.replaceChildren(el("div", { className: "combat-frames" }, this.youFrame.root, this.targetFrame.root), this.floatLayer, this.say, this.castBar, this.bar, this.log);
+    this.hud.replaceChildren(el("div", { className: "combat-frames" }, this.youFrame.root, this.targetFrame.root), this.floatLayer, this.say, this.castBar, this.bar, this.log.root);
     this.youFrame.name.textContent = this.you.name;
     this.drawFrame(this.youFrame, this.health, this.maxHealth);
     this.targetRing = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff5040, transparent: true, opacity: 0.8, depthWrite: false }));
@@ -285,6 +285,10 @@ export class PlayCombat {
     if (id === this.you.id) this.showBar(null);
   }
 
+  logged({ kind, text }) {
+    this.log.add(text, kind);
+  }
+
   refused({ why }) {
     this.say.textContent = why;
     this.saidAt = performance.now();
@@ -337,9 +341,7 @@ export class PlayCombat {
 
   note({ from, on, ability }, text) {
     const made = this.made?.abilities?.find((a) => a.id === ability);
-    this.log.append(el("div", { textContent: `${this.nameOf(from)}: ${made?.name ?? ability} on ${this.nameOf(on)}: ${text}` }));
-    while (this.log.children.length > LOG_LINES) this.log.firstChild.remove();
-    this.log.scrollTop = this.log.scrollHeight;
+    this.log.add(`${this.nameOf(from)}: ${made?.name ?? ability} on ${this.nameOf(on)}: ${text}`);
   }
 
   float(unit, { text, kind }) {

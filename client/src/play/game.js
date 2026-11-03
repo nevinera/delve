@@ -72,6 +72,11 @@ export class GameConnection {
     this.socket.send(JSON.stringify({ type: "use", ability, target, ...(spot ? { spot } : {}) }));
   }
 
+  // Sends a command for the game server to read.
+  command(line) {
+    if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: "command", line }));
+  }
+
   stop() {
     if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: "stop" }));
   }

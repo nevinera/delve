@@ -20,7 +20,7 @@ func (fightWorld) Load(_ context.Context, repo, sha string) (*worlds.World, erro
 	yes := true
 	zero := 0.0
 	return &worlds.World{
-		Repo: repo, Sha: sha, Continents: []string{"main"},
+		Repo: repo, Sha: sha, Continents: []string{"main", "far"},
 		Spawn:   worlds.Spawn{Continent: "main", At: [2]float64{100, 100}},
 		Dummies: []worlds.Dummy{{Continent: "main", At: [2]float64{100, 120}}},
 		Classes: []*combat.Class{{

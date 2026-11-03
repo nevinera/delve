@@ -397,3 +397,141 @@ func TestAPlayerKnowsItsOwnerIsASystemAdmin(t *testing.T) {
 		t.Fatal("character 2's owner isn't")
 	}
 }
+
+func say(t *testing.T, p *Player, line string) {
+	t.Helper()
+	b, _ := json.Marshal(map[string]string{"type": "command", "line": line})
+	if err := p.Handle(b); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// lastLog is the last line in what's waiting for p, as "kind: text".
+func lastLog(t *testing.T, p *Player) string {
+	t.Helper()
+	got := heard(p, "log")
+	if len(got) == 0 {
+		t.Fatal("nothing in the log")
+	}
+	m := got[len(got)-1]
+	return m["kind"].(string) + ": " + m["text"].(string)
+}
+
+func commanding(t *testing.T, admin bool) (*Hub, *Player, *float64) {
+	t.Helper()
+	people := characters(nil)
+	people.admin[1] = admin
+	h := NewHub(fightWorld{}, people)
+	c := clockOf(h)
+	return h, enter(t, h, 1), c
+}
+
+func TestCommandsAnswerInTheLog(t *testing.T) {
+	_, p, _ := commanding(t, false)
+	for line, want := range map[string]string{
+		"/nope":  "error: There's no /nope. Try /help.",
+		"hello":  "error: Commands start with /. Try /help.",
+		"/help":  "system: /help",
+		"/HELP ": "system: /help",
+	} {
+		say(t, p, line)
+		if got := lastLog(t, p); got != want {
+			t.Errorf("%q answered %q, want %q", line, got, want)
+		}
+	}
+}
+
+func TestOnlyASystemAdminTeleports(t *testing.T) {
+	_, p, _ := commanding(t, false)
+	from := p.state.At
+	say(t, p, "/teleport 500 600")
+	if got := lastLog(t, p); got != "error: You can't use /teleport." {
+		t.Fatal(got)
+	}
+	if p.state.At != from {
+		t.Fatalf("moved to %v", p.state.At)
+	}
+}
+
+func TestHelpShowsAnAdminItsCommands(t *testing.T) {
+	_, p, _ := commanding(t, true)
+	say(t, p, "/help")
+	if got := heard(p, "log"); len(got) != 2 {
+		t.Fatalf("help = %v", got)
+	}
+}
+
+func TestTeleportCommand(t *testing.T) {
+	_, p, _ := commanding(t, true)
+	say(t, p, "/teleport 500 600")
+	got := heard(p, "teleport")
+	if len(got) != 1 || got[0]["continent"] != "main" || p.state.At != [3]float64{500, 0, 600} {
+		t.Fatalf("teleport = %v, at %v", got, p.state.At)
+	}
+	say(t, p, "/teleport spawn")
+	if p.state.At != [3]float64{100, 0, 100} {
+		t.Fatalf("spawn = %v", p.state.At)
+	}
+	say(t, p, "/teleport 1 2 far")
+	if p.state.Continent != "far" || p.state.At != [3]float64{1, 0, 2} {
+		t.Fatalf("far = %v %v", p.state.Continent, p.state.At)
+	}
+	say(t, p, "/teleport spawn")
+	if p.state.Continent != "main" {
+		t.Fatalf("spawn continent = %v", p.state.Continent)
+	}
+}
+
+func TestTeleportTakesOnlyWhatMakesSense(t *testing.T) {
+	_, p, _ := commanding(t, true)
+	from := p.state.At
+	for line, want := range map[string]string{
+		"/teleport":             "error: Use /teleport <x> <z> [continent], or /teleport spawn.",
+		"/teleport 1":           "error: Use /teleport <x> <z> [continent], or /teleport spawn.",
+		"/teleport a b":         "error: Use /teleport <x> <z> [continent], or /teleport spawn.",
+		"/teleport NaN 1":       "error: Use /teleport <x> <z> [continent], or /teleport spawn.",
+		"/teleport 1 2 nowhere": `error: This world has no continent "nowhere".`,
+	} {
+		say(t, p, line)
+		if got := lastLog(t, p); got != want {
+			t.Errorf("%q answered %q", line, got)
+		}
+	}
+	if p.state.At != from {
+		t.Fatalf("moved to %v", p.state.At)
+	}
+}
+
+func TestReportsFromBeforeATeleportDontCount(t *testing.T) {
+	h, p, c := commanding(t, true)
+	from := p.state.At
+	say(t, p, "/teleport 5000 5000")
+	report := func(at [3]float64) {
+		b, _ := json.Marshal(incoming{Type: "heartbeat", T: 1000, At: at})
+		if err := p.Handle(b); err != nil {
+			t.Fatal(err)
+		}
+	}
+	report(from)
+	if p.state.At != [3]float64{5000, 0, 5000} || len(heard(p, "correct")) != 0 || len(p.motion.corrections) != 0 {
+		t.Fatalf("at %v, corrections %v", p.state.At, p.motion.corrections)
+	}
+	*c += 3
+	h.Tick()
+	report(from)
+	if len(p.motion.corrections) != 1 {
+		t.Fatalf("a report from the old place after the wait: corrections %v", p.motion.corrections)
+	}
+}
+
+func TestTeleportingAwayVanishesFromThoseNear(t *testing.T) {
+	people := characters(nil)
+	people.admin[1] = true
+	h := NewHub(fightWorld{}, people)
+	p, o := enter(t, h, 1), enter(t, h, 2)
+	heard(o, "appear")
+	say(t, p, "/teleport 90000 90000")
+	if got := heard(o, "vanish"); len(got) != 1 || got[0]["id"] != 1.0 {
+		t.Fatalf("vanish = %v", got)
+	}
+}

@@ -102,6 +102,7 @@ The game server (`game-server/`) holds every character in a world. Browsers conn
 - A user with the `system_admin` role (`users.role`, set from the Rails console) can use admin commands. Rails tells the game server with each character it reads.
 - `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token, and writes their classes and positions back to it (`WorldCharacter`, one per character per world). The server never writes to the database itself.
 
+- `internal/game/commands.go` runs what players type after a slash. `client/src/play/log.js` is the log and its box on the play page.
 - `internal/combat` reads classes and works out stats and what amounts come to. `internal/game/combat.go` runs abilities on a layer, and `Hub.Run` moves them on every 50 ms. [Combat](formats.md#combat) has the rules.
 
 Bots play characters, so you can test with others around: `script/game/bot` (code in `lib/bot/`) enters a released world as a character, the way the play page does, and runs a strategy. A bot fetches plate, placed and caves files from GitHub and walks the ground as the game server reads it, standing on cave floors and stopping at slabs, cave rock, trees and objects in its way. It doesn't know about the boulders across cascades. `null` stands still, and `follow` runs after a named character.

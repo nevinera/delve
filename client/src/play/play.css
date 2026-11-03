@@ -386,15 +386,32 @@ body.touch .play-bar button {
   text-shadow: 0 1px 2px #000;
 }
 
-.combat-log {
+.play-log {
   position: absolute;
   left: 12px;
   bottom: 16px;
-  width: 300px;
-  max-height: 140px;
-  overflow: hidden;
+  width: 340px;
   font-size: 12px;
   text-shadow: 0 1px 2px #000;
+}
+
+.play-log-lines {
+  max-height: 140px;
+  overflow: hidden;
+}
+
+.play-log-system {
+  color: #c0e0ff;
+}
+
+.play-log-error {
+  color: #ff9080;
+}
+
+.play-log-box {
+  width: 100%;
+  margin-top: 4px;
+  pointer-events: auto;
 }
 
 .combat-float {
@@ -415,7 +432,7 @@ body.touch .play-bar button {
 }
 
 @media (max-width: 800px) {
-  .combat-log {
+  .play-log {
     display: none;
   }
 }

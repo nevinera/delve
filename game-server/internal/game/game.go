@@ -141,14 +141,8 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 		state.Continent, state.At, state.Yaw = pos.Continent, pos.At, pos.Yaw
 	} else {
 		state.Continent, state.At = layer.world.Spawn.Continent, layer.world.SpawnAt()
-		// Standing on the ground there, or on the water if it's deep.
-		if g := layer.ground(state.Continent); g != nil {
-			if s, ok, err := g.At(state.At[0], state.At[2]); ok && err == nil {
-				state.At[1] = s.Ground
-				if !math.IsNaN(s.Water) && s.Water-swimDepth > s.Ground {
-					state.At[1] = s.Water - swimDepth
-				}
-			}
+		if at, ok := layer.standing(state.Continent, state.At[0], state.At[2]); ok {
+			state.At = at
 		}
 	}
 	// Reading the plate it's on now spares the layer the wait when the first report comes.
@@ -328,6 +322,9 @@ func (p *Player) Handle(raw []byte) error {
 	switch m.Type {
 	case "use":
 		p.layer.use(p, m)
+		return nil
+	case "command":
+		p.layer.command(p, m.Line)
 		return nil
 	case "stop":
 		p.layer.mu.Lock()

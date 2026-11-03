@@ -1094,6 +1094,7 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `heartbeat` | `t`, `at`, `yaw` | twice a second while moving or turning, once a second otherwise |
 | `use` | `ability`, `target`, `spot` | you ask to use an ability: `target` is who it's aimed at, 0 for no one, and `spot` is `[x, y, z]` for one aimed at the ground |
 | `stop` | none | you stop what you're casting or channelling |
+| `command` | `line` | you typed a line starting with `/`. The server answers with `log` |
 
 `t` is the client's clock in milliseconds when it sent the message, from a clock that only goes forward (`performance.now()` in a browser). Without it, the server times the message by when it arrived.
 
@@ -1124,11 +1125,20 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `health` | `id`, `health`, `maxHealth` | a training dummy reset |
 | `statusGone` | `id`, `status` | a status ran out |
 | `resources` | `resources` | how much of each resource you have, by key, at most twice a second |
+| `log` | `kind` (`system` or `error`), `text` | a line for your log |
+| `teleport` | `continent`, `at`, `yaw` | the server moved you there. On another continent, the client loads it |
 | `error` | `message` | before the server closes the connection |
 
 A character is `{ id, name, look, continent, at, yaw, move, class, dummy, health, maxHealth }`. `look` is the character builder's look. Training dummies come as characters with `dummy: true` and negative ids, in your `snapshot`: all of those on your continent.
 
 "Near you" is the 3×3 tiles around your tile, on your continent and layer.
+
+### Commands
+
+You type commands in the log's box, starting with `/`. The game server reads each one, so the client can't give itself anything.
+
+- `/help`: lists the commands you can use.
+- `/teleport <x> <z> [continent]`, or `/teleport spawn`: moves you to that spot, standing on the ground, ending what you're casting. Your owner needs the `system_admin` role.
 
 ### Movement checks
 
