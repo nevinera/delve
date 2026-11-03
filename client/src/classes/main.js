@@ -7,7 +7,9 @@ import { readLibrary, writeLibrary } from "../create/store.js";
 import { GithubAuthError } from "../github/github.js";
 import { LibrarySync } from "../objects/libraryStore.js";
 import { isClassPath } from "../world/paths.js";
-import { classPath, classesOf, newClass } from "./classFile.js";
+import { classPath, classProblems, classesOf, newAbility, newClass, newStatus } from "./classFile.js";
+import { abilityFields, classFields, statusFields } from "./fields.js";
+import { renderFields } from "./form.js";
 
 // The class editor: the classes of the world /create has open. Changes go to the store /create
 // shares with the objects page, and the page's button commits them to the world's repo.
@@ -23,6 +25,7 @@ const world = new KeptJson(await keptFiles());
 $("worldName").textContent = world.info.name;
 const open = world.files.has("world.json");
 let picked = null; // the id of the class being edited
+let part = null; // what of it: { kind: "ability" or "status", id }, or null for the class itself
 
 const sync = new LibrarySync(world, () => show(), { read: readLibrary, write: writeLibrary, channel: "delve3d-create-library" });
 await sync.pull();
@@ -33,65 +36,125 @@ const change = (made) => {
   keep();
 };
 
+const el = (tag, props = {}, ...children) => {
+  const node = Object.assign(document.createElement(tag), props);
+  node.append(...children);
+  return node;
+};
+
+// A button in the side list.
+function listButton(text, active, click) {
+  const button = el("button", { type: "button", textContent: text || "(no name)" });
+  button.classList.toggle("active", active);
+  button.addEventListener("click", click);
+  return button;
+}
+
+const pick = (id, what = null) => {
+  picked = id;
+  part = what;
+  show();
+};
+
 function showList(classes) {
-  $("classList").replaceChildren(
-    ...classes.map((c) => {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.textContent = c.name || "(no name)";
-      button.classList.toggle("active", c.id === picked);
-      button.addEventListener("click", () => {
-        picked = c.id;
-        show();
-      });
-      return button;
+  $("classList").replaceChildren(...classes.map((c) => listButton(c.name, c.id === picked, () => pick(c.id))));
+}
+
+// The picked class's own list: the class, its abilities by level, and its statuses.
+function showParts(made) {
+  const parts = $("classParts");
+  parts.replaceChildren();
+  if (!made) return;
+  const isPart = (kind, id) => part?.kind === kind && part.id === id;
+  const heading = (text, click) => {
+    const add = el("button", { type: "button", textContent: "add", className: "classes-add" });
+    add.addEventListener("click", click);
+    return el("div", { className: "classes-heading" }, el("span", { textContent: text }), add);
+  };
+  const abilities = [...(made.abilities ?? [])].sort((a, b) => (a.level ?? 1) - (b.level ?? 1) || a.name.localeCompare(b.name));
+  parts.append(
+    el("div", { className: "classes-list" }, listButton("class", !part, () => pick(made.id))),
+    heading("abilities", () => {
+      const ability = newAbility();
+      made.abilities = [...(made.abilities ?? []), ability];
+      change(made);
+      pick(made.id, { kind: "ability", id: ability.id });
+      $("config").querySelector("input")?.select();
     }),
+    el("div", { className: "classes-list" }, ...abilities.map((a) => listButton(`${a.level ?? 1} ${a.name}`, isPart("ability", a.id), () => pick(made.id, { kind: "ability", id: a.id })))),
+    heading("statuses", () => {
+      const status = newStatus();
+      made.statuses = [...(made.statuses ?? []), status];
+      change(made);
+      pick(made.id, { kind: "status", id: status.id });
+      $("config").querySelector("input")?.select();
+    }),
+    el("div", { className: "classes-list" }, ...(made.statuses ?? []).map((s) => listButton(s.name, isPart("status", s.id), () => pick(made.id, { kind: "status", id: s.id })))),
   );
 }
 
-function showClass(made) {
+// The form for the picked class, ability or status, with what's wrong with the class over it.
+function showConfig(made) {
   const config = $("config");
   config.replaceChildren();
   if (!made) {
     config.textContent = open ? "Pick a class, or make a new one." : "Open a world in /create first.";
     return;
   }
-  const label = document.createElement("label");
-  label.textContent = "name";
-  const name = document.createElement("input");
-  name.value = made.name;
-  name.addEventListener("input", () => {
-    made.name = name.value;
+  const list = part?.kind === "ability" ? "abilities" : part?.kind === "status" ? "statuses" : null;
+  const thing = list ? made[list]?.find((t) => t.id === part.id) : made;
+  if (!thing) return pick(made.id);
+  const fields = part?.kind === "ability" ? abilityFields(made) : part?.kind === "status" ? statusFields(made) : classFields(made);
+  const problems = el("ul", { className: "classes-problems" });
+  const showProblems = () => problems.replaceChildren(...classProblems(made).map((p) => el("li", { textContent: p })));
+  showProblems();
+  const changed = () => {
     change(made);
+    showProblems();
     showList(classesOf(world));
-  });
-  label.append(name);
-  const remove = document.createElement("button");
-  remove.type = "button";
-  remove.textContent = "delete class";
+    showParts(made);
+    showPreview(made, part?.kind === "ability" ? thing : null);
+  };
+  const reshaped = () => {
+    changed();
+    const top = config.scrollTop;
+    showConfig(made);
+    config.scrollTop = top;
+  };
+  const remove = el("button", { type: "button", textContent: `delete ${part?.kind ?? "class"}`, className: "form-remove" });
   remove.addEventListener("click", () => {
-    if (!window.confirm(`Delete ${made.name || "this class"}?`)) return;
-    world.files.delete(classPath(made.id));
-    keep();
-    picked = null;
-    show();
+    if (!window.confirm(`Delete ${thing.name || `this ${part?.kind ?? "class"}`}?`)) return;
+    if (list) {
+      made[list] = made[list].filter((t) => t !== thing);
+      if (!made[list].length) delete made[list];
+      change(made);
+      pick(made.id);
+    } else {
+      world.files.delete(classPath(made.id));
+      keep();
+      pick(null);
+    }
   });
-  config.append(label, remove);
+  config.append(problems, ...renderFields(fields, thing, { changed, reshaped }), remove);
 }
+
+function showPreview() {}
 
 function show() {
   const classes = classesOf(world);
   if (!classes.some((c) => c.id === picked)) picked = null;
+  const made = classes.find((c) => c.id === picked);
   showList(classes);
-  showClass(classes.find((c) => c.id === picked));
+  showParts(made);
+  showConfig(made);
+  showPreview(made, part?.kind === "ability" ? made.abilities?.find((a) => a.id === part.id) : null);
 }
 
 $("newClass").disabled = !open;
 $("newClass").addEventListener("click", () => {
   const made = newClass();
-  picked = made.id;
   change(made);
-  show();
+  pick(made.id);
   $("config").querySelector("input")?.select();
 });
 show();
