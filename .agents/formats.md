@@ -784,7 +784,7 @@ Types:
 - `reveal`: shows stealthed or invisible enemies among those it `affects`, and takes them out of stealth.
 - `consume`: takes `status` or `statuses` off those it `affects`, or just `stacks` stacks of it, or `seconds` of its time. `dealsLeft` does that share of what it had left to do now, and `keeps` leaves it on. `perStack` is an effect that happens for each stack taken. It's for an ability using up a status of its own, where `dispel` removes by kind. With `affects: "summons"` it dismisses or sacrifices summons instead, `units` and `count` saying which and how many.
 - `chance`, on any effect, 0 to 1: how likely it is to happen, 1 by default. `chancePerSpent` adds that much for each point spent, here and on a `trigger`.
-- `when`, on any effect: conditions written as `requires`. The effect only happens while they hold.
+- `when`, on any effect: conditions written as `requires`. The effect only happens while they hold. An ability checks all its effects' conditions before any of them land, so one button can start a status or end it.
 - `prefers`, on an effect with `max`: which it picks first, `nearest` by default, or `injured`, `farthest` or `lowestHealth`.
 - `perCount`, on any effect or stat: its number counts once for each of something, up to `max`. Pick `statusStacks` (stacks of that status), `statusesFromMe` (statuses you've put on the target), `statusesOnTarget` (which of those the target has), `unitsOut` (how many of those units you have out) or `resource` (how much of it you have). `add` makes each count add that much, not the whole number again.
 - `softCap`, on any effect that hits several: past this many hit, those hit share this many's worth, split evenly.
