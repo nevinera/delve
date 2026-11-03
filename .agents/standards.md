@@ -15,7 +15,7 @@ These cover docs, comments, commit messages, UI text and issues.
 - Match the code around you.
 - Comments say what something is, in plain words. Look at a neighbouring file for how many to write.
 - Keep no dead code "for later".
-- Keep format code in `client/src/world/` and `client/src/v2/` pure: it takes what it needs as arguments, so pages, workers and scripts can all call it.
+- Keep format code pure: it takes what it needs as arguments, so pages, workers and scripts can all call it. Most is in `client/src/v2/` and `client/src/world/`, and files only /create writes are in `client/src/create/`. [formats.md](formats.md#a-worlds-files) lists each file's code.
 - Share rules between Go and JS by testing them against the same data. `game-server/internal/worlds/testdata/world.mjs` writes the test world and what the client makes of it, and Go and rspec both check against it. `game-server/internal/worlds/fill.json` is a copy of `client/src/v2/fill.json`, so change both.
 - Use one shared constant for a game rule, not a number repeated.
 
@@ -25,9 +25,9 @@ Combat, stats and rules follow the MMO genre's conventions. [formats.md](formats
 
 ## Formats
 
-- Version every format, and keep readers working on old versions.
+- Version every format. Readers take old versions, or formats.md says what they do with them instead, as caves files drop version 1.
 - Keep what players load as text and line-oriented, so an edit changes only the lines it touched.
-- Update [formats.md](formats.md) and the schema in `docs/schema/` in the same commit as the code.
+- Update every reader, [formats.md](formats.md) and the schema in `docs/schema/` in the same commit as the code.
 - Write zips with `@bokuweb/zstd-wasm` and read them with `fzstd`. Writers must `await loadZipper()`, or tiles fall back to a longer form. Don't use zstdify: it writes frames that decode wrong.
 
 ## Commits

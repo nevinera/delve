@@ -2,6 +2,8 @@
 
 Every file in a version 2 world, plus the game protocol. JSON Schemas are in [docs/schema](../docs/schema). When a format and its code disagree, the code wins: fix this file in the same commit.
 
+A change to a format has to reach every reader of it. The client's is in the code column below. The game server (`game-server/internal/worlds/`) and bots (`lib/bot/`) also read `world.json`, plates, placed and caves files, and `water.json` on the server. Regenerate their shared test world with `node game-server/internal/worlds/testdata/world.mjs`. `.agents/skills/measure-world/measure.mjs` decodes plates, platters and caves.
+
 - [A world's files](#a-worlds-files)
 - [Plates](#plates) and [platters](#platters)
 - [Placed objects and slabs](#placed-objects-and-slabs), [slabs](#slabs), [templates](#templates)
@@ -30,7 +32,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 | `places/continents/<c>/placed/<px>_<pz>.json` | objects and slabs placed by hand | [Placed](#placed-objects-and-slabs) | `client/src/create/placed.js` |
 | `places/continents/<c>/caves/<px>_<pz>.caves` | caves' air, column by column, by network | [Caves](#caves) | `client/src/v2/caves.js` |
 | `places/continents/<c>/caves/layout.json` | the cave networks laid out | [Cave layout](#cave-layout), [schema](../docs/schema/cave-layout.schema.json) | `client/src/create/caveLayout.js` |
-| `places/continents/<c>/biomes.json` | biome areas | [below](#biomes-planning-marks-and-water) | `client/src/create/biomes.js` |
+| `places/continents/<c>/biomes.json` | biome areas | [below](#biomes-planning-marks-and-water) | `client/src/create/biomes.js`, `client/src/play/loader.js` |
 | `places/continents/<c>/planning.json` | planning lines and pins | [below](#biomes-planning-marks-and-water) | `client/src/create/marks.js` |
 | `places/continents/<c>/water.json` | the water's bodies and courses | [below](#biomes-planning-marks-and-water) | `client/src/v2/water.js`, `courses.js` |
 | `places/continents/<c>/spawns.json` | spawn regions, and mobs and NPCs placed one at a time | [Spawns](#spawns), [schema](../docs/schema/spawns.schema.json) | none yet |
@@ -53,7 +55,7 @@ Tile `(tx, tz)` covers `[tx * 256, (tx + 1) * 256)` each way. Caves use 2 ft vox
 
 ### Kept as they are
 
-/create keeps files it doesn't understand, and saves them back unchanged. Older worlds can hold `sketch.json`, `zones/`, `land/`, `index.json`, `thumbs/`, `edited.json` and `plates.json`. Nothing in /create or the game reads them.
+/create keeps files it doesn't understand, and saves them back unchanged. Older worlds can hold `sketch.json`, `zones/`, `land/`, `index.json`, `thumbs/`, `edited.json` and `plates.json`. Nothing in /create or the game reads them. `docs/schema/plates-index.schema.json` and `shapes.schema.json` cover the version 1 files `script/plates.mjs` writes.
 
 ## Plates
 
@@ -311,7 +313,7 @@ Everything in a template is in feet from its anchor: a corner of an 8 ft grid, a
 
 ## Caves
 
-A world keeps its caves in a text file for each plate (8×8 tiles, 2,048 ft square) that has any. Code: `client/src/v2/caves.js`, and the game server's reader in `game-server/internal/worlds/caves.go`.
+A world keeps its caves in a text file for each plate (8×8 tiles, 2,048 ft square) that has any. Code: `client/src/v2/caves.js`, with readers in `game-server/internal/worlds/caves.go` and `lib/bot/caves.rb`.
 
 ```
 places/continents/<continent>/caves/<px>_<pz>.caves
@@ -447,7 +449,7 @@ Shapes are domes, `{kind: "dome", at, radii: [rx, ry, rz], yaw}`, a half ellipso
 
 Each continent has one of each, all in continent feet.
 
-`biomes.json` (`client/src/create/biomes.js`) is render-only:
+`biomes.json` (`client/src/create/biomes.js`) holds the areas as drawn. /create and the play page read it. Each cell's biome is baked into [plates](#biomes) as `b` lines, and those are what pick a tile's trees, which block walking on the game server:
 
 ```json
 { "version": 1, "areas": [{ "biome": "forest", "points": [[0, 0], [64, 0], [64, 64]] }] }
@@ -1033,7 +1035,7 @@ The game server never writes to the database directly.
 The game server keeps positions in memory, and saves one when it has changed:
 
 - when the character leaves the game;
-- when it crosses into another 4,096 ft square (`plateFt` in `game-server/internal/game/game.go`);
+- when it crosses into another 4,096 ft square, two plates wide (`plateFt` in `game-server/internal/game/game.go`);
 - every 30 s;
 - when the server stops, for everyone.
 

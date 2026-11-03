@@ -7,6 +7,8 @@ description: Sign in, open /create with a test world, place the builder and save
 
 The local stack has to be running on :8000 (`bin/dev`), or pass another with `--base`. A 500 on `/login` that can't load `config/routes.rb` means the checkout moved after the server started, so restart it. The local database needs at least one user. You need Python Playwright: `pipx install playwright`, then `playwright install chromium`.
 
+`tmp/worlds/` isn't in git, so on a machine without it, use any world zip saved from `/create`.
+
 ```sh
 ~/.local/pipx/venvs/playwright/bin/python -I .agents/skills/screenshot-create/screenshot.py \
   --world tmp/worlds/northvale.zip --out shot.png --at -3200,-6272 --up 100

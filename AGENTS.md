@@ -27,4 +27,4 @@ Skills, for jobs with steps and scripts:
 - The walkable slope limit is 50°, measured on the ground's face. `/create` and the game server both use it.
 - Signed credentials for entering the game are "tokens", never "tickets".
 - Local Rails runs on :8000. Leave whatever's on :3000 alone.
-- When you change a format, a JSON file's shape or how the pieces fit together, update the matching `.agents/` file in the same commit.
+- When you change a format, a JSON file's shape or how the pieces fit together, update every reader and the matching `.agents/` file in the same commit.
