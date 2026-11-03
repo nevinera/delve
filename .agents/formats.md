@@ -1125,7 +1125,7 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `health` | `id`, `health`, `maxHealth` | a training dummy reset |
 | `statusGone` | `id`, `status` | a status ran out |
 | `resources` | `resources` | how much of each resource you have, by key, at most twice a second |
-| `log` | `kind` (`system` or `error`), `text` | a line for your log |
+| `log` | `kind` (`system`, `error` or `debug`), `text` | a line for your log |
 | `teleport` | `continent`, `at`, `yaw` | the server moved you there. On another continent, the client loads it |
 | `error` | `message` | before the server closes the connection |
 
@@ -1138,6 +1138,7 @@ A character is `{ id, name, look, continent, at, yaw, move, class, dummy, health
 You type commands in the log's box, starting with `/`. The game server reads each one, so the client can't give itself anything.
 
 - `/help`: lists the commands you can use.
+- `/combatdebug [on or off]`: logs what your abilities do as you use them: what they spend and what goes into each effect, and which effects do nothing yet. It lasts until you leave. Your owner needs the `system_admin` role.
 - `/teleport <x> <z> [continent]`, or `/teleport spawn`: moves you to that spot, standing on the ground, ending what you're casting. Your owner needs the `system_admin` role.
 
 ### Movement checks

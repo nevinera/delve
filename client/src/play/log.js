@@ -23,7 +23,7 @@ export class PlayLog {
     window.addEventListener("keydown", (e) => this.key(e), { capture: true });
   }
 
-  // kind: combat, system or error.
+  // kind: combat, system, error or debug.
   add(text, kind = "combat") {
     this.lines.append(Object.assign(document.createElement("div"), { className: `play-log-${kind}`, textContent: text }));
     while (this.lines.children.length > LINES) this.lines.firstChild.remove();

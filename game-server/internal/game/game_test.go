@@ -456,7 +456,7 @@ func TestOnlyASystemAdminTeleports(t *testing.T) {
 func TestHelpShowsAnAdminItsCommands(t *testing.T) {
 	_, p, _ := commanding(t, true)
 	say(t, p, "/help")
-	if got := heard(p, "log"); len(got) != 2 {
+	if got := heard(p, "log"); len(got) != 3 {
 		t.Fatalf("help = %v", got)
 	}
 }

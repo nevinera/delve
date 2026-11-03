@@ -139,7 +139,7 @@ type moved struct {
 	Move Move       `json:"move"`
 }
 
-// logLine is a line for a player's log. Kind is system or error.
+// logLine is a line for a player's log. Kind is system, error or debug.
 type logLine struct {
 	Type string `json:"type"`
 	Kind string `json:"kind"`

@@ -89,6 +89,8 @@ type Player struct {
 	once   sync.Once
 	// systemAdmin says its owner has that role, which admin commands need.
 	systemAdmin bool
+	// combatDebug says to log what each of its abilities comes to, for this connection.
+	combatDebug bool
 }
 
 // ID is the player's character id.

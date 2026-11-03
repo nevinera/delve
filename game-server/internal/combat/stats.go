@@ -1,6 +1,10 @@
 package combat
 
-import "math/rand/v2"
+import (
+	"fmt"
+	"math/rand/v2"
+	"strings"
+)
 
 // A character's numbers until gear and levels feed in.
 const (
@@ -77,6 +81,30 @@ func Roll(a Amount, s Stats, canCrit bool, roll func() float64) (float64, bool) 
 		return n * CritScale, true
 	}
 	return n, false
+}
+
+// DescribeAmount says what goes into an amount for someone with these stats.
+func DescribeAmount(a Amount, s Stats) string {
+	var parts []string
+	if a.Min != 0 || a.Max != 0 {
+		if a.Min == a.Max {
+			parts = append(parts, fmt.Sprintf("%g", a.Min))
+		} else {
+			parts = append(parts, fmt.Sprintf("%g to %g", a.Min, a.Max))
+		}
+	}
+	for _, p := range []struct {
+		name         string
+		share, value float64
+	}{{"attack power", a.AttackPower, s.AttackPower}, {"spell power", a.SpellPower, s.SpellPower}, {"weapon", a.Weapon, WeaponDamage}} {
+		if p.share != 0 {
+			parts = append(parts, fmt.Sprintf("%g x %s %g", p.share, p.name, p.value))
+		}
+	}
+	if len(parts) == 0 {
+		return "0"
+	}
+	return strings.Join(parts, " + ")
 }
 
 // Random is the roll to use outside of tests.

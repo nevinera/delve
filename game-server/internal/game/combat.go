@@ -2,6 +2,7 @@ package game
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"math"
 	"slices"
@@ -146,6 +147,7 @@ func (l *Layer) use(p *Player, m incoming) {
 	now := l.hub.now()
 	ability, target, why := l.check(p, m, now)
 	if why != "" {
+		p.debugLine("%s: refused: %s", m.Ability, why)
 		p.send(encode(refused{"refused", m.Ability, why}))
 		return
 	}
@@ -279,8 +281,10 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 		return
 	}
 	for _, cost := range a.Cost {
-		f.resources[cost.Resource] -= costOf(f, cost)
+		spent := costOf(f, cost)
+		f.resources[cost.Resource] -= spent
 		f.resChanged = true
+		p.debugLine("%s: spent %g %s", a.Name, spent, cost.Resource)
 	}
 	if a.Cooldown > 0 {
 		spent := live(f.cooldowns[a.ID], now)
@@ -370,7 +374,11 @@ func (l *Layer) landArriving(p *Player, c *casting, now time.Time) {
 // land does one effect to everyone it reaches. Effects that aren't here yet do nothing.
 func (l *Layer) land(p *Player, c *casting, e *combat.Effect, now time.Time) {
 	f := &p.fight
-	for _, on := range l.reached(p, c, e) {
+	reached := l.reached(p, c, e)
+	if len(reached) == 0 {
+		p.debugLine("%s: %s reached no one", c.ability.Name, e.Type)
+	}
+	for _, on := range reached {
 		h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: e.Type}
 		switch e.Type {
 		case "damage":
@@ -406,12 +414,50 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, now time.Time) {
 			}
 			h.Status, h.Lasts, h.Class = s.ID, lasts, f.class.ID
 		default:
+			p.debugLine("%s: %s does nothing yet", c.ability.Name, e.Type)
 			continue
 		}
+		p.debugLine("%s", l.debugHit(p, c.ability.Name, e, on, h))
 		h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
 		l.sync(on)
 		l.tell(p, encode(h))
 	}
+}
+
+// debugLine logs a line for a player with combat debug on.
+func (p *Player) debugLine(format string, args ...any) {
+	if p.combatDebug {
+		answer(p, "debug", fmt.Sprintf(format, args...))
+	}
+}
+
+// debugHit says what an effect came to and how.
+func (l *Layer) debugHit(p *Player, ability string, e *combat.Effect, on *vitals, h hit) string {
+	line := fmt.Sprintf("%s on %s: %s", ability, l.nameOf(on.ID), e.Type)
+	switch e.Type {
+	case "damage", "heal", "resource":
+		line += fmt.Sprintf(" %g from %s", h.Amount, combat.DescribeAmount(e.Amount, p.fight.stats))
+		if e.Type != "resource" {
+			line += fmt.Sprintf(", crit %v", h.Crit)
+		}
+		if e.Resource != "" {
+			line += " " + e.Resource
+		}
+	case "status":
+		line += fmt.Sprintf(" %s for %g s", h.Status, h.Lasts)
+	}
+	return line
+}
+
+// nameOf is a unit's name, for the log.
+func (l *Layer) nameOf(id int64) string {
+	if d := l.dummy(id, ""); d != nil {
+		return d.state.Name
+	}
+	if o := l.players[id]; o != nil {
+		return o.state.Name
+	}
+	return "someone"
 }
 
 func (l *Layer) addResource(f *fighter, key string, n float64) bool {

@@ -24,12 +24,13 @@ var commands map[string]command
 
 func init() {
 	commands = map[string]command{
-		"help":     {usage: "/help", run: runHelp},
-		"teleport": {admin: true, usage: "/teleport <x> <z> [continent], or /teleport spawn", run: runTeleport},
+		"combatdebug": {admin: true, usage: "/combatdebug [on or off]", run: runCombatDebug},
+		"help":        {usage: "/help", run: runHelp},
+		"teleport":    {admin: true, usage: "/teleport <x> <z> [continent], or /teleport spawn", run: runTeleport},
 	}
 }
 
-// answer sends a line to a player's log. Kind is system or error.
+// answer sends a line to a player's log. Kind is system, error or debug.
 func answer(p *Player, kind, text string) {
 	p.send(encode(logLine{"log", kind, text}))
 }
@@ -71,6 +72,25 @@ func runHelp(_ *Layer, p *Player, _ []string) error {
 	slices.Sort(names)
 	for _, name := range names {
 		answer(p, "system", commands[name].usage)
+	}
+	return nil
+}
+
+func runCombatDebug(_ *Layer, p *Player, args []string) error {
+	switch {
+	case len(args) == 0:
+		p.combatDebug = !p.combatDebug
+	case len(args) == 1 && strings.EqualFold(args[0], "on"):
+		p.combatDebug = true
+	case len(args) == 1 && strings.EqualFold(args[0], "off"):
+		p.combatDebug = false
+	default:
+		return fmt.Errorf("Use %s.", commands["combatdebug"].usage)
+	}
+	if p.combatDebug {
+		answer(p, "system", "Combat debug is on.")
+	} else {
+		answer(p, "system", "Combat debug is off.")
 	}
 	return nil
 }

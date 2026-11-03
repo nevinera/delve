@@ -327,3 +327,42 @@ func TestLeavingDropsWhatWasComing(t *testing.T) {
 }
 
 func jsonInto(b []byte, m *map[string]any) error { return json.Unmarshal(b, m) }
+
+func TestCombatDebugLogsWhatAbilitiesDo(t *testing.T) {
+	h, p, c := fighting(t)
+	p.systemAdmin = true
+	use(t, p, "zap")
+	pass(h, c, 2)
+	if got := heard(p, "log"); len(got) != 0 {
+		t.Fatalf("logged with it off: %v", got)
+	}
+	say(t, p, "/combatdebug")
+	if got := lastLog(t, p); got != "system: Combat debug is on." {
+		t.Fatal(got)
+	}
+	use(t, p, "zap")
+	pass(h, c, 2)
+	var lines []string
+	for _, m := range heard(p, "log") {
+		lines = append(lines, m["kind"].(string)+": "+m["text"].(string))
+	}
+	want := []string{"debug: : spent 100 mana", "debug:  on Training Dummy: damage 10 from 10, crit false"}
+	if !slices.Equal(lines, want) {
+		t.Fatalf("lines = %q", lines)
+	}
+	say(t, p, "/combatdebug off")
+	if got := lastLog(t, p); got != "system: Combat debug is off." {
+		t.Fatal(got)
+	}
+}
+
+func TestCombatDebugIsForAdmins(t *testing.T) {
+	_, p, _ := fighting(t)
+	say(t, p, "/combatdebug")
+	if got := lastLog(t, p); got != "error: You can't use /combatdebug." {
+		t.Fatal(got)
+	}
+	if p.combatDebug {
+		t.Fatal("it turned on")
+	}
+}
