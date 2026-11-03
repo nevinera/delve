@@ -19,7 +19,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 
 | Path | What it is | Format | Code |
 | --- | --- | --- | --- |
-| `world.json` | version (2), name, level cap, continents, dungeons, spawn point | [schema](../docs/schema/world.schema.json) | `client/src/create/main.js` |
+| `world.json` | version (2), name, level cap, continents, dungeons, spawn point, training dummies | [schema](../docs/schema/world.schema.json) | `client/src/create/main.js` |
 | `collections.json` | the world's object collections | [schema](../docs/schema/collections.schema.json) | `client/src/objects/collections.js` |
 | `template-collections.json` | the world's template collections | [schema](../docs/schema/collections.schema.json) | `client/src/objects/collections.js` |
 | `objects/<id>.json` | a built object | [schema](../docs/schema/object.schema.json) | `client/src/world/builtObjects.js` |
@@ -601,7 +601,7 @@ A humanoid's areas are its look's color slots, and an area with no rule takes th
 
 ## Game data
 
-Nothing reads these yet, so this section is the only definition. What a world defines for combat: classes, abilities, statuses, items, creatures, NPCs, dialogue and spawns. Each is a JSON file in the world, with a schema in [docs/schema](../docs/schema). The rules follow the genre's modern standard as closely as we can: its stats, rating conversions, attack table, GCD and resources.
+The game server and `/classes` read classes, as [Combat](#combat) describes, and nothing reads the rest yet, so this section is their only definition. What a world defines for combat: classes, abilities, statuses, items, creatures, NPCs, dialogue and spawns. Each is a JSON file in the world, with a schema in [docs/schema](../docs/schema). The rules follow the genre's modern standard as closely as we can: its stats, rating conversions, attack table, GCD and resources.
 
 | Path | What it is | Schema |
 | --- | --- | --- |
@@ -987,6 +987,8 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 |---|---|---|
 | `move` | `t`, `at`, `yaw`, `move` | whenever its movement changes: starting, stopping, turning, jumping, changing gait |
 | `heartbeat` | `t`, `at`, `yaw` | twice a second while moving or turning, once a second otherwise |
+| `use` | `ability`, `target`, `spot` | you ask to use an ability: `target` is who it's aimed at, 0 for no one, and `spot` is `[x, y, z]` for one aimed at the ground |
+| `stop` | none | you stop what you're casting or channelling |
 
 `t` is the client's clock in milliseconds when it sent the message, from a clock that only goes forward (`performance.now()` in a browser). Without it, the server times the message by when it arrived.
 
@@ -1008,9 +1010,17 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `vanish` | `id` | someone leaves your area, or the game |
 | `moved` | `id`, `at`, `yaw`, `move` | someone near you sent `move` or `heartbeat` |
 | `correct` | `at`, `yaw` | your last report didn't add up: you're back at `at` |
+| `used` | `id`, `class`, `ability`, `target`, `spot`, `gcd` | someone near you started using an ability: clients play its timeline from this |
+| `stopped` | `id` | someone's cast or channel ended early |
+| `refused` | `ability`, `why` | you can't use that now |
+| `cooldown` | `ability`, `seconds` | an ability of yours started its cooldown |
+| `hit` | `from`, `ability`, `on`, `effect`, `amount`, `crit`, `resource`, `status`, `class`, `lasts`, `dps`, `health`, `maxHealth` | one of an ability's effects landed on someone near you |
+| `health` | `id`, `health`, `maxHealth` | a training dummy reset |
+| `statusGone` | `id`, `status` | a status ran out |
+| `resources` | `resources` | how much of each resource you have, by key, at most twice a second |
 | `error` | `message` | before the server closes the connection |
 
-A character is `{ id, name, look, continent, at, yaw, move }`. `look` is the character builder's look.
+A character is `{ id, name, look, continent, at, yaw, move, class, dummy, health, maxHealth }`. `look` is the character builder's look. Training dummies come as characters with `dummy: true` and negative ids, in your `snapshot`: all of those on your continent.
 
 "Near you" is the 3×3 tiles around your tile, on your continent and layer.
 
@@ -1028,6 +1038,18 @@ The game server checks that each report follows from the last one it took, the w
 The server keeps each fall's height and time when you land, for fall damage later.
 
 A report that fails isn't passed on. The server sends `correct`, and the client puts you back there and reports afresh. Reports that arrive before the client has taken the correction are dropped quietly for up to 2 s. More than 10 corrections in a minute drops the connection.
+
+### Combat
+
+The game server decides what abilities do, from the class files in the released commit. It checks `use` against where it has you, so the client reports where you are just before it.
+
+- **Class:** you play the world's first class by id, until characters pick one. You have all its abilities.
+- **Checks:** you need a class that has the ability, nothing else being cast, the global cooldown (1.5 s, or the ability's `gcd`) and its cooldown or a charge over, what it costs, to be standing still if it takes time and isn't `castWhileMoving`, a target of the right kind, to be in range (melee reaches 8 ft), and to face an enemy target (the half circle in front of you).
+- **Timing:** the same as the client's timeline. A cast lets go after `castTime`, and spends its cost and starts its cooldown then. A melee hit lands 0.3 s after that. What flies lands when it arrives, at `speed`. A channel lands its effects on each of its ticks, evenly over its `duration`. Moving stops a cast or channel.
+- **Stats:** at level 1, primary stats are 12 and the others 6, stamina 12, attack power is twice the higher of strength and agility, spell power twice intellect, and health ten times stamina. A weapon swing does 10. A hit has a 5% chance to do double.
+- **Resources:** mana holds 1000 and regains 20 a second, energy holds 100 and regains 10, and rage holds 100, starts empty and falls by 1. Points hold `max` and go by `regen`.
+- **Enemies:** only training dummies, for now. A dummy has 100000 health, never drops below 1, and heals up and starts its damage tally over after 5 s unhit.
+- **Not yet:** the `interrupt`, `taunt`, `move`, `dispel` and `resurrect` effects do nothing, what a status does while it's on (`effects`) doesn't apply, nothing checks line of sight, and nothing misses, or is dodged, parried or blocked.
 
 ### Rails and the game server
 

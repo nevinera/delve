@@ -200,3 +200,165 @@ body.touch .play-bar button {
     z-index: 10;
   }
 }
+
+/* Combat: frames top left, the action bar along the bottom, the log bottom left. */
+.play-combat {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.combat-frames {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  display: flex;
+  gap: 12px;
+}
+
+.combat-frame {
+  width: 190px;
+  padding: 6px 8px;
+  background: rgba(10, 8, 14, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 4px;
+}
+
+.combat-name {
+  font-weight: 600;
+}
+
+.combat-health {
+  position: relative;
+  height: 16px;
+  margin-top: 3px;
+  background: #301818;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.combat-health-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: #3c9a48;
+}
+
+.combat-health-text {
+  position: absolute;
+  inset: 0;
+  font-size: 11px;
+  line-height: 16px;
+  text-align: center;
+}
+
+.combat-resources {
+  margin-top: 3px;
+  font-size: 12px;
+}
+
+.combat-actions {
+  position: absolute;
+  left: 50%;
+  bottom: 16px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 4px;
+  pointer-events: auto;
+}
+
+.combat-action {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  padding: 2px;
+  overflow: hidden;
+  font: 11px/1.2 system-ui, sans-serif;
+  color: #eee;
+  background: rgba(20, 18, 24, 0.85);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+}
+
+.combat-action-key {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  color: #ffd070;
+}
+
+.combat-action-shade {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 0;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.combat-cast {
+  position: absolute;
+  left: 50%;
+  bottom: 96px;
+  width: 280px;
+  height: 18px;
+  transform: translateX(-50%);
+  background: rgba(10, 8, 14, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.combat-cast-fill {
+  height: 100%;
+  background: #e0aa40;
+}
+
+.combat-cast-label {
+  position: absolute;
+  inset: 0;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.combat-say {
+  position: absolute;
+  left: 50%;
+  top: 22%;
+  transform: translateX(-50%);
+  color: #ff6050;
+  font-weight: 600;
+  text-shadow: 0 1px 2px #000;
+}
+
+.combat-log {
+  position: absolute;
+  left: 12px;
+  bottom: 16px;
+  width: 300px;
+  max-height: 140px;
+  overflow: hidden;
+  font-size: 12px;
+  text-shadow: 0 1px 2px #000;
+}
+
+.combat-float {
+  position: absolute;
+  transform: translateX(-50%);
+  font-weight: 700;
+  color: #ffe060;
+  text-shadow: 0 0 3px #000, 0 1px 2px #000;
+  white-space: nowrap;
+}
+
+.combat-float-heal {
+  color: #70f070;
+}
+
+.combat-float-status {
+  color: #c0e0ff;
+}
+
+@media (max-width: 800px) {
+  .combat-log {
+    display: none;
+  }
+}

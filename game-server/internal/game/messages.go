@@ -26,16 +26,87 @@ type Character struct {
 	At        [3]float64      `json:"at"`
 	Yaw       float64         `json:"yaw"`
 	Move      Move            `json:"move"`
+	Class     string          `json:"class,omitempty"`
+	Dummy     bool            `json:"dummy,omitempty"`
+	Health    float64         `json:"health"`
+	MaxHealth float64         `json:"maxHealth"`
 }
 
-// incoming is a message from a client: move or heartbeat. T is the client's clock, in
+// incoming is a message from a client: move, heartbeat, use or stop. T is the client's clock, in
 // milliseconds.
 type incoming struct {
-	Type string     `json:"type"`
-	T    float64    `json:"t"`
-	At   [3]float64 `json:"at"`
-	Yaw  float64    `json:"yaw"`
-	Move *Move      `json:"move"`
+	Type    string      `json:"type"`
+	T       float64     `json:"t"`
+	At      [3]float64  `json:"at"`
+	Yaw     float64     `json:"yaw"`
+	Move    *Move       `json:"move"`
+	Ability string      `json:"ability"`
+	Target  int64       `json:"target"`
+	Spot    *[3]float64 `json:"spot"`
+}
+
+// used says someone has started using an ability. The client plays its timeline from this.
+type used struct {
+	Type    string      `json:"type"`
+	ID      int64       `json:"id"`
+	Class   string      `json:"class"`
+	Ability string      `json:"ability"`
+	Target  int64       `json:"target,omitempty"`
+	Spot    *[3]float64 `json:"spot,omitempty"`
+	GCD     float64     `json:"gcd"`
+}
+
+type refused struct {
+	Type    string `json:"type"`
+	Ability string `json:"ability"`
+	Why     string `json:"why"`
+}
+
+type stopped struct {
+	Type string `json:"type"`
+	ID   int64  `json:"id"`
+}
+
+type cooldown struct {
+	Type    string  `json:"type"`
+	Ability string  `json:"ability"`
+	Seconds float64 `json:"seconds"`
+}
+
+// hit is one of an ability's effects landing on someone.
+type hit struct {
+	Type      string  `json:"type"`
+	From      int64   `json:"from"`
+	Ability   string  `json:"ability"`
+	On        int64   `json:"on"`
+	Effect    string  `json:"effect"`
+	Amount    float64 `json:"amount,omitempty"`
+	Crit      bool    `json:"crit,omitempty"`
+	Resource  string  `json:"resource,omitempty"`
+	Status    string  `json:"status,omitempty"`
+	Class     string  `json:"class,omitempty"`
+	Lasts     float64 `json:"lasts,omitempty"`
+	DPS       float64 `json:"dps,omitempty"`
+	Health    float64 `json:"health"`
+	MaxHealth float64 `json:"maxHealth"`
+}
+
+type healthMessage struct {
+	Type      string  `json:"type"`
+	ID        int64   `json:"id"`
+	Health    float64 `json:"health"`
+	MaxHealth float64 `json:"maxHealth"`
+}
+
+type statusGone struct {
+	Type   string `json:"type"`
+	ID     int64  `json:"id"`
+	Status string `json:"status"`
+}
+
+type resources struct {
+	Type      string             `json:"type"`
+	Resources map[string]float64 `json:"resources"`
 }
 
 type welcome struct {

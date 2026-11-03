@@ -370,6 +370,28 @@ function start(world, changes, fresh) {
     await store.set("changes", changes).catch(() => {});
     showSpawn();
   });
+  // Training dummies, kept in world.json: the game server puts them up to hit.
+  const showDummies = () => {
+    const here = (worldInfo().dummies ?? []).filter((d) => d.continent === continent);
+    $("dummyCount").textContent = here.length ? `${here.length} on this continent` : "none on this continent";
+    $("dummyNearest").disabled = !here.length;
+  };
+  const keepDummies = async (dummies) => {
+    const info = worldInfo();
+    info.dummies = dummies;
+    if (!dummies.length) delete info.dummies;
+    changes.set("world.json", strToU8(`${JSON.stringify(info, null, 2)}\n`));
+    await store.set("changes", changes).catch(() => {});
+    showDummies();
+  };
+  showDummies();
+  $("dummyHere").addEventListener("click", () => keepDummies([...(worldInfo().dummies ?? []), { continent, at: [builder.state.x, builder.state.z].map((v) => Math.round(v * 10) / 10) }]));
+  $("dummyNearest").addEventListener("click", () => {
+    const dummies = worldInfo().dummies ?? [];
+    const gap = (d) => (d.continent === continent ? Math.hypot(d.at[0] - builder.state.x, d.at[1] - builder.state.z) : Infinity);
+    const nearest = dummies.reduce((best, d) => (gap(d) < gap(best) ? d : best), dummies[0]);
+    keepDummies(dummies.filter((d) => d !== nearest));
+  });
   $("spawnGo").addEventListener("click", () => {
     const [x, z] = worldInfo().spawn.at;
     builder.state = { ...builder.state, x, z, y: walkAt(x, z), flying: false, falling: 0 };

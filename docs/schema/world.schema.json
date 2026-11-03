@@ -73,6 +73,32 @@
           "description": "[x, z] in continent feet"
         }
       }
+    },
+    "dummies": {
+      "type": "array",
+      "description": "version 2: training dummies the game server puts up, set in /create",
+      "items": {
+        "type": "object",
+        "required": [
+          "continent",
+          "at"
+        ],
+        "properties": {
+          "continent": {
+            "type": "string",
+            "description": "a continent's key"
+          },
+          "at": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "[x, z] in continent feet"
+          }
+        }
+      }
     }
   }
 }

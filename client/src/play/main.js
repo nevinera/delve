@@ -7,6 +7,7 @@ import { Renditions } from "../create/ground.js";
 import { Placed } from "../create/placed.js";
 import { PLATE_FT } from "../v2/sizes.js";
 import { setBuiltObjects } from "../world/objects.js";
+import { PlayCombat } from "./combat.js";
 import { GameConnection } from "./game.js";
 import { PlayWorld } from "./loader.js";
 import { Others } from "./others.js";
@@ -58,6 +59,9 @@ async function play() {
   setBuiltObjects(builtObjects(loader), images(loader));
 
   let others = null;
+  let combat = null;
+  // Combat news before you're in the world isn't yours to see: it's about others.
+  const fight = (method) => (message) => combat?.[method](message);
   const early = []; // what the server says before the view is ready, as [method, argument]
   const tell = (method, arg) => (others ? others[method](arg) : early.push([method, arg]));
   status("Entering...");
@@ -66,6 +70,13 @@ async function play() {
     appear: ({ character }) => tell("appear", character),
     vanish: ({ id }) => tell("vanish", id),
     moved: (message) => tell("moved", message),
+    used: fight("used"),
+    stopped: fight("stopped"),
+    refused: fight("refused"),
+    cooldown: fight("cooldown"),
+    hit: fight("hit"),
+    resources: fight("resources_"),
+    health: fight("health_"),
     closed: () => {
       status("You've left the game. Reload the page to enter again.");
       others?.clear();
@@ -114,13 +125,17 @@ async function play() {
   menu.querySelector('[data-open="playGraphics"]').disabled = false;
   others = new Others(view);
   for (const [method, arg] of early) others[method](arg);
-  view.onWalkFrame = (dt) => others.frame(dt);
+  view.onWalkFrame = (dt) => {
+    others.frame(dt);
+    combat?.frame(dt);
+  };
   const paused = () => ($("playPaused").hidden = false);
   view.startWalk(paused, [you.at[0], you.at[2]], resolveRecipe(config.look));
   view.walker.yaw = you.yaw;
   connection.report(view);
+  combat = new PlayCombat({ view, others, connection, loader, you, hud: $("playCombat") });
   // A handle for scripts and the browser's console.
-  window.play = { view, connection, others, renditions, placed, caves };
+  window.play = { view, connection, others, combat, renditions, placed, caves };
   if (touch) new TouchControls(view, document.body);
   $("playResume").addEventListener("click", () => {
     $("playPaused").hidden = true;

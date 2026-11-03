@@ -32,6 +32,7 @@ export const WALK_FT = 7.5;
 export const BACK_FT = 13.5; // backing up at a run
 export const SWIM_FT = 14.2;
 export const SPRINT = 2;
+const TAP_PX = 5; // a press that moves less than this is a click or tap, not a drag
 const TURN = TURN_RATE; // radians per second, as the turning clips step round at
 export const JUMP_FT = 16; // upward speed at takeoff, per second
 export const GRAVITY = 48;
@@ -269,6 +270,11 @@ export class Walker {
     this.untwistChest();
     this.mixer.update(dt);
     if (!this.clips) return;
+    if (this.acting && (this.t >= this.acting.until || moving || this.airTime > 0 || swimming)) this.acting = null;
+    if (this.acting) {
+      this.play(this.acting.name, 1, !this.acting.loop);
+      return;
+    }
 
     if (this.landing && (this.t > this.landing.until || (moving && this.landing.clip !== "Roll"))) this.landing = null;
     const sat = this.sitting && this.t - this.sitting.at;
@@ -308,7 +314,7 @@ export class Walker {
   }
 
   // Fades to a clip, or sets the playing one's speed. One-shot clips hold their last frame.
-  play(name, speed = ONCE[name]?.speed ?? 1) {
+  play(name, speed = ONCE[name]?.speed ?? 1, once = Boolean(ONCE[name])) {
     const clip = this.clips.get(name);
     if (!clip) return;
     const action = this.mixer.clipAction(clip);
@@ -317,11 +323,17 @@ export class Walker {
     const previous = this.playing && this.mixer.existingAction(this.clips.get(this.playing));
     this.playing = name;
     action.reset();
-    action.setLoop(ONCE[name] ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
+    action.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
     action.clampWhenFinished = true;
     action.time = ONCE[name]?.from ?? 0;
     action.play();
     if (previous) action.crossFadeFrom(previous, FADE_S, false);
+  }
+
+  // Plays a clip on the character while it stands still: an ability's. Null lets it go.
+  act(name, loop = false) {
+    const clip = name && this.clips?.get(name);
+    this.acting = clip ? { name, loop, until: loop ? Infinity : this.t + clip.duration } : null;
   }
 
   // Whether the character may move to (x, z): on a tile drawn in full, not into a tree trunk, an
@@ -414,6 +426,7 @@ export class Walker {
     // A finger drags as the right button does, turning the character with the camera, since a
     // phone has no other way to turn.
     this.drag = { x: e.clientX, y: e.clientY, button: e.pointerType === "touch" ? 2 : e.button };
+    this.pressed = { x: e.clientX, y: e.clientY };
     this.view.canvas.setPointerCapture(e.pointerId);
   }
 
@@ -437,6 +450,8 @@ export class Walker {
   onUp(e) {
     e.stopImmediatePropagation();
     this.drag = null;
+    if (this.pressed && Math.hypot(e.clientX - this.pressed.x, e.clientY - this.pressed.y) < TAP_PX) this.onTap?.(e);
+    this.pressed = null;
   }
 
   onWheel(e) {

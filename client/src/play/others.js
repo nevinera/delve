@@ -89,6 +89,11 @@ export class Others {
     const drawn = {
       id: character.id,
       name: character.name,
+      look,
+      class: character.class,
+      dummy: Boolean(character.dummy),
+      health: character.health,
+      maxHealth: character.maxHealth,
       model,
       nameplate: nameplate(character.name),
       height: look.height,
@@ -171,6 +176,11 @@ export class Others {
     if (!drawn.clips) return;
     const { move } = drawn;
     const speed = speedOf(move);
+    if (drawn.acting && (drawn.acting.until <= performance.now() || speed || drawn.airborne || move.swim)) drawn.acting = null;
+    if (drawn.acting) {
+      this.play(drawn, drawn.acting.name, 1, !drawn.acting.loop);
+      return;
+    }
     const way = move.forward < 0 ? "back" : move.forward > 0 || !move.strafe ? "ahead" : move.strafe > 0 ? "left" : "right";
     let clip = "Idle_Loop";
     if (move.swim) clip = speed ? "Swim_Fwd_Loop" : "Swim_Idle_Loop";
@@ -180,8 +190,14 @@ export class Others {
     this.play(drawn, clip, strideRate(drawn.clips.get(clip), drawn.model, speed));
   }
 
+  // Plays a clip on someone while they stand still: an ability's. Null lets it go.
+  act(drawn, name, loop = false) {
+    const clip = name && drawn.clips?.get(name);
+    drawn.acting = clip ? { name, loop, until: loop ? Infinity : performance.now() + clip.duration * 1000 } : null;
+  }
+
   // Fades to a clip, or sets the playing one's speed.
-  play(drawn, name, rate = 1) {
+  play(drawn, name, rate = 1, once = false) {
     const clip = drawn.clips.get(name);
     if (!clip) return;
     drawn.mixer.clipAction(clip).timeScale = rate;
@@ -190,6 +206,8 @@ export class Others {
     drawn.playing = name;
     const action = drawn.mixer.clipAction(clip);
     action.reset();
+    action.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
+    action.clampWhenFinished = once;
     action.play();
     if (previous) action.crossFadeFrom(previous, FADE_S, false);
   }

@@ -18,6 +18,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/delve-mmo/delve3d/game-server/internal/combat"
 )
 
 // World is what the game server knows of a released world.
@@ -25,11 +27,19 @@ type World struct {
 	Repo, Sha    string
 	Continents   []string
 	Spawn        Spawn
-	path, prefix string // the zip it was read from, and its top directory
+	Dummies      []Dummy         // training dummies
+	Classes      []*combat.Class // by id
+	path, prefix string          // the zip it was read from, and its top directory
 }
 
 // Spawn is where characters new to the world start: a continent and a place in its feet.
 type Spawn struct {
+	Continent string     `json:"continent"`
+	At        [2]float64 `json:"at"`
+}
+
+// Dummy is a training dummy placed on a continent, at a place in its feet.
+type Dummy struct {
 	Continent string     `json:"continent"`
 	At        [2]float64 `json:"at"`
 }
@@ -134,6 +144,7 @@ func Read(path string) (*World, error) {
 		Version    int                    `json:"version"`
 		Continents []struct{ Key string } `json:"continents"`
 		Spawn      *Spawn                 `json:"spawn"`
+		Dummies    []Dummy                `json:"dummies"`
 	}
 	if err := readJSON(files, "world.json", &info); err != nil {
 		return nil, err
@@ -149,6 +160,10 @@ func Read(path string) (*World, error) {
 		return nil, fmt.Errorf("worlds: %s has no spawn point on one of its continents: set one in /create", path)
 	}
 	w.Spawn = *info.Spawn
+	w.Dummies = info.Dummies
+	if w.Classes, err = readClasses(files); err != nil {
+		return nil, err
+	}
 	return w, nil
 }
 
@@ -160,6 +175,26 @@ func (w *World) SpawnAt() [3]float64 {
 // TileOf is the tile holding continent feet (x, z).
 func TileOf(x, z float64) [2]int {
 	return [2]int{int(math.Floor(x / TileFt)), int(math.Floor(z / TileFt))}
+}
+
+// readClasses reads classes/<id>.json, in order of id.
+func readClasses(files map[string]*zip.File) ([]*combat.Class, error) {
+	var paths []string
+	for name := range files {
+		if dir, file := filepath.Split(name); dir == "classes/" && strings.HasSuffix(file, ".json") {
+			paths = append(paths, name)
+		}
+	}
+	slices.Sort(paths)
+	classes := []*combat.Class{}
+	for _, path := range paths {
+		c := &combat.Class{}
+		if err := readJSON(files, path, c); err != nil {
+			return nil, err
+		}
+		classes = append(classes, c)
+	}
+	return classes, nil
 }
 
 func readJSON(files map[string]*zip.File, path string, out any) error {

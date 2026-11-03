@@ -35,6 +35,7 @@ The client has one entry point per page (`vite.config.js`):
 - `client/src/render/` draws the world with three.js for `/create`, `/play` and the object builder: the ground's and water's materials, trees, objects, slabs, clutter, the sky, graphics settings and the performance overlay.
 - `client/src/play/` is the game page, and its walker, which the character builder uses too.
 - `client/src/classes/` is the class editor.
+- `client/src/abilities/` is what abilities look and sound like: pure timelines, stock visuals and sounds made in code, and the stage that plays them.
 - `client/src/objects/` is the object library: collections, its storage in the browser, and the builder pages.
 - `client/src/character/` is bodies, rigs, animations and the character and creature pages.
 - `client/src/github/github.js` is the browser's route to GitHub's API. The play page reads world files from `raw.githubusercontent.com` (`client/src/play/loader.js`).
@@ -87,8 +88,9 @@ Released worlds are listed for everyone signed in, on `/worlds`. A world's owner
 3. It reads your continent's platters, biomes, water and cave layout, and draws the world as `/create` does (`client/src/play/view.js`, with `client/src/create/ground.js` and the rest): tiles near you in full, coarser further off, out to where the fog closes in, 3,500 ft away. Plate files are fetched as the ground wants them, and placed and caves files for the plates within two plates' width of you. Caves are drawn as `/create`'s finished view draws them (`client/src/create/caves.js`), with their mouths cut through the ground. The sky, its day and night, and the fog come from `client/src/render/sky.js` and `client/src/world/dayNight.js`.
 4. You walk with `client/src/play/walker.js`, on the ground as the game server has it (`client/src/play/ground.js`), caves' floors included: slabs, cave rock, objects placed by hand, and the trees and objects in tiles' slots are in the way.
 5. It reports how you move, and draws the characters near you as the server reports theirs (`client/src/play/game.js`, `others.js`).
-6. A menu button in the bottom right opens the menu: graphics settings (`client/src/render/graphicsPanel.js`, shared with the editor) and leaving the world.
-7. On a phone (`client/src/play/touch.js`) it plays in landscape only, with a thumbstick, a jump button, and drags that turn you with the camera, on lighter graphics. Menu and chat buttons sit along the bottom, and the menu scrolls.
+6. You fight with `client/src/play/combat.js`: frames, the action bar (keys 1 to 0), Tab or a click to target, a reticle for ground abilities, and a log. It asks the server to use abilities and shows what the server says happened. `client/src/abilities/stage.js` plays their timelines, for this and for `/classes`' preview.
+7. A menu button in the bottom right opens the menu: graphics settings (`client/src/render/graphicsPanel.js`, shared with the editor) and leaving the world.
+8. On a phone (`client/src/play/touch.js`) it plays in landscape only, with a thumbstick, a jump button, and drags that turn you with the camera, on lighter graphics. Menu and chat buttons sit along the bottom, and the menu scrolls.
 
 ## The game server
 
@@ -98,5 +100,7 @@ The game server (`game-server/`) holds every character in a world. Browsers conn
 - `internal/worlds` downloads each released commit's zip once, keeps it on disk, and reads a version 2 world's continents and spawn point. It reads a continent's plates and placed files as characters reach them, and samples the ground as `/create`'s builder walks it: heights pressed down by level slabs, water, slabs, objects placed by hand, the trees and objects in the tiles' slots (`fill.go`, by a copy of `client/src/v2/fill.json`), and boulders across courses' cascades from `water.json`. Off the tiles is sea. `testdata/world.mjs` writes its test world and what `/create` makes of it, with the client's own code.
 - `internal/game` places characters on a layer, works out who's near whom (the 3×3 tiles around each), checks that their movement adds up (speed, clocks, rising and falling, the ground, slabs and cave floors under them, and not walking into slabs, cave rock, trees or objects), and passes it on.
 - `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token, and writes their positions back to it (`WorldCharacter`, one per character per world). The server never writes to the database itself.
+
+- `internal/combat` reads classes and works out stats and what amounts come to. `internal/game/combat.go` runs abilities on a layer, and `Hub.Run` moves them on every 50 ms. [Combat](formats.md#combat) has the rules.
 
 Bots play characters, so you can test with others around: `script/game/bot` (code in `lib/bot/`) enters a released world as a character, the way the play page does, and runs a strategy. A bot fetches plate, placed and caves files from GitHub and walks the ground as the game server reads it, standing on cave floors and stopping at slabs, cave rock, trees and objects in its way. It doesn't know about the boulders across cascades. `null` stands still, and `follow` runs after a named character.

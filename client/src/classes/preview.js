@@ -1,8 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import { playSound } from "../abilities/sounds.js";
-import { MELEE_FT, abilityTimeline, hitOn, hitText, moveAt, schoolColors } from "../abilities/timeline.js";
-import { disposeVisual, makeVisual } from "../abilities/visuals.js";
+import { AbilityStage, clipNameFor } from "../abilities/stage.js";
+import { MELEE_FT, hitOn, hitText, moveAt, schoolColors } from "../abilities/timeline.js";
 import { characterClips, loadAnimations, roleClips } from "../character/animations.js";
 import { characterMesh, disposeCharacter, skeletonOf } from "../character/characterMesh.js";
 import { randomLook, resolveRecipe } from "../character/recipe.js";
@@ -90,9 +89,9 @@ export class AbilityPreview {
     this.canvas.addEventListener("pointermove", (e) => this.aimReticle(e));
 
     this.distance = 30;
-    this.alive = []; // visuals playing: { visual, at, follow }
+    this.stage = new AbilityStage(this.scene, { audio: () => (this.muteBox.checked ? null : this.audioContext()) });
     this.floats = [];
-    this.run = null; // what's playing: { line, t, next }
+    this.run = null; // what's playing, from the stage
     this.makeUnit("dummy", resolveRecipe({ body: "goblin" }, SEEDED(7)));
     this.frameAll = true;
     new ResizeObserver(() => this.resize()).observe(this.canvas);
@@ -117,6 +116,7 @@ export class AbilityPreview {
     this.scene.add(mesh);
     mesh.geometry.computeBoundingBox();
     const unit = { mesh, look, mixer: new THREE.AnimationMixer(mesh), clips: null, roles: roleClips(look, skeletonOf(look.body)), playing: null, height: mesh.geometry.boundingBox.max.y };
+    unit.clip = (role, loop) => this.clip(unit, role ?? "idle", role === null || loop);
     this[which] = unit;
     loadAnimations().then((baked) => {
       if (this[which] !== unit) return;
@@ -130,7 +130,7 @@ export class AbilityPreview {
   // Plays a role's clip on a unit, or a spell's holding clip for "channel".
   clip(unit, role, loop = false) {
     if (!unit.clips) return;
-    const name = role === "channel" ? (unit.clips.has("Spell_Simple_Idle_Loop") ? "Spell_Simple_Idle_Loop" : unit.roles.cast ?? unit.roles.idle) : unit.roles[role] ?? unit.roles.idle;
+    const name = clipNameFor(role, unit.roles, unit.clips);
     const clip = unit.clips.get(name);
     if (!clip) return;
     const action = unit.mixer.clipAction(clip);
@@ -247,10 +247,9 @@ export class AbilityPreview {
   }
 
   stop() {
+    this.stage.clear();
     this.run = null;
     this.bar.hidden = true;
-    for (const { visual } of this.alive) disposeVisual(visual);
-    this.alive = [];
     this.placeUnits();
     if (this.caster) this.clip(this.caster, "idle", true);
     if (this.dummy) this.clip(this.dummy, "idle", true);
@@ -261,8 +260,9 @@ export class AbilityPreview {
   play() {
     if (!this.ability) return;
     this.stop();
-    const to = this.ability.target === "ground" ? this.spot.length() : this.distance;
-    this.run = { line: abilityTimeline(this.ability, { distance: to, ranged: this.ranged }), t: 0, next: 0, moves: [] };
+    const distance = this.ability.target === "ground" ? this.spot.length() : this.distance;
+    const on = { hit: (event) => this.land(event), bar: (event) => this.showBar(event) };
+    this.run = this.stage.play(this.ability, { caster: this.caster, target: this.dummy, spot: this.ability.target === "ground" ? this.spot : null, ranged: this.ranged, distance, on });
     this.say.textContent = this.problem();
     if (this.audio?.state === "suspended") this.audio.resume();
   }
@@ -274,89 +274,11 @@ export class AbilityPreview {
     return "";
   }
 
-  // The point on a unit something goes to: its chest, or the spot on the ground.
-  pointOf(on) {
-    if (on === "ground") return this.ability?.target === "ground" ? this.spot.clone() : this.dummy.mesh.position.clone().setY(0);
-    const unit = on === "caster" ? this.caster : this.dummy;
-    return unit.mesh.position.clone();
-  }
-
-  chestOf(unit) {
-    return unit.mesh.position.clone().add(new THREE.Vector3(0, unit.height * 0.6, 0));
-  }
-
-  // Where a projectile starts: the caster's right hand, or its chest for a body with none.
-  handOf(unit) {
-    unit.mesh.updateMatrixWorld(true);
-    const hand = unit.mesh.skeleton?.getBoneByName("hand_r");
-    return hand ? hand.getWorldPosition(new THREE.Vector3()) : this.chestOf(unit);
-  }
-
-  spawn(name, options, place) {
-    const visual = makeVisual(name, options);
-    if (place) visual.group.position.add(place);
-    this.scene.add(visual.group);
-    this.alive.push({ visual, at: this.run.t });
-    return visual;
-  }
-
-  fire(event) {
-    const unitOn = (on) => (on === "caster" ? this.caster : this.dummy);
-    switch (event.kind) {
-      case "clip":
-        this.clip(this.caster, event.role, event.loop);
-        break;
-      case "bar":
-        this.bar.hidden = false;
-        this.bar.querySelector(".preview-bar-label").textContent = event.label ?? "";
-        this.run.bar = { from: event.at, until: event.until, draining: event.draining };
-        break;
-      case "visual": {
-        const on = event.on;
-        const height = on === "ground" ? 6 : unitOn(on).height;
-        if (event.effect === "beam") {
-          this.spawn("beam", { colors: event.colors, scale: event.scale, from: this.handOf(this.caster).toArray(), to: (on === "caster" ? this.chestOf(this.caster) : on === "ground" ? this.spot : this.chestOf(this.dummy)).toArray() });
-        } else if (event.effect === "bolt" || event.effect === "arrow") {
-          this.spawn(event.effect, { colors: event.colors, scale: event.scale, height }, on === "ground" ? this.spot : this.chestOf(unitOn(on)));
-        } else {
-          const visual = this.spawn(event.effect, { colors: event.colors, scale: event.scale, height }, this.pointOf(on));
-          // What faces a way faces where the ability goes.
-          if (["cone", "slash"].includes(event.effect) && on === "caster") visual.group.rotation.y = Math.PI / 2;
-        }
-        break;
-      }
-      case "sound":
-        if (!this.muteBox.checked) playSound(this.audioContext(), event.sound, { volume: event.volume, pitch: event.pitch });
-        break;
-      case "projectile": {
-        const from = this.handOf(this.caster);
-        const visual = this.spawn(event.effect, { colors: event.colors, scale: event.scale });
-        visual.group.position.copy(from);
-        this.alive.at(-1).flying = { from, until: event.until, start: event.at };
-        break;
-      }
-      case "area": {
-        const center = event.around === "ground" ? this.spot.clone() : event.around === "target" ? this.dummy.mesh.position.clone() : this.caster.mesh.position.clone();
-        this.showArea(center, event);
-        break;
-      }
-      case "hit":
-        this.land(event);
-        break;
-    }
-  }
-
-  // Marks the ground an area effect covers: a flat disc, or a slice of one facing the target.
-  showArea(center, { radius, cone, colors }) {
-    const length = cone ? (cone / 360) * Math.PI * 2 : Math.PI * 2;
-    const start = cone ? -length / 2 : 0; // the target stands along +x
-    const geometry = new THREE.CircleGeometry(radius, 64, start, length).rotateX(-Math.PI / 2);
-    const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: colors[0], transparent: true, opacity: 0.35, depthWrite: false, side: THREE.DoubleSide }));
-    mesh.position.copy(center).setY(0.1);
-    const group = new THREE.Group();
-    group.add(mesh);
-    this.scene.add(group);
-    this.alive.push({ at: this.run.t, visual: { group, length: 0.8, update: (u) => (mesh.material.opacity = 0.35 * (1 - u)) } });
+  showBar(event) {
+    if (!event) return;
+    this.bar.hidden = false;
+    this.bar.querySelector(".preview-bar-label").textContent = event.label ?? "";
+    this.run.bar = { from: event.at, until: event.until, draining: event.draining };
   }
 
   // One of the ability's effects landing: the unit reacts, and what it did floats over it.
@@ -368,7 +290,7 @@ export class AbilityPreview {
     if (text) this.floatText(on, text, effect.type);
     if (effect.type === "status") {
       const status = this.statuses.find((s) => s.id === effect.status);
-      if (status?.aura?.effect) this.spawn(status.aura.effect, { colors: status.aura.colors?.length === 2 ? status.aura.colors : schoolColors(this.ability), height: on.height }, on.mesh.position);
+      if (status?.aura?.effect) this.stage.spawn(status.aura.effect, { colors: status.aura.colors?.length === 2 ? status.aura.colors : schoolColors(this.ability), height: on.height }, on.mesh.position);
     }
   }
 
@@ -403,19 +325,17 @@ export class AbilityPreview {
   frame(now) {
     const dt = Math.min(0.05, (now - this.last) / 1000) * this.speed;
     this.last = now;
-    if (this.run) {
-      this.run.t += dt;
-      const { line } = this.run;
-      while (this.run.next < line.events.length && line.events[this.run.next].at <= this.run.t) this.fire(line.events[this.run.next++]);
-      if (this.run?.moves.length) this.applyMoves();
+    const running = this.run;
+    this.stage.frame(dt);
+    if (running) {
+      if (running.moves.length) this.applyMoves();
       this.drawBar();
-      if (this.run.t >= line.duration) {
+      if (!this.stage.runs.includes(running)) {
         const again = this.loopBox.checked;
         this.stop();
         if (again) this.play();
       }
     }
-    this.drawVisuals();
     for (const unit of [this.caster, this.dummy]) {
       if (!unit) continue;
       unit.mixer.update(dt);
@@ -442,29 +362,6 @@ export class AbilityPreview {
       this.bar.hidden = true;
       this.run.bar = null;
     }
-  }
-
-  drawVisuals() {
-    const t = this.run?.t ?? Infinity;
-    this.alive = this.alive.filter((live) => {
-      const { visual, at, flying } = live;
-      if (flying) {
-        const u = Math.min(1, (t - flying.start) / Math.max(0.001, flying.until - flying.start));
-        const to = this.chestOf(this.dummy);
-        visual.group.position.copy(flying.from).lerp(to, u);
-        visual.group.lookAt(to);
-        visual.update((t - flying.start) % 1);
-        if (u < 1) return true;
-      } else {
-        const u = (t - at) / visual.length;
-        if (u < 1) {
-          visual.update(Math.max(0, u));
-          return true;
-        }
-      }
-      disposeVisual(visual);
-      return false;
-    });
   }
 
   drawFloats() {

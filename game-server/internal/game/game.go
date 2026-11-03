@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/delve-mmo/delve3d/game-server/internal/combat"
 	"github.com/delve-mmo/delve3d/game-server/internal/rails"
 	"github.com/delve-mmo/delve3d/game-server/internal/token"
 	"github.com/delve-mmo/delve3d/game-server/internal/worlds"
@@ -45,6 +46,7 @@ type Hub struct {
 	idle       time.Duration
 	saver      *saver
 	now        func() time.Time
+	roll       func() float64
 
 	mu      sync.Mutex
 	layers  map[string]*Layer // by world id and sha
@@ -52,7 +54,7 @@ type Hub struct {
 }
 
 func NewHub(w WorldLoader, c Characters) *Hub {
-	return &Hub{worlds: w, characters: c, idle: IdleUnload, saver: newSaver(c), now: time.Now, layers: map[string]*Layer{}, playing: map[int64]*Player{}}
+	return &Hub{worlds: w, characters: c, idle: IdleUnload, saver: newSaver(c), now: time.Now, roll: combat.Random, layers: map[string]*Layer{}, playing: map[int64]*Player{}}
 }
 
 // Layer is one copy of a world's open land and the characters in it.
@@ -69,6 +71,9 @@ type Layer struct {
 	players   map[int64]*Player
 	unload    *time.Timer
 	gone      bool // unloaded, so no one joins it
+	dummies   []*dummy
+	landings  []*landing
+	lastTick  time.Time
 }
 
 // Player is a connected character. Its connection reads Send until Gone closes.
@@ -79,6 +84,7 @@ type Player struct {
 	state  Character
 	saved  rails.Position // the position last saved
 	motion motion
+	fight  fighter
 	once   sync.Once
 }
 
@@ -156,6 +162,7 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 		layer.mu.Unlock()
 	}
 	p := &Player{Send: make(chan []byte, SendQueue), Gone: make(chan struct{}), layer: layer, state: state, motion: motion{joined: h.now()}}
+	p.enterFight(layer.world.Classes)
 	p.saved = p.position()
 
 	h.mu.Lock()
@@ -223,8 +230,9 @@ func (l *Layer) join(p *Player) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.players[p.ID()] = p
+	l.placeDummies()
 	p.send(encode(welcome{"welcome", p.state, l.number}))
-	near := []Character{}
+	near := l.dummiesOn(p.state.Continent)
 	for _, o := range l.near(p) {
 		near = append(near, o.state)
 		o.send(encode(appear{"appear", p.state}))
@@ -267,7 +275,17 @@ func (p *Player) Handle(raw []byte) error {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return errBadMessage
 	}
-	if m.Type != "move" && m.Type != "heartbeat" {
+	switch m.Type {
+	case "use":
+		p.layer.use(p, m)
+		return nil
+	case "stop":
+		p.layer.mu.Lock()
+		defer p.layer.mu.Unlock()
+		p.layer.stopCast(p)
+		return nil
+	case "move", "heartbeat":
+	default:
 		return fmt.Errorf("%w: unknown type %q", errBadMessage, m.Type)
 	}
 	if !finite(m.At, m.Yaw, m.T) {
@@ -308,6 +326,7 @@ func (l *Layer) moved(p *Player, m incoming) {
 	}
 	if m.Move != nil {
 		p.state.Move = m.Move.clean()
+		l.interruptMoving(p)
 	}
 	update := encode(moved{"moved", p.ID(), p.state.At, p.state.Yaw, p.state.Move})
 	for _, o := range l.near(p) {
@@ -327,16 +346,20 @@ func (l *Layer) moved(p *Player, m incoming) {
 	p.state.Move.Jump = false
 }
 
-// Run saves the positions that have changed every SaveEvery, until ctx ends.
+// Run saves the positions that have changed every SaveEvery, and moves combat on, until ctx ends.
 func (h *Hub) Run(ctx context.Context) {
 	tick := time.NewTicker(SaveEvery)
 	defer tick.Stop()
+	fight := time.NewTicker(CombatTick)
+	defer fight.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-tick.C:
 			h.SaveAll()
+		case <-fight.C:
+			h.Tick()
 		}
 	}
 }

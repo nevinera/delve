@@ -53,14 +53,26 @@ export class GameConnection {
     this.timer = setInterval(() => this.tick(view), TICK_MS);
   }
 
-  tick(view) {
+  // Asks to use an ability, after saying where you are so it's checked against that.
+  use(ability, target, spot) {
+    if (this.socket.readyState !== WebSocket.OPEN) return;
+    if (this.view) this.tick(this.view, true);
+    this.socket.send(JSON.stringify({ type: "use", ability, target, ...(spot ? { spot } : {}) }));
+  }
+
+  stop() {
+    if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: "stop" }));
+  }
+
+  // now: report even if nothing's due.
+  tick(view, now = false) {
     const { walker, origin } = view;
     // Paused, it still sends heartbeats, so the server knows you're there.
     if (!walker?.pos || this.socket.readyState !== WebSocket.OPEN) return;
     const move = movementOf(walker);
     const jumped = this.jumpedAt !== undefined && walker.jumpedAt !== this.jumpedAt;
     this.jumpedAt = walker.jumpedAt;
-    const type = nextReport(this.last, move, walker.yaw, jumped, performance.now());
+    const type = nextReport(this.last, move, walker.yaw, jumped, performance.now()) ?? (now ? "heartbeat" : null);
     if (!type) return;
     const at = [walker.pos.x + origin[0], walker.pos.y, walker.pos.z + origin[1]];
     const message = { type, t: performance.now(), at, yaw: walker.yaw };
