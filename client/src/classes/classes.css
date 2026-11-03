@@ -124,6 +124,54 @@
   color: #aaa;
 }
 
+.form-advanced,
+.form-collapsed {
+  margin: 4px 0 8px;
+}
+
+.form-advanced > summary,
+.form-collapsed > summary {
+  display: inline-block;
+  padding: 2px 8px;
+  border: 1px solid #444;
+  border-radius: 3px;
+  color: #aaa;
+  cursor: pointer;
+  list-style: none;
+}
+
+.form-advanced > summary::-webkit-details-marker,
+.form-collapsed > summary::-webkit-details-marker {
+  display: none;
+}
+
+.form-advanced > summary::before,
+.form-collapsed > summary::before {
+  content: "▸ ";
+}
+
+.form-advanced[open] > summary::before,
+.form-collapsed[open] > summary::before {
+  content: "▾ ";
+}
+
+.form-fold-body {
+  margin-top: 6px;
+  padding-left: 10px;
+  border-left: 2px solid #333;
+}
+
+.form-heading {
+  margin: 8px 0 4px;
+  color: #888;
+  font-size: 0.85em;
+  text-transform: uppercase;
+}
+
+.form-wrong {
+  outline: 1px solid #e06060;
+}
+
 .form-item {
   position: relative;
   margin-bottom: 8px;

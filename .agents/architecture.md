@@ -34,7 +34,7 @@ The client has one entry point per page (`vite.config.js`):
 - `client/src/create/` is the world editor.
 - `client/src/render/` draws the world with three.js for `/create`, `/play` and the object builder: the ground's and water's materials, trees, objects, slabs, clutter, the sky, graphics settings and the performance overlay.
 - `client/src/play/` is the game page, and its walker, which the character builder uses too.
-- `client/src/classes/` is the class editor.
+- `client/src/classes/` is the class editor. `fields.js` lists every field, and one marked `advanced` starts folded away unless it has a value. `fields.test.js` fails if a key in `docs/schema` has no field.
 - `client/src/abilities/` is what abilities look and sound like: pure timelines, stock visuals and sounds made in code, and the stage that plays them.
 - `client/src/objects/` is the object library: collections, its storage in the browser, and the builder pages.
 - `client/src/character/` is bodies, rigs, animations and the character and creature pages.
