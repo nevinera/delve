@@ -104,8 +104,14 @@ export function writeCondition({ kind, ...c }) {
 }
 
 const effectFields = (made, nested = false) => [
-  { key: "type", type: "select", options: ["damage", "heal", "resource", "status", "interrupt", "taunt", "move", "dispel", "consume", "cooldown", "summon", "command", "area", "resurrect"] },
-  { key: "affects", type: "select", options: ["target", "self", "enemies", "allies", "holder", "caster"] },
+  { key: "type", type: "select", options: ["damage", "heal", "resource", "status", "interrupt", "taunt", "move", "dispel", "extend", "consume", "cooldown", "summon", "command", "area", "resurrect"] },
+  { key: "affects", type: "select", options: ["target", "self", "enemies", "allies", "hit", "holder", "caster"] },
+  { key: "statuses", type: "multi", options: statusesOf(made), show: is("extend", "consume") },
+  { key: "seconds", type: "number", show: is("extend", "consume") },
+  { key: "refresh", label: "start it over", type: "check", show: is("extend") },
+  { key: "apply", label: "apply if missing", type: "check", show: is("extend") },
+  { key: "dealsLeft", label: "does this share of what's left", type: "number", show: is("consume") },
+  { key: "keeps", label: "leaves it on", type: "check", show: (e) => e.type === "consume" && e.dealsLeft !== undefined },
   { key: "holding", type: "multi", options: statusesOf(made), hint: "only those holding one of these from you", show: (e) => ["enemies", "allies"].includes(e.affects) },
   { key: "around", type: "select", none: "self", options: ["target", "ground", "holders"], show: (e) => ["enemies", "allies"].includes(e.affects) },
   { key: "radius", type: "number", label: "radius ft", min: 0, show: (e) => ["enemies", "allies"].includes(e.affects) },
@@ -356,6 +362,7 @@ const statusEffectFields = (made, nested = false) => [
   { key: "chance", type: "number", min: 0, hint: "0 to 1, 1 by default", show: is("trigger") },
   { key: "atMax", label: "at max stacks", type: "check", show: triggerOn("statusGained") },
   { key: "resets", label: "takes the stacks off", type: "check", show: (e) => e.type === "trigger" && (e.atMax || e.atStacks) },
+  { key: "spendsStack", label: "takes a stack each time", type: "check", show: is("trigger") },
   { key: "of", label: "watches", type: "select", none: "the holder", options: ["caster"], show: is("trigger") },
   { key: "notOnHolder", label: "not on the holder", type: "check", show: is("trigger") },
   { key: "every", label: "every nth", type: "number", min: 1, hint: "fires only on every this-many-th time, or for spend every this many points", show: is("trigger") },
@@ -379,6 +386,7 @@ export const statusFields = (made) => [
   { key: "duration", label: "duration s", type: "number", min: 0, hint: "leave it out for one that lasts until removed" },
   { key: "stacking", type: "select", none: "refresh", options: ["replace", "stack"] },
   { key: "maxStacks", label: "max stacks", type: "number", min: 1, step: 1, show: (s) => s.stacking === "stack" },
+  { key: "limit", label: "how many can hold it", type: "number", min: 1, step: 1 },
   { key: "group", hint: "only one status of a group at a time; a new one replaces the old" },
   { key: "breaksOn", label: "breaks on", type: "multi", options: ["move", "damage", "action"] },
   { key: "keptBy", label: "kept by", type: "group", show: (s) => s.breaksOn?.includes("action"), fields: [{ key: "abilities", type: "multi", options: abilitiesOf(made) }, { key: "tags", type: "words", label: "or tags" }] },

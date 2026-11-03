@@ -3,7 +3,7 @@ import { gameDataPath, isClassPath } from "../world/paths.js";
 
 // A class, as the world keeps it in classes/<id>.json.
 
-const BUILT_IN_CHANGES = new Set(["cost", "cooldown", "amount", "absorb", "lockout", "cone", "distance", "limit", "uses", "delay", "cooldownRate", "tickRate", "channelDuration", "channelTicks", "castTime", "charges", "range", "radius", "maxTargets", "duration", "damage", "healing", "critChance", "critDamage", "maxStacks", "mastery", "every", "others"]);
+const BUILT_IN_CHANGES = new Set(["cost", "cooldown", "amount", "absorb", "lockout", "cone", "distance", "limit", "uses", "delay", "cooldownRate", "tickRate", "channelDuration", "channelTicks", "castTime", "charges", "range", "radius", "maxTargets", "duration", "damage", "healing", "critChance", "critDamage", "maxStacks", "mastery", "every", "others", "stacks"]);
 
 export const classPath = (id) => gameDataPath("classes", id);
 
@@ -60,7 +60,8 @@ export function classProblems(made) {
     (e.amount?.shareOf?.statuses ?? []).forEach((id) => status(where, id));
     (e.holding ?? []).forEach((id) => status(where, id));
     conditions(where, e.when);
-    if (e.type === "status" || e.type === "consume") status(where, e.status);
+    if (e.type === "status" || (e.type === "consume" && !e.statuses)) status(where, e.status);
+    (e.type === "extend" || e.type === "consume" ? (e.statuses ?? []) : []).forEach((id) => status(where, id));
     if (e.type === "resource") resource(where, e.resource);
     if (e.type === "area") {
       if (e.status) status(where, e.status);

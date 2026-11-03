@@ -54,6 +54,11 @@
       "type": "integer",
       "minimum": 1
     },
+    "limit": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "how many units can hold it from you at once. Applying it to another takes it off the oldest"
+    },
     "breaksOn": {
       "type": "array",
       "items": {
@@ -168,6 +173,13 @@
           "set": {
             "type": "number",
             "description": "modify: makes it this. Applied before `add` and `multiply`"
+          },
+          "spendsStack": {
+            "type": [
+              "boolean",
+              "string"
+            ],
+            "description": "trigger: takes a stack of this status, or of the one named, each time it fires"
           },
           "of": {
             "enum": [
@@ -458,7 +470,7 @@
           },
           "change": {
             "type": "string",
-            "description": "modify: what changes, one of cost, cooldown, cooldownRate, tickRate, channelDuration, channelTicks, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, maxStacks, mastery, every, others, amount, absorb, lockout, cone, distance, limit, uses, delay, or a param its target names"
+            "description": "modify: what changes, one of cost, cooldown, cooldownRate, tickRate, channelDuration, channelTicks, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, maxStacks, mastery, every, others, stacks, amount, absorb, lockout, cone, distance, limit, uses, delay, or a param its target names"
           },
           "addEffects": {
             "type": "array",

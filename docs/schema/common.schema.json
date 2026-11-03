@@ -789,7 +789,8 @@
             "cooldown",
             "summon",
             "command",
-            "area"
+            "area",
+            "extend"
           ]
         },
         "affects": {
@@ -800,7 +801,8 @@
             "allies",
             "summons",
             "holder",
-            "caster"
+            "caster",
+            "hit"
           ]
         },
         "around": {
@@ -847,6 +849,45 @@
         },
         "amount": {
           "$ref": "#/$defs/amount"
+        },
+        "seconds": {
+          "type": "number",
+          "description": "extend: seconds added. consume: only this much of its time goes"
+        },
+        "perSpent": {
+          "type": "number",
+          "description": "extend: seconds added for each point spent"
+        },
+        "refresh": {
+          "type": "boolean",
+          "description": "extend: starts its duration over instead"
+        },
+        "apply": {
+          "type": "boolean",
+          "description": "extend: applies it if it is not on yet"
+        },
+        "maxShare": {
+          "type": "number",
+          "description": "extend: the most it can be extended by, as a share of its full duration"
+        },
+        "dealsLeft": {
+          "type": "number",
+          "description": "consume: does this share of what it had left to do now"
+        },
+        "keeps": {
+          "type": "boolean",
+          "description": "consume: with dealsLeft, leaves the status on"
+        },
+        "perStack": {
+          "$ref": "#/$defs/effect",
+          "description": "consume: this effect happens once for each stack taken"
+        },
+        "creatureTypes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/creatureType"
+          },
+          "description": "only those of these types"
         },
         "drain": {
           "type": "number",
