@@ -95,6 +95,7 @@ func (p *Player) enterFight(class *combat.Class) {
 	f.resources, f.cooldowns = map[string]float64{}, map[string][]time.Time{}
 	if class == nil {
 		f.vitals.MaxHealth, f.vitals.Health = 100, 100
+		p.state.Health, p.state.MaxHealth = 100, 100
 		return
 	}
 	f.class = class

@@ -366,3 +366,11 @@ func TestCombatDebugIsForAdmins(t *testing.T) {
 		t.Fatal("it turned on")
 	}
 }
+
+func TestACharacterWithNoClassEntersWithHealth(t *testing.T) {
+	h := NewHub(fightWorld{}, characters(nil))
+	you := next(t, enter(t, h, 1))["you"].(map[string]any)
+	if you["health"] != 100.0 || you["maxHealth"] != 100.0 {
+		t.Fatalf("you = %v", you)
+	}
+}
