@@ -315,6 +315,7 @@ const statusEffectFields = (made, nested = false) => [
   { key: "into", label: "looks like", type: "select", none: "pick one", options: unitsOf(made), show: is("transform") },
   { key: "perTargetHit", label: "more per target hit", type: "number", show: (e) => e.type === "modify" && e.change },
   { key: "maxTotal", label: "at most", type: "number", min: 0, show: (e) => e.type === "modify" && e.change },
+  { key: "ignores", type: "multi", options: ["cooldown", "requires"], show: (e) => e.type === "modify" && e.abilities?.length },
   { key: "addTags", label: "adds tags", type: "words", show: (e) => e.type === "modify" && !e.change },
   { key: "abilities", type: "multi", options: abilitiesOf(made), show: is("modify", "trigger", "stat") },
   { key: "tag", label: "or tag", show: is("modify", "trigger", "stat") },

@@ -147,7 +147,7 @@ export function classProblems(made) {
         (e.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} modifies an ability this class doesn't have (${id}).`));
         if (e.change && !BUILT_IN_CHANGES.has(e.change) && !e.tag) {
           const targets = [...(made.abilities ?? []).filter((a) => e.abilities?.includes(a.id)), ...(made.statuses ?? []).filter((t) => e.statuses?.includes(t.id))];
-          targets.filter((t) => !(t.effects ?? []).some((f) => f.param === e.change)).forEach((t) => problems.push(`${where} changes "${e.change}", which ${t.name || t.id} doesn't name.`));
+          targets.filter((t) => !(t.effects ?? []).some((f) => f.param === e.change || f.effect?.param === e.change)).forEach((t) => problems.push(`${where} changes "${e.change}", which ${t.name || t.id} doesn't name.`));
         }
         (e.addEffects ?? []).forEach((added) => effect(where, added));
         (e.statusEffects ?? []).forEach((added) => {

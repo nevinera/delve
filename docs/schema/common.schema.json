@@ -1175,6 +1175,13 @@
           },
           "description": "which of these the target has"
         },
+        "weights": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "status id to how many it counts as, 1 by default"
+        },
         "unitsOut": {
           "type": "array",
           "items": {

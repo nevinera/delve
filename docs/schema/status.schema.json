@@ -468,7 +468,17 @@
           },
           "overrides": {
             "type": "object",
-            "description": "modify of statuses: replaces these keys of the status's definition, for things that aren't numbers. null removes one"
+            "description": "modify: replaces these keys of the status's or ability's definition, for things that aren't numbers. null removes one"
+          },
+          "ignores": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "cooldown",
+                "requires"
+              ]
+            },
+            "description": "modify of abilities: they can be used through these"
           },
           "param": {
             "type": "string",
