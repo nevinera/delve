@@ -1,10 +1,10 @@
 import { SOUNDS, VISUALS } from "../abilities/stock.js";
 import { ARMOR_TYPES } from "../character/armor.js";
 import { HELD, OFFHANDS } from "../character/weapons.js";
+import { TALENT_TIERS, TALENT_TIER_STEP } from "./classFile.js";
 
 // What the class editor's forms hold, by the formats in formats.md. Fields that pick a status or a
 // resource take their options from the class being edited.
-
 const SCHOOLS = ["physical", "holy", "fire", "nature", "frost", "shadow", "arcane"];
 const DISPELS = ["magic", "curse", "poison", "disease", "enrage"];
 const CREATURE_TYPES = ["beast", "humanoid", "undead", "elemental", "demon", "dragonkin", "giant", "mechanical", "aberration", "critter"];
@@ -174,6 +174,47 @@ export const classFields = (made) => [
       { key: "abilities", type: "multi", options: abilitiesOf(made) },
       { key: "autocast", type: "multi", options: abilitiesOf(made) },
     ],
+  },
+  {
+    key: "specializations",
+    type: "list",
+    one: "specialization",
+    blank: () => ({ id: "", name: "" }),
+    fields: [
+      { key: "id" },
+      { key: "name" },
+      { key: "description" },
+      { key: "status", type: "select", none: "none", options: statusesOf(made) },
+      { key: "abilities", type: "multi", options: abilitiesOf(made) },
+    ],
+  },
+  {
+    key: "talents",
+    type: "group",
+    fields: TALENT_TIERS.map((level) => ({
+      key: String(level),
+      label: `level ${level}`,
+      type: "list",
+      one: "talent",
+      blank: () => ({ id: "", name: "", grants: [{}] }),
+      fields: [
+        { key: "id" },
+        { key: "name" },
+        { key: "description" },
+        { key: "requires", type: "select", none: "nothing", options: () => (made.talents?.[level - TALENT_TIER_STEP] ?? []).map((t) => [t.id, t.name || t.id]) },
+        {
+          key: "grants",
+          type: "list",
+          one: "grant",
+          blank: () => ({}),
+          fields: [
+            { key: "status", type: "select", none: "none", options: statusesOf(made) },
+            { key: "ability", type: "select", none: "none", options: abilitiesOf(made) },
+            { key: "spec", label: "only for", type: "select", none: "every specialization", options: () => (made.specializations ?? []).map((s) => [s.id, s.name || s.id]) },
+          ],
+        },
+      ],
+    })),
   },
   { key: "passives", type: "list", one: "passive", blank: () => ({ status: "", level: 1 }), fields: [{ key: "status", type: "select", none: "pick one", options: statusesOf(made) }, { key: "level", type: "number", min: 1, step: 1 }] },
   { key: "mastery", type: "group", fields: [{ key: "name" }, { key: "description", type: "area" }, { key: "status", type: "select", none: "pick one", options: statusesOf(made) }] },

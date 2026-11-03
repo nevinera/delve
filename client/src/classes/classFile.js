@@ -13,6 +13,17 @@ export const newAbility = (level = 1, random = Math.random) => ({ id: newObjectI
 
 export const newStatus = (random = Math.random) => ({ id: newObjectId(random), name: "new status", kind: "buff", effects: [] });
 
+// The levels the game offers a talent tier at. A class fills them, or leaves them empty.
+export const TALENT_TIER_STEP = 5;
+export const FIRST_TALENT_TIER = 15;
+export const LAST_TALENT_TIER = 60;
+export const TALENT_TIERS = Array.from({ length: (LAST_TALENT_TIER - FIRST_TALENT_TIER) / TALENT_TIER_STEP + 1 }, (_, i) => FIRST_TALENT_TIER + i * TALENT_TIER_STEP);
+const MIN_TALENTS_IN_TIER = 3;
+const MAX_TALENTS_IN_TIER = 6;
+const MIN_TALENTS_ON_OFFER = 2;
+const isTalentTier = (level) => level >= FIRST_TALENT_TIER && (level - FIRST_TALENT_TIER) % TALENT_TIER_STEP === 0;
+const offeredTo = (talent, spec) => talent.grants?.some((g) => !g.spec || g.spec === spec);
+
 // What in a class points at something it doesn't have: a list of sentences, for the page to show.
 export function classProblems(made) {
   const statuses = new Set((made.statuses ?? []).map((s) => s.id));
@@ -62,6 +73,40 @@ export function classProblems(made) {
     const spendsAll = (ability.cost ?? []).filter((c) => c.all).length;
     if (spendsAll > 1) problems.push(`${where} spends all of more than one resource, so it can't tell what to scale with.`);
     if (!spendsAll && (ability.effects ?? []).some((e) => e.durationPerSpent !== undefined || e.amount?.perSpent !== undefined)) problems.push(`${where} scales with points spent, but no cost spends all.`);
+  }
+  const specs = new Set((made.specializations ?? []).map((s) => s.id));
+  for (const s of made.specializations ?? []) {
+    const where = s.name || "A specialization";
+    if (s.status) status(where, s.status);
+    (s.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} grants an ability this class doesn't have (${id}).`));
+  }
+  const tiers = made.talents ?? {};
+  for (const [key, talents] of Object.entries(tiers)) {
+    const level = Number(key);
+    if (!isTalentTier(level)) problems.push(`Talents at level ${key} aren't in a tier: tiers come every ${TALENT_TIER_STEP} levels from ${FIRST_TALENT_TIER}.`);
+    if (!talents.length) continue;
+    if (talents.length < MIN_TALENTS_IN_TIER || talents.length > MAX_TALENTS_IN_TIER) problems.push(`The level ${key} tier has ${talents.length} talents, and needs ${MIN_TALENTS_IN_TIER} to ${MAX_TALENTS_IN_TIER}.`);
+    const above = tiers[level - TALENT_TIER_STEP] ?? [];
+    for (const t of talents) {
+      const where = t.name || "A talent";
+      if (t.requires && !above.some((a) => a.id === t.requires)) problems.push(`${where} requires a talent that isn't in the tier directly above (${t.requires}).`);
+      for (const g of t.grants ?? []) {
+        if (g.status) status(where, g.status);
+        if (g.ability && !abilities.has(g.ability)) problems.push(`${where} grants an ability this class doesn't have (${g.ability}).`);
+        if (g.spec && !specs.has(g.spec)) problems.push(`${where} is for a specialization this class doesn't have (${g.spec}).`);
+      }
+    }
+    for (const spec of specs.size ? specs : [undefined]) {
+      const offered = talents.filter((t) => offeredTo(t, spec));
+      const picks = above.filter((a) => offeredTo(a, spec));
+      for (const pick of picks.length ? picks : [undefined]) {
+        const open = offered.filter((t) => !t.requires || t.requires === pick?.id);
+        if (open.length < MIN_TALENTS_ON_OFFER) {
+          const who = [spec && `the ${spec} specialization`, pick && `${pick.name || pick.id} picked above`].filter(Boolean).join(" with ");
+          problems.push(`The level ${key} tier offers only ${open.length}${who ? ` to ${who}` : ""}, and has to offer at least ${MIN_TALENTS_ON_OFFER}.`);
+        }
+      }
+    }
   }
   for (const u of made.units ?? []) {
     const where = u.name || "A unit";

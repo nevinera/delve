@@ -124,6 +124,26 @@
         "$ref": "#/$defs/unit"
       }
     },
+    "specializations": {
+      "type": "array",
+      "description": "what a character picks at the level the game sets",
+      "items": {
+        "$ref": "#/$defs/specialization"
+      }
+    },
+    "talents": {
+      "type": "object",
+      "description": "what a character picks from, one per tier, by the level of the tier",
+      "additionalProperties": false,
+      "patternProperties": {
+        "^[1-9][0-9]*$": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/talent"
+          }
+        }
+      }
+    },
     "passives": {
       "type": "array",
       "items": {
@@ -255,6 +275,80 @@
         },
         "notes": {
           "type": "string"
+        }
+      }
+    },
+    "specialization": {
+      "type": "object",
+      "required": [
+        "id",
+        "name"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "common.schema.json#/$defs/id",
+          "description": "a status it has for as long as it's this, so effects can ask with when"
+        },
+        "abilities": {
+          "type": "array",
+          "items": {
+            "$ref": "common.schema.json#/$defs/id"
+          },
+          "description": "abilities only it gets"
+        }
+      }
+    },
+    "talent": {
+      "type": "object",
+      "required": [
+        "id",
+        "name",
+        "grants"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "common.schema.json#/$defs/id"
+        },
+        "name": {
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "requires": {
+          "$ref": "common.schema.json#/$defs/id",
+          "description": "a talent in the tier directly above that you have to have picked"
+        },
+        "grants": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "status": {
+                "$ref": "common.schema.json#/$defs/id"
+              },
+              "ability": {
+                "$ref": "common.schema.json#/$defs/id"
+              },
+              "spec": {
+                "type": "string",
+                "description": "only for this specialization"
+              }
+            }
+          }
         }
       }
     }

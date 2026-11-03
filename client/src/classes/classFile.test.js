@@ -134,6 +134,49 @@ describe("what's wrong with a class", () => {
     ]);
   });
 
+  describe("talents", () => {
+    const grant = (id) => ({ id, name: id, grants: [{ status: "good0001" }] });
+    const base = { statuses: [{ id: "good0001", name: "Good", effects: [] }] };
+
+    it("takes full tiers with chains from the tier above, and empty tiers", () => {
+      const talents = { 15: [grant("aaaa0001"), grant("bbbb0001"), grant("cccc0001")], 20: [], 25: [grant("dddd0001"), grant("eeee0001"), grant("ffff0001")] };
+      expect(classProblems({ ...base, talents })).toEqual([]);
+    });
+
+    it("names levels that aren't tiers and tiers of the wrong size", () => {
+      const problems = classProblems({ ...base, talents: { 12: [], 15: [grant("aaaa0001")] } });
+      expect(problems.some((p) => p.startsWith("Talents at level 12 aren't in a tier"))).toBe(true);
+      expect(problems.some((p) => p.startsWith("The level 15 tier has 1 talents"))).toBe(true);
+    });
+
+    it("needs a prerequisite in the tier directly above", () => {
+      const talents = { 15: [grant("aaaa0001"), grant("bbbb0001"), grant("cccc0001")], 20: [], 25: [{ ...grant("dddd0001"), requires: "aaaa0001" }, grant("eeee0001"), grant("ffff0001")] };
+      expect(classProblems({ ...base, talents })).toContain("dddd0001 requires a talent that isn't in the tier directly above (aaaa0001).");
+    });
+
+    it("always offers two, whatever you picked above and whatever your specialization", () => {
+      const onlyAfter = (id, pick) => ({ ...grant(id), requires: pick });
+      const chained = { 15: [grant("aaaa0001"), grant("bbbb0001"), grant("cccc0001")], 20: [grant("dddd0001"), onlyAfter("eeee0001", "aaaa0001"), onlyAfter("ffff0001", "bbbb0001")] };
+      expect(classProblems({ ...base, talents: chained })).toContain("The level 20 tier offers only 1 to cccc0001 picked above, and has to offer at least 2.");
+      const forBlood = (id) => ({ id, name: id, grants: [{ status: "good0001", spec: "blood" }] });
+      const specced = { ...base, specializations: [{ id: "blood", name: "Blood" }, { id: "frost", name: "Frost" }], talents: { 15: [forBlood("aaaa0001"), forBlood("bbbb0001"), grant("cccc0001")] } };
+      expect(classProblems(specced)).toContain("The level 15 tier offers only 1 to the frost specialization, and has to offer at least 2.");
+    });
+
+    it("names what grants and specializations point at that's gone", () => {
+      const talents = { 15: [{ id: "aaaa0001", name: "One", grants: [{ status: "gone0001" }, { ability: "gone0002" }, { status: "good0001", spec: "gone" }] }, grant("bbbb0001"), grant("cccc0001")] };
+      const specializations = [{ id: "blood", name: "Blood", status: "gone0003", abilities: ["gone0004"] }];
+      const problems = classProblems({ ...base, specializations, talents });
+      for (const expected of [
+        "One points at a status this class doesn't have (gone0001).",
+        "One grants an ability this class doesn't have (gone0002).",
+        "One is for a specialization this class doesn't have (gone).",
+        "Blood points at a status this class doesn't have (gone0003).",
+        "Blood grants an ability this class doesn't have (gone0004).",
+      ]) expect(problems).toContain(expected);
+    });
+  });
+
   it("names a param its target doesn't have", () => {
     const made = {
       statuses: [
