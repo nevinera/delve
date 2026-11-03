@@ -71,6 +71,16 @@ type expected struct {
 		At        [2]float64
 		Footholds []float64
 	}
+	CaveFloors []struct {
+		At     [2]float64
+		Ground float64
+		Floors []float64
+		Open   bool
+		Rock   []struct {
+			Y     float64
+			Solid bool
+		}
+	}
 }
 
 func near(a, b float64) bool { return math.Abs(a-b) < 1e-6 }
@@ -274,6 +284,84 @@ func firstTree(t *testing.T, g *Ground) thing {
 	}
 	t.Fatal("no tree on its own")
 	return thing{}
+}
+
+func TestGroundFindsCaveFloorsAndRockAsCreateDoes(t *testing.T) {
+	w, e := fixture(t)
+	g := w.Ground("main")
+	if len(e.CaveFloors) == 0 {
+		t.Fatal("the fixture has no caves")
+	}
+	for _, p := range e.CaveFloors {
+		s, _, err := g.At(p.At[0], p.At[1])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(s.Floors) != len(p.Floors) || s.Open != p.Open {
+			t.Errorf("%v: floors %v, open %v; want %v, %v", p.At, s.Floors, s.Open, p.Floors, p.Open)
+			continue
+		}
+		for k := range s.Floors {
+			if !near(s.Floors[k], p.Floors[k]) {
+				t.Errorf("%v: floors = %v, want %v", p.At, s.Floors, p.Floors)
+			}
+		}
+		g.mu.Lock()
+		for _, r := range p.Rock {
+			in, err := g.inCaveRock(p.At[0], r.Y, p.At[1], s.Ground)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if in != r.Solid {
+				t.Errorf("%v: in rock at %v = %v, want %v", p.At, r.Y, in, r.Solid)
+			}
+		}
+		g.mu.Unlock()
+	}
+}
+
+func TestGroundStopsMovesIntoCaveRock(t *testing.T) {
+	w, _ := fixture(t)
+	g := w.Ground("main")
+	for _, c := range []struct {
+		name     string
+		from, to [3]float64
+		want     string
+	}{
+		{"across the domed cave", [3]float64{545, -20, 425}, [3]float64{555, -20, 435}, ""},
+		{"out through its wall", [3]float64{550, -20, 450}, [3]float64{550, -20, 470}, "a cave's rock"},
+		{"down the tunnel", [3]float64{535, 4.7, 325}, [3]float64{540, -3.8, 350}, ""},
+		{"in through the mouth", [3]float64{530, 17.5, 296}, [3]float64{531.3, 12.1, 301.7}, ""},
+		{"out of rock it's in", [3]float64{550, -20, 470}, [3]float64{550, -20, 450}, ""},
+		{"over the ground", [3]float64{520, 14, 460}, [3]float64{530, 14, 470}, ""},
+	} {
+		got, err := g.Enters(c.from, c.to)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got != c.want {
+			t.Errorf("%s: Enters = %q, want %q", c.name, got, c.want)
+		}
+	}
+}
+
+func TestReadCavesRefusesBadFiles(t *testing.T) {
+	for _, text := range []string{
+		"cave 2 0 0\n",
+		"caves 3 0 0\n",
+		"caves 2 0 0\ntile 0 a\n",
+		"caves 2 0 0\ntile 0 a\nc9 00\n",
+		"caves 2 0 0\ntile 0 a\nc1 01 99999999999999\n",
+	} {
+		if _, err := readCaves([]byte(text)); err == nil {
+			t.Errorf("read %q", text)
+		}
+	}
+	for _, text := range []string{"\x1f\x8b binary", "caves 1 0 0\n"} {
+		if c, err := readCaves([]byte(text)); err != nil || len(c) != 0 {
+			t.Errorf("%q: %v, %v; want no caves", text, c, err)
+		}
+	}
 }
 
 func TestReadPlateRefusesBadPlates(t *testing.T) {

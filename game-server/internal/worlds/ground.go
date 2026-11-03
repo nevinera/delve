@@ -30,6 +30,10 @@ type Sample struct {
 	Water  float64 // the water's surface over the cell, or NaN
 	// Footholds are the heights of slab faces there gentle enough to stand on (Slab.Footholds).
 	Footholds []float64
+	// Floors are the smoothed floors of caves under the ground there, and Open is whether a cave
+	// opens the ground itself, at a mouth, so it isn't there to stand on.
+	Floors []float64
+	Open   bool
 }
 
 // Ground reads one continent's ground, a plate at a time as it's needed, and keeps what it's read.
@@ -37,6 +41,7 @@ type Ground struct {
 	path, prefix, continent string // the world's zip, its top directory
 	mu                      sync.Mutex
 	plates                  map[[2]int]*plate
+	caves                   map[[2]int]caves
 	boulders                []thing // across courses' cascades, once water.json's read
 	bouldersRead            bool
 }
@@ -59,7 +64,7 @@ func (w *World) Ground(continent string) *Ground {
 	if w.path == "" {
 		return nil
 	}
-	return &Ground{path: w.path, prefix: w.prefix, continent: continent, plates: map[[2]int]*plate{}}
+	return &Ground{path: w.path, prefix: w.prefix, continent: continent, plates: map[[2]int]*plate{}, caves: map[[2]int]caves{}}
 }
 
 // At samples the ground at continent feet (x, z). ok is always true: off the tiles is sea.
@@ -80,6 +85,11 @@ func (g *Ground) At(x, z float64) (s Sample, ok bool, err error) {
 	} else if wet {
 		s.Water = level
 	}
+	if found {
+		if s.Floors, s.Open, err = g.caveFloors(x, z, h); err != nil {
+			return s, false, err
+		}
+	}
 	slabs, err := g.slabsNear(x, z, 0)
 	for _, slab := range slabs {
 		s.Footholds = append(s.Footholds, slab.Footholds(x, z, MaxClimb)...)
@@ -88,12 +98,17 @@ func (g *Ground) At(x, z float64) (s Sample, ok bool, err error) {
 }
 
 // Enters is what the straight move from a to b (continent feet, the feet's height) runs into, or
-// "": a slab at a character's body height, from a step over its feet up to its eyes, or a tree
-// or object. What it starts in doesn't stop it moving.
+// "": a slab or a cave's rock at a character's body height, from a step over its feet up to its
+// eyes, or a tree or object. What it starts in doesn't stop it moving.
 func (g *Ground) Enters(a, b [3]float64) (string, error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
 	reach := math.Hypot(b[0]-a[0], b[2]-a[2])
+	if into, err := g.entersCaveRock(a, b, reach); err != nil {
+		return "", err
+	} else if into {
+		return "a cave's rock", nil
+	}
 	slabs, err := g.slabsNear((a[0]+b[0])/2, (a[2]+b[2])/2, reach/2)
 	if err != nil {
 		return "", err
@@ -130,6 +145,36 @@ func (g *Ground) Enters(a, b [3]float64) (string, error) {
 // bodyHeights are the heights over the feet a move is checked against slabs at: over a step, up
 // to the eyes.
 var bodyHeights = []float64{2, 3.5, 5}
+
+// entersCaveRock is whether the move from a to b, `reach` across, goes into a cave's rock at a
+// body height it didn't start in, checked every half foot along it. The lock is held.
+func (g *Ground) entersCaveRock(a, b [3]float64, reach float64) (bool, error) {
+	near, err := g.nearCaves(b[0], b[2])
+	if err != nil || !near {
+		return false, err
+	}
+	in := func(p [3]float64, up float64) (bool, error) {
+		ground, found, err := g.heightAt(p[0], p[2])
+		if err != nil || !found {
+			return false, err
+		}
+		return g.inCaveRock(p[0], p[1]+up, p[2], ground)
+	}
+	steps := max(1, int(math.Ceil(reach/0.5)))
+	for _, up := range bodyHeights {
+		if started, err := in(a, up); started || err != nil {
+			continue
+		}
+		for n := 1; n <= steps; n++ {
+			u := float64(n) / float64(steps)
+			p := [3]float64{a[0] + (b[0]-a[0])*u, a[1] + (b[1]-a[1])*u, a[2] + (b[2]-a[2])*u}
+			if into, err := in(p, up); into || err != nil {
+				return into, err
+			}
+		}
+	}
+	return false, nil
+}
 
 // inside is whether (x, z) is inside the thing's footprint by more than leeway.
 func (t thing) inside(x, z float64) bool {

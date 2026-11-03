@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"math"
+	"slices"
 	"time"
 
 	"github.com/delve-mmo/delve3d/game-server/internal/worlds"
@@ -12,8 +13,8 @@ import (
 // Movement checks: each report a client sends has to follow from the one before, at the speeds a
 // character can move, by the clocks of both. Where the world's ground is known, the character also
 // has to keep to it: not under it, not floating over it or over deep water, not swimming out of
-// water, and not up slopes too steep to climb. Slabs are ground too, to stand on, and it can't
-// move into one, nor into a tree or an object.
+// water, and not up slopes too steep to climb. Slabs and caves' floors are ground too, to stand on,
+// and it can't move into a slab or a cave's rock, nor into a tree or an object.
 
 // Speeds and jumping, feet and seconds, as client/src/play/walker.js moves characters.
 const (
@@ -91,8 +92,8 @@ type motion struct {
 type footing struct {
 	known  bool    // the ground was known there
 	ground float64 // the ground's height
-	stand  float64 // where the feet rest: the ground, a swimming depth in deep water, or a slab
-	slab   bool    // they rest on a slab
+	stand  float64 // where the feet rest: the ground, a swimming depth in deep water, a slab or a cave's floor
+	slab   bool    // they rest on a slab or a cave's floor
 	deep   bool    // water too deep to stand in
 	on     bool    // the feet were where they rest
 }
@@ -235,15 +236,15 @@ func (m *motion) onGround(r incoming, t float64, g Ground) (footing, string) {
 		f.stand = s.Water - swimDepth
 	}
 	y := r.At[1]
-	// The highest slab within reach of the feet holds them, when it's over the ground or they're
-	// under it.
+	// The highest slab or cave floor within reach of the feet holds them, when it's over the
+	// ground or they're under it. Where a cave's mouth opens the ground, the ground holds nothing.
 	best := math.Inf(-1)
-	for _, top := range s.Footholds {
+	for _, top := range append(slices.Clone(s.Footholds), s.Floors...) {
 		if top <= y+slackFt {
 			best = math.Max(best, top)
 		}
 	}
-	if best > f.stand || (!math.IsInf(best, -1) && y < s.Ground-underFt) {
+	if best > f.stand || (!math.IsInf(best, -1) && (y < s.Ground-underFt || s.Open)) {
 		f.stand, f.slab, f.deep = best, true, false
 	}
 	f.on = y <= f.stand+slackFt
@@ -254,7 +255,7 @@ func (m *motion) onGround(r incoming, t float64, g Ground) (footing, string) {
 	}
 	last := m.footing
 
-	if y < s.Ground-underFt && !f.slab {
+	if y < s.Ground-underFt && !f.slab && !s.Open {
 		return f, fmt.Sprintf("went %.0f ft under the ground", s.Ground-y)
 	}
 	if swimming && !f.deep && !(last.known && last.deep) {

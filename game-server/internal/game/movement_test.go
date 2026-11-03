@@ -419,3 +419,38 @@ func TestWalkingIntoASlab(t *testing.T) {
 		t.Errorf("why = %q", why)
 	}
 }
+
+// caved is level ground at 50 with a cave under it, its floor at 20 from x = 100 to 300, and a
+// mouth from x = 70 sloping down to it, open to the sky.
+type caved struct{}
+
+func (caved) floor(x float64) float64 { return 50 - math.Max(0, math.Min(30, x-70)) }
+
+func (c caved) At(x, z float64) (worlds.Sample, bool, error) {
+	s := worlds.Sample{Ground: 50, Water: math.NaN()}
+	if x > 70 && x < 100 {
+		s.Floors, s.Open = []float64{c.floor(x)}, true
+	} else if x >= 100 && x <= 300 {
+		s.Floors = []float64{20}
+	}
+	return s, true, nil
+}
+
+func (caved) Enters(from, to [3]float64) (string, error) { return "", nil }
+
+func TestWalkingIntoACave(t *testing.T) {
+	r := onGround(t, caved{}, 50)
+	r.at[0] = 60
+	r.want(accept, 0.1, 60, 50, 100, running)
+	for x := 65.0; x <= 150; x += 5 {
+		r.want(accept, 0.25, x, caved{}.floor(x), 100, nil)
+	}
+	// Under the ground where there's no cave isn't.
+	r = onGround(t, caved{}, 20)
+	r.at[0] = 290
+	r.want(accept, 0.1, 290, 20, 100, running)
+	r.want(accept, 0.4, 298, 20, 100, nil)
+	if why := r.want(correct, 0.25, 303, 20, 100, nil); !strings.Contains(why, "under the ground") {
+		t.Errorf("why = %q", why)
+	}
+}

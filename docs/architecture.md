@@ -83,10 +83,10 @@ The game server (`game-server/`) holds every character in a world. Browsers conn
 
 - `internal/token` checks entry tokens, which Rails signs (`Game::EntryToken`).
 - `internal/worlds` downloads each released commit's zip once, keeps it on disk, and reads a version 2 world's continents and spawn point. It reads a continent's plates and placed files as characters reach them, and samples the ground as `/create`'s builder walks it: heights pressed down by level slabs, water, slabs, objects placed by hand, the trees and objects in the tiles' slots (`fill.go`, by a copy of `client/src/v2/fill.json`), and boulders across courses' cascades from `water.json`. Off the tiles is sea. `testdata/world.mjs` writes its test world and what `/create` makes of it, with the client's own code.
-- `internal/game` places characters on a layer, works out who's near whom (the 3×3 tiles around each), checks that their movement adds up (speed, clocks, rising and falling, the ground and slabs under them, and not walking into slabs, trees or objects), and passes it on.
+- `internal/game` places characters on a layer, works out who's near whom (the 3×3 tiles around each), checks that their movement adds up (speed, clocks, rising and falling, the ground, slabs and cave floors under them, and not walking into slabs, cave rock, trees or objects), and passes it on.
 - `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token, and writes their positions back to it (`WorldCharacter`, one per character per world). The server never writes to the database itself.
 
-Bots play characters, so you can test with others around: `script/game/bot` (code in `lib/bot/`) enters a released world as a character, the way the play page does, and runs a strategy. A bot fetches plates and placed files from GitHub and walks the ground as the game server reads it, stopping at slabs, trees and objects in its way. It doesn't know about the boulders across cascades. `null` stands still, and `follow` runs after a named character.
+Bots play characters, so you can test with others around: `script/game/bot` (code in `lib/bot/`) enters a released world as a character, the way the play page does, and runs a strategy. A bot fetches plates and placed files from GitHub and walks the ground as the game server reads it, stopping at slabs, trees and objects in its way. It doesn't know about the boulders across cascades, or about caves. `null` stands still, and `follow` runs after a named character.
 
 ## Docs
 

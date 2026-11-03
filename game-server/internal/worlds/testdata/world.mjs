@@ -1,7 +1,7 @@
 // Writes the fixtures the worlds tests read: a small version 2 world in world/, written by the
 // client's own codecs, and in expected.json what /create finds on it: the ground's height and
 // water at points, what stands in each tile's slots and across the course's cascades, where
-// objects placed by hand stand, and footholds on the slabs.
+// objects placed by hand stand, footholds on the slabs, and the caves' floors and rock.
 //
 //   node game-server/internal/worlds/testdata/world.mjs
 import { register } from "node:module";
@@ -24,6 +24,8 @@ const { Things } = await client("create/things.js");
 const { pressesOver } = await client("create/press.js");
 const { slabFootholds } = await client("world/slabs.js");
 const { trunkRadius } = await client("render/treeMeshes.js");
+const { carve, encodeCaves, emptyColumns, floorAt, tileIndex } = await client("v2/caves.js");
+const { Caves } = await client("create/caves.js");
 
 const here = new URL(".", import.meta.url);
 const TILE_FT = 256;
@@ -79,11 +81,42 @@ for (let tz = 0; tz <= 2; tz++) {
     plates.get(`${px},${pz}`).set((tz - pz * 8) * 8 + (tx - px * 8), tile(tx, tz));
   }
 }
-// Plate 0,0's heights are kept a line a chunk; plate -1,0's zipped, once the zipper's loaded.
 const files = new Map();
+// Caves: a tunnel down from a mouth at (530, 300) to a domed cave, with a pocket in another
+// network under its floor, a lone pocket deep in tile 0,0 and two far apart in heights in tile 1,0.
+// Plate -1,0's are written before the zipper's loaded, a pocket, a cave and two big caves far
+// apart in heights, so their cells take forms c1, c2 and c3.
+const caveTiles = new Map();
+const columnsOf = (tx, tz, make) => {
+  const key = `${tx},${tz}`;
+  if (!caveTiles.has(key) && make) caveTiles.set(key, emptyColumns());
+  return caveTiles.get(key) ?? null;
+};
+const caveGround = (ci, cj) => heightAt((ci + 0.5) * 2, (cj + 0.5) * 2);
+for (let n = 0; n <= 40; n++) {
+  const u = n / 40;
+  carve({ kind: "sphere", at: [530 + 20 * u, 17 - 33 * u, 300 + 100 * u], radius: 5 }, columnsOf, caveGround, { net: "tunnel" });
+}
+carve({ kind: "dome", at: [550, -20, 430], radii: [30, 20, 30], yaw: 0.3 }, columnsOf, caveGround, { net: "tunnel" });
+carve({ kind: "sphere", at: [565, -45, 430], radius: 6 }, columnsOf, caveGround, { net: "under" });
+carve({ kind: "sphere", at: [60, -30, 60], radius: 3 }, columnsOf, caveGround, { net: "lone" });
+carve({ kind: "sphere", at: [300, -1100, 60], radius: 3 }, columnsOf, caveGround, { net: "far" });
+carve({ kind: "sphere", at: [310, -10, 60], radius: 3 }, columnsOf, caveGround, { net: "far" });
+carve({ kind: "sphere", at: [-100, -30, 100], radius: 3 }, columnsOf, caveGround, { net: "west" });
+carve({ kind: "sphere", at: [-128, -20, 384], radius: 20 }, columnsOf, caveGround, { net: "west" });
+carve({ kind: "cylinder", at: [-128, -1100, 640], radius: 64, half: [64, 3, 64] }, columnsOf, caveGround, { net: "west" });
+carve({ kind: "cylinder", at: [-128, -20, 640], radius: 64, half: [64, 3, 64] }, columnsOf, caveGround, { net: "west" });
+const cavesOf = (west) =>
+  new Map([...caveTiles].filter(([key]) => key.startsWith("-") === west).map(([key, columns]) => [tileIndex(...key.split(",").map(Number)), columns]));
+const cellForms = (bytes) => new TextDecoder().decode(bytes).split("\n").filter((l) => /^c\d/.test(l)).map((l) => l.split(" ")[0]);
+files.set("places/continents/main/caves/-1_0.caves", encodeCaves([-1, 0], cavesOf(true)));
+
+// Plate 0,0's heights are kept a line a chunk; plate -1,0's zipped, once the zipper's loaded.
 files.set("places/continents/main/plates/0_0.plate", encodePlate({ coords: [0, 0], tiles: plates.get("0,0") }));
 await loadZipper();
 files.set("places/continents/main/plates/-1_0.plate", encodePlate({ coords: [-1, 0], tiles: plates.get("-1,0") }));
+files.set("places/continents/main/caves/0_0.caves", encodeCaves([0, 0], cavesOf(false)));
+console.log(`caves cells: ${["-1_0", "0_0"].flatMap((key) => cellForms(files.get(`places/continents/main/caves/${key}.caves`))).join(", ")}`);
 
 const square = (n) => [[0, 0], [n, 0], [n, n], [0, n]];
 const floorY = heightAt(100, 500) + 1;
@@ -152,5 +185,14 @@ const standing = p.near(0, 0, 10).objects.map((o) => ({ type: o.type, at: o.at, 
 const slabPoints = [[110, 510], [110, 499.5], [110, 498], [135, 510], [149, 510], [111, 499], [160, 510]];
 const footholds = slabPoints.map(([x, z]) => ({ at: [x, z], footholds: placed.slabs.flatMap((slab) => slabFootholds(slab, x, z, Math.tan((50 * Math.PI) / 180))) }));
 
-fs.writeFileSync(new URL("expected.json", here), `${JSON.stringify({ ground, fills, standing, footholds })}\n`);
+// Floors and rock in the caves, as /create stands on them and keeps the builder out of them.
+const caves = new Caves(new THREE.Scene(), r);
+for (const key of ["-1_0", "0_0"]) caves.load(files.get(`places/continents/main/caves/${key}.caves`), key.split("_").map(Number));
+const cavePoints = [[530, 300], [531.3, 301.7], [535, 325], [540, 350], [545.5, 377.3], [550, 430], [553.1, 427.9], [565, 430], [566.2, 431.5], [575, 445], [520, 460], [60, 60], [310, 60], [300, 60], [500, 200], [-100, 100], [-128, 384], [-120.5, 390.7], [-128, 640], [-100, 600]];
+const caveFloors = cavePoints.map(([x, z]) => {
+  const g = r.heightAt(x, z) ?? EMPTY_FT;
+  const spans = caves.spans(Math.floor(x / 2), Math.floor(z / 2));
+  return { at: [x, z], ground: g, floors: spans.filter((s) => s.floor <= g).map((s) => floorAt((ci, cj) => caves.spans(ci, cj), x, z, s)), open: spans.some((s) => s.floor < g && g < s.ceiling), rock: [-60, -45, -30, -20, -10, 0, 10, 20].map((y) => ({ y, solid: caves.near(x, z) && caves.solid(x, y, z) && y < g })) };
+});
+fs.writeFileSync(new URL("expected.json", here), `${JSON.stringify({ ground, fills, standing, footholds, caveFloors })}\n`);
 console.log(`${ground.length} points, ${fills.reduce((n, f) => n + f.things.length, 0)} things, ${standing.length} placed objects`);

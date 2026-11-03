@@ -1,6 +1,6 @@
 # Caves
 
-A version 2 world keeps its caves in a text file for each plate (8×8 tiles, 2,048 ft square) that has any. Code: `client/src/v2/caves.js`.
+A version 2 world keeps its caves in a text file for each plate (8×8 tiles, 2,048 ft square) that has any. Code: `client/src/v2/caves.js`, and the game server's reader in `game-server/internal/worlds/caves.go`.
 
 ```
 places/continents/<continent>/caves/<px>_<pz>.caves
