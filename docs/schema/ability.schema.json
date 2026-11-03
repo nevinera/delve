@@ -43,6 +43,40 @@
         "none"
       ]
     },
+    "animation": {
+      "enum": [
+        "attack",
+        "offhandAttack",
+        "dualAttack",
+        "bigAttack",
+        "spinningAttack",
+        "stab",
+        "kick",
+        "spinningKick",
+        "punch",
+        "shieldBash",
+        "groundSlam",
+        "shoot",
+        "aimedShot",
+        "rapidShot",
+        "throw",
+        "cast",
+        "castBig",
+        "castChannel",
+        "castGround",
+        "castOverhead",
+        "castSelf",
+        "castOnAlly",
+        "pray",
+        "shout",
+        "breath",
+        "roll",
+        "drink",
+        "transform",
+        "none"
+      ],
+      "description": "what the body does as it uses it, by what it looks like and not by clip. Left out, it goes by the range and school"
+    },
     "range": {
       "$ref": "common.schema.json#/$defs/distance"
     },

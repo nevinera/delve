@@ -37,6 +37,11 @@ describe("the class editor's fields", () => {
     expect(missing(schema("class").properties, classes, ["id", "abilities", "statuses"])).toEqual([]);
   });
 
+  it("offer every animation", () => {
+    const field = fieldOf(abilities, "animation");
+    expect([...field.options, ...field.more].sort()).toEqual([...ability.animation.enum].sort());
+  });
+
   it("reach every part of a look", () => {
     expect(Object.keys(DEFAULT_LOOK).filter((key) => !keysOf(lookFields()).has(key))).toEqual([]);
   });

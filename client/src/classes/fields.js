@@ -14,6 +14,8 @@ const CREATURE_TYPES = ["beast", "humanoid", "undead", "elemental", "demon", "dr
 const STATS = ["strength", "agility", "intellect", "stamina", "armor", "critRating", "hasteRating", "masteryRating", "versatilityRating", "leechRating", "avoidanceRating", "speedRating", "attackPower", "spellPower", "maxHealth", "resourceMax", "resourceRegen", "resourceRest", "resourceDecay", "resourceGain", "critChance", "critDamage", "critHealing", "critTaken", "haste", "mastery", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed", "stealth", "detection", "damageDone", "healingDone", "damageTaken", "healingTaken", "threat"];
 const COMMON_STATS = ["strength", "agility", "intellect", "stamina", "armor", "attackPower", "spellPower", "maxHealth", "critChance", "haste", "movementSpeed", "damageDone", "healingDone", "damageTaken"];
 const HITS = ["auto", "ability", "melee", "direct", "periodic", "area", "main", "others", "single"];
+const COMMON_ANIMATIONS = ["attack", "bigAttack", "shoot", "cast", "castBig", "castChannel"];
+const MORE_ANIMATIONS = ["offhandAttack", "dualAttack", "spinningAttack", "stab", "kick", "spinningKick", "punch", "shieldBash", "groundSlam", "aimedShot", "rapidShot", "throw", "castGround", "castOverhead", "castSelf", "castOnAlly", "pray", "shout", "breath", "roll", "drink", "transform", "none"];
 const WHEN = ["cast", "launch", "impact", "channel"];
 const ON = ["caster", "target", "ground"];
 
@@ -503,6 +505,7 @@ export const abilityFields = (made) => [
   { key: "charges", type: "number", min: 1, step: 1, advanced: "casting" },
   { key: "cooldownHasted", label: "cooldown hasted", type: "check", advanced: "casting" },
   { key: "replaces", type: "select", none: "nothing", options: abilitiesOf(made), advanced: "casting" },
+  { key: "animation", type: "select", none: "by its range and school", options: COMMON_ANIMATIONS, more: MORE_ANIMATIONS, advanced: "look and sound" },
   {
     key: "visuals",
     type: "list",
