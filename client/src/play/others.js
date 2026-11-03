@@ -3,7 +3,7 @@ import { characterClips, loadAnimations, strideRate } from "../character/animati
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
 import { TURN_RATE } from "../character/posed.js";
 import { resolveRecipe } from "../character/recipe.js";
-import { BACK_FT, GAITS, GRAVITY, JUMP_FT, RUN_FT, SPRINT, SWIM_FT, WALK_FT } from "./walker.js";
+import { BACK_FT, GAITS, GRAVITY, JUMP_FT, RUN_FT, SPRINT, SWIM_FT, WALK_FT, walksDown } from "./walker.js";
 
 // The other characters near you, as the game server reports them. Each carries on moving as it
 // last said it was, between messages, and eases toward where each message says it is. Each has its
@@ -151,6 +151,7 @@ export class Others {
       const ground = walker?.standHeight(sx, sz, drawn.at.y + 2) ?? walker?.standHeight(sx, sz, Infinity);
       if (ground === null || ground === undefined) drawn.vy = 0; // off the land drawn: as they said
       else {
+        if (drawn.vy === 0 && walksDown(drawn.at.y - ground, Math.hypot(dx, dz))) drawn.at.y = ground;
         drawn.vy -= GRAVITY * dt;
         drawn.at.y += drawn.vy * dt;
         if (drawn.at.y <= ground) [drawn.at.y, drawn.vy] = [ground, 0];

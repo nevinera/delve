@@ -50,6 +50,10 @@ const CAMERA_FOLLOW = { rate: 2, least: 0.8 };
 // Frames are drawn at most the view's frame rate cap a second (60 unless the graphics settings say
 // less), so a fast display doesn't keep the GPU (shared with the rest of the screen) flat out. The
 // interval is a little under the cap's, so a display at that rate doesn't drop frames.
+// Whether feet `drop` ft over the ground, after `across` ft on it, are just going down a slope
+// gentle enough to walk: they stay on it, rather than falling.
+export const walksDown = (drop, across) => drop > 0 && drop <= across * MAX_CLIMB;
+
 export const frameDue = (last, now, fps) => last === null || now - last >= 1000 / fps - 2;
 const UP = new THREE.Vector3(0, 1, 0);
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " "]);
@@ -199,6 +203,7 @@ export class Walker {
       const close = Math.max(Math.abs(off) * (1 - Math.exp(-CAMERA_FOLLOW.rate * dt)), CAMERA_FOLLOW.least * dt);
       this.cam.yaw = Math.sign(off) * Math.max(0, Math.abs(off) - close);
     }
+    const [fromX, fromZ] = [this.pos.x, this.pos.z];
     if (length > 0) {
       this.sitting = null;
       mx = (mx / length) * speed * dt;
@@ -214,6 +219,8 @@ export class Walker {
     }
 
     const ground = this.standHeight(this.pos.x, this.pos.z) ?? this.pos.y;
+    const across = Math.hypot(this.pos.x - fromX, this.pos.z - fromZ);
+    if (this.airTime === 0 && this.vy === 0 && walksDown(this.pos.y - ground, across)) this.pos.y = ground;
     const onGround = this.pos.y <= ground + 0.01;
     if (onGround && this.held.has(" ")) {
       this.vy = JUMP_FT;

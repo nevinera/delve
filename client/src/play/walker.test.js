@@ -85,3 +85,46 @@ describe("walker on slabs", () => {
     expect(w.standHeight(345, 350, 100)).toBeCloseTo(100);
   });
 });
+
+describe("walker going downhill", () => {
+  // A hill falling away to the south at `slope`, rise over run, with the character running down it.
+  function downhill(slope) {
+    const w = Object.create(Walker.prototype);
+    const groundAt = (x, z) => 1000 - z * slope;
+    w.ground = { groundAt, waterAt: () => NaN, footholds: () => [], inWay: () => false };
+    Object.assign(w, { pos: { x: 0, y: 1000, z: 0 }, held: new Set(["w"]), cam: { yaw: 0 }, yaw: 0, vy: 0, t: 0, airTime: 0, jumpedAt: -Infinity, gait: "run" });
+    return w;
+  }
+  const run = (w, frames = 30) => {
+    for (let n = 0; n < frames; n++) w.step(1 / 60);
+  };
+
+  it("keeps its feet on a walkable slope", () => {
+    const w = downhill(Math.tan((45 * Math.PI) / 180));
+    run(w);
+    expect(w.airTime).toBe(0);
+    expect(w.pos.y).toBeCloseTo(w.standHeight(w.pos.x, w.pos.z), 5);
+  });
+
+  it("falls down a slope too steep to walk", () => {
+    const w = downhill(Math.tan((70 * Math.PI) / 180));
+    run(w);
+    expect(w.airTime).toBeGreaterThan(0.15);
+  });
+
+  it("can still jump, and leaves the ground when it does", () => {
+    const w = downhill(0.5);
+    run(w, 5);
+    w.held.add(" ");
+    run(w, 5);
+    expect(w.airTime).toBeGreaterThan(0);
+    expect(w.pos.y).toBeGreaterThan(w.standHeight(w.pos.x, w.pos.z));
+  });
+
+  it("falls off a ledge, however gentle the ground below", () => {
+    const w = downhill(0);
+    w.ground.groundAt = (x, z) => (z < 3 ? 1000 : 990);
+    run(w);
+    expect(w.airTime).toBeGreaterThan(0);
+  });
+});
