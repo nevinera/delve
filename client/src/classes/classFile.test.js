@@ -269,3 +269,13 @@ describe("classProblems and points spent", () => {
     expect(classProblems({ resources, abilities: [{ name: "Finish", cost: two, effects: [] }] })).toEqual(["Finish spends all of more than one resource, so it can't tell what to scale with."]);
   });
 });
+
+describe("classProblems: abilities pointing at abilities", () => {
+  it("finds a cast, a replacement or a modify that points outside the class", () => {
+    const base = { abilities: [{ id: "abcd0001", name: "One", replaces: "nope0001", effects: [{ type: "castAbility", affects: "target", ability: "nope0002" }] }], statuses: [{ id: "stat0001", name: "S", effects: [{ type: "modify", abilities: ["abcd0001"], becomes: "nope0003" }] }] };
+    const problems = classProblems(base).join(" ");
+    expect(problems).toContain("nope0001");
+    expect(problems).toContain("nope0002");
+    expect(problems).toContain("nope0003");
+  });
+});

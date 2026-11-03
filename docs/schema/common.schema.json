@@ -811,7 +811,8 @@
             "command",
             "area",
             "extend",
-            "extraTargets"
+            "extraTargets",
+            "castAbility"
           ]
         },
         "affects": {
@@ -956,7 +957,21 @@
         },
         "ability": {
           "$ref": "#/$defs/id",
-          "description": "command: the ability your summons use"
+          "description": "command: the ability your summons use. castAbility: the ability it casts"
+        },
+        "free": {
+          "type": "boolean",
+          "description": "castAbility: it costs nothing"
+        },
+        "strength": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "castAbility: what it does is multiplied by this"
+        },
+        "level": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "castAbility: the empowered level it casts at"
         },
         "statuses": {
           "type": "array",

@@ -71,11 +71,13 @@ export function classProblems(made) {
     }
     if (e.type === "summon" && !units.has(e.unit)) problems.push(`${where} summons a unit this class doesn't have (${e.unit}).`);
     (e.units ?? []).filter((id) => !units.has(id)).forEach((id) => problems.push(`${where} points at a unit this class doesn't have (${id}).`));
+    if (e.type === "castAbility" && !abilities.has(e.ability)) problems.push(`${where} casts an ability this class doesn't have (${e.ability}).`);
     if (e.type === "command" && !abilities.has(e.ability)) problems.push(`${where} commands an ability this class doesn't have (${e.ability}).`);
     (e.statuses ?? []).forEach((id) => status(where, id));
     if (e.type === "cooldown") (e.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} changes the cooldown of an ability this class doesn't have (${id}).`));
   };
   for (const ability of made.abilities ?? []) {
+    if (ability.replaces && !abilities.has(ability.replaces)) problems.push(`Ability ${ability.name || ability.id} replaces an ability this class doesn't have (${ability.replaces}).`);
     const where = ability.name || "An ability";
     (ability.cost ?? []).forEach((c) => resource(where, c.resource));
     conditions(where, ability.requires);
@@ -126,6 +128,7 @@ export function classProblems(made) {
   for (const s of made.statuses ?? []) {
     const where = s.name || "A status";
     conditions(where, s.when);
+    (s.effects ?? []).filter((e) => e.becomes && !abilities.has(e.becomes)).forEach((e) => problems.push(`${where} becomes an ability this class doesn't have (${e.becomes}).`));
     (s.keptBy?.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} is kept by an ability this class doesn't have (${id}).`));
     (s.consumedBy?.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} is used up by an ability this class doesn't have (${id}).`));
     for (const e of s.effects ?? []) {
