@@ -466,6 +466,10 @@
             },
             "description": "modify of `statuses`: effects they also have"
           },
+          "overrides": {
+            "type": "object",
+            "description": "modify of statuses: replaces these keys of the status's definition, for things that aren't numbers. null removes one"
+          },
           "param": {
             "type": "string",
             "description": "names this effect's number, so a modify can change it"
