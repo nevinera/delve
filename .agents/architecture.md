@@ -22,6 +22,7 @@ The client has one entry point per page (`vite.config.js`):
 | `/creatures` | `client/src/character/creatures.js` | each creature body playing its clips, by skeleton |
 | `/creature` | `client/src/character/creature.js` | one creature playing each of its roles in turn, with a control for each setting |
 | `/monster_lab` | `client/src/character/monsterLab.js` | the shipped bodies, and a world's own from its `models.json` |
+| `/classes` | `client/src/classes/main.js` | the class editor |
 | `/play/:id` | `client/src/play/main.js` | the game |
 
 `client/src/main.js` is a placeholder for the game.
@@ -33,6 +34,7 @@ The client has one entry point per page (`vite.config.js`):
 - `client/src/create/` is the world editor.
 - `client/src/render/` draws the world with three.js for `/create`, `/play` and the object builder: the ground's and water's materials, trees, objects, slabs, clutter, the sky, graphics settings and the performance overlay.
 - `client/src/play/` is the game page, and its walker, which the character builder uses too.
+- `client/src/classes/` is the class editor.
 - `client/src/objects/` is the object library: collections, its storage in the browser, and the builder pages.
 - `client/src/character/` is bodies, rigs, animations and the character and creature pages.
 - `client/src/github/github.js` is the browser's route to GitHub's API. The play page reads world files from `raw.githubusercontent.com` (`client/src/play/loader.js`).
@@ -60,7 +62,7 @@ A world also defines what you fight and meet: classes, abilities, statuses, item
 - **Tokens:** the browser gets a GitHub App user token from Rails at `GET /github/token`, as `{ token, expires_at, login }`, and fetches a new one shortly before it expires. A 401 means you need to connect GitHub (`connect_url`) or authorize again (`reauth_url`).
 - **Opening:** `/create?from=github/<owner>/<repo>` opens the head of the default branch. It lists every file at that commit with its blob sha, and downloads blobs pinned to that commit, so a branch that moves during the load doesn't mix commits. The world remembers `{ repo, branch, commitSha, shas }`, and opening again skips files whose sha hasn't changed. A repo with no `world.json` opens as a new world named after the repo, and keeps its files.
 - **Saving:** one commit on the branch the world came from. It works out each file's blob sha to find what changed, and refuses if the branch head is no longer `commitSha`. Binary files go up as blobs, and text files (`.plate`, `.platter`, `.json`, `.md`, `.txt`) go inline in the tree. Trees are built in requests of at most 10 MB of inline text and 500 files, each building on the last, because GitHub refuses a request over about 40 MB and times one out after about 10 s. A repo with no commits gets its `world.json` first through the contents API.
-- **Saving from `/objects`:** its own button commits only the library's files, on the same branch, through `client/src/create/keptSave.js`. The kept world's source moves to the new commit, and an open `/create` tab hears of it, so its next save isn't refused. `/create`'s other changes stay unsaved.
+- **Saving from `/objects` and `/classes`:** each page's own button commits only that page's files, on the same branch, through `client/src/create/keptSave.js`. The kept world's source moves to the new commit, and an open `/create` tab hears of it, so its next save isn't refused. `/create`'s other changes stay unsaved.
 - **Publishing:** a published version is a tag on a saved commit, `v1`, `v2` and so on. Publishing refuses while anything is unsaved, and when the commit is published already. Nothing checks the world first.
 
 ## Importing and releasing versions

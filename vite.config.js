@@ -22,6 +22,7 @@ export default defineConfig(({command}) => ({
         main: resolve(__dirname, "client/src/main.js"),
         create: resolve(__dirname, "client/src/create/main.js"),
         objects: resolve(__dirname, "client/src/objects/main.js"),
+        classes: resolve(__dirname, "client/src/classes/main.js"),
         play: resolve(__dirname, "client/src/play/main.js"),
         characterBuilder: resolve(__dirname, "client/src/character/builder.js"),
         characterList: resolve(__dirname, "client/src/character/list.js"),

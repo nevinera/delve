@@ -1,0 +1,20 @@
+<% content_for :title, "Delve classes" %>
+<div class="classes-page">
+  <header class="library-bar">
+    <h2>Classes</h2>
+    <span id="worldName" class="library-world"></span>
+    <a href="/create">editor</a>
+    <a href="/objects">objects</a>
+    <span class="library-spacer"></span>
+    <p id="message" class="editor-message"></p>
+    <input id="repoMessage" placeholder="what you changed" aria-label="commit message" autocomplete="off">
+    <button id="repoSave" type="button" disabled>save to GitHub</button>
+  </header>
+  <div class="classes-body">
+    <nav class="classes-nav">
+      <button id="newClass" type="button">new class</button>
+      <div id="classList"></div>
+    </nav>
+    <main id="config" class="classes-config"></main>
+  </div>
+</div>

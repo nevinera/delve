@@ -1,0 +1,46 @@
+.classes-page {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.classes-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.classes-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 200px;
+  padding: 12px;
+  overflow-y: auto;
+  border-right: 1px solid #333;
+}
+
+.classes-nav #classList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.classes-nav #classList button {
+  text-align: left;
+}
+
+.classes-config {
+  flex: 1;
+  min-width: 0;
+  padding: 12px 16px;
+  overflow-y: auto;
+}
+
+.classes-config label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}

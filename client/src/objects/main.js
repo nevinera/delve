@@ -1,11 +1,13 @@
 import "./library.css";
-import { strFromU8, strToU8, unzipSync } from "fflate";
+import { strFromU8 } from "fflate";
 import { PLACED_PATH } from "../create/placed.js";
 import { keptSource, onSourceSaved, saveKept } from "../create/keptSave.js";
 import { BranchMoved } from "../create/repo.js";
-import { keptWorld, readLibrary, writeLibrary } from "../create/store.js";
+import { KeptJson, keptFiles } from "../create/keptWorld.js";
+import { readLibrary, writeLibrary } from "../create/store.js";
 import { GithubAuthError } from "../github/github.js";
 import { LibrarySync, isLibraryPath } from "./libraryStore.js";
+import { isClassPath } from "../world/paths.js";
 import { setBuiltObjects } from "../world/objects.js";
 import { adoptStrays, builtObjects, images } from "./collections.js";
 import { ObjectLibrary } from "./library.js";
@@ -21,35 +23,6 @@ function say(message = "", { info = false } = {}) {
   $("message").classList.toggle("info", info);
 }
 
-// The JSON files of the world /create has open, path -> bytes, with its changes since it was
-// opened: its library, what's placed and world.json. Empty when it has none open.
-async function keptFiles() {
-  const kept = await keptWorld();
-  if (!kept) return new Map();
-  // A zip's bytes, or a repo's files as a Map.
-  let files = kept.bytes instanceof Map ? [...kept.bytes].filter(([path]) => path.endsWith(".json")) : Object.entries(unzipSync(kept.bytes, { filter: (file) => file.name.endsWith(".json") }));
-  const top = files.some(([path]) => path === "world.json") ? null : files[0]?.[0].split("/")[0];
-  if (top) files = files.map(([path, b]) => [path.slice(top.length + 1), b]);
-  // A change of null is a file taken away.
-  return new Map([...files, ...[...kept.changes].filter(([path]) => path.endsWith(".json"))].filter(([, b]) => b));
-}
-
-// The world's files as the library wants them: read and written as JSON.
-class World {
-  constructor(files) {
-    this.files = files;
-    this.info = files.has("world.json") ? this.readJson("world.json") : { name: "no world open in /create" };
-  }
-
-  readJson(path) {
-    return JSON.parse(strFromU8(this.files.get(path)));
-  }
-
-  writeJson(path, data) {
-    this.files.set(path, strToU8(`${JSON.stringify(data, null, 2)}\n`));
-  }
-}
-
 // How many objects of the given types (a Set) are placed in the world, in every continent.
 async function placedCount(types) {
   let count = 0;
@@ -59,7 +32,7 @@ async function placedCount(types) {
   return count;
 }
 
-const world = new World(await keptFiles());
+const world = new KeptJson(await keptFiles());
 $("worldName").textContent = world.info.name;
 const sync = new LibrarySync(
   world,
@@ -97,7 +70,7 @@ $("repoSave").addEventListener("click", async () => {
   try {
     await sync.push();
     const message = $("repoMessage").value.trim() || "Save the object library";
-    const next = await saveKept(world.files, isLibraryPath, { message, log: (text) => say(text, { info: true }) });
+    const next = await saveKept(world.files, (path) => isLibraryPath(path) && !isClassPath(path), { message, log: (text) => say(text, { info: true }) });
     if (!next) return say("Nothing's changed since the last save.", { info: true });
     $("repoMessage").value = "";
     say(`Saved ${next.commitSha.slice(0, 7)}.`, { info: true });

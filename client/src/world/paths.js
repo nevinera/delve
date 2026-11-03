@@ -30,6 +30,8 @@ export const GAME_DATA_DIRS = {
   dialogues: "dialogues",
 };
 export const gameDataPath = (kind, id) => `${GAME_DATA_DIRS[kind]}/${id}.json`;
+export const CLASS_PATH = /^classes\/[0-9a-z]{8}\.json$/;
+export const isClassPath = (path) => CLASS_PATH.test(path);
 const GAME_DATA = /^([\w-]+)\/([0-9a-z]{8})\.json$/;
 
 // The world's models (.agents/formats.md), shared by every continent: its own bodies, and the

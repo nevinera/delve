@@ -918,3 +918,7 @@ body.create {
 .create-ask::backdrop {
   background: #0008;
 }
+
+.create-page-link {
+  color: #8fc4ff;
+}

@@ -39,6 +39,7 @@ Rails.application.routes.draw do
   end
   get "play/:id" => "play#show", :as => :play
   get "objects" => "objects#show"
+  get "classes" => "classes#show"
   get "character_builder", to: redirect("/characters/new")
   resources :characters, except: [:show]
   get "animation_lab" => "animation_lab#show"
