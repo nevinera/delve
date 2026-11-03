@@ -346,6 +346,8 @@ const statusEffectFields = (made, nested = false) => [
   { key: "resource", type: "select", none: "any", options: resourcesOf(made), show: triggerOn("spend") },
   { key: "param", label: "named", hint: "a name other things can change this number by", show: is("stat", "periodic", "absorb") },
   { key: "chance", type: "number", min: 0, hint: "0 to 1, 1 by default", show: is("trigger") },
+  { key: "every", label: "every nth", type: "number", min: 1, hint: "fires only on every this-many-th time, or for spend every this many points", show: is("trigger") },
+  { key: "resetOn", label: "starts over on", type: "select", none: "never", options: TRIGGERS, show: (e) => e.type === "trigger" && e.every },
   { key: "chancePerSpent", label: "chance per point", type: "number", min: 0, show: is("trigger") },
   { key: "param", label: "named", hint: "a name other things can change this chance by", show: is("trigger") },
   { key: "cooldown", label: "cooldown s", type: "number", min: 0, show: is("trigger") },

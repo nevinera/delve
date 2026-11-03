@@ -223,7 +223,12 @@
           },
           "every": {
             "type": "number",
-            "exclusiveMinimum": 0
+            "exclusiveMinimum": 0,
+            "description": "periodic: seconds between ticks. trigger: it fires only on every this-many-th time, or for spend every this many points"
+          },
+          "resetOn": {
+            "type": "string",
+            "description": "trigger with every: this event starts the count over, like nonCrit for two crits in a row"
           },
           "does": {
             "enum": [
@@ -420,7 +425,7 @@
           },
           "change": {
             "type": "string",
-            "description": "modify: what changes, one of cost, cooldown, cooldownRate, tickRate, channelDuration, channelTicks, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, maxStacks, mastery, amount, absorb, lockout, cone, distance, limit, uses, delay, or a param its target names"
+            "description": "modify: what changes, one of cost, cooldown, cooldownRate, tickRate, channelDuration, channelTicks, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, maxStacks, mastery, every, amount, absorb, lockout, cone, distance, limit, uses, delay, or a param its target names"
           },
           "addEffects": {
             "type": "array",
