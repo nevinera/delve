@@ -2,6 +2,7 @@ import "./play.css";
 import { graphicsPanel } from "../render/graphicsPanel.js";
 import { builtObjects, images } from "../objects/collections.js";
 import { resolveRecipe } from "../character/recipe.js";
+import { Caves } from "../create/caves.js";
 import { Renditions } from "../create/ground.js";
 import { Placed } from "../create/placed.js";
 import { PLATE_FT } from "../v2/sizes.js";
@@ -13,8 +14,8 @@ import { TouchControls, isTouch } from "./touch.js";
 import { PlayView } from "./view.js";
 
 // The play page: your character in a released version 2 world, where the game server puts it. The
-// world comes from raw GitHub at the released commit: its continent's platters first, and plate
-// and placed files as you come near them. Others near you come and go as the game server says.
+// world comes from raw GitHub at the released commit: its continent's platters first, and plate,
+// placed and caves files as you come near them. Others near you come and go as the game server says.
 
 const $ = (id) => document.getElementById(id);
 const config = JSON.parse($("playConfig").textContent); // { repo, sha, paths, look, game: { url, token } }
@@ -72,14 +73,17 @@ async function play() {
   });
 
   status("Loading the land around you...");
+  let showGraphics = null;
+  const view = new PlayView($("scene"), { onGraphics: (graphics) => showGraphics?.(graphics) });
   const continent = await loader.continent(you.continent);
   const renditions = new Renditions();
   for (const bytes of continent.platters) renditions.addPlatter(bytes);
   renditions.setBiomes(continent.biomes?.areas ?? [], false);
   renditions.setWater(continent.water ?? { bodies: [], courses: [] }, false);
   renditions.fetchPlate = (coords) => loader.plate(you.continent, coords);
-  // Placed files for the plates near you, once each.
+  // Placed and caves files for the plates near you, once each.
   const placed = new Placed();
+  const caves = new Caves(view.scene, renditions);
   const fetched = new Set();
   const placedNear = (x, z) =>
     Promise.all(
@@ -88,15 +92,14 @@ async function play() {
         .filter(([px, pz]) => !fetched.has(`${px},${pz}`) && Math.hypot(x - Math.max(px * PLATE_FT, Math.min(x, (px + 1) * PLATE_FT)), z - Math.max(pz * PLATE_FT, Math.min(z, (pz + 1) * PLATE_FT))) <= PLACED_FT)
         .map(async (coords) => {
           fetched.add(coords.join(","));
-          const bytes = await loader.placed(you.continent, coords).catch((err) => (fetched.delete(coords.join(",")), Promise.reject(err)));
+          const [bytes, caveBytes] = await Promise.all([loader.placed(you.continent, coords), loader.caves(you.continent, coords)]).catch((err) => (fetched.delete(coords.join(",")), Promise.reject(err)));
           if (bytes) placed.load(coords, bytes);
+          if (caveBytes) caves.load(caveBytes, coords);
         }),
     );
   await placedNear(you.at[0], you.at[2]);
 
-  let showGraphics = null;
-  const view = new PlayView($("scene"), { onGraphics: (graphics) => showGraphics?.(graphics) });
-  view.show(renditions, placed);
+  view.show(renditions, placed, caves, continent.caveLayout);
   await view.ready([you.at[0], you.at[2]]);
   status("");
   const touch = isTouch();
@@ -117,14 +120,15 @@ async function play() {
   view.walker.yaw = you.yaw;
   connection.report(view);
   // A handle for scripts and the browser's console.
-  window.play = { view, connection, others, renditions, placed };
+  window.play = { view, connection, others, renditions, placed, caves };
   if (touch) new TouchControls(view, document.body);
   $("playResume").addEventListener("click", () => {
     $("playPaused").hidden = true;
     view.startWalk(paused, [view.walker.pos.x, view.walker.pos.z]);
   });
 
-  // Placed files come in as you get near their plates; plate files as the ground wants them.
+  // Placed and caves files come in as you get near their plates; plate files as the ground wants
+  // them.
   let fetching = false;
   setInterval(async () => {
     if (fetching || !view.walker?.pos) return;
@@ -132,7 +136,7 @@ async function play() {
     try {
       await placedNear(view.walker.pos.x, view.walker.pos.z);
     } catch (err) {
-      status(`Couldn't load what's built nearby: ${err.message}`);
+      status(`Couldn't load what's built or dug nearby: ${err.message}`);
     } finally {
       fetching = false;
     }

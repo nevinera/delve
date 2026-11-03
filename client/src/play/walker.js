@@ -335,11 +335,12 @@ export class Walker {
     return this.stand(x, z, feet)?.height ?? null;
   }
 
-  // Where the feet rest at (x, z), as { height, slab, swim }: the ground, or a swimming depth below
+  // Where the feet rest at (x, z), as { height, slab, swim }: the ground (or the highest cave floor
+  // within a step of `feet`, where its ground has one), or a swimming depth below
   // the water's surface where it's deeper than that, or a slab's face (slab true), whichever is
   // highest within a step of `feet` (standOn). Null off the tiles drawn in full.
   stand(x, z, feet = this.pos?.y ?? Infinity) {
-    const groundY = this.ground.groundAt(x, z);
+    const groundY = this.ground.groundAt(x, z, feet + STEP_FT);
     if (groundY === null) return null;
     const water = this.ground.waterAt(x, z);
     const swim = Number.isFinite(water) && water - SWIM_DEPTH > groundY;
@@ -363,6 +364,7 @@ export class Walker {
     this.ray.far = distance;
     const hit = this.ray.intersectObjects(this.ground.sightBlockers(), false)[0];
     camera.position.copy(head).addScaledVector(away, hit ? Math.max(1, hit.distance - 1) : distance);
+    if (this.ground.clear) camera.position.copy(this.ground.clear(head, camera.position));
     // Kept above the ground; a slab far above (a roof overhead, say) doesn't push it up.
     const floor = this.stand(camera.position.x, camera.position.z, camera.position.y);
     if (floor && (!floor.slab || floor.height <= camera.position.y + STEP_FT)) camera.position.y = Math.max(camera.position.y, floor.height + 1.5);

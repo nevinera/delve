@@ -4,6 +4,9 @@ import { RESOLUTIONS, SIGHT } from "../render/renderView.js";
 import { HORIZON, Sky } from "../render/sky.js";
 import { setTreeSight } from "../render/treeMeshes.js";
 import { Walker } from "./walker.js";
+import { clutterMeshes } from "../render/clutterMeshes.js";
+import { Caves } from "../create/caves.js";
+import { Layout } from "../create/caveLayout.js";
 import { Clutter } from "../create/clutter.js";
 import { Falls } from "../create/falls.js";
 import { EMPTY_FT, FINE, Ground } from "../create/ground.js";
@@ -14,10 +17,11 @@ import { Sea } from "../create/sea.js";
 import { Things } from "../create/things.js";
 import { WaterSurfaces } from "../create/waterSurface.js";
 import { CYCLE_MS, cyclesAt, skyAt } from "../world/dayNight.js";
+import { BIOME_NAMES } from "../v2/biomes.js";
 import { SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { PlayGround } from "./ground.js";
 
-// The play page's view of a version 2 world: the ground, water, trees, objects and slabs as /create
+// The play page's view of a version 2 world: the ground, water, trees, objects, slabs and caves as /create
 // draws them (create/ground.js and the rest), its tiles near you in full and coarser further off,
 // out to where the fog closes in, under the editor's sky, which passes through day and night as
 // its walk mode's does. You walk as the editor's walker (play/walker.js), on the ground as the
@@ -57,9 +61,10 @@ export class PlayView {
     new ResizeObserver(() => this.resize()).observe(canvas);
   }
 
-  // Draws a continent from `renditions` (its platters added, its plates fetched as they're wanted)
-  // and `placed`, its slabs and objects.
-  show(renditions, placed) {
+  // Draws a continent from `renditions` (its platters added, its plates fetched as they're wanted),
+  // `placed`, its slabs and objects, and its caves: `caves` a Caves its caves files are loaded into
+  // as they come, and `caveLayout` its layout.json, or null.
+  show(renditions, placed, caves, caveLayout = null) {
     const { scene, renderer } = this;
     this.renditions = renditions;
     this.placed = placed;
@@ -71,8 +76,22 @@ export class PlayView {
     this.scatter = new Scatter(scene, renditions);
     this.clutter = new Clutter(scene, renditions);
     this.falls = new Falls(scene, renditions, renderer);
-    this.things = new Things(scene, placed, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT);
-    this.walkGround = new PlayGround({ renditions, placed, things: this.things, scatter: this.scatter });
+    // The ground at caves' mouths is theirs to draw, with clutter round them as /create has it.
+    this.caves = caves;
+    const entrances = [...new Layout(caveLayout).entrances.values()];
+    caves.entrances = () => entrances;
+    caves.biomeAt = (x, z) => BIOME_NAMES[renditions.biomes.at(x, z)];
+    caves.clutterMeshes = clutterMeshes;
+    this.ground.holes = (tx, tz) => caves.holes(tx, tz);
+    const groundRead = renditions.onRead;
+    renditions.onRead = (key) => {
+      groundRead(key);
+      caves.groundRead(key);
+    };
+    caves.onMouths = (plates) => this.ground.refresh(plates);
+    caves.groundMaterial = (tx, tz) => this.ground.fullMesh(tx, tz)?.material ?? null;
+    this.things = new Things(scene, placed, (x, z, under) => caves.groundAt(x, z, under));
+    this.walkGround = new PlayGround({ renditions, placed, things: this.things, scatter: this.scatter, caves });
     this.resize();
   }
 
@@ -116,6 +135,7 @@ export class PlayView {
         this.ground.refresh(this.renditions.repress());
       }
       this.things.tick(x, z);
+      this.caves.tick(x, z);
       this.surfaces.tick(dt, x, z, near);
     }
     this.sky.update(this.camera, now / 1000);

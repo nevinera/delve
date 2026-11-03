@@ -24,10 +24,11 @@ describe("playing a released world", () => {
     ["places/continents/main/biomes.json", json({ version: 1, areas: [] })],
     ["places/continents/main/plates/0_0.plate", strToU8("plate 8 0 0\n")],
     ["places/continents/main/placed/1_0.json", json({ version: 1, objects: [], slabs: [] })],
+    ["places/continents/main/caves/2_0.caves", strToU8("caves 2 2 0\n")],
     ["places/continents/other/plates/5_5.plate", strToU8("plate 8 5 5\n")],
   ]);
 
-  it("reads world.json and the library first, then a continent's platters, biomes and water", async () => {
+  it("reads world.json and the library first, then a continent's platters, biomes, water and cave layout", async () => {
     const { world, fetched } = served(files);
     await world.open();
     expect(world.info.name).toBe("W");
@@ -36,16 +37,19 @@ describe("playing a released world", () => {
     expect(main.platters).toHaveLength(1);
     expect(main.biomes).toEqual({ version: 1, areas: [] });
     expect(main.water).toBeNull(); // it hasn't got one, and nothing asked for it
+    expect(main.caveLayout).toBeNull();
     expect(fetched.some((u) => u.endsWith("water.json"))).toBe(false);
   });
 
-  it("fetches plate and placed files only where the commit has them", async () => {
+  it("fetches plate, placed and caves files only where the commit has them", async () => {
     const { world, fetched } = served(files);
     expect(await world.plate("main", [0, 0])).not.toBeNull();
     expect(await world.plate("main", [1, 0])).toBeNull();
     expect(await world.placed("main", [1, 0])).not.toBeNull();
-    expect(fetched).toHaveLength(2);
-    expect(world.plates("main")).toEqual([[0, 0], [1, 0]]);
+    expect(await world.caves("main", [2, 0])).not.toBeNull();
+    expect(await world.caves("main", [0, 0])).toBeNull();
+    expect(fetched).toHaveLength(3);
+    expect(world.plates("main")).toEqual([[0, 0], [1, 0], [2, 0]]);
   });
 
   it("won't play a version 1 world", async () => {

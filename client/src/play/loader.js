@@ -1,7 +1,9 @@
 import { strFromU8 } from "fflate";
 import { pool } from "../github/github.js";
 import { biomesPath } from "../create/biomes.js";
+import { layoutPath } from "../create/caveLayout.js";
 import { PLACED_PATH, placedPath } from "../create/placed.js";
+import { CAVES_PATH, cavesPath } from "../v2/caves.js";
 import { PLATE_PATH, platePath } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
 import { waterPath } from "../v2/water.js";
@@ -9,8 +11,8 @@ import { COLLECTIONS_PATH, IMAGE_PATH, OBJECT_PATH, WORLD_PATH } from "../world/
 
 // A released version 2 world, read straight from raw GitHub at its commit: no API calls and no
 // token. The page knows the commit's files (its import's list), so nothing has to be probed for.
-// World.json, the object library and a continent's platters, biomes and water come first; plate
-// and placed files as they're wanted.
+// World.json, the object library and a continent's platters, biomes, water and cave layout come
+// first; plate, placed and caves files as they're wanted.
 
 const FETCHES = 8; // at once
 
@@ -48,18 +50,19 @@ export class PlayWorld {
     if (this.info.version !== 2) throw new Error(`this is a version ${this.info.version} world, and only version 2 worlds can be played`);
   }
 
-  // A continent's platters (as [coords, bytes]), biomes and water.
+  // A continent's platters (as [coords, bytes]), biomes, water and cave layout.
   async continent(key) {
     const platters = [...this.paths].filter((p) => PLATTER_PATH.exec(p)?.[1] === key);
-    await this.fetchAll([...platters, biomesPath(key), waterPath(key)].filter((p) => this.paths.has(p)));
+    await this.fetchAll([...platters, biomesPath(key), waterPath(key), layoutPath(key)].filter((p) => this.paths.has(p)));
     return {
       platters: platters.map((p) => this.files.get(p)),
       biomes: this.readJson(biomesPath(key)),
       water: this.readJson(waterPath(key)),
+      caveLayout: this.readJson(layoutPath(key)),
     };
   }
 
-  // Plate (px, pz)'s plate file and placed file, either null where there's none.
+  // Plate (px, pz)'s plate, placed and caves files, each null where there's none.
   plate(continent, coords) {
     return this.file(platePath(continent, coords));
   }
@@ -68,11 +71,15 @@ export class PlayWorld {
     return this.file(placedPath(continent, coords));
   }
 
-  // The plates on a continent that have a plate or placed file, as [px, pz].
+  caves(continent, coords) {
+    return this.file(cavesPath(continent, coords));
+  }
+
+  // The plates on a continent that have a plate, placed or caves file, as [px, pz].
   plates(continent) {
     const out = new Map();
     for (const path of this.paths) {
-      const m = PLATE_PATH.exec(path) ?? PLACED_PATH.exec(path);
+      const m = PLATE_PATH.exec(path) ?? PLACED_PATH.exec(path) ?? CAVES_PATH.exec(path);
       if (m?.[1] === continent) out.set(`${m[2]},${m[3]}`, [Number(m[2]), Number(m[3])]);
     }
     return [...out.values()];

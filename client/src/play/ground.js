@@ -7,7 +7,8 @@ import { slabFootholds, slabHitsTrunk } from "../world/slabs.js";
 // The ground the play page's walker (play/walker.js) walks on: a version 2 world's, as /create
 // draws it and the game server checks it (game-server/internal/worlds/ground.go). Heights come
 // from plate files once they're read, pressed down by level slabs; off the tiles is the sea's bed.
-// Slabs, objects placed by hand, and the trees and objects in tiles' slots are in the way.
+// Caves' floors are ground too, and where a cave's mouth opens the ground it isn't. Slabs, cave
+// rock, objects placed by hand, and the trees and objects in tiles' slots are in the way.
 // Positions are continent feet.
 
 const NEAR_FT = 64; // how far round a walker slabs and objects are looked at
@@ -16,17 +17,19 @@ const EYE_FT = 5.5;
 
 export class PlayGround {
   // renditions: create/ground.js's Renditions; placed: create/placed.js's Placed; things and
-  // scatter: create/things.js's and scatter.js's, for objects' heights and what fills slots.
-  constructor({ renditions, placed, things, scatter }) {
-    Object.assign(this, { renditions, placed, things, scatter });
+  // scatter: create/things.js's and scatter.js's, for objects' heights and what fills slots;
+  // caves: create/caves.js's Caves.
+  constructor({ renditions, placed, things, scatter, caves }) {
+    Object.assign(this, { renditions, placed, things, scatter, caves });
   }
 
-  // The ground's height, or null on a tile whose plate file isn't read yet.
-  groundAt(x, z) {
+  // The height to stand at no higher than `under`, the ground's or a cave's floor (Caves'
+  // groundAt), or null on a tile whose plate file isn't read yet.
+  groundAt(x, z, under = Infinity) {
     const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
     if (!this.renditions.tile(tx, tz)) return EMPTY_FT;
     if (!this.renditions.hasCells(tx, tz)) return null;
-    return this.renditions.heightAt(x, z);
+    return this.caves.groundAt(x, z, under);
   }
 
   waterAt(x, z) {
@@ -46,6 +49,7 @@ export class PlayGround {
     const body = (bx, bz) => ({ x: bx, z: bz, radius, ground: pos.y + STEP_FT, top: pos.y + EYE_FT });
     const [there, here] = [body(x, z), body(pos.x, pos.z)];
     if (slabs.some((slab) => slabHitsTrunk(slab, there) && !slabHitsTrunk(slab, here))) return true;
+    if (this.inRock(x, z, pos.y, radius) && !this.inRock(pos.x, pos.z, pos.y, radius)) return true;
     const into = (object) => blocks(object, x, z, radius) && !blocks(object, pos.x, pos.z, radius);
     for (const object of objects) {
       if (!object.footprint || !into(object)) continue;
@@ -66,6 +70,17 @@ export class PlayGround {
       }
     }
     return false;
+  }
+
+  // Whether cave rock's anywhere from a step over feet at `y` up to the eyes, at (x, z) or `radius`
+  // off it along the axes, as /create keeps the builder out of it.
+  inRock(x, z, y, radius) {
+    return [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => this.caves.inRock(x + dx * radius, z + dz * radius, y + STEP_FT, y + EYE_FT));
+  }
+
+  // Where the camera can be, looking from `head` to `at` (Vector3s), short of cave rock between.
+  clear(head, at) {
+    return this.caves.clear(head, at);
   }
 
   // What pulls the camera in front of it: trees and things placed by hand.
