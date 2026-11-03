@@ -44,6 +44,10 @@ export function classProblems(made) {
     conditions(where, e.when);
     if (e.type === "status" || e.type === "consume") status(where, e.status);
     if (e.type === "resource") resource(where, e.resource);
+    if (e.type === "area") {
+      if (e.status) status(where, e.status);
+      if (e.effect) effect(where, e.effect);
+    }
     if (e.type === "summon" && !units.has(e.unit)) problems.push(`${where} summons a unit this class doesn't have (${e.unit}).`);
     (e.units ?? []).filter((id) => !units.has(id)).forEach((id) => problems.push(`${where} points at a unit this class doesn't have (${id}).`));
     if (e.type === "command" && !abilities.has(e.ability)) problems.push(`${where} commands an ability this class doesn't have (${e.ability}).`);
@@ -72,7 +76,8 @@ export function classProblems(made) {
       conditions(where, e.when);
       counted(where, e.perCount);
       if (e.type === "periodic" && e.does === "resource") resource(where, e.resource);
-      if (e.type === "trigger" && e.effect) effect(where, e.effect);
+      if ((e.type === "trigger" || e.type === "aura") && e.effect) effect(where, e.effect);
+      if (e.type === "aura" && e.status) status(where, e.status);
       if (e.type === "stat") {
         (e.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} counts an ability this class doesn't have (${id}).`));
         (e.statuses ?? []).forEach((id) => status(where, id));

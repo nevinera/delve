@@ -454,7 +454,8 @@
             "consume",
             "cooldown",
             "summon",
-            "command"
+            "command",
+            "area"
           ]
         },
         "affects": {
@@ -692,6 +693,20 @@
         },
         "perCount": {
           "$ref": "#/$defs/perCount"
+        },
+        "every": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "area: seconds between each time effect lands on those inside"
+        },
+        "effect": {
+          "$ref": "#/$defs/effect",
+          "description": "area: what lands on those inside, each every seconds. affects self means whoever's inside"
+        },
+        "limit": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "area: how many of these you can have out at once"
         }
       }
     },

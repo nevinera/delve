@@ -743,6 +743,7 @@ Types:
 - `command`: your summons, or just `units`, use `ability`.
 - `source: "summons"`, on a damage or heal effect: your summons do it, not you.
 - `category`, on a damage or heal effect or a periodic: a word the class picks, like `bleed` or `disease`. A `stat` or `trigger` with `category` or `categories` only counts those.
+- `area`: a lasting area `around` `self`, `target` or `ground`, `radius` ft across and `lasts` seconds, touching those it `affects`. Those inside have `status` while they stay, and `effect` lands on them each `every` seconds. In that `effect`, `affects: "self"` means whoever's inside. `max` caps how many it touches each time, and `limit` caps how many of these you can have out.
 - `consume`: takes `status` off those it `affects`, or just `stacks` stacks of it. It's for an ability using up a status of its own, where `dispel` removes by kind. With `affects: "summons"` it dismisses or sacrifices summons instead, `units` and `count` saying which and how many.
 - `chance`, on any effect, 0 to 1: how likely it is to happen, 1 by default. `chancePerSpent` adds that much for each point spent, here and on a `trigger`.
 - `when`, on any effect: conditions written as `requires`. The effect only happens while they hold.
@@ -815,6 +816,7 @@ Any effect can have `when`, conditions written as an ability's `requires`, check
   - `addEffects` lists more ability effects for them to do.
 - `modify` of `statuses`: changes statuses, by id, from the same class, instead of abilities. `change` is `duration` or `maxStacks`, by `add`, `multiply` or `set`, or `statusEffects` lists more effects for them to have, like `{ "type": "modify", "statuses": ["chil0001"], "change": "duration", "add": 2 }`.
 - `immune`: the holder is immune to `controls` (`stun`, `root`, `silence`, `incapacitate`, `disorient`, `fear`, `disarm`, `slow`, `interrupt`, `knockback`, `pull`, `pushback`, `charm`, `sleep`), to damage from `schools`, to everything with `all`, or to harmful statuses with `harmful`.
+- `aura`: an area that follows the holder while the status lasts, with `radius`, `affects`, `every`, `effect`, `status` and `max` as in an ability's `area`.
 - `param` on an effect names its number, so a `modify` can change just that number: `{ "type": "stat", "stat": "damageTaken", "multiply": 0.8, "param": "reduction" }` on a status, and `{ "type": "modify", "statuses": ["bark0001"], "change": "reduction", "add": -0.1 }` on a talent. Ability effects can have one too, for a `modify` of `abilities`. The number is a stat's `add` or `multiply`, or its `share` with `fromStat`, the `amount` of a periodic, absorb, damage or heal effect, and a trigger's `chance`. An `amount` that's an object takes `multiply` and `set`, not `add`. Several talents changing one `param` all count, in the `set`, `add`, `multiply` order.
 - `none`: nothing, for a status other things look for by name.
 
@@ -1083,7 +1085,7 @@ The game server decides what abilities do, from the class files in the released 
 - **Stats:** at level 1, primary stats are 12 and the others 6, stamina 12, attack power is twice the higher of strength and agility, spell power twice intellect, and health ten times stamina. A weapon swing does 10. A hit has a 5% chance to do double.
 - **Resources:** mana holds 1000 and regains 20 a second, energy holds 100 and regains 10, and rage holds 100, starts empty and falls by 1. Points hold `max` and go by `regen`.
 - **Enemies:** only training dummies, for now. A dummy has 100000 health, never drops below 1, and heals up and starts its damage tally over after 5 s unhit.
-- **Not yet:** an `all` cost spends only its least, and `perSpent`, `maxHealth` and `shareOfTrigger` amounts and `perSpent` durations count for nothing. The `interrupt`, `taunt`, `move`, `dispel`, `consume`, `cooldown` and `resurrect` effects do nothing, `summon`, `command` and `units` do nothing, `consumedBy` does nothing, `when`, `chance` and `perCount` on an ability's effect aren't checked, what a status does while it's on (`effects`), including `immune`, doesn't apply, nothing checks line of sight, and nothing misses, or is dodged, parried or blocked.
+- **Not yet:** an `all` cost spends only its least, and `perSpent`, `maxHealth` and `shareOfTrigger` amounts and `perSpent` durations count for nothing. The `interrupt`, `taunt`, `move`, `dispel`, `consume`, `cooldown` and `resurrect` effects do nothing, `summon`, `command`, `area`, `aura` and `units` do nothing, `consumedBy` does nothing, `when`, `chance` and `perCount` on an ability's effect aren't checked, what a status does while it's on (`effects`), including `immune`, doesn't apply, nothing checks line of sight, and nothing misses, or is dodged, parried or blocked.
 
 ### Rails and the game server
 

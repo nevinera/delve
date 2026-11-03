@@ -127,6 +127,7 @@
               "stealth",
               "modify",
               "immune",
+              "aura",
               "none"
             ]
           },
@@ -378,6 +379,26 @@
           "param": {
             "type": "string",
             "description": "names this effect's number, so a modify can change it"
+          },
+          "radius": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "aura: how far it reaches, in feet"
+          },
+          "affects": {
+            "enum": [
+              "enemies",
+              "allies"
+            ],
+            "description": "aura: who's touched"
+          },
+          "status": {
+            "$ref": "common.schema.json#/$defs/id",
+            "description": "aura: the status those inside have while they stay"
+          },
+          "max": {
+            "type": "integer",
+            "minimum": 1
           },
           "perCount": {
             "$ref": "common.schema.json#/$defs/perCount"

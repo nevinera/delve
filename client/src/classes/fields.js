@@ -81,8 +81,8 @@ export function writeCondition({ kind, ...c }) {
   return { [kind]: c.yes ?? true };
 }
 
-const effectFields = (made) => [
-  { key: "type", type: "select", options: ["damage", "heal", "resource", "status", "interrupt", "taunt", "move", "dispel", "consume", "cooldown", "summon", "command", "resurrect"] },
+const effectFields = (made, nested = false) => [
+  { key: "type", type: "select", options: ["damage", "heal", "resource", "status", "interrupt", "taunt", "move", "dispel", "consume", "cooldown", "summon", "command", "area", "resurrect"] },
   { key: "affects", type: "select", options: ["target", "self", "enemies", "allies"] },
   { key: "around", type: "select", none: "self", options: ["target", "ground"], show: (e) => ["enemies", "allies"].includes(e.affects) },
   { key: "radius", type: "number", label: "radius ft", min: 0, show: (e) => ["enemies", "allies"].includes(e.affects) },
@@ -105,6 +105,10 @@ const effectFields = (made) => [
   { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: is("resource") },
   { key: "status", type: "select", none: "pick one", options: statusesOf(made), show: is("status", "consume") },
   { key: "stacks", type: "number", min: 1, step: 1, hint: "all of them by default", show: is("consume") },
+  { key: "lasts", label: "lasts s", type: "number", min: 0, show: is("area") },
+  { key: "every", label: "every s", type: "number", min: 0, show: is("area") },
+  { key: "limit", label: "at most out", type: "number", min: 1, step: 1, show: is("area") },
+  ...(nested ? [] : [{ key: "effect", label: "each time", type: "group", fields: effectFields(made, true), show: is("area") }]),
   { key: "unit", type: "select", none: "pick one", options: unitsOf(made), show: is("summon") },
   { key: "count", type: "number", min: 1, step: 1, show: is("summon") },
   { key: "lasts", label: "lasts s", type: "number", min: 0, hint: "left out, until it dies or is dismissed", show: is("summon") },
@@ -232,7 +236,7 @@ export const abilityFields = (made) => [
 ];
 
 const statusEffectFields = (made, nested = false) => [
-  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "stealth", "modify", "immune", "none"] },
+  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "stealth", "modify", "immune", "aura", "none"] },
   { key: "stat", type: "select", none: "pick one", options: STATS, show: is("stat") },
   { key: "abilities", type: "multi", options: abilitiesOf(made), show: is("modify", "trigger", "stat") },
   { key: "tag", label: "or tag", show: is("modify", "trigger", "stat") },
@@ -246,7 +250,7 @@ const statusEffectFields = (made, nested = false) => [
   { key: "addPerSpent", label: "add per point spent", type: "number", show: is("stat") },
   { key: "multiplyPerSpent", label: "multiply per point spent", type: "number", show: is("stat") },
   { key: "school", type: "select", none: "any", options: SCHOOLS, show: is("stat", "periodic", "trigger") },
-  { key: "every", label: "every s", type: "number", min: 0, show: is("periodic") },
+  { key: "every", label: "every s", type: "number", min: 0, show: is("periodic", "aura") },
   { key: "does", type: "select", options: ["damage", "heal", "resource"], show: is("periodic") },
   { key: "amount", type: "amount", show: is("periodic", "absorb") },
   { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: (e) => e.type === "periodic" && e.does === "resource" },
@@ -273,7 +277,10 @@ const statusEffectFields = (made, nested = false) => [
   { key: "chancePerSpent", label: "chance per point", type: "number", min: 0, show: is("trigger") },
   { key: "param", label: "named", hint: "a name other things can change this chance by", show: is("trigger") },
   { key: "cooldown", label: "cooldown s", type: "number", min: 0, show: is("trigger") },
-  { key: "effect", type: "group", fields: effectFields(made), show: is("trigger") },
+  { key: "effect", type: "group", fields: effectFields(made), show: is("trigger", "aura") },
+  { key: "radius", type: "number", min: 0, label: "radius ft", show: is("aura") },
+  { key: "affects", type: "select", options: ["enemies", "allies"], show: is("aura") },
+  { key: "status", type: "select", none: "none", options: statusesOf(made), show: is("aura") },
   { key: "when", type: "list", one: "condition", blank: () => ({ kind: "health", health: "self" }), read: readCondition, write: writeCondition, fields: conditionFields(made) },
 ];
 
