@@ -27,9 +27,6 @@ const IdleUnload = 5 * time.Minute
 // crossing into another plate.
 const SaveEvery = 30 * time.Second
 
-// plateFt is a plate's width: 16 tiles (client/src/world/plateCodec.js).
-const plateFt = 16 * worlds.TileFt
-
 // WorldLoader gives a released world (worlds.Store).
 type WorldLoader interface {
 	Load(ctx context.Context, repo, sha string) (*worlds.World, error)
@@ -397,7 +394,7 @@ func (l *Layer) ground(continent string) Ground {
 }
 
 func plateOf(at [3]float64) [2]int {
-	return [2]int{int(math.Floor(at[0] / plateFt)), int(math.Floor(at[2] / plateFt))}
+	return [2]int{int(math.Floor(at[0] / worlds.PlateFt)), int(math.Floor(at[2] / worlds.PlateFt))}
 }
 
 // near is everyone else in the 3×3 tiles around p, on its continent. It looks at every player in

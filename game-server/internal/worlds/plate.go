@@ -20,7 +20,7 @@ const (
 	tileChunks = tileCells / chunkCells
 	TileFt     = tileCells * cellFt // 256
 	plateTiles = 8
-	plateFt    = TileFt * plateTiles // 2,048
+	PlateFt    = TileFt * plateTiles // 2,048
 
 	plateVersion = 8
 	levelOffset  = 32768

@@ -256,20 +256,20 @@ func TestSavingPositions(t *testing.T) {
 		t.Fatalf("saved %v", got)
 	}
 
-	// Crossing into another plate (8192 ft a side) saves at once.
-	move(t, p, 8200, 5400)
-	if got := flush(); len(got) != 2 || got[1].At[0] != 8200 {
+	// Crossing into another plate (2,048 ft a side) saves at once.
+	move(t, p, 6200, 5400)
+	if got := flush(); len(got) != 2 || got[1].At[0] != 6200 {
 		t.Fatalf("saved %v", got)
 	}
 
 	// So does leaving, and entering again starts there.
-	move(t, p, 8300, 5400)
+	move(t, p, 6300, 5400)
 	h.Leave(p)
-	if got := flush(); len(got) != 3 || got[2].At[0] != 8300 || got[2].Continent != "main" {
+	if got := flush(); len(got) != 3 || got[2].At[0] != 6300 || got[2].Continent != "main" {
 		t.Fatalf("saved %v", got)
 	}
 	again := enter(t, h, 1)
-	if at := next(t, again)["you"].(map[string]any)["at"]; fmt.Sprint(at) != "[8300 0 5400]" {
+	if at := next(t, again)["you"].(map[string]any)["at"]; fmt.Sprint(at) != "[6300 0 5400]" {
 		t.Errorf("entered again at %v", at)
 	}
 }

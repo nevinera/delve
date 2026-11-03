@@ -485,8 +485,8 @@ func (g *Ground) slabsNear(x, z, by float64) ([]*Slab, error) {
 // platesNear are the plates within `reach` of (x, z) that have anything. The lock is held.
 func (g *Ground) platesNear(x, z, reach float64) ([]*plate, error) {
 	var out []*plate
-	for pz := int(math.Floor((z - reach) / plateFt)); pz <= int(math.Floor((z+reach)/plateFt)); pz++ {
-		for px := int(math.Floor((x - reach) / plateFt)); px <= int(math.Floor((x+reach)/plateFt)); px++ {
+	for pz := int(math.Floor((z - reach) / PlateFt)); pz <= int(math.Floor((z+reach)/PlateFt)); pz++ {
+		for px := int(math.Floor((x - reach) / PlateFt)); px <= int(math.Floor((x+reach)/PlateFt)); px++ {
 			p, err := g.plate(px, pz)
 			if err != nil {
 				return nil, err

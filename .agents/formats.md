@@ -1035,7 +1035,7 @@ The game server never writes to the database directly.
 The game server keeps positions in memory, and saves one when it has changed:
 
 - when the character leaves the game;
-- when it crosses into another 4,096 ft square, two plates wide (`plateFt` in `game-server/internal/game/game.go`);
+- when it crosses into another plate;
 - every 30 s;
 - when the server stops, for everyone.
 
