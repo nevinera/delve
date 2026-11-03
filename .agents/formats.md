@@ -746,6 +746,7 @@ Types:
 - `consume`: takes `status` off those it `affects`, or just `stacks` stacks of it. It's for an ability using up a status of its own, where `dispel` removes by kind. With `affects: "summons"` it dismisses or sacrifices summons instead, `units` and `count` saying which and how many.
 - `chance`, on any effect, 0 to 1: how likely it is to happen, 1 by default. `chancePerSpent` adds that much for each point spent, here and on a `trigger`.
 - `when`, on any effect: conditions written as `requires`. The effect only happens while they hold.
+- `prefers`, on an effect with `max`: which it picks first, `nearest` by default, or `injured`, `farthest` or `lowestHealth`.
 - `softCap`, on any effect that hits several: past this many hit, those hit share this many's worth, split evenly.
 - `perTargetHit`, on any effect: its amount, or a `cooldown` effect's `by`, counts once for each one the ability hits. `maxTotal` is the most it can come to.
 - `exceptTarget`, on any effect: leaves the ability's target out of those it `affects`.

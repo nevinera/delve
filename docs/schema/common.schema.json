@@ -490,6 +490,15 @@
           "type": "integer",
           "minimum": 1
         },
+        "prefers": {
+          "enum": [
+            "injured",
+            "nearest",
+            "farthest",
+            "lowestHealth"
+          ],
+          "description": "with max: which it picks first, nearest by default"
+        },
         "amount": {
           "$ref": "#/$defs/amount"
         },
