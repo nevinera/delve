@@ -5,8 +5,9 @@ import { setBrush } from "./caveMaterial.js";
 
 // The caves' polish tools: hand edits to the rock of a cave network being polished (cavePlan.js),
 // its 2 ft voxels changed where you aim, from inside it.
-// - blocks: a click breaks the voxel aimed at, and a right-click places one against it, the face
-//   aimed at lit, which it's broken through or placed against.
+// - blocks: a click breaks the voxel aimed at, and a right-click places one against it, as the
+//   button is let go and not where it dragged the camera round. The face aimed at, which it's
+//   broken through or placed against, is outlined.
 // - sculpt: the sphere, cube and upright cylinder brushes, sized with [ and ], carve as you drag,
 //   or fill with the right button. The box brush spans two voxels clicked, the button of the
 //   second saying whether it carves or fills; then [ and ] shrink and grow the face nearest
@@ -28,6 +29,7 @@ const OP_OF = { caveSmooth: "smooth", caveFlatten: "flatten", cavePaint: "paint"
 const SIZES = [1, 8]; // the brushes' radii, voxels
 const ROCKS = 4;
 const UNDOS = 10;
+const CLICK_PX = 5; // how far the pointer can move with a button down and still click
 const GHOST_RGB = 0x7fffe6;
 const ADD_RGB = 0xffa040; // smooth's outlines: blocks it fills
 const [FACE_RGB, FACE_OPACITY] = [0x3d8bff, 0.7]; // the outline of the face blocks aims at
@@ -44,6 +46,7 @@ export class CavePolish {
     this.brush = { shape: "sphere", size: 2, fill: null, paint: 0 }; // fill: the rock blocks and sculpt use, or null for the same
     this.stroke = null; // the drag being worked: { before, net, op, level, down, last }
     this.box = null; // the box brush's corners, { a, b, net, op }, voxels
+    this.pressed = null; // a button down for a click: { button, x, y }
     this.undos = new Map(); // network -> the tiles each edit to it changed, as they were before it
     this.previewed = null; // what smooth's outlines were worked out for
     this.ghost = new THREE.LineSegments(new THREE.BufferGeometry(), new THREE.LineBasicMaterial({ color: GHOST_RGB, depthTest: false, transparent: true, opacity: 0.8 }));
@@ -117,25 +120,36 @@ export class CavePolish {
     return null;
   }
 
-  // A button down: the left carves (or works a surface tool), the right fills.
+  // A button down: the left carves (or works a surface tool), the right fills. Blocks and the box
+  // brush's corners wait for the button to be let go, and don't if it's dragged the camera round.
   down(e) {
+    if (this.tool === "caveBlocks" || (this.tool === "caveSculpt" && this.brush.shape === "box")) {
+      this.pressed = { button: e.button, x: e.clientX, y: e.clientY };
+      return;
+    }
     const aimed = this.aim();
     const problem = this.problem(aimed);
     if (problem) return alert(problem);
     const op = OP_OF[this.tool] ?? (e.button === 2 ? "fill" : "carve");
     if (e.button === 2 && SURFACE.has(this.tool)) return;
+    this.stroke = { before: new Map(), net: aimed.net, op, level: snap(aimed.hit[1]), down: aimed.down, last: null };
+    this.strokeAt(aimed);
+  }
+
+  // A click of blocks or the box brush, button `button`.
+  click(button) {
+    const aimed = this.aim();
+    const problem = this.problem(aimed);
+    if (problem) return alert(problem);
+    const op = button === 2 ? "fill" : "carve";
     if (this.tool === "caveBlocks") {
       const at = middleOf(op === "fill" ? aimed.air : aimed.rock);
       const cube = { kind: "box", at, half: [0.9, 0.9, 0.9], yaw: 0 };
       return this.remember(aimed.net, this.work(cube, op, aimed.net, null, { exact: true }));
     }
-    if (this.tool === "caveSculpt" && this.brush.shape === "box") {
-      if (!this.box || this.box.b) this.box = { a: aimed.rock, b: null, net: aimed.net, op };
-      else Object.assign(this.box, { b: aimed.rock, op });
-      return this.drawGhost(aimed);
-    }
-    this.stroke = { before: new Map(), net: aimed.net, op, level: snap(aimed.hit[1]), down: aimed.down, last: null };
-    this.strokeAt(aimed);
+    if (!this.box || this.box.b) this.box = { a: aimed.rock, b: null, net: aimed.net, op };
+    else Object.assign(this.box, { b: aimed.rock, op });
+    this.drawGhost(aimed);
   }
 
   move() {
@@ -145,7 +159,11 @@ export class CavePolish {
     this.drawGhost(aimed);
   }
 
-  up() {
+  // A button let go, at pointer event `e`.
+  up(e) {
+    const pressed = this.pressed;
+    this.pressed = null;
+    if (pressed && e && e.button === pressed.button && Math.hypot(e.clientX - pressed.x, e.clientY - pressed.y) < CLICK_PX) this.click(pressed.button);
     if (!this.stroke) return;
     if (this.stroke.before.size) this.remember(this.stroke.net, this.stroke.before);
     this.stroke = null;

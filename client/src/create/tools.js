@@ -473,11 +473,11 @@ export class Tools {
       this.marks.draw(this.drawing.points);
       this.showStroke();
     });
-    canvas.addEventListener("pointerup", () => {
+    canvas.addEventListener("pointerup", (e) => {
       this.stroke = null;
       if (BUILD.has(this.tool)) this.build.up();
       if (PLANS.has(this.tool)) this.plan.up();
-      if (POLISH.has(this.tool)) this.polish.up();
+      if (POLISH.has(this.tool)) this.polish.up(e);
       if (this.clicked?.pin) this.openPin(this.clicked.pin);
       else if (this.clicked?.at) {
         const before = this.marks.toJSON();
