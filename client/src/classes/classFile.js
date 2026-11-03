@@ -32,7 +32,15 @@ export function classProblems(made) {
       if (c.anyOf) conditions(where, c.anyOf);
       if (c.not) conditions(where, [c.not]);
     });
+  const counted = (where, c) => {
+    if (!c) return;
+    if (c.statusStacks) status(where, c.statusStacks);
+    (c.statusesOnTarget ?? []).forEach((id) => status(where, id));
+    (c.unitsOut ?? []).filter((id) => !units.has(id)).forEach((id) => problems.push(`${where} points at a unit this class doesn't have (${id}).`));
+    if (c.resource) resource(where, c.resource);
+  };
   const effect = (where, e) => {
+    counted(where, e.perCount);
     conditions(where, e.when);
     if (e.type === "status" || e.type === "consume") status(where, e.status);
     if (e.type === "resource") resource(where, e.resource);
@@ -62,6 +70,7 @@ export function classProblems(made) {
     (s.consumedBy?.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} is used up by an ability this class doesn't have (${id}).`));
     for (const e of s.effects ?? []) {
       conditions(where, e.when);
+      counted(where, e.perCount);
       if (e.type === "periodic" && e.does === "resource") resource(where, e.resource);
       if (e.type === "trigger" && e.effect) effect(where, e.effect);
       if (e.type === "stat") {

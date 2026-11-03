@@ -39,6 +39,21 @@ const simpleConditionFields = (made) => [
   { key: "yes", type: "check", label: "true", default: true, show: (c) => c.kind === "stealthed" || c.kind === "inCombat" },
 ];
 
+const perCountField = (made) => ({
+  key: "perCount",
+  label: "per count of",
+  type: "group",
+  fields: [
+    { key: "statusStacks", label: "stacks of", type: "select", none: "none", options: statusesOf(made) },
+    { key: "statusesFromMe", label: "your statuses on the target", type: "check" },
+    { key: "statusesOnTarget", label: "of these on the target", type: "multi", options: statusesOf(made) },
+    { key: "unitsOut", label: "units out", type: "multi", options: unitsOf(made) },
+    { key: "resource", type: "select", none: "none", options: resourcesOf(made) },
+    { key: "add", type: "number", hint: "this much per count, not the whole amount again" },
+    { key: "max", type: "number", min: 0, hint: "the most it counts" },
+  ],
+});
+
 const conditionFields = (made) => [
   ...simpleConditionFields(made).map((f) => (f.key === "kind" ? { ...f, options: [...f.options, ["anyOf", "any of"], ["not", "not"]] } : f)),
   { key: "not", type: "list", one: "condition", blank: () => ({ kind: "status", on: "self" }), read: readCondition, write: writeCondition, fields: simpleConditionFields(made), show: (c) => c.kind === "not" },
@@ -81,6 +96,7 @@ const effectFields = (made) => [
   { key: "chance", type: "number", min: 0, hint: "0 to 1, 1 by default" },
   { key: "chancePerSpent", label: "chance per point", type: "number", min: 0 },
   { key: "category", hint: "a word like bleed or disease that stats and triggers can look for", show: is("damage", "heal") },
+  { ...perCountField(made), show: is("damage", "heal", "resource", "status") },
   { key: "softCap", label: "soft cap", type: "number", min: 1, step: 1, hint: "past this many hit, they share this many's worth", show: is("damage", "heal") },
   { key: "perTargetHit", label: "per target hit", type: "check", show: is("damage", "heal", "resource", "cooldown") },
   { key: "maxTotal", label: "at most", type: "number", min: 0, show: (e) => Boolean(e.perTargetHit) },
@@ -243,6 +259,7 @@ const statusEffectFields = (made, nested = false) => [
   { key: "controls", type: "multi", options: ["stun", "root", "silence", "incapacitate", "disorient", "fear", "disarm", "slow", "interrupt", "knockback", "pull", "pushback", "charm", "sleep"], show: is("immune") },
   { key: "all", label: "all damage", type: "check", show: is("immune") },
   { key: "harmful", label: "harmful statuses", type: "check", show: is("immune") },
+  { ...perCountField(made), show: is("stat", "trigger") },
   { key: "casterOnly", label: "only with its caster", type: "check", show: is("trigger", "stat") },
   { key: "source", type: "select", none: "the holder", options: ["summons", "both"], show: is("trigger", "stat") },
   { key: "units", type: "multi", options: unitsOf(made), show: (e) => e.source === "summons" || e.source === "both" },

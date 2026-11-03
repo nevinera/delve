@@ -378,6 +378,9 @@
           "param": {
             "type": "string",
             "description": "names this effect's number, so a modify can change it"
+          },
+          "perCount": {
+            "$ref": "common.schema.json#/$defs/perCount"
           }
         }
       }

@@ -123,6 +123,17 @@ describe("what's wrong with a class", () => {
     ]);
   });
 
+  it("names what a count points at that's gone", () => {
+    const made = {
+      abilities: [{ id: "bolt0001", name: "Bolt", effects: [{ type: "damage", affects: "target", perCount: { statusStacks: "gone0001" } }] }],
+      statuses: [{ id: "good0001", name: "Good", effects: [{ type: "stat", stat: "damageDone", multiply: 1.1, perCount: { unitsOut: ["gone0002"] } }] }],
+    };
+    expect(classProblems(made)).toEqual([
+      "Bolt points at a status this class doesn't have (gone0001).",
+      "Good points at a unit this class doesn't have (gone0002).",
+    ]);
+  });
+
   it("names a param its target doesn't have", () => {
     const made = {
       statuses: [

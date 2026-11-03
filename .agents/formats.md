@@ -747,6 +747,7 @@ Types:
 - `chance`, on any effect, 0 to 1: how likely it is to happen, 1 by default. `chancePerSpent` adds that much for each point spent, here and on a `trigger`.
 - `when`, on any effect: conditions written as `requires`. The effect only happens while they hold.
 - `prefers`, on an effect with `max`: which it picks first, `nearest` by default, or `injured`, `farthest` or `lowestHealth`.
+- `perCount`, on any effect or stat: its number counts once for each of something, up to `max`. Pick `statusStacks` (stacks of that status), `statusesFromMe` (statuses you've put on the target), `statusesOnTarget` (which of those the target has), `unitsOut` (how many of those units you have out) or `resource` (how much of it you have). `add` makes each count add that much, not the whole number again.
 - `softCap`, on any effect that hits several: past this many hit, those hit share this many's worth, split evenly.
 - `perTargetHit`, on any effect: its amount, or a `cooldown` effect's `by`, counts once for each one the ability hits. `maxTotal` is the most it can come to.
 - `exceptTarget`, on any effect: leaves the ability's target out of those it `affects`.
@@ -1082,7 +1083,7 @@ The game server decides what abilities do, from the class files in the released 
 - **Stats:** at level 1, primary stats are 12 and the others 6, stamina 12, attack power is twice the higher of strength and agility, spell power twice intellect, and health ten times stamina. A weapon swing does 10. A hit has a 5% chance to do double.
 - **Resources:** mana holds 1000 and regains 20 a second, energy holds 100 and regains 10, and rage holds 100, starts empty and falls by 1. Points hold `max` and go by `regen`.
 - **Enemies:** only training dummies, for now. A dummy has 100000 health, never drops below 1, and heals up and starts its damage tally over after 5 s unhit.
-- **Not yet:** an `all` cost spends only its least, and `perSpent`, `maxHealth` and `shareOfTrigger` amounts and `perSpent` durations count for nothing. The `interrupt`, `taunt`, `move`, `dispel`, `consume`, `cooldown` and `resurrect` effects do nothing, `summon`, `command` and `units` do nothing, `consumedBy` does nothing, `when` and `chance` on an ability's effect aren't checked, what a status does while it's on (`effects`), including `immune`, doesn't apply, nothing checks line of sight, and nothing misses, or is dodged, parried or blocked.
+- **Not yet:** an `all` cost spends only its least, and `perSpent`, `maxHealth` and `shareOfTrigger` amounts and `perSpent` durations count for nothing. The `interrupt`, `taunt`, `move`, `dispel`, `consume`, `cooldown` and `resurrect` effects do nothing, `summon`, `command` and `units` do nothing, `consumedBy` does nothing, `when`, `chance` and `perCount` on an ability's effect aren't checked, what a status does while it's on (`effects`), including `immune`, doesn't apply, nothing checks line of sight, and nothing misses, or is dodged, parried or blocked.
 
 ### Rails and the game server
 

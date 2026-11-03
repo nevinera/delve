@@ -689,6 +689,9 @@
         "category": {
           "type": "string",
           "description": "damage, heal: a word the class picks, like bleed or disease, that stats and triggers can look for"
+        },
+        "perCount": {
+          "$ref": "#/$defs/perCount"
         }
       }
     },
@@ -758,6 +761,48 @@
         "pitch": {
           "type": "number",
           "exclusiveMinimum": 0
+        }
+      }
+    },
+    "perCount": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "counts once for each of these, up to max",
+      "properties": {
+        "statusStacks": {
+          "$ref": "#/$defs/id",
+          "description": "stacks of this status"
+        },
+        "statusesFromMe": {
+          "type": "boolean",
+          "description": "statuses you've put on the target"
+        },
+        "statusesOnTarget": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "description": "which of these the target has"
+        },
+        "unitsOut": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "description": "how many of these units you have out"
+        },
+        "resource": {
+          "type": "string",
+          "description": "how much of this resource you have"
+        },
+        "add": {
+          "type": "number",
+          "description": "this much per count, not the whole amount again"
+        },
+        "max": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "the most it counts"
         }
       }
     }
