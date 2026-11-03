@@ -27,7 +27,8 @@ import { WALK_DEG } from "./growth.js";
 // climbing that long would have them going (heightAfter).
 //
 // Left-drag swings the camera round the builder, right-drag turns the builder with it, both tip
-// it up and down, and the wheel zooms. The higher the builder flies, the more the camera looks down (cameraFor).
+// it up and down, and the wheel zooms, in past the nearest to first person. The higher the builder flies, the more the
+// camera looks down (cameraFor), but for in first person.
 
 export const RUN_FT = 21; // a second
 export const BACK_FT = 13.5;
@@ -271,12 +272,21 @@ export class Builder {
     this.place();
   }
 
-  // Puts the camera behind the builder, above the ground.
+  // Puts the camera behind the builder, above the ground, or, zoomed all the way in, at their
+  // eyes, looking out of them as dragging has them look, and hides them.
   place() {
     const { x, y, z, yaw } = this.state;
     const look = yaw + this.cam.yaw;
-    const { pitch, distance } = cameraFor(this.cam, this.above);
     const head = new THREE.Vector3(x, y + EYE_FT, z);
+    const firstPerson = this.cam.distance === 0;
+    this.figure.model.visible = !firstPerson;
+    if (firstPerson) {
+      const { pitch } = this.cam;
+      this.camera.position.copy(head);
+      this.camera.lookAt(head.clone().add(new THREE.Vector3(Math.sin(look) * Math.cos(pitch), -Math.sin(pitch), Math.cos(look) * Math.cos(pitch))));
+      return;
+    }
+    const { pitch, distance } = cameraFor(this.cam, this.above);
     const away = new THREE.Vector3(-Math.sin(look) * Math.cos(pitch), Math.sin(pitch), -Math.cos(look) * Math.cos(pitch));
     const at = head.clone().addScaledVector(away, distance);
     // Over the ground, and over the water but while swimming; in a cave, kept in by its rock
@@ -326,10 +336,16 @@ export class Builder {
     this.cam.pitch = Math.max(CAMERA.minPitch, Math.min(CAMERA.maxPitch, this.cam.pitch + dy * DRAG));
   }
 
-  // The wheel zooms the camera, unless wheel(e), a tool's, takes it.
+  // The wheel zooms the camera, unless wheel(e), a tool's, takes it: in past the nearest it
+  // goes to first person (distance 0), and out of that back to the nearest.
   onWheel(e) {
     e.preventDefault();
     if (this.wheel?.(e)) return;
-    this.cam.distance = Math.max(CAMERA.min, Math.min(CAMERA.max, this.cam.distance * Math.exp(e.deltaY * 0.001)));
+    if (this.cam.distance === 0) {
+      if (e.deltaY > 0) this.cam.distance = CAMERA.min;
+      return;
+    }
+    const distance = this.cam.distance * Math.exp(e.deltaY * 0.001);
+    this.cam.distance = distance < CAMERA.min ? (e.deltaY < 0 && this.cam.distance <= CAMERA.min ? 0 : CAMERA.min) : Math.min(CAMERA.max, distance);
   }
 }
