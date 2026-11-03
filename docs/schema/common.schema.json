@@ -798,15 +798,26 @@
             "self",
             "enemies",
             "allies",
-            "summons"
+            "summons",
+            "holder",
+            "caster"
           ]
         },
         "around": {
           "enum": [
             "self",
             "target",
-            "ground"
+            "ground",
+            "holders"
           ]
+        },
+        "holding": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "description": "with affects enemies or allies: only those holding one of these statuses from you, wherever they are"
         },
         "radius": {
           "type": "number",
@@ -1183,6 +1194,10 @@
           "type": "number",
           "exclusiveMinimum": 0,
           "description": "the most it counts"
+        },
+        "holders": {
+          "$ref": "#/$defs/id",
+          "description": "how many units hold this status from you"
         }
       }
     },

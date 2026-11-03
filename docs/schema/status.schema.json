@@ -169,6 +169,17 @@
             "type": "number",
             "description": "modify: makes it this. Applied before `add` and `multiply`"
           },
+          "of": {
+            "enum": [
+              "holder",
+              "caster"
+            ],
+            "description": "trigger: whose events it watches, the holder's by default"
+          },
+          "notOnHolder": {
+            "type": "boolean",
+            "description": "trigger: not when the event landed on the holder"
+          },
           "softCap": {
             "type": "integer",
             "minimum": 1,

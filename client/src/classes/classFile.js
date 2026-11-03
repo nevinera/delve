@@ -50,6 +50,7 @@ export function classProblems(made) {
   const counted = (where, c) => {
     if (!c) return;
     if (c.statusStacks) status(where, c.statusStacks);
+    if (c.holders) status(where, c.holders);
     (c.statusesOnTarget ?? []).forEach((id) => status(where, id));
     (c.unitsOut ?? []).filter((id) => !units.has(id)).forEach((id) => problems.push(`${where} points at a unit this class doesn't have (${id}).`));
     if (c.resource) resource(where, c.resource);
@@ -57,6 +58,7 @@ export function classProblems(made) {
   const effect = (where, e) => {
     counted(where, e.perCount);
     (e.amount?.shareOf?.statuses ?? []).forEach((id) => status(where, id));
+    (e.holding ?? []).forEach((id) => status(where, id));
     conditions(where, e.when);
     if (e.type === "status" || e.type === "consume") status(where, e.status);
     if (e.type === "resource") resource(where, e.resource);

@@ -62,6 +62,7 @@ const perCountField = (made) => ({
     { key: "statusStacks", label: "stacks of", type: "select", none: "none", options: statusesOf(made) },
     { key: "statusesFromMe", label: "your statuses on the target", type: "check" },
     { key: "statusesOnTarget", label: "of these on the target", type: "multi", options: statusesOf(made) },
+    { key: "holders", label: "units holding", type: "select", none: "none", options: statusesOf(made) },
     { key: "unitsOut", label: "units out", type: "multi", options: unitsOf(made) },
     { key: "resource", type: "select", none: "none", options: resourcesOf(made) },
     { key: "add", type: "number", hint: "this much per count, not the whole amount again" },
@@ -104,8 +105,9 @@ export function writeCondition({ kind, ...c }) {
 
 const effectFields = (made, nested = false) => [
   { key: "type", type: "select", options: ["damage", "heal", "resource", "status", "interrupt", "taunt", "move", "dispel", "consume", "cooldown", "summon", "command", "area", "resurrect"] },
-  { key: "affects", type: "select", options: ["target", "self", "enemies", "allies"] },
-  { key: "around", type: "select", none: "self", options: ["target", "ground"], show: (e) => ["enemies", "allies"].includes(e.affects) },
+  { key: "affects", type: "select", options: ["target", "self", "enemies", "allies", "holder", "caster"] },
+  { key: "holding", type: "multi", options: statusesOf(made), hint: "only those holding one of these from you", show: (e) => ["enemies", "allies"].includes(e.affects) },
+  { key: "around", type: "select", none: "self", options: ["target", "ground", "holders"], show: (e) => ["enemies", "allies"].includes(e.affects) },
   { key: "radius", type: "number", label: "radius ft", min: 0, show: (e) => ["enemies", "allies"].includes(e.affects) },
   { key: "height", type: "number", label: "height ft", min: 0, hint: "above and below its center, 15 by default", show: (e) => e.type !== "move" && ["enemies", "allies"].includes(e.affects) },
   { key: "cone", type: "number", label: "cone °", min: 0, hint: "a slice in front of you, around yourself only", show: (e) => ["enemies", "allies"].includes(e.affects) },
@@ -351,6 +353,8 @@ const statusEffectFields = (made, nested = false) => [
   { key: "resource", type: "select", none: "any", options: resourcesOf(made), show: triggerOn("spend") },
   { key: "param", label: "named", hint: "a name other things can change this number by", show: is("stat", "periodic", "absorb") },
   { key: "chance", type: "number", min: 0, hint: "0 to 1, 1 by default", show: is("trigger") },
+  { key: "of", label: "watches", type: "select", none: "the holder", options: ["caster"], show: is("trigger") },
+  { key: "notOnHolder", label: "not on the holder", type: "check", show: is("trigger") },
   { key: "every", label: "every nth", type: "number", min: 1, hint: "fires only on every this-many-th time, or for spend every this many points", show: is("trigger") },
   { key: "resetOn", label: "starts over on", type: "select", none: "never", options: TRIGGERS, show: (e) => e.type === "trigger" && e.every },
   { key: "chancePerSpent", label: "chance per point", type: "number", min: 0, show: is("trigger") },
