@@ -7,7 +7,7 @@ const (
 	WeaponDamage = 10.0 // what a swing does, until characters hold real weapons
 	CritChance   = 0.05
 	CritScale    = 2.0
-	MeleeFt      = 8.0 // how far melee reaches
+	MeleeFt      = 15.0 // how far melee reaches, until units have their own reach
 	GCDSeconds   = 1.5
 )
 
