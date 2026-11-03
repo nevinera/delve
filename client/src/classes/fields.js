@@ -214,7 +214,7 @@ export const abilityFields = (made) => [
 ];
 
 const statusEffectFields = (made, nested = false) => [
-  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "stealth", "modify", "none"] },
+  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "stealth", "modify", "immune", "none"] },
   { key: "stat", type: "select", none: "pick one", options: STATS, show: is("stat") },
   { key: "abilities", type: "multi", options: abilitiesOf(made), show: is("modify", "trigger", "stat") },
   { key: "tag", label: "or tag", show: is("modify", "trigger", "stat") },
@@ -232,12 +232,15 @@ const statusEffectFields = (made, nested = false) => [
   { key: "does", type: "select", options: ["damage", "heal", "resource"], show: is("periodic") },
   { key: "amount", type: "amount", show: is("periodic", "absorb") },
   { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: (e) => e.type === "periodic" && e.does === "resource" },
-  { key: "schools", type: "multi", options: SCHOOLS, show: is("absorb", "trigger", "stat") },
+  { key: "schools", type: "multi", options: SCHOOLS, show: is("absorb", "trigger", "stat", "immune") },
   { key: "control", type: "select", options: ["stun", "root", "silence", "incapacitate", "disorient", "fear", "disarm"], show: is("control") },
   { key: "on", type: "select", options: TRIGGERS, show: is("trigger") },
   { key: "hit", type: "select", none: "any", options: ["auto", "ability", "melee", "direct", "periodic", "area", "main", "others", "single"], show: is("trigger", "stat", "modify") },
   { key: "atTargets", label: "at targets hit", type: "number", min: 2, step: 1, show: is("trigger", "modify") },
   { key: "category", hint: "a word like bleed or disease", show: is("stat", "trigger", "periodic") },
+  { key: "controls", type: "multi", options: ["stun", "root", "silence", "incapacitate", "disorient", "fear", "disarm", "slow", "interrupt", "knockback", "pull", "pushback", "charm", "sleep"], show: is("immune") },
+  { key: "all", label: "all damage", type: "check", show: is("immune") },
+  { key: "harmful", label: "harmful statuses", type: "check", show: is("immune") },
   { key: "casterOnly", label: "only with its caster", type: "check", show: is("trigger", "stat") },
   { key: "source", type: "select", none: "the holder", options: ["summons", "both"], show: is("trigger", "stat") },
   { key: "units", type: "multi", options: unitsOf(made), show: (e) => e.source === "summons" || e.source === "both" },

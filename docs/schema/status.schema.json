@@ -126,6 +126,7 @@
               "trigger",
               "stealth",
               "modify",
+              "immune",
               "none"
             ]
           },
@@ -190,6 +191,36 @@
               "fear",
               "disarm"
             ]
+          },
+          "controls": {
+            "type": "array",
+            "items": {
+              "enum": [
+                "stun",
+                "root",
+                "silence",
+                "incapacitate",
+                "disorient",
+                "fear",
+                "disarm",
+                "slow",
+                "interrupt",
+                "knockback",
+                "pull",
+                "pushback",
+                "charm",
+                "sleep"
+              ]
+            },
+            "description": "immune: these kinds of control"
+          },
+          "all": {
+            "type": "boolean",
+            "description": "immune: to all damage and harmful effects"
+          },
+          "harmful": {
+            "type": "boolean",
+            "description": "immune: to harmful statuses"
           },
           "on": {
             "enum": [
