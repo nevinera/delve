@@ -4,8 +4,9 @@ require "net/http"
 module Bot
   # The ground of a continent as /create's builder walks it, and as the game server checks it
   # (game-server/internal/worlds/ground.go): heights and water from its version 2 plate files,
-  # pressed down by level slabs, slabs and objects from its placed files, and the trees and objects
-  # in the tiles' slots. Off the tiles is sea. Boulders across courses' cascades aren't in its way.
+  # pressed down by level slabs, slabs and objects from its placed files, the trees and objects in
+  # the tiles' slots, and the floors and rock of its caves files. Off the tiles is sea. Boulders
+  # across courses' cascades aren't in its way.
   class Ground
     EMPTY_FT = -100.0 # the sea floor's height where there are no tiles
     SWIM_DEPTH = 4.5
@@ -26,30 +27,35 @@ module Bot
       @plates = {}
     end
 
-    # The ground at continent feet (x, z) as {ground:, water:}, water nil where it's dry. Off the
-    # tiles it's the sea's.
+    # The ground at continent feet (x, z) as {ground:, water:, floors:, open:}, water nil where
+    # it's dry. Off the tiles it's the sea's. Floors are the smoothed floors of caves under the
+    # ground, and open is whether a cave opens the ground itself, at a mouth, so it isn't there to
+    # stand on.
     def at(x, z)
-      {ground: height_at(x, z) || EMPTY_FT, water: water_at(x, z)&.first}
+      height = height_at(x, z)
+      floors, open = height ? cave_floors(x, z, height) : [[], false]
+      {ground: height || EMPTY_FT, water: water_at(x, z)&.first, floors:, open:}
     end
 
-    # Where the feet rest at (x, z), for feet at `feet`, as [height, swimming]: the ground, or a
-    # swimming depth under water too deep to stand in, or a slab's top, whichever is highest within
-    # a step of the feet.
+    # Where the feet rest at (x, z), for feet at `feet`, as [height, swimming]: the ground (but at
+    # a cave's mouth), or a swimming depth under water too deep to stand in, or a slab's top or a
+    # cave's floor, whichever is highest within a step of the feet.
     def stand(x, z, feet = Float::INFINITY)
       sample = at(x, z)
       water = sample[:water]
       swim = !water.nil? && water - SWIM_DEPTH > sample[:ground]
       ground = swim ? water - SWIM_DEPTH : sample[:ground]
-      heights = [ground, *footholds(x, z)]
+      heights = [*(ground unless sample[:open]), *footholds(x, z), *sample[:floors]]
       reachable = heights.select { _1 <= feet + STEP_FT }
       height = reachable.any? ? reachable.max : heights.min
       [height, swim && height == ground]
     end
 
-    # Whether the straight move from a to b ([x, y, z], the feet's height) runs into a slab at the
-    # bot's body height, or a tree or object. What it starts in doesn't stop it.
+    # Whether the straight move from a to b ([x, y, z], the feet's height) runs into a slab or a
+    # cave's rock at the bot's body height, or a tree or object. What it starts in doesn't stop it.
     def enters?(a, b)
       reach = Math.hypot(b[0] - a[0], b[2] - a[2])
+      return true if enters_cave_rock?(a, b, reach)
       mx, mz = (a[0] + b[0]) / 2, (a[2] + b[2]) / 2
       return true if slabs_near(mx, mz, reach / 2).any? do |slab|
         BODY_HEIGHTS.any? { |up| slab.enters?([a[0], a[1] + up, a[2]], [b[0], b[1] + up, b[2]]) }
@@ -90,6 +96,55 @@ module Bot
     def placed_objects(px, pz) = plate(px, pz)&.dig(:objects) || []
 
     private
+
+    # The smoothed floors of the caves under the ground at (x, z), the ground `ground` there, and
+    # whether a cave opens the ground itself.
+    def cave_floors(x, z, ground)
+      spans = spans_at((x / Caves::VOXEL_FT).floor, (z / Caves::VOXEL_FT).floor)
+      open = spans.any? { |s| s[0] < ground && ground < s[1] }
+      floors = spans.select { _1[0] <= ground }.map { Caves.floor_at(method(:spans_at), x, z, _1) }
+      [floors, open]
+    end
+
+    # Whether the move from a to b, `reach` across, goes into a cave's rock at a body height it
+    # didn't start in, checked every half foot along it.
+    def enters_cave_rock?(a, b, reach)
+      return false unless near_caves?(b[0], b[2])
+      steps = [1, (reach / 0.5).ceil].max
+      BODY_HEIGHTS.any? do |up|
+        next false if in_cave_rock?(a[0], a[1] + up, a[2])
+        (1..steps).any? do |n|
+          u = n.to_f / steps
+          in_cave_rock?(a[0] + (b[0] - a[0]) * u, a[1] + up + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u)
+        end
+      end
+    end
+
+    # Whether (x, y, z) is in a cave's rock: under the ground, near caves, and in none of their air.
+    def in_cave_rock?(x, y, z)
+      ground = height_at(x, z)
+      return false if ground.nil? || y >= ground || !near_caves?(x, z)
+      spans_at((x / Caves::VOXEL_FT).floor, (z / Caves::VOXEL_FT).floor).none? { |s| y.between?(s[0], s[1]) }
+    end
+
+    # Whether the tile at (x, z), or one beside it, has caves, as /create has it.
+    def near_caves?(x, z)
+      tx, tz = (x / TILE_FT).floor, (z / TILE_FT).floor
+      (-1..1).any? { |dz| (-1..1).any? { |dx| cave_tile(tx + dx, tz + dz) } }
+    end
+
+    # Tile (tx, tz)'s cave columns, or nil where it has no caves.
+    def cave_tile(tx, tz)
+      _, plate, index = tile_at(tx, tz)
+      plate&.dig(:caves, index)
+    end
+
+    # Continent column (ci, cj)'s cave spans, lowest first.
+    def spans_at(ci, cj)
+      tx, tz = ci.div(Caves::TILE_COLUMNS), cj.div(Caves::TILE_COLUMNS)
+      columns = cave_tile(tx, tz) or return []
+      columns[(cj - tz * Caves::TILE_COLUMNS) * Caves::TILE_COLUMNS + ci - tx * Caves::TILE_COLUMNS] || []
+    end
 
     def footholds(x, z) = slabs_near(x, z, 0).flat_map { _1.footholds(x, z, MAX_CLIMB) }
 
@@ -185,14 +240,16 @@ module Bot
       range(z, reach, PLATE_FT).flat_map { |pz| range(x, reach, PLATE_FT).filter_map { |px| plate(px, pz) } }
     end
 
-    # Plate (px, pz)'s tiles, slabs and objects, or nil where it has neither a plate nor a placed
-    # file.
+    # Plate (px, pz)'s tiles, slabs, objects and caves, or nil where it has neither a plate nor a
+    # placed file.
     def plate(px, pz)
       return @plates[[px, pz]] if @plates.key?([px, pz])
       text = @fetch.call("#{@base}/plates/#{px}_#{pz}.plate")
       placed = @fetch.call("#{@base}/placed/#{px}_#{pz}.json")
+      caves = text && @fetch.call("#{@base}/caves/#{px}_#{pz}.caves")
       @plates[[px, pz]] = (text || placed) && {
         tiles: text ? Plate.read(text, px, pz) : {},
+        caves: caves ? Caves.read(caves) : {},
         **read_placed(placed),
         pressed: {},
         filled: {}

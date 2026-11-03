@@ -84,4 +84,29 @@ RSpec.describe Bot::Ground do
     # The stump placed by hand.
     expect(ground.enters?([410, 36.75, 120], [430, 36.75, 120])).to be(true)
   end
+
+  it "finds the cave floors /create finds, and stands on them under the ground" do
+    expect(expected["caveFloors"]).not_to be_empty
+    expected["caveFloors"].each do |point|
+      x, z = point["at"]
+      sample = ground.at(x, z)
+      expect(sample[:open]).to eq(point["open"]), "at #{point["at"]}"
+      expect(sample[:floors].size).to eq(point["floors"].size), "at #{point["at"]}"
+      sample[:floors].zip(point["floors"]).each { |a, b| expect(a).to be_within(1e-6).of(b), "at #{point["at"]}" }
+    end
+    # In the domed cave, on its floor; at the tunnel's mouth, not on the ground it opens.
+    expect(ground.stand(550, 430, -20)[0]).to be_within(1e-6).of(-20)
+    expect(ground.stand(550, 430, 20)[0]).to be > 0
+    mouth = expected["caveFloors"].find { _1["open"] }
+    expect(ground.stand(*mouth["at"], mouth["ground"])[0]).to be_within(1e-6).of(mouth["floors"].max)
+  end
+
+  it "won't walk into a cave's rock, but will through its mouth and along it" do
+    expect(ground.enters?([545, -20, 425], [555, -20, 435])).to be(false)
+    expect(ground.enters?([550, -20, 450], [550, -20, 470])).to be(true)
+    expect(ground.enters?([535, 4.7, 325], [540, -3.8, 350])).to be(false)
+    expect(ground.enters?([530, 17.5, 296], [531.3, 12.1, 301.7])).to be(false)
+    expect(ground.enters?([550, -20, 470], [550, -20, 450])).to be(false)
+    expect(ground.enters?([520, 14, 460], [530, 14, 470])).to be(false)
+  end
 end

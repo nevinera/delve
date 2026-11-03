@@ -86,7 +86,7 @@ The game server (`game-server/`) holds every character in a world. Browsers conn
 - `internal/game` places characters on a layer, works out who's near whom (the 3×3 tiles around each), checks that their movement adds up (speed, clocks, rising and falling, the ground, slabs and cave floors under them, and not walking into slabs, cave rock, trees or objects), and passes it on.
 - `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token, and writes their positions back to it (`WorldCharacter`, one per character per world). The server never writes to the database itself.
 
-Bots play characters, so you can test with others around: `script/game/bot` (code in `lib/bot/`) enters a released world as a character, the way the play page does, and runs a strategy. A bot fetches plates and placed files from GitHub and walks the ground as the game server reads it, stopping at slabs, trees and objects in its way. It doesn't know about the boulders across cascades, or about caves. `null` stands still, and `follow` runs after a named character.
+Bots play characters, so you can test with others around: `script/game/bot` (code in `lib/bot/`) enters a released world as a character, the way the play page does, and runs a strategy. A bot fetches plate, placed and caves files from GitHub and walks the ground as the game server reads it, standing on cave floors and stopping at slabs, cave rock, trees and objects in its way. It doesn't know about the boulders across cascades. `null` stands still, and `follow` runs after a named character.
 
 ## Docs
 
