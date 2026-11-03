@@ -66,6 +66,8 @@ export function classProblems(made) {
     if (e.type === "area") {
       if (e.status) status(where, e.status);
       if (e.effect) effect(where, e.effect);
+      if (e.onEnter) effect(where, e.onEnter);
+      (e.effects ?? []).forEach((each) => effect(where, each));
     }
     if (e.type === "summon" && !units.has(e.unit)) problems.push(`${where} summons a unit this class doesn't have (${e.unit}).`);
     (e.units ?? []).filter((id) => !units.has(id)).forEach((id) => problems.push(`${where} points at a unit this class doesn't have (${id}).`));

@@ -59,6 +59,19 @@
       "minimum": 1,
       "description": "how many units can hold it from you at once. Applying it to another takes it off the oldest"
     },
+    "leash": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "it ends if the holder goes further than this many ft from whoever applied it"
+    },
+    "tags": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "minItems": 1,
+      "description": "free-form words a dispel can pick it by"
+    },
     "breaksOn": {
       "type": "array",
       "items": {
