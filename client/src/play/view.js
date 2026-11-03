@@ -58,6 +58,7 @@ export class PlayView {
     this.walker = null;
     this.last = null;
     grid.value = 0;
+    canvas.addEventListener("contextmenu", (e) => e.preventDefault());
     new ResizeObserver(() => this.resize()).observe(canvas);
   }
 
