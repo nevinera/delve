@@ -105,7 +105,7 @@ export function writeCondition({ kind, ...c }) {
 }
 
 const effectFields = (made, nested = false) => [
-  { key: "type", type: "select", options: ["damage", "heal", "resource", "status", "interrupt", "taunt", "move", "dispel", "extend", "consume", "extraTargets", "castAbility", "cooldown", "summon", "command", "area", "resurrect"] },
+  { key: "type", type: "select", options: ["damage", "heal", "resource", "status", "interrupt", "taunt", "move", "dispel", "extend", "consume", "extraTargets", "castAbility", "threat", "reveal", "cooldown", "summon", "command", "area", "resurrect"] },
   { key: "affects", type: "select", options: ["target", "self", "enemies", "allies", "hit", "holder", "caster"] },
   { key: "statuses", type: "multi", options: statusesOf(made), show: is("extend", "consume") },
   { key: "seconds", type: "number", show: is("extend", "consume") },
@@ -163,6 +163,8 @@ const effectFields = (made, nested = false) => [
   { key: "units", type: "multi", options: unitsOf(made), show: (e) => e.type === "command" || e.affects === "summons" },
   { key: "abilities", type: "multi", options: abilitiesOf(made), show: is("cooldown") },
   { key: "free", type: "check", show: is("castAbility") },
+  { key: "clear", label: "wipes it", type: "check", show: is("threat") },
+  { key: "multiply", type: "number", show: is("threat") },
   { key: "strength", type: "number", min: 0, show: is("castAbility") },
   { key: "tag", label: "or tag", show: is("cooldown") },
   { key: "by", label: "seconds off", type: "number", min: 0, show: is("cooldown") },
@@ -283,6 +285,7 @@ export const abilityFields = (made) => [
   { key: "castTime", label: "cast s", type: "number", min: 0, hint: "0 is instant" },
   { key: "castWhileMoving", label: "cast moving", type: "check" },
   { key: "whileCasting", label: "use while casting", type: "check" },
+  { key: "keepsStealth", label: "keeps stealth", type: "check" },
   { key: "replaces", type: "select", none: "nothing", options: abilitiesOf(made) },
   { key: "channel", type: "group", fields: [{ key: "duration", label: "duration s", type: "number", min: 0 }, { key: "ticks", type: "number", min: 1, step: 1 }] },
   { key: "speed", label: "projectile ft/s", type: "number", min: 0, hint: "leave it out for one that lands at once" },
@@ -326,7 +329,7 @@ export const abilityFields = (made) => [
 ];
 
 const statusEffectFields = (made, nested = false) => [
-  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "stealth", "modify", "immune", "aura", "transform", "store", "extraTargets", "gear", "none"] },
+  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "stealth", "modify", "immune", "aura", "transform", "store", "extraTargets", "gear", "untargetable", "redirectThreat", "countsAsStealthed", "stealthLinger", "stealthProtected", "none"] },
   { key: "stat", type: "select", none: "pick one", options: STATS, show: is("stat") },
   { key: "on", label: "keeps", type: "select", options: ["dealDamage", "heal"], show: is("store") },
   { key: "share", type: "number", show: (e) => e.type === "store" || e.type === "extraTargets" || (e.type === "stat" && e.fromStat) || (e.type === "modify" && e.fromStat) },
@@ -359,6 +362,10 @@ const statusEffectFields = (made, nested = false) => [
   { key: "does", type: "select", options: ["damage", "heal", "resource"], show: is("periodic") },
   { key: "amount", type: "amount", show: is("periodic", "absorb") },
   { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: (e) => (e.type === "periodic" && e.does === "resource") || (e.type === "stat" && e.stat?.startsWith("resource")) },
+  { key: "seconds", type: "number", min: 0, show: is("stealthLinger", "stealthProtected", "redirectThreat") },
+  { key: "to", type: "select", none: "target", options: ["caster"], show: is("redirectThreat") },
+  { key: "afterSeconds", label: "after s", type: "number", min: 0, show: is("untargetable") },
+  { key: "onlyBelow", label: "only under health %", type: "number", min: 0, show: is("untargetable") },
   { key: "spendsUpTo", label: "can spend more", type: "number", min: 0, show: is("modify") },
   { key: "byExtraSpent", label: "times as much for spending it", type: "number", min: 0, show: is("modify") },
   { key: "schools", type: "multi", options: SCHOOL_LISTS, show: is("absorb", "trigger", "stat", "immune", "periodic") },

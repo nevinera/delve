@@ -78,6 +78,10 @@
       "type": "boolean",
       "description": "you can use it while casting something else"
     },
+    "keepsStealth": {
+      "type": "boolean",
+      "description": "using it doesn't break stealth"
+    },
     "channel": {
       "type": "object",
       "required": [

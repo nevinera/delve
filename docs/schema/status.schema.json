@@ -172,6 +172,11 @@
               "store",
               "extraTargets",
               "gear",
+              "untargetable",
+              "redirectThreat",
+              "countsAsStealthed",
+              "stealthLinger",
+              "stealthProtected",
               "none",
               "transform"
             ]
@@ -534,6 +539,27 @@
                 "const": "max"
               }
             ]
+          },
+          "seconds": {
+            "type": "number",
+            "exclusiveMinimum": 0,
+            "description": "stealthLinger, stealthProtected, redirectThreat: how long it holds"
+          },
+          "to": {
+            "enum": [
+              "target",
+              "caster"
+            ],
+            "description": "redirectThreat: who gets the threat"
+          },
+          "afterSeconds": {
+            "type": "number",
+            "minimum": 0,
+            "description": "untargetable: it starts this many seconds in"
+          },
+          "onlyBelow": {
+            "type": "number",
+            "description": "untargetable: only while the holder is under this health percentage"
           },
           "byExtraSpent": {
             "type": "number",

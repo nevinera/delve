@@ -817,7 +817,9 @@
             "area",
             "extend",
             "extraTargets",
-            "castAbility"
+            "castAbility",
+            "threat",
+            "reveal"
           ]
         },
         "affects": {
@@ -977,6 +979,14 @@
           "type": "integer",
           "minimum": 1,
           "description": "castAbility: the empowered level it casts at"
+        },
+        "clear": {
+          "type": "boolean",
+          "description": "threat: wipes it, so enemies stop chasing you for it"
+        },
+        "multiply": {
+          "type": "number",
+          "description": "threat: multiplies what it is"
         },
         "statuses": {
           "type": "array",
