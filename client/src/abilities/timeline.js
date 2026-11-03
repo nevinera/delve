@@ -23,9 +23,20 @@ const defaultOn = (when, ability) => (when !== "impact" ? "caster" : ability.tar
 
 export const schoolColors = (ability) => SCHOOL_COLORS[ability.school ?? ability.schools?.[0]] ?? SCHOOL_COLORS.physical;
 
-// Which clip it plays as it's let go: a melee attack, a shot if it's physical with a ranged weapon
-// in hand, or a spell.
-function releaseRole(ability, ranged) {
+// The nearest clip a body has for each `animation`. Those with none of their own wait on more clips.
+const ANIMATION_ROLES = {
+  attack: "attack", offhandAttack: "attack", dualAttack: "attack", stab: "attack", kick: "attack", spinningKick: "attack", punch: "attack",
+  bigAttack: "bigAttack", spinningAttack: "bigAttack", shieldBash: "bigAttack", groundSlam: "bigAttack",
+  shoot: "shoot", aimedShot: "shoot", rapidShot: "shoot", throw: "shoot",
+  cast: "cast", castBig: "cast", castChannel: "cast", castGround: "cast", castOverhead: "cast", castSelf: "cast", castOnAlly: "cast", pray: "cast", drink: "cast", transform: "cast", roll: "cast",
+  shout: "battleCry", breath: "breath",
+};
+
+// Which clip it plays as it's let go, or null for none: what its `animation` says, or else a melee
+// attack, a shot if it's physical with a ranged weapon in hand, or a spell.
+export function releaseRole(ability, ranged) {
+  if (ability.animation === "none") return null;
+  if (ANIMATION_ROLES[ability.animation]) return ANIMATION_ROLES[ability.animation];
   if (ability.range === "melee") return "attack";
   if (ability.school === "physical" || !ability.school) return ranged ? "shoot" : "cast";
   return "cast";
@@ -54,7 +65,8 @@ export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false }
     events.push({ at: launch, kind: "clip", role: "channel", loop: true });
     events.push({ at: launch, kind: "bar", until: end, label: ability.name, draining: true });
   } else {
-    events.push({ at: launch, kind: "clip", role: releaseRole(ability, ranged) });
+    const role = releaseRole(ability, ranged);
+    if (role) events.push({ at: launch, kind: "clip", role });
   }
 
   // When a visual or sound with this `when` happens.

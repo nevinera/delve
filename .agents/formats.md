@@ -673,7 +673,7 @@ An area is a cylinder: `radius` across, and `height` above and below its center,
 ```
 
 - `primaryStats`: one or more of `strength`, `agility` and `intellect`. A hybrid lists the ones its roles use. Gear rolled for the class uses the first.
-- `resources`: one to three. The first is the primary resource, and the UI shows all of them. `kind` sets the rules:
+- `resources`: one to three. The first is the primary resource. The UI always shows it, and shows the others once you know an ability that spends or gives them. `kind` sets the rules:
   - `mana`: its maximum comes from level, and it regenerates over time.
   - `energy`: 100, regenerating 10 a second, faster with haste.
   - `rage`: 100, built by dealing and taking damage, decaying out of combat.
@@ -742,7 +742,7 @@ Only a class's `id` and `name` are required for now, so the class editor can sav
 - `speed`: a projectile's speed. Its effects aimed at the target land when it arrives, and fizzle if the target dies first.
 - `school`: the school of its damage, unless an effect says otherwise. `schools` instead lists several, or `all` for every school. A hit in several counts as each of them: a bonus to any applies, and immunity has to cover them all.
 - `effects`: what it does, below.
-- `animation`: what the body does as it uses it, by what it looks like and not by clip, so each body plays its own version. Left out, it goes by the ability: `attack` in melee, `shoot` for a physical one with a ranged weapon, and `cast` otherwise. A body with no clip for it plays the nearest it has.
+- `animation`: what the body does as it uses it, by what it looks like and not by clip, so each body plays its own version. Left out, it goes by the ability: `attack` in melee, `shoot` for a physical one with a ranged weapon, and `cast` otherwise. The client plays the nearest clip a body has: `attack`, `bigAttack`, `shoot`, `cast`, `battleCry` or `breath`, and none for `none`.
   - Melee: `attack`, `offhandAttack`, `dualAttack` (both weapons), `bigAttack`, `spinningAttack`, `stab`, `kick`, `spinningKick`, `punch`, `shieldBash`, `groundSlam`.
   - Ranged: `shoot`, `aimedShot`, `rapidShot`, `throw`.
   - Spells: `cast`, `castBig`, `castChannel`, `castGround`, `castOverhead`, `castSelf`, `castOnAlly`, `pray`.
@@ -1094,6 +1094,7 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `heartbeat` | `t`, `at`, `yaw` | twice a second while moving or turning, once a second otherwise |
 | `use` | `ability`, `target`, `spot` | you ask to use an ability: `target` is who it's aimed at, 0 for no one, and `spot` is `[x, y, z]` for one aimed at the ground |
 | `stop` | none | you stop what you're casting or channelling |
+| `attack` | `target` | you start auto-attacking `target`, or stop with 0 |
 | `command` | `line` | you typed a line starting with `/`. The server answers with `log` |
 
 `t` is the client's clock in milliseconds when it sent the message, from a clock that only goes forward (`performance.now()` in a browser). Without it, the server times the message by when it arrived.
@@ -1118,18 +1119,20 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `moved` | `id`, `at`, `yaw`, `move` | someone near you sent `move` or `heartbeat` |
 | `correct` | `at`, `yaw` | your last report didn't add up: you're back at `at` |
 | `used` | `id`, `class`, `ability`, `target`, `spot`, `gcd` | someone near you started using an ability: clients play its timeline from this |
+| `swung` | `id`, `target` | someone near you started an auto-attack swing |
+| `attacking` | `target` | who you're auto-attacking now, 0 for no one |
 | `stopped` | `id` | someone's cast or channel ended early |
 | `refused` | `ability`, `why` | you can't use that now |
 | `cooldown` | `ability`, `seconds` | an ability of yours started its cooldown |
-| `hit` | `from`, `ability`, `on`, `effect`, `amount`, `crit`, `resource`, `status`, `class`, `lasts`, `dps`, `health`, `maxHealth` | one of an ability's effects landed on someone near you |
+| `hit` | `from`, `ability` (none for an auto-attack), `on`, `effect`, `amount`, `crit`, `missed`, `resource`, `status`, `class`, `lasts`, `dps`, `health`, `maxHealth` | one of an ability's effects landed on someone near you |
 | `health` | `id`, `health`, `maxHealth` | a training dummy reset |
 | `statusGone` | `id`, `status` | a status ran out |
-| `resources` | `resources` | how much of each resource you have, by key, at most twice a second |
+| `resources` | `resources`, `max` | how much of each resource you have and can hold, by key, at most twice a second |
 | `log` | `kind` (`system`, `error` or `debug`), `text` | a line for your log |
 | `teleport` | `continent`, `at`, `yaw` | the server moved you there. On another continent, the client loads it |
 | `error` | `message` | before the server closes the connection |
 
-A character is `{ id, name, look, continent, at, yaw, move, class, dummy, health, maxHealth }`. `look` is the character builder's look. Training dummies come as characters with `dummy: true` and negative ids, in your `snapshot`: all of those on your continent.
+A character is `{ id, name, look, continent, at, yaw, move, class, level, dummy, health, maxHealth }`. `look` is the character builder's look. Training dummies come as characters with `dummy: true` and negative ids, in your `snapshot`: all of those on your continent.
 
 "Near you" is the 3×3 tiles around your tile, on your continent and layer.
 
@@ -1160,13 +1163,14 @@ A report that fails isn't passed on. The server sends `correct`, and the client 
 
 The game server decides what abilities do, from the class files in the released commit. It checks `use` against where it has you, so the client reports where you are just before it.
 
-- **Class:** you play the one you picked in this world, and have all its abilities.
-- **Checks:** you need a class that has the ability, nothing else being cast, the global cooldown (1.5 s, or the ability's `gcd`) and its cooldown or a charge over, what it costs, to be standing still if it takes time and isn't `castWhileMoving`, a target of the right kind, to be in range (melee reaches 8 ft), and to face an enemy target (the half circle in front of you).
+- **Class:** you play the one you picked in this world, at your level there, which starts at 1. You know its abilities up to your level. What a specialization or talent gives isn't known yet, since nothing offers those.
+- **Auto-attack:** `attack` starts it, and so does using a melee ability on an enemy. Every 2 s you swing for a weapon's damage, landing 0.3 s later, if the target's in melee range and in front of you and you aren't casting. It stops when you ask or teleport.
+- **Checks:** you need a class that has the ability, nothing else being cast, the global cooldown (1.5 s, or the ability's `gcd`) and its cooldown or a charge over, what it costs, to be standing still if it takes time and isn't `castWhileMoving`, a target of the right kind, to be in range (melee reaches 15 ft), and to face an enemy target (the half circle in front of you).
 - **Timing:** the same as the client's timeline. A cast lets go after `castTime`, and spends its cost and starts its cooldown then. A melee hit lands 0.3 s after that. What flies lands when it arrives, at `speed`. A channel lands its effects on each of its ticks, evenly over its `duration`. Moving stops a cast or channel.
-- **Stats:** at level 1, primary stats are 12 and the others 6, stamina 12, attack power is twice the higher of strength and agility, spell power twice intellect, and health ten times stamina. A weapon swing does 10. A hit has a 5% chance to do double.
+- **Stats:** at level 1, primary stats are 12 and the others 6, stamina 12, attack power is twice the higher of strength and agility, spell power twice intellect, and health ten times stamina. A weapon swing does 10. An attack on an enemy has a 5% chance to miss, and a hit has a 5% chance to do double.
 - **Resources:** mana holds 1000 and regains 20 a second, energy holds 100 and regains 10, and rage holds 100, starts empty and falls by 1. Points hold `max` and go by `regen`.
 - **Enemies:** only training dummies, for now. A dummy has 100000 health, never drops below 1, and heals up and starts its damage tally over after 5 s unhit.
-- **Not yet:** an `all` cost spends only its least, and `perSpent`, `byMastery`, `maxHealth` and `shareOfTrigger` amounts and `perSpent` durations count for nothing. The `interrupt`, `taunt`, `move`, `dispel`, `consume`, `cooldown` and `resurrect` effects do nothing, `summon`, `command`, `area`, `aura` and `units` do nothing, `specializations` and `talents` aren't offered, `consumedBy` does nothing, `requires` isn't checked, `animation` does nothing, `threat`, `reveal`, `keepsStealth`, `untargetable`, `redirectThreat`, `countsAsStealthed`, `stealthLinger` and `stealthProtected` do nothing, `upTo`, `perSecond`, cost `when`, `costPerTick`, `spentAs`, `byExtraSpent`, `spendsUpTo` and resource stats do nothing, `castAbility`, `replaces`, `becomes` and `whileCasting` do nothing, `line`, `onEnter`, `leash` and dispel `tags` do nothing, `fromStat`, `extraTargets`, `alwaysCrit`, `critMultiplier` and `gear` do nothing, the `wielding` condition always holds, the `extend` effect, `limit`, `dealsLeft`, `perStack` and `spendsStack` do nothing, `atMax` and `resets` do nothing, `ignores` and `weights` do nothing, `overrides` does nothing, `holding` and `of` do nothing, the `any` target isn't offered, `split`, `others` and `followsTarget` do nothing, and a number for `perTargetHit` counts for nothing, `every` and `resetOn` on a trigger do nothing, `shareOf`, `minimum`, `maximum`, `byMissingHealth` and `drain` do nothing, `schools` on an ability or hit counts as no school, a status's `group` and `keptBy` and the `transform` and `addTags` effects do nothing, `when`, `chance` and `perCount` on an ability's effect aren't checked, what a status does while it's on (`effects`), including `immune`, doesn't apply, nothing checks line of sight, and nothing misses, or is dodged, parried or blocked.
+- **Not yet:** an `all` cost spends only its least, and `perSpent`, `byMastery`, `maxHealth` and `shareOfTrigger` amounts and `perSpent` durations count for nothing. The `interrupt`, `taunt`, `move`, `dispel`, `consume`, `cooldown` and `resurrect` effects do nothing, `summon`, `command`, `area`, `aura` and `units` do nothing, `specializations` and `talents` aren't offered, `consumedBy` does nothing, `requires` isn't checked, `threat`, `reveal`, `keepsStealth`, `untargetable`, `redirectThreat`, `countsAsStealthed`, `stealthLinger` and `stealthProtected` do nothing, `upTo`, `perSecond`, cost `when`, `costPerTick`, `spentAs`, `byExtraSpent`, `spendsUpTo` and resource stats do nothing, `castAbility`, `replaces`, `becomes` and `whileCasting` do nothing, `line`, `onEnter`, `leash` and dispel `tags` do nothing, `fromStat`, `extraTargets`, `alwaysCrit`, `critMultiplier` and `gear` do nothing, the `wielding` condition always holds, the `extend` effect, `limit`, `dealsLeft`, `perStack` and `spendsStack` do nothing, `atMax` and `resets` do nothing, `ignores` and `weights` do nothing, `overrides` does nothing, `holding` and `of` do nothing, the `any` target isn't offered, `split`, `others` and `followsTarget` do nothing, and a number for `perTargetHit` counts for nothing, `every` and `resetOn` on a trigger do nothing, `shareOf`, `minimum`, `maximum`, `byMissingHealth` and `drain` do nothing, `schools` on an ability or hit counts as no school, a status's `group` and `keptBy` and the `transform` and `addTags` effects do nothing, `when`, `chance` and `perCount` on an ability's effect aren't checked, what a status does while it's on (`effects`), including `immune`, doesn't apply, nothing checks line of sight, and nothing is dodged, parried or blocked.
 
 ### Rails and the game server
 

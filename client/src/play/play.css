@@ -313,6 +313,30 @@ body.touch .play-bar button {
   font-size: 12px;
 }
 
+.combat-resource {
+  position: relative;
+  height: 14px;
+  margin-top: 2px;
+  background: #0006;
+}
+
+.combat-resource-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+}
+
+.combat-resource-text {
+  position: absolute;
+  inset: 0;
+  font-size: 11px;
+  line-height: 14px;
+  text-align: center;
+}
+
+.combat-action-on {
+  outline: 2px solid #ffe060;
+}
+
 .combat-actions {
   position: absolute;
   left: 50%;
@@ -425,6 +449,10 @@ body.touch .play-bar button {
   color: #ffe060;
   text-shadow: 0 0 3px #000, 0 1px 2px #000;
   white-space: nowrap;
+}
+
+.combat-float-miss {
+  color: #c0c0c0;
 }
 
 .combat-float-heal {

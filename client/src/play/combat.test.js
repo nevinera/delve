@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hitWords, nextTarget, pickNearest } from "./combat.js";
+import { hitWords, knownAbilities, nextTarget, pickNearest, shownResources } from "./combat.js";
 
 describe("pickNearest", () => {
   const units = [{ id: 1, x: 100, y: 100 }, { id: 2, x: 130, y: 100 }];
@@ -21,5 +21,22 @@ describe("hitWords", () => {
   it("shows damage, marking a crit", () => expect(hitWords({ effect: "damage", amount: 40, crit: true })).toEqual({ text: "40!", kind: "damage" }));
   it("shows healing", () => expect(hitWords({ effect: "heal", amount: 9 })).toEqual({ text: "+9", kind: "heal" }));
   it("names a status", () => expect(hitWords({ effect: "status", status: "c" }, [{ id: "c", name: "Chilled" }]).text).toBe("Chilled"));
+  it("says when it missed", () => expect(hitWords({ effect: "damage", missed: true })).toEqual({ text: "miss", kind: "miss" }));
   it("says nothing of the rest", () => expect(hitWords({ effect: "resource" })).toBeNull());
+});
+
+describe("what you know", () => {
+  const made = {
+    resources: [{ key: "conviction" }, { key: "oath" }],
+    specializations: [{ id: "s", abilities: ["spec"] }],
+    talents: { 15: [{ id: "t", grants: [{ ability: "talent" }] }] },
+    abilities: [{ id: "third", level: 3, cost: [{ resource: "oath" }] }, { id: "first", level: 1 }, { id: "spec", level: 1 }, { id: "talent", level: 1 }, { id: "fifth", level: 5, effects: [{ type: "resource", resource: "oath" }] }],
+  };
+  const ids = (list) => list.map((a) => a.id);
+
+  it("goes by level, lowest first", () => expect(ids(knownAbilities(made, 3))).toEqual(["first", "third"]));
+  it("leaves out what a spec or talent gives", () => expect(ids(knownAbilities(made, 20))).toEqual(["first", "third", "fifth"]));
+  it("shows the primary resource from the start", () => expect(ids(shownResources(made, []).map((r) => ({ id: r.key })))).toEqual(["conviction"]));
+  it("shows another once something you know spends it", () => expect(shownResources(made, knownAbilities(made, 3))).toHaveLength(2));
+  it("shows another once something you know gives it", () => expect(shownResources(made, [made.abilities[4]])).toHaveLength(2));
 });

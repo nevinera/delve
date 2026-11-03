@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { SOUNDS, VISUALS } from "./stock.js";
-import { abilityTimeline, amountText, hitOn, hitText, moveAt } from "./timeline.js";
+import { releaseRole, abilityTimeline, amountText, hitOn, hitText, moveAt } from "./timeline.js";
 
 const kinds = ({ events }, kind) => events.filter((e) => e.kind === kind);
 const damage = { type: "damage", affects: "target", amount: 10 };
@@ -100,4 +100,10 @@ describe("what's shown", () => {
     expect(new Set(VISUALS).size).toBe(VISUALS.length);
     expect(new Set(SOUNDS).size).toBe(SOUNDS.length);
   });
+});
+
+describe("releaseRole", () => {
+  it("plays the nearest clip to the ability's animation", () => expect(releaseRole({ animation: "shieldBash", range: "melee" })).toBe("bigAttack"));
+  it("plays nothing for none", () => expect(releaseRole({ animation: "none", range: "melee" })).toBeNull());
+  it("goes by the ability without one", () => expect(releaseRole({ range: "melee" })).toBe("attack"));
 });

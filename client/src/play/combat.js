@@ -9,6 +9,7 @@ import { PlayLog } from "./log.js";
 // floating over who it lands on, and a log. The game server decides everything: this asks it to use
 // abilities, and shows what it says happened.
 
+const ATTACK_KEY = "`";
 const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 const FLOAT_S = 1.2;
 const REFUSED_S = 2;
@@ -44,11 +45,35 @@ export function nextTarget(units, current) {
 
 // What a `hit` reads as over who it lands on, or null for nothing, and its kind for its color.
 export function hitWords(hit, statuses = []) {
+  if (hit.missed) return { text: "miss", kind: "miss" };
   const crit = hit.crit ? "!" : "";
   if (hit.effect === "damage") return { text: `${hit.amount}${crit}`, kind: "damage" };
   if (hit.effect === "heal") return { text: `+${hit.amount}${crit}`, kind: "heal" };
   if (hit.effect === "status") return { text: statuses.find((s) => s.id === hit.status)?.name ?? hit.status, kind: "status" };
   return null;
+}
+
+// What a character of this level knows of its class. What a specialization or talent gives isn't
+// known until choosing those exists. The game server has the same rule (combat.Class.Knows).
+export function knownAbilities(made, level) {
+  const chosen = new Set((made.specializations ?? []).flatMap((s) => s.abilities ?? []));
+  for (const tier of Object.values(made.talents ?? {})) for (const talent of tier) for (const grant of talent.grants ?? []) if (grant.ability) chosen.add(grant.ability);
+  return (made.abilities ?? []).filter((a) => (a.level ?? 1) <= level && !chosen.has(a.id)).sort((a, b) => (a.level ?? 1) - (b.level ?? 1));
+}
+
+// The resources to show: the primary one always, and the rest once something you know uses them.
+export function shownResources(made, known) {
+  const used = new Set();
+  const look = (effect) => {
+    if (effect?.resource) used.add(effect.resource);
+    (effect?.effects ?? []).forEach(look);
+    if (effect?.effect) look(effect.effect);
+  };
+  for (const ability of known) {
+    (ability.cost ?? []).forEach((cost) => used.add(cost.resource));
+    (ability.effects ?? []).forEach(look);
+  }
+  return (made.resources ?? []).filter((r, i) => i === 0 || used.has(r.key));
 }
 
 export class PlayCombat {
@@ -63,6 +88,7 @@ export class PlayCombat {
     this.cooldowns = new Map(); // ability id -> when it's ready, in performance.now()
     this.gcdUntil = 0;
     this.resources = {};
+    this.resourceMax = {};
     this.health = you.health;
     this.maxHealth = you.maxHealth;
     this.aiming = null;
@@ -94,7 +120,7 @@ export class PlayCombat {
     this.log = new PlayLog((line) => this.connection.command(line));
     this.floatLayer = el("div", { className: "combat-floats" });
     this.hud.replaceChildren(el("div", { className: "combat-frames" }, this.youFrame.root, this.targetFrame.root), this.floatLayer, this.say, this.castBar, this.bar, this.log.root);
-    this.youFrame.name.textContent = this.you.name;
+    this.youFrame.name.textContent = `${this.you.name}${this.you.level ? ` (${this.you.level})` : ""}`;
     this.drawFrame(this.youFrame, this.health, this.maxHealth);
     this.targetRing = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff5040, transparent: true, opacity: 0.8, depthWrite: false }));
     this.targetRing.visible = false;
@@ -121,8 +147,12 @@ export class PlayCombat {
     if (!made) return;
     this.made = made;
     this.buttons = new Map();
-    const abilities = (made.abilities ?? []).slice(0, KEYS.length);
+    this.known = knownAbilities(made, this.you.level ?? 1);
+    const abilities = this.known.slice(0, KEYS.length);
+    this.attackButton = el("button", { type: "button", className: "combat-action", title: "Auto-attack your target, or stop" }, el("span", { className: "combat-action-key", textContent: ATTACK_KEY }), el("span", { className: "combat-action-name", textContent: "Attack" }));
+    this.attackButton.addEventListener("click", () => this.toggleAttack());
     this.bar.replaceChildren(
+      this.attackButton,
       ...abilities.map((ability, i) => {
         const shade = el("div", { className: "combat-action-shade" });
         const button = el("button", { type: "button", className: "combat-action", title: ability.description ?? ability.name }, el("span", { className: "combat-action-key", textContent: KEYS[i] }), el("span", { className: "combat-action-name", textContent: ability.name }), shade);
@@ -135,8 +165,15 @@ export class PlayCombat {
   }
 
   drawResources() {
-    const list = this.made?.resources ?? [];
-    this.youFrame.resources.replaceChildren(...list.map((r) => el("div", { className: "combat-resource", textContent: `${r.name ?? r.key} ${Math.round(this.resources[r.key] ?? 0)}`, style: `color: ${r.color ?? "#ccd"}` })));
+    if (!this.made) return;
+    this.youFrame.resources.replaceChildren(
+      ...shownResources(this.made, this.known).map((r) => {
+        const have = this.resources[r.key] ?? 0;
+        const most = this.resourceMax[r.key] ?? r.max ?? 0;
+        const fill = el("div", { className: "combat-resource-fill", style: `width: ${most ? (100 * have) / most : 0}%; background: ${r.color ?? "#ccd"}` });
+        return el("div", { className: "combat-resource" }, fill, el("span", { className: "combat-resource-text", textContent: `${r.name ?? r.key} ${Math.round(have)}${most ? ` / ${most}` : ""}` }));
+      }),
+    );
   }
 
   bind() {
@@ -150,6 +187,10 @@ export class PlayCombat {
       if (e.key === "Escape" && this.aiming) {
         e.stopImmediatePropagation();
         this.stopAiming();
+        return;
+      }
+      if (e.key === ATTACK_KEY) {
+        this.toggleAttack();
         return;
       }
       const at = KEYS.indexOf(e.key);
@@ -204,7 +245,7 @@ export class PlayCombat {
   }
 
   useAt(index) {
-    const ability = this.made?.abilities?.[index];
+    const ability = this.known?.[index];
     if (!ability) return;
     if (ability.target === "ground") {
       this.aiming = ability;
@@ -214,6 +255,12 @@ export class PlayCombat {
     }
     this.stopAiming();
     this.connection.use(ability.id, this.target ?? 0);
+  }
+
+  // Starts auto-attacking your target, or stops.
+  toggleAttack() {
+    this.connection.attack(this.attacking ? 0 : this.target ?? 0);
+    if (!this.attacking && !this.target) this.refused({ why: "you need an enemy targeted" });
   }
 
   useOnSpot(spot) {
@@ -278,6 +325,15 @@ export class PlayCombat {
     this.runs.set(id, run);
   }
 
+  swung({ id }) {
+    this.unit(id)?.clip("attack");
+  }
+
+  attacking_({ target }) {
+    this.attacking = target;
+    this.attackButton?.classList.toggle("combat-action-on", Boolean(target));
+  }
+
   stopped({ id }) {
     const run = this.runs.get(id);
     if (run) this.stage.stop(run);
@@ -298,8 +354,9 @@ export class PlayCombat {
     this.cooldowns.set(ability, performance.now() + seconds * 1000);
   }
 
-  resources_({ resources }) {
+  resources_({ resources, max }) {
     this.resources = resources;
+    this.resourceMax = max ?? {};
     this.drawResources();
   }
 
@@ -341,7 +398,7 @@ export class PlayCombat {
 
   note({ from, on, ability }, text) {
     const made = this.made?.abilities?.find((a) => a.id === ability);
-    this.log.add(`${this.nameOf(from)}: ${made?.name ?? ability} on ${this.nameOf(on)}: ${text}`);
+    this.log.add(`${this.nameOf(from)}: ${made?.name ?? ability ?? "attack"} on ${this.nameOf(on)}: ${text}`);
   }
 
   float(unit, { text, kind }) {

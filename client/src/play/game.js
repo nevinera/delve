@@ -72,6 +72,13 @@ export class GameConnection {
     this.socket.send(JSON.stringify({ type: "use", ability, target, ...(spot ? { spot } : {}) }));
   }
 
+  // Asks to auto-attack someone, or with 0 to stop.
+  attack(target) {
+    if (this.socket.readyState !== WebSocket.OPEN) return;
+    if (this.view) this.tick(this.view, true);
+    this.socket.send(JSON.stringify({ type: "attack", target }));
+  }
+
   // Sends a command for the game server to read.
   command(line) {
     if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: "command", line }));
