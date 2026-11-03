@@ -2,18 +2,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "class.schema.json",
   "title": "classes/<id>.json",
-  "description": "A class players can pick.",
+  "description": "A class players can pick, holding its own abilities and statuses. Only its id and name are required, so the class editor can save one as it's built; what the game needs to play one comes later.",
   "type": "object",
   "required": [
     "id",
-    "name",
-    "colors",
-    "primaryStats",
-    "resources",
-    "armor",
-    "weapons",
-    "abilities",
-    "mastery"
+    "name"
   ],
   "properties": {
     "id": {
@@ -96,21 +89,32 @@
     },
     "abilities": {
       "type": "array",
+      "description": "What the class can do: abilities, each with the level it's granted at.",
       "items": {
-        "type": "object",
-        "required": [
-          "ability",
-          "level"
-        ],
-        "properties": {
-          "ability": {
-            "$ref": "common.schema.json#/$defs/id"
+        "allOf": [
+          {
+            "$ref": "ability.schema.json"
           },
-          "level": {
-            "type": "integer",
-            "minimum": 1
+          {
+            "type": "object",
+            "required": [
+              "level"
+            ],
+            "properties": {
+              "level": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
           }
-        }
+        ]
+      }
+    },
+    "statuses": {
+      "type": "array",
+      "description": "The statuses its abilities, passives and mastery apply. Effects point at them by id.",
+      "items": {
+        "$ref": "status.schema.json"
       }
     },
     "passives": {

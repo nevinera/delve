@@ -606,8 +606,8 @@ Nothing reads these yet, so this section is the only definition. What a world de
 | Path | What it is | Schema |
 | --- | --- | --- |
 | `classes/<id>.json` | a class players can pick | [class](../docs/schema/class.schema.json) |
-| `abilities/<id>.json` | something a class or creature can do | [ability](../docs/schema/ability.schema.json) |
-| `statuses/<id>.json` | a buff, debuff or hidden effect | [status](../docs/schema/status.schema.json) |
+| `abilities/<id>.json` | something that isn't a class's own: for items, or for every character | [ability](../docs/schema/ability.schema.json) |
+| `statuses/<id>.json` | a buff, debuff or hidden effect that isn't a class's own | [status](../docs/schema/status.schema.json) |
 | `items/<id>.json` | an item, written by hand | [item](../docs/schema/item.schema.json) |
 | `item-templates/<id>.json` | a pattern the server rolls gear from | [item template](../docs/schema/item-template.schema.json) |
 | `creatures/<id>.json` | a kind of mob | [creature](../docs/schema/creature.schema.json) |
@@ -655,7 +655,11 @@ An area is a cylinder: `radius` across, and `height` above and below its center,
   "armor": [{ "type": "cloth", "level": 1 }, { "type": "leather", "level": 1 }],
   "weapons": ["fist", "staff", "polearm"],
   "offhands": ["fist"],
-  "abilities": [{ "ability": "jab00001", "level": 1 }, { "ability": "kick0001", "level": 4 }],
+  "abilities": [{ "id": "jab00001", "level": 1, "name": "Jab", "target": "enemy", "range": "melee", "effects": [{ "type": "damage", "affects": "target", "amount": { "attackPower": 0.5 } }] }],
+  "statuses": [
+    { "id": "flow0001", "name": "Flow", "kind": "hidden", "effects": [{ "type": "stat", "stat": "dodge", "add": 5 }] },
+    { "id": "cntr0001", "name": "Centered", "kind": "hidden", "effects": [{ "type": "stat", "stat": "damageDone", "multiply": 1.1 }] }
+  ],
   "passives": [{ "status": "flow0001", "level": 1 }],
   "mastery": { "name": "Centered", "description": "Your strikes hit harder the more ki you hold.", "status": "cntr0001" },
   "startingGear": ["wrap0001", "fist0001"]
@@ -670,11 +674,13 @@ An area is a cylinder: `radius` across, and `height` above and below its center,
   - `points`: whole points up to `max`, like ki or combo points. Abilities build and spend them. `regen` adds that many a second (astra's is `1/9`, so about a point every 9 s), and `decay` drains that many a second out of combat.
 - `armor`: what it can wear, each with the level it unlocks at. A paladin lists `chain` at 1 and `plate` at 40.
 - `weapons` and `offhands`: weapon types from `client/src/character/weapons.js` (`HELD`) that it can use.
-- `abilities` and `passives`: granted automatically at their level. Passives are statuses that never expire, and hidden ones don't show.
+- `abilities`: the class's own [abilities](#abilities), written out here, each with the `level` it's granted at. A class's abilities don't generalize to others, so they aren't shared.
+- `statuses`: the [statuses](#statuses) its abilities, passives and mastery apply. They point at them by id, unique within the class.
+- `passives`: statuses it has from their `level`. They never expire, and hidden ones don't show.
 - `mastery`: one mastery effect, a status the class always has, whose amounts use `mastery`.
 - `startingGear`: items a new character starts with.
 
-Every class has auto-attack from its weapons. The UI shows at most 12 of its abilities on the action bar.
+Only a class's `id` and `name` are required for now, so the class editor can save one as it's built. Every class has auto-attack from its weapons. The UI shows at most 12 of its abilities on the action bar.
 
 ### Abilities
 
@@ -730,6 +736,8 @@ Types:
 - `resource`: gives `amount` of `resource` (negative takes it).
 - `status`: applies `status`, for its own duration unless `duration` says otherwise.
 - `interrupt`: stops a cast, and locks its school out for `lockout` seconds.
+- `dispel`: removes up to `count` statuses, 1 by default, of the kinds `dispels` lists.
+- `resurrect`: brings a dead ally back, with `health` percent of its health.
 - `taunt`: makes a mob attack you for `duration`.
 - `move`: moves someone, as `kind` says:
   - `charge`: you run to the target at `speed`, stopping in melee range.
@@ -740,7 +748,7 @@ Types:
 
   The server moves them, and their client follows.
 
-A creature's ability uses the same format. An ability doesn't say who gets it: a class's `abilities` and a creature's `abilities` do.
+A class's abilities live in its file. `abilities/<id>.json` is for those that aren't a class's own, like an item's or one every character has, and creatures point at them by id. Those files leave out `level`.
 
 ### Statuses
 

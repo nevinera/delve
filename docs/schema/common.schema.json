@@ -381,7 +381,9 @@
             "status",
             "interrupt",
             "taunt",
-            "move"
+            "move",
+            "dispel",
+            "resurrect"
           ]
         },
         "affects": {
@@ -452,6 +454,31 @@
         "speed": {
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "dispels": {
+          "type": "array",
+          "description": "dispel: the kinds of status it can remove",
+          "items": {
+            "enum": [
+              "magic",
+              "curse",
+              "poison",
+              "disease",
+              "enrage"
+            ]
+          },
+          "minItems": 1
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "dispel: how many statuses it removes, 1 by default"
+        },
+        "health": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "maximum": 100,
+          "description": "resurrect: the percent of health it comes back with"
         }
       }
     },
