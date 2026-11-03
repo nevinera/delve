@@ -57,27 +57,34 @@ const shas = new WeakMap(); // file bytes -> blob sha
 
 // The world's files (path -> bytes) against what was there when it was opened or last saved
 // (source): { shas, changes }, shas each file's blob sha, and changes { path: text, bytes or null }
-// for each file that's new, different or gone.
-export async function repoChanges(files, source) {
+// for each file that's new, different or gone. With `only`, a test of paths, other paths aren't
+// looked at, and keep the shas they had.
+export async function repoChanges(files, source, only = () => true) {
   const next = {};
   const changes = {};
   for (const [path, bytes] of files) {
+    if (!only(path)) continue;
     if (!shas.has(bytes)) shas.set(bytes, await blobSha(bytes));
     next[path] = shas.get(bytes);
     if (source.shas[path] !== next[path]) changes[path] = TEXT.test(path) ? strFromU8(bytes) : bytes;
   }
-  for (const path of Object.keys(source.shas)) if (!next[path]) changes[path] = null;
+  for (const [path, sha] of Object.entries(source.shas)) {
+    if (!only(path)) next[path] = sha;
+    else if (!next[path]) changes[path] = null;
+  }
   return { shas: next, changes };
 }
 
 // Saves the world's files to the branch it was opened from as one commit: the files that differ
 // from what was there, and deletions of files no longer in it. A repo with no commits gets its
 // world.json first, as a commit of its own. Refuses with BranchMoved if the branch has moved on.
+// With `only`, a test of paths, the commit holds just those paths, on a repo that has commits.
 // Returns the new source, or null when nothing changed. log(message) hears each step.
-export async function saveRepo(client, files, source, { message, onProgress, log = () => {} } = {}) {
+export async function saveRepo(client, files, source, { message, onProgress, only, log = () => {} } = {}) {
+  if (only && !source.commitSha) throw new Error("this repo has no commits yet: save the whole world from /create first");
   log(`Checking ${source.branch} hasn't moved on since you opened it…`);
   if ((await client.headSha(source.branch)) !== source.commitSha) throw new BranchMoved(client.repo, source.branch);
-  let { shas: next, changes } = await repoChanges(files, source);
+  let { shas: next, changes } = await repoChanges(files, source, only);
   const paths = Object.keys(changes);
   log(`${files.size} files: ${paths.length} changed, ${paths.filter((p) => changes[p] === null).length} gone.`);
   if (!paths.length) return null;

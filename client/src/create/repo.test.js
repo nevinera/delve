@@ -74,6 +74,34 @@ describe("repo worlds", () => {
     await expect(saveRepo(client, files, next, { message: "m" })).rejects.toBeInstanceOf(BranchMoved);
   });
 
+  it("saves only the paths asked for, leaving what else differs as it was", async () => {
+    const [kept, ground] = [strToU8("1"), strToU8("old")];
+    const source = {
+      repo: "me/thorn",
+      branch: "main",
+      commitSha: "c1",
+      shas: { "objects/a.json": await blobSha(kept), "objects/gone.json": "x", "ground.plate": await blobSha(ground) },
+    };
+    const client = fakeClient();
+    const files = new Map([
+      ["objects/a.json", strToU8("2")],
+      ["ground.plate", strToU8("new")],
+      ["notes.json", strToU8("{}")],
+    ]);
+    const only = (path) => path.startsWith("objects/");
+    const next = await saveRepo(client, files, source, { only, message: "objects" });
+    expect(client.commits[0].changes).toEqual({ "objects/a.json": "2", "objects/gone.json": null });
+    expect(next.shas["ground.plate"]).toBe(source.shas["ground.plate"]);
+    expect(next.shas["objects/a.json"]).toBe(await blobSha(strToU8("2")));
+    expect(next.shas).not.toHaveProperty("objects/gone.json");
+    expect(next.shas).not.toHaveProperty("notes.json");
+  });
+
+  it("won't save only some paths to a repo with no commits", async () => {
+    const source = { repo: "me/thorn", branch: "main", commitSha: null, shas: {} };
+    await expect(saveRepo(fakeClient({}, null), new Map(), source, { only: () => true })).rejects.toThrow("no commits");
+  });
+
   it("starts a repo with no commits with its world.json, then commits the rest on it", async () => {
     const client = fakeClient({}, null);
     const { files, source } = await loadRepo(client);

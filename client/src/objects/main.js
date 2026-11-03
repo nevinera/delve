@@ -1,8 +1,11 @@
 import "./library.css";
 import { strFromU8, strToU8, unzipSync } from "fflate";
 import { PLACED_PATH } from "../create/placed.js";
+import { keptSource, onSourceSaved, saveKept } from "../create/keptSave.js";
+import { BranchMoved } from "../create/repo.js";
 import { keptWorld, readLibrary, writeLibrary } from "../create/store.js";
-import { LibrarySync } from "./libraryStore.js";
+import { GithubAuthError } from "../github/github.js";
+import { LibrarySync, isLibraryPath } from "./libraryStore.js";
 import { setBuiltObjects } from "../world/objects.js";
 import { adoptStrays, builtObjects, images } from "./collections.js";
 import { ObjectLibrary } from "./library.js";
@@ -23,7 +26,8 @@ function say(message = "", { info = false } = {}) {
 async function keptFiles() {
   const kept = await keptWorld();
   if (!kept) return new Map();
-  let files = Object.entries(unzipSync(kept.bytes, { filter: (file) => file.name.endsWith(".json") }));
+  // A zip's bytes, or a repo's files as a Map.
+  let files = kept.bytes instanceof Map ? [...kept.bytes].filter(([path]) => path.endsWith(".json")) : Object.entries(unzipSync(kept.bytes, { filter: (file) => file.name.endsWith(".json") }));
   const top = files.some(([path]) => path === "world.json") ? null : files[0]?.[0].split("/")[0];
   if (top) files = files.map(([path, b]) => [path.slice(top.length + 1), b]);
   // A change of null is a file taken away.
@@ -78,3 +82,31 @@ const library = new ObjectLibrary($("gallery"), {
   say,
 });
 library.show();
+
+// Saving the library to GitHub, as one commit of its files alone, on the repo /create opened the
+// world from. /create's other changes stay unsaved until it saves them.
+const showSource = (source) => {
+  $("repoSave").disabled = !source?.commitSha;
+  $("repoSave").title = source?.commitSha ? `commit this library to ${source.repo}` : "open the world from GitHub in /create, and save it there first";
+};
+showSource(await keptSource());
+onSourceSaved(showSource);
+$("repoSave").addEventListener("click", async () => {
+  const button = $("repoSave");
+  button.disabled = true;
+  try {
+    await sync.push();
+    const message = $("repoMessage").value.trim() || "Save the object library";
+    const next = await saveKept(world.files, isLibraryPath, { message, log: (text) => say(text, { info: true }) });
+    if (!next) return say("Nothing's changed since the last save.", { info: true });
+    $("repoMessage").value = "";
+    say(`Saved ${next.commitSha.slice(0, 7)}.`, { info: true });
+  } catch (e) {
+    console.error("couldn't save the library", e);
+    if (e instanceof BranchMoved) say(`${e.message}: open the repo again in /create, then save.`);
+    else if (e instanceof GithubAuthError) say("Connect GitHub first, from your worlds page.");
+    else say(`Couldn't save: ${e.message}`);
+  } finally {
+    showSource(await keptSource());
+  }
+});

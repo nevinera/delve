@@ -22,6 +22,7 @@ import { Tools } from "./tools.js";
 import { Library } from "./library.js";
 import { PLACED_PATH, Placed } from "./placed.js";
 import { pressesOver } from "./press.js";
+import { onSourceSaved } from "./keptSave.js";
 import { readLibrary, store, writeLibrary } from "./store.js";
 import { LibrarySync } from "../objects/libraryStore.js";
 import { Things } from "./things.js";
@@ -539,6 +540,11 @@ function repoTools(world, changes, save) {
     for (const button of buttons) button.disabled = busy || !source;
   };
   show();
+  // Another page saved its files to the repo, so what it committed is the world's source now.
+  onSourceSaved((saved) => {
+    if (saved) source = saved;
+    show();
+  });
   const run = async (doing, act) => {
     if (busy || !source) return;
     busy = true;
