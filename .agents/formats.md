@@ -721,6 +721,7 @@ Only a class's `id` and `name` are required for now, so the class editor can sav
   - `{ spentAtLeast }`, `{ targetsHitAtLeast }`: what the ability spent, and how many it hit.
   - `{ outcome }`: the hit just made was a `crit`, or the target `survived` it.
   - `{ targetHealthBelowMine }`: the target has less health than you.
+  - `{ group, on }`: `on` has a status of this `group`. `{ "not": { "group": "form" } }` holds when you're in no form.
 
   An execute needs `{ "health": "target", "below": 20 }`.
 - `creatureTypes`: the creature types it can target, for an ability that only works on beasts, say.
@@ -751,7 +752,7 @@ Types:
 - `resource`: gives `amount` of `resource` (negative takes it).
 - `status`: applies `status`, for its own duration unless `duration` says otherwise, and `durationPerSpent` seconds more for each point spent. Amounts in the status's effects count the points this ability spent.
 - `interrupt`: stops a cast, and locks its school out for `lockout` seconds.
-- `dispel`: removes up to `count` statuses, 1 by default, of the kinds `dispels` lists.
+- `dispel`: removes up to `count` statuses, 1 by default, of the kinds `dispels` lists. `dispels` can also list controls, like `root` and `slow`.
 - `cooldown`: changes the caster's cooldowns on `abilities`, by id from the same class, or on abilities with this `tag`. `by` takes that many seconds off, `reset` makes them ready with every charge, and `charges` gives back that many charges.
 - `summon`: brings `unit`, `count` of them, for `lasts` seconds, or until it dies or is dismissed if that's left out. `max` is how many can be out at once. `obeys` means you command it. `statuses` are what it arrives with.
 - `command`: your summons, or just `units`, use `ability`.
@@ -803,6 +804,8 @@ A class's abilities live in its file. `abilities/<id>.json` is for those that ar
 - `duration`: how long it lasts, unless whatever applies it says otherwise. Leave it out for one that lasts until something removes it.
 - `stacking`: what happens when it lands again. `refresh` resets the duration (and keeps up to 30% of what was left), `replace` starts it over, and `stack` adds a stack up to `maxStacks`, refreshing the duration. Effects scale with stacks.
 - `breaksOn`: any of `move`, `damage` and `action` (using an ability or attacking). Food and drink break on `move` and `damage`, and stealth on `damage` and `action`.
+- `group`: only one status of this group can be on a unit, and a new one replaces the old. With no `duration` it lasts until replaced. Stances, party auras and shapeshift forms work this way.
+- `keptBy`: `abilities` by id from the same class, or `tags`, that don't trigger `breaksOn: ["action"]`. A form keeps its own abilities this way, and anything else you use ends it.
 - `consumedBy`: ends it when the holder uses one of these `abilities`, by id from the same class, or an ability with this `tag`. A `modify` on the status still changes that use. `uses` makes it last that many uses, for "your next 3". `stacks` takes that many stacks each use, instead of ending it. The ability doesn't know about it.
 - `pose`: `sit` sits you down while it lasts.
 - `aura`: a visual on the unit while it lasts, `{ effect, colors }`.
@@ -828,11 +831,13 @@ Any effect can have `when`, conditions written as an ability's `requires`, check
 - `modify`: changes abilities the holder uses while it's on, as `stat` changes a stat. The ability itself doesn't know about it. `abilities` picks them by id, from the same class, and `tag` picks all with that tag. Then either:
   - `change` says what changes, by `add`, `multiply` or `set` (`set` goes first, then `add`, then `multiply`). `cost` covers each thing it spends, `cooldown`, `castTime` and `charges` are its own, `amount` and `absorb` are its effects' amounts, `lockout`, `cone`, `distance` and `delay` are the numbers on its effects with those names, `limit` is how many it can have out or hit, `uses` is a status's `consumedBy` uses, `cooldownRate` is how fast its cooldown runs while the status lasts, `tickRate` is how fast its periodic or channel ticks, `channelDuration` and `channelTicks` are its channel's, `range` and `radius` are in feet, `maxTargets` is the `max` of its area effects, `duration` is how long the statuses it applies last, `damage` and `healing` are what its effects do, and `critChance` and `critDamage` add in points. One `modify` makes one change, so two changes are two effects, like `{ "type": "modify", "abilities": ["frst0001"], "change": "cooldown", "add": -2 }`.
   - `addEffects` lists more ability effects for them to do.
+  - `addTags` gives them more tags, like letting an ability keep a form.
 - `modify` of `statuses`: changes statuses, by id, from the same class, instead of abilities. `change` is `duration` or `maxStacks`, by `add`, `multiply` or `set`, or `statusEffects` lists more effects for them to have, like `{ "type": "modify", "statuses": ["chil0001"], "change": "duration", "add": 2 }`.
 - `immune`: the holder is immune to `controls` (`stun`, `root`, `silence`, `incapacitate`, `disorient`, `fear`, `disarm`, `slow`, `interrupt`, `knockback`, `pull`, `pushback`, `charm`, `sleep`), to damage from `schools`, to everything with `all`, or to harmful statuses with `harmful`.
 - `aura`: an area that follows the holder while the status lasts, with `radius`, `affects`, `every`, `effect`, `status` and `max` as in an ability's `area`.
 - `param` on an effect names its number, so a `modify` can change just that number: `{ "type": "stat", "stat": "damageTaken", "multiply": 0.8, "param": "reduction" }` on a status, and `{ "type": "modify", "statuses": ["bark0001"], "change": "reduction", "add": -0.1 }` on a talent. Ability effects can have one too, for a `modify` of `abilities`. The number is a stat's `add` or `multiply`, or its `share` with `fromStat`, the `amount` of a periodic, absorb, damage or heal effect, and a trigger's `chance`. An `amount` that's an object takes `multiply` and `set`, not `add`. Several talents changing one `param` all count, in the `set`, `add`, `multiply` order.
 - `mastery` scales with the holder's mastery percentage. `{ "type": "stat", "stat": "damageDone", "mastery": 1, "school": "frost" }` means 1% more frost damage per point. On a percentage stat like `block` it adds the points. On a `modify` it grows what `change` picks, like `{ "type": "modify", "tag": "finisher", "change": "damage", "mastery": 1 }`, and on a `trigger` it adds to `chance`. A `modify` can change `mastery` itself, to give an ability's or status's numbers more from it.
+- `transform`: shows the holder with the look of the unit `into`, by id from the same class, while the status lasts.
 - `none`: nothing, for a status other things look for by name.
 
 ### Items
@@ -1100,7 +1105,7 @@ The game server decides what abilities do, from the class files in the released 
 - **Stats:** at level 1, primary stats are 12 and the others 6, stamina 12, attack power is twice the higher of strength and agility, spell power twice intellect, and health ten times stamina. A weapon swing does 10. A hit has a 5% chance to do double.
 - **Resources:** mana holds 1000 and regains 20 a second, energy holds 100 and regains 10, and rage holds 100, starts empty and falls by 1. Points hold `max` and go by `regen`.
 - **Enemies:** only training dummies, for now. A dummy has 100000 health, never drops below 1, and heals up and starts its damage tally over after 5 s unhit.
-- **Not yet:** an `all` cost spends only its least, and `perSpent`, `byMastery`, `maxHealth` and `shareOfTrigger` amounts and `perSpent` durations count for nothing. The `interrupt`, `taunt`, `move`, `dispel`, `consume`, `cooldown` and `resurrect` effects do nothing, `summon`, `command`, `area`, `aura` and `units` do nothing, `specializations` and `talents` aren't offered, `consumedBy` does nothing, `requires` isn't checked, `when`, `chance` and `perCount` on an ability's effect aren't checked, what a status does while it's on (`effects`), including `immune`, doesn't apply, nothing checks line of sight, and nothing misses, or is dodged, parried or blocked.
+- **Not yet:** an `all` cost spends only its least, and `perSpent`, `byMastery`, `maxHealth` and `shareOfTrigger` amounts and `perSpent` durations count for nothing. The `interrupt`, `taunt`, `move`, `dispel`, `consume`, `cooldown` and `resurrect` effects do nothing, `summon`, `command`, `area`, `aura` and `units` do nothing, `specializations` and `talents` aren't offered, `consumedBy` does nothing, `requires` isn't checked, a status's `group` and `keptBy` and the `transform` and `addTags` effects do nothing, `when`, `chance` and `perCount` on an ability's effect aren't checked, what a status does while it's on (`effects`), including `immune`, doesn't apply, nothing checks line of sight, and nothing misses, or is dodged, parried or blocked.
 
 ### Rails and the game server
 

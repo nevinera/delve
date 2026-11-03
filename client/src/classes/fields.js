@@ -6,7 +6,7 @@ import { TALENT_TIERS, TALENT_TIER_STEP } from "./classFile.js";
 // What the class editor's forms hold, by the formats in formats.md. Fields that pick a status or a
 // resource take their options from the class being edited.
 const SCHOOLS = ["physical", "holy", "fire", "nature", "frost", "shadow", "arcane"];
-const DISPELS = ["magic", "curse", "poison", "disease", "enrage"];
+const DISPELS = ["magic", "curse", "poison", "disease", "enrage", "stun", "root", "silence", "incapacitate", "disorient", "fear", "disarm", "slow"];
 const CREATURE_TYPES = ["beast", "humanoid", "undead", "elemental", "demon", "dragonkin", "giant", "mechanical", "aberration", "critter"];
 const STATS = ["strength", "agility", "intellect", "stamina", "armor", "critRating", "hasteRating", "masteryRating", "versatilityRating", "leechRating", "avoidanceRating", "speedRating", "attackPower", "spellPower", "maxHealth", "critChance", "critDamage", "haste", "mastery", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed", "stealth", "detection", "damageDone", "healingDone", "damageTaken", "healingTaken", "threat"];
 const WHEN = ["cast", "launch", "impact", "channel"];
@@ -28,7 +28,8 @@ const resourcesOf = (made) => () => (made.resources ?? []).map((r) => [r.key, r.
 const main = { key: "colors", type: "words", label: "colors", hint: "[main, trim]: two #rrggbb colors, with commas" };
 
 const simpleConditionFields = (made) => [
-  { key: "kind", type: "select", label: "needs", options: [["health", "health"], ["status", "a status"], ["stealthed", "stealth"], ["inCombat", "combat"], ["targetIs", "used on"], ["state", "a state"], ["position", "position"], ["since", "time since"], ["resource", "a resource"], ["holders", "units holding"], ["unitsOut", "a unit out"], ["inArea", "in your area"], ["spentAtLeast", "spent at least"], ["targetsHitAtLeast", "hit at least"], ["outcome", "the hit"], ["targetHealthBelowMine", "target under your health"]] },
+  { key: "kind", type: "select", label: "needs", options: [["health", "health"], ["status", "a status"], ["stealthed", "stealth"], ["inCombat", "combat"], ["targetIs", "used on"], ["state", "a state"], ["position", "position"], ["since", "time since"], ["resource", "a resource"], ["holders", "units holding"], ["unitsOut", "a unit out"], ["inArea", "in your area"], ["spentAtLeast", "spent at least"], ["targetsHitAtLeast", "hit at least"], ["outcome", "the hit"], ["targetHealthBelowMine", "target under your health"], ["group", "a status group"]] },
+  { key: "group", label: "of group", show: (c) => c.kind === "group" },
   { key: "state", type: "select", options: ["casting", "inCombat", "slowed", "airborne", "falling", "controlled", "stunned", "outdoors"], show: (c) => c.kind === "state" },
   { key: "position", type: "select", options: ["behind", "inFront"], show: (c) => c.kind === "position" },
   { key: "since", type: "select", options: ["stealth", "attack", "damageTaken", "kill", "combatStart"], show: (c) => c.kind === "since" },
@@ -48,7 +49,7 @@ const simpleConditionFields = (made) => [
   { key: "below", type: "number", label: "below", min: 0, show: (c) => ["health", "since", "resource"].includes(c.kind) },
   { key: "above", type: "number", label: "above", min: 0, show: (c) => ["health", "since", "resource"].includes(c.kind) },
   { key: "status", type: "select", none: "pick one", options: statusesOf(made), show: (c) => c.kind === "status" },
-  { key: "on", type: "select", options: ["self", "target"], show: (c) => c.kind === "status" || c.kind === "state" },
+  { key: "on", type: "select", options: ["self", "target"], show: (c) => ["status", "state", "group"].includes(c.kind) },
   { key: "yes", type: "check", label: "true", default: true, show: (c) => c.kind === "stealthed" || c.kind === "inCombat" },
 ];
 
@@ -74,7 +75,7 @@ const conditionFields = (made) => [
 ];
 
 // A condition as the form edits it, with the `kind` the format leaves implicit.
-const PLAIN_CONDITIONS = ["state", "position", "since", "resource", "holders", "unitsOut", "inArea", "spentAtLeast", "targetsHitAtLeast", "outcome", "targetHealthBelowMine"];
+const PLAIN_CONDITIONS = ["state", "position", "since", "resource", "holders", "unitsOut", "inArea", "spentAtLeast", "targetsHitAtLeast", "outcome", "targetHealthBelowMine", "group"];
 
 export function readCondition(condition) {
   if ("health" in condition) return { kind: "health", ...condition };
@@ -296,8 +297,10 @@ export const abilityFields = (made) => [
 ];
 
 const statusEffectFields = (made, nested = false) => [
-  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "stealth", "modify", "immune", "aura", "none"] },
+  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "stealth", "modify", "immune", "aura", "transform", "none"] },
   { key: "stat", type: "select", none: "pick one", options: STATS, show: is("stat") },
+  { key: "into", label: "looks like", type: "select", none: "pick one", options: unitsOf(made), show: is("transform") },
+  { key: "addTags", label: "adds tags", type: "words", show: (e) => e.type === "modify" && !e.change },
   { key: "abilities", type: "multi", options: abilitiesOf(made), show: is("modify", "trigger", "stat") },
   { key: "tag", label: "or tag", show: is("modify", "trigger", "stat") },
   { key: "statuses", type: "multi", options: statusesOf(made), show: is("modify", "trigger", "stat") },
@@ -354,7 +357,9 @@ export const statusFields = (made) => [
   { key: "duration", label: "duration s", type: "number", min: 0, hint: "leave it out for one that lasts until removed" },
   { key: "stacking", type: "select", none: "refresh", options: ["replace", "stack"] },
   { key: "maxStacks", label: "max stacks", type: "number", min: 1, step: 1, show: (s) => s.stacking === "stack" },
+  { key: "group", hint: "only one status of a group at a time; a new one replaces the old" },
   { key: "breaksOn", label: "breaks on", type: "multi", options: ["move", "damage", "action"] },
+  { key: "keptBy", label: "kept by", type: "group", show: (s) => s.breaksOn?.includes("action"), fields: [{ key: "abilities", type: "multi", options: abilitiesOf(made) }, { key: "tags", type: "words", label: "or tags" }] },
   {
     key: "consumedBy",
     label: "used up by",

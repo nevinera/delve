@@ -120,10 +120,12 @@ export function classProblems(made) {
   for (const s of made.statuses ?? []) {
     const where = s.name || "A status";
     conditions(where, s.when);
+    (s.keptBy?.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} is kept by an ability this class doesn't have (${id}).`));
     (s.consumedBy?.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} is used up by an ability this class doesn't have (${id}).`));
     for (const e of s.effects ?? []) {
       conditions(where, e.when);
       counted(where, e.perCount);
+      if (e.into && !units.has(e.into)) problems.push(`${where} turns into a unit this class doesn't have (${e.into}).`);
       if (e.type === "periodic" && e.does === "resource") resource(where, e.resource);
       if ((e.type === "trigger" || e.type === "aura") && e.effect) effect(where, e.effect);
       if (e.type === "aura" && e.status) status(where, e.status);

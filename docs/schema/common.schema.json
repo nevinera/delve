@@ -491,6 +491,25 @@
               "type": "boolean"
             }
           }
+        },
+        {
+          "type": "object",
+          "required": [
+            "group"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "group": {
+              "type": "string",
+              "description": "a status of this group"
+            },
+            "on": {
+              "enum": [
+                "self",
+                "target"
+              ]
+            }
+          }
         }
       ]
     },
@@ -829,14 +848,22 @@
         },
         "dispels": {
           "type": "array",
-          "description": "dispel: the kinds of status it can remove",
+          "description": "the kinds of status it removes, or the controls: root and slow, for a shapeshift that frees you",
           "items": {
             "enum": [
               "magic",
               "curse",
               "poison",
               "disease",
-              "enrage"
+              "enrage",
+              "stun",
+              "root",
+              "silence",
+              "incapacitate",
+              "disorient",
+              "fear",
+              "disarm",
+              "slow"
             ]
           },
           "minItems": 1
