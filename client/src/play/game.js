@@ -31,7 +31,7 @@ export function nextReport(last, move, yaw, jumped, now) {
 }
 
 export class GameConnection {
-  // game: { url, token } from the page. on: { welcome, snapshot, appear, vanish, moved, error, closed }.
+  // game: { url, token } from the page. on: { pickClass, welcome, snapshot, appear, vanish, moved, error, closed }.
   constructor(game, on) {
     this.on = on;
     this.socket = new WebSocket(`${game.url}/play?token=${encodeURIComponent(game.token)}`);
@@ -44,6 +44,18 @@ export class GameConnection {
       clearInterval(this.timer);
       this.on.closed?.();
     });
+  }
+
+  // Keeps the connection open while the player chooses a class, with nothing to report yet.
+  waitToPick() {
+    this.timer = setInterval(() => {
+      if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: "heartbeat" }));
+    }, HEARTBEAT_MS.still);
+  }
+
+  pick(id) {
+    clearInterval(this.timer);
+    if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: "pick", class: id }));
   }
 
   // Reports the movement of the view's walker from now on.

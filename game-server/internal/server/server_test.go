@@ -6,9 +6,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/delve-mmo/delve3d/game-server/internal/combat"
 	"github.com/delve-mmo/delve3d/game-server/internal/game"
 	"github.com/delve-mmo/delve3d/game-server/internal/rails"
 	"github.com/delve-mmo/delve3d/game-server/internal/token"
@@ -40,7 +42,74 @@ func (anyone) Character(_ context.Context, _, id int64) (rails.Character, error)
 	return rails.Character{ID: id, Name: "Arwen", Look: json.RawMessage(`{}`)}, nil
 }
 
+func (anyone) SaveClass(context.Context, int64, int64, string) error { return nil }
+
 func (anyone) SavePosition(context.Context, int64, int64, rails.Position) error { return nil }
+
+type classyWorld struct{}
+
+func (classyWorld) Load(_ context.Context, repo, sha string) (*worlds.World, error) {
+	return &worlds.World{Repo: repo, Sha: sha, Spawn: worlds.Spawn{Continent: "main", At: [2]float64{512, 512}}, Classes: []*combat.Class{{ID: "frst0001"}, {ID: "fire0001"}}}, nil
+}
+
+// classKeeper remembers the class it's told, as Rails does.
+type classKeeper struct {
+	anyone
+	class atomic.Value
+}
+
+func (k *classKeeper) Character(_ context.Context, _, id int64) (rails.Character, error) {
+	class, _ := k.class.Load().(string)
+	return rails.Character{ID: id, Name: "Arwen", Look: json.RawMessage(`{}`), Class: class}, nil
+}
+
+func (k *classKeeper) SaveClass(_ context.Context, _, _ int64, class string) error {
+	k.class.Store(class)
+	return nil
+}
+
+func TestPickingAClassBeforeEntering(t *testing.T) {
+	srv := httptest.NewServer(New(game.NewHub(classyWorld{}, &classKeeper{}), "shh"))
+	defer srv.Close()
+	tok := token.Issue("shh", token.Claims{Character: 1, World: 1, Repo: "a/b", Sha: "s", Exp: time.Now().Unix() + 60})
+
+	// Choosing something the world doesn't have ends it with a reason.
+	c, _, err := dial(t, srv.URL, tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	if m := receive(t, c); m["type"] != "pickClass" || len(m["classes"].([]any)) != 2 {
+		t.Fatalf("got %v", m)
+	}
+	_ = c.WriteJSON(map[string]any{"type": "pick", "class": "nope"})
+	if m := receive(t, c); m["type"] != "error" {
+		t.Fatalf("got %v", m)
+	}
+
+	// A heartbeat while choosing is fine. Then it enters with the class it chose.
+	c, _, err = dial(t, srv.URL, tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c.Close()
+	receive(t, c)
+	_ = c.WriteJSON(map[string]any{"type": "heartbeat"})
+	_ = c.WriteJSON(map[string]any{"type": "pick", "class": "fire0001"})
+	if m := receive(t, c); m["type"] != "welcome" || m["you"].(map[string]any)["class"] != "fire0001" {
+		t.Fatalf("got %v", m)
+	}
+
+	// Next time it isn't asked.
+	c2, _, err := dial(t, srv.URL, tok)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c2.Close()
+	if m := receive(t, c2); m["type"] != "welcome" {
+		t.Fatalf("got %v", m)
+	}
+}
 
 func dial(t *testing.T, url, tok string) (*websocket.Conn, *http.Response, error) {
 	t.Helper()

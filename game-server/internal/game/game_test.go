@@ -29,6 +29,7 @@ func (f *fakeWorlds) Load(_ context.Context, repo, sha string) (*worlds.World, e
 type fakeCharacters struct {
 	mu    sync.Mutex
 	at    map[int64]*rails.Position
+	class map[int64]string
 	saves []rails.Position
 }
 
@@ -36,13 +37,20 @@ func characters(at map[int64]*rails.Position) *fakeCharacters {
 	if at == nil {
 		at = map[int64]*rails.Position{}
 	}
-	return &fakeCharacters{at: at}
+	return &fakeCharacters{at: at, class: map[int64]string{}}
 }
 
 func (f *fakeCharacters) Character(_ context.Context, _, id int64) (rails.Character, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return rails.Character{ID: id, Name: fmt.Sprintf("C%d", id), Look: json.RawMessage(`{"skin":1}`), Position: f.at[id]}, nil
+	return rails.Character{ID: id, Name: fmt.Sprintf("C%d", id), Look: json.RawMessage(`{"skin":1}`), Class: f.class[id], Position: f.at[id]}, nil
+}
+
+func (f *fakeCharacters) SaveClass(_ context.Context, _, id int64, class string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.class[id] = class
+	return nil
 }
 
 func (f *fakeCharacters) SavePosition(_ context.Context, _, id int64, pos rails.Position) error {

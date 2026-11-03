@@ -45,3 +45,20 @@ func TestSavePosition(t *testing.T) {
 		t.Fatalf("SavePosition sent %s, %v", got, err)
 	}
 }
+
+func TestSaveClass(t *testing.T) {
+	var path, got string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		path, got = r.Method+" "+r.URL.Path, string(body)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	if err := New(srv.URL, "tok").SaveClass(context.Background(), 3, 12, "frst0001"); err != nil {
+		t.Fatal(err)
+	}
+	if path != "PUT /internal/worlds/3/characters/12/class" || got != `{"class":"frst0001"}` {
+		t.Fatalf("SaveClass sent %s %s", path, got)
+	}
+}

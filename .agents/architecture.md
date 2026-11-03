@@ -50,7 +50,7 @@ A world is a directory of files: JSON and plain-text plates, platters and caves.
 - **Ground tiers** (`client/src/create/ground.js`) go by tile distance, in squares: full within 4 tiles, cell scale within 8, tile renditions within 16, then plate renditions. What's drawn changes only when the builder leaves their tile, one plate at a time, as one merged mesh per plate for each tier except full tiles.
 - **Controls:** a right sidebar picks the type of work, then the tool, then configures it. A bottom bar shows readouts and display toggles.
 
-A world also defines what you fight and meet: classes, abilities, statuses, items, creatures, NPCs, dialogue, and each continent's spawns. [Game data](formats.md#game-data) describes them. Nothing checks or reads them yet.
+A world also defines what you fight and meet: classes, abilities, statuses, items, creatures, NPCs, dialogue, and each continent's spawns. [Game data](formats.md#game-data) describes them. The game server and play page read classes. Nothing reads the rest yet.
 
 ## Loading and saving
 
@@ -84,7 +84,7 @@ The owner releases an import that passed from the same page. Releasing checks th
 Released worlds are listed for everyone signed in, on `/worlds`. A world's owner can also preview an import that passed, before releasing it, from the world's page (`/play/:id?import=`); the game server keeps it on a layer of its own, by its commit. Playing one (`/play/:id`) asks which of your characters to enter as, then loads `client/src/play/main.js`. It plays version 2 worlds only.
 
 1. It reads `world.json` and the object library from `raw.githubusercontent.com/<repo>/<released sha>/` (`client/src/play/loader.js`). The page lists the commit's files from its import, so nothing is probed for.
-2. It enters the game server with an entry token from the page, and the server says where your character is. A character new to the world starts at its spawn point, `spawn` in `world.json`, which `/create`'s manage tools set.
+2. It enters the game server with an entry token from the page. A character with no class in this world chooses one (`client/src/play/classPicker.js`), and the server says where your character is. A character new to the world starts at its spawn point, `spawn` in `world.json`, which `/create`'s manage tools set.
 3. It reads your continent's platters, biomes, water and cave layout, and draws the world as `/create` does (`client/src/play/view.js`, with `client/src/create/ground.js` and the rest): tiles near you in full, coarser further off, out to where the fog closes in, 3,500 ft away. Plate files are fetched as the ground wants them, and placed and caves files for the plates within two plates' width of you. Caves are drawn as `/create`'s finished view draws them (`client/src/create/caves.js`), with their mouths cut through the ground. The sky, its day and night, and the fog come from `client/src/render/sky.js` and `client/src/world/dayNight.js`.
 4. You walk with `client/src/play/walker.js`, on the ground as the game server has it (`client/src/play/ground.js`), caves' floors included: slabs, cave rock, objects placed by hand, and the trees and objects in tiles' slots are in the way.
 5. It reports how you move, and draws the characters near you as the server reports theirs (`client/src/play/game.js`, `others.js`).
@@ -99,7 +99,7 @@ The game server (`game-server/`) holds every character in a world. Browsers conn
 - `internal/token` checks entry tokens, which Rails signs (`Game::EntryToken`).
 - `internal/worlds` downloads each released commit's zip once, keeps it on disk, and reads a version 2 world's continents and spawn point. It reads a continent's plates and placed files as characters reach them, and samples the ground as `/create`'s builder walks it: heights pressed down by level slabs, water, slabs, objects placed by hand, the trees and objects in the tiles' slots (`fill.go`, by a copy of `client/src/v2/fill.json`), and boulders across courses' cascades from `water.json`. Off the tiles is sea. `testdata/world.mjs` writes its test world and what `/create` makes of it, with the client's own code.
 - `internal/game` places characters on a layer, works out who's near whom (the 3×3 tiles around each), checks that their movement adds up (speed, clocks, rising and falling, the ground, slabs and cave floors under them, and not walking into slabs, cave rock, trees or objects), and passes it on.
-- `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token, and writes their positions back to it (`WorldCharacter`, one per character per world). The server never writes to the database itself.
+- `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token, and writes their classes and positions back to it (`WorldCharacter`, one per character per world). The server never writes to the database itself.
 
 - `internal/combat` reads classes and works out stats and what amounts come to. `internal/game/combat.go` runs abilities on a layer, and `Hub.Run` moves them on every 50 ms. [Combat](formats.md#combat) has the rules.
 

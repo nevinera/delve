@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"testing"
+	"time"
 
 	"github.com/delve-mmo/delve3d/game-server/internal/combat"
+	"github.com/delve-mmo/delve3d/game-server/internal/token"
 	"github.com/delve-mmo/delve3d/game-server/internal/worlds"
 )
 
@@ -44,7 +47,9 @@ func (fightWorld) Load(_ context.Context, repo, sha string) (*worlds.World, erro
 // fighting enters a character facing the dummy, ready to fight.
 func fighting(t *testing.T) (*Hub, *Player, *float64) {
 	t.Helper()
-	h := NewHub(fightWorld{}, characters(nil))
+	people := characters(nil)
+	people.class[1], people.class[2] = "frst0001", "frst0001"
+	h := NewHub(fightWorld{}, people)
 	h.roll = func() float64 { return 0.5 } // never a crit
 	c := clockOf(h)
 	p := enter(t, h, 1)
@@ -58,6 +63,51 @@ func fighting(t *testing.T) (*Hub, *Player, *float64) {
 	}
 	h.Tick()
 	return h, p, c
+}
+
+func TestPickingAClass(t *testing.T) {
+	people := characters(nil)
+	h := NewHub(fightWorld{}, people)
+	claims := token.Claims{Character: 1, World: 1, Repo: "them/vale", Sha: "s"}
+	ctx := context.Background()
+
+	ids, err := h.ClassesToPick(ctx, claims)
+	if err != nil || !slices.Equal(ids, []string{"frst0001"}) {
+		t.Fatalf("to pick = %v, %v", ids, err)
+	}
+	if err := h.PickClass(ctx, claims, "nope"); err == nil || people.class[1] != "" {
+		t.Fatalf("picked a class the world doesn't have: %v, %q", err, people.class[1])
+	}
+	if err := h.PickClass(ctx, claims, "frst0001"); err != nil {
+		t.Fatal(err)
+	}
+	if ids, err := h.ClassesToPick(ctx, claims); err != nil || len(ids) != 0 {
+		t.Fatalf("to pick after picking = %v, %v", ids, err)
+	}
+	if w := next(t, enter(t, h, 1)); w["you"].(map[string]any)["class"] != "frst0001" {
+		t.Fatalf("welcome = %v", w)
+	}
+
+	// A class the world no longer has is as good as none.
+	people.class[1] = "gone0001"
+	if ids, _ := h.ClassesToPick(ctx, claims); !slices.Equal(ids, []string{"frst0001"}) {
+		t.Fatalf("to pick with a lost class = %v", ids)
+	}
+}
+
+func TestALayerNoOneJoinsUnloads(t *testing.T) {
+	h := NewHub(fightWorld{}, characters(nil))
+	h.idle = time.Millisecond
+	if _, err := h.ClassesToPick(context.Background(), token.Claims{Character: 1, World: 1, Repo: "them/vale", Sha: "s"}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.Now().Add(time.Second)
+	for h.Layers() != 0 {
+		if time.Now().After(deadline) {
+			t.Fatal("the layer stayed loaded")
+		}
+		time.Sleep(time.Millisecond)
+	}
 }
 
 func use(t *testing.T, p *Player, ability string) {

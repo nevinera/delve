@@ -33,9 +33,10 @@ type WorldLoader interface {
 	Load(ctx context.Context, repo, sha string) (*worlds.World, error)
 }
 
-// Characters gives a character entering a world, and keeps where it is (rails.Client).
+// Characters gives a character entering a world, and keeps its class and where it is (rails.Client).
 type Characters interface {
 	Character(ctx context.Context, world, id int64) (rails.Character, error)
+	SaveClass(ctx context.Context, world, id int64, class string) error
 	Positions
 }
 
@@ -162,7 +163,7 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 		layer.mu.Unlock()
 	}
 	p := &Player{Send: make(chan []byte, SendQueue), Gone: make(chan struct{}), layer: layer, state: state, motion: motion{joined: h.now()}}
-	p.enterFight(layer.world.Classes)
+	p.enterFight(classWithID(layer.world.Classes, character.Class))
 	p.saved = p.position()
 
 	h.mu.Lock()
@@ -174,6 +175,43 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 	}
 	layer.join(p)
 	return p, nil
+}
+
+// ClassesToPick is the ids of the classes a character entering has to choose from: none if it has
+// a class the world still has, or the world has no classes.
+func (h *Hub) ClassesToPick(ctx context.Context, c token.Claims) ([]string, error) {
+	character, err := h.characters.Character(ctx, c.World, c.Character)
+	if err != nil {
+		return nil, fmt.Errorf("couldn't find your character: %w", err)
+	}
+	layer, err := h.layer(ctx, c)
+	if err != nil {
+		return nil, err
+	}
+	layer.unloadUnlessJoined() // someone can leave without choosing
+	if classWithID(layer.world.Classes, character.Class) != nil {
+		return nil, nil
+	}
+	ids := make([]string, len(layer.world.Classes))
+	for i, class := range layer.world.Classes {
+		ids[i] = class.ID
+	}
+	return ids, nil
+}
+
+// PickClass keeps the class a character chose, if the world has it.
+func (h *Hub) PickClass(ctx context.Context, c token.Claims, id string) error {
+	layer, err := h.layer(ctx, c)
+	if err != nil {
+		return err
+	}
+	if classWithID(layer.world.Classes, id) == nil {
+		return fmt.Errorf("this world has no class %q", id)
+	}
+	if err := h.characters.SaveClass(ctx, c.World, c.Character, id); err != nil {
+		return fmt.Errorf("couldn't keep your class: %w", err)
+	}
+	return nil
 }
 
 // layer finds, or loads, the layer a token's world is on.
@@ -224,6 +262,15 @@ func (l *Layer) joinable() bool {
 		l.unload = nil
 	}
 	return !l.gone
+}
+
+// unloadUnlessJoined starts the idle wait on a layer with no players, which joining stops.
+func (l *Layer) unloadUnlessJoined() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if len(l.players) == 0 && l.unload == nil && !l.gone {
+		l.unload = time.AfterFunc(l.hub.idle, l.unloadIfEmpty)
+	}
 }
 
 func (l *Layer) join(p *Player) {

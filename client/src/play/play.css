@@ -138,6 +138,63 @@ body.touch .play-bar button {
   padding: 4px 16px;
 }
 
+/* Choosing a class on first entering a world, over the empty scene. */
+.play-classes {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(420px, calc(100vw - 32px));
+  height: max-content;
+  max-height: calc(100vh - 32px);
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 16px 20px;
+  background: rgba(20, 18, 24, 0.95);
+  border: 1px solid #555;
+  border-radius: 6px;
+}
+
+.play-classes[hidden] {
+  display: none;
+}
+
+.play-classes h2 {
+  margin: 0 0 4px;
+  font-size: 18px;
+}
+
+.play-classes p {
+  margin: 0 0 12px;
+  color: #aaa;
+}
+
+.play-classes button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  font: inherit;
+  text-align: left;
+  color: #eee;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-left: 4px solid #888;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.play-classes button:hover,
+.play-classes button:focus-visible {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.play-classes span {
+  color: #bbb;
+  font-size: 13px;
+}
+
 /* Phones: the view takes every touch, with a thumbstick and a jump button over it. */
 .play-scene {
   touch-action: none;

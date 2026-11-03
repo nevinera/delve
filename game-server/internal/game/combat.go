@@ -77,17 +77,26 @@ type landing struct {
 	run  func(now time.Time)
 }
 
-// enterFight gives a player its class's numbers. Until characters pick a class, each plays the
-// world's first.
-func (p *Player) enterFight(classes []*combat.Class) {
+// classWithID is the class with that id, or nil.
+func classWithID(classes []*combat.Class, id string) *combat.Class {
+	for _, class := range classes {
+		if class.ID == id {
+			return class
+		}
+	}
+	return nil
+}
+
+// enterFight gives a player its class's numbers. With no class, it has plain health and no abilities.
+func (p *Player) enterFight(class *combat.Class) {
 	f := &p.fight
 	f.vitals = vitals{ID: p.state.ID, Statuses: map[string]*activeStatus{}}
 	f.resources, f.cooldowns = map[string]float64{}, map[string][]time.Time{}
-	if len(classes) == 0 {
+	if class == nil {
 		f.vitals.MaxHealth, f.vitals.Health = 100, 100
 		return
 	}
-	f.class = classes[0]
+	f.class = class
 	f.stats = combat.StatsFor(f.class, playLevel)
 	f.vitals.MaxHealth, f.vitals.Health = f.stats.MaxHealth, f.stats.MaxHealth
 	for _, r := range f.class.Resources {

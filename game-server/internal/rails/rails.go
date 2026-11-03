@@ -30,11 +30,13 @@ type Position struct {
 	Yaw       float64    `json:"yaw"`
 }
 
-// Character is a character as it enters a world. Position is nil when it hasn't been there.
+// Character is a character as it enters a world. Class is empty until it picks one there, and
+// Position is nil when it hasn't been there.
 type Character struct {
 	ID       int64           `json:"id"`
 	Name     string          `json:"name"`
 	Look     json.RawMessage `json:"look"`
+	Class    string          `json:"class"`
 	Position *Position       `json:"position"`
 }
 
@@ -52,6 +54,15 @@ func (c *Client) SavePosition(ctx context.Context, world, id int64, pos Position
 		return err
 	}
 	return c.do(ctx, http.MethodPut, fmt.Sprintf("/internal/worlds/%d/characters/%d/position", world, id), body, nil)
+}
+
+// SaveClass keeps the class a character picked in a world.
+func (c *Client) SaveClass(ctx context.Context, world, id int64, class string) error {
+	body, err := json.Marshal(map[string]string{"class": class})
+	if err != nil {
+		return err
+	}
+	return c.do(ctx, http.MethodPut, fmt.Sprintf("/internal/worlds/%d/characters/%d/class", world, id), body, nil)
 }
 
 func (c *Client) get(ctx context.Context, path string, out any) error {

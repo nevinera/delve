@@ -957,7 +957,9 @@ The play page talks to the Go game server (`game-server/`) over a websocket. The
 
 1. The play page gets an entry token from Rails, in its config with the game server's address.
 2. The client opens `wss://<game server>/play?token=<token>`. A browser websocket can't set headers, so the token goes in the URL.
-3. The game server checks the token's signature and expiry, loads the world, asks Rails for the character, and places it.
+3. The game server checks the token's signature and expiry, loads the world, and asks Rails for the character.
+4. If the world has classes and the character has none of them, the server sends `pickClass` and waits for `pick`. It keeps the choice with Rails. A character asks again only if its class leaves the world.
+5. The server places the character and sends `welcome`.
 
 A token lasts 5 minutes. To enter again after that, reload the page.
 
@@ -985,6 +987,7 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 
 | type | fields | sent |
 |---|---|---|
+| `pick` | `class` | you choose from `pickClass`. Send `heartbeat`s while you decide; the server ignores all else until `pick` |
 | `move` | `t`, `at`, `yaw`, `move` | whenever its movement changes: starting, stopping, turning, jumping, changing gait |
 | `heartbeat` | `t`, `at`, `yaw` | twice a second while moving or turning, once a second otherwise |
 | `use` | `ability`, `target`, `spot` | you ask to use an ability: `target` is who it's aimed at, 0 for no one, and `spot` is `[x, y, z]` for one aimed at the ground |
@@ -1004,6 +1007,7 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 
 | type | fields | sent |
 |---|---|---|
+| `pickClass` | `classes` (ids) | before `welcome`, to a character that has to choose. Each is `classes/<id>.json` in the world |
 | `welcome` | `you` (a character), `layer` | once, on entering |
 | `snapshot` | `characters` | once, after `welcome`: everyone near you |
 | `appear` | `character` | someone comes near you |
@@ -1043,7 +1047,7 @@ A report that fails isn't passed on. The server sends `correct`, and the client 
 
 The game server decides what abilities do, from the class files in the released commit. It checks `use` against where it has you, so the client reports where you are just before it.
 
-- **Class:** you play the world's first class by id, until characters pick one. You have all its abilities.
+- **Class:** you play the one you picked in this world, and have all its abilities.
 - **Checks:** you need a class that has the ability, nothing else being cast, the global cooldown (1.5 s, or the ability's `gcd`) and its cooldown or a charge over, what it costs, to be standing still if it takes time and isn't `castWhileMoving`, a target of the right kind, to be in range (melee reaches 8 ft), and to face an enemy target (the half circle in front of you).
 - **Timing:** the same as the client's timeline. A cast lets go after `castTime`, and spends its cost and starts its cooldown then. A melee hit lands 0.3 s after that. What flies lands when it arrives, at `speed`. A channel lands its effects on each of its ticks, evenly over its `duration`. Moving stops a cast or channel.
 - **Stats:** at level 1, primary stats are 12 and the others 6, stamina 12, attack power is twice the higher of strength and agility, spell power twice intellect, and health ten times stamina. A weapon swing does 10. A hit has a 5% chance to do double.
@@ -1055,8 +1059,9 @@ The game server decides what abilities do, from the class files in the released 
 
 They call each other with fixed shared tokens in an `X-Internal-Token` header. Rails accepts the ones in `INTERNAL_API_TOKENS`, and the game server sends `RAILS_INTERNAL_TOKEN`.
 
-- `GET /internal/worlds/:world/characters/:character` gives `{ id, name, look, position }`, `position` being `{ continent, at, yaw }` or null.
+- `GET /internal/worlds/:world/characters/:character` gives `{ id, name, look, class, position }`, `class` being the id it picked in that world or null, and `position` being `{ continent, at, yaw }` or null.
 - `PUT /internal/worlds/:world/characters/:character/position` with `{ continent, at, yaw }` keeps where the character is in that world (a `WorldCharacter`), and answers 204.
+- `PUT /internal/worlds/:world/characters/:character/class` with `{ class }` keeps the class it picked there, and answers 204.
 
 The game server never writes to the database directly.
 

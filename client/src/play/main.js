@@ -7,6 +7,7 @@ import { Renditions } from "../create/ground.js";
 import { Placed } from "../create/placed.js";
 import { PLATE_FT } from "../v2/sizes.js";
 import { setBuiltObjects } from "../world/objects.js";
+import { classChoices, showClassPicker } from "./classPicker.js";
 import { PlayCombat } from "./combat.js";
 import { GameConnection } from "./game.js";
 import { PlayWorld } from "./loader.js";
@@ -27,12 +28,22 @@ const PLACED_FT = 2 * PLATE_FT; // how near a plate's placed file is fetched
 // ground clutter, and simple tree crowns.
 const PHONE_GRAPHICS = { resolution: 1, maxFps: 30, clutterRadiusFt: 120, clutterDensity: 0.5, solidCanopies: true };
 
-// Enters the game server, and resolves with the welcome: where it puts you.
-function enter(on) {
+// Enters the game server, and resolves with the welcome: where it puts you. A character new to the
+// world chooses a class first, if the server asks it to.
+function enter(on, loader) {
   return new Promise((resolve, reject) => {
     let welcomed = false;
     const connection = new GameConnection(config.game, {
       ...on,
+      pickClass: async ({ classes }) => {
+        connection.waitToPick();
+        const choices = await classChoices(classes, (path) => loader.file(path));
+        status("");
+        showClassPicker($("playClasses"), choices, (id) => {
+          status("Entering...");
+          connection.pick(id);
+        });
+      },
       welcome: (message) => ((welcomed = true), resolve({ connection, you: message.you })),
       error: (message) => (welcomed ? status(message.message) : reject(new Error(message.message))),
       closed: () => (welcomed ? on.closed() : reject(new Error("the game server isn't answering"))),
@@ -81,7 +92,7 @@ async function play() {
       status("You've left the game. Reload the page to enter again.");
       others?.clear();
     },
-  });
+  }, loader);
 
   status("Loading the land around you...");
   let showGraphics = null;
@@ -158,4 +169,7 @@ async function play() {
   }, STREAM_MS);
 }
 
-play().catch((err) => status(`Couldn't enter the world: ${err.message}`));
+play().catch((err) => {
+  $("playClasses").hidden = true;
+  status(`Couldn't enter the world: ${err.message}`);
+});

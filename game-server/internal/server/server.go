@@ -3,6 +3,7 @@
 package server
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"time"
@@ -46,7 +47,11 @@ func play(hub *game.Hub, secret string, w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	defer conn.Close()
-	player, err := hub.Enter(r.Context(), claims)
+	err = pickClass(r.Context(), conn, hub, claims)
+	var player *game.Player
+	if err == nil {
+		player, err = hub.Enter(r.Context(), claims)
+	}
 	if err != nil {
 		slog.Warn("couldn't enter", "character", claims.Character, "world", claims.World, "err", err)
 		_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
@@ -64,6 +69,33 @@ func play(hub *game.Hub, secret string, w http.ResponseWriter, r *http.Request) 
 	read(conn, player)
 	hub.Leave(player)
 	<-done
+}
+
+// pickClass asks a character with no class in this world to choose one, and waits for the answer.
+// The client keeps sending heartbeats while its player makes up their mind.
+func pickClass(ctx context.Context, conn *websocket.Conn, hub *game.Hub, claims token.Claims) error {
+	classes, err := hub.ClassesToPick(ctx, claims)
+	if err != nil || len(classes) == 0 {
+		return err
+	}
+	_ = conn.SetWriteDeadline(time.Now().Add(writeWait))
+	if err := conn.WriteJSON(map[string]any{"type": "pickClass", "classes": classes}); err != nil {
+		return err
+	}
+	conn.SetReadLimit(readLimit)
+	for {
+		_ = conn.SetReadDeadline(time.Now().Add(readWait))
+		var m struct {
+			Type  string `json:"type"`
+			Class string `json:"class"`
+		}
+		if err := conn.ReadJSON(&m); err != nil {
+			return err
+		}
+		if m.Type == "pick" {
+			return hub.PickClass(ctx, claims, m.Class)
+		}
+	}
 }
 
 // read hands the client's messages to the game until the connection ends or the player is dropped.

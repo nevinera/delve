@@ -51,6 +51,11 @@ RSpec.describe Bot::Runner do
     connection
   end
 
+  it "picks the first class it's offered" do
+    connection = run_bot(Bot::Strategies::Null.new, [[{"type" => "pickClass", "classes" => ["frst0001", "fire0001"]}], [welcome]])
+    expect(connection.sent).to include({type: "pick", class: "frst0001"})
+  end
+
   it "enters with a token for its character and world" do
     connection = run_bot(Bot::Strategies::Null.new, [[welcome]])
     token = CGI.unescape(connection.url[/token=(.*)/, 1])

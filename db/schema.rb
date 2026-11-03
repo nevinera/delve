@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_020000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_03_000000) do
   create_table "characters", force: :cascade do |t|
     t.integer "user_id", null: false
     t.string "name", null: false
@@ -53,13 +53,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_020000) do
   create_table "world_characters", force: :cascade do |t|
     t.integer "world_id", null: false
     t.integer "character_id", null: false
-    t.string "continent", null: false
-    t.float "x", null: false
-    t.float "y", null: false
-    t.float "z", null: false
+    t.string "continent"
+    t.float "x"
+    t.float "y"
+    t.float "z"
     t.float "yaw", default: 0.0, null: false
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.string "class_id"
     t.index ["character_id"], name: "index_world_characters_on_character_id"
     t.index ["world_id", "character_id"], name: "index_world_characters_on_world_id_and_character_id", unique: true
     t.index ["world_id"], name: "index_world_characters_on_world_id"

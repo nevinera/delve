@@ -10,7 +10,7 @@ RSpec.describe "The game server's character API", type: :request do
 
   it "gives the character entering a world it hasn't played" do
     get(path, headers:)
-    expect(response.parsed_body).to eq("id" => character.id, "name" => "Arwen", "look" => {"skin" => 3}, "position" => nil)
+    expect(response.parsed_body).to eq("id" => character.id, "name" => "Arwen", "look" => {"skin" => 3}, "class" => nil, "position" => nil)
   end
 
   it "keeps where the character is, per world" do
@@ -30,6 +30,36 @@ RSpec.describe "The game server's character API", type: :request do
     put("#{path}/position", params: {continent: "main", at: [1, 2], yaw: 0}, headers:, as: :json)
     expect(response).to have_http_status(:unprocessable_content)
     put("#{path}/position", params: {continent: "", at: [1, 2, 3], yaw: 0}, headers:, as: :json)
+    expect(response).to have_http_status(:unprocessable_content)
+    put("#{path}/position", params: {continent: "main", at: [nil, 2, 3], yaw: 0}, headers:, as: :json)
+    expect(response).to have_http_status(:unprocessable_content)
+    expect(WorldCharacter.count).to eq(0)
+  end
+
+  it "keeps the class a character picks, per world, before it has a position" do
+    put("#{path}/class", params: {class: "frst0001"}, headers:, as: :json)
+    expect(response).to have_http_status(:no_content)
+
+    get(path, headers:)
+    expect(response.parsed_body).to include("class" => "frst0001", "position" => nil)
+
+    put("#{path}/position", params: {continent: "main", at: [1, 2, 3], yaw: 0}, headers:, as: :json)
+    get(path, headers:)
+    expect(response.parsed_body).to include("class" => "frst0001", "position" => {"continent" => "main", "at" => [1.0, 2.0, 3.0], "yaw" => 0.0})
+    expect(WorldCharacter.count).to eq(1)
+
+    get("/internal/worlds/#{create(:world).id}/characters/#{character.id}", headers:)
+    expect(response.parsed_body["class"]).to be_nil
+  end
+
+  it "keeps a position with no class" do
+    put("#{path}/position", params: {continent: "main", at: [1, 2, 3], yaw: 0}, headers:, as: :json)
+    get(path, headers:)
+    expect(response.parsed_body).to include("class" => nil, "position" => {"continent" => "main", "at" => [1.0, 2.0, 3.0], "yaw" => 0.0})
+  end
+
+  it "refuses an empty class" do
+    put("#{path}/class", params: {class: ""}, headers:, as: :json)
     expect(response).to have_http_status(:unprocessable_content)
     expect(WorldCharacter.count).to eq(0)
   end

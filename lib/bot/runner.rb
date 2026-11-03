@@ -67,9 +67,15 @@ module Bot
       end
       @log.warn("server: #{msg["message"]}") if msg["type"] == "error"
       @state.apply(msg)
+      pick_class(msg["classes"]) if msg["type"] == "pickClass"
       entered if msg["type"] == "welcome"
       corrected(msg) if msg["type"] == "correct"
       @log.info("#{msg["character"]["name"]} came near") if msg["type"] == "appear"
+    end
+
+    def pick_class(classes)
+      @log.info("Picking class #{classes.first}")
+      send_message({type: "pick", class: classes.first})
     end
 
     def entered
