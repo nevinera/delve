@@ -20,7 +20,8 @@ import { setBrush } from "./caveMaterial.js";
 // Smooth, flatten and paint work on the rock's surface within their size of where you aim, and
 // that patch of it is lit. Blocks and sculpt carve and fill with the rock picked, or "same", the
 // rock round where they work; paint with the rock picked. The number keys pick: 1 same, 2 to 5
-// the rocks. Each click or drag undoes on its own, back UNDOS of them in each network.
+// the rocks. Each click or drag undoes on its own, back UNDOS of them in each network. They all
+// work within REACH_FT of the camera.
 
 export const SHAPES = ["sphere", "cube", "cylinder", "box"];
 export const TOOLS = ["caveBlocks", "caveSculpt", "caveSmooth", "caveFlatten", "cavePaint"];
@@ -29,6 +30,7 @@ const OP_OF = { caveSmooth: "smooth", caveFlatten: "flatten", cavePaint: "paint"
 const SIZES = [1, 8]; // the brushes' radii, voxels
 const ROCKS = 4;
 const UNDOS = 10;
+const REACH_FT = 64; // how far from the camera the tools work
 const CLICK_PX = 5; // how far the pointer can move with a button down and still click
 const GHOST_RGB = 0x7fffe6;
 const ADD_RGB = 0xffa040; // smooth's outlines: blocks it fills
@@ -98,13 +100,13 @@ export class CavePolish {
     for (const button of document.querySelectorAll('[data-rocks="paint"] [data-rock]')) button.setAttribute("aria-pressed", String(Number(button.dataset.rock) === this.brush.paint));
   }
 
-  // What the pointer's aimed at: where it meets rock, the voxel of rock there and of air before
-  // it, across the face between them, `out` of the rock, the network that air's in, which way
-  // the ray looks, and whether it looks down.
+  // What the pointer's aimed at, within REACH_FT of the camera, or null: where it meets rock, the
+  // voxel of rock there and of air before it, across the face between them, `out` of the rock,
+  // the network that air's in, which way the ray looks, and whether it looks down.
   aim() {
     const ray = this.ray()?.ray;
     const hit = ray && this.caves.hit(ray);
-    if (!hit) return null;
+    if (!hit || ray.origin.distanceTo(new THREE.Vector3(...hit)) > REACH_FT) return null;
     const way = ray.direction.toArray();
     const { rock, out } = faceAt(hit, way);
     const air = rock.map((v, k) => v + out[k]);
@@ -115,7 +117,7 @@ export class CavePolish {
 
   // Why an edit can't be made where `aimed` is, or null where it can.
   problem(aimed) {
-    if (!aimed?.net) return "aim at a cave's rock, from inside it";
+    if (!aimed?.net) return `aim at a cave's rock within ${REACH_FT} ft, from inside it`;
     if (!this.layout.locked(aimed.net)) return `${aimed.net} is still in layout; you can't polish it until it's being polished`;
     return null;
   }
