@@ -169,6 +169,20 @@
             "type": "number",
             "description": "modify: makes it this. Applied before `add` and `multiply`"
           },
+          "softCap": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "periodic: past this many hit, those hit share this many's worth"
+          },
+          "perTargetHit": {
+            "type": "number",
+            "description": "modify, with change: this share more for each one the ability hits, or for cost this much more"
+          },
+          "maxTotal": {
+            "type": "number",
+            "minimum": 0,
+            "description": "with perTargetHit: the most it can come to"
+          },
           "addAmount": {
             "$ref": "common.schema.json#/$defs/amount",
             "description": "modify: adds this amount, for one worked out in the fight"
@@ -425,7 +439,7 @@
           },
           "change": {
             "type": "string",
-            "description": "modify: what changes, one of cost, cooldown, cooldownRate, tickRate, channelDuration, channelTicks, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, maxStacks, mastery, every, amount, absorb, lockout, cone, distance, limit, uses, delay, or a param its target names"
+            "description": "modify: what changes, one of cost, cooldown, cooldownRate, tickRate, channelDuration, channelTicks, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, maxStacks, mastery, every, others, amount, absorb, lockout, cone, distance, limit, uses, delay, or a param its target names"
           },
           "addEffects": {
             "type": "array",

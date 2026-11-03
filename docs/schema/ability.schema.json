@@ -33,6 +33,7 @@
       "enum": [
         "enemy",
         "ally",
+        "any",
         "self",
         "ground",
         "none"

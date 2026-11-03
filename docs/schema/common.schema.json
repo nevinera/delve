@@ -1005,9 +1005,25 @@
           "minimum": 1,
           "description": "past this many hit, those hit share this many's worth, split evenly"
         },
-        "perTargetHit": {
+        "split": {
           "type": "boolean",
-          "description": "its amount, or a cooldown effect's by, counts once for each one the ability hits"
+          "description": "those hit share the amount, split evenly"
+        },
+        "others": {
+          "type": "number",
+          "minimum": 0,
+          "description": "those besides the main target take this share of the amount"
+        },
+        "followsTarget": {
+          "type": "boolean",
+          "description": "area: it moves with its target"
+        },
+        "perTargetHit": {
+          "type": [
+            "boolean",
+            "number"
+          ],
+          "description": "true: its amount, or a cooldown effect's by, counts once for each one the ability hits. A number: that share more for each one"
         },
         "maxTotal": {
           "type": "number",

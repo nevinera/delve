@@ -32,7 +32,7 @@ function releaseRole(ability, ranged) {
 }
 
 // The effects that land when a projectile arrives, and those that land when it's let go.
-const onArrival = (effect, ability) => ability.speed && effect.affects === "target" && ["enemy", "ally"].includes(ability.target);
+const onArrival = (effect, ability) => ability.speed && effect.affects === "target" && ["enemy", "ally", "any"].includes(ability.target);
 
 export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false } = {}) {
   const events = [];
@@ -75,7 +75,7 @@ export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false }
   for (const s of ability.sounds ?? []) {
     for (const at of times(s.when)) events.push({ at, kind: "sound", sound: s.sound, on: s.on ?? defaultOn(s.when, ability), volume: s.volume ?? 1, pitch: s.pitch ?? 1 });
   }
-  if (ability.speed && ["enemy", "ally"].includes(ability.target)) {
+  if (ability.speed && ["enemy", "ally", "any"].includes(ability.target)) {
     const own = visuals.find(isProjectile);
     events.push({ at: launch, kind: "projectile", effect: own?.effect ?? "bolt", colors: own ? colorsOf(own) : schoolColors(ability), scale: own?.scale ?? 1, until: impact });
   }
