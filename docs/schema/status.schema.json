@@ -144,6 +144,10 @@
             "type": "number",
             "description": "modify: makes it this. Applied before `add` and `multiply`"
           },
+          "mastery": {
+            "type": "number",
+            "description": "stat: the change grows by this many percent for each point of the holder's mastery percentage. modify: the same for what `change` picks. trigger: this many percent added to `chance` for each point"
+          },
           "school": {
             "$ref": "common.schema.json#/$defs/school"
           },
@@ -360,7 +364,7 @@
           },
           "change": {
             "type": "string",
-            "description": "modify: what changes, one of cost, cooldown, cooldownRate, tickRate, channelDuration, channelTicks, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, maxStacks, amount, absorb, lockout, cone, distance, limit, uses, delay, or a param its target names"
+            "description": "modify: what changes, one of cost, cooldown, cooldownRate, tickRate, channelDuration, channelTicks, castTime, charges, range, radius, maxTargets, duration, damage, healing, critChance, critDamage, maxStacks, mastery, amount, absorb, lockout, cone, distance, limit, uses, delay, or a param its target names"
           },
           "addEffects": {
             "type": "array",

@@ -87,6 +87,10 @@
             "mastery": {
               "type": "number"
             },
+            "byMastery": {
+              "type": "number",
+              "description": "makes the whole amount bigger: it grows by this many percent for each point of the caster's mastery percentage"
+            },
             "maxHealth": {
               "type": "number",
               "description": "a share of the maximum health of whoever it affects"

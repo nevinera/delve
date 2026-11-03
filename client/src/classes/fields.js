@@ -286,6 +286,7 @@ const statusEffectFields = (made, nested = false) => [
   { key: "set", type: "number", show: (e) => e.type === "modify" && e.change },
   { key: "add", type: "number", show: (e) => e.type === "stat" || (e.type === "modify" && e.change) },
   { key: "multiply", type: "number", show: (e) => e.type === "stat" || (e.type === "modify" && e.change) },
+  { key: "mastery", label: "per point of mastery", hint: "percent more for each point of mastery percentage; on a trigger, percent more chance", type: "number", show: (e) => e.type === "stat" || e.type === "trigger" || (e.type === "modify" && e.change) },
   { key: "addEffects", label: "adds effects", type: "list", one: "effect", blank: () => ({ type: "damage", affects: "target" }), fields: effectFields(made), show: (e) => e.type === "modify" && !e.change && !e.statuses?.length },
   ...(nested ? [] : [{ key: "statusEffects", label: "adds status effects", type: "list", one: "effect", blank: () => ({ type: "stat" }), fields: statusEffectFields(made, true), show: (e) => e.type === "modify" && !e.change && e.statuses?.length }]),
   { key: "addPerSpent", label: "add per point spent", type: "number", show: is("stat") },

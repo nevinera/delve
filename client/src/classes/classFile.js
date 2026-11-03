@@ -3,7 +3,7 @@ import { gameDataPath, isClassPath } from "../world/paths.js";
 
 // A class, as the world keeps it in classes/<id>.json.
 
-const BUILT_IN_CHANGES = new Set(["cost", "cooldown", "amount", "absorb", "lockout", "cone", "distance", "limit", "uses", "delay", "cooldownRate", "tickRate", "channelDuration", "channelTicks", "castTime", "charges", "range", "radius", "maxTargets", "duration", "damage", "healing", "critChance", "critDamage", "maxStacks"]);
+const BUILT_IN_CHANGES = new Set(["cost", "cooldown", "amount", "absorb", "lockout", "cone", "distance", "limit", "uses", "delay", "cooldownRate", "tickRate", "channelDuration", "channelTicks", "castTime", "charges", "range", "radius", "maxTargets", "duration", "damage", "healing", "critChance", "critDamage", "maxStacks", "mastery"]);
 
 export const classPath = (id) => gameDataPath("classes", id);
 

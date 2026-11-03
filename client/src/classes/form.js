@@ -20,9 +20,9 @@ export function setKey(object, key, value) {
   else object[key] = value;
 }
 
-const AMOUNT_PARTS = ["attackPower", "spellPower", "weapon", "mastery", "maxHealth", "shareOfTrigger"];
+const AMOUNT_PARTS = ["attackPower", "spellPower", "weapon", "mastery", "byMastery", "maxHealth", "shareOfTrigger"];
 
-// An amount as the form shows it: { min, max, attackPower, spellPower, weapon, mastery, maxHealth, shareOfTrigger, perSpent },
+// An amount as the form shows it: { min, max, attackPower, spellPower, weapon, mastery, byMastery, maxHealth, shareOfTrigger, perSpent },
 // perSpent being another of these.
 export function readAmount(amount) {
   if (amount === undefined || amount === null) return {};
@@ -149,7 +149,7 @@ const RENDERERS = {
       });
       return box;
     };
-    const inputs = (held, after = "") => [input(held, "min", `min${after}`), input(held, "max", `max${after}`), input(held, "attackPower", `× attack power${after}`), input(held, "spellPower", `× spell power${after}`), input(held, "weapon", `× weapon${after}`), input(held, "mastery", `× mastery${after}`), input(held, "maxHealth", `× max health${after}`), input(held, "shareOfTrigger", `× what set it off${after}`)];
+    const inputs = (held, after = "") => [input(held, "min", `min${after}`), input(held, "max", `max${after}`), input(held, "attackPower", `× attack power${after}`), input(held, "spellPower", `× spell power${after}`), input(held, "weapon", `× weapon${after}`), input(held, "mastery", `× mastery${after}`), input(held, "byMastery", `% per mastery${after}`), input(held, "maxHealth", `× max health${after}`), input(held, "shareOfTrigger", `× what set it off${after}`)];
     return el(
       "div",
       { className: "form-row", title: field.hint ?? "" },

@@ -230,7 +230,7 @@ describe("form values", () => {
 
   it("writes an amount the shortest way that says it", () => {
     expect(writeAmount({ min: 5, max: 5 })).toBe(5);
-    expect(writeAmount(readAmount({ maxHealth: 0.1, shareOfTrigger: 0.5 }))).toEqual({ maxHealth: 0.1, shareOfTrigger: 0.5 });
+    expect(writeAmount(readAmount({ maxHealth: 0.1, shareOfTrigger: 0.5, byMastery: 1 }))).toEqual({ maxHealth: 0.1, byMastery: 1, shareOfTrigger: 0.5 });
     expect(writeAmount({ min: 5 })).toBe(5);
     expect(writeAmount({ min: 5, max: 9 })).toEqual([5, 9]);
     expect(writeAmount({ spellPower: 1.1 })).toEqual({ spellPower: 1.1 });

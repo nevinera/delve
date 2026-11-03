@@ -139,6 +139,7 @@ export function amountText(amount) {
   const names = { attackPower: "attack power", spellPower: "spell power", weapon: "weapon", mastery: "mastery", maxHealth: "max health", shareOfTrigger: "what set it off" };
   for (const [key, name] of Object.entries(names)) if (amount[key] !== undefined) parts.push(`${amount[key]} × ${name}`);
   if (amount.perSpent !== undefined) parts.push(`${amountText(amount.perSpent)} per point`);
+  if (amount.byMastery !== undefined) return `(${parts.join(" + ")}) grown by ${amount.byMastery}% per mastery`;
   return parts.join(" + ");
 }
 
