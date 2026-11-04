@@ -1306,6 +1306,15 @@
         "scrollAcross": {
           "type": "number"
         },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "description": "a decal's, in feet"
+        },
+        "spin": {
+          "type": "number",
+          "description": "a decal's, in turns a second"
+        },
         "length": {
           "type": "number",
           "minimum": 0,

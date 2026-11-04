@@ -4,11 +4,14 @@ import { repeatingTexture } from "./effectTextures.js";
 // How a layer of a shape effect or ribbon looks: a texture scrolling across it (shapeStock.js).
 
 const VERTEX = `
+#define FLAT_REPEATS_A_FOOT 0.12
 varying vec2 vUv;
 varying vec3 vNormal;
 varying vec3 vView;
+varying vec2 vFlat;
 void main() {
   vUv = uv;
+  vFlat = position.xz * FLAT_REPEATS_A_FOOT;
   vec4 seen = modelViewMatrix * vec4(position, 1.0);
   vNormal = normalMatrix * normal;
   vView = -seen.xyz;
@@ -26,11 +29,15 @@ uniform float uOpacity;
 uniform float uEdge;
 uniform float uRim;
 uniform float uTrail;
+uniform float uSolid;
+uniform float uFlat;
 varying vec2 vUv;
 varying vec3 vNormal;
 varying vec3 vView;
+varying vec2 vFlat;
 void main() {
-  vec2 at = vUv * uRepeat + uScroll * uTime;
+  // A decal can lay its texture flat, rather than round its middle.
+  vec2 at = (uFlat > 0.0 ? vFlat : vUv) * uRepeat + uScroll * uTime;
   // A second, slower look at the same texture, so it doesn't read as one image sliding by.
   float shape = texture2D(uTexture, at).r * (0.6 + 0.8 * texture2D(uTexture, at * 0.61 + 0.37 - uScroll * uTime * 0.4).r);
   shape = min(1.0, shape);
@@ -42,7 +49,7 @@ void main() {
   gl_FragColor = vec4(mix(uColor, uHot, smoothstep(0.5, 1.0, shape)), 1.0);
   #include <colorspace_fragment>
   // It mostly adds light, and covers a little of what's behind so it shows against a bright sky.
-  gl_FragColor = vec4(gl_FragColor.rgb * alpha, alpha * 0.3);
+  gl_FragColor = vec4(gl_FragColor.rgb * alpha, alpha * uSolid);
 }`;
 
 export function shapeMaterial(layer, [main, trim], vertexShader = VERTEX) {
@@ -60,6 +67,8 @@ export function shapeMaterial(layer, [main, trim], vertexShader = VERTEX) {
       uEdge: { value: layer.edge },
       uRim: { value: layer.rim },
       uTrail: { value: layer.trail ? 1 : 0 },
+      uSolid: { value: layer.solid ?? 0.3 },
+      uFlat: { value: layer.flat ? 1 : 0 },
     },
     transparent: true,
     depthWrite: false,

@@ -1,8 +1,9 @@
 // Draws areas on the ground, for as long as they last: red for what hurts, green for what helps.
 import * as THREE from "three";
+import { discGeometry, drapedMeshes, stripGeometry } from "../abilities/decal.js";
 
-const COLORS = { enemies: 0xff5040, allies: 0x50e070 };
-const ABOVE_FT = 0.3; // over the ground, so it doesn't sink in
+const COLORS = { enemies: "#ff5040", allies: "#50e070" };
+const AREA_LAYER = { color: "main", opacity: 1, repeat: [1, 1], scroll: [0, 0], edge: 0, rim: 0, trail: false, solid: 0.75 };
 
 // What shape to draw an area: a ring, or a strip running from its start. Pure, for testing.
 export function markOf({ radius, line, width, dir }) {
@@ -10,31 +11,48 @@ export function markOf({ radius, line, width, dir }) {
   return { shape: "strip", length: radius, width, turn: Math.atan2(dir[0], dir[1]) };
 }
 
+// What to lay on the ground for a mark, as drapedMeshes wants it.
+function partsOf(mark) {
+  if (mark.shape === "strip") {
+    const geometry = () => stripGeometry(mark);
+    return [
+      { geometry: geometry(), layer: { ...AREA_LAYER, texture: "energy", scroll: [0.5, 0], edge: 0.15, opacity: 0.4 } },
+      { geometry: geometry(), layer: { ...AREA_LAYER, texture: "plain", edge: 0.08, opacity: 0.15 } },
+    ];
+  }
+  const { radius } = mark;
+  return [
+    { geometry: discGeometry({ radius }), layer: { ...AREA_LAYER, texture: "swirl", repeat: [3, 0.5], scroll: [0.1, 0], edge: 0.12, opacity: 0.22 } },
+    { geometry: discGeometry({ radius, inner: 0.93 }), layer: { ...AREA_LAYER, texture: "plain", edge: 0.5, opacity: 0.9 } },
+  ];
+}
+
 export class AreaMarks {
   constructor(view) {
     this.view = view;
-    this.marks = new Map(); // id -> { mesh, until, follows, at }
+    this.marks = new Map(); // id -> { draped, from, until, follows }
   }
 
   add(area, now) {
     this.remove(area.id);
     const mark = markOf(area);
-    const geometry = mark.shape === "ring" ? new THREE.RingGeometry(mark.radius * 0.96, mark.radius, 64).rotateX(-Math.PI / 2) : new THREE.PlaneGeometry(mark.width, mark.length).rotateX(-Math.PI / 2).translate(0, 0, mark.length / 2);
-    const material = new THREE.MeshBasicMaterial({ color: COLORS[area.affects] ?? 0xffffff, transparent: true, opacity: mark.shape === "ring" ? 0.8 : 0.3, side: THREE.DoubleSide, depthWrite: false });
-    const mesh = new THREE.Mesh(geometry, material);
-    if (mark.turn) mesh.rotation.y = mark.turn;
+    const color = COLORS[area.affects] ?? "#ffffff";
     const { origin } = this.view;
-    mesh.position.set(area.at[0] - origin[0], area.at[1] + ABOVE_FT, area.at[2] - origin[1]);
-    this.view.scene.add(mesh);
-    this.marks.set(area.id, { mesh, until: now + area.lasts * 1000, follows: area.follows ?? 0 });
+    const center = new THREE.Vector3(area.at[0] - origin[0], area.at[1], area.at[2] - origin[1]);
+    const draped = drapedMeshes(partsOf(mark), [color, color], center, (x, z) => this.view.renditions?.heightAt(x, z), mark.turn ?? 0);
+    draped.show(0, 1);
+    this.view.scene.add(draped.group);
+    this.marks.set(area.id, { draped, from: now, until: now + area.lasts * 1000, follows: area.follows ?? 0 });
   }
 
   remove(id) {
     const mark = this.marks.get(id);
     if (!mark) return;
-    this.view.scene.remove(mark.mesh);
-    mark.mesh.geometry.dispose();
-    mark.mesh.material.dispose();
+    this.view.scene.remove(mark.draped.group);
+    for (const mesh of mark.draped.group.children) {
+      mesh.geometry.dispose();
+      mesh.material.dispose();
+    }
     this.marks.delete(id);
   }
 
@@ -47,7 +65,8 @@ export class AreaMarks {
         continue;
       }
       const at = mark.follows ? place(mark.follows) : null;
-      if (at) mark.mesh.position.set(at.x, at.y + ABOVE_FT, at.z);
+      if (at) mark.draped.moveTo(at);
+      mark.draped.show((now - mark.from) / 1000, 1);
     }
   }
 }

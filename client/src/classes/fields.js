@@ -1,6 +1,6 @@
 import { iconNames } from "../play/icons.js";
 import { PARTICLE_STOCK, isParticleEffect } from "../abilities/particleStock.js";
-import { SHAPES, SHAPE_FADES, isShapeEffect } from "../abilities/shapeStock.js";
+import { DECALS, SHAPES, SHAPE_FADES, isShapeEffect } from "../abilities/shapeStock.js";
 import { SOUNDS, VISUALS } from "../abilities/stock.js";
 import { ARMOR_SLOTS, ARMOR_STYLES, ARMOR_TYPES } from "../character/armor.js";
 import { BODIES } from "../character/bodies.js";
@@ -31,7 +31,9 @@ const particleSelect = (key, options) => ({ key, type: "select", none: "stock", 
 // A shape effect's, each left empty for what the stock effect does.
 const shapeEffect = (v) => isShapeEffect(v.effect);
 const SHAPE_FIELDS = [
-  { key: "shape", type: "select", none: "stock", options: SHAPES, show: (v) => shapeEffect(v) && v.effect !== "ribbon" },
+  { key: "shape", type: "select", none: "stock", options: SHAPES, show: (v) => shapeEffect(v) && v.effect !== "ribbon" && !DECALS.includes(v.effect) },
+  { key: "radius", type: "number", label: "radius ft", min: 0, show: (v) => DECALS.includes(v.effect) },
+  { key: "spin", type: "number", label: "turns a second", show: (v) => DECALS.includes(v.effect) },
   { key: "length", type: "number", label: "trail seconds", min: 0, show: (v) => v.effect === "ribbon" },
   { key: "width", type: "number", label: "width ft", hint: "off a weapon, the blade sets it", min: 0, show: (v) => v.effect === "ribbon" },
   { key: "texture", type: "select", none: "stock", options: repeatingNames, show: shapeEffect },

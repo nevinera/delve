@@ -1,7 +1,8 @@
 import * as THREE from "three";
+import { makeDecal } from "./decal.js";
 import { makeRibbon } from "./ribbon.js";
 import { shapeMaterial } from "./shapeMaterial.js";
-import { fadeAt, isShapeEffect, shapeSpec } from "./shapeStock.js";
+import { DECALS, fadeAt, isShapeEffect, shapeSpec } from "./shapeStock.js";
 
 // The stock visuals, small three.js groups. Most are shapes with a texture scrolling across them
 // (shapeStock.js), a ribbon trails after something moving (ribbon.js), and an arrow is just solid. makeVisual gives { group, length, update }, and
@@ -102,11 +103,11 @@ export const hasVisual = (name) => name === "arrow" || isShapeEffect(name);
 
 // A stock visual. options: colors, [main, trim]; scale; height, of what it stands on, in feet; from
 // and to for a beam, as [x, y, z]; follow, a thing to stay on; trace, what a ribbon follows on a body
-// (ribbon.js); and params, what the ability sets (shapeStock.js).
-export function makeVisual(name, { colors = ["#ffffff", "#ffffff"], scale = 1, height = 6, from, to, params, follow, trace } = {}) {
-  const options = { colors, scale, height, from, to, params, follow, trace };
+// (ribbon.js); at and ground, where a decal goes and how high the ground is (decal.js); and params, what the ability sets (shapeStock.js).
+export function makeVisual(name, { colors = ["#ffffff", "#ffffff"], scale = 1, height = 6, from, to, params, follow, trace, at, ground } = {}) {
+  const options = { colors, scale, height, from, to, params, follow, trace, at, ground };
   const makers = { arrow: makeArrow, ribbon: makeRibbon };
-  const made = makers[name]?.(options) ?? makeShapes(isShapeEffect(name) ? name : "burst", options);
+  const made = DECALS.includes(name) ? makeDecal(name, options) : makers[name]?.(options) ?? makeShapes(isShapeEffect(name) ? name : "burst", options);
   made.update(0);
   return made;
 }

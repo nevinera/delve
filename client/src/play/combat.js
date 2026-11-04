@@ -107,7 +107,7 @@ export class PlayCombat {
     Object.assign(this, { view, others, connection, loader, you, hud, unitStatuses });
     this.classes = new Map(); // id -> a promise of its file
     this.target = null;
-    this.stage = new AbilityStage(view.scene, { audio: () => this.audioContext(), particles: isTouch() ? PHONE_PARTICLES : DESKTOP_PARTICLES });
+    this.stage = new AbilityStage(view.scene, { ground: (x, z) => view.renditions?.heightAt(x, z), audio: () => this.audioContext(), particles: isTouch() ? PHONE_PARTICLES : DESKTOP_PARTICLES });
     this.runs = new Map(); // caster id -> its run
     this.floats = [];
     this.cooldowns = new Map(); // ability id -> when it's ready, in performance.now()

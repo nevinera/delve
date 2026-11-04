@@ -18,8 +18,10 @@ attribute float aAcross;
 varying vec2 vUv;
 varying vec3 vNormal;
 varying vec3 vView;
+varying vec2 vFlat;
 void main() {
   vUv = uv;
+  vFlat = vec2(0.0);
   vec4 seen = modelViewMatrix * vec4(position, 1.0);
   vec2 way = (modelViewMatrix * vec4(aTangent, 0.0)).xy;
   float size = length(way);

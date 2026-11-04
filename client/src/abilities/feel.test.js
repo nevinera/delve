@@ -103,6 +103,15 @@ describe("the stage", () => {
     expect(trail.at).toBeCloseTo(at + 0.01);
   });
 
+  it("stops a cancelled cast's clip even with a swing going", () => {
+    const [stage, caster, target] = [stageWith(), unit(), unit(10)];
+    const cast = stage.play({ name: "Cast", castTime: 2, school: "fire" }, { caster, target });
+    stage.swing(caster, target);
+    caster.clip.mockClear();
+    stage.stop(cast);
+    expect(caster.clip).toHaveBeenCalledWith(null);
+  });
+
   it("lets go of everything when cleared", () => {
     const [stage, caster, target] = [stageWith(), unit(), unit(10)];
     stage.swing(caster, target);

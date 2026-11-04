@@ -136,6 +136,48 @@ describe("ribbons", () => {
   });
 });
 
+describe("decals", () => {
+  const slope = (x) => x / 2;
+
+  it("follows the ground's slope", () => {
+    const { group } = makeVisual("decal", { at: new THREE.Vector3(10, 5, 0), ground: slope });
+    const { position } = group.children[0].geometry.attributes;
+    for (let n = 0; n < position.count; n++) {
+      expect(position.getY(n)).toBeCloseTo(slope(10 + position.getX(n)) - 5 + 0.2, 4);
+    }
+  });
+
+  it("lies flat with no ground to go by", () => {
+    const { group } = makeVisual("scorch", { at: new THREE.Vector3(1, 5, 1) });
+    const { position } = group.children[0].geometry.attributes;
+    expect(position.getY(3)).toBeCloseTo(0.2);
+  });
+
+  it("takes a radius, by the ability's scale", () => {
+    const { group } = makeVisual("decal", { scale: 2, params: { radius: 4 } });
+    group.children[0].geometry.computeBoundingSphere();
+    expect(group.children[0].geometry.boundingSphere.radius).toBeCloseTo(8, 0);
+  });
+
+  it("spins by turning its texture", () => {
+    const { group } = makeVisual("decal", { params: { spin: 2 } });
+    const [{ material }] = group.children;
+    expect(material.uniforms.uScroll.value.x).toBe(2 * SHAPE_STOCK.decal.layers[0].repeat[0]);
+  });
+
+  it("keeps a scorch dark unless the ability sets its colors", () => {
+    const dark = makeVisual("scorch", { colors: ["#ff0000", "#ff0000"] }).group.children[0].material.uniforms.uColor.value;
+    expect(dark.r).toBeLessThan(0.1);
+    const red = makeVisual("scorch", { colors: ["#ff0000", "#ff0000"], params: { colors: ["#ff0000", "#ff0000"] } }).group.children[0].material.uniforms.uColor.value;
+    expect(red.r).toBeGreaterThan(0.9);
+  });
+
+  it("covers what's under a scorch, and mostly adds light with the rest", () => {
+    expect(makeVisual("scorch").group.children[0].material.uniforms.uSolid.value).toBe(1);
+    expect(makeVisual("decal").group.children[0].material.uniforms.uSolid.value).toBe(0.3);
+  });
+});
+
 describe("the stock sounds", () => {
   it("has a recipe for every name", () => {
     expect(missingSounds()).toEqual([]);

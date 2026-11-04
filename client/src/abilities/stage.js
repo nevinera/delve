@@ -4,6 +4,8 @@ import { DESKTOP_PARTICLES, ParticleField } from "./particles.js";
 import { playSound } from "./sounds.js";
 import { SCHOOL_COLORS } from "./stock.js";
 import { abilityTimeline } from "./timeline.js";
+import { discGeometry, drape } from "./decal.js";
+import { DECALS } from "./shapeStock.js";
 import { disposeVisual, makeVisual } from "./visuals.js";
 
 // Plays abilities' timelines in a scene: clips on who uses them, visuals, sounds and projectiles.
@@ -15,7 +17,6 @@ import { disposeVisual, makeVisual } from "./visuals.js";
 
 const AREA_OPACITY = 0.35;
 const AREA_S = 0.8;
-const ABOVE_GROUND_FT = 0.15;
 
 const SHAKE_S = 0.25;
 const LUNGE_BACK_S = 0.25;
@@ -67,8 +68,9 @@ export function clipNameFor(role, roles, clips) {
 
 export class AbilityStage {
   // scene: where visuals go. audio: gives an AudioContext, or null to keep quiet.
-  constructor(scene, { audio = () => null, particles = DESKTOP_PARTICLES } = {}) {
-    Object.assign(this, { scene, audio });
+  // ground(x, z): how high the ground is there, or null. Left out, it's flat.
+  constructor(scene, { audio = () => null, particles = DESKTOP_PARTICLES, ground = null } = {}) {
+    Object.assign(this, { scene, audio, ground });
     this.particles = new ParticleField(scene, { capacity: particles });
     this.t = 0;
     this.runs = [];
@@ -92,7 +94,8 @@ export class AbilityStage {
   stop(run) {
     this.runs = this.runs.filter((r) => r !== run);
     // Someone can have a newer one going, with a bolt of an older one still in the air.
-    if (!this.runs.some((r) => r.caster.mesh === run.caster.mesh)) run.caster.clip(null);
+    // A plain swing doesn't hold on to a clip, or a cancelled cast would keep looping through it.
+    if (!this.runs.some((r) => r.caster.mesh === run.caster.mesh && r.ability !== PLAIN_SWING)) run.caster.clip(null);
     run.on.bar?.(null);
   }
 
@@ -225,7 +228,11 @@ export class AbilityStage {
       if (event.heldByCast) live.heldBy = run;
       return;
     }
-    if (event.effect === "ribbon") {
+    if (DECALS.includes(event.effect)) {
+      const at = this.pointOf(run, on);
+      const live = this.spawn(event.effect, { colors, scale, params: event.params, at, ground: this.ground });
+      if (event.heldByCast) live.heldBy = run;
+    } else if (event.effect === "ribbon") {
       const live = this.spawn("ribbon", { colors, scale, params: event.params, trace: traceOf(unit) });
       live.heldStill = unit.mesh;
       if (event.heldByCast) live.heldBy = run;
@@ -311,10 +318,11 @@ export class AbilityStage {
     const center = around === "ground" ? this.pointOf(run, "ground") : around === "target" ? this.pointOf(run, "target") : run.caster.mesh.position.clone();
     const length = cone ? (cone / 360) * Math.PI * 2 : Math.PI * 2;
     const start = cone ? -length / 2 : 0; // along +x, and the mesh turns it
-    const geometry = new THREE.CircleGeometry(radius, 64, start, length).rotateX(-Math.PI / 2);
+    const geometry = discGeometry({ radius, start, sweep: length });
     const mesh = new THREE.Mesh(geometry, new THREE.MeshBasicMaterial({ color: colors[0], transparent: true, opacity: AREA_OPACITY, depthWrite: false, side: THREE.DoubleSide }));
-    mesh.position.copy(center).setY(center.y + ABOVE_GROUND_FT);
+    mesh.position.copy(center);
     mesh.rotation.y = run.caster.mesh.rotation.y - Math.PI / 2;
+    drape(geometry, center, this.ground, mesh.rotation.y);
     const group = new THREE.Group();
     group.add(mesh);
     this.scene.add(group);

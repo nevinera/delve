@@ -11,11 +11,12 @@
 //   scroll: how fast it moves that way, in repeats a second.
 // - edge: how much of the shape's width fades out at its edges. rim: how much it shows only where
 //   it turns away from you, as a shield does. trail: an arc fades toward its start.
-// - opacity: 0 to 1.
+// - opacity: 0 to 1. solid: how much it covers what's behind it, 0 to 1, as well as adding light. A
+//   dark mark needs a lot. flat: a decal's texture lies flat, rather than running round its middle.
 // A ribbon's shape isn't one of those: it trails after something moving (ribbon.js). Its length is
 // how many seconds a part of it lasts, and its width is in feet.
 
-const LAYER = { color: "main", opacity: 1, repeat: [1, 1], scroll: [0, 0], edge: 0, rim: 0, trail: false, texture: "energy" };
+const LAYER = { color: "main", opacity: 1, repeat: [1, 1], scroll: [0, 0], edge: 0, rim: 0, trail: false, solid: 0.3, texture: "energy" };
 
 export const SHAPE_STOCK = {
   bolt: {
@@ -101,6 +102,24 @@ export const SHAPE_STOCK = {
       { ...LAYER, shape: "ribbon", texture: "plain", edge: 0.5, trail: true, color: "trim", opacity: 0.35 },
     ],
   },
+  // Laid over the ground (decal.js). inner: where a layer starts, a share of its radius out.
+  decal: {
+    duration: 2,
+    fade: "hold",
+    radius: 5,
+    layers: [
+      { ...LAYER, shape: "decal", inner: 0, texture: "swirl", repeat: [3, 0.5], scroll: [0.25, 0], edge: 0.2, opacity: 0.35 },
+      { ...LAYER, shape: "decal", inner: 0.68, texture: "streaks", repeat: [6, 1], scroll: [-0.3, 0], edge: 0.35, opacity: 0.6 },
+      { ...LAYER, shape: "decal", inner: 0.92, texture: "plain", edge: 0.5, color: "trim", opacity: 0.9 },
+    ],
+  },
+  scorch: {
+    duration: 6,
+    fade: "hold",
+    radius: 3,
+    colors: ["#100c08", "#1c130c"],
+    layers: [{ ...LAYER, shape: "decal", inner: 0, texture: "energy", flat: true, edge: 0.4, solid: 1, opacity: 0.9 }],
+  },
   shield: {
     duration: 1.2,
     fade: "hold",
@@ -112,6 +131,7 @@ export const SHAPE_STOCK = {
   },
 };
 
+export const DECALS = ["decal", "scorch"];
 export const SHAPES = ["sphere", "cylinder", "cone", "ring", "arc"];
 export const SHAPE_FADES = ["out", "pulse", "hold", "none"];
 export const SHAPE_EFFECTS = Object.keys(SHAPE_STOCK);
