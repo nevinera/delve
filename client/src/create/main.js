@@ -27,7 +27,8 @@ import { readLibrary, store, writeLibrary } from "./store.js";
 import { LibrarySync } from "../objects/libraryStore.js";
 import { Things } from "./things.js";
 import { GithubAuthError, GithubClient } from "../github/github.js";
-import { BranchMoved, fromRepo, loadRepo, nextVersion, recordOpened, repoChanges, sameRepo, saveRepo } from "./repo.js";
+import { openRepoKept } from "./keptOpen.js";
+import { BranchMoved, fromRepo, nextVersion, repoChanges, saveRepo } from "./repo.js";
 import { CAVES_PATH, Caves } from "./caves.js";
 import { VOXEL_FT } from "../v2/caves.js";
 import { Layout, layoutPath } from "./caveLayout.js";
@@ -316,9 +317,10 @@ function start(world, changes, fresh) {
   const unsaved = () => renditions.unsaved.size || placed.changed.size || library.dirty.size || caves.changed.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || waterVersion() !== waterSaved || layout.version !== layoutSaved;
   // Saves what's changed into `changes`, writing files on the worker: once what's being saved is,
   // where something is.
+  let dropped = false; // its changes are being thrown away, so it keeps no more
   const save = async () => {
     while (saving) await saving;
-    if (!unsaved()) return;
+    if (dropped || !unsaved()) return;
     const [version, biomesVersion, waterNow, layoutNow] = [tools.marks.version, tools.biomes.version, waterVersion(), layout.version];
     saving = renditions
       .unsavedFiles(continent)
@@ -350,7 +352,10 @@ function start(world, changes, fresh) {
       [downloadButton.disabled, downloadButton.textContent] = [false, "download world"];
     }
   });
-  repoTools(world, changes, save);
+  repoTools(world, changes, save, async () => {
+    dropped = true;
+    while (saving) await saving;
+  });
   let lastInfo = 0;
   const compass = new Compass($("stage"), document.querySelector(".create-bar"));
   const feet = (ft) => `${Math.round(ft).toLocaleString()} ft`;
@@ -553,8 +558,19 @@ async function open(base, changes = new Map(), fresh = false) {
 
 // GitHub, in the manage tools: the repo the world came from, saving to it as one commit, and
 // publishing that commit as the next version.
-function repoTools(world, changes, save) {
+function repoTools(world, changes, save, stopKeeping) {
   const status = (text) => ($("repoStatus").textContent = text);
+  $("repoDrop").textContent = source ? "drop local changes and reload" : "drop local changes";
+  $("repoDrop").addEventListener("click", async () => {
+    const what = source ? `reload ${source.repo} from GitHub` : "go back to the world as you uploaded it";
+    if (!window.confirm(`Drop every change you haven't saved, and ${what}? This can't be undone.`)) return;
+    await stopKeeping();
+    await store.delete("changes");
+    await store.set("fresh", true);
+    // Its address opens the head of the repo, downloading only what's changed.
+    if (source) window.location.search = `?from=github/${source.repo}`;
+    else window.location.reload();
+  });
   const buttons = [$("repoSave"), $("repoPublish")];
   let busy = false;
   const show = () => {
@@ -628,20 +644,15 @@ for (const form of [$("repoOpen"), $("openRepo")]) {
 
 // The files at the head of `repo`, kept in place of the world kept here, or null when that's the
 // one to open: it's that commit already, or you'd rather keep its changes. Throws when it can't.
-async function openRepo(repo, kept, keptChanges) {
-  const client = new GithubClient(repo);
+async function openRepo(repo) {
   $("open").hidden = false;
   $("openError").textContent = `Opening ${repo}…`;
-  const head = await client.headSha(await client.defaultBranch());
-  if (kept && sameRepo(source?.repo, repo) && source.commitSha === head) return null;
-  const lose = source && !sameRepo(source.repo, repo) ? `${source.repo}'s` : "its";
-  if (kept && keptChanges?.size && !window.confirm(`Open ${repo} from GitHub? It replaces the world kept in this browser, and ${lose} changes are lost unless you've saved or downloaded them.`)) return null;
-  const sameKept = kept instanceof Map && sameRepo(source?.repo, repo) ? { files: kept, source } : null;
-  const loaded = await loadRepo(client, { kept: sameKept, onProgress: ({ done, total }) => ($("openError").textContent = `Downloading ${done} of ${total} files…`) });
-  const { name } = readWorld(loaded.files);
-  await keepNew(loaded.files, false, loaded.source);
+  const loaded = await openRepoKept(repo, {
+    confirm: (message) => window.confirm(message),
+    onProgress: ({ done, total }) => ($("openError").textContent = `Downloading ${done} of ${total} files…`),
+  });
+  if (!loaded) return null;
   source = loaded.source;
-  recordOpened(repo, name).catch((e) => console.error("couldn't add the world to your list", e));
   return loaded.files;
 }
 
@@ -705,7 +716,7 @@ await store.delete("fresh");
 const repo = fromRepo(new URLSearchParams(window.location.search).get("from"));
 let [opened, failed] = [null, false];
 try {
-  opened = repo && (await openRepo(repo, kept, changes));
+  opened = repo && (await openRepo(repo));
   $("openError").textContent = "";
 } catch (e) {
   failed = true;

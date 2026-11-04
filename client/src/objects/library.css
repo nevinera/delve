@@ -453,6 +453,27 @@
   margin: 0;
 }
 
+.library-world-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.library-source {
+  opacity: 0.7;
+  white-space: nowrap;
+}
+
+.library-open {
+  display: flex;
+  gap: 4px;
+}
+
+.library-open input {
+  width: 150px;
+}
+
 .library-world {
   color: #aaa;
 }

@@ -4,6 +4,7 @@ import { playSound } from "../abilities/sounds.js";
 import { keptSource, onSourceSaved, saveKept } from "../create/keptSave.js";
 import { KeptJson, keptFiles } from "../create/keptWorld.js";
 import { BranchMoved } from "../create/repo.js";
+import { openFromAddress, worldBar } from "../create/worldBar.js";
 import { readLibrary, writeLibrary } from "../create/store.js";
 import { GithubAuthError } from "../github/github.js";
 import { LibrarySync } from "../objects/libraryStore.js";
@@ -14,7 +15,7 @@ import { abilityFields, classFields, statusFields } from "./fields.js";
 import { renderFields } from "./form.js";
 import { AbilityPreview } from "./preview.js";
 
-// The class editor: the classes of the world /create has open. Changes go to the store /create
+// The class editor: the classes of the world this browser keeps, opened here or in /create. Changes go to the store /create
 // shares with the objects page, and the page's button commits them to the world's repo.
 
 const $ = (id) => document.getElementById(id);
@@ -24,6 +25,7 @@ function say(message = "", { info = false } = {}) {
   $("message").classList.toggle("info", info);
 }
 
+await openFromAddress(say);
 const world = new KeptJson(await keptFiles());
 setWorldIcons(world.files);
 $("worldName").textContent = world.info.name;
@@ -102,7 +104,7 @@ function showConfig(made) {
   const config = $("config");
   config.replaceChildren();
   if (!made) {
-    config.textContent = open ? "Pick a class, or make a new one." : "Open a world in /create first.";
+    config.textContent = open ? "Pick a class, or make a new one." : "Open a repo above, or a world in /create first.";
     return;
   }
   const list = part?.kind === "ability" ? "abilities" : part?.kind === "status" ? "statuses" : null;
@@ -188,10 +190,11 @@ show();
 // Saving the classes to GitHub, as one commit of their files alone.
 const showSource = (source) => {
   $("repoSave").disabled = !source?.commitSha;
-  $("repoSave").title = source?.commitSha ? `commit these classes to ${source.repo}` : "open the world from GitHub in /create, and save it there first";
+  $("repoSave").title = source?.commitSha ? `commit these classes to ${source.repo}` : "open a repo here, and save it there first";
 };
 showSource(await keptSource());
 onSourceSaved(showSource);
+await worldBar($("worldBar"), { say, flush: () => sync.push() });
 $("repoSave").addEventListener("click", async () => {
   $("repoSave").disabled = true;
   try {
@@ -203,7 +206,7 @@ $("repoSave").addEventListener("click", async () => {
     say(`Saved ${next.commitSha.slice(0, 7)}.`, { info: true });
   } catch (e) {
     console.error("couldn't save the classes", e);
-    if (e instanceof BranchMoved) say(`${e.message}: open the repo again in /create, then save.`);
+    if (e instanceof BranchMoved) say(`${e.message}: open the repo again, then save.`);
     else if (e instanceof GithubAuthError) say("Connect GitHub first, from your worlds page.");
     else say(`Couldn't save: ${e.message}`);
   } finally {

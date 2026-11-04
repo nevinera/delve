@@ -4,6 +4,7 @@ import { PLACED_PATH } from "../create/placed.js";
 import { keptSource, onSourceSaved, saveKept } from "../create/keptSave.js";
 import { BranchMoved } from "../create/repo.js";
 import { KeptJson, keptFiles } from "../create/keptWorld.js";
+import { openFromAddress, worldBar } from "../create/worldBar.js";
 import { readLibrary, writeLibrary } from "../create/store.js";
 import { GithubAuthError } from "../github/github.js";
 import { LibrarySync, isLibraryPath } from "./libraryStore.js";
@@ -12,7 +13,7 @@ import { setBuiltObjects } from "../world/objects.js";
 import { adoptStrays, builtObjects, images } from "./collections.js";
 import { ObjectLibrary } from "./library.js";
 
-// The objects page: the object library of the world /create has open, on its own. Changes go
+// The objects page: the object library of the world this browser keeps, opened here or in /create. Changes go
 // straight to the library /create keeps in this browser (create/store.js), which it shares, open
 // or not.
 
@@ -32,6 +33,7 @@ async function placedCount(types) {
   return count;
 }
 
+await openFromAddress(say);
 const world = new KeptJson(await keptFiles());
 $("worldName").textContent = world.info.name;
 const sync = new LibrarySync(
@@ -60,10 +62,11 @@ library.show();
 // world from. /create's other changes stay unsaved until it saves them.
 const showSource = (source) => {
   $("repoSave").disabled = !source?.commitSha;
-  $("repoSave").title = source?.commitSha ? `commit this library to ${source.repo}` : "open the world from GitHub in /create, and save it there first";
+  $("repoSave").title = source?.commitSha ? `commit this library to ${source.repo}` : "open a repo here, and save it there first";
 };
 showSource(await keptSource());
 onSourceSaved(showSource);
+await worldBar($("worldBar"), { say, flush: () => sync.push() });
 $("repoSave").addEventListener("click", async () => {
   const button = $("repoSave");
   button.disabled = true;
@@ -76,7 +79,7 @@ $("repoSave").addEventListener("click", async () => {
     say(`Saved ${next.commitSha.slice(0, 7)}.`, { info: true });
   } catch (e) {
     console.error("couldn't save the library", e);
-    if (e instanceof BranchMoved) say(`${e.message}: open the repo again in /create, then save.`);
+    if (e instanceof BranchMoved) say(`${e.message}: open the repo again, then save.`);
     else if (e instanceof GithubAuthError) say("Connect GitHub first, from your worlds page.");
     else say(`Couldn't save: ${e.message}`);
   } finally {

@@ -1,7 +1,7 @@
 import { strFromU8, strToU8, unzipSync } from "fflate";
 import { keptWorld } from "./store.js";
 
-// The world /create keeps in this browser, as a page other than /create reads it.
+// The world this browser keeps, as a page other than /create reads it.
 
 // Its JSON files, path -> bytes, with its changes since it was opened: its library, what's placed
 // and world.json. Empty when it has none open.
@@ -22,7 +22,7 @@ export async function keptFiles() {
 export class KeptJson {
   constructor(files) {
     this.files = files;
-    this.info = files.has("world.json") ? this.readJson("world.json") : { name: "no world open in /create" };
+    this.info = files.has("world.json") ? this.readJson("world.json") : { name: "no world open" };
   }
 
   readJson(path) {
