@@ -18,6 +18,9 @@ import { disposeVisual, makeVisual } from "./visuals.js";
 const AREA_OPACITY = 0.35;
 const AREA_S = 0.8;
 
+const MOST_EMITTED = 256; // batches a long-lasting effect remembers, to fade out when it ends
+const AURA_IN_S = 0.25;
+const AURA_OUT_S = 0.3;
 const SHAKE_S = 0.25;
 const LUNGE_BACK_S = 0.25;
 const LUNGE_CLEAR_FT = 3; // how far from its target a lunge stops
@@ -151,7 +154,7 @@ export class AbilityStage {
     const body = new THREE.Vector3();
     const emitted = [];
     let sent = 0;
-    const update = (u) => {
+    const put = () => {
       if (follow) {
         group.position.copy(follow.position).setY(follow.position.y + up);
         if (pelvis) {
@@ -159,11 +162,28 @@ export class AbilityStage {
           group.position.setX(body.x).setZ(body.z);
         }
       }
-      const due = dueBy(spec, u);
+    };
+    const letGo = (due) => {
       if (due > sent) emitted.push(this.particles.emit(spec, due - sent, group.position.toArray(), colors, direction, floor));
       sent = Math.max(sent, due);
     };
-    return { group, length: Math.max(0.02, emitsFor(spec)), update, fadeOut: () => this.particles.fadeOut(emitted) };
+    const update = (u) => {
+      put();
+      letGo(dueBy(spec, u));
+    };
+    // For as long as it's wanted: it goes on at its rate, or lets go its count again as the last die.
+    let stopped = false;
+    const sustain = (time) => {
+      if (stopped) return;
+      put();
+      letGo(spec.rate > 0 ? spec.count + Math.floor(spec.rate * time) : spec.count * (1 + Math.floor(time / Math.max(0.5, spec.lifetime))));
+      if (emitted.length > MOST_EMITTED) emitted.shift();
+    };
+    const fadeOut = () => {
+      stopped = true;
+      this.particles.fadeOut(emitted);
+    };
+    return { group, length: Math.max(0.02, emitsFor(spec)), update, sustain, fadeOut };
   }
 
   fire(run, event) {
@@ -214,40 +234,106 @@ export class AbilityStage {
     }
   }
 
+  // Sets a visual going, and gives back what's playing. params.follow says if it stays on who it's on
+  // or stays where it started. Particles follow unless they say not to, and the rest don't unless
+  // they say to. A ribbon always follows the blade or projectile it trails after.
   fireVisual(run, event) {
-    const { on, colors, scale } = event;
+    const { on, colors, scale, params } = event;
     const unit = on === "caster" ? run.caster : run.target ?? run.caster;
     const height = on === "ground" ? 6 : unit.height;
+    const follows = on !== "ground" && (params?.follow ?? isParticleEffect(event.effect));
+    const held = (live) => {
+      if (event.heldByCast) live.heldBy = run;
+      return live;
+    };
     if (isParticleEffect(event.effect)) {
-      const spec = particleSpec(event.effect, event.params);
+      const spec = particleSpec(event.effect, params);
       const up = on !== "ground" && spec.at === "chest" ? chestOf(unit).y - unit.mesh.position.y : 0;
       const yaw = run.caster.mesh.rotation.y;
-      const follow = on === "ground" ? null : unit.mesh;
       const floor = on === "ground" ? this.pointOf(run, "ground").y : unit.mesh.position.y;
-      const live = this.spawn(event.effect, { colors, scale, params: event.params, follow, up, floor, way: [Math.sin(yaw), 0, Math.cos(yaw)] }, on === "ground" ? this.pointOf(run, "ground") : null);
-      if (event.heldByCast) live.heldBy = run;
-      return;
+      const place = on === "ground" ? this.pointOf(run, "ground") : follows ? null : unit.mesh.position.clone().setY(unit.mesh.position.y + up);
+      return held(this.spawn(event.effect, { colors, scale, params, follow: follows ? unit.mesh : null, up, floor, way: [Math.sin(yaw), 0, Math.cos(yaw)] }, place));
     }
     if (DECALS.includes(event.effect)) {
       const at = this.pointOf(run, on);
-      const live = this.spawn(event.effect, { colors, scale, params: event.params, at, ground: this.ground });
-      if (event.heldByCast) live.heldBy = run;
-    } else if (event.effect === "ribbon") {
-      const live = this.spawn("ribbon", { colors, scale, params: event.params, trace: traceOf(unit) });
-      live.heldStill = unit.mesh;
-      if (event.heldByCast) live.heldBy = run;
-    } else if (event.effect === "beam") {
-      const to = on === "ground" ? this.pointOf(run, "ground") : chestOf(unit);
-      const live = this.spawn("beam", { colors, scale, params: event.params, from: handOf(run.caster).toArray(), to: to.toArray() });
-      if (event.heldByCast) live.heldBy = run;
-    } else if (event.effect === "bolt" || event.effect === "arrow") {
-      this.spawn(event.effect, { colors, scale, height, params: event.params }, on === "ground" ? this.pointOf(run, "ground") : chestOf(unit));
-    } else {
-      const live = this.spawn(event.effect, { colors, scale, height, params: event.params }, this.pointOf(run, on));
-      if (event.heldByCast) live.heldBy = run;
-      // What faces a way faces where the caster does.
-      if (["cone", "slash"].includes(event.effect) && on === "caster") live.visual.group.rotation.y = run.caster.mesh.rotation.y;
+      return held(this.stick(this.spawn(event.effect, { colors, scale, params, at, ground: this.ground }), follows, unit));
     }
+    if (event.effect === "ribbon") {
+      const live = this.spawn("ribbon", { colors, scale, params, trace: traceOf(unit) });
+      live.heldStill = unit.mesh;
+      return held(live);
+    }
+    if (event.effect === "beam") {
+      const end = () => (on === "ground" ? this.pointOf(run, "ground") : chestOf(unit)).toArray();
+      const live = this.spawn("beam", { colors, scale, params, from: handOf(run.caster).toArray(), to: end() });
+      // It reaches from wherever its caster is to wherever it's going.
+      if (params?.follow) live.aims = () => live.visual.aim(handOf(run.caster).toArray(), end());
+      return held(live);
+    }
+    if (event.effect === "bolt" || event.effect === "arrow") {
+      const live = this.spawn(event.effect, { colors, scale, height, params }, on === "ground" ? this.pointOf(run, "ground") : chestOf(unit));
+      return held(this.stick(live, follows, unit));
+    }
+    const live = this.spawn(event.effect, { colors, scale, height, params }, this.pointOf(run, on));
+    // What faces a way faces where the caster does.
+    const faces = ["cone", "slash"].includes(event.effect) && on === "caster";
+    if (faces) live.visual.group.rotation.y = run.caster.mesh.rotation.y;
+    return held(this.stick(live, follows, unit, faces));
+  }
+
+  // Keeps a visual where it is on a unit, as the unit moves.
+  stick(live, follows, unit, faces = false) {
+    if (follows) live.sticksTo = { mesh: unit.mesh, faces, offset: live.visual.group.position.clone().sub(unit.mesh.position) };
+    return live;
+  }
+
+  // Puts what follows someone where they are now.
+  placeFollowers() {
+    const place = new THREE.Vector3();
+    for (const { visual, sticksTo, aims } of this.alive) {
+      aims?.();
+      if (!sticksTo) continue;
+      place.copy(sticksTo.mesh.position).add(sticksTo.offset);
+      if (visual.moveTo) visual.moveTo(place);
+      else visual.group.position.copy(place);
+      if (sticksTo.faces) visual.group.rotation.y = sticksTo.mesh.rotation.y;
+    }
+  }
+
+  // Plays a status's look on whoever has it, with these colors if it has none of its own. It follows
+  // them unless it says not to. With a duration of "status" it carries on until endAura, or for
+  // `lasts` seconds if that's given.
+  aura(unit, aura, colors = ["#ffffff", "#ffffff"], { lasts = null } = {}) {
+    const sustained = aura.duration === "status";
+    const params = { ...aura, follow: aura.follow ?? true, ...(sustained ? { duration: undefined } : {}) };
+    const event = { effect: aura.effect, on: "caster", colors: aura.colors?.length === 2 ? aura.colors : colors, scale: aura.scale ?? 1, params };
+    const live = this.fireVisual({ caster: unit, target: unit, spot: null }, event);
+    if (sustained) {
+      live.sustained = true;
+      live.endsAt = lasts === null ? null : this.t + lasts;
+    }
+    return live;
+  }
+
+  // Starts a status-long aura fading away.
+  endAura(live) {
+    if (live.ending !== undefined) return;
+    live.ending = this.t;
+    live.visual.fadeOut?.();
+  }
+
+  // Draws a status-long aura, and says if it's still going.
+  sustain(live) {
+    const { visual, at, endsAt } = live;
+    if (endsAt !== null && this.t >= endsAt) this.endAura(live);
+    const time = this.t - at;
+    const left = live.ending === undefined ? 1 : 1 - (this.t - live.ending) / AURA_OUT_S;
+    if (left <= 0) {
+      disposeVisual(visual);
+      return false;
+    }
+    visual.sustain?.(time, Math.min(1, time / AURA_IN_S) * left);
+    return true;
   }
 
   // A plain swing, one that isn't an ability.
@@ -289,6 +375,7 @@ export class AbilityStage {
   // Moves lunging bodies to where they're drawn. Call it once the game has put everyone in place, as
   // it's about to draw them. A body nothing's moved since has last frame's lean taken off first.
   place() {
+    this.placeFollowers();
     this.lunges = this.lunges.filter((lunge) => {
       const { mesh, toward, from, peak, offset, last } = lunge;
       if (mesh.position.equals(last)) mesh.position.sub(offset);
@@ -313,12 +400,6 @@ export class AbilityStage {
     }
   }
 
-  // Plays a status's look on whoever just got it, with these colors if it has none of its own.
-  aura(unit, aura, colors = ["#ffffff", "#ffffff"]) {
-    const event = { effect: aura.effect, on: "caster", colors: aura.colors?.length === 2 ? aura.colors : colors, scale: aura.scale ?? 1, params: aura };
-    this.fireVisual({ caster: unit, target: unit, spot: null }, event);
-  }
-
   // Marks the ground an area effect covers: a flat disc, or a slice of one the way the caster faces.
   showArea(run, { radius, cone, around, colors }) {
     const center = around === "ground" ? this.pointOf(run, "ground") : around === "target" ? this.pointOf(run, "target") : run.caster.mesh.position.clone();
@@ -337,6 +418,7 @@ export class AbilityStage {
 
   draw() {
     this.alive = this.alive.filter((live) => {
+      if (live.sustained) return this.sustain(live);
       const { visual, at, flying } = live;
       if (flying) {
         const t = live.run.t;

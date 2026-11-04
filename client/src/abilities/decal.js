@@ -62,6 +62,7 @@ export function drape(geometry, center, heightAt, turn = 0) {
 export function drapedMeshes(parts, colors, center, heightAt, turn = 0) {
   const group = new THREE.Group();
   group.position.copy(center);
+  const draped = center.clone(); // where it last followed the ground from
   const meshes = parts.map(({ geometry, layer }) => {
     drape(geometry, center, heightAt, turn);
     const mesh = new THREE.Mesh(geometry, shapeMaterial(layer, colors));
@@ -75,8 +76,9 @@ export function drapedMeshes(parts, colors, center, heightAt, turn = 0) {
     group,
     // Moves it, laying it over the ground again once it's gone far enough to matter.
     moveTo(place) {
-      if (group.position.distanceTo(place) < STEP_FT / 3) return;
       group.position.copy(place);
+      if (draped.distanceTo(place) < STEP_FT / 3) return;
+      draped.copy(place);
       for (const { mesh } of meshes) drape(mesh.geometry, place, heightAt, turn);
     },
     show(time, seen) {
@@ -99,6 +101,6 @@ export function makeDecal(name, { colors, scale, params, at, ground }) {
   }));
   // A stock decal with its own colors keeps them, unless the ability sets some.
   const shades = spec.colors && !(params?.colors?.length === 2) ? spec.colors : colors;
-  const { group, show } = drapedMeshes(parts, shades, at ?? new THREE.Vector3(), ground);
-  return { group, length: spec.duration, update: (u) => show(u * spec.duration, fadeAt(spec.fade, u)) };
+  const { group, show, moveTo } = drapedMeshes(parts, shades, at ?? new THREE.Vector3(), ground);
+  return { group, length: spec.duration, moveTo, update: (u) => show(u * spec.duration, fadeAt(spec.fade, u)), sustain: show };
 }

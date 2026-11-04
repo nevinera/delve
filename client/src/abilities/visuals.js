@@ -54,39 +54,49 @@ function makeShapes(name, { colors, scale, height, from, to, params, follow }) {
   const holder = new THREE.Group();
   group.add(holder);
   group.position.y = spec.raise ?? (spec.rise ? spec.rise * height : 0);
-  const reach = from && to ? new THREE.Vector3(...from).distanceTo(new THREE.Vector3(...to)) : null;
-  if (name === "beam" && reach !== null) {
-    // A beam's cylinders lie along the way from one point to the other.
-    holder.position.fromArray(from);
-    holder.lookAt(new THREE.Vector3(...to));
-    holder.rotateX(Math.PI / 2);
-  }
+  const beam = name === "beam" && Boolean(from && to);
+  let reach = null;
   const shapes = spec.layers.map((layer) => {
-    const beam = name === "beam" && reach !== null;
-    // A beam's texture repeats by its length, so it doesn't stretch.
-    const fitted = beam ? { ...layer, repeat: [layer.repeat[0], layer.repeat[1] * reach] } : layer;
-    const mesh = new THREE.Mesh(shapeGeometry(layer), shapeMaterial(fitted, colors));
+    const mesh = new THREE.Mesh(shapeGeometry(layer), shapeMaterial(layer, colors));
     mesh.frustumCulled = false;
     mesh.renderOrder = 5;
     holder.add(mesh);
     const across = (u) => between(layer.radius, u) * (layer.bodies ? height : 1) * scale;
-    const length = beam ? reach : layer.long ? layer.long * scale : layer.tall ? layer.tall * height : null;
+    const length = layer.long ? layer.long * scale : layer.tall ? layer.tall * height : null;
     return { layer, mesh, across, length };
   });
+  // Lays a beam's cylinders along the way from one point to the other. Its texture repeats by its
+  // length, so it doesn't stretch.
+  const aim = (start, end) => {
+    const [a, b] = [new THREE.Vector3(...start), new THREE.Vector3(...end)];
+    reach = a.distanceTo(b);
+    holder.position.copy(a);
+    holder.lookAt(b);
+    holder.rotateX(Math.PI / 2);
+    for (const { layer, mesh } of shapes) mesh.material.uniforms.uRepeat.value.y = layer.repeat[1] * reach;
+  };
+  if (beam) aim(from, to);
+  // Draws it grown u of the way, `time` seconds in, this much seen.
+  const show = (u, time, seen) => {
+    const grown = spec.grow ? 0.4 + 0.6 * Math.min(1, u / spec.grow) : 1;
+    for (const { layer, mesh, across, length } of shapes) {
+      const along = beam ? reach : length && length * grown;
+      sized(mesh, layer, across(u) * grown, along);
+      mesh.material.uniforms.uTime.value = time;
+      mesh.material.uniforms.uOpacity.value = layer.opacity * seen;
+    }
+    if (name === "slash") holder.rotation.z = -1.2 + 2.4 * u;
+  };
   return {
     group,
     length: spec.duration,
+    aim,
     update: (u) => {
       if (follow) group.position.copy(follow.position);
-      const grown = spec.grow ? 0.4 + 0.6 * Math.min(1, u / spec.grow) : 1;
-      for (const { layer, mesh, across, length } of shapes) {
-        sized(mesh, layer, across(u) * grown, length && length * grown);
-        mesh.material.uniforms.uTime.value = u * spec.duration;
-        mesh.material.uniforms.uOpacity.value = layer.opacity * fadeAt(spec.fade, u);
-      }
-      if (name === "slash") holder.rotation.z = -1.2 + 2.4 * u;
+      show(u, u * spec.duration, fadeAt(spec.fade, u));
       if (name === "bolt") holder.scale.setScalar(1 + 0.12 * Math.sin(u * 40));
     },
+    sustain: (time, seen) => show(Math.min(1, time / spec.duration), time, seen),
   };
 }
 

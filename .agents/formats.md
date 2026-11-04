@@ -753,7 +753,9 @@ Only a class's `id` and `name` are required for now, so the class editor can sav
   - Ranged: `shoot`, `aimedShot`, `rapidShot`, `throw`.
   - Spells: `cast`, `castBig`, `castChannel`, `castGround`, `castOverhead`, `castSelf`, `castOnAlly`, `pray`.
   - Other: `shout`, `breath`, `roll`, `drink`, `transform`, and `none` for no animation.
-- `visuals` and `sounds`: what plays, from the stock sets the core world ships. Each picks an `effect` or `sound`, `when` it plays (`cast`, `launch`, `impact` or `channel`), and `on` (`caster`, `target` or `ground`, the target by default for impacts). Visuals take `colors` and `scale`, and sounds take `volume` and `pitch`, each 1 by default. Abilities can list several visuals to layer them. A visual with `when: "flight"` follows the ability's projectile. A `ribbon` is a strip trailing after something moving. With `when: "flight"` it follows the projectile. Otherwise it follows the blade of the weapon in the hand of whoever it's `on`, or their bare hand. It takes `length` (how many seconds a part of it lasts) and `width` (feet, when it isn't off a weapon), and the shape parameters below other than `shape`. A melee swing gets a stock one unless the ability lists a `ribbon` itself.
+- `visuals` and `sounds`: what plays, from the stock sets the core world ships. Each picks an `effect` or `sound`, `when` it plays (`cast`, `launch`, `impact` or `channel`), and `on` (`caster`, `target` or `ground`, the target by default for impacts). Visuals take `colors` and `scale`, and sounds take `volume` and `pitch`, each 1 by default. Abilities can list several visuals to layer them. A visual with `when: "flight"` follows the ability's projectile. Any visual can set `follow`: true stays on who it's on as they move, and false stays where it started. Particles follow by default and the rest don't, and something `on` the ground stays put. A followed `beam` keeps reaching from its caster to where it's going. A `ribbon` always follows what it trails after.
+
+A `ribbon` is a strip trailing after something moving. With `when: "flight"` it follows the projectile. Otherwise it follows the blade of the weapon in the hand of whoever it's `on`, or their bare hand. It takes `length` (how many seconds a part of it lasts) and `width` (feet, when it isn't off a weapon), and the shape parameters below other than `shape`. A melee swing gets a stock one unless the ability lists a `ribbon` itself.
 
 A `decal` (an ability circle) or `scorch` (a dark burn) is a texture laid over the ground, following its slopes. They take `radius` (feet) and `spin` (turns a second), and the shape parameters below other than `shape`. Ground areas draw with the same thing for as long as they last.
 
@@ -849,7 +851,7 @@ A unit holds one copy of a status for each unit that put it on, so two casters' 
 - `limit`: how many units can hold it from you at once. Applying it to another takes it off the oldest.
 - `consumedBy`: ends it when the holder uses one of these `abilities`, by id from the same class, or an ability with this `tag`. A `modify` on the status still changes that use. `uses` makes it last that many uses, for "your next 3". `stacks` takes that many stacks each use, instead of ending it. The ability doesn't know about it.
 - `pose`: `sit` sits you down while it lasts.
-- `aura`: a visual that plays once on the unit when it gets the status. It takes `effect`, `colors`, `scale` and that effect's parameters, as an ability's visual does, except that `duration` is only ever seconds.
+- `aura`: a visual on the unit when it gets the status. It takes `effect`, `colors`, `scale` and that effect's parameters, as an ability's visual does. It plays once, unless `duration` is `"status"`, which keeps it going for as long as the status lasts, and shows it to anyone who comes into sight meanwhile. `follow` defaults to true here.
 
 Effects:
 

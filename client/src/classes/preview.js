@@ -8,6 +8,8 @@ import { randomLook, resolveRecipe } from "../character/recipe.js";
 import { UpperBody, canSplit, halfOf } from "../character/upperBody.js";
 import { attackGroup } from "../character/weapons.js";
 
+const PREVIEW_AURA_S = 6; // the longest it shows an aura that lasts as long as its status
+
 // Trying an ability as it's being made: a character of the class using it on a goblin in an empty
 // field, with its animations, visuals and sounds, and what it does floating over who it lands on.
 // None of this decides what an ability does in the game: that's the game server's.
@@ -346,7 +348,7 @@ export class AbilityPreview {
     if (text) this.floatText(on, text, effect.type);
     if (effect.type === "status") {
       const status = this.statuses.find((s) => s.id === effect.status);
-      if (status?.aura?.effect) this.stage.aura(on, status.aura, schoolColors(this.ability));
+      if (status?.aura?.effect) this.stage.aura(on, status.aura, schoolColors(this.ability), { lasts: Math.min(status.duration ?? PREVIEW_AURA_S, PREVIEW_AURA_S) });
     }
   }
 

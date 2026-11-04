@@ -172,6 +172,134 @@ describe("the stage", () => {
     });
   });
 
+  describe("following", () => {
+    const fire = (stage, on, effect, params) => stage.fireVisual({ caster: on, target: on, spot: null }, { effect, on: "caster", colors: ["#ffffff", "#ffffff"], scale: 1, params });
+    const moved = (stage, on) => {
+      on.mesh.position.x += 5;
+      stage.frame(0.01);
+      stage.place();
+    };
+
+    it.each(["burst", "ring", "shield", "bolt", "arrow", "decal", "scorch"])("%s stays put by default, and comes along when it says", (effect) => {
+      const stage = stageWith();
+      const on = unit();
+      const left = fire(stage, on, effect, {});
+      const comes = fire(stage, on, effect, { follow: true });
+      const { y } = comes.visual.group.position;
+      moved(stage, on);
+      expect(left.visual.group.position.x).toBe(0);
+      expect(comes.visual.group.position.x).toBe(5);
+      expect(comes.visual.group.position.y).toBe(y);
+    });
+
+    it.each([[true, 5], [undefined, 5], [false, 0]])("particles with follow %s", (follow, x) => {
+      const stage = stageWith();
+      const on = unit();
+      const { visual } = fire(stage, on, "embers", { follow });
+      on.mesh.position.x = 5;
+      stage.frame(0.01);
+      expect(visual.group.position.x).toBe(x);
+    });
+
+    it("lays a following decal over the ground it's come to", () => {
+      const stage = new AbilityStage(new THREE.Scene(), { ground: (x) => x });
+      const on = unit();
+      const { visual } = fire(stage, on, "decal", { follow: true, duration: 100 });
+      moved(stage, on);
+      const { position } = visual.group.children[0].geometry.attributes;
+      expect(position.getY(1)).toBeCloseTo(5 + position.getX(1) + 0.2, 3);
+    });
+
+    it("turns a following cone as its caster turns", () => {
+      const stage = stageWith();
+      const on = unit();
+      const { visual } = fire(stage, on, "cone", { follow: true });
+      on.mesh.rotation.y = 1;
+      moved(stage, on);
+      expect(visual.group.rotation.y).toBe(1);
+    });
+
+    it("keeps a following beam reaching to its target", () => {
+      const stage = stageWith();
+      const [caster, target] = [unit(), unit(10)];
+      const { visual } = stage.fireVisual({ caster, target, spot: null }, { effect: "beam", on: "target", colors: ["#ffffff", "#ffffff"], scale: 1, params: { follow: true } });
+      target.mesh.position.x = 30;
+      stage.frame(0.01);
+      stage.place();
+      stage.frame(0.01);
+      const beam = visual.group.children[0].children[0];
+      expect(beam.scale.y).toBeGreaterThan(25);
+    });
+
+    it("leaves something on the ground where it is", () => {
+      const stage = stageWith();
+      const on = unit();
+      const live = stage.fireVisual({ caster: on, target: on, spot: new THREE.Vector3(3, 0, 3) }, { effect: "ring", on: "ground", colors: ["#ffffff", "#ffffff"], scale: 1, params: { follow: true } });
+      moved(stage, on);
+      expect(live.visual.group.position.x).toBe(3);
+    });
+  });
+
+  describe("an aura that lasts as long as its status", () => {
+    const lasting = { effect: "shield", duration: "status" };
+
+    it("carries on past its stock length, then fades and goes when ended", () => {
+      const stage = stageWith();
+      const live = stage.aura(unit(), lasting);
+      for (let n = 0; n < 50; n++) stage.frame(0.1);
+      expect(stage.alive).toContain(live);
+      const { material } = live.visual.group.children[0].children[0];
+      expect(material.uniforms.uOpacity.value).toBeGreaterThan(0.5);
+      const full = material.uniforms.uOpacity.value;
+      stage.endAura(live);
+      stage.frame(0.1);
+      expect(stage.alive).toContain(live);
+      expect(material.uniforms.uOpacity.value).toBeLessThan(full);
+      stage.frame(0.3);
+      expect(stage.alive).not.toContain(live);
+    });
+
+    it("follows by default, and not if it says", () => {
+      const stage = stageWith();
+      const on = unit();
+      const comes = stage.aura(on, lasting);
+      const stays = stage.aura(on, { ...lasting, follow: false });
+      on.mesh.position.x = 4;
+      stage.frame(0.1);
+      stage.place();
+      expect(comes.visual.group.position.x).toBe(4);
+      expect(stays.visual.group.position.x).toBe(0);
+    });
+
+    it("keeps letting go particles, of either kind, until it ends", () => {
+      for (const effect of ["embers", "sparks"]) {
+        const stage = stageWith();
+        const emit = vi.spyOn(stage.particles, "emit");
+        const live = stage.aura(unit(), { effect, duration: "status" });
+        for (let n = 0; n < 40; n++) stage.frame(0.1);
+        const { length } = emit.mock.calls;
+        expect(length).toBeGreaterThan(1);
+        stage.endAura(live);
+        stage.frame(0.1);
+        expect(emit.mock.calls.length).toBe(length);
+      }
+    });
+
+    it("ends by itself when told how long", () => {
+      const stage = stageWith();
+      const live = stage.aura(unit(), lasting, undefined, { lasts: 1 });
+      for (let n = 0; n < 15; n++) stage.frame(0.1);
+      expect(stage.alive).not.toContain(live);
+    });
+
+    it("plays once with a number", () => {
+      const stage = stageWith();
+      const live = stage.aura(unit(), { effect: "shield", duration: 0.5 });
+      for (let n = 0; n < 8; n++) stage.frame(0.1);
+      expect(stage.alive).not.toContain(live);
+    });
+  });
+
   it("shakes only when told to, and settles", () => {
     const stage = stageWith();
     expect(stage.shakeOffset().length()).toBe(0);

@@ -34,6 +34,7 @@ const SHAPE_FIELDS = [
   { key: "shape", type: "select", none: "stock", options: SHAPES, show: (v) => shapeEffect(v) && v.effect !== "ribbon" && !DECALS.includes(v.effect) },
   { key: "radius", type: "number", label: "radius ft", min: 0, show: (v) => DECALS.includes(v.effect) },
   { key: "spin", type: "number", label: "turns a second", show: (v) => DECALS.includes(v.effect) },
+  { key: "follow", type: "check", label: "follows who it's on", default: false, show: (v) => (shapeEffect(v) && v.effect !== "ribbon") || v.effect === "arrow" },
   { key: "length", type: "number", label: "trail seconds", min: 0, show: (v) => v.effect === "ribbon" },
   { key: "width", type: "number", label: "width ft", hint: "off a weapon, the blade sets it", min: 0, show: (v) => v.effect === "ribbon" },
   { key: "texture", type: "select", none: "stock", options: repeatingNames, show: shapeEffect },
@@ -45,8 +46,11 @@ const SHAPE_FIELDS = [
   { key: "fade", type: "select", none: "stock", options: SHAPE_FADES, show: shapeEffect },
   { key: "opacity", type: "number", min: 0, max: 1, show: shapeEffect },
 ];
-// An aura plays once, with no cast to last through, so its duration is only ever seconds.
-const asAuraField = (field) => (field.key === "duration" ? { key: "duration", type: "number", label: "for seconds", min: 0, show: field.show } : field);
+// An aura has no cast to last through, but can last through its status, and follows unless it says not to.
+const asAuraField = (field) => {
+  if (field.key === "duration") return { ...field, word: "status", after: "or as long as the status" };
+  return field.key === "follow" ? { ...field, default: true } : field;
+};
 const PARTICLE_FIELDS = [
   particleNumber("count", "at once", { min: 0, step: 1 }),
   particleNumber("rate", "per second", { min: 0 }),
@@ -54,6 +58,7 @@ const PARTICLE_FIELDS = [
   particleNumber("lifetime", "each lasts", { min: 0 }),
   particleNumber("speed", "speed", { min: 0 }),
   particleNumber("spread", "spread degrees", { min: 0, max: 360 }),
+  { key: "follow", type: "check", label: "follows who it's on", default: true, show: particle },
   particleSelect("direction", ["up", "forward"]),
   particleNumber("gravity", "gravity"),
   particleNumber("drag", "drag", { min: 0 }),

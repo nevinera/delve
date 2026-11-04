@@ -13,9 +13,12 @@ import { skeletonOf } from "../character/characterMesh.js";
 import { strFromU8 } from "fflate";
 import { allHold } from "./conditions.js";
 import { PlayLog } from "./log.js";
+import { LastingAuras } from "./lastingAuras.js";
 import { absorbBand, initials, timeLeft } from "./unitStatuses.js";
 import { AreaMarks } from "./areas.js";
 import { blockedBy, isHelpless } from "./controls.js";
+
+const AURA_CHECK_S = 0.25; // how often to see which status-long auras should be showing
 
 // Fighting on the play page: frames for you and your target, an action bar, a cast bar, what lands
 // floating over who it lands on, and a log. The game server decides everything: this asks it to use
@@ -123,6 +126,7 @@ export class PlayCombat {
     this.barPage = 0; // which bar a small screen shows
     document.querySelector("[data-abilities]")?.addEventListener("click", () => this.toggleAbilities());
     this.areas = new AreaMarks(view);
+    this.auras = new LastingAuras(this.stage);
     this.statuses = new Map(); // unit id -> the statuses you've put on it, as stacks by id
     this.statusLists = new Map(); // class id -> its statuses, null while its file loads
     this.health = you.health;
@@ -722,7 +726,7 @@ export class PlayCombat {
     }
     if (message.status && unit) {
       const aura = made?.statuses?.find((s) => s.id === message.status)?.aura;
-      if (aura?.effect) this.stage.aura(unit, aura);
+      if (aura?.effect && aura.duration !== "status") this.stage.aura(unit, aura);
     }
   }
 
@@ -779,9 +783,28 @@ export class PlayCombat {
     this.view.camera.position.add(this.stage.shakeOffset());
   }
 
+  // What status-long auras there should be right now: who has what, and how it looks.
+  wantedAuras() {
+    const wanted = new Map();
+    for (const id of this.unitStatuses.units.keys()) {
+      for (const held of this.unitStatuses.of(id)) {
+        const aura = this.statusesOf(held.class)?.find((s) => s.id === held.status)?.aura;
+        if (!aura?.effect || aura.duration !== "status") continue;
+        const unit = this.unit(id);
+        if (unit) wanted.set(`${id}/${held.status}/${held.from}`, { unit, aura });
+      }
+    }
+    return wanted;
+  }
+
   // Called each frame of the walk.
   frame(dt) {
     this.stage.frame(dt);
+    this.auraWait = (this.auraWait ?? 0) - dt;
+    if (this.auraWait <= 0) {
+      this.auraWait = AURA_CHECK_S;
+      this.auras.sync(this.wantedAuras());
+    }
     const now = performance.now();
     if (this.casting) {
       const u = Math.min(1, (now - this.casting.from) / Math.max(1, this.casting.length));

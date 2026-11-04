@@ -102,6 +102,15 @@ export function makeRibbon({ colors, scale, params, follow, trace }) {
     return columns;
   };
 
+  const show = (now, seen) => {
+    const shown = write(now) > 1;
+    for (const { layer, mesh } of meshes) {
+      mesh.visible = shown;
+      mesh.material.uniforms.uTime.value = now;
+      mesh.material.uniforms.uOpacity.value = layer.opacity * seen;
+    }
+  };
+
   const length = spec.duration + lasts;
   const { after, duration } = SHAPE_STOCK.ribbon;
   const starts = trace ? after * Math.min(1, spec.duration / duration) : 0; // a faster swing winds up faster
@@ -111,12 +120,11 @@ export function makeRibbon({ colors, scale, params, follow, trace }) {
     update: (u) => {
       const now = u * length;
       if (now >= starts && now <= spec.duration) sample(now);
-      const shown = write(now) > 1;
-      for (const { layer, mesh } of meshes) {
-        mesh.visible = shown;
-        mesh.material.uniforms.uTime.value = now;
-        mesh.material.uniforms.uOpacity.value = layer.opacity * fadeAt(spec.fade, u);
-      }
+      show(now, fadeAt(spec.fade, u));
+    },
+    sustain: (now, seen) => {
+      sample(now);
+      show(now, seen);
     },
   };
 }
