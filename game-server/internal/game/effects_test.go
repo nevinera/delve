@@ -123,7 +123,7 @@ func TestDispelByKindControlSlowAndTag(t *testing.T) {
 	statuses := []combat.Status{
 		{ID: "pois", Name: "Poison", Kind: "debuff", Dispel: "poison"},
 		{ID: "fire", Name: "Burn", Kind: "debuff", Dispel: "magic"},
-		{ID: "stun", Name: "Stun", Kind: "debuff", Effects: []combat.StatusEffect{{Type: "control", Control: "stun"}}},
+		{ID: "hold", Name: "Hold", Kind: "debuff", Effects: []combat.StatusEffect{{Type: "control", Control: "root"}}},
 		{ID: "slow", Name: "Slow", Kind: "debuff", Effects: []combat.StatusEffect{{Type: "stat", Stat: "movementSpeed", Multiply: &half}}},
 		{ID: "mark", Name: "Mark", Kind: "debuff", Tags: []string{"curse-ish"}},
 		{ID: "none", Name: "Stuck", Kind: "debuff"},
@@ -133,7 +133,7 @@ func TestDispelByKindControlSlowAndTag(t *testing.T) {
 		gone   string
 	}{
 		{combat.Effect{Dispels: []string{"poison", "disease"}}, "pois"},
-		{combat.Effect{Dispels: []string{"stun", "root"}}, "stun"},
+		{combat.Effect{Dispels: []string{"stun", "root"}}, "hold"},
 		{combat.Effect{Dispels: []string{"slow"}}, "slow"},
 		{combat.Effect{Tags: []string{"curse-ish"}}, "mark"},
 	} {
@@ -313,5 +313,114 @@ func TestUnitsShowWhatTheyHold(t *testing.T) {
 	}
 	if len(seen[-1]) != 1 || len(seen[float64(p.ID())]) != 1 || seen[-1][0].(map[string]any)["status"] != "mark" {
 		t.Fatalf("snapshot = %v", snapshot)
+	}
+}
+
+// controlled is a fight where the player can hold itself with a control for 5 s.
+func controlled(t *testing.T, control string) (*Hub, *Player, *float64) {
+	t.Helper()
+	zero := 0.0
+	h, p, c := dispelling(t, []combat.Status{{ID: "held", Name: "Held", Kind: "debuff", Duration: 5, Effects: []combat.StatusEffect{{Type: "control", Control: control}}}}, combat.Effect{Type: "dispel", Affects: "self"})
+	p.fight.class.Abilities = append(p.fight.class.Abilities,
+		combat.Ability{ID: "sing", Name: "Sing", School: "holy", Target: "self", GCD: &zero},
+		combat.Ability{ID: "singing", Name: "Singing", School: "holy", Target: "self", GCD: &zero, CastTime: 3},
+		combat.Ability{ID: "punch", Name: "Punch", School: "physical", Target: "self", GCD: &zero, Range: combat.Distance{Melee: true}})
+	return h, p, c
+}
+
+func TestStunStopsEverythingUntilItEnds(t *testing.T) {
+	h, p, c := controlled(t, "stun")
+	use(t, p, "singing")
+	pass(h, c, 0.1)
+	heard(p)
+	p.fight.vitals.Statuses[statusKey{"held", p.ID()}] = &activeStatus{def: p.fight.class.Status("held"), class: p.fight.class.ID, since: h.now(), until: h.now().Add(seconds(5)), stacks: 1, uses: 1}
+	pass(h, c, 0.1)
+	got := heard(p, "controls", "speed", "stopped")
+	if len(got) != 3 {
+		t.Fatalf("heard %v", got)
+	}
+	if p.fight.cast != nil {
+		t.Fatal("the cast went on")
+	}
+	if p.motion.slowed != -1 {
+		t.Fatalf("slowed = %g", p.motion.slowed)
+	}
+	use(t, p, "punch")
+	pass(h, c, 0.05)
+	refusal(t, p, "you're stunned")
+	found := false
+	for _, s := range fighterState(p, h.now()) {
+		found = found || s == "stunned"
+	}
+	if !found {
+		t.Fatal("not stunned as far as conditions go")
+	}
+	pass(h, c, 5.1)
+	if got := heard(p, "controls"); len(got) != 1 || got[0]["controls"] != nil {
+		t.Fatalf("after it ended: %v", got)
+	}
+	if p.motion.slowed != 0 {
+		t.Fatalf("slowed = %g after", p.motion.slowed)
+	}
+	use(t, p, "punch")
+	pass(h, c, 0.05)
+	if got := heard(p, "refused"); len(got) != 0 {
+		t.Fatalf("refused = %v", got)
+	}
+}
+
+func TestRootHoldsYouStillButYouCanAct(t *testing.T) {
+	h, p, c := controlled(t, "root")
+	use(t, p, "meheld")
+	pass(h, c, 0.1)
+	if p.motion.slowed != -1 {
+		t.Fatalf("slowed = %g", p.motion.slowed)
+	}
+	heard(p)
+	use(t, p, "sing")
+	pass(h, c, 0.05)
+	if got := heard(p, "refused"); len(got) != 0 {
+		t.Fatalf("refused = %v", got)
+	}
+}
+
+func TestSilenceStopsHolyCastsNotFists(t *testing.T) {
+	h, p, c := controlled(t, "silence")
+	use(t, p, "meheld")
+	pass(h, c, 0.05)
+	use(t, p, "singing")
+	pass(h, c, 0.05)
+	refusal(t, p, "you're silenced")
+	use(t, p, "punch")
+	pass(h, c, 0.05)
+	if got := heard(p, "refused"); len(got) != 0 {
+		t.Fatalf("refused = %v", got)
+	}
+}
+
+func TestDamageBreaksFear(t *testing.T) {
+	h, p, c := controlled(t, "fear")
+	use(t, p, "itheld")
+	pass(h, c, 0.05)
+	if held(p, "held") == nil {
+		t.Fatal("it never landed")
+	}
+	p.layer.harm(p, &p.layer.dummies[0].vitals, 1, &hit{}, h.now())
+	if held(p, "held") != nil {
+		t.Fatal("damage didn't break it")
+	}
+}
+
+func TestDisarmStopsSwings(t *testing.T) {
+	h, p, c := controlled(t, "disarm")
+	use(t, p, "meheld")
+	pass(h, c, 0.05)
+	if err := p.Handle([]byte(`{"type":"attack","target":-1}`)); err != nil {
+		t.Fatal(err)
+	}
+	heard(p)
+	pass(h, c, 3)
+	if got := heard(p, "swung"); len(got) != 0 {
+		t.Fatalf("swung %v", got)
 	}
 }

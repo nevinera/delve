@@ -1,0 +1,20 @@
+{
+  "abilities": {
+    "holy": { "id": "holy", "school": "holy" },
+    "fists": { "id": "fists", "school": "physical", "range": "melee" },
+    "shot": { "id": "shot", "school": "physical", "range": 30 },
+    "plain": { "id": "plain" }
+  },
+  "cases": [
+    { "controls": [], "swing": true, "still": false, "blocked": {} },
+    { "controls": ["stun"], "swing": false, "still": true, "blocked": { "holy": "you're stunned", "fists": "you're stunned", "shot": "you're stunned", "plain": "you're stunned" } },
+    { "controls": ["incapacitate"], "swing": false, "still": true, "blocked": { "holy": "you're incapacitated", "fists": "you're incapacitated", "shot": "you're incapacitated", "plain": "you're incapacitated" } },
+    { "controls": ["disorient"], "swing": false, "still": true, "blocked": { "holy": "you're disoriented", "fists": "you're disoriented", "shot": "you're disoriented", "plain": "you're disoriented" } },
+    { "controls": ["fear"], "swing": false, "still": true, "blocked": { "holy": "you're afraid", "fists": "you're afraid", "shot": "you're afraid", "plain": "you're afraid" } },
+    { "controls": ["root"], "swing": true, "still": true, "blocked": {} },
+    { "controls": ["silence"], "swing": true, "still": false, "blocked": { "holy": "you're silenced" } },
+    { "controls": ["disarm"], "swing": false, "still": false, "blocked": { "fists": "you're disarmed" } },
+    { "controls": ["silence", "disarm"], "swing": false, "still": false, "blocked": { "holy": "you're silenced", "fists": "you're disarmed" } },
+    { "controls": ["root", "stun"], "swing": false, "still": true, "blocked": { "holy": "you're stunned", "fists": "you're stunned", "shot": "you're stunned", "plain": "you're stunned" } }
+  ]
+}

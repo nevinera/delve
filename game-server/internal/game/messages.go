@@ -144,6 +144,12 @@ type forced struct {
 	Height  float64    `json:"height"`
 }
 
+// controlsMessage is what's holding its hearer now.
+type controlsMessage struct {
+	Type     string   `json:"type"`
+	Controls []string `json:"controls"`
+}
+
 // lockout is a school its hearer can't use for a while.
 type lockout struct {
 	Type    string  `json:"type"`

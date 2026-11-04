@@ -218,12 +218,13 @@ export class Walker {
       return;
     }
     const key = (k) => (this.held.has(k) ? 1 : 0);
-    this.yaw += (key("a") - key("d")) * TURN * dt;
+    if (!this.stunned) this.yaw += (key("a") - key("d")) * TURN * dt;
     // Which way it's turned since the last step, by keys or by dragging.
     this.turning = Math.sign(this.yaw - (this.lastYaw ?? this.yaw));
     this.lastYaw = this.yaw;
-    const forward = key("w") - key("s");
-    const strafe = key("q") - key("e");
+    const still = this.speedShare === 0; // something's holding you: the server won't take a step
+    const forward = still ? 0 : key("w") - key("s");
+    const strafe = still ? 0 : key("q") - key("e");
     const fx = Math.sin(this.yaw);
     const fz = Math.cos(this.yaw);
     let mx = fx * forward + fz * strafe;
@@ -258,7 +259,7 @@ export class Walker {
     const across = Math.hypot(this.pos.x - fromX, this.pos.z - fromZ);
     if (this.airTime === 0 && this.vy === 0 && walksDown(this.pos.y - ground, across)) this.pos.y = ground;
     const onGround = this.pos.y <= ground + 0.01;
-    if (onGround && this.held.has(" ")) {
+    if (onGround && !still && this.held.has(" ")) {
       this.vy = JUMP_FT;
       this.jumpedAt = this.t;
       this.sitting = null;

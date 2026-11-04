@@ -10,6 +10,7 @@ import { strFromU8 } from "fflate";
 import { allHold } from "./conditions.js";
 import { PlayLog } from "./log.js";
 import { initials, timeLeft } from "./unitStatuses.js";
+import { blockedBy, isHelpless } from "./controls.js";
 
 // Fighting on the play page: frames for you and your target, an action bar, a cast bar, what lands
 // floating over who it lands on, and a log. The game server decides everything: this asks it to use
@@ -100,6 +101,7 @@ export class PlayCombat {
     this.floats = [];
     this.cooldowns = new Map(); // ability id -> when it's ready, in performance.now()
     this.lockouts = new Map(); // school -> when it's back, in performance.now()
+    this.controls = []; // the controls on you
     this.gcdUntil = 0;
     this.resources = {};
     this.resourceMax = {};
@@ -548,6 +550,11 @@ export class PlayCombat {
     this.view.walker.speedShare = movementSpeed / 100;
   }
 
+  controls_({ controls }) {
+    this.controls = controls ?? [];
+    this.view.walker.stunned = isHelpless(this.controls);
+  }
+
   statusChanged_({ id, status, from, stacks }) {
     if (from === this.you.id) this.statuses.get(id)?.set(status, stacks);
   }
@@ -672,7 +679,7 @@ export class PlayCombat {
         const ready = Math.max(this.cooldowns.get(id) ?? 0, this.gcdUntil, this.lockedUntil(ability));
         shade.style.height = ready > now ? "100%" : "0";
         node.classList.toggle("combat-action-locked", this.lockedUntil(ability) > now);
-        node.classList.toggle("combat-action-off", !allHold(ability.requires, facts));
+        node.classList.toggle("combat-action-off", !allHold(ability.requires, facts) || Boolean(blockedBy(this.controls, ability)));
       }
     }
     this.drawStatuses(this.youFrame, this.you.id, now);

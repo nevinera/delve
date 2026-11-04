@@ -84,6 +84,7 @@ type fighter struct {
 	gcdUntil   time.Time
 	cooldowns  map[string][]time.Time // when each spent charge of an ability comes back
 	lockouts   map[string]time.Time   // when each school it's been locked out of comes back
+	controls   []string               // the controls on it, as it's last been told
 	cast       *casting
 	attacking  int64                // who it's auto-attacking, or 0
 	swingAt    time.Time            // when its next swing can start
@@ -383,6 +384,9 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 	if !slices.Contains(ability.Ignores, "cooldown") && len(live(f.cooldowns[ability.ID], now)) >= max(ability.Charges, 1) {
 		return nil, 0, "not ready yet"
 	}
+	if why := combat.Blocked(controlsOn(&f.vitals), ability); why != "" {
+		return nil, 0, why
+	}
 	if lockedOut(f, ability, now) {
 		return nil, 0, "that school is locked out"
 	}
@@ -678,10 +682,17 @@ func unitOf(v *vitals, reader int64, state []string) combat.Unit {
 	return combat.Unit{Health: v.Health, MaxHealth: v.MaxHealth, Statuses: stacks, State: state}
 }
 
-// fighterState is which of a `state` condition's words are true of a player. Being controlled or
-// stunned aren't, until statuses can do those, and everywhere counts as outdoors.
+// fighterState is which of a `state` condition's words are true of a player. Everywhere counts as
+// outdoors.
 func fighterState(p *Player, now time.Time) []string {
 	state := []string{"outdoors"}
+	controls := controlsOn(&p.fight.vitals)
+	if combat.Helpless(controls) {
+		state = append(state, "controlled")
+	}
+	if slices.Contains(controls, "stun") {
+		state = append(state, "stunned")
+	}
 	if p.motion.slowed < 0 {
 		state = append(state, "slowed")
 	}
@@ -989,7 +1000,7 @@ func (l *Layer) dropFrom(from int64) {
 // breakStatuses takes off a unit's statuses that end when this happens. Only an ability has anything to keep them on.
 func (l *Layer) breakStatuses(on *vitals, what string, kept func(*combat.Status) bool) {
 	for key, each := range on.Statuses {
-		if slices.Contains(each.def.BreaksOn, what) && (kept == nil || !kept(each.def)) {
+		if (slices.Contains(each.def.BreaksOn, what) || (what == "damage" && each.def.BreaksOnDamage())) && (kept == nil || !kept(each.def)) {
 			l.takeOff(on, key)
 		}
 	}
@@ -1637,7 +1648,7 @@ func hitOf(c *casting, e *combat.Effect, on *vitals, count int) combat.HitContex
 // has, and a player's speed.
 func (l *Layer) refit(v *vitals, now time.Time) {
 	o := l.players[v.ID]
-	if len(v.Statuses) == 0 && v.MaxHealth == v.base.MaxHealth && (o == nil || o.motion.settled()) {
+	if len(v.Statuses) == 0 && v.MaxHealth == v.base.MaxHealth && (o == nil || (o.motion.settled() && len(o.fight.controls) == 0)) {
 		return
 	}
 	stats := l.statsOf(v, nil, now)
@@ -1647,9 +1658,33 @@ func (l *Layer) refit(v *vitals, now time.Time) {
 		l.sync(v)
 		l.tellOf(v.ID, encode(healthMessage{"health", v.ID, math.Round(v.Health), v.MaxHealth}))
 	}
-	if o != nil && o.motion.setSpeed(max(stats.MovementSpeed, 0)/100, now) {
-		o.send(encode(speedMessage{"speed", max(stats.MovementSpeed, 0)}))
+	if o == nil {
+		return
 	}
+	speed := max(stats.MovementSpeed, 0)
+	if controls := controlsOn(v); !slices.Equal(controls, o.fight.controls) {
+		o.fight.controls = controls
+		o.send(encode(controlsMessage{"controls", controls}))
+		if c := o.fight.cast; c != nil && combat.Blocked(controls, c.ability) != "" {
+			l.stopCast(o)
+		}
+	}
+	if combat.HoldsStill(o.fight.controls) {
+		speed = 0
+	}
+	if o.motion.setSpeed(speed/100, now) {
+		o.send(encode(speedMessage{"speed", speed}))
+	}
+}
+
+// controlsOn is the controls a unit's statuses hold it with, sorted, each once.
+func controlsOn(v *vitals) []string {
+	var out []string
+	for _, held := range v.Statuses {
+		out = append(out, held.def.Controls()...)
+	}
+	slices.Sort(out)
+	return slices.Compact(out)
 }
 
 // harm takes health off a unit, noting it in the hit.
@@ -1705,7 +1740,7 @@ func (l *Layer) stopAttacking(p *Player) {
 // cast to end, and for the target to come into reach and in front of you.
 func (l *Layer) swing(p *Player, now time.Time) {
 	f := &p.fight
-	if f.attacking == 0 || f.cast != nil || now.Before(f.swingAt) {
+	if f.attacking == 0 || f.cast != nil || now.Before(f.swingAt) || !combat.CanSwing(controlsOn(&f.vitals)) {
 		return
 	}
 	d := l.dummy(f.attacking, p.state.Continent)
@@ -1759,7 +1794,7 @@ func (l *Layer) spar(p *Player, now time.Time) {
 			d = each
 		}
 	}
-	if d == nil {
+	if d == nil || !combat.CanSwing(controlsOn(&d.vitals)) {
 		return
 	}
 	f.sparAt = now.Add(seconds(combat.SwingSeconds))
