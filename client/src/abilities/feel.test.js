@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
-import { abilityTimeline } from "./timeline.js";
+import { abilityTimeline, swingLook } from "./timeline.js";
 import { AbilityStage } from "./stage.js";
 
 const swing = { range: "melee", school: "physical", animation: "attack" };
@@ -169,6 +169,33 @@ describe("the stage", () => {
       on.mesh.position.x = 7;
       stage.frame(0.05);
       expect(spawned(stage).position.x).toBe(7);
+    });
+  });
+
+  describe("a status's swing", () => {
+    it("adds up visuals and takes the largest of each number", () => {
+      const [fire, ice] = [{ effect: "sparks", when: "impact" }, { effect: "smoke", when: "impact" }];
+      expect(swingLook([{ visuals: [fire], lunge: 1, shake: 0.2 }, { visuals: [ice], lunge: 2 }, { type: "swing" }])).toEqual({ visuals: [fire, ice], lunge: 2, shake: 0.2 });
+      expect(swingLook([])).toEqual({});
+    });
+
+    it("can turn one off", () => {
+      expect(kinds({ ...swing, ...swingLook([{ pause: 0 }]) }, "pause")).toEqual([]);
+    });
+
+    it("plays its visuals with the swing, and a ribbon of its own replaces the stock one", () => {
+      const stage = stageWith();
+      const look = swingLook([{ visuals: [{ effect: "ribbon", when: "launch", length: 1 }, { effect: "burst", when: "impact" }] }]);
+      const run = stage.swing(unit(), unit(10), {}, look);
+      const visuals = run.line.events.filter((e) => e.kind === "visual");
+      expect(visuals.map((e) => e.effect).sort()).toEqual(["burst", "ribbon"]);
+      expect(visuals.find((e) => e.effect === "ribbon").params.length).toBe(1);
+      expect(visuals.find((e) => e.effect === "burst").on).toBe("target");
+    });
+
+    it("keeps the stock trail with visuals that aren't a ribbon", () => {
+      const run = stageWith().swing(unit(), unit(10), {}, swingLook([{ visuals: [{ effect: "burst", when: "impact" }] }]));
+      expect(run.line.events.filter((e) => e.kind === "visual").map((e) => e.effect).sort()).toEqual(["burst", "ribbon"]);
     });
   });
 

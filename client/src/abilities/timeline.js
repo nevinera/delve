@@ -34,6 +34,19 @@ const defaultOn = (when, ability) => (when !== "impact" ? "caster" : ability.tar
 
 export const schoolColors = (ability) => SCHOOL_COLORS[ability.school ?? ability.schools?.[0]] ?? SCHOOL_COLORS.physical;
 
+// What a holder's `swing` status effects make of a plain swing: their visuals together, and the largest
+// of each number any of them sets.
+export function swingLook(effects) {
+  const look = {};
+  for (const effect of effects) {
+    if (effect.visuals?.length) look.visuals = [...(look.visuals ?? []), ...effect.visuals];
+    for (const key of ["clipSpeed", "lunge", "pause", "shake"]) {
+      if (effect[key] !== undefined && effect[key] !== null) look[key] = Math.max(look[key] ?? 0, effect[key]);
+    }
+  }
+  return look;
+}
+
 // The nearest clip a body has for each `animation`. Those with none of their own wait on more clips.
 const ANIMATION_ROLES = {
   attack: "attack", offhandAttack: "attack", dualAttack: "attack", stab: "attack", kick: "attack", spinningKick: "attack", punch: "attack",

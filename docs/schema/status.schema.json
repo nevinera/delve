@@ -167,7 +167,8 @@
               "stealthLinger",
               "stealthProtected",
               "none",
-              "transform"
+              "transform",
+              "swing"
             ]
           },
           "stat": {
@@ -604,6 +605,33 @@
           "scalesWithCrit": {
             "type": "boolean",
             "description": "modify: the abilities do more the higher your crit chance"
+          },
+          "visuals": {
+            "type": "array",
+            "items": {
+              "$ref": "common.schema.json#/$defs/visual"
+            },
+            "description": "swing: what plays on the holder's auto-attacks, along with its ordinary swing"
+          },
+          "clipSpeed": {
+            "type": "number",
+            "minimum": 0,
+            "description": "swing: how fast the holder's auto-attack clip plays"
+          },
+          "lunge": {
+            "type": "number",
+            "minimum": 0,
+            "description": "swing: how many feet the holder leans in"
+          },
+          "pause": {
+            "type": "number",
+            "minimum": 0,
+            "description": "swing: how many seconds both sides hold still on contact"
+          },
+          "shake": {
+            "type": "number",
+            "minimum": 0,
+            "description": "swing: how many feet the holder's camera shakes on contact"
           }
         }
       }

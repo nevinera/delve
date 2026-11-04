@@ -13,6 +13,7 @@ import { skeletonOf } from "../character/characterMesh.js";
 import { strFromU8 } from "fflate";
 import { allHold } from "./conditions.js";
 import { PlayLog } from "./log.js";
+import { swingLook } from "../abilities/timeline.js";
 import { LastingAuras } from "./lastingAuras.js";
 import { absorbBand, initials, timeLeft } from "./unitStatuses.js";
 import { AreaMarks } from "./areas.js";
@@ -617,9 +618,17 @@ export class PlayCombat {
     return id === this.you.id ? { shake: (strength) => this.stage.shake(strength) } : {};
   }
 
+  // The `swing` effects of the statuses someone has.
+  swingEffectsOn(id) {
+    return this.unitStatuses.of(id).flatMap((held) => {
+      const status = this.statusesOf(held.class)?.find((s) => s.id === held.status);
+      return (status?.effects ?? []).filter((effect) => effect.type === "swing");
+    });
+  }
+
   swung({ id, target }) {
     const unit = this.unit(id);
-    if (unit) this.stage.swing(unit, this.unit(target), this.yoursToShake(id));
+    if (unit) this.stage.swing(unit, this.unit(target), this.yoursToShake(id), swingLook(this.swingEffectsOn(id)));
   }
 
   attacking_({ target }) {

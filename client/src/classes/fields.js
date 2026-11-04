@@ -89,6 +89,28 @@ const changesOf = (made) => () => {
 const unitsOf = (made) => () => (made.units ?? []).map((u) => [u.id, u.name || u.id]);
 const resourcesOf = (made) => () => (made.resources ?? []).map((r) => [r.key, r.name || r.key]);
 const main = { key: "colors", type: "words", label: "colors", hint: "[main, trim]: two #rrggbb colors, with commas" };
+// How an ability or a status's swing feels and looks.
+const FEEL_FIELDS = [
+  { key: "clipSpeed", label: "clip speed", type: "number", min: 0, hint: "1 by default" },
+  { key: "lunge", label: "lunge ft", type: "number", min: 0, hint: "a melee swing has one by default, 0 is none" },
+  { key: "pause", label: "pause on contact s", type: "number", min: 0, hint: "a melee swing has one by default, 0 is none" },
+  { key: "shake", label: "camera shake ft", type: "number", min: 0, hint: "a big melee swing has some by default, 0 is none" },
+];
+const VISUALS_FIELD = {
+  key: "visuals",
+  type: "list",
+  one: "visual",
+  blank: () => ({ effect: VISUALS[0], when: "impact" }),
+  fields: [
+    { key: "effect", type: "select", options: VISUALS },
+    { key: "when", type: "select", options: WHEN },
+    { key: "on", type: "select", none: "by when", options: ON },
+    main,
+    { key: "scale", type: "number", min: 0 },
+    ...PARTICLE_FIELDS,
+    ...SHAPE_FIELDS,
+  ],
+};
 // A stack taken from this status, or from another named one.
 const spendsStack = (made) => ({ type: "select", none: "no", options: () => [["this status", "this status"], ...statusesOf(made)()], read: (v) => (v === true ? "this status" : v), write: (v) => (v === "this status" ? true : v) });
 
@@ -571,26 +593,8 @@ export const abilityFields = (made) => [
   { key: "cooldownHasted", label: "cooldown hasted", type: "check", advanced: "casting" },
   { key: "replaces", type: "select", none: "nothing", options: abilitiesOf(made), advanced: "casting" },
   { key: "animation", type: "select", none: "by its range and school", options: COMMON_ANIMATIONS, more: MORE_ANIMATIONS, advanced: "look and sound" },
-  { key: "clipSpeed", label: "clip speed", type: "number", min: 0, hint: "1 by default", advanced: "look and sound" },
-  { key: "lunge", label: "lunge ft", type: "number", min: 0, hint: "a melee swing has one by default, 0 is none", advanced: "look and sound" },
-  { key: "pause", label: "pause on contact s", type: "number", min: 0, hint: "a melee swing has one by default, 0 is none", advanced: "look and sound" },
-  { key: "shake", label: "camera shake ft", type: "number", min: 0, hint: "a big melee swing has some by default, 0 is none", advanced: "look and sound" },
-  {
-    key: "visuals",
-    type: "list",
-    one: "visual",
-    advanced: "look and sound",
-    blank: () => ({ effect: VISUALS[0], when: "impact" }),
-    fields: [
-      { key: "effect", type: "select", options: VISUALS },
-      { key: "when", type: "select", options: WHEN },
-      { key: "on", type: "select", none: "by when", options: ON },
-      main,
-      { key: "scale", type: "number", min: 0 },
-      ...PARTICLE_FIELDS,
-      ...SHAPE_FIELDS,
-    ],
-  },
+  ...FEEL_FIELDS.map((field) => ({ ...field, advanced: "look and sound" })),
+  { ...VISUALS_FIELD, advanced: "look and sound" },
   {
     key: "sounds",
     type: "list",
@@ -638,7 +642,9 @@ export function overridesField(made, kind, fieldsOf, removable, show) {
 }
 
 const statusEffectFields = (made, nested = false) => [
-  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "modify"], more: ["immune", "aura", "stealth", "transform", "store", "extraTargets", "gear", "untargetable", "redirectThreat", "countsAsStealthed", "stealthLinger", "stealthProtected", "none"] },
+  { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "modify"], more: ["swing", "immune", "aura", "stealth", "transform", "store", "extraTargets", "gear", "untargetable", "redirectThreat", "countsAsStealthed", "stealthLinger", "stealthProtected", "none"] },
+  ...FEEL_FIELDS.map((field) => ({ ...field, show: is("swing") })),
+  { ...VISUALS_FIELD, show: is("swing") },
   { key: "stat", type: "select", none: "pick one", options: COMMON_STATS, more: STATS.filter((s) => !COMMON_STATS.includes(s)), show: is("stat") },
   { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: (e) => (e.type === "periodic" && e.does === "resource") || (e.type === "stat" && e.stat?.startsWith("resource")) },
   { key: "does", type: "select", options: ["damage", "heal", "resource"], show: is("periodic") },

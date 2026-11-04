@@ -367,3 +367,20 @@ func TestLeavingTakesOffWhatYouPutOn(t *testing.T) {
 		t.Fatalf("statusGone = %v", got)
 	}
 }
+
+// A status the swing ends still shows on the swing, so the swing has to be said first.
+func TestSwingIsSaidBeforeWhatItEnds(t *testing.T) {
+	h, p, c := lifetimes(t, []combat.Status{{ID: "next", Name: "Next", BreaksOn: []string{"action"}}}, selfBuff("next", gaining("next")))
+	use(t, p, "next")
+	pass(h, c, 0.1)
+	heard(p, "statusGone", "swung")
+	p.state.At[2] += 12
+	if err := p.Handle([]byte(`{"type":"attack","target":-1}`)); err != nil {
+		t.Fatal(err)
+	}
+	pass(h, c, 0.1)
+	got := heard(p, "swung", "statusGone")
+	if len(got) != 2 || got[0]["type"] != "swung" || got[1]["type"] != "statusGone" {
+		t.Fatalf("heard = %v", got)
+	}
+}

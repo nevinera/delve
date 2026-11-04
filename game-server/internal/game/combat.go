@@ -2319,9 +2319,10 @@ func (l *Layer) swing(p *Player, now time.Time) {
 	f.swingWhy = ""
 	sheet := l.statsOf(&f.vitals, nil, now)
 	f.swingAt = now.Add(seconds(sheet.Hasted(combat.SwingSeconds) * 100 / max(sheet.AttackSpeed, 1)))
-	l.breakStatuses(&f.vitals, "action", func(s *combat.Status) bool { return s.KeptBy != nil })
 	target := d.ID
+	// Those watching hear of the swing first, so they can draw it with the statuses it ends.
 	l.tell(p, encode(swung{"swung", p.ID(), target}))
+	l.breakStatuses(&f.vitals, "action", func(s *combat.Status) bool { return s.KeptBy != nil })
 	l.after(now.Add(strikeDelay), nil, func(now time.Time) {
 		d := l.dummy(target, "")
 		if l.players[p.ID()] != p || d == nil {

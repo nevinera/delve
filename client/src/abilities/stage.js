@@ -24,7 +24,7 @@ const AURA_OUT_S = 0.3;
 const SHAKE_S = 0.25;
 const LUNGE_BACK_S = 0.25;
 const LUNGE_CLEAR_FT = 3; // how far from its target a lunge stops
-const PLAIN_SWING = { name: "swing", range: "melee", school: "physical", animation: "attack" };
+const PLAIN_SWING = { name: "swing", plainSwing: true, range: "melee", school: "physical", animation: "attack" };
 const BLADE_STARTS = 0.55; // how far along a weapon from its grip to its tip a ribbon starts
 const BARE_HAND = new THREE.Vector3(0, 0.35, 0); // how wide a ribbon off a bare hand is
 
@@ -98,7 +98,7 @@ export class AbilityStage {
     this.runs = this.runs.filter((r) => r !== run);
     // Someone can have a newer one going, with a bolt of an older one still in the air.
     // A plain swing doesn't hold on to a clip, or a cancelled cast would keep looping through it.
-    if (!this.runs.some((r) => r.caster.mesh === run.caster.mesh && r.ability !== PLAIN_SWING)) run.caster.clip(null);
+    if (!this.runs.some((r) => r.caster.mesh === run.caster.mesh && !r.ability.plainSwing)) run.caster.clip(null);
     run.on.bar?.(null);
   }
 
@@ -336,9 +336,9 @@ export class AbilityStage {
     return true;
   }
 
-  // A plain swing, one that isn't an ability.
-  swing(caster, target, on) {
-    return this.play(PLAIN_SWING, { caster, target, on });
+  // A plain swing, one that isn't an ability. look: what statuses make of it (timeline.js's swingLook).
+  swing(caster, target, on, look = {}) {
+    return this.play({ ...PLAIN_SWING, ...look }, { caster, target, on });
   }
 
   // Leans a body in toward its target, in what's drawn only, and no closer than it can stand.
