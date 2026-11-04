@@ -107,6 +107,8 @@ type footing struct {
 type Ground interface {
 	At(x, z float64) (worlds.Sample, bool, error)
 	Enters(from, to [3]float64) (string, error)
+	// Sees is whether someone with their feet at from can see what has its feet at to.
+	Sees(from, to [3]float64) (bool, error)
 }
 
 // verdict is what to do with a report.

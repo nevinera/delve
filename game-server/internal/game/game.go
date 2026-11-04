@@ -62,15 +62,16 @@ func NewHub(w WorldLoader, c Characters) *Hub {
 
 // Layer is one copy of a world's open land and the characters in it.
 type Layer struct {
-	zones     []*zone // areas on the ground, oldest first
-	zoneCount int64
-	firing    int // how many triggers are setting each other off right now
-	hub       *Hub
-	key       string
-	worldID   int64
-	number    int
-	world     *worlds.World
-	grounds   map[string]*worlds.Ground // by continent, as they're needed
+	zones      []*zone // areas on the ground, oldest first
+	zoneCount  int64
+	firing     int // how many triggers are setting each other off right now
+	hub        *Hub
+	key        string
+	worldID    int64
+	number     int
+	world      *worlds.World
+	grounds    map[string]*worlds.Ground // by continent, as they're needed
+	fakeGround Ground                    // what tests have instead
 	// groundsMu guards grounds, apart from mu, since entering reads the ground without the layer.
 	groundsMu sync.Mutex
 	mu        sync.Mutex
@@ -84,14 +85,16 @@ type Layer struct {
 
 // Player is a connected character. Its connection reads Send until Gone closes.
 type Player struct {
-	Send   chan []byte
-	Gone   chan struct{}
-	layer  *Layer
-	state  Character
-	saved  rails.Position // the position last saved
-	motion motion
-	fight  fighter
-	once   sync.Once
+	Send      chan []byte
+	Gone      chan struct{}
+	layer     *Layer
+	state     Character
+	saved     rails.Position // the position last saved
+	motion    motion
+	seesFrom  time.Time // when the second of `sees` questions being counted began
+	seesAsked int
+	fight     fighter
+	once      sync.Once
 	// systemAdmin says its owner has that role, which admin commands need.
 	systemAdmin bool
 	// combatDebug says to log what each of its abilities comes to, for this connection.
@@ -359,6 +362,9 @@ func (p *Player) Handle(raw []byte) error {
 	case "attack":
 		p.layer.attack(p, m)
 		return nil
+	case "sees":
+		p.layer.answerSees(p, m.Target)
+		return nil
 	case "stop":
 		p.layer.mu.Lock()
 		defer p.layer.mu.Unlock()
@@ -483,6 +489,9 @@ func (p *Player) position() rails.Position {
 
 // ground is a continent's ground, or nil where it isn't known.
 func (l *Layer) ground(continent string) Ground {
+	if l.fakeGround != nil {
+		return l.fakeGround
+	}
 	l.groundsMu.Lock()
 	defer l.groundsMu.Unlock()
 	g, read := l.grounds[continent]

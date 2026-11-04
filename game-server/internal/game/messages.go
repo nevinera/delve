@@ -124,6 +124,13 @@ type refused struct {
 	Why     string `json:"why"`
 }
 
+// seesAnswer is whether the server has you seeing a unit.
+type seesAnswer struct {
+	Type   string `json:"type"`
+	Target int64  `json:"target"`
+	Clear  bool   `json:"clear"`
+}
+
 type stopped struct {
 	Type string `json:"type"`
 	ID   int64  `json:"id"`

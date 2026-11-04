@@ -1,5 +1,6 @@
 import "./play.css";
 import { graphicsPanel } from "../render/graphicsPanel.js";
+import { SightLines } from "./sightLines.js";
 import { builtObjects, images } from "../objects/collections.js";
 import { resolveRecipe } from "../character/recipe.js";
 import { Caves } from "../create/caves.js";
@@ -76,6 +77,7 @@ async function play() {
 
   let others = null;
   let combat = null;
+  let sightLines = null;
   // Combat news before you're in the world isn't yours to see: it's about others.
   const fight = (method) => (message) => combat?.[method](message);
   // The server says these as you enter, before combat is ready.
@@ -133,6 +135,7 @@ async function play() {
       combat?.statusGone_(message);
     },
     swung: fight("swung"),
+    sees: (message) => sightLines?.answer(message),
     attacking: fight("attacking_"),
     // Another continent's land isn't loaded, so the page comes back up there.
     teleport: (message) => (message.continent === you.continent ? connection.correct(message) : window.location.reload()),
@@ -184,9 +187,12 @@ async function play() {
   menu.querySelector('[data-open="playGraphics"]').disabled = false;
   others = new Others(view);
   for (const [method, arg] of early) others[method](arg);
+  sightLines = new SightLines(view, others, connection);
+  sightLines.addOption(menu.querySelector(".play-graphics"));
   view.onWalkFrame = (dt) => {
     others.frame(dt);
     combat?.frame(dt);
+    sightLines.frame(dt);
   };
   const paused = () => ($("playPaused").hidden = false);
   view.startWalk(paused, [you.at[0], you.at[2]], resolveRecipe(config.look));
@@ -198,7 +204,7 @@ async function play() {
   if (firstBars) combat.bars_(firstBars);
   earlyAreas.forEach((message) => combat.area_(message));
   // A handle for scripts and the browser's console.
-  window.play = { view, connection, others, combat, renditions, placed, caves };
+  window.play = { view, connection, others, combat, renditions, placed, caves, sightLines };
   if (touch) new TouchControls(view, document.body);
   $("playResume").addEventListener("click", () => {
     $("playPaused").hidden = true;

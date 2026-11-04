@@ -44,6 +44,7 @@ type Ground struct {
 	caves                   map[[2]int]caves
 	boulders                []thing // across courses' cascades, once water.json's read
 	bouldersRead            bool
+	through                 map[string]bool // built objects by id: whether you can see through them
 }
 
 type plate struct {
@@ -205,6 +206,15 @@ func (t thing) inside(x, z float64) bool {
 // are at y: those in the tiles' slots and across cascades whatever their height, and those placed
 // by hand reaching over a step above the feet and under the head. The lock is held.
 func (g *Ground) thingsNear(x, z, by, y float64) ([]thing, error) {
+	return g.thingsAround(x, z, by, func(t thing, bottom float64) bool {
+		return bottom < y+headFt && bottom+t.Height > y+stepFt
+	})
+}
+
+// thingsAround are the trees and objects within `by` feet of (x, z): all those in the tiles' slots
+// and across cascades, and those placed by hand that `keep` wants, told the height they stand at.
+// The lock is held.
+func (g *Ground) thingsAround(x, z, by float64, keep func(t thing, bottom float64) bool) ([]thing, error) {
 	var out []thing
 	near := func(t thing) bool {
 		return math.Abs(t.X-x) <= by+t.Footprint.reach() && math.Abs(t.Z-z) <= by+t.Footprint.reach()
@@ -217,6 +227,7 @@ func (g *Ground) thingsNear(x, z, by, y float64) ([]thing, error) {
 			}
 			for _, t := range filled {
 				if near(t) {
+					t.slotted = true
 					out = append(out, t)
 				}
 			}
@@ -235,7 +246,7 @@ func (g *Ground) thingsNear(x, z, by, y float64) ([]thing, error) {
 			if err != nil {
 				return nil, err
 			}
-			if bottom < y+headFt && bottom+t.Height > y+stepFt {
+			if keep(t, bottom) {
 				out = append(out, t)
 			}
 		}

@@ -91,6 +91,11 @@ export class GameConnection {
     this.socket.send(JSON.stringify({ type: "attack", target }));
   }
 
+  // Asks whether the server has you seeing someone.
+  askSees(target) {
+    if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: "sees", target }));
+  }
+
   // Sends a command for the game server to read.
   command(line) {
     if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: "command", line }));

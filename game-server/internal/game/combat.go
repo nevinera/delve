@@ -523,11 +523,77 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 	if needsFacing(ability) && !facing(p.state.At, p.state.Yaw, at) {
 		return nil, 0, "you're not facing it"
 	}
+	if target != p.ID() && !l.sees(p.state.Continent, p.state.At, at) {
+		return nil, 0, cantSee
+	}
 	if why := l.unmet(p, ability, target, now); why != "" {
 		return nil, 0, why
 	}
 	return ability, target, ""
 }
+
+// cantSee is why you can't use something on what's out of your sight.
+const cantSee = "you can't see that"
+
+// sees is whether someone with their feet at from can see what has its feet at to. With no ground
+// to go by, or trouble reading it, nothing's in the way.
+func (l *Layer) sees(continent string, from, to [3]float64) bool {
+	g := l.ground(continent)
+	if g == nil {
+		return true
+	}
+	clear, err := g.Sees(from, to)
+	if err != nil {
+		log.Printf("line of sight on %s: %v", continent, err)
+		return true
+	}
+	return clear
+}
+
+// feetOf is where a unit's feet are, if it's here.
+func (l *Layer) feetOf(id int64) ([3]float64, bool) {
+	if d := l.dummy(id, ""); d != nil {
+		return d.state.At, true
+	}
+	if o := l.players[id]; o != nil {
+		return o.state.At, true
+	}
+	return [3]float64{}, false
+}
+
+// seesCast is whether the caster can still see what a cast is on.
+func (l *Layer) seesCast(p *Player, c *casting) bool {
+	if c.spot != nil {
+		return l.sees(p.state.Continent, p.state.At, *c.spot)
+	}
+	if c.target == 0 || c.target == p.ID() {
+		return true
+	}
+	at, here := l.feetOf(c.target)
+	return !here || l.sees(p.state.Continent, p.state.At, at)
+}
+
+// answerSees tells the player whether the server has them seeing a unit, for the line of sight
+// overlay, as often as maxSeesPerSecond.
+func (l *Layer) answerSees(p *Player, target int64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	now := l.hub.now()
+	if now.Sub(p.seesFrom) >= time.Second {
+		p.seesFrom, p.seesAsked = now, 0
+	}
+	at, here := l.feetOf(target)
+	if !here || p.seesAsked >= maxSeesPerSecond || distance(p.state.At, at) > seesReachFt {
+		return
+	}
+	p.seesAsked++
+	p.send(encode(seesAnswer{"sees", target, l.sees(p.state.Continent, p.state.At, at)}))
+}
+
+const (
+	maxSeesPerSecond = 40
+	seesReachFt      = 200.0
+)
 
 func needsFacing(a *combat.Ability) bool {
 	if a.Facing != nil {
@@ -686,7 +752,11 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 	f := &p.fight
 	a := c.ability
 	c.released = true
-	if why := l.affordable(p, a, c.target, now); why != "" {
+	why := l.affordable(p, a, c.target, now)
+	if why == "" && !c.channel && a.Target != "self" && !l.seesCast(p, c) {
+		why = cantSee
+	}
+	if why != "" {
 		if f.cast == c {
 			f.cast = nil
 		}
@@ -2200,6 +2270,8 @@ func (l *Layer) swing(p *Player, now time.Time) {
 		why = "out of range"
 	} else if !facing(p.state.At, p.state.Yaw, d.state.At) {
 		why = "you're not facing it"
+	} else if !l.sees(p.state.Continent, p.state.At, d.state.At) {
+		why = cantSee
 	}
 	if why != "" {
 		if why != f.swingWhy {

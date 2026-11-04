@@ -240,6 +240,8 @@ func (f groundOf) At(x, z float64) (worlds.Sample, bool, error) {
 
 func (f groundOf) Enters(from, to [3]float64) (string, error) { return "", nil }
 
+func (f groundOf) Sees(from, to [3]float64) (bool, error) { return true, nil }
+
 // slabbed is level ground at 50 with a floor over it, its top at 60, from x = 100 to 200, and a
 // wall standing across x = 300.
 type slabbed struct{}
@@ -251,6 +253,8 @@ func (slabbed) At(x, z float64) (worlds.Sample, bool, error) {
 	}
 	return s, true, nil
 }
+
+func (slabbed) Sees(from, to [3]float64) (bool, error) { return true, nil }
 
 func (slabbed) Enters(from, to [3]float64) (string, error) {
 	if (from[0] < 300) != (to[0] < 300) && math.Min(from[1], to[1]) < 70 {
@@ -437,6 +441,8 @@ func (c caved) At(x, z float64) (worlds.Sample, bool, error) {
 }
 
 func (caved) Enters(from, to [3]float64) (string, error) { return "", nil }
+
+func (caved) Sees(from, to [3]float64) (bool, error) { return true, nil }
 
 func TestWalkingIntoACave(t *testing.T) {
 	r := onGround(t, caved{}, 50)

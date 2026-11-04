@@ -143,6 +143,39 @@ export function slabFootholds(slab, x, z, steepest) {
   return tops;
 }
 
+// Whether the straight line from a to b (continent [x, y, z]) goes into the slab: past its start,
+// into a part of it the start isn't already in.
+export function slabEnters(slab, a, b) {
+  const p = unturned(slab, a);
+  const d = sub(unturned(slab, b), p);
+  let [from, to] = [0, 1];
+  if (Math.abs(d[1]) > 1e-9) {
+    const [s, t] = [(-slab.thickness - p[1]) / d[1], -p[1] / d[1]];
+    [from, to] = [Math.max(from, Math.min(s, t)), Math.min(to, Math.max(s, t))];
+  } else if (p[1] > 0 || p[1] < -slab.thickness) return false;
+  if (to - from < 1e-9) return false;
+  const at = (t) => [p[0] + d[0] * t, p[2] + d[2] * t];
+  const inside = (point) => inPolygon(slab.outline, point) && !(slab.holes ?? []).some((hole) => inPolygon(hole, point));
+  const cuts = [from, to];
+  if (Math.hypot(d[0], d[2]) > 1e-9) {
+    for (const ring of [slab.outline, ...(slab.holes ?? [])]) {
+      ring.forEach((c, i) => {
+        const t = crossing([p[0], 0, p[2]], [d[0], 0, d[2]], c, ring[(i + 1) % ring.length]);
+        if (t !== null && t > from && t < to) cuts.push(t);
+      });
+    }
+  }
+  cuts.sort((x, y) => x - y);
+  let last = null; // where the stretch inside it the line was last in ended
+  for (let i = 0; i + 1 < cuts.length; i++) {
+    const [t0, t1] = [cuts[i], cuts[i + 1]];
+    if (t1 - t0 < 1e-6 || !inside(at((t0 + t1) / 2))) continue;
+    if (t0 > 1e-6 && (last === null || Math.abs(last - t0) >= 1e-6)) return true;
+    last = t1;
+  }
+  return false;
+}
+
 // The edge, [a, b], of any of the rings nearest a point.
 function nearestEdge(rings, [u, v]) {
   let best = null;

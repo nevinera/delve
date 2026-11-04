@@ -3,6 +3,7 @@ import { EMPTY_FT } from "../create/ground.js";
 import { TILE_FT } from "../v2/sizes.js";
 import { blocks } from "../world/objects.js";
 import { slabFootholds, slabHitsTrunk } from "../world/slabs.js";
+import { CROWN_REACH_FT, objectSolid, seesFeet, seenThrough, treeSolid } from "./sight.js";
 
 // The ground the play page's walker (play/walker.js) walks on: a version 2 world's, as /create
 // draws it and the game server checks it (game-server/internal/worlds/ground.go). Heights come
@@ -76,6 +77,32 @@ export class PlayGround {
   // off it along the axes, as /create keeps the builder out of it.
   inRock(x, z, y, radius) {
     return [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dz]) => this.caves.inRock(x + dx * radius, z + dz * radius, y + STEP_FT, y + EYE_FT));
+  }
+
+  // Whether someone with their feet at `from` can see what has its feet at `to` (both continent
+  // [x, y, z]), by the game server's rules.
+  sees(from, to) {
+    const [mx, mz] = [(from[0] + to[0]) / 2, (from[2] + to[2]) / 2];
+    const by = Math.hypot(to[0] - from[0], to[2] - from[2]) / 2 + CROWN_REACH_FT;
+    const { objects, slabs } = this.placed.near(mx, mz, by);
+    const solids = [];
+    const addObject = (object) => {
+      if (object.footprint && !seenThrough(object.type)) solids.push(objectSolid(object, this.things.objectY(object)));
+    };
+    objects.forEach(addObject);
+    for (let tz = Math.floor((mz - by) / TILE_FT); tz <= Math.floor((mz + by) / TILE_FT); tz++) {
+      for (let tx = Math.floor((mx - by) / TILE_FT); tx <= Math.floor((mx + by) / TILE_FT); tx++) {
+        const filled = this.renditions.tile(tx, tz) && this.scatter.fill(tx, tz);
+        if (!filled) continue;
+        for (const tree of filled.trees) solids.push(treeSolid(tree, this.renditions.heightAt(tree.x, tree.z) ?? 0));
+        filled.objects.forEach(addObject);
+      }
+    }
+    const rock = (x, y, z) => {
+      const ground = this.renditions.heightAt(x, z);
+      return ground !== null && ground !== undefined && y < ground && this.caves.solid(x, y, z);
+    };
+    return seesFeet(from, to, { rock, solids, slabs });
   }
 
   // Where the camera can be, looking from `head` to `at` (Vector3s), short of cave rock between.

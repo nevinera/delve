@@ -206,6 +206,18 @@ export function treeHeight(kind, size) {
   return SIZES[size].height * (KINDS[kind] ?? KINDS.oak).height;
 }
 
+// A tree's crown as line of sight has it, a rough egg: { from, to, radius } in feet, from and to
+// over its ground, or null for a kind without one. Unknown kinds are oaks. The game server keeps
+// these too (game-server/internal/worlds/fill.go treeCrowns).
+const CROWNS = { oak: [0.576, 1.216, 1], pine: [0.288, 1.108, 0.45], willow: [0.48, 0.98, 1.3] };
+
+export function treeCrown(kind, size) {
+  const crown = KINDS[kind] ? CROWNS[kind] : CROWNS.oak;
+  if (!crown) return null;
+  const h = treeHeight(kind, size);
+  return { from: crown[0] * h, to: crown[1] * h, radius: crown[2] * SIZES[size].crown };
+}
+
 // trees: [{ x, z, ground, size, kind }] in scene feet. Unknown kinds draw as oaks. `far` draws
 // them as cheap stand-ins: a trunk and a crown of a few flat faces each.
 export function treeMeshes(trees, { far = false } = {}) {

@@ -110,7 +110,7 @@ var objectTypes = map[string]objectType{
 
 // Trees' trunks and heights by size and kind (client/src/render/treeMeshes.js).
 var (
-	treeSizes = map[int]struct{ height, trunk float64 }{1: {60, 2.5}, 2: {90, 4}, 3: {120, 6}}
+	treeSizes = map[int]struct{ height, trunk, crown float64 }{1: {60, 2.5, 18}, 2: {90, 4, 28}, 3: {120, 6, 38}}
 	treeKinds = map[string]struct{ height, trunk float64 }{"oak": {1, 1}, "pine": {1.15, 0.8}, "willow": {0.9, 1.2}, "dead": {0.85, 0.8}}
 )
 
@@ -131,7 +131,35 @@ type thing struct {
 	Height    float64   `json:"height"`
 	Y         float64   `json:"-"`
 	tree      bool
+	slotted   bool // in a tile's slots rather than placed by hand
+	crown     crown
 }
+
+// crown is a tree's crown as line of sight has it: an egg, `from` to `to` over its ground, `radius`
+// round at its widest.
+type crown struct{ from, to, radius float64 }
+
+// Crowns' shapes by kind, as shares of the tree's height and its size's crown (treeMeshes.js
+// CROWNS). Dead trees have none.
+var treeCrowns = map[string]crown{"oak": {0.576, 1.216, 1}, "pine": {0.288, 1.108, 0.45}, "willow": {0.48, 0.98, 1.3}}
+
+// crownReachFt is the widest crown of all.
+const crownReachFt = 50.0
+
+// crownOf is the crown of a tree of a kind and size. Unknown kinds are oaks.
+func crownOf(kind string, height, across float64) crown {
+	c, ok := treeCrowns[kind]
+	if !ok {
+		if _, known := treeKinds[kind]; known {
+			return crown{}
+		}
+		c = treeCrowns["oak"]
+	}
+	return crown{c.from * height, c.to * height, c.radius * across}
+}
+
+// seeThrough are the built-in kinds you can see through (client/src/world/objects.js blocksSight).
+var seeThrough = map[string]bool{"bush": true, "fence": true, "thicket": true, "rootTangle": true}
 
 // The ground's class for filling slots (client/src/v2/look.js groundClass).
 const (
@@ -241,7 +269,7 @@ func fillSlots(slots []byte, tx, tz int, biomeAt func(i, j int) uint8, groundAt 
 			}
 			keep(x, z, r)
 			s, k := treeSizes[entry.Size], treeKind(entry.Tree)
-			out = append(out, thing{Type: entry.Tree, X: x, Z: z, Footprint: footprint{Circle: s.trunk * k.trunk}, Height: s.height * k.height, tree: true})
+			out = append(out, thing{Type: entry.Tree, X: x, Z: z, Footprint: footprint{Circle: s.trunk * k.trunk}, Height: s.height * k.height, tree: true, crown: crownOf(entry.Tree, s.height*k.height, s.crown)})
 			continue
 		}
 		spec, ok := objectTypes[entry.Object]

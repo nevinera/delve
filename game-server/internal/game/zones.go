@@ -325,7 +325,7 @@ func (l *Layer) inArea(a areaOf) []*vitals {
 		gap float64
 	}
 	var found []reach
-	inside := func(at [3]float64) (float64, bool) {
+	near := func(at [3]float64) (float64, bool) {
 		gap := distance(a.center, at)
 		if a.height > 0 && math.Abs(at[1]-a.center[1]) > a.height {
 			return gap, false
@@ -342,6 +342,13 @@ func (l *Layer) inArea(a areaOf) []*vitals {
 			return gap, false
 		}
 		return gap, a.cone == 0 || withinCone(a.center, a.yaw, a.cone, at)
+	}
+	inside := func(at [3]float64) (float64, bool) {
+		gap, ok := near(at)
+		if !ok || len(a.holding) > 0 {
+			return gap, ok
+		}
+		return gap, l.sees(a.continent, a.center, at)
 	}
 	if a.affects == "enemies" {
 		for _, d := range l.dummies {
