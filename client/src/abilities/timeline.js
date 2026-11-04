@@ -5,7 +5,8 @@ import { SCHOOL_COLORS } from "./stock.js";
 // ability does; this is only what it looks and sounds like.
 //
 // An event is { at, kind, ... }, at in seconds from when it's used:
-// - clip: { role, loop }, a role of animations.js's ROLES, or "channel" to hold a spell.
+// - clip: { role, loop }, a role of animations.js's ROLES, or "channel" to hold a spell. A melee
+//   ability's cast holds "windup" instead, and lets go into "released".
 // - bar: { until, label }, the cast or channel bar.
 // - visual: { effect, on, colors, scale, params, heldByCast }, a stock visual on "caster", "target" or
 //   "ground". heldByCast: it lasts until the cast or channel ends, and stops if that's cut short.
@@ -30,7 +31,7 @@ const ANIMATION_ROLES = {
   attack: "attack", offhandAttack: "attack", dualAttack: "attack", stab: "attack", kick: "attack", spinningKick: "attack", punch: "attack",
   bigAttack: "bigAttack", spinningAttack: "bigAttack", shieldBash: "bigAttack", groundSlam: "bigAttack",
   shoot: "shoot", aimedShot: "shoot", rapidShot: "shoot", throw: "shoot",
-  cast: "cast", castBig: "cast", castChannel: "cast", castGround: "cast", castOverhead: "cast", castSelf: "cast", castOnAlly: "cast", pray: "cast", drink: "cast", transform: "cast", roll: "cast",
+  cast: "cast", castBig: "cast", castChannel: "cast", castGround: "cast", castOverhead: "cast", castSelf: "cast", castOnAlly: "cast", pray: "pray", drink: "cast", transform: "cast", roll: "cast",
   shout: "battleCry", breath: "breath",
 };
 
@@ -61,7 +62,7 @@ export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false }
   const castEnds = channel ? end : launch;
 
   if (castTime > 0) {
-    events.push({ at: 0, kind: "clip", role: "channel", loop: true });
+    events.push({ at: 0, kind: "clip", role: melee ? "windup" : "channel", loop: true });
     events.push({ at: 0, kind: "bar", until: castTime, label: ability.name, draining: false });
   }
   if (channel) {
@@ -69,7 +70,7 @@ export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false }
     events.push({ at: launch, kind: "bar", until: end, label: ability.name, draining: true });
   } else {
     const role = releaseRole(ability, ranged);
-    if (role) events.push({ at: launch, kind: "clip", role });
+    if (role) events.push({ at: launch, kind: "clip", role: melee && castTime > 0 && ["attack", "bigAttack"].includes(role) ? "released" : role });
   }
 
   // When a visual or sound with this `when` happens.

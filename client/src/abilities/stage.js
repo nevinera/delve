@@ -26,9 +26,12 @@ function handOf(unit) {
   return hand ? hand.getWorldPosition(new THREE.Vector3()) : chestOf(unit);
 }
 
+// What to play for a role a body has no clip of its own for.
+const NEAREST_ROLE = { pray: "cast", released: "bigAttack" };
+
 // The clip a role plays on a body with these role clips, or a spell's holding clip for "channel".
 export function clipNameFor(role, roles, clips) {
-  if (role !== "channel") return roles[role] ?? roles.idle;
+  if (role !== "channel") return roles[role] ?? roles[NEAREST_ROLE[role]] ?? roles.idle;
   return clips.has("Spell_Simple_Idle_Loop") ? "Spell_Simple_Idle_Loop" : roles.cast ?? roles.idle;
 }
 

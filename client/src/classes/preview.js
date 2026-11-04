@@ -25,6 +25,20 @@ const el = (tag, props = {}, ...children) => {
   return node;
 };
 
+// What a class holds to use an ability: its first weapon and off hand, unless the ability wants
+// something else in its `requires`.
+export function gearFor(made, ability) {
+  const weapons = made.weapons ?? [];
+  const offhands = made.offhands ?? [];
+  const wants = ability?.requires?.find((need) => need.wielding)?.wielding;
+  const ofGroup = (group) => weapons.find((w) => attackGroup(w) === group);
+  if (wants === "twoHanded") return { weapon: ofGroup("twoHanded") ?? "none", offhand: "none" };
+  if (wants === "oneHanded") return { weapon: ofGroup("oneHanded") ?? "none", offhand: offhands[0] ?? "none" };
+  if (wants === "shield") return { weapon: ofGroup("oneHanded") ?? "none", offhand: "shield" };
+  if (wants === "dual") return { weapon: ofGroup("oneHanded") ?? "none", offhand: offhands.find((o) => !["shield", "orb"].includes(o)) ?? "none" };
+  return { weapon: weapons[0] ?? "none", offhand: offhands[0] ?? "none" };
+}
+
 export class AbilityPreview {
   constructor(root) {
     this.root = root;
@@ -145,10 +159,9 @@ export class AbilityPreview {
     unit.playedFor = 0;
   }
 
-  // Sets who's using it: a character in the class's colors, holding its first weapon.
-  setClass(made) {
-    const weapon = made.weapons?.[0] ?? "none";
-    const offhand = made.offhands?.[0] ?? "none";
+  // Sets who's using it: a character in the class's colors, holding what the ability needs.
+  setClass(made, ability) {
+    const { weapon, offhand } = gearFor(made, ability);
     const armor = made.armor?.[0]?.type ?? "";
     const key = JSON.stringify([made.id, weapon, offhand, armor, made.colors]);
     if (key === this.classKey) return;

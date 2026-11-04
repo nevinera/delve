@@ -86,11 +86,16 @@ export function strideRate(clip, mesh, speed) {
 // What a creature does, each played by one of its clips: idle, walk, run, attack, battleCry (an
 // enrage or a rallying shout), hit and death for every body, and fly, bigAttack, cast, shoot and
 // breath (fire or the like, from its mouth bone) for those that can.
-export const ROLES = ["idle", "walk", "run", "fly", "attack", "bigAttack", "cast", "shoot", "breath", "battleCry", "hit", "death"];
+export const ROLES = ["idle", "walk", "run", "fly", "attack", "bigAttack", "cast", "shoot", "breath", "battleCry", "hit", "death", "pray", "windup", "released"];
 
 // The clip for each of ROLES for a look (recipe.js's resolveRecipe), by its skeleton
 // (frames.js's skeletonOf), or null where it has none. A humanoid's attacks go with how its weapon
 // attacks (weapons.js's attackGroup), and it shoots only with something to shoot or throw.
+// windup holds a melee ability's cast, and released is the swing that comes straight out of it.
+const HOLDS = {
+  oneHanded: { windup: "Sword_Idle" },
+  twoHanded: { windup: "TwoHand_Windup_Loop", released: "TwoHand_Sweep_Release" },
+};
 const ATTACKS = {
   unarmed: ["Punch_Jab", "Punch_Cross", null],
   oneHanded: ["Sword_Attack", "Sword_Regular_B", null],
@@ -107,5 +112,5 @@ export function roleClips(look, skeleton) {
   const group = attackGroup(look.weapon);
   const [attack, bigAttack, shoot] = group === "unarmed" && look.unarmed === "claw" ? ["Zombie_Scratch", "Zombie_Scratch", null] : ATTACKS[group];
   const moves = look.gait === "shamble" ? { idle: "Zombie_Idle_Loop", walk: "Zombie_Walk_Fwd_Loop", run: "Zombie_Walk_Fwd_Loop" } : { idle: "Idle_Loop", walk: "Walk_Loop", run: "Run_Fwd_Loop" };
-  return { ...moves, attack, bigAttack, cast: "Spell_Simple_Shoot", shoot, battleCry: "Battle_Cry", hit: "Hit_Chest", death: "Death01" };
+  return { ...moves, attack, bigAttack, cast: "Spell_Simple_Shoot", shoot, battleCry: "Battle_Cry", hit: "Hit_Chest", death: "Death01", pray: "Pray", ...HOLDS[group] };
 }

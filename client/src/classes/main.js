@@ -159,7 +159,7 @@ function showPreview(made, ability) {
   if (!ability) return preview?.setAbility(null);
   preview ??= new AbilityPreview($("preview"));
   window.classes = { preview, playSound };
-  preview.setClass(made);
+  preview.setClass(made, ability);
   // Changing a field needn't restart what's playing, or move the camera off where it's been put.
   const key = JSON.stringify(ability);
   if (key !== shownAbility) preview.setAbility(ability, made.statuses ?? []);

@@ -745,7 +745,7 @@ Only a class's `id` and `name` are required for now, so the class editor can sav
 - `speed`: a projectile's speed. Its effects aimed at the target land when it arrives, and fizzle if the target dies first.
 - `school`: the school of its damage, unless an effect says otherwise. `schools` instead lists several, or `all` for every school. A hit in several counts as each of them: a bonus to any applies, and immunity has to cover them all.
 - `effects`: what it does, below.
-- `animation`: what the body does as it uses it, by what it looks like and not by clip, so each body plays its own version. Left out, it goes by the ability: `attack` in melee, `shoot` for a physical one with a ranged weapon, and `cast` otherwise. The client plays the nearest clip a body has: `attack`, `bigAttack`, `shoot`, `cast`, `battleCry` or `breath`, and none for `none`.
+- `animation`: what the body does as it uses it, by what it looks like and not by clip, so each body plays its own version. Left out, it goes by the ability: `attack` in melee, `shoot` for a physical one with a ranged weapon, and `cast` otherwise. The client plays the nearest clip a body has: `attack`, `bigAttack`, `shoot`, `cast`, `battleCry`, `breath` or `pray`, and none for `none`. A melee ability with a `castTime` holds a weapon ready through the cast, not a spell.
   - Melee: `attack`, `offhandAttack`, `dualAttack` (both weapons), `bigAttack`, `spinningAttack`, `stab`, `kick`, `spinningKick`, `punch`, `shieldBash`, `groundSlam`.
   - Ranged: `shoot`, `aimedShot`, `rapidShot`, `throw`.
   - Spells: `cast`, `castBig`, `castChannel`, `castGround`, `castOverhead`, `castSelf`, `castOnAlly`, `pray`.

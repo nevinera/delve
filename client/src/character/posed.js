@@ -230,6 +230,14 @@ const KICKED = shouldered([-0.32, 4.85, 0.7], [0.05, 0.3, 0.95]);
 // A battle cry: a crouch, then up with the arms flung wide and the head thrown back, shaking.
 const PLANTED = { feet: { foot_l: [0.4, 0.32, 0.15], foot_r: [-0.4, 0.32, -0.1] } };
 const GATHER = { ...PLANTED, pelvis: [0, -0.35, 0], bones: { spine_01: [0.25, 0, 0], spine_02: [0.2, 0, 0], neck_01: [-0.2, 0, 0], upperarm_l: [-0.5, 0, 0.3], upperarm_r: [-0.5, 0, -0.3], lowerarm_l: [-1.2, 0, 0], lowerarm_r: [-1.2, 0, 0] } };
+// An oath: the head bowed and the left hand over the heart, whatever the right is holding.
+const heart = (bow) => ({
+  ...PLANTED,
+  pelvis: [0, -0.04 - bow * 0.1, 0],
+  bones: { spine_01: [bow * 0.25, 0, 0], spine_02: [bow * 0.2, 0, 0], neck_01: [bow * 0.3, 0, 0], head: [bow * 0.45, 0, 0], upperarm_r: [-0.1, 0, -0.08], lowerarm_r: [-0.25, 0, 0] },
+  reach: { hand_l: { wrist: [0.2, 4.55 - bow * 0.1, 0.62 + bow * 0.1], elbow: [0.85, -0.5, 0.1] } },
+});
+
 const roar = (shake) => ({
   ...PLANTED,
   pelvis: [0, -0.1, 0],
@@ -377,6 +385,24 @@ export const POSED = {
     [1.06, KICKED],
     [1.3, AIMED],
     [1.8, HIP_FIRE],
+  ],
+  // Held ready to swing through a long windup, then let go straight into the swing.
+  TwoHand_Windup_Loop: [
+    [0, SWEEP[0]],
+    [1, { ...SWEEP[0], pelvis: [SWEEP[0].pelvis[0], SWEEP[0].pelvis[1] - 0.05, SWEEP[0].pelvis[2]] }],
+    [2, SWEEP[0]],
+  ],
+  TwoHand_Sweep_Release: [
+    [0, SWEEP[0]],
+    ...through(0, 0.35, SWEEP),
+    [0.6, SWEEP[6]],
+    [1.15, READY],
+  ],
+  Pray: [
+    [0, STANDING],
+    [0.3, heart(1)],
+    [0.95, heart(0.9)],
+    [1.3, STANDING],
   ],
   Battle_Cry: [
     [0, STANDING],

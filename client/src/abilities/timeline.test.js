@@ -35,6 +35,11 @@ describe("an ability's timeline", () => {
     expect(line.duration).toBeGreaterThan(2.5);
   });
 
+  it("holds a melee ability's cast at the ready and swings straight out of it", () => {
+    const line = abilityTimeline({ name: "Heave", target: "enemy", range: "melee", castTime: 2, animation: "bigAttack", effects: [damage] });
+    expect(kinds(line, "clip").map((c) => [c.at, c.role, c.loop])).toEqual([[0, "windup", true], [2, "released", undefined]]);
+  });
+
   it("makes a visual last the cast or channel when its duration says cast", () => {
     const visuals = [{ effect: "motes", when: "cast", duration: "cast" }];
     const lasts = (ability) => kinds(abilityTimeline({ target: "enemy", effects: [], visuals, ...ability }), "visual")[0];
