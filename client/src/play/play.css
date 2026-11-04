@@ -333,6 +333,10 @@ body.touch .play-bar button {
   text-align: center;
 }
 
+.combat-action-off {
+  opacity: 0.45;
+}
+
 .combat-action-on {
   outline: 2px solid #ffe060;
 }

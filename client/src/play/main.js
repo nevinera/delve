@@ -89,6 +89,7 @@ async function play() {
     resources: fight("resources_"),
     health: fight("health_"),
     log: fight("logged"),
+    statusGone: fight("statusGone_"),
     swung: fight("swung"),
     attacking: fight("attacking_"),
     // Another continent's land isn't loaded, so the page comes back up there.

@@ -3,6 +3,7 @@ import { chestOf, AbilityStage, clipNameFor } from "../abilities/stage.js";
 import { roleClips } from "../character/animations.js";
 import { skeletonOf } from "../character/characterMesh.js";
 import { strFromU8 } from "fflate";
+import { allHold } from "./conditions.js";
 import { PlayLog } from "./log.js";
 
 // Fighting on the play page: frames for you and your target, an action bar, a cast bar, what lands
@@ -89,6 +90,7 @@ export class PlayCombat {
     this.gcdUntil = 0;
     this.resources = {};
     this.resourceMax = {};
+    this.statuses = new Map(); // unit id -> its statuses, as stacks by id
     this.health = you.health;
     this.maxHealth = you.maxHealth;
     this.aiming = null;
@@ -147,6 +149,7 @@ export class PlayCombat {
     if (!made) return;
     this.made = made;
     this.buttons = new Map();
+    this.actionNodes = new Map();
     this.known = knownAbilities(made, this.you.level ?? 1);
     const abilities = this.known.slice(0, KEYS.length);
     this.attackButton = el("button", { type: "button", className: "combat-action", title: "Auto-attack your target, or stop" }, el("span", { className: "combat-action-key", textContent: ATTACK_KEY }), el("span", { className: "combat-action-name", textContent: "Attack" }));
@@ -158,6 +161,7 @@ export class PlayCombat {
         const button = el("button", { type: "button", className: "combat-action", title: ability.description ?? ability.name }, el("span", { className: "combat-action-key", textContent: KEYS[i] }), el("span", { className: "combat-action-name", textContent: ability.name }), shade);
         button.addEventListener("click", () => this.useAt(i));
         this.buttons.set(ability.id, shade);
+        this.actionNodes.set(ability.id, button);
         return button;
       }),
     );
@@ -341,6 +345,21 @@ export class PlayCombat {
     if (id === this.you.id) this.showBar(null);
   }
 
+  statusGone_({ id, status }) {
+    this.statuses.get(id)?.delete(status);
+  }
+
+  // What the client knows of the facts conditions read. What it doesn't know stays undefined.
+  facts() {
+    const statuses = (id) => Object.fromEntries(this.statuses.get(id) ?? []);
+    const drawn = this.target !== null ? this.others.characters.get(this.target) : null;
+    return {
+      self: { health: this.health, maxHealth: this.maxHealth, statuses: statuses(this.you.id) },
+      target: drawn ? { health: drawn.health, maxHealth: drawn.maxHealth, statuses: statuses(this.target) } : null,
+      resources: Object.fromEntries(Object.keys(this.resources).map((key) => [key, { have: this.resources[key], max: this.resourceMax[key] ?? 0 }])),
+    };
+  }
+
   logged({ kind, text }) {
     this.log.add(text, kind);
   }
@@ -367,6 +386,10 @@ export class PlayCombat {
     if (words && unit) this.float(unit, words);
     this.setHealth(message.on, message.health, message.maxHealth, message.dps);
     if (words) this.note(message, words.text);
+    if (message.status) {
+      if (!this.statuses.has(message.on)) this.statuses.set(message.on, new Map());
+      this.statuses.get(message.on).set(message.status, 1);
+    }
     if (message.status && unit) {
       const aura = made?.statuses?.find((s) => s.id === message.status)?.aura;
       if (aura?.effect) this.stage.spawn(aura.effect, { colors: aura.colors?.length === 2 ? aura.colors : ["#ffffff", "#ffffff"], height: unit.height }, unit.mesh.position);
@@ -423,9 +446,12 @@ export class PlayCombat {
       if (u >= 1) this.showBar(null);
     }
     if (this.buttons) {
+      const facts = this.facts();
       for (const [id, shade] of this.buttons) {
         const ready = Math.max(this.cooldowns.get(id) ?? 0, this.gcdUntil);
         shade.style.height = ready > now ? "100%" : "0";
+        const ability = this.known.find((a) => a.id === id);
+        this.actionNodes.get(id).classList.toggle("combat-action-off", !allHold(ability.requires, facts));
       }
     }
     if (this.saidAt && now - this.saidAt > REFUSED_S * 1000) {

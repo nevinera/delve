@@ -45,23 +45,24 @@ type Resource struct {
 
 // Ability is what the game needs of an ability.
 type Ability struct {
-	ID              string   `json:"id"`
-	Name            string   `json:"name"`
-	Level           int      `json:"level"`
-	School          string   `json:"school"`
-	Target          string   `json:"target"` // enemy, ally, self, ground or none
-	Range           Distance `json:"range"`
-	MinRange        float64  `json:"minRange"`
-	Facing          *bool    `json:"facing"`
-	CastTime        float64  `json:"castTime"`
-	CastWhileMoving bool     `json:"castWhileMoving"`
-	Channel         *Channel `json:"channel"`
-	GCD             *float64 `json:"gcd"`
-	Cooldown        float64  `json:"cooldown"`
-	Charges         int      `json:"charges"`
-	Cost            []Cost   `json:"cost"`
-	Speed           float64  `json:"speed"`
-	Effects         []Effect `json:"effects"`
+	ID              string      `json:"id"`
+	Name            string      `json:"name"`
+	Level           int         `json:"level"`
+	School          string      `json:"school"`
+	Target          string      `json:"target"` // enemy, ally, self, ground or none
+	Range           Distance    `json:"range"`
+	MinRange        float64     `json:"minRange"`
+	Facing          *bool       `json:"facing"`
+	CastTime        float64     `json:"castTime"`
+	CastWhileMoving bool        `json:"castWhileMoving"`
+	Channel         *Channel    `json:"channel"`
+	GCD             *float64    `json:"gcd"`
+	Cooldown        float64     `json:"cooldown"`
+	Charges         int         `json:"charges"`
+	Cost            []Cost      `json:"cost"`
+	Speed           float64     `json:"speed"`
+	Effects         []Effect    `json:"effects"`
+	Requires        []Condition `json:"requires"`
 }
 
 // Channel is an ability that goes on for Duration seconds, landing its effects Ticks times.
@@ -79,17 +80,18 @@ type Cost struct {
 
 // Effect is one thing an ability does.
 type Effect struct {
-	Type     string  `json:"type"`
-	Affects  string  `json:"affects"` // target, self, enemies or allies
-	Around   string  `json:"around"`  // self, target or ground
-	Radius   float64 `json:"radius"`
-	Cone     float64 `json:"cone"`
-	Max      int     `json:"max"`
-	Amount   Amount  `json:"amount"`
-	School   string  `json:"school"`
-	Resource string  `json:"resource"`
-	Status   string  `json:"status"`
-	Duration float64 `json:"duration"`
+	Type     string      `json:"type"`
+	Affects  string      `json:"affects"` // target, self, enemies or allies
+	Around   string      `json:"around"`  // self, target or ground
+	Radius   float64     `json:"radius"`
+	Cone     float64     `json:"cone"`
+	Max      int         `json:"max"`
+	Amount   Amount      `json:"amount"`
+	School   string      `json:"school"`
+	Resource string      `json:"resource"`
+	Status   string      `json:"status"`
+	Duration float64     `json:"duration"`
+	When     []Condition `json:"when"`
 }
 
 // Status is what the game needs of a status so far.

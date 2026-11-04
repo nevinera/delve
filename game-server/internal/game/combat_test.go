@@ -490,3 +490,98 @@ func TestResourcesSayTheirMost(t *testing.T) {
 		t.Fatalf("resources = %v", got)
 	}
 }
+
+// conditional gives p's class abilities with conditions.
+func conditional(p *Player, abilities ...combat.Ability) {
+	p.fight.class.Abilities = append(p.fight.class.Abilities, abilities...)
+	p.fight.class.Statuses = append(p.fight.class.Statuses, combat.Status{ID: "oath", Name: "Oath"}, combat.Status{ID: "wound", Name: "Wound", Duration: 9})
+}
+
+func TestRequiresRefusesWithAReason(t *testing.T) {
+	_, p, _ := fighting(t)
+	twenty := 20.0
+	conditional(p, combat.Ability{ID: "finish", Target: "enemy", Range: combat.Distance{Feet: 30}, Requires: []combat.Condition{{Health: "target", Below: &twenty}}})
+	use(t, p, "finish")
+	refusal(t, p, "your target's health is too high")
+	p.layer.dummies[0].Health = 100
+	use(t, p, "finish")
+	if got := heard(p, "used"); len(got) != 1 {
+		t.Fatalf("used = %v", got)
+	}
+}
+
+func TestAnEffectLandsOnlyWhenItsConditionsHold(t *testing.T) {
+	h, p, c := fighting(t)
+	wounded := combat.Condition{Status: "wound", On: "target"}
+	conditional(p, combat.Ability{ID: "flay", Target: "enemy", Range: combat.Distance{Feet: 30}, Effects: []combat.Effect{
+		{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 1, Max: 1}, When: []combat.Condition{{Not: &wounded}}},
+		{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 5, Max: 5}, When: []combat.Condition{wounded}},
+	}}, combat.Ability{ID: "cut", Target: "enemy", Range: combat.Distance{Feet: 30}, Effects: []combat.Effect{{Type: "status", Affects: "target", Status: "wound"}}})
+	use(t, p, "flay")
+	pass(h, c, 2)
+	if got := heard(p, "hit"); len(got) != 1 || got[0]["amount"] != 1.0 {
+		t.Fatalf("unwounded hits = %v", got)
+	}
+	use(t, p, "cut")
+	pass(h, c, 2)
+	use(t, p, "flay")
+	pass(h, c, 2)
+	got := heard(p, "hit")
+	if len(got) != 2 || got[1]["amount"] != 5.0 {
+		t.Fatalf("wounded hits = %v", got)
+	}
+}
+
+func TestAnAbilityReadsItsConditionsBeforeAnyEffectLands(t *testing.T) {
+	h, p, c := fighting(t)
+	has := combat.Condition{Status: "oath", On: "self"}
+	conditional(p, combat.Ability{ID: "swear", Target: "self", Effects: []combat.Effect{
+		{Type: "status", Affects: "self", Status: "oath", When: []combat.Condition{{Not: &has}}},
+		{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 3, Max: 3}, When: []combat.Condition{has}},
+	}})
+	use(t, p, "swear")
+	pass(h, c, 2)
+	if got := heard(p, "hit"); len(got) != 1 || got[0]["status"] != "oath" {
+		t.Fatalf("the status landing mustn't set off the next effect: %v", got)
+	}
+}
+
+func TestAStatusWithNoDurationStays(t *testing.T) {
+	h, p, c := fighting(t)
+	conditional(p, combat.Ability{ID: "swear", Target: "self", Effects: []combat.Effect{{Type: "status", Affects: "self", Status: "oath"}}})
+	use(t, p, "swear")
+	pass(h, c, 60)
+	if p.fight.vitals.Statuses["oath"] == nil {
+		t.Fatal("it ran out")
+	}
+}
+
+func TestBeingInCombatFollowsAttacking(t *testing.T) {
+	h, p, c := fighting(t)
+	yes := true
+	conditional(p, combat.Ability{ID: "angry", Target: "self", Requires: []combat.Condition{{InCombat: &yes}}})
+	use(t, p, "angry")
+	refusal(t, p, "you need to be in combat")
+	use(t, p, "zap")
+	pass(h, c, 2)
+	heard(p, "used", "hit")
+	use(t, p, "angry")
+	if got := heard(p, "refused"); len(got) != 0 {
+		t.Fatalf("refused = %v", got)
+	}
+	pass(h, c, 6)
+	use(t, p, "angry")
+	refusal(t, p, "you need to be in combat")
+}
+
+func TestYouDontMissYourself(t *testing.T) {
+	h, p, c := fighting(t)
+	h.roll = func() float64 { return 0 }
+	conditional(p, combat.Ability{ID: "bleed", Target: "self", Effects: []combat.Effect{{Type: "damage", Affects: "self", Amount: combat.Amount{Min: 3, Max: 3}}}})
+	before := p.fight.vitals.Health
+	use(t, p, "bleed")
+	pass(h, c, 1)
+	if p.fight.vitals.Health >= before {
+		t.Fatalf("health = %v", p.fight.vitals.Health)
+	}
+}

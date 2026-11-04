@@ -19,6 +19,7 @@ const (
 	strikeDelay    = 300 * time.Millisecond // how far into its attack clip a melee hit lands
 	dummyHealth    = 100000.0
 	dummyResetIdle = 5 * time.Second // a dummy heals up and its tally starts over after this long unhit
+	combatLasts    = 5 * time.Second // you're in combat until this long after you last attacked or were hit
 	resourceEvery  = 500 * time.Millisecond
 )
 
@@ -30,10 +31,11 @@ type vitals struct {
 	Statuses  map[string]*activeStatus
 }
 
-// activeStatus is a status on a unit, until it runs out.
+// activeStatus is a status on a unit, until it runs out. With no `until`, it stays until removed.
 type activeStatus struct {
-	class string
-	until time.Time
+	class  string
+	until  time.Time
+	stacks int
 }
 
 // dummy is a training dummy: it takes damage, never dies or fights back, and tallies who's hit it.
@@ -57,9 +59,10 @@ type fighter struct {
 	gcdUntil   time.Time
 	cooldowns  map[string][]time.Time // when each spent charge of an ability comes back
 	cast       *casting
-	attacking  int64     // who it's auto-attacking, or 0
-	swingAt    time.Time // when its next swing can start
-	swingWhy   string    // why it last couldn't swing, so it says so once
+	attacking  int64                // who it's auto-attacking, or 0
+	swingAt    time.Time            // when its next swing can start
+	swingWhy   string               // why it last couldn't swing, so it says so once
+	since      map[string]time.Time // when each thing a `since` condition asks about last happened
 }
 
 // casting is a cast or channel under way.
@@ -95,7 +98,7 @@ func classWithID(classes []*combat.Class, id string) *combat.Class {
 func (p *Player) enterFight(class *combat.Class, level int) {
 	f := &p.fight
 	f.vitals = vitals{ID: p.state.ID, Statuses: map[string]*activeStatus{}}
-	f.resources, f.cooldowns = map[string]float64{}, map[string][]time.Time{}
+	f.resources, f.cooldowns, f.since = map[string]float64{}, map[string][]time.Time{}, map[string]time.Time{}
 	if class == nil {
 		f.vitals.MaxHealth, f.vitals.Health = 100, 100
 		p.state.Health, p.state.MaxHealth = 100, 100
@@ -231,6 +234,9 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 		}
 		at = *m.Spot
 	default:
+		if why := l.unmet(p, ability, 0, now); why != "" {
+			return nil, 0, why
+		}
 		return ability, 0, ""
 	}
 	gap := distance(p.state.At, at)
@@ -243,6 +249,9 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 	}
 	if needsFacing(ability) && !facing(p.state.At, p.state.Yaw, at) {
 		return nil, 0, "you're not facing it"
+	}
+	if why := l.unmet(p, ability, target, now); why != "" {
+		return nil, 0, why
 	}
 	return ability, target, ""
 }
@@ -357,72 +366,192 @@ func arrives(a *combat.Ability, e *combat.Effect) bool {
 
 // landAll lands an ability's effects, other than those flying if leaveFlying says so.
 func (l *Layer) landAll(p *Player, c *casting, now time.Time, leaveFlying bool) {
-	if l.players[p.ID()] != p {
-		return
-	}
-	for i := range c.ability.Effects {
-		e := &c.ability.Effects[i]
-		if !leaveFlying || !arrives(c.ability, e) {
-			l.land(p, c, e, now)
-		}
-	}
+	l.landWhich(p, c, now, func(e *combat.Effect) bool { return !leaveFlying || !arrives(c.ability, e) })
 }
 
 func (l *Layer) landArriving(p *Player, c *casting, now time.Time) {
+	l.landWhich(p, c, now, func(e *combat.Effect) bool { return arrives(c.ability, e) })
+}
+
+// landWhich lands the effects `which` picks. It reads all their conditions first, so one effect
+// can't change whether another lands: one button can start a status or end it.
+func (l *Layer) landWhich(p *Player, c *casting, now time.Time, which func(*combat.Effect) bool) {
 	if l.players[p.ID()] != p {
 		return
 	}
+	type landingOn struct {
+		effect *combat.Effect
+		on     *vitals
+	}
+	var plan []landingOn
 	for i := range c.ability.Effects {
-		if e := &c.ability.Effects[i]; arrives(c.ability, e) {
-			l.land(p, c, e, now)
+		e := &c.ability.Effects[i]
+		if !which(e) {
+			continue
 		}
+		reached := l.reached(p, c, e)
+		if len(reached) == 0 {
+			p.debugLine("%s: %s reached no one", c.ability.Name, e.Type)
+		}
+		for _, on := range reached {
+			target := c.target
+			if e.Affects == "enemies" || e.Affects == "allies" {
+				target = on.ID // an area's conditions ask about each one it reaches
+			}
+			if failed, ok := combat.All(e.When, l.facts(p, target, now)); !ok {
+				p.debugLine("%s: %s skipped: %s", c.ability.Name, e.Type, failed.Why(statusNames(p)))
+				continue
+			}
+			plan = append(plan, landingOn{e, on})
+		}
+	}
+	for _, each := range plan {
+		l.land(p, c, each.effect, each.on, now)
 	}
 }
 
-// land does one effect to everyone it reaches. Effects that aren't here yet do nothing.
-func (l *Layer) land(p *Player, c *casting, e *combat.Effect, now time.Time) {
-	f := &p.fight
-	reached := l.reached(p, c, e)
-	if len(reached) == 0 {
-		p.debugLine("%s: %s reached no one", c.ability.Name, e.Type)
-	}
-	for _, on := range reached {
-		h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: e.Type}
-		switch e.Type {
-		case "damage":
-			l.strike(p, on, e.Amount, &h, now)
-		case "heal":
-			n, crit := combat.Roll(e.Amount, f.stats, true, l.hub.roll)
-			on.Health = min(on.Health+n, on.MaxHealth)
-			h.Amount, h.Crit = math.Round(n), crit
-		case "resource":
-			n, _ := combat.Roll(e.Amount, f.stats, false, l.hub.roll)
-			if l.addResource(f, e.Resource, n) {
-				h.Amount, h.Resource = math.Round(n), e.Resource
-			}
-		case "status":
-			s := f.class.Status(e.Status)
-			if s == nil {
-				log.Printf("character %d: ability %s applies a status its class hasn't got: %s", p.ID(), c.ability.ID, e.Status)
-				continue
-			}
-			lasts := e.Duration
-			if lasts == 0 {
-				lasts = s.Duration
-			}
-			if lasts > 0 {
-				on.Statuses[s.ID] = &activeStatus{class: f.class.ID, until: now.Add(seconds(lasts))}
-			}
-			h.Status, h.Lasts, h.Class = s.ID, lasts, f.class.ID
-		default:
-			p.debugLine("%s: %s does nothing yet", c.ability.Name, e.Type)
-			continue
+// statusNames gives a status's name by id, for what a player reads.
+func statusNames(p *Player) func(string) string {
+	return func(id string) string {
+		if s := p.fight.class.Status(id); s != nil {
+			return s.Name
 		}
-		p.debugLine("%s", l.debugHit(p, c.ability.Name, e, on, h))
-		h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
-		l.sync(on)
-		l.tell(p, encode(h))
+		return id
 	}
+}
+
+// unmet says why a player can't use an ability on a target, going by its `requires`.
+func (l *Layer) unmet(p *Player, a *combat.Ability, target int64, now time.Time) string {
+	if failed, ok := combat.All(a.Requires, l.facts(p, target, now)); !ok {
+		return failed.Why(statusNames(p))
+	}
+	return ""
+}
+
+// facts is what conditions are read against, for a player and its target.
+func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
+	f := &p.fight
+	out := &combat.Facts{
+		Self:      unitOf(&f.vitals, fighterState(p, now)),
+		Since:     map[string]float64{},
+		Resources: map[string]combat.ResourceAmount{},
+	}
+	for what, at := range f.since {
+		out.Since[what] = now.Sub(at).Seconds()
+	}
+	for _, r := range f.class.Resources {
+		out.Resources[r.Key] = combat.ResourceAmount{Have: f.resources[r.Key], Max: combat.MaxResource(r)}
+	}
+	if d := l.dummy(target, p.state.Continent); d != nil {
+		state := []string{}
+		if !d.lastHit.IsZero() && now.Sub(d.lastHit) < combatLasts {
+			state = append(state, "inCombat")
+		}
+		unit := unitOf(&d.vitals, state)
+		out.Target, out.TargetIs = &unit, []string{"enemy", "other", "nonPlayer"}
+		out.Position = positionOf(p.state.At, d.state.At, d.state.Yaw)
+	} else if o := l.players[target]; o != nil && target != 0 {
+		unit := unitOf(&o.fight.vitals, fighterState(o, now))
+		out.Target, out.TargetIs = &unit, []string{"ally", "player"}
+		if o == p {
+			out.TargetIs = append(out.TargetIs, "self")
+		} else {
+			out.TargetIs = append(out.TargetIs, "other")
+		}
+		out.Position = positionOf(p.state.At, o.state.At, o.state.Yaw)
+	}
+	return out
+}
+
+func unitOf(v *vitals, state []string) combat.Unit {
+	stacks := map[string]int{}
+	for id, s := range v.Statuses {
+		stacks[id] = s.stacks
+	}
+	return combat.Unit{Health: v.Health, MaxHealth: v.MaxHealth, Statuses: stacks, State: state}
+}
+
+// fighterState is which of a `state` condition's words are true of a player. Being slowed,
+// controlled or stunned aren't, until statuses can do those, and everywhere counts as outdoors.
+func fighterState(p *Player, now time.Time) []string {
+	state := []string{"outdoors"}
+	if p.fight.cast != nil {
+		state = append(state, "casting")
+	}
+	if p.motion.aloft {
+		state = append(state, "airborne", "falling")
+	}
+	if p.fight.inCombat(now) {
+		state = append(state, "inCombat")
+	}
+	return state
+}
+
+func (f *fighter) inCombat(now time.Time) bool {
+	for _, what := range []string{"attack", "damageTaken"} {
+		if at, ok := f.since[what]; ok && now.Sub(at) < combatLasts {
+			return true
+		}
+	}
+	return false
+}
+
+// attacked notes that a player attacked someone, which keeps it in combat.
+func (f *fighter) attacked(now time.Time) {
+	if !f.inCombat(now) {
+		f.since["combatStart"] = now
+	}
+	f.since["attack"] = now
+}
+
+// positionOf says whether someone at `from` is behind or in front of a unit at `at` facing `yaw`.
+func positionOf(from, at [3]float64, yaw float64) string {
+	if facing(at, yaw, from) {
+		return "inFront"
+	}
+	return "behind"
+}
+
+// land does one effect to one unit. Effects that aren't here yet do nothing.
+func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, now time.Time) {
+	f := &p.fight
+	h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: e.Type}
+	switch e.Type {
+	case "damage":
+		l.strike(p, on, e.Amount, &h, now)
+	case "heal":
+		n, crit := combat.Roll(e.Amount, f.stats, true, l.hub.roll)
+		on.Health = min(on.Health+n, on.MaxHealth)
+		h.Amount, h.Crit = math.Round(n), crit
+	case "resource":
+		n, _ := combat.Roll(e.Amount, f.stats, false, l.hub.roll)
+		if l.addResource(f, e.Resource, n) {
+			h.Amount, h.Resource = math.Round(n), e.Resource
+		}
+	case "status":
+		s := f.class.Status(e.Status)
+		if s == nil {
+			log.Printf("character %d: ability %s applies a status its class hasn't got: %s", p.ID(), c.ability.ID, e.Status)
+			return
+		}
+		lasts := e.Duration
+		if lasts == 0 {
+			lasts = s.Duration
+		}
+		held := &activeStatus{class: f.class.ID, stacks: 1}
+		if lasts > 0 {
+			held.until = now.Add(seconds(lasts))
+		}
+		on.Statuses[s.ID] = held
+		h.Status, h.Lasts, h.Class = s.ID, lasts, f.class.ID
+	default:
+		p.debugLine("%s: %s does nothing yet", c.ability.Name, e.Type)
+		return
+	}
+	p.debugLine("%s", l.debugHit(p, c.ability.Name, e, on, h))
+	h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
+	l.sync(on)
+	l.tell(p, encode(h))
 }
 
 // debugLine logs a line for a player with combat debug on.
@@ -466,9 +595,15 @@ func (l *Layer) nameOf(id int64) string {
 
 // strike rolls an attack on an enemy and does what it comes to, noting it in the hit.
 func (l *Layer) strike(p *Player, on *vitals, amount combat.Amount, h *hit, now time.Time) {
-	if combat.Missed(l.hub.roll) {
-		h.Missed = true
-		return
+	if on.ID != p.ID() {
+		p.fight.attacked(now)
+		if combat.Missed(l.hub.roll) {
+			h.Missed = true
+			return
+		}
+	}
+	if o := l.players[on.ID]; o != nil {
+		o.fight.since["damageTaken"] = now
 	}
 	n, crit := combat.Roll(amount, p.fight.stats, true, l.hub.roll)
 	on.Health = max(on.Health-n, 0)
@@ -779,7 +914,7 @@ func (l *Layer) tick(now time.Time) {
 func expire(v *vitals, now time.Time) map[string]bool {
 	gone := map[string]bool{}
 	for id, s := range v.Statuses {
-		if !now.Before(s.until) {
+		if !s.until.IsZero() && !now.Before(s.until) {
 			delete(v.Statuses, id)
 			gone[id] = true
 		}
