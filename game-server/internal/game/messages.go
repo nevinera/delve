@@ -33,6 +33,23 @@ type Character struct {
 	Dummy     bool            `json:"dummy,omitempty"`
 	Health    float64         `json:"health"`
 	MaxHealth float64         `json:"maxHealth"`
+	Statuses  []shownStatus   `json:"statuses,omitempty"` // what it holds, as it comes into view
+}
+
+// shownStatus is a status a unit holds, for its frame.
+type shownStatus struct {
+	Status string  `json:"status"`
+	From   int64   `json:"from"`
+	Class  string  `json:"class"`
+	Stacks int     `json:"stacks"`
+	Lasts  float64 `json:"lasts,omitempty"` // seconds left, if it runs out
+}
+
+// statusOn is a status going on a unit.
+type statusOn struct {
+	Type string `json:"type"`
+	ID   int64  `json:"id"`
+	shownStatus
 }
 
 // incoming is a message from a client: move, heartbeat, use, stop, attack or command. T is the client's clock, in

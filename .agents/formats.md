@@ -1120,9 +1120,10 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `pickClass` | `classes` (ids) | before `welcome`, to a character that has to choose. Each is `classes/<id>.json` in the world |
 | `welcome` | `you` (a character), `layer` | once, on entering |
 | `snapshot` | `characters` | once, after `welcome`: everyone near you |
-| `appear` | `character` | someone comes near you |
+| `appear` | `character` | someone comes near you. A character carries the `statuses` it holds then, each with `status`, `from`, `class`, `stacks` and `lasts` |
 | `vanish` | `id` | someone leaves your area, or the game |
 | `moved` | `id`, `at`, `yaw`, `move` | someone near you sent `move` or `heartbeat` |
+| `statusOn` | `id`, `status`, `from`, `class`, `stacks`, `lasts` | a status went on someone near you, or a dummy |
 | `forced` | `id`, `kind`, `from`, `at`, `yaw`, `seconds`, `height` | an effect moved you or someone near you. It's at `at` already, and clients play the trip over `seconds`, arcing `height` ft up. The server ignores your reports until then |
 | `correct` | `at`, `yaw` | your last report didn't add up: you're back at `at` |
 | `used` | `id`, `class`, `ability`, `target`, `spot`, `gcd`, `castTime`, `channel`, `cost`, `school`, `schools`, `animation` | someone near you started using an ability, with those numbers as `modify` left them: clients play its timeline from this |

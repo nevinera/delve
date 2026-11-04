@@ -14,6 +14,7 @@ import { PlayWorld } from "./loader.js";
 import { Others } from "./others.js";
 import { TouchControls, isTouch } from "./touch.js";
 import { PlayView } from "./view.js";
+import { UnitStatuses } from "./unitStatuses.js";
 
 // The play page: your character in a released version 2 world, where the game server puts it. The
 // world comes from raw GitHub at the released commit: its continent's platters first, and plate,
@@ -82,11 +83,20 @@ async function play() {
   let firstBars = null;
   const early = []; // what the server says before the view is ready, as [method, argument]
   const tell = (method, arg) => (others ? others[method](arg) : early.push([method, arg]));
+  const unitStatuses = new UnitStatuses();
+  const appear = (character) => {
+    unitStatuses.seen(character);
+    tell("appear", character);
+  };
   status("Entering...");
   const { connection, you } = await enter({
-    snapshot: ({ characters }) => characters.forEach((c) => tell("appear", c)),
-    appear: ({ character }) => tell("appear", character),
-    vanish: ({ id }) => tell("vanish", id),
+    snapshot: ({ characters }) => characters.forEach(appear),
+    appear: ({ character }) => appear(character),
+    vanish: ({ id }) => {
+      unitStatuses.vanish(id);
+      tell("vanish", id);
+    },
+    statusOn: (message) => unitStatuses.on(message),
     moved: (message) => tell("moved", message),
     forced: (message) => (message.id === you.id ? connection.forced(message) : tell("forced", message)),
     used: fight("used"),
@@ -101,8 +111,14 @@ async function play() {
     speed: fight("speed_"),
     build: (message) => (combat ? combat.build_(message) : (firstBuild = message)),
     bars: (message) => (combat ? combat.bars_(message) : (firstBars = message)),
-    statusChanged: fight("statusChanged_"),
-    statusGone: fight("statusGone_"),
+    statusChanged: (message) => {
+      unitStatuses.changed(message);
+      combat?.statusChanged_(message);
+    },
+    statusGone: (message) => {
+      unitStatuses.gone(message);
+      combat?.statusGone_(message);
+    },
     swung: fight("swung"),
     attacking: fight("attacking_"),
     // Another continent's land isn't loaded, so the page comes back up there.
@@ -163,7 +179,8 @@ async function play() {
   view.startWalk(paused, [you.at[0], you.at[2]], resolveRecipe(config.look));
   view.walker.yaw = you.yaw;
   connection.report(view);
-  combat = new PlayCombat({ view, others, connection, loader, you, hud: $("playCombat") });
+  unitStatuses.seen(you);
+  combat = new PlayCombat({ view, others, connection, loader, you, hud: $("playCombat"), unitStatuses });
   if (firstBuild) combat.build_(firstBuild);
   if (firstBars) combat.bars_(firstBars);
   // A handle for scripts and the browser's console.

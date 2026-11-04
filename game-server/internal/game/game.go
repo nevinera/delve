@@ -284,11 +284,11 @@ func (l *Layer) join(p *Player) {
 	}
 	l.players[p.ID()] = p
 	l.placeDummies()
-	p.send(encode(welcome{"welcome", p.state, l.number}))
+	p.send(encode(welcome{"welcome", l.seen(p.state), l.number}))
 	near := l.dummiesOn(p.state.Continent)
 	for _, o := range l.near(p) {
-		near = append(near, o.state)
-		o.send(encode(appear{"appear", p.state}))
+		near = append(near, l.seen(o.state))
+		o.send(encode(appear{"appear", l.seen(p.state)}))
 	}
 	p.send(encode(snapshot{"snapshot", near}))
 	if p.fight.class != nil {
@@ -407,8 +407,8 @@ func (l *Layer) moved(p *Player, m incoming) {
 			o.send(update)
 			continue
 		}
-		o.send(encode(appear{"appear", p.state}))
-		p.send(encode(appear{"appear", o.state}))
+		o.send(encode(appear{"appear", l.seen(p.state)}))
+		p.send(encode(appear{"appear", l.seen(o.state)}))
 	}
 	for _, o := range before {
 		o.send(encode(vanish{"vanish", p.ID()}))

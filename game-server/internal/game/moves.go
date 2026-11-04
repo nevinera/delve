@@ -246,8 +246,8 @@ func (l *Layer) relocate(p *Player, continent string, at [3]float64, own, seen [
 			o.send(seen)
 			continue
 		}
-		o.send(encode(appear{"appear", p.state}))
-		p.send(encode(appear{"appear", o.state}))
+		o.send(encode(appear{"appear", l.seen(p.state)}))
+		p.send(encode(appear{"appear", l.seen(o.state)}))
 	}
 	for _, o := range before {
 		o.send(encode(vanish{"vanish", p.ID()}))

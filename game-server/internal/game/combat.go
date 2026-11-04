@@ -181,9 +181,15 @@ func (l *Layer) chooseBuild(p *Player, b combat.Build) {
 	for key, held := range f.vitals.Statuses {
 		if held.granted && !slices.Contains(keep, key.id) {
 			delete(f.vitals.Statuses, key)
+			l.tellOf(p.ID(), encode(statusGone{"statusGone", p.ID(), key.id, key.from}))
 		}
 	}
 	p.grantStatuses(now)
+	for key, held := range f.vitals.Statuses {
+		if held.granted {
+			l.tellOf(p.ID(), encode(statusOn{"statusOn", p.ID(), shownOf(key, held, now)}))
+		}
+	}
 	p.send(encode(buildMessage{"build", f.build.Specialization, f.build.Talents}))
 	world, id, spec, talents := l.worldID, p.ID(), f.build.Specialization, f.build.Talents
 	go func() {
@@ -247,7 +253,7 @@ func (l *Layer) dummiesOn(continent string) []Character {
 	out := []Character{}
 	for _, d := range l.dummies {
 		if d.state.Continent == continent {
-			out = append(out, d.state)
+			out = append(out, l.seen(d.state))
 		}
 	}
 	return out
@@ -928,6 +934,7 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 		held.ticks, held.fired, held.counts = was.ticks, was.fired, was.counts // putting it on again doesn't start these over
 	}
 	on.Statuses[key] = held
+	l.tellOf(on.ID, encode(statusOn{"statusOn", on.ID, shownOf(key, held, now)}))
 	l.fire(statusEvent("statusGained", on, key, held), now)
 	h.Status, h.Lasts, h.Class, h.Stacks = s.ID, lasts, f.class.ID, held.stacks
 	return true
@@ -1346,6 +1353,36 @@ func (l *Layer) statusChanged(unit int64, key statusKey, held *activeStatus, now
 		lasts = held.until.Sub(now).Seconds()
 	}
 	l.tellOf(unit, encode(statusChanged{"statusChanged", unit, key.id, key.from, held.stacks, lasts}))
+}
+
+func shownOf(key statusKey, held *activeStatus, now time.Time) shownStatus {
+	lasts := 0.0
+	if !held.until.IsZero() {
+		lasts = held.until.Sub(now).Seconds()
+	}
+	return shownStatus{key.id, key.from, held.class, held.stacks, lasts}
+}
+
+// seen is a character as someone coming across it should see it, with what it holds.
+func (l *Layer) seen(c Character) Character {
+	var v *vitals
+	if d := l.dummy(c.ID, ""); d != nil {
+		v = &d.vitals
+	} else if o := l.players[c.ID]; o != nil {
+		v = &o.fight.vitals
+	}
+	if v == nil {
+		return c
+	}
+	now := l.hub.now()
+	c.Statuses = nil
+	for key, held := range v.Statuses {
+		c.Statuses = append(c.Statuses, shownOf(key, held, now))
+	}
+	slices.SortFunc(c.Statuses, func(a, b shownStatus) int {
+		return cmp.Or(cmp.Compare(a.Status, b.Status), cmp.Compare(a.From, b.From))
+	})
+	return c
 }
 
 // tellOf sends a message about a unit to those who can see it.

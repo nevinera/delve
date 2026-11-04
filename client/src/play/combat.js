@@ -9,6 +9,7 @@ import { skeletonOf } from "../character/characterMesh.js";
 import { strFromU8 } from "fflate";
 import { allHold } from "./conditions.js";
 import { PlayLog } from "./log.js";
+import { initials, timeLeft } from "./unitStatuses.js";
 
 // Fighting on the play page: frames for you and your target, an action bar, a cast bar, what lands
 // floating over who it lands on, and a log. The game server decides everything: this asks it to use
@@ -90,8 +91,8 @@ export function shownResources(made, known) {
 
 export class PlayCombat {
   // you: the welcome's character. loader: the world's files. hud: the element to build in.
-  constructor({ view, others, connection, loader, you, hud }) {
-    Object.assign(this, { view, others, connection, loader, you, hud });
+  constructor({ view, others, connection, loader, you, hud, unitStatuses }) {
+    Object.assign(this, { view, others, connection, loader, you, hud, unitStatuses });
     this.classes = new Map(); // id -> a promise of its file
     this.target = null;
     this.stage = new AbilityStage(view.scene, { audio: () => this.audioContext() });
@@ -109,6 +110,7 @@ export class PlayCombat {
     this.barPage = 0; // which bar a small screen shows
     document.querySelector("[data-abilities]")?.addEventListener("click", () => this.toggleAbilities());
     this.statuses = new Map(); // unit id -> the statuses you've put on it, as stacks by id
+    this.statusLists = new Map(); // class id -> its statuses, null while its file loads
     this.health = you.health;
     this.maxHealth = you.maxHealth;
     this.aiming = null;
@@ -155,7 +157,8 @@ export class PlayCombat {
     const fill = el("div", { className: "combat-health-fill" });
     const text = el("span", { className: "combat-health-text" });
     const resources = el("div", { className: "combat-resources" });
-    return { root: el("div", { className: "combat-frame" }, name, el("div", { className: "combat-health" }, fill, text), resources), name, fill, text, resources };
+    const statuses = el("div", { className: "combat-statuses" });
+    return { root: el("div", { className: "combat-frame" }, name, el("div", { className: "combat-health" }, fill, text), resources, statuses), name, fill, text, resources, statuses };
   }
 
   drawFrame(frame, health, most) {
@@ -387,6 +390,51 @@ export class PlayCombat {
   setTarget(id) {
     this.target = id;
     this.drawTarget();
+  }
+
+  // A frame's statuses, as icons with their stacks and time left. Hidden ones stay off it, and a
+  // tap says what one is. The icons stay in place as their numbers change, so a tap can land.
+  drawStatuses(frame, unit, now) {
+    const shown = [];
+    for (const held of this.unitStatuses.of(unit)) {
+      const made = this.statusesOf(held.class)?.find((s) => s.id === held.status);
+      if (made && made.kind !== "hidden") shown.push({ held, made });
+    }
+    const which = shown.map(({ held }) => `${held.status}/${held.from}`).join();
+    if (frame.shownStatuses !== which) {
+      frame.shownStatuses = which;
+      frame.statusIcons = shown.map(({ made }) => {
+        const words = `${made.name}${made.description ? `: ${made.description}` : ""}`;
+        const stacks = el("span", { className: "combat-status-stacks" });
+        const left = el("span", { className: "combat-status-left" });
+        const root = el(
+          "button",
+          { className: `combat-status combat-status-${made.kind === "debuff" ? "debuff" : "buff"}`, title: words, onclick: () => this.refused({ why: words }) },
+          el("span", { className: "combat-status-icon" }, initials(made.name)),
+          stacks,
+          left,
+        );
+        return { root, stacks, left };
+      });
+      frame.statuses.replaceChildren(...frame.statusIcons.map((icon) => icon.root));
+    }
+    shown.forEach(({ held }, i) => {
+      const icon = frame.statusIcons[i];
+      const stacks = held.stacks > 1 ? String(held.stacks) : "";
+      const left = timeLeft(held.until, now);
+      if (icon.stacks.textContent !== stacks) icon.stacks.textContent = stacks;
+      if (icon.left.textContent !== left) icon.left.textContent = left;
+    });
+  }
+
+  // A class's statuses, once its file has loaded, and asks for it until then.
+  statusesOf(classId) {
+    if (!classId) return null;
+    if (!this.statusLists.has(classId)) {
+      this.statusLists.set(classId, null);
+      this.classOf(classId).then((made) => this.statusLists.set(classId, made?.statuses ?? []));
+    }
+    return this.statusLists.get(classId);
   }
 
   drawTarget() {
@@ -627,6 +675,8 @@ export class PlayCombat {
         node.classList.toggle("combat-action-off", !allHold(ability.requires, facts));
       }
     }
+    this.drawStatuses(this.youFrame, this.you.id, now);
+    if (this.target !== null) this.drawStatuses(this.targetFrame, this.target, now);
     if (this.saidAt && now - this.saidAt > REFUSED_S * 1000) {
       this.say.textContent = "";
       this.saidAt = null;

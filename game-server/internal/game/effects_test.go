@@ -282,3 +282,36 @@ func TestInterruptWithNothingToStop(t *testing.T) {
 		t.Fatalf("hits = %v", got)
 	}
 }
+
+func TestUnitsShowWhatTheyHold(t *testing.T) {
+	statuses := []combat.Status{{ID: "mark", Name: "Mark", Kind: "debuff", Duration: 20}}
+	h, p, c := dispelling(t, statuses, combat.Effect{Type: "dispel", Affects: "target", Tags: []string{"none"}})
+	heard(p)
+	use(t, p, "itmark")
+	pass(h, c, 0.05)
+	got := heard(p, "statusOn")
+	if len(got) != 1 || got[0]["id"] != -1.0 || got[0]["status"] != "mark" || got[0]["class"] != "frst0001" || got[0]["stacks"] != 1.0 || got[0]["from"] != float64(p.ID()) {
+		t.Fatalf("statusOn = %v", got)
+	}
+	if lasts := got[0]["lasts"].(float64); lasts != 20 {
+		t.Fatalf("lasts %g", lasts)
+	}
+	// Someone coming later sees it on the dummy, and what you hold on you.
+	use(t, p, "memark")
+	pass(h, c, 0.05)
+	other := enter(t, h, 2)
+	var snapshot map[string]any
+	for snapshot == nil {
+		if m := next(t, other); m["type"] == "snapshot" {
+			snapshot = m
+		}
+	}
+	seen := map[float64][]any{}
+	for _, each := range snapshot["characters"].([]any) {
+		ch := each.(map[string]any)
+		seen[ch["id"].(float64)], _ = ch["statuses"].([]any)
+	}
+	if len(seen[-1]) != 1 || len(seen[float64(p.ID())]) != 1 || seen[-1][0].(map[string]any)["status"] != "mark" {
+		t.Fatalf("snapshot = %v", snapshot)
+	}
+}
