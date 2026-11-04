@@ -146,6 +146,27 @@ type forced struct {
 	Height  float64    `json:"height"`
 }
 
+// areaMessage is an area going down on the ground.
+type areaMessage struct {
+	Type    string     `json:"type"`
+	ID      int64      `json:"id"`
+	From    int64      `json:"from"`
+	Ability string     `json:"ability"`
+	Affects string     `json:"affects"`
+	At      [3]float64 `json:"at"`
+	Radius  float64    `json:"radius"`
+	Line    bool       `json:"line,omitempty"`
+	Width   float64    `json:"width,omitempty"`
+	Dir     [2]float64 `json:"dir"`
+	Lasts   float64    `json:"lasts"`
+	Follows int64      `json:"follows,omitempty"`
+}
+
+type areaGone struct {
+	Type string `json:"type"`
+	ID   int64  `json:"id"`
+}
+
 // targetable says whether a unit can be picked as a target, when that changes.
 type targetable struct {
 	Type       string `json:"type"`

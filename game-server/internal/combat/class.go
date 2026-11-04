@@ -150,6 +150,19 @@ type Effect struct {
 
 	Lockout float64 `json:"lockout"` // interrupt
 
+	// area
+	Lasts         float64  `json:"lasts"`
+	Every         float64  `json:"every"`
+	Effect        *Effect  `json:"effect"`
+	Effects       []Effect `json:"effects"`
+	OnEnter       *Effect  `json:"onEnter"`
+	Limit         int      `json:"limit"`
+	Overlaps      bool     `json:"overlaps"`
+	FollowsTarget bool     `json:"followsTarget"`
+	Line          bool     `json:"line"`
+	Width         float64  `json:"width"`
+	Along         string   `json:"along"`
+
 	// move
 	Kind     string  `json:"kind"`
 	To       string  `json:"to"`
@@ -265,6 +278,7 @@ func (b *ConsumedBy) Matches(a *Ability) bool {
 type StatusEffect struct {
 	Type    string
 	Control string
+	Status  string // an `aura`'s
 
 	// An `immune` and an `untargetable`.
 	Controls     []string
@@ -364,6 +378,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		Hit          string   `json:"hit"`
 		Source       string   `json:"source"`
 		Control      string   `json:"control"`
+		Status       string   `json:"status"`
 		Controls     []string `json:"controls"`
 		All          bool     `json:"all"`
 		Harmful      bool     `json:"harmful"`
@@ -414,7 +429,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &body); err != nil {
 		return err
 	}
-	*s = StatusEffect{head.Type, body.Control, body.Controls, body.All, body.Harmful, body.AfterSeconds, body.OnlyBelow, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
+	*s = StatusEffect{head.Type, body.Control, body.Status, body.Controls, body.All, body.Harmful, body.AfterSeconds, body.OnlyBelow, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
 		body.Hit, body.Source, body.School, body.Schools, body.Category, body.Categories, body.Abilities, body.Tag, body.Statuses, body.When,
 		body.Change, body.Set, body.AddAmount, body.AddTags, body.Chance, body.AtTargets, body.PerTargetHit, body.MaxTotal,
 		body.Affects, body.Radius, body.Max, body.SoftCap, body.Drain,

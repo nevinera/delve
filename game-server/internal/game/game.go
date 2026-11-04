@@ -62,13 +62,15 @@ func NewHub(w WorldLoader, c Characters) *Hub {
 
 // Layer is one copy of a world's open land and the characters in it.
 type Layer struct {
-	firing  int // how many triggers are setting each other off right now
-	hub     *Hub
-	key     string
-	worldID int64
-	number  int
-	world   *worlds.World
-	grounds map[string]*worlds.Ground // by continent, as they're needed
+	zones     []*zone // areas on the ground, oldest first
+	zoneCount int64
+	firing    int // how many triggers are setting each other off right now
+	hub       *Hub
+	key       string
+	worldID   int64
+	number    int
+	world     *worlds.World
+	grounds   map[string]*worlds.Ground // by continent, as they're needed
 	// groundsMu guards grounds, apart from mu, since entering reads the ground without the layer.
 	groundsMu sync.Mutex
 	mu        sync.Mutex
@@ -291,6 +293,12 @@ func (l *Layer) join(p *Player) {
 		o.send(encode(appear{"appear", l.seen(p.state)}))
 	}
 	p.send(encode(snapshot{"snapshot", near}))
+	now := l.hub.now()
+	for _, z := range l.zones {
+		if _, continent, ok := z.center(); ok && continent == p.state.Continent {
+			p.send(encode(l.areaMessage(z, now)))
+		}
+	}
 	if p.fight.class != nil {
 		p.send(encode(buildMessage{"build", p.fight.build.Specialization, p.fight.build.Talents}))
 		if p.fight.bars != nil {

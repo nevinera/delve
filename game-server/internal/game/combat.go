@@ -36,8 +36,8 @@ type vitals struct {
 	Statuses  map[statusKey]*activeStatus
 	base      combat.Stats // what its class and level give it, before what it holds
 
-	untargetable bool // as it's last been told
-	primary   []string     // its class's main stats
+	untargetable bool     // as it's last been told
+	primary      []string // its class's main stats
 }
 
 // statusKey picks out one copy of a status: a unit holds one for each unit that put it on.
@@ -58,6 +58,8 @@ type activeStatus struct {
 	counts  map[int]float64   // how far along each `every` is, by the same
 	granted bool              // what the class gives you for good: a passive, your mastery, a spec's or a talent's
 	ticks   map[int]time.Time // when each of its periodic effects next ticks, by its place in the status
+	zone    *zone             // the area or aura keeping it on, if any
+	zones   map[int]*zone     // its own auras, by their place in the status
 }
 
 // dummy is a training dummy: it takes damage, never dies or fights back, and tallies who's hit it.
@@ -184,6 +186,7 @@ func (l *Layer) chooseBuild(p *Player, b combat.Build) {
 	for key, held := range f.vitals.Statuses {
 		if held.granted && !slices.Contains(keep, key.id) {
 			delete(f.vitals.Statuses, key)
+			l.endZones(held)
 			l.tellOf(p.ID(), encode(statusGone{"statusGone", p.ID(), key.id, key.from}))
 		}
 	}
@@ -606,9 +609,20 @@ func (l *Layer) landWhich(p *Player, c *casting, now time.Time, which func(*comb
 		if !which(e) {
 			continue
 		}
-		reached := l.reached(p, c, e)
-		if len(reached) == 0 {
-			p.debugLine("%s: %s reached no one", c.ability.Name, e.Type)
+		var reached []*vitals
+		if e.Type != "area" {
+			reached = l.reached(p, c, e)
+			if len(reached) == 0 {
+				p.debugLine("%s: %s reached no one", c.ability.Name, e.Type)
+			}
+		}
+		if e.Type == "area" {
+			if failed, ok := combat.All(e.When, l.facts(p, c.target, now)); ok {
+				l.placeArea(p, c, e, now)
+			} else {
+				p.debugLine("%s: area skipped: %s", c.ability.Name, failed.Why(statusNames(p)))
+			}
+			continue
 		}
 		for _, on := range reached {
 			target := c.target
@@ -964,7 +978,7 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 		held.until = now.Add(seconds(lasts))
 	}
 	if was != nil {
-		held.ticks, held.fired, held.counts = was.ticks, was.fired, was.counts // putting it on again doesn't start these over
+		held.ticks, held.fired, held.counts, held.zones = was.ticks, was.fired, was.counts, was.zones // putting it on again doesn't start these over
 	}
 	on.Statuses[key] = held
 	l.tellOf(on.ID, encode(statusOn{"statusOn", on.ID, shownOf(key, held, now)}))
@@ -1003,6 +1017,7 @@ func (l *Layer) takeOff(on *vitals, key statusKey) {
 	held := on.Statuses[key]
 	delete(on.Statuses, key)
 	if held != nil {
+		l.endZones(held)
 		l.fire(statusEvent("statusEnds", on, key, held), l.hub.now())
 	}
 	l.tellOf(on.ID, encode(statusGone{"statusGone", on.ID, key.id, key.from}))
@@ -1090,6 +1105,7 @@ func (l *Layer) sweep(now time.Time) {
 		}
 		l.refit(v, now)
 	})
+	l.sweepZones(now)
 }
 
 // tickStatus lands whatever's due of a status's periodic effects. A last tick due as it ends still lands.
@@ -2004,54 +2020,11 @@ func (l *Layer) reached(p *Player, c *casting, e *combat.Effect) []*vitals {
 			center = at
 		}
 	}
-	type reach struct {
-		v   *vitals
-		gap float64
+	way := [2]float64{}
+	if e.Line {
+		way = lineWay(p, c, e, center)
 	}
-	var found []reach
-	inside := func(at [3]float64) (float64, bool) {
-		gap := distance(center, at)
-		if e.Radius > 0 && gap > e.Radius {
-			return gap, false
-		}
-		return gap, e.Cone == 0 || withinCone(center, p.state.Yaw, e.Cone, at)
-	}
-	if e.Affects == "enemies" {
-		for _, d := range l.dummies {
-			if d.state.Continent != p.state.Continent {
-				continue
-			}
-			if gap, ok := inside(d.state.At); ok {
-				found = append(found, reach{&d.vitals, gap})
-			}
-		}
-	} else if e.Affects == "allies" {
-		for _, o := range l.players {
-			if o.state.Continent != p.state.Continent {
-				continue
-			}
-			if gap, ok := inside(o.state.At); ok {
-				found = append(found, reach{&o.fight.vitals, gap})
-			}
-		}
-	}
-	slices.SortFunc(found, func(a, b reach) int {
-		if a.gap != b.gap {
-			if a.gap < b.gap {
-				return -1
-			}
-			return 1
-		}
-		return int(a.v.ID - b.v.ID)
-	})
-	if e.Max > 0 && len(found) > e.Max {
-		found = found[:e.Max]
-	}
-	out := make([]*vitals, len(found))
-	for i, r := range found {
-		out[i] = r.v
-	}
-	return out
+	return l.inArea(areaOf{center: center, continent: p.state.Continent, yaw: p.state.Yaw, affects: e.Affects, radius: e.Radius, cone: e.Cone, line: e.Line, width: e.Width, dir: way, most: e.Max})
 }
 
 func (l *Layer) dummy(id int64, continent string) *dummy {

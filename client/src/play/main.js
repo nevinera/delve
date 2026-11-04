@@ -81,6 +81,7 @@ async function play() {
   // The server says these as you enter, before combat is ready.
   let firstBuild = null;
   let firstBars = null;
+  let earlyAreas = [];
   const early = []; // what the server says before the view is ready, as [method, argument]
   const tell = (method, arg) => (others ? others[method](arg) : early.push([method, arg]));
   const unitStatuses = new UnitStatuses();
@@ -110,6 +111,8 @@ async function play() {
     log: fight("logged"),
     speed: fight("speed_"),
     controls: fight("controls_"),
+    area: (message) => (combat ? combat.area_(message) : earlyAreas.push(message)),
+    areaGone: (message) => (combat ? combat.areaGone_(message) : (earlyAreas = earlyAreas.filter((a) => a.id !== message.id))),
     targetable: (message) => {
       unitStatuses.targetable(message);
       combat?.targetable_(message);
@@ -188,6 +191,7 @@ async function play() {
   combat = new PlayCombat({ view, others, connection, loader, you, hud: $("playCombat"), unitStatuses });
   if (firstBuild) combat.build_(firstBuild);
   if (firstBars) combat.bars_(firstBars);
+  earlyAreas.forEach((message) => combat.area_(message));
   // A handle for scripts and the browser's console.
   window.play = { view, connection, others, combat, renditions, placed, caves };
   if (touch) new TouchControls(view, document.body);

@@ -10,6 +10,7 @@ import { strFromU8 } from "fflate";
 import { allHold } from "./conditions.js";
 import { PlayLog } from "./log.js";
 import { initials, timeLeft } from "./unitStatuses.js";
+import { AreaMarks } from "./areas.js";
 import { blockedBy, isHelpless } from "./controls.js";
 
 // Fighting on the play page: frames for you and your target, an action bar, a cast bar, what lands
@@ -111,6 +112,7 @@ export class PlayCombat {
     this.savedBars = null; // null until you've set them
     this.barPage = 0; // which bar a small screen shows
     document.querySelector("[data-abilities]")?.addEventListener("click", () => this.toggleAbilities());
+    this.areas = new AreaMarks(view);
     this.statuses = new Map(); // unit id -> the statuses you've put on it, as stacks by id
     this.statusLists = new Map(); // class id -> its statuses, null while its file loads
     this.health = you.health;
@@ -551,6 +553,14 @@ export class PlayCombat {
     this.view.walker.speedShare = movementSpeed / 100;
   }
 
+  area_(message) {
+    this.areas.add(message, performance.now());
+  }
+
+  areaGone_({ id }) {
+    this.areas.remove(id);
+  }
+
   targetable_({ id, targetable }) {
     if (!targetable && id === this.target) this.setTarget(null);
   }
@@ -687,6 +697,7 @@ export class PlayCombat {
         node.classList.toggle("combat-action-off", !allHold(ability.requires, facts) || Boolean(blockedBy(this.controls, ability)));
       }
     }
+    this.areas.frame(now, (id) => (id === this.you.id ? this.view.walker?.model?.position : this.others.characters.get(id)?.model.position));
     this.drawStatuses(this.youFrame, this.you.id, now);
     if (this.target !== null) this.drawStatuses(this.targetFrame, this.target, now);
     if (this.saidAt && now - this.saidAt > REFUSED_S * 1000) {
