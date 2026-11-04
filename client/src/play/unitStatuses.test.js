@@ -50,6 +50,17 @@ describe("UnitStatuses", () => {
     u.vanish(-1);
     expect(u.of(-1)).toEqual([]);
   });
+
+  it("knows who can't be targeted", () => {
+    const [u] = units();
+    u.seen({ id: 5, untargetable: true });
+    expect(u.untargetable.has(5)).toBe(true);
+    u.targetable({ id: 5, targetable: true });
+    expect(u.untargetable.has(5)).toBe(false);
+    u.targetable({ id: 6, targetable: false });
+    u.vanish(6);
+    expect(u.untargetable.has(6)).toBe(false);
+  });
 });
 
 describe("timeLeft", () => {

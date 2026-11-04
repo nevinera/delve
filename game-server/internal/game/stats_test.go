@@ -541,12 +541,12 @@ func TestDrainAndSlowed(t *testing.T) {
 	if got := p.fight.vitals.Health - was; got != 10 {
 		t.Fatalf("drained %g, want 10", got)
 	}
-	if slices.Contains(fighterState(p, h.now()), "slowed") {
+	if slices.Contains(p.layer.fighterState(p, h.now()), "slowed") {
 		t.Fatal("slowed with nothing on")
 	}
 	use(t, p, "mire")
 	pass(h, c, 0.1)
-	if !slices.Contains(fighterState(p, h.now()), "slowed") {
+	if !slices.Contains(p.layer.fighterState(p, h.now()), "slowed") {
 		t.Fatal("not slowed")
 	}
 }

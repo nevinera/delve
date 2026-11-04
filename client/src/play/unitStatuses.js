@@ -7,11 +7,13 @@ export class UnitStatuses {
   constructor(clock = () => performance.now()) {
     this.clock = clock;
     this.units = new Map(); // unit id -> key -> { status, from, class, stacks, until }
+    this.untargetable = new Set(); // ids of those nothing can pick as a target
   }
 
   // A character coming into view, with what it holds then.
-  seen({ id, statuses }) {
+  seen({ id, statuses, untargetable }) {
     this.units.delete(id);
+    this.targetable({ id, targetable: !untargetable });
     (statuses ?? []).forEach((held) => this.on({ id, ...held }));
   }
 
@@ -31,8 +33,14 @@ export class UnitStatuses {
     this.units.get(id)?.delete(keyOf({ status, from }));
   }
 
+  targetable({ id, targetable }) {
+    if (targetable) this.untargetable.delete(id);
+    else this.untargetable.add(id);
+  }
+
   vanish(id) {
     this.units.delete(id);
+    this.untargetable.delete(id);
   }
 
   // What a unit holds, oldest to end last, those that never end first. Those whose time has run out

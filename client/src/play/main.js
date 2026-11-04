@@ -110,6 +110,10 @@ async function play() {
     log: fight("logged"),
     speed: fight("speed_"),
     controls: fight("controls_"),
+    targetable: (message) => {
+      unitStatuses.targetable(message);
+      combat?.targetable_(message);
+    },
     build: (message) => (combat ? combat.build_(message) : (firstBuild = message)),
     bars: (message) => (combat ? combat.bars_(message) : (firstBars = message)),
     statusChanged: (message) => {

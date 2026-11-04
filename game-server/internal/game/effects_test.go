@@ -349,7 +349,7 @@ func TestStunStopsEverythingUntilItEnds(t *testing.T) {
 	pass(h, c, 0.05)
 	refusal(t, p, "you're stunned")
 	found := false
-	for _, s := range fighterState(p, h.now()) {
+	for _, s := range p.layer.fighterState(p, h.now()) {
 		found = found || s == "stunned"
 	}
 	if !found {
@@ -423,4 +423,156 @@ func TestDisarmStopsSwings(t *testing.T) {
 	if got := heard(p, "swung"); len(got) != 0 {
 		t.Fatalf("swung %v", got)
 	}
+}
+
+// shielded is a fight where the player can put each of these statuses on itself or the dummy, and
+// has something to do to a unit that holds one.
+func shielded(t *testing.T, statuses ...combat.Status) (*Hub, *Player, *float64) {
+	t.Helper()
+	zero := 0.0
+	h, p, c := dispelling(t, statuses, combat.Effect{Type: "dispel", Affects: "self"})
+	p.fight.class.Statuses = append(p.fight.class.Statuses, combat.Status{ID: "ill", Name: "Ill", Kind: "debuff", Duration: 9})
+	p.fight.class.Abilities = append(p.fight.class.Abilities,
+		combat.Ability{ID: "zapit", Name: "Zap", School: "holy", Target: "enemy", GCD: &zero, Range: combat.Distance{Feet: 100}, Effects: []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 9, Max: 9}}}},
+		combat.Ability{ID: "coldit", Name: "Cold", School: "frost", Target: "enemy", GCD: &zero, Range: combat.Distance{Feet: 100}, Effects: []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 9, Max: 9}}}},
+		combat.Ability{ID: "sick", Name: "Sick", Target: "enemy", GCD: &zero, Range: combat.Distance{Feet: 100}, Effects: []combat.Effect{{Type: "status", Affects: "target", Status: "ill"}}})
+	return h, p, c
+}
+
+func immune(s combat.StatusEffect) combat.Status {
+	s.Type = "immune"
+	return combat.Status{ID: "ward", Name: "Ward", Kind: "buff", Effects: []combat.StatusEffect{s}}
+}
+
+func TestImmuneToDamageFromSchools(t *testing.T) {
+	h, p, c := shielded(t, immune(combat.StatusEffect{Schools: []string{"holy"}}))
+	use(t, p, "itward")
+	pass(h, c, 0.05)
+	d := p.layer.dummies[0]
+	was := d.Health
+	heard(p)
+	use(t, p, "zapit")
+	pass(h, c, 0.05)
+	if d.Health != was {
+		t.Fatal("holy got through")
+	}
+	if got := heard(p, "hit"); len(got) != 1 || got[0]["avoided"] != "immune" || got[0]["missed"] != true {
+		t.Fatalf("hits = %v", got)
+	}
+	use(t, p, "coldit")
+	pass(h, c, 0.05)
+	if d.Health == was {
+		t.Fatal("frost didn't")
+	}
+}
+
+func TestImmuneToHarmfulStatuses(t *testing.T) {
+	for _, e := range []combat.StatusEffect{{Harmful: true}, {All: true}} {
+		h, p, c := shielded(t, immune(e))
+		use(t, p, "itward")
+		pass(h, c, 0.05)
+		heard(p)
+		use(t, p, "sick")
+		pass(h, c, 0.05)
+		if held(p, "ill") != nil {
+			t.Fatalf("%+v: it landed", e)
+		}
+		if got := heard(p, "hit"); len(got) != 1 || got[0]["avoided"] != "immune" {
+			t.Fatalf("%+v: hits = %v", e, got)
+		}
+	}
+}
+
+func TestImmuneToControls(t *testing.T) {
+	half := 0.5
+	h, p, c := shielded(t, immune(combat.StatusEffect{Controls: []string{"stun", "slow"}}),
+		combat.Status{ID: "daze", Name: "Daze", Kind: "buff", Effects: []combat.StatusEffect{{Type: "control", Control: "stun"}}},
+		combat.Status{ID: "drag", Name: "Drag", Kind: "buff", Effects: []combat.StatusEffect{{Type: "stat", Stat: "movementSpeed", Multiply: &half}}})
+	use(t, p, "itward")
+	pass(h, c, 0.05)
+	use(t, p, "itdaze")
+	use(t, p, "itdrag")
+	pass(h, c, 0.05)
+	if held(p, "daze") != nil || held(p, "drag") != nil {
+		t.Fatal("they landed")
+	}
+	// A stun you've already got doesn't count once you're immune.
+	use(t, p, "medaze")
+	pass(h, c, 0.05)
+	if got := p.layer.controlsOn(&p.fight.vitals); len(got) != 1 {
+		t.Fatalf("controls = %v", got)
+	}
+	use(t, p, "meward")
+	p.fight.vitals.Statuses[statusKey{"ward", p.ID()}] = &activeStatus{def: p.fight.class.Status("ward"), class: p.fight.class.ID, since: h.now(), stacks: 1, uses: 1}
+	if got := p.layer.controlsOn(&p.fight.vitals); len(got) != 0 {
+		t.Fatalf("controls = %v", got)
+	}
+}
+
+func TestImmuneToInterruptAndKnockback(t *testing.T) {
+	zero := 0.0
+	ward := immune(combat.StatusEffect{Controls: []string{"interrupt", "knockback"}})
+	h, p, other, c := two(t, []combat.Status{ward},
+		combat.Ability{ID: "guard", Name: "Guard", Target: "self", GCD: &zero, Effects: []combat.Effect{{Type: "status", Affects: "self", Status: "ward"}}},
+		combat.Ability{ID: "longcast", Name: "Long", School: "frost", Target: "self", GCD: &zero, CastTime: 5},
+		combat.Ability{ID: "hush", Name: "Hush", Target: "ally", GCD: &zero, Range: combat.Distance{Feet: 100}, Effects: []combat.Effect{{Type: "interrupt", Affects: "target", Lockout: 4}}},
+		combat.Ability{ID: "shove", Name: "Shove", Target: "ally", GCD: &zero, Range: combat.Distance{Feet: 100}, Effects: []combat.Effect{{Type: "move", Affects: "target", Kind: "knockback"}}})
+	use(t, other, "guard")
+	pass(h, c, 0.05)
+	use(t, other, "longcast")
+	pass(h, c, 0.05)
+	useOn(t, p, "hush", other.ID())
+	pass(h, c, 0.05)
+	if other.fight.cast == nil {
+		t.Fatal("the cast stopped")
+	}
+	was := other.state.At
+	useOn(t, p, "shove", other.ID())
+	pass(h, c, 0.05)
+	if other.state.At != was {
+		t.Fatal("it moved")
+	}
+}
+
+func TestUntargetable(t *testing.T) {
+	gone := func(e combat.StatusEffect) combat.Status {
+		e.Type = "untargetable"
+		return combat.Status{ID: "gone", Name: "Gone", Kind: "buff", Effects: []combat.StatusEffect{e}}
+	}
+	h, p, c := shielded(t, gone(combat.StatusEffect{}))
+	use(t, p, "itgone")
+	pass(h, c, 0.1)
+	if got := heard(p, "targetable"); len(got) != 1 || got[0]["targetable"] != false || got[0]["id"] != -1.0 {
+		t.Fatalf("targetable = %v", got)
+	}
+	use(t, p, "zapit")
+	pass(h, c, 0.05)
+	refusal(t, p, "you can't target that")
+
+	h, p, c = shielded(t, gone(combat.StatusEffect{AfterSeconds: 2}))
+	use(t, p, "itgone")
+	pass(h, c, 0.1)
+	use(t, p, "zapit")
+	pass(h, c, 0.05)
+	if got := heard(p, "refused"); len(got) != 0 {
+		t.Fatalf("too soon: %v", got)
+	}
+	pass(h, c, 2)
+	use(t, p, "zapit")
+	pass(h, c, 0.05)
+	refusal(t, p, "you can't target that")
+
+	h, p, c = shielded(t, gone(combat.StatusEffect{OnlyBelow: 50}))
+	use(t, p, "itgone")
+	pass(h, c, 0.1)
+	use(t, p, "zapit")
+	pass(h, c, 0.05)
+	if got := heard(p, "refused"); len(got) != 0 {
+		t.Fatalf("at full health: %v", got)
+	}
+	p.layer.dummies[0].Health = 10
+	pass(h, c, 0.1)
+	use(t, p, "zapit")
+	pass(h, c, 0.05)
+	refusal(t, p, "you can't target that")
 }

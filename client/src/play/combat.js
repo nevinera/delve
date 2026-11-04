@@ -366,6 +366,7 @@ export class PlayCombat {
     const box = canvas.getBoundingClientRect();
     const out = [];
     for (const drawn of this.others.characters.values()) {
+      if (this.unitStatuses.untargetable.has(drawn.id)) continue;
       const chest = drawn.model.position.clone();
       chest.y += drawn.height * 0.6;
       const projected = chest.clone().project(camera);
@@ -548,6 +549,10 @@ export class PlayCombat {
 
   speed_({ movementSpeed }) {
     this.view.walker.speedShare = movementSpeed / 100;
+  }
+
+  targetable_({ id, targetable }) {
+    if (!targetable && id === this.target) this.setTarget(null);
   }
 
   controls_({ controls }) {

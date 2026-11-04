@@ -217,6 +217,11 @@ func (s *Status) Dispelled(by *Effect) bool {
 	return false
 }
 
+// Slows says whether this status lowers its holder's movement speed.
+func (s *Status) Slows() bool {
+	return slices.ContainsFunc(s.Effects, func(e StatusEffect) bool { return e.slows() })
+}
+
 // slows says whether this effect lowers its holder's movement speed.
 func (e *StatusEffect) slows() bool {
 	return e.Type == "stat" && e.Stat == "movementSpeed" && (e.Add < 0 || (e.Multiply != nil && *e.Multiply < 1))
@@ -258,9 +263,17 @@ func (b *ConsumedBy) Matches(a *Ability) bool {
 type StatusEffect struct {
 	Type    string
 	Control string
-	Every   float64
-	Does    string
-	Amount  Amount
+
+	// An `immune` and an `untargetable`.
+	Controls     []string
+	All          bool
+	Harmful      bool
+	AfterSeconds float64
+	OnlyBelow    float64
+
+	Every  float64
+	Does   string
+	Amount Amount
 
 	// A `stat`. Only `periodic` and `stat` have their numbers read so far.
 	Stat       string
@@ -333,22 +346,28 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		return nil
 	}
 	var body struct {
-		Every      float64     `json:"every"`
-		Does       string      `json:"does"`
-		Amount     Amount      `json:"amount"`
-		Stat       string      `json:"stat"`
-		Resource   string      `json:"resource"`
-		Add        float64     `json:"add"`
-		Multiply   *float64    `json:"multiply"`
-		Mastery    float64     `json:"mastery"`
-		Param      string      `json:"param"`
-		FromStat   string      `json:"fromStat"`
-		Share      float64     `json:"share"`
-		OfCaster   bool        `json:"ofCaster"`
-		CasterOnly bool        `json:"casterOnly"`
-		Hit        string      `json:"hit"`
-		Source     string      `json:"source"`
-		Control    string      `json:"control"`
+		Every        float64  `json:"every"`
+		Does         string   `json:"does"`
+		Amount       Amount   `json:"amount"`
+		Stat         string   `json:"stat"`
+		Resource     string   `json:"resource"`
+		Add          float64  `json:"add"`
+		Multiply     *float64 `json:"multiply"`
+		Mastery      float64  `json:"mastery"`
+		Param        string   `json:"param"`
+		FromStat     string   `json:"fromStat"`
+		Share        float64  `json:"share"`
+		OfCaster     bool     `json:"ofCaster"`
+		CasterOnly   bool     `json:"casterOnly"`
+		Hit          string   `json:"hit"`
+		Source       string   `json:"source"`
+		Control      string   `json:"control"`
+		Controls     []string `json:"controls"`
+		All          bool     `json:"all"`
+		Harmful      bool     `json:"harmful"`
+		AfterSeconds float64  `json:"afterSeconds"`
+		OnlyBelow    float64  `json:"onlyBelow"`
+
 		School     string      `json:"school"`
 		Schools    []string    `json:"schools"`
 		Category   string      `json:"category"`
@@ -393,7 +412,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &body); err != nil {
 		return err
 	}
-	*s = StatusEffect{head.Type, body.Control, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
+	*s = StatusEffect{head.Type, body.Control, body.Controls, body.All, body.Harmful, body.AfterSeconds, body.OnlyBelow, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
 		body.Hit, body.Source, body.School, body.Schools, body.Category, body.Categories, body.Abilities, body.Tag, body.Statuses, body.When,
 		body.Change, body.Set, body.AddAmount, body.AddTags, body.Chance, body.AtTargets, body.PerTargetHit, body.MaxTotal,
 		body.Affects, body.Radius, body.Max, body.SoftCap, body.Drain,

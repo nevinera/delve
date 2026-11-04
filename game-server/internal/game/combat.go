@@ -35,6 +35,8 @@ type vitals struct {
 	MaxHealth float64
 	Statuses  map[statusKey]*activeStatus
 	base      combat.Stats // what its class and level give it, before what it holds
+
+	untargetable bool // as it's last been told
 	primary   []string     // its class's main stats
 }
 
@@ -384,7 +386,7 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 	if !slices.Contains(ability.Ignores, "cooldown") && len(live(f.cooldowns[ability.ID], now)) >= max(ability.Charges, 1) {
 		return nil, 0, "not ready yet"
 	}
-	if why := combat.Blocked(controlsOn(&f.vitals), ability); why != "" {
+	if why := combat.Blocked(l.controlsOn(&f.vitals), ability); why != "" {
 		return nil, 0, why
 	}
 	if lockedOut(f, ability, now) {
@@ -405,15 +407,24 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 		if d == nil {
 			return nil, 0, "you need an enemy targeted"
 		}
+		if l.untargetable(&d.vitals, now) {
+			return nil, 0, "you can't target that"
+		}
 		target, at = d.ID, d.state.At
 	case "ally", "any":
 		if d := l.dummy(m.Target, p.state.Continent); d != nil && ability.Target == "any" {
+			if l.untargetable(&d.vitals, now) {
+				return nil, 0, "you can't target that"
+			}
 			target, at = d.ID, d.state.At
 			break
 		}
 		o := l.players[m.Target]
 		if o == nil || o.state.Continent != p.state.Continent {
 			o = p // with no one else targeted, it goes on you
+		}
+		if o != p && l.untargetable(&o.fight.vitals, now) {
+			return nil, 0, "you can't target that"
 		}
 		target, at = o.ID(), o.state.At
 	case "ground":
@@ -638,7 +649,7 @@ func (l *Layer) unmet(p *Player, a *combat.Ability, target int64, now time.Time)
 func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
 	f := &p.fight
 	out := &combat.Facts{
-		Self:      unitOf(&f.vitals, p.ID(), fighterState(p, now)),
+		Self:      unitOf(&f.vitals, p.ID(), l.fighterState(p, now)),
 		Since:     map[string]float64{},
 		Resources: map[string]combat.ResourceAmount{},
 	}
@@ -659,7 +670,7 @@ func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
 		out.Target, out.TargetIs = &unit, []string{"enemy", "other", "nonPlayer"}
 		out.Position = positionOf(p.state.At, d.state.At, d.state.Yaw)
 	} else if o := l.players[target]; o != nil && target != 0 {
-		unit := unitOf(&o.fight.vitals, p.ID(), fighterState(o, now))
+		unit := unitOf(&o.fight.vitals, p.ID(), l.fighterState(o, now))
 		out.Target, out.TargetIs = &unit, []string{"ally", "player"}
 		if o == p {
 			out.TargetIs = append(out.TargetIs, "self")
@@ -684,9 +695,9 @@ func unitOf(v *vitals, reader int64, state []string) combat.Unit {
 
 // fighterState is which of a `state` condition's words are true of a player. Everywhere counts as
 // outdoors.
-func fighterState(p *Player, now time.Time) []string {
+func (l *Layer) fighterState(p *Player, now time.Time) []string {
 	state := []string{"outdoors"}
-	controls := controlsOn(&p.fight.vitals)
+	controls := l.controlsOn(&p.fight.vitals)
 	if combat.Helpless(controls) {
 		state = append(state, "controlled")
 	}
@@ -833,6 +844,10 @@ func (l *Layer) interrupt(p *Player, e *combat.Effect, on *vitals, h *hit, now t
 	if o == nil || o.fight.cast == nil {
 		return false
 	}
+	if l.immuneTo(on, "interrupt", now) {
+		h.Missed, h.Avoided = true, "immune"
+		return true
+	}
 	f := &o.fight
 	stopped := f.cast.ability
 	l.stopCast(o)
@@ -908,6 +923,10 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 		mastery = l.statsOf(&f.vitals, nil, now).MasteryPercent()
 	}
 	s = f.class.ResolveStatus(s, duration, mods, mastery)
+	if l.immuneToStatus(on, s, p.ID(), now) {
+		h.Missed, h.Avoided = true, "immune"
+		return true
+	}
 	lasts := s.Duration
 	key := statusKey{s.ID, p.ID()}
 	was := on.Statuses[key]
@@ -1112,6 +1131,9 @@ func (l *Layer) tickOf(p *Player, holder *vitals, id string, held *activeStatus,
 			if on.ID != p.ID() {
 				p.fight.attacked(now)
 			}
+			if l.immuneToDamage(on, ctx.Schools, now) {
+				continue
+			}
 			n, crit := l.rollDamage(p, on, amount, ctx, now)
 			h.Crit = crit
 			l.harm(p, on, n, &h, now)
@@ -1277,6 +1299,10 @@ func (l *Layer) dealLeft(p *Player, c *casting, id string, held *activeStatus, s
 		h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: each.Does, Crit: crit}
 		switch each.Does {
 		case "damage":
+			if l.immuneToDamage(on, ctx.Schools, now) {
+				h.Missed, h.Avoided, h.Crit = true, "immune", false
+				break
+			}
 			l.harm(p, on, total, &h, now)
 			l.leech(p, on, total, ctx, c.ability.ID, now)
 			l.drain(p, total, each.Drain, c.ability.ID)
@@ -1386,7 +1412,7 @@ func (l *Layer) seen(c Character) Character {
 		return c
 	}
 	now := l.hub.now()
-	c.Statuses = nil
+	c.Statuses, c.Untargetable = nil, v.untargetable
 	for key, held := range v.Statuses {
 		c.Statuses = append(c.Statuses, shownOf(key, held, now))
 	}
@@ -1461,6 +1487,10 @@ func (l *Layer) strike(p *Player, on *vitals, amount combat.Amount, ctx combat.H
 			return
 		}
 		blocked = combat.Blocks(theirs, melee, front, l.hub.roll)
+	}
+	if l.immuneToDamage(on, ctx.Schools, now) {
+		h.Missed, h.Avoided = true, "immune"
+		return
 	}
 	n, crit := l.rollDamage(p, on, amount, ctx, now)
 	h.Crit = crit
@@ -1648,8 +1678,12 @@ func hitOf(c *casting, e *combat.Effect, on *vitals, count int) combat.HitContex
 // has, and a player's speed.
 func (l *Layer) refit(v *vitals, now time.Time) {
 	o := l.players[v.ID]
-	if len(v.Statuses) == 0 && v.MaxHealth == v.base.MaxHealth && (o == nil || (o.motion.settled() && len(o.fight.controls) == 0)) {
+	if len(v.Statuses) == 0 && v.MaxHealth == v.base.MaxHealth && !v.untargetable && (o == nil || (o.motion.settled() && len(o.fight.controls) == 0)) {
 		return
+	}
+	if out := l.untargetable(v, now); out != v.untargetable {
+		v.untargetable = out
+		l.tellOf(v.ID, encode(targetable{"targetable", v.ID, !out}))
 	}
 	stats := l.statsOf(v, nil, now)
 	if most := max(stats.MaxHealth, 1); most != v.MaxHealth {
@@ -1662,7 +1696,7 @@ func (l *Layer) refit(v *vitals, now time.Time) {
 		return
 	}
 	speed := max(stats.MovementSpeed, 0)
-	if controls := controlsOn(v); !slices.Equal(controls, o.fight.controls) {
+	if controls := l.controlsOn(v); !slices.Equal(controls, o.fight.controls) {
 		o.fight.controls = controls
 		o.send(encode(controlsMessage{"controls", controls}))
 		if c := o.fight.cast; c != nil && combat.Blocked(controls, c.ability) != "" {
@@ -1677,14 +1711,78 @@ func (l *Layer) refit(v *vitals, now time.Time) {
 	}
 }
 
-// controlsOn is the controls a unit's statuses hold it with, sorted, each once.
-func controlsOn(v *vitals) []string {
+// controlsOn is the controls a unit's statuses hold it with, sorted, each once, less those it's immune to.
+func (l *Layer) controlsOn(v *vitals) []string {
 	var out []string
+	now := l.hub.now()
 	for _, held := range v.Statuses {
-		out = append(out, held.def.Controls()...)
+		for _, c := range held.def.Controls() {
+			if !l.immuneTo(v, c, now) {
+				out = append(out, c)
+			}
+		}
 	}
 	slices.Sort(out)
 	return slices.Compact(out)
+}
+
+// immunities calls f with each `immune` effect a unit holds right now, until it says true, and
+// says whether it did.
+func (l *Layer) immunities(v *vitals, now time.Time, f func(e *combat.StatusEffect) bool) bool {
+	for _, held := range v.Statuses {
+		for i := range held.def.Effects {
+			if e := &held.def.Effects[i]; e.Type == "immune" && l.holds(v, e, nil, now) && f(e) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// immuneTo says whether a unit is immune to a kind of control.
+func (l *Layer) immuneTo(v *vitals, control string, now time.Time) bool {
+	return l.immunities(v, now, func(e *combat.StatusEffect) bool { return e.All || slices.Contains(e.Controls, control) })
+}
+
+// immuneToDamage says whether a unit takes nothing from a hit of these schools.
+func (l *Layer) immuneToDamage(v *vitals, schools []string, now time.Time) bool {
+	return l.immunities(v, now, func(e *combat.StatusEffect) bool {
+		if e.All {
+			return true
+		}
+		return slices.ContainsFunc(e.Schools, func(school string) bool { return slices.Contains(schools, school) })
+	})
+}
+
+// immuneToStatus says whether a status from someone else bounces off a unit: it's harmful, or
+// holds with a control it's immune to. You can always do it to yourself.
+func (l *Layer) immuneToStatus(v *vitals, s *combat.Status, from int64, now time.Time) bool {
+	if v.ID == from {
+		return false
+	}
+	if s.Kind == "debuff" && l.immunities(v, now, func(e *combat.StatusEffect) bool { return e.All || e.Harmful }) {
+		return true
+	}
+	if slices.ContainsFunc(s.Controls(), func(c string) bool { return l.immuneTo(v, c, now) }) {
+		return true
+	}
+	return s.Slows() && l.immuneTo(v, "slow", now)
+}
+
+// untargetable says whether nothing can pick a unit as a target right now.
+func (l *Layer) untargetable(v *vitals, now time.Time) bool {
+	for _, held := range v.Statuses {
+		for i := range held.def.Effects {
+			e := &held.def.Effects[i]
+			if e.Type != "untargetable" || !l.holds(v, e, nil, now) || now.Sub(held.since).Seconds() < e.AfterSeconds {
+				continue
+			}
+			if e.OnlyBelow == 0 || (v.MaxHealth > 0 && v.Health/v.MaxHealth*100 < e.OnlyBelow) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // harm takes health off a unit, noting it in the hit.
@@ -1713,8 +1811,13 @@ func (l *Layer) attack(p *Player, m incoming) {
 		l.stopAttacking(p)
 		return
 	}
-	if l.dummy(m.Target, p.state.Continent) == nil {
+	d := l.dummy(m.Target, p.state.Continent)
+	if d == nil {
 		p.send(encode(refused{Type: "refused", Why: "you need an enemy targeted"}))
+		return
+	}
+	if l.untargetable(&d.vitals, l.hub.now()) {
+		p.send(encode(refused{Type: "refused", Why: "you can't target that"}))
 		return
 	}
 	l.startAttacking(p, m.Target)
@@ -1740,11 +1843,11 @@ func (l *Layer) stopAttacking(p *Player) {
 // cast to end, and for the target to come into reach and in front of you.
 func (l *Layer) swing(p *Player, now time.Time) {
 	f := &p.fight
-	if f.attacking == 0 || f.cast != nil || now.Before(f.swingAt) || !combat.CanSwing(controlsOn(&f.vitals)) {
+	if f.attacking == 0 || f.cast != nil || now.Before(f.swingAt) || !combat.CanSwing(l.controlsOn(&f.vitals)) {
 		return
 	}
 	d := l.dummy(f.attacking, p.state.Continent)
-	if d == nil {
+	if d == nil || l.untargetable(&d.vitals, now) {
 		l.stopAttacking(p)
 		return
 	}
@@ -1794,7 +1897,7 @@ func (l *Layer) spar(p *Player, now time.Time) {
 			d = each
 		}
 	}
-	if d == nil || !combat.CanSwing(controlsOn(&d.vitals)) {
+	if d == nil || !combat.CanSwing(l.controlsOn(&d.vitals)) {
 		return
 	}
 	f.sparAt = now.Add(seconds(combat.SwingSeconds))

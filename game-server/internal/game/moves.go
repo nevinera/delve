@@ -49,6 +49,10 @@ func (l *Layer) forceMove(p *Player, c *casting, e *combat.Effect, on *vitals, n
 		log.Printf("character %d: ability %s has a move of a kind there isn't: %q", p.ID(), c.ability.ID, e.Kind)
 		return
 	}
+	if (e.Kind == "knockback" || e.Kind == "pull") && o != p && l.immuneTo(on, e.Kind, now) {
+		p.debugLine("%s: %s is immune", c.ability.Name, l.nameOf(on.ID))
+		return
+	}
 	to, yaw, ok := l.moveEnd(p, c, e, o, kind)
 	if !ok {
 		p.debugLine("%s: nowhere for %s to go", c.ability.Name, l.nameOf(on.ID))

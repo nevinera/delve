@@ -34,6 +34,8 @@ type Character struct {
 	Health    float64         `json:"health"`
 	MaxHealth float64         `json:"maxHealth"`
 	Statuses  []shownStatus   `json:"statuses,omitempty"` // what it holds, as it comes into view
+
+	Untargetable bool `json:"untargetable,omitempty"`
 }
 
 // shownStatus is a status a unit holds, for its frame.
@@ -142,6 +144,13 @@ type forced struct {
 	Yaw     float64    `json:"yaw"`
 	Seconds float64    `json:"seconds"`
 	Height  float64    `json:"height"`
+}
+
+// targetable says whether a unit can be picked as a target, when that changes.
+type targetable struct {
+	Type       string `json:"type"`
+	ID         int64  `json:"id"`
+	Targetable bool   `json:"targetable"`
 }
 
 // controlsMessage is what's holding its hearer now.
