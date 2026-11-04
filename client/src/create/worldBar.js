@@ -27,8 +27,9 @@ export async function openFromAddress(say) {
   }
 }
 
-// Fills `root` in. `flush` keeps what the page has changed, for counting it.
-export async function worldBar(root, { say, flush = async () => {} }) {
+// Fills `root` in. `flush` keeps what the page has changed, for counting it. `only` picks the paths
+// this page looks after, and `what` says what they are, for its drop button: nothing else goes.
+export async function worldBar(root, { say, flush = async () => {}, only, what }) {
   const source = document.createElement("span");
   source.className = "library-source";
   const form = document.createElement("form");
@@ -44,13 +45,13 @@ export async function worldBar(root, { say, flush = async () => {} }) {
   const drop = document.createElement("button");
   drop.type = "button";
   drop.textContent = "drop local changes";
-  drop.title = "puts classes and objects back to what was last opened or saved. It leaves the world's other changes alone";
+  drop.title = `puts ${what} back to what was last opened or saved, and leaves everything else alone`;
   drop.addEventListener("click", async () => {
     await flush();
-    const count = await localLibraryChanges();
-    if (!count) return say("There are no local class or object changes.", { info: true });
-    if (!window.confirm(`Drop ${count} unsaved class and object file${count === 1 ? "" : "s"}? This can't be undone. The world's other changes stay.`)) return;
-    await dropLibraryChanges();
+    const count = await localLibraryChanges(only);
+    if (!count) return say(`There are no local changes to ${what}.`, { info: true });
+    if (!window.confirm(`Drop your unsaved changes to ${what} (${count} file${count === 1 ? "" : "s"})? This can't be undone. Everything else stays.`)) return;
+    await dropLibraryChanges(only);
     window.location.reload();
   });
   const showSource = (kept) => {

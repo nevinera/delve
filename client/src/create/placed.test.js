@@ -1,4 +1,6 @@
+import * as THREE from "three";
 import { strFromU8 } from "fflate";
+import { blocks } from "../world/objects.js";
 import { describe, expect, it } from "vitest";
 import { PLATE_FT } from "../v2/sizes.js";
 import { Placed, placedPath, readyObject } from "./placed.js";
@@ -109,5 +111,58 @@ describe("walking among things", () => {
     const through = new Things({ add() {} }, withDoor, () => 0);
     expect(through.pushOut(10, 0.2, 0, 1)).toEqual([10, 0.2]);
     expect(Math.abs(through.pushOut(4, 0.2, 0, 1)[1] - 0.2)).toBeGreaterThan(0.5);
+  });
+});
+
+describe("placed objects of kinds the world hasn't got", () => {
+  const gone = { type: "built:gone0000", at: [10, 20], yaw: 1, scale: 2, footprint: { circle: 3 }, height: 4 };
+  const bare = { type: "built:gone1111", at: [30, 40], yaw: 0, scale: 1 };
+  const file = (objects) => new TextEncoder().encode(JSON.stringify({ objects }));
+  const loaded = (...objects) => {
+    const placed = new Placed();
+    placed.load([0, 0], file(objects));
+    return placed;
+  };
+
+  it("keeps them, and counts them", () => {
+    const placed = loaded(gone, bare);
+    expect(placed.plates.get("0,0").objects).toHaveLength(2);
+    expect(placed.missingCount()).toBe(2);
+  });
+
+  it("saves them as they were, beside a change on the same plate", () => {
+    const placed = loaded(gone, bare);
+    placed.put([boulder(50, 50)]);
+    const { objects } = JSON.parse(strFromU8(placed.unsavedFiles("main").get(placedPath("main", [0, 0]))));
+    expect(objects).toHaveLength(3);
+    expect(objects.find((o) => o.type === gone.type)).toMatchObject({ at: [10, 20], footprint: { circle: 3 }, height: 4 });
+    const kept = objects.find((o) => o.type === bare.type);
+    expect(kept.at).toEqual([30, 40]);
+    expect(kept.footprint).toBeUndefined();
+    expect(kept.height).toBeUndefined();
+  });
+
+  it("stands in the way only if its file says how", () => {
+    const placed = loaded(gone, bare);
+    const [withShape, without] = placed.plates.get("0,0").objects;
+    expect(blocks(withShape, 10, 20)).toBe(true);
+    expect(blocks(without, 30, 40)).toBe(false);
+  });
+
+  it("draws them as boxes that can be picked, and only where it's asked to", () => {
+    const placed = loaded(gone, bare);
+    const quiet = new Things(new THREE.Scene(), placed, () => 0);
+    quiet.tick(10, 20);
+    expect(quiet.group.children.filter((m) => m.userData.objects?.some((o) => o.type === gone.type))).toEqual([]);
+    const shown = new Things(new THREE.Scene(), placed, () => 0, { showMissing: true });
+    shown.tick(10, 20);
+    const box = shown.group.children.find((m) => m.userData.objects?.some((o) => o.type === gone.type));
+    expect(box.count).toBe(2);
+  });
+
+  it("can be deleted", () => {
+    const placed = loaded(gone);
+    placed.remove(placed.plates.get("0,0").objects[0]);
+    expect(placed.missingCount()).toBe(0);
   });
 });

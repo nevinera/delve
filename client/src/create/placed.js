@@ -44,11 +44,22 @@ export function readyObject(object) {
   return { ...object, ...(colors ? { colors } : {}), footprint: footprintOf(object.type, object.scale), height: spec.height * object.scale };
 }
 
+// An object of a kind the world hasn't got, as a placed file holds it: kept as it is, so saving
+// doesn't lose it and it comes back with its kind. It stands in the way as its file says, and
+// nothing draws it but what asks to (Things' showMissing).
+export function standIn(object) {
+  const plain = !object.footprint;
+  return { ...object, footprint: object.footprint ?? { open: 1 }, height: object.height ?? 2, plain };
+}
+
+// Whether an object's kind is one the world hasn't got.
+export const isMissing = (object) => !specOf(object.type);
+
 // A footprint's sizes rounded as the file keeps them.
 const keptFootprint = (footprint) => Object.fromEntries(Object.entries(footprint).map(([shape, v]) => [shape, Array.isArray(v) ? v.map((n) => round(n, 3)) : round(v, 3)]));
 
 // An object as the file keeps it.
-function keptObject({ type, at, y, yaw, scale, colors, texts, template, cave, footprint, height }) {
+function keptObject({ type, at, y, yaw, scale, colors, texts, template, cave, footprint, height, plain }) {
   return {
     type,
     at: at.map((v) => round(v)),
@@ -59,7 +70,7 @@ function keptObject({ type, at, y, yaw, scale, colors, texts, template, cave, fo
     ...(texts && Object.keys(texts).length ? { texts } : {}),
     ...(template ? { template } : {}),
     ...(cave ? { cave } : {}),
-    ...(footprint ? { footprint: keptFootprint(footprint), height: round(height, 3) } : {}),
+    ...(footprint && !plain ? { footprint: keptFootprint(footprint), height: round(height, 3) } : {}),
   };
 }
 
@@ -95,9 +106,16 @@ export class Placed {
   load([px, pz], bytes) {
     const json = JSON.parse(strFromU8(bytes));
     const plate = this.plate(`${px},${pz}`);
-    plate.objects.push(...(json.objects ?? []).map(readyObject).filter(Boolean));
+    plate.objects.push(...(json.objects ?? []).map((object) => readyObject(object) ?? standIn(object)));
     plate.slabs.push(...(json.slabs ?? []));
     this.version++;
+  }
+
+  // How many placed objects are of kinds the world hasn't got.
+  missingCount() {
+    let count = 0;
+    for (const { objects } of this.plates.values()) count += objects.filter(isMissing).length;
+    return count;
   }
 
   plate(key) {

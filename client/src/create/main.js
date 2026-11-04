@@ -1,5 +1,6 @@
 import "./create.css";
 import * as THREE from "three";
+import { alert } from "./alerts.js";
 import { strFromU8, strToU8, unzipSync, zip, zipSync } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
@@ -162,6 +163,9 @@ function start(world, changes, fresh) {
     () => {
       library.register();
       tools.build.showRecent();
+      // What's placed draws as what it is now, and its kind can have gone or come back.
+      placed.version++;
+      sayMissing();
     },
     { read: readLibrary, write: writeLibrary, channel: "delve3d-create-library" },
   );
@@ -173,6 +177,10 @@ function start(world, changes, fresh) {
     });
   };
   const placed = new Placed();
+  const sayMissing = () => {
+    const count = placed.missingCount();
+    if (count) alert(`${count} placed object${count === 1 ? " is a kind" : "s are kinds"} this world doesn't have. ${count === 1 ? "It shows" : "They show"} as a pink box and stay${count === 1 ? "s" : ""} in the world until you delete ${count === 1 ? "it" : "them"}.`);
+  };
   for (const [path, bytes] of world.files) {
     const match = PLACED_PATH.exec(path);
     if (match?.[1] === continent) placed.load([Number(match[2]), Number(match[3])], bytes);
@@ -203,7 +211,8 @@ function start(world, changes, fresh) {
   };
   caves.onMouths = (plates) => ground.refresh(plates);
   caves.groundMaterial = (tx, tz) => ground.fullMesh(tx, tz)?.material ?? null;
-  const things = new Things(scene, placed, (x, z, under) => caves.groundAt(x, z, under));
+  const things = new Things(scene, placed, (x, z, under) => caves.groundAt(x, z, under), { showMissing: true });
+  sayMissing();
   // Level slabs press the ground down under them (press.js).
   renditions.pressesOver = (tx, tz) => pressesOver(placed.near((tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT, TILE_FT).slabs, tx, tz);
   let pressedVersion = placed.version;

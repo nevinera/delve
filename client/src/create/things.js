@@ -7,6 +7,7 @@ import { reachOf } from "../world/objects.js";
 import { turnPoint } from "../world/builtObjects.js";
 import { inPolygon, slabBottom, slabFootholds, slabTop } from "../world/slabs.js";
 import { WALK_DEG } from "./growth.js";
+import { isMissing } from "./placed.js";
 
 // The objects and slabs placed by hand (placed.js) round the builder, out to REACH_FT, drawn with
 // the editor's models: made again when they change, or the builder leaves their tile. The builder
@@ -19,14 +20,17 @@ const UPRIGHT = 0.3; // a slab whose top faces up less than this is a wall, in t
 const STEEPEST = Math.tan((WALK_DEG * Math.PI) / 180);
 const PICKED = 0xffe14d;
 const NEAR_FT = 64; // how far round a walker slabs are looked at
+const MISSING_BOX = new THREE.BoxGeometry(1, 1, 1);
+const MISSING_LOOK = new THREE.MeshBasicMaterial({ color: 0xff40c0, transparent: true, opacity: 0.55 });
 
 // An object (placed.js's readyObject) as objectMeshes draws it: standing at `y`.
 export const drawable = (object, y) => ({ ...object, y, owner: object });
 
 export class Things {
   // groundAt(x, z, under): the ground's height, or a cave's floor, no higher than `under`.
-  constructor(scene, placed, groundAt) {
-    Object.assign(this, { placed, groundAt });
+  // showMissing: draws objects of kinds the world hasn't got as boxes, to find and take away.
+  constructor(scene, placed, groundAt, { showMissing = false } = {}) {
+    Object.assign(this, { placed, groundAt, showMissing });
     this.group = new THREE.Group();
     scene.add(this.group);
     this.outlines = new THREE.Group();
@@ -65,6 +69,10 @@ export class Things {
       const { objects, slabs } = this.placed.near(x, z, REACH_FT);
       const near = (p) => Math.hypot(p[0] - x, p[1] - z) <= REACH_FT;
       const meshes = [...objectMeshes(objects.filter((o) => near(o.at)).map((o) => drawable(o, this.objectY(o))), null, [0, 0]), ...slabMeshes(slabs, [0, 0])];
+      if (this.showMissing) {
+        const box = this.missingBoxes(objects.filter((o) => isMissing(o) && near(o.at)));
+        if (box) meshes.push(box);
+      }
       for (const mesh of meshes) {
         mesh.frustumCulled = false;
         this.group.add(mesh);
@@ -75,6 +83,21 @@ export class Things {
       this.pickedDrawn = picked;
       this.outline();
     }
+  }
+
+  // A box for each of these objects, which can be picked like any other, or null for none.
+  missingBoxes(objects) {
+    if (!objects.length) return null;
+    const mesh = new THREE.InstancedMesh(MISSING_BOX, MISSING_LOOK, objects.length);
+    const matrix = new THREE.Matrix4();
+    objects.forEach((object, n) => {
+      const across = Math.max(1, reachOf(object) * 2);
+      const tall = Math.max(1, object.height);
+      matrix.makeScale(across, tall, across).setPosition(object.at[0], this.objectY(object) + tall / 2, object.at[1]);
+      mesh.setMatrixAt(n, matrix);
+    });
+    mesh.userData.objects = objects;
+    return mesh;
   }
 
   // What's under the pointer's ray: { thing, point } for the nearest object or slab, or null.

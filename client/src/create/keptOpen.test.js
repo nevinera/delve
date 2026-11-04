@@ -1,6 +1,7 @@
 import { strToU8, zipSync } from "fflate";
 import { describe, expect, it } from "vitest";
-import { baseFiles, libraryRecords, openPlan, recordsDiffering, withoutLibrary } from "./keptOpen.js";
+import { isClassPath } from "../world/paths.js";
+import { baseFiles, libraryRecords, openPlan, recordsDiffering, recordsDropped, withoutPaths } from "./keptOpen.js";
 
 const json = (value) => strToU8(JSON.stringify(value, null, 2));
 
@@ -32,9 +33,24 @@ describe("the library's part of a world", () => {
     expect(recordsDiffering(a, a)).toBe(0);
   });
 
-  it("drops only the library's changes", () => {
-    const changes = new Map([["classes/paladin1.json", json({})], ["objects/abcd1234.json", null], ["places/continents/main/plates/0_0.plate", strToU8("moved")], ["world.json", json({})]]);
-    expect([...withoutLibrary(changes).keys()].sort()).toEqual(["places/continents/main/plates/0_0.plate", "world.json"]);
+  it("picks only some, when asked", () => {
+    expect([...libraryRecords(files, isClassPath).keys()]).toEqual(["classes/paladin1.json"]);
+  });
+
+  const objects = (path) => path.startsWith("objects/");
+  const plate = "places/continents/main/plates/0_0.plate";
+
+  it("drops only the changes it's asked to", () => {
+    const changes = new Map([["classes/paladin1.json", json({})], ["objects/abcd1234.json", null], [plate, strToU8("moved")], ["world.json", json({})]]);
+    expect([...withoutPaths(changes, isClassPath).keys()].sort()).toEqual(["objects/abcd1234.json", plate, "world.json"].sort());
+    expect([...withoutPaths(changes, objects).keys()].sort()).toEqual(["classes/paladin1.json", plate, "world.json"].sort());
+  });
+
+  it("puts back only the records it's asked to", () => {
+    const stored = new Map([["classes/paladin1.json", "edited"], ["classes/newclass.json", "new"], ["objects/abcd1234.json", "edited"], ["objects/newthing.json", "new"]]);
+    const base = new Map([["classes/paladin1.json", "base"], ["objects/abcd1234.json", "base"]]);
+    expect(Object.fromEntries(recordsDropped(stored, base, isClassPath))).toEqual({ "classes/paladin1.json": "base", "objects/abcd1234.json": "edited", "objects/newthing.json": "new" });
+    expect(Object.fromEntries(recordsDropped(stored, base, objects))).toEqual({ "classes/paladin1.json": "edited", "classes/newclass.json": "new", "objects/abcd1234.json": "base" });
   });
 });
 

@@ -206,6 +206,8 @@ Plate `(px, pz)` covers `[px * 2048, (px + 1) * 2048)` each way, in continent fe
 
 Each is a [slab](#slabs), with `template` when it was placed from one, and `cave` as objects have it.
 
+A placed object's `type` can name a kind the world doesn't have, after its object was deleted or its changes dropped. Every reader keeps going: `/create` keeps it in the file through saves and shows it as a pink box you can pick and delete, and the game draws nothing there. It stands in the way only if it has its `footprint` and `height` kept, for the client and server alike.
+
 ## Slabs
 
 Slabs are flat pieces placed with `/create`'s build tools to walk on and to block movement and sight. Floors, ramps, walls and roofs are all slabs. A world keeps them in its [placed](#placed-objects-and-slabs) files. Code: `client/src/world/slabs.js`. [Schema](../docs/schema/slab.schema.json).

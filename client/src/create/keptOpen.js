@@ -27,10 +27,11 @@ export function baseFiles(base) {
   return new Map(files);
 }
 
-// A world's library files as the library store holds them: path -> JSON text.
-export function libraryRecords(files) {
+// A world's library files as the library store holds them: path -> JSON text. With `only`, a test
+// of paths, just those.
+export function libraryRecords(files, only = () => true) {
   const out = new Map();
-  for (const [path, bytes] of files) if (isLibraryPath(path)) out.set(path, JSON.stringify(JSON.parse(strFromU8(bytes))));
+  for (const [path, bytes] of files) if (isLibraryPath(path) && only(path)) out.set(path, JSON.stringify(JSON.parse(strFromU8(bytes))));
   return out;
 }
 
@@ -42,8 +43,15 @@ export function recordsDiffering(a, b) {
   return count;
 }
 
-// `changes` (path -> bytes) without the library's, for dropping those alone.
-export const withoutLibrary = (changes) => new Map([...changes].filter(([path]) => !isLibraryPath(path)));
+// `changes` (path -> bytes) without those of the paths `only` picks, for dropping those alone.
+export const withoutPaths = (changes, only) => new Map([...changes].filter(([path]) => !only(path)));
+
+// The library's records with those `only` picks put back to `base`'s, the rest as they are.
+export function recordsDropped(stored, base, only) {
+  const out = new Map([...stored].filter(([path]) => !only(path)));
+  for (const [path, text] of base) if (only(path)) out.set(path, text);
+  return out;
+}
 
 // What's to do about opening a repo whose head is `head`, given what's kept: "keep" when that's the
 // commit kept already, "ask" when opening it would lose local changes, or "load".
@@ -81,20 +89,23 @@ export async function replaceLibrary(files) {
   tellLibraryChanged();
 }
 
-// How many objects, classes and other library files differ from those the kept world was opened or
-// last saved with.
-export async function localLibraryChanges() {
+// How many of the library files `only` picks differ from those the kept world was opened or last
+// saved with.
+export async function localLibraryChanges(only) {
   const kept = await store.get("world").catch(() => null);
   const stored = await readLibrary().catch(() => null);
   if (!kept || !stored) return 0;
-  return recordsDiffering(libraryRecords(baseFiles(kept)), stored);
+  const picked = new Map([...stored].filter(([path]) => only(path)));
+  return recordsDiffering(libraryRecords(baseFiles(kept), only), picked);
 }
 
-// Puts the library back to what the kept world was opened or last saved with, leaving its other
-// changes alone.
-export async function dropLibraryChanges() {
+// Puts the library files `only` picks back to what the kept world was opened or last saved with,
+// leaving everything else alone.
+export async function dropLibraryChanges(only) {
   const kept = await store.get("world");
   const changes = await store.get("changes").catch(() => null);
-  if (changes) await store.set("changes", withoutLibrary(changes));
-  await replaceLibrary(baseFiles(kept));
+  if (changes) await store.set("changes", withoutPaths(changes, only));
+  const stored = (await readLibrary().catch(() => null)) ?? new Map();
+  await writeLibrary(recordsDropped(stored, libraryRecords(baseFiles(kept)), only), true);
+  tellLibraryChanged();
 }

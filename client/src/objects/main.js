@@ -66,7 +66,7 @@ const showSource = (source) => {
 };
 showSource(await keptSource());
 onSourceSaved(showSource);
-await worldBar($("worldBar"), { say, flush: () => sync.push() });
+await worldBar($("worldBar"), { say, flush: () => sync.push(), only: (path) => isLibraryPath(path) && !isClassPath(path), what: "objects" });
 $("repoSave").addEventListener("click", async () => {
   const button = $("repoSave");
   button.disabled = true;

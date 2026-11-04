@@ -610,6 +610,7 @@ export class Build {
 
   placeObject(hit) {
     const type = this.armed.object;
+    if (!specOf(type)) return;
     const [x, y, z] = this.objectAt(hit);
     // In the ghost's colors.
     const { id: _, ...made } = makeObject(type, [x, z], this.yaw, this.scale);
@@ -1132,6 +1133,11 @@ export class Build {
     this.placeHandles();
     this.showGrid();
     if (this.drawing || this.outlining || this.stair || this.ramp || this.roofing || this.holing) return;
+    // What's armed can be gone: another page dropped it, say.
+    if (this.armed.object && !specOf(this.armed.object)) {
+      this.armed.object = null;
+      this.showScale();
+    }
     const type = this.tool === "object" ? this.armed.object : this.tool === "template" ? this.armed.template : null;
     const hit = type && this.hit();
     if (!hit) {
