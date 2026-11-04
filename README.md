@@ -42,3 +42,7 @@ bundle exec standardrb
 npx vitest run
 (cd game-server && go test ./... && golangci-lint run ./...)
 ```
+
+## License
+
+The code is [MIT](LICENSE). Stock icons are CC BY 3.0, and [ATTRIBUTIONS.md](ATTRIBUTIONS.md) lists everything that isn't ours.

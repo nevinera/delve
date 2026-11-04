@@ -42,3 +42,7 @@ Tests sit beside the code: vitest as `*.test.js`, Go as `*_test.go` in `game-ser
 ## Tracking
 
 Work is tracked in GitHub milestones and issues on `nevinera/delve`.
+
+## Third-party material
+
+Our own work is MIT. When you add anything made by someone else, such as art, sound or copied code, check its license allows it and list it in `ATTRIBUTIONS.md`.
