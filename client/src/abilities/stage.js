@@ -101,9 +101,18 @@ export class AbilityStage {
     const spec = particleSpec(name, { ...params, scale });
     const group = new THREE.Group();
     const direction = spec.direction === "forward" ? way : [0, 1, 0];
+    // A clip can carry a body away from where its unit stands, so it goes by the pelvis if there's one.
+    const pelvis = follow?.skeleton?.getBoneByName("pelvis");
+    const body = new THREE.Vector3();
     let sent = 0;
     const update = (u) => {
-      if (follow) group.position.copy(follow.position).setY(follow.position.y + up);
+      if (follow) {
+        group.position.copy(follow.position).setY(follow.position.y + up);
+        if (pelvis) {
+          pelvis.getWorldPosition(body);
+          group.position.setX(body.x).setZ(body.z);
+        }
+      }
       const due = dueBy(spec, u);
       if (due > sent) this.particles.emit(spec, due - sent, group.position.toArray(), colors, direction, floor);
       sent = Math.max(sent, due);
