@@ -1,5 +1,7 @@
 import { SPEC_LEVEL, allowedBuild, heldStatuses, knownAbilities } from "./build.js";
 import { drawBuildPanel } from "./buildPanel.js";
+import { drawAbilitiesPane } from "./abilitiesPane.js";
+import { barsFor, cleared, keyLabel, placed, slotForKey, swapped } from "./bars.js";
 import * as THREE from "three";
 import { chestOf, AbilityStage, clipNameFor } from "../abilities/stage.js";
 import { roleClips } from "../character/animations.js";
@@ -13,7 +15,6 @@ import { PlayLog } from "./log.js";
 // abilities, and shows what it says happened.
 
 const ATTACK_KEY = "`";
-const KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 const FLOAT_S = 1.2;
 const REFUSED_S = 2;
 const PICK_PX = 60; // how far from someone's chest on screen a click still picks them
@@ -100,6 +101,10 @@ export class PlayCombat {
     this.resourceMax = {};
     this.chosen = { specialization: "", talents: {} }; // your specialization and talents
     this.buildBox = document.getElementById("playBuild");
+    this.pane = document.getElementById("playAbilities");
+    this.savedBars = null; // null until you've set them
+    this.barPage = 0; // which bar a small screen shows
+    document.querySelector("[data-abilities]")?.addEventListener("click", () => this.toggleAbilities());
     this.statuses = new Map(); // unit id -> the statuses you've put on it, as stacks by id
     this.health = you.health;
     this.maxHealth = you.maxHealth;
@@ -158,8 +163,6 @@ export class PlayCombat {
   setClass(made) {
     if (!made) return;
     this.made = made;
-    this.buttons = new Map();
-    this.actionNodes = new Map();
     const level = this.you.level ?? 1;
     const build = allowedBuild(made, this.chosen, level);
     this.known = knownAbilities(made, level, build);
@@ -173,20 +176,8 @@ export class PlayCombat {
       this.askedBuild = true;
       this.openBuild();
     }
-    const abilities = this.known.slice(0, KEYS.length);
-    this.attackButton = el("button", { type: "button", className: "combat-action", title: "Auto-attack your target, or stop" }, el("span", { className: "combat-action-key", textContent: ATTACK_KEY }), el("span", { className: "combat-action-name", textContent: "Attack" }));
-    this.attackButton.addEventListener("click", () => this.toggleAttack());
-    this.bar.replaceChildren(
-      this.attackButton,
-      ...abilities.map((ability, i) => {
-        const shade = el("div", { className: "combat-action-shade" });
-        const button = el("button", { type: "button", className: "combat-action", title: ability.description ?? ability.name }, el("span", { className: "combat-action-key", textContent: KEYS[i] }), el("span", { className: "combat-action-name", textContent: ability.name }), shade);
-        button.addEventListener("click", () => this.useAt(i));
-        this.buttons.set(ability.id, shade);
-        this.actionNodes.set(ability.id, button);
-        return button;
-      }),
-    );
+    this.drawBars();
+    this.drawPane();
     this.drawResources();
   }
 
@@ -200,6 +191,116 @@ export class PlayCombat {
         return el("div", { className: "combat-resource" }, fill, el("span", { className: "combat-resource-text", textContent: `${r.name ?? r.key} ${Math.round(have)}${most ? ` / ${most}` : ""}` }));
       }),
     );
+  }
+
+  // The bars and their buttons. A bar with nothing on it only shows while you're arranging them.
+  drawBars() {
+    if (!this.made) return;
+    this.bars = barsFor(this.savedBars, this.known);
+    this.slots = [];
+    const arranging = !this.pane?.hidden;
+    const rows = this.bars.map((bar, b) => {
+      const row = el("div", { className: b === this.barPage ? "combat-bar" : "combat-bar combat-bar-away" });
+      row.hidden = b > 0 && !arranging && !bar.some((id) => this.knownById(id));
+      bar.forEach((id, s) => row.append(this.slotButton(b, s, this.knownById(id))));
+      return row;
+    });
+    if (!this.attackButton) {
+      this.attackButton = el("button", { type: "button", className: "combat-action", title: "Auto-attack your target, or stop" }, el("span", { className: "combat-action-key", textContent: ATTACK_KEY }), el("span", { className: "combat-action-name", textContent: "Attack" }));
+      this.attackButton.addEventListener("click", () => this.toggleAttack());
+    }
+    if (!this.pageButton) {
+      this.pageButton = el("button", { type: "button", className: "combat-action combat-page", title: "Show another action bar" });
+      this.pageButton.addEventListener("click", () => {
+        const shown = this.bars.map((bar, b) => b).filter((b) => b === 0 || this.bars[b].some((id) => this.knownById(id)));
+        this.barPage = shown[(shown.indexOf(this.barPage) + 1) % shown.length];
+        this.drawBars();
+      });
+    }
+    this.pageButton.textContent = `bar ${this.barPage + 1}`;
+    const box = el("div", { className: `combat-bars${arranging ? " combat-bars-arranging" : ""}` }, ...rows);
+    this.bar.replaceChildren(el("div", { className: "combat-bar-side" }, this.pageButton, this.attackButton), box);
+    this.castBar.style.bottom = `${innerHeight - this.bar.getBoundingClientRect().top + 10}px`;
+  }
+
+  knownById(id) {
+    return id ? this.known.find((a) => a.id === id) : null;
+  }
+
+  slotButton(bar, slot, ability) {
+    const at = { bar, slot };
+    const shade = el("div", { className: "combat-action-shade" });
+    const button = el("button", { type: "button", className: `combat-action${ability ? "" : " combat-action-empty"}`, title: ability ? ability.description ?? ability.name : "" }, el("span", { className: "combat-action-key", textContent: keyLabel(bar, slot) }), el("span", { className: "combat-action-name", textContent: ability?.name ?? "" }), shade);
+    if (this.pickedSlot?.bar === bar && this.pickedSlot?.slot === slot) button.classList.add("combat-action-on");
+    button.addEventListener("click", () => (this.pane?.hidden ? this.useSlot(at) : this.tapSlot(at)));
+    button.draggable = Boolean(ability);
+    button.addEventListener("dragstart", (e) => {
+      if (this.pane?.hidden) return e.preventDefault();
+      e.dataTransfer.setData("text/plain", JSON.stringify({ from: at }));
+    });
+    button.addEventListener("dragend", (e) => {
+      if (!this.pane?.hidden && e.dataTransfer.dropEffect === "none") this.setBars(cleared(this.bars, at));
+    });
+    button.addEventListener("dragover", (e) => e.preventDefault());
+    button.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const { ability: id, from } = JSON.parse(e.dataTransfer.getData("text/plain") || "{}");
+      if (id) this.setBars(placed(this.bars, at, id));
+      else if (from) this.setBars(swapped(this.bars, from, at));
+    });
+    if (ability) this.slots.push({ id: ability.id, ability, shade, node: button });
+    return button;
+  }
+
+  // While you're arranging the bars, a tap places what you picked, or picks up or moves a slot.
+  tapSlot(at) {
+    if (this.pickedAbility) {
+      const id = this.pickedAbility;
+      this.pickedAbility = null;
+      this.setBars(placed(this.bars, at, id));
+      this.drawPane();
+    } else if (!this.pickedSlot) {
+      this.pickedSlot = this.bars[at.bar][at.slot] ? at : null;
+      this.drawBars();
+    } else {
+      const from = this.pickedSlot;
+      this.pickedSlot = null;
+      this.setBars(from.bar === at.bar && from.slot === at.slot ? cleared(this.bars, at) : swapped(this.bars, from, at));
+    }
+  }
+
+  setBars(bars) {
+    this.savedBars = bars;
+    this.connection.saveBars(bars);
+    this.drawBars();
+  }
+
+  toggleAbilities() {
+    if (!this.pane || !this.made) return;
+    this.pane.hidden = !this.pane.hidden;
+    this.pickedAbility = this.pickedSlot = null;
+    this.drawPane();
+    this.drawBars();
+  }
+
+  drawPane() {
+    if (!this.pane || this.pane.hidden || !this.made) return;
+    const passives = this.held.map((id) => this.made.statuses?.find((s) => s.id === id)).filter(Boolean);
+    drawAbilitiesPane(this.pane, { known: this.known, passives, picked: this.pickedAbility }, {
+      onPick: (id) => {
+        this.pickedAbility = id;
+        this.pickedSlot = null;
+        this.drawPane();
+        this.drawBars();
+      },
+      onClose: () => this.toggleAbilities(),
+    });
+  }
+
+  // The bars you set, which the server keeps.
+  bars_({ bars }) {
+    this.savedBars = bars;
+    this.drawBars();
   }
 
   // What the server says you've chosen.
@@ -237,8 +338,15 @@ export class PlayCombat {
         this.toggleAttack();
         return;
       }
-      const at = KEYS.indexOf(e.key);
-      if (at >= 0) this.useAt(at);
+      if (e.key === "p" && !e.ctrlKey && !e.metaKey) {
+        this.toggleAbilities();
+        return;
+      }
+      const at = slotForKey(e);
+      if (at) {
+        e.preventDefault();
+        this.useSlot(at);
+      }
     }, { capture: true });
     window.addEventListener("pointermove", (e) => this.aim(e), { capture: true });
     this.view.walker.onTap = (e) => this.tap(e);
@@ -288,8 +396,8 @@ export class PlayCombat {
     this.targetFrame.resources.textContent = drawn.dps ? `${drawn.dps} damage a second` : "";
   }
 
-  useAt(index) {
-    const ability = this.known?.[index];
+  useSlot({ bar, slot }) {
+    const ability = this.knownById(this.bars?.[bar]?.[slot]);
     if (!ability) return;
     if (ability.target === "ground") {
       this.aiming = ability;
@@ -497,13 +605,12 @@ export class PlayCombat {
       this.castBar.firstChild.style.width = `${(this.casting.draining ? 1 - u : u) * 100}%`;
       if (u >= 1) this.showBar(null);
     }
-    if (this.buttons) {
+    if (this.slots) {
       const facts = this.facts();
-      for (const [id, shade] of this.buttons) {
+      for (const { id, ability, shade, node } of this.slots) {
         const ready = Math.max(this.cooldowns.get(id) ?? 0, this.gcdUntil);
         shade.style.height = ready > now ? "100%" : "0";
-        const ability = this.known.find((a) => a.id === id);
-        this.actionNodes.get(id).classList.toggle("combat-action-off", !allHold(ability.requires, facts));
+        node.classList.toggle("combat-action-off", !allHold(ability.requires, facts));
       }
     }
     if (this.saidAt && now - this.saidAt > REFUSED_S * 1000) {

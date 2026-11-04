@@ -68,6 +68,7 @@ type dummy struct {
 
 // fighter is a player's part in combat.
 type fighter struct {
+	bars       [][]string   // its action bars, as it set them
 	build      combat.Build // its specialization and talents, as allowed
 	class      *combat.Class
 	level      int
@@ -184,6 +185,35 @@ func (l *Layer) chooseBuild(p *Player, b combat.Build) {
 	go func() {
 		if err := l.hub.characters.SaveBuild(context.Background(), world, id, spec, talents); err != nil {
 			log.Printf("character %d: couldn't keep its build: %v", id, err)
+		}
+	}()
+}
+
+// The most a character's action bars can hold, and the longest an ability id can be.
+const (
+	maxBars    = 3
+	maxSlots   = 12
+	maxSlotLen = 64
+)
+
+// setBars keeps a character's action bars, if they're the right size. They only say where its
+// buttons go, so they don't need to be abilities it knows.
+func (l *Layer) setBars(p *Player, bars [][]string) {
+	if bars == nil || len(bars) > maxBars || slices.ContainsFunc(bars, func(bar []string) bool {
+		return len(bar) > maxSlots || slices.ContainsFunc(bar, func(id string) bool { return len(id) > maxSlotLen })
+	}) {
+		return
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.players[p.ID()] != p {
+		return
+	}
+	p.fight.bars = bars
+	world, id := l.worldID, p.ID()
+	go func() {
+		if err := l.hub.characters.SaveBars(context.Background(), world, id, bars); err != nil {
+			log.Printf("character %d: couldn't keep its action bars: %v", id, err)
 		}
 	}()
 }

@@ -66,6 +66,11 @@ export class GameConnection {
   }
 
   // Asks to use an ability, after saying where you are so it's checked against that.
+  // Keeps how you've set your action bars.
+  saveBars(bars) {
+    if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: "bars", bars }));
+  }
+
   // Asks for this specialization and these talents.
   chooseBuild({ specialization, talents }) {
     if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: "build", specialization, talents }));

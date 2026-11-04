@@ -50,6 +50,7 @@ type incoming struct {
 
 	Specialization string            `json:"specialization"`
 	Talents        map[string]string `json:"talents"`
+	Bars           [][]string        `json:"bars"`
 }
 
 // used says someone has started using an ability. The client plays its timeline from this.
@@ -69,6 +70,12 @@ type used struct {
 	School    string          `json:"school,omitempty"`
 	Schools   []string        `json:"schools,omitempty"`
 	Animation string          `json:"animation,omitempty"`
+}
+
+// barsMessage is the action bars you set.
+type barsMessage struct {
+	Type string     `json:"type"`
+	Bars [][]string `json:"bars"`
 }
 
 // buildMessage says what specialization and talents you have.

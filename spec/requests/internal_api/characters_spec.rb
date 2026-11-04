@@ -10,7 +10,7 @@ RSpec.describe "The game server's character API", type: :request do
 
   it "gives the character entering a world it hasn't played" do
     get(path, headers:)
-    expect(response.parsed_body).to eq("id" => character.id, "name" => "Arwen", "look" => {"skin" => 3}, "class" => nil, "level" => 1, "specialization" => nil, "talents" => {}, "position" => nil, "systemAdmin" => false)
+    expect(response.parsed_body).to eq("id" => character.id, "name" => "Arwen", "look" => {"skin" => 3}, "class" => nil, "level" => 1, "specialization" => nil, "talents" => {}, "bars" => nil, "position" => nil, "systemAdmin" => false)
   end
 
   it "says when the character's owner is a system admin" do
@@ -85,9 +85,16 @@ RSpec.describe "The game server's character API", type: :request do
     expect(response.parsed_body).to include("specialization" => "guard", "talents" => {"15" => "both"})
   end
 
+  it "keeps its action bars" do
+    put("#{path}/bars", params: {bars: [["a", ""], ["b"]]}, headers:, as: :json)
+    expect(response).to have_http_status(:no_content)
+
+    get(path, headers:)
+    expect(response.parsed_body).to include("bars" => [["a", ""], ["b"]])
+  end
+
   it "has no specialization or talents until it chooses" do
     get(path, headers:)
     expect(response.parsed_body).to include("specialization" => nil, "talents" => {})
   end
-
 end

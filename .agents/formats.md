@@ -689,7 +689,7 @@ An area is a cylinder: `radius` across, and `height` above and below its center,
 - `mastery`: one mastery effect, a status the class always has, whose amounts use `mastery`.
 - `startingGear`: items a new character starts with.
 
-Only a class's `id` and `name` are required for now, so the class editor can save one as it's built. Every class has auto-attack from its weapons. The UI shows at most 12 of its abilities on the action bar.
+Only a class's `id` and `name` are required for now, so the class editor can save one as it's built. Every class has auto-attack from its weapons. The UI has 3 action bars of 12 slots.
 
 ### Abilities
 
@@ -1097,6 +1097,7 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `move` | `t`, `at`, `yaw`, `move` | whenever its movement changes: starting, stopping, turning, jumping, changing gait |
 | `heartbeat` | `t`, `at`, `yaw` | twice a second while moving or turning, once a second otherwise |
 | `use` | `ability`, `target`, `spot` | you ask to use an ability: `target` is who it's aimed at, 0 for no one, and `spot` is `[x, y, z]` for one aimed at the ground |
+| `bars` | `bars` | you've set your action bars: up to 3 lists of up to 12 ability ids, `""` for an empty slot |
 | `build` | `specialization`, `talents` | you ask for this specialization and these talents, out of combat: the server keeps what's allowed and answers with `build` |
 | `stop` | none | you stop what you're casting or channelling |
 | `attack` | `target` | you start auto-attacking `target`, or stop with 0 |
@@ -1131,6 +1132,7 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `cooldown` | `ability`, `seconds` | an ability of yours started its cooldown |
 | `hit` | `from`, `ability` (none for an auto-attack or a tick), `on`, `effect`, `amount`, `crit`, `missed`, `resource`, `status`, `ticked`, `class`, `lasts`, `stacks`, `dps`, `health`, `maxHealth` | one of an ability's effects landed on someone near you |
 | `health` | `id`, `health`, `maxHealth` | a training dummy reset |
+| `bars` | `bars` | the action bars you set, as you enter, if you ever have |
 | `build` | `specialization`, `talents` | what you've chosen, after you enter and whenever it changes |
 | `speed` | `movementSpeed` | how fast you go now, 100 being plain |
 | `statusChanged` | `id`, `status`, `from`, `stacks`, `lasts` | the copy of a status that `from` put on `id` has different stacks or time left now. `lasts` is seconds left, or 0 if it stays until removed |
@@ -1171,7 +1173,7 @@ A report that fails isn't passed on. The server sends `correct`, and the client 
 
 The game server decides what abilities do, from the class files in the released commit. It checks `use` against where it has you, so the client reports where you are just before it.
 
-- **Class:** you play the one you picked in this world, at your level there, which starts at 1. You know its abilities up to your level, leaving out what a specialization or talent gives until you choose it. You choose a specialization from level 10 and a talent in each tier you've reached, from the play menu, and you can change them out of combat. Choosing another specialization drops talents that don't suit it. `client/src/play/build.js` and `combat/build.go` hold the rules, and `testdata/build.json` checks both.
+- **Class:** you play the one you picked in this world, at your level there, which starts at 1. You know its abilities up to your level, leaving out what a specialization or talent gives until you choose it. You choose a specialization from level 10 and a talent in each tier you've reached, from the play menu, and you can change them out of combat. Your bars show what you know until you set them, and then they change only when you change them. Choosing another specialization drops talents that don't suit it. `client/src/play/build.js` and `combat/build.go` hold the rules, and `testdata/build.json` checks both.
 - **Auto-attack:** `attack` starts it, and so does using a melee ability on an enemy. Every 2 s you swing for a weapon's damage, landing 0.3 s later, if the target's in melee range and in front of you and you aren't casting. It stops when you ask or teleport.
 - **Checks:** you need a class that has the ability, nothing else being cast, the global cooldown (1.5 s, or the ability's `gcd`) and its cooldown or a charge over, what it costs, to be standing still if it takes time and isn't `castWhileMoving`, a target of the right kind, to be in range (melee reaches 15 ft), to face an enemy target (the half circle in front of you), and its `requires` to hold.
 - **Conditions:** the server checks `requires` before you use an ability, and an effect's `when` as it lands. It reads all of an ability's conditions that land together before any of them do. On an effect reaching `enemies` or `allies`, `target` means each one it reaches. You're in combat for 5 s after you last attacked or were hit. The client greys out an ability whose `requires` it knows don't hold.
@@ -1189,8 +1191,9 @@ The game server decides what abilities do, from the class files in the released 
 
 They call each other with fixed shared tokens in an `X-Internal-Token` header. Rails accepts the ones in `INTERNAL_API_TOKENS`, and the game server sends `RAILS_INTERNAL_TOKEN`.
 
-- `GET /internal/worlds/:world/characters/:character` gives `{ id, name, look, class, level, specialization, talents, position }`, `class` being the id it picked in that world or null, `talents` being the talent id picked for each tier's level, and `position` being `{ continent, at, yaw }` or null.
+- `GET /internal/worlds/:world/characters/:character` gives `{ id, name, look, class, level, specialization, talents, bars, position }`, `bars` being its action bars or null, `class` being the id it picked in that world or null, `talents` being the talent id picked for each tier's level, and `position` being `{ continent, at, yaw }` or null.
 - `PUT /internal/worlds/:world/characters/:character/position` with `{ continent, at, yaw }` keeps where the character is in that world (a `WorldCharacter`), and answers 204.
+- `PUT /internal/worlds/:world/characters/:character/bars` with `{ bars }` keeps its action bars there, and answers 204.
 - `PUT /internal/worlds/:world/characters/:character/build` with `{ specialization, talents }` keeps what it chose there, and answers 204.
 - `PUT /internal/worlds/:world/characters/:character/class` with `{ class }` keeps the class it picked there, and answers 204.
 

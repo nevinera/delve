@@ -77,7 +77,9 @@ async function play() {
   let combat = null;
   // Combat news before you're in the world isn't yours to see: it's about others.
   const fight = (method) => (message) => combat?.[method](message);
-  let firstBuild = null; // the server says this as you enter, before combat is ready
+  // The server says these as you enter, before combat is ready.
+  let firstBuild = null;
+  let firstBars = null;
   const early = []; // what the server says before the view is ready, as [method, argument]
   const tell = (method, arg) => (others ? others[method](arg) : early.push([method, arg]));
   status("Entering...");
@@ -96,6 +98,7 @@ async function play() {
     log: fight("logged"),
     speed: fight("speed_"),
     build: (message) => (combat ? combat.build_(message) : (firstBuild = message)),
+    bars: (message) => (combat ? combat.bars_(message) : (firstBars = message)),
     statusChanged: fight("statusChanged_"),
     statusGone: fight("statusGone_"),
     swung: fight("swung"),
@@ -160,6 +163,7 @@ async function play() {
   connection.report(view);
   combat = new PlayCombat({ view, others, connection, loader, you, hud: $("playCombat") });
   if (firstBuild) combat.build_(firstBuild);
+  if (firstBars) combat.bars_(firstBars);
   // A handle for scripts and the browser's console.
   window.play = { view, connection, others, combat, renditions, placed, caves };
   if (touch) new TouchControls(view, document.body);

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"math"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/delve-mmo/delve3d/game-server/internal/combat"
@@ -771,5 +772,20 @@ func TestChoosingABuild(t *testing.T) {
 	}
 	if got := hitFor(t, h, p, c); got != 100 {
 		t.Fatalf("hit for %g, want 100 with the old spec gone", got)
+	}
+}
+
+func TestSettingBars(t *testing.T) {
+	_, p, _ := statusFight(t, nil)
+	bars := [][]string{{"a", ""}, {"b"}}
+	p.layer.setBars(p, bars)
+	if len(p.fight.bars) != 2 {
+		t.Fatalf("bars = %v", p.fight.bars)
+	}
+	for _, bad := range [][][]string{nil, {{}, {}, {}, {}}, {make([]string, maxSlots+1)}, {{strings.Repeat("x", maxSlotLen+1)}}} {
+		p.layer.setBars(p, bad)
+		if len(p.fight.bars) != 2 {
+			t.Fatalf("took %v", bad)
+		}
 	}
 }

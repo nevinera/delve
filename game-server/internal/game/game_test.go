@@ -48,6 +48,10 @@ func (f *fakeCharacters) Character(_ context.Context, _, id int64) (rails.Charac
 	return rails.Character{ID: id, Name: fmt.Sprintf("C%d", id), Look: json.RawMessage(`{"skin":1}`), Class: f.class[id], Level: f.level[id], Position: f.at[id], SystemAdmin: f.admin[id]}, nil
 }
 
+func (f *fakeCharacters) SaveBars(_ context.Context, _, _ int64, _ [][]string) error {
+	return nil
+}
+
 func (f *fakeCharacters) SaveBuild(_ context.Context, _, _ int64, _ string, _ map[string]string) error {
 	return nil
 }

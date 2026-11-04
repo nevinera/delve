@@ -41,6 +41,7 @@ type Character struct {
 	Level          int               `json:"level"`
 	Specialization string            `json:"specialization"`
 	Talents        map[string]string `json:"talents"`
+	Bars           [][]string        `json:"bars"`
 	Position       *Position         `json:"position"`
 	SystemAdmin    bool              `json:"systemAdmin"`
 }
@@ -68,6 +69,15 @@ func (c *Client) SaveBuild(ctx context.Context, world, id int64, specialization 
 		return err
 	}
 	return c.do(ctx, http.MethodPut, fmt.Sprintf("/internal/worlds/%d/characters/%d/build", world, id), body, nil)
+}
+
+// SaveBars keeps a character's action bars in a world.
+func (c *Client) SaveBars(ctx context.Context, world, id int64, bars [][]string) error {
+	body, err := json.Marshal(map[string]any{"bars": bars})
+	if err != nil {
+		return err
+	}
+	return c.do(ctx, http.MethodPut, fmt.Sprintf("/internal/worlds/%d/characters/%d/bars", world, id), body, nil)
 }
 
 // SaveClass keeps the class a character picked in a world.

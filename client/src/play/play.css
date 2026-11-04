@@ -154,6 +154,23 @@ body.touch .play-bar button {
   border-radius: 6px;
 }
 
+.play-abilities {
+  inset: 16px 16px auto auto;
+  margin: 0;
+  max-height: calc(100vh - 240px);
+}
+
+.play-passive {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 8px;
+}
+
+.play-passive span {
+  color: #aaa;
+}
+
 .play-build h3 {
   margin: 12px 0 0;
   font-size: 14px;
@@ -371,6 +388,36 @@ body.touch .play-bar button {
   pointer-events: auto;
 }
 
+.combat-bar-side {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  gap: 4px;
+}
+
+.combat-page {
+  display: none;
+}
+
+.combat-bars {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 4px;
+}
+
+.combat-bar {
+  display: flex;
+  gap: 4px;
+}
+
+.combat-bar[hidden] {
+  display: none;
+}
+
+.combat-action-empty {
+  background: rgba(20, 18, 24, 0.35);
+}
+
 .combat-action {
   position: relative;
   width: 60px;
@@ -490,6 +537,33 @@ body.touch .play-bar button {
 
 .combat-float-status {
   color: #c0e0ff;
+}
+
+/* The menu buttons sit under the bars here, and a small screen has room for one bar at a time. */
+@media (max-width: 1000px) {
+  .combat-actions {
+    bottom: 48px;
+  }
+
+  .combat-action {
+    width: 44px;
+    height: 44px;
+    font-size: 9px;
+  }
+
+  .play-abilities {
+    max-height: calc(100vh - 220px);
+  }
+}
+
+@media (max-height: 520px) {
+  .combat-page {
+    display: block;
+  }
+
+  .combat-bars:not(.combat-bars-arranging) .combat-bar-away {
+    display: none;
+  }
 }
 
 @media (max-width: 800px) {

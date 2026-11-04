@@ -54,6 +54,7 @@ Rails.application.routes.draw do
         put :position, on: :member
         put :class, on: :member, action: :pick_class
         put :build, on: :member
+        put :bars, on: :member
       end
     end
   end
