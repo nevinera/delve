@@ -21,6 +21,7 @@ const (
 	dummyResetIdle = 5 * time.Second // a dummy heals up and its tally starts over after this long unhit
 	combatLasts    = 5 * time.Second // you're in combat until this long after you last attacked or were hit
 	resourceEvery  = 500 * time.Millisecond
+	refreshKeeps   = 0.3 // the share of a status's duration that a refresh can keep of what was left
 )
 
 // vitals are what can be hurt and healed: a player's, or a dummy's.
@@ -33,9 +34,13 @@ type vitals struct {
 
 // activeStatus is a status on a unit, until it runs out. With no `until`, it stays until removed.
 type activeStatus struct {
+	def    *combat.Status
 	class  string
+	from   int64     // who put it on
+	since  time.Time // when they last did
 	until  time.Time
 	stacks int
+	uses   int // what's left of `consumedBy.uses`
 }
 
 // dummy is a training dummy: it takes damage, never dies or fights back, and tallies who's hit it.
@@ -161,6 +166,7 @@ func (l *Layer) use(p *Player, m incoming) {
 		return
 	}
 	f := &p.fight
+	l.breakStatuses(&f.vitals, "action", func(s *combat.Status) bool { return s.KeptBy.Keeps(ability) })
 	gcd := combat.GCDSeconds
 	if ability.GCD != nil {
 		gcd = *ability.GCD
@@ -314,7 +320,9 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 		f.cooldowns[a.ID] = append(spent, from.Add(seconds(a.Cooldown)))
 		p.send(encode(cooldown{"cooldown", a.ID, a.Cooldown}))
 	}
+	used := usedBy(f, a)
 	if c.channel {
+		l.spend(p, used, now)
 		f.cast = c
 		ticks := max(a.Channel.Ticks, 1)
 		for n := 1; n <= ticks; n++ {
@@ -341,6 +349,7 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 	} else {
 		l.after(strike, nil, func(now time.Time) { l.landArriving(p, c, now) })
 	}
+	l.after(strike, nil, func(now time.Time) { l.spend(p, used, now) })
 }
 
 func (l *Layer) after(at time.Time, c *casting, run func(time.Time)) {
@@ -566,13 +575,136 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 	if lasts == 0 {
 		lasts = s.Duration
 	}
-	held := &activeStatus{class: f.class.ID, stacks: 1}
+	was := on.Statuses[s.ID]
+	if s.Group != "" {
+		for other, each := range on.Statuses {
+			if other != s.ID && each.def.Group == s.Group {
+				l.takeOff(on, other)
+			}
+		}
+	}
+	if s.Limit > 0 && (was == nil || was.from != p.ID()) {
+		l.makeRoom(p, s)
+	}
+	held := &activeStatus{def: s, class: f.class.ID, from: p.ID(), since: now, stacks: 1, uses: 1}
+	if s.ConsumedBy != nil && s.ConsumedBy.Uses > 0 {
+		held.uses = s.ConsumedBy.Uses
+	}
+	if was != nil {
+		switch s.Stacking {
+		case "stack":
+			held.stacks = was.stacks + 1
+			if s.MaxStacks > 0 {
+				held.stacks = min(held.stacks, s.MaxStacks)
+			}
+		case "refresh":
+			if lasts > 0 && !was.until.IsZero() {
+				lasts += min(max(was.until.Sub(now).Seconds(), 0), lasts*refreshKeeps)
+			}
+		}
+	}
 	if lasts > 0 {
 		held.until = now.Add(seconds(lasts))
 	}
 	on.Statuses[s.ID] = held
 	h.Status, h.Lasts, h.Class, h.Stacks = s.ID, lasts, f.class.ID, held.stacks
 	return true
+}
+
+// makeRoom takes a status off the oldest units holding it from a player, so one more stays within its limit.
+func (l *Layer) makeRoom(p *Player, s *combat.Status) {
+	var holders []*vitals
+	l.eachUnit(func(v *vitals, _ [3]float64, _ string) {
+		if each := v.Statuses[s.ID]; each != nil && each.from == p.ID() {
+			holders = append(holders, v)
+		}
+	})
+	slices.SortFunc(holders, func(a, b *vitals) int { return a.Statuses[s.ID].since.Compare(b.Statuses[s.ID].since) })
+	for i := 0; i <= len(holders)-s.Limit; i++ {
+		l.takeOff(holders[i], s.ID)
+	}
+}
+
+// eachUnit goes over every unit on the layer that can hold a status.
+func (l *Layer) eachUnit(do func(v *vitals, at [3]float64, continent string)) {
+	for _, d := range l.dummies {
+		do(&d.vitals, d.state.At, d.state.Continent)
+	}
+	for _, o := range l.players {
+		do(&o.fight.vitals, o.state.At, o.state.Continent)
+	}
+}
+
+// takeOff removes a status from a unit and says so.
+func (l *Layer) takeOff(on *vitals, id string) {
+	delete(on.Statuses, id)
+	l.tellOf(on.ID, encode(statusGone{"statusGone", on.ID, id}))
+}
+
+// breakStatuses takes off a unit's statuses that end when this happens. Only an ability has anything to keep them on.
+func (l *Layer) breakStatuses(on *vitals, what string, kept func(*combat.Status) bool) {
+	for id, each := range on.Statuses {
+		if slices.Contains(each.def.BreaksOn, what) && (kept == nil || !kept(each.def)) {
+			l.takeOff(on, id)
+		}
+	}
+}
+
+// usingUp is a status that an ability's use will spend once its effects have landed.
+type usingUp struct {
+	id   string
+	held *activeStatus
+}
+
+// usedBy finds the statuses that using an ability spends.
+func usedBy(f *fighter, a *combat.Ability) []usingUp {
+	var out []usingUp
+	for id, each := range f.vitals.Statuses {
+		if each.def.ConsumedBy.Matches(a) {
+			out = append(out, usingUp{id, each})
+		}
+	}
+	return out
+}
+
+// spend takes a use or stacks from statuses an ability used, unless they've been put on afresh since.
+func (l *Layer) spend(p *Player, used []usingUp, now time.Time) {
+	if l.players[p.ID()] != p {
+		return
+	}
+	on := &p.fight.vitals
+	for _, u := range used {
+		if on.Statuses[u.id] != u.held {
+			continue
+		}
+		if n := u.held.def.ConsumedBy.Stacks; n > 0 {
+			u.held.stacks -= n
+			if u.held.stacks > 0 {
+				l.statusChanged(on.ID, u.id, u.held, now)
+				continue
+			}
+		} else if u.held.uses--; u.held.uses > 0 {
+			continue
+		}
+		l.takeOff(on, u.id)
+		p.debugLine("%s is used up", u.held.def.Name)
+	}
+}
+
+// sweep takes off statuses that have run out or whose holder has gone too far from who put them on.
+func (l *Layer) sweep(now time.Time) {
+	l.eachUnit(func(v *vitals, at [3]float64, continent string) {
+		for id, each := range v.Statuses {
+			over := !each.until.IsZero() && !now.Before(each.until)
+			if each.def.Leash > 0 && !over {
+				from := l.players[each.from]
+				over = from == nil || from.state.Continent != continent || distance(from.state.At, at) > each.def.Leash
+			}
+			if over {
+				l.takeOff(v, id)
+			}
+		}
+	})
 }
 
 // consume takes statuses off a unit, or stacks or seconds of them, and does what that's worth.
@@ -610,8 +742,7 @@ func (l *Layer) consume(p *Player, c *casting, e *combat.Effect, on *vitals, now
 		case e.Seconds > 0 && held.until.IsZero():
 			p.debugLine("%s: %s has no time to take off %s", c.ability.Name, id, l.nameOf(on.ID))
 		default:
-			delete(on.Statuses, id)
-			l.tellOf(on.ID, encode(statusGone{"statusGone", on.ID, id}))
+			l.takeOff(on, id)
 			p.debugLine("%s: took %s off %s", c.ability.Name, id, l.nameOf(on.ID))
 		}
 		if e.PerStack != nil {
@@ -814,6 +945,7 @@ func (l *Layer) harm(p *Player, on *vitals, n float64, h *hit, now time.Time) {
 	}
 	on.Health = max(on.Health-n, 0)
 	h.Amount = math.Round(n)
+	l.breakStatuses(on, "damage", nil)
 	if d := l.dummy(on.ID, p.state.Continent); d != nil {
 		d.tally(n, now)
 		h.DPS = math.Round(d.dps(now))
@@ -882,6 +1014,7 @@ func (l *Layer) swing(p *Player, now time.Time) {
 	}
 	f.swingWhy = ""
 	f.swingAt = now.Add(seconds(combat.SwingSeconds))
+	l.breakStatuses(&f.vitals, "action", func(s *combat.Status) bool { return s.KeptBy != nil })
 	target := d.ID
 	l.tell(p, encode(swung{"swung", p.ID(), target}))
 	l.after(now.Add(strikeDelay), nil, func(now time.Time) {
@@ -1036,10 +1169,13 @@ func (l *Layer) stopCast(p *Player) {
 	l.tell(p, encode(stopped{"stopped", p.ID()}))
 }
 
-// interruptMoving ends a cast its caster has moved during.
+// interruptMoving ends a cast its caster has moved during, and the statuses that break on moving.
 func (l *Layer) interruptMoving(p *Player) {
 	if c := p.fight.cast; c != nil && !c.ability.CastWhileMoving && movingNow(p.state.Move) {
 		l.stopCast(p)
+	}
+	if movingNow(p.state.Move) {
+		l.breakStatuses(&p.fight.vitals, "move", nil)
 	}
 }
 
@@ -1101,27 +1237,8 @@ func (l *Layer) tick(now time.Time) {
 				}
 			}
 		}
-		for id := range expire(&d.vitals, now) {
-			l.tellOf(d.ID, encode(statusGone{"statusGone", d.ID, id}))
-		}
 	}
-	for _, p := range l.players {
-		for id := range expire(&p.fight.vitals, now) {
-			l.tell(p, encode(statusGone{"statusGone", p.ID(), id}))
-		}
-	}
-}
-
-// expire takes off the statuses that have run out, and returns them.
-func expire(v *vitals, now time.Time) map[string]bool {
-	gone := map[string]bool{}
-	for id, s := range v.Statuses {
-		if !s.until.IsZero() && !now.Before(s.until) {
-			delete(v.Statuses, id)
-			gone[id] = true
-		}
-	}
-	return gone
+	l.sweep(now)
 }
 
 // regen brings back resources and tells the player how they stand, every so often.

@@ -63,6 +63,7 @@ type Ability struct {
 	Speed           float64     `json:"speed"`
 	Effects         []Effect    `json:"effects"`
 	Requires        []Condition `json:"requires"`
+	Tags            []string    `json:"tags"`
 }
 
 // Channel is an ability that goes on for Duration seconds, landing its effects Ticks times.
@@ -117,11 +118,43 @@ func (e *Effect) StatusIDs() []string {
 
 // Status is what the game needs of a status so far.
 type Status struct {
-	ID       string         `json:"id"`
-	Name     string         `json:"name"`
-	Kind     string         `json:"kind"`
-	Duration float64        `json:"duration"`
-	Effects  []StatusEffect `json:"effects"`
+	ID         string         `json:"id"`
+	Name       string         `json:"name"`
+	Kind       string         `json:"kind"`
+	Duration   float64        `json:"duration"`
+	Effects    []StatusEffect `json:"effects"`
+	Stacking   string         `json:"stacking"` // refresh, stack or replace, which is what leaving it out means
+	MaxStacks  int            `json:"maxStacks"`
+	Limit      int            `json:"limit"`
+	Leash      float64        `json:"leash"`
+	Group      string         `json:"group"`
+	BreaksOn   []string       `json:"breaksOn"`
+	KeptBy     *KeptBy        `json:"keptBy"`
+	ConsumedBy *ConsumedBy    `json:"consumedBy"`
+}
+
+// KeptBy lists the abilities that don't break a status with `breaksOn: ["action"]`.
+type KeptBy struct {
+	Abilities []string `json:"abilities"`
+	Tags      []string `json:"tags"`
+}
+
+// Keeps says whether using an ability leaves the status on.
+func (k *KeptBy) Keeps(a *Ability) bool {
+	return k != nil && (slices.Contains(k.Abilities, a.ID) || slices.ContainsFunc(a.Tags, func(t string) bool { return slices.Contains(k.Tags, t) }))
+}
+
+// ConsumedBy says which of the holder's abilities use a status up, and how fast.
+type ConsumedBy struct {
+	Abilities []string `json:"abilities"`
+	Tag       string   `json:"tag"`
+	Uses      int      `json:"uses"`
+	Stacks    int      `json:"stacks"`
+}
+
+// Matches says whether using an ability counts.
+func (b *ConsumedBy) Matches(a *Ability) bool {
+	return b != nil && (slices.Contains(b.Abilities, a.ID) || (b.Tag != "" && slices.Contains(a.Tags, b.Tag)))
 }
 
 // StatusEffect is what a status does while it's on. Only `periodic` has its numbers read so far.
