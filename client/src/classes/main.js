@@ -9,6 +9,7 @@ import { readLibrary, writeLibrary } from "../create/store.js";
 import { GithubAuthError } from "../github/github.js";
 import { LibrarySync } from "../objects/libraryStore.js";
 import { setWorldIcons } from "../play/icons.js";
+import { setWorldEffectSheets } from "../abilities/effectTextures.js";
 import { isClassPath } from "../world/paths.js";
 import { classPath, classProblems, classesOf, newAbility, newClass, newStatus } from "./classFile.js";
 import { abilityFields, classFields, statusFields } from "./fields.js";
@@ -28,6 +29,7 @@ function say(message = "", { info = false } = {}) {
 await openFromAddress(say);
 const world = new KeptJson(await keptFiles());
 setWorldIcons(world.files);
+setWorldEffectSheets(world.files);
 $("worldName").textContent = world.info.name;
 const open = world.files.has("world.json");
 let picked = null; // the id of the class being edited

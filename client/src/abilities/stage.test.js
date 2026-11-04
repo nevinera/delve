@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { STOCK_SHEET } from "./effectTextures.js";
 import { describe, expect, it, vi } from "vitest";
 import { AbilityStage } from "./stage.js";
 
@@ -38,7 +39,10 @@ describe("a particle effect on a unit", () => {
 
   it("has what a cast held fade out as the cast ends, and leaves other particles alone", () => {
     const { stage, unit } = stageWithUnit();
-    const fadesAt = () => Array.from({ length: stage.particles.next }, (_, k) => stage.particles.cells[k * 4 + 3]);
+    const fadesAt = () => {
+      const part = stage.particles.of(STOCK_SHEET);
+      return Array.from({ length: part.next }, (_, k) => part.cells[k * 4 + 3]);
+    };
     stage.play({ ...motes, visuals: [...motes.visuals, { effect: "embers", when: "cast" }] }, { caster: unit });
     for (let i = 0; i < 12; i++) stage.frame(0.1);
     expect(new Set(fadesAt()).size).toBe(1);

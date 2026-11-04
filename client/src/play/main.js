@@ -1,6 +1,7 @@
 import "./play.css";
 import { graphicsPanel } from "../render/graphicsPanel.js";
 import { setWorldIcons } from "./icons.js";
+import { setWorldEffectSheets } from "../abilities/effectTextures.js";
 import { SightLines } from "./sightLines.js";
 import { builtObjects, images } from "../objects/collections.js";
 import { prepareAnimations } from "../character/animations.js";
@@ -77,6 +78,7 @@ async function play() {
   await loader.open();
   setBuiltObjects(builtObjects(loader), images(loader));
   setWorldIcons(loader.files);
+  setWorldEffectSheets(loader.files);
 
   let others = null;
   let transformed = false;

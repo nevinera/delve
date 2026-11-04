@@ -1,9 +1,10 @@
 import { iconNames } from "../play/icons.js";
-import { PARTICLE_STOCK, PARTICLE_TEXTURES, isParticleEffect } from "../abilities/particleStock.js";
+import { PARTICLE_STOCK, isParticleEffect } from "../abilities/particleStock.js";
 import { SOUNDS, VISUALS } from "../abilities/stock.js";
 import { ARMOR_SLOTS, ARMOR_STYLES, ARMOR_TYPES } from "../character/armor.js";
 import { BODIES } from "../character/bodies.js";
 import { BEARD, EARS, FACE, FLESH, GAIT, HAIR, HANDS, HORNS, JEWELRY, LOWER, LOWER_ARMS, MOUTH, MUZZLE, NOSE, TAIL, TUSKS, UNARMED, WINGS } from "../character/recipe.js";
+import { textureNames } from "../abilities/effectTextures.js";
 import { HELD, OFFHANDS, WEAPONS, WEAPON_STYLES } from "../character/weapons.js";
 import { BUILT_IN_CHANGES, TALENT_TIERS, TALENT_TIER_STEP } from "./classFile.js";
 
@@ -39,7 +40,7 @@ const PARTICLE_FIELDS = [
   particleNumber("size", "size", { min: 0 }),
   particleNumber("sizeEnd", "end size", { min: 0 }),
   particleNumber("radius", "radius", { min: 0 }),
-  particleSelect("texture", PARTICLE_TEXTURES),
+  particleSelect("texture", textureNames),
   particleSelect("blend", ["glow", "solid"]),
   particleNumber("stretch", "stretch", { min: 0 }),
   particleNumber("spin", "spin", { min: 0 }),

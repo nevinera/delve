@@ -20,6 +20,14 @@ The MIT license in [LICENSE](LICENSE) covers this project's own code, docs and d
 
 **Source:** [Universal Animation Library](https://quaternius.com/packs/universalanimationlibrary.html) by Quaternius, baked onto our skeleton by `script/bake_animations.mjs`. CC0 doesn't require credit, so this is a courtesy.
 
+## Effect textures
+
+**Where:** `public/effects/stock.png`
+
+**License:** [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
+
+**Source:** [Particle Pack](https://kenney.nl/assets/particle-pack) by Kenney, scaled down and made grayscale by `script/bake_effect_textures.py`. Its filter templates are credited to Indigo Ray, Craig Nisbet, Zoltan Erdokovy, Heliagon, ThreeDee, Killst4r and Tim2501. The `shard` cell is ours.
+
 ## Packages
 
 Packages in `package.json`, `Gemfile` and `game-server/go.mod` keep their own licenses. They aren't copied into this repo.

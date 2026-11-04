@@ -1,9 +1,10 @@
 import * as THREE from "three";
-import { PARTICLE_TEXTURES, SHEET, aimed, sheetBytes } from "./particleStock.js";
+import { effectSheets, sheetTexture, textureCell } from "./effectTextures.js";
+import { aimed } from "./particleStock.js";
 
-// Every particle in a scene, in one draw call: camera-facing quads, each worked out in its vertex
-// shader from when and how it was let go, so nothing changes between lets-go. It's a ring: past
-// `capacity` the oldest make way. Glowing and solid ones blend in the same call, by premultiplied
+// Every particle in a scene, in a draw call for each texture sheet in use: camera-facing quads, each
+// worked out in its vertex shader from when and how it was let go, so nothing changes between
+// lets-go. Each sheet's are a ring: past its capacity the oldest make way. Glowing and solid ones blend in the same call, by premultiplied
 // alpha: a glowing one writes no alpha, so it only adds light.
 
 const FLOATS = 24;
@@ -22,6 +23,7 @@ attribute vec3 aColorEnd;
 attribute vec4 aPaint; // opacity, how much it's solid, floor, whether it lies flat
 attribute vec4 aCell; // the cell's column, row, a turn to start at, and when it was told to fade out
 uniform float uTime;
+uniform vec2 uCells;
 varying vec2 vUv;
 varying vec3 vColor;
 varying float vAlpha;
@@ -43,7 +45,7 @@ void main() {
   vec2 corner = position.xy;
   if (aPaint.w > 0.5) {
     gl_Position = projectionMatrix * modelViewMatrix * vec4(at + vec3(corner.x, 0.0, corner.y) * size + vec3(0.0, 0.15, 0.0), 1.0);
-    vUv = (aCell.xy + position.xy * 0.5 + 0.5) / vec2(${SHEET.columns}.0, ${SHEET.rows}.0);
+    vUv = (aCell.xy + position.xy * 0.5 + 0.5) / uCells;
     vColor = mix(aColor, aColorEnd, u);
     vAlpha = aPaint.x * smoothstep(0.0, 0.08, u) * (1.0 - u * u) * (1.0 - clamp(fading, 0.0, 1.0));
     vSolid = aPaint.y;
@@ -68,7 +70,7 @@ void main() {
   vec2 side = vec2(-along.y, along.x);
   view.xy += (along * corner.x * reach + side * corner.y) * size;
   gl_Position = projectionMatrix * view;
-  vUv = (aCell.xy + position.xy * 0.5 + 0.5) / vec2(${SHEET.columns}.0, ${SHEET.rows}.0);
+  vUv = (aCell.xy + position.xy * 0.5 + 0.5) / uCells;
   vColor = mix(aColor, aColorEnd, u);
   // In quickly, and out over the rest.
   vAlpha = aPaint.x * smoothstep(0.0, 0.08, u) * (1.0 - u * u) * (1.0 - clamp(fading, 0.0, 1.0));
@@ -91,22 +93,13 @@ void main() {
 }`;
 
 let sheet = null;
-function sheetTexture() {
-  if (sheet) return sheet;
-  const [w, h] = [SHEET.columns * SHEET.cellPx, SHEET.rows * SHEET.cellPx];
-  sheet = new THREE.DataTexture(sheetBytes(), w, h, THREE.RedFormat, THREE.UnsignedByteType);
-  sheet.minFilter = THREE.LinearMipmapLinearFilter;
-  sheet.magFilter = THREE.LinearFilter;
-  sheet.generateMipmaps = true;
-  sheet.needsUpdate = true;
-  return sheet;
-}
-
 const color = new THREE.Color();
 const colorOf = (hex) => color.set(hex).toArray();
 
-export class ParticleField {
-  constructor(scene, { capacity = DESKTOP_PARTICLES } = {}) {
+// The particles of one sheet.
+class SheetParticles {
+  constructor(scene, sheet, capacity) {
+    this.sheet = sheet;
     this.capacity = capacity;
     this.next = 0;
     this.time = 0;
@@ -133,7 +126,7 @@ export class ParticleField {
     this.material = new THREE.ShaderMaterial({
       vertexShader: VERTEX,
       fragmentShader: FRAGMENT,
-      uniforms: { uTime: { value: 0 }, uSheet: { value: sheetTexture() } },
+      uniforms: { uTime: { value: 0 }, uSheet: { value: sheetTexture(sheet) }, uCells: { value: new THREE.Vector2(sheet.columns, sheet.rows) } },
       transparent: true,
       depthWrite: false,
       side: THREE.DoubleSide,
@@ -153,8 +146,8 @@ export class ParticleField {
   // way: the unit vector its direction points. floor: how low they can fall. Returns where they
   // went, for fadeOut.
   emit(spec, n, origin, colors, way = [0, 1, 0], floor = -Infinity, rand = Math.random) {
-    const cell = PARTICLE_TEXTURES.indexOf(spec.texture);
-    const [column, row] = [cell % SHEET.columns, Math.floor(cell / SHEET.columns)];
+    const { sheet, column, row: fromTop } = textureCell(spec.texture);
+    const row = sheet.rows - 1 - fromTop; // its image's bottom row is first
     const start = colorOf(colors[1]);
     const end = colorOf(colors[0]);
     const solid = spec.blend === "solid" ? 1 : 0;
@@ -197,7 +190,7 @@ export class ParticleField {
     }
     this.buffer.needsUpdate = true;
     this.cellBuffer.needsUpdate = true;
-    return { first, n };
+    return { from: this, first, n };
   }
 
   // Has these particles, each what emit returned, fade out over a moment from now.
@@ -224,5 +217,53 @@ export class ParticleField {
     this.mesh.removeFromParent();
     this.geometry.dispose();
     this.material.dispose();
+  }
+}
+
+// A world's sheet gets this share of the stock sheet's capacity, since few effects use one.
+const WORLD_SHARE = 4;
+
+export class ParticleField {
+  constructor(scene, { capacity = DESKTOP_PARTICLES } = {}) {
+    this.scene = scene;
+    this.capacity = capacity;
+    this.time = 0;
+    this.sheets = new Map();
+    // Loading them now means the first effect to use each one shows.
+    for (const sheet of effectSheets()) sheetTexture(sheet);
+  }
+
+  // The particles for a sheet, which take a draw call from the first one let go.
+  of(sheet) {
+    if (!this.sheets.has(sheet)) {
+      const part = new SheetParticles(this.scene, sheet, sheet.url ? this.capacity : Math.ceil(this.capacity / WORLD_SHARE));
+      part.frame(this.time);
+      this.sheets.set(sheet, part);
+    }
+    return this.sheets.get(sheet);
+  }
+
+  emit(spec, ...rest) {
+    return this.of(textureCell(spec.texture).sheet).emit(spec, ...rest);
+  }
+
+  // Has these particles, each what emit returned, fade out over a moment from now.
+  fadeOut(emitted) {
+    for (const part of new Set(emitted.map(({ from }) => from))) part.fadeOut(emitted.filter(({ from }) => from === part));
+  }
+
+  frame(time) {
+    this.time = time;
+    for (const part of this.sheets.values()) part.frame(time);
+  }
+
+  // Takes every particle away.
+  clear() {
+    for (const part of this.sheets.values()) part.clear();
+  }
+
+  dispose() {
+    for (const part of this.sheets.values()) part.dispose();
+    this.sheets.clear();
   }
 }

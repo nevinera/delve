@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { PARTICLE_EFFECTS, PARTICLE_STOCK, PARTICLE_TEXTURES, SHEET, TEXTURE_CELLS, aimed, dueBy, emitsFor, particleSpec, sheetBytes } from "./particleStock.js";
+import { PARTICLE_EFFECTS, PARTICLE_STOCK, aimed, dueBy, emitsFor, particleSpec } from "./particleStock.js";
+import { STOCK_SHEET, setWorldEffectSheets } from "./effectTextures.js";
 import { ParticleField } from "./particles.js";
 
 describe("particleSpec", () => {
@@ -23,8 +24,7 @@ describe("particleSpec", () => {
   });
 
   it("uses only textures on the sheet", () => {
-    for (const name of PARTICLE_EFFECTS) expect(PARTICLE_TEXTURES).toContain(PARTICLE_STOCK[name].texture);
-    for (const name of PARTICLE_TEXTURES) expect(TEXTURE_CELLS[name]).toBeTypeOf("function");
+    for (const name of PARTICLE_EFFECTS) expect(STOCK_SHEET.textures).toContain(PARTICLE_STOCK[name].texture);
   });
 });
 
@@ -69,48 +69,64 @@ describe("aimed", () => {
   });
 });
 
-describe("the sheet", () => {
-  it("has something in every cell and nothing at their edges", () => {
-    const { columns, rows, cellPx } = SHEET;
-    const bytes = sheetBytes();
-    expect(bytes).toHaveLength(columns * rows * cellPx * cellPx);
-    PARTICLE_TEXTURES.forEach((name, n) => {
-      const [cx, cy] = [n % columns, Math.floor(n / columns)];
-      let most = 0;
-      for (let j = 0; j < cellPx; j++) for (let i = 0; i < cellPx; i++) most = Math.max(most, bytes[(cy * cellPx + j) * columns * cellPx + cx * cellPx + i]);
-      expect(most, name).toBeGreaterThan(100);
-      expect(bytes[cy * cellPx * columns * cellPx + cx * cellPx], name).toBeLessThan(40);
-    });
-  });
-});
-
 describe("ParticleField", () => {
   const spec = particleSpec("sparks");
+  const made = (capacity) => {
+    const scene = new THREE.Scene();
+    const field = new ParticleField(scene, { capacity });
+    return { scene, field, part: field.of(STOCK_SHEET) };
+  };
 
   it("is one mesh however many it holds", () => {
-    const scene = new THREE.Scene();
-    const field = new ParticleField(scene, { capacity: 50 });
+    const { scene, field, part } = made(50);
     field.emit(spec, 30, [0, 0, 0], ["#ff0000", "#ffffff"]);
-    expect(scene.children).toEqual([field.mesh]);
-    expect(field.geometry.instanceCount).toBe(50);
+    expect(scene.children).toEqual([part.mesh]);
+    expect(part.geometry.instanceCount).toBe(50);
   });
 
   it("makes the oldest way past its capacity", () => {
-    const field = new ParticleField(new THREE.Scene(), { capacity: 10 });
+    const { field, part } = made(10);
     field.emit(spec, 8, [1, 0, 0], ["#ff0000", "#ffffff"]);
     field.emit(spec, 5, [2, 0, 0], ["#ff0000", "#ffffff"]);
-    expect(field.next).toBe(3);
-    const xs = Array.from({ length: 10 }, (_, k) => field.data[k * 24]);
+    expect(part.next).toBe(3);
+    const xs = Array.from({ length: 10 }, (_, k) => part.data[k * 24]);
     expect(xs.filter((x) => x === 2)).toHaveLength(5);
     expect(xs.filter((x) => x === 1)).toHaveLength(5);
   });
 
   it("stamps them with its time, and clear takes them all away", () => {
-    const field = new ParticleField(new THREE.Scene(), { capacity: 10 });
+    const { field, part } = made(10);
     field.frame(4);
     field.emit(spec, 1, [0, 0, 0], ["#ff0000", "#ffffff"]);
-    expect(field.data[6]).toBe(4);
+    expect(part.data[6]).toBe(4);
     field.clear();
-    expect(field.data[6]).toBeLessThan(0);
+    expect(part.data[6]).toBeLessThan(0);
+  });
+
+  it("points each particle at its texture's cell, its rows counted from the image's bottom", () => {
+    const { field, part } = made(10);
+    field.emit(particleSpec("sparks", { texture: "sigil" }), 1, [0, 0, 0], ["#ff0000", "#ffffff"]);
+    const cell = STOCK_SHEET.textures.indexOf("sigil");
+    expect(part.cells[0]).toBe(cell % STOCK_SHEET.columns);
+    expect(part.cells[1]).toBe(STOCK_SHEET.rows - 1 - Math.floor(cell / STOCK_SHEET.columns));
+  });
+
+  it("draws a world's sheet apart, with less room, and fades out only what it's told to", () => {
+    const words = new TextEncoder().encode(JSON.stringify({ columns: 2, rows: 1, textures: ["mine"] }));
+    setWorldEffectSheets([["effects/ours.json", words], ["effects/ours.png", new Uint8Array(4)]]);
+    try {
+      const { scene, field, part } = made(40);
+      const stock = field.emit(spec, 2, [0, 0, 0], ["#ff0000", "#ffffff"]);
+      const ours = field.emit(particleSpec("sparks", { texture: "mine" }), 2, [0, 0, 0], ["#ff0000", "#ffffff"]);
+      expect(scene.children).toHaveLength(2);
+      expect(ours.from).not.toBe(part);
+      expect(ours.from.capacity).toBe(10);
+      field.frame(3);
+      field.fadeOut([ours]);
+      expect(ours.from.cells[3]).toBe(3);
+      expect(part.cells[stock.first * 4 + 3]).toBeGreaterThan(1000);
+    } finally {
+      setWorldEffectSheets([]);
+    }
   });
 });

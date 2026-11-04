@@ -1,11 +1,12 @@
 import { strFromU8, strToU8, unzipSync } from "fflate";
+import { EFFECT_IMAGE_PATH } from "../world/paths.js";
 import { keptWorld } from "./store.js";
 
 // The world this browser keeps, as a page other than /create reads it.
 
 // Its JSON files, path -> bytes, with its changes since it was opened: its library, what's placed
 // and world.json. Empty when it has none open.
-const wanted = (path) => path.endsWith(".json") || path.endsWith(".svg");
+const wanted = (path) => path.endsWith(".json") || path.endsWith(".svg") || EFFECT_IMAGE_PATH.test(path);
 
 export async function keptFiles() {
   const kept = await keptWorld();

@@ -1358,16 +1358,8 @@
           ]
         },
         "texture": {
-          "enum": [
-            "dot",
-            "spark",
-            "star",
-            "smoke",
-            "ring",
-            "shard",
-            "flame",
-            "noise"
-          ]
+          "type": "string",
+          "description": "a stock texture, listed in client/src/abilities/stockTextures.json, or one from the world's effect sheets"
         },
         "blend": {
           "enum": [

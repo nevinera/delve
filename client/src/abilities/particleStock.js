@@ -5,11 +5,10 @@
 // - direction and spread: which way they go, up or forward, and how many degrees across. 360 is every way.
 // - gravity: feet a second a second downward, or upward below 0. drag: how fast they slow, 0 for not at all.
 // - size and sizeEnd: feet across at the start and the end. radius: how far round its point it lets them go.
-// - texture: the shape of each. blend: glow adds light, solid covers what's behind.
+// - texture: the shape of each, a name from effectTextures.js. blend: glow adds light, solid covers what's behind.
 // - stretch: how much they draw out along the way they're going. spin: turns a second. opacity: 0 to 1.
 // - at: where on a unit they start, feet or chest. facing: camera, or ground to lie flat.
 
-export const PARTICLE_TEXTURES = ["dot", "spark", "star", "smoke", "ring", "shard", "flame", "noise"];
 export const PARTICLE_NUMBERS = ["count", "rate", "duration", "lifetime", "speed", "spread", "gravity", "drag", "size", "sizeEnd", "radius", "stretch", "spin", "opacity"];
 
 const BASE = { count: 0, rate: 0, duration: 0, lifetime: 1, speed: 0, direction: "up", spread: 360, gravity: 0, drag: 0, size: 0.5, sizeEnd: 0.5, radius: 0, texture: "dot", blend: "glow", stretch: 0, spin: 0, opacity: 1, at: "chest", facing: "camera" };
@@ -64,42 +63,4 @@ export function aimed(way, spread, rand = Math.random) {
 function normal([x, y, z]) {
   const length = Math.hypot(x, y, z) || 1;
   return [x / length, y / length, z / length];
-}
-
-// The grayscale sheet's cells, each a function of (x, y), -1 to 1 across the cell, to 0 to 1.
-const fall = (d, from = 1) => Math.max(0, Math.min(1, (from - d) / from));
-const smooth = (v) => v * v * (3 - 2 * v);
-const lump = (x, y) => {
-  // A few overlaid waves, so smoke and flame aren't round.
-  const wave = Math.sin(x * 5.1 + 1.3) * Math.cos(y * 4.3 - 0.7) + 0.5 * Math.sin(x * 9.7 - y * 8.1 + 2.1) + 0.25 * Math.cos(x * 17.3 + y * 15.9);
-  return 0.5 + wave * 0.3;
-};
-export const TEXTURE_CELLS = {
-  dot: (x, y) => smooth(fall(Math.hypot(x, y))) ** 1.5,
-  spark: (x, y) => smooth(fall(Math.hypot(x * 1, y * 6))) + 0.7 * smooth(fall(Math.hypot(x * 3, y * 3))),
-  star: (x, y) => Math.max(smooth(fall(Math.hypot(x * 1.1, y * 12))), smooth(fall(Math.hypot(x * 12, y * 1.1))), smooth(fall(Math.hypot(x, y), 0.45))),
-  smoke: (x, y) => smooth(fall(Math.hypot(x, y) / 0.95)) * Math.max(0, Math.min(1, lump(x, y) * 1.3)),
-  ring: (x, y) => smooth(fall(Math.abs(Math.hypot(x, y) - 0.8) / 0.16)),
-  shard: (x, y) => (Math.abs(x) * 2.2 + Math.abs(y) * 1.1 < 0.95 ? 0.75 + 0.25 * Math.sign(x + y * 0.3) : 0),
-  flame: (x, y) => smooth(fall(Math.hypot(x * (1.6 - y * 0.9), y) / 0.95)) * Math.min(1, 0.55 + lump(x * 0.8, y * 0.5)),
-  noise: (x, y) => smooth(fall(Math.hypot(x, y))) * lump(x * 2.3, y * 2.3),
-};
-export const SHEET = { columns: 4, rows: 2, cellPx: 64 };
-
-// The sheet as bytes, a byte a texel, with the first cell's rows first.
-export function sheetBytes({ columns, rows, cellPx } = SHEET) {
-  const bytes = new Uint8Array(columns * rows * cellPx * cellPx);
-  PARTICLE_TEXTURES.forEach((name, n) => {
-    const cell = TEXTURE_CELLS[name];
-    const [cx, cy] = [n % columns, Math.floor(n / columns)];
-    for (let j = 0; j < cellPx; j++) {
-      for (let i = 0; i < cellPx; i++) {
-        const [x, y] = [((i + 0.5) / cellPx) * 2 - 1, ((j + 0.5) / cellPx) * 2 - 1];
-        // Fades out at the edge so cells don't bleed into each other.
-        const edge = Math.min(1, (1 - Math.max(Math.abs(x), Math.abs(y))) * 8);
-        bytes[(cy * cellPx + j) * columns * cellPx + cx * cellPx + i] = Math.round(255 * Math.min(1, cell(x, y)) * edge);
-      }
-    }
-  });
-  return bytes;
 }

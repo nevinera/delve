@@ -26,6 +26,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 | `templates/<id>.json` | slabs and objects placed together | [Templates](#templates), [schema](../docs/schema/template.schema.json) | `client/src/world/templates.js` |
 | `textures/<id>.json` | an image objects and slabs wear | [schema](../docs/schema/image.schema.json) | `client/src/objects/collections.js` |
 | `icons/<name>.svg` | an icon for abilities, statuses and items, the name lowercase letters, digits and dashes | [Icons](#icons) | `client/src/play/icons.js` |
+| `effects/<name>.json`, `effects/<name>.png` | a sheet of textures for effects, the name lowercase letters, digits and dashes | [Effect textures](#effect-textures) | `client/src/abilities/effectTextures.js` |
 | `models.json` | the world's own bodies, and what it adds to shipped ones | [A world's models](#a-worlds-models) | `client/src/world/models.js` |
 | `classes/`, `abilities/`, `statuses/`, `items/`, `item-templates/`, `creatures/`, `npcs/`, `dialogues/` | game data, each `<id>.json` | [Game data](#game-data) | none yet |
 | `places/continents/<c>/plates/<px>_<pz>.plate` | 8×8 tiles' ground, biomes, slots, water and cuts | [Plates](#plates) | `client/src/v2/plate.js` |
@@ -1067,6 +1068,19 @@ Abilities, statuses and items pick an `icon` by name, from the world's own or th
 A world's own are SVG files at `icons/<name>.svg`, on a 512 by 512 `viewBox`. The client only uses a file's shape as a mask, and draws it in the text color of what it's on, so its colors don't count. A world's icon wins over a stock one of the same name. The client reads them when it opens the world, so keep them small.
 
 The game ships the stock ones in `public/icons/`, listed in `client/src/play/icons.json`. They come from game-icons.net under CC BY 3.0, and `public/icons/credits.txt` credits each one, so add a line there when you add one. The play menu links to it.
+
+### Effect textures
+
+Effects pick grayscale textures by name and tint them, so one texture serves every color. `texture` on a particle visual takes one of these names.
+
+The game ships the stock ones on one sheet, `public/effects/stock.png`, with the names of its cells in `client/src/abilities/stockTextures.json`. `script/bake_effect_textures.py` makes both. Most come from Kenney's Particle Pack, under CC0, as `ATTRIBUTIONS.md` says.
+
+A world adds its own for textures only it needs, with a pair of files for each sheet:
+
+- `effects/<name>.png`: a grid of equal cells, where brighter is more solid. Only its red channel is read.
+- `effects/<name>.json`: `{ "columns": 4, "rows": 2, "textures": ["my-flame", "my-rune"] }`, the names of the cells, left to right and top to bottom ([schema](../docs/schema/effect-sheet.schema.json)).
+
+A world's texture wins over a stock one of the same name, and a name that's neither draws as `dot`. Each sheet in use takes a draw call. A particle's up is the image's up, and a stretched one stretches along the image's x.
 
 ## The game protocol
 
