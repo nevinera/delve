@@ -91,12 +91,19 @@ type Ability struct {
 	Tags            []string    `json:"tags"`
 	Animation       string      `json:"animation"`
 	Ignores         []string    `json:"-"` // what a `modify` lets it be used through
+
+	// What a `modify` says about what it spends.
+	SpentAs      float64 `json:"-"` // it counts as spending this much
+	SpentAsMax   bool    `json:"-"` // or the most it can
+	SpendsUpTo   float64 `json:"-"` // it can spend this much more
+	ByExtraSpent float64 `json:"-"`
 }
 
 // Channel is an ability that goes on for Duration seconds, landing its effects Ticks times.
 type Channel struct {
-	Duration float64 `json:"duration"`
-	Ticks    int     `json:"ticks"`
+	Duration    float64 `json:"duration"`
+	Ticks       int     `json:"ticks"`
+	CostPerTick *Cost   `json:"costPerTick"`
 }
 
 // Cost is what using an ability spends.
@@ -104,6 +111,11 @@ type Cost struct {
 	Resource string  `json:"resource"`
 	Amount   float64 `json:"amount"`
 	Percent  float64 `json:"percent"` // of the resource's most
+
+	All       bool        `json:"all"`       // spends all you have, needing at least Amount
+	UpTo      float64     `json:"upTo"`      // spends more if you have it, up to this in all
+	PerSecond float64     `json:"perSecond"` // spends this each second of a channel
+	When      []Condition `json:"when"`      // it only counts while these hold
 }
 
 // Effect is one thing an ability does.
@@ -149,6 +161,12 @@ type Effect struct {
 	Tags    []string `json:"tags"`
 
 	Lockout float64 `json:"lockout"` // interrupt
+
+	// What was spent.
+	DurationPerSpent float64  `json:"durationPerSpent"`
+	Chance           *float64 `json:"chance"`
+	ChancePerSpent   float64  `json:"chancePerSpent"`
+	ByExtraSpent     float64  `json:"byExtraSpent"`
 
 	// area
 	Lasts         float64  `json:"lasts"`
@@ -280,6 +298,14 @@ type StatusEffect struct {
 	Control string
 	Status  string // an `aura`'s
 
+	// Those that go by what the ability that applied it spent, and a `modify` of what it spends.
+	AddPerSpent      float64
+	MultiplyPerSpent float64
+	SpentAs          float64
+	SpentAsMax       bool
+	SpendsUpTo       float64
+	ByExtraSpent     float64
+
 	// An `immune` and an `untargetable`.
 	Controls     []string
 	All          bool
@@ -362,23 +388,30 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		return nil
 	}
 	var body struct {
-		Every        float64  `json:"every"`
-		Does         string   `json:"does"`
-		Amount       Amount   `json:"amount"`
-		Stat         string   `json:"stat"`
-		Resource     string   `json:"resource"`
-		Add          float64  `json:"add"`
-		Multiply     *float64 `json:"multiply"`
-		Mastery      float64  `json:"mastery"`
-		Param        string   `json:"param"`
-		FromStat     string   `json:"fromStat"`
-		Share        float64  `json:"share"`
-		OfCaster     bool     `json:"ofCaster"`
-		CasterOnly   bool     `json:"casterOnly"`
-		Hit          string   `json:"hit"`
-		Source       string   `json:"source"`
-		Control      string   `json:"control"`
-		Status       string   `json:"status"`
+		Every      float64  `json:"every"`
+		Does       string   `json:"does"`
+		Amount     Amount   `json:"amount"`
+		Stat       string   `json:"stat"`
+		Resource   string   `json:"resource"`
+		Add        float64  `json:"add"`
+		Multiply   *float64 `json:"multiply"`
+		Mastery    float64  `json:"mastery"`
+		Param      string   `json:"param"`
+		FromStat   string   `json:"fromStat"`
+		Share      float64  `json:"share"`
+		OfCaster   bool     `json:"ofCaster"`
+		CasterOnly bool     `json:"casterOnly"`
+		Hit        string   `json:"hit"`
+		Source     string   `json:"source"`
+		Control    string   `json:"control"`
+		Status     string   `json:"status"`
+
+		AddPerSpent      float64         `json:"addPerSpent"`
+		MultiplyPerSpent float64         `json:"multiplyPerSpent"`
+		SpentAs          json.RawMessage `json:"spentAs"`
+		SpendsUpTo       float64         `json:"spendsUpTo"`
+		ByExtraSpent     float64         `json:"byExtraSpent"`
+
 		Controls     []string `json:"controls"`
 		All          bool     `json:"all"`
 		Harmful      bool     `json:"harmful"`
@@ -429,7 +462,15 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &body); err != nil {
 		return err
 	}
-	*s = StatusEffect{head.Type, body.Control, body.Status, body.Controls, body.All, body.Harmful, body.AfterSeconds, body.OnlyBelow, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
+	spentAs, spentAsMax := 0.0, false
+	if len(body.SpentAs) > 0 {
+		if string(body.SpentAs) == `"max"` {
+			spentAsMax = true
+		} else if err := json.Unmarshal(body.SpentAs, &spentAs); err != nil {
+			return err
+		}
+	}
+	*s = StatusEffect{head.Type, body.Control, body.Status, body.AddPerSpent, body.MultiplyPerSpent, spentAs, spentAsMax, body.SpendsUpTo, body.ByExtraSpent, body.Controls, body.All, body.Harmful, body.AfterSeconds, body.OnlyBelow, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
 		body.Hit, body.Source, body.School, body.Schools, body.Category, body.Categories, body.Abilities, body.Tag, body.Statuses, body.When,
 		body.Change, body.Set, body.AddAmount, body.AddTags, body.Chance, body.AtTargets, body.PerTargetHit, body.MaxTotal,
 		body.Affects, body.Radius, body.Max, body.SoftCap, body.Drain,
@@ -464,6 +505,25 @@ type Amount struct {
 	ByMastery                             float64
 	MaxHealth                             float64 // a share of the maximum health of whoever it affects
 	ShareOfTrigger                        float64 // a share of what set off the trigger
+	PerSpent                              *Amount // an amount for each point spent
+}
+
+// Spending is an amount with its `perSpent` counted for this many points.
+func (a Amount) Spending(points float64) Amount {
+	if a.PerSpent == nil {
+		return a
+	}
+	per := a.PerSpent.Spending(points)
+	per.scale(points)
+	a.PerSpent = nil
+	a.Min += per.Min
+	a.Max += per.Max
+	a.AttackPower += per.AttackPower
+	a.SpellPower += per.SpellPower
+	a.Weapon += per.Weapon
+	a.Mast += per.Mast
+	a.MaxHealth += per.MaxHealth
+	return a
 }
 
 // UnmarshalJSON reads each of an amount's three shapes.
@@ -477,13 +537,14 @@ func (a *Amount) UnmarshalJSON(b []byte) error {
 		ByMastery      float64         `json:"byMastery"`
 		MaxHealth      float64         `json:"maxHealth"`
 		ShareOfTrigger float64         `json:"shareOfTrigger"`
+		PerSpent       *Amount         `json:"perSpent"`
 	}
 	if len(b) > 0 && b[0] == '{' {
 		if err := json.Unmarshal(b, &parts); err != nil {
 			return err
 		}
 		a.AttackPower, a.SpellPower, a.Weapon, a.Mast = parts.AttackPower, parts.SpellPower, parts.Weapon, parts.Mastery
-		a.ByMastery, a.MaxHealth, a.ShareOfTrigger = parts.ByMastery, parts.MaxHealth, parts.ShareOfTrigger
+		a.ByMastery, a.MaxHealth, a.ShareOfTrigger, a.PerSpent = parts.ByMastery, parts.MaxHealth, parts.ShareOfTrigger, parts.PerSpent
 		if len(parts.Base) == 0 {
 			return nil
 		}

@@ -606,3 +606,157 @@ func TestHasteShortensTheGCDAndCooldownsAsTheAbilitySays(t *testing.T) {
 		t.Fatalf("cools: %v", got)
 	}
 }
+
+// spender is a fight with a resource, 10 of it to hand.
+func spender(t *testing.T, abilities ...combat.Ability) (*Hub, *Player, *float64) {
+	t.Helper()
+	h, p, c := fighting(t)
+	zero := 0.0
+	p.fight.class.Resources = append(p.fight.class.Resources, combat.Resource{Key: "combo", Kind: "points", Max: 10})
+	p.fight.resources["combo"] = 10
+	for _, a := range abilities {
+		a.GCD, a.Range = &zero, combat.Distance{Feet: 100}
+		if a.Target == "" {
+			a.Target = "enemy"
+		}
+		p.fight.class.Abilities = append(p.fight.class.Abilities, a)
+	}
+	return h, p, c
+}
+
+func dealing(perSpent float64) combat.Effect {
+	return combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{PerSpent: &combat.Amount{Min: perSpent, Max: perSpent}}}
+}
+
+func TestAnAllCostSpendsAllOfIt(t *testing.T) {
+	h, p, c := spender(t, combat.Ability{ID: "finish", Name: "Finish", Cost: []combat.Cost{{Resource: "combo", Amount: 1, All: true}}, Effects: []combat.Effect{dealing(10)}})
+	d := p.layer.dummies[0]
+	was := d.Health
+	p.fight.resources["combo"] = 4
+	use(t, p, "finish")
+	pass(h, c, 0.5)
+	if got := was - d.Health; got != 40 {
+		t.Fatalf("dealt %g for 4 points", got)
+	}
+	if p.fight.resources["combo"] != 0 {
+		t.Fatalf("%g left", p.fight.resources["combo"])
+	}
+	heard(p)
+	use(t, p, "finish")
+	pass(h, c, 0.05)
+	refusal(t, p, "not enough combo")
+}
+
+func TestAnUpToCostSpendsWhatItCan(t *testing.T) {
+	grown := combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 10, Max: 10}, ByExtraSpent: 3}
+	h, p, c := spender(t, combat.Ability{ID: "bite", Name: "Bite", Cost: []combat.Cost{{Resource: "combo", Amount: 2, UpTo: 6}}, Effects: []combat.Effect{grown}})
+	d := p.layer.dummies[0]
+	was := d.Health
+	p.fight.resources["combo"] = 4 // 2 past its 2, of the 4 it could
+	use(t, p, "bite")
+	pass(h, c, 0.5)
+	if got := was - d.Health; got != 20 {
+		t.Fatalf("dealt %g", got)
+	}
+	if p.fight.resources["combo"] != 0 {
+		t.Fatalf("%g left", p.fight.resources["combo"])
+	}
+}
+
+func TestACostOnlyCountsWhileItsConditionsHold(t *testing.T) {
+	have := combat.Condition{Status: "free", On: "self"}
+	h, p, c := spender(t, combat.Ability{ID: "maybe", Name: "Maybe", Cost: []combat.Cost{{Resource: "combo", Amount: 3, When: []combat.Condition{{Not: &have}}}}})
+	use(t, p, "maybe")
+	pass(h, c, 0.05)
+	if p.fight.resources["combo"] != 7 {
+		t.Fatalf("%g left", p.fight.resources["combo"])
+	}
+	p.fight.class.Statuses = append(p.fight.class.Statuses, combat.Status{ID: "free", Name: "Free"})
+	p.fight.vitals.Statuses[statusKey{"free", p.ID()}] = &activeStatus{def: p.fight.class.Status("free"), since: h.now(), stacks: 1, uses: 1}
+	use(t, p, "maybe")
+	pass(h, c, 0.05)
+	if p.fight.resources["combo"] != 7 {
+		t.Fatalf("%g left with it free", p.fight.resources["combo"])
+	}
+}
+
+func TestChannelCostsEndItWhenYouCantPay(t *testing.T) {
+	for name, a := range map[string]combat.Ability{
+		"per tick":   {Channel: &combat.Channel{Duration: 5, Ticks: 5, CostPerTick: &combat.Cost{Resource: "combo", Amount: 2}}},
+		"per second": {Channel: &combat.Channel{Duration: 5, Ticks: 5}, Cost: []combat.Cost{{Resource: "combo", PerSecond: 2}}},
+	} {
+		a.ID, a.Name, a.Target = "sipper", "Drain", "self"
+		a.Effects = []combat.Effect{{Type: "resource", Affects: "self", Resource: "tally", Amount: combat.Amount{Min: 1, Max: 1}}}
+		h, p, c := spender(t, a)
+		p.fight.class.Resources = append(p.fight.class.Resources, combat.Resource{Key: "tally", Kind: "points", Max: 100})
+		p.fight.resources["combo"] = 5
+		use(t, p, "sipper")
+		pass(h, c, 2.5)
+		if got := p.fight.resources["tally"]; got != 2 {
+			t.Fatalf("%s: %g ticks in 2.5 s", name, got)
+		}
+		if p.fight.cast == nil {
+			t.Fatalf("%s: stopped early", name)
+		}
+		pass(h, c, 1)
+		if p.fight.cast != nil {
+			t.Fatalf("%s: went on unpaid", name)
+		}
+		if got := p.fight.resources["combo"]; got != 1 {
+			t.Fatalf("%s: %g left", name, got)
+		}
+	}
+}
+
+func TestDurationsAndStatsGrowWithWhatWasSpent(t *testing.T) {
+	fury := combat.Status{ID: "fury", Name: "Fury", Duration: 4, Effects: []combat.StatusEffect{{Type: "stat", Stat: "strength", AddPerSpent: 3}}}
+	h, p, c := spender(t, combat.Ability{ID: "rouse", Name: "Rouse", Target: "self", Cost: []combat.Cost{{Resource: "combo", Amount: 1, All: true}}, Effects: []combat.Effect{{Type: "status", Affects: "self", Status: "fury", DurationPerSpent: 2}}})
+	p.fight.class.Statuses = append(p.fight.class.Statuses, fury)
+	before := p.layer.statsOf(&p.fight.vitals, nil, h.now()).Strength
+	p.fight.resources["combo"] = 5
+	use(t, p, "rouse")
+	pass(h, c, 0.05)
+	held := p.fight.vitals.Statuses[statusKey{"fury", p.ID()}]
+	if held == nil {
+		t.Fatal("no status")
+	}
+	if got := held.until.Sub(held.since).Seconds(); got != 14 {
+		t.Fatalf("lasts %g", got)
+	}
+	if got := p.layer.statsOf(&p.fight.vitals, nil, h.now()).Strength - before; got != 15 {
+		t.Fatalf("strength up %g", got)
+	}
+}
+
+func TestSpentAsCountsWhatAModifySays(t *testing.T) {
+	ramp := combat.Status{ID: "ramp", Name: "Ramp", Effects: []combat.StatusEffect{{Type: "modify", Abilities: []string{"finish"}, SpentAs: 7}}}
+	h, p, c := spender(t, combat.Ability{ID: "finish", Name: "Finish", Cost: []combat.Cost{{Resource: "combo", Amount: 1, All: true}}, Effects: []combat.Effect{dealing(10)}})
+	p.fight.class.Statuses = append(p.fight.class.Statuses, ramp)
+	p.fight.vitals.Statuses[statusKey{"ramp", p.ID()}] = &activeStatus{def: p.fight.class.Status("ramp"), since: h.now(), stacks: 1, uses: 1}
+	d := p.layer.dummies[0]
+	was := d.Health
+	p.fight.resources["combo"] = 2
+	use(t, p, "finish")
+	pass(h, c, 0.5)
+	if got := was - d.Health; got != 70 {
+		t.Fatalf("dealt %g", got)
+	}
+}
+
+func TestEffectChance(t *testing.T) {
+	half := 0.25
+	h, p, c := spender(t, combat.Ability{ID: "lucky", Name: "Lucky", Effects: []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 9, Max: 9}, Chance: &half}}},
+		combat.Ability{ID: "earned", Name: "Earned", Cost: []combat.Cost{{Resource: "combo", Amount: 4}}, Effects: []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 9, Max: 9}, Chance: &half, ChancePerSpent: 0.1}}})
+	d := p.layer.dummies[0]
+	was := d.Health
+	use(t, p, "lucky") // the rolls are 0.5
+	pass(h, c, 0.5)
+	if d.Health != was {
+		t.Fatal("it landed at a 25% chance")
+	}
+	use(t, p, "earned")
+	pass(h, c, 0.5)
+	if d.Health != was-9 {
+		t.Fatal("it missed at 65%")
+	}
+}

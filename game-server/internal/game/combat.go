@@ -58,6 +58,7 @@ type activeStatus struct {
 	counts  map[int]float64   // how far along each `every` is, by the same
 	granted bool              // what the class gives you for good: a passive, your mastery, a spec's or a talent's
 	ticks   map[int]time.Time // when each of its periodic effects next ticks, by its place in the status
+	spent   float64           // what the ability that applied it spent
 	zone    *zone             // the area or aura keeping it on, if any
 	zones   map[int]*zone     // its own auras, by their place in the status
 }
@@ -98,15 +99,17 @@ type fighter struct {
 
 // casting is a cast or channel under way.
 type casting struct {
-	ability  *combat.Ability
-	target   int64
-	spot     *[3]float64
-	release  time.Time // when a cast lets go
-	ends     time.Time // when it stops: the release, or the channel's end
-	channel  bool
-	released bool
-	stopped  bool
-	spent    float64 // what its costs came to
+	ability   *combat.Ability
+	target    int64
+	spot      *[3]float64
+	release   time.Time // when a cast lets go
+	ends      time.Time // when it stops: the release, or the channel's end
+	channel   bool
+	released  bool
+	stopped   bool
+	spent     float64 // what its costs came to
+	spentOpen bool    // those include one that can spend more
+	extra     float64 // how far past its least that one went, as a share
 }
 
 // landing is something that happens at a time: a hit arriving, a channel's tick.
@@ -398,7 +401,7 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 	if lockedOut(f, ability, now) {
 		return nil, 0, "that school is locked out"
 	}
-	if why := l.affordable(f, ability); why != "" {
+	if why := l.affordable(p, ability, m.Target, now); why != "" {
 		return nil, 0, why
 	}
 	waits := ability.CastTime > 0 || ability.Channel != nil
@@ -469,13 +472,130 @@ func needsFacing(a *combat.Ability) bool {
 }
 
 // affordable says what the ability needs that the fighter hasn't got.
-func (l *Layer) affordable(f *fighter, a *combat.Ability) string {
+func (l *Layer) affordable(p *Player, a *combat.Ability, target int64, now time.Time) string {
+	f := &p.fight
 	for _, cost := range a.Cost {
-		if f.resources[cost.Resource] < costOf(f, cost) {
+		if l.costCounts(p, cost, target, now) && f.resources[cost.Resource] < costOf(f, cost) {
 			return "not enough " + cost.Resource
 		}
 	}
 	return ""
+}
+
+// costCounts says whether a cost's conditions hold.
+func (l *Layer) costCounts(p *Player, cost combat.Cost, target int64, now time.Time) bool {
+	if len(cost.When) == 0 {
+		return true
+	}
+	_, ok := combat.All(cost.When, l.facts(p, target, now))
+	return ok
+}
+
+// spendFor is what a use takes of a cost, which can be more than the least it needs.
+func spendFor(f *fighter, a *combat.Ability, cost combat.Cost) float64 {
+	least, have := costOf(f, cost), f.resources[cost.Resource]
+	switch {
+	case cost.All:
+		return have
+	case cost.UpTo > 0 || a.SpendsUpTo > 0:
+		return max(least, min(have, max(cost.UpTo, least)+a.SpendsUpTo))
+	}
+	return least
+}
+
+// countSpent notes how many points a use spent, for what goes by that, and how far past the least
+// its open-ended cost went, as a share.
+func countSpent(f *fighter, c *casting, cost combat.Cost, spent float64) {
+	a := c.ability
+	open := cost.All || cost.UpTo > 0 || a.SpendsUpTo > 0
+	if open && !c.spentOpen {
+		c.spent, c.spentOpen = 0, true
+	}
+	if open || !c.spentOpen {
+		c.spent += spent
+	}
+	if !open {
+		return
+	}
+	least := costOf(f, cost)
+	top := max(cost.UpTo, least) + a.SpendsUpTo
+	if top > least {
+		c.extra = min((spent-least)/(top-least), 1)
+	}
+}
+
+// countedSpent is what a use counts as having spent, after what a `modify` says.
+func countedSpent(f *fighter, c *casting) float64 {
+	a := c.ability
+	if a.SpentAsMax {
+		most := 0.0
+		for _, r := range f.class.Resources {
+			for _, cost := range a.Cost {
+				if cost.Resource == r.Key {
+					most = max(most, f.pool(r).Max)
+				}
+			}
+		}
+		return most
+	}
+	if a.SpentAs != 0 {
+		return a.SpentAs
+	}
+	return c.spent
+}
+
+// amountOf is what an effect's amount comes to in this use, with what it spent.
+func amountOf(c *casting, e *combat.Effect, count int) combat.Amount {
+	out := e.AmountFor(count).Spending(c.spent)
+	by := e.ByExtraSpent
+	if c.ability.ByExtraSpent != 0 {
+		by = c.ability.ByExtraSpent
+	}
+	if by != 0 && c.extra > 0 {
+		out = out.Grown(1 + (by-1)*c.extra)
+	}
+	return out
+}
+
+// chanceHolds rolls an effect's `chance`, if it has one.
+func (l *Layer) chanceHolds(c *casting, e *combat.Effect) bool {
+	if e.Chance == nil && e.ChancePerSpent == 0 {
+		return true
+	}
+	chance := 1.0
+	if e.Chance != nil {
+		chance = *e.Chance
+	}
+	return l.hub.roll() < chance+e.ChancePerSpent*c.spent
+}
+
+// payForTick takes what a channel costs each tick, and says whether it could.
+func (l *Layer) payForTick(p *Player, c *casting, ticks int) bool {
+	f, a := &p.fight, c.ability
+	type due struct {
+		resource string
+		amount   float64
+	}
+	var owed []due
+	for _, cost := range a.Cost {
+		if cost.PerSecond > 0 {
+			owed = append(owed, due{cost.Resource, cost.PerSecond * a.Channel.Duration / float64(ticks)})
+		}
+	}
+	if each := a.Channel.CostPerTick; each != nil {
+		owed = append(owed, due{each.Resource, each.Amount})
+	}
+	for _, each := range owed {
+		if f.resources[each.resource] < each.amount {
+			p.send(encode(refused{"refused", a.ID, "not enough " + each.resource}))
+			return false
+		}
+	}
+	for _, each := range owed {
+		f.resources[each.resource] -= each.amount
+		f.resChanged = true
+	}
+	return true
 }
 
 func costOf(f *fighter, cost combat.Cost) float64 {
@@ -501,20 +621,27 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 	f := &p.fight
 	a := c.ability
 	c.released = true
-	if why := l.affordable(f, a); why != "" {
+	if why := l.affordable(p, a, c.target, now); why != "" {
 		f.cast = nil
 		p.send(encode(refused{"refused", a.ID, why}))
 		l.tell(p, encode(stopped{"stopped", p.ID()}))
 		return
 	}
 	for _, cost := range a.Cost {
-		spent := costOf(f, cost)
+		if !l.costCounts(p, cost, c.target, now) {
+			continue
+		}
+		spent := spendFor(f, a, cost)
+		if spent == 0 {
+			continue
+		}
 		f.resources[cost.Resource] -= spent
 		f.resChanged = true
-		c.spent += spent
+		countSpent(f, c, cost, spent)
 		p.debugLine("%s: spent %g %s", a.Name, spent, cost.Resource)
 		l.fire(event{on: "spend", who: &f.vitals, other: c.target, ctx: castOf(a), amount: spent, resource: cost.Resource}, now)
 	}
+	c.spent = countedSpent(f, c)
 	l.fire(event{on: "cast", who: &f.vitals, other: c.target, ctx: castOf(a)}, now)
 	if a.Cooldown > 0 {
 		spent := live(f.cooldowns[a.ID], now)
@@ -532,7 +659,13 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 		ticks := max(a.Channel.Ticks, 1)
 		for n := 1; n <= ticks; n++ {
 			at := now.Add(seconds(a.Channel.Duration * float64(n) / float64(ticks)))
-			l.after(at, c, func(now time.Time) { l.landAll(p, c, now, false) })
+			l.after(at, c, func(now time.Time) {
+				if !l.payForTick(p, c, ticks) {
+					l.stopCast(p)
+					return
+				}
+				l.landAll(p, c, now, false)
+			})
 		}
 		l.after(now.Add(seconds(a.Channel.Duration)), c, func(now time.Time) {
 			l.fire(event{on: "channelEnd", who: &f.vitals, other: c.target, ctx: castOf(a)}, now)
@@ -763,10 +896,13 @@ func positionOf(from, at [3]float64, yaw float64) string {
 
 // land does one effect to one unit. Effects that aren't here yet do nothing.
 func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count int, now time.Time) {
+	if !l.chanceHolds(c, e) {
+		return
+	}
 	h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: e.Type}
 	switch e.Type {
 	case "damage":
-		l.strike(p, on, e.AmountFor(count), hitOf(c, e, on, count), &h, now)
+		l.strike(p, on, amountOf(c, e, count), hitOf(c, e, on, count), &h, now)
 		if !h.Missed {
 			l.drain(p, h.Amount, e.Drain, c.ability.ID)
 		}
@@ -795,20 +931,32 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 			return
 		}
 	case "heal":
-		n, crit := l.rollHeal(p, on, e.AmountFor(count), hitOf(c, e, on, count), now)
+		n, crit := l.rollHeal(p, on, amountOf(c, e, count), hitOf(c, e, on, count), now)
 		over := max(on.Health+n-on.MaxHealth, 0)
 		on.Health = min(on.Health+n, on.MaxHealth)
 		h.Amount, h.Crit = math.Round(n), crit
 		ctx := hitOf(c, e, on, count)
 		defer l.healedBy(p, on, n, over, ctx, now)
 	case "resource":
-		n, _ := combat.Roll(e.AmountFor(count), l.statsOf(&p.fight.vitals, nil, now), false, l.hub.roll)
+		n, _ := combat.Roll(amountOf(c, e, count), l.statsOf(&p.fight.vitals, nil, now), false, l.hub.roll)
 		if given, ok := l.addResource(&p.fight, e.Resource, n); ok {
 			h.Amount, h.Resource = math.Round(given), e.Resource
 		}
 	case "status":
-		if !l.applyStatus(p, c.ability, e.Status, e.Duration, on, &h, now) {
+		duration := e.Duration
+		if e.DurationPerSpent != 0 {
+			if duration == 0 {
+				if s := p.fight.class.Status(e.Status); s != nil {
+					duration = s.Duration
+				}
+			}
+			duration += e.DurationPerSpent * c.spent
+		}
+		if !l.applyStatus(p, c.ability, e.Status, duration, on, &h, now) {
 			return
+		}
+		if held := on.Statuses[statusKey{e.Status, p.ID()}]; held != nil {
+			held.spent = c.spent
 		}
 	default:
 		p.debugLine("%s: %s does nothing yet", c.ability.Name, e.Type)
@@ -1141,7 +1289,7 @@ func (l *Layer) tickOf(p *Player, holder *vitals, id string, held *activeStatus,
 	if e.Affects == "enemies" || e.Affects == "allies" {
 		targets = l.around(e, at, continent)
 	}
-	amount := combat.Shared(e.Amount, e.SoftCap, len(targets)).Scaled(float64(held.stacks))
+	amount := combat.Shared(e.Amount.Spending(held.spent), e.SoftCap, len(targets)).Scaled(float64(held.stacks))
 	ctx := combat.HitContext{Schools: schoolsOf(e.School, e.Schools, nil), Category: e.Category, Status: id, Kinds: []string{"periodic"}}
 	for _, on := range targets {
 		h := hit{Type: "hit", From: p.ID(), On: on.ID, Effect: e.Does, Ticked: id, Class: held.class}
@@ -1574,7 +1722,7 @@ func (l *Layer) modsOf(v *vitals, ctx *combat.HitContext, now time.Time) []comba
 			if e.Type != "stat" || !e.Applies(ctx, key.from) || !l.holds(v, e, ctx, now) {
 				continue
 			}
-			mod := combat.Mod{Effect: e, Stacks: held.stacks}
+			mod := combat.Mod{Effect: e, Stacks: held.stacks, Spent: held.spent}
 			if o := l.players[key.from]; o != nil {
 				mod.Caster = &o.fight.vitals.base
 			}

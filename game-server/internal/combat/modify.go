@@ -69,6 +69,17 @@ func (a *Amount) scale(by float64) {
 	a.Weapon *= by
 	a.Mast *= by
 	a.MaxHealth *= by
+	if a.PerSpent != nil {
+		per := *a.PerSpent
+		per.scale(by)
+		a.PerSpent = &per
+	}
+}
+
+// Grown is an amount made this many times bigger.
+func (a Amount) Grown(by float64) Amount {
+	a.scale(by)
+	return a
 }
 
 // edits is what a `modify` does at each stage, if anything. `Mastery` grows what it picks as a
@@ -150,7 +161,7 @@ func (c *Class) Resolve(a *Ability, mods []Mod, mastery float64, roll func() flo
 	}
 	for _, m := range mods {
 		e := m.Effect
-		if !e.picks(&out) || (e.Change == "" && len(e.AddEffects) == 0 && len(e.Overrides) == 0 && len(e.Ignores) == 0) {
+		if !e.picks(&out) || (e.Change == "" && len(e.AddEffects) == 0 && len(e.Overrides) == 0 && len(e.Ignores) == 0 && e.SpentAs == 0 && !e.SpentAsMax && e.SpendsUpTo == 0 && e.ByExtraSpent == 0) {
 			continue
 		}
 		if e.Chance > 0 && roll() >= e.Chance {
@@ -167,6 +178,14 @@ func (c *Class) Resolve(a *Ability, mods []Mod, mastery float64, roll func() flo
 		override(&out, m.Effect.Overrides)
 		out.Effects = append(out.Effects, m.Effect.AddEffects...)
 		out.Ignores = append(out.Ignores, m.Effect.Ignores...)
+		if m.Effect.SpentAs != 0 {
+			out.SpentAs = m.Effect.SpentAs
+		}
+		out.SpentAsMax = out.SpentAsMax || m.Effect.SpentAsMax
+		out.SpendsUpTo += m.Effect.SpendsUpTo
+		if m.Effect.ByExtraSpent != 0 {
+			out.ByExtraSpent = m.Effect.ByExtraSpent
+		}
 	}
 	for i := range out.Effects {
 		if e := &out.Effects[i]; e.Type == "status" && e.Duration == 0 {

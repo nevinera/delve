@@ -1,3 +1,16 @@
+// What an ability's cost reads as, the way the server charges it.
+export function costWords(costs) {
+  return costs
+    .map(({ resource, amount, percent, all, upTo, perSecond }) => {
+      if (perSecond) return `${perSecond} ${resource} a second`;
+      const least = percent ? `${percent}%` : amount ?? 0;
+      if (all) return `${least}+ ${resource}, spends it all`;
+      if (upTo) return `${least} to ${upTo} ${resource}`;
+      return `${least} ${resource}`;
+    })
+    .join(", ");
+}
+
 const el = (tag, props = {}, ...children) => {
   const node = Object.assign(document.createElement(tag), props);
   node.append(...children);
@@ -16,6 +29,7 @@ export function drawAbilitiesPane(box, { known, passives, picked }, { onPick, on
   );
   for (const ability of known) {
     const button = el("button", { type: "button", draggable: true, className: picked === ability.id ? "play-build-on" : "" }, el("strong", { textContent: ability.name ?? ability.id }));
+    if (ability.cost?.length) button.append(el("em", { textContent: costWords(ability.cost) }));
     if (ability.description) button.append(el("span", { textContent: ability.description }));
     button.addEventListener("click", () => onPick(picked === ability.id ? null : ability.id));
     button.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/plain", JSON.stringify({ ability: ability.id })));

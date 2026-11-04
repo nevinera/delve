@@ -65,6 +65,7 @@ func (e *StatusEffect) Applies(h *HitContext, from int64) bool {
 type Mod struct {
 	Effect  *StatusEffect
 	Stacks  int
+	Spent   float64 // what the ability that applied it spent
 	Caster  *Stats  // the stats of whoever applied the status, for `ofCaster`
 	Mastery float64 // the holder's, on a `modify` waiting to see how many an ability hits
 }
@@ -186,13 +187,22 @@ func Sheet(base Stats, primary []string, mods []Mod) Stats {
 // leave it be.
 func change(mods []Mod, pick func(*StatusEffect) *float64) {
 	for _, m := range mods {
-		if field := pick(m.Effect); field != nil && m.Effect.Add != 0 {
-			*field += m.Effect.Add * float64(m.Stacks)
+		if add := m.Effect.Add + m.Effect.AddPerSpent*m.Spent; add != 0 {
+			if field := pick(m.Effect); field != nil {
+				*field += add * float64(m.Stacks)
+			}
 		}
 	}
 	for _, m := range mods {
-		if field := pick(m.Effect); field != nil && m.Effect.Multiply != nil {
-			*field *= math.Pow(*m.Effect.Multiply, float64(m.Stacks))
+		if m.Effect.Multiply == nil && m.Effect.MultiplyPerSpent == 0 {
+			continue
+		}
+		by := 1.0
+		if m.Effect.Multiply != nil {
+			by = *m.Effect.Multiply
+		}
+		if field := pick(m.Effect); field != nil {
+			*field *= math.Pow(by+m.Effect.MultiplyPerSpent*m.Spent, float64(m.Stacks))
 		}
 	}
 }
