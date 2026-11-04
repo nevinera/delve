@@ -244,7 +244,7 @@ export class Others {
     else if (arms) drawn.upper.show(arms, arms.name, { time: (now - arms.at) / 1000, once: !arms.loop });
     else drawn.upper.clear();
     if (drawn.acting && !arms) {
-      this.play(drawn, drawn.acting.name, 1, !drawn.acting.loop, (now - drawn.acting.at) / 1000);
+      this.play(drawn, drawn.acting.name, drawn.acting.speed, !drawn.acting.loop, ((now - drawn.acting.at) / 1000) * drawn.acting.speed);
       return;
     }
     const way = move.forward < 0 ? "back" : move.forward > 0 || !move.strafe ? "ahead" : move.strafe > 0 ? "left" : "right";
@@ -257,10 +257,10 @@ export class Others {
   }
 
   // Plays a clip on someone: an ability's. Null lets it go.
-  act(drawn, name, loop = false) {
+  act(drawn, name, loop = false, speed = 1) {
     const clip = name && drawn.clips?.get(name);
     const now = performance.now();
-    drawn.acting = clip ? { name, loop, at: now, until: loop ? Infinity : now + clip.duration * 1000 } : null;
+    drawn.acting = clip ? { name, loop, speed, at: now, until: loop ? Infinity : now + (clip.duration * 1000) / speed } : null;
   }
 
   // Fades to a clip, or sets the playing one's speed.

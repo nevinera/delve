@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { shapeSpec, fadeAt } from "./shapeStock.js";
+import { SHAPE_STOCK, fadeAt, shapeSpec } from "./shapeStock.js";
 import { shapeMaterial } from "./shapeMaterial.js";
 
 // A strip that trails after something moving and dies away from its far end. It follows one of:
@@ -101,7 +101,8 @@ export function makeRibbon({ colors, scale, params, follow, trace }) {
   };
 
   const length = spec.duration + lasts;
-  const starts = trace ? spec.after : 0;
+  const { after, duration } = SHAPE_STOCK.ribbon;
+  const starts = trace ? (after * spec.duration) / duration : 0; // a faster swing winds up faster
   return {
     group,
     length,

@@ -561,6 +561,10 @@ export const abilityFields = (made) => [
   { key: "cooldownHasted", label: "cooldown hasted", type: "check", advanced: "casting" },
   { key: "replaces", type: "select", none: "nothing", options: abilitiesOf(made), advanced: "casting" },
   { key: "animation", type: "select", none: "by its range and school", options: COMMON_ANIMATIONS, more: MORE_ANIMATIONS, advanced: "look and sound" },
+  { key: "clipSpeed", label: "clip speed", type: "number", min: 0, hint: "1 by default", advanced: "look and sound" },
+  { key: "lunge", label: "lunge ft", type: "number", min: 0, hint: "a melee swing has one by default, 0 is none", advanced: "look and sound" },
+  { key: "pause", label: "pause on contact s", type: "number", min: 0, hint: "a melee swing has one by default, 0 is none", advanced: "look and sound" },
+  { key: "shake", label: "camera shake ft", type: "number", min: 0, hint: "a big melee swing has some by default, 0 is none", advanced: "look and sound" },
   {
     key: "visuals",
     type: "list",

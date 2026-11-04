@@ -17,6 +17,10 @@ const AREA_OPACITY = 0.35;
 const AREA_S = 0.8;
 const ABOVE_GROUND_FT = 0.15;
 
+const SHAKE_S = 0.25;
+const LUNGE_BACK_S = 0.25;
+const LUNGE_CLEAR_FT = 3; // how far from its target a lunge stops
+const PLAIN_SWING = { name: "swing", range: "melee", school: "physical", animation: "attack" };
 const BLADE_STARTS = 0.55; // how far along a weapon from its grip to its tip a ribbon starts
 const BARE_HAND = new THREE.Vector3(0, 0.35, 0); // how wide a ribbon off a bare hand is
 
@@ -68,7 +72,10 @@ export class AbilityStage {
     this.particles = new ParticleField(scene, { capacity: particles });
     this.t = 0;
     this.runs = [];
-    this.alive = []; // visuals playing: { visual, at, flying }
+    this.alive = []; // visuals playing: { visual, at, flying, heldStill }
+    this.lunges = [];
+    this.holds = new Map(); // by mesh: { mixer, until }
+    this.shaking = null;
   }
 
   // Starts an ability. caster and target are units; target can be null. spot: a Vector3 on the
@@ -94,12 +101,18 @@ export class AbilityStage {
     for (const run of [...this.runs]) this.stop(run);
     for (const { visual } of this.alive) disposeVisual(visual);
     this.alive = [];
+    for (const lunge of this.lunges) lunge.mesh.position.sub(lunge.offset);
+    this.lunges = [];
+    for (const { mixer } of this.holds.values()) mixer.timeScale = 1;
+    this.holds.clear();
+    this.shaking = null;
     this.particles.clear();
   }
 
   frame(dt) {
     this.t += dt;
     this.particles.frame(this.t);
+    this.holding(dt);
     for (const run of [...this.runs]) {
       run.t += dt;
       const { events, duration } = run.line;
@@ -153,7 +166,7 @@ export class AbilityStage {
   fire(run, event) {
     switch (event.kind) {
       case "clip":
-        run.caster.clip(event.role, event.loop);
+        run.caster.clip(event.role, event.loop, event.speed);
         break;
       case "bar":
         run.on.bar?.(event);
@@ -182,6 +195,16 @@ export class AbilityStage {
       case "area":
         this.showArea(run, event);
         break;
+      case "lunge":
+        this.lunge(run, event);
+        break;
+      case "pause":
+        this.hold(run.caster, event.seconds);
+        this.hold(run.target, event.seconds);
+        break;
+      case "shake":
+        run.on.shake?.(event.strength);
+        break;
       case "hit":
         run.on.hit?.(event);
         break;
@@ -204,6 +227,7 @@ export class AbilityStage {
     }
     if (event.effect === "ribbon") {
       const live = this.spawn("ribbon", { colors, scale, params: event.params, trace: traceOf(unit) });
+      live.heldStill = unit.mesh;
       if (event.heldByCast) live.heldBy = run;
     } else if (event.effect === "beam") {
       const to = on === "ground" ? this.pointOf(run, "ground") : chestOf(unit);
@@ -219,9 +243,67 @@ export class AbilityStage {
     }
   }
 
-  // Trails a ribbon after a plain swing, one that isn't an ability.
-  swing(unit) {
-    this.spawn("ribbon", { colors: SCHOOL_COLORS.physical, trace: traceOf(unit) });
+  // A plain swing, one that isn't an ability.
+  swing(caster, target, on) {
+    return this.play(PLAIN_SWING, { caster, target, on });
+  }
+
+  // Leans a body in toward its target, in what's drawn only, and no closer than it can stand.
+  lunge(run, { feet, strikes, at }) {
+    const { caster, target } = run;
+    const toward = new THREE.Vector3();
+    if (target && target !== caster) toward.subVectors(target.mesh.position, caster.mesh.position).setY(0);
+    const off = toward.length();
+    if (off > 0.01) toward.multiplyScalar(Math.min(feet, Math.max(0, off - LUNGE_CLEAR_FT)) / off);
+    else toward.set(Math.sin(caster.mesh.rotation.y), 0, Math.cos(caster.mesh.rotation.y)).multiplyScalar(feet);
+    this.lunges.push({ mesh: caster.mesh, toward, from: this.t, peak: strikes - at, offset: new THREE.Vector3(), last: new THREE.Vector3(Infinity, 0, 0) });
+  }
+
+  // Holds a unit's clips still, and the trails on it.
+  hold(unit, seconds) {
+    if (!unit?.mixer) return;
+    unit.mixer.timeScale = 0;
+    this.holds.set(unit.mesh, { mixer: unit.mixer, until: this.t + seconds });
+  }
+
+  // Shakes the camera, which shakeOffset gives you.
+  shake(strength) {
+    this.shaking = { strength, at: this.t };
+  }
+
+  // How far off to draw the camera this frame.
+  shakeOffset() {
+    const { strength, at } = this.shaking ?? { strength: 0, at: 0 };
+    const left = Math.max(0, 1 - (this.t - at) / SHAKE_S);
+    const size = strength * left * left;
+    return new THREE.Vector3(Math.sin(this.t * 71) * size, Math.sin(this.t * 83 + 1) * size, 0);
+  }
+
+  // Moves lunging bodies to where they're drawn. Call it once the game has put everyone in place, as
+  // it's about to draw them. A body nothing's moved since has last frame's lean taken off first.
+  place() {
+    this.lunges = this.lunges.filter((lunge) => {
+      const { mesh, toward, from, peak, offset, last } = lunge;
+      if (mesh.position.equals(last)) mesh.position.sub(offset);
+      const t = this.t - from;
+      const lean = t < peak ? Math.sin(((t / peak) * Math.PI) / 2) : Math.cos((Math.min(1, (t - peak) / LUNGE_BACK_S) * Math.PI) / 2);
+      offset.copy(toward).multiplyScalar(lean);
+      mesh.position.add(offset);
+      last.copy(mesh.position);
+      return t < peak + LUNGE_BACK_S;
+    });
+  }
+
+  // Lets go of what's held once its time's up, and keeps trails on what's still held from ageing.
+  holding(dt) {
+    for (const [mesh, { mixer, until }] of this.holds) {
+      if (this.t >= until) {
+        mixer.timeScale = 1;
+        this.holds.delete(mesh);
+      } else {
+        for (const live of this.alive) if (live.heldStill === mesh) live.at += dt;
+      }
+    }
   }
 
   // Marks the ground an area effect covers: a flat disc, or a slice of one the way the caster faces.

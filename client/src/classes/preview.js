@@ -144,7 +144,7 @@ export class AbilityPreview {
     this.scene.add(mesh);
     mesh.geometry.computeBoundingBox();
     const unit = { mesh, look, mixer: new THREE.AnimationMixer(mesh), clips: null, roles: standingReady(roleClips(look, skeletonOf(look.body))), playing: null, height: mesh.geometry.boundingBox.max.y };
-    unit.clip = (role, loop) => this.clip(unit, role ?? "idle", role === null || loop);
+    unit.clip = (role, loop, speed) => this.clip(unit, role ?? "idle", role === null || loop, speed);
     this[which] = unit;
     loadAnimations().then((baked) => {
       if (this[which] !== unit) return;
@@ -157,7 +157,7 @@ export class AbilityPreview {
   }
 
   // Plays a role's clip on a unit, or a spell's holding clip for "channel".
-  clip(unit, role, loop = false) {
+  clip(unit, role, loop = false, speed = 1) {
     if (!unit.clips) return;
     const name = clipNameFor(role, unit.roles, unit.clips);
     const clip = unit.clips.get(name);
@@ -165,8 +165,8 @@ export class AbilityPreview {
     if (unit === this.caster && this.runBox.checked && canSplit(unit.mesh)) {
       unit.upper ??= new UpperBody(unit.mixer, unit.clips);
       if (role === "idle") unit.upper.clear();
-      else unit.upper.show({}, name, { once: !loop });
-      unit.back = loop ? null : clip.duration;
+      else unit.upper.show({}, name, { once: !loop, speed });
+      unit.back = loop ? null : clip.duration / speed;
       unit.playedFor = 0;
       return;
     }
@@ -174,11 +174,12 @@ export class AbilityPreview {
     action.reset();
     action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
     action.clampWhenFinished = !loop;
+    action.timeScale = speed;
     const previous = unit.playing;
     action.play();
     if (previous && previous !== action) previous.crossFadeTo(action, role === "idle" ? FADE_S : SWING_FADE_S, false);
     unit.playing = action;
-    unit.back = loop ? null : clip.duration;
+    unit.back = loop ? null : clip.duration / speed;
     unit.playedFor = 0;
   }
 
@@ -316,7 +317,7 @@ export class AbilityPreview {
     if (!this.ability) return;
     this.stop();
     const distance = this.ability.target === "ground" ? this.spot.length() : this.distance;
-    const on = { hit: (event) => this.land(event), bar: (event) => this.showBar(event) };
+    const on = { hit: (event) => this.land(event), bar: (event) => this.showBar(event), shake: (strength) => this.stage.shake(strength) };
     this.run = this.stage.play(this.ability, { caster: this.caster, target: this.dummy, spot: this.ability.target === "ground" ? this.spot : null, ranged: this.ranged, distance, on });
     this.say.textContent = this.problem();
     if (this.audio?.state === "suspended") this.audio.resume();
@@ -402,9 +403,13 @@ export class AbilityPreview {
         }
       }
     }
+    this.stage.place();
     this.orbit.update();
     this.drawFloats();
+    const shaken = this.stage.shakeOffset();
+    this.camera.position.add(shaken);
     this.renderer.render(this.scene, this.camera);
+    this.camera.position.sub(shaken);
     requestAnimationFrame((t) => this.frame(t));
   }
 

@@ -586,12 +586,12 @@ export class PlayCombat {
     const { walker } = this.view;
     if (id === this.you.id) {
       const roles = roleClips(walker.look, skeletonOf(walker.look.body));
-      return { mesh: walker.model, height: walker.look.height ?? 6, clip: (role, loop) => walker.act(role === null ? null : walker.clips && clipNameFor(role, roles, walker.clips), loop) };
+      return { mesh: walker.model, mixer: walker.mixer, height: walker.look.height ?? 6, clip: (role, loop, speed) => walker.act(role === null ? null : walker.clips && clipNameFor(role, roles, walker.clips), loop, speed) };
     }
     const drawn = this.others.characters.get(id);
     if (!drawn) return null;
     const roles = roleClips(drawn.look, skeletonOf(drawn.look.body));
-    return { mesh: drawn.model, height: drawn.height, clip: (role, loop) => this.others.act(drawn, role === null ? null : drawn.clips && clipNameFor(role, roles, drawn.clips), loop) };
+    return { mesh: drawn.model, mixer: drawn.mixer, height: drawn.height, clip: (role, loop, speed) => this.others.act(drawn, role === null ? null : drawn.clips && clipNameFor(role, roles, drawn.clips), loop, speed) };
   }
 
   // What the game server says.
@@ -602,17 +602,20 @@ export class PlayCombat {
     const caster = this.unit(id);
     if (!ability || !caster) return;
     // Only the latest run's bar shows, and only its end takes the bar away.
-    const on = {};
+    const on = this.yoursToShake(id);
     const run = this.stage.play(asUsed(ability, { castTime, channel, cost, school, schools, animation }), { caster, target: target ? this.unit(target) : null, spot: spot ? new THREE.Vector3(...spot) : null, on });
     if (id === this.you.id) on.bar = (event) => this.runs.get(id) === run && this.showBar(event);
     this.runs.set(id, run);
   }
 
-  swung({ id }) {
+  // Only what you do shakes your camera.
+  yoursToShake(id) {
+    return id === this.you.id ? { shake: (strength) => this.stage.shake(strength) } : {};
+  }
+
+  swung({ id, target }) {
     const unit = this.unit(id);
-    if (!unit) return;
-    unit.clip("attack");
-    this.stage.swing(unit);
+    if (unit) this.stage.swing(unit, this.unit(target), this.yoursToShake(id));
   }
 
   attacking_({ target }) {
@@ -768,6 +771,12 @@ export class PlayCombat {
     this.casting = event ? { from: performance.now(), length: (event.until - event.at) * 1000, draining: event.draining } : null;
     this.castBar.hidden = !event;
     if (event) this.castBar.querySelector(".combat-cast-label").textContent = event.label ?? "";
+  }
+
+  // Called once everything's in place for this frame, as it's about to be drawn.
+  placed() {
+    this.stage.place();
+    this.view.camera.position.add(this.stage.shakeOffset());
   }
 
   // Called each frame of the walk.

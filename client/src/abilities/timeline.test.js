@@ -8,7 +8,7 @@ const damage = { type: "damage", affects: "target", amount: 10 };
 describe("an ability's timeline", () => {
   it("swings a melee ability and lands it partway through", () => {
     const line = abilityTimeline({ name: "Jab", target: "enemy", range: "melee", effects: [damage] });
-    expect(kinds(line, "clip")).toEqual([{ at: 0, kind: "clip", role: "attack" }]);
+    expect(kinds(line, "clip")).toEqual([{ at: 0, kind: "clip", role: "attack", speed: 1 }]);
     expect(kinds(line, "hit")[0].at).toBeCloseTo(0.3);
     expect(kinds(line, "bar")).toEqual([]);
   });

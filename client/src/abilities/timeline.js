@@ -1,3 +1,4 @@
+import { SHAPE_STOCK } from "./shapeStock.js";
 import { SCHOOL_COLORS } from "./stock.js";
 
 // What happens when an ability's used, in order, for anything that plays one: a pure list of events
@@ -15,11 +16,18 @@ import { SCHOOL_COLORS } from "./stock.js";
 //   trails, the visuals with `when: "flight"`, following it.
 // - hit: { effect, n, on }, one of the ability's effects landing, on tick n of a channel.
 // - area: { shape, radius, cone, around, colors }, what an area effect covers.
+// - lunge: { feet, strikes, target }, the caster's body leaning in toward its target and back. It
+//   only moves what's drawn.
+// - pause: { seconds }, the caster and target's clips and trails holding still on contact.
+// - shake: { strength }, the camera of whoever used it, in feet.
 
 const MELEE_STRIKE_S = 0.3; // how far into its attack clip a melee hit lands
 export const MELEE_FT = 5; // how far off a melee target stands
 const DEFAULT_SPEED = 60; // a charge's, in feet a second
 const AFTER_S = 1.2; // how long the scene carries on after the last thing happens
+
+// How a melee swing feels unless the ability says, by its clip.
+const SWING_FEEL = { attack: { pause: 0.04, lunge: 0.5, shake: 0 }, bigAttack: { pause: 0.08, lunge: 1, shake: 0.1 } };
 
 // Where a visual or sound goes if it doesn't say: impacts on the target, the rest on the caster.
 const defaultOn = (when, ability) => (when !== "impact" ? "caster" : ability.target === "ground" ? "ground" : ability.target === "self" || ability.target === "none" ? "caster" : "target");
@@ -55,11 +63,22 @@ export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false }
   const ticks = channel ? Math.max(1, channel.ticks ?? 1) : 0;
   const melee = ability.range === "melee";
   const launch = castTime;
-  const strike = melee ? launch + MELEE_STRIKE_S : launch;
+  const clipSpeed = ability.clipSpeed > 0 ? ability.clipSpeed : 1;
+  const strike = melee ? launch + MELEE_STRIKE_S / clipSpeed : launch;
   const flight = ability.speed ? distance / ability.speed : 0;
   const impact = strike + flight;
   const end = channel ? launch + channel.duration : impact;
   const castEnds = channel ? end : launch;
+
+  const role = channel ? null : releaseRole(ability, ranged);
+  const swings = melee && ["attack", "bigAttack"].includes(role);
+  const feel = swings ? SWING_FEEL[role] : {};
+  const lunge = ability.lunge ?? feel.lunge ?? 0;
+  const pause = ability.pause ?? feel.pause ?? 0;
+  const shake = ability.shake ?? feel.shake ?? 0;
+  if (lunge > 0) events.push({ at: launch, kind: "lunge", feet: lunge, strikes: strike });
+  if (pause > 0) events.push({ at: impact, kind: "pause", seconds: pause });
+  if (shake > 0) events.push({ at: impact, kind: "shake", strength: shake });
 
   if (castTime > 0) {
     events.push({ at: 0, kind: "clip", role: melee ? "windup" : "channel", loop: true });
@@ -69,12 +88,10 @@ export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false }
     events.push({ at: launch, kind: "clip", role: "channel", loop: true });
     events.push({ at: launch, kind: "bar", until: end, label: ability.name, draining: true });
   } else {
-    const role = releaseRole(ability, ranged);
-    const swings = ["attack", "bigAttack"].includes(role);
-    if (role) events.push({ at: launch, kind: "clip", role: melee && castTime > 0 && swings ? "released" : role });
+    if (role) events.push({ at: launch, kind: "clip", role: castTime > 0 && swings ? "released" : role, speed: clipSpeed });
     // A weapon swing leaves a trail, unless the ability says how its own should look.
-    if (melee && swings && !ability.visuals?.some((v) => v.effect === "ribbon")) {
-      events.push({ at: launch, kind: "visual", effect: "ribbon", on: "caster", colors: schoolColors(ability), scale: 1, params: {}, heldByCast: false });
+    if (swings && !ability.visuals?.some((v) => v.effect === "ribbon")) {
+      events.push({ at: launch, kind: "visual", effect: "ribbon", on: "caster", colors: schoolColors(ability), scale: 1, params: { duration: SHAPE_STOCK.ribbon.duration / clipSpeed }, heldByCast: false });
     }
   }
 

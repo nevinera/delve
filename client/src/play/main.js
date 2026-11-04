@@ -208,6 +208,7 @@ async function play() {
     combat?.frame(dt);
     sightLines.frame(dt);
   };
+  view.onWalkPlaced = () => combat?.placed();
   const paused = () => ($("playPaused").hidden = false);
   view.startWalk(paused, [you.at[0], you.at[2]], resolveRecipe(you.look));
   view.walker.yaw = you.yaw;

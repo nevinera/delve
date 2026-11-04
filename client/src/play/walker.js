@@ -180,6 +180,7 @@ export class Walker {
       this.view.onWalkFrame?.(dt);
     }
     this.place();
+    this.view.onWalkPlaced?.();
     this.view.render();
     requestAnimationFrame((t) => this.frame(t));
   }
@@ -335,10 +336,10 @@ export class Walker {
     this.upper ??= new UpperBody(this.mixer, this.clips);
     const arms = reaching ?? (busy ? this.acting : null);
     this.legsOnly = Boolean(arms);
-    if (arms) this.upper.show(arms, arms.name, { time: this.t - arms.at, once: !arms.loop });
+    if (arms) this.upper.show(arms, arms.name, { time: (this.t - arms.at) * (arms.speed ?? 1), once: !arms.loop, speed: arms.speed });
     else this.upper.clear();
     if (this.acting && !arms) {
-      this.play(this.acting.name, 1, !this.acting.loop, this.t - this.acting.at);
+      this.play(this.acting.name, this.acting.speed, !this.acting.loop, (this.t - this.acting.at) * this.acting.speed);
       return;
     }
 
@@ -397,9 +398,9 @@ export class Walker {
   }
 
   // Plays a clip on the character: an ability's. Null lets it go.
-  act(name, loop = false) {
+  act(name, loop = false, speed = 1) {
     const clip = name && this.clips?.get(name);
-    this.acting = clip ? { name, loop, at: this.t, until: loop ? Infinity : this.t + clip.duration } : null;
+    this.acting = clip ? { name, loop, speed, at: this.t, until: loop ? Infinity : this.t + clip.duration / speed } : null;
   }
 
   // Whether the character may move to (x, z): on a tile drawn in full, not into a tree trunk, an

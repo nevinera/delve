@@ -28,7 +28,7 @@ export class UpperBody {
 
   // Plays a clip on the arms from `time` seconds in. `showing` says which go this is: the same one
   // carries on, and another starts over.
-  show(showing, name, { time = 0, once = true } = {}) {
+  show(showing, name, { time = 0, once = true, speed = 1 } = {}) {
     if (this.showing === showing) return;
     this.clear();
     this.showing = showing;
@@ -38,6 +38,7 @@ export class UpperBody {
     this.action.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
     this.action.clampWhenFinished = once;
     this.action.time = time;
+    this.action.timeScale = speed;
     this.action.fadeIn(FADE_S).play();
   }
 

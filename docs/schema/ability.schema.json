@@ -43,6 +43,26 @@
         "none"
       ]
     },
+    "clipSpeed": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "description": "how fast its clip plays, 1 by default"
+    },
+    "lunge": {
+      "type": "number",
+      "minimum": 0,
+      "description": "how many feet its user leans in toward the target, in what's drawn only"
+    },
+    "pause": {
+      "type": "number",
+      "minimum": 0,
+      "description": "how many seconds its user's and target's clips and trails hold still on contact"
+    },
+    "shake": {
+      "type": "number",
+      "minimum": 0,
+      "description": "how many feet the user's camera shakes on contact"
+    },
     "animation": {
       "enum": [
         "attack",
