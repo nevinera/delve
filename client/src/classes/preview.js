@@ -19,6 +19,7 @@ const SEEDED = (seed) => () => {
 };
 const FLOAT_S = 1.1; // how long text floats over a unit
 const FADE_S = 0.15;
+const SWING_FADE_S = 0.08; // into an ability's clip, so a quick swing isn't mostly a fade
 
 const el = (tag, props = {}, ...children) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -40,6 +41,9 @@ export function gearFor(made, ability, picked = "") {
   if (wants === "dual") return { weapon: ofGroup("oneHanded") ?? "none", offhand: offhands.find((o) => !["shield", "orb"].includes(o)) ?? "none" };
   return { weapon: weapons[0] ?? "none", offhand: offhands[0] ?? "none" };
 }
+
+// The preview's characters always have their weapons out.
+const standingReady = (roles) => ({ ...roles, idle: roles.ready ?? roles.idle });
 
 export class AbilityPreview {
   constructor(root) {
@@ -137,7 +141,7 @@ export class AbilityPreview {
     const mesh = characterMesh(look);
     this.scene.add(mesh);
     mesh.geometry.computeBoundingBox();
-    const unit = { mesh, look, mixer: new THREE.AnimationMixer(mesh), clips: null, roles: roleClips(look, skeletonOf(look.body)), playing: null, height: mesh.geometry.boundingBox.max.y };
+    const unit = { mesh, look, mixer: new THREE.AnimationMixer(mesh), clips: null, roles: standingReady(roleClips(look, skeletonOf(look.body))), playing: null, height: mesh.geometry.boundingBox.max.y };
     unit.clip = (role, loop) => this.clip(unit, role ?? "idle", role === null || loop);
     this[which] = unit;
     loadAnimations().then((baked) => {
@@ -170,7 +174,7 @@ export class AbilityPreview {
     action.clampWhenFinished = !loop;
     const previous = unit.playing;
     action.play();
-    if (previous && previous !== action) previous.crossFadeTo(action, FADE_S, false);
+    if (previous && previous !== action) previous.crossFadeTo(action, role === "idle" ? FADE_S : SWING_FADE_S, false);
     unit.playing = action;
     unit.back = loop ? null : clip.duration;
     unit.playedFor = 0;

@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { blocks } from "../world/objects.js";
 import { slabFootholds, slabHitsTrunk } from "../world/slabs.js";
-import { characterClips, loadAnimations, strideRate } from "../character/animations.js";
+import { characterClips, loadAnimations, roleClips, strideRate } from "../character/animations.js";
 import { UpperBody, canSplit, halfOf } from "../character/upperBody.js";
 import { characterMesh, disposeCharacter, setWeaponsDrawn } from "../character/characterMesh.js";
 import { TURN_RATE } from "../character/posed.js";
@@ -78,6 +78,7 @@ const TWIST = [
 ];
 const TURN_LEAD = 0.12; // how far the chest and head lead a turn on the spot
 const FADE_S = 0.2;
+const SWING_FADE_S = 0.08; // into an ability's clip, so a quick swing isn't mostly a fade
 const WEAPONS_OUT_S = 6; // how long weapons stay out after an ability
 const AIRBORNE_S = 0.15; // off the ground this long, without jumping, is falling
 const ROLL_FT = 30; // landing faster than this, or moving after a long fall, rolls
@@ -198,6 +199,7 @@ export class Walker {
     this.bones = null;
     this.clips = null;
     this.upper = null;
+    this.readyClip = roleClips(this.model.userData.look, this.model.userData.skeleton).ready ?? "Idle_Loop";
     this.playing = null;
     const model = this.model;
     loadAnimations().then((baked) => {
@@ -322,7 +324,8 @@ export class Walker {
     this.mixer.update(dt);
     if (!this.clips) return;
     if (this.acting) this.weaponsUntil = this.t + WEAPONS_OUT_S;
-    setWeaponsDrawn(this.model, this.t < (this.weaponsUntil ?? 0));
+    const weaponsOut = this.t < (this.weaponsUntil ?? 0);
+    setWeaponsDrawn(this.model, weaponsOut);
     const busy = moving || this.airTime > 0;
     if (this.acting && (this.t >= this.acting.until || swimming || (busy && !canSplit(this.model)))) this.acting = null;
     // On the move, an ability plays on the arms over what the legs are doing.
@@ -347,7 +350,7 @@ export class Walker {
       const clip = (GAITS[gait] ?? GAITS.run)[way];
       this.play(clip, strideRate(this.clips.get(clip), this.model, speed));
     } else if (still && this.turning) this.play(this.turning > 0 ? "Turn_Left_Loop" : "Turn_Right_Loop");
-    else this.play("Idle_Loop");
+    else this.play(weaponsOut ? this.readyClip : "Idle_Loop");
     this.twistChest();
   }
 
@@ -386,7 +389,7 @@ export class Walker {
     action.clampWhenFinished = true;
     action.time = from;
     action.play();
-    if (previous) action.crossFadeFrom(previous, FADE_S, false);
+    if (previous) action.crossFadeFrom(previous, this.acting ? SWING_FADE_S : FADE_S, false);
   }
 
   // Plays a clip on the character: an ability's. Null lets it go.

@@ -98,10 +98,11 @@ export const ROLES = ["idle", "walk", "run", "fly", "attack", "bigAttack", "cast
 // The clip for each of ROLES for a look (recipe.js's resolveRecipe), by its skeleton
 // (frames.js's skeletonOf), or null where it has none. A humanoid's attacks go with how its weapon
 // attacks (weapons.js's attackGroup), and it shoots only with something to shoot or throw.
-// windup holds a melee ability's cast, and released is the swing that comes straight out of it.
+// windup holds a melee ability's cast, released is the swing that comes straight out of it, and
+// ready is how it stands with its weapon out.
 const HOLDS = {
-  oneHanded: { windup: "Sword_Idle" },
-  twoHanded: { windup: "TwoHand_Windup_Loop", released: "TwoHand_Sweep_Release" },
+  oneHanded: { windup: "Sword_Idle", ready: "Sword_Idle" },
+  twoHanded: { windup: "TwoHand_Windup_Loop", released: "TwoHand_Sweep_Release", ready: "TwoHand_Idle_Loop" },
 };
 const ATTACKS = {
   unarmed: ["Punch_Jab", "Punch_Cross", null],

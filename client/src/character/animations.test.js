@@ -72,6 +72,17 @@ describe("characterClips", () => {
     }
   }, 60000);
 
+  it("keeps a greatsword moving through its swings, from the ready to the end of the swing", () => {
+    for (const name of ["TwoHand_Chop", "TwoHand_Sweep"]) {
+      let was = posed(name, 0.1)("hand_r");
+      for (let t = 0.1 + 1 / 30; t < 0.36; t += 1 / 30) {
+        const now = posed(name, t)("hand_r");
+        expect(now.distanceTo(was) * 30, `${name} at ${t.toFixed(2)}`).toBeGreaterThan(7);
+        was = now;
+      }
+    }
+  }, 60000);
+
   it("holds a two-handed weapon in both hands, in front, with the feet planted", () => {
     for (const time of [0, 0.5, 0.6, 0.75]) {
       const at = posed("TwoHand_Chop", time);

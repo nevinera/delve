@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { characterClips, loadAnimations, strideRate } from "../character/animations.js";
+import { characterClips, loadAnimations, roleClips, strideRate } from "../character/animations.js";
 import { UpperBody, canSplit, halfOf } from "../character/upperBody.js";
 import { characterMesh, disposeCharacter, setWeaponsDrawn } from "../character/characterMesh.js";
 import { TURN_RATE } from "../character/posed.js";
@@ -15,6 +15,7 @@ const RUNNING = { ...STILL, forward: 1 };
 const CATCH_UP = 8; // how fast a drawn character closes the gap to where it should be, per second
 const SNAP_FT = 40; // further off than this across the ground, it jumps there
 const FADE_S = 0.2;
+const SWING_FADE_S = 0.08; // into an ability's clip, so a quick swing isn't mostly a fade
 const WEAPONS_OUT_MS = 6000; // how long weapons stay out after an ability
 const NAME_FT = 300; // names show out to this far from the camera
 const NAME_ABOVE_FT = 0.6; // how far over the head
@@ -219,7 +220,8 @@ export class Others {
     const speed = speedOf(move);
     const now = performance.now();
     if (drawn.acting) drawn.weaponsUntil = now + WEAPONS_OUT_MS;
-    setWeaponsDrawn(drawn.model, now < (drawn.weaponsUntil ?? 0));
+    const weaponsOut = now < (drawn.weaponsUntil ?? 0);
+    setWeaponsDrawn(drawn.model, weaponsOut);
     const busy = speed || drawn.airborne;
     if (drawn.acting && (drawn.acting.until <= now || move.swim || (busy && !canSplit(drawn.model)))) drawn.acting = null;
     // On the move, an ability plays on the arms over what the legs are doing.
@@ -233,7 +235,7 @@ export class Others {
       return;
     }
     const way = move.forward < 0 ? "back" : move.forward > 0 || !move.strafe ? "ahead" : move.strafe > 0 ? "left" : "right";
-    let clip = "Idle_Loop";
+    let clip = weaponsOut ? (roleClips(drawn.model.userData.look, drawn.model.userData.skeleton).ready ?? "Idle_Loop") : "Idle_Loop";
     if (move.swim) clip = speed ? "Swim_Fwd_Loop" : "Swim_Idle_Loop";
     else if (drawn.airborne) clip = "Jump_Loop";
     else if (speed) clip = (GAITS[move.gait] ?? GAITS.run)[way];
@@ -263,6 +265,6 @@ export class Others {
     action.clampWhenFinished = once;
     action.time = from;
     action.play();
-    if (previous) action.crossFadeFrom(previous, FADE_S, false);
+    if (previous) action.crossFadeFrom(previous, drawn.acting ? SWING_FADE_S : FADE_S, false);
   }
 }

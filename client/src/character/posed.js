@@ -357,16 +357,12 @@ export const POSED = {
   // A melee hit lands 0.3 s in (timeline.js's MELEE_STRIKE_S), so each swing gets there by then.
   TwoHand_Chop: [
     [0, READY],
-    [0.12, WOUND],
-    ...through(0.12, 0.42, [WOUND, OVERHEAD, ABOVE, AHEAD, CHOPPED, FOLLOWED]),
-    [0.55, FOLLOWED],
+    ...through(0, 0.44, [READY, WOUND, OVERHEAD, ABOVE, AHEAD, CHOPPED, FOLLOWED]),
     [1.0, READY],
   ],
   TwoHand_Sweep: [
     [0, READY],
-    [0.14, SWEEP[0]],
-    ...through(0.14, 0.44, SWEEP),
-    [0.6, SWEEP[6]],
+    ...through(0, 0.46, [READY, ...SWEEP]),
     [1.1, READY],
   ],
   Bow_Shoot: [
