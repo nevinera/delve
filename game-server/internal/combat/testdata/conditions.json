@@ -29,5 +29,5 @@
   { "name": "since, never, asking below", "condition": { "since": "kill", "below": 5 }, "holds": false },
   { "name": "since, never, asking above", "condition": { "since": "kill", "above": 5 }, "holds": true },
   { "name": "a condition not read yet", "condition": { "wielding": "shield" }, "holds": true },
-  { "name": "not of a condition not read yet", "condition": { "not": { "group": "form" } }, "holds": true }
+  { "name": "not of a condition not read yet", "condition": { "not": { "wielding": "shield" } }, "holds": true }
 ]

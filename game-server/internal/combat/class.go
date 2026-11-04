@@ -91,6 +91,8 @@ type Ability struct {
 	Tags            []string      `json:"tags"`
 	Animation       string        `json:"animation"`
 	ExtraTargets    *ExtraTargets `json:"extraTargets"`
+	WhileCasting    bool          `json:"whileCasting"`
+	Replaces        string        `json:"replaces"`
 	Ignores         []string      `json:"-"` // what a `modify` lets it be used through
 
 	// What a `modify` says about what it spends.
@@ -162,6 +164,12 @@ type Effect struct {
 	Tags    []string `json:"tags"`
 
 	Lockout float64 `json:"lockout"` // interrupt
+
+	// castAbility
+	Ability  string  `json:"ability"`
+	Free     bool    `json:"free"`
+	Strength float64 `json:"strength"`
+	Level    int     `json:"level"`
 
 	// Crits.
 	AlwaysCrit     bool        `json:"alwaysCrit"`
@@ -352,8 +360,9 @@ type StatusEffect struct {
 	Control string
 	Status  string // an `aura`'s
 
-	Spill *ExtraTargets // an `extraTargets`
-	From  string        // a `store`: whose doings it keeps a share of
+	Spill   *ExtraTargets // an `extraTargets`
+	Becomes string        // a `modify`: what it turns the abilities into
+	From    string        // a `store`: whose doings it keeps a share of
 
 	// A `modify` of crits.
 	AlwaysCrit     bool
@@ -469,6 +478,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		Control    string   `json:"control"`
 		Status     string   `json:"status"`
 
+		Becomes        string      `json:"becomes"`
 		From           string      `json:"from"`
 		AlwaysCrit     bool        `json:"alwaysCrit"`
 		AlwaysCritWhen []Condition `json:"alwaysCritWhen"`
@@ -546,7 +556,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 			return err
 		}
 	}
-	*s = StatusEffect{head.Type, body.Control, body.Status, spill, body.From, body.AlwaysCrit, body.AlwaysCritWhen, body.ScalesWithCrit, body.CritMultiplier, body.AddPerSpent, body.MultiplyPerSpent, spentAs, spentAsMax, body.SpendsUpTo, body.ByExtraSpent, body.Controls, body.All, body.Harmful, body.AfterSeconds, body.OnlyBelow, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
+	*s = StatusEffect{head.Type, body.Control, body.Status, spill, body.Becomes, body.From, body.AlwaysCrit, body.AlwaysCritWhen, body.ScalesWithCrit, body.CritMultiplier, body.AddPerSpent, body.MultiplyPerSpent, spentAs, spentAsMax, body.SpendsUpTo, body.ByExtraSpent, body.Controls, body.All, body.Harmful, body.AfterSeconds, body.OnlyBelow, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
 		body.Hit, body.Source, body.School, body.Schools, body.Category, body.Categories, body.Abilities, body.Tag, body.Statuses, body.When,
 		body.Change, body.Set, body.AddAmount, body.AddTags, body.Chance, body.AtTargets, body.PerTargetHit, body.MaxTotal,
 		body.Affects, body.Radius, body.Max, body.SoftCap, body.Drain,
@@ -663,6 +673,19 @@ func (c *Class) Ability(id string) *Ability {
 // Knows says whether a character of this level and build has an ability. The build has to be one
 // Allowed gave back.
 func (c *Class) Knows(a *Ability, level int, b Build) bool {
+	if !c.reaches(a, level, b) {
+		return false
+	}
+	for i := range c.Abilities {
+		if o := &c.Abilities[i]; o.Replaces == a.ID && c.reaches(o, level, b) {
+			return false // something you know takes its place
+		}
+	}
+	return true
+}
+
+// reaches says whether an ability is within what a character of this level and build can have.
+func (c *Class) reaches(a *Ability, level int, b Build) bool {
 	if a.Level > level {
 		return false
 	}

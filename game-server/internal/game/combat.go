@@ -103,19 +103,21 @@ type fighter struct {
 
 // casting is a cast or channel under way.
 type casting struct {
-	ability   *combat.Ability
-	target    int64
-	spot      *[3]float64
-	release   time.Time // when a cast lets go
-	ends      time.Time // when it stops: the release, or the channel's end
-	channel   bool
-	released  bool
-	stopped   bool
-	spent     float64       // what its costs came to
-	status    *activeStatus // the status behind what's landing, if it isn't an ability
-	lastDone  float64       // what the last effect did
-	spentOpen bool          // those include one that can spend more
-	extra     float64       // how far past its least that one went, as a share
+	ability                *combat.Ability
+	target                 int64
+	spot                   *[3]float64
+	release                time.Time // when a cast lets go
+	ends                   time.Time // when it stops: the release, or the channel's end
+	channel                bool
+	released               bool
+	stopped                bool
+	spent                  float64       // what its costs came to
+	depth                  int           // how many `castAbility`s got it here
+	status                 *activeStatus // the status behind what's landing, if it isn't an ability
+	lastDone               float64       // what the last effect did
+	landed, crit, survived bool          // its last hit: whether there's been one, and how it went
+	spentOpen              bool          // those include one that can spend more
+	extra                  float64       // how far past its least that one went, as a share
 }
 
 // landing is something that happens at a time: a hit arriving, a channel's tick.
@@ -313,6 +315,60 @@ func (l *Layer) use(p *Player, m incoming) {
 	l.release(p, c, now)
 }
 
+// inForce is the ability a use of this one comes to: a `modify`'s `becomes` can turn it into another.
+func (l *Layer) inForce(p *Player, a *combat.Ability, now time.Time) *combat.Ability {
+	f := &p.fight
+	for _, m := range l.modifiersOf(&f.vitals, now) {
+		if e := m.Effect; e.Becomes != "" && e.Picks(a) && l.holds(&f.vitals, e, nil, now) {
+			if to := f.class.Ability(e.Becomes); to != nil {
+				return to
+			}
+		}
+	}
+	return a
+}
+
+const maxCastDepth = 4 // how many abilities can cast each other in a row
+
+// castNow does a `castAbility`: another of the class's abilities, at once.
+func (l *Layer) castNow(p *Player, c *casting, e *combat.Effect, on *vitals, now time.Time) {
+	f := &p.fight
+	if c.depth >= maxCastDepth || f.level < e.Level {
+		return
+	}
+	found := f.class.Ability(e.Ability)
+	if found == nil {
+		log.Printf("character %d: ability %s casts one its class hasn't got: %s", p.ID(), c.ability.ID, e.Ability)
+		return
+	}
+	a := *l.resolved(p, found, now)
+	if e.Strength != 0 && e.Strength != 1 {
+		a.Effects = slices.Clone(a.Effects)
+		for i := range a.Effects {
+			a.Effects[i].Amount = a.Effects[i].Amount.Grown(e.Strength)
+		}
+	}
+	if e.Free {
+		a.Cost = nil
+	}
+	if why := l.affordable(p, &a, on.ID, now); why != "" {
+		p.debugLine("%s: %s: %s", c.ability.Name, a.Name, why)
+		return
+	}
+	inner := &casting{ability: &a, target: on.ID, spot: c.spot, depth: c.depth + 1}
+	for _, cost := range a.Cost {
+		if l.costCounts(p, cost, on.ID, now) {
+			spent := spendFor(f, &a, cost)
+			f.resources[cost.Resource] -= spent
+			f.resChanged = true
+			countSpent(f, inner, cost, spent)
+		}
+	}
+	inner.spent = countedSpent(f, inner)
+	l.tell(p, encode(used{Type: "used", ID: p.ID(), Class: f.class.ID, Ability: a.ID, Target: on.ID, Spot: c.spot, School: a.School, Schools: a.Schools, Animation: a.Animation}))
+	l.landWhich(p, inner, now, func(*combat.Effect) bool { return true })
+}
+
 // modifiersOf is the `modify` effects that count for a unit right now.
 func (l *Layer) modifiersOf(v *vitals, now time.Time) []combat.Mod {
 	// What you gained last goes last, so with several `overrides` it wins. Statuses are held in a
@@ -387,8 +443,8 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 	if ability == nil || !f.class.Knows(ability, f.level, f.build) {
 		return nil, 0, "you don't know that"
 	}
-	ability = l.resolved(p, ability, now)
-	if f.cast != nil {
+	ability = l.resolved(p, l.inForce(p, ability, now), now)
+	if f.cast != nil && !ability.WhileCasting {
 		return nil, 0, "you're busy"
 	}
 	gcd := combat.GCDSeconds
@@ -628,7 +684,9 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 	a := c.ability
 	c.released = true
 	if why := l.affordable(p, a, c.target, now); why != "" {
-		f.cast = nil
+		if f.cast == c {
+			f.cast = nil
+		}
 		p.send(encode(refused{"refused", a.ID, why}))
 		l.tell(p, encode(stopped{"stopped", p.ID()}))
 		return
@@ -678,7 +736,9 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 		})
 		return
 	}
-	f.cast = nil
+	if f.cast == c {
+		f.cast = nil
+	}
 	strike := now
 	if a.Range.Melee {
 		strike = now.Add(strikeDelay)
@@ -768,7 +828,7 @@ func (l *Layer) landWhich(p *Player, c *casting, now time.Time, which func(*comb
 			if e.Affects == "enemies" || e.Affects == "allies" {
 				target = on.ID // an area's conditions ask about each one it reaches
 			}
-			if failed, ok := combat.All(e.When, l.facts(p, target, now)); !ok {
+			if failed, ok := combat.All(e.When, l.factsInUse(p, c, target, len(reached), now)); !ok {
 				p.debugLine("%s: %s skipped: %s", c.ability.Name, e.Type, failed.Why(statusNames(p)))
 				continue
 			}
@@ -776,6 +836,12 @@ func (l *Layer) landWhich(p *Player, c *casting, now time.Time, which func(*comb
 		}
 	}
 	for _, each := range plan {
+		// How a hit went is only known once it's landed, so what asks about that waits till now.
+		if slices.ContainsFunc(each.effect.When, func(w combat.Condition) bool { return w.Outcome != "" }) {
+			if _, ok := combat.All(each.effect.When, l.factsInUse(p, c, each.on.ID, each.count, now)); !ok {
+				continue
+			}
+		}
 		l.land(p, c, each.effect, each.on, each.count, now)
 	}
 }
@@ -801,6 +867,13 @@ func (l *Layer) unmet(p *Player, a *combat.Ability, target int64, now time.Time)
 	return ""
 }
 
+// factsInUse is what an ability's effects are read against, with how the use is going.
+func (l *Layer) factsInUse(p *Player, c *casting, target int64, hits int, now time.Time) *combat.Facts {
+	out := l.facts(p, target, now)
+	out.Used = &combat.UseSoFar{Spent: c.spent, Hits: hits, Crit: c.crit, Survived: c.survived, Landed: c.landed}
+	return out
+}
+
 // facts is what conditions are read against, for a player and its target.
 func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
 	f := &p.fight
@@ -811,6 +884,23 @@ func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
 	}
 	for what, at := range f.since {
 		out.Since[what] = now.Sub(at).Seconds()
+	}
+	out.Holders, out.InAreas = map[string]int{}, map[string]bool{}
+	out.Groups = groupsOn(&f.vitals)
+	l.eachUnit(func(v *vitals, _ [3]float64, _ string) {
+		for key := range v.Statuses {
+			if key.from == p.ID() {
+				out.Holders[key.id]++
+			}
+		}
+	})
+	for _, z := range l.zones {
+		if z.from == p && z.inside[target] != nil {
+			out.InAreas[z.kind] = true
+		}
+	}
+	if t := l.unitWithID(target, p.state.Continent); t != nil {
+		out.TargetGroups = groupsOn(t)
 	}
 	if f.class != nil {
 		for _, r := range f.class.Resources {
@@ -847,6 +937,17 @@ func unitOf(v *vitals, reader int64, state []string) combat.Unit {
 		}
 	}
 	return combat.Unit{Health: v.Health, MaxHealth: v.MaxHealth, Statuses: stacks, State: state}
+}
+
+// groupsOn is the status groups a unit holds something of.
+func groupsOn(v *vitals) map[string]bool {
+	out := map[string]bool{}
+	for _, held := range v.Statuses {
+		if held.def.Group != "" {
+			out[held.def.Group] = true
+		}
+	}
+	return out
 }
 
 // fighterState is which of a `state` condition's words are true of a player. Everywhere counts as
@@ -912,6 +1013,7 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 		l.critRules(p, e, on, &ctx, now)
 		l.strike(p, on, l.amountFor(p, c, e, on, count, now), ctx, &h, now)
 		if !h.Missed {
+			c.landed, c.crit, c.survived = true, h.Crit, on.Health > 0
 			l.drain(p, h.Amount, e.Drain, c.ability.ID)
 			c.lastDone = h.Amount
 			if center, continent, ok := l.unitAt(on.ID, [3]float64{}, ""); ok {
@@ -933,6 +1035,9 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 		return
 	case "dispel":
 		l.dispel(p, c, e, on, now)
+		return
+	case "castAbility":
+		l.castNow(p, c, e, on, now)
 		return
 	case "move":
 		l.forceMove(p, c, e, on, now)

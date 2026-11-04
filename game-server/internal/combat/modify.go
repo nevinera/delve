@@ -136,6 +136,9 @@ func (e *StatusEffect) picks(a *Ability) bool {
 	return slices.Contains(e.Abilities, a.ID) || (e.Tag != "" && slices.Contains(a.Tags, e.Tag))
 }
 
+// Picks says whether a `modify` is about this ability.
+func (e *StatusEffect) Picks(a *Ability) bool { return e.picks(a) }
+
 // byHits says whether a `modify` waits to see how many the ability hits.
 func (e *StatusEffect) byHits() bool {
 	return (e.AtTargets > 0 || e.PerTargetHit != 0) && slices.Contains([]string{"amount", "damage", "healing"}, e.Change)

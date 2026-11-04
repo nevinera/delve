@@ -91,6 +91,12 @@ export function shownResources(made, known) {
   return (made.resources ?? []).filter((r, i) => i === 0 || used.has(r.key));
 }
 
+// Whether a `modify` is about this ability, as the game server has it.
+export function modifyPicks(effect, ability) {
+  if (effect.abilities?.length || effect.tag) return Boolean(effect.abilities?.includes(ability.id) || (effect.tag && ability.tags?.includes(effect.tag)));
+  return true;
+}
+
 export class PlayCombat {
   // you: the welcome's character. loader: the world's files. hud: the element to build in.
   constructor({ view, others, connection, loader, you, hud, unitStatuses }) {
@@ -259,7 +265,7 @@ export class PlayCombat {
       if (id) this.setBars(placed(this.bars, at, id));
       else if (from) this.setBars(swapped(this.bars, from, at));
     });
-    if (ability) this.slots.push({ id: ability.id, ability, shade, node: button });
+    if (ability) this.slots.push({ id: ability.id, ability, shade, node: button, label: button.querySelector(".combat-action-name") });
     return button;
   }
 
@@ -441,6 +447,20 @@ export class PlayCombat {
     frame.shownAbsorb = style;
     frame.shield.style.left = `${left}%`;
     frame.shield.style.width = `${width}%`;
+  }
+
+  // The ability a slot's ability comes to right now: a status's `becomes` can turn it into another.
+  inForce(ability) {
+    for (const held of this.unitStatuses.of(this.you.id)) {
+      if (held.class !== this.made?.id && held.class !== this.you.class) continue;
+      const made = this.made?.statuses?.find((s) => s.id === held.status);
+      for (const effect of made?.effects ?? []) {
+        if (effect.type === "modify" && effect.becomes && modifyPicks(effect, ability)) {
+          return this.made.abilities?.find((a) => a.id === effect.becomes) ?? ability;
+        }
+      }
+    }
+    return ability;
   }
 
   // A class's statuses, once its file has loaded, and asks for it until then.
@@ -701,7 +721,9 @@ export class PlayCombat {
     }
     if (this.slots) {
       const facts = this.facts();
-      for (const { id, ability, shade, node } of this.slots) {
+      for (const { id, ability, shade, node, label } of this.slots) {
+        const force = this.inForce(ability);
+        if (label && label.textContent !== (force.name ?? force.id)) label.textContent = force.name ?? force.id;
         const ready = Math.max(this.cooldowns.get(id) ?? 0, this.gcdUntil, this.lockedUntil(ability));
         shade.style.height = ready > now ? "100%" : "0";
         node.classList.toggle("combat-action-locked", this.lockedUntil(ability) > now);

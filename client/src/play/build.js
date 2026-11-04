@@ -34,7 +34,9 @@ export function knownAbilities(made, level, build) {
   for (const tier of Object.values(made.talents ?? {})) for (const talent of tier) for (const grant of talent.grants ?? []) if (grant.ability) chosen.add(grant.ability);
   const mine = new Set((made.specializations ?? []).find((s) => s.id === build?.specialization)?.abilities ?? []);
   for (const grant of talentGrants(made, build)) if (grant.ability) mine.add(grant.ability);
-  return (made.abilities ?? []).filter((a) => (a.level ?? 1) <= level && (mine.has(a.id) || !chosen.has(a.id))).sort((a, b) => (a.level ?? 1) - (b.level ?? 1));
+  const reached = (made.abilities ?? []).filter((a) => (a.level ?? 1) <= level && (mine.has(a.id) || !chosen.has(a.id)));
+  const replaced = new Set(reached.map((a) => a.replaces).filter(Boolean));
+  return reached.filter((a) => !replaced.has(a.id)).sort((a, b) => (a.level ?? 1) - (b.level ?? 1));
 }
 
 // The ids of the statuses a character of this level and allowed build always holds.

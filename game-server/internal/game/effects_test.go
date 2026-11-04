@@ -975,3 +975,122 @@ func TestExtraTargetsSpill(t *testing.T) {
 		t.Fatalf("dealt %g, spilled %g", x, y)
 	}
 }
+
+func TestWhileCastingDoesntStopTheCast(t *testing.T) {
+	h, p, c := spender(t,
+		combat.Ability{ID: "longone", Name: "Long", Target: "self", CastTime: 3},
+		combat.Ability{ID: "aside", Name: "Aside", Target: "self", WhileCasting: true},
+		combat.Ability{ID: "notaside", Name: "Not", Target: "self"})
+	use(t, p, "longone")
+	pass(h, c, 0.05)
+	heard(p)
+	use(t, p, "notaside")
+	pass(h, c, 0.05)
+	refusal(t, p, "you're busy")
+	use(t, p, "aside")
+	pass(h, c, 0.05)
+	if got := heard(p, "refused"); len(got) != 0 {
+		t.Fatalf("refused = %v", got)
+	}
+	if p.fight.cast == nil {
+		t.Fatal("the cast stopped")
+	}
+}
+
+func TestBecomesSwapsWhileItHolds(t *testing.T) {
+	form := combat.Status{ID: "form", Name: "Form", Effects: []combat.StatusEffect{{Type: "modify", Abilities: []string{"weakone"}, Becomes: "bigone"}}}
+	h, p, c := spender(t,
+		combat.Ability{ID: "weakone", Name: "Weak", Effects: []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 1, Max: 1}}}},
+		combat.Ability{ID: "bigone", Name: "Big", Level: 99, Effects: []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 500, Max: 500}}}})
+	p.fight.class.Statuses = append(p.fight.class.Statuses, form)
+	d := p.layer.dummies[0]
+	was := d.Health
+	use(t, p, "weakone")
+	pass(h, c, 0.5)
+	if got := was - d.Health; got > 5 {
+		t.Fatalf("before: dealt %g", got)
+	}
+	p.fight.vitals.Statuses[statusKey{"form", p.ID()}] = &activeStatus{def: p.fight.class.Status("form"), since: h.now(), stacks: 1, uses: 1}
+	was = d.Health
+	use(t, p, "weakone")
+	pass(h, c, 0.5)
+	if got := was - d.Health; got < 400 {
+		t.Fatalf("after: dealt %g", got)
+	}
+}
+
+func TestCastAbilityAtOnce(t *testing.T) {
+	inner := combat.Ability{ID: "innerone", Name: "Inner", Cost: []combat.Cost{{Resource: "combo", Amount: 3}}, Effects: []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 100, Max: 100}}}}
+	h, p, c := spender(t, inner,
+		combat.Ability{ID: "paid", Name: "Paid", Effects: []combat.Effect{{Type: "castAbility", Affects: "target", Ability: "innerone"}}},
+		combat.Ability{ID: "gratis", Name: "Gratis", Effects: []combat.Effect{{Type: "castAbility", Affects: "target", Ability: "innerone", Free: true, Strength: 0.5}}},
+		combat.Ability{ID: "selfish", Name: "Selfish", Effects: []combat.Effect{{Type: "castAbility", Affects: "target", Ability: "selfish"}}})
+	d := p.layer.dummies[0]
+	was := d.Health
+	heard(p)
+	use(t, p, "paid")
+	pass(h, c, 0.5)
+	if p.fight.resources["combo"] != 7 {
+		t.Fatalf("%g left", p.fight.resources["combo"])
+	}
+	dealtFull := was - d.Health
+	if dealtFull < 90 {
+		t.Fatalf("dealt %g", dealtFull)
+	}
+	if got := heard(p, "used"); len(got) != 2 || got[1]["ability"] != "innerone" {
+		t.Fatalf("used = %v", got)
+	}
+	was = d.Health
+	use(t, p, "gratis")
+	pass(h, c, 0.5)
+	if p.fight.resources["combo"] != 7 {
+		t.Fatalf("free cost: %g left", p.fight.resources["combo"])
+	}
+	if got := was - d.Health; math.Abs(got-dealtFull/2) > 2 {
+		t.Fatalf("at half strength dealt %g, %g at full", got, dealtFull)
+	}
+	use(t, p, "selfish") // it stops on its own
+	pass(h, c, 0.1)
+}
+
+func TestConditionsOnTheFightSoFar(t *testing.T) {
+	two := 2.0
+	one := 1
+	h, p, c := consuming(t, combat.Status{ID: "mark", Name: "Mark", Duration: 20, Group: "marks"},
+		withEffects("gated", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 1, Max: 1}, When: []combat.Condition{{Holders: "mark", AtLeast: &[]float64{1}[0]}}}),
+		withEffects("tooMany", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 1, Max: 1}, When: []combat.Condition{{Holders: "mark", AtLeast: &two}}}),
+		withEffects("oneHit", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 1, Max: 1}, When: []combat.Condition{{TargetsHitAtLeast: &one}}}),
+		withEffects("marked", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 1, Max: 1}, When: []combat.Condition{{Group: "marks", On: "target"}}}),
+		withEffects("weaker", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 1, Max: 1}, When: []combat.Condition{{TargetHealthBelowMine: true}}}),
+		withEffects("spent", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 1, Max: 1}, When: []combat.Condition{{SpentAtLeast: &two}}}),
+		withEffects("afterCrit", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 1, Max: 1}}, combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 50, Max: 50}, When: []combat.Condition{{Outcome: "crit"}}}))
+	d := p.layer.dummies[0]
+	check := func(id string, lands bool) {
+		t.Helper()
+		was := d.Health
+		use(t, p, id)
+		pass(h, c, 0.5)
+		if got := d.Health < was; got != lands {
+			t.Fatalf("%s: landed = %v", id, got)
+		}
+	}
+	check("gated", false)
+	check("marked", false)
+	use(t, p, "put")
+	pass(h, c, 0.1)
+	check("gated", true)
+	check("tooMany", false)
+	check("oneHit", true)
+	check("marked", true)
+	check("weaker", false)
+	check("spent", false)
+	d.Health = 10
+	check("weaker", true)
+	d.Health = d.MaxHealth
+	was := d.Health
+	use(t, p, "afterCrit") // the fight never crits: only the first lands
+	pass(h, c, 0.5)
+	if got := was - d.Health; got > 5 {
+		t.Fatalf("after a hit that didn't crit, dealt %g", got)
+	}
+}

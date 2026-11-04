@@ -23,10 +23,16 @@
       { "id": "late", "level": 12 },
       { "id": "slash", "level": 10 },
       { "id": "gifted", "level": 1 },
-      { "id": "far", "level": 30 }
+      { "id": "far", "level": 30 },
+      { "id": "weak", "level": 40 },
+      { "id": "strong", "level": 41, "replaces": "weak" }
     ]
   },
   "cases": [
+    { "name": "what replaces an ability takes its place once you know it", "level": 40, "build": {},
+      "want": { "specialization": "", "talents": {} }, "known": ["plain", "far", "weak"], "held": ["early", "focus", "late"] },
+    { "name": "and it's gone from then on", "level": 41, "build": {},
+      "want": { "specialization": "", "talents": {} }, "known": ["plain", "far", "strong"], "held": ["early", "focus", "late"] },
     { "name": "under level 10 there's no spec to have", "level": 9, "build": { "specialization": "guard" },
       "want": { "specialization": "", "talents": {} }, "known": ["plain"], "held": ["early", "focus"] },
     { "name": "a spec gives its abilities at their levels, and its status", "level": 10, "build": { "specialization": "guard" },

@@ -20,6 +20,18 @@ type Condition struct {
 	Since    string      `json:"since"`
 	Resource string      `json:"resource"`
 	Percent  bool        `json:"percent"`
+
+	// About the fight so far, which only the server knows.
+	Holders               string   `json:"holders"`
+	AtLeast               *float64 `json:"atLeast"`
+	AtMost                *float64 `json:"atMost"`
+	UnitsOut              []string `json:"unitsOut"`
+	InArea                string   `json:"inArea"`
+	SpentAtLeast          *float64 `json:"spentAtLeast"`
+	TargetsHitAtLeast     *int     `json:"targetsHitAtLeast"`
+	Outcome               string   `json:"outcome"`
+	TargetHealthBelowMine bool     `json:"targetHealthBelowMine"`
+	Group                 string   `json:"group"`
 }
 
 // Unit is what conditions ask about someone.
@@ -44,10 +56,27 @@ type Facts struct {
 	Position  string                    `json:"position"` // behind or inFront of the target
 	Since     map[string]float64        `json:"since"`    // seconds, leaving out what's never happened
 	Resources map[string]ResourceAmount `json:"resources"`
+
+	// What the server knows, in the middle of a use. Known is false when a condition's asked about
+	// something that isn't there to ask, like before an ability has landed: those hold.
+	Holders      map[string]int  `json:"-"` // units holding each status from you
+	Groups       map[string]bool `json:"-"` // status groups on you
+	TargetGroups map[string]bool `json:"-"` // and on your target
+	InAreas      map[string]bool `json:"-"` // abilities of yours whose area your target's in
+	Used         *UseSoFar       `json:"-"`
+}
+
+// UseSoFar is what an ability has done by now, for conditions on its effects.
+type UseSoFar struct {
+	Spent    float64
+	Hits     int
+	Crit     bool
+	Survived bool
+	Landed   bool // a hit has landed, so there's an outcome to ask about
 }
 
 func (c *Condition) reads() bool {
-	return c.Health != "" || c.Status != "" || c.Not != nil || len(c.AnyOf) > 0 || c.TargetIs != "" || c.State != "" || c.InCombat != nil || c.Position != "" || c.Since != "" || c.Resource != ""
+	return c.Health != "" || c.Status != "" || c.Not != nil || len(c.AnyOf) > 0 || c.TargetIs != "" || c.State != "" || c.InCombat != nil || c.Position != "" || c.Since != "" || c.Resource != "" || c.Holders != "" || c.InArea != "" || c.SpentAtLeast != nil || c.TargetsHitAtLeast != nil || c.Outcome != "" || c.TargetHealthBelowMine || c.Group != ""
 }
 
 func inRange(n float64, c *Condition) bool {
@@ -82,6 +111,34 @@ func (c *Condition) Holds(f *Facts) bool {
 			}
 		}
 		return false
+	case c.Holders != "":
+		if f.Holders == nil {
+			return true
+		}
+		n := float64(f.Holders[c.Holders])
+		return (c.AtLeast == nil || n >= *c.AtLeast) && (c.AtMost == nil || n <= *c.AtMost)
+	case c.InArea != "":
+		return f.InAreas == nil || f.InAreas[c.InArea]
+	case c.SpentAtLeast != nil:
+		return f.Used == nil || f.Used.Spent >= *c.SpentAtLeast
+	case c.TargetsHitAtLeast != nil:
+		return f.Used == nil || f.Used.Hits >= *c.TargetsHitAtLeast
+	case c.Outcome != "":
+		if f.Used == nil || !f.Used.Landed {
+			return true
+		}
+		if c.Outcome == "crit" {
+			return f.Used.Crit
+		}
+		return f.Used.Survived
+	case c.TargetHealthBelowMine:
+		return f.Target == nil || f.Target.Health < f.Self.Health
+	case c.Group != "":
+		groups := f.Groups
+		if c.On == "target" {
+			groups = f.TargetGroups
+		}
+		return groups == nil || groups[c.Group]
 	case c.Health != "":
 		return who != nil && who.MaxHealth > 0 && inRange(100*who.Health/who.MaxHealth, c)
 	case c.Status != "":
