@@ -10,8 +10,7 @@ const STOCK = new Set(names);
 let worldIcons = new Map(); // name -> data URL
 
 // A world's icons, from its files: [path, bytes] pairs. They're only ever used as CSS images, which
-// can't run what's in them. As data URLs because raw GitHub serves them as plain text, which
-// browsers won't use as an image.
+// can't run what's in them. As data URLs so they draw whatever type the host serves them as.
 export function setWorldIcons(files) {
   worldIcons = new Map();
   for (const [path, bytes] of files) {
