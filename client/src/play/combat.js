@@ -1,6 +1,7 @@
 import { SPEC_LEVEL, allowedBuild, heldStatuses, knownAbilities } from "./build.js";
 import { drawBuildPanel } from "./buildPanel.js";
 import { drawAbilitiesPane } from "./abilitiesPane.js";
+import { AbilityTooltip } from "./abilityTooltip.js";
 import { barsFor, cleared, keyLabel, placed, slotForKey, swapped } from "./bars.js";
 import * as THREE from "three";
 import { chestOf, AbilityStage, clipNameFor } from "../abilities/stage.js";
@@ -154,7 +155,9 @@ export class PlayCombat {
     this.say = el("div", { className: "combat-say" });
     this.log = new PlayLog((line) => this.connection.command(line));
     this.floatLayer = el("div", { className: "combat-floats" });
-    this.hud.replaceChildren(el("div", { className: "combat-frames" }, this.youFrame.root, this.targetFrame.root), this.floatLayer, this.say, this.castBar, this.bar, this.log.root);
+    this.tooltip = new AbilityTooltip();
+    this.hovered = null;
+    this.hud.replaceChildren(el("div", { className: "combat-frames" }, this.youFrame.root, this.targetFrame.root), this.floatLayer, this.tooltip.root, this.say, this.castBar, this.bar, this.log.root);
     this.youFrame.name.textContent = `${this.you.name}${this.you.level ? ` (${this.you.level})` : ""}`;
     this.drawFrame(this.youFrame, this.health, this.maxHealth);
     this.targetRing = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff5040, transparent: true, opacity: 0.8, depthWrite: false }));
@@ -218,6 +221,7 @@ export class PlayCombat {
     if (!this.made) return;
     this.bars = barsFor(this.savedBars, this.known);
     this.slots = [];
+    this.hideTooltip();
     const arranging = !this.pane?.hidden;
     const rows = this.bars.map((bar, b) => {
       const row = el("div", { className: b === this.barPage ? "combat-bar" : "combat-bar combat-bar-away" });
@@ -250,7 +254,7 @@ export class PlayCombat {
   slotButton(bar, slot, ability) {
     const at = { bar, slot };
     const shade = el("div", { className: "combat-action-shade" });
-    const button = el("button", { type: "button", className: `combat-action${ability ? "" : " combat-action-empty"}`, title: ability ? ability.description ?? ability.name : "" }, el("span", { className: "combat-action-key", textContent: keyLabel(bar, slot) }), el("span", { className: "combat-action-name", textContent: ability?.name ?? "" }), shade);
+    const button = el("button", { type: "button", className: `combat-action${ability ? "" : " combat-action-empty"}` }, el("span", { className: "combat-action-key", textContent: keyLabel(bar, slot) }), el("span", { className: "combat-action-name", textContent: ability?.name ?? "" }), shade);
     const icon = iconNode(ability?.icon, "combat-action-icon");
     if (icon) {
       button.prepend(icon);
@@ -273,8 +277,34 @@ export class PlayCombat {
       if (id) this.setBars(placed(this.bars, at, id));
       else if (from) this.setBars(swapped(this.bars, from, at));
     });
+    if (ability) {
+      button.addEventListener("pointerenter", (e) => {
+        if (e.pointerType !== "mouse") return;
+        this.hovered = ability;
+        this.showTooltip();
+      });
+      button.addEventListener("pointerleave", () => this.hideTooltip());
+      button.addEventListener("dragstart", () => this.hideTooltip());
+    }
     if (ability) this.slots.push({ id: ability.id, ability, shade, node: button, label: button.querySelector(".combat-action-name") });
     return button;
+  }
+
+  // Says what the ability under the mouse comes to, and what's true of you for it now.
+  showTooltip() {
+    const shown = this.inForce(this.hovered);
+    const ready = this.cooldowns.get(shown.id) ?? 0;
+    this.tooltip.show(shown, {
+      resources: this.resources,
+      names: Object.fromEntries((this.made?.resources ?? []).map(({ key, name }) => [key, name ?? key])),
+      look: this.view.walker?.look,
+      cooldownLeft: (ready - performance.now()) / 1000,
+    });
+  }
+
+  hideTooltip() {
+    this.hovered = null;
+    this.tooltip.hide();
   }
 
   // While you're arranging the bars, a tap places what you picked, or picks up or moves a slot.
@@ -734,6 +764,7 @@ export class PlayCombat {
       this.castBar.firstChild.style.width = `${(this.casting.draining ? 1 - u : u) * 100}%`;
       if (u >= 1) this.showBar(null);
     }
+    if (this.hovered) this.showTooltip();
     if (this.slots) {
       const facts = this.facts();
       for (const { id, ability, shade, node, label } of this.slots) {

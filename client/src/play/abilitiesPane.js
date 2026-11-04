@@ -1,8 +1,10 @@
 import { iconNode } from "./icons.js";
-// What an ability's cost reads as, the way the server charges it.
-export function costWords(costs) {
+// What an ability's cost reads as, the way the server charges it, with what each resource is called
+// if `names` says.
+export function costWords(costs, names = {}) {
   return costs
-    .map(({ resource, amount, percent, all, upTo, perSecond }) => {
+    .map(({ resource: key, amount, percent, all, upTo, perSecond }) => {
+      const resource = names[key] ?? key;
       if (perSecond) return `${perSecond} ${resource} a second`;
       const least = percent ? `${percent}%` : amount ?? 0;
       if (all) return `${least}+ ${resource}, spends it all`;
