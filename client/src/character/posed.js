@@ -233,9 +233,9 @@ const GATHER = { ...PLANTED, pelvis: [0, -0.35, 0], bones: { spine_01: [0.25, 0,
 // An oath: the head bowed and the left hand over the heart, whatever the right is holding.
 const heart = (bow) => ({
   ...PLANTED,
-  pelvis: [0, -0.04 - bow * 0.1, 0],
-  bones: { spine_01: [bow * 0.25, 0, 0], spine_02: [bow * 0.2, 0, 0], neck_01: [bow * 0.3, 0, 0], head: [bow * 0.45, 0, 0], upperarm_r: [-0.1, 0, -0.08], lowerarm_r: [-0.25, 0, 0] },
-  reach: { hand_l: { wrist: [0.2, 4.55 - bow * 0.1, 0.62 + bow * 0.1], elbow: [0.85, -0.5, 0.1] } },
+  pelvis: [0, -0.02 - bow * 0.03, 0],
+  bones: { spine_01: [bow * 0.05, 0, 0], spine_02: [bow * 0.05, 0, 0], neck_01: [bow * 0.1, 0, 0], head: [bow * 0.25, 0, 0], upperarm_r: [-0.1, 0, -0.08], lowerarm_r: [-0.25, 0, 0] },
+  reach: { hand_l: { wrist: [0.15, 4.5, 0.62], elbow: [0.85, -0.5, 0.1] } },
 });
 
 const roar = (shake) => ({
