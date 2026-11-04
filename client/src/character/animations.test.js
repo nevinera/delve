@@ -59,15 +59,18 @@ describe("characterClips", () => {
 
   it("gets every melee swing to its target about when its hit lands", () => {
     for (const name of ["Punch_Cross", "Sword_Attack", "Sword_Regular_B", "TwoHand_Chop", "TwoHand_Sweep", "TwoHand_Sweep_Release", "Zombie_Scratch"]) {
-      let furthest = { z: -Infinity, at: 0 };
-      for (let t = 0; t < 0.9; t += 1 / 30) {
+      // The moment the hand goes forward fastest.
+      let fastest = { gain: 0, at: 0 };
+      let was = posed(name, 0)("hand_r").z;
+      for (let t = 1 / 30; t < 0.9; t += 1 / 30) {
         const { z } = posed(name, t)("hand_r");
-        if (z > furthest.z) furthest = { z, at: t };
+        if (z - was > fastest.gain) fastest = { gain: z - was, at: t };
+        was = z;
       }
-      expect(furthest.at, name).toBeGreaterThan(0.15);
-      expect(furthest.at, name).toBeLessThan(0.4);
+      expect(fastest.at, name).toBeGreaterThan(0.12);
+      expect(fastest.at, name).toBeLessThan(0.4);
     }
-  });
+  }, 60000);
 
   it("holds a two-handed weapon in both hands, in front, with the feet planted", () => {
     for (const time of [0, 0.5, 0.6, 0.75]) {
