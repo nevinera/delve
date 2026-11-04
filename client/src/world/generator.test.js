@@ -56,17 +56,19 @@ describe("generator", () => {
   });
 
   // Heights along one row, west to east, across the island's east edge at x = 16 tiles.
-  const row = (j) => [14, 15, 16].flatMap((tx) => Array.from({ length: CELLS }, (_, i) => cell(generateTile(ctx, tx, -2), i, j, "height")));
+  const coast = () => [14, 15, 16].map((tx) => generateTile(ctx, tx, -2));
+  const row = (tiles, j) => tiles.flatMap((tile) => Array.from({ length: CELLS }, (_, i) => cell(tile, i, j, "height")));
 
   it("puts the coast where the land grid crosses sea level", () => {
     // The grid crosses 0 80ft in from the edge, 10 cells.
+    const tiles = coast();
     for (const j of [8, 32, 56]) {
-      const heights = row(j);
+      const heights = row(tiles, j);
       expect(heights[2 * CELLS - 13]).toBeGreaterThan(0);
       expect(heights[2 * CELLS - 7]).toBeLessThan(0);
-      expect(cell(generateTile(ctx, 15, -2), CELLS - 7, j, "water")).toBe(0);
+      expect(cell(tiles[1], CELLS - 7, j, "water")).toBe(0);
     }
-  }, 20000);
+  });
 
   it("follows the land grid inland", () => {
     const tile = generateTile(ctx, 13, -2);
@@ -202,8 +204,22 @@ describe("beaches", () => {
 
 describe("biomes in the generator", () => {
   // Flat land 20ft up, 8×8 tiles, given over to a single biome pin.
-  const world = (biome, tags = []) => prepareWorld(island([0, 0, 8, 8], 20, 1), { pins: [{ id: "b", kind: "biome", at: [4, 4], biome, tags }] });
-  const tiles = (ctx) => [3, 4].flatMap((tx) => [3, 4].map((tz) => generateTile(ctx, tx, tz)));
+  const worlds = new Map();
+  const world = (biome, tags = []) => {
+    const key = `${biome} ${tags}`;
+    if (!worlds.has(key)) worlds.set(key, prepareWorld(island([0, 0, 8, 8], 20, 1), { pins: [{ id: "b", kind: "biome", at: [4, 4], biome, tags }] }));
+    return worlds.get(key);
+  };
+  // Generating is slow, so these tests share their worlds and tiles.
+  const sharedTiles = new WeakMap();
+  const tileOf = (ctx, tx, tz) => {
+    if (!sharedTiles.has(ctx)) sharedTiles.set(ctx, new Map());
+    const made = sharedTiles.get(ctx);
+    const key = `${tx},${tz}`;
+    if (!made.has(key)) made.set(key, generateTile(ctx, tx, tz));
+    return made.get(key);
+  };
+  const tiles = (ctx) => [3, 4].flatMap((tx) => [3, 4].map((tz) => tileOf(ctx, tx, tz)));
   const count = (ctx, fn) => tiles(ctx).reduce((sum, tile) => sum + fn(tile), 0);
 
   it("plants many more trees in forest than plains", () => {
@@ -218,7 +234,7 @@ describe("biomes in the generator", () => {
   });
 
   it("keeps each swamp pool flat, in a hollow, and off slopes", () => {
-    const tile = tiles(world("swamp"))[0];
+    const tile = tileOf(world("swamp"), 3, 3);
     const levels = new Set();
     tile.layers.water.forEach((w, k) => {
       if (Number.isNaN(w)) return;
@@ -237,7 +253,7 @@ describe("biomes in the generator", () => {
   });
 
   it("scatters flat-topped ponds and lakes where tagged", () => {
-    const all = (ctx) => [2, 3, 4, 5].flatMap((tx) => [2, 3, 4, 5].map((tz) => generateTile(ctx, tx, tz)));
+    const all = (ctx) => [2, 3, 4, 5].flatMap((tx) => [2, 3, 4, 5].map((tz) => tileOf(ctx, tx, tz)));
     const water = (tiles) => tiles.flatMap((t) => Array.from(t.layers.water).filter((w) => !Number.isNaN(w)));
     expect(water(all(world("plains")))).toHaveLength(0);
     const tiles = all(world("plains", ["lakes"]));

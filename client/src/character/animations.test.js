@@ -11,15 +11,27 @@ const read = (file) => JSON.parse(fs.readFileSync(new URL(file, import.meta.url)
 const baked = read("./animations.json");
 baked.clips.A_TPose = read("./animations-stash.json").clips.A_TPose;
 
-// Where each bone is, in feet, at a time into a clip.
-function posed(name, time, look = resolveRecipe()) {
+// Building a look's clips is slow, so its tests share them.
+const builtClips = new Map();
+function clipsOf(mesh, look) {
+  const key = JSON.stringify(look);
+  if (!builtClips.has(key)) builtClips.set(key, characterClips(mesh, baked));
+  return builtClips.get(key);
+}
+
+// A character playing a clip. Given a time into it, it stands there and says where each bone is, in feet.
+function playing(name, look = resolveRecipe()) {
   const mesh = characterMesh(look);
   const mixer = new THREE.AnimationMixer(mesh);
-  mixer.clipAction(characterClips(mesh, baked).get(name)).play();
-  mixer.setTime(time);
-  mesh.updateMatrixWorld(true);
-  return (bone) => new THREE.Vector3().setFromMatrixPosition(mesh.skeleton.getBoneByName(bone).matrixWorld);
+  mixer.clipAction(clipsOf(mesh, look).get(name)).play();
+  return (time) => {
+    mixer.setTime(time);
+    mesh.updateMatrixWorld(true);
+    return (bone) => new THREE.Vector3().setFromMatrixPosition(mesh.skeleton.getBoneByName(bone).matrixWorld);
+  };
 }
+
+const posed = (name, time, look) => playing(name, look)(time);
 
 describe("characterClips", () => {
   it("holds the arms straight out in a T-pose", () => {
@@ -60,28 +72,30 @@ describe("characterClips", () => {
   it("gets every melee swing to its target about when its hit lands", () => {
     for (const name of ["Punch_Cross", "Sword_Attack", "Sword_Regular_B", "TwoHand_Chop", "TwoHand_Sweep", "TwoHand_Sweep_Release", "Zombie_Scratch"]) {
       // The moment the hand goes forward fastest.
+      const at = playing(name);
       let fastest = { gain: 0, at: 0 };
-      let was = posed(name, 0)("hand_r").z;
+      let was = at(0)("hand_r").z;
       for (let t = 1 / 30; t < 0.9; t += 1 / 30) {
-        const { z } = posed(name, t)("hand_r");
+        const { z } = at(t)("hand_r");
         if (z - was > fastest.gain) fastest = { gain: z - was, at: t };
         was = z;
       }
       expect(fastest.at, name).toBeGreaterThan(0.12);
       expect(fastest.at, name).toBeLessThan(0.4);
     }
-  }, 60000);
+  });
 
   it("keeps a greatsword moving through its swings, from the ready to the end of the swing", () => {
     for (const name of ["TwoHand_Chop", "TwoHand_Sweep"]) {
-      let was = posed(name, 0.1)("hand_r");
+      const at = playing(name);
+      let was = at(0.1)("hand_r");
       for (let t = 0.1 + 1 / 30; t < 0.36; t += 1 / 30) {
-        const now = posed(name, t)("hand_r");
+        const now = at(t)("hand_r");
         expect(now.distanceTo(was) * 30, `${name} at ${t.toFixed(2)}`).toBeGreaterThan(7);
         was = now;
       }
     }
-  }, 60000);
+  });
 
   it("holds a two-handed weapon in both hands, in front, with the feet planted", () => {
     for (const time of [0, 0.5, 0.6, 0.75]) {

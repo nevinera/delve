@@ -44,16 +44,23 @@ describe("quadrupedMesh", () => {
 });
 
 describe("roleClips", () => {
-  it("has a clip for each role each body plays, a battle cry among them", () => {
-    for (const body of Object.values(SKELETONS).flat()) {
-      const look = resolveRecipe({ body, loadouts: [] });
-      const mesh = characterMesh(look);
-      const clips = characterClips(mesh, baked);
-      const roles = roleClips(look, mesh.userData.skeleton);
-      for (const role of ["idle", "walk", "run", "attack", "battleCry", "hit", "death"]) expect(clips.has(roles[role]), `${body} ${role}`).toBe(true);
-      for (const role of ROLES) if (roles[role]) expect(clips.has(roles[role]), `${body} ${role}`).toBe(true);
-    }
-  }, 30000);
+  const expectEveryRole = (body, skeleton, look, clips) => {
+    const roles = roleClips(look, skeleton);
+    for (const role of ["idle", "walk", "run", "attack", "battleCry", "hit", "death"]) expect(clips.has(roles[role]), `${body} ${role}`).toBe(true);
+    for (const role of ROLES) if (roles[role]) expect(clips.has(roles[role]), `${body} ${role}`).toBe(true);
+  };
+
+  it("has a clip for each role each humanoid body plays, a battle cry among them", () => {
+    // They all have the same clips, and building them is slow.
+    const clips = characterClips(characterMesh(resolveRecipe()), baked);
+    for (const body of SKELETONS.humanoid) expectEveryRole(body, "humanoid", resolveRecipe({ body, loadouts: [] }), clips);
+  });
+
+  const others = Object.entries(SKELETONS).filter(([skeleton]) => skeleton !== "humanoid").flatMap(([skeleton, bodies]) => bodies.map((body) => [body, skeleton]));
+  it.each(others)("has a clip for each role a %s plays on its %s skeleton, a battle cry among them", (body, skeleton) => {
+    const look = resolveRecipe({ body, loadouts: [] });
+    expectEveryRole(body, skeleton, look, characterClips(characterMesh(look), baked));
+  });
 
   it("attacks with every weapon, by one of a few groups of clips", () => {
     const clips = characterClips(characterMesh(resolveRecipe()), baked);
