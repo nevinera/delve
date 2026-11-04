@@ -10,9 +10,7 @@ import (
 const (
 	WeaponDamage = 10.0 // what a swing does, until characters hold real weapons
 	SwingSeconds = 2.0  // how long a swing takes, until characters hold real weapons
-	CritChance   = 0.05
 	MissChance   = 0.05
-	CritScale    = 2.0
 	MeleeFt      = 15.0 // how far melee reaches, until units have their own reach
 	GCDSeconds   = 1.5
 )
@@ -21,6 +19,23 @@ const (
 type Stats struct {
 	Strength, Agility, Intellect, Stamina float64
 	AttackPower, SpellPower, MaxHealth    float64
+
+	// Percentages, in points. A crit does 100 + CritDamage percent, or CritHealing for a heal.
+	CritChance, CritDamage, CritHealing, CritTaken, Leech float64
+	MovementSpeed, AttackSpeed                            float64 // 100 is as fast as anyone goes
+
+	// What multiplies what a unit does and takes.
+	DamageDone, HealingDone, DamageTaken, HealingTaken float64
+
+	Others map[string]*float64 // the rest, once Sheet's worked them out
+}
+
+// Plain is the stats of something with only health.
+func Plain(health float64) Stats {
+	return Stats{
+		MaxHealth: health, CritChance: 5, CritDamage: 100, CritHealing: 100, MovementSpeed: 100, AttackSpeed: 100,
+		DamageDone: 1, HealingDone: 1, DamageTaken: 1, HealingTaken: 1,
+	}
 }
 
 // StatsFor works out a character's stats: its class's primary stats grow twice as fast as the rest.
@@ -33,7 +48,8 @@ func StatsFor(c *Class, level int) Stats {
 		}
 		return 5 + float64(level)
 	}
-	s := Stats{Strength: per("strength"), Agility: per("agility"), Intellect: per("intellect"), Stamina: 10 + 2*float64(level)}
+	s := Plain(0)
+	s.Strength, s.Agility, s.Intellect, s.Stamina = per("strength"), per("agility"), per("intellect"), 10+2*float64(level)
 	s.AttackPower = 2 * max(s.Strength, s.Agility)
 	s.SpellPower = 2 * s.Intellect
 	s.MaxHealth = 10 * s.Stamina
@@ -79,8 +95,8 @@ func RegenOf(r Resource) float64 {
 // numbers in [0, 1).
 func Roll(a Amount, s Stats, canCrit bool, roll func() float64) (float64, bool) {
 	n := a.Min + (a.Max-a.Min)*roll() + a.AttackPower*s.AttackPower + a.SpellPower*s.SpellPower + a.Weapon*WeaponDamage
-	if canCrit && roll() < CritChance {
-		return n * CritScale, true
+	if canCrit && roll() < s.CritChance/100 {
+		return n * (1 + s.CritDamage/100), true
 	}
 	return n, false
 }

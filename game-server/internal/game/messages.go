@@ -115,6 +115,11 @@ type healthMessage struct {
 	MaxHealth float64 `json:"maxHealth"`
 }
 
+type speedMessage struct {
+	Type          string  `json:"type"`
+	MovementSpeed float64 `json:"movementSpeed"`
+}
+
 type statusGone struct {
 	Type   string `json:"type"`
 	ID     int64  `json:"id"`

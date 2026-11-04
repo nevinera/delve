@@ -68,6 +68,10 @@ type motion struct {
 	t       float64    // that report's client time, in seconds
 	move    Move       // how the character was moving since then
 
+	slowed     float64   // how far from plain speed it goes by what it holds, as a share: -0.15 is 85%
+	leeway     float64   // the same that reports are held to, lagging behind as it slows down
+	leewayEnds time.Time // when the client's had time to hear it's slowed down
+
 	entered time.Time // when the first report came
 	lag     float64   // server time less client time, the least seen while calibrating
 	jumped  float64   // client time of the last jump, or -inf
@@ -352,7 +356,26 @@ func (m *motion) speed(r incoming) float64 {
 	if r.Move != nil {
 		s = math.Max(s, speedOf(r.Move.clean()))
 	}
-	return s
+	return s * (1 + m.leeway)
+}
+
+// settled says whether the character goes at plain speed and reports are held to that.
+func (m *motion) settled() bool { return m.slowed == 0 && m.leeway == 0 }
+
+// setSpeed changes the character's speed from what it holds, as a share of plain speed, and says
+// whether it changed. Slowed down, reports are still allowed the old speed till the client's had
+// time to hear of it.
+func (m *motion) setSpeed(share float64, now time.Time) bool {
+	slowed := share - 1
+	changed := slowed != m.slowed
+	if slowed < m.slowed {
+		m.leewayEnds = now.Add(correctWait)
+	}
+	if slowed >= m.leeway || now.After(m.leewayEnds) {
+		m.leeway = slowed
+	}
+	m.slowed = slowed
+	return changed
 }
 
 // speedOf is how fast a character moving this way goes across the ground.

@@ -52,7 +52,8 @@ func TestStatsFavorPrimaryStats(t *testing.T) {
 }
 
 func TestRollAddsPartsAndCrits(t *testing.T) {
-	s := Stats{SpellPower: 10, AttackPower: 20}
+	s := Plain(0)
+	s.SpellPower, s.AttackPower = 10, 20
 	a := Amount{Min: 2, Max: 4, SpellPower: 1, AttackPower: 0.5, Weapon: 1}
 	n, crit := Roll(a, s, true, func() float64 { return 0.5 })
 	if n != 3+10+10+WeaponDamage || crit {

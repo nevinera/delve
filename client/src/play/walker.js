@@ -197,7 +197,7 @@ export class Walker {
     const swimming = this.swimming();
     const sprinting = this.sprinting && !swimming;
     const gait = swimming ? "swim" : sprinting ? "sprint" : this.gait;
-    const speed = length ? (swimming ? SWIM_FT : gait === "walk" ? WALK_FT : forward < 0 ? BACK_FT : RUN_FT) * (sprinting ? SPRINT : 1) : 0;
+    const speed = length ? (this.speedShare ?? 1) * (swimming ? SWIM_FT : gait === "walk" ? WALK_FT : forward < 0 ? BACK_FT : RUN_FT) * (sprinting ? SPRINT : 1) : 0;
     this.motion = { forward, strafe, speed, gait, swimming };
     if (speed && this.drag?.button !== 0) {
       const off = Math.atan2(Math.sin(this.cam.yaw), Math.cos(this.cam.yaw));

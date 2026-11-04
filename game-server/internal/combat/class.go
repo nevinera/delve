@@ -49,6 +49,7 @@ type Ability struct {
 	Name            string      `json:"name"`
 	Level           int         `json:"level"`
 	School          string      `json:"school"`
+	Schools         []string    `json:"schools"`
 	Target          string      `json:"target"` // enemy, ally, self, ground or none
 	Range           Distance    `json:"range"`
 	MinRange        float64     `json:"minRange"`
@@ -89,6 +90,8 @@ type Effect struct {
 	Max      int         `json:"max"`
 	Amount   Amount      `json:"amount"`
 	School   string      `json:"school"`
+	Schools  []string    `json:"schools"`
+	Category string      `json:"category"`
 	Resource string      `json:"resource"`
 	Status   string      `json:"status"`
 	Duration float64     `json:"duration"`
@@ -157,15 +160,34 @@ func (b *ConsumedBy) Matches(a *Ability) bool {
 	return b != nil && (slices.Contains(b.Abilities, a.ID) || (b.Tag != "" && slices.Contains(a.Tags, b.Tag)))
 }
 
-// StatusEffect is what a status does while it's on. Only `periodic` has its numbers read so far.
+// StatusEffect is what a status does while it's on.
 type StatusEffect struct {
 	Type   string
 	Every  float64
 	Does   string
 	Amount Amount
+
+	// A `stat`. Only `periodic` and `stat` have their numbers read so far.
+	Stat       string
+	Add        float64
+	Multiply   *float64
+	FromStat   string
+	Share      float64
+	OfCaster   bool
+	CasterOnly bool
+	Hit        string
+	Source     string
+	School     string
+	Schools    []string
+	Category   string
+	Categories []string
+	Abilities  []string
+	Tag        string
+	Statuses   []string
+	When       []Condition
 }
 
-// UnmarshalJSON reads the numbers of a periodic effect, and just the type of the others.
+// UnmarshalJSON reads the numbers of a periodic or stat effect, and just the type of the others.
 func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 	var head struct {
 		Type string `json:"type"`
@@ -174,18 +196,36 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	s.Type = head.Type
-	if head.Type != "periodic" {
+	if head.Type != "periodic" && head.Type != "stat" {
 		return nil
 	}
 	var body struct {
-		Every  float64 `json:"every"`
-		Does   string  `json:"does"`
-		Amount Amount  `json:"amount"`
+		Every      float64     `json:"every"`
+		Does       string      `json:"does"`
+		Amount     Amount      `json:"amount"`
+		Stat       string      `json:"stat"`
+		Add        float64     `json:"add"`
+		Multiply   *float64    `json:"multiply"`
+		FromStat   string      `json:"fromStat"`
+		Share      float64     `json:"share"`
+		OfCaster   bool        `json:"ofCaster"`
+		CasterOnly bool        `json:"casterOnly"`
+		Hit        string      `json:"hit"`
+		Source     string      `json:"source"`
+		School     string      `json:"school"`
+		Schools    []string    `json:"schools"`
+		Category   string      `json:"category"`
+		Categories []string    `json:"categories"`
+		Abilities  []string    `json:"abilities"`
+		Tag        string      `json:"tag"`
+		Statuses   []string    `json:"statuses"`
+		When       []Condition `json:"when"`
 	}
 	if err := json.Unmarshal(b, &body); err != nil {
 		return err
 	}
-	s.Every, s.Does, s.Amount = body.Every, body.Does, body.Amount
+	*s = StatusEffect{head.Type, body.Every, body.Does, body.Amount, body.Stat, body.Add, body.Multiply, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
+		body.Hit, body.Source, body.School, body.Schools, body.Category, body.Categories, body.Abilities, body.Tag, body.Statuses, body.When}
 	return nil
 }
 

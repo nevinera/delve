@@ -345,6 +345,10 @@ export class PlayCombat {
     if (id === this.you.id) this.showBar(null);
   }
 
+  speed_({ movementSpeed }) {
+    this.view.walker.speedShare = movementSpeed / 100;
+  }
+
   statusChanged_({ id, status, from, stacks }) {
     if (from === this.you.id) this.statuses.get(id)?.set(status, stacks);
   }
