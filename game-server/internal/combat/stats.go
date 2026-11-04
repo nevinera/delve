@@ -144,10 +144,33 @@ func Roll(a Amount, s Stats, canCrit bool, roll func() float64) (float64, bool) 
 	n := a.Min + (a.Max-a.Min)*roll() + a.AttackPower*s.AttackPower + a.SpellPower*s.SpellPower + a.Weapon*WeaponDamage
 	mastery := s.MasteryPercent()
 	n = (n + a.Mast*mastery) * (1 + a.ByMastery*mastery/100)
-	if canCrit && roll() < s.CritChance/100 {
-		return n * (1 + s.CritDamage/100), true
+	crit := canCrit && roll() < s.CritChance/100
+	if crit {
+		n *= 1 + s.CritDamage/100
 	}
-	return n, false
+	if a.Minimum != nil {
+		least, _ := Roll(*a.Minimum, s, false, roll)
+		n = max(n, least)
+	}
+	if a.Maximum != nil {
+		most, _ := Roll(*a.Maximum, s, false, roll)
+		n = min(n, most)
+	}
+	return n, crit
+}
+
+// WithCritRules is an amount and stats with what a hit says about crits counted.
+func WithCritRules(a Amount, s Stats, ctx HitContext) (Amount, Stats) {
+	if ctx.ScalesWithCrit {
+		a = a.Grown(1 + max(s.CritChance, 0)/100)
+	}
+	if ctx.AlwaysCrit {
+		s.CritChance = 100
+	}
+	if ctx.CritMultiplier != 0 {
+		s.CritDamage = (ctx.CritMultiplier - 1) * 100
+	}
+	return a, s
 }
 
 // DescribeAmount says what goes into an amount for someone with these stats.

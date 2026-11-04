@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { initials, timeLeft, UnitStatuses } from "./unitStatuses.js";
+import { absorbBand, initials, timeLeft, UnitStatuses } from "./unitStatuses.js";
 
 describe("UnitStatuses", () => {
   const units = () => {
@@ -78,5 +78,15 @@ describe("initials", () => {
     expect(initials("Oath of Vigil")).toBe("OO");
     expect(initials("Arrested")).toBe("AR");
     expect(initials("")).toBe("?");
+  });
+});
+
+describe("absorbBand", () => {
+  it("sits after the health you have, and stays on the bar", () => {
+    expect(absorbBand(50, 20, 100)).toEqual([50, 20]);
+    expect(absorbBand(90, 20, 100)).toEqual([80, 20]);
+    expect(absorbBand(10, 500, 100)).toEqual([0, 100]);
+    expect(absorbBand(10, 0, 100)).toEqual([0, 0]);
+    expect(absorbBand(10, 10, 0)).toEqual([0, 0]);
   });
 });

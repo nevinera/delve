@@ -17,6 +17,10 @@ type HitContext struct {
 	Hits int // how many the ability hit
 
 	CritChance, CritDamage float64 // what a `modify` adds to this hit, in points
+
+	AlwaysCrit     bool
+	ScalesWithCrit bool
+	CritMultiplier float64 // its crits do this many times as much, in place of the usual
 }
 
 // narrowed says whether a stat only counts for some hits.

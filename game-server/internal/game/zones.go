@@ -1,6 +1,7 @@
 package game
 
 import (
+	"cmp"
 	"math"
 	"slices"
 	"time"
@@ -310,6 +311,11 @@ type areaOf struct {
 	width     float64
 	dir       [2]float64
 	most      int
+	prefers   string
+	height    float64  // how far up and down it reaches, if it says
+	except    int64    // leaves this one out
+	from      int64    // whose statuses `holding` asks about
+	holding   []string // only those holding one of these from `from`, wherever they are
 }
 
 // inArea is who of a side is in an area, nearest first, up to its most.
@@ -321,6 +327,12 @@ func (l *Layer) inArea(a areaOf) []*vitals {
 	var found []reach
 	inside := func(at [3]float64) (float64, bool) {
 		gap := distance(a.center, at)
+		if a.height > 0 && math.Abs(at[1]-a.center[1]) > a.height {
+			return gap, false
+		}
+		if len(a.holding) > 0 {
+			return gap, true
+		}
 		if a.line {
 			dx, dz := at[0]-a.center[0], at[2]-a.center[2]
 			along, across := dx*a.dir[0]+dz*a.dir[1], dx*a.dir[1]-dz*a.dir[0]
@@ -336,7 +348,7 @@ func (l *Layer) inArea(a areaOf) []*vitals {
 			if d.state.Continent != a.continent {
 				continue
 			}
-			if gap, ok := inside(d.state.At); ok {
+			if gap, ok := inside(d.state.At); ok && a.counts(&d.vitals) {
 				found = append(found, reach{&d.vitals, gap})
 			}
 		}
@@ -345,19 +357,25 @@ func (l *Layer) inArea(a areaOf) []*vitals {
 			if o.state.Continent != a.continent {
 				continue
 			}
-			if gap, ok := inside(o.state.At); ok {
+			if gap, ok := inside(o.state.At); ok && a.counts(&o.fight.vitals) {
 				found = append(found, reach{&o.fight.vitals, gap})
 			}
 		}
 	}
 	slices.SortFunc(found, func(x, y reach) int {
-		if x.gap != y.gap {
-			if x.gap < y.gap {
-				return -1
+		switch a.prefers {
+		case "farthest":
+			x, y = y, x
+		case "lowestHealth":
+			if c := cmp.Compare(x.v.Health, y.v.Health); c != 0 {
+				return c
 			}
-			return 1
+		case "injured":
+			if c := cmp.Compare(x.v.Health/max(x.v.MaxHealth, 1), y.v.Health/max(y.v.MaxHealth, 1)); c != 0 {
+				return c
+			}
 		}
-		return int(x.v.ID - y.v.ID)
+		return cmp.Or(cmp.Compare(x.gap, y.gap), cmp.Compare(x.v.ID, y.v.ID))
 	})
 	if a.most > 0 && len(found) > a.most {
 		found = found[:a.most]
@@ -367,6 +385,17 @@ func (l *Layer) inArea(a areaOf) []*vitals {
 		out[i] = r.v
 	}
 	return out
+}
+
+// counts says whether a unit in an area is one it's after.
+func (a areaOf) counts(v *vitals) bool {
+	if v.ID == a.except && a.except != 0 {
+		return false
+	}
+	if len(a.holding) == 0 {
+		return true
+	}
+	return slices.ContainsFunc(a.holding, func(id string) bool { return v.Statuses[statusKey{id, a.from}] != nil })
 }
 
 func (l *Layer) tellContinent(continent string, b []byte) {

@@ -392,6 +392,13 @@ body.touch .play-bar button {
   background: #3c9a48;
 }
 
+.combat-health-absorb {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(235, 235, 255, 0.65);
+}
+
 .combat-health-text {
   position: absolute;
   inset: 0;

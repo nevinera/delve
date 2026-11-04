@@ -37,6 +37,8 @@ type vitals struct {
 	base      combat.Stats // what its class and level give it, before what it holds
 
 	untargetable bool     // as it's last been told
+	absorbShown  float64  // as it\'s last been told
+	recent       []taken  // damage it\'s taken lately
 	primary      []string // its class's main stats
 }
 
@@ -59,6 +61,8 @@ type activeStatus struct {
 	granted bool              // what the class gives you for good: a passive, your mastery, a spec's or a talent's
 	ticks   map[int]time.Time // when each of its periodic effects next ticks, by its place in the status
 	spent   float64           // what the ability that applied it spent
+	absorb  float64           // what its `absorb` has left
+	stored  float64           // what it holds for `stored` amounts
 	zone    *zone             // the area or aura keeping it on, if any
 	zones   map[int]*zone     // its own auras, by their place in the status
 }
@@ -107,9 +111,11 @@ type casting struct {
 	channel   bool
 	released  bool
 	stopped   bool
-	spent     float64 // what its costs came to
-	spentOpen bool    // those include one that can spend more
-	extra     float64 // how far past its least that one went, as a share
+	spent     float64       // what its costs came to
+	status    *activeStatus // the status behind what's landing, if it isn't an ability
+	lastDone  float64       // what the last effect did
+	spentOpen bool          // those include one that can spend more
+	extra     float64       // how far past its least that one went, as a share
 }
 
 // landing is something that happens at a time: a hit arriving, a channel's tick.
@@ -902,9 +908,15 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 	h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: e.Type}
 	switch e.Type {
 	case "damage":
-		l.strike(p, on, amountOf(c, e, count), hitOf(c, e, on, count), &h, now)
+		ctx := hitOf(c, e, on, count)
+		l.critRules(p, e, on, &ctx, now)
+		l.strike(p, on, l.amountFor(p, c, e, on, count, now), ctx, &h, now)
 		if !h.Missed {
 			l.drain(p, h.Amount, e.Drain, c.ability.ID)
+			c.lastDone = h.Amount
+			if center, continent, ok := l.unitAt(on.ID, [3]float64{}, ""); ok {
+				defer l.spill(p, c, e, on, center, continent, h.Amount, count, now)
+			}
 		}
 	case "consume":
 		if e.Affects != "summons" {
@@ -931,14 +943,17 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 			return
 		}
 	case "heal":
-		n, crit := l.rollHeal(p, on, amountOf(c, e, count), hitOf(c, e, on, count), now)
+		healing := hitOf(c, e, on, count)
+		l.critRules(p, e, on, &healing, now)
+		n, crit := l.rollHeal(p, on, l.amountFor(p, c, e, on, count, now), healing, now)
+		c.lastDone = n
 		over := max(on.Health+n-on.MaxHealth, 0)
 		on.Health = min(on.Health+n, on.MaxHealth)
 		h.Amount, h.Crit = math.Round(n), crit
 		ctx := hitOf(c, e, on, count)
 		defer l.healedBy(p, on, n, over, ctx, now)
 	case "resource":
-		n, _ := combat.Roll(amountOf(c, e, count), l.statsOf(&p.fight.vitals, nil, now), false, l.hub.roll)
+		n, _ := combat.Roll(l.amountFor(p, c, e, on, count, now), l.statsOf(&p.fight.vitals, nil, now), false, l.hub.roll)
 		if given, ok := l.addResource(&p.fight, e.Resource, n); ok {
 			h.Amount, h.Resource = math.Round(given), e.Resource
 		}
@@ -957,6 +972,12 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 		}
 		if held := on.Statuses[statusKey{e.Status, p.ID()}]; held != nil {
 			held.spent = c.spent
+			var given *combat.Amount
+			if e.Amount != (combat.Amount{}) {
+				worked := l.amountFor(p, c, e, on, count, now)
+				given = &worked
+			}
+			l.startAbsorb(p, held, given, on, now)
 		}
 	default:
 		p.debugLine("%s: %s does nothing yet", c.ability.Name, e.Type)
@@ -1303,7 +1324,7 @@ func (l *Layer) tickOf(p *Player, holder *vitals, id string, held *activeStatus,
 			}
 			n, crit := l.rollDamage(p, on, amount, ctx, now)
 			h.Crit = crit
-			l.harm(p, on, n, &h, now)
+			l.harm(p, on, l.soak(on, n, ctx.Schools, &h, now), &h, now)
 			l.leech(p, on, n, ctx, "", now)
 			l.drain(p, n, e.Drain, "")
 			defer l.damaged(p, on, n, crit, ctx, now)
@@ -1470,7 +1491,7 @@ func (l *Layer) dealLeft(p *Player, c *casting, id string, held *activeStatus, s
 				h.Missed, h.Avoided, h.Crit = true, "immune", false
 				break
 			}
-			l.harm(p, on, total, &h, now)
+			l.harm(p, on, l.soak(on, total, ctx.Schools, &h, now), &h, now)
 			l.leech(p, on, total, ctx, c.ability.ID, now)
 			l.drain(p, total, each.Drain, c.ability.ID)
 		case "heal":
@@ -1579,7 +1600,7 @@ func (l *Layer) seen(c Character) Character {
 		return c
 	}
 	now := l.hub.now()
-	c.Statuses, c.Untargetable = nil, v.untargetable
+	c.Statuses, c.Untargetable, c.Absorb = nil, v.untargetable, v.absorbShown
 	for key, held := range v.Statuses {
 		c.Statuses = append(c.Statuses, shownOf(key, held, now))
 	}
@@ -1665,7 +1686,7 @@ func (l *Layer) strike(p *Player, on *vitals, amount combat.Amount, ctx combat.H
 		n *= 1 - combat.BlockShare
 		h.Blocked = true
 	}
-	l.harm(p, on, n, h, now)
+	l.harm(p, on, l.soak(on, n, ctx.Schools, h, now), h, now)
 	if blocked {
 		l.fire(event{on: "block", who: on, other: p.ID(), ctx: &ctx, amount: n}, now)
 	}
@@ -1762,6 +1783,7 @@ func (l *Layer) rollDamage(p *Player, on *vitals, amount combat.Amount, ctx comb
 	rolled := mine
 	rolled.CritChance += theirs.CritTaken + ctx.CritChance
 	rolled.CritDamage += ctx.CritDamage
+	amount, rolled = combat.WithCritRules(amount, rolled, ctx)
 	n, crit := combat.Roll(amount, rolled, true, l.hub.roll)
 	before := n
 	n = theirs.Taken(n*mine.DamageDone*(1+mine.Versatility()/100), ctx, mine.Level)
@@ -1778,6 +1800,7 @@ func (l *Layer) rollHeal(p *Player, on *vitals, amount combat.Amount, ctx combat
 	rolled := mine
 	rolled.CritChance += ctx.CritChance
 	rolled.CritDamage = mine.CritHealing + ctx.CritDamage
+	amount, rolled = combat.WithCritRules(amount, rolled, ctx)
 	n, crit := combat.Roll(amount, rolled, true, l.hub.roll)
 	if times := mine.HealingDone * theirs.HealingTaken * (1 + mine.Versatility()/100); times != 1 {
 		p.debugLine("healing %g x %g from stats", n, times)
@@ -1845,6 +1868,10 @@ func hitOf(c *casting, e *combat.Effect, on *vitals, count int) combat.HitContex
 // has, and a player's speed.
 func (l *Layer) refit(v *vitals, now time.Time) {
 	o := l.players[v.ID]
+	if left := math.Round(absorbOn(v)); left != v.absorbShown {
+		v.absorbShown = left
+		l.tellOf(v.ID, encode(absorbMessage{"absorb", v.ID, left}))
+	}
 	if len(v.Statuses) == 0 && v.MaxHealth == v.base.MaxHealth && !v.untargetable && (o == nil || (o.motion.settled() && len(o.fight.controls) == 0)) {
 		return
 	}
@@ -1954,6 +1981,12 @@ func (l *Layer) untargetable(v *vitals, now time.Time) bool {
 
 // harm takes health off a unit, noting it in the hit.
 func (l *Layer) harm(p *Player, on *vitals, n float64, h *hit, now time.Time) {
+	if n > 0 {
+		on.recent = append(on.recent, taken{now, n})
+		for len(on.recent) > 0 && now.Sub(on.recent[0].at) > recentDamageLasts {
+			on.recent = on.recent[1:]
+		}
+	}
 	if o := l.players[on.ID]; o != nil {
 		o.fight.since["damageTaken"] = now
 	}
@@ -2081,6 +2114,7 @@ func (l *Layer) spar(p *Player, now time.Time) {
 			n *= 1 - combat.BlockShare
 			h.Blocked = true
 		}
+		n = l.soak(on, n, ctx.Schools, &h, now)
 		n = min(n, on.Health-1)
 		l.harm(p, on, max(n, 0), &h, now)
 		if blocked {
@@ -2172,7 +2206,14 @@ func (l *Layer) reached(p *Player, c *casting, e *combat.Effect) []*vitals {
 	if e.Line {
 		way = lineWay(p, c, e, center)
 	}
-	return l.inArea(areaOf{center: center, continent: p.state.Continent, yaw: p.state.Yaw, affects: e.Affects, radius: e.Radius, cone: e.Cone, line: e.Line, width: e.Width, dir: way, most: e.Max})
+	a := areaOf{center: center, continent: p.state.Continent, yaw: p.state.Yaw, affects: e.Affects, radius: e.Radius, cone: e.Cone, line: e.Line, width: e.Width, dir: way, most: e.Max, prefers: e.Prefers, from: p.ID(), holding: e.Holding}
+	if e.Type != "move" {
+		a.height = e.Height
+	}
+	if e.ExceptTarget {
+		a.except = c.target
+	}
+	return l.inArea(a)
 }
 
 func (l *Layer) dummy(id int64, continent string) *dummy {

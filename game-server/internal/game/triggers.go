@@ -182,7 +182,7 @@ func (l *Layer) runTrigger(w watcher, ev event, now time.Time) {
 	effect.Amount.Min += effect.Amount.ShareOfTrigger * ev.amount
 	effect.Amount.Max += effect.Amount.ShareOfTrigger * ev.amount
 	effect.Amount.ShareOfTrigger = 0
-	c := &casting{ability: &combat.Ability{ID: w.held.def.ID, Name: w.held.def.Name}, target: ev.other}
+	c := &casting{ability: &combat.Ability{ID: w.held.def.ID, Name: w.held.def.Name}, target: ev.other, status: w.held}
 	var targets []*vitals
 	switch effect.Affects {
 	case "", "self", "holder":
@@ -237,6 +237,7 @@ func (l *Layer) unitWithID(id int64, continent string) *vitals {
 // damaged says a player did damage, for what's watching. `n` has already come off.
 func (l *Layer) damaged(p *Player, on *vitals, n float64, crit bool, ctx combat.HitContext, now time.Time) {
 	mine := &p.fight.vitals
+	l.keepShare(mine, p.ID(), "dealDamage", n, &ctx)
 	outcome := "nonCrit"
 	if crit {
 		outcome = "crit"
@@ -255,6 +256,7 @@ func (l *Layer) damaged(p *Player, on *vitals, n float64, crit bool, ctx combat.
 
 // healedBy says a player healed a unit, for what's watching. `over` is the part past full health.
 func (l *Layer) healedBy(p *Player, on *vitals, n, over float64, ctx combat.HitContext, now time.Time) {
+	l.keepShare(&p.fight.vitals, p.ID(), "heal", n, &ctx)
 	l.fire(event{on: "heal", who: &p.fight.vitals, other: on.ID, ctx: &ctx, amount: n}, now)
 	l.fire(event{on: "healed", who: on, other: p.ID(), ctx: &ctx, amount: n}, now)
 	if over > 0 {

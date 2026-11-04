@@ -2,6 +2,7 @@ package game
 
 import (
 	"fmt"
+	"math"
 	"testing"
 
 	"github.com/delve-mmo/delve3d/game-server/internal/combat"
@@ -758,5 +759,219 @@ func TestEffectChance(t *testing.T) {
 	pass(h, c, 0.5)
 	if d.Health != was-9 {
 		t.Fatal("it missed at 65%")
+	}
+}
+
+// hitting is a fight with one ability, dealing whatever this effect does to the dummy.
+func hitting(t *testing.T, e combat.Effect) (*Hub, *Player, *float64, *dummy) {
+	t.Helper()
+	zero := 0.0
+	h, p, c := fighting(t)
+	e.Type, e.Affects = "damage", "target"
+	p.fight.class.Abilities = append(p.fight.class.Abilities, combat.Ability{ID: "bonk", Name: "Bonk", Target: "enemy", GCD: &zero, Range: combat.Distance{Feet: 100}, Effects: []combat.Effect{e}})
+	return h, p, c, p.layer.dummies[0]
+}
+
+func dealt(t *testing.T, h *Hub, p *Player, c *float64, d *dummy) float64 {
+	t.Helper()
+	was := d.Health
+	use(t, p, "bonk")
+	pass(h, c, 0.5)
+	return was - d.Health
+}
+
+func TestCritRules(t *testing.T) {
+	flat := combat.Amount{Min: 100, Max: 100}
+	base := func(e combat.Effect) float64 {
+		e.Amount = flat
+		h, p, c, d := hitting(t, e)
+		return dealt(t, h, p, c, d)
+	}
+	plain := base(combat.Effect{})
+	if got := base(combat.Effect{AlwaysCrit: true, CritMultiplier: 3}); got != plain*3 {
+		t.Fatalf("always crits at 3x: %g, plain %g", got, plain)
+	}
+	below := 150.0
+	if got := base(combat.Effect{AlwaysCritWhen: []combat.Condition{{Health: "target", Below: &below}}, CritMultiplier: 2}); got != plain*2 {
+		t.Fatalf("crit when: %g, plain %g", got, plain)
+	}
+	if got := base(combat.Effect{CritMultiplier: 3}); got != plain {
+		t.Fatalf("a multiplier alone doesn't crit: %g", got)
+	}
+}
+
+func TestAmountLimits(t *testing.T) {
+	least := combat.Amount{Min: 50, Max: 50}
+	most := combat.Amount{Min: 5, Max: 5}
+	h, p, c, d := hitting(t, combat.Effect{Amount: combat.Amount{Min: 1, Max: 1, Minimum: &least}})
+	if got := dealt(t, h, p, c, d); got < 45 {
+		t.Fatalf("minimum: %g", got)
+	}
+	h, p, c, d = hitting(t, combat.Effect{Amount: combat.Amount{Min: 100, Max: 100, Maximum: &most}})
+	if got := dealt(t, h, p, c, d); got > 6 {
+		t.Fatalf("maximum: %g", got)
+	}
+}
+
+func TestByMissingHealth(t *testing.T) {
+	h, p, c, d := hitting(t, combat.Effect{Amount: combat.Amount{Min: 100, Max: 100, ByMissingHealth: &combat.ByMissingHealth{UpTo: 3}}})
+	full := dealt(t, h, p, c, d)
+	d.Health = d.MaxHealth / 2
+	if got := dealt(t, h, p, c, d); got < full*1.9 {
+		t.Fatalf("at half health %g, at full %g", got, full)
+	}
+}
+
+func TestShareOfWhatTheFightKept(t *testing.T) {
+	h, p, c, d := hitting(t, combat.Effect{Amount: combat.Amount{ShareOf: &combat.ShareOf{Of: "recentDamage", Share: 0.5, Seconds: 5}}})
+	p.fight.vitals.Health = p.fight.vitals.MaxHealth
+	p.layer.harm(p, &p.fight.vitals, 40, &hit{}, h.now())
+	got := dealt(t, h, p, c, d)
+	if got < 15 || got > 25 {
+		t.Fatalf("dealt %g for half of 40", got)
+	}
+	pass(h, c, 6)
+	if got := dealt(t, h, p, c, d); got != 0 {
+		t.Fatalf("dealt %g after it faded", got)
+	}
+}
+
+func TestShareOfTheEffectBefore(t *testing.T) {
+	zero := 0.0
+	h, p, c := fighting(t)
+	p.fight.class.Abilities = append(p.fight.class.Abilities, combat.Ability{ID: "twice", Name: "Twice", Target: "enemy", GCD: &zero, Range: combat.Distance{Feet: 100}, Effects: []combat.Effect{
+		{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 100, Max: 100}},
+		{Type: "heal", Affects: "self", Amount: combat.Amount{ShareOf: &combat.ShareOf{Of: "effect", Share: 0.5}}},
+	}})
+	p.fight.vitals.Health = 1
+	use(t, p, "twice")
+	pass(h, c, 0.5)
+	if got := p.fight.vitals.Health; got < 40 {
+		t.Fatalf("health %g", got)
+	}
+}
+
+func TestPerCount(t *testing.T) {
+	mark := combat.Status{ID: "mark", Name: "Mark", Duration: 20}
+	h, p, c := consuming(t, mark, withEffects("count", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 10, Max: 10}, PerCount: &combat.PerCount{StatusStacks: "mark", Max: 2}}))
+	use(t, p, "put")
+	pass(h, c, 0.1)
+	d := p.layer.dummies[0]
+	held(p, "mark").stacks = 5
+	was := d.Health
+	use(t, p, "count")
+	pass(h, c, 0.1)
+	if got := was - d.Health; got < 19 || got > 21 {
+		t.Fatalf("dealt %g, want 2 counts of 10", got)
+	}
+}
+
+func TestAbsorbSoaksThenEnds(t *testing.T) {
+	ward := combat.Status{ID: "ward", Name: "Ward", Kind: "buff", Effects: []combat.StatusEffect{{Type: "absorb", Amount: combat.Amount{Min: 30, Max: 30}}}}
+	h, p, c := consuming(t, ward, withEffects("slap", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 20, Max: 20}}))
+	use(t, p, "put")
+	pass(h, c, 0.1)
+	d := p.layer.dummies[0]
+	if got := heard(p, "absorb"); len(got) != 1 || got[0]["absorb"] != 30.0 {
+		t.Fatalf("absorb = %v", got)
+	}
+	was := d.Health
+	use(t, p, "slap")
+	pass(h, c, 0.5)
+	hits := heard(p, "hit")
+	last := hits[len(hits)-1]
+	if d.Health != was || last["absorbed"] == nil {
+		t.Fatalf("first hit: health down %g, %v", was-d.Health, last)
+	}
+	use(t, p, "slap")
+	pass(h, c, 0.5)
+	if held(p, "ward") != nil {
+		t.Fatal("it stayed once spent")
+	}
+	if got := was - d.Health; got < 8 {
+		t.Fatalf("second hit let %g through", got)
+	}
+}
+
+func TestStoreKeepsAShareForLater(t *testing.T) {
+	keep := combat.Status{ID: "keep", Name: "Keep", Kind: "buff", Duration: 2, Effects: []combat.StatusEffect{
+		{Type: "store", On: "dealDamage", Share: 0.5},
+		{Type: "trigger", On: "statusEnds", Effect: &combat.Effect{Type: "heal", Affects: "caster", Amount: combat.Amount{ShareOf: &combat.ShareOf{Of: "stored", Share: 1}}}},
+	}}
+	h, p, c := consuming(t, keep, withEffects("slap", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 40, Max: 40}}))
+	use(t, p, "put")
+	pass(h, c, 0.1)
+	use(t, p, "slap")
+	pass(h, c, 0.5)
+	if s := held(p, "keep"); s == nil || s.stored < 15 {
+		t.Fatalf("holding %+v", s)
+	}
+	p.fight.vitals.Health = 1
+	pass(h, c, 2)
+	if got := p.fight.vitals.Health; got < 15 {
+		t.Fatalf("health %g after it ended", got)
+	}
+}
+
+func TestWhoAnEffectReaches(t *testing.T) {
+	zero := 0.0
+	h, p, c := fighting(t)
+	world := p.layer
+	second := *world.dummies[0]
+	second.vitals.ID, second.state.ID = -2, -2
+	second.Statuses = map[statusKey]*activeStatus{}
+	world.dummies = append(world.dummies, &second)
+	first := world.dummies[0]
+	first.state.At = p.state.At
+	second.state.At = [3]float64{p.state.At[0] + 5, p.state.At[1], p.state.At[2]}
+	first.Health, second.Health = 900, 500
+	p.fight.class.Statuses = append(p.fight.class.Statuses, combat.Status{ID: "tag", Name: "Tag", Duration: 10})
+	effect := func(id string, e combat.Effect) {
+		e.Type, e.Affects, e.Amount = "damage", "enemies", combat.Amount{Min: 10, Max: 10}
+		p.fight.class.Abilities = append(p.fight.class.Abilities, combat.Ability{ID: id, Name: id, Target: "enemy", GCD: &zero, Range: combat.Distance{Feet: 100}, Effects: []combat.Effect{e}})
+	}
+	effect("near1", combat.Effect{Radius: 50, Max: 1})
+	effect("low1", combat.Effect{Radius: 50, Max: 1, Prefers: "lowestHealth"})
+	effect("far1", combat.Effect{Radius: 50, Max: 1, Prefers: "farthest"})
+	effect("butone", combat.Effect{Radius: 50, ExceptTarget: true})
+	effect("both", combat.Effect{Radius: 50, Split: true})
+	effect("less", combat.Effect{Radius: 50, Others: 0.5})
+	check := func(id string, wantFirst, wantSecond float64) {
+		t.Helper()
+		a, b := first.Health, second.Health
+		use(t, p, id)
+		pass(h, c, 0.5)
+		x, y := a-first.Health, b-second.Health
+		if math.Abs(x-wantFirst) > 1.5 || math.Abs(y-wantSecond) > 1.5 {
+			t.Fatalf("%s: dealt %g and %g, want %g and %g", id, x, y, wantFirst, wantSecond)
+		}
+	}
+	check("near1", 10, 0)
+	check("low1", 0, 10)
+	check("far1", 0, 10)
+	check("butone", 0, 10)
+	check("both", 5, 5)
+	check("less", 10, 5)
+}
+
+func TestExtraTargetsSpill(t *testing.T) {
+	zero := 0.0
+	h, p, c := fighting(t)
+	world := p.layer
+	second := *world.dummies[0]
+	second.vitals.ID, second.state.ID = -2, -2
+	second.Statuses = map[statusKey]*activeStatus{}
+	world.dummies = append(world.dummies, &second)
+	first := world.dummies[0]
+	second.state.At = first.state.At
+	p.fight.class.Abilities = append(p.fight.class.Abilities, combat.Ability{ID: "cleave", Name: "Cleave", Target: "enemy", GCD: &zero, Range: combat.Distance{Feet: 1000},
+		Effects:      []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 100, Max: 100}}},
+		ExtraTargets: &combat.ExtraTargets{Max: 1, Radius: 10, Share: 0.5}})
+	a, b := first.Health, second.Health
+	use(t, p, "cleave")
+	pass(h, c, 0.5)
+	x, y := a-first.Health, b-second.Health
+	if x == 0 || math.Abs(y-x/2) > 1 {
+		t.Fatalf("dealt %g, spilled %g", x, y)
 	}
 }

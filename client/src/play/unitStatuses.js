@@ -8,11 +8,13 @@ export class UnitStatuses {
     this.clock = clock;
     this.units = new Map(); // unit id -> key -> { status, from, class, stacks, until }
     this.untargetable = new Set(); // ids of those nothing can pick as a target
+    this.absorbs = new Map(); // unit id -> what it can soak up
   }
 
   // A character coming into view, with what it holds then.
-  seen({ id, statuses, untargetable }) {
+  seen({ id, statuses, untargetable, absorb }) {
     this.units.delete(id);
+    this.absorb({ id, absorb: absorb ?? 0 });
     this.targetable({ id, targetable: !untargetable });
     (statuses ?? []).forEach((held) => this.on({ id, ...held }));
   }
@@ -33,6 +35,11 @@ export class UnitStatuses {
     this.units.get(id)?.delete(keyOf({ status, from }));
   }
 
+  absorb({ id, absorb }) {
+    if (absorb > 0) this.absorbs.set(id, absorb);
+    else this.absorbs.delete(id);
+  }
+
   targetable({ id, targetable }) {
     if (targetable) this.untargetable.delete(id);
     else this.untargetable.add(id);
@@ -41,6 +48,7 @@ export class UnitStatuses {
   vanish(id) {
     this.units.delete(id);
     this.untargetable.delete(id);
+    this.absorbs.delete(id);
   }
 
   // What a unit holds, oldest to end last, those that never end first. Those whose time has run out
@@ -51,6 +59,14 @@ export class UnitStatuses {
       .filter((held) => held.until === null || held.until > now)
       .sort((a, b) => (a.until ?? 0) - (b.until ?? 0) || a.status.localeCompare(b.status));
   }
+}
+
+// Where an absorb's band goes on a health bar, as [left, width] in percent: after the health it
+// has, and back from the end if it wouldn't fit.
+export function absorbBand(health, absorb, most) {
+  if (!most || absorb <= 0) return [0, 0];
+  const width = Math.min(100, (100 * absorb) / most);
+  return [Math.min((100 * health) / most, 100 - width), width];
 }
 
 // How a status's time left reads on its icon.

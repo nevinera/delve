@@ -98,6 +98,7 @@ async function play() {
       tell("vanish", id);
     },
     statusOn: (message) => unitStatuses.on(message),
+    absorb: (message) => unitStatuses.absorb(message),
     moved: (message) => tell("moved", message),
     forced: (message) => (message.id === you.id ? connection.forced(message) : tell("forced", message)),
     used: fight("used"),

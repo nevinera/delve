@@ -9,7 +9,7 @@ import { skeletonOf } from "../character/characterMesh.js";
 import { strFromU8 } from "fflate";
 import { allHold } from "./conditions.js";
 import { PlayLog } from "./log.js";
-import { initials, timeLeft } from "./unitStatuses.js";
+import { absorbBand, initials, timeLeft } from "./unitStatuses.js";
 import { AreaMarks } from "./areas.js";
 import { blockedBy, isHelpless } from "./controls.js";
 
@@ -55,8 +55,8 @@ export function hitWords(hit, statuses = [], abilities = []) {
   if (hit.missed) return { text: hit.avoided ?? "miss", kind: "miss" };
   if (hit.removed) return { text: `${statuses.find((s) => s.id === hit.removed)?.name ?? hit.removed} removed`, kind: "status" };
   if (hit.stopped) return { text: `${abilities.find((a) => a.id === hit.stopped)?.name ?? hit.stopped} interrupted`, kind: "status" };
-  const crit = `${hit.crit ? "!" : ""}${hit.blocked ? " blocked" : ""}`;
-  if (hit.effect === "damage") return { text: `${hit.amount}${crit}`, kind: hit.ticked ? "damage combat-float-tick" : "damage" };
+  const crit = `${hit.crit ? "!" : ""}${hit.blocked ? " blocked" : ""}${hit.absorbed ? ` (${hit.absorbed} absorbed)` : ""}`;
+  if (hit.effect === "damage") return { text: `${hit.amount ?? 0}${crit}`, kind: hit.ticked ? "damage combat-float-tick" : "damage" };
   if (hit.effect === "heal") return { text: `+${hit.amount}${crit}`, kind: hit.ticked ? "heal combat-float-tick" : "heal" };
   if (hit.effect === "status") return { text: statuses.find((s) => s.id === hit.status)?.name ?? hit.status, kind: "status" };
   return null;
@@ -159,10 +159,11 @@ export class PlayCombat {
   frameNode() {
     const name = el("div", { className: "combat-name" });
     const fill = el("div", { className: "combat-health-fill" });
+    const shield = el("div", { className: "combat-health-absorb" });
     const text = el("span", { className: "combat-health-text" });
     const resources = el("div", { className: "combat-resources" });
     const statuses = el("div", { className: "combat-statuses" });
-    return { root: el("div", { className: "combat-frame" }, name, el("div", { className: "combat-health" }, fill, text), resources, statuses), name, fill, text, resources, statuses };
+    return { root: el("div", { className: "combat-frame" }, name, el("div", { className: "combat-health" }, fill, shield, text), resources, statuses), name, fill, shield, text, resources, statuses };
   }
 
   drawFrame(frame, health, most) {
@@ -432,6 +433,16 @@ export class PlayCombat {
     });
   }
 
+  // What a unit can soak up, as a band on its health bar after what it has.
+  drawAbsorb(frame, unit, health, most) {
+    const [left, width] = absorbBand(health, this.unitStatuses.absorbs.get(unit) ?? 0, most);
+    const style = `${left}% ${width}%`;
+    if (frame.shownAbsorb === style) return;
+    frame.shownAbsorb = style;
+    frame.shield.style.left = `${left}%`;
+    frame.shield.style.width = `${width}%`;
+  }
+
   // A class's statuses, once its file has loaded, and asks for it until then.
   statusesOf(classId) {
     if (!classId) return null;
@@ -699,6 +710,9 @@ export class PlayCombat {
     }
     this.areas.frame(now, (id) => (id === this.you.id ? this.view.walker?.model?.position : this.others.characters.get(id)?.model.position));
     this.drawStatuses(this.youFrame, this.you.id, now);
+    this.drawAbsorb(this.youFrame, this.you.id, this.health, this.maxHealth);
+    const aimedAt = this.target !== null ? this.others.characters.get(this.target) : null;
+    if (aimedAt) this.drawAbsorb(this.targetFrame, this.target, aimedAt.health, aimedAt.maxHealth);
     if (this.target !== null) this.drawStatuses(this.targetFrame, this.target, now);
     if (this.saidAt && now - this.saidAt > REFUSED_S * 1000) {
       this.say.textContent = "";

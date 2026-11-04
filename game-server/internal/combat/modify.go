@@ -69,6 +69,14 @@ func (a *Amount) scale(by float64) {
 	a.Weapon *= by
 	a.Mast *= by
 	a.MaxHealth *= by
+	if a.Minimum != nil {
+		grown := a.Minimum.Grown(by)
+		a.Minimum = &grown
+	}
+	if a.Maximum != nil {
+		grown := a.Maximum.Grown(by)
+		a.Maximum = &grown
+	}
 	if a.PerSpent != nil {
 		per := *a.PerSpent
 		per.scale(by)
@@ -161,7 +169,7 @@ func (c *Class) Resolve(a *Ability, mods []Mod, mastery float64, roll func() flo
 	}
 	for _, m := range mods {
 		e := m.Effect
-		if !e.picks(&out) || (e.Change == "" && len(e.AddEffects) == 0 && len(e.Overrides) == 0 && len(e.Ignores) == 0 && e.SpentAs == 0 && !e.SpentAsMax && e.SpendsUpTo == 0 && e.ByExtraSpent == 0) {
+		if !e.picks(&out) || (e.Change == "" && len(e.AddEffects) == 0 && len(e.Overrides) == 0 && len(e.Ignores) == 0 && e.SpentAs == 0 && !e.SpentAsMax && e.SpendsUpTo == 0 && e.ByExtraSpent == 0 && !e.AlwaysCrit && len(e.AlwaysCritWhen) == 0 && !e.ScalesWithCrit && e.CritMultiplier == 0) {
 			continue
 		}
 		if e.Chance > 0 && roll() >= e.Chance {
@@ -183,6 +191,17 @@ func (c *Class) Resolve(a *Ability, mods []Mod, mastery float64, roll func() flo
 		}
 		out.SpentAsMax = out.SpentAsMax || m.Effect.SpentAsMax
 		out.SpendsUpTo += m.Effect.SpendsUpTo
+		if e := m.Effect; e.AlwaysCrit || len(e.AlwaysCritWhen) > 0 || e.ScalesWithCrit || e.CritMultiplier != 0 {
+			for i := range out.Effects {
+				o := &out.Effects[i]
+				o.AlwaysCrit = o.AlwaysCrit || e.AlwaysCrit
+				o.AlwaysCritWhen = append(o.AlwaysCritWhen, e.AlwaysCritWhen...)
+				o.ScalesWithCrit = o.ScalesWithCrit || e.ScalesWithCrit
+				if e.CritMultiplier != 0 {
+					o.CritMultiplier = e.CritMultiplier
+				}
+			}
+		}
 		if m.Effect.ByExtraSpent != 0 {
 			out.ByExtraSpent = m.Effect.ByExtraSpent
 		}

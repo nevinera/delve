@@ -35,7 +35,8 @@ type Character struct {
 	MaxHealth float64         `json:"maxHealth"`
 	Statuses  []shownStatus   `json:"statuses,omitempty"` // what it holds, as it comes into view
 
-	Untargetable bool `json:"untargetable,omitempty"`
+	Untargetable bool    `json:"untargetable,omitempty"`
+	Absorb       float64 `json:"absorb,omitempty"`
 }
 
 // shownStatus is a status a unit holds, for its frame.
@@ -167,6 +168,13 @@ type areaGone struct {
 	ID   int64  `json:"id"`
 }
 
+// absorbMessage is how much a unit's absorbs have left, when it changes.
+type absorbMessage struct {
+	Type   string  `json:"type"`
+	ID     int64   `json:"id"`
+	Absorb float64 `json:"absorb"`
+}
+
 // targetable says whether a unit can be picked as a target, when that changes.
 type targetable struct {
 	Type       string `json:"type"`
@@ -201,7 +209,8 @@ type hit struct {
 	Status    string  `json:"status,omitempty"`
 	Avoided   string  `json:"avoided,omitempty"` // dodge or parry, along with missed
 	Blocked   bool    `json:"blocked,omitempty"`
-	Ticked    string  `json:"ticked,omitempty"`  // the status whose periodic effect this was
+	Ticked    string  `json:"ticked,omitempty"` // the status whose periodic effect this was
+	Absorbed  float64 `json:"absorbed,omitempty"`
 	Removed   string  `json:"removed,omitempty"` // the status a dispel took off
 	Stopped   string  `json:"stopped,omitempty"` // the ability an interrupt stopped
 	Class     string  `json:"class,omitempty"`
