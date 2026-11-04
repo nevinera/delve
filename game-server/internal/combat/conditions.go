@@ -20,6 +20,7 @@ type Condition struct {
 	Since    string      `json:"since"`
 	Resource string      `json:"resource"`
 	Percent  bool        `json:"percent"`
+	Wielding string      `json:"wielding"`
 
 	// About the fight so far, which only the server knows.
 	Holders               string   `json:"holders"`

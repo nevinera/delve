@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { speedOf, stepOf } from "./others.js";
+import { Others, speedOf, stepOf } from "./others.js";
 
 const move = (m) => ({ forward: 0, strafe: 0, turn: 0, gait: "run", swim: false, jump: false, ...m });
 
@@ -26,5 +26,26 @@ describe("stepOf", () => {
   it("goes no faster on the diagonal", () => {
     const [dx, dz] = stepOf(move({ forward: 1, strafe: 1 }), 1, 1);
     expect(Math.hypot(dx, dz)).toBeCloseTo(21);
+  });
+});
+
+describe("gear", () => {
+  const seen = (drawn) => {
+    const shown = [];
+    const others = { characters: new Map([[1, drawn]]), look: (message) => shown.push(message) };
+    Others.prototype.gear.call(others, { id: 1, look: { weapon: "maul" } });
+    return shown;
+  };
+
+  it("shows what someone holds now", () => {
+    const drawn = { own: {} };
+    expect(seen(drawn)).toEqual([{ id: 1, look: null }]);
+    expect(drawn.own).toEqual({ weapon: "maul" });
+  });
+
+  it("waits until someone looks like themselves again", () => {
+    const drawn = { own: {}, transformed: true };
+    expect(seen(drawn)).toEqual([]);
+    expect(drawn.own).toEqual({ weapon: "maul" });
   });
 });

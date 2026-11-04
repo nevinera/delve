@@ -18,6 +18,9 @@ type Class struct {
 	Resources    []Resource  `json:"resources"`
 	Abilities    []Ability   `json:"abilities"`
 	Statuses     []Status    `json:"statuses"`
+	// What it can hold, best first.
+	Weapons  []string `json:"weapons"`
+	Offhands []string `json:"offhands"`
 	// What a character chooses gives these abilities, so level alone doesn't.
 	Specializations []Specialization    `json:"specializations"`
 	Talents         map[string][]Talent `json:"talents"`

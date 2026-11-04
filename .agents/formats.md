@@ -682,7 +682,7 @@ An area is a cylinder: `radius` across, and `height` above and below its center,
   - `rage`: 100, built by dealing and taking damage, decaying out of combat.
   - `points`: whole points up to `max`, like ki or combo points. Abilities build and spend them. `regen` adds that many a second (astra's is `1/9`, so about a point every 9 s), and `decay` drains that many a second out of combat.
 - `armor`: what it can wear, each with the level it unlocks at. A paladin lists `chain` at 1 and `plate` at 40.
-- `weapons` and `offhands`: weapon types from `client/src/character/weapons.js` (`HELD`) that it can use.
+- `weapons` and `offhands`: weapon types from `client/src/character/weapons.js` (`HELD`) that it can use, best first. Until there's gear, the game server gives a character the first ones that suit what its specialization's abilities ask for with `wielding`, or the first of each without a specialization.
 - `abilities`: the class's own [abilities](#abilities), written out here, each with the `level` it's granted at. A class's abilities don't generalize to others, so they aren't shared.
 - `statuses`: the [statuses](#statuses) its abilities, passives and mastery apply. They point at them by id, unique within the class.
 - `units`: what it summons, written out here so a class needs nothing from outside itself. A unit takes `id`, `name` and a creature's `look`, `creatureType`, `reach`, `attack` and `speed`, plus `abilities` from the same class and `autocast`, those it uses on its own when it obeys you. `power` gives it shares of its summoner's `attackPower`, `spellPower`, `health` and `armor`. Its level, crit, haste, mastery and versatility follow its summoner's.
@@ -1156,6 +1156,7 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `areaGone` | `id` | an area ended |
 | `absorb` | `id`, `absorb` | what someone near you can still soak up changed. A character carries `absorb` too |
 | `look` | `id`, `look` | someone near you started or stopped looking like something else. Without a `look`, they went back to their own |
+| `gear` | `id`, `look` | what someone near you holds changed, and `look` is their own look with it |
 | `targetable` | `id`, `targetable` | someone near you became targetable or stopped being. A character carries `untargetable` while it can't be |
 | `controls` | `controls` | what's holding you now, a list of `control` words |
 | `speed` | `movementSpeed` | how fast you go now, 100 being plain |
@@ -1178,7 +1179,7 @@ You type commands in the log's box, starting with `/`. The game server reads eac
 - `/spar [on or off]`: training dummies in reach swing back at you every 2 s for 5% of your health, so you can try blocks, parries and what they set off. They leave you at least 1 health.
 - `/combatdebug [on or off]`: logs what your abilities do as you use them: what they spend and what goes into each effect, and which effects do nothing yet. It lasts until you leave. Your owner needs the `system_admin` role.
 - `/level <1 to 100>`: sets your level in this world, healed up, and keeps it. Your owner needs the `system_admin` role.
-- `/weapon <main hand> [off hand]`: changes what you hold until you leave, for everyone to see. It doesn't change what your abilities' `wielding` checks. Your owner needs the `system_admin` role.
+- `/weapon <main hand> [off hand]`: changes what you hold until you leave, for everyone to see, in place of what your class gives you. It doesn't change what your abilities' `wielding` checks. Your owner needs the `system_admin` role.
 - `/teleport <x> <z> [continent]`, or `/teleport spawn`: moves you to that spot, standing on the ground, ending what you're casting. Your owner needs the `system_admin` role.
 
 ### Movement checks

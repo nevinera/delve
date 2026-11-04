@@ -1,7 +1,6 @@
 package game
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -143,17 +142,10 @@ func runWeapon(l *Layer, p *Player, args []string) error {
 	if off != "none" && slices.Contains(twoHanded, main) {
 		return fmt.Errorf("A %s takes both hands.", main)
 	}
-	look := map[string]any{}
-	if err := json.Unmarshal(p.state.Look, &look); err != nil {
-		return fmt.Errorf("That character's look can't change.")
+	p.fight.ownWeapons = true
+	if p.wear(main, off) {
+		l.tellOf(p.ID(), encode(gearMessage{"gear", p.ID(), p.state.Look}))
 	}
-	look["weapon"], look["offhand"] = main, off
-	encoded, err := json.Marshal(look)
-	if err != nil {
-		return err
-	}
-	p.state.Look = encoded
-	l.tellOf(p.ID(), encode(lookMessage{"look", p.ID(), encoded}))
 	answer(p, "system", fmt.Sprintf("You're holding %s and %s until you leave.", main, off))
 	return nil
 }

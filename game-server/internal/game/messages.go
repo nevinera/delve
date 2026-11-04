@@ -189,6 +189,13 @@ type lookMessage struct {
 	Look json.RawMessage `json:"look"`
 }
 
+// gearMessage is a character's own look now what it holds has changed.
+type gearMessage struct {
+	Type string          `json:"type"`
+	ID   int64           `json:"id"`
+	Look json.RawMessage `json:"look"`
+}
+
 // targetable says whether a unit can be picked as a target, when that changes.
 type targetable struct {
 	Type       string `json:"type"`

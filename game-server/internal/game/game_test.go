@@ -609,9 +609,9 @@ func TestWeaponCommand(t *testing.T) {
 		t.Fatal(got)
 	}
 	say(t, p, "/weapon sword shield")
-	got := heard(p, "look")
+	got := heard(p, "gear")
 	if len(got) != 1 {
-		t.Fatalf("look messages = %v", got)
+		t.Fatalf("gear messages = %v", got)
 	}
 	look := got[0]["look"].(map[string]any)
 	if look["weapon"] != "sword" || look["offhand"] != "shield" {

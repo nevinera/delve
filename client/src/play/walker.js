@@ -3,7 +3,8 @@ import { blocks } from "../world/objects.js";
 import { slabFootholds, slabHitsTrunk } from "../world/slabs.js";
 import { characterClips, loadAnimations, roleClips, strideRate } from "../character/animations.js";
 import { UpperBody, canSplit, halfOf } from "../character/upperBody.js";
-import { characterMesh, disposeCharacter, setWeaponsDrawn } from "../character/characterMesh.js";
+import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
+import { WeaponDraw } from "../character/weaponDraw.js";
 import { TURN_RATE } from "../character/posed.js";
 import { randomLook } from "../character/recipe.js";
 import { trunkRadius } from "../render/treeMeshes.js";
@@ -199,6 +200,7 @@ export class Walker {
     this.bones = null;
     this.clips = null;
     this.upper = null;
+    this.hands = new WeaponDraw(this.model);
     this.readyClip = roleClips(this.model.userData.look, this.model.userData.skeleton).ready ?? "Idle_Loop";
     this.playing = null;
     const model = this.model;
@@ -325,15 +327,17 @@ export class Walker {
     if (!this.clips) return;
     if (this.acting) this.weaponsUntil = this.t + WEAPONS_OUT_S;
     const weaponsOut = this.t < (this.weaponsUntil ?? 0);
-    setWeaponsDrawn(this.model, weaponsOut);
+    const reaching = this.hands.update(this.t, weaponsOut);
     const busy = moving || this.airTime > 0;
     if (this.acting && (this.t >= this.acting.until || swimming || (busy && !canSplit(this.model)))) this.acting = null;
-    // On the move, an ability plays on the arms over what the legs are doing.
+    // On the move, an ability plays on the arms over what the legs are doing, and reaching for a
+    // weapon always does.
     this.upper ??= new UpperBody(this.mixer, this.clips);
-    this.legsOnly = Boolean(this.acting && busy);
-    if (this.legsOnly) this.upper.show(this.acting, this.acting.name, { time: this.t - this.acting.at, once: !this.acting.loop });
+    const arms = reaching ?? (busy ? this.acting : null);
+    this.legsOnly = Boolean(arms);
+    if (arms) this.upper.show(arms, arms.name, { time: this.t - arms.at, once: !arms.loop });
     else this.upper.clear();
-    if (this.acting && !busy) {
+    if (this.acting && !arms) {
       this.play(this.acting.name, 1, !this.acting.loop, this.t - this.acting.at);
       return;
     }

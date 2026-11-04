@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { characterClips, loadAnimations, roleClips, strideRate } from "../character/animations.js";
 import { UpperBody, canSplit, halfOf } from "../character/upperBody.js";
-import { characterMesh, disposeCharacter, setWeaponsDrawn } from "../character/characterMesh.js";
+import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
+import { WeaponDraw } from "../character/weaponDraw.js";
 import { TURN_RATE } from "../character/posed.js";
 import { resolveRecipe } from "../character/recipe.js";
 import { BACK_FT, GAITS, GRAVITY, JUMP_FT, RUN_FT, RUNNING_KINDS, SPRINT, SWIM_FT, tripAt, WALK_FT, walksDown } from "./walker.js";
@@ -131,6 +132,15 @@ export class Others {
     const next = this.characters.get(id);
     next.own = own;
     next.dps = dps;
+    next.transformed = Boolean(look);
+  }
+
+  // What someone holds changed, which shows now unless they look like something else.
+  gear({ id, look }) {
+    const drawn = this.characters.get(id);
+    if (!drawn) return;
+    drawn.own = look;
+    if (!drawn.transformed) this.look({ id, look: null });
   }
 
   // An effect is carrying someone: they're at `at` as far as the server goes, and this plays the trip.
@@ -221,17 +231,20 @@ export class Others {
     const now = performance.now();
     if (drawn.acting) drawn.weaponsUntil = now + WEAPONS_OUT_MS;
     const weaponsOut = now < (drawn.weaponsUntil ?? 0);
-    setWeaponsDrawn(drawn.model, weaponsOut);
+    drawn.hands ??= new WeaponDraw(drawn.model);
+    const reaching = drawn.hands.update(now / 1000, weaponsOut);
     const busy = speed || drawn.airborne;
     if (drawn.acting && (drawn.acting.until <= now || move.swim || (busy && !canSplit(drawn.model)))) drawn.acting = null;
-    // On the move, an ability plays on the arms over what the legs are doing.
+    // On the move, an ability plays on the arms over what the legs are doing, and reaching for a
+    // weapon always does.
     drawn.upper ??= new UpperBody(drawn.mixer, drawn.clips);
-    const since = drawn.acting ? (now - drawn.acting.at) / 1000 : 0;
-    drawn.legsOnly = Boolean(drawn.acting && busy);
-    if (drawn.legsOnly) drawn.upper.show(drawn.acting, drawn.acting.name, { time: since, once: !drawn.acting.loop });
+    const arms = reaching ?? (busy ? drawn.acting : null);
+    drawn.legsOnly = Boolean(arms);
+    if (reaching) drawn.upper.show(reaching, reaching.name, { time: now / 1000 - reaching.at, once: true });
+    else if (arms) drawn.upper.show(arms, arms.name, { time: (now - arms.at) / 1000, once: !arms.loop });
     else drawn.upper.clear();
-    if (drawn.acting && !busy) {
-      this.play(drawn, drawn.acting.name, 1, !drawn.acting.loop, since);
+    if (drawn.acting && !arms) {
+      this.play(drawn, drawn.acting.name, 1, !drawn.acting.loop, (now - drawn.acting.at) / 1000);
       return;
     }
     const way = move.forward < 0 ? "back" : move.forward > 0 || !move.strafe ? "ahead" : move.strafe > 0 ? "left" : "right";

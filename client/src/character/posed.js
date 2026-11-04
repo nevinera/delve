@@ -238,6 +238,11 @@ const heart = (bow) => ({
   reach: { hand_l: { wrist: [0.15, 4.5, 0.62], elbow: [0.85, -0.5, 0.1] } },
 });
 
+// Reaching for a weapon: the right hand over the right shoulder for one on the back, or across to
+// the left hip for one there.
+const REACH_BACK = { ...PLANTED, bones: { spine_01: [0, -0.12, 0], spine_02: [0, -0.1, 0], head: [0, 0.1, 0] }, reach: { hand_r: { wrist: [-0.5, 5.75, -0.2], elbow: [-1, 0.35, -0.1] } } };
+const REACH_HIP = { ...PLANTED, bones: { spine_01: [0.08, 0.2, 0], spine_02: [0.04, 0.12, 0], head: [0.05, -0.1, 0] }, reach: { hand_r: { wrist: [0.45, 3.25, 0.45], elbow: [-0.7, -0.45, 0.5] } } };
+
 const roar = (shake) => ({
   ...PLANTED,
   pelvis: [0, -0.1, 0],
@@ -392,6 +397,16 @@ export const POSED = {
     ...through(0, 0.35, SWEEP),
     [0.6, SWEEP[6]],
     [1.15, READY],
+  ],
+  Draw_Back: [
+    [0, STANDING],
+    [0.1, REACH_BACK],
+    [0.3, STANDING],
+  ],
+  Draw_Hip: [
+    [0, STANDING],
+    [0.1, REACH_HIP],
+    [0.3, STANDING],
   ],
   Pray: [
     [0, STANDING],

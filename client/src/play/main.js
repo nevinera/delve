@@ -78,6 +78,7 @@ async function play() {
   setWorldIcons(loader.files);
 
   let others = null;
+  let transformed = false;
   let combat = null;
   let sightLines = null;
   // Combat news before you're in the world isn't yours to see: it's about others.
@@ -105,8 +106,14 @@ async function play() {
     absorb: (message) => unitStatuses.absorb(message),
     moved: (message) => tell("moved", message),
     look: (message) => {
-      if (message.id !== you.id) tell("look", message);
-      else if (others) others.view.walker?.setLook(resolveRecipe(message.look ?? config.look));
+      if (message.id !== you.id) return tell("look", message);
+      transformed = Boolean(message.look);
+      if (others) others.view.walker?.setLook(resolveRecipe(message.look ?? you.look));
+    },
+    gear: (message) => {
+      if (message.id !== you.id) return tell("gear", message);
+      you.look = message.look;
+      if (others && !transformed) others.view.walker?.setLook(resolveRecipe(you.look));
     },
     forced: (message) => (message.id === you.id ? connection.forced(message) : tell("forced", message)),
     used: fight("used"),
@@ -198,7 +205,7 @@ async function play() {
     sightLines.frame(dt);
   };
   const paused = () => ($("playPaused").hidden = false);
-  view.startWalk(paused, [you.at[0], you.at[2]], resolveRecipe(config.look));
+  view.startWalk(paused, [you.at[0], you.at[2]], resolveRecipe(you.look));
   view.walker.yaw = you.yaw;
   connection.report(view);
   unitStatuses.seen(you);

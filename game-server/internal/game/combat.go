@@ -84,6 +84,7 @@ type fighter struct {
 	sparring   bool // a dummy in reach swings back at it
 	sparAt     time.Time
 	bars       [][]string   // its action bars, as it set them
+	ownWeapons bool         // it holds what it picked, not what its class and build give it
 	build      combat.Build // its specialization and talents, as allowed
 	class      *combat.Class
 	level      int
@@ -161,6 +162,8 @@ func (p *Player) enterFight(class *combat.Class, level int, build combat.Build) 
 	}
 	f.resChanged = true // so the first tick tells the player where they stand
 	f.build = f.class.Allowed(build, f.level)
+	f.ownWeapons = holdsOwnWeapon(p.state.Look)
+	p.wearGear()
 	p.grantStatuses(time.Time{})
 	p.state.Class, p.state.Level, p.state.Health, p.state.MaxHealth = f.class.ID, f.level, f.vitals.Health, f.vitals.MaxHealth
 }
@@ -224,6 +227,9 @@ func (l *Layer) applyBuild(p *Player, b combat.Build, now time.Time) {
 		}
 	}
 	p.send(encode(buildMessage{"build", f.build.Specialization, f.build.Talents}))
+	if p.wearGear() {
+		l.tellOf(p.ID(), encode(gearMessage{"gear", p.ID(), p.state.Look}))
+	}
 }
 
 // setLevel moves a character to a level, healed up, and keeps it.
