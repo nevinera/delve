@@ -341,10 +341,13 @@ func (l *Layer) resolved(p *Player, a *combat.Ability, now time.Time) *combat.Ab
 	if len(mods) > 0 {
 		a = p.fight.class.Resolve(a, mods, sheet.MasteryPercent(), l.hub.roll)
 	}
-	if sheet.Haste() == 0 || (a.CastTime == 0 && a.Channel == nil && a.GCD != nil && *a.GCD == 0) {
+	if sheet.Haste() == 0 {
 		return a
 	}
 	hasted := *a
+	if a.CooldownHasted {
+		hasted.Cooldown = sheet.Hasted(a.Cooldown)
+	}
 	hasted.CastTime = sheet.Hasted(a.CastTime)
 	if a.Channel != nil {
 		channel := *a.Channel
@@ -355,7 +358,7 @@ func (l *Layer) resolved(p *Player, a *combat.Ability, now time.Time) *combat.Ab
 	if a.GCD != nil {
 		gcd = *a.GCD
 	}
-	if gcd > 0 {
+	if gcd > 0 && (a.GCDHasted == nil || *a.GCDHasted) {
 		gcd = max(sheet.Hasted(gcd), combat.LowestGCD)
 		hasted.GCD = &gcd
 	}

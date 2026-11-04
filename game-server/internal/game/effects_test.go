@@ -576,3 +576,33 @@ func TestUntargetable(t *testing.T) {
 	pass(h, c, 0.05)
 	refusal(t, p, "you can't target that")
 }
+
+func TestHasteShortensTheGCDAndCooldownsAsTheAbilitySays(t *testing.T) {
+	no := false
+	fast := combat.Status{ID: "fast", Name: "Fast", Kind: "buff", Effects: []combat.StatusEffect{{Type: "stat", Stat: "haste", Add: 100}}}
+	h, p, c := dispelling(t, []combat.Status{fast}, combat.Effect{Type: "dispel", Affects: "self"})
+	p.fight.class.Abilities = append(p.fight.class.Abilities,
+		combat.Ability{ID: "plain", Name: "Plain", Target: "self", GCD: &[]float64{2}[0], Cooldown: 10},
+		combat.Ability{ID: "fixed", Name: "Fixed", Target: "self", GCD: &[]float64{2}[0], GCDHasted: &no},
+		combat.Ability{ID: "cools", Name: "Cools", Target: "self", GCD: &[]float64{0}[0], Cooldown: 10, CooldownHasted: true})
+	use(t, p, "mefast")
+	pass(h, c, 0.05)
+	heard(p)
+	use(t, p, "plain")
+	pass(h, c, 0.05)
+	got := heard(p, "used", "cooldown")
+	if got[0]["gcd"] != 1.0 || got[1]["seconds"] != 10.0 {
+		t.Fatalf("plain: %v", got)
+	}
+	pass(h, c, 1)
+	use(t, p, "fixed")
+	pass(h, c, 0.05)
+	if got := heard(p, "used"); got[0]["gcd"] != 2.0 {
+		t.Fatalf("fixed: %v", got)
+	}
+	use(t, p, "cools")
+	pass(h, c, 0.05)
+	if got := heard(p, "cooldown"); got[0]["seconds"] != 5.0 {
+		t.Fatalf("cools: %v", got)
+	}
+}

@@ -80,7 +80,9 @@ type Ability struct {
 	CastWhileMoving bool        `json:"castWhileMoving"`
 	Channel         *Channel    `json:"channel"`
 	GCD             *float64    `json:"gcd"`
+	GCDHasted       *bool       `json:"gcdHasted"`
 	Cooldown        float64     `json:"cooldown"`
+	CooldownHasted  bool        `json:"cooldownHasted"`
 	Charges         int         `json:"charges"`
 	Cost            []Cost      `json:"cost"`
 	Speed           float64     `json:"speed"`
