@@ -60,9 +60,12 @@ type used struct {
 	GCD     float64     `json:"gcd"`
 
 	// The ability as it's being used, with what changes it counted.
-	CastTime float64         `json:"castTime"`
-	Channel  *combat.Channel `json:"channel,omitempty"`
-	Cost     []combat.Cost   `json:"cost,omitempty"`
+	CastTime  float64         `json:"castTime"`
+	Channel   *combat.Channel `json:"channel,omitempty"`
+	Cost      []combat.Cost   `json:"cost,omitempty"`
+	School    string          `json:"school,omitempty"`
+	Schools   []string        `json:"schools,omitempty"`
+	Animation string          `json:"animation,omitempty"`
 }
 
 // swung says someone has started an auto-attack swing.

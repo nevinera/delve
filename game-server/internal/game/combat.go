@@ -1,6 +1,7 @@
 package game
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -193,7 +194,7 @@ func (l *Layer) use(p *Player, m incoming) {
 	if gcd > 0 {
 		f.gcdUntil = now.Add(seconds(gcd))
 	}
-	l.tell(p, encode(used{Type: "used", ID: p.ID(), Class: f.class.ID, Ability: ability.ID, Target: target, Spot: m.Spot, GCD: gcd, CastTime: ability.CastTime, Channel: ability.Channel, Cost: ability.Cost}))
+	l.tell(p, encode(used{Type: "used", ID: p.ID(), Class: f.class.ID, Ability: ability.ID, Target: target, Spot: m.Spot, GCD: gcd, CastTime: ability.CastTime, Channel: ability.Channel, Cost: ability.Cost, School: ability.School, Schools: ability.Schools, Animation: ability.Animation}))
 	if ability.Range.Melee && ability.Target == "enemy" {
 		l.startAttacking(p, target)
 	}
@@ -211,18 +212,30 @@ func (l *Layer) use(p *Player, m incoming) {
 
 // modifiersOf is the `modify` effects that count for a unit right now.
 func (l *Layer) modifiersOf(v *vitals, now time.Time) []combat.Mod {
+	// What you gained last goes last, so with several `overrides` it wins. Statuses are held in a
+	// map, so ties go by id.
+	held := make([]statusKey, 0, len(v.Statuses))
+	for key := range v.Statuses {
+		held = append(held, key)
+	}
+	slices.SortFunc(held, func(a, b statusKey) int {
+		if n := v.Statuses[a].since.Compare(v.Statuses[b].since); n != 0 {
+			return n
+		}
+		if n := strings.Compare(a.id, b.id); n != 0 {
+			return n
+		}
+		return cmp.Compare(a.from, b.from)
+	})
 	var mods []combat.Mod
-	for _, held := range v.Statuses {
-		for i := range held.def.Effects {
-			if e := &held.def.Effects[i]; e.Type == "modify" && l.holds(v, e, nil, now) {
-				mods = append(mods, combat.Mod{Effect: e, Stacks: held.stacks})
+	for _, key := range held {
+		each := v.Statuses[key]
+		for i := range each.def.Effects {
+			if e := &each.def.Effects[i]; e.Type == "modify" && l.holds(v, e, nil, now) {
+				mods = append(mods, combat.Mod{Effect: e, Stacks: each.stacks})
 			}
 		}
 	}
-	// Statuses are held in a map, so give ties between changes one order.
-	slices.SortStableFunc(mods, func(a, b combat.Mod) int {
-		return strings.Compare(a.Effect.Change+a.Effect.Tag, b.Effect.Change+b.Effect.Tag)
-	})
 	return mods
 }
 
@@ -261,7 +274,7 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 	if gcd > 0 && now.Before(f.gcdUntil) {
 		return nil, 0, "not ready yet"
 	}
-	if len(live(f.cooldowns[ability.ID], now)) >= max(ability.Charges, 1) {
+	if !slices.Contains(ability.Ignores, "cooldown") && len(live(f.cooldowns[ability.ID], now)) >= max(ability.Charges, 1) {
 		return nil, 0, "not ready yet"
 	}
 	if why := l.affordable(f, ability); why != "" {
@@ -485,6 +498,9 @@ func statusNames(p *Player) func(string) string {
 
 // unmet says why a player can't use an ability on a target, going by its `requires`.
 func (l *Layer) unmet(p *Player, a *combat.Ability, target int64, now time.Time) string {
+	if slices.Contains(a.Ignores, "requires") {
+		return ""
+	}
 	if failed, ok := combat.All(a.Requires, l.facts(p, target, now)); !ok {
 		return failed.Why(statusNames(p))
 	}

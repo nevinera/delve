@@ -375,3 +375,40 @@ func TestModifyChangesStatuses(t *testing.T) {
 		t.Fatalf("lasts %v", got[len(got)-1])
 	}
 }
+
+// A modify can let an ability past its cooldown and requires, add to what it does and change its school.
+func TestModifyChangesWhatAbilitiesAre(t *testing.T) {
+	h, p, c := statusFight(t, map[string]string{
+		"free": `[{"type":"modify","abilities":["hit"],"ignores":["cooldown","requires"]}]`,
+		"more": `[{"type":"modify","abilities":["hit"],"overrides":{"school":"frost"},"addEffects":[{"type":"damage","affects":"target","amount":7}]}]`,
+	})
+	gone := combat.Condition{Status: "never", On: "self"}
+	for i := range p.fight.class.Abilities {
+		if a := &p.fight.class.Abilities[i]; a.ID == "hit" {
+			a.Cooldown, a.Requires = 100, []combat.Condition{gone}
+		}
+	}
+	heard(p)
+	use(t, p, "hit")
+	if got := heard(p, "refused"); len(got) != 1 {
+		t.Fatalf("not refused: %v", got)
+	}
+	use(t, p, "free")
+	pass(h, c, 0.1)
+	if got := hitFor(t, h, p, c); got != 100 {
+		t.Fatalf("hit for %g", got)
+	}
+	if got := hitFor(t, h, p, c); got != 100 {
+		t.Fatalf("second hit, through the cooldown, for %g", got)
+	}
+	use(t, p, "more")
+	pass(h, c, 0.1)
+	heard(p)
+	if got := hitFor(t, h, p, c); got != 107 {
+		t.Fatalf("hit for %g, want 100 and the added 7", got)
+	}
+	used := heard(p, "used")
+	if len(used) != 1 || used[0]["school"] != "frost" {
+		t.Fatalf("used %v", used)
+	}
+}

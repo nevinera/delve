@@ -134,3 +134,41 @@ func TestResolveStatus(t *testing.T) {
 		t.Fatalf("given duration: %g", got.Duration)
 	}
 }
+
+func TestResolveChangesWhatAnAbilityIs(t *testing.T) {
+	a := ability(t, strikeJSON)
+	got := (&Class{}).Resolve(a, modsFrom(t,
+		`{"type":"modify","tag":"spender","overrides":{"school":"physical","animation":"dualAttack"}}`,
+		`{"type":"modify","tag":"spender","overrides":{"school":"frost","tags":["spender","cold"]}}`,
+		`{"type":"modify","tag":"spender","overrides":{"cost":null}}`,
+		`{"type":"modify","tag":"spender","addEffects":[{"type":"damage","affects":"self","amount":10}]}`,
+		`{"type":"modify","tag":"spender","change":"damage","multiply":2}`,
+		`{"type":"modify","tag":"spender","ignores":["cooldown","requires"]}`,
+	), 0, nil)
+	if got.School != "frost" || got.Animation != "dualAttack" || len(got.Tags) != 2 || got.Cost != nil {
+		t.Fatalf("%+v", got)
+	}
+	if len(got.Effects) != 4 || got.Effects[3].Affects != "self" || got.Effects[3].Amount.Min != 20 {
+		t.Fatalf("effects %+v", got.Effects)
+	}
+	if len(got.Ignores) != 2 {
+		t.Fatalf("%+v", got)
+	}
+	if a.School != "holy" || len(a.Effects) != 3 || len(a.Cost) != 2 || a.Ignores != nil {
+		t.Fatalf("changed the class's own ability: %+v", a)
+	}
+}
+
+func TestResolveStatusChangesWhatItIs(t *testing.T) {
+	s := &Status{ID: "slow", Duration: 6, Stacking: "refresh"}
+	got := (&Class{}).ResolveStatus(s, 0, modsFrom(t,
+		`{"type":"modify","statuses":["slow"],"overrides":{"stacking":"stack","maxStacks":3,"dispel":null}}`,
+		`{"type":"modify","statuses":["slow"],"statusEffects":[{"type":"stat","stat":"block","add":5}]}`,
+	), 0)
+	if got.Stacking != "stack" || got.MaxStacks != 3 || got.Duration != 6 || len(got.Effects) != 1 || got.Effects[0].Add != 5 {
+		t.Fatalf("%+v", got)
+	}
+	if s.Stacking != "refresh" || len(s.Effects) != 0 {
+		t.Fatalf("changed the class's own status: %+v", s)
+	}
+}

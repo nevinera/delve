@@ -79,6 +79,8 @@ type Ability struct {
 	Effects         []Effect    `json:"effects"`
 	Requires        []Condition `json:"requires"`
 	Tags            []string    `json:"tags"`
+	Animation       string      `json:"animation"`
+	Ignores         []string    `json:"-"` // what a `modify` lets it be used through
 }
 
 // Channel is an ability that goes on for Duration seconds, landing its effects Ticks times.
@@ -219,6 +221,11 @@ type StatusEffect struct {
 	AtTargets    int
 	PerTargetHit float64
 	MaxTotal     float64
+
+	AddEffects    []Effect
+	StatusEffects []StatusEffect
+	Overrides     map[string]json.RawMessage
+	Ignores       []string
 }
 
 // UnmarshalJSON reads the numbers of a periodic or stat effect, and just the type of the others.
@@ -266,13 +273,19 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		AtTargets    int      `json:"atTargets"`
 		PerTargetHit float64  `json:"perTargetHit"`
 		MaxTotal     float64  `json:"maxTotal"`
+
+		AddEffects    []Effect                   `json:"addEffects"`
+		StatusEffects []StatusEffect             `json:"statusEffects"`
+		Overrides     map[string]json.RawMessage `json:"overrides"`
+		Ignores       []string                   `json:"ignores"`
 	}
 	if err := json.Unmarshal(b, &body); err != nil {
 		return err
 	}
 	*s = StatusEffect{head.Type, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
 		body.Hit, body.Source, body.School, body.Schools, body.Category, body.Categories, body.Abilities, body.Tag, body.Statuses, body.When,
-		body.Change, body.Set, body.AddAmount, body.AddTags, body.Chance, body.AtTargets, body.PerTargetHit, body.MaxTotal}
+		body.Change, body.Set, body.AddAmount, body.AddTags, body.Chance, body.AtTargets, body.PerTargetHit, body.MaxTotal,
+		body.AddEffects, body.StatusEffects, body.Overrides, body.Ignores}
 	return nil
 }
 

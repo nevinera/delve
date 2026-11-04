@@ -29,6 +29,7 @@ describe("an ability as it's used", () => {
   const ability = { id: "a", castTime: 2, channel: { duration: 3, ticks: 3 }, cost: [{ resource: "x", amount: 1 }] };
   it("takes the server's numbers", () => expect(asUsed(ability, { castTime: 1, channel: { duration: 6 }, cost: [{ resource: "x", amount: 2 }] })).toEqual({ id: "a", castTime: 1, channel: { duration: 6, ticks: 3 }, cost: [{ resource: "x", amount: 2 }] }));
   it("keeps its own when the server says nothing", () => expect(asUsed(ability, {})).toEqual(ability));
+  it("takes the school and animation in force", () => expect(asUsed({ school: "holy", animation: "cast" }, { school: "physical", animation: "attack" })).toEqual({ school: "physical", animation: "attack" }));
   it("takes a cast time of none", () => expect(asUsed(ability, { castTime: 0 }).castTime).toBe(0));
 });
 

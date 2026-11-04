@@ -1,8 +1,12 @@
 package combat
 
 import (
+	"encoding/json"
+	"log"
 	"math"
+	"reflect"
 	"slices"
+	"strings"
 )
 
 // How a `modify` changes a number, in the order they go.
@@ -119,7 +123,7 @@ func (e *StatusEffect) byHits() bool {
 // Resolve is an ability with what its user holds counted. It gives back the same ability if
 // nothing changes it. `roll` gives numbers in [0, 1), for a `modify` with a `chance`.
 func (c *Class) Resolve(a *Ability, mods []Mod, mastery float64, roll func() float64) *Ability {
-	picked := make([]Mod, 0, len(mods))
+	var picked []Mod
 	out := *a
 	copied := false
 	own := func() {
@@ -143,10 +147,11 @@ func (c *Class) Resolve(a *Ability, mods []Mod, mastery float64, roll func() flo
 		}
 	}
 	for _, m := range mods {
-		if !m.Effect.picks(&out) || m.Effect.Change == "" {
+		e := m.Effect
+		if !e.picks(&out) || (e.Change == "" && len(e.AddEffects) == 0 && len(e.Overrides) == 0 && len(e.Ignores) == 0) {
 			continue
 		}
-		if m.Effect.Chance > 0 && roll() >= m.Effect.Chance {
+		if e.Chance > 0 && roll() >= e.Chance {
 			continue
 		}
 		picked = append(picked, m)
@@ -155,6 +160,12 @@ func (c *Class) Resolve(a *Ability, mods []Mod, mastery float64, roll func() flo
 		return a
 	}
 	own()
+	// What changes the ability's shape comes before its numbers, so they cover what's added.
+	for _, m := range picked {
+		override(&out, m.Effect.Overrides)
+		out.Effects = append(out.Effects, m.Effect.AddEffects...)
+		out.Ignores = append(out.Ignores, m.Effect.Ignores...)
+	}
 	for i := range out.Effects {
 		if e := &out.Effects[i]; e.Type == "status" && e.Duration == 0 {
 			if s := c.Status(e.Status); s != nil {
@@ -164,10 +175,7 @@ func (c *Class) Resolve(a *Ability, mods []Mod, mastery float64, roll func() flo
 	}
 	for _, how := range []int{setting, adding, multiplying} {
 		for _, m := range picked {
-			if d, ok := edits(m, mastery, how); ok {
-				if m.Effect.byHits() {
-					continue
-				}
+			if d, ok := edits(m, mastery, how); ok && m.Effect.Change != "" && !m.Effect.byHits() {
 				out.change(m.Effect.Change, m.Effect.Resource, d)
 			}
 		}
@@ -317,7 +325,7 @@ func (c *Class) ResolveStatus(s *Status, duration float64, mods []Mod, mastery f
 	}
 	var picked []Mod
 	for _, m := range mods {
-		if m.Effect.Type == "modify" && m.Effect.Change != "" && slices.Contains(m.Effect.Statuses, s.ID) {
+		if m.Effect.Type == "modify" && slices.Contains(m.Effect.Statuses, s.ID) {
 			picked = append(picked, m)
 		}
 	}
@@ -325,10 +333,20 @@ func (c *Class) ResolveStatus(s *Status, duration float64, mods []Mod, mastery f
 		return &out
 	}
 	out.Effects = slices.Clone(s.Effects)
+	lasts := out.Duration
+	for _, m := range picked {
+		override(&out, m.Effect.Overrides)
+		out.Effects = append(out.Effects, m.Effect.StatusEffects...)
+	}
+	if duration > 0 {
+		out.Duration = duration
+	} else if out.Duration == 0 {
+		out.Duration = lasts
+	}
 	for _, how := range []int{setting, adding, multiplying} {
 		for _, m := range picked {
 			d, ok := edits(m, mastery, how)
-			if !ok {
+			if !ok || m.Effect.Change == "" {
 				continue
 			}
 			switch m.Effect.Change {
@@ -347,6 +365,27 @@ func (c *Class) ResolveStatus(s *Status, duration float64, mods []Mod, mastery f
 	}
 	out.Duration = max(out.Duration, 0)
 	return &out
+}
+
+// override replaces those keys of a definition. `null` removes one, and a key it hasn't got means
+// nothing: the game doesn't read that key yet.
+func override(into any, keys map[string]json.RawMessage) {
+	if len(keys) == 0 {
+		return
+	}
+	v := reflect.ValueOf(into).Elem()
+	for i := 0; i < v.NumField(); i++ {
+		name, _, _ := strings.Cut(v.Type().Field(i).Tag.Get("json"), ",")
+		text, named := keys[name]
+		if !named {
+			continue
+		}
+		field := v.Field(i)
+		field.SetZero()
+		if err := json.Unmarshal(text, field.Addr().Interface()); err != nil {
+			log.Printf("combat: bad override of %s: %v", name, err)
+		}
+	}
 }
 
 // changeParam changes the number a status effect's `param` names.
