@@ -794,6 +794,16 @@ export class Renditions {
     delete cells.grid;
   }
 
+  // The look.js pattern of the ground at continent feet (x, z), or null where it's not been read.
+  patternAt(x, z) {
+    const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
+    const kinds = this.cells(tx, tz)?.kinds;
+    if (!kinds) return null;
+    const i = Math.min(TILE_CELLS - 1, Math.floor((x - tx * TILE_FT) / CELL_FT));
+    const j = Math.min(TILE_CELLS - 1, Math.floor((z - tz * TILE_FT) / CELL_FT));
+    return PATTERNS[kinds[j * TILE_CELLS + i]] ?? null;
+  }
+
   // The ground's height at continent feet (x, z), straight between cell corners, or chunk corners
   // where there are no cells or they've not been read, or null where there's no tile. It reads no
   // plate files.

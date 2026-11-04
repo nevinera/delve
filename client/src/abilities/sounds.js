@@ -95,6 +95,9 @@ export class SoundMixer {
   // delay, in seconds; at, [x, y, z] in the scene, or none for one that's only heard, like a menu's;
   // and mine, for your own, which are the last to go.
   play(name, { volume = 1, pitch = 1, pitchVariation = 0, delay = 0, at = null, mine = false } = {}) {
+    // Browsers hold sound back until you've pressed something, and what's played till then would
+    // all come out at once.
+    if (this.context.state === "suspended") return null;
     const loud = this.loudness(volume, at);
     if (loud < HEARD_UNTIL) return null;
     // How much it matters, for what gets dropped when too many are going.

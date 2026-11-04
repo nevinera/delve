@@ -265,6 +265,13 @@ describe("SoundMixer", () => {
     expect(made.play("impact", { at: [1000, 0, 0] })).toBeNull();
   });
 
+  it("doesn't save anything up while the browser's holding sound back", async () => {
+    const { made, context } = await mixer();
+    context.state = "suspended";
+    expect(made.play("impact")).toBeNull();
+    expect(made.playing).toEqual([]);
+  });
+
   it("forgets one when it ends", async () => {
     const { made } = await mixer();
     const voice = made.play("impact");

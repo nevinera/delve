@@ -69,7 +69,10 @@ menu.querySelector("[data-build]").addEventListener("click", () => {
   window.play?.combat?.openBuild();
 });
 for (const button of menu.querySelectorAll("[data-back]")) button.addEventListener("click", () => showPage(null));
-menu.addEventListener("toggle", (e) => e.newState === "closed" && showPage(null));
+menu.addEventListener("toggle", (e) => {
+  if (e.newState === "closed") showPage(null);
+  window.play?.combat?.menuSound(e.newState === "closed" ? "ui-close" : "ui-open");
+});
 menu.querySelector('[data-open="playGraphics"]').disabled = true; // until there's a view
 
 async function play() {
