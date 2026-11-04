@@ -75,6 +75,7 @@ type casting struct {
 	channel  bool
 	released bool
 	stopped  bool
+	spent    float64 // what its costs came to
 }
 
 // landing is something that happens at a time: a hit arriving, a channel's tick.
@@ -301,6 +302,7 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 		spent := costOf(f, cost)
 		f.resources[cost.Resource] -= spent
 		f.resChanged = true
+		c.spent += spent
 		p.debugLine("%s: spent %g %s", a.Name, spent, cost.Resource)
 	}
 	if a.Cooldown > 0 {
@@ -519,6 +521,16 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, now ti
 	switch e.Type {
 	case "damage":
 		l.strike(p, on, e.Amount, &h, now)
+	case "consume":
+		if e.Affects != "summons" {
+			l.consume(p, c, e, on, now)
+			return
+		}
+		p.debugLine("%s: consume of summons does nothing yet", c.ability.Name)
+		return
+	case "extend":
+		l.extend(p, c, e, on, now)
+		return
 	case "heal":
 		n, crit := combat.Roll(e.Amount, f.stats, true, l.hub.roll)
 		on.Health = min(on.Health+n, on.MaxHealth)
@@ -529,21 +541,9 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, now ti
 			h.Amount, h.Resource = math.Round(n), e.Resource
 		}
 	case "status":
-		s := f.class.Status(e.Status)
-		if s == nil {
-			log.Printf("character %d: ability %s applies a status its class hasn't got: %s", p.ID(), c.ability.ID, e.Status)
+		if !l.applyStatus(p, c.ability, e.Status, e.Duration, on, &h, now) {
 			return
 		}
-		lasts := e.Duration
-		if lasts == 0 {
-			lasts = s.Duration
-		}
-		held := &activeStatus{class: f.class.ID, stacks: 1}
-		if lasts > 0 {
-			held.until = now.Add(seconds(lasts))
-		}
-		on.Statuses[s.ID] = held
-		h.Status, h.Lasts, h.Class = s.ID, lasts, f.class.ID
 	default:
 		p.debugLine("%s: %s does nothing yet", c.ability.Name, e.Type)
 		return
@@ -552,6 +552,206 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, now ti
 	h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
 	l.sync(on)
 	l.tell(p, encode(h))
+}
+
+// applyStatus puts a status on a unit and notes it in the hit. It says whether the class has that status.
+func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration float64, on *vitals, h *hit, now time.Time) bool {
+	f := &p.fight
+	s := f.class.Status(id)
+	if s == nil {
+		log.Printf("character %d: ability %s applies a status its class hasn't got: %s", p.ID(), a.ID, id)
+		return false
+	}
+	lasts := duration
+	if lasts == 0 {
+		lasts = s.Duration
+	}
+	held := &activeStatus{class: f.class.ID, stacks: 1}
+	if lasts > 0 {
+		held.until = now.Add(seconds(lasts))
+	}
+	on.Statuses[s.ID] = held
+	h.Status, h.Lasts, h.Class, h.Stacks = s.ID, lasts, f.class.ID, held.stacks
+	return true
+}
+
+// consume takes statuses off a unit, or stacks or seconds of them, and does what that's worth.
+func (l *Layer) consume(p *Player, c *casting, e *combat.Effect, on *vitals, now time.Time) {
+	for _, id := range e.StatusIDs() {
+		held := on.Statuses[id]
+		if held == nil {
+			p.debugLine("%s: %s has no %s to consume", c.ability.Name, l.nameOf(on.ID), id)
+			continue
+		}
+		taken, window := held.stacks, time.Duration(0)
+		if e.Stacks > 0 {
+			taken = min(e.Stacks, held.stacks)
+		}
+		if !held.until.IsZero() {
+			window = max(held.until.Sub(now), 0)
+			if e.Seconds > 0 {
+				window = min(window, seconds(e.Seconds))
+			}
+		}
+		if e.DealsLeft > 0 {
+			l.dealLeft(p, c, id, e.DealsLeft, taken, window, on, now)
+		}
+		switch {
+		case e.Keeps:
+			p.debugLine("%s: %s keeps %s", c.ability.Name, l.nameOf(on.ID), id)
+		case e.Stacks > 0 && taken < held.stacks:
+			held.stacks -= taken
+			l.statusChanged(on.ID, id, held, now)
+			p.debugLine("%s: took %d stacks of %s off %s, %d left", c.ability.Name, taken, id, l.nameOf(on.ID), held.stacks)
+		case e.Seconds > 0 && !held.until.IsZero() && window < held.until.Sub(now):
+			held.until = held.until.Add(-window)
+			l.statusChanged(on.ID, id, held, now)
+			p.debugLine("%s: took %g s of %s off %s", c.ability.Name, window.Seconds(), id, l.nameOf(on.ID))
+		case e.Seconds > 0 && held.until.IsZero():
+			p.debugLine("%s: %s has no time to take off %s", c.ability.Name, id, l.nameOf(on.ID))
+		default:
+			delete(on.Statuses, id)
+			l.tellOf(on.ID, encode(statusGone{"statusGone", on.ID, id}))
+			p.debugLine("%s: took %s off %s", c.ability.Name, id, l.nameOf(on.ID))
+		}
+		if e.PerStack != nil {
+			for n := 0; n < taken; n++ {
+				l.landNested(p, c, e.PerStack, on, now)
+			}
+		}
+	}
+}
+
+// landNested lands an effect inside another, on the same unit unless it says who it affects.
+func (l *Layer) landNested(p *Player, c *casting, e *combat.Effect, on *vitals, now time.Time) {
+	if e.Affects == "" {
+		l.land(p, c, e, on, now)
+		return
+	}
+	for _, each := range l.reached(p, c, e) {
+		l.land(p, c, e, each, now)
+	}
+}
+
+// dealLeft does a share of what a status had left to do over a stretch of its time, all at once.
+func (l *Layer) dealLeft(p *Player, c *casting, id string, share float64, stacks int, window time.Duration, on *vitals, now time.Time) {
+	f := &p.fight
+	s := f.class.Status(id)
+	if s == nil {
+		return
+	}
+	for _, each := range s.Effects {
+		if each.Type != "periodic" || each.Every <= 0 {
+			continue
+		}
+		ticks := int(window.Seconds() / each.Every)
+		if ticks == 0 {
+			continue
+		}
+		total, crit := 0.0, false
+		for n := 0; n < ticks*stacks; n++ {
+			rolled, critical := combat.Roll(each.Amount, f.stats, true, l.hub.roll)
+			total += rolled
+			crit = crit || critical
+		}
+		total *= share
+		h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: each.Does, Crit: crit}
+		switch each.Does {
+		case "damage":
+			l.harm(p, on, total, &h, now)
+		case "heal":
+			on.Health = min(on.Health+total, on.MaxHealth)
+			h.Amount = math.Round(total)
+		default:
+			continue
+		}
+		p.debugLine("%s: %s had %d ticks left, %g %s", c.ability.Name, id, ticks*stacks, h.Amount, each.Does)
+		h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
+		l.sync(on)
+		l.tellOf(on.ID, encode(h))
+	}
+}
+
+// extend adds time to statuses on a unit, starts them over, or puts them on if they're missing.
+func (l *Layer) extend(p *Player, c *casting, e *combat.Effect, on *vitals, now time.Time) {
+	f := &p.fight
+	for _, id := range e.StatusIDs() {
+		s := f.class.Status(id)
+		held := on.Statuses[id]
+		if held == nil {
+			if !e.Apply {
+				p.debugLine("%s: %s has no %s to extend", c.ability.Name, l.nameOf(on.ID), id)
+				continue
+			}
+			h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: "status"}
+			if l.applyStatus(p, c.ability, id, e.Duration, on, &h, now) {
+				p.debugLine("%s", l.debugHit(p, c.ability.Name, &combat.Effect{Type: "status"}, on, h))
+				h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
+				l.tellOf(on.ID, encode(h))
+			}
+			continue
+		}
+		if held.until.IsZero() {
+			p.debugLine("%s: %s has no end to move", c.ability.Name, id)
+			continue
+		}
+		full := 0.0
+		if s != nil {
+			full = s.Duration
+		}
+		if e.Duration > 0 {
+			full = e.Duration
+		}
+		if e.Refresh {
+			if full > 0 {
+				held.until = now.Add(seconds(full))
+			}
+		} else {
+			until := held.until.Add(seconds(e.Seconds + e.PerSpent*c.spent))
+			if e.MaxTotal > 0 {
+				until = earlier(until, now.Add(seconds(e.MaxTotal)))
+			}
+			if e.MaxShare > 0 && full > 0 {
+				until = earlier(until, now.Add(seconds(full*e.MaxShare)))
+			}
+			if until.After(held.until) {
+				held.until = until
+			}
+		}
+		l.statusChanged(on.ID, id, held, now)
+		p.debugLine("%s: %s on %s now has %g s left", c.ability.Name, id, l.nameOf(on.ID), held.until.Sub(now).Seconds())
+	}
+}
+
+func earlier(a, b time.Time) time.Time {
+	if a.Before(b) {
+		return a
+	}
+	return b
+}
+
+// statusChanged tells those near a unit how a status on it stands now.
+func (l *Layer) statusChanged(unit int64, id string, held *activeStatus, now time.Time) {
+	lasts := 0.0
+	if !held.until.IsZero() {
+		lasts = held.until.Sub(now).Seconds()
+	}
+	l.tellOf(unit, encode(statusChanged{"statusChanged", unit, id, held.stacks, lasts}))
+}
+
+// tellOf sends a message about a unit to those who can see it.
+func (l *Layer) tellOf(unit int64, b []byte) {
+	if d := l.dummy(unit, ""); d != nil {
+		for _, o := range l.players {
+			if o.state.Continent == d.state.Continent {
+				o.send(b)
+			}
+		}
+		return
+	}
+	if o := l.players[unit]; o != nil {
+		l.tell(o, b)
+	}
 }
 
 // debugLine logs a line for a player with combat debug on.
@@ -602,12 +802,18 @@ func (l *Layer) strike(p *Player, on *vitals, amount combat.Amount, h *hit, now 
 			return
 		}
 	}
+	n, crit := combat.Roll(amount, p.fight.stats, true, l.hub.roll)
+	h.Crit = crit
+	l.harm(p, on, n, h, now)
+}
+
+// harm takes health off a unit, noting it in the hit.
+func (l *Layer) harm(p *Player, on *vitals, n float64, h *hit, now time.Time) {
 	if o := l.players[on.ID]; o != nil {
 		o.fight.since["damageTaken"] = now
 	}
-	n, crit := combat.Roll(amount, p.fight.stats, true, l.hub.roll)
 	on.Health = max(on.Health-n, 0)
-	h.Amount, h.Crit = math.Round(n), crit
+	h.Amount = math.Round(n)
 	if d := l.dummy(on.ID, p.state.Continent); d != nil {
 		d.tally(n, now)
 		h.DPS = math.Round(d.dps(now))
@@ -896,11 +1102,7 @@ func (l *Layer) tick(now time.Time) {
 			}
 		}
 		for id := range expire(&d.vitals, now) {
-			for _, o := range l.players {
-				if o.state.Continent == d.state.Continent {
-					o.send(encode(statusGone{"statusGone", d.ID, id}))
-				}
-			}
+			l.tellOf(d.ID, encode(statusGone{"statusGone", d.ID, id}))
 		}
 	}
 	for _, p := range l.players {

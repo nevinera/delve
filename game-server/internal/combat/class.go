@@ -92,14 +92,68 @@ type Effect struct {
 	Status   string      `json:"status"`
 	Duration float64     `json:"duration"`
 	When     []Condition `json:"when"`
+
+	// consume and extend
+	Statuses  []string `json:"statuses"`
+	Stacks    int      `json:"stacks"`
+	Seconds   float64  `json:"seconds"`
+	DealsLeft float64  `json:"dealsLeft"`
+	Keeps     bool     `json:"keeps"`
+	PerStack  *Effect  `json:"perStack"`
+	PerSpent  float64  `json:"perSpent"`
+	MaxTotal  float64  `json:"maxTotal"`
+	MaxShare  float64  `json:"maxShare"`
+	Refresh   bool     `json:"refresh"`
+	Apply     bool     `json:"apply"`
+}
+
+// StatusIDs is what a consume or extend works on, from `status` and `statuses`.
+func (e *Effect) StatusIDs() []string {
+	if e.Status == "" {
+		return e.Statuses
+	}
+	return append([]string{e.Status}, e.Statuses...)
 }
 
 // Status is what the game needs of a status so far.
 type Status struct {
-	ID       string  `json:"id"`
-	Name     string  `json:"name"`
-	Kind     string  `json:"kind"`
-	Duration float64 `json:"duration"`
+	ID       string         `json:"id"`
+	Name     string         `json:"name"`
+	Kind     string         `json:"kind"`
+	Duration float64        `json:"duration"`
+	Effects  []StatusEffect `json:"effects"`
+}
+
+// StatusEffect is what a status does while it's on. Only `periodic` has its numbers read so far.
+type StatusEffect struct {
+	Type   string
+	Every  float64
+	Does   string
+	Amount Amount
+}
+
+// UnmarshalJSON reads the numbers of a periodic effect, and just the type of the others.
+func (s *StatusEffect) UnmarshalJSON(b []byte) error {
+	var head struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(b, &head); err != nil {
+		return err
+	}
+	s.Type = head.Type
+	if head.Type != "periodic" {
+		return nil
+	}
+	var body struct {
+		Every  float64 `json:"every"`
+		Does   string  `json:"does"`
+		Amount Amount  `json:"amount"`
+	}
+	if err := json.Unmarshal(b, &body); err != nil {
+		return err
+	}
+	s.Every, s.Does, s.Amount = body.Every, body.Does, body.Amount
+	return nil
 }
 
 // Distance is feet, or melee reach.

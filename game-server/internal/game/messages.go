@@ -102,6 +102,7 @@ type hit struct {
 	Status    string  `json:"status,omitempty"`
 	Class     string  `json:"class,omitempty"`
 	Lasts     float64 `json:"lasts,omitempty"`
+	Stacks    int     `json:"stacks,omitempty"`
 	DPS       float64 `json:"dps,omitempty"`
 	Health    float64 `json:"health"`
 	MaxHealth float64 `json:"maxHealth"`
@@ -118,6 +119,14 @@ type statusGone struct {
 	Type   string `json:"type"`
 	ID     int64  `json:"id"`
 	Status string `json:"status"`
+}
+
+type statusChanged struct {
+	Type   string  `json:"type"`
+	ID     int64   `json:"id"`
+	Status string  `json:"status"`
+	Stacks int     `json:"stacks"`
+	Lasts  float64 `json:"lasts"` // seconds left, or 0 if it stays until removed
 }
 
 type resources struct {

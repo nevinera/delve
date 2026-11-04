@@ -345,6 +345,10 @@ export class PlayCombat {
     if (id === this.you.id) this.showBar(null);
   }
 
+  statusChanged_({ id, status, stacks }) {
+    this.statuses.get(id)?.set(status, stacks);
+  }
+
   statusGone_({ id, status }) {
     this.statuses.get(id)?.delete(status);
   }
@@ -388,7 +392,7 @@ export class PlayCombat {
     if (words) this.note(message, words.text);
     if (message.status) {
       if (!this.statuses.has(message.on)) this.statuses.set(message.on, new Map());
-      this.statuses.get(message.on).set(message.status, 1);
+      this.statuses.get(message.on).set(message.status, message.stacks ?? 1);
     }
     if (message.status && unit) {
       const aura = made?.statuses?.find((s) => s.id === message.status)?.aura;

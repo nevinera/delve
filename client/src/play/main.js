@@ -89,6 +89,7 @@ async function play() {
     resources: fight("resources_"),
     health: fight("health_"),
     log: fight("logged"),
+    statusChanged: fight("statusChanged_"),
     statusGone: fight("statusGone_"),
     swung: fight("swung"),
     attacking: fight("attacking_"),
