@@ -3,6 +3,7 @@ import { graphicsPanel } from "../render/graphicsPanel.js";
 import { setWorldIcons } from "./icons.js";
 import { SightLines } from "./sightLines.js";
 import { builtObjects, images } from "../objects/collections.js";
+import { prepareAnimations } from "../character/animations.js";
 import { resolveRecipe } from "../character/recipe.js";
 import { Caves } from "../create/caves.js";
 import { Renditions } from "../create/ground.js";
