@@ -175,6 +175,13 @@ type absorbMessage struct {
 	Absorb float64 `json:"absorb"`
 }
 
+// lookMessage is what a unit looks like now a `transform` has started or ended. An empty look means its own.
+type lookMessage struct {
+	Type string          `json:"type"`
+	ID   int64           `json:"id"`
+	Look json.RawMessage `json:"look"`
+}
+
 // targetable says whether a unit can be picked as a target, when that changes.
 type targetable struct {
 	Type       string `json:"type"`

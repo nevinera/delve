@@ -1094,3 +1094,36 @@ func TestConditionsOnTheFightSoFar(t *testing.T) {
 		t.Fatalf("after a hit that didn't crit, dealt %g", got)
 	}
 }
+
+func TestTransformChangesTheLookWhileItLasts(t *testing.T) {
+	bear := combat.Status{ID: "bearform", Name: "Bear", Kind: "buff", Duration: 2, Effects: []combat.StatusEffect{{Type: "transform", Into: "bear"}}}
+	h, p, c := dispelling(t, []combat.Status{bear}, combat.Effect{Type: "dispel", Affects: "self"})
+	p.fight.class.Units = append(p.fight.class.Units, combat.ClassUnit{ID: "bear", Name: "Bear", Look: []byte(`{"body":"bear"}`)})
+	other := enter(t, h, 2)
+	h.Tick()
+	heard(other)
+	use(t, p, "mebearform")
+	pass(h, c, 0.1)
+	got := heard(other, "look")
+	if len(got) != 1 || got[0]["id"] != float64(p.ID()) || got[0]["look"].(map[string]any)["body"] != "bear" {
+		t.Fatalf("look = %v", got)
+	}
+	third := enter(t, h, 3)
+	var seen map[string]any
+	for seen == nil {
+		if m := next(t, third); m["type"] == "snapshot" {
+			for _, each := range m["characters"].([]any) {
+				if ch := each.(map[string]any); ch["id"] == float64(p.ID()) {
+					seen = ch
+				}
+			}
+		}
+	}
+	if seen["look"].(map[string]any)["body"] != "bear" {
+		t.Fatalf("someone coming later sees %v", seen["look"])
+	}
+	pass(h, c, 2.1)
+	if got := heard(other, "look"); len(got) != 1 || got[0]["look"] != nil {
+		t.Fatalf("after it ended: %v", got)
+	}
+}

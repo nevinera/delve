@@ -100,6 +100,10 @@ async function play() {
     statusOn: (message) => unitStatuses.on(message),
     absorb: (message) => unitStatuses.absorb(message),
     moved: (message) => tell("moved", message),
+    look: (message) => {
+      if (message.id !== you.id) tell("look", message);
+      else if (others) others.view.walker?.setLook(resolveRecipe(message.look ?? config.look));
+    },
     forced: (message) => (message.id === you.id ? connection.forced(message) : tell("forced", message)),
     used: fight("used"),
     stopped: fight("stopped"),

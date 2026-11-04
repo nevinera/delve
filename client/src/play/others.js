@@ -92,6 +92,7 @@ export class Others {
       id: character.id,
       name: character.name,
       look,
+      own: character.look,
       class: character.class,
       dummy: Boolean(character.dummy),
       health: character.health,
@@ -116,6 +117,17 @@ export class Others {
   moved(message) {
     const drawn = this.characters.get(message.id);
     if (drawn) this.update(drawn, message);
+  }
+
+  // Someone's look changed, or went back to their own if it's null.
+  look({ id, look }) {
+    const drawn = this.characters.get(id);
+    if (!drawn) return;
+    const { name, class: classId, dummy, health, maxHealth, dps, at, yaw, move, own } = drawn;
+    this.appear({ id, name, look: look ?? own, class: classId, dummy, health, maxHealth, at: [at.x, at.y, at.z], yaw, move });
+    const next = this.characters.get(id);
+    next.own = own;
+    next.dps = dps;
   }
 
   // An effect is carrying someone: they're at `at` as far as the server goes, and this plays the trip.

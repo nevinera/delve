@@ -11,12 +11,13 @@ import (
 
 // Class is the part of classes/<id>.json the game plays.
 type Class struct {
-	ID           string     `json:"id"`
-	Name         string     `json:"name"`
-	PrimaryStats []string   `json:"primaryStats"`
-	Resources    []Resource `json:"resources"`
-	Abilities    []Ability  `json:"abilities"`
-	Statuses     []Status   `json:"statuses"`
+	Units        []ClassUnit `json:"units"`
+	ID           string      `json:"id"`
+	Name         string      `json:"name"`
+	PrimaryStats []string    `json:"primaryStats"`
+	Resources    []Resource  `json:"resources"`
+	Abilities    []Ability   `json:"abilities"`
+	Statuses     []Status    `json:"statuses"`
 	// What a character chooses gives these abilities, so level alone doesn't.
 	Specializations []Specialization    `json:"specializations"`
 	Talents         map[string][]Talent `json:"talents"`
@@ -232,6 +233,13 @@ func (e *Effect) StatusIDs() []string {
 	return append([]string{e.Status}, e.Statuses...)
 }
 
+// ClassUnit is something a class summons or turns you into, as far as the game reads it so far.
+type ClassUnit struct {
+	ID   string          `json:"id"`
+	Name string          `json:"name"`
+	Look json.RawMessage `json:"look"`
+}
+
 // PerCount is a number counting once for each of something.
 type PerCount struct {
 	StatusStacks     string             `json:"statusStacks"`
@@ -362,6 +370,7 @@ type StatusEffect struct {
 
 	Spill   *ExtraTargets // an `extraTargets`
 	Becomes string        // a `modify`: what it turns the abilities into
+	Into    string        // a `transform`: the unit whose look it gives
 	From    string        // a `store`: whose doings it keeps a share of
 
 	// A `modify` of crits.
@@ -479,6 +488,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		Status     string   `json:"status"`
 
 		Becomes        string      `json:"becomes"`
+		Into           string      `json:"into"`
 		From           string      `json:"from"`
 		AlwaysCrit     bool        `json:"alwaysCrit"`
 		AlwaysCritWhen []Condition `json:"alwaysCritWhen"`
@@ -556,7 +566,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 			return err
 		}
 	}
-	*s = StatusEffect{head.Type, body.Control, body.Status, spill, body.Becomes, body.From, body.AlwaysCrit, body.AlwaysCritWhen, body.ScalesWithCrit, body.CritMultiplier, body.AddPerSpent, body.MultiplyPerSpent, spentAs, spentAsMax, body.SpendsUpTo, body.ByExtraSpent, body.Controls, body.All, body.Harmful, body.AfterSeconds, body.OnlyBelow, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
+	*s = StatusEffect{head.Type, body.Control, body.Status, spill, body.Becomes, body.Into, body.From, body.AlwaysCrit, body.AlwaysCritWhen, body.ScalesWithCrit, body.CritMultiplier, body.AddPerSpent, body.MultiplyPerSpent, spentAs, spentAsMax, body.SpendsUpTo, body.ByExtraSpent, body.Controls, body.All, body.Harmful, body.AfterSeconds, body.OnlyBelow, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
 		body.Hit, body.Source, body.School, body.Schools, body.Category, body.Categories, body.Abilities, body.Tag, body.Statuses, body.When,
 		body.Change, body.Set, body.AddAmount, body.AddTags, body.Chance, body.AtTargets, body.PerTargetHit, body.MaxTotal,
 		body.Affects, body.Radius, body.Max, body.SoftCap, body.Drain,

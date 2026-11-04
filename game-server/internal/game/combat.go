@@ -1,6 +1,7 @@
 package game
 
 import (
+	"bytes"
 	"cmp"
 	"context"
 	"encoding/json"
@@ -36,10 +37,11 @@ type vitals struct {
 	Statuses  map[statusKey]*activeStatus
 	base      combat.Stats // what its class and level give it, before what it holds
 
-	untargetable bool     // as it's last been told
-	absorbShown  float64  // as it\'s last been told
-	recent       []taken  // damage it\'s taken lately
-	primary      []string // its class's main stats
+	untargetable bool            // as it's last been told
+	lookShown    json.RawMessage // what a `transform` shows it as, as it\'s last been told
+	absorbShown  float64         // as it\'s last been told
+	recent       []taken         // damage it\'s taken lately
+	primary      []string        // its class's main stats
 }
 
 // statusKey picks out one copy of a status: a unit holds one for each unit that put it on.
@@ -65,6 +67,7 @@ type activeStatus struct {
 	stored  float64           // what it holds for `stored` amounts
 	zone    *zone             // the area or aura keeping it on, if any
 	zones   map[int]*zone     // its own auras, by their place in the status
+	owner   *combat.Class     // the class it came from
 }
 
 // dummy is a training dummy: it takes damage, never dies or fights back, and tallies who's hit it.
@@ -172,7 +175,7 @@ func (p *Player) grantStatuses(now time.Time) {
 			continue
 		}
 		if s := f.class.Status(id); s != nil {
-			f.vitals.Statuses[key] = &activeStatus{def: s, class: f.class.ID, since: now, stacks: 1, uses: 1, granted: true}
+			f.vitals.Statuses[key] = &activeStatus{def: s, class: f.class.ID, owner: f.class, since: now, stacks: 1, uses: 1, granted: true}
 		} else {
 			log.Printf("character %d: class %s holds a status it hasn't got: %s", p.state.ID, f.class.ID, id)
 		}
@@ -939,6 +942,35 @@ func unitOf(v *vitals, reader int64, state []string) combat.Unit {
 	return combat.Unit{Health: v.Health, MaxHealth: v.MaxHealth, Statuses: stacks, State: state}
 }
 
+// lookOn is the look a unit's holding a `transform` gives it, the latest put on, or nil for its own.
+func lookOn(v *vitals) json.RawMessage {
+	var look json.RawMessage
+	var since time.Time
+	for _, held := range v.Statuses {
+		for i := range held.def.Effects {
+			if e := &held.def.Effects[i]; e.Type == "transform" && !held.since.Before(since) {
+				if unit := held.unit(e.Into); unit != nil {
+					look, since = unit.Look, held.since
+				}
+			}
+		}
+	}
+	return look
+}
+
+// unit is a unit of the class this status came from.
+func (a *activeStatus) unit(id string) *combat.ClassUnit {
+	if a.owner == nil {
+		return nil
+	}
+	for i := range a.owner.Units {
+		if a.owner.Units[i].ID == id {
+			return &a.owner.Units[i]
+		}
+	}
+	return nil
+}
+
 // groupsOn is the status groups a unit holds something of.
 func groupsOn(v *vitals) map[string]bool {
 	out := map[string]bool{}
@@ -1231,7 +1263,7 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 	if s.Limit > 0 && was == nil {
 		l.makeRoom(p, s)
 	}
-	held := &activeStatus{def: s, class: f.class.ID, since: now, stacks: 1, uses: 1}
+	held := &activeStatus{def: s, class: f.class.ID, owner: f.class, since: now, stacks: 1, uses: 1}
 	if s.ConsumedBy != nil && s.ConsumedBy.Uses > 0 {
 		held.uses = s.ConsumedBy.Uses
 	}
@@ -1706,6 +1738,9 @@ func (l *Layer) seen(c Character) Character {
 	}
 	now := l.hub.now()
 	c.Statuses, c.Untargetable, c.Absorb = nil, v.untargetable, v.absorbShown
+	if v.lookShown != nil {
+		c.Look = v.lookShown
+	}
 	for key, held := range v.Statuses {
 		c.Statuses = append(c.Statuses, shownOf(key, held, now))
 	}
@@ -1973,6 +2008,10 @@ func hitOf(c *casting, e *combat.Effect, on *vitals, count int) combat.HitContex
 // has, and a player's speed.
 func (l *Layer) refit(v *vitals, now time.Time) {
 	o := l.players[v.ID]
+	if look := lookOn(v); !bytes.Equal(look, v.lookShown) {
+		v.lookShown = look
+		l.tellOf(v.ID, encode(lookMessage{"look", v.ID, look}))
+	}
 	if left := math.Round(absorbOn(v)); left != v.absorbShown {
 		v.absorbShown = left
 		l.tellOf(v.ID, encode(absorbMessage{"absorb", v.ID, left}))

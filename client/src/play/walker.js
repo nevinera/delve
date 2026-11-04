@@ -128,13 +128,7 @@ export class Walker {
     this.saved = { near: camera.near };
     camera.near = CAMERA.near;
     camera.updateProjectionMatrix();
-    if (this.model) disposeCharacter(this.model);
-    this.model = characterMesh({ ...(this.look ?? randomLook()), sheathed: true });
-    this.view.scene.add(this.model);
-    this.mixer = new THREE.AnimationMixer(this.model);
-    this.bones = null;
-    this.clips = null;
-    this.playing = null;
+    this.buildModel();
     this.t = 0;
     this.facing = 0;
     this.twist = 0;
@@ -144,11 +138,6 @@ export class Walker {
     this.landing = null;
     this.airTime = 0;
     this.jumpedAt = -Infinity;
-    const model = this.model;
-    loadAnimations().then((baked) => {
-      if (this.model !== model) return;
-      this.clips = characterClips(model, baked);
-    });
     for (const [name, fn] of Object.entries(this.listeners)) window.addEventListener(name, fn);
     for (const [name, fn] of Object.entries(this.pointer)) this.view.canvas.addEventListener(name, fn, { capture: true });
     this.active = true;
@@ -189,6 +178,29 @@ export class Walker {
     this.place();
     this.view.render();
     requestAnimationFrame((t) => this.frame(t));
+  }
+
+  // Draws the character with a different look, as it stands.
+  setLook(look) {
+    this.look = look;
+    if (!this.model) return;
+    this.view.scene.remove(this.model);
+    this.buildModel();
+  }
+
+  buildModel() {
+    if (this.model) disposeCharacter(this.model);
+    this.model = characterMesh({ ...(this.look ?? randomLook()), sheathed: true });
+    this.view.scene.add(this.model);
+    this.mixer = new THREE.AnimationMixer(this.model);
+    this.bones = null;
+    this.clips = null;
+    this.playing = null;
+    const model = this.model;
+    loadAnimations().then((baked) => {
+      if (this.model !== model) return;
+      this.clips = characterClips(model, baked);
+    });
   }
 
   // Carries the character along a trip the server has made for it. from and to are scene positions.
