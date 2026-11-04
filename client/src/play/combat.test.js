@@ -22,6 +22,10 @@ describe("hitWords", () => {
   it("shows healing", () => expect(hitWords({ effect: "heal", amount: 9 })).toEqual({ text: "+9", kind: "heal" }));
   it("names a status", () => expect(hitWords({ effect: "status", status: "c" }, [{ id: "c", name: "Chilled" }]).text).toBe("Chilled"));
   it("says when it missed", () => expect(hitWords({ effect: "damage", missed: true })).toEqual({ text: "miss", kind: "miss" }));
+  it("marks a tick apart from a direct hit", () => {
+    expect(hitWords({ effect: "damage", amount: 5, ticked: "bleed" })).toEqual({ text: "5", kind: "damage combat-float-tick" });
+    expect(hitWords({ effect: "heal", amount: 5, ticked: "mend" })).toEqual({ text: "+5", kind: "heal combat-float-tick" });
+  });
   it("says nothing of the rest", () => expect(hitWords({ effect: "resource" })).toBeNull());
 });
 

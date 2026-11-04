@@ -128,6 +128,9 @@ type Effect struct {
 
 	Param string `json:"param"` // names its number, for a `modify`
 
+	SoftCap int     `json:"softCap"` // past this many hit, those hit share this many's worth
+	Drain   float64 `json:"drain"`   // heals the caster by this share of what it does
+
 	// What a `modify` adds, worked out as it's used.
 	CritChance float64 `json:"-"`
 	CritDamage float64 `json:"-"`
@@ -157,6 +160,16 @@ type Status struct {
 	BreaksOn   []string       `json:"breaksOn"`
 	KeptBy     *KeptBy        `json:"keptBy"`
 	ConsumedBy *ConsumedBy    `json:"consumedBy"`
+
+	TickRate float64 `json:"-"` // how much faster than `every` its periodic effects tick, once a `modify` says
+}
+
+// Period is how often this status's periodic effect ticks.
+func (s *Status) Period(e *StatusEffect) float64 {
+	if s.TickRate > 0 {
+		return e.Every / s.TickRate
+	}
+	return e.Every
 }
 
 // KeptBy lists the abilities that don't break a status with `breaksOn: ["action"]`.
@@ -222,6 +235,13 @@ type StatusEffect struct {
 	PerTargetHit float64
 	MaxTotal     float64
 
+	// A `periodic`.
+	Affects string
+	Radius  float64
+	Max     int
+	SoftCap int
+	Drain   float64
+
 	AddEffects    []Effect
 	StatusEffects []StatusEffect
 	Overrides     map[string]json.RawMessage
@@ -274,6 +294,12 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		PerTargetHit float64  `json:"perTargetHit"`
 		MaxTotal     float64  `json:"maxTotal"`
 
+		Affects string  `json:"affects"`
+		Radius  float64 `json:"radius"`
+		Max     int     `json:"max"`
+		SoftCap int     `json:"softCap"`
+		Drain   float64 `json:"drain"`
+
 		AddEffects    []Effect                   `json:"addEffects"`
 		StatusEffects []StatusEffect             `json:"statusEffects"`
 		Overrides     map[string]json.RawMessage `json:"overrides"`
@@ -285,6 +311,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 	*s = StatusEffect{head.Type, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
 		body.Hit, body.Source, body.School, body.Schools, body.Category, body.Categories, body.Abilities, body.Tag, body.Statuses, body.When,
 		body.Change, body.Set, body.AddAmount, body.AddTags, body.Chance, body.AtTargets, body.PerTargetHit, body.MaxTotal,
+		body.Affects, body.Radius, body.Max, body.SoftCap, body.Drain,
 		body.AddEffects, body.StatusEffects, body.Overrides, body.Ignores}
 	return nil
 }
@@ -313,6 +340,7 @@ type Amount struct {
 	Min, Max                              float64
 	AttackPower, SpellPower, Weapon, Mast float64
 	ByMastery                             float64
+	MaxHealth                             float64 // a share of the maximum health of whoever it affects
 }
 
 // UnmarshalJSON reads each of an amount's three shapes.
@@ -324,13 +352,14 @@ func (a *Amount) UnmarshalJSON(b []byte) error {
 		Weapon      float64         `json:"weapon"`
 		Mastery     float64         `json:"mastery"`
 		ByMastery   float64         `json:"byMastery"`
+		MaxHealth   float64         `json:"maxHealth"`
 	}
 	if len(b) > 0 && b[0] == '{' {
 		if err := json.Unmarshal(b, &parts); err != nil {
 			return err
 		}
 		a.AttackPower, a.SpellPower, a.Weapon, a.Mast = parts.AttackPower, parts.SpellPower, parts.Weapon, parts.Mastery
-		a.ByMastery = parts.ByMastery
+		a.ByMastery, a.MaxHealth = parts.ByMastery, parts.MaxHealth
 		if len(parts.Base) == 0 {
 			return nil
 		}

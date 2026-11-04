@@ -459,6 +459,11 @@ body.touch .play-bar button {
   color: #c0c0c0;
 }
 
+.combat-float-tick {
+  font-size: 0.8em;
+  opacity: 0.85;
+}
+
 .combat-float-heal {
   color: #70f070;
 }

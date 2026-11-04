@@ -49,7 +49,8 @@ type activeStatus struct {
 	since  time.Time // when it was last put on
 	until  time.Time
 	stacks int
-	uses   int // what's left of `consumedBy.uses`
+	uses   int               // what's left of `consumedBy.uses`
+	ticks  map[int]time.Time // when each of its periodic effects next ticks, by its place in the status
 }
 
 // dummy is a training dummy: it takes damage, never dies or fights back, and tallies who's hit it.
@@ -555,10 +556,13 @@ func unitOf(v *vitals, reader int64, state []string) combat.Unit {
 	return combat.Unit{Health: v.Health, MaxHealth: v.MaxHealth, Statuses: stacks, State: state}
 }
 
-// fighterState is which of a `state` condition's words are true of a player. Being slowed,
-// controlled or stunned aren't, until statuses can do those, and everywhere counts as outdoors.
+// fighterState is which of a `state` condition's words are true of a player. Being controlled or
+// stunned aren't, until statuses can do those, and everywhere counts as outdoors.
 func fighterState(p *Player, now time.Time) []string {
 	state := []string{"outdoors"}
+	if p.motion.slowed < 0 {
+		state = append(state, "slowed")
+	}
 	if p.fight.cast != nil {
 		state = append(state, "casting")
 	}
@@ -602,6 +606,9 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 	switch e.Type {
 	case "damage":
 		l.strike(p, on, e.AmountFor(count), hitOf(c, e, on, count), &h, now)
+		if !h.Missed {
+			l.drain(p, h.Amount, e.Drain, c.ability.ID)
+		}
 	case "consume":
 		if e.Affects != "summons" {
 			l.consume(p, c, e, on, now)
@@ -681,6 +688,9 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 	}
 	if lasts > 0 {
 		held.until = now.Add(seconds(lasts))
+	}
+	if was != nil {
+		held.ticks = was.ticks // putting it on again doesn't start its ticks over
 	}
 	on.Statuses[key] = held
 	h.Status, h.Lasts, h.Class, h.Stacks = s.ID, lasts, f.class.ID, held.stacks
@@ -784,6 +794,10 @@ func (l *Layer) spend(p *Player, used []usingUp, now time.Time) {
 func (l *Layer) sweep(now time.Time) {
 	l.eachUnit(func(v *vitals, at [3]float64, continent string) {
 		for key, each := range v.Statuses {
+			l.tickStatus(v, key, each, at, continent, now)
+			if v.Statuses[key] != each {
+				continue
+			}
 			over := !each.until.IsZero() && !now.Before(each.until)
 			if each.def.Leash > 0 && !over {
 				from := l.players[key.from]
@@ -795,6 +809,112 @@ func (l *Layer) sweep(now time.Time) {
 		}
 		l.refit(v, now)
 	})
+}
+
+// tickStatus lands whatever's due of a status's periodic effects. A last tick due as it ends still lands.
+func (l *Layer) tickStatus(v *vitals, key statusKey, held *activeStatus, at [3]float64, continent string, now time.Time) {
+	p := l.players[key.from]
+	if p == nil {
+		return
+	}
+	for i := range held.def.Effects {
+		e := &held.def.Effects[i]
+		period := held.def.Period(e)
+		if e.Type != "periodic" || period <= 0 {
+			continue
+		}
+		if held.ticks == nil {
+			held.ticks = map[int]time.Time{}
+		}
+		next, ok := held.ticks[i]
+		if !ok {
+			next = held.since.Add(seconds(period))
+		}
+		for !now.Before(next) && (held.until.IsZero() || !next.After(held.until)) && v.Statuses[key] == held {
+			l.tickOf(p, v, key.id, held, e, at, continent, now)
+			next = next.Add(seconds(period))
+		}
+		held.ticks[i] = next
+	}
+}
+
+// tickOf lands one tick of a periodic effect, from the one who applied it. Ticks don't miss.
+func (l *Layer) tickOf(p *Player, holder *vitals, id string, held *activeStatus, e *combat.StatusEffect, at [3]float64, continent string, now time.Time) {
+	targets := []*vitals{holder}
+	if e.Affects == "enemies" || e.Affects == "allies" {
+		targets = l.around(e, at, continent)
+	}
+	amount := combat.Shared(e.Amount, e.SoftCap, len(targets)).Scaled(float64(held.stacks))
+	ctx := combat.HitContext{Schools: schoolsOf(e.School, e.Schools, nil), Category: e.Category, Status: id, Kinds: []string{"periodic"}}
+	for _, on := range targets {
+		h := hit{Type: "hit", From: p.ID(), On: on.ID, Effect: e.Does, Ticked: id, Class: held.class}
+		switch e.Does {
+		case "damage":
+			if on.ID != p.ID() {
+				p.fight.attacked(now)
+			}
+			n, crit := l.rollDamage(p, on, amount, ctx, now)
+			h.Crit = crit
+			l.harm(p, on, n, &h, now)
+			l.leech(p, on, n, ctx, "", now)
+			l.drain(p, n, e.Drain, "")
+		case "heal":
+			n, crit := l.rollHeal(p, on, amount, ctx, now)
+			h.Crit = crit
+			on.Health = min(on.Health+n, on.MaxHealth)
+			h.Amount = math.Round(n)
+		case "resource":
+			o := l.players[on.ID]
+			if o == nil {
+				continue
+			}
+			n, _ := combat.Roll(amount, l.statsOf(&p.fight.vitals, nil, now), false, l.hub.roll)
+			given, ok := l.addResource(&o.fight, e.Resource, n)
+			if !ok {
+				continue
+			}
+			h.Amount, h.Resource = math.Round(given), e.Resource
+		default:
+			p.debugLine("%s: a periodic that does %s does nothing yet", id, e.Does)
+			continue
+		}
+		p.debugLine("%s on %s ticks: %s %g", id, l.nameOf(on.ID), e.Does, h.Amount)
+		h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
+		l.sync(on)
+		l.tellOf(on.ID, encode(h))
+	}
+}
+
+// around is who an area periodic reaches around its holder, nearest first.
+func (l *Layer) around(e *combat.StatusEffect, at [3]float64, continent string) []*vitals {
+	type reach struct {
+		v   *vitals
+		gap float64
+	}
+	var found []reach
+	l.eachUnit(func(v *vitals, there [3]float64, on string) {
+		isEnemy := v.ID < 0 // only dummies are enemies, for now
+		if on != continent || isEnemy != (e.Affects == "enemies") {
+			return
+		}
+		if gap := distance(at, there); e.Radius <= 0 || gap <= e.Radius {
+			found = append(found, reach{v, gap})
+		}
+	})
+	slices.SortFunc(found, func(a, b reach) int {
+		if n := cmp.Compare(a.gap, b.gap); n != 0 {
+			return n
+		}
+		return cmp.Compare(a.v.ID, b.v.ID)
+	})
+	if e.Max > 0 && len(found) > e.Max {
+		found = found[:e.Max]
+	}
+	out := make([]*vitals, len(found))
+	for i, each := range found {
+		out[i] = each.v
+	}
+	return out
 }
 
 // consume takes statuses off a unit, or stacks or seconds of them, and does what that's worth.
@@ -817,7 +937,7 @@ func (l *Layer) consume(p *Player, c *casting, e *combat.Effect, on *vitals, now
 			}
 		}
 		if e.DealsLeft > 0 {
-			l.dealLeft(p, c, id, e.DealsLeft, taken, window, on, now)
+			l.dealLeft(p, c, id, held, e.DealsLeft, taken, window, on, now)
 		}
 		switch {
 		case e.Keeps:
@@ -857,17 +977,20 @@ func (l *Layer) landNested(p *Player, c *casting, e *combat.Effect, on *vitals, 
 }
 
 // dealLeft does a share of what a status had left to do over a stretch of its time, all at once.
-func (l *Layer) dealLeft(p *Player, c *casting, id string, share float64, stacks int, window time.Duration, on *vitals, now time.Time) {
-	f := &p.fight
-	s := f.class.Status(id)
-	if s == nil {
-		return
-	}
-	for _, each := range s.Effects {
-		if each.Type != "periodic" || each.Every <= 0 {
+func (l *Layer) dealLeft(p *Player, c *casting, id string, held *activeStatus, share float64, stacks int, window time.Duration, on *vitals, now time.Time) {
+	for i, each := range held.def.Effects {
+		period := held.def.Period(&each)
+		if each.Type != "periodic" || period <= 0 {
 			continue
 		}
-		ticks := int(window.Seconds() / each.Every)
+		next, ok := held.ticks[i]
+		if !ok {
+			next = held.since.Add(seconds(period))
+		}
+		ticks := 0
+		if gap := next.Sub(now); gap <= window {
+			ticks = 1 + int((window-gap).Seconds()/period)
+		}
 		if ticks == 0 {
 			continue
 		}
@@ -890,6 +1013,7 @@ func (l *Layer) dealLeft(p *Player, c *casting, id string, share float64, stacks
 		case "damage":
 			l.harm(p, on, total, &h, now)
 			l.leech(p, on, total, ctx, c.ability.ID, now)
+			l.drain(p, total, each.Drain, c.ability.ID)
 		case "heal":
 			on.Health = min(on.Health+total, on.MaxHealth)
 			h.Amount = math.Round(total)
@@ -1094,6 +1218,7 @@ func withOther(ctx combat.HitContext, other int64) *combat.HitContext {
 
 // rollDamage is what a hit comes to, by the stats of who does it and who takes it.
 func (l *Layer) rollDamage(p *Player, on *vitals, amount combat.Amount, ctx combat.HitContext, now time.Time) (float64, bool) {
+	amount = amount.On(on.MaxHealth)
 	mine, theirs := l.statsOf(&p.fight.vitals, withOther(ctx, on.ID), now), l.statsOf(on, withOther(ctx, p.ID()), now)
 	rolled := mine
 	rolled.CritChance += theirs.CritTaken + ctx.CritChance
@@ -1108,6 +1233,7 @@ func (l *Layer) rollDamage(p *Player, on *vitals, amount combat.Amount, ctx comb
 
 // rollHeal is what a heal comes to, by the stats of who does it and who takes it.
 func (l *Layer) rollHeal(p *Player, on *vitals, amount combat.Amount, ctx combat.HitContext, now time.Time) (float64, bool) {
+	amount = amount.On(on.MaxHealth)
 	mine, theirs := l.statsOf(&p.fight.vitals, withOther(ctx, on.ID), now), l.statsOf(on, withOther(ctx, p.ID()), now)
 	rolled := mine
 	rolled.CritChance += ctx.CritChance
@@ -1125,9 +1251,13 @@ func (l *Layer) leech(p *Player, on *vitals, n float64, ctx combat.HitContext, a
 	if on.ID == p.ID() {
 		return
 	}
+	l.drain(p, n, l.statsOf(&p.fight.vitals, withOther(ctx, on.ID), now).Leech/100, ability)
+}
+
+// drain heals a player by a share of what it did.
+func (l *Layer) drain(p *Player, n, share float64, ability string) {
 	f := &p.fight.vitals
-	share := l.statsOf(f, withOther(ctx, on.ID), now).Leech
-	back := min(n*share/100, f.MaxHealth-f.Health)
+	back := min(n*share, f.MaxHealth-f.Health)
 	if back <= 0 {
 		return
 	}

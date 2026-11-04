@@ -54,6 +54,7 @@ func (d edit) amount(a *Amount) {
 			a.SpellPower += d.add.SpellPower
 			a.Weapon += d.add.Weapon
 			a.Mast += d.add.Mast
+			a.MaxHealth += d.add.MaxHealth
 		}
 	case multiplying:
 		a.scale(d.n)
@@ -67,6 +68,7 @@ func (a *Amount) scale(by float64) {
 	a.SpellPower *= by
 	a.Weapon *= by
 	a.Mast *= by
+	a.MaxHealth *= by
 }
 
 // edits is what a `modify` does at each stage, if anything. `Mastery` grows what it picks as a
@@ -293,7 +295,7 @@ func (a *Ability) change(name, resource string, d edit) {
 
 // AmountFor is an effect's amount when its ability hit `count` units.
 func (e *Effect) AmountFor(count int) Amount {
-	out := e.Amount
+	out := Shared(e.Amount, e.SoftCap, count)
 	for _, m := range e.ByHits {
 		if count < m.Effect.AtTargets {
 			continue
@@ -354,6 +356,12 @@ func (c *Class) ResolveStatus(s *Status, duration float64, mods []Mod, mastery f
 				d.number(&out.Duration)
 			case "maxStacks":
 				d.whole(&out.MaxStacks)
+			case "tickRate":
+				out.TickRate = max(out.TickRate, 0)
+				if out.TickRate == 0 {
+					out.TickRate = 1
+				}
+				d.number(&out.TickRate)
 			default:
 				for i := range out.Effects {
 					if e := &out.Effects[i]; e.Param == m.Effect.Change {

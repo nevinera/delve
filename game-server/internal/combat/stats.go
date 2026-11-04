@@ -112,6 +112,28 @@ func (s Stats) MasteryPercent() float64 {
 	return 0
 }
 
+// On is an amount as it comes to on a unit with this much health.
+func (a Amount) On(maxHealth float64) Amount {
+	a.Min += a.MaxHealth * maxHealth
+	a.Max += a.MaxHealth * maxHealth
+	a.MaxHealth = 0
+	return a
+}
+
+// Scaled is an amount that many times over.
+func (a Amount) Scaled(by float64) Amount {
+	a.scale(by)
+	return a
+}
+
+// Shared is what one of `count` units hit gets, past a soft cap.
+func Shared(a Amount, softCap, count int) Amount {
+	if softCap > 0 && count > softCap {
+		return a.Scaled(float64(softCap) / float64(count))
+	}
+	return a
+}
+
 // Roll is what an amount comes to for someone with these stats, and whether it crit. roll gives
 // numbers in [0, 1).
 func Roll(a Amount, s Stats, canCrit bool, roll func() float64) (float64, bool) {

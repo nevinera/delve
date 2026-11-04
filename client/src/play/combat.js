@@ -48,8 +48,8 @@ export function nextTarget(units, current) {
 export function hitWords(hit, statuses = []) {
   if (hit.missed) return { text: "miss", kind: "miss" };
   const crit = hit.crit ? "!" : "";
-  if (hit.effect === "damage") return { text: `${hit.amount}${crit}`, kind: "damage" };
-  if (hit.effect === "heal") return { text: `+${hit.amount}${crit}`, kind: "heal" };
+  if (hit.effect === "damage") return { text: `${hit.amount}${crit}`, kind: hit.ticked ? "damage combat-float-tick" : "damage" };
+  if (hit.effect === "heal") return { text: `+${hit.amount}${crit}`, kind: hit.ticked ? "heal combat-float-tick" : "heal" };
   if (hit.effect === "status") return { text: statuses.find((s) => s.id === hit.status)?.name ?? hit.status, kind: "status" };
   return null;
 }
@@ -415,7 +415,11 @@ export class PlayCombat {
     const unit = this.unit(message.on);
     if (words && unit) this.float(unit, words);
     this.setHealth(message.on, message.health, message.maxHealth, message.dps);
-    if (words) this.note(message, words.text);
+    if (words) {
+      const ticked = message.ticked && made?.statuses?.find((s) => s.id === message.ticked);
+      if (message.ticked) this.log.add(`${this.nameOf(message.from)}: ${ticked?.name ?? message.ticked} ticks on ${this.nameOf(message.on)}: ${words.text}`);
+      else this.note(message, words.text);
+    }
     if (message.status && message.from === this.you.id) {
       if (!this.statuses.has(message.on)) this.statuses.set(message.on, new Map());
       this.statuses.get(message.on).set(message.status, message.stacks ?? 1);

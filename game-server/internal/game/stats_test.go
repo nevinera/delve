@@ -3,6 +3,7 @@ package game
 import (
 	"encoding/json"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/delve-mmo/delve3d/game-server/internal/combat"
@@ -410,5 +411,140 @@ func TestModifyChangesWhatAbilitiesAre(t *testing.T) {
 	used := heard(p, "used")
 	if len(used) != 1 || used[0]["school"] != "frost" {
 		t.Fatalf("used %v", used)
+	}
+}
+
+// A periodic effect ticks while held, from the one who applied it, and its stats and stacks count.
+func TestPeriodicTicks(t *testing.T) {
+	h, p, c := statusFight(t, nil)
+	class := p.fight.class
+	class.Statuses = append(class.Statuses,
+		combat.Status{ID: "bleed", Name: "Bleed", Duration: 6, Stacking: "stack", Effects: effects(t, `[{"type":"periodic","every":2,"does":"damage","amount":10,"school":"physical","category":"bleed","drain":0.5}]`)},
+		combat.Status{ID: "more", Name: "More", Effects: effects(t, `[{"type":"stat","stat":"damageDone","multiply":2,"statuses":["bleed"]}]`)},
+		combat.Status{ID: "quick", Name: "Quick", Effects: effects(t, `[{"type":"modify","statuses":["bleed"],"change":"tickRate","multiply":2}]`)})
+	class.Abilities = append(class.Abilities, onDummy("cut", combat.Effect{Type: "status", Affects: "target", Status: "bleed"}), selfBuff("more", gaining("more")), selfBuff("quick", gaining("quick")),
+		selfBuff("ouch2", combat.Effect{Type: "damage", Affects: "self", Amount: combat.Amount{Min: 50, Max: 50}}))
+	d := p.layer.dummies[0]
+	heard(p)
+	use(t, p, "ouch2")
+	pass(h, c, 0.1)
+	was := d.Health
+	wasHealth := p.fight.vitals.Health
+	use(t, p, "cut")
+	pass(h, c, 7)
+	if got := was - d.Health; got != 30 {
+		t.Fatalf("did %g over its 6 s, want 3 ticks of 10", got)
+	}
+	if got := p.fight.vitals.Health - wasHealth; got != 15 {
+		t.Fatalf("drained %g, want 15", got)
+	}
+	ticks := 0
+	for _, m := range heard(p, "hit") {
+		if m["ticked"] == "bleed" {
+			ticks++
+			if m["class"] != p.fight.class.ID {
+				t.Fatalf("a tick doesn't say its class: %v", m)
+			}
+			if _, named := m["ability"]; named {
+				t.Fatalf("a tick says it's an ability: %v", m)
+			}
+		}
+	}
+	if ticks != 3 {
+		t.Fatalf("heard %d ticks", ticks)
+	}
+	if len(d.Statuses) != 0 {
+		t.Fatalf("still held: %v", d.Statuses)
+	}
+
+	// Twice as often, twice as hard, and twice for two stacks.
+	use(t, p, "more")
+	use(t, p, "quick")
+	pass(h, c, 0.1)
+	use(t, p, "cut")
+	use(t, p, "cut")
+	pass(h, c, 0.05)
+	was = d.Health
+	pass(h, c, 1.1)
+	if got := was - d.Health; got != 40 {
+		t.Fatalf("a tick did %g, want 10 x 2 stacks x 2", got)
+	}
+}
+
+// Putting a periodic on again doesn't start its ticks over.
+func TestRefreshKeepsTheTickSchedule(t *testing.T) {
+	h, p, c := statusFight(t, nil)
+	class := p.fight.class
+	class.Statuses = append(class.Statuses, combat.Status{ID: "bleed", Name: "Bleed", Duration: 20, Stacking: "refresh", Effects: effects(t, `[{"type":"periodic","every":2,"does":"damage","amount":10}]`)})
+	class.Abilities = append(class.Abilities, onDummy("cut", combat.Effect{Type: "status", Affects: "target", Status: "bleed"}))
+	d := p.layer.dummies[0]
+	was := d.Health
+	use(t, p, "cut")
+	for n := 0; n < 4; n++ {
+		pass(h, c, 0.5)
+		if n == 2 {
+			use(t, p, "cut")
+		}
+	}
+	pass(h, c, 0.2)
+	if got := was - d.Health; got != 10 {
+		t.Fatalf("did %g by 2.2 s, want one tick", got)
+	}
+}
+
+// A periodic can hit an area, share past its soft cap, heal, and give resources.
+func TestPeriodicKinds(t *testing.T) {
+	h, p, c := statusFight(t, nil)
+	class := p.fight.class
+	grit := combat.Resource{Key: "grit", Kind: "points", Max: 10}
+	class.Resources = append(class.Resources, grit)
+	class.Statuses = append(class.Statuses,
+		combat.Status{ID: "warm", Name: "Warm", Effects: effects(t, `[{"type":"periodic","every":1,"does":"heal","amount":{"maxHealth":0.1}},{"type":"periodic","every":1,"does":"resource","resource":"grit","amount":1}]`)},
+		combat.Status{ID: "burn", Name: "Burn", Effects: effects(t, `[{"type":"periodic","every":1,"does":"damage","amount":10,"affects":"enemies","radius":100000,"softCap":1}]`)})
+	class.Abilities = append(class.Abilities, selfBuff("warm", gaining("warm")), selfBuff("burn", gaining("burn")),
+		selfBuff("ouch3", combat.Effect{Type: "damage", Affects: "self", Amount: combat.Amount{Min: 50, Max: 50}}))
+	use(t, p, "ouch3")
+	pass(h, c, 0.1)
+	was := p.fight.vitals.Health
+	use(t, p, "warm")
+	pass(h, c, 1.1)
+	if got := p.fight.vitals.Health - was; got != p.fight.vitals.MaxHealth*0.1 {
+		t.Fatalf("healed %g", got)
+	}
+	if p.fight.resources["grit"] != 1 {
+		t.Fatalf("grit = %g", p.fight.resources["grit"])
+	}
+	d := p.layer.dummies[0]
+	before := d.Health
+	use(t, p, "burn")
+	pass(h, c, 1.1)
+	if got := before - d.Health; got != 10/float64(max(len(p.layer.dummies), 1)) {
+		t.Fatalf("burned %g with %d dummies", got, len(p.layer.dummies))
+	}
+}
+
+// An ability's drain heals you by a share of what it did, and `slowed` follows your speed.
+func TestDrainAndSlowed(t *testing.T) {
+	h, p, c := statusFight(t, map[string]string{
+		"mire": `[{"type":"stat","stat":"movementSpeed","multiply":0.5}]`,
+	})
+	class := p.fight.class
+	class.Abilities = append(class.Abilities, onDummy("sap", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 40, Max: 40}, Drain: 0.25}),
+		selfBuff("ouch4", combat.Effect{Type: "damage", Affects: "self", Amount: combat.Amount{Min: 50, Max: 50}}))
+	use(t, p, "ouch4")
+	pass(h, c, 0.1)
+	was := p.fight.vitals.Health
+	use(t, p, "sap")
+	pass(h, c, 0.5)
+	if got := p.fight.vitals.Health - was; got != 10 {
+		t.Fatalf("drained %g, want 10", got)
+	}
+	if slices.Contains(fighterState(p, h.now()), "slowed") {
+		t.Fatal("slowed with nothing on")
+	}
+	use(t, p, "mire")
+	pass(h, c, 0.1)
+	if !slices.Contains(fighterState(p, h.now()), "slowed") {
+		t.Fatal("not slowed")
 	}
 }

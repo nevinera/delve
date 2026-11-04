@@ -83,9 +83,9 @@ func TestConsumeDealsWhatWasLeft(t *testing.T) {
 		health := p.layer.dummies[0].Health
 		use(t, p, "dry")
 		pass(h, c, 0.1)
-		// Nearly 12 s left at 2 s a tick is 5 ticks of 10, and half of that is 25.
-		if got := health - p.layer.dummies[0].Health; got != 25 {
-			t.Fatalf("keeps %v: dealt %g, want 25", keeps, got)
+		// It has all 6 of its ticks to come, 10 each, and half of that is 30.
+		if got := health - p.layer.dummies[0].Health; got != 30 {
+			t.Fatalf("keeps %v: dealt %g, want 30", keeps, got)
 		}
 		if (held(p, "bleed") != nil) != keeps {
 			t.Fatalf("keeps %v: status is %+v", keeps, held(p, "bleed"))
