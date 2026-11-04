@@ -134,6 +134,13 @@ type Effect struct {
 	Refresh   bool     `json:"refresh"`
 	Apply     bool     `json:"apply"`
 
+	// cooldown
+	Abilities []string `json:"abilities"`
+	Tag       string   `json:"tag"`
+	By        float64  `json:"by"`
+	Reset     bool     `json:"reset"`
+	Charges   int      `json:"charges"`
+
 	Param string `json:"param"` // names its number, for a `modify`
 
 	SoftCap int     `json:"softCap"` // past this many hit, those hit share this many's worth

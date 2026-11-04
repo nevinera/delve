@@ -488,7 +488,7 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 			from = spent[len(spent)-1]
 		}
 		f.cooldowns[a.ID] = append(spent, from.Add(seconds(a.Cooldown)))
-		p.send(encode(cooldown{"cooldown", a.ID, a.Cooldown}))
+		p.send(encode(cooldown{"cooldown", a.ID, readyIn(f, a, now)}))
 	}
 	used := usedBy(f, a)
 	if c.channel {
@@ -727,6 +727,9 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 	case "extend":
 		l.extend(p, c, e, on, now)
 		return
+	case "cooldown":
+		l.changeCooldowns(p, c, e, now)
+		return
 	case "heal":
 		n, crit := l.rollHeal(p, on, e.AmountFor(count), hitOf(c, e, on, count), now)
 		over := max(on.Health+n-on.MaxHealth, 0)
@@ -751,6 +754,49 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 	h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
 	l.sync(on)
 	l.tell(p, encode(h))
+}
+
+// changeCooldowns does a `cooldown` effect, on the caster's own cooldowns, and tells it where they stand.
+func (l *Layer) changeCooldowns(p *Player, c *casting, e *combat.Effect, now time.Time) {
+	f := &p.fight
+	for i := range f.class.Abilities {
+		a := &f.class.Abilities[i]
+		if !slices.Contains(e.Abilities, a.ID) && (e.Tag == "" || !slices.Contains(a.Tags, e.Tag)) {
+			continue
+		}
+		spent := live(f.cooldowns[a.ID], now)
+		if len(spent) == 0 {
+			continue
+		}
+		f.cooldowns[a.ID] = sooner(spent, e, now)
+		seconds := readyIn(f, l.resolved(p, a, now), now)
+		p.debugLine("%s: %s is ready in %.1f s", c.ability.Name, a.Name, seconds)
+		p.send(encode(cooldown{"cooldown", a.ID, seconds}))
+	}
+}
+
+// sooner is an ability's spent charges after a `cooldown` effect. They come back one after another,
+// so taking time off moves them all, and giving a charge back drops the last to come.
+func sooner(spent []time.Time, e *combat.Effect, now time.Time) []time.Time {
+	if e.Reset {
+		return nil
+	}
+	moved := make([]time.Time, len(spent))
+	for i, t := range spent {
+		moved[i] = t.Add(-seconds(e.By))
+	}
+	moved = live(moved, now)
+	return moved[:max(len(moved)-e.Charges, 0)]
+}
+
+// readyIn is how many seconds until an ability can be used, as far as its cooldown goes.
+func readyIn(f *fighter, a *combat.Ability, now time.Time) float64 {
+	spent := live(f.cooldowns[a.ID], now)
+	charges := max(a.Charges, 1)
+	if len(spent) < charges {
+		return 0
+	}
+	return spent[len(spent)-charges].Sub(now).Seconds()
 }
 
 // applyStatus puts a status on a unit and notes it in the hit. It says whether the class has that status.
