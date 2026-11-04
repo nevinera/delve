@@ -89,3 +89,52 @@ func TestANarrowedStatMatchesHits(t *testing.T) {
 		t.Error("a narrowed stat counted with no hit")
 	}
 }
+
+func TestPoolCountsTheStatsThatNameIt(t *testing.T) {
+	mod := func(text string, stacks int) Mod { return Mod{Effect: statEffect(t, text), Stacks: stacks} }
+	rage := Resource{Key: "rage", Kind: "rage"}
+	got := PoolOf(rage, Stats{}, nil, []Mod{
+		mod(`{"type":"stat","stat":"resourceMax","resource":"rage","add":20}`, 2),
+		mod(`{"type":"stat","stat":"resourceMax","resource":"rage","multiply":0.5}`, 1),
+		mod(`{"type":"stat","stat":"resourceMax","resource":"mana","add":1000}`, 1),
+		mod(`{"type":"stat","stat":"resourceRegen","resource":"rage","add":3}`, 1),
+		mod(`{"type":"stat","stat":"resourceRest","resource":"rage","add":10}`, 1),
+		mod(`{"type":"stat","stat":"resourceDecay","resource":"rage","multiply":2}`, 1),
+		mod(`{"type":"stat","stat":"resourceGain","resource":"rage","add":0.5}`, 1),
+	})
+	if want := (Pool{Max: 70, Regen: 3, Rest: 10, Decay: 2, Gain: 1.5}); got != want {
+		t.Fatalf("pool = %+v, want %+v", got, want)
+	}
+	if got := PoolOf(rage, Stats{}, nil, []Mod{mod(`{"type":"stat","stat":"resourceMax","resource":"rage","add":-500}`, 1)}); got.Max != 0 {
+		t.Fatalf("max = %g, want 0", got.Max)
+	}
+	strong := Stats{Strength: 40}
+	if got := PoolOf(rage, strong, []string{"strength"}, []Mod{mod(`{"type":"stat","stat":"resourceMax","resource":"rage","fromStat":"primary","share":0.5}`, 1)}); got.Max != 120 {
+		t.Fatalf("max from strength = %g, want 120", got.Max)
+	}
+}
+
+func TestPoolAfter(t *testing.T) {
+	for _, c := range []struct {
+		name     string
+		pool     Pool
+		have     float64
+		fighting bool
+		want     float64
+	}{
+		{"regen stops at the max", Pool{Max: 10, Regen: 5}, 8, true, 10},
+		{"decay waits for combat to end", Pool{Max: 10, Decay: 1}, 5, true, 5},
+		{"decay runs out of combat", Pool{Max: 10, Decay: 1}, 5, false, 4},
+		{"decay stops at nothing", Pool{Max: 10, Decay: 9}, 5, false, 0},
+		{"decay stops at the rest", Pool{Max: 10, Rest: 4, Decay: 9}, 5, false, 4},
+		{"it climbs to the rest", Pool{Max: 10, Rest: 4, Decay: 9}, 1, false, 4},
+		{"a rest with no decay drifts at 1", Pool{Max: 10, Rest: 4}, 1, false, 2},
+		{"a rest waits for combat to end", Pool{Max: 10, Rest: 4}, 1, true, 1},
+		{"no decay and no rest holds", Pool{Max: 10}, 5, false, 5},
+		{"it falls to a lower max", Pool{Max: 3}, 5, true, 3},
+	} {
+		if got := c.pool.After(c.have, 1, c.fighting); got != c.want {
+			t.Errorf("%s: %g, want %g", c.name, got, c.want)
+		}
+	}
+}

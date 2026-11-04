@@ -66,6 +66,7 @@ type fighter struct {
 	stats      combat.Stats
 	vitals     vitals
 	resources  map[string]float64
+	pools      map[string]combat.Pool // how each resource behaves, as of the last tick
 	sentAt     time.Time
 	resChanged bool
 	gcdUntil   time.Time
@@ -111,7 +112,7 @@ func classWithID(classes []*combat.Class, id string) *combat.Class {
 func (p *Player) enterFight(class *combat.Class, level int) {
 	f := &p.fight
 	f.vitals = vitals{ID: p.state.ID, Statuses: map[statusKey]*activeStatus{}}
-	f.resources, f.cooldowns, f.since = map[string]float64{}, map[string][]time.Time{}, map[string]time.Time{}
+	f.resources, f.pools, f.cooldowns, f.since = map[string]float64{}, map[string]combat.Pool{}, map[string][]time.Time{}, map[string]time.Time{}
 	if class == nil {
 		f.vitals.base = combat.Plain(100)
 		f.vitals.MaxHealth, f.vitals.Health = 100, 100
@@ -126,6 +127,7 @@ func (p *Player) enterFight(class *combat.Class, level int) {
 	for _, r := range f.class.Resources {
 		f.resources[r.Key] = combat.StartResource(r)
 	}
+	f.resChanged = true // so the first tick tells the player where they stand
 	p.state.Class, p.state.Level, p.state.Health, p.state.MaxHealth = f.class.ID, f.level, f.vitals.Health, f.vitals.MaxHealth
 }
 
@@ -462,7 +464,7 @@ func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
 	}
 	if f.class != nil {
 		for _, r := range f.class.Resources {
-			out.Resources[r.Key] = combat.ResourceAmount{Have: f.resources[r.Key], Max: combat.MaxResource(r)}
+			out.Resources[r.Key] = combat.ResourceAmount{Have: f.resources[r.Key], Max: f.pool(r).Max}
 		}
 	}
 	if d := l.dummy(target, p.state.Continent); d != nil {
@@ -560,8 +562,8 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 		h.Amount, h.Crit = math.Round(n), crit
 	case "resource":
 		n, _ := combat.Roll(e.Amount, l.statsOf(&p.fight.vitals, nil, now), false, l.hub.roll)
-		if l.addResource(&p.fight, e.Resource, n) {
-			h.Amount, h.Resource = math.Round(n), e.Resource
+		if given, ok := l.addResource(&p.fight, e.Resource, n); ok {
+			h.Amount, h.Resource = math.Round(given), e.Resource
 		}
 	case "status":
 		if !l.applyStatus(p, c.ability, e.Status, e.Duration, on, &h, now) {
@@ -986,6 +988,11 @@ func (l *Layer) strike(p *Player, on *vitals, amount combat.Amount, ctx combat.H
 // statsOf is a unit's stats with what it holds counted. With a hit, stats narrowed to some hits
 // count if they match it, and otherwise they don't.
 func (l *Layer) statsOf(v *vitals, ctx *combat.HitContext, now time.Time) combat.Stats {
+	return combat.Sheet(v.base, v.primary, l.modsOf(v, ctx, now))
+}
+
+// modsOf is the stat effects that count for a unit right now.
+func (l *Layer) modsOf(v *vitals, ctx *combat.HitContext, now time.Time) []combat.Mod {
 	var mods []combat.Mod
 	for key, held := range v.Statuses {
 		for i := range held.def.Effects {
@@ -1000,7 +1007,7 @@ func (l *Layer) statsOf(v *vitals, ctx *combat.HitContext, now time.Time) combat
 			mods = append(mods, mod)
 		}
 	}
-	return combat.Sheet(v.base, v.primary, mods)
+	return mods
 }
 
 // holds says whether a stat's own conditions hold for the unit holding it.
@@ -1215,15 +1222,29 @@ func (l *Layer) swing(p *Player, now time.Time) {
 	})
 }
 
-func (l *Layer) addResource(f *fighter, key string, n float64) bool {
+// addResource gives a fighter some of a resource, or takes it with a negative amount. It says
+// how much that came to with resourceGain, and whether the fighter has the resource.
+func (l *Layer) addResource(f *fighter, key string, n float64) (float64, bool) {
 	for _, r := range f.class.Resources {
 		if r.Key == key {
-			f.resources[key] = max(0, min(combat.MaxResource(r), f.resources[key]+n))
+			pool := f.pool(r)
+			if n > 0 {
+				n *= pool.Gain
+			}
+			f.resources[key] = max(0, min(pool.Max, f.resources[key]+n))
 			f.resChanged = true
-			return true
+			return n, true
 		}
 	}
-	return false
+	return 0, false
+}
+
+// pool is how a resource behaves for a fighter. Until the first tick that's its class's numbers.
+func (f *fighter) pool(r combat.Resource) combat.Pool {
+	if pool, ok := f.pools[r.Key]; ok {
+		return pool
+	}
+	return combat.PoolOf(r, f.vitals.base, f.vitals.primary, nil)
 }
 
 // sync puts what's been done to a unit where those arriving will see it.
@@ -1432,9 +1453,20 @@ func (l *Layer) regen(p *Player, dt float64, now time.Time) {
 	if f.class == nil {
 		return
 	}
+	mods := l.modsOf(&f.vitals, nil, now)
+	sheet := f.vitals.base
+	if len(mods) > 0 {
+		sheet = combat.Sheet(f.vitals.base, f.vitals.primary, mods)
+	}
+	fighting := f.inCombat(now)
 	for _, r := range f.class.Resources {
+		pool := combat.PoolOf(r, sheet, f.vitals.primary, mods)
+		if old, ok := f.pools[r.Key]; ok && old.Max != pool.Max {
+			f.resChanged = true
+		}
+		f.pools[r.Key] = pool
 		was := f.resources[r.Key]
-		f.resources[r.Key] = max(0, min(combat.MaxResource(r), was+combat.RegenOf(r)*dt))
+		f.resources[r.Key] = pool.After(was, dt, fighting)
 		if f.resources[r.Key] != was {
 			f.resChanged = true
 		}
@@ -1442,11 +1474,20 @@ func (l *Layer) regen(p *Player, dt float64, now time.Time) {
 	if f.resChanged && now.Sub(f.sentAt) >= resourceEvery {
 		out, most := map[string]float64{}, map[string]float64{}
 		for _, r := range f.class.Resources {
-			out[r.Key], most[r.Key] = math.Round(f.resources[r.Key]), combat.MaxResource(r)
+			out[r.Key], most[r.Key] = shownResource(r, f.resources[r.Key]), math.Round(f.pool(r).Max)
 		}
 		p.send(encode(resources{"resources", out, most}))
 		f.sentAt, f.resChanged = now, false
 	}
+}
+
+// shownResource is what a player sees of a resource. Points only count once they're whole, so a
+// part-earned point doesn't show as one you can spend.
+func shownResource(r combat.Resource, have float64) float64 {
+	if r.Kind == "points" {
+		return math.Floor(have)
+	}
+	return math.Round(have)
 }
 
 func movingNow(m Move) bool { return m.Forward != 0 || m.Strafe != 0 || m.Jump }

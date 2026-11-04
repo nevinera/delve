@@ -207,3 +207,82 @@ func TestAStatsConditionsAreChecked(t *testing.T) {
 		t.Fatalf("hit at low health = %g", got)
 	}
 }
+
+// Resource stats move the most you can hold, how fast it comes back and what abilities give.
+func TestResourceStats(t *testing.T) {
+	h, p, c := statusFight(t, map[string]string{
+		"vow": `[{"type":"stat","stat":"resourceRegen","resource":"grit","multiply":2},{"type":"stat","stat":"resourceMax","resource":"grit","add":-4},{"type":"stat","stat":"resourceGain","resource":"grit","multiply":3}]`,
+	})
+	grit := combat.Resource{Key: "grit", Kind: "points", Max: 10, Regen: 1}
+	p.fight.class.Resources = append(p.fight.class.Resources, grit)
+	p.fight.resources["grit"] = 8
+	pass(h, c, 0.1)
+	if most := p.fight.pool(grit).Max; most != 10 {
+		t.Fatalf("most = %g, want 10", most)
+	}
+	heard(p)
+	use(t, p, "vow")
+	pass(h, c, 0.6)
+	if have, most := p.fight.resources["grit"], p.fight.pool(grit).Max; have != 6 || most != 6 {
+		t.Fatalf("have %g of %g, want 6 of 6", have, most)
+	}
+	got := heard(p, "resources")
+	if len(got) == 0 {
+		t.Fatal("no resources message")
+	}
+	last := got[len(got)-1]
+	if last["resources"].(map[string]any)["grit"] != 6.0 || last["max"].(map[string]any)["grit"] != 6.0 {
+		t.Fatalf("told %v", last)
+	}
+	p.fight.resources["grit"] = 1
+	was := p.fight.resources["grit"]
+	pass(h, c, 1)
+	if gained := p.fight.resources["grit"] - was; gained < 1.9 || gained > 2.1 {
+		t.Fatalf("gained %g in a second, want about 2", gained)
+	}
+	p.fight.resources["grit"] = 1
+	if given, ok := p.layer.addResource(&p.fight, "grit", 1); !ok || given != 3 || p.fight.resources["grit"] != 4 {
+		t.Fatalf("given %g, have %g", given, p.fight.resources["grit"])
+	}
+	if given, _ := p.layer.addResource(&p.fight, "grit", -1); given != -1 {
+		t.Fatalf("resourceGain changed a loss to %g", given)
+	}
+}
+
+// A stat that asks about a resource doesn't loop, and sees the maximum as it stands.
+func TestResourceStatWithAConditionOnAResource(t *testing.T) {
+	h, p, c := statusFight(t, map[string]string{
+		"vow": `[{"type":"stat","stat":"resourceMax","resource":"grit","add":5,"when":[{"resource":"grit","above":50,"percent":true}]}]`,
+	})
+	grit := combat.Resource{Key: "grit", Kind: "points", Max: 10}
+	p.fight.class.Resources = append(p.fight.class.Resources, grit)
+	p.fight.resources["grit"] = 8
+	use(t, p, "vow")
+	pass(h, c, 0.6)
+	if most := p.fight.pool(grit).Max; most != 15 {
+		t.Fatalf("most = %g, want 15", most)
+	}
+}
+
+// Decay waits for combat to end, and a part-earned point doesn't show as a whole one.
+func TestDecayAndWholePoints(t *testing.T) {
+	h, p, c := statusFight(t, nil)
+	grit := combat.Resource{Key: "grit", Kind: "points", Max: 10, Decay: 2}
+	p.fight.class.Resources = append(p.fight.class.Resources, grit)
+	p.fight.resources["grit"] = 8
+	p.fight.since["attack"] = h.now()
+	pass(h, c, 1)
+	if have := p.fight.resources["grit"]; have != 8 {
+		t.Fatalf("in combat: %g, want 8", have)
+	}
+	pass(h, c, 5)
+	if have := p.fight.resources["grit"]; have >= 8 {
+		t.Fatalf("out of combat: %g, want less than 8", have)
+	}
+	if got := shownResource(grit, 2.9); got != 2 {
+		t.Fatalf("showed %g, want 2", got)
+	}
+	if got := shownResource(combat.Resource{Key: "mana", Kind: "mana"}, 2.9); got != 3 {
+		t.Fatalf("showed %g, want 3", got)
+	}
+}

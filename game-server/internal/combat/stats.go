@@ -76,8 +76,8 @@ func StartResource(r Resource) float64 {
 	return MaxResource(r)
 }
 
-// RegenOf is how much of a resource comes back each second. Rage falls, and points do as their
-// class says.
+// RegenOf is how much of a resource comes back each second, in or out of combat. Points do as
+// their class says.
 func RegenOf(r Resource) float64 {
 	switch r.Kind {
 	case "mana":
@@ -85,9 +85,22 @@ func RegenOf(r Resource) float64 {
 	case "energy":
 		return 10
 	case "rage":
-		return -1
+		return 0
 	default:
 		return r.Regen
+	}
+}
+
+// DecayOf is how much of a resource drains each second out of combat. Rage falls, and points do
+// as their class says.
+func DecayOf(r Resource) float64 {
+	switch r.Kind {
+	case "rage":
+		return 1
+	case "points":
+		return r.Decay
+	default:
+		return 0
 	}
 }
 

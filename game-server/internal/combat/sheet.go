@@ -134,31 +134,15 @@ func Sheet(base Stats, primary []string, mods []Mod) Stats {
 	}
 	isGear := func(name string) bool { return slices.Contains(gearStats, name) }
 	stage := func(gear bool) {
-		for _, m := range mods {
-			if field := s.field(m.Effect.Stat); field != nil && isGear(m.Effect.Stat) == gear && m.Effect.Add != 0 {
-				*field += m.Effect.Add * float64(m.Stacks)
+		pick := func(e *StatusEffect) *float64 {
+			if isGear(e.Stat) != gear {
+				return nil
 			}
+			return s.field(e.Stat)
 		}
-		for _, m := range mods {
-			if field := s.field(m.Effect.Stat); field != nil && isGear(m.Effect.Stat) == gear && m.Effect.Multiply != nil {
-				*field *= math.Pow(*m.Effect.Multiply, float64(m.Stacks))
-			}
-		}
+		change(mods, pick)
 		read := s
-		for _, m := range mods {
-			field := s.field(m.Effect.Stat)
-			if field == nil || isGear(m.Effect.Stat) != gear || m.Effect.FromStat == "" {
-				continue
-			}
-			from := &read
-			if m.Effect.OfCaster {
-				if m.Caster == nil {
-					continue
-				}
-				from = m.Caster
-			}
-			*field += m.Effect.Share * from.named(m.Effect.FromStat, primary) * float64(m.Stacks)
-		}
+		shares(mods, pick, &read, primary)
 	}
 	stage(true)
 	s.AttackPower += 2 * (max(s.Strength, s.Agility) - max(base.Strength, base.Agility))
@@ -166,6 +150,92 @@ func Sheet(base Stats, primary []string, mods []Mod) Stats {
 	s.MaxHealth += 10 * (s.Stamina - base.Stamina)
 	stage(false)
 	return s
+}
+
+// change makes a stat's `add`s, then its `multiply`s. `pick` says where a stat's kept, or nil to
+// leave it be.
+func change(mods []Mod, pick func(*StatusEffect) *float64) {
+	for _, m := range mods {
+		if field := pick(m.Effect); field != nil && m.Effect.Add != 0 {
+			*field += m.Effect.Add * float64(m.Stacks)
+		}
+	}
+	for _, m := range mods {
+		if field := pick(m.Effect); field != nil && m.Effect.Multiply != nil {
+			*field *= math.Pow(*m.Effect.Multiply, float64(m.Stacks))
+		}
+	}
+}
+
+// shares adds what's worked out with `fromStat`, reading the holder's stats from `read`.
+func shares(mods []Mod, pick func(*StatusEffect) *float64, read *Stats, primary []string) {
+	for _, m := range mods {
+		field := pick(m.Effect)
+		if field == nil || m.Effect.FromStat == "" {
+			continue
+		}
+		from := read
+		if m.Effect.OfCaster {
+			if m.Caster == nil {
+				continue
+			}
+			from = m.Caster
+		}
+		*field += m.Effect.Share * from.named(m.Effect.FromStat, primary) * float64(m.Stacks)
+	}
+}
+
+// Pool is how a resource behaves for someone right now.
+type Pool struct {
+	Max   float64
+	Regen float64 // each second, in or out of combat
+	Rest  float64 // where it drifts to out of combat
+	Decay float64 // how fast it drifts there, each second
+	Gain  float64 // a share of what abilities give
+}
+
+// PoolOf is a resource with the stats that name it counted. `s` is the holder's sheet.
+func PoolOf(r Resource, s Stats, primary []string, mods []Mod) Pool {
+	out := Pool{Max: MaxResource(r), Regen: RegenOf(r), Decay: DecayOf(r), Gain: 1}
+	pick := func(e *StatusEffect) *float64 {
+		if e.Resource != r.Key {
+			return nil
+		}
+		switch e.Stat {
+		case "resourceMax":
+			return &out.Max
+		case "resourceRegen":
+			return &out.Regen
+		case "resourceRest":
+			return &out.Rest
+		case "resourceDecay":
+			return &out.Decay
+		case "resourceGain":
+			return &out.Gain
+		}
+		return nil
+	}
+	change(mods, pick)
+	shares(mods, pick, &s, primary)
+	out.Max, out.Rest, out.Decay, out.Gain = max(out.Max, 0), max(out.Rest, 0), max(out.Decay, 0), max(out.Gain, 0)
+	return out
+}
+
+// After is what `have` comes to after `dt` seconds. A rest with no decay drifts at 1 a second.
+func (p Pool) After(have, dt float64, fighting bool) float64 {
+	n := have + p.Regen*dt
+	if !fighting {
+		rate := p.Decay
+		if rate == 0 && p.Rest > 0 {
+			rate = 1
+		}
+		if n > p.Rest {
+			n = max(p.Rest, n-rate*dt)
+		} else {
+			n = min(p.Rest, n+rate*dt)
+		}
+	}
+	return max(0, min(p.Max, n))
 }
 
 // named reads a stat by name. `primary` is the highest of the holder's main stats.

@@ -41,6 +41,7 @@ type Resource struct {
 	Kind  string  `json:"kind"`
 	Max   int     `json:"max"`
 	Regen float64 `json:"regen"`
+	Decay float64 `json:"decay"`
 }
 
 // Ability is what the game needs of an ability.
@@ -169,6 +170,7 @@ type StatusEffect struct {
 
 	// A `stat`. Only `periodic` and `stat` have their numbers read so far.
 	Stat       string
+	Resource   string
 	Add        float64
 	Multiply   *float64
 	FromStat   string
@@ -204,6 +206,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		Does       string      `json:"does"`
 		Amount     Amount      `json:"amount"`
 		Stat       string      `json:"stat"`
+		Resource   string      `json:"resource"`
 		Add        float64     `json:"add"`
 		Multiply   *float64    `json:"multiply"`
 		FromStat   string      `json:"fromStat"`
@@ -224,7 +227,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &body); err != nil {
 		return err
 	}
-	*s = StatusEffect{head.Type, body.Every, body.Does, body.Amount, body.Stat, body.Add, body.Multiply, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
+	*s = StatusEffect{head.Type, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
 		body.Hit, body.Source, body.School, body.Schools, body.Category, body.Categories, body.Abilities, body.Tag, body.Statuses, body.When}
 	return nil
 }

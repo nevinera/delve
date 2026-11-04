@@ -68,7 +68,7 @@ func TestResourcesStartAndRegenByKind(t *testing.T) {
 	if StartResource(Resource{Kind: "mana"}) != 1000 || RegenOf(Resource{Kind: "energy"}) != 10 {
 		t.Fatal("mana or energy")
 	}
-	if StartResource(Resource{Kind: "rage"}) != 0 || RegenOf(Resource{Kind: "rage"}) >= 0 {
+	if StartResource(Resource{Kind: "rage"}) != 0 || RegenOf(Resource{Kind: "rage"}) != 0 || DecayOf(Resource{Kind: "rage"}) != 1 {
 		t.Fatal("rage")
 	}
 	if MaxResource(Resource{Kind: "points", Max: 5}) != 5 || RegenOf(Resource{Kind: "points", Regen: 2}) != 2 {
