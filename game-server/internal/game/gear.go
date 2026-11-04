@@ -9,11 +9,9 @@ import (
 )
 
 // gearFor is what a character of a class and build holds until there's real gear: the class's first
-// choices that suit what its specialization's abilities ask for. Empty if the class holds nothing.
+// choices that suit what its specialization's abilities ask for, or its starting gear if they ask
+// for nothing. Empty if the class holds nothing.
 func gearFor(class *combat.Class, b combat.Build) (main, off string) {
-	if len(class.Weapons) == 0 {
-		return "", ""
-	}
 	first := func(from, among []string) string {
 		for _, kind := range from {
 			if kind != "none" && slices.Contains(among, kind) {
@@ -22,7 +20,18 @@ func gearFor(class *combat.Class, b combat.Build) (main, off string) {
 		}
 		return ""
 	}
-	main, off = class.Weapons[0], first(class.Offhands, offHands)
+	main = first(class.Weapons, slices.Concat(oneHanded, twoHanded))
+	off = first(class.Offhands, offHands)
+	start := class.StartingGear
+	if slices.Contains(oneHanded, start.Weapon) || slices.Contains(twoHanded, start.Weapon) {
+		main = start.Weapon
+	}
+	if slices.Contains(offHands, start.Offhand) {
+		off = start.Offhand
+	}
+	if main == "" {
+		return "", ""
+	}
 	oneHand := first(class.Weapons, oneHanded)
 	switch wieldingOf(class, b) {
 	case "twoHanded":

@@ -21,11 +21,19 @@ type Class struct {
 	// What it can hold, best first.
 	Weapons  []string `json:"weapons"`
 	Offhands []string `json:"offhands"`
+	// What it holds before a specialization asks for something else.
+	StartingGear StartingGear `json:"startingGear"`
 	// What a character chooses gives these abilities, so level alone doesn't.
 	Specializations []Specialization    `json:"specializations"`
 	Talents         map[string][]Talent `json:"talents"`
 	Passives        []Passive           `json:"passives"`
 	Mastery         *Mastery            `json:"mastery"`
+}
+
+// StartingGear is what a class holds to begin with. Either one left out is the first in the class's list.
+type StartingGear struct {
+	Weapon  string `json:"weapon"`
+	Offhand string `json:"offhand"`
 }
 
 // Passive is a status a class has from a level on.

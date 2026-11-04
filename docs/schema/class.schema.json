@@ -87,6 +87,20 @@
         "type": "string"
       }
     },
+    "startingGear": {
+      "type": "object",
+      "description": "What it holds before a specialization asks for something else. Either one left out is the first in its list.",
+      "properties": {
+        "weapon": {
+          "type": "string",
+          "description": "one of its weapons"
+        },
+        "offhand": {
+          "type": "string",
+          "description": "one of its offhands, or none"
+        }
+      }
+    },
     "abilities": {
       "type": "array",
       "description": "What the class can do: abilities, each with the level it's granted at.",

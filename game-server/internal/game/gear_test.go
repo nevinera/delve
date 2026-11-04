@@ -53,6 +53,33 @@ func TestGearLeavesTheOffHandEmptyWithATwoHander(t *testing.T) {
 	}
 }
 
+func TestStartingGearComesBeforeASpecializationAsksForAnything(t *testing.T) {
+	class := armedClass()
+	class.StartingGear = combat.StartingGear{Weapon: "maul", Offhand: "axe"}
+	for _, c := range []struct{ spec, main, off string }{
+		{"", "maul", "none"},
+		{"free", "maul", "none"},
+		{"wall", "sword", "shield"},
+		{"great", "greatsword", "none"},
+	} {
+		if main, off := gearFor(class, combat.Build{Specialization: c.spec}); main != c.main || off != c.off {
+			t.Fatalf("%q holds %s and %s, want %s and %s", c.spec, main, off, c.main, c.off)
+		}
+	}
+	class.StartingGear = combat.StartingGear{Weapon: "axe", Offhand: "none"}
+	if main, off := gearFor(class, combat.Build{}); main != "axe" || off != "none" {
+		t.Fatalf("holds %s and %s", main, off)
+	}
+	class.StartingGear = combat.StartingGear{Offhand: "axe"}
+	if main, off := gearFor(class, combat.Build{}); main != "sword" || off != "axe" {
+		t.Fatalf("holds %s and %s", main, off)
+	}
+	class.StartingGear = combat.StartingGear{Weapon: "banana"}
+	if main, _ := gearFor(class, combat.Build{}); main != "sword" {
+		t.Fatalf("holds %s", main)
+	}
+}
+
 func TestGearIsNothingForAClassThatHoldsNothing(t *testing.T) {
 	if main, off := gearFor(&combat.Class{}, combat.Build{}); main != "" || off != "" {
 		t.Fatalf("holds %s and %s", main, off)

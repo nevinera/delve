@@ -412,6 +412,15 @@ export const classFields = (made) => [
   { key: "weapons", type: "multi", options: Object.keys(HELD).filter((type) => !["shield", "orb"].includes(type)) },
   { key: "offhands", type: "multi", options: OFFHANDS.filter((type) => type !== "none") },
   {
+    key: "startingGear",
+    type: "group",
+    collapsed: true,
+    fields: [
+      { key: "weapon", type: "select", none: "first weapon", options: () => made.weapons ?? [] },
+      { key: "offhand", type: "select", none: "first off hand", options: () => ["none", ...(made.offhands ?? [])] },
+    ],
+  },
+  {
     key: "units",
     type: "list",
     one: "unit",

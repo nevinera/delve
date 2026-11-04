@@ -12,4 +12,14 @@ describe("what the preview's character holds", () => {
     expect(wielding("dual")).toEqual({ weapon: "sword", offhand: "axe" });
     expect(gearFor(made, {}, "greatsword")).toEqual({ weapon: "greatsword", offhand: "none" });
   });
+
+  it("holds its starting gear unless the ability needs otherwise", () => {
+    const starting = (startingGear, ability = {}) => gearFor({ ...made, startingGear }, ability);
+    expect(starting({ weapon: "greatsword" })).toEqual({ weapon: "greatsword", offhand: "none" });
+    expect(starting({ weapon: "bow" })).toEqual({ weapon: "bow", offhand: "none" });
+    expect(starting({ weapon: "thrown" })).toEqual({ weapon: "thrown", offhand: "shield" });
+    expect(starting({ offhand: "axe" })).toEqual({ weapon: "sword", offhand: "axe" });
+    expect(starting({ offhand: "none" })).toEqual({ weapon: "sword", offhand: "none" });
+    expect(starting({ weapon: "greatsword" }, { requires: [{ wielding: "shield" }] })).toEqual({ weapon: "sword", offhand: "shield" });
+  });
 });

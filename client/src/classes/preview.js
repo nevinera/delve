@@ -27,8 +27,8 @@ const el = (tag, props = {}, ...children) => {
   return node;
 };
 
-// What a class holds to use an ability: `picked` if there's one, or else its first weapon and off
-// hand, unless the ability wants something else in its `requires`.
+// What a class holds to use an ability: `picked` if there's one, or else its starting gear, unless
+// the ability wants something else in its `requires`.
 export function gearFor(made, ability, picked = "") {
   const weapons = made.weapons ?? [];
   const offhands = made.offhands ?? [];
@@ -39,7 +39,9 @@ export function gearFor(made, ability, picked = "") {
   if (wants === "oneHanded") return { weapon: ofGroup("oneHanded") ?? "none", offhand: offhands[0] ?? "none" };
   if (wants === "shield") return { weapon: ofGroup("oneHanded") ?? "none", offhand: "shield" };
   if (wants === "dual") return { weapon: ofGroup("oneHanded") ?? "none", offhand: offhands.find((o) => !["shield", "orb"].includes(o)) ?? "none" };
-  return { weapon: weapons[0] ?? "none", offhand: offhands[0] ?? "none" };
+  const weapon = made.startingGear?.weapon ?? weapons[0] ?? "none";
+  const offhand = made.startingGear?.offhand ?? offhands[0] ?? "none";
+  return { weapon, offhand: ["twoHanded", "bow", "firearm"].includes(attackGroup(weapon)) ? "none" : offhand };
 }
 
 // The preview's characters always have their weapons out.
