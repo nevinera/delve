@@ -176,6 +176,11 @@ body.touch .play-bar button {
   font-size: 14px;
 }
 
+.play-build-refused {
+  color: #ff6050;
+  font-weight: 600;
+}
+
 .play-classes .play-build-on {
   border-color: #e8c860;
   background: rgba(232, 200, 96, 0.16);

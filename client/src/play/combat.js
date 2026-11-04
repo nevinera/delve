@@ -361,6 +361,8 @@ export class PlayCombat {
 
   // What the server says you've chosen.
   build_({ specialization, talents }) {
+    this.buildAsked = false;
+    this.buildRefused = "";
     this.chosen = { specialization, talents: talents ?? {} };
     if (this.made) this.setClass(this.made);
   }
@@ -374,7 +376,10 @@ export class PlayCombat {
   drawBuild() {
     if (!this.buildBox || this.buildBox.hidden || !this.made) return;
     const level = this.you.level ?? 1;
-    drawBuildPanel(this.buildBox, { made: this.made, level, build: allowedBuild(this.made, this.chosen, level) }, (build) => this.connection.chooseBuild(build));
+    drawBuildPanel(this.buildBox, { made: this.made, level, build: allowedBuild(this.made, this.chosen, level), refused: this.buildRefused }, (build) => {
+      this.buildAsked = true;
+      this.connection.chooseBuild(build);
+    });
   }
 
   bind() {
@@ -663,7 +668,13 @@ export class PlayCombat {
     this.log.add(text, kind);
   }
 
-  refused({ why }) {
+  refused({ why, ability }) {
+    // The build panel covers where this usually shows.
+    if (this.buildAsked && !ability) {
+      this.buildAsked = false;
+      this.buildRefused = why;
+      this.drawBuild();
+    }
     this.say.textContent = why;
     this.saidAt = performance.now();
   }
