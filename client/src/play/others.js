@@ -3,12 +3,14 @@ import { characterClips, loadAnimations, strideRate } from "../character/animati
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
 import { TURN_RATE } from "../character/posed.js";
 import { resolveRecipe } from "../character/recipe.js";
-import { BACK_FT, GAITS, GRAVITY, JUMP_FT, RUN_FT, SPRINT, SWIM_FT, WALK_FT, walksDown } from "./walker.js";
+import { BACK_FT, GAITS, GRAVITY, JUMP_FT, RUN_FT, RUNNING_KINDS, SPRINT, SWIM_FT, tripAt, WALK_FT, walksDown } from "./walker.js";
 
 // The other characters near you, as the game server reports them. Each carries on moving as it
 // last said it was, between messages, and eases toward where each message says it is. Each has its
 // name over its head, the same size on screen however far off, out to NAME_FT.
 
+const STILL = { forward: 0, strafe: 0, turn: 0, gait: "run", swim: false, jump: false };
+const RUNNING = { ...STILL, forward: 1 };
 const CATCH_UP = 8; // how fast a drawn character closes the gap to where it should be, per second
 const SNAP_FT = 40; // further off than this across the ground, it jumps there
 const FADE_S = 0.2;
@@ -116,7 +118,20 @@ export class Others {
     if (drawn) this.update(drawn, message);
   }
 
+  // An effect is carrying someone: they're at `at` as far as the server goes, and this plays the trip.
+  forced({ id, kind, from, at, yaw, seconds, height }) {
+    const drawn = this.characters.get(id);
+    if (!drawn) return;
+    drawn.at = new THREE.Vector3(...at);
+    drawn.yaw = yaw;
+    drawn.vy = 0;
+    drawn.move = STILL;
+    drawn.trip = { from: new THREE.Vector3(...from), to: drawn.at.clone(), seconds, height, t: 0, move: RUNNING_KINDS.includes(kind) ? RUNNING : STILL };
+  }
+
   update(drawn, { at, yaw, move }) {
+    drawn.trip = null;
+
     drawn.at = new THREE.Vector3(...at);
     drawn.yaw = yaw;
     drawn.move = move;
@@ -144,6 +159,14 @@ export class Others {
     const { origin, walker } = this.view;
     if (!origin) return;
     for (const drawn of this.characters.values()) {
+      if (drawn.trip) {
+        drawn.trip.t += dt;
+        const { position, done } = tripAt(drawn.trip);
+        drawn.shown.copy(position);
+        this.draw(drawn, dt, drawn.trip.move);
+        if (done) drawn.trip = null;
+        continue;
+      }
       const { move } = drawn;
       drawn.yaw += move.turn * TURN_RATE * dt;
       const [dx, dz] = stepOf(move, drawn.yaw, dt);
@@ -163,18 +186,22 @@ export class Others {
       }
       drawn.airborne = ground !== null && ground !== undefined && drawn.at.y > ground + 0.5;
       drawn.shown.lerp(drawn.at, Math.min(1, CATCH_UP * dt));
-      drawn.model.position.set(drawn.shown.x - origin[0], drawn.shown.y, drawn.shown.z - origin[1]);
-      drawn.model.rotation.y = drawn.yaw;
-      drawn.nameplate.position.copy(drawn.model.position).y += drawn.height + NAME_ABOVE_FT;
-      drawn.nameplate.visible = drawn.nameplate.position.distanceTo(this.view.camera.position) < NAME_FT;
-      this.animate(drawn, dt);
+      this.draw(drawn, dt, move);
     }
   }
 
-  animate(drawn, dt) {
+  draw(drawn, dt, move) {
+    const { origin } = this.view;
+    drawn.model.position.set(drawn.shown.x - origin[0], drawn.shown.y, drawn.shown.z - origin[1]);
+    drawn.model.rotation.y = drawn.yaw;
+    drawn.nameplate.position.copy(drawn.model.position).y += drawn.height + NAME_ABOVE_FT;
+    drawn.nameplate.visible = drawn.nameplate.position.distanceTo(this.view.camera.position) < NAME_FT;
+    this.animate(drawn, dt, move);
+  }
+
+  animate(drawn, dt, move) {
     drawn.mixer.update(dt);
     if (!drawn.clips) return;
-    const { move } = drawn;
     const speed = speedOf(move);
     if (drawn.acting && (drawn.acting.until <= performance.now() || speed || drawn.airborne || move.swim)) drawn.acting = null;
     if (drawn.acting) {

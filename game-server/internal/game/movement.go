@@ -122,6 +122,9 @@ const (
 // check decides what to do with a report that came at server time now, from a character at
 // `from` (where the server last had it), on ground g (nil where it isn't known).
 func (m *motion) check(r incoming, from [3]float64, now time.Time, g Ground) (verdict, string) {
+	if now.Before(m.joined) {
+		return ignore, "" // an effect is still carrying it there
+	}
 	t := r.T / 1000
 	if r.T == 0 {
 		t = secondsOf(now) // a client that doesn't send its time is timed by the server's clock
@@ -135,6 +138,7 @@ func (m *motion) check(r incoming, from [3]float64, now time.Time, g Ground) (ve
 		if moved := horizontal(from, r.At); moved > allowed {
 			// Reports sent before the client heard of the teleport don't count against it.
 			if m.arriving && now.Sub(m.joined) < correctWait {
+				m.started = false
 				return ignore, ""
 			}
 			return m.violation(now, fmt.Sprintf("first report is %.0f ft from where you entered", moved))
@@ -328,9 +332,10 @@ func (m *motion) take(r incoming, t float64, f footing) verdict {
 	return accept
 }
 
-// teleported starts the checks over from where the server has just put the character.
-func (m *motion) teleported(now time.Time) {
-	*m = motion{joined: now, arriving: true, corrections: m.corrections}
+// teleported starts the checks over from where the server has just put the character, for when it
+// gets there.
+func (m *motion) teleported(arrives time.Time) {
+	*m = motion{joined: arrives, arriving: true, corrections: m.corrections}
 }
 
 // violation counts a correction, or drops the client when there have been too many.

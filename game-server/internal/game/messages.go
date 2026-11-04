@@ -115,6 +115,18 @@ type cooldown struct {
 	Seconds float64 `json:"seconds"`
 }
 
+// forced is a character being moved by an effect: it's at `at` already, and clients play the trip.
+type forced struct {
+	Type    string     `json:"type"`
+	ID      int64      `json:"id"`
+	Kind    string     `json:"kind"`
+	From    [3]float64 `json:"from"`
+	At      [3]float64 `json:"at"`
+	Yaw     float64    `json:"yaw"`
+	Seconds float64    `json:"seconds"`
+	Height  float64    `json:"height"`
+}
+
 // lockout is a school its hearer can't use for a while.
 type lockout struct {
 	Type    string  `json:"type"`

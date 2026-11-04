@@ -741,6 +741,9 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 	case "dispel":
 		l.dispel(p, c, e, on, now)
 		return
+	case "move":
+		l.forceMove(p, c, e, on, now)
+		return
 	case "interrupt":
 		if !l.interrupt(p, e, on, &h, now) {
 			p.debugLine("%s: %s isn't casting", c.ability.Name, l.nameOf(on.ID))

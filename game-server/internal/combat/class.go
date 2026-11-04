@@ -148,6 +148,14 @@ type Effect struct {
 
 	Lockout float64 `json:"lockout"` // interrupt
 
+	// move
+	Kind     string  `json:"kind"`
+	To       string  `json:"to"`
+	Distance float64 `json:"distance"`
+	Speed    float64 `json:"speed"`
+	Height   float64 `json:"height"`
+	Flying   bool    `json:"flying"`
+
 	Param string `json:"param"` // names its number, for a `modify`
 
 	SoftCap int     `json:"softCap"` // past this many hit, those hit share this many's worth

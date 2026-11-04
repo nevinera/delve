@@ -173,28 +173,9 @@ func (l *Layer) standing(continent string, x, z float64) ([3]float64, bool) {
 // teleport moves a player there at once, ending what it was casting. Those it leaves see it vanish,
 // and those it arrives by see it appear. The layer's lock is held.
 func (l *Layer) teleport(p *Player, continent string, at [3]float64) {
-	before := map[int64]*Player{}
-	for _, o := range l.near(p) {
-		before[o.ID()] = o
-	}
 	l.stopCast(p)
 	l.stopAttacking(p)
 	log.Printf("character %d: teleported to %s %v", p.ID(), continent, at)
-	p.state.Continent, p.state.At, p.state.Move = continent, at, Move{Gait: "run"}
 	p.motion.teleported(l.hub.now())
-	l.save(p)
-	p.send(encode(teleported{"teleport", continent, at, p.state.Yaw}))
-	for _, o := range l.near(p) {
-		if before[o.ID()] != nil {
-			delete(before, o.ID())
-			o.send(encode(moved{"moved", p.ID(), p.state.At, p.state.Yaw, p.state.Move}))
-			continue
-		}
-		o.send(encode(appear{"appear", p.state}))
-		p.send(encode(appear{"appear", o.state}))
-	}
-	for _, o := range before {
-		o.send(encode(vanish{"vanish", p.ID()}))
-		p.send(encode(vanish{"vanish", o.ID()}))
-	}
+	l.relocate(p, continent, at, encode(teleported{"teleport", continent, at, p.state.Yaw}), encode(moved{"moved", p.ID(), at, p.state.Yaw, Move{Gait: "run"}}))
 }

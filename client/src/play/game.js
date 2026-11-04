@@ -2,6 +2,8 @@
 // the page's entry token, reports how your character moves, puts your character back where the
 // server says when it corrects you, and hands what it hears about everyone else to `on`.
 
+import { RUNNING_KINDS } from "./walker.js";
+
 const TICK_MS = 100; // how often to look at how you're moving
 const HEARTBEAT_MS = { moving: 500, still: 1000 };
 
@@ -103,6 +105,11 @@ export class GameConnection {
     const { walker, origin } = view;
     // Paused, it still sends heartbeats, so the server knows you're there.
     if (!walker?.pos || this.socket.readyState !== WebSocket.OPEN) return;
+    // While an effect carries you, the server knows where you're going, and you report afresh after.
+    if (walker.travelling) {
+      this.last = null;
+      return;
+    }
     const move = movementOf(walker);
     const jumped = this.jumpedAt !== undefined && walker.jumpedAt !== this.jumpedAt;
     this.jumpedAt = walker.jumpedAt;
@@ -122,7 +129,16 @@ export class GameConnection {
     walker.pos.set(at[0] - origin[0], at[1], at[2] - origin[1]);
     walker.vy = 0;
     walker.yaw = yaw;
+    walker.travelling = null;
     this.last = null;
+  }
+
+  // An effect is moving you: your walker plays the trip, ending where the server has you.
+  forced({ kind, from, at, yaw, seconds, height }) {
+    const { walker, origin } = this.view ?? {};
+    if (!walker?.pos) return;
+    const scene = ([x, y, z]) => [x - origin[0], y, z - origin[1]];
+    walker.travel({ from: scene(from), to: scene(at), yaw, seconds, height, runs: RUNNING_KINDS.includes(kind) });
   }
 
   close() {

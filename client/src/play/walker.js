@@ -82,6 +82,17 @@ const ROLL_FT = 30; // landing faster than this, or moving after a long fall, ro
 const LONG_FALL_S = 1.1;
 const ONCE = { Jump_Start: { from: 0.1, speed: 1.5 }, Jump_Land: { speed: 1.6, length: 0.55 }, Roll: { speed: 1.5 }, Sit_Ground_Enter: {}, Sit_Ground_Exit: {} };
 
+// The kinds of `move` that look like running. The rest just carry you.
+export const RUNNING_KINDS = ["charge", "dash", "pull"];
+
+// Where a trip has got to, by its `t`: straight across, with an arc `height` high.
+export function tripAt({ from, to, seconds, height, t }) {
+  const u = seconds > 0 ? Math.min(1, t / seconds) : 1;
+  const position = from.clone().lerp(to, u);
+  position.y += height * 4 * u * (1 - u);
+  return { position, done: u >= 1 };
+}
+
 export class Walker {
   // view: the RenderView, for its scene, camera and canvas, and its decoded tiles unless `ground`
   // is given.
@@ -180,8 +191,32 @@ export class Walker {
     requestAnimationFrame((t) => this.frame(t));
   }
 
+  // Carries the character along a trip the server has made for it. from and to are scene positions.
+  travel({ from, to, yaw, seconds, height, runs }) {
+    this.travelling = { from: new THREE.Vector3(...from), to: new THREE.Vector3(...to), seconds, height, runs, t: 0 };
+    this.yaw = yaw;
+    this.sitting = null;
+    this.vy = 0;
+    this.airTime = 0;
+  }
+
+  ride(dt) {
+    const trip = this.travelling;
+    trip.t += dt;
+    const { position, done } = tripAt(trip);
+    this.pos.copy(position);
+    this.lastYaw = this.yaw;
+    this.turning = 0;
+    this.motion = { forward: trip.runs ? 1 : 0, strafe: 0, speed: trip.runs ? RUN_FT : 0, gait: "run", swimming: false };
+    if (done) this.travelling = null;
+  }
+
   step(dt) {
     this.t += dt;
+    if (this.travelling) {
+      this.ride(dt);
+      return;
+    }
     const key = (k) => (this.held.has(k) ? 1 : 0);
     this.yaw += (key("a") - key("d")) * TURN * dt;
     // Which way it's turned since the last step, by keys or by dragging.

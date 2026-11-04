@@ -88,6 +88,7 @@ async function play() {
     appear: ({ character }) => tell("appear", character),
     vanish: ({ id }) => tell("vanish", id),
     moved: (message) => tell("moved", message),
+    forced: (message) => (message.id === you.id ? connection.forced(message) : tell("forced", message)),
     used: fight("used"),
     stopped: fight("stopped"),
     refused: fight("refused"),

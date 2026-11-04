@@ -1,6 +1,7 @@
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { setBuiltObjects } from "../world/objects.js";
-import { ViewGround, Walker, frameDue } from "./walker.js";
+import { ViewGround, Walker, frameDue, tripAt } from "./walker.js";
 
 // A 3 ft crate.
 const crate = { id: "crate001", name: "crate", palette: [{ color: "#806040" }], pieces: [{ type: "box", size: [3, 3, 3], at: [0, 1.5, 0], turn: [0, 0, 0], color: 0 }] };
@@ -126,5 +127,27 @@ describe("walker going downhill", () => {
     w.ground.groundAt = (x, z) => (z < 3 ? 1000 : 990);
     run(w);
     expect(w.airTime).toBeGreaterThan(0);
+  });
+});
+
+describe("tripAt", () => {
+  const trip = { from: new THREE.Vector3(0, 10, 0), to: new THREE.Vector3(20, 10, 0), seconds: 2, height: 8 };
+
+  it("goes straight across with an arc in the middle", () => {
+    const { position, done } = tripAt({ ...trip, t: 1 });
+    expect(position.toArray()).toEqual([10, 18, 0]);
+    expect(done).toBe(false);
+  });
+
+  it("ends where the server said", () => {
+    const { position, done } = tripAt({ ...trip, t: 3 });
+    expect(position.toArray()).toEqual([20, 10, 0]);
+    expect(done).toBe(true);
+  });
+
+  it("gets there at once when it takes no time", () => {
+    const { position, done } = tripAt({ ...trip, seconds: 0, t: 0 });
+    expect(position.toArray()).toEqual([20, 10, 0]);
+    expect(done).toBe(true);
   });
 });
