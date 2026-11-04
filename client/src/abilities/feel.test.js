@@ -124,6 +124,54 @@ describe("the stage", () => {
     expect(caster.mesh.position.x).toBeCloseTo(0, 5);
   });
 
+  describe("a status's aura", () => {
+    const spawned = (stage) => stage.alive.at(-1).visual.group;
+
+    it("lays a decal over the ground where the unit stands", () => {
+      const scene = new THREE.Scene();
+      const stage = new AbilityStage(scene, { ground: (x) => x });
+      stage.aura(unit(10), { effect: "decal", radius: 2 });
+      const { position } = spawned(stage).children[0].geometry.attributes;
+      expect(spawned(stage).position.x).toBe(10);
+      expect(position.getY(1)).toBeCloseTo(10 + position.getX(1) + 0.2, 3);
+    });
+
+    it("has a ribbon follow what the unit holds", () => {
+      const stage = stageWith();
+      const on = unit();
+      const hold = new THREE.Bone();
+      hold.name = "hand_r";
+      on.mesh.skeleton = { getBoneByName: () => hold };
+      on.mesh.add(hold);
+      stage.aura(on, { effect: "ribbon", duration: 2, length: 1 });
+      const live = stage.alive.at(-1);
+      for (const x of [1, 2, 3, 4]) {
+        hold.position.x = x;
+        stage.frame(0.1);
+      }
+      expect(live.visual.group.children[0].visible).toBe(true);
+    });
+
+    it("takes parameters and colors, and its own colors over the ones given", () => {
+      const stage = stageWith();
+      stage.aura(unit(), { effect: "shield", texture: "ripple", duration: 3, colors: ["#ff0000", "#ff0000"], scale: 2 }, ["#00ff00", "#00ff00"]);
+      const live = stage.alive.at(-1);
+      expect(live.visual.length).toBe(3);
+      expect(live.visual.group.children[0].children[0].material.uniforms.uColor.value.r).toBeGreaterThan(0.9);
+      stage.aura(unit(), { effect: "shield" }, ["#00ff00", "#00ff00"]);
+      expect(stage.alive.at(-1).visual.group.children[0].children[0].material.uniforms.uColor.value.g).toBeGreaterThan(0.9);
+    });
+
+    it("keeps a particle one on the unit as it moves", () => {
+      const stage = stageWith();
+      const on = unit();
+      stage.aura(on, { effect: "embers", duration: 1 });
+      on.mesh.position.x = 7;
+      stage.frame(0.05);
+      expect(spawned(stage).position.x).toBe(7);
+    });
+  });
+
   it("shakes only when told to, and settles", () => {
     const stage = stageWith();
     expect(stage.shakeOffset().length()).toBe(0);

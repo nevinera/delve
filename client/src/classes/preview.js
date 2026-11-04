@@ -346,7 +346,7 @@ export class AbilityPreview {
     if (text) this.floatText(on, text, effect.type);
     if (effect.type === "status") {
       const status = this.statuses.find((s) => s.id === effect.status);
-      if (status?.aura?.effect) this.stage.spawn(status.aura.effect, { colors: status.aura.colors?.length === 2 ? status.aura.colors : schoolColors(this.ability), height: on.height }, on.mesh.position);
+      if (status?.aura?.effect) this.stage.aura(on, status.aura, schoolColors(this.ability));
     }
   }
 

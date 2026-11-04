@@ -104,7 +104,7 @@ export function makeRibbon({ colors, scale, params, follow, trace }) {
 
   const length = spec.duration + lasts;
   const { after, duration } = SHAPE_STOCK.ribbon;
-  const starts = trace ? (after * spec.duration) / duration : 0; // a faster swing winds up faster
+  const starts = trace ? after * Math.min(1, spec.duration / duration) : 0; // a faster swing winds up faster
   return {
     group,
     length,

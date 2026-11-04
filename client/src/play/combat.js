@@ -722,7 +722,7 @@ export class PlayCombat {
     }
     if (message.status && unit) {
       const aura = made?.statuses?.find((s) => s.id === message.status)?.aura;
-      if (aura?.effect) this.stage.spawn(aura.effect, { colors: aura.colors?.length === 2 ? aura.colors : ["#ffffff", "#ffffff"], height: unit.height }, unit.mesh.position);
+      if (aura?.effect) this.stage.aura(unit, aura);
     }
   }
 

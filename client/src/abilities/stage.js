@@ -313,6 +313,12 @@ export class AbilityStage {
     }
   }
 
+  // Plays a status's look on whoever just got it, with these colors if it has none of its own.
+  aura(unit, aura, colors = ["#ffffff", "#ffffff"]) {
+    const event = { effect: aura.effect, on: "caster", colors: aura.colors?.length === 2 ? aura.colors : colors, scale: aura.scale ?? 1, params: aura };
+    this.fireVisual({ caster: unit, target: unit, spot: null }, event);
+  }
+
   // Marks the ground an area effect covers: a flat disc, or a slice of one the way the caster faces.
   showArea(run, { radius, cone, around, colors }) {
     const center = around === "ground" ? this.pointOf(run, "ground") : around === "target" ? this.pointOf(run, "target") : run.caster.mesh.position.clone();

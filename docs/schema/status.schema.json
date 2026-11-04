@@ -137,18 +137,7 @@
       ]
     },
     "aura": {
-      "type": "object",
-      "required": [
-        "effect"
-      ],
-      "properties": {
-        "effect": {
-          "type": "string"
-        },
-        "colors": {
-          "$ref": "common.schema.json#/$defs/colors"
-        }
-      }
+      "$ref": "common.schema.json#/$defs/aura"
     },
     "effects": {
       "type": "array",

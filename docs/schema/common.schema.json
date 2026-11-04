@@ -1309,11 +1309,11 @@
         "radius": {
           "type": "number",
           "minimum": 0,
-          "description": "a decal's, in feet"
+          "description": "in feet: how far a particle effect spreads, or a decal's size"
         },
         "spin": {
           "type": "number",
-          "description": "a decal's, in turns a second"
+          "description": "how fast a particle effect's pieces turn, or a decal's turns a second"
         },
         "length": {
           "type": "number",
@@ -1352,8 +1352,13 @@
         "duration": {
           "description": "Seconds it lets particles go for at `rate`, or \"cast\" to last until the ability's cast or channel ends, however it ends. Its particles then fade out at once.",
           "oneOf": [
-            { "type": "number", "minimum": 0 },
-            { "const": "cast" }
+            {
+              "type": "number",
+              "minimum": 0
+            },
+            {
+              "const": "cast"
+            }
           ]
         },
         "lifetime": {
@@ -1381,15 +1386,7 @@
           "type": "number",
           "minimum": 0
         },
-        "radius": {
-          "type": "number",
-          "minimum": 0
-        },
         "stretch": {
-          "type": "number",
-          "minimum": 0
-        },
-        "spin": {
           "type": "number",
           "minimum": 0
         },
@@ -1537,6 +1534,153 @@
             "target"
           ],
           "description": "whose health: whoever it lands on by default"
+        }
+      }
+    },
+    "aura": {
+      "type": "object",
+      "required": [
+        "effect"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "effect": {
+          "type": "string"
+        },
+        "colors": {
+          "$ref": "#/$defs/colors"
+        },
+        "scale": {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        "shape": {
+          "enum": [
+            "sphere",
+            "cylinder",
+            "cone",
+            "ring",
+            "arc"
+          ]
+        },
+        "scroll": {
+          "type": "number"
+        },
+        "scrollAcross": {
+          "type": "number"
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0,
+          "description": "in feet: how far a particle effect spreads, or a decal's size"
+        },
+        "spin": {
+          "type": "number",
+          "description": "how fast a particle effect's pieces turn, or a decal's turns a second"
+        },
+        "length": {
+          "type": "number",
+          "minimum": 0,
+          "description": "a ribbon's: how many seconds a part of it lasts"
+        },
+        "width": {
+          "type": "number",
+          "minimum": 0,
+          "description": "a ribbon's, in feet, when it isn't off a weapon"
+        },
+        "repeat": {
+          "type": "number",
+          "minimum": 0
+        },
+        "repeatAcross": {
+          "type": "number",
+          "minimum": 0
+        },
+        "fade": {
+          "enum": [
+            "out",
+            "pulse",
+            "hold",
+            "none"
+          ]
+        },
+        "count": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rate": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "minimum": 0,
+          "description": "seconds it plays for"
+        },
+        "lifetime": {
+          "type": "number",
+          "minimum": 0
+        },
+        "speed": {
+          "type": "number",
+          "minimum": 0
+        },
+        "spread": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 360
+        },
+        "drag": {
+          "type": "number",
+          "minimum": 0
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sizeEnd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "stretch": {
+          "type": "number",
+          "minimum": 0
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "gravity": {
+          "type": "number"
+        },
+        "direction": {
+          "enum": [
+            "up",
+            "forward"
+          ]
+        },
+        "texture": {
+          "type": "string",
+          "description": "for a particle effect, a texture from a sheet; for a shape effect, a repeating texture. client/src/abilities/stockTextures.json lists the stock ones, and a world can add its own"
+        },
+        "blend": {
+          "enum": [
+            "glow",
+            "solid"
+          ]
+        },
+        "at": {
+          "enum": [
+            "feet",
+            "chest"
+          ]
+        },
+        "facing": {
+          "enum": [
+            "camera",
+            "ground"
+          ]
         }
       }
     }

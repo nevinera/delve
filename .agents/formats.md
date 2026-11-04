@@ -849,7 +849,7 @@ A unit holds one copy of a status for each unit that put it on, so two casters' 
 - `limit`: how many units can hold it from you at once. Applying it to another takes it off the oldest.
 - `consumedBy`: ends it when the holder uses one of these `abilities`, by id from the same class, or an ability with this `tag`. A `modify` on the status still changes that use. `uses` makes it last that many uses, for "your next 3". `stacks` takes that many stacks each use, instead of ending it. The ability doesn't know about it.
 - `pose`: `sit` sits you down while it lasts.
-- `aura`: a visual on the unit while it lasts, `{ effect, colors }`.
+- `aura`: a visual that plays once on the unit when it gets the status. It takes `effect`, `colors`, `scale` and that effect's parameters, as an ability's visual does, except that `duration` is only ever seconds.
 
 Effects:
 

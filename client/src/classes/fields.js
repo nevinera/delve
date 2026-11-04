@@ -45,6 +45,8 @@ const SHAPE_FIELDS = [
   { key: "fade", type: "select", none: "stock", options: SHAPE_FADES, show: shapeEffect },
   { key: "opacity", type: "number", min: 0, max: 1, show: shapeEffect },
 ];
+// An aura plays once, with no cast to last through, so its duration is only ever seconds.
+const asAuraField = (field) => (field.key === "duration" ? { key: "duration", type: "number", label: "for seconds", min: 0, show: field.show } : field);
 const PARTICLE_FIELDS = [
   particleNumber("count", "at once", { min: 0, step: 1 }),
   particleNumber("rate", "per second", { min: 0 }),
@@ -66,6 +68,7 @@ const PARTICLE_FIELDS = [
   particleSelect("at", ["feet", "chest"]),
   particleSelect("facing", ["camera", "ground"]),
 ];
+const AURA_LOOK_FIELDS = [...PARTICLE_FIELDS, ...SHAPE_FIELDS].map(asAuraField);
 
 const is = (...types) => (value) => types.includes(value.type);
 const abilitiesOf = (made) => () => (made.abilities ?? []).map((a) => [a.id, a.name || a.id]);
@@ -753,7 +756,7 @@ export const statusFields = (made) => [
   { key: "group", hint: "only one status of a group at a time; a new one replaces the old", advanced: RULES },
   { key: "leash", label: "ends past ft", type: "number", min: 0, advanced: RULES },
   { key: "pose", type: "select", none: "none", options: ["sit"], advanced: "look" },
-  { key: "aura", type: "group", collapsed: true, advanced: "look", fields: [{ key: "effect", type: "select", none: "none", options: VISUALS }, main] },
+  { key: "aura", type: "group", collapsed: true, advanced: "look", fields: [{ key: "effect", type: "select", none: "none", options: VISUALS }, main, { key: "scale", type: "number", min: 0 }, ...AURA_LOOK_FIELDS] },
   { key: "tags", type: "words", advanced: "notes" },
   { key: "notes", type: "area", advanced: "notes" },
 ];
