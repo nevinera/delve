@@ -4,7 +4,7 @@ import { AbilityStage } from "./stage.js";
 
 const stageWithUnit = () => {
   const stage = new AbilityStage(new THREE.Scene());
-  stage.particles.emit = vi.fn();
+  vi.spyOn(stage.particles, "emit");
   const pelvis = new THREE.Object3D();
   const mesh = new THREE.Object3D();
   mesh.add(pelvis);
@@ -34,5 +34,17 @@ describe("a particle effect on a unit", () => {
     stage.frame(0.5);
     expect(stage.particles.emit).not.toHaveBeenCalled();
     expect(stage.alive).toEqual([]);
+  });
+
+  it("has what a cast held fade out as the cast ends, and leaves other particles alone", () => {
+    const { stage, unit } = stageWithUnit();
+    const fadesAt = () => Array.from({ length: stage.particles.next }, (_, k) => stage.particles.cells[k * 4 + 3]);
+    stage.play({ ...motes, visuals: [...motes.visuals, { effect: "embers", when: "cast" }] }, { caster: unit });
+    for (let i = 0; i < 12; i++) stage.frame(0.1);
+    expect(new Set(fadesAt()).size).toBe(1);
+    for (let i = 0; i < 10; i++) stage.frame(0.1);
+    const ended = new Set(fadesAt());
+    expect(ended.size).toBe(2);
+    expect([...ended].filter((at) => at < 3)[0]).toBeCloseTo(2, 0);
   });
 });

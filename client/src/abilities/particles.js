@@ -9,6 +9,8 @@ import { PARTICLE_TEXTURES, SHEET, aimed, sheetBytes } from "./particleStock.js"
 const FLOATS = 24;
 export const DESKTOP_PARTICLES = 6000;
 export const PHONE_PARTICLES = 1500;
+const NEVER = 1e9;
+const FADE_OUT_S = 0.15;
 
 const VERTEX = `
 attribute vec3 aOrigin;
@@ -18,7 +20,7 @@ attribute vec4 aLook; // size, end size, stretch, spin
 attribute vec3 aColor;
 attribute vec3 aColorEnd;
 attribute vec4 aPaint; // opacity, how much it's solid, floor, whether it lies flat
-attribute vec3 aCell; // the cell's column, row, and a turn to start at
+attribute vec4 aCell; // the cell's column, row, a turn to start at, and when it was told to fade out
 uniform float uTime;
 varying vec2 vUv;
 varying vec3 vColor;
@@ -27,7 +29,8 @@ varying float vSolid;
 void main() {
   float t = uTime - aMotion.x;
   float u = t / aMotion.y;
-  if (u < 0.0 || u >= 1.0) {
+  float fading = (uTime - aCell.w) / ${FADE_OUT_S};
+  if (u < 0.0 || u >= 1.0 || fading >= 1.0) {
     gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
     return;
   }
@@ -42,7 +45,7 @@ void main() {
     gl_Position = projectionMatrix * modelViewMatrix * vec4(at + vec3(corner.x, 0.0, corner.y) * size + vec3(0.0, 0.15, 0.0), 1.0);
     vUv = (aCell.xy + position.xy * 0.5 + 0.5) / vec2(${SHEET.columns}.0, ${SHEET.rows}.0);
     vColor = mix(aColor, aColorEnd, u);
-    vAlpha = aPaint.x * smoothstep(0.0, 0.08, u) * (1.0 - u * u);
+    vAlpha = aPaint.x * smoothstep(0.0, 0.08, u) * (1.0 - u * u) * (1.0 - clamp(fading, 0.0, 1.0));
     vSolid = aPaint.y;
     return;
   }
@@ -68,7 +71,7 @@ void main() {
   vUv = (aCell.xy + position.xy * 0.5 + 0.5) / vec2(${SHEET.columns}.0, ${SHEET.rows}.0);
   vColor = mix(aColor, aColorEnd, u);
   // In quickly, and out over the rest.
-  vAlpha = aPaint.x * smoothstep(0.0, 0.08, u) * (1.0 - u * u);
+  vAlpha = aPaint.x * smoothstep(0.0, 0.08, u) * (1.0 - u * u) * (1.0 - clamp(fading, 0.0, 1.0));
   vSolid = aPaint.y;
 }`;
 
@@ -123,8 +126,8 @@ export class ParticleField {
     attribute("aPaint", 4, 20);
     geometry.instanceCount = capacity;
     this.geometry = geometry;
-    this.cells = new Float32Array(capacity * 3);
-    this.cellBuffer = new THREE.InstancedBufferAttribute(this.cells, 3);
+    this.cells = new Float32Array(capacity * 4);
+    this.cellBuffer = new THREE.InstancedBufferAttribute(this.cells, 4);
     this.cellBuffer.setUsage(THREE.DynamicDrawUsage);
     geometry.setAttribute("aCell", this.cellBuffer);
     this.material = new THREE.ShaderMaterial({
@@ -147,13 +150,15 @@ export class ParticleField {
   }
 
   // Lets `n` go from `origin`. spec: particleSpec's. colors: [main, trim], going from trim to main.
-  // way: the unit vector its direction points. floor: how low they can fall.
+  // way: the unit vector its direction points. floor: how low they can fall. Returns where they
+  // went, for fadeOut.
   emit(spec, n, origin, colors, way = [0, 1, 0], floor = -Infinity, rand = Math.random) {
     const cell = PARTICLE_TEXTURES.indexOf(spec.texture);
     const [column, row] = [cell % SHEET.columns, Math.floor(cell / SHEET.columns)];
     const start = colorOf(colors[1]);
     const end = colorOf(colors[0]);
     const solid = spec.blend === "solid" ? 1 : 0;
+    const first = this.next;
     for (let k = 0; k < n; k++) {
       const at = this.next * FLOATS;
       const out = aimed(way, spec.spread, rand);
@@ -187,10 +192,19 @@ export class ParticleField {
         ],
         at,
       );
-      this.cells.set([column, row, spec.spin ? rand() * 6.2832 : 0], this.next * 3);
+      this.cells.set([column, row, spec.spin ? rand() * 6.2832 : 0, NEVER], this.next * 4);
       this.next = (this.next + 1) % this.capacity;
     }
     this.buffer.needsUpdate = true;
+    this.cellBuffer.needsUpdate = true;
+    return { first, n };
+  }
+
+  // Has these particles, each what emit returned, fade out over a moment from now.
+  fadeOut(emitted) {
+    for (const { first, n } of emitted) {
+      for (let k = 0; k < n; k++) this.cells[((first + k) % this.capacity) * 4 + 3] = this.time;
+    }
     this.cellBuffer.needsUpdate = true;
   }
 

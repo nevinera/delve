@@ -104,6 +104,7 @@ export class AbilityStage {
     // A clip can carry a body away from where its unit stands, so it goes by the pelvis if there's one.
     const pelvis = follow?.skeleton?.getBoneByName("pelvis");
     const body = new THREE.Vector3();
+    const emitted = [];
     let sent = 0;
     const update = (u) => {
       if (follow) {
@@ -114,10 +115,10 @@ export class AbilityStage {
         }
       }
       const due = dueBy(spec, u);
-      if (due > sent) this.particles.emit(spec, due - sent, group.position.toArray(), colors, direction, floor);
+      if (due > sent) emitted.push(this.particles.emit(spec, due - sent, group.position.toArray(), colors, direction, floor));
       sent = Math.max(sent, due);
     };
-    return { group, length: Math.max(0.02, emitsFor(spec)), update };
+    return { group, length: Math.max(0.02, emitsFor(spec)), update, fadeOut: () => this.particles.fadeOut(emitted) };
   }
 
   fire(run, event) {
@@ -219,6 +220,7 @@ export class AbilityStage {
           return true;
         }
       }
+      if (live.heldBy) visual.fadeOut();
       disposeVisual(visual);
       return false;
     });

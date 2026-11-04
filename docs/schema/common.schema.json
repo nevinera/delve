@@ -1300,7 +1300,7 @@
           "minimum": 0
         },
         "duration": {
-          "description": "Seconds it lets particles go for at `rate`, or \"cast\" to last until the ability's cast or channel ends, and stop if that's cut short.",
+          "description": "Seconds it lets particles go for at `rate`, or \"cast\" to last until the ability's cast or channel ends, however it ends. Its particles then fade out at once.",
           "oneOf": [
             { "type": "number", "minimum": 0 },
             { "const": "cast" }
