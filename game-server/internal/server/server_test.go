@@ -42,6 +42,8 @@ func (anyone) Character(_ context.Context, _, id int64) (rails.Character, error)
 	return rails.Character{ID: id, Name: "Arwen", Look: json.RawMessage(`{}`)}, nil
 }
 
+func (anyone) SaveBuild(context.Context, int64, int64, string, map[string]string) error { return nil }
+
 func (anyone) SaveClass(context.Context, int64, int64, string) error { return nil }
 
 func (anyone) SavePosition(context.Context, int64, int64, rails.Position) error { return nil }
@@ -61,6 +63,10 @@ type classKeeper struct {
 func (k *classKeeper) Character(_ context.Context, _, id int64) (rails.Character, error) {
 	class, _ := k.class.Load().(string)
 	return rails.Character{ID: id, Name: "Arwen", Look: json.RawMessage(`{}`), Class: class}, nil
+}
+
+func (k *classKeeper) SaveBuild(context.Context, int64, int64, string, map[string]string) error {
+	return nil
 }
 
 func (k *classKeeper) SaveClass(_ context.Context, _, _ int64, class string) error {

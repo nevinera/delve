@@ -53,6 +53,7 @@ Rails.application.routes.draw do
       resources :characters, only: [:show] do
         put :position, on: :member
         put :class, on: :member, action: :pick_class
+        put :build, on: :member
       end
     end
   end

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_03_020000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_03_231500) do
   create_table "characters", force: :cascade do |t|
     t.integer "user_id", null: false
     t.string "name", null: false
@@ -63,6 +63,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_03_020000) do
     t.datetime "updated_at", null: false
     t.string "class_id"
     t.integer "level", default: 1, null: false
+    t.string "specialization"
+    t.json "talents", default: {}, null: false
     t.index ["character_id"], name: "index_world_characters_on_character_id"
     t.index ["world_id", "character_id"], name: "index_world_characters_on_world_id_and_character_id", unique: true
     t.index ["world_id"], name: "index_world_characters_on_world_id"

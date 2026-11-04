@@ -380,10 +380,8 @@ func levelledClass() *combat.Class {
 	return &combat.Class{
 		ID:              "lvld0001",
 		Specializations: []combat.Specialization{{ID: "spec", Abilities: []string{"bySpec"}}},
-		Talents: map[string][]combat.Talent{"15": {{Grants: []struct {
-			Ability string `json:"ability"`
-		}{{Ability: "byTalent"}}}}},
-		Abilities: []combat.Ability{{ID: "first", Level: 1}, {ID: "third", Level: 3}, {ID: "bySpec", Level: 1}, {ID: "byTalent", Level: 1}},
+		Talents:         map[string][]combat.Talent{"15": {{Grants: []combat.TalentGrant{{Ability: "byTalent"}}}}},
+		Abilities:       []combat.Ability{{ID: "first", Level: 1}, {ID: "third", Level: 3}, {ID: "bySpec", Level: 1}, {ID: "byTalent", Level: 1}},
 	}
 }
 
@@ -394,7 +392,7 @@ func TestLevelAndChoicesSayWhatYouKnow(t *testing.T) {
 		level   int
 		knows   bool
 	}{{"first", 1, true}, {"third", 1, false}, {"third", 3, true}, {"bySpec", 20, false}, {"byTalent", 20, false}} {
-		if got := c.Knows(c.Ability(want.ability), want.level); got != want.knows {
+		if got := c.Knows(c.Ability(want.ability), want.level, combat.Build{}); got != want.knows {
 			t.Errorf("%s at level %d: knows = %v", want.ability, want.level, got)
 		}
 	}

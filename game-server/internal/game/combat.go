@@ -2,6 +2,7 @@ package game
 
 import (
 	"cmp"
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
@@ -44,15 +45,16 @@ type statusKey struct {
 
 // activeStatus is a status on a unit, until it runs out. With no `until`, it stays until removed.
 type activeStatus struct {
-	def    *combat.Status
-	class  string
-	since  time.Time // when it was last put on
-	until  time.Time
-	stacks int
-	uses   int               // what's left of `consumedBy.uses`
-	fired  map[int]time.Time // when each of its triggers last fired, by its place in the status
-	counts map[int]float64   // how far along each `every` is, by the same
-	ticks  map[int]time.Time // when each of its periodic effects next ticks, by its place in the status
+	def     *combat.Status
+	class   string
+	since   time.Time // when it was last put on
+	until   time.Time
+	stacks  int
+	uses    int               // what's left of `consumedBy.uses`
+	fired   map[int]time.Time // when each of its triggers last fired, by its place in the status
+	counts  map[int]float64   // how far along each `every` is, by the same
+	granted bool              // what the class gives you for good: a passive, your mastery, a spec's or a talent's
+	ticks   map[int]time.Time // when each of its periodic effects next ticks, by its place in the status
 }
 
 // dummy is a training dummy: it takes damage, never dies or fights back, and tallies who's hit it.
@@ -66,6 +68,7 @@ type dummy struct {
 
 // fighter is a player's part in combat.
 type fighter struct {
+	build      combat.Build // its specialization and talents, as allowed
 	class      *combat.Class
 	level      int
 	stats      combat.Stats
@@ -114,7 +117,7 @@ func classWithID(classes []*combat.Class, id string) *combat.Class {
 }
 
 // enterFight gives a player its class's numbers. With no class, it has plain health and no abilities.
-func (p *Player) enterFight(class *combat.Class, level int) {
+func (p *Player) enterFight(class *combat.Class, level int, build combat.Build) {
 	f := &p.fight
 	f.vitals = vitals{ID: p.state.ID, Statuses: map[statusKey]*activeStatus{}}
 	f.resources, f.pools, f.cooldowns, f.since = map[string]float64{}, map[string]combat.Pool{}, map[string][]time.Time{}, map[string]time.Time{}
@@ -133,14 +136,56 @@ func (p *Player) enterFight(class *combat.Class, level int) {
 		f.resources[r.Key] = combat.StartResource(r)
 	}
 	f.resChanged = true // so the first tick tells the player where they stand
-	for _, id := range f.class.HeldFrom(f.level) {
+	f.build = f.class.Allowed(build, f.level)
+	p.grantStatuses(time.Time{})
+	p.state.Class, p.state.Level, p.state.Health, p.state.MaxHealth = f.class.ID, f.level, f.vitals.Health, f.vitals.MaxHealth
+}
+
+// grantStatuses puts on what a character's class, level and build give it for good, and says
+// nothing: the client works these out too (play/build.js).
+func (p *Player) grantStatuses(now time.Time) {
+	f := &p.fight
+	for _, id := range f.class.HeldFrom(f.level, f.build) {
+		key := statusKey{id, p.state.ID}
+		if f.vitals.Statuses[key] != nil {
+			continue
+		}
 		if s := f.class.Status(id); s != nil {
-			f.vitals.Statuses[statusKey{id, p.state.ID}] = &activeStatus{def: s, class: f.class.ID, stacks: 1, uses: 1}
+			f.vitals.Statuses[key] = &activeStatus{def: s, class: f.class.ID, since: now, stacks: 1, uses: 1, granted: true}
 		} else {
 			log.Printf("character %d: class %s holds a status it hasn't got: %s", p.state.ID, f.class.ID, id)
 		}
 	}
-	p.state.Class, p.state.Level, p.state.Health, p.state.MaxHealth = f.class.ID, f.level, f.vitals.Health, f.vitals.MaxHealth
+}
+
+// chooseBuild changes a character's specialization and talents, out of combat, and keeps them.
+func (l *Layer) chooseBuild(p *Player, b combat.Build) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	f := &p.fight
+	if l.players[p.ID()] != p || f.class == nil {
+		return
+	}
+	now := l.hub.now()
+	if f.inCombat(now) {
+		p.send(encode(refused{"refused", "", "you can't change that in combat"}))
+		return
+	}
+	f.build = f.class.Allowed(b, f.level)
+	keep := f.class.HeldFrom(f.level, f.build)
+	for key, held := range f.vitals.Statuses {
+		if held.granted && !slices.Contains(keep, key.id) {
+			delete(f.vitals.Statuses, key)
+		}
+	}
+	p.grantStatuses(now)
+	p.send(encode(buildMessage{"build", f.build.Specialization, f.build.Talents}))
+	world, id, spec, talents := l.worldID, p.ID(), f.build.Specialization, f.build.Talents
+	go func() {
+		if err := l.hub.characters.SaveBuild(context.Background(), world, id, spec, talents); err != nil {
+			log.Printf("character %d: couldn't keep its build: %v", id, err)
+		}
+	}()
 }
 
 // placeDummies puts a world's training dummies on the layer, standing on the ground.
@@ -263,7 +308,7 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 		return nil, 0, "you have no class"
 	}
 	ability := f.class.Ability(m.Ability)
-	if ability == nil || !f.class.Knows(ability, f.level) {
+	if ability == nil || !f.class.Knows(ability, f.level, f.build) {
 		return nil, 0, "you don't know that"
 	}
 	ability = l.resolved(p, ability, now)

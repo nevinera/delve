@@ -300,7 +300,7 @@ func TestPassivesAndMastery(t *testing.T) {
 	class.Mastery = &combat.Mastery{Status: "focus"}
 	grit := combat.Resource{Key: "grit", Kind: "points", Max: 1}
 	class.Resources = append(class.Resources[:len(class.Resources):len(class.Resources)], grit)
-	p.enterFight(&class, 10)
+	p.enterFight(&class, 10, combat.Build{})
 	pass(h, c, 60)
 	if most := p.fight.pool(grit).Max; most != 2 {
 		t.Fatalf("most = %g, want 2 at level 10", most)
@@ -308,7 +308,7 @@ func TestPassivesAndMastery(t *testing.T) {
 	if got := hitFor(t, h, p, c); got != 110 {
 		t.Fatalf("hit for %g, want 110", got)
 	}
-	p.enterFight(&class, 20)
+	p.enterFight(&class, 20, combat.Build{})
 	pass(h, c, 0.1)
 	if most := p.fight.pool(grit).Max; most != 3 {
 		t.Fatalf("most = %g, want 3 at level 20", most)
@@ -729,5 +729,47 @@ func TestTriggerWatchingTheCaster(t *testing.T) {
 	// It lands on its holder, a dummy, who has no grit: the caster did it, and nothing's given.
 	if got := p.layer.dummies[0].Statuses[statusKey{"mark", p.ID()}]; got == nil || got.fired == nil {
 		t.Fatalf("didn't fire: %+v", got)
+	}
+}
+
+// Choosing a build changes what you know and hold, stays out of combat, and goes back on if you change again.
+func TestChoosingABuild(t *testing.T) {
+	h, p, c := statusFight(t, nil)
+	class := *p.fight.class
+	class.Statuses = append(class.Statuses[:len(class.Statuses):len(class.Statuses)], combat.Status{ID: "sguard", Name: "Guard", Effects: effects(t, `[{"type":"stat","stat":"damageDone","multiply":2}]`)}, combat.Status{ID: "sblade", Name: "Blade"})
+	class.Abilities = append(class.Abilities[:len(class.Abilities):len(class.Abilities)], selfBuff("wall"))
+	class.Specializations = []combat.Specialization{{ID: "guard", Status: "sguard", Abilities: []string{"wall"}}, {ID: "blade", Status: "sblade"}}
+	p.enterFight(&class, 10, combat.Build{})
+	pass(h, c, 60)
+	heard(p)
+	use(t, p, "wall")
+	if got := heard(p, "refused"); len(got) != 1 {
+		t.Fatalf("knew a spec's ability with no spec: %v", got)
+	}
+	p.layer.chooseBuild(p, combat.Build{Specialization: "guard"})
+	got := heard(p, "build")
+	if len(got) != 1 || got[0]["specialization"] != "guard" {
+		t.Fatalf("heard %v", got)
+	}
+	use(t, p, "wall")
+	if got := heard(p, "refused"); len(got) != 0 {
+		t.Fatalf("refused: %v", got)
+	}
+	pass(h, c, 0.1)
+	if got := hitFor(t, h, p, c); got != 200 {
+		t.Fatalf("hit for %g, want 200 with the spec's status", got)
+	}
+	// In combat now, from that hit.
+	p.layer.chooseBuild(p, combat.Build{Specialization: "blade"})
+	if got := heard(p, "refused"); len(got) != 1 || p.fight.build.Specialization != "guard" {
+		t.Fatalf("changed in combat: %v", got)
+	}
+	pass(h, c, 6)
+	p.layer.chooseBuild(p, combat.Build{Specialization: "blade"})
+	if p.fight.vitals.Statuses[statusKey{"sguard", p.ID()}] != nil || p.fight.vitals.Statuses[statusKey{"sblade", p.ID()}] == nil {
+		t.Fatalf("holding %v", p.fight.vitals.Statuses)
+	}
+	if got := hitFor(t, h, p, c); got != 100 {
+		t.Fatalf("hit for %g, want 100 with the old spec gone", got)
 	}
 }

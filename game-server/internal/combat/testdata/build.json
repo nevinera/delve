@@ -1,0 +1,53 @@
+{
+  "class": {
+    "passives": [{ "status": "early", "level": 1 }, { "status": "late", "level": 10 }],
+    "mastery": { "status": "focus" },
+    "specializations": [
+      { "id": "guard", "status": "sguard", "abilities": ["wall", "late"] },
+      { "id": "blade", "status": "sblade", "abilities": ["slash"] }
+    ],
+    "talents": {
+      "15": [
+        { "id": "both", "grants": [{ "status": "tboth" }] },
+        { "id": "guardonly", "grants": [{ "status": "tguard", "spec": "guard" }] },
+        { "id": "gift", "grants": [{ "ability": "gifted" }] }
+      ],
+      "20": [
+        { "id": "after", "requires": "both", "grants": [{ "status": "tafter" }] },
+        { "id": "free", "grants": [{ "status": "tfree" }] }
+      ]
+    },
+    "abilities": [
+      { "id": "plain", "level": 1 },
+      { "id": "wall", "level": 10 },
+      { "id": "late", "level": 12 },
+      { "id": "slash", "level": 10 },
+      { "id": "gifted", "level": 1 },
+      { "id": "far", "level": 30 }
+    ]
+  },
+  "cases": [
+    { "name": "under level 10 there's no spec to have", "level": 9, "build": { "specialization": "guard" },
+      "want": { "specialization": "", "talents": {} }, "known": ["plain"], "held": ["early", "focus"] },
+    { "name": "a spec gives its abilities at their levels, and its status", "level": 10, "build": { "specialization": "guard" },
+      "want": { "specialization": "guard", "talents": {} }, "known": ["plain", "wall"], "held": ["early", "focus", "late", "sguard"] },
+    { "name": "another spec's abilities aren't yours", "level": 12, "build": { "specialization": "blade" },
+      "want": { "specialization": "blade", "talents": {} }, "known": ["plain", "slash"], "held": ["early", "focus", "late", "sblade"] },
+    { "name": "an unknown spec counts for nothing", "level": 12, "build": { "specialization": "nope" },
+      "want": { "specialization": "", "talents": {} }, "known": ["plain"], "held": ["early", "focus", "late"] },
+    { "name": "a tier waits for its level", "level": 14, "build": { "specialization": "guard", "talents": { "15": "both" } },
+      "want": { "specialization": "guard", "talents": {} }, "known": ["plain", "wall", "late"], "held": ["early", "focus", "late", "sguard"] },
+    { "name": "a talent gives its status", "level": 15, "build": { "specialization": "guard", "talents": { "15": "guardonly" } },
+      "want": { "specialization": "guard", "talents": { "15": "guardonly" } }, "known": ["plain", "wall", "late"], "held": ["early", "focus", "late", "sguard", "tguard"] },
+    { "name": "a talent with nothing for your spec isn't offered", "level": 15, "build": { "specialization": "blade", "talents": { "15": "guardonly" } },
+      "want": { "specialization": "blade", "talents": {} }, "known": ["plain", "slash"], "held": ["early", "focus", "late", "sblade"] },
+    { "name": "a talent can give an ability", "level": 15, "build": { "specialization": "blade", "talents": { "15": "gift" } },
+      "want": { "specialization": "blade", "talents": { "15": "gift" } }, "known": ["plain", "gifted", "slash"], "held": ["early", "focus", "late", "sblade"] },
+    { "name": "a talent needing one above has it", "level": 20, "build": { "specialization": "blade", "talents": { "15": "both", "20": "after" } },
+      "want": { "specialization": "blade", "talents": { "15": "both", "20": "after" } }, "known": ["plain", "slash"], "held": ["early", "focus", "late", "sblade", "tafter", "tboth"] },
+    { "name": "a talent needing one above doesn't have it", "level": 20, "build": { "specialization": "blade", "talents": { "15": "gift", "20": "after" } },
+      "want": { "specialization": "blade", "talents": { "15": "gift" } }, "known": ["plain", "gifted", "slash"], "held": ["early", "focus", "late", "sblade"] },
+    { "name": "a talent from another tier isn't taken", "level": 20, "build": { "specialization": "blade", "talents": { "15": "free" } },
+      "want": { "specialization": "blade", "talents": {} }, "known": ["plain", "slash"], "held": ["early", "focus", "late", "sblade"] }
+  ]
+}

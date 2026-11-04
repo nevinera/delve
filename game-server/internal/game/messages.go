@@ -47,6 +47,9 @@ type incoming struct {
 	Target  int64       `json:"target"`
 	Spot    *[3]float64 `json:"spot"`
 	Line    string      `json:"line"`
+
+	Specialization string            `json:"specialization"`
+	Talents        map[string]string `json:"talents"`
 }
 
 // used says someone has started using an ability. The client plays its timeline from this.
@@ -66,6 +69,13 @@ type used struct {
 	School    string          `json:"school,omitempty"`
 	Schools   []string        `json:"schools,omitempty"`
 	Animation string          `json:"animation,omitempty"`
+}
+
+// buildMessage says what specialization and talents you have.
+type buildMessage struct {
+	Type           string            `json:"type"`
+	Specialization string            `json:"specialization"`
+	Talents        map[string]string `json:"talents"`
 }
 
 // swung says someone has started an auto-attack swing.

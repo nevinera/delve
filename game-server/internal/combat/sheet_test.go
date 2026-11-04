@@ -180,10 +180,10 @@ func TestAmountReadsMastery(t *testing.T) {
 
 func TestHeldFromGoesByLevel(t *testing.T) {
 	c := &Class{Passives: []Passive{{"early", 1}, {"late", 10}}, Mastery: &Mastery{"resolve"}}
-	if got := c.HeldFrom(9); len(got) != 2 || got[0] != "early" || got[1] != "resolve" {
+	if got := c.HeldFrom(9, Build{}); len(got) != 2 || got[0] != "early" || got[1] != "resolve" {
 		t.Fatalf("level 9: %v", got)
 	}
-	if got := c.HeldFrom(10); len(got) != 3 {
+	if got := c.HeldFrom(10, Build{}); len(got) != 3 {
 		t.Fatalf("level 10: %v", got)
 	}
 }

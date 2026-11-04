@@ -59,6 +59,10 @@ const showPage = (page) => {
   main.hidden = Boolean(page);
 };
 for (const button of menu.querySelectorAll("[data-open]")) button.addEventListener("click", () => showPage($(button.dataset.open)));
+menu.querySelector("[data-build]").addEventListener("click", () => {
+  menu.hidePopover();
+  window.play?.combat?.openBuild();
+});
 for (const button of menu.querySelectorAll("[data-back]")) button.addEventListener("click", () => showPage(null));
 menu.addEventListener("toggle", (e) => e.newState === "closed" && showPage(null));
 menu.querySelector('[data-open="playGraphics"]').disabled = true; // until there's a view
@@ -73,6 +77,7 @@ async function play() {
   let combat = null;
   // Combat news before you're in the world isn't yours to see: it's about others.
   const fight = (method) => (message) => combat?.[method](message);
+  let firstBuild = null; // the server says this as you enter, before combat is ready
   const early = []; // what the server says before the view is ready, as [method, argument]
   const tell = (method, arg) => (others ? others[method](arg) : early.push([method, arg]));
   status("Entering...");
@@ -90,6 +95,7 @@ async function play() {
     health: fight("health_"),
     log: fight("logged"),
     speed: fight("speed_"),
+    build: (message) => (combat ? combat.build_(message) : (firstBuild = message)),
     statusChanged: fight("statusChanged_"),
     statusGone: fight("statusGone_"),
     swung: fight("swung"),
@@ -153,6 +159,7 @@ async function play() {
   view.walker.yaw = you.yaw;
   connection.report(view);
   combat = new PlayCombat({ view, others, connection, loader, you, hud: $("playCombat") });
+  if (firstBuild) combat.build_(firstBuild);
   // A handle for scripts and the browser's console.
   window.play = { view, connection, others, combat, renditions, placed, caves };
   if (touch) new TouchControls(view, document.body);

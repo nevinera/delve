@@ -38,14 +38,22 @@ type Mastery struct {
 // Specialization is what a character picks at the level the game sets.
 type Specialization struct {
 	ID        string   `json:"id"`
+	Status    string   `json:"status"`
 	Abilities []string `json:"abilities"`
 }
 
 // Talent is one choice in a talent tier.
 type Talent struct {
-	Grants []struct {
-		Ability string `json:"ability"`
-	} `json:"grants"`
+	ID       string        `json:"id"`
+	Requires string        `json:"requires"` // a talent in the tier directly above
+	Grants   []TalentGrant `json:"grants"`
+}
+
+// TalentGrant is an ability or status a talent gives, to one specialization if it says.
+type TalentGrant struct {
+	Ability string `json:"ability"`
+	Status  string `json:"status"`
+	Spec    string `json:"spec"`
 }
 
 // Resource is one of a class's resources. Kind is mana, energy, rage or points.
@@ -419,31 +427,36 @@ func (c *Class) Ability(id string) *Ability {
 	return nil
 }
 
-// Knows says whether a character of this level has an ability. One that a specialization or talent
-// gives isn't known until choosing those exists.
-func (c *Class) Knows(a *Ability, level int) bool {
+// Knows says whether a character of this level and build has an ability. The build has to be one
+// Allowed gave back.
+func (c *Class) Knows(a *Ability, level int, b Build) bool {
 	if a.Level > level {
 		return false
 	}
+	chosen := false
 	for _, s := range c.Specializations {
 		if slices.Contains(s.Abilities, a.ID) {
-			return false
+			if s.ID == b.Specialization {
+				return true
+			}
+			chosen = true
+		}
+	}
+	for _, g := range c.talentGrants(b) {
+		if g.Ability == a.ID {
+			return true
 		}
 	}
 	for _, tier := range c.Talents {
 		for _, t := range tier {
-			for _, g := range t.Grants {
-				if g.Ability == a.ID {
-					return false
-				}
-			}
+			chosen = chosen || slices.ContainsFunc(t.Grants, func(g TalentGrant) bool { return g.Ability == a.ID })
 		}
 	}
-	return true
+	return !chosen
 }
 
-// HeldFrom is the ids of the statuses a character of this level always holds.
-func (c *Class) HeldFrom(level int) []string {
+// HeldFrom is the ids of the statuses a character of this level and build always holds.
+func (c *Class) HeldFrom(level int, b Build) []string {
 	var out []string
 	for _, p := range c.Passives {
 		if p.Level <= level {
@@ -452,6 +465,16 @@ func (c *Class) HeldFrom(level int) []string {
 	}
 	if c.Mastery != nil && c.Mastery.Status != "" {
 		out = append(out, c.Mastery.Status)
+	}
+	for _, s := range c.Specializations {
+		if s.ID == b.Specialization && s.Status != "" {
+			out = append(out, s.Status)
+		}
+	}
+	for _, g := range c.talentGrants(b) {
+		if g.Status != "" {
+			out = append(out, g.Status)
+		}
 	}
 	return out
 }

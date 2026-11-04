@@ -37,6 +37,7 @@ type WorldLoader interface {
 type Characters interface {
 	Character(ctx context.Context, world, id int64) (rails.Character, error)
 	SaveClass(ctx context.Context, world, id int64, class string) error
+	SaveBuild(ctx context.Context, world, id int64, specialization string, talents map[string]string) error
 	Positions
 }
 
@@ -162,7 +163,7 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 		layer.mu.Unlock()
 	}
 	p := &Player{Send: make(chan []byte, SendQueue), Gone: make(chan struct{}), layer: layer, state: state, motion: motion{joined: h.now()}}
-	p.enterFight(classWithID(layer.world.Classes, character.Class), character.Level)
+	p.enterFight(classWithID(layer.world.Classes, character.Class), character.Level, combat.Build{Specialization: character.Specialization, Talents: character.Talents})
 	p.systemAdmin = character.SystemAdmin
 	p.saved = p.position()
 
@@ -288,6 +289,9 @@ func (l *Layer) join(p *Player) {
 		o.send(encode(appear{"appear", p.state}))
 	}
 	p.send(encode(snapshot{"snapshot", near}))
+	if p.fight.class != nil {
+		p.send(encode(buildMessage{"build", p.fight.build.Specialization, p.fight.build.Talents}))
+	}
 }
 
 func (l *Layer) leave(p *Player) {
@@ -332,6 +336,9 @@ func (p *Player) Handle(raw []byte) error {
 		return nil
 	case "command":
 		p.layer.command(p, m.Line)
+		return nil
+	case "build":
+		p.layer.chooseBuild(p, combat.Build{Specialization: m.Specialization, Talents: m.Talents})
 		return nil
 	case "attack":
 		p.layer.attack(p, m)

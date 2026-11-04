@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { asUsed, heldStatuses, hitWords, knownAbilities, nextTarget, pickNearest, shownResources } from "./combat.js";
+import { heldStatuses, knownAbilities } from "./build.js";
+import { asUsed, hitWords, nextTarget, pickNearest, shownResources } from "./combat.js";
 
 describe("pickNearest", () => {
   const units = [{ id: 1, x: 100, y: 100 }, { id: 2, x: 130, y: 100 }];

@@ -34,13 +34,15 @@ type Position struct {
 // Position is nil when it hasn't been there. Level starts at 1. SystemAdmin says its owner has that
 // role.
 type Character struct {
-	ID          int64           `json:"id"`
-	Name        string          `json:"name"`
-	Look        json.RawMessage `json:"look"`
-	Class       string          `json:"class"`
-	Level       int             `json:"level"`
-	Position    *Position       `json:"position"`
-	SystemAdmin bool            `json:"systemAdmin"`
+	ID             int64             `json:"id"`
+	Name           string            `json:"name"`
+	Look           json.RawMessage   `json:"look"`
+	Class          string            `json:"class"`
+	Level          int               `json:"level"`
+	Specialization string            `json:"specialization"`
+	Talents        map[string]string `json:"talents"`
+	Position       *Position         `json:"position"`
+	SystemAdmin    bool              `json:"systemAdmin"`
 }
 
 // Character fetches a character entering a world.
@@ -57,6 +59,15 @@ func (c *Client) SavePosition(ctx context.Context, world, id int64, pos Position
 		return err
 	}
 	return c.do(ctx, http.MethodPut, fmt.Sprintf("/internal/worlds/%d/characters/%d/position", world, id), body, nil)
+}
+
+// SaveBuild keeps the specialization and talents a character chose in a world.
+func (c *Client) SaveBuild(ctx context.Context, world, id int64, specialization string, talents map[string]string) error {
+	body, err := json.Marshal(map[string]any{"specialization": specialization, "talents": talents})
+	if err != nil {
+		return err
+	}
+	return c.do(ctx, http.MethodPut, fmt.Sprintf("/internal/worlds/%d/characters/%d/build", world, id), body, nil)
 }
 
 // SaveClass keeps the class a character picked in a world.

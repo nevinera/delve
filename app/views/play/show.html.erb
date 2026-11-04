@@ -2,6 +2,7 @@
 <p id="playStatus" class="play-status"></p>
 <div id="playCombat" class="play-combat"></div>
 <div id="playClasses" class="play-classes" hidden></div>
+<div id="playBuild" class="play-classes play-build" hidden></div>
 <div id="playPaused" class="play-paused" hidden>
   <p>Paused.</p>
   <button id="playResume" type="button">resume</button>
@@ -13,6 +14,7 @@
 <div id="playMenu" class="play-menu" popover>
   <div class="play-menu-main">
     <p class="play-menu-title"><strong><%= @character.name %></strong> in <%= @world.display_name %><% if @preview %>, previewing <%= @preview.tag %><% end %></p>
+    <button type="button" data-build>specialization and talents</button>
     <button type="button" data-open="playGraphics">graphics settings</button>
     <%= link_to "leave world", worlds_path, class: "play-menu-leave" %>
   </div>

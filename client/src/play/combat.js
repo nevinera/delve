@@ -1,3 +1,5 @@
+import { SPEC_LEVEL, allowedBuild, heldStatuses, knownAbilities } from "./build.js";
+import { drawBuildPanel } from "./buildPanel.js";
 import * as THREE from "three";
 import { chestOf, AbilityStage, clipNameFor } from "../abilities/stage.js";
 import { roleClips } from "../character/animations.js";
@@ -54,14 +56,6 @@ export function hitWords(hit, statuses = []) {
   return null;
 }
 
-// What a character of this level knows of its class. What a specialization or talent gives isn't
-// known until choosing those exists. The game server has the same rule (combat.Class.Knows).
-export function knownAbilities(made, level) {
-  const chosen = new Set((made.specializations ?? []).flatMap((s) => s.abilities ?? []));
-  for (const tier of Object.values(made.talents ?? {})) for (const talent of tier) for (const grant of talent.grants ?? []) if (grant.ability) chosen.add(grant.ability);
-  return (made.abilities ?? []).filter((a) => (a.level ?? 1) <= level && !chosen.has(a.id)).sort((a, b) => (a.level ?? 1) - (b.level ?? 1));
-}
-
 // An ability as the server says it's being used, with what changes it counted. An older server's
 // message leaves those out.
 export function asUsed(ability, { castTime, channel, cost, school, schools, animation }) {
@@ -74,12 +68,6 @@ export function asUsed(ability, { castTime, channel, cost, school, schools, anim
     ...(schools ? { schools } : {}),
     ...(animation ? { animation } : {}),
   };
-}
-
-// The ids of the statuses a character of this level always holds.
-export function heldStatuses(made, level) {
-  const passives = (made.passives ?? []).filter((p) => (p.level ?? 1) <= level).map((p) => p.status);
-  return made.mastery?.status ? [...passives, made.mastery.status] : passives;
 }
 
 // The resources to show: the primary one always, and the rest once something you know uses them.
@@ -110,6 +98,8 @@ export class PlayCombat {
     this.gcdUntil = 0;
     this.resources = {};
     this.resourceMax = {};
+    this.chosen = { specialization: "", talents: {} }; // your specialization and talents
+    this.buildBox = document.getElementById("playBuild");
     this.statuses = new Map(); // unit id -> the statuses you've put on it, as stacks by id
     this.health = you.health;
     this.maxHealth = you.maxHealth;
@@ -170,9 +160,19 @@ export class PlayCombat {
     this.made = made;
     this.buttons = new Map();
     this.actionNodes = new Map();
-    this.known = knownAbilities(made, this.you.level ?? 1);
+    const level = this.you.level ?? 1;
+    const build = allowedBuild(made, this.chosen, level);
+    this.known = knownAbilities(made, level, build);
     if (!this.statuses.has(this.you.id)) this.statuses.set(this.you.id, new Map());
-    for (const id of heldStatuses(made, this.you.level ?? 1)) this.statuses.get(this.you.id).set(id, 1);
+    const mine = this.statuses.get(this.you.id);
+    for (const id of this.held ?? []) mine.delete(id);
+    this.held = heldStatuses(made, level, build);
+    for (const id of this.held) mine.set(id, 1);
+    this.drawBuild();
+    if (level >= SPEC_LEVEL && !build.specialization && made.specializations?.length && !this.askedBuild) {
+      this.askedBuild = true;
+      this.openBuild();
+    }
     const abilities = this.known.slice(0, KEYS.length);
     this.attackButton = el("button", { type: "button", className: "combat-action", title: "Auto-attack your target, or stop" }, el("span", { className: "combat-action-key", textContent: ATTACK_KEY }), el("span", { className: "combat-action-name", textContent: "Attack" }));
     this.attackButton.addEventListener("click", () => this.toggleAttack());
@@ -200,6 +200,24 @@ export class PlayCombat {
         return el("div", { className: "combat-resource" }, fill, el("span", { className: "combat-resource-text", textContent: `${r.name ?? r.key} ${Math.round(have)}${most ? ` / ${most}` : ""}` }));
       }),
     );
+  }
+
+  // What the server says you've chosen.
+  build_({ specialization, talents }) {
+    this.chosen = { specialization, talents: talents ?? {} };
+    if (this.made) this.setClass(this.made);
+  }
+
+  openBuild() {
+    if (!this.buildBox || !this.made) return;
+    this.buildBox.hidden = false;
+    this.drawBuild();
+  }
+
+  drawBuild() {
+    if (!this.buildBox || this.buildBox.hidden || !this.made) return;
+    const level = this.you.level ?? 1;
+    drawBuildPanel(this.buildBox, { made: this.made, level, build: allowedBuild(this.made, this.chosen, level) }, (build) => this.connection.chooseBuild(build));
   }
 
   bind() {
