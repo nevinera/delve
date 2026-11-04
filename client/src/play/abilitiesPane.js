@@ -1,3 +1,4 @@
+import { iconNode } from "./icons.js";
 // What an ability's cost reads as, the way the server charges it.
 export function costWords(costs) {
   return costs
@@ -29,6 +30,8 @@ export function drawAbilitiesPane(box, { known, passives, picked }, { onPick, on
   );
   for (const ability of known) {
     const button = el("button", { type: "button", draggable: true, className: picked === ability.id ? "play-build-on" : "" }, el("strong", { textContent: ability.name ?? ability.id }));
+    const icon = iconNode(ability.icon, "play-ability-icon");
+    if (icon) button.prepend(icon);
     if (ability.cost?.length) button.append(el("em", { textContent: costWords(ability.cost) }));
     if (ability.description) button.append(el("span", { textContent: ability.description }));
     button.addEventListener("click", () => onPick(picked === ability.id ? null : ability.id));

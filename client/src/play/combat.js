@@ -5,6 +5,7 @@ import { barsFor, cleared, keyLabel, placed, slotForKey, swapped } from "./bars.
 import * as THREE from "three";
 import { chestOf, AbilityStage, clipNameFor } from "../abilities/stage.js";
 import { roleClips } from "../character/animations.js";
+import { iconNode } from "./icons.js";
 import { skeletonOf } from "../character/characterMesh.js";
 import { strFromU8 } from "fflate";
 import { allHold } from "./conditions.js";
@@ -248,6 +249,11 @@ export class PlayCombat {
     const at = { bar, slot };
     const shade = el("div", { className: "combat-action-shade" });
     const button = el("button", { type: "button", className: `combat-action${ability ? "" : " combat-action-empty"}`, title: ability ? ability.description ?? ability.name : "" }, el("span", { className: "combat-action-key", textContent: keyLabel(bar, slot) }), el("span", { className: "combat-action-name", textContent: ability?.name ?? "" }), shade);
+    const icon = iconNode(ability?.icon, "combat-action-icon");
+    if (icon) {
+      button.prepend(icon);
+      button.classList.add("combat-action-iconed");
+    }
     if (this.pickedSlot?.bar === bar && this.pickedSlot?.slot === slot) button.classList.add("combat-action-on");
     button.addEventListener("click", () => (this.pane?.hidden ? this.useSlot(at) : this.tapSlot(at)));
     button.draggable = Boolean(ability);
@@ -422,7 +428,7 @@ export class PlayCombat {
         const root = el(
           "button",
           { className: `combat-status combat-status-${made.kind === "debuff" ? "debuff" : "buff"}`, title: words, onclick: () => this.refused({ why: words }) },
-          el("span", { className: "combat-status-icon" }, initials(made.name)),
+          iconNode(made.icon, "combat-status-picture") ?? el("span", { className: "combat-status-icon" }, initials(made.name)),
           stacks,
           left,
         );

@@ -280,6 +280,22 @@ body.touch .play-bar button {
   display: none;
 }
 
+.combat-action-icon {
+  position: absolute;
+  inset: 6px;
+}
+
+.combat-action-iconed .combat-action-name {
+  display: none;
+}
+
+.play-ability-icon {
+  float: left;
+  width: 28px;
+  height: 28px;
+  margin-right: 6px;
+}
+
 @media (orientation: portrait) and (pointer: coarse) {
   .play-turn {
     display: flex;
@@ -355,6 +371,19 @@ body.touch .play-bar button {
 
 .combat-status-icon {
   opacity: 0.8;
+}
+
+.stock-icon {
+  display: block;
+  background: currentColor;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+}
+
+.combat-status-picture {
+  position: absolute;
+  inset: 2px;
 }
 
 .combat-status-stacks {
