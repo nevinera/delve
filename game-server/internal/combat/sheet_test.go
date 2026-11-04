@@ -36,7 +36,7 @@ func TestSheet(t *testing.T) {
 	if want := base.MaxHealth + 10*base.Stamina; s.MaxHealth != want {
 		t.Fatalf("max health = %g, want %g", s.MaxHealth, want)
 	}
-	if s.DamageTaken != 0.25 || s.CritChance != 15 || *s.Others["block"] != 15 {
+	if s.DamageTaken != 0.25 || s.CritChance != 15 || s.Block != 15 {
 		t.Fatalf("stats = %+v", s)
 	}
 	if want := base.SpellPower + 0.5*s.Strength; s.SpellPower != want {
@@ -151,8 +151,8 @@ func TestMasteryScalesStatsAndAmounts(t *testing.T) {
 	if s.MasteryPercent() != 20 {
 		t.Fatalf("mastery = %g, want 20", s.MasteryPercent())
 	}
-	if *s.Others["block"] != 40 {
-		t.Fatalf("block = %g, want 40", *s.Others["block"])
+	if s.Block != 40 {
+		t.Fatalf("block = %g, want 40", s.Block)
 	}
 	if s.DamageDone != 1.2 {
 		t.Fatalf("damage done = %g, want 1.2", s.DamageDone)

@@ -2,6 +2,7 @@ package game
 
 import (
 	"encoding/json"
+	"fmt"
 	"math"
 	"slices"
 	"strings"
@@ -787,5 +788,88 @@ func TestSettingBars(t *testing.T) {
 		if len(p.fight.bars) != 2 {
 			t.Fatalf("took %v", bad)
 		}
+	}
+}
+
+// A dummy that swings back lets you dodge, parry and block, and each can set off a trigger.
+func TestSparringAndTheAttackTable(t *testing.T) {
+	for _, c := range []struct {
+		stat, on string
+		roll     float64 // what every roll comes to
+		took     float64 // of 120 health, 5% is 6
+	}{
+		{"dodge", "dodge", 0.1, 0},
+		{"parry", "parry", 0.1, 0},
+		{"block", "block", 0.5, 4.2},
+	} {
+		t.Run(c.stat, func(t *testing.T) {
+			h, p, clock := triggered(t, `[{"type":"stat","stat":"dodge","add":-3},{"type":"stat","stat":"parry","add":-3},{"type":"stat","stat":"`+c.stat+`","add":100},{"type":"trigger","on":"`+c.on+`",`+giveGrit+`}]`)
+			p.fight.sparring = true
+			p.state.At = p.layer.dummies[0].state.At
+			p.state.At[2] -= 5
+			p.state.Yaw = 0
+			h.roll = func() float64 { return c.roll }
+			heard(p)
+			was := p.fight.vitals.Health
+			pass(h, clock, 0.1)
+			if got := was - p.fight.vitals.Health; math.Abs(got-c.took) > 1e-9 {
+				t.Fatalf("took %g, want %g", got, c.took)
+			}
+			if p.fight.resources["grit"] != 1 {
+				t.Fatalf("grit = %g, want 1 from the trigger", p.fight.resources["grit"])
+			}
+			hits := heard(p, "hit")
+			if len(hits) == 0 {
+				t.Fatal("no hit")
+			}
+			last := hits[len(hits)-1]
+			if c.stat == "block" && last["blocked"] != true || c.stat != "block" && last["avoided"] != c.stat {
+				t.Fatalf("hit %v", last)
+			}
+		})
+	}
+}
+
+// From behind you can't parry or block, though you can still dodge.
+func TestBehindCantBeParried(t *testing.T) {
+	h, p, c := triggered(t, `[{"type":"stat","stat":"dodge","add":-3},{"type":"stat","stat":"parry","add":100}]`)
+	p.fight.sparring = true
+	p.state.At = p.layer.dummies[0].state.At
+	p.state.At[2] += 5
+	p.state.Yaw = 0 // facing away from the dummy, which is on the -z side
+	h.roll = func() float64 { return 0.5 }
+	was := p.fight.vitals.Health
+	pass(h, c, 0.1)
+	if got := was - p.fight.vitals.Health; got != 6 {
+		t.Fatalf("took %g, want 6", got)
+	}
+}
+
+func TestSparNeverKills(t *testing.T) {
+	h, p, c := statusFight(t, nil)
+	p.fight.sparring = true
+	p.state.At = p.layer.dummies[0].state.At
+	p.fight.vitals.Health = 2
+	pass(h, c, 10)
+	if got := p.fight.vitals.Health; got != 1 {
+		t.Fatalf("health = %g, want 1", got)
+	}
+}
+
+func TestHasteSpeedsCastsAndTicks(t *testing.T) {
+	per := combat.RatingPerPoint(1)
+	h, p, c := statusFight(t, map[string]string{
+		"quick": fmt.Sprintf(`[{"type":"stat","stat":"hasteRating","add":%g}]`, 100*per),
+	})
+	class := p.fight.class
+	zero := 0.0
+	class.Abilities = append(class.Abilities, combat.Ability{ID: "slow", Name: "slow", Target: "self", GCD: &zero, CastTime: 2})
+	use(t, p, "quick")
+	pass(h, c, 0.1)
+	heard(p)
+	use(t, p, "slow")
+	got := heard(p, "used")
+	if len(got) != 1 || got[0]["castTime"] != 1.0 {
+		t.Fatalf("used %v", got)
 	}
 }

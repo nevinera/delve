@@ -26,6 +26,7 @@ func init() {
 	commands = map[string]command{
 		"combatdebug": {admin: true, usage: "/combatdebug [on or off]", run: runCombatDebug},
 		"help":        {usage: "/help", run: runHelp},
+		"spar":        {usage: "/spar [on or off]", run: runSpar},
 		"teleport":    {admin: true, usage: "/teleport <x> <z> [continent], or /teleport spawn", run: runTeleport},
 	}
 }
@@ -72,6 +73,25 @@ func runHelp(_ *Layer, p *Player, _ []string) error {
 	slices.Sort(names)
 	for _, name := range names {
 		answer(p, "system", commands[name].usage)
+	}
+	return nil
+}
+
+func runSpar(_ *Layer, p *Player, args []string) error {
+	switch {
+	case len(args) == 0:
+		p.fight.sparring = !p.fight.sparring
+	case len(args) == 1 && args[0] == "on":
+		p.fight.sparring = true
+	case len(args) == 1 && args[0] == "off":
+		p.fight.sparring = false
+	default:
+		return fmt.Errorf("usage: %s", commands["spar"].usage)
+	}
+	if p.fight.sparring {
+		answer(p, "system", "Training dummies in reach now swing back at you, for 5% of your health. They won't kill you.")
+	} else {
+		answer(p, "system", "Training dummies have stopped swinging at you.")
 	}
 	return nil
 }

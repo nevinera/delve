@@ -103,6 +103,12 @@ func (s *Stats) field(name string) *float64 {
 		return &s.MovementSpeed
 	case "attackSpeed":
 		return &s.AttackSpeed
+	case "dodge":
+		return &s.Dodge
+	case "parry":
+		return &s.Parry
+	case "block":
+		return &s.Block
 	case "damageDone":
 		return &s.DamageDone
 	case "healingDone":
@@ -122,7 +128,7 @@ func (s *Stats) field(name string) *float64 {
 }
 
 // otherStats are kept and changed, but nothing reads them yet.
-var otherStats = []string{"armor", "critRating", "hasteRating", "masteryRating", "versatilityRating", "leechRating", "avoidanceRating", "speedRating", "haste", "mastery", "versatility", "avoidance", "dodge", "parry", "block", "stealth", "detection", "threat"}
+var otherStats = []string{"armor", "critRating", "hasteRating", "masteryRating", "versatilityRating", "leechRating", "avoidanceRating", "speedRating", "haste", "mastery", "versatility", "avoidance", "stealth", "detection", "threat"}
 
 // Sheet is a unit's stats with what it holds counted: gear stats first, then what's worked out
 // from them, then changes to those. A stat's `add`s go before its `multiply`s, and `fromStat`
@@ -164,6 +170,14 @@ func Sheet(base Stats, primary []string, mods []Mod) Stats {
 	s.AttackPower += 2 * (max(s.Strength, s.Agility) - max(base.Strength, base.Agility))
 	s.SpellPower += 2 * (s.Intellect - base.Intellect)
 	s.MaxHealth += 10 * (s.Stamina - base.Stamina)
+	per := RatingPerPoint(s.Level)
+	s.CritChance += s.other("critRating") / per
+	s.Leech += s.other("leechRating") / per
+	s.MovementSpeed += s.other("speedRating") / per
+	for rating, into := range map[string]string{"hasteRating": "haste", "masteryRating": "mastery", "versatilityRating": "versatility", "avoidanceRating": "avoidance"} {
+		*s.Others[into] += s.other(rating) / per
+	}
+	mastery = s.MasteryPercent()
 	stage(false)
 	return s
 }
@@ -253,6 +267,9 @@ func PoolOf(r Resource, s Stats, primary []string, mods []Mod) Pool {
 	change(mods, pick)
 	scale(mods, pick, s.MasteryPercent())
 	shares(mods, pick, &s, primary)
+	if r.Kind == "energy" {
+		out.Regen *= 1 + s.Haste()
+	}
 	out.Max, out.Rest, out.Decay, out.Gain = max(out.Max, 0), max(out.Rest, 0), max(out.Decay, 0), max(out.Gain, 0)
 	return out
 }

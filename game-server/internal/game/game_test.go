@@ -440,8 +440,8 @@ func TestCommandsAnswerInTheLog(t *testing.T) {
 	for line, want := range map[string]string{
 		"/nope":  "error: There's no /nope. Try /help.",
 		"hello":  "error: Commands start with /. Try /help.",
-		"/help":  "system: /help",
-		"/HELP ": "system: /help",
+		"/help":  "system: /spar [on or off]",
+		"/HELP ": "system: /spar [on or off]",
 	} {
 		say(t, p, line)
 		if got := lastLog(t, p); got != want {
@@ -465,7 +465,7 @@ func TestOnlyASystemAdminTeleports(t *testing.T) {
 func TestHelpShowsAnAdminItsCommands(t *testing.T) {
 	_, p, _ := commanding(t, true)
 	say(t, p, "/help")
-	if got := heard(p, "log"); len(got) != 3 {
+	if got := heard(p, "log"); len(got) != 4 {
 		t.Fatalf("help = %v", got)
 	}
 }

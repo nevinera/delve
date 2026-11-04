@@ -23,6 +23,9 @@ type Stats struct {
 	// Percentages, in points. A crit does 100 + CritDamage percent, or CritHealing for a heal.
 	CritChance, CritDamage, CritHealing, CritTaken, Leech float64
 	MovementSpeed, AttackSpeed                            float64 // 100 is as fast as anyone goes
+	Dodge, Parry, Block                                   float64
+
+	Level int // the level it attacks at
 
 	// What multiplies what a unit does and takes.
 	DamageDone, HealingDone, DamageTaken, HealingTaken float64
@@ -53,6 +56,7 @@ func StatsFor(c *Class, level int) Stats {
 	s.AttackPower = 2 * max(s.Strength, s.Agility)
 	s.SpellPower = 2 * s.Intellect
 	s.MaxHealth = 10 * s.Stamina
+	s.Dodge, s.Parry, s.Level = StartDodge, StartParry, level
 	return s
 }
 
@@ -169,9 +173,6 @@ func DescribeAmount(a Amount, s Stats) string {
 	}
 	return strings.Join(parts, " + ")
 }
-
-// Missed rolls whether an attack on an enemy misses.
-func Missed(roll func() float64) bool { return roll() < MissChance }
 
 // Random is the roll to use outside of tests.
 func Random() float64 { return rand.Float64() }

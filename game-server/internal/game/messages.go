@@ -127,6 +127,8 @@ type hit struct {
 	Missed    bool    `json:"missed,omitempty"`
 	Resource  string  `json:"resource,omitempty"`
 	Status    string  `json:"status,omitempty"`
+	Avoided   string  `json:"avoided,omitempty"` // dodge or parry, along with missed
+	Blocked   bool    `json:"blocked,omitempty"`
 	Ticked    string  `json:"ticked,omitempty"` // the status whose periodic effect this was
 	Class     string  `json:"class,omitempty"`
 	Lasts     float64 `json:"lasts,omitempty"`

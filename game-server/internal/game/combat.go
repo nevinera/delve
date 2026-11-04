@@ -24,7 +24,8 @@ const (
 	dummyResetIdle = 5 * time.Second // a dummy heals up and its tally starts over after this long unhit
 	combatLasts    = 5 * time.Second // you're in combat until this long after you last attacked or were hit
 	resourceEvery  = 500 * time.Millisecond
-	refreshKeeps   = 0.3 // the share of a status's duration that a refresh can keep of what was left
+	sparShare      = 0.05 // what a dummy's swing takes of your most health
+	refreshKeeps   = 0.3  // the share of a status's duration that a refresh can keep of what was left
 )
 
 // vitals are what can be hurt and healed: a player's, or a dummy's.
@@ -68,6 +69,8 @@ type dummy struct {
 
 // fighter is a player's part in combat.
 type fighter struct {
+	sparring   bool // a dummy in reach swings back at it
+	sparAt     time.Time
 	bars       [][]string   // its action bars, as it set them
 	build      combat.Build // its specialization and talents, as allowed
 	class      *combat.Class
@@ -321,14 +324,32 @@ func (l *Layer) modifiersOf(v *vitals, now time.Time) []combat.Mod {
 func (l *Layer) resolved(p *Player, a *combat.Ability, now time.Time) *combat.Ability {
 	f := &p.fight.vitals
 	mods := l.modifiersOf(f, now)
-	if len(mods) == 0 {
+	sheet := l.statsOf(f, nil, now)
+	for i := range mods {
+		mods[i].Mastery = sheet.MasteryPercent()
+	}
+	if len(mods) > 0 {
+		a = p.fight.class.Resolve(a, mods, sheet.MasteryPercent(), l.hub.roll)
+	}
+	if sheet.Haste() == 0 || (a.CastTime == 0 && a.Channel == nil && a.GCD != nil && *a.GCD == 0) {
 		return a
 	}
-	mastery := l.statsOf(f, nil, now).MasteryPercent()
-	for i := range mods {
-		mods[i].Mastery = mastery
+	hasted := *a
+	hasted.CastTime = sheet.Hasted(a.CastTime)
+	if a.Channel != nil {
+		channel := *a.Channel
+		channel.Duration = sheet.Hasted(channel.Duration)
+		hasted.Channel = &channel
 	}
-	return p.fight.class.Resolve(a, mods, mastery, l.hub.roll)
+	gcd := combat.GCDSeconds
+	if a.GCD != nil {
+		gcd = *a.GCD
+	}
+	if gcd > 0 {
+		gcd = max(sheet.Hasted(gcd), combat.LowestGCD)
+		hasted.GCD = &gcd
+	}
+	return &hasted
 }
 
 // check says whether a player can use an ability now: the ability and its target, or why not.
@@ -915,10 +936,10 @@ func (l *Layer) tickStatus(v *vitals, key statusKey, held *activeStatus, at [3]f
 	}
 	for i := range held.def.Effects {
 		e := &held.def.Effects[i]
-		period := held.def.Period(e)
-		if e.Type != "periodic" || period <= 0 {
+		if e.Type != "periodic" || held.def.Period(e) <= 0 {
 			continue
 		}
+		period := l.statsOf(&p.fight.vitals, nil, now).Hasted(held.def.Period(e))
 		if held.ticks == nil {
 			held.ticks = map[int]time.Time{}
 		}
@@ -1259,22 +1280,62 @@ func (l *Layer) nameOf(id int64) string {
 
 // strike rolls an attack on an enemy and does what it comes to, noting it in the hit.
 func (l *Layer) strike(p *Player, on *vitals, amount combat.Amount, ctx combat.HitContext, h *hit, now time.Time) {
+	blocked := false
 	if on.ID != p.ID() {
 		p.fight.attacked(now)
-		if combat.Missed(l.hub.roll) {
-			h.Missed = true
+		theirs := l.statsOf(on, withOther(ctx, p.ID()), now)
+		melee, front := slices.Contains(ctx.Kinds, "melee"), l.seesFromFront(on, p.state.At)
+		if l.avoided(on, p.ID(), theirs, melee, front, &ctx, h, now) {
 			return
 		}
+		blocked = combat.Blocks(theirs, melee, front, l.hub.roll)
 	}
 	n, crit := l.rollDamage(p, on, amount, ctx, now)
 	h.Crit = crit
+	if blocked {
+		n *= 1 - combat.BlockShare
+		h.Blocked = true
+	}
 	l.harm(p, on, n, h, now)
+	if blocked {
+		l.fire(event{on: "block", who: on, other: p.ID(), ctx: &ctx, amount: n}, now)
+	}
 	ability := ""
 	if ctx.Ability != nil {
 		ability = ctx.Ability.ID
 	}
 	l.leech(p, on, n, ctx, ability, now)
 	l.damaged(p, on, n, crit, ctx, now)
+}
+
+// avoided rolls an attack on a unit, and says whether it came to nothing. A unit that dodges or
+// parries is still in the fight.
+func (l *Layer) avoided(on *vitals, from int64, theirs combat.Stats, melee, front bool, ctx *combat.HitContext, h *hit, now time.Time) bool {
+	outcome := combat.AttackRoll(theirs, melee, front, l.hub.roll)
+	if outcome == "" {
+		return false
+	}
+	h.Missed = true
+	if outcome == "miss" {
+		return true
+	}
+	h.Avoided = outcome
+	if o := l.players[on.ID]; o != nil {
+		o.fight.since["damageTaken"] = now
+	}
+	l.fire(event{on: outcome, who: on, other: from, ctx: ctx}, now)
+	return true
+}
+
+// seesFromFront says whether a unit is facing what's at `from`.
+func (l *Layer) seesFromFront(on *vitals, from [3]float64) bool {
+	if o := l.players[on.ID]; o != nil {
+		return facing(o.state.At, o.state.Yaw, from)
+	}
+	if d := l.dummy(on.ID, ""); d != nil {
+		return facing(d.state.At, d.state.Yaw, from)
+	}
+	return true
 }
 
 // statsOf is a unit's stats with what it holds counted. With a hit, stats narrowed to some hits
@@ -1333,9 +1394,10 @@ func (l *Layer) rollDamage(p *Player, on *vitals, amount combat.Amount, ctx comb
 	rolled.CritChance += theirs.CritTaken + ctx.CritChance
 	rolled.CritDamage += ctx.CritDamage
 	n, crit := combat.Roll(amount, rolled, true, l.hub.roll)
-	if times := mine.DamageDone * theirs.DamageTaken; times != 1 {
-		p.debugLine("damage %g x %g from statuses", n, times)
-		n *= times
+	before := n
+	n = theirs.Taken(n*mine.DamageDone*(1+mine.Versatility()/100), ctx, mine.Level)
+	if n != before {
+		p.debugLine("damage %g comes to %g from stats", before, n)
 	}
 	return n, crit
 }
@@ -1348,8 +1410,8 @@ func (l *Layer) rollHeal(p *Player, on *vitals, amount combat.Amount, ctx combat
 	rolled.CritChance += ctx.CritChance
 	rolled.CritDamage = mine.CritHealing + ctx.CritDamage
 	n, crit := combat.Roll(amount, rolled, true, l.hub.roll)
-	if times := mine.HealingDone * theirs.HealingTaken; times != 1 {
-		p.debugLine("healing %g x %g from statuses", n, times)
+	if times := mine.HealingDone * theirs.HealingTaken * (1 + mine.Versatility()/100); times != 1 {
+		p.debugLine("healing %g x %g from stats", n, times)
 		n *= times
 	}
 	return n, crit
@@ -1504,7 +1566,8 @@ func (l *Layer) swing(p *Player, now time.Time) {
 		return
 	}
 	f.swingWhy = ""
-	f.swingAt = now.Add(seconds(combat.SwingSeconds * 100 / max(l.statsOf(&f.vitals, nil, now).AttackSpeed, 1)))
+	sheet := l.statsOf(&f.vitals, nil, now)
+	f.swingAt = now.Add(seconds(sheet.Hasted(combat.SwingSeconds) * 100 / max(sheet.AttackSpeed, 1)))
 	l.breakStatuses(&f.vitals, "action", func(s *combat.Status) bool { return s.KeptBy != nil })
 	target := d.ID
 	l.tell(p, encode(swung{"swung", p.ID(), target}))
@@ -1520,6 +1583,48 @@ func (l *Layer) swing(p *Player, now time.Time) {
 		l.sync(&d.vitals)
 		l.tell(p, encode(h))
 	})
+}
+
+// spar has the nearest dummy in reach swing back at a player who asked for that. It's how you try
+// out what happens when you're hit, while nothing else in the world attacks. It can't kill you.
+func (l *Layer) spar(p *Player, now time.Time) {
+	f := &p.fight
+	if !f.sparring || now.Before(f.sparAt) {
+		return
+	}
+	var d *dummy
+	for _, each := range l.dummies {
+		if each.state.Continent == p.state.Continent && distance(p.state.At, each.state.At) <= combat.MeleeFt && (d == nil || distance(p.state.At, each.state.At) < distance(p.state.At, d.state.At)) {
+			d = each
+		}
+	}
+	if d == nil {
+		return
+	}
+	f.sparAt = now.Add(seconds(combat.SwingSeconds))
+	on := &f.vitals
+	l.tell(p, encode(swung{"swung", d.ID, p.ID()}))
+	ctx := combat.HitContext{Schools: []string{"physical"}, Kinds: []string{"auto", "melee", "direct", "main", "single"}, Other: d.ID}
+	h := hit{Type: "hit", From: d.ID, On: p.ID(), Effect: "damage"}
+	theirs := l.statsOf(on, &ctx, now)
+	front := facing(p.state.At, p.state.Yaw, d.state.At)
+	if !l.avoided(on, d.ID, theirs, true, front, &ctx, &h, now) {
+		n := theirs.Taken(on.MaxHealth*sparShare, ctx, f.level)
+		blocked := combat.Blocks(theirs, true, front, l.hub.roll)
+		if blocked {
+			n *= 1 - combat.BlockShare
+			h.Blocked = true
+		}
+		n = min(n, on.Health-1)
+		l.harm(p, on, max(n, 0), &h, now)
+		if blocked {
+			l.fire(event{on: "block", who: on, other: d.ID, ctx: &ctx, amount: n}, now)
+		}
+		l.fire(event{on: "takeDamage", who: on, other: d.ID, ctx: &ctx, amount: n}, now)
+	}
+	h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
+	l.sync(on)
+	l.tell(p, encode(h))
 }
 
 // addResource gives a fighter some of a resource, or takes it with a negative amount. It says
@@ -1717,6 +1822,7 @@ func (l *Layer) tick(now time.Time) {
 			}
 		}
 		l.swing(p, now)
+		l.spar(p, now)
 		l.regen(p, dt, now)
 	}
 	// Landings can add landings, so go by index.

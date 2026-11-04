@@ -49,8 +49,8 @@ export function nextTarget(units, current) {
 
 // What a `hit` reads as over who it lands on, or null for nothing, and its kind for its color.
 export function hitWords(hit, statuses = []) {
-  if (hit.missed) return { text: "miss", kind: "miss" };
-  const crit = hit.crit ? "!" : "";
+  if (hit.missed) return { text: hit.avoided ?? "miss", kind: "miss" };
+  const crit = `${hit.crit ? "!" : ""}${hit.blocked ? " blocked" : ""}`;
   if (hit.effect === "damage") return { text: `${hit.amount}${crit}`, kind: hit.ticked ? "damage combat-float-tick" : "damage" };
   if (hit.effect === "heal") return { text: `+${hit.amount}${crit}`, kind: hit.ticked ? "heal combat-float-tick" : "heal" };
   if (hit.effect === "status") return { text: statuses.find((s) => s.id === hit.status)?.name ?? hit.status, kind: "status" };

@@ -22,6 +22,8 @@ describe("hitWords", () => {
   it("shows damage, marking a crit", () => expect(hitWords({ effect: "damage", amount: 40, crit: true })).toEqual({ text: "40!", kind: "damage" }));
   it("shows healing", () => expect(hitWords({ effect: "heal", amount: 9 })).toEqual({ text: "+9", kind: "heal" }));
   it("names a status", () => expect(hitWords({ effect: "status", status: "c" }, [{ id: "c", name: "Chilled" }]).text).toBe("Chilled"));
+  it("says when it was dodged or parried", () => expect(hitWords({ effect: "damage", missed: true, avoided: "parry" })).toEqual({ text: "parry", kind: "miss" }));
+  it("says when it was blocked", () => expect(hitWords({ effect: "damage", amount: 4, blocked: true }).text).toBe("4 blocked"));
   it("says when it missed", () => expect(hitWords({ effect: "damage", missed: true })).toEqual({ text: "miss", kind: "miss" }));
   it("marks a tick apart from a direct hit", () => {
     expect(hitWords({ effect: "damage", amount: 5, ticked: "bleed" })).toEqual({ text: "5", kind: "damage combat-float-tick" });
