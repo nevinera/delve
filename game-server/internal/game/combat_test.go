@@ -551,7 +551,7 @@ func TestAStatusWithNoDurationStays(t *testing.T) {
 	conditional(p, combat.Ability{ID: "swear", Target: "self", Effects: []combat.Effect{{Type: "status", Affects: "self", Status: "oath"}}})
 	use(t, p, "swear")
 	pass(h, c, 60)
-	if p.fight.vitals.Statuses["oath"] == nil {
+	if p.fight.vitals.Statuses[statusKey{"oath", p.ID()}] == nil {
 		t.Fatal("it ran out")
 	}
 }

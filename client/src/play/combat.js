@@ -90,7 +90,7 @@ export class PlayCombat {
     this.gcdUntil = 0;
     this.resources = {};
     this.resourceMax = {};
-    this.statuses = new Map(); // unit id -> its statuses, as stacks by id
+    this.statuses = new Map(); // unit id -> the statuses you've put on it, as stacks by id
     this.health = you.health;
     this.maxHealth = you.maxHealth;
     this.aiming = null;
@@ -345,12 +345,12 @@ export class PlayCombat {
     if (id === this.you.id) this.showBar(null);
   }
 
-  statusChanged_({ id, status, stacks }) {
-    this.statuses.get(id)?.set(status, stacks);
+  statusChanged_({ id, status, from, stacks }) {
+    if (from === this.you.id) this.statuses.get(id)?.set(status, stacks);
   }
 
-  statusGone_({ id, status }) {
-    this.statuses.get(id)?.delete(status);
+  statusGone_({ id, status, from }) {
+    if (from === this.you.id) this.statuses.get(id)?.delete(status);
   }
 
   // What the client knows of the facts conditions read. What it doesn't know stays undefined.
@@ -390,7 +390,7 @@ export class PlayCombat {
     if (words && unit) this.float(unit, words);
     this.setHealth(message.on, message.health, message.maxHealth, message.dps);
     if (words) this.note(message, words.text);
-    if (message.status) {
+    if (message.status && message.from === this.you.id) {
       if (!this.statuses.has(message.on)) this.statuses.set(message.on, new Map());
       this.statuses.get(message.on).set(message.status, message.stacks ?? 1);
     }

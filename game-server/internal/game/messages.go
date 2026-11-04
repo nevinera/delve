@@ -119,12 +119,14 @@ type statusGone struct {
 	Type   string `json:"type"`
 	ID     int64  `json:"id"`
 	Status string `json:"status"`
+	From   int64  `json:"from"`
 }
 
 type statusChanged struct {
 	Type   string  `json:"type"`
 	ID     int64   `json:"id"`
 	Status string  `json:"status"`
+	From   int64   `json:"from"`
 	Stacks int     `json:"stacks"`
 	Lasts  float64 `json:"lasts"` // seconds left, or 0 if it stays until removed
 }

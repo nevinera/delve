@@ -716,7 +716,7 @@ Only a class's `id` and `name` are required for now, so the class editor can sav
 - `target`: what you need targeted to use it. `enemy` or `ally`, `any` for either (its effects tell them apart with `targetIs`), or `self`, `ground` (you pick a place within range) or `none`. An `ally` ability with no friendly target lands on you.
 - `icon`: its action bar icon, from the stock set the core world ships.
 - `range`: how far the target can be, a number or `"melee"` (see Distance and areas). `minRange` is how near it can be.
-- `requires`: conditions to use it, each `{ health, below or above }` (`health` is `self` or `target`, in percent) or `{ status, on, stacks }` (a status `on` `self` or `target`, with at least `stacks` stacks if it says), or `{ targetIs }` (what you're using it on: `enemy`, `ally`, `self`, `other`, `player` or `nonPlayer`), or `{ stealthed }` or `{ inCombat }` (true or false, about you), or `{ anyOf: [conditions] }`, which holds when any of them does, or `{ not: condition }`, which holds when it doesn't, or one of these:
+- `requires`: conditions to use it, each `{ health, below or above }` (`health` is `self` or `target`, in percent) or `{ status, on, stacks }` (a status you put `on` `self` or `target`, with at least `stacks` stacks if it says), or `{ targetIs }` (what you're using it on: `enemy`, `ally`, `self`, `other`, `player` or `nonPlayer`), or `{ stealthed }` or `{ inCombat }` (true or false, about you), or `{ anyOf: [conditions] }`, which holds when any of them does, or `{ not: condition }`, which holds when it doesn't, or one of these:
   - `{ state, on }`: `casting`, `inCombat`, `slowed`, `airborne`, `falling`, `controlled`, `stunned` or `outdoors`, for `on` `self` (by default) or `target`.
   - `{ position }`: you're `behind` the target or `inFront` of it.
   - `{ since, below or above }`: seconds since your last `stealth`, `attack` or `kill`, since you last took damage (`damageTaken`), or since you entered combat (`combatStart`).
@@ -776,13 +776,13 @@ Types:
 - `source: "summons"`, on a damage or heal effect: your summons do it, not you.
 - `category`, on a damage or heal effect or a periodic: a word the class picks, like `bleed` or `disease`. A `stat` or `trigger` with `category` or `categories` only counts those.
 - `area`: a lasting area `around` `self`, `target` or `ground`, `radius` ft across and `lasts` seconds, touching those it `affects`. Those inside have `status` while they stay, and `effect` lands on them each `every` seconds. In that `effect`, `affects: "self"` means whoever's inside. `max` caps how many it touches each time, and `limit` caps how many of these you can have out. `around` can also be `random`, somewhere near you. `onEnter` is an effect that lands once on someone who comes inside. `effects` lists more than one effect for each `every`, in place of `effect`. `overlaps` makes copies of it each work on those inside.
-- `extend`: adds `seconds`, or `perSpent` seconds for each point spent, to `status` or `statuses` on those it `affects`, up to `maxTotal` seconds left or `maxShare` of its full duration. `refresh` starts it over instead, and `apply` puts it on if it isn't there.
+- `extend`: adds `seconds`, or `perSpent` seconds for each point spent, to your copy of `status` or `statuses` on those it `affects`, up to `maxTotal` seconds left or `maxShare` of its full duration. `refresh` starts it over instead, and `apply` puts it on if it isn't there.
 - `line`, on an `area` or an effect with `affects: "enemies"` or `"allies"`: it covers a strip `radius` ft long and `width` ft wide instead of a circle. `along` says which way it runs: `facing` (the default), `path` (along the path you just moved) or `ground` (to the ground you picked).
 - `flying`, on a `move`: it flies over whatever is in the way.
 - `castAbility`: casts `ability` from the same class at those it `affects`, with no cast time. `free` makes it cost nothing, `strength` multiplies what it does and `max` limits how many it goes at. `when` works as usual.
 - `threat`: changes how much those it `affects` want to hit you. `clear` wipes it and `multiply` scales it.
 - `reveal`: shows stealthed or invisible enemies among those it `affects`, and takes them out of stealth.
-- `consume`: takes `status` or `statuses` off those it `affects`, or just `stacks` stacks of it, or `seconds` of its time. `dealsLeft` does that share of what it had left to do now, and `keeps` leaves it on. `perStack` is an effect that happens for each stack taken. It's for an ability using up a status of its own, where `dispel` removes by kind. With `affects: "summons"` it dismisses or sacrifices summons instead, `units` and `count` saying which and how many.
+- `consume`: takes your copy of `status` or `statuses` off those it `affects`, or just `stacks` stacks of it, or `seconds` of its time. `dealsLeft` does that share of what it had left to do now, and `keeps` leaves it on. `perStack` is an effect that happens for each stack taken. It's for an ability using up a status of its own, where `dispel` removes by kind. With `affects: "summons"` it dismisses or sacrifices summons instead, `units` and `count` saying which and how many.
 - `chance`, on any effect, 0 to 1: how likely it is to happen, 1 by default. `chancePerSpent` adds that much for each point spent, here and on a `trigger`.
 - `when`, on any effect: conditions written as `requires`. The effect only happens while they hold. An ability checks all its effects' conditions before any of them land, so one button can start a status or end it.
 - `prefers`, on an effect with `max`: which it picks first, `nearest` by default, or `injured`, `farthest` or `lowestHealth`.
@@ -824,14 +824,16 @@ A class's abilities live in its file. `abilities/<id>.json` is for those that ar
 }
 ```
 
+A unit holds one copy of a status for each unit that put it on, so two casters' copies run side by side. When you leave the game, your copies come off everyone.
+
 - `kind`: `buff` or `debuff`, shown on unit frames with its `icon`, or `hidden`.
 - `dispel`: `magic`, `curse`, `poison`, `disease` or `enrage`, or left out if it can't be dispelled.
 - `duration`: how long it lasts, unless whatever applies it says otherwise. Leave it out for one that lasts until something removes it.
-- `stacking`: what happens when it lands again. `refresh` resets the duration (and keeps up to 30% of what was left), `replace` starts it over, and `stack` adds a stack up to `maxStacks`, refreshing the duration. Effects scale with stacks. Leaving it out means `replace`.
+- `stacking`: what happens when the same caster lands it again. `refresh` resets the duration (and keeps up to 30% of what was left), `replace` starts it over, and `stack` adds a stack up to `maxStacks`, refreshing the duration. Effects scale with stacks. Leaving it out means `replace`.
 - `leash`: it ends if the holder goes further than this many ft from whoever applied it.
 - `tags`: free-form words a `dispel` can pick it by.
 - `breaksOn`: any of `move`, `damage` and `action` (using an ability or attacking). Food and drink break on `move` and `damage`, and stealth on `damage` and `action`.
-- `group`: only one status of this group can be on a unit, and a new one replaces the old. With no `duration` it lasts until replaced. Stances, party auras and shapeshift forms work this way.
+- `group`: only one status of this group can be on a unit, whoever put it on, and a new one replaces the old. Give a status a group of its own if two casters' copies shouldn't both count. With no `duration` it lasts until replaced. Stances, party auras and shapeshift forms work this way.
 - `keptBy`: `abilities` by id from the same class, or `tags`, that don't trigger `breaksOn: ["action"]`. A form keeps its own abilities this way, and anything else you use ends it. A status with `keptBy` stays through auto-attack swings.
 - `limit`: how many units can hold it from you at once. Applying it to another takes it off the oldest.
 - `consumedBy`: ends it when the holder uses one of these `abilities`, by id from the same class, or an ability with this `tag`. A `modify` on the status still changes that use. `uses` makes it last that many uses, for "your next 3". `stacks` takes that many stacks each use, instead of ending it. The ability doesn't know about it.
@@ -1126,8 +1128,8 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `cooldown` | `ability`, `seconds` | an ability of yours started its cooldown |
 | `hit` | `from`, `ability` (none for an auto-attack), `on`, `effect`, `amount`, `crit`, `missed`, `resource`, `status`, `class`, `lasts`, `stacks`, `dps`, `health`, `maxHealth` | one of an ability's effects landed on someone near you |
 | `health` | `id`, `health`, `maxHealth` | a training dummy reset |
-| `statusChanged` | `id`, `status`, `stacks`, `lasts` | a status has different stacks or time left now. `lasts` is seconds left, or 0 if it stays until removed |
-| `statusGone` | `id`, `status` | a status ran out or something took it off |
+| `statusChanged` | `id`, `status`, `from`, `stacks`, `lasts` | the copy of a status that `from` put on `id` has different stacks or time left now. `lasts` is seconds left, or 0 if it stays until removed |
+| `statusGone` | `id`, `status`, `from` | the copy of a status that `from` put on `id` ran out or something took it off |
 | `resources` | `resources`, `max` | how much of each resource you have and can hold, by key, at most twice a second |
 | `log` | `kind` (`system`, `error` or `debug`), `text` | a line for your log |
 | `teleport` | `continent`, `at`, `yaw` | the server moved you there. On another continent, the client loads it |

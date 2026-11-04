@@ -28,7 +28,7 @@ func withEffects(id string, effects ...combat.Effect) combat.Ability {
 }
 
 func held(p *Player, id string) *activeStatus {
-	return p.layer.dummies[0].Statuses[id]
+	return p.layer.dummies[0].Statuses[statusKey{id, p.ID()}]
 }
 
 func TestConsumeTakesAStatusOff(t *testing.T) {
@@ -177,12 +177,12 @@ func TestOathButtonSwearsAndEnds(t *testing.T) {
 	}})
 	use(t, p, "swear")
 	pass(h, c, 0.1)
-	if p.fight.vitals.Statuses["oath"] == nil || p.fight.resources["oath"] != 1 {
-		t.Fatalf("after swearing: status %v, oath %g", p.fight.vitals.Statuses["oath"], p.fight.resources["oath"])
+	if p.fight.vitals.Statuses[statusKey{"oath", p.ID()}] == nil || p.fight.resources["oath"] != 1 {
+		t.Fatalf("after swearing: status %v, oath %g", p.fight.vitals.Statuses[statusKey{"oath", p.ID()}], p.fight.resources["oath"])
 	}
 	use(t, p, "swear")
 	pass(h, c, 0.1)
-	if p.fight.vitals.Statuses["oath"] != nil || p.fight.resources["oath"] != 0 {
-		t.Fatalf("after ending: status %v, oath %g", p.fight.vitals.Statuses["oath"], p.fight.resources["oath"])
+	if p.fight.vitals.Statuses[statusKey{"oath", p.ID()}] != nil || p.fight.resources["oath"] != 0 {
+		t.Fatalf("after ending: status %v, oath %g", p.fight.vitals.Statuses[statusKey{"oath", p.ID()}], p.fight.resources["oath"])
 	}
 }

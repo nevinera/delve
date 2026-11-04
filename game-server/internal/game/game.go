@@ -275,6 +275,9 @@ func (l *Layer) unloadUnlessJoined() {
 func (l *Layer) join(p *Player) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if l.players[p.ID()] != nil {
+		l.dropFrom(p.ID()) // the same character, entering again before its old connection left
+	}
 	l.players[p.ID()] = p
 	l.placeDummies()
 	p.send(encode(welcome{"welcome", p.state, l.number}))
@@ -296,6 +299,7 @@ func (l *Layer) leave(p *Player) {
 		o.send(encode(vanish{"vanish", p.ID()}))
 	}
 	delete(l.players, p.ID())
+	l.dropFrom(p.ID())
 	l.save(p)
 	if len(l.players) == 0 {
 		l.unload = time.AfterFunc(l.hub.idle, l.unloadIfEmpty)

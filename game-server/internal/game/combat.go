@@ -29,15 +29,20 @@ type vitals struct {
 	ID        int64
 	Health    float64
 	MaxHealth float64
-	Statuses  map[string]*activeStatus
+	Statuses  map[statusKey]*activeStatus
+}
+
+// statusKey picks out one copy of a status: a unit holds one for each unit that put it on.
+type statusKey struct {
+	id   string
+	from int64
 }
 
 // activeStatus is a status on a unit, until it runs out. With no `until`, it stays until removed.
 type activeStatus struct {
 	def    *combat.Status
 	class  string
-	from   int64     // who put it on
-	since  time.Time // when they last did
+	since  time.Time // when it was last put on
 	until  time.Time
 	stacks int
 	uses   int // what's left of `consumedBy.uses`
@@ -103,7 +108,7 @@ func classWithID(classes []*combat.Class, id string) *combat.Class {
 // enterFight gives a player its class's numbers. With no class, it has plain health and no abilities.
 func (p *Player) enterFight(class *combat.Class, level int) {
 	f := &p.fight
-	f.vitals = vitals{ID: p.state.ID, Statuses: map[string]*activeStatus{}}
+	f.vitals = vitals{ID: p.state.ID, Statuses: map[statusKey]*activeStatus{}}
 	f.resources, f.cooldowns, f.since = map[string]float64{}, map[string][]time.Time{}, map[string]time.Time{}
 	if class == nil {
 		f.vitals.MaxHealth, f.vitals.Health = 100, 100
@@ -135,7 +140,7 @@ func (l *Layer) placeDummies() {
 		}
 		id := int64(-1 - i) // characters' ids are positive
 		l.dummies = append(l.dummies, &dummy{
-			vitals: vitals{ID: id, Health: dummyHealth, MaxHealth: dummyHealth, Statuses: map[string]*activeStatus{}},
+			vitals: vitals{ID: id, Health: dummyHealth, MaxHealth: dummyHealth, Statuses: map[statusKey]*activeStatus{}},
 			state:  Character{ID: id, Name: "Training Dummy", Look: json.RawMessage(`{"body":"goblin"}`), Continent: d.Continent, At: at, Move: Move{Gait: "run"}, Dummy: true, Health: dummyHealth, MaxHealth: dummyHealth},
 		})
 	}
@@ -443,7 +448,7 @@ func (l *Layer) unmet(p *Player, a *combat.Ability, target int64, now time.Time)
 func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
 	f := &p.fight
 	out := &combat.Facts{
-		Self:      unitOf(&f.vitals, fighterState(p, now)),
+		Self:      unitOf(&f.vitals, p.ID(), fighterState(p, now)),
 		Since:     map[string]float64{},
 		Resources: map[string]combat.ResourceAmount{},
 	}
@@ -458,11 +463,11 @@ func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
 		if !d.lastHit.IsZero() && now.Sub(d.lastHit) < combatLasts {
 			state = append(state, "inCombat")
 		}
-		unit := unitOf(&d.vitals, state)
+		unit := unitOf(&d.vitals, p.ID(), state)
 		out.Target, out.TargetIs = &unit, []string{"enemy", "other", "nonPlayer"}
 		out.Position = positionOf(p.state.At, d.state.At, d.state.Yaw)
 	} else if o := l.players[target]; o != nil && target != 0 {
-		unit := unitOf(&o.fight.vitals, fighterState(o, now))
+		unit := unitOf(&o.fight.vitals, p.ID(), fighterState(o, now))
 		out.Target, out.TargetIs = &unit, []string{"ally", "player"}
 		if o == p {
 			out.TargetIs = append(out.TargetIs, "self")
@@ -474,10 +479,13 @@ func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
 	return out
 }
 
-func unitOf(v *vitals, state []string) combat.Unit {
+// unitOf is a unit as one reader's conditions see it: its statuses are the ones that reader put on.
+func unitOf(v *vitals, reader int64, state []string) combat.Unit {
 	stacks := map[string]int{}
-	for id, s := range v.Statuses {
-		stacks[id] = s.stacks
+	for key, s := range v.Statuses {
+		if key.from == reader {
+			stacks[key.id] = s.stacks
+		}
 	}
 	return combat.Unit{Health: v.Health, MaxHealth: v.MaxHealth, Statuses: stacks, State: state}
 }
@@ -575,18 +583,19 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 	if lasts == 0 {
 		lasts = s.Duration
 	}
-	was := on.Statuses[s.ID]
+	key := statusKey{s.ID, p.ID()}
+	was := on.Statuses[key]
 	if s.Group != "" {
 		for other, each := range on.Statuses {
-			if other != s.ID && each.def.Group == s.Group {
+			if other != key && each.def.Group == s.Group {
 				l.takeOff(on, other)
 			}
 		}
 	}
-	if s.Limit > 0 && (was == nil || was.from != p.ID()) {
+	if s.Limit > 0 && was == nil {
 		l.makeRoom(p, s)
 	}
-	held := &activeStatus{def: s, class: f.class.ID, from: p.ID(), since: now, stacks: 1, uses: 1}
+	held := &activeStatus{def: s, class: f.class.ID, since: now, stacks: 1, uses: 1}
 	if s.ConsumedBy != nil && s.ConsumedBy.Uses > 0 {
 		held.uses = s.ConsumedBy.Uses
 	}
@@ -606,22 +615,23 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 	if lasts > 0 {
 		held.until = now.Add(seconds(lasts))
 	}
-	on.Statuses[s.ID] = held
+	on.Statuses[key] = held
 	h.Status, h.Lasts, h.Class, h.Stacks = s.ID, lasts, f.class.ID, held.stacks
 	return true
 }
 
 // makeRoom takes a status off the oldest units holding it from a player, so one more stays within its limit.
 func (l *Layer) makeRoom(p *Player, s *combat.Status) {
+	key := statusKey{s.ID, p.ID()}
 	var holders []*vitals
 	l.eachUnit(func(v *vitals, _ [3]float64, _ string) {
-		if each := v.Statuses[s.ID]; each != nil && each.from == p.ID() {
+		if v.Statuses[key] != nil {
 			holders = append(holders, v)
 		}
 	})
-	slices.SortFunc(holders, func(a, b *vitals) int { return a.Statuses[s.ID].since.Compare(b.Statuses[s.ID].since) })
+	slices.SortFunc(holders, func(a, b *vitals) int { return a.Statuses[key].since.Compare(b.Statuses[key].since) })
 	for i := 0; i <= len(holders)-s.Limit; i++ {
-		l.takeOff(holders[i], s.ID)
+		l.takeOff(holders[i], key)
 	}
 }
 
@@ -636,32 +646,43 @@ func (l *Layer) eachUnit(do func(v *vitals, at [3]float64, continent string)) {
 }
 
 // takeOff removes a status from a unit and says so.
-func (l *Layer) takeOff(on *vitals, id string) {
-	delete(on.Statuses, id)
-	l.tellOf(on.ID, encode(statusGone{"statusGone", on.ID, id}))
+func (l *Layer) takeOff(on *vitals, key statusKey) {
+	delete(on.Statuses, key)
+	l.tellOf(on.ID, encode(statusGone{"statusGone", on.ID, key.id, key.from}))
+}
+
+// dropFrom takes off everything a unit put on, when it leaves: nothing's left to carry it on or end it.
+func (l *Layer) dropFrom(from int64) {
+	l.eachUnit(func(v *vitals, _ [3]float64, _ string) {
+		for key := range v.Statuses {
+			if key.from == from {
+				l.takeOff(v, key)
+			}
+		}
+	})
 }
 
 // breakStatuses takes off a unit's statuses that end when this happens. Only an ability has anything to keep them on.
 func (l *Layer) breakStatuses(on *vitals, what string, kept func(*combat.Status) bool) {
-	for id, each := range on.Statuses {
+	for key, each := range on.Statuses {
 		if slices.Contains(each.def.BreaksOn, what) && (kept == nil || !kept(each.def)) {
-			l.takeOff(on, id)
+			l.takeOff(on, key)
 		}
 	}
 }
 
 // usingUp is a status that an ability's use will spend once its effects have landed.
 type usingUp struct {
-	id   string
+	key  statusKey
 	held *activeStatus
 }
 
 // usedBy finds the statuses that using an ability spends.
 func usedBy(f *fighter, a *combat.Ability) []usingUp {
 	var out []usingUp
-	for id, each := range f.vitals.Statuses {
+	for key, each := range f.vitals.Statuses {
 		if each.def.ConsumedBy.Matches(a) {
-			out = append(out, usingUp{id, each})
+			out = append(out, usingUp{key, each})
 		}
 	}
 	return out
@@ -674,19 +695,19 @@ func (l *Layer) spend(p *Player, used []usingUp, now time.Time) {
 	}
 	on := &p.fight.vitals
 	for _, u := range used {
-		if on.Statuses[u.id] != u.held {
+		if on.Statuses[u.key] != u.held {
 			continue
 		}
 		if n := u.held.def.ConsumedBy.Stacks; n > 0 {
 			u.held.stacks -= n
 			if u.held.stacks > 0 {
-				l.statusChanged(on.ID, u.id, u.held, now)
+				l.statusChanged(on.ID, u.key, u.held, now)
 				continue
 			}
 		} else if u.held.uses--; u.held.uses > 0 {
 			continue
 		}
-		l.takeOff(on, u.id)
+		l.takeOff(on, u.key)
 		p.debugLine("%s is used up", u.held.def.Name)
 	}
 }
@@ -694,14 +715,14 @@ func (l *Layer) spend(p *Player, used []usingUp, now time.Time) {
 // sweep takes off statuses that have run out or whose holder has gone too far from who put them on.
 func (l *Layer) sweep(now time.Time) {
 	l.eachUnit(func(v *vitals, at [3]float64, continent string) {
-		for id, each := range v.Statuses {
+		for key, each := range v.Statuses {
 			over := !each.until.IsZero() && !now.Before(each.until)
 			if each.def.Leash > 0 && !over {
-				from := l.players[each.from]
+				from := l.players[key.from]
 				over = from == nil || from.state.Continent != continent || distance(from.state.At, at) > each.def.Leash
 			}
 			if over {
-				l.takeOff(v, id)
+				l.takeOff(v, key)
 			}
 		}
 	})
@@ -710,7 +731,8 @@ func (l *Layer) sweep(now time.Time) {
 // consume takes statuses off a unit, or stacks or seconds of them, and does what that's worth.
 func (l *Layer) consume(p *Player, c *casting, e *combat.Effect, on *vitals, now time.Time) {
 	for _, id := range e.StatusIDs() {
-		held := on.Statuses[id]
+		key := statusKey{id, p.ID()}
+		held := on.Statuses[key]
 		if held == nil {
 			p.debugLine("%s: %s has no %s to consume", c.ability.Name, l.nameOf(on.ID), id)
 			continue
@@ -733,16 +755,16 @@ func (l *Layer) consume(p *Player, c *casting, e *combat.Effect, on *vitals, now
 			p.debugLine("%s: %s keeps %s", c.ability.Name, l.nameOf(on.ID), id)
 		case e.Stacks > 0 && taken < held.stacks:
 			held.stacks -= taken
-			l.statusChanged(on.ID, id, held, now)
+			l.statusChanged(on.ID, key, held, now)
 			p.debugLine("%s: took %d stacks of %s off %s, %d left", c.ability.Name, taken, id, l.nameOf(on.ID), held.stacks)
 		case e.Seconds > 0 && !held.until.IsZero() && window < held.until.Sub(now):
 			held.until = held.until.Add(-window)
-			l.statusChanged(on.ID, id, held, now)
+			l.statusChanged(on.ID, key, held, now)
 			p.debugLine("%s: took %g s of %s off %s", c.ability.Name, window.Seconds(), id, l.nameOf(on.ID))
 		case e.Seconds > 0 && held.until.IsZero():
 			p.debugLine("%s: %s has no time to take off %s", c.ability.Name, id, l.nameOf(on.ID))
 		default:
-			l.takeOff(on, id)
+			l.takeOff(on, key)
 			p.debugLine("%s: took %s off %s", c.ability.Name, id, l.nameOf(on.ID))
 		}
 		if e.PerStack != nil {
@@ -808,7 +830,8 @@ func (l *Layer) extend(p *Player, c *casting, e *combat.Effect, on *vitals, now 
 	f := &p.fight
 	for _, id := range e.StatusIDs() {
 		s := f.class.Status(id)
-		held := on.Statuses[id]
+		key := statusKey{id, p.ID()}
+		held := on.Statuses[key]
 		if held == nil {
 			if !e.Apply {
 				p.debugLine("%s: %s has no %s to extend", c.ability.Name, l.nameOf(on.ID), id)
@@ -849,7 +872,7 @@ func (l *Layer) extend(p *Player, c *casting, e *combat.Effect, on *vitals, now 
 				held.until = until
 			}
 		}
-		l.statusChanged(on.ID, id, held, now)
+		l.statusChanged(on.ID, key, held, now)
 		p.debugLine("%s: %s on %s now has %g s left", c.ability.Name, id, l.nameOf(on.ID), held.until.Sub(now).Seconds())
 	}
 }
@@ -862,12 +885,12 @@ func earlier(a, b time.Time) time.Time {
 }
 
 // statusChanged tells those near a unit how a status on it stands now.
-func (l *Layer) statusChanged(unit int64, id string, held *activeStatus, now time.Time) {
+func (l *Layer) statusChanged(unit int64, key statusKey, held *activeStatus, now time.Time) {
 	lasts := 0.0
 	if !held.until.IsZero() {
 		lasts = held.until.Sub(now).Seconds()
 	}
-	l.tellOf(unit, encode(statusChanged{"statusChanged", unit, id, held.stacks, lasts}))
+	l.tellOf(unit, encode(statusChanged{"statusChanged", unit, key.id, key.from, held.stacks, lasts}))
 }
 
 // tellOf sends a message about a unit to those who can see it.
