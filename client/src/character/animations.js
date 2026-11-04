@@ -42,6 +42,12 @@ export function decodeClip(baked, name) {
 // The names of every clip: baked, then hand-posed.
 export const clipNames = (baked) => [...Object.keys(baked.clips), ...Object.keys(POSED)];
 
+// Baked swings too slow for a melee hit landing 0.3 s in (timeline.js's MELEE_STRIKE_S): when each
+// reaches its target, and how much faster to play what comes after. What's before plays in 0.3 s.
+const STRIKE_S = 0.3;
+const SLOW_SWINGS = { Sword_Attack: { strikes: 0.4, after: 1.5 }, Zombie_Scratch: { strikes: 0.57, after: 1.5 } };
+const retimed = (times, { strikes, after }) => times.map((t) => (t <= strikes ? (t * STRIKE_S) / strikes : STRIKE_S + (t - strikes) / after));
+
 // Every clip as a three.js AnimationClip for this character, by name. A clip that moves along the
 // ground keeps its speed, for a 6ft body, in userData.speed.
 export function characterClips(mesh, baked) {
@@ -56,7 +62,8 @@ export function characterClips(mesh, baked) {
   const turn = new THREE.Quaternion();
   const clips = new Map();
   for (const name of clipNames(baked)) {
-    const { times, rotations, pelvis } = POSED[name] ? posedClip(name, mesh.userData.joints, s, baked.fps) : decodeClip(baked, name);
+    const { times: playedAt, rotations, pelvis } = POSED[name] ? posedClip(name, mesh.userData.joints, s, baked.fps) : decodeClip(baked, name);
+    const times = SLOW_SWINGS[name] ? Float32Array.from(retimed(playedAt, SLOW_SWINGS[name])) : playedAt;
     const tracks = Object.entries(rotations).map(([bone, values]) => new THREE.QuaternionKeyframeTrack(`${bone}.quaternion`, times, values));
     // A second pair of arms moves as the first.
     for (const bone of lowerArms) if (rotations[bone]) tracks.push(new THREE.QuaternionKeyframeTrack(`${bone.replace(/_([lr])$/, "2_$1")}.quaternion`, times, rotations[bone]));
