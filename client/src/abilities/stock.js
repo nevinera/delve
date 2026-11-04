@@ -1,9 +1,10 @@
 import { PARTICLE_EFFECTS } from "./particleStock.js";
+import { SHAPE_EFFECTS } from "./shapeStock.js";
 
 // The stock visuals and sounds abilities pick from, by name. What each one looks like is in
-// visuals.js or particleStock.js, and what it sounds like in sounds.js.
+// shapeStock.js, particleStock.js or visuals.js, and what it sounds like in sounds.js.
 
-export const MESH_VISUALS = ["bolt", "arrow", "burst", "ring", "glow", "swirl", "beam", "slash", "cone", "shield"];
+export const MESH_VISUALS = [...SHAPE_EFFECTS, "arrow"];
 export const VISUALS = [...MESH_VISUALS, ...PARTICLE_EFFECTS];
 export const SOUNDS = ["cast", "whoosh", "impact", "fire", "frost", "holy", "shadow", "nature", "arcane", "slash", "heal", "shout"];
 

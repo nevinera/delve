@@ -98,7 +98,7 @@ export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false }
   }
   if (ability.speed && ["enemy", "ally", "any"].includes(ability.target)) {
     const own = visuals.find(isProjectile);
-    events.push({ at: launch, kind: "projectile", effect: own?.effect ?? "bolt", colors: own ? colorsOf(own) : schoolColors(ability), scale: own?.scale ?? 1, until: impact, trails: visuals.filter((v) => v.when === "flight").map((v) => ({ effect: v.effect, colors: colorsOf(v), params: v.duration === "cast" ? { ...v, duration: undefined } : v })) });
+    events.push({ at: launch, kind: "projectile", effect: own?.effect ?? "bolt", colors: own ? colorsOf(own) : schoolColors(ability), scale: own?.scale ?? 1, params: own?.duration === "cast" ? { ...own, duration: undefined } : own, until: impact, trails: visuals.filter((v) => v.when === "flight").map((v) => ({ effect: v.effect, colors: colorsOf(v), params: v.duration === "cast" ? { ...v, duration: undefined } : v })) });
   }
 
   (ability.effects ?? []).forEach((effect) => {

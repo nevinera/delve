@@ -30,5 +30,15 @@
     "sigil",
     "twirl",
     "scorch"
+  ],
+  "repeating": [
+    "plain",
+    "energy",
+    "streaks",
+    "bands",
+    "swirl",
+    "ripple",
+    "motes",
+    "hex"
   ]
 }

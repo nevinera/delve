@@ -1,10 +1,11 @@
 import { iconNames } from "../play/icons.js";
 import { PARTICLE_STOCK, isParticleEffect } from "../abilities/particleStock.js";
+import { SHAPES, SHAPE_FADES, isShapeEffect } from "../abilities/shapeStock.js";
 import { SOUNDS, VISUALS } from "../abilities/stock.js";
 import { ARMOR_SLOTS, ARMOR_STYLES, ARMOR_TYPES } from "../character/armor.js";
 import { BODIES } from "../character/bodies.js";
 import { BEARD, EARS, FACE, FLESH, GAIT, HAIR, HANDS, HORNS, JEWELRY, LOWER, LOWER_ARMS, MOUTH, MUZZLE, NOSE, TAIL, TUSKS, UNARMED, WINGS } from "../character/recipe.js";
-import { textureNames } from "../abilities/effectTextures.js";
+import { repeatingNames, textureNames } from "../abilities/effectTextures.js";
 import { HELD, OFFHANDS, WEAPONS, WEAPON_STYLES } from "../character/weapons.js";
 import { BUILT_IN_CHANGES, TALENT_TIERS, TALENT_TIER_STEP } from "./classFile.js";
 
@@ -27,6 +28,19 @@ const particle = (v) => isParticleEffect(v.effect);
 const stockOf = (key) => (v) => (particle(v) ? String(PARTICLE_STOCK[v.effect][key]) : "");
 const particleNumber = (key, label, more = {}) => ({ key, label, type: "number", show: particle, placeholder: stockOf(key), ...more });
 const particleSelect = (key, options) => ({ key, type: "select", none: "stock", options, show: particle });
+// A shape effect's, each left empty for what the stock effect does.
+const shapeEffect = (v) => isShapeEffect(v.effect);
+const SHAPE_FIELDS = [
+  { key: "shape", type: "select", none: "stock", options: SHAPES, show: shapeEffect },
+  { key: "texture", type: "select", none: "stock", options: repeatingNames, show: shapeEffect },
+  { key: "scroll", type: "number", label: "scroll up", show: shapeEffect },
+  { key: "scrollAcross", type: "number", label: "scroll around", show: shapeEffect },
+  { key: "repeat", type: "number", label: "repeats up", min: 0, show: shapeEffect },
+  { key: "repeatAcross", type: "number", label: "repeats around", min: 0, show: shapeEffect },
+  { key: "duration", type: "numberOr", word: "cast", after: "or the whole cast", label: "for seconds", min: 0, show: shapeEffect },
+  { key: "fade", type: "select", none: "stock", options: SHAPE_FADES, show: shapeEffect },
+  { key: "opacity", type: "number", min: 0, max: 1, show: shapeEffect },
+];
 const PARTICLE_FIELDS = [
   particleNumber("count", "at once", { min: 0, step: 1 }),
   particleNumber("rate", "per second", { min: 0 }),
@@ -558,6 +572,7 @@ export const abilityFields = (made) => [
       main,
       { key: "scale", type: "number", min: 0 },
       ...PARTICLE_FIELDS,
+      ...SHAPE_FIELDS,
     ],
   },
   {

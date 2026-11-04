@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { effectSheets, sheetTexture, textureCell } from "./effectTextures.js";
+import { loadEffectTextures, sheetTexture, textureCell } from "./effectTextures.js";
 import { aimed } from "./particleStock.js";
 
 // Every particle in a scene, in a draw call for each texture sheet in use: camera-facing quads, each
@@ -229,8 +229,7 @@ export class ParticleField {
     this.capacity = capacity;
     this.time = 0;
     this.sheets = new Map();
-    // Loading them now means the first effect to use each one shows.
-    for (const sheet of effectSheets()) sheetTexture(sheet);
+    loadEffectTextures();
   }
 
   // The particles for a sheet, which take a draw call from the first one let go.

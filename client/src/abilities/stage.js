@@ -142,7 +142,7 @@ export class AbilityStage {
       }
       case "projectile": {
         const from = handOf(run.caster);
-        const live = this.spawn(event.effect, { colors: event.colors, scale: event.scale });
+        const live = this.spawn(event.effect, { colors: event.colors, scale: event.scale, params: event.params });
         live.visual.group.position.copy(from);
         live.flying = { from, to: run.target ?? run.caster, until: run.t + (event.until - event.at) };
         live.flying.start = run.t;
@@ -178,11 +178,13 @@ export class AbilityStage {
     }
     if (event.effect === "beam") {
       const to = on === "ground" ? this.pointOf(run, "ground") : chestOf(unit);
-      this.spawn("beam", { colors, scale, from: handOf(run.caster).toArray(), to: to.toArray() });
+      const live = this.spawn("beam", { colors, scale, params: event.params, from: handOf(run.caster).toArray(), to: to.toArray() });
+      if (event.heldByCast) live.heldBy = run;
     } else if (event.effect === "bolt" || event.effect === "arrow") {
-      this.spawn(event.effect, { colors, scale, height }, on === "ground" ? this.pointOf(run, "ground") : chestOf(unit));
+      this.spawn(event.effect, { colors, scale, height, params: event.params }, on === "ground" ? this.pointOf(run, "ground") : chestOf(unit));
     } else {
-      const live = this.spawn(event.effect, { colors, scale, height }, this.pointOf(run, on));
+      const live = this.spawn(event.effect, { colors, scale, height, params: event.params }, this.pointOf(run, on));
+      if (event.heldByCast) live.heldBy = run;
       // What faces a way faces where the caster does.
       if (["cone", "slash"].includes(event.effect) && on === "caster") live.visual.group.rotation.y = run.caster.mesh.rotation.y;
     }
@@ -223,7 +225,7 @@ export class AbilityStage {
           return true;
         }
       }
-      if (live.heldBy) visual.fadeOut();
+      if (live.heldBy) visual.fadeOut?.();
       disposeVisual(visual);
       return false;
     });

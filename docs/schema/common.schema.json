@@ -1291,6 +1291,37 @@
           "type": "number",
           "exclusiveMinimum": 0
         },
+        "shape": {
+          "enum": [
+            "sphere",
+            "cylinder",
+            "cone",
+            "ring",
+            "arc"
+          ]
+        },
+        "scroll": {
+          "type": "number"
+        },
+        "scrollAcross": {
+          "type": "number"
+        },
+        "repeat": {
+          "type": "number",
+          "minimum": 0
+        },
+        "repeatAcross": {
+          "type": "number",
+          "minimum": 0
+        },
+        "fade": {
+          "enum": [
+            "out",
+            "pulse",
+            "hold",
+            "none"
+          ]
+        },
         "count": {
           "type": "number",
           "minimum": 0
@@ -1359,7 +1390,7 @@
         },
         "texture": {
           "type": "string",
-          "description": "a stock texture, listed in client/src/abilities/stockTextures.json, or one from the world's effect sheets"
+          "description": "for a particle effect, a texture from a sheet; for a shape effect, a repeating texture. client/src/abilities/stockTextures.json lists the stock ones, and a world can add its own"
         },
         "blend": {
           "enum": [

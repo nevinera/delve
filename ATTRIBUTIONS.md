@@ -24,6 +24,8 @@ The MIT license in [LICENSE](LICENSE) covers this project's own code, docs and d
 
 **Where:** `public/effects/stock.png`
 
+The repeating textures beside it, like `public/effects/energy.png`, are ours: `script/bake_effect_textures.py` draws them.
+
 **License:** [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
 
 **Source:** [Particle Pack](https://kenney.nl/assets/particle-pack) by Kenney, scaled down and made grayscale by `script/bake_effect_textures.py`. Its filter templates are credited to Indigo Ray, Craig Nisbet, Zoltan Erdokovy, Heliagon, ThreeDee, Killst4r and Tim2501. The `shard` cell is ours.

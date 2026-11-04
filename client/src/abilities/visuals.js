@@ -1,161 +1,178 @@
 import * as THREE from "three";
+import { repeatingTexture } from "./effectTextures.js";
+import { fadeAt, isShapeEffect, shapeSpec } from "./shapeStock.js";
 
-// The stock visuals: small three.js groups made in code. makeVisual gives { group, length, update },
-// and update(u) draws it u of the way through its length, 0 to 1. A `from` and `to` in feet, for
-// beams, reach between two points; the rest stand where the group's put.
+// The stock visuals, small three.js groups. Most are shapes with a texture scrolling across them
+// (shapeStock.js), and an arrow is just solid. makeVisual gives { group, length, update }, and
+// update(u) draws it u of the way through its length, 0 to 1. A `from` and `to` in feet, for beams,
+// reach between two points; the rest stand where the group's put.
 
-const basic = (color, opacity = 0.9) => new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, side: THREE.DoubleSide });
+const VERTEX = `
+varying vec2 vUv;
+varying vec3 vNormal;
+varying vec3 vView;
+void main() {
+  vUv = uv;
+  vec4 seen = modelViewMatrix * vec4(position, 1.0);
+  vNormal = normalMatrix * normal;
+  vView = -seen.xyz;
+  gl_Position = projectionMatrix * seen;
+}`;
 
-const sphere = (radius, color, opacity) => new THREE.Mesh(new THREE.SphereGeometry(radius, 16, 12), basic(color, opacity));
+const FRAGMENT = `
+uniform sampler2D uTexture;
+uniform vec3 uColor;
+uniform vec3 uHot;
+uniform vec2 uRepeat;
+uniform vec2 uScroll;
+uniform float uTime;
+uniform float uOpacity;
+uniform float uEdge;
+uniform float uRim;
+uniform float uTrail;
+varying vec2 vUv;
+varying vec3 vNormal;
+varying vec3 vView;
+void main() {
+  vec2 at = vUv * uRepeat + uScroll * uTime;
+  // A second, slower look at the same texture, so it doesn't read as one image sliding by.
+  float shape = texture2D(uTexture, at).r * (0.6 + 0.8 * texture2D(uTexture, at * 0.61 + 0.37 - uScroll * uTime * 0.4).r);
+  shape = min(1.0, shape);
+  float alpha = shape * uOpacity;
+  if (uEdge > 0.0) alpha *= smoothstep(0.0, uEdge, vUv.y) * smoothstep(0.0, uEdge, 1.0 - vUv.y);
+  if (uRim > 0.0) alpha *= pow(1.0 - abs(dot(normalize(vNormal), normalize(vView))), uRim) * 1.6;
+  if (uTrail > 0.0) alpha *= vUv.x;
+  if (alpha < 0.002) discard;
+  gl_FragColor = vec4(mix(uColor, uHot, smoothstep(0.5, 1.0, shape)), 1.0);
+  #include <colorspace_fragment>
+  // It mostly adds light, and covers a little of what's behind so it shows against a bright sky.
+  gl_FragColor = vec4(gl_FragColor.rgb * alpha, alpha * 0.3);
+}`;
 
-// Fades everything in the group by `amount`, from the opacity each mesh started with.
-function fade(group, amount) {
-  group.traverse((node) => {
-    if (!node.material) return;
-    node.userData.opacity ??= node.material.opacity;
-    node.material.opacity = node.userData.opacity * amount;
+function shapeMaterial(layer, [main, trim]) {
+  return new THREE.ShaderMaterial({
+    vertexShader: VERTEX,
+    fragmentShader: FRAGMENT,
+    uniforms: {
+      uTexture: { value: repeatingTexture(layer.texture) },
+      uColor: { value: new THREE.Color(layer.color === "trim" ? trim : main) },
+      uHot: { value: new THREE.Color(trim) },
+      uRepeat: { value: new THREE.Vector2(...layer.repeat) },
+      uScroll: { value: new THREE.Vector2(...layer.scroll) },
+      uTime: { value: 0 },
+      uOpacity: { value: layer.opacity },
+      uEdge: { value: layer.edge },
+      uRim: { value: layer.rim },
+      uTrail: { value: layer.trail ? 1 : 0 },
+    },
+    transparent: true,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    blending: THREE.CustomBlending,
+    blendEquation: THREE.AddEquation,
+    blendSrc: THREE.OneFactor,
+    blendDst: THREE.OneMinusSrcAlphaFactor,
   });
 }
 
-const MAKERS = {
-  // Flying things: the caller moves them, and they keep their look.
-  bolt: ({ colors: [main, trim], scale }) => {
-    const group = new THREE.Group();
-    group.add(sphere(0.55 * scale, main, 0.7), sphere(0.3 * scale, trim, 1));
-    return { group, length: 1, update: (u) => group.scale.setScalar(1 + 0.12 * Math.sin(u * 40)) };
-  },
-  arrow: ({ colors: [main, trim], scale }) => {
-    const group = new THREE.Group();
-    const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * scale, 0.05 * scale, 2.4 * scale, 6).rotateX(Math.PI / 2), basic(main, 1));
-    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.14 * scale, 0.4 * scale, 8).rotateX(Math.PI / 2).translate(0, 0, 1.3 * scale), basic(trim, 1));
-    group.add(shaft, tip);
-    return { group, length: 1, update: () => {} };
-  },
-  burst: ({ colors: [main, trim], scale }) => {
-    const group = new THREE.Group();
-    const [outer, inner] = [sphere(1, main, 0.7), sphere(0.6, trim, 0.9)];
-    group.add(outer, inner);
-    return {
-      group,
-      length: 0.45,
-      update: (u) => {
-        outer.scale.setScalar((0.6 + 3.2 * u) * scale);
-        inner.scale.setScalar((0.5 + 2 * u) * scale);
-        fade(group, 1 - u);
-      },
-    };
-  },
-  ring: ({ colors: [main, trim], scale }) => {
-    const group = new THREE.Group();
-    const flat = (color) => new THREE.Mesh(new THREE.RingGeometry(0.82, 1, 48).rotateX(-Math.PI / 2), basic(color, 0.9));
-    const [outer, inner] = [flat(main), flat(trim)];
-    group.add(outer, inner);
-    group.position.y = 0.15;
-    return {
-      group,
-      length: 0.7,
-      update: (u) => {
-        outer.scale.setScalar((1 + 7 * u) * scale);
-        inner.scale.setScalar((0.5 + 4 * u) * scale);
-        fade(group, 1 - u);
-      },
-    };
-  },
-  glow: ({ colors: [main, trim], scale, height }) => {
-    const group = new THREE.Group();
-    const [outer, inner] = [sphere(0.5 * height, main, 0.35), sphere(0.32 * height, trim, 0.25)];
-    group.add(outer, inner);
-    group.position.y = height / 2;
-    return {
-      group,
-      length: 0.9,
-      update: (u) => {
-        group.scale.setScalar(scale * (0.8 + 0.3 * Math.sin(u * Math.PI)));
-        fade(group, Math.sin(u * Math.PI));
-      },
-    };
-  },
-  swirl: ({ colors: [main, trim], scale, height }) => {
-    const group = new THREE.Group();
-    const motes = Array.from({ length: 10 }, (_, n) => sphere(0.14 * scale, n % 2 ? main : trim, 1));
-    group.add(...motes);
-    return {
-      group,
-      length: 1.1,
-      update: (u) => {
-        motes.forEach((mote, n) => {
-          const a = n * 0.63 + u * 11;
-          const r = 1.7 * scale * (1 - u * 0.4);
-          mote.position.set(Math.cos(a) * r, height * ((n / 10 + u) % 1), Math.sin(a) * r);
-        });
-        fade(group, Math.sin(u * Math.PI));
-      },
-    };
-  },
-  beam: ({ colors: [main, trim], scale, from, to }) => {
-    const group = new THREE.Group();
-    const [a, b] = [new THREE.Vector3(...(from ?? [0, 0, 0])), new THREE.Vector3(...(to ?? [0, 0, 1]))];
-    const length = Math.max(0.1, a.distanceTo(b));
-    const rod = (radius, color, opacity) => new THREE.Mesh(new THREE.CylinderGeometry(radius, radius, length, 10).rotateX(Math.PI / 2), basic(color, opacity));
-    const beam = new THREE.Group();
-    beam.add(rod(0.35 * scale, main, 0.55), rod(0.12 * scale, trim, 1));
-    beam.position.copy(a).lerp(b, 0.5);
-    beam.lookAt(b);
-    group.add(beam);
-    return { group, length: 0.5, update: (u) => fade(group, Math.sin(u * Math.PI)) };
-  },
-  slash: ({ colors: [main, trim], scale, height }) => {
-    const group = new THREE.Group();
-    const arc = (radius, color) => new THREE.Mesh(new THREE.RingGeometry(radius * 0.8, radius, 24, 1, -0.6, 2.2), basic(color, 1));
-    const [outer, inner] = [arc(2.4 * scale, main), arc(1.9 * scale, trim)];
-    group.add(outer, inner);
-    group.position.y = height * 0.6;
-    return {
-      group,
-      length: 0.28,
-      update: (u) => {
-        group.rotation.z = -1.2 + 2.4 * u;
-        fade(group, 1 - u);
-      },
-    };
-  },
-  cone: ({ colors: [main, trim], scale, height }) => {
-    const group = new THREE.Group();
-    const shape = (radius, color, opacity) => new THREE.Mesh(new THREE.ConeGeometry(radius, 12 * scale, 16, 1, true).translate(0, -6 * scale, 0).rotateX(-Math.PI / 2), basic(color, opacity));
-    group.add(shape(3 * scale, main, 0.5), shape(1.4 * scale, trim, 0.7));
-    group.position.y = height * 0.65;
-    return {
-      group,
-      length: 0.55,
-      update: (u) => {
-        group.scale.setScalar(0.4 + 0.6 * Math.min(1, u * 3));
-        fade(group, 1 - u * u);
-      },
-    };
-  },
-  shield: ({ colors: [main, trim], scale, height }) => {
-    const group = new THREE.Group();
-    const [outer, wire] = [sphere(0.62 * height, main, 0.22), new THREE.Mesh(new THREE.IcosahedronGeometry(0.64 * height, 1), new THREE.MeshBasicMaterial({ color: trim, wireframe: true, transparent: true, opacity: 0.5 }))];
-    group.add(outer, wire);
-    group.position.y = height / 2;
-    group.scale.setScalar(scale);
-    return {
-      group,
-      length: 1.2,
-      update: (u) => {
-        wire.rotation.y = u * 2;
-        fade(group, Math.min(1, u * 5, (1 - u) * 3));
-      },
-    };
-  },
-};
+// A flat band round a point in the xy plane, x going along it and y going out from `inner` to 1.
+function bandGeometry(inner, start, sweep, segments = 48) {
+  const [positions, uvs, indices] = [[], [], []];
+  for (let n = 0; n <= segments; n++) {
+    const u = n / segments;
+    const angle = start + sweep * u;
+    for (const [v, r] of [[0, inner], [1, 1]]) {
+      positions.push(Math.cos(angle) * r, Math.sin(angle) * r, 0);
+      uvs.push(u, v);
+    }
+    if (n < segments) indices.push(n * 2, n * 2 + 1, n * 2 + 2, n * 2 + 1, n * 2 + 3, n * 2 + 2);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
+  geometry.setAttribute("normal", new THREE.Float32BufferAttribute(positions.map((_, k) => (k % 3 === 2 ? 1 : 0)), 3));
+  geometry.setIndex(indices);
+  return geometry;
+}
 
-export const hasVisual = (name) => Boolean(MAKERS[name]);
+// A shape with a radius of 1, and its length along the way it reaches: a cylinder's up y from its
+// foot, and a cone's along z from its point. A ring lies flat, and an arc stands facing z.
+function shapeGeometry({ shape, inner = 0.7, start = 0, sweep = Math.PI * 2 }) {
+  if (shape === "cylinder") return new THREE.CylinderGeometry(1, 1, 1, 32, 1, true).translate(0, 0.5, 0);
+  if (shape === "cone") return new THREE.ConeGeometry(1, 1, 24, 1, true).translate(0, -0.5, 0).rotateX(-Math.PI / 2);
+  if (shape === "ring") return bandGeometry(inner, 0, Math.PI * 2).rotateX(-Math.PI / 2);
+  if (shape === "arc") return bandGeometry(inner, start, sweep);
+  return new THREE.SphereGeometry(1, 24, 16);
+}
 
-// A stock visual. options: colors, [main, trim]; scale; height, of what it stands on, in feet; and
-// from and to for a beam, as [x, y, z].
-export function makeVisual(name, { colors = ["#ffffff", "#ffffff"], scale = 1, height = 6, from, to } = {}) {
-  const made = (MAKERS[name] ?? MAKERS.burst)({ colors, scale, height, from, to });
+const between = (radius, u) => (Array.isArray(radius) ? radius[0] + (radius[1] - radius[0]) * u : radius);
+
+// Sizes a shape: a radius across, and a length that way too unless it has one of its own.
+function sized(mesh, { shape }, radius, length) {
+  if (shape === "cylinder") mesh.scale.set(radius, length ?? radius * 2, radius);
+  else if (shape === "cone") mesh.scale.set(radius, radius, length ?? radius * 4);
+  else mesh.scale.setScalar(radius);
+}
+
+function makeShapes(name, { colors, scale, height, from, to, params, follow }) {
+  const spec = shapeSpec(name, params);
+  const group = new THREE.Group();
+  const holder = new THREE.Group();
+  group.add(holder);
+  group.position.y = spec.raise ?? (spec.rise ? spec.rise * height : 0);
+  const reach = from && to ? new THREE.Vector3(...from).distanceTo(new THREE.Vector3(...to)) : null;
+  if (name === "beam" && reach !== null) {
+    // A beam's cylinders lie along the way from one point to the other.
+    holder.position.fromArray(from);
+    holder.lookAt(new THREE.Vector3(...to));
+    holder.rotateX(Math.PI / 2);
+  }
+  const shapes = spec.layers.map((layer) => {
+    const beam = name === "beam" && reach !== null;
+    // A beam's texture repeats by its length, so it doesn't stretch.
+    const fitted = beam ? { ...layer, repeat: [layer.repeat[0], layer.repeat[1] * reach] } : layer;
+    const mesh = new THREE.Mesh(shapeGeometry(layer), shapeMaterial(fitted, colors));
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 5;
+    holder.add(mesh);
+    const across = (u) => between(layer.radius, u) * (layer.bodies ? height : 1) * scale;
+    const length = beam ? reach : layer.long ? layer.long * scale : layer.tall ? layer.tall * height : null;
+    return { layer, mesh, across, length };
+  });
+  return {
+    group,
+    length: spec.duration,
+    update: (u) => {
+      if (follow) group.position.copy(follow.position);
+      const grown = spec.grow ? 0.4 + 0.6 * Math.min(1, u / spec.grow) : 1;
+      for (const { layer, mesh, across, length } of shapes) {
+        sized(mesh, layer, across(u) * grown, length && length * grown);
+        mesh.material.uniforms.uTime.value = u * spec.duration;
+        mesh.material.uniforms.uOpacity.value = layer.opacity * fadeAt(spec.fade, u);
+      }
+      if (name === "slash") holder.rotation.z = -1.2 + 2.4 * u;
+      if (name === "bolt") holder.scale.setScalar(1 + 0.12 * Math.sin(u * 40));
+    },
+  };
+}
+
+function makeArrow({ colors: [main, trim], scale }) {
+  const material = (color) => new THREE.MeshBasicMaterial({ color });
+  const group = new THREE.Group();
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.05 * scale, 0.05 * scale, 2.4 * scale, 6).rotateX(Math.PI / 2), material(main));
+  const tip = new THREE.Mesh(new THREE.ConeGeometry(0.14 * scale, 0.4 * scale, 8).rotateX(Math.PI / 2).translate(0, 0, 1.3 * scale), material(trim));
+  group.add(shaft, tip);
+  return { group, length: 1, update: () => {} };
+}
+
+export const hasVisual = (name) => name === "arrow" || isShapeEffect(name);
+
+// A stock visual. options: colors, [main, trim]; scale; height, of what it stands on, in feet; from
+// and to for a beam, as [x, y, z]; follow, a thing to stay on; and params, what the ability sets
+// (shapeStock.js).
+export function makeVisual(name, { colors = ["#ffffff", "#ffffff"], scale = 1, height = 6, from, to, params, follow } = {}) {
+  const options = { colors, scale, height, from, to, params, follow };
+  const made = name === "arrow" ? makeArrow(options) : makeShapes(isShapeEffect(name) ? name : "burst", options);
   made.update(0);
   return made;
 }

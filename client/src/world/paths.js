@@ -18,7 +18,7 @@ export const OBJECT_PATH = /^objects\/[0-9a-z]{8}\.json$/;
 export const TEMPLATE_PATH = /^templates\/[0-9a-z]{8}\.json$/;
 export const ICON_PATH = /^icons\/([0-9a-z-]+)\.svg$/;
 export const EFFECT_SHEET_PATH = /^effects\/([0-9a-z-]+)\.json$/;
-export const EFFECT_IMAGE_PATH = /^effects\/[0-9a-z-]+\.png$/;
+export const EFFECT_IMAGE_PATH = /^effects\/([0-9a-z-]+)\.png$/;
 export const effectImagePath = (name) => `effects/${name}.png`;
 export const IMAGE_PATH = /^textures\/[0-9a-z]{8}\.json$/;
 
