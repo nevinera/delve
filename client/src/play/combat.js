@@ -4,8 +4,10 @@ import { drawAbilitiesPane } from "./abilitiesPane.js";
 import { barsFor, cleared, keyLabel, placed, slotForKey, swapped } from "./bars.js";
 import * as THREE from "three";
 import { chestOf, AbilityStage, clipNameFor } from "../abilities/stage.js";
+import { DESKTOP_PARTICLES, PHONE_PARTICLES } from "../abilities/particles.js";
 import { roleClips } from "../character/animations.js";
 import { iconNode } from "./icons.js";
+import { isTouch } from "./touch.js";
 import { skeletonOf } from "../character/characterMesh.js";
 import { strFromU8 } from "fflate";
 import { allHold } from "./conditions.js";
@@ -104,7 +106,7 @@ export class PlayCombat {
     Object.assign(this, { view, others, connection, loader, you, hud, unitStatuses });
     this.classes = new Map(); // id -> a promise of its file
     this.target = null;
-    this.stage = new AbilityStage(view.scene, { audio: () => this.audioContext() });
+    this.stage = new AbilityStage(view.scene, { audio: () => this.audioContext(), particles: isTouch() ? PHONE_PARTICLES : DESKTOP_PARTICLES });
     this.runs = new Map(); // caster id -> its run
     this.floats = [];
     this.cooldowns = new Map(); // ability id -> when it's ready, in performance.now()

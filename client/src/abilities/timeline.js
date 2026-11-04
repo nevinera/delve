@@ -7,9 +7,10 @@ import { SCHOOL_COLORS } from "./stock.js";
 // An event is { at, kind, ... }, at in seconds from when it's used:
 // - clip: { role, loop }, a role of animations.js's ROLES, or "channel" to hold a spell.
 // - bar: { until, label }, the cast or channel bar.
-// - visual: { effect, on, colors, scale }, a stock visual on "caster", "target" or "ground".
+// - visual: { effect, on, colors, scale, params }, a stock visual on "caster", "target" or "ground".
 // - sound: { sound, volume, pitch }.
-// - projectile: { effect, colors, until }, flying from the caster to the target.
+// - projectile: { effect, colors, until, trails }, flying from the caster to the target, with
+//   trails, the visuals with `when: "flight"`, following it.
 // - hit: { effect, n, on }, one of the ability's effects landing, on tick n of a channel.
 // - area: { shape, radius, cone, around, colors }, what an area effect covers.
 
@@ -73,6 +74,7 @@ export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false }
   const times = (when) => {
     if (when === "cast") return [0];
     if (when === "launch") return [launch];
+    if (when === "flight") return [];
     if (when === "channel") return channel ? Array.from({ length: ticks }, (_, n) => launch + ((n + 1) * channel.duration) / ticks) : [];
     return channel ? Array.from({ length: ticks }, (_, n) => launch + ((n + 1) * channel.duration) / ticks) : [impact];
   };
@@ -82,14 +84,14 @@ export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false }
   const visuals = ability.visuals ?? [];
   for (const v of visuals) {
     if (isProjectile(v)) continue;
-    for (const at of times(v.when)) events.push({ at, kind: "visual", effect: v.effect, on: v.on ?? defaultOn(v.when, ability), colors: colorsOf(v), scale: v.scale ?? 1 });
+    for (const at of times(v.when)) events.push({ at, kind: "visual", effect: v.effect, on: v.on ?? defaultOn(v.when, ability), colors: colorsOf(v), scale: v.scale ?? 1, params: v });
   }
   for (const s of ability.sounds ?? []) {
     for (const at of times(s.when)) events.push({ at, kind: "sound", sound: s.sound, on: s.on ?? defaultOn(s.when, ability), volume: s.volume ?? 1, pitch: s.pitch ?? 1 });
   }
   if (ability.speed && ["enemy", "ally", "any"].includes(ability.target)) {
     const own = visuals.find(isProjectile);
-    events.push({ at: launch, kind: "projectile", effect: own?.effect ?? "bolt", colors: own ? colorsOf(own) : schoolColors(ability), scale: own?.scale ?? 1, until: impact });
+    events.push({ at: launch, kind: "projectile", effect: own?.effect ?? "bolt", colors: own ? colorsOf(own) : schoolColors(ability), scale: own?.scale ?? 1, until: impact, trails: visuals.filter((v) => v.when === "flight").map((v) => ({ effect: v.effect, colors: colorsOf(v), params: v })) });
   }
 
   (ability.effects ?? []).forEach((effect) => {

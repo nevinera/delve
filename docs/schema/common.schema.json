@@ -1272,6 +1272,7 @@
           "enum": [
             "cast",
             "launch",
+            "flight",
             "impact",
             "channel"
           ]
@@ -1289,6 +1290,99 @@
         "scale": {
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "count": {
+          "type": "number",
+          "minimum": 0
+        },
+        "rate": {
+          "type": "number",
+          "minimum": 0
+        },
+        "duration": {
+          "type": "number",
+          "minimum": 0
+        },
+        "lifetime": {
+          "type": "number",
+          "minimum": 0
+        },
+        "speed": {
+          "type": "number",
+          "minimum": 0
+        },
+        "spread": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 360
+        },
+        "drag": {
+          "type": "number",
+          "minimum": 0
+        },
+        "size": {
+          "type": "number",
+          "minimum": 0
+        },
+        "sizeEnd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "radius": {
+          "type": "number",
+          "minimum": 0
+        },
+        "stretch": {
+          "type": "number",
+          "minimum": 0
+        },
+        "spin": {
+          "type": "number",
+          "minimum": 0
+        },
+        "opacity": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "gravity": {
+          "type": "number"
+        },
+        "direction": {
+          "enum": [
+            "up",
+            "forward"
+          ]
+        },
+        "texture": {
+          "enum": [
+            "dot",
+            "spark",
+            "star",
+            "smoke",
+            "ring",
+            "shard",
+            "flame",
+            "noise"
+          ]
+        },
+        "blend": {
+          "enum": [
+            "glow",
+            "solid"
+          ]
+        },
+        "at": {
+          "enum": [
+            "feet",
+            "chest"
+          ]
+        },
+        "facing": {
+          "enum": [
+            "camera",
+            "ground"
+          ]
         }
       }
     },

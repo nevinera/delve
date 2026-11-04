@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { missingSounds, soundLength, soundVoices } from "./sounds.js";
-import { SOUNDS, VISUALS } from "./stock.js";
+import { MESH_VISUALS, SOUNDS } from "./stock.js";
 import { disposeVisual, hasVisual, makeVisual } from "./visuals.js";
 
 describe("the stock visuals", () => {
-  it.each(VISUALS)("%s draws from start to end and comes apart", (name) => {
+  it.each(MESH_VISUALS)("%s draws from start to end and comes apart", (name) => {
     expect(hasVisual(name)).toBe(true);
     const visual = makeVisual(name, { colors: ["#ff0000", "#00ff00"], scale: 1.5, height: 6, from: [0, 3, 0], to: [20, 3, 0] });
     expect(visual.length).toBeGreaterThan(0);

@@ -143,6 +143,8 @@ const RENDERERS = {
     const input = el("input", { type: "number", value: value[field.key] ?? "", step: field.step ?? "any" });
     if (field.min !== undefined) input.min = field.min;
     if (field.max !== undefined) input.max = field.max;
+    const hint = field.placeholder?.(value);
+    if (hint !== undefined) input.placeholder = hint;
     input.addEventListener("input", () => (setKey(value, field.key, numberOf(input.value)), changed()));
     return row(field, input);
   },

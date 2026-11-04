@@ -1,5 +1,8 @@
 import * as THREE from "three";
+import { dueBy, emitsFor, isParticleEffect, particleSpec } from "./particleStock.js";
+import { DESKTOP_PARTICLES, ParticleField } from "./particles.js";
 import { playSound } from "./sounds.js";
+import { SCHOOL_COLORS } from "./stock.js";
 import { abilityTimeline } from "./timeline.js";
 import { disposeVisual, makeVisual } from "./visuals.js";
 
@@ -31,8 +34,9 @@ export function clipNameFor(role, roles, clips) {
 
 export class AbilityStage {
   // scene: where visuals go. audio: gives an AudioContext, or null to keep quiet.
-  constructor(scene, { audio = () => null } = {}) {
+  constructor(scene, { audio = () => null, particles = DESKTOP_PARTICLES } = {}) {
     Object.assign(this, { scene, audio });
+    this.particles = new ParticleField(scene, { capacity: particles });
     this.t = 0;
     this.runs = [];
     this.alive = []; // visuals playing: { visual, at, flying }
@@ -61,10 +65,12 @@ export class AbilityStage {
     for (const run of [...this.runs]) this.stop(run);
     for (const { visual } of this.alive) disposeVisual(visual);
     this.alive = [];
+    this.particles.clear();
   }
 
   frame(dt) {
     this.t += dt;
+    this.particles.frame(this.t);
     for (const run of [...this.runs]) {
       run.t += dt;
       const { events, duration } = run.line;
@@ -80,12 +86,29 @@ export class AbilityStage {
   }
 
   spawn(name, options, place) {
-    const visual = makeVisual(name, options);
+    const visual = isParticleEffect(name) ? this.emitter(name, options) : makeVisual(name, options);
     if (place) visual.group.position.add(place);
     this.scene.add(visual.group);
     const live = { visual, at: this.t };
     this.alive.push(live);
     return live;
+  }
+
+  // A particle effect as a visual: nothing to draw of its own, it lets particles go from where its
+  // group is, while it lasts. options.params: its parameters; options.follow: the mesh it stays on;
+  // options.way: which way "forward" is, for one with that direction.
+  emitter(name, { colors = SCHOOL_COLORS.physical, scale = 1, params = {}, follow = null, way = [0, 0, 1], up = 0, floor = -Infinity }) {
+    const spec = particleSpec(name, { ...params, scale });
+    const group = new THREE.Group();
+    const direction = spec.direction === "forward" ? way : [0, 1, 0];
+    let sent = 0;
+    const update = (u) => {
+      if (follow) group.position.copy(follow.position).setY(follow.position.y + up);
+      const due = dueBy(spec, u);
+      if (due > sent) this.particles.emit(spec, due - sent, group.position.toArray(), colors, direction, floor);
+      sent = Math.max(sent, due);
+    };
+    return { group, length: Math.max(0.02, emitsFor(spec)), update };
   }
 
   fire(run, event) {
@@ -111,6 +134,10 @@ export class AbilityStage {
         live.flying = { from, to: run.target ?? run.caster, until: run.t + (event.until - event.at) };
         live.flying.start = run.t;
         live.run = run;
+        for (const trail of event.trails ?? []) {
+          const left = event.until - event.at;
+          this.spawn(trail.effect, { colors: trail.colors, scale: trail.params.scale ?? 1, params: { ...trail.params, duration: trail.params.duration ?? left }, follow: live.visual.group });
+        }
         break;
       }
       case "area":
@@ -126,6 +153,15 @@ export class AbilityStage {
     const { on, colors, scale } = event;
     const unit = on === "caster" ? run.caster : run.target ?? run.caster;
     const height = on === "ground" ? 6 : unit.height;
+    if (isParticleEffect(event.effect)) {
+      const spec = particleSpec(event.effect, event.params);
+      const up = on !== "ground" && spec.at === "chest" ? chestOf(unit).y - unit.mesh.position.y : 0;
+      const yaw = run.caster.mesh.rotation.y;
+      const follow = on === "ground" ? null : unit.mesh;
+      const floor = on === "ground" ? this.pointOf(run, "ground").y : unit.mesh.position.y;
+      this.spawn(event.effect, { colors, scale, params: event.params, follow, up, floor, way: [Math.sin(yaw), 0, Math.cos(yaw)] }, on === "ground" ? this.pointOf(run, "ground") : null);
+      return;
+    }
     if (event.effect === "beam") {
       const to = on === "ground" ? this.pointOf(run, "ground") : chestOf(unit);
       this.spawn("beam", { colors, scale, from: handOf(run.caster).toArray(), to: to.toArray() });

@@ -107,3 +107,19 @@ describe("releaseRole", () => {
   it("plays nothing for none", () => expect(releaseRole({ animation: "none", range: "melee" })).toBeNull());
   it("goes by the ability without one", () => expect(releaseRole({ range: "melee" })).toBe("attack"));
 });
+
+describe("particle visuals on the timeline", () => {
+  const ability = { name: "Test", school: "fire", target: "enemy", speed: 30, range: 40, visuals: [{ effect: "embers", when: "flight", rate: 5 }, { effect: "sparks", when: "impact", count: 9 }] };
+
+  it("carries a visual's parameters", () => {
+    const { events } = abilityTimeline(ability, { distance: 30 });
+    const sparks = events.find((e) => e.kind === "visual" && e.effect === "sparks");
+    expect(sparks.params.count).toBe(9);
+  });
+
+  it("puts flight visuals on the projectile", () => {
+    const { events } = abilityTimeline(ability, { distance: 30 });
+    expect(events.filter((e) => e.kind === "visual" && e.effect === "embers")).toEqual([]);
+    expect(events.find((e) => e.kind === "projectile").trails.map((t) => t.effect)).toEqual(["embers"]);
+  });
+});

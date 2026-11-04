@@ -1,4 +1,5 @@
 import { iconNames } from "../play/icons.js";
+import { PARTICLE_STOCK, PARTICLE_TEXTURES, isParticleEffect } from "../abilities/particleStock.js";
 import { SOUNDS, VISUALS } from "../abilities/stock.js";
 import { ARMOR_SLOTS, ARMOR_STYLES, ARMOR_TYPES } from "../character/armor.js";
 import { BODIES } from "../character/bodies.js";
@@ -17,8 +18,35 @@ const COMMON_STATS = ["strength", "agility", "intellect", "stamina", "armor", "a
 const HITS = ["auto", "ability", "melee", "direct", "periodic", "area", "main", "others", "single"];
 const COMMON_ANIMATIONS = ["attack", "bigAttack", "shoot", "cast", "castBig", "castChannel"];
 const MORE_ANIMATIONS = ["offhandAttack", "dualAttack", "spinningAttack", "stab", "kick", "spinningKick", "punch", "shieldBash", "groundSlam", "aimedShot", "rapidShot", "throw", "castGround", "castOverhead", "castSelf", "castOnAlly", "pray", "shout", "breath", "roll", "drink", "transform", "none"];
-const WHEN = ["cast", "launch", "impact", "channel"];
+const WHEN = ["cast", "launch", "flight", "impact", "channel"];
 const ON = ["caster", "target", "ground"];
+
+// A particle effect's parameters. Left empty, each is the stock effect's, which shows in grey.
+const particle = (v) => isParticleEffect(v.effect);
+const stockOf = (key) => (v) => (particle(v) ? String(PARTICLE_STOCK[v.effect][key]) : "");
+const particleNumber = (key, label, more = {}) => ({ key, label, type: "number", show: particle, placeholder: stockOf(key), ...more });
+const particleSelect = (key, options) => ({ key, type: "select", none: "stock", options, show: particle });
+const PARTICLE_FIELDS = [
+  particleNumber("count", "at once", { min: 0, step: 1 }),
+  particleNumber("rate", "per second", { min: 0 }),
+  particleNumber("duration", "for seconds", { min: 0 }),
+  particleNumber("lifetime", "each lasts", { min: 0 }),
+  particleNumber("speed", "speed", { min: 0 }),
+  particleNumber("spread", "spread degrees", { min: 0, max: 360 }),
+  particleSelect("direction", ["up", "forward"]),
+  particleNumber("gravity", "gravity"),
+  particleNumber("drag", "drag", { min: 0 }),
+  particleNumber("size", "size", { min: 0 }),
+  particleNumber("sizeEnd", "end size", { min: 0 }),
+  particleNumber("radius", "radius", { min: 0 }),
+  particleSelect("texture", PARTICLE_TEXTURES),
+  particleSelect("blend", ["glow", "solid"]),
+  particleNumber("stretch", "stretch", { min: 0 }),
+  particleNumber("spin", "spin", { min: 0 }),
+  particleNumber("opacity", "opacity", { min: 0, max: 1 }),
+  particleSelect("at", ["feet", "chest"]),
+  particleSelect("facing", ["camera", "ground"]),
+];
 
 const is = (...types) => (value) => types.includes(value.type);
 const abilitiesOf = (made) => () => (made.abilities ?? []).map((a) => [a.id, a.name || a.id]);
@@ -519,6 +547,7 @@ export const abilityFields = (made) => [
       { key: "on", type: "select", none: "by when", options: ON },
       main,
       { key: "scale", type: "number", min: 0 },
+      ...PARTICLE_FIELDS,
     ],
   },
   {
