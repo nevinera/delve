@@ -454,7 +454,7 @@ export class PlayCombat {
   }
 
   note({ from, on, ability }, text) {
-    const made = this.made?.abilities?.find((a) => a.id === ability);
+    const made = this.made?.abilities?.find((a) => a.id === ability) ?? this.made?.statuses?.find((s) => s.id === ability);
     this.log.add(`${this.nameOf(from)}: ${made?.name ?? ability ?? "attack"} on ${this.nameOf(on)}: ${text}`);
   }
 

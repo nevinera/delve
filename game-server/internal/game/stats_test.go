@@ -548,3 +548,186 @@ func TestDrainAndSlowed(t *testing.T) {
 		t.Fatal("not slowed")
 	}
 }
+
+// triggered is a fight holding `watch`, with `hit` for 100 on the dummy.
+func triggered(t *testing.T, watch string) (*Hub, *Player, *float64) {
+	t.Helper()
+	h, p, c := statusFight(t, map[string]string{"watch": watch})
+	p.fight.class.Resources = append(p.fight.class.Resources, combat.Resource{Key: "grit", Kind: "points", Max: 100})
+	use(t, p, "watch")
+	pass(h, c, 0.1)
+	return h, p, c
+}
+
+const giveGrit = `"effect":{"type":"resource","affects":"self","resource":"grit","amount":1}`
+
+func TestTriggersOnHits(t *testing.T) {
+	for _, c := range []struct {
+		name  string
+		watch string
+		want  float64
+	}{
+		{"deal damage", `{"type":"trigger","on":"dealDamage",` + giveGrit + `}`, 1},
+		{"a crit only on a crit", `{"type":"trigger","on":"crit",` + giveGrit + `}`, 0},
+		{"not a crit", `{"type":"trigger","on":"nonCrit",` + giveGrit + `}`, 1},
+		{"narrowed to its school", `{"type":"trigger","on":"dealDamage","school":"holy",` + giveGrit + `}`, 1},
+		{"narrowed away", `{"type":"trigger","on":"dealDamage","school":"frost",` + giveGrit + `}`, 0},
+		{"narrowed to the ability", `{"type":"trigger","on":"dealDamage","abilities":["hit"],` + giveGrit + `}`, 1},
+		{"a chance that fails", `{"type":"trigger","on":"dealDamage","chance":0.25,` + giveGrit + `}`, 0},
+		{"a chance that lands", `{"type":"trigger","on":"dealDamage","chance":0.75,` + giveGrit + `}`, 1},
+		{"a cast", `{"type":"trigger","on":"cast","abilities":["hit"],` + giveGrit + `}`, 1},
+		{"takes damage only when it does", `{"type":"trigger","on":"takeDamage",` + giveGrit + `}`, 0},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			h, p, clock := triggered(t, `[`+c.watch+`]`)
+			hitFor(t, h, p, clock)
+			if got := p.fight.resources["grit"]; got != c.want {
+				t.Fatalf("grit = %g, want %g", got, c.want)
+			}
+		})
+	}
+}
+
+func TestTriggerSharesWhatSetItOffAndCantLoop(t *testing.T) {
+	h, p, c := triggered(t, `[{"type":"trigger","on":"dealDamage","effect":{"type":"damage","affects":"target","amount":{"shareOfTrigger":0.5}}}]`)
+	// 100, then half of each hit it sets off until the chain stops: 50, 25, 12.5 and 6.25.
+	if got := hitFor(t, h, p, c); got != 193.75 {
+		t.Fatalf("hit for %g, want 193.75", got)
+	}
+}
+
+func TestTriggerLimits(t *testing.T) {
+	grit := func(p *Player) float64 { return p.fight.resources["grit"] }
+	t.Run("cooldown", func(t *testing.T) {
+		h, p, c := triggered(t, `[{"type":"trigger","on":"dealDamage","cooldown":10,`+giveGrit+`}]`)
+		hitFor(t, h, p, c)
+		hitFor(t, h, p, c)
+		if grit(p) != 1 {
+			t.Fatalf("grit = %g, want 1", grit(p))
+		}
+		pass(h, c, 11)
+		hitFor(t, h, p, c)
+		if grit(p) != 2 {
+			t.Fatalf("grit = %g, want 2", grit(p))
+		}
+	})
+	t.Run("every", func(t *testing.T) {
+		h, p, c := triggered(t, `[{"type":"trigger","on":"dealDamage","every":2,`+giveGrit+`}]`)
+		hitFor(t, h, p, c)
+		if grit(p) != 0 {
+			t.Fatal("fired on the first")
+		}
+		hitFor(t, h, p, c)
+		if grit(p) != 1 {
+			t.Fatal("didn't fire on the second")
+		}
+	})
+	t.Run("resetOn", func(t *testing.T) {
+		h, p, c := triggered(t, `[{"type":"trigger","on":"crit","every":2,"resetOn":"nonCrit",`+giveGrit+`}]`)
+		_ = c
+		w := p.fight.vitals.Statuses[statusKey{"watch", p.ID()}]
+		v := &p.fight.vitals
+		p.layer.fire(event{on: "crit", who: v, other: -1}, h.now())
+		p.layer.fire(event{on: "nonCrit", who: v, other: -1}, h.now())
+		p.layer.fire(event{on: "crit", who: v, other: -1}, h.now())
+		if grit(p) != 0 {
+			t.Fatalf("fired with no two in a row, counts %v", w.counts)
+		}
+		p.layer.fire(event{on: "crit", who: v, other: -1}, h.now())
+		if grit(p) != 1 {
+			t.Fatalf("didn't fire on two in a row, counts %v", w.counts)
+		}
+	})
+	t.Run("spendsStack", func(t *testing.T) {
+		h, p, c := triggered(t, `[{"type":"trigger","on":"dealDamage","spendsStack":true,`+giveGrit+`}]`)
+		hitFor(t, h, p, c)
+		if held(p, "watch") != nil || grit(p) != 1 {
+			t.Fatalf("still held, grit %g", grit(p))
+		}
+		hitFor(t, h, p, c)
+		if grit(p) != 1 {
+			t.Fatal("fired after it was gone")
+		}
+	})
+}
+
+func TestTriggersOnAStatusLife(t *testing.T) {
+	grit := func(p *Player) float64 { return p.fight.resources["grit"] }
+	t.Run("gained, once, at its stacks", func(t *testing.T) {
+		h, p, c := statusFight(t, nil)
+		class := p.fight.class
+		class.Resources = append(class.Resources, combat.Resource{Key: "grit", Kind: "points", Max: 100})
+		class.Statuses = append(class.Statuses, combat.Status{ID: "pile", Name: "Pile", Stacking: "stack", MaxStacks: 3,
+			Effects: effects(t, `[{"type":"trigger","on":"statusGained",`+giveGrit+`},{"type":"trigger","on":"statusGained","atMax":true,"resets":true,"effect":{"type":"resource","affects":"self","resource":"grit","amount":10}}]`)})
+		class.Abilities = append(class.Abilities, selfBuff("pile", gaining("pile")))
+		for i := 0; i < 2; i++ {
+			use(t, p, "pile")
+			pass(h, c, 0.1)
+		}
+		if grit(p) != 2 {
+			t.Fatalf("grit = %g, want one each", grit(p))
+		}
+		use(t, p, "pile")
+		pass(h, c, 0.1)
+		if grit(p) != 13 || held(p, "pile") != nil {
+			t.Fatalf("grit = %g, held %v", grit(p), held(p, "pile"))
+		}
+	})
+	t.Run("ends", func(t *testing.T) {
+		h, p, c := statusFight(t, nil)
+		class := p.fight.class
+		class.Resources = append(class.Resources, combat.Resource{Key: "grit", Kind: "points", Max: 100})
+		class.Statuses = append(class.Statuses, combat.Status{ID: "brief", Name: "Brief", Duration: 1, Effects: effects(t, `[{"type":"trigger","on":"statusEnds",`+giveGrit+`}]`)})
+		class.Abilities = append(class.Abilities, selfBuff("brief", gaining("brief")))
+		use(t, p, "brief")
+		pass(h, c, 0.5)
+		if grit(p) != 0 {
+			t.Fatal("fired early")
+		}
+		pass(h, c, 1)
+		if grit(p) != 1 {
+			t.Fatalf("grit = %g, want 1", grit(p))
+		}
+	})
+}
+
+func TestTriggerOnHealthAndHeals(t *testing.T) {
+	h, p, c := triggered(t, `[{"type":"trigger","on":"healthBelow","threshold":70,`+giveGrit+`},{"type":"trigger","on":"healed",`+giveGrit+`},{"type":"trigger","on":"overheal","effect":{"type":"resource","affects":"self","resource":"grit","amount":{"shareOfTrigger":1}}}]`)
+	use(t, p, "ouch")
+	pass(h, c, 0.5)
+	// Falling past 70% fires once, and staying under doesn't again.
+	if got := p.fight.resources["grit"]; got != 1 {
+		t.Fatalf("grit = %g, want 1", got)
+	}
+	use(t, p, "ouch")
+	pass(h, c, 0.5)
+	if got := p.fight.resources["grit"]; got != 1 {
+		t.Fatalf("grit = %g, still 1", got)
+	}
+	use(t, p, "soothe")
+	pass(h, c, 0.5)
+	if got := p.fight.resources["grit"]; got != 2 {
+		t.Fatalf("grit = %g, want 2 after a heal", got)
+	}
+	p.fight.vitals.Health = p.fight.vitals.MaxHealth - 4
+	use(t, p, "soothe")
+	pass(h, c, 0.5)
+	if got := p.fight.resources["grit"]; got != 9 {
+		t.Fatalf("grit = %g, want 9 with 1 for the heal and 6 for what's past full", got)
+	}
+}
+
+func TestTriggerWatchingTheCaster(t *testing.T) {
+	h, p, c := statusFight(t, map[string]string{})
+	class := p.fight.class
+	class.Resources = append(class.Resources, combat.Resource{Key: "grit", Kind: "points", Max: 100})
+	class.Statuses = append(class.Statuses, combat.Status{ID: "mark", Name: "Mark", Effects: effects(t, `[{"type":"trigger","of":"caster","on":"dealDamage",`+giveGrit+`}]`)})
+	class.Abilities = append(class.Abilities, onDummy("mark", combat.Effect{Type: "status", Affects: "target", Status: "mark"}))
+	use(t, p, "mark")
+	pass(h, c, 0.1)
+	hitFor(t, h, p, c)
+	// It lands on its holder, a dummy, who has no grit: the caster did it, and nothing's given.
+	if got := p.layer.dummies[0].Statuses[statusKey{"mark", p.ID()}]; got == nil || got.fired == nil {
+		t.Fatalf("didn't fire: %+v", got)
+	}
+}

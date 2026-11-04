@@ -242,6 +242,19 @@ type StatusEffect struct {
 	SoftCap int
 	Drain   float64
 
+	// A `trigger`.
+	On          string
+	Effect      *Effect
+	Cooldown    float64
+	ResetOn     string
+	SpendsStack bool
+	Of          string
+	NotOnHolder bool
+	AtStacks    int
+	AtMax       bool
+	Resets      bool
+	Threshold   float64
+
 	AddEffects    []Effect
 	StatusEffects []StatusEffect
 	Overrides     map[string]json.RawMessage
@@ -257,7 +270,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	s.Type = head.Type
-	if head.Type != "periodic" && head.Type != "stat" && head.Type != "modify" {
+	if head.Type != "periodic" && head.Type != "stat" && head.Type != "modify" && head.Type != "trigger" {
 		return nil
 	}
 	var body struct {
@@ -300,6 +313,18 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		SoftCap int     `json:"softCap"`
 		Drain   float64 `json:"drain"`
 
+		On          string  `json:"on"`
+		Effect      *Effect `json:"effect"`
+		Cooldown    float64 `json:"cooldown"`
+		ResetOn     string  `json:"resetOn"`
+		SpendsStack bool    `json:"spendsStack"`
+		Of          string  `json:"of"`
+		NotOnHolder bool    `json:"notOnHolder"`
+		AtStacks    int     `json:"atStacks"`
+		AtMax       bool    `json:"atMax"`
+		Resets      bool    `json:"resets"`
+		Threshold   float64 `json:"threshold"`
+
 		AddEffects    []Effect                   `json:"addEffects"`
 		StatusEffects []StatusEffect             `json:"statusEffects"`
 		Overrides     map[string]json.RawMessage `json:"overrides"`
@@ -312,6 +337,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		body.Hit, body.Source, body.School, body.Schools, body.Category, body.Categories, body.Abilities, body.Tag, body.Statuses, body.When,
 		body.Change, body.Set, body.AddAmount, body.AddTags, body.Chance, body.AtTargets, body.PerTargetHit, body.MaxTotal,
 		body.Affects, body.Radius, body.Max, body.SoftCap, body.Drain,
+		body.On, body.Effect, body.Cooldown, body.ResetOn, body.SpendsStack, body.Of, body.NotOnHolder, body.AtStacks, body.AtMax, body.Resets, body.Threshold,
 		body.AddEffects, body.StatusEffects, body.Overrides, body.Ignores}
 	return nil
 }
@@ -341,25 +367,27 @@ type Amount struct {
 	AttackPower, SpellPower, Weapon, Mast float64
 	ByMastery                             float64
 	MaxHealth                             float64 // a share of the maximum health of whoever it affects
+	ShareOfTrigger                        float64 // a share of what set off the trigger
 }
 
 // UnmarshalJSON reads each of an amount's three shapes.
 func (a *Amount) UnmarshalJSON(b []byte) error {
 	var parts struct {
-		Base        json.RawMessage `json:"base"`
-		AttackPower float64         `json:"attackPower"`
-		SpellPower  float64         `json:"spellPower"`
-		Weapon      float64         `json:"weapon"`
-		Mastery     float64         `json:"mastery"`
-		ByMastery   float64         `json:"byMastery"`
-		MaxHealth   float64         `json:"maxHealth"`
+		Base           json.RawMessage `json:"base"`
+		AttackPower    float64         `json:"attackPower"`
+		SpellPower     float64         `json:"spellPower"`
+		Weapon         float64         `json:"weapon"`
+		Mastery        float64         `json:"mastery"`
+		ByMastery      float64         `json:"byMastery"`
+		MaxHealth      float64         `json:"maxHealth"`
+		ShareOfTrigger float64         `json:"shareOfTrigger"`
 	}
 	if len(b) > 0 && b[0] == '{' {
 		if err := json.Unmarshal(b, &parts); err != nil {
 			return err
 		}
 		a.AttackPower, a.SpellPower, a.Weapon, a.Mast = parts.AttackPower, parts.SpellPower, parts.Weapon, parts.Mastery
-		a.ByMastery, a.MaxHealth = parts.ByMastery, parts.MaxHealth
+		a.ByMastery, a.MaxHealth, a.ShareOfTrigger = parts.ByMastery, parts.MaxHealth, parts.ShareOfTrigger
 		if len(parts.Base) == 0 {
 			return nil
 		}

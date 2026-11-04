@@ -50,6 +50,8 @@ type activeStatus struct {
 	until  time.Time
 	stacks int
 	uses   int               // what's left of `consumedBy.uses`
+	fired  map[int]time.Time // when each of its triggers last fired, by its place in the status
+	counts map[int]float64   // how far along each `every` is, by the same
 	ticks  map[int]time.Time // when each of its periodic effects next ticks, by its place in the status
 }
 
@@ -357,6 +359,11 @@ func costOf(f *fighter, cost combat.Cost) float64 {
 	return 0
 }
 
+// castOf is an ability being used, as what's watching sees it.
+func castOf(a *combat.Ability) *combat.HitContext {
+	return &combat.HitContext{Schools: schoolsOf("", nil, a), Ability: a, Kinds: []string{"ability"}}
+}
+
 // release lets go of a cast: it spends what the ability costs, starts its cooldown, and sets off
 // what lands.
 func (l *Layer) release(p *Player, c *casting, now time.Time) {
@@ -375,7 +382,9 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 		f.resChanged = true
 		c.spent += spent
 		p.debugLine("%s: spent %g %s", a.Name, spent, cost.Resource)
+		l.fire(event{on: "spend", who: &f.vitals, other: c.target, ctx: castOf(a), amount: spent, resource: cost.Resource}, now)
 	}
+	l.fire(event{on: "cast", who: &f.vitals, other: c.target, ctx: castOf(a)}, now)
 	if a.Cooldown > 0 {
 		spent := live(f.cooldowns[a.ID], now)
 		from := now
@@ -394,6 +403,9 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 			at := now.Add(seconds(a.Channel.Duration * float64(n) / float64(ticks)))
 			l.after(at, c, func(now time.Time) { l.landAll(p, c, now, false) })
 		}
+		l.after(now.Add(seconds(a.Channel.Duration)), c, func(now time.Time) {
+			l.fire(event{on: "channelEnd", who: &f.vitals, other: c.target, ctx: castOf(a)}, now)
+		})
 		return
 	}
 	f.cast = nil
@@ -621,8 +633,11 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 		return
 	case "heal":
 		n, crit := l.rollHeal(p, on, e.AmountFor(count), hitOf(c, e, on, count), now)
+		over := max(on.Health+n-on.MaxHealth, 0)
 		on.Health = min(on.Health+n, on.MaxHealth)
 		h.Amount, h.Crit = math.Round(n), crit
+		ctx := hitOf(c, e, on, count)
+		defer l.healedBy(p, on, n, over, ctx, now)
 	case "resource":
 		n, _ := combat.Roll(e.AmountFor(count), l.statsOf(&p.fight.vitals, nil, now), false, l.hub.roll)
 		if given, ok := l.addResource(&p.fight, e.Resource, n); ok {
@@ -690,9 +705,10 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 		held.until = now.Add(seconds(lasts))
 	}
 	if was != nil {
-		held.ticks = was.ticks // putting it on again doesn't start its ticks over
+		held.ticks, held.fired, held.counts = was.ticks, was.fired, was.counts // putting it on again doesn't start these over
 	}
 	on.Statuses[key] = held
+	l.fire(statusEvent("statusGained", on, key, held), now)
 	h.Status, h.Lasts, h.Class, h.Stacks = s.ID, lasts, f.class.ID, held.stacks
 	return true
 }
@@ -724,7 +740,11 @@ func (l *Layer) eachUnit(do func(v *vitals, at [3]float64, continent string)) {
 
 // takeOff removes a status from a unit and says so.
 func (l *Layer) takeOff(on *vitals, key statusKey) {
+	held := on.Statuses[key]
 	delete(on.Statuses, key)
+	if held != nil {
+		l.fire(statusEvent("statusEnds", on, key, held), l.hub.now())
+	}
 	l.tellOf(on.ID, encode(statusGone{"statusGone", on.ID, key.id, key.from}))
 }
 
@@ -775,6 +795,7 @@ func (l *Layer) spend(p *Player, used []usingUp, now time.Time) {
 		if on.Statuses[u.key] != u.held {
 			continue
 		}
+		l.fire(statusEvent("statusConsumed", on, u.key, u.held), now)
 		if n := u.held.def.ConsumedBy.Stacks; n > 0 {
 			u.held.stacks -= n
 			if u.held.stacks > 0 {
@@ -858,11 +879,14 @@ func (l *Layer) tickOf(p *Player, holder *vitals, id string, held *activeStatus,
 			l.harm(p, on, n, &h, now)
 			l.leech(p, on, n, ctx, "", now)
 			l.drain(p, n, e.Drain, "")
+			defer l.damaged(p, on, n, crit, ctx, now)
 		case "heal":
 			n, crit := l.rollHeal(p, on, amount, ctx, now)
 			h.Crit = crit
+			over := max(on.Health+n-on.MaxHealth, 0)
 			on.Health = min(on.Health+n, on.MaxHealth)
 			h.Amount = math.Round(n)
+			defer l.healedBy(p, on, n, over, ctx, now)
 		case "resource":
 			o := l.players[on.ID]
 			if o == nil {
@@ -924,6 +948,10 @@ func (l *Layer) consume(p *Player, c *casting, e *combat.Effect, on *vitals, now
 		held := on.Statuses[key]
 		if held == nil {
 			p.debugLine("%s: %s has no %s to consume", c.ability.Name, l.nameOf(on.ID), id)
+			continue
+		}
+		l.fire(statusEvent("statusConsumed", on, key, held), now)
+		if on.Statuses[key] != held {
 			continue
 		}
 		taken, window := held.stacks, time.Duration(0)
@@ -1024,6 +1052,11 @@ func (l *Layer) dealLeft(p *Player, c *casting, id string, held *activeStatus, s
 		h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
 		l.sync(on)
 		l.tellOf(on.ID, encode(h))
+		if each.Does == "damage" {
+			l.damaged(p, on, total, crit, ctx, now)
+		} else {
+			l.healedBy(p, on, total, 0, ctx, now)
+		}
 	}
 }
 
@@ -1166,6 +1199,7 @@ func (l *Layer) strike(p *Player, on *vitals, amount combat.Amount, ctx combat.H
 		ability = ctx.Ability.ID
 	}
 	l.leech(p, on, n, ctx, ability, now)
+	l.damaged(p, on, n, crit, ctx, now)
 }
 
 // statsOf is a unit's stats with what it holds counted. With a hit, stats narrowed to some hits
@@ -1298,7 +1332,7 @@ func hitOf(c *casting, e *combat.Effect, on *vitals, count int) combat.HitContex
 	if count == 1 {
 		kinds = append(kinds, "single")
 	}
-	return combat.HitContext{Schools: schoolsOf(e.School, e.Schools, c.ability), Category: e.Category, Ability: c.ability, Kinds: kinds, CritChance: e.CritChance, CritDamage: e.CritDamage}
+	return combat.HitContext{Schools: schoolsOf(e.School, e.Schools, c.ability), Category: e.Category, Ability: c.ability, Kinds: kinds, Hits: count, CritChance: e.CritChance, CritDamage: e.CritDamage}
 }
 
 // refit brings what's kept from a unit's stats up to date: its most health, keeping the share it

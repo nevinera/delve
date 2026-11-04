@@ -14,6 +14,8 @@ type HitContext struct {
 	Kinds    []string // what kinds of hit it counts as: auto, ability, melee and the rest
 	Other    int64    // the unit at the other end of the hit
 
+	Hits int // how many the ability hit
+
 	CritChance, CritDamage float64 // what a `modify` adds to this hit, in points
 }
 

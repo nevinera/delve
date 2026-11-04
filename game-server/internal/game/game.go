@@ -60,6 +60,7 @@ func NewHub(w WorldLoader, c Characters) *Hub {
 
 // Layer is one copy of a world's open land and the characters in it.
 type Layer struct {
+	firing  int // how many triggers are setting each other off right now
 	hub     *Hub
 	key     string
 	worldID int64
