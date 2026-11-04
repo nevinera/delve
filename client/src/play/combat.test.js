@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hitWords, knownAbilities, nextTarget, pickNearest, shownResources } from "./combat.js";
+import { heldStatuses, hitWords, knownAbilities, nextTarget, pickNearest, shownResources } from "./combat.js";
 
 describe("pickNearest", () => {
   const units = [{ id: 1, x: 100, y: 100 }, { id: 2, x: 130, y: 100 }];
@@ -36,6 +36,12 @@ describe("what you know", () => {
 
   it("goes by level, lowest first", () => expect(ids(knownAbilities(made, 3))).toEqual(["first", "third"]));
   it("leaves out what a spec or talent gives", () => expect(ids(knownAbilities(made, 20))).toEqual(["first", "third", "fifth"]));
+  it("holds passives from their level, and mastery always", () => {
+    const holder = { passives: [{ status: "a" }, { status: "b", level: 10 }], mastery: { status: "m" } };
+    expect(heldStatuses(holder, 9)).toEqual(["a", "m"]);
+    expect(heldStatuses(holder, 10)).toEqual(["a", "b", "m"]);
+    expect(heldStatuses({}, 10)).toEqual([]);
+  });
   it("shows the primary resource from the start", () => expect(ids(shownResources(made, []).map((r) => ({ id: r.key })))).toEqual(["conviction"]));
   it("shows another once something you know spends it", () => expect(shownResources(made, knownAbilities(made, 3))).toHaveLength(2));
   it("shows another once something you know gives it", () => expect(shownResources(made, [made.abilities[4]])).toHaveLength(2));

@@ -20,6 +20,19 @@ type Class struct {
 	// What a character chooses gives these abilities, so level alone doesn't.
 	Specializations []Specialization    `json:"specializations"`
 	Talents         map[string][]Talent `json:"talents"`
+	Passives        []Passive           `json:"passives"`
+	Mastery         *Mastery            `json:"mastery"`
+}
+
+// Passive is a status a class has from a level on.
+type Passive struct {
+	Status string `json:"status"`
+	Level  int    `json:"level"`
+}
+
+// Mastery is the status a class always has, whose numbers use the mastery stat.
+type Mastery struct {
+	Status string `json:"status"`
 }
 
 // Specialization is what a character picks at the level the game sets.
@@ -173,6 +186,7 @@ type StatusEffect struct {
 	Resource   string
 	Add        float64
 	Multiply   *float64
+	Mastery    float64
 	FromStat   string
 	Share      float64
 	OfCaster   bool
@@ -209,6 +223,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		Resource   string      `json:"resource"`
 		Add        float64     `json:"add"`
 		Multiply   *float64    `json:"multiply"`
+		Mastery    float64     `json:"mastery"`
 		FromStat   string      `json:"fromStat"`
 		Share      float64     `json:"share"`
 		OfCaster   bool        `json:"ofCaster"`
@@ -227,7 +242,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &body); err != nil {
 		return err
 	}
-	*s = StatusEffect{head.Type, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
+	*s = StatusEffect{head.Type, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
 		body.Hit, body.Source, body.School, body.Schools, body.Category, body.Categories, body.Abilities, body.Tag, body.Statuses, body.When}
 	return nil
 }
@@ -255,6 +270,7 @@ func (d *Distance) UnmarshalJSON(b []byte) error {
 type Amount struct {
 	Min, Max                              float64
 	AttackPower, SpellPower, Weapon, Mast float64
+	ByMastery                             float64
 }
 
 // UnmarshalJSON reads each of an amount's three shapes.
@@ -265,12 +281,14 @@ func (a *Amount) UnmarshalJSON(b []byte) error {
 		SpellPower  float64         `json:"spellPower"`
 		Weapon      float64         `json:"weapon"`
 		Mastery     float64         `json:"mastery"`
+		ByMastery   float64         `json:"byMastery"`
 	}
 	if len(b) > 0 && b[0] == '{' {
 		if err := json.Unmarshal(b, &parts); err != nil {
 			return err
 		}
 		a.AttackPower, a.SpellPower, a.Weapon, a.Mast = parts.AttackPower, parts.SpellPower, parts.Weapon, parts.Mastery
+		a.ByMastery = parts.ByMastery
 		if len(parts.Base) == 0 {
 			return nil
 		}
@@ -323,6 +341,20 @@ func (c *Class) Knows(a *Ability, level int) bool {
 		}
 	}
 	return true
+}
+
+// HeldFrom is the ids of the statuses a character of this level always holds.
+func (c *Class) HeldFrom(level int) []string {
+	var out []string
+	for _, p := range c.Passives {
+		if p.Level <= level {
+			out = append(out, p.Status)
+		}
+	}
+	if c.Mastery != nil && c.Mastery.Status != "" {
+		out = append(out, c.Mastery.Status)
+	}
+	return out
 }
 
 // Status finds one of the class's statuses.

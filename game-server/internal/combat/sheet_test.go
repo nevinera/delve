@@ -138,3 +138,52 @@ func TestPoolAfter(t *testing.T) {
 		}
 	}
 }
+
+func TestMasteryScalesStatsAndAmounts(t *testing.T) {
+	mod := func(text string, stacks int) Mod { return Mod{Effect: statEffect(t, text), Stacks: stacks} }
+	base := Plain(100)
+	s := Sheet(base, nil, []Mod{
+		mod(`{"type":"stat","stat":"block","mastery":2}`, 1),
+		mod(`{"type":"stat","stat":"damageDone","mastery":1}`, 1),
+		mod(`{"type":"stat","stat":"stamina","add":10,"mastery":1}`, 1),
+		mod(`{"type":"stat","stat":"mastery","add":10}`, 2),
+	})
+	if s.MasteryPercent() != 20 {
+		t.Fatalf("mastery = %g, want 20", s.MasteryPercent())
+	}
+	if *s.Others["block"] != 40 {
+		t.Fatalf("block = %g, want 40", *s.Others["block"])
+	}
+	if s.DamageDone != 1.2 {
+		t.Fatalf("damage done = %g, want 1.2", s.DamageDone)
+	}
+	if s.Stamina != 12 {
+		t.Fatalf("stamina = %g, want 12", s.Stamina)
+	}
+	if n, _ := Roll(Amount{Min: 100, Max: 100, Mast: 2, ByMastery: 1}, s, false, func() float64 { return 0 }); n != 168 {
+		t.Fatalf("amount = %g, want (100 + 2*20) * 1.2", n)
+	}
+	if got := PoolOf(Resource{Key: "rage", Kind: "rage"}, s, nil, []Mod{mod(`{"type":"stat","stat":"resourceMax","resource":"rage","mastery":1}`, 1)}); got.Max != 120 {
+		t.Fatalf("max = %g, want 120", got.Max)
+	}
+}
+
+func TestAmountReadsMastery(t *testing.T) {
+	var a Amount
+	if err := json.Unmarshal([]byte(`{"base":5,"mastery":2,"byMastery":3}`), &a); err != nil {
+		t.Fatal(err)
+	}
+	if a.Mast != 2 || a.ByMastery != 3 {
+		t.Fatalf("%+v", a)
+	}
+}
+
+func TestHeldFromGoesByLevel(t *testing.T) {
+	c := &Class{Passives: []Passive{{"early", 1}, {"late", 10}}, Mastery: &Mastery{"resolve"}}
+	if got := c.HeldFrom(9); len(got) != 2 || got[0] != "early" || got[1] != "resolve" {
+		t.Fatalf("level 9: %v", got)
+	}
+	if got := c.HeldFrom(10); len(got) != 3 {
+		t.Fatalf("level 10: %v", got)
+	}
+}

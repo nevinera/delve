@@ -133,14 +133,25 @@ func Sheet(base Stats, primary []string, mods []Mod) Stats {
 		s.Others[name] = &v
 	}
 	isGear := func(name string) bool { return slices.Contains(gearStats, name) }
+	// Mastery goes first, so that what scales by it can be any stat.
+	isMastery := func(e *StatusEffect) *float64 {
+		if e.Stat == "mastery" {
+			return s.Others["mastery"]
+		}
+		return nil
+	}
+	change(mods, isMastery)
+	shares(mods, isMastery, &s, primary)
+	mastery := s.MasteryPercent()
 	stage := func(gear bool) {
 		pick := func(e *StatusEffect) *float64 {
-			if isGear(e.Stat) != gear {
+			if isGear(e.Stat) != gear || e.Stat == "mastery" {
 				return nil
 			}
 			return s.field(e.Stat)
 		}
 		change(mods, pick)
+		scale(mods, pick, mastery)
 		read := s
 		shares(mods, pick, &read, primary)
 	}
@@ -163,6 +174,25 @@ func change(mods []Mod, pick func(*StatusEffect) *float64) {
 	for _, m := range mods {
 		if field := pick(m.Effect); field != nil && m.Effect.Multiply != nil {
 			*field *= math.Pow(*m.Effect.Multiply, float64(m.Stacks))
+		}
+	}
+}
+
+// percentStats add a stat's `mastery` in points. The others grow by that percent.
+var percentStats = []string{"critChance", "critDamage", "critHealing", "critTaken", "haste", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed"}
+
+// scale makes the changes that go by the holder's mastery.
+func scale(mods []Mod, pick func(*StatusEffect) *float64, mastery float64) {
+	for _, m := range mods {
+		field := pick(m.Effect)
+		if field == nil || m.Effect.Mastery == 0 {
+			continue
+		}
+		points := m.Effect.Mastery * mastery * float64(m.Stacks)
+		if slices.Contains(percentStats, m.Effect.Stat) {
+			*field += points
+		} else {
+			*field *= 1 + points/100
 		}
 	}
 }
@@ -216,6 +246,7 @@ func PoolOf(r Resource, s Stats, primary []string, mods []Mod) Pool {
 		return nil
 	}
 	change(mods, pick)
+	scale(mods, pick, s.MasteryPercent())
 	shares(mods, pick, &s, primary)
 	out.Max, out.Rest, out.Decay, out.Gain = max(out.Max, 0), max(out.Rest, 0), max(out.Decay, 0), max(out.Gain, 0)
 	return out

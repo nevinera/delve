@@ -62,6 +62,12 @@ export function knownAbilities(made, level) {
   return (made.abilities ?? []).filter((a) => (a.level ?? 1) <= level && !chosen.has(a.id)).sort((a, b) => (a.level ?? 1) - (b.level ?? 1));
 }
 
+// The ids of the statuses a character of this level always holds.
+export function heldStatuses(made, level) {
+  const passives = (made.passives ?? []).filter((p) => (p.level ?? 1) <= level).map((p) => p.status);
+  return made.mastery?.status ? [...passives, made.mastery.status] : passives;
+}
+
 // The resources to show: the primary one always, and the rest once something you know uses them.
 export function shownResources(made, known) {
   const used = new Set();
@@ -151,6 +157,8 @@ export class PlayCombat {
     this.buttons = new Map();
     this.actionNodes = new Map();
     this.known = knownAbilities(made, this.you.level ?? 1);
+    if (!this.statuses.has(this.you.id)) this.statuses.set(this.you.id, new Map());
+    for (const id of heldStatuses(made, this.you.level ?? 1)) this.statuses.get(this.you.id).set(id, 1);
     const abilities = this.known.slice(0, KEYS.length);
     this.attackButton = el("button", { type: "button", className: "combat-action", title: "Auto-attack your target, or stop" }, el("span", { className: "combat-action-key", textContent: ATTACK_KEY }), el("span", { className: "combat-action-name", textContent: "Attack" }));
     this.attackButton.addEventListener("click", () => this.toggleAttack());

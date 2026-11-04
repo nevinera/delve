@@ -128,6 +128,13 @@ func (p *Player) enterFight(class *combat.Class, level int) {
 		f.resources[r.Key] = combat.StartResource(r)
 	}
 	f.resChanged = true // so the first tick tells the player where they stand
+	for _, id := range f.class.HeldFrom(f.level) {
+		if s := f.class.Status(id); s != nil {
+			f.vitals.Statuses[statusKey{id, p.state.ID}] = &activeStatus{def: s, class: f.class.ID, stacks: 1, uses: 1}
+		} else {
+			log.Printf("character %d: class %s holds a status it hasn't got: %s", p.state.ID, f.class.ID, id)
+		}
+	}
 	p.state.Class, p.state.Level, p.state.Health, p.state.MaxHealth = f.class.ID, f.level, f.vitals.Health, f.vitals.MaxHealth
 }
 

@@ -104,10 +104,20 @@ func DecayOf(r Resource) float64 {
 	}
 }
 
+// MasteryPercent is the holder's mastery, once Sheet's worked it out.
+func (s Stats) MasteryPercent() float64 {
+	if p, ok := s.Others["mastery"]; ok {
+		return *p
+	}
+	return 0
+}
+
 // Roll is what an amount comes to for someone with these stats, and whether it crit. roll gives
 // numbers in [0, 1).
 func Roll(a Amount, s Stats, canCrit bool, roll func() float64) (float64, bool) {
 	n := a.Min + (a.Max-a.Min)*roll() + a.AttackPower*s.AttackPower + a.SpellPower*s.SpellPower + a.Weapon*WeaponDamage
+	mastery := s.MasteryPercent()
+	n = (n + a.Mast*mastery) * (1 + a.ByMastery*mastery/100)
 	if canCrit && roll() < s.CritChance/100 {
 		return n * (1 + s.CritDamage/100), true
 	}

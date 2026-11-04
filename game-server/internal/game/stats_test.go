@@ -286,3 +286,30 @@ func TestDecayAndWholePoints(t *testing.T) {
 		t.Fatalf("showed %g, want 3", got)
 	}
 }
+
+// A class's passives and mastery are held from their levels on, for good, and count as stats.
+func TestPassivesAndMastery(t *testing.T) {
+	h, p, c := statusFight(t, nil)
+	class := *p.fight.class
+	class.Statuses = append(class.Statuses[:len(class.Statuses):len(class.Statuses)],
+		combat.Status{ID: "second", Effects: effects(t, `[{"type":"stat","stat":"resourceMax","resource":"grit","add":1}]`)},
+		combat.Status{ID: "third", Effects: effects(t, `[{"type":"stat","stat":"resourceMax","resource":"grit","add":1}]`)},
+		combat.Status{ID: "focus", Effects: effects(t, `[{"type":"stat","stat":"mastery","add":10},{"type":"stat","stat":"damageDone","mastery":1}]`)})
+	class.Passives = []combat.Passive{{Status: "second", Level: 10}, {Status: "third", Level: 20}}
+	class.Mastery = &combat.Mastery{Status: "focus"}
+	grit := combat.Resource{Key: "grit", Kind: "points", Max: 1}
+	class.Resources = append(class.Resources[:len(class.Resources):len(class.Resources)], grit)
+	p.enterFight(&class, 10)
+	pass(h, c, 60)
+	if most := p.fight.pool(grit).Max; most != 2 {
+		t.Fatalf("most = %g, want 2 at level 10", most)
+	}
+	if got := hitFor(t, h, p, c); got != 110 {
+		t.Fatalf("hit for %g, want 110", got)
+	}
+	p.enterFight(&class, 20)
+	pass(h, c, 0.1)
+	if most := p.fight.pool(grit).Max; most != 3 {
+		t.Fatalf("most = %g, want 3 at level 20", most)
+	}
+}
