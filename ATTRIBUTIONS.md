@@ -33,3 +33,11 @@ The repeating textures beside it, like `public/effects/energy.png`, are ours: `s
 ## Packages
 
 Packages in `package.json`, `Gemfile` and `game-server/go.mod` keep their own licenses. They aren't copied into this repo.
+
+## Sound effects
+
+**Where:** `public/sounds/*.mp3`
+
+**License:** [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
+
+**Source:** [Impact Sounds](https://kenney.nl/assets/impact-sounds), [RPG Audio](https://kenney.nl/assets/rpg-audio) and [Interface Sounds](https://kenney.nl/assets/interface-sounds) by Kenney. `client/src/abilities/stockSounds.json` says which sounds come from them. `script/bake_sounds.py` converts those, and synthesizes the rest, which are ours.

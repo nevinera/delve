@@ -1,12 +1,13 @@
 import { PARTICLE_EFFECTS } from "./particleStock.js";
 import { SHAPE_EFFECTS } from "./shapeStock.js";
+import { STOCK_SOUNDS } from "./sounds.js";
 
 // The stock visuals and sounds abilities pick from, by name. What each one looks like is in
 // shapeStock.js, particleStock.js or visuals.js, and what it sounds like in sounds.js.
 
 export const MESH_VISUALS = [...SHAPE_EFFECTS, "arrow"];
 export const VISUALS = [...MESH_VISUALS, ...PARTICLE_EFFECTS];
-export const SOUNDS = ["cast", "whoosh", "impact", "fire", "frost", "holy", "shadow", "nature", "arcane", "slash", "heal", "shout"];
+export const SOUNDS = Object.keys(STOCK_SOUNDS);
 
 // What a school looks like, if an ability doesn't pick colors: [main, trim].
 export const SCHOOL_COLORS = {

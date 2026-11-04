@@ -319,7 +319,7 @@ export class AbilityPreview {
     if (!this.ability) return;
     this.stop();
     const distance = this.ability.target === "ground" ? this.spot.length() : this.distance;
-    const on = { hit: (event) => this.land(event), bar: (event) => this.showBar(event), shake: (strength) => this.stage.shake(strength) };
+    const on = { hit: (event) => this.land(event), bar: (event) => this.showBar(event), mine: true, shake: (strength) => this.stage.shake(strength) };
     this.run = this.stage.play(this.ability, { caster: this.caster, target: this.dummy, spot: this.ability.target === "ground" ? this.spot : null, ranged: this.ranged, distance, on });
     this.say.textContent = this.problem();
     if (this.audio?.state === "suspended") this.audio.resume();
@@ -407,6 +407,7 @@ export class AbilityPreview {
     }
     this.stage.place();
     this.orbit.update();
+    this.stage.hear(this.camera);
     this.drawFloats();
     const shaken = this.stage.shakeOffset();
     this.camera.position.add(shaken);

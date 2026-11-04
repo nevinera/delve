@@ -1,6 +1,5 @@
 import "../objects/library.css";
 import "./classes.css";
-import { playSound } from "../abilities/sounds.js";
 import { keptSource, onSourceSaved, saveKept } from "../create/keptSave.js";
 import { KeptJson, keptFiles } from "../create/keptWorld.js";
 import { BranchMoved } from "../create/repo.js";
@@ -160,7 +159,7 @@ function showPreview(made, ability) {
   $("preview").hidden = !ability;
   if (!ability) return preview?.setAbility(null);
   preview ??= new AbilityPreview($("preview"));
-  window.classes = { preview, playSound };
+  window.classes = { preview };
   preview.setClass(made, ability);
   // Changing a field needn't restart what's playing, or move the camera off where it's been put.
   const key = JSON.stringify(ability);

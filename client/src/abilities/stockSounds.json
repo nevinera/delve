@@ -1,0 +1,182 @@
+{
+  "cast": {
+    "kind": "ability",
+    "variations": 3,
+    "from": "made"
+  },
+  "whoosh": {
+    "kind": "ability",
+    "variations": 4,
+    "from": "made"
+  },
+  "slash": {
+    "kind": "ability",
+    "variations": 4,
+    "from": "made"
+  },
+  "bowshot": {
+    "kind": "ability",
+    "variations": 3,
+    "from": "made"
+  },
+  "fire": {
+    "kind": "ability",
+    "variations": 3,
+    "from": "made"
+  },
+  "frost": {
+    "kind": "ability",
+    "variations": 3,
+    "from": "made"
+  },
+  "holy": {
+    "kind": "ability",
+    "variations": 3,
+    "from": "made"
+  },
+  "shadow": {
+    "kind": "ability",
+    "variations": 3,
+    "from": "made"
+  },
+  "nature": {
+    "kind": "ability",
+    "variations": 3,
+    "from": "made"
+  },
+  "arcane": {
+    "kind": "ability",
+    "variations": 3,
+    "from": "made"
+  },
+  "lightning": {
+    "kind": "ability",
+    "variations": 3,
+    "from": "made"
+  },
+  "explosion": {
+    "kind": "ability",
+    "variations": 3,
+    "from": "made"
+  },
+  "heal": {
+    "kind": "ability",
+    "variations": 3,
+    "from": "made"
+  },
+  "shimmer": {
+    "kind": "ability",
+    "variations": 3,
+    "from": "made"
+  },
+  "shout": {
+    "kind": "ability",
+    "variations": 3,
+    "from": "made"
+  },
+  "impact": {
+    "kind": "hit",
+    "variations": 4,
+    "from": "kenney"
+  },
+  "hit-metal": {
+    "kind": "hit",
+    "variations": 4,
+    "from": "kenney"
+  },
+  "hit-soft": {
+    "kind": "hit",
+    "variations": 4,
+    "from": "kenney"
+  },
+  "block": {
+    "kind": "hit",
+    "variations": 4,
+    "from": "kenney"
+  },
+  "miss": {
+    "kind": "hit",
+    "variations": 3,
+    "from": "made"
+  },
+  "growl": {
+    "kind": "mob",
+    "variations": 3,
+    "from": "made"
+  },
+  "mob-hurt": {
+    "kind": "mob",
+    "variations": 4,
+    "from": "made"
+  },
+  "mob-death": {
+    "kind": "mob",
+    "variations": 3,
+    "from": "made"
+  },
+  "death": {
+    "kind": "mob",
+    "variations": 3,
+    "from": "made"
+  },
+  "step-grass": {
+    "kind": "footstep",
+    "variations": 4,
+    "from": "kenney"
+  },
+  "step-stone": {
+    "kind": "footstep",
+    "variations": 4,
+    "from": "kenney"
+  },
+  "step-wood": {
+    "kind": "footstep",
+    "variations": 4,
+    "from": "kenney"
+  },
+  "step-snow": {
+    "kind": "footstep",
+    "variations": 4,
+    "from": "kenney"
+  },
+  "coins": {
+    "kind": "loot",
+    "variations": 2,
+    "from": "kenney"
+  },
+  "loot-cloth": {
+    "kind": "loot",
+    "variations": 3,
+    "from": "kenney"
+  },
+  "ui-click": {
+    "kind": "ui",
+    "variations": 3,
+    "from": "kenney"
+  },
+  "ui-open": {
+    "kind": "ui",
+    "variations": 3,
+    "from": "kenney"
+  },
+  "ui-close": {
+    "kind": "ui",
+    "variations": 3,
+    "from": "kenney"
+  },
+  "ui-error": {
+    "kind": "ui",
+    "variations": 3,
+    "from": "kenney"
+  },
+  "ui-confirm": {
+    "kind": "ui",
+    "variations": 3,
+    "from": "kenney"
+  },
+  "level-up": {
+    "kind": "ui",
+    "variations": 2,
+    "from": "made"
+  }
+}

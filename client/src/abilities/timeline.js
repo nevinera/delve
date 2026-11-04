@@ -11,7 +11,7 @@ import { SCHOOL_COLORS } from "./stock.js";
 // - bar: { until, label }, the cast or channel bar.
 // - visual: { effect, on, colors, scale, params, heldByCast }, a stock visual on "caster", "target" or
 //   "ground". heldByCast: it lasts until the cast or channel ends, and stops if that's cut short.
-// - sound: { sound, volume, pitch }.
+// - sound: { sound, on, volume, pitch, pitchVariation, delay }.
 // - projectile: { effect, colors, until, trails }, flying from the caster to the target, with
 //   trails, the visuals with `when: "flight"`, following it.
 // - hit: { effect, n, on }, one of the ability's effects landing, on tick n of a channel.
@@ -129,7 +129,7 @@ export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false }
     }
   }
   for (const s of ability.sounds ?? []) {
-    for (const at of times(s.when)) events.push({ at, kind: "sound", sound: s.sound, on: s.on ?? defaultOn(s.when, ability), volume: s.volume ?? 1, pitch: s.pitch ?? 1 });
+    for (const at of times(s.when)) events.push({ at, kind: "sound", sound: s.sound, on: s.on ?? defaultOn(s.when, ability), volume: s.volume ?? 1, pitch: s.pitch ?? 1, pitchVariation: s.pitchVariation ?? 0, delay: s.delay ?? 0 });
   }
   if (ability.speed && ["enemy", "ally", "any"].includes(ability.target)) {
     const own = visuals.find(isProjectile);

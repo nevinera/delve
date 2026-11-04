@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { dueBy, emitsFor, isParticleEffect, particleSpec } from "./particleStock.js";
 import { DESKTOP_PARTICLES, ParticleField } from "./particles.js";
-import { playSound } from "./sounds.js";
+import { DESKTOP_SOUNDS, SoundMixer, fetchSounds } from "./sounds.js";
 import { SCHOOL_COLORS } from "./stock.js";
 import { abilityTimeline } from "./timeline.js";
 import { discGeometry, drape } from "./decal.js";
@@ -24,7 +24,7 @@ const AURA_OUT_S = 0.3;
 const SHAKE_S = 0.25;
 const LUNGE_BACK_S = 0.25;
 const LUNGE_CLEAR_FT = 3; // how far from its target a lunge stops
-const PLAIN_SWING = { name: "swing", plainSwing: true, range: "melee", school: "physical", animation: "attack" };
+const PLAIN_SWING = { name: "swing", plainSwing: true, range: "melee", school: "physical", animation: "attack", sounds: [{ sound: "whoosh", when: "launch", volume: 0.5, pitchVariation: 0.08 }] };
 const BLADE_STARTS = 0.55; // how far along a weapon from its grip to its tip a ribbon starts
 const BARE_HAND = new THREE.Vector3(0, 0.35, 0); // how wide a ribbon off a bare hand is
 
@@ -72,8 +72,9 @@ export function clipNameFor(role, roles, clips) {
 export class AbilityStage {
   // scene: where visuals go. audio: gives an AudioContext, or null to keep quiet.
   // ground(x, z): how high the ground is there, or null. Left out, it's flat.
-  constructor(scene, { audio = () => null, particles = DESKTOP_PARTICLES, ground = null } = {}) {
-    Object.assign(this, { scene, audio, ground });
+  constructor(scene, { audio = () => null, particles = DESKTOP_PARTICLES, ground = null, sounds = DESKTOP_SOUNDS } = {}) {
+    Object.assign(this, { scene, audio, ground, soundLimit: sounds });
+    fetchSounds();
     this.particles = new ParticleField(scene, { capacity: particles });
     this.t = 0;
     this.runs = [];
@@ -198,8 +199,8 @@ export class AbilityStage {
         this.fireVisual(run, event);
         break;
       case "sound": {
-        const context = this.audio();
-        if (context) playSound(context, event.sound, { volume: event.volume, pitch: event.pitch });
+        const { sound, on, volume, pitch, pitchVariation, delay } = event;
+        this.sound(sound, { volume, pitch, pitchVariation, delay, at: this.pointOf(run, on).toArray(), mine: run.on.mine });
         break;
       }
       case "projectile": {
@@ -334,6 +335,19 @@ export class AbilityStage {
     }
     visual.sustain?.(time, Math.min(1, time / AURA_IN_S) * left);
     return true;
+  }
+
+  // Plays a stock sound, if there's anything to play it on (sounds.js says what options it takes).
+  sound(name, options) {
+    const context = this.audio();
+    if (!context) return null;
+    this.mixer ??= new SoundMixer(context, { limit: this.soundLimit });
+    return this.mixer.play(name, options);
+  }
+
+  // Puts your ears where the camera is.
+  hear(camera) {
+    this.mixer?.hear(camera);
   }
 
   // A plain swing, one that isn't an ability. look: what statuses make of it (timeline.js's swingLook).

@@ -1,71 +1,146 @@
-import { SOUNDS } from "./stock.js";
+import * as THREE from "three";
+import stock from "./stockSounds.json";
 
-// The stock sounds, made in the browser rather than loaded from files. A sound is a list of voices,
-// each a tone or a burst of noise with its own envelope: { osc, from, to } or { noise, filter, from,
-// to }, with `at` and `for` in seconds and `gain` from 0 to 1.
+// The stock sounds: a few recordings of each, in public/sounds (script/bake_sounds.py makes them).
+// SoundMixer plays them through one context, each from a place in the scene if it's given one, and
+// no more than so many at once.
 
-const RECIPES = {
-  cast: [{ osc: "sine", from: 220, to: 660, for: 0.5, gain: 0.25 }, { osc: "triangle", from: 330, to: 990, for: 0.5, gain: 0.12 }],
-  whoosh: [{ noise: "bandpass", from: 400, to: 1800, for: 0.4, gain: 1 }],
-  impact: [{ noise: "lowpass", from: 1600, to: 200, for: 0.18, gain: 0.8 }, { osc: "sine", from: 140, to: 50, for: 0.2, gain: 0.7 }],
-  fire: [{ noise: "lowpass", from: 2400, to: 500, for: 0.7, gain: 0.6 }, { osc: "sawtooth", from: 90, to: 50, for: 0.5, gain: 0.15 }],
-  frost: [{ osc: "sine", from: 1800, to: 2600, for: 0.3, gain: 0.2 }, { osc: "sine", from: 2700, to: 3400, at: 0.06, for: 0.3, gain: 0.14 }, { noise: "highpass", from: 5000, to: 7000, for: 0.25, gain: 0.25 }],
-  holy: [{ osc: "sine", from: 523, to: 523, for: 0.9, gain: 0.22 }, { osc: "sine", from: 659, to: 659, at: 0.08, for: 0.8, gain: 0.18 }, { osc: "sine", from: 784, to: 784, at: 0.16, for: 0.7, gain: 0.16 }],
-  shadow: [{ osc: "sawtooth", from: 110, to: 55, for: 0.7, gain: 0.3 }, { noise: "lowpass", from: 500, to: 150, for: 0.7, gain: 0.45 }],
-  nature: [{ osc: "triangle", from: 392, to: 523, for: 0.35, gain: 0.25 }, { noise: "bandpass", from: 1400, to: 900, for: 0.5, gain: 0.6 }],
-  arcane: [{ osc: "square", from: 880, to: 1320, for: 0.3, gain: 0.08 }, { osc: "sine", from: 440, to: 220, for: 0.5, gain: 0.25 }],
-  slash: [{ noise: "highpass", from: 1500, to: 4000, for: 0.14, gain: 0.7 }],
-  heal: [{ osc: "sine", from: 440, to: 880, for: 0.7, gain: 0.25 }, { osc: "triangle", from: 660, to: 1320, at: 0.1, for: 0.6, gain: 0.12 }],
-  shout: [{ osc: "sawtooth", from: 180, to: 130, for: 0.6, gain: 0.3 }, { osc: "square", from: 270, to: 195, for: 0.6, gain: 0.12 }],
-};
+export const STOCK_SOUNDS = stock;
+export const soundUrl = (name, n) => `/sounds/${name}-${n}.mp3`;
 
-export const soundVoices = (name) => RECIPES[name] ?? [];
-export const missingSounds = () => SOUNDS.filter((name) => !RECIPES[name]);
+const HEARD_AT_FULL_FT = 12; // nearer than this, it's as loud as it gets
+const HEARD_UNTIL = 0.04; // it isn't played if distance leaves less than this of its volume
+const MINE = 10; // what your own adds to how much it matters, which puts it over anyone else's
+export const DESKTOP_SOUNDS = 24;
+export const PHONE_SOUNDS = 12;
 
-const noiseBuffers = new WeakMap();
-function noiseOf(context) {
-  if (!noiseBuffers.has(context)) {
-    const buffer = context.createBuffer(1, context.sampleRate, context.sampleRate);
-    const data = buffer.getChannelData(0);
-    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
-    noiseBuffers.set(context, buffer);
-  }
-  return noiseBuffers.get(context);
+// How much of a sound's volume is left this far off, as the panner works it out.
+export const heardAt = (feet) => HEARD_AT_FULL_FT / (HEARD_AT_FULL_FT + Math.max(0, feet - HEARD_AT_FULL_FT));
+
+const fetched = new Map(); // url -> the bytes on their way
+
+function bytesOf(url) {
+  if (!fetched.has(url)) fetched.set(url, fetch(url).then((response) => response.arrayBuffer()));
+  return fetched.get(url);
 }
 
-// Plays a stock sound on `context` at its time `when`.
-export function playSound(context, name, { volume = 1, pitch = 1, when = context.currentTime } = {}) {
-  for (const voice of soundVoices(name)) {
-    const start = when + (voice.at ?? 0);
-    const stop = start + voice.for / pitch;
-    const gain = context.createGain();
-    gain.gain.setValueAtTime(0.0001, start);
-    gain.gain.exponentialRampToValueAtTime(voice.gain * volume, start + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, stop);
-    gain.connect(context.destination);
-    let source;
-    let sweep;
-    if (voice.osc) {
-      source = context.createOscillator();
-      source.type = voice.osc;
-      sweep = source.frequency;
-      source.connect(gain);
-    } else {
-      source = context.createBufferSource();
-      source.buffer = noiseOf(context);
-      source.loop = true;
-      const filter = context.createBiquadFilter();
-      filter.type = voice.noise;
-      sweep = filter.frequency;
-      source.connect(filter);
-      filter.connect(gain);
+// Starts every stock sound on its way, so the first use of each one plays.
+export function fetchSounds() {
+  if (typeof fetch !== "function" || typeof AudioContext !== "function") return;
+  for (const [name, { variations }] of Object.entries(stock)) {
+    for (let n = 1; n <= variations; n++) bytesOf(soundUrl(name, n)).catch((err) => console.warn(`Couldn't load ${name}: ${err.message}`));
+  }
+}
+
+export class SoundMixer {
+  // bytes(name, n): gives a recording's bytes, for tests to replace.
+  constructor(context, { limit = DESKTOP_SOUNDS, bytes = (name, n) => bytesOf(soundUrl(name, n)), rand = Math.random } = {}) {
+    Object.assign(this, { context, limit, bytes, rand });
+    this.buffers = new Map(); // name -> its decoded variations, which fill in as they arrive
+    this.last = new Map(); // name -> the variation it played last
+    this.playing = [];
+    this.heardFrom = [0, 0, 0];
+    // It squashes what's loudest, so that what's left of a big fight doesn't clip.
+    this.out = context.createDynamicsCompressor();
+    this.out.connect(context.destination);
+    for (const name of Object.keys(stock)) this.load(name);
+  }
+
+  load(name) {
+    const loaded = [];
+    this.buffers.set(name, loaded);
+    for (let n = 1; n <= stock[name].variations; n++) {
+      Promise.resolve(this.bytes(name, n))
+        // Decoding uses up what it's given, and other mixers can want the same bytes.
+        .then((bytes) => this.context.decodeAudioData(bytes.slice(0)))
+        .then((buffer) => loaded.push(buffer))
+        .catch((err) => console.warn(`Couldn't decode ${name}: ${err.message}`));
     }
-    sweep.setValueAtTime(voice.from * pitch, start);
-    sweep.exponentialRampToValueAtTime(voice.to * pitch, stop);
-    source.start(start);
-    source.stop(stop);
+  }
+
+  // A variation, never the one it played last while there's another.
+  pick(name) {
+    const loaded = this.buffers.get(name) ?? [];
+    if (!loaded.length) return null;
+    let n = Math.floor(this.rand() * loaded.length);
+    if (loaded.length > 1 && n === this.last.get(name)) n = (n + 1) % loaded.length;
+    this.last.set(name, n);
+    return loaded[n];
+  }
+
+  // Puts your ears where the camera is.
+  hear(camera) {
+    const { listener } = this.context;
+    const { x, y, z } = camera.position;
+    this.heardFrom = [x, y, z];
+    const [fx, fy, fz] = camera.getWorldDirection(new THREE.Vector3()).toArray();
+    const { x: ux, y: uy, z: uz } = camera.up;
+    if (listener.positionX) {
+      const now = this.context.currentTime;
+      [[listener.positionX, x], [listener.positionY, y], [listener.positionZ, z], [listener.forwardX, fx], [listener.forwardY, fy], [listener.forwardZ, fz], [listener.upX, ux], [listener.upY, uy], [listener.upZ, uz]].forEach(([param, value]) => param.setValueAtTime(value, now));
+    } else {
+      listener.setPosition?.(x, y, z);
+      listener.setOrientation?.(fx, fy, fz, ux, uy, uz);
+    }
+  }
+
+  // How much of a sound you'd hear from here.
+  loudness(volume, at) {
+    const off = at ? Math.hypot(at[0] - this.heardFrom[0], at[1] - this.heardFrom[1], at[2] - this.heardFrom[2]) : 0;
+    return volume * heardAt(off);
+  }
+
+  // Plays a stock sound, and gives back what's playing, or null if it didn't.
+  // options: volume; pitch; pitchVariation, how far off it can land each time, as a share of pitch;
+  // delay, in seconds; at, [x, y, z] in the scene, or none for one that's only heard, like a menu's;
+  // and mine, for your own, which are the last to go.
+  play(name, { volume = 1, pitch = 1, pitchVariation = 0, delay = 0, at = null, mine = false } = {}) {
+    const loud = this.loudness(volume, at);
+    if (loud < HEARD_UNTIL) return null;
+    // How much it matters, for what gets dropped when too many are going.
+    const worth = loud + (mine || !at ? MINE : 0);
+    if (this.playing.length >= this.limit) {
+      const least = this.playing.reduce((a, b) => (b.worth < a.worth ? b : a));
+      if (least.worth >= worth) return null;
+      this.stop(least);
+    }
+    const buffer = this.pick(name);
+    if (!buffer) return null;
+    const { context } = this;
+    const source = context.createBufferSource();
+    source.buffer = buffer;
+    source.playbackRate.value = pitch * (1 + pitchVariation * (this.rand() * 2 - 1));
+    const gain = context.createGain();
+    gain.gain.value = volume;
+    source.connect(gain);
+    if (at) {
+      const panner = context.createPanner();
+      panner.panningModel = "equalpower";
+      panner.distanceModel = "inverse";
+      panner.refDistance = HEARD_AT_FULL_FT;
+      panner.rolloffFactor = 1;
+      panner.setPosition?.(...at);
+      if (panner.positionX) [panner.positionX.value, panner.positionY.value, panner.positionZ.value] = at;
+      gain.connect(panner);
+      panner.connect(this.out);
+    } else {
+      gain.connect(this.out);
+    }
+    const voice = { name, source, gain, worth };
+    source.onended = () => {
+      this.playing = this.playing.filter((v) => v !== voice);
+      gain.disconnect();
+    };
+    this.playing.push(voice);
+    source.start(context.currentTime + delay);
+    return voice;
+  }
+
+  stop(voice) {
+    this.playing = this.playing.filter((v) => v !== voice);
+    voice.source.onended = null;
+    voice.source.stop();
+    voice.gain.disconnect();
   }
 }
 
-// How long a stock sound lasts, in seconds at normal pitch.
-export const soundLength = (name) => Math.max(0, ...soundVoices(name).map((v) => (v.at ?? 0) + v.for));

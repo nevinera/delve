@@ -1,9 +1,9 @@
 import fs from "fs";
 import * as THREE from "three";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import stock from "./stockTextures.json";
 import { SHAPES, SHAPE_EFFECTS, SHAPE_STOCK, fadeAt, shapeSpec } from "./shapeStock.js";
-import { missingSounds, soundLength, soundVoices } from "./sounds.js";
+import { STOCK_SOUNDS, SoundMixer, heardAt, soundUrl } from "./sounds.js";
 import { MESH_VISUALS, SOUNDS } from "./stock.js";
 import { disposeVisual, hasVisual, makeVisual } from "./visuals.js";
 
@@ -179,16 +179,110 @@ describe("decals", () => {
 });
 
 describe("the stock sounds", () => {
-  it("has a recipe for every name", () => {
-    expect(missingSounds()).toEqual([]);
+  it.each(SOUNDS)("%s has its files, 2 to 4 of them", (name) => {
+    const { variations } = STOCK_SOUNDS[name];
+    expect(variations).toBeGreaterThanOrEqual(2);
+    expect(variations).toBeLessThanOrEqual(4);
+    for (let n = 1; n <= variations; n++) expect(fs.existsSync(new URL(`../../../public${soundUrl(name, n)}`, import.meta.url)), `${name} ${n}`).toBe(true);
+  });
+});
+
+function fakeContext() {
+  const node = () => ({ connect: vi.fn(), disconnect: vi.fn() });
+  const context = {
+    currentTime: 0,
+    destination: {},
+    listener: { setPosition: vi.fn(), setOrientation: vi.fn() },
+    createDynamicsCompressor: node,
+    createGain: () => ({ ...node(), gain: { value: 1 } }),
+    createPanner: () => ({ ...node(), setPosition: vi.fn() }),
+    createBufferSource: () => {
+      const source = { ...node(), playbackRate: { value: 1 }, start: vi.fn(), stop: vi.fn() };
+      context.sources.push(source);
+      return source;
+    },
+    decodeAudioData: async (bytes) => ({ bytes }),
+    sources: [],
+  };
+  return context;
+}
+
+describe("SoundMixer", () => {
+  const mixer = async (options) => {
+    const context = fakeContext();
+    const made = new SoundMixer(context, { bytes: () => new ArrayBuffer(4), rand: () => 0.5, ...options });
+    await new Promise((done) => setTimeout(done));
+    return { context, made };
+  };
+
+  it("plays each variation in turn rather than one twice running", async () => {
+    const { made } = await mixer();
+    const picks = [0, 1, 2, 3].map(() => made.pick("impact"));
+    for (let n = 1; n < picks.length; n++) expect(picks[n]).not.toBe(picks[n - 1]);
   });
 
-  it.each(SOUNDS)("%s is short and has positive frequencies, which its sweeps need", (name) => {
-    expect(soundLength(name)).toBeGreaterThan(0);
-    expect(soundLength(name)).toBeLessThan(1.5);
-    for (const voice of soundVoices(name)) {
-      expect(voice.from).toBeGreaterThan(0);
-      expect(voice.to).toBeGreaterThan(0);
-    }
+  it("sets volume, pitch and delay", async () => {
+    const { made, context } = await mixer();
+    const voice = made.play("impact", { volume: 0.5, pitch: 2, delay: 0.25 });
+    expect(voice.gain.gain.value).toBe(0.5);
+    expect(voice.source.playbackRate.value).toBe(2);
+    expect(context.sources[0].start).toHaveBeenCalledWith(0.25);
+  });
+
+  it("varies the pitch by its share either way", async () => {
+    const { made } = await mixer({ rand: () => 0.999 });
+    expect(made.play("impact", { pitch: 2, pitchVariation: 0.1 }).source.playbackRate.value).toBeCloseTo(2.2, 1);
+    made.rand = () => 0;
+    expect(made.play("impact", { pitch: 2, pitchVariation: 0.1 }).source.playbackRate.value).toBeCloseTo(1.8);
+  });
+
+  it("drops the quietest when too many are going", async () => {
+    const { made } = await mixer({ limit: 2 });
+    const far = made.play("impact", { at: [100, 0, 0] });
+    const near = made.play("impact", { at: [5, 0, 0] });
+    const nearer = made.play("impact", { at: [1, 0, 0] });
+    expect(made.playing).toEqual([near, nearer]);
+    expect(far.source.stop).toHaveBeenCalled();
+  });
+
+  it("won't drop something for what matters less", async () => {
+    const { made } = await mixer({ limit: 1 });
+    const near = made.play("impact", { at: [1, 0, 0] });
+    expect(made.play("impact", { at: [100, 0, 0] })).toBeNull();
+    expect(made.playing).toEqual([near]);
+  });
+
+  it("keeps your own over someone else's, however near", async () => {
+    const { made } = await mixer({ limit: 1 });
+    const mine = made.play("impact", { at: [60, 0, 0], mine: true });
+    expect(made.play("impact", { at: [13, 0, 0] })).toBeNull();
+    expect(made.playing).toEqual([mine]);
+  });
+
+  it("doesn't play what's too far off to hear", async () => {
+    const { made } = await mixer();
+    expect(heardAt(5)).toBe(1);
+    expect(made.play("impact", { at: [1000, 0, 0] })).toBeNull();
+  });
+
+  it("forgets one when it ends", async () => {
+    const { made } = await mixer();
+    const voice = made.play("impact");
+    voice.source.onended();
+    expect(made.playing).toEqual([]);
+  });
+
+  it("goes without a place for what's only heard", async () => {
+    const { made, context } = await mixer();
+    const panner = vi.spyOn(context, "createPanner");
+    made.play("ui-click");
+    expect(panner).not.toHaveBeenCalled();
+    made.play("impact", { at: [1, 2, 3] });
+    expect(panner).toHaveBeenCalledOnce();
+  });
+
+  it("plays nothing for a name it doesn't have", async () => {
+    const { made } = await mixer();
+    expect(made.play("nope")).toBeNull();
   });
 });

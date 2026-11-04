@@ -14,6 +14,7 @@ import { strFromU8 } from "fflate";
 import { allHold } from "./conditions.js";
 import { PlayLog } from "./log.js";
 import { swingLook } from "../abilities/timeline.js";
+import { DESKTOP_SOUNDS, PHONE_SOUNDS } from "../abilities/sounds.js";
 import { LastingAuras } from "./lastingAuras.js";
 import { absorbBand, initials, timeLeft } from "./unitStatuses.js";
 import { AreaMarks } from "./areas.js";
@@ -111,7 +112,7 @@ export class PlayCombat {
     Object.assign(this, { view, others, connection, loader, you, hud, unitStatuses });
     this.classes = new Map(); // id -> a promise of its file
     this.target = null;
-    this.stage = new AbilityStage(view.scene, { ground: (x, z) => view.renditions?.heightAt(x, z), audio: () => this.audioContext(), particles: isTouch() ? PHONE_PARTICLES : DESKTOP_PARTICLES });
+    this.stage = new AbilityStage(view.scene, { sounds: isTouch() ? PHONE_SOUNDS : DESKTOP_SOUNDS, ground: (x, z) => view.renditions?.heightAt(x, z), audio: () => this.audioContext(), particles: isTouch() ? PHONE_PARTICLES : DESKTOP_PARTICLES });
     this.runs = new Map(); // caster id -> its run
     this.floats = [];
     this.cooldowns = new Map(); // ability id -> when it's ready, in performance.now()
@@ -613,9 +614,9 @@ export class PlayCombat {
     this.runs.set(id, run);
   }
 
-  // Only what you do shakes your camera.
+  // Only what you do shakes your camera, and it's the last to be dropped if too many sounds are going.
   yoursToShake(id) {
-    return id === this.you.id ? { shake: (strength) => this.stage.shake(strength) } : {};
+    return id === this.you.id ? { mine: true, shake: (strength) => this.stage.shake(strength) } : {};
   }
 
   // The `swing` effects of the statuses someone has.
@@ -724,6 +725,10 @@ export class PlayCombat {
     const unit = this.unit(message.on);
     if (words && unit) this.float(unit, words);
     this.setHealth(message.on, message.health, message.maxHealth, message.dps);
+    if (unit && !message.ability && !message.ticked) {
+      const sound = message.missed ? "miss" : message.blocked ? "block" : "impact";
+      this.stage.sound(sound, { at: unit.mesh.position.toArray(), mine: message.from === this.you.id, pitchVariation: 0.06 });
+    }
     if (words) {
       const ticked = message.ticked && made?.statuses?.find((s) => s.id === message.ticked);
       if (message.ticked) this.log.add(`${this.nameOf(message.from)}: ${ticked?.name ?? message.ticked} ticks on ${this.nameOf(message.on)}: ${words.text}`);
@@ -789,6 +794,7 @@ export class PlayCombat {
   // Called once everything's in place for this frame, as it's about to be drawn.
   placed() {
     this.stage.place();
+    this.stage.hear(this.view.camera);
     this.view.camera.position.add(this.stage.shakeOffset());
   }
 

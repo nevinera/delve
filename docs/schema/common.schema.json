@@ -1440,7 +1440,8 @@
       ],
       "properties": {
         "sound": {
-          "type": "string"
+          "type": "string",
+          "description": "a stock sound, listed in client/src/abilities/stockSounds.json"
         },
         "when": {
           "enum": [
@@ -1464,6 +1465,16 @@
         "pitch": {
           "type": "number",
           "exclusiveMinimum": 0
+        },
+        "pitchVariation": {
+          "type": "number",
+          "minimum": 0,
+          "description": "how far off its pitch can land each time, as a share: 0.1 is up to 10% either way"
+        },
+        "delay": {
+          "type": "number",
+          "minimum": 0,
+          "description": "seconds after its `when` that it starts"
         }
       }
     },

@@ -607,6 +607,8 @@ export const abilityFields = (made) => [
       { key: "on", type: "select", none: "by when", options: ON },
       { key: "volume", type: "number", min: 0 },
       { key: "pitch", type: "number", min: 0 },
+      { key: "pitchVariation", label: "pitch variation", type: "number", min: 0, hint: "how far off it can land each time, as a share: 0.1 is up to 10% either way" },
+      { key: "delay", label: "delay s", type: "number", min: 0 },
     ],
   },
   { key: "tags", type: "words", advanced: "notes" },
