@@ -70,7 +70,12 @@ export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false }
     events.push({ at: launch, kind: "bar", until: end, label: ability.name, draining: true });
   } else {
     const role = releaseRole(ability, ranged);
-    if (role) events.push({ at: launch, kind: "clip", role: melee && castTime > 0 && ["attack", "bigAttack"].includes(role) ? "released" : role });
+    const swings = ["attack", "bigAttack"].includes(role);
+    if (role) events.push({ at: launch, kind: "clip", role: melee && castTime > 0 && swings ? "released" : role });
+    // A weapon swing leaves a trail, unless the ability says how its own should look.
+    if (melee && swings && !ability.visuals?.some((v) => v.effect === "ribbon")) {
+      events.push({ at: launch, kind: "visual", effect: "ribbon", on: "caster", colors: schoolColors(ability), scale: 1, params: {}, heldByCast: false });
+    }
   }
 
   // When a visual or sound with this `when` happens.

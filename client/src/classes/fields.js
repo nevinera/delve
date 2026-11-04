@@ -31,7 +31,9 @@ const particleSelect = (key, options) => ({ key, type: "select", none: "stock", 
 // A shape effect's, each left empty for what the stock effect does.
 const shapeEffect = (v) => isShapeEffect(v.effect);
 const SHAPE_FIELDS = [
-  { key: "shape", type: "select", none: "stock", options: SHAPES, show: shapeEffect },
+  { key: "shape", type: "select", none: "stock", options: SHAPES, show: (v) => shapeEffect(v) && v.effect !== "ribbon" },
+  { key: "length", type: "number", label: "trail seconds", min: 0, show: (v) => v.effect === "ribbon" },
+  { key: "width", type: "number", label: "width ft", hint: "off a weapon, the blade sets it", min: 0, show: (v) => v.effect === "ribbon" },
   { key: "texture", type: "select", none: "stock", options: repeatingNames, show: shapeEffect },
   { key: "scroll", type: "number", label: "scroll up", show: shapeEffect },
   { key: "scrollAcross", type: "number", label: "scroll around", show: shapeEffect },

@@ -1306,6 +1306,16 @@
         "scrollAcross": {
           "type": "number"
         },
+        "length": {
+          "type": "number",
+          "minimum": 0,
+          "description": "a ribbon's: how many seconds a part of it lasts"
+        },
+        "width": {
+          "type": "number",
+          "minimum": 0,
+          "description": "a ribbon's, in feet, when it isn't off a weapon"
+        },
         "repeat": {
           "type": "number",
           "minimum": 0

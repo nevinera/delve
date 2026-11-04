@@ -609,7 +609,10 @@ export class PlayCombat {
   }
 
   swung({ id }) {
-    this.unit(id)?.clip("attack");
+    const unit = this.unit(id);
+    if (!unit) return;
+    unit.clip("attack");
+    this.stage.swing(unit);
   }
 
   attacking_({ target }) {

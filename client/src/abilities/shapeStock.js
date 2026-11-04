@@ -12,6 +12,8 @@
 // - edge: how much of the shape's width fades out at its edges. rim: how much it shows only where
 //   it turns away from you, as a shield does. trail: an arc fades toward its start.
 // - opacity: 0 to 1.
+// A ribbon's shape isn't one of those: it trails after something moving (ribbon.js). Its length is
+// how many seconds a part of it lasts, and its width is in feet.
 
 const LAYER = { color: "main", opacity: 1, repeat: [1, 1], scroll: [0, 0], edge: 0, rim: 0, trail: false, texture: "energy" };
 
@@ -84,6 +86,19 @@ export const SHAPE_STOCK = {
     layers: [
       { ...LAYER, shape: "cone", radius: 3, long: 12, texture: "streaks", repeat: [3, 1], scroll: [0.1, -2], edge: 0.2, opacity: 0.75 },
       { ...LAYER, shape: "cone", radius: 1.4, long: 12, texture: "streaks", repeat: [2, 1], scroll: [-0.2, -3], edge: 0.2, color: "trim", opacity: 0.85 },
+    ],
+  },
+  // A swing's: the clip winds up, reaches its strike 0.3 s in, and carries on a little. On a weapon
+  // it starts `after` that many seconds, so it leaves out the wind-up.
+  ribbon: {
+    after: 0.14,
+    duration: 0.42,
+    length: 0.16,
+    width: 0.5,
+    fade: "none",
+    layers: [
+      { ...LAYER, shape: "ribbon", texture: "bands", scroll: [1.5, 0], edge: 0.25, trail: true, opacity: 0.5 },
+      { ...LAYER, shape: "ribbon", texture: "plain", edge: 0.5, trail: true, color: "trim", opacity: 0.35 },
     ],
   },
   shield: {

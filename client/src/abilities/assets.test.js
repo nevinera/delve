@@ -1,4 +1,5 @@
 import fs from "fs";
+import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import stock from "./stockTextures.json";
 import { SHAPES, SHAPE_EFFECTS, SHAPE_STOCK, fadeAt, shapeSpec } from "./shapeStock.js";
@@ -68,6 +69,70 @@ describe("shape effects", () => {
     expect(a.scale.y).toBeCloseTo(4);
     expect(b.scale.y).toBeCloseTo(40);
     expect(b.material.uniforms.uRepeat.value.y).toBeCloseTo(a.material.uniforms.uRepeat.value.y * 10);
+  });
+});
+
+describe("ribbons", () => {
+  const place = { x: 0 };
+  const edges = { edges: (a, b) => { a.set(place.x, 0, 0); b.set(place.x, 1, 0); } };
+
+  // Moves a trace along x, drawing the ribbon at each step.
+  const swept = (options, steps) => {
+    const made = makeVisual("ribbon", options);
+    for (const u of steps) {
+      place.x = u * 10;
+      made.update(u);
+    }
+    return made;
+  };
+  it("sweeps out what its edges cover", () => {
+    const { group } = swept({ trace: edges }, [0.3, 0.4, 0.5, 0.6]);
+    const [mesh] = group.children;
+    expect(mesh.visible).toBe(true);
+    expect(mesh.geometry.drawRange.count).toBeGreaterThan(0);
+    const { position } = mesh.geometry.attributes;
+    expect(position.getY(1) - position.getY(0)).toBeCloseTo(1);
+    expect(position.getX(mesh.geometry.drawRange.count / 3)).toBeGreaterThan(position.getX(0));
+  });
+
+  it("leaves out a swing's wind-up", () => {
+    const { group } = swept({ trace: edges }, [0, 0.05, 0.1]);
+    expect(group.children[0].visible).toBe(false);
+  });
+
+  it("dies away after it stops following", () => {
+    const { group } = swept({ trace: edges }, [0.3, 0.4, 0.5, 0.6, 1]);
+    expect(group.children[0].visible).toBe(false);
+  });
+
+  it("draws nothing while what it's on stands still", () => {
+    place.x = 3;
+    const made = makeVisual("ribbon", { trace: edges });
+    for (const u of [0.3, 0.4, 0.5]) made.update(u);
+    const { group } = made;
+    expect(group.children[0].visible).toBe(false);
+  });
+
+  it("follows a thing, as wide as it says", () => {
+    const thing = new THREE.Group();
+    const made = makeVisual("ribbon", { follow: thing, params: { width: 2, length: 1 } });
+    for (const u of [0, 0.1, 0.2]) {
+      thing.position.x = u * 10;
+      made.update(u);
+    }
+    const { aAcross } = made.group.children[0].geometry.attributes;
+    expect(aAcross.getX(1)).toBeCloseTo(1);
+    expect(aAcross.getX(0)).toBeCloseTo(-1);
+  });
+
+  it("stops at its most samples, however long it runs", () => {
+    const thing = new THREE.Group();
+    const made = makeVisual("ribbon", { follow: thing, params: { duration: 100, length: 100 } });
+    for (let n = 0; n < 200; n++) {
+      thing.position.x = n;
+      made.update(n / 400);
+    }
+    expect(made.group.children[0].visible).toBe(true);
   });
 });
 

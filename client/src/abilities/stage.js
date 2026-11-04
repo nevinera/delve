@@ -17,6 +17,9 @@ const AREA_OPACITY = 0.35;
 const AREA_S = 0.8;
 const ABOVE_GROUND_FT = 0.15;
 
+const BLADE_STARTS = 0.55; // how far along a weapon from its grip to its tip a ribbon starts
+const BARE_HAND = new THREE.Vector3(0, 0.35, 0); // how wide a ribbon off a bare hand is
+
 export const chestOf = (unit) => unit.mesh.position.clone().add(new THREE.Vector3(0, unit.height * 0.6, 0));
 
 // Where a projectile starts: the unit's right hand, or its chest for a body with none.
@@ -24,6 +27,29 @@ function handOf(unit) {
   unit.mesh.updateMatrixWorld(true);
   const hand = unit.mesh.skeleton?.getBoneByName("hand_r");
   return hand ? hand.getWorldPosition(new THREE.Vector3()) : chestOf(unit);
+}
+
+// What a ribbon on this unit follows: the blade of the weapon in its hand, or its hand, or its chest.
+export function traceOf(unit) {
+  const inHand = () => {
+    const item = unit.mesh.userData?.held?.[0];
+    return item && item.parent === item.userData.places?.inHand.parent ? item : null;
+  };
+  return {
+    edges(a, b) {
+      const item = inHand();
+      if (!item) {
+        a.copy(handOf(unit));
+        b.copy(a).add(BARE_HAND);
+        return;
+      }
+      if (!item.geometry.boundingBox) item.geometry.computeBoundingBox();
+      const tip = item.geometry.boundingBox.max.y;
+      item.updateWorldMatrix(true, false);
+      item.localToWorld(a.set(0, tip * BLADE_STARTS, 0));
+      item.localToWorld(b.set(0, tip, 0));
+    },
+  };
 }
 
 // What to play for a role a body has no clip of its own for.
@@ -176,7 +202,10 @@ export class AbilityStage {
       if (event.heldByCast) live.heldBy = run;
       return;
     }
-    if (event.effect === "beam") {
+    if (event.effect === "ribbon") {
+      const live = this.spawn("ribbon", { colors, scale, params: event.params, trace: traceOf(unit) });
+      if (event.heldByCast) live.heldBy = run;
+    } else if (event.effect === "beam") {
       const to = on === "ground" ? this.pointOf(run, "ground") : chestOf(unit);
       const live = this.spawn("beam", { colors, scale, params: event.params, from: handOf(run.caster).toArray(), to: to.toArray() });
       if (event.heldByCast) live.heldBy = run;
@@ -188,6 +217,11 @@ export class AbilityStage {
       // What faces a way faces where the caster does.
       if (["cone", "slash"].includes(event.effect) && on === "caster") live.visual.group.rotation.y = run.caster.mesh.rotation.y;
     }
+  }
+
+  // Trails a ribbon after a plain swing, one that isn't an ability.
+  swing(unit) {
+    this.spawn("ribbon", { colors: SCHOOL_COLORS.physical, trace: traceOf(unit) });
   }
 
   // Marks the ground an area effect covers: a flat disc, or a slice of one the way the caster faces.
