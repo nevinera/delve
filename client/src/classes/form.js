@@ -206,6 +206,9 @@ const RENDERERS = {
   numberOr: (field, value, { reshaped, changed }) => {
     const word = el("input", { type: "checkbox", checked: value[field.key] === field.word });
     const number = el("input", { type: "number", step: "any", disabled: word.checked, value: word.checked ? "" : (value[field.key] ?? "") });
+    if (field.min !== undefined) number.min = field.min;
+    const hint = field.placeholder?.(value);
+    if (hint !== undefined && !word.checked) number.placeholder = hint;
     number.addEventListener("input", () => (setKey(value, field.key, numberOf(number.value)), changed()));
     word.addEventListener("change", () => (setKey(value, field.key, word.checked ? field.word : undefined), reshaped()));
     return row(field, number, el("span", { textContent: field.after }), word);

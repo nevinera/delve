@@ -7,7 +7,8 @@ import { SCHOOL_COLORS } from "./stock.js";
 // An event is { at, kind, ... }, at in seconds from when it's used:
 // - clip: { role, loop }, a role of animations.js's ROLES, or "channel" to hold a spell.
 // - bar: { until, label }, the cast or channel bar.
-// - visual: { effect, on, colors, scale, params }, a stock visual on "caster", "target" or "ground".
+// - visual: { effect, on, colors, scale, params, heldByCast }, a stock visual on "caster", "target" or
+//   "ground". heldByCast: it lasts until the cast or channel ends, and stops if that's cut short.
 // - sound: { sound, volume, pitch }.
 // - projectile: { effect, colors, until, trails }, flying from the caster to the target, with
 //   trails, the visuals with `when: "flight"`, following it.
@@ -57,6 +58,7 @@ export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false }
   const flight = ability.speed ? distance / ability.speed : 0;
   const impact = strike + flight;
   const end = channel ? launch + channel.duration : impact;
+  const castEnds = channel ? end : launch;
 
   if (castTime > 0) {
     events.push({ at: 0, kind: "clip", role: "channel", loop: true });
@@ -84,14 +86,18 @@ export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false }
   const visuals = ability.visuals ?? [];
   for (const v of visuals) {
     if (isProjectile(v)) continue;
-    for (const at of times(v.when)) events.push({ at, kind: "visual", effect: v.effect, on: v.on ?? defaultOn(v.when, ability), colors: colorsOf(v), scale: v.scale ?? 1, params: v });
+    for (const at of times(v.when)) {
+      const heldByCast = v.duration === "cast";
+      const params = heldByCast ? { ...v, duration: Math.max(0, castEnds - at) } : v;
+      events.push({ at, kind: "visual", effect: v.effect, on: v.on ?? defaultOn(v.when, ability), colors: colorsOf(v), scale: v.scale ?? 1, params, heldByCast });
+    }
   }
   for (const s of ability.sounds ?? []) {
     for (const at of times(s.when)) events.push({ at, kind: "sound", sound: s.sound, on: s.on ?? defaultOn(s.when, ability), volume: s.volume ?? 1, pitch: s.pitch ?? 1 });
   }
   if (ability.speed && ["enemy", "ally", "any"].includes(ability.target)) {
     const own = visuals.find(isProjectile);
-    events.push({ at: launch, kind: "projectile", effect: own?.effect ?? "bolt", colors: own ? colorsOf(own) : schoolColors(ability), scale: own?.scale ?? 1, until: impact, trails: visuals.filter((v) => v.when === "flight").map((v) => ({ effect: v.effect, colors: colorsOf(v), params: v })) });
+    events.push({ at: launch, kind: "projectile", effect: own?.effect ?? "bolt", colors: own ? colorsOf(own) : schoolColors(ability), scale: own?.scale ?? 1, until: impact, trails: visuals.filter((v) => v.when === "flight").map((v) => ({ effect: v.effect, colors: colorsOf(v), params: v.duration === "cast" ? { ...v, duration: undefined } : v })) });
   }
 
   (ability.effects ?? []).forEach((effect) => {

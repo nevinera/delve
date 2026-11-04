@@ -1300,8 +1300,11 @@
           "minimum": 0
         },
         "duration": {
-          "type": "number",
-          "minimum": 0
+          "description": "Seconds it lets particles go for at `rate`, or \"cast\" to last until the ability's cast or channel ends, and stop if that's cut short.",
+          "oneOf": [
+            { "type": "number", "minimum": 0 },
+            { "const": "cast" }
+          ]
         },
         "lifetime": {
           "type": "number",

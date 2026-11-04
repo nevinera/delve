@@ -159,7 +159,8 @@ export class AbilityStage {
       const yaw = run.caster.mesh.rotation.y;
       const follow = on === "ground" ? null : unit.mesh;
       const floor = on === "ground" ? this.pointOf(run, "ground").y : unit.mesh.position.y;
-      this.spawn(event.effect, { colors, scale, params: event.params, follow, up, floor, way: [Math.sin(yaw), 0, Math.cos(yaw)] }, on === "ground" ? this.pointOf(run, "ground") : null);
+      const live = this.spawn(event.effect, { colors, scale, params: event.params, follow, up, floor, way: [Math.sin(yaw), 0, Math.cos(yaw)] }, on === "ground" ? this.pointOf(run, "ground") : null);
+      if (event.heldByCast) live.heldBy = run;
       return;
     }
     if (event.effect === "beam") {
@@ -203,7 +204,8 @@ export class AbilityStage {
         if (u < 1 && this.runs.includes(live.run)) return true;
       } else {
         const u = (this.t - at) / visual.length;
-        if (u < 1) {
+        // One held by a cast ends with it, if the cast is cut short.
+        if (u < 1 && (!live.heldBy || this.runs.includes(live.heldBy))) {
           visual.update(Math.max(0, u));
           return true;
         }

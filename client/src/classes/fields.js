@@ -29,7 +29,7 @@ const particleSelect = (key, options) => ({ key, type: "select", none: "stock", 
 const PARTICLE_FIELDS = [
   particleNumber("count", "at once", { min: 0, step: 1 }),
   particleNumber("rate", "per second", { min: 0 }),
-  particleNumber("duration", "for seconds", { min: 0 }),
+  particleNumber("duration", "for seconds", { type: "numberOr", word: "cast", after: "or the whole cast", min: 0 }),
   particleNumber("lifetime", "each lasts", { min: 0 }),
   particleNumber("speed", "speed", { min: 0 }),
   particleNumber("spread", "spread degrees", { min: 0, max: 360 }),

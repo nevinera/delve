@@ -35,6 +35,20 @@ describe("an ability's timeline", () => {
     expect(line.duration).toBeGreaterThan(2.5);
   });
 
+  it("makes a visual last the cast or channel when its duration says cast", () => {
+    const visuals = [{ effect: "motes", when: "cast", duration: "cast" }];
+    const lasts = (ability) => kinds(abilityTimeline({ target: "enemy", effects: [], visuals, ...ability }), "visual")[0];
+    expect(lasts({ castTime: 2.5 })).toMatchObject({ heldByCast: true, params: { duration: 2.5 } });
+    expect(lasts({ castTime: 2, channel: { duration: 3 } }).params.duration).toBe(5);
+    expect(lasts({}).params.duration).toBe(0);
+  });
+
+  it("flies a trail with the projectile even if its duration says cast", () => {
+    const visuals = [{ effect: "embers", when: "flight", duration: "cast" }];
+    const [{ trails }] = kinds(abilityTimeline({ target: "enemy", speed: 60, castTime: 2, effects: [], visuals }, { distance: 30 }), "projectile");
+    expect(trails[0].params.duration).toBeUndefined();
+  });
+
   it("shoots rather than casts for a physical ability with a ranged weapon", () => {
     const shot = { target: "enemy", range: 100, school: "physical", effects: [] };
     expect(kinds(abilityTimeline(shot, { ranged: true }), "clip")[0].role).toBe("shoot");
