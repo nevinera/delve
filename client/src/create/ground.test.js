@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { TILE_FT } from "../v2/sizes.js";
 import { trackOf } from "../v2/courses.js";
 import { decodePlate, encodePlate } from "../v2/plate.js";
+import { loadZipper } from "../v2/zstd.js";
 import { decodePlatter, encodePlatter } from "../v2/platter.js";
 import { CELLS, CHUNKS, TILES } from "./geo.js";
 import { COARSE, COARSE_TILES, EMPTY_FT, FINE, FINE_TILES, FULL, FULL_TILES, Ground, PLATE, Renditions } from "./ground.js";
@@ -333,5 +334,68 @@ describe("the sea across plates", () => {
     renditions.cells(8, 0);
     renditions.cells(7, 0);
     expect(renditions.unsaved.size).toBe(0);
+  });
+});
+
+describe("saving plates the worker reads", () => {
+  const up = () => 3;
+  // A world of two plates side by side, their files written and none of them read.
+  const twoPlates = () => {
+    const made = new Renditions();
+    made.raise(up, [0, 0, 1100, 100], CELLS);
+    const files = made.changedFiles("main");
+    const fresh = new Renditions();
+    for (const [path, bytes] of files) {
+      if (path.includes("/platters/")) fresh.addPlatter(bytes);
+      else fresh.addPlate(path.match(/(-?\d+)_(-?\d+)\.plate/).slice(1).map(Number), bytes);
+    }
+    return fresh;
+  };
+
+  it.each([
+    ["cell", CELLS],
+    ["chunk", CHUNKS],
+    ["tile", TILES],
+  ])("writes the same file as reading it here, for %s moves", async (_, level) => {
+    await loadZipper(); // files are packed once it's there
+    const here = twoPlates();
+    const there = twoPlates();
+    for (const each of [here, there]) {
+      each.raise(up, [64, 64, 300, 300], level);
+      each.clear(576, 64, 1);
+      each.decoded.clear();
+    }
+    const expected = here.changedFiles("main");
+    const got = await there.unsavedFiles("main");
+    expect([...got.keys()].sort()).toEqual([...expected.keys()].sort());
+    for (const [path, bytes] of expected) expect(got.get(path), path).toEqual(bytes);
+  });
+
+  it("reads none of them on this thread", async () => {
+    const world = twoPlates();
+    world.raise(up, [64, 64, 300, 300], TILES);
+    world.decoded.clear();
+    let readHere = 0;
+    const readNow = world.readNow.bind(world);
+    world.readNow = (key) => (readHere++, readNow(key));
+    await world.unsavedFiles("main");
+    expect(readHere).toBe(0);
+    expect(world.decoded.size).toBe(0);
+  });
+
+  it("saves the plates next door again only where the sea along their side changed", async () => {
+    const world = twoPlates();
+    world.raise(up, [64, 64, 200, 200], CELLS);
+    world.decoded.clear();
+    await world.unsavedFiles("main");
+    expect(world.unsaved.size).toBe(0);
+  });
+
+  it("drops what it knew of a plate's sides once its tiles change", async () => {
+    const world = twoPlates();
+    await world.readEdges(["0,0"]);
+    expect(world.fileEdges.has("0,0")).toBe(true);
+    world.clear(64, 64, 1);
+    expect(world.fileEdges.has("0,0")).toBe(false);
   });
 });

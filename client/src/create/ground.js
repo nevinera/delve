@@ -6,13 +6,13 @@ import { LEDGE_RAISE_FT, LEVEE_FT, courseBox, shape } from "../v2/courses.js";
 import { waterMaterial } from "../render/waterMaterial.js";
 import { SHORE_FADE_FT, WATER_LOOKS } from "./waterSurface.js";
 import { PATTERNS, RUNNING, look, painted, slopeOf } from "../v2/look.js";
-import { makeSlots } from "../v2/slots.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate, platePath, tileIndexInPlate } from "../v2/plate.js";
 import { loadZipper } from "../v2/zstd.js";
 import { CORNERS, decodePlatter, encodePlatter, indexIn, plateIndexIn, platterOf, platterOfPlate, platterPath } from "../v2/platter.js";
 import { CELL_FT, CHUNK_CELLS, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_FT, PLATTER_PLATES, PLATTER_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
 import { CELLS, CHUNKS, TILES } from "./geo.js";
 import { withGrid } from "./grid.js";
+import { EMPTY_FT, applyEdits, bakedPlate, fileTiles, plateEdges, smooth } from "./plateEdits.js";
 import { pressHeights, pressedCorners } from "./press.js";
 
 // The ground round the builder, a tile at a time, finer the nearer the tile is to the builder's:
@@ -48,7 +48,7 @@ const SKIRT_SHADE = 0.6;
 const KEEP_PLATES = 40; // plate files kept decoded
 const BUILD_MS = 6; // how long a frame spends making plates
 const NOTHING_COVERED = new Set();
-export const EMPTY_FT = -100; // the sea floor's height where there are no tiles
+export { EMPTY_FT };
 const TINT = 0.8; // how far toward its biome's color ground's mixed, showing biomes
 const CHUNK_CELLS_HALF = CHUNK_CELLS / 2;
 const SHORE_CELLS = 4; // how far from water ground can be shore
@@ -65,7 +65,9 @@ export class Renditions {
     this.decoded = new Map(); // "px,pz" -> decoded plate file, the latest used last
     this.reading = new Set(); // "px,pz" of plate files being read
     this.unreadable = new Set(); // "px,pz" of plate files that couldn't be read
-    this.worker = null;
+    this.worker = null; // reads plates to draw
+    this.saver = null; // writes files, so a big save doesn't hold up what's being drawn
+    this.nextWrite = 1;
     this.onRead = () => {};
     // How far the ground's been moved, by how finely: "tx,tz" -> 65 × 65 cell corners, "tx,tz" ->
     // 9 × 9 chunk corners, and "px,pz" -> 9 × 9 tile corners.
@@ -84,6 +86,7 @@ export class Renditions {
     this.water = new WaterMap(); // and the water from them, baked into plate files saved
     this.cuts = new Map(); // "tx,tz" -> how far courses cut the tile's corners, over what its plate file has
     this.waters = new Map(); // "tx,tz" -> the tile's water as last baked, over what its plate file has
+    this.fileEdges = new Map(); // "px,pz" -> the sea along its sides as its file has it, for plates not read here
     this.wet = 0; // counts changes to tiles' water
     this.wetPlates = new Set(); // "px,pz" of plates whose renditions' water changed, to draw again
     // What presses tile (tx, tz)'s ground down where it's drawn and walked on (press.js), as
@@ -148,7 +151,7 @@ export class Renditions {
     this.biomes = new BiomeMap(areas);
     this.biomeCells.clear();
     this.looks++;
-    this.worker?.postMessage({ biomes: areas });
+    this.tellWorkers({ biomes: areas });
     return dirty ? this.markBoxes(boxes) : new Set();
   }
 
@@ -160,7 +163,7 @@ export class Renditions {
     const courses = changedWaterBoxes({ courses: this.waterFile.courses }, { courses: file.courses });
     this.waterFile = file;
     this.water = new WaterMap(file.bodies, file.courses);
-    this.worker?.postMessage({ water: file });
+    this.tellWorkers({ water: file });
     if (!dirty) return new Set();
     const moved = this.carve(courses, file.courses ?? []);
     return new Set([...moved, ...this.markBoxes(boxes)]);
@@ -248,6 +251,7 @@ export class Renditions {
   make(tx, tz) {
     this.layout++;
     const [px, pz] = [Math.floor(tx / PLATE_TILES), Math.floor(tz / PLATE_TILES)];
+    this.fileEdges.delete(`${px},${pz}`);
     const floor = () => ({ heights: new Float32Array(CORNERS * CORNERS).fill(EMPTY_FT), hash: "0000000000000000" });
     const platterKey = platterOf(tx, tz).join(",");
     if (!this.platters.has(platterKey)) this.platters.set(platterKey, { coords: platterOf(tx, tz), tiles: new Map(), plates: new Map() });
@@ -281,6 +285,7 @@ export class Renditions {
         this.offsets[CELLS].delete(`${tx},${tz}`);
         this.offsets[CHUNKS].delete(`${tx},${tz}`);
         this.decoded.get(key)?.tiles.delete(index);
+        this.fileEdges.delete(key);
         moved.add(key);
       }
     }
@@ -303,23 +308,18 @@ export class Renditions {
     return moved;
   }
 
-  // Puts the tiles made in plate `key` into it, read from its file or made from nothing, and takes
-  // out those cleared away, and their water as last baked and cuts as last carved.
-  fill(key, plate) {
-    for (const index of this.cleared.get(key) ?? []) plate.tiles.delete(index);
+  // What's been done to plate `key` since its file was written, for applyEdits(): which tiles were
+  // cleared and made, and each tile's water as last baked, cuts as last carved and moves. A copy
+  // of this goes with a plate to the worker that saves it.
+  editsFor(key) {
     const [px, pz] = key.split(",").map(Number);
-    for (const [index, tile] of plate.tiles) {
-      const key = `${px * PLATE_TILES + (index % PLATE_TILES)},${pz * PLATE_TILES + Math.floor(index / PLATE_TILES)}`;
-      const [water, cut] = [this.waters.get(key), this.cuts.get(key)];
-      if (water !== undefined) tile.water = water;
-      if (cut !== undefined) tile.cut = cut;
+    const tiles = new Map();
+    for (let index = 0; index < PLATE_TILES * PLATE_TILES; index++) {
+      const tile = `${px * PLATE_TILES + (index % PLATE_TILES)},${pz * PLATE_TILES + Math.floor(index / PLATE_TILES)}`;
+      const edit = { water: this.waters.get(tile), cut: this.cuts.get(tile), fine: this.offsets[CELLS].get(tile), coarse: this.offsets[CHUNKS].get(tile) };
+      if (Object.values(edit).some((value) => value !== undefined)) tiles.set(index, edit);
     }
-    for (const index of this.made.get(key) ?? []) {
-      if (plate.tiles.has(index)) continue;
-      const [px, pz] = key.split(",").map(Number);
-      const slots = makeSlots(px * PLATE_TILES + (index % PLATE_TILES), pz * PLATE_TILES + Math.floor(index / PLATE_TILES));
-      plate.tiles.set(index, { heights: new Float32Array(CELL_CORNERS * CELL_CORNERS).fill(EMPTY_FT), terrain: new Uint8Array(TILE_CELLS * TILE_CELLS), biome: new Uint8Array(TILE_CELLS * TILE_CELLS), slots });
-    }
+    return { cleared: this.cleared.get(key), made: this.made.get(key), tiles, plateMove: this.offsets[TILES].get(key) };
   }
 
   // Plate `key` read now, its made tiles and moves in, or null where it has no ground.
@@ -327,9 +327,7 @@ export class Renditions {
     const [px, pz] = key.split(",").map(Number);
     const plate = this.plateFiles.has(key) ? decodePlate(this.plateFiles.get(key)) : this.made.has(key) ? { coords: [px, pz], palette: [], tiles: new Map() } : null;
     if (!plate) return null;
-    this.fill(key, plate);
-    this.offset(key, plate);
-    return plate;
+    return applyEdits(key, plate, this.editsFor(key));
   }
 
   // The files of `continent` whose ground's been moved, path -> bytes: their platters, and their
@@ -362,17 +360,21 @@ export class Renditions {
     const files = new Map();
     const platters = new Set();
     const writing = [];
+    await this.readEdges(keys);
     for (const key of keys) {
       const [px, pz] = key.split(",").map(Number);
       platters.add(platterOfPlate(px, pz).join(","));
-      const plate = this.decoded.get(key) ?? this.readNow(key);
-      if (!plate?.tiles.size) {
+      const place = { coords: [px, pz], around: this.around(px, pz), shores: this.shores(px, pz) };
+      const plate = this.decoded.get(key);
+      const hasFile = this.plateFiles.has(key) || this.made.has(key);
+      if (plate ? !plate.tiles.size : !hasFile) {
         files.set(platePath(continent, [px, pz]), null);
         continue;
       }
-      // Only what the file holds, not what's kept for drawing.
-      const tiles = new Map([...plate.tiles].map(([index, { heights, slots, slotSeed, water, cut }]) => [index, { heights, slots, slotSeed, water, cut }]));
-      writing.push(this.write("plate", { coords: [px, pz], palette: plate.palette, tiles, around: this.around(px, pz), shores: this.shores(px, pz) }).then((bytes) => files.set(platePath(continent, [px, pz]), bytes)));
+      // A plate not read here goes as its file and edits, for the worker to read. One read here
+      // goes as only what the file holds, not what's kept for drawing.
+      const value = plate ? { ...place, palette: plate.palette, tiles: fileTiles(plate.tiles) } : { ...place, bytes: this.plateFiles.get(key), edits: this.editsFor(key) };
+      writing.push(this.write("plate", value).then((bytes) => files.set(platePath(continent, [px, pz]), bytes)));
     }
     // Platters after, with their tiles' water as the plates were baked.
     await Promise.all(writing);
@@ -395,35 +397,62 @@ export class Renditions {
     if (typeof Worker === "undefined") {
       return loadZipper().then(() => {
         if (kind !== "plate") return encodePlatter(value);
-        const bytes = encodePlate(this.bake(value));
-        this.baked(value.coords, [...value.tiles].map(([index, tile]) => [index, tile.water]));
+        const { bytes, waters } = bakedPlate(value, this.biomes, this.water);
+        if (waters) this.baked(value.coords, waters);
         return bytes;
       });
     }
-    this.startWorker();
-    const id = this.writes.size ? Math.max(...this.writes.keys()) + 1 : 1;
-    return new Promise((resolve) => {
-      this.writes.set(id, ({ bytes, waters }) => {
-        if (waters) this.baked(value.coords, waters);
-        resolve(bytes);
-      });
-      this.worker.postMessage({ write: kind, id, value });
+    return this.ask({ write: kind, value }).then(({ bytes, waters }) => {
+      if (waters) this.baked(value.coords, waters);
+      return bytes;
     });
   }
 
-  // Takes the water baked into plate (px, pz)'s tiles, [index, water], to draw, and into their
-  // renditions. Where its sea along a side's changed, the plate past that side's to be saved
+  // Sends the saving worker a message, and gives its answer.
+  ask(message) {
+    this.startSaver();
+    const id = this.nextWrite++;
+    return new Promise((resolve, reject) => {
+      this.writes.set(id, (answer) => (answer.error ? reject(new Error(answer.error)) : resolve(answer)));
+      this.saver.postMessage({ ...message, id });
+    });
+  }
+
+  // Finds the sea along the sides of plates `keys` and the plates next to them, where it's not
+  // known, from their files on the worker. Saving these plates needs it.
+  async readEdges(keys) {
+    const wanted = new Set();
+    const want = (px, pz) => {
+      const key = `${px},${pz}`;
+      if ((this.plateFiles.has(key) || this.made.has(key)) && !this.edges(px, pz)) wanted.add(key);
+    };
+    for (const key of keys) {
+      const [px, pz] = key.split(",").map(Number);
+      want(px, pz);
+      for (const [dx, dz] of Object.values(PLATE_SIDES)) want(px + dx, pz + dz);
+    }
+    await Promise.all(
+      [...wanted].map(async (key) => {
+        const value = { coords: key.split(",").map(Number), bytes: this.plateFiles.get(key), edits: { cleared: this.cleared.get(key), made: this.made.get(key) } };
+        const edges = typeof Worker === "undefined" ? plateEdges(value) : (await this.ask({ edgesOf: value })).edges;
+        this.fileEdges.set(key, edges);
+      }),
+    );
+  }
+
+  // Takes the water baked into plate (px, pz)'s tiles, [index, water, its parts' water if it's
+  // been worked out], to draw, and into their renditions. Where its sea along a side's changed, the plate past that side's to be saved
   // again, to take the sea in from it.
   baked([px, pz], waters) {
     const plate = this.decoded.get(`${px},${pz}`);
     const before = this.edges(px, pz);
-    for (const [index, water] of waters) {
+    for (const [index, water, part = partWater(water)] of waters) {
       const [tx, tz] = [px * PLATE_TILES + (index % PLATE_TILES), pz * PLATE_TILES + Math.floor(index / PLATE_TILES)];
       this.waters.set(`${tx},${tz}`, water);
       const tile = plate?.tiles.get(index);
       if (tile) tile.water = water;
       const rendition = this.tile(tx, tz);
-      if (rendition) rendition.water = partWater(water);
+      if (rendition) rendition.water = part;
     }
     this.wetPlates.add(`${px},${pz}`);
     this.wet++;
@@ -454,7 +483,7 @@ export class Renditions {
     const key = `${px},${pz}`;
     let known = this.decoded.has(key);
     for (let b = 0; b < PLATE_TILES && !known; b++) for (let a = 0; a < PLATE_TILES && !known; a++) known = this.waters.has(`${px * PLATE_TILES + a},${pz * PLATE_TILES + b}`);
-    return known ? seaEdges(this.waterOf(px, pz)) : null;
+    return known ? seaEdges(this.waterOf(px, pz)) : (this.fileEdges.get(key) ?? null);
   }
 
   // Which cells just past each of plate (px, pz)'s sides are sea, as water.js's bakeWater wants
@@ -502,15 +531,28 @@ export class Renditions {
   }
 
   startWorker() {
-    if (this.worker) return;
-    this.worker = new Worker(new URL("./plateWorker.js", import.meta.url), { type: "module" });
-    this.worker.postMessage({ biomes: this.biomeAreas });
-    this.worker.postMessage({ water: this.waterFile });
-    this.worker.onmessage = ({ data }) => {
+    this.worker ??= this.plateWorker();
+  }
+
+  startSaver() {
+    this.saver ??= this.plateWorker();
+  }
+
+  plateWorker() {
+    const worker = new Worker(new URL("./plateWorker.js", import.meta.url), { type: "module" });
+    worker.postMessage({ biomes: this.biomeAreas });
+    worker.postMessage({ water: this.waterFile });
+    worker.onmessage = ({ data }) => {
       if (data.id === undefined) return this.done(data);
       this.writes.get(data.id)(data);
       this.writes.delete(data.id);
     };
+    return worker;
+  }
+
+  tellWorkers(message) {
+    this.worker?.postMessage(message);
+    this.saver?.postMessage(message);
   }
 
   // Moves the ground by at(x, z) feet within `bounds`, [x0, z0, x1, z1] continent feet, worked out
@@ -631,27 +673,13 @@ export class Renditions {
     return moved;
   }
 
-  // Moves a plate file just read by the offsets kept for it.
-  offset(key, plate) {
-    const [px, pz] = key.split(",").map(Number);
-    const plateMove = this.offsets[TILES].get(key);
-    for (const [index, cells] of plate.tiles) {
-      const [i0, j0] = [index % PLATE_TILES, Math.floor(index / PLATE_TILES)];
-      const tileKey = `${px * PLATE_TILES + i0},${pz * PLATE_TILES + j0}`;
-      const [fine, coarse] = [this.offsets[CELLS].get(tileKey), this.offsets[CHUNKS].get(tileKey)];
-      if (!fine && !coarse && !plateMove) continue;
-      const side = CORNERS + 2;
-      const moves = [fine, coarse && smooth(coarse, side, 0, 0, 1 / CHUNK_CELLS, CELL_CORNERS), plateMove && smooth(plateMove, side, i0, j0, 1 / TILE_CELLS, CELL_CORNERS)];
-      for (const move of moves) if (move) for (let k = 0; k < move.length; k++) cells.heights[k] += move[k];
-    }
-  }
-
   addPlatter(bytes) {
     const platter = decodePlatter(bytes);
     this.platters.set(platter.coords.join(","), platter);
   }
 
   addPlate(coords, bytes) {
+    this.fileEdges.delete(coords.join(","));
     this.plateFiles.set(coords.join(","), bytes);
   }
 
@@ -699,8 +727,7 @@ export class Renditions {
       console.error(`plate ${key} can't be read: ${error}`);
       return;
     }
-    this.fill(key, plate);
-    this.offset(key, plate);
+    applyEdits(key, plate, this.editsFor(key));
     this.keep(key, plate);
     this.checkShores(key);
     this.onRead(key);
@@ -870,49 +897,6 @@ export class Renditions {
     const [tx, tz] = all.reduce((best, t) => (Math.hypot(t[0] - mean[0], t[1] - mean[1]) < Math.hypot(best[0] - mean[0], best[1] - mean[1]) ? t : best));
     return [(tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT];
   }
-}
-
-// A value `t` of the way from p1 to p2, curved through p0 to p3 round them, never past p1 or p2
-// where they're the highest or lowest round there (a monotone cubic), so a cliff gets no ditch at
-// its foot or lip at its top.
-function curve(p0, p1, p2, p3, t) {
-  const [s0, s1, s2] = [p1 - p0, p2 - p1, p3 - p2];
-  let m1 = s0 * s1 > 0 ? (s0 + s1) / 2 : 0;
-  let m2 = s1 * s2 > 0 ? (s1 + s2) / 2 : 0;
-  if (s1 !== 0) {
-    const [a, b] = [m1 / s1, m2 / s1];
-    const r = a * a + b * b;
-    if (r > 9) [m1, m2] = [(3 * a * s1) / Math.sqrt(r), (3 * b * s1) / Math.sqrt(r)];
-  }
-  const [t2, t3] = [t * t, t * t * t];
-  return (2 * t3 - 3 * t2 + 1) * p1 + (t3 - 2 * t2 + t) * m1 + (-2 * t3 + 3 * t2) * p2 + (t3 - t2) * m2;
-}
-
-// A `count` × `count` grid of values curved smoothly between a grid's corners, through each: from
-// (u0, v0) in the grid's squares, `step` squares apart. The grid has `side` corners a row, a ring
-// of them round its squares, so it curves the same across its edges as its neighbours do.
-function smooth(grid, side, u0, v0, step, count) {
-  const n = side - 3;
-  const place = (u) => {
-    const i = Math.min(n - 1, Math.max(0, Math.floor(u)));
-    return [i, u - i];
-  };
-  const across = Array.from({ length: count }, (_, i) => place(u0 + i * step));
-  // Each row of the grid curved across first, then those down.
-  const rows = new Float32Array(side * count);
-  for (let r = 0; r < side; r++) {
-    for (let c = 0; c < count; c++) {
-      const [i, t] = across[c];
-      const at = r * side + i;
-      rows[r * count + c] = curve(grid[at], grid[at + 1], grid[at + 2], grid[at + 3], t);
-    }
-  }
-  const out = new Float32Array(count * count);
-  for (let k = 0; k < count; k++) {
-    const [j, t] = place(v0 + k * step);
-    for (let c = 0; c < count; c++) out[k * count + c] = curve(rows[j * count + c], rows[(j + 1) * count + c], rows[(j + 2) * count + c], rows[(j + 3) * count + c], t);
-  }
-  return out;
 }
 
 // A height straight between a grid's corners (`side` a row), at (u, v) in grid squares.
