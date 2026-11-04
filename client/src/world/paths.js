@@ -16,6 +16,7 @@ export const OLD_IMAGES = /^images\/[0-9a-z]{8}\.json$/;
 export const OLD_STRUCTURES = /^structures\/[0-9a-z]{8}\.json$|^structure-collections\.json$/;
 export const OBJECT_PATH = /^objects\/[0-9a-z]{8}\.json$/;
 export const TEMPLATE_PATH = /^templates\/[0-9a-z]{8}\.json$/;
+export const ICON_PATH = /^icons\/([0-9a-z-]+)\.svg$/;
 export const IMAGE_PATH = /^textures\/[0-9a-z]{8}\.json$/;
 
 // Game data (.agents/formats.md): each kind's directory, holding <id>.json files.

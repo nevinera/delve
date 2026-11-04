@@ -5,15 +5,17 @@ import { keptWorld } from "./store.js";
 
 // Its JSON files, path -> bytes, with its changes since it was opened: its library, what's placed
 // and world.json. Empty when it has none open.
+const wanted = (path) => path.endsWith(".json") || path.endsWith(".svg");
+
 export async function keptFiles() {
   const kept = await keptWorld();
   if (!kept) return new Map();
   // A zip's bytes, or a repo's files as a Map.
-  let files = kept.bytes instanceof Map ? [...kept.bytes].filter(([path]) => path.endsWith(".json")) : Object.entries(unzipSync(kept.bytes, { filter: (file) => file.name.endsWith(".json") }));
+  let files = kept.bytes instanceof Map ? [...kept.bytes].filter(([path]) => wanted(path)) : Object.entries(unzipSync(kept.bytes, { filter: (file) => wanted(file.name) }));
   const top = files.some(([path]) => path === "world.json") ? null : files[0]?.[0].split("/")[0];
   if (top) files = files.map(([path, b]) => [path.slice(top.length + 1), b]);
   // A change of null is a file taken away.
-  return new Map([...files, ...[...kept.changes].filter(([path]) => path.endsWith(".json"))].filter(([, b]) => b));
+  return new Map([...files, ...[...kept.changes].filter(([path]) => wanted(path))].filter(([, b]) => b));
 }
 
 // Those files, read and written as JSON.

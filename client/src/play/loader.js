@@ -7,11 +7,11 @@ import { CAVES_PATH, cavesPath } from "../v2/caves.js";
 import { PLATE_PATH, platePath } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
 import { waterPath } from "../v2/water.js";
-import { COLLECTIONS_PATH, IMAGE_PATH, OBJECT_PATH, WORLD_PATH } from "../world/paths.js";
+import { COLLECTIONS_PATH, ICON_PATH, IMAGE_PATH, OBJECT_PATH, WORLD_PATH } from "../world/paths.js";
 
 // A released version 2 world, read straight from raw GitHub at its commit: no API calls and no
 // token. The page knows the commit's files (its import's list), so nothing has to be probed for.
-// World.json, the object library and a continent's platters, biomes, water and cave layout come
+// World.json, the object library, icons and a continent's platters, biomes, water and cave layout come
 // first; plate, placed and caves files as they're wanted.
 
 const FETCHES = 8; // at once
@@ -42,9 +42,9 @@ export class PlayWorld {
     return bytes ? JSON.parse(strFromU8(bytes)) : null;
   }
 
-  // World.json and the object library.
+  // World.json, the object library and the icons.
   async open() {
-    const library = [...this.paths].filter((p) => p === COLLECTIONS_PATH || OBJECT_PATH.test(p) || IMAGE_PATH.test(p));
+    const library = [...this.paths].filter((p) => p === COLLECTIONS_PATH || OBJECT_PATH.test(p) || IMAGE_PATH.test(p) || ICON_PATH.test(p));
     await this.fetchAll([WORLD_PATH, ...library]);
     this.info = this.readJson(WORLD_PATH);
     if (this.info.version !== 2) throw new Error(`this is a version ${this.info.version} world, and only version 2 worlds can be played`);

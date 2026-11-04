@@ -1,5 +1,6 @@
 import "./play.css";
 import { graphicsPanel } from "../render/graphicsPanel.js";
+import { setWorldIcons } from "./icons.js";
 import { SightLines } from "./sightLines.js";
 import { builtObjects, images } from "../objects/collections.js";
 import { resolveRecipe } from "../character/recipe.js";
@@ -74,6 +75,7 @@ async function play() {
   status("Loading the world...");
   await loader.open();
   setBuiltObjects(builtObjects(loader), images(loader));
+  setWorldIcons(loader.files);
 
   let others = null;
   let combat = null;

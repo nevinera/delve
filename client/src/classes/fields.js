@@ -1,4 +1,4 @@
-import { ICON_NAMES } from "../play/icons.js";
+import { iconNames } from "../play/icons.js";
 import { SOUNDS, VISUALS } from "../abilities/stock.js";
 import { ARMOR_SLOTS, ARMOR_STYLES, ARMOR_TYPES } from "../character/armor.js";
 import { BODIES } from "../character/bodies.js";
@@ -458,7 +458,7 @@ export const abilityFields = (made) => [
   { key: "name" },
   { key: "level", type: "number", min: 1, step: 1 },
   { key: "description", type: "area" },
-  { key: "icon", type: "select", none: "none", options: ICON_NAMES },
+  { key: "icon", type: "select", none: "none", options: iconNames },
   { key: "school", type: "select", none: "none", options: SCHOOLS },
   { key: "target", type: "select", options: ["enemy", "ally", "any", "self", "ground", "none"], then: (a) => ["self", "none"].includes(a.target) && delete a.range },
   { key: "range", type: "distance", show: (a) => (a.target !== "self" && a.target !== "none") || a.range !== undefined },
@@ -665,7 +665,7 @@ const statusEffectFields = (made, nested = false) => [
 export const statusFields = (made) => [
   { key: "name" },
   { key: "description", type: "area" },
-  { key: "icon", type: "select", none: "none", options: ICON_NAMES },
+  { key: "icon", type: "select", none: "none", options: iconNames },
   { key: "kind", type: "select", options: ["buff", "debuff", "hidden"] },
   { key: "duration", label: "duration s", type: "number", min: 0, hint: "leave it out for one that lasts until removed" },
   { key: "stacking", type: "select", none: "refresh", options: ["replace", "stack"] },

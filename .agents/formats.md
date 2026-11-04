@@ -25,6 +25,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 | `objects/<id>.json` | a built object | [schema](../docs/schema/object.schema.json) | `client/src/world/builtObjects.js` |
 | `templates/<id>.json` | slabs and objects placed together | [Templates](#templates), [schema](../docs/schema/template.schema.json) | `client/src/world/templates.js` |
 | `textures/<id>.json` | an image objects and slabs wear | [schema](../docs/schema/image.schema.json) | `client/src/objects/collections.js` |
+| `icons/<name>.svg` | an icon for abilities, statuses and items, the name lowercase letters, digits and dashes | [Icons](#icons) | `client/src/play/icons.js` |
 | `models.json` | the world's own bodies, and what it adds to shipped ones | [A world's models](#a-worlds-models) | `client/src/world/models.js` |
 | `classes/`, `abilities/`, `statuses/`, `items/`, `item-templates/`, `creatures/`, `npcs/`, `dialogues/` | game data, each `<id>.json` | [Game data](#game-data) | none yet |
 | `places/continents/<c>/plates/<px>_<pz>.plate` | 8×8 tiles' ground, biomes, slots, water and cuts | [Plates](#plates) | `client/src/v2/plate.js` |
@@ -714,7 +715,7 @@ Only a class's `id` and `name` are required for now, so the class editor can sav
 ```
 
 - `target`: what you need targeted to use it. `enemy` or `ally`, `any` for either (its effects tell them apart with `targetIs`), or `self`, `ground` (you pick a place within range) or `none`. An `ally` ability with no friendly target lands on you.
-- `icon`: its action bar icon, by name from the [stock icons](#stock-icons). Without one, the bar shows its name.
+- `icon`: its action bar icon, by name from the world's own or the [stock icons](#icons). Without one, the bar shows its name.
 - `range`: how far the target can be, a number or `"melee"` (see Distance and areas). `minRange` is how near it can be.
 - `requires`: conditions to use it, each `{ health, below or above }` (`health` is `self` or `target`, in percent) or `{ status, on, stacks }` (a status you put `on` `self` or `target`, with at least `stacks` stacks if it says), or `{ targetIs }` (what you're using it on: `enemy`, `ally`, `self`, `other`, `player` or `nonPlayer`), or `{ stealthed }` or `{ inCombat }` (true or false, about you), or `{ anyOf: [conditions] }`, which holds when any of them does, or `{ not: condition }`, which holds when it doesn't, or one of these:
   - `{ state, on }`: `casting`, `inCombat`, `slowed`, `airborne`, `falling`, `controlled`, `stunned` or `outdoors`, for `on` `self` (by default) or `target`.
@@ -912,7 +913,7 @@ Any effect can have `when`, conditions written as an ability's `requires`, check
 }
 ```
 
-- `icon`: its bag and tooltip icon, from the [stock icons](#stock-icons). `description` is flavor text on the tooltip.
+- `icon`: its bag and tooltip icon, from the world's own or the [stock icons](#icons). `description` is flavor text on the tooltip.
 - `quality`: `poor` (junk), `common`, `uncommon`, `rare` or `epic`.
 - `itemLevel` sets armor and weapon damage, which the server works out. `requiredLevel` is the level you need to equip it.
 - `slot`: `head`, `neck`, `shoulders`, `back`, `chest`, `wrists`, `hands`, `waist`, `legs`, `feet`, `finger`, `trinket`, `oneHand`, `mainHand`, `offHand`, `twoHand` or `ranged`. Leave it out for an item you don't wear.
@@ -1055,9 +1056,13 @@ Each line has the NPC's `text` and your `choices`. A choice goes to the line `ne
 
 Mobs near one that's pulled, of the same `family`, may join it too.
 
-### Stock icons
+### Icons
 
-Abilities, statuses and items pick an `icon` by name from the icons the game ships in `public/icons/`, listed in `client/src/play/icons.json`. They're the same for every world and don't come from a world's files. Each is a white shape on nothing, and the client draws it in the text color of what it's on. They come from game-icons.net under CC BY 3.0, and `public/icons/credits.txt` credits each one, so add a line there when you add an icon. The play menu links to it.
+Abilities, statuses and items pick an `icon` by name, from the world's own or the stock ones.
+
+A world's own are SVG files at `icons/<name>.svg`, on a 512 by 512 `viewBox`. The client only uses a file's shape as a mask, and draws it in the text color of what it's on, so its colors don't count. A world's icon wins over a stock one of the same name. The client reads them when it opens the world, so keep them small.
+
+The game ships the stock ones in `public/icons/`, listed in `client/src/play/icons.json`. They come from game-icons.net under CC BY 3.0, and `public/icons/credits.txt` credits each one, so add a line there when you add one. The play menu links to it.
 
 ## The game protocol
 
