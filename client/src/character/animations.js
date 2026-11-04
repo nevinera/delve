@@ -50,6 +50,63 @@ const retimed = (times, { strikes, after }) => times.map((t) => (t <= strikes ? 
 
 // Every clip as a three.js AnimationClip for this character, by name. A clip that moves along the
 // ground keeps its speed, for a 6ft body, in userData.speed.
+// A character's clips, each built the first time something asks for it, since a character only ever
+// plays a few of them. It reads as a Map of them all.
+class LazyClips extends Map {
+  constructor(names, build) {
+    super();
+    this.names = new Set(names);
+    this.build = build;
+  }
+
+  has(name) {
+    return this.names.has(name);
+  }
+
+  get(name) {
+    if (!super.has(name) && this.names.has(name)) super.set(name, this.build(name));
+    return super.get(name);
+  }
+
+  set(name, clip) {
+    this.names?.add(name);
+    return super.set(name, clip);
+  }
+
+  get size() {
+    return this.names.size;
+  }
+
+  keys() {
+    return this.names.values();
+  }
+
+  *values() {
+    for (const name of this.names) yield this.get(name);
+  }
+
+  *entries() {
+    for (const name of this.names) yield [name, this.get(name)];
+  }
+
+  [Symbol.iterator]() {
+    return this.entries();
+  }
+
+  forEach(callback) {
+    for (const [name, clip] of this.entries()) callback(clip, name, this);
+  }
+}
+
+// A baked clip's decoded numbers are the same for everyone, so everyone shares them. Nothing writes to them.
+const decoded = new WeakMap();
+function sharedDecode(baked, name) {
+  if (!decoded.has(baked)) decoded.set(baked, new Map());
+  const clips = decoded.get(baked);
+  if (!clips.has(name)) clips.set(name, decodeClip(baked, name));
+  return clips.get(name);
+}
+
 export function characterClips(mesh, baked) {
   const frame = FRAMES[mesh.userData.skeleton];
   if (frame) return frame.clips(mesh, mesh.userData.look);
@@ -60,9 +117,8 @@ export function characterClips(mesh, baked) {
   const lowerArms = mesh.skeleton.getBoneByName("upperarm2_l") ? ["clavicle_l", "upperarm_l", "lowerarm_l", "hand_l"].flatMap((b) => [b, b.replace(/_l$/, "_r")]) : [];
   const euler = new THREE.Euler();
   const turn = new THREE.Quaternion();
-  const clips = new Map();
-  for (const name of clipNames(baked)) {
-    const { times: playedAt, rotations, pelvis } = POSED[name] ? posedClip(name, mesh.userData.joints, s, baked.fps) : decodeClip(baked, name);
+  return new LazyClips(clipNames(baked), (name) => {
+    const { times: playedAt, rotations, pelvis } = POSED[name] ? posedClip(name, mesh.userData.joints, s, baked.fps) : sharedDecode(baked, name);
     const times = SLOW_SWINGS[name] ? Float32Array.from(retimed(playedAt, SLOW_SWINGS[name])) : playedAt;
     const tracks = Object.entries(rotations).map(([bone, values]) => new THREE.QuaternionKeyframeTrack(`${bone}.quaternion`, times, values));
     // A second pair of arms moves as the first.
@@ -77,10 +133,9 @@ export function characterClips(mesh, baked) {
       tracks.push(new THREE.QuaternionKeyframeTrack(`${bone}.quaternion`, times, values));
     }
     const clip = new THREE.AnimationClip(name, duration, tracks);
-    clip.userData = { speed: POSED[name] ? posedSpeed(name) : baked.clips[name].speed };
-    clips.set(name, clip);
-  }
-  return clips;
+    clip.userData = { speed };
+    return clip;
+  });
 }
 
 // How fast to play a clip that moves along the ground so a character's feet keep pace with it

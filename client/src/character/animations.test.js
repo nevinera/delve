@@ -34,6 +34,26 @@ function playing(name, look = resolveRecipe()) {
 const posed = (name, time, look) => playing(name, look)(time);
 
 describe("characterClips", () => {
+  it("lists every clip, and builds one only when asked, and only once", () => {
+    const clips = characterClips(characterMesh(resolveRecipe()), baked);
+    expect(clips.has("Idle_Loop")).toBe(true);
+    expect(clips.has("No_Such_Clip")).toBe(false);
+    expect(clips.get("No_Such_Clip")).toBeUndefined();
+    expect([...clips.keys()].length).toBe(clips.size);
+    expect(Map.prototype.has.call(clips, "Idle_Loop")).toBe(false);
+    const idle = clips.get("Idle_Loop");
+    expect(Map.prototype.has.call(clips, "Idle_Loop")).toBe(true);
+    expect(clips.get("Idle_Loop")).toBe(idle);
+    expect(Map.prototype.has.call(clips, "Run_Fwd_Loop")).toBe(false);
+  });
+
+  it("shares a baked clip's numbers between characters of different sizes, but not their pelvis height", () => {
+    const [small, large] = [3, 8].map((height) => characterClips(characterMesh(resolveRecipe({ height })), baked).get("Idle_Loop"));
+    const track = (clip, name) => clip.tracks.find((t) => t.name === name);
+    expect(track(small, "head.quaternion").values).toBe(track(large, "head.quaternion").values);
+    expect(track(small, "pelvis.position").values[1]).toBeLessThan(track(large, "pelvis.position").values[1]);
+  });
+
   it("holds the arms straight out in a T-pose", () => {
     const at = posed("A_TPose", 0);
     expect(at("hand_l").y).toBeCloseTo(at("upperarm_l").y, 0);
