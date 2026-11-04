@@ -1,7 +1,7 @@
 import fs from "fs";
 import * as THREE from "three";
-import { describe, expect, it } from "vitest";
-import { characterClips, strideRate } from "./animations.js";
+import { describe, expect, it, vi } from "vitest";
+import { characterClips, loadAnimations, prepareAnimations, strideRate } from "./animations.js";
 import { characterMesh } from "./characterMesh.js";
 import { TURN_RATE } from "./posed.js";
 import { resolveRecipe } from "./recipe.js";
@@ -32,6 +32,18 @@ function playing(name, look = resolveRecipe()) {
 }
 
 const posed = (name, time, look) => playing(name, look)(time);
+
+describe("prepareAnimations", () => {
+  it("decodes the baked clips ahead of time, so playing one doesn't", async () => {
+    const few = { ...baked, clips: { Idle_Loop: { ...baked.clips.Idle_Loop } } };
+    vi.stubGlobal("fetch", async () => ({ json: async () => few }));
+    await prepareAnimations();
+    vi.unstubAllGlobals();
+    expect(await loadAnimations()).toBe(few);
+    few.clips.Idle_Loop.data = "not base64 !";
+    expect(characterClips(characterMesh(resolveRecipe()), few).get("Idle_Loop").tracks.length).toBeGreaterThan(0);
+  });
+});
 
 describe("characterClips", () => {
   it("lists every clip, and builds one only when asked, and only once", () => {

@@ -48,6 +48,12 @@ const STRIKE_S = 0.3;
 const SLOW_SWINGS = { Sword_Attack: { strikes: 0.4, after: 1.5 }, Zombie_Scratch: { strikes: 0.57, after: 1.5 } };
 const retimed = (times, { strikes, after }) => times.map((t) => (t <= strikes ? (t * STRIKE_S) / strikes : STRIKE_S + (t - strikes) / after));
 
+// Decodes the baked clips ahead of time, for a loading screen, so nobody waits on one mid-fight.
+export async function prepareAnimations() {
+  const baked = await loadAnimations();
+  for (const name of Object.keys(baked.clips)) sharedDecode(baked, name);
+}
+
 // Every clip as a three.js AnimationClip for this character, by name. A clip that moves along the
 // ground keeps its speed, for a 6ft body, in userData.speed.
 // A character's clips, each built the first time something asks for it, since a character only ever

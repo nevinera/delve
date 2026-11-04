@@ -184,6 +184,7 @@ async function play() {
 
   view.show(renditions, placed, caves, continent.caveLayout);
   await view.ready([you.at[0], you.at[2]]);
+  await prepareAnimations().catch((err) => console.warn(`Couldn't load animations: ${err.message}`));
   status("");
   const touch = isTouch();
   if (touch) view.setGraphics(PHONE_GRAPHICS);
