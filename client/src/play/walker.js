@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { blocks } from "../world/objects.js";
 import { slabFootholds, slabHitsTrunk } from "../world/slabs.js";
 import { characterClips, loadAnimations, strideRate } from "../character/animations.js";
+import { UpperBody, canSplit, halfOf } from "../character/upperBody.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
 import { TURN_RATE } from "../character/posed.js";
 import { randomLook } from "../character/recipe.js";
@@ -195,6 +196,7 @@ export class Walker {
     this.mixer = new THREE.AnimationMixer(this.model);
     this.bones = null;
     this.clips = null;
+    this.upper = null;
     this.playing = null;
     const model = this.model;
     loadAnimations().then((baked) => {
@@ -318,9 +320,15 @@ export class Walker {
     this.untwistChest();
     this.mixer.update(dt);
     if (!this.clips) return;
-    if (this.acting && (this.t >= this.acting.until || moving || this.airTime > 0 || swimming)) this.acting = null;
-    if (this.acting) {
-      this.play(this.acting.name, 1, !this.acting.loop);
+    const busy = moving || this.airTime > 0;
+    if (this.acting && (this.t >= this.acting.until || swimming || (busy && !canSplit(this.model)))) this.acting = null;
+    // On the move, an ability plays on the arms over what the legs are doing.
+    this.upper ??= new UpperBody(this.mixer, this.clips);
+    this.legsOnly = Boolean(this.acting && busy);
+    if (this.legsOnly) this.upper.show(this.acting, this.acting.name, { time: this.t - this.acting.at, once: !this.acting.loop });
+    else this.upper.clear();
+    if (this.acting && !busy) {
+      this.play(this.acting.name, 1, !this.acting.loop, this.t - this.acting.at);
       return;
     }
 
@@ -362,26 +370,26 @@ export class Walker {
   }
 
   // Fades to a clip, or sets the playing one's speed. One-shot clips hold their last frame.
-  play(name, speed = ONCE[name]?.speed ?? 1, once = Boolean(ONCE[name])) {
-    const clip = this.clips.get(name);
-    if (!clip) return;
-    const action = this.mixer.clipAction(clip);
+  play(name, speed = ONCE[name]?.speed ?? 1, once = Boolean(ONCE[name]), from = ONCE[name]?.from ?? 0) {
+    if (!this.clips.has(name)) return;
+    const shown = this.legsOnly ? halfOf(this.clips, name, "lower") : name;
+    const action = this.mixer.clipAction(this.clips.get(shown));
     action.timeScale = speed;
-    if (this.playing === name) return;
+    if (this.playing === shown) return;
     const previous = this.playing && this.mixer.existingAction(this.clips.get(this.playing));
-    this.playing = name;
+    this.playing = shown;
     action.reset();
     action.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
     action.clampWhenFinished = true;
-    action.time = ONCE[name]?.from ?? 0;
+    action.time = from;
     action.play();
     if (previous) action.crossFadeFrom(previous, FADE_S, false);
   }
 
-  // Plays a clip on the character while it stands still: an ability's. Null lets it go.
+  // Plays a clip on the character: an ability's. Null lets it go.
   act(name, loop = false) {
     const clip = name && this.clips?.get(name);
-    this.acting = clip ? { name, loop, until: loop ? Infinity : this.t + clip.duration } : null;
+    this.acting = clip ? { name, loop, at: this.t, until: loop ? Infinity : this.t + clip.duration } : null;
   }
 
   // Whether the character may move to (x, z): on a tile drawn in full, not into a tree trunk, an

@@ -5,6 +5,7 @@ import { MELEE_FT, hitOn, hitText, moveAt, schoolColors } from "../abilities/tim
 import { characterClips, loadAnimations, roleClips } from "../character/animations.js";
 import { characterMesh, disposeCharacter, skeletonOf } from "../character/characterMesh.js";
 import { randomLook, resolveRecipe } from "../character/recipe.js";
+import { UpperBody, canSplit, halfOf } from "../character/upperBody.js";
 import { attackGroup } from "../character/weapons.js";
 
 // Trying an ability as it's being made: a character of the class using it on a goblin in an empty
@@ -25,11 +26,12 @@ const el = (tag, props = {}, ...children) => {
   return node;
 };
 
-// What a class holds to use an ability: its first weapon and off hand, unless the ability wants
-// something else in its `requires`.
-export function gearFor(made, ability) {
+// What a class holds to use an ability: `picked` if there's one, or else its first weapon and off
+// hand, unless the ability wants something else in its `requires`.
+export function gearFor(made, ability, picked = "") {
   const weapons = made.weapons ?? [];
   const offhands = made.offhands ?? [];
+  if (picked) return { weapon: picked, offhand: attackGroup(picked) === "oneHanded" ? (offhands[0] ?? "none") : "none" };
   const wants = ability?.requires?.find((need) => need.wielding)?.wielding;
   const ofGroup = (group) => weapons.find((w) => attackGroup(w) === group);
   if (wants === "twoHanded") return { weapon: ofGroup("twoHanded") ?? "none", offhand: "none" };
@@ -52,6 +54,10 @@ export class AbilityPreview {
     this.playButton.addEventListener("click", () => this.play());
     this.loopBox = el("input", { type: "checkbox" });
     this.muteBox = el("input", { type: "checkbox" });
+    this.runBox = el("input", { type: "checkbox" });
+    this.runBox.addEventListener("change", () => (this.stop(), this.runLegs()));
+    this.weaponSelect = el("select", { title: "what the character holds" });
+    this.weaponSelect.addEventListener("change", () => (this.stop(), this.setClass(this.made, this.ability)));
     this.speed = 1;
     this.speedSelect = el("select", {}, ...[["1", "full speed"], ["0.5", "half speed"], ["0.25", "quarter speed"]].map(([value, textContent]) => el("option", { value, textContent })));
     this.speedSelect.addEventListener("change", () => (this.speed = Number(this.speedSelect.value)));
@@ -67,6 +73,8 @@ export class AbilityPreview {
         this.playButton,
         el("label", {}, this.loopBox, " loop"),
         el("label", {}, this.muteBox, " mute"),
+        el("label", {}, this.runBox, " run"),
+        this.weaponSelect,
         this.speedSelect,
         el("label", { className: "preview-distance" }, "target ", this.distanceInput, this.distanceText),
         this.say,
@@ -135,7 +143,8 @@ export class AbilityPreview {
     loadAnimations().then((baked) => {
       if (this[which] !== unit) return;
       unit.clips = characterClips(mesh, baked);
-      this.clip(unit, "idle", true);
+      if (which === "caster") this.runLegs();
+      else this.clip(unit, "idle", true);
     });
     this.placeUnits();
     return unit;
@@ -147,6 +156,14 @@ export class AbilityPreview {
     const name = clipNameFor(role, unit.roles, unit.clips);
     const clip = unit.clips.get(name);
     if (!clip) return;
+    if (unit === this.caster && this.runBox.checked && canSplit(unit.mesh)) {
+      unit.upper ??= new UpperBody(unit.mixer, unit.clips);
+      if (role === "idle") unit.upper.clear();
+      else unit.upper.show({}, name, { once: !loop });
+      unit.back = loop ? null : clip.duration;
+      unit.playedFor = 0;
+      return;
+    }
     const action = unit.mixer.clipAction(clip);
     action.reset();
     action.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
@@ -159,9 +176,28 @@ export class AbilityPreview {
     unit.playedFor = 0;
   }
 
-  // Sets who's using it: a character in the class's colors, holding what the ability needs.
+  // Has the caster's legs run, with what it uses played on its arms, or go back to standing.
+  runLegs() {
+    const unit = this.caster;
+    if (!unit?.clips) return;
+    unit.upper?.clear();
+    if (!this.runBox.checked || !canSplit(unit.mesh)) return this.clip(unit, "idle", true);
+    const action = unit.mixer.clipAction(unit.clips.get(halfOf(unit.clips, "Run_Fwd_Loop", "lower")));
+    action.reset().setLoop(THREE.LoopRepeat, Infinity).play();
+    if (unit.playing && unit.playing !== action) unit.playing.crossFadeTo(action, FADE_S, false);
+    unit.playing = action;
+    unit.back = null;
+  }
+
+  // Sets who's using it: a character in the class's colors, holding what the ability needs, or what
+  // the picker says.
   setClass(made, ability) {
-    const { weapon, offhand } = gearFor(made, ability);
+    this.made = made;
+    const held = this.weaponSelect.value;
+    const weapons = made.weapons ?? [];
+    this.weaponSelect.replaceChildren(el("option", { value: "", textContent: "weapon it needs" }), ...weapons.map((value) => el("option", { value, textContent: value })));
+    this.weaponSelect.value = weapons.includes(held) ? held : "";
+    const { weapon, offhand } = gearFor(made, ability, this.weaponSelect.value);
     const armor = made.armor?.[0]?.type ?? "";
     const key = JSON.stringify([made.id, weapon, offhand, armor, made.colors]);
     if (key === this.classKey) return;

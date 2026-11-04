@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { characterClips, loadAnimations, strideRate } from "../character/animations.js";
+import { UpperBody, canSplit, halfOf } from "../character/upperBody.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
 import { TURN_RATE } from "../character/posed.js";
 import { resolveRecipe } from "../character/recipe.js";
@@ -215,9 +216,17 @@ export class Others {
     drawn.mixer.update(dt);
     if (!drawn.clips) return;
     const speed = speedOf(move);
-    if (drawn.acting && (drawn.acting.until <= performance.now() || speed || drawn.airborne || move.swim)) drawn.acting = null;
-    if (drawn.acting) {
-      this.play(drawn, drawn.acting.name, 1, !drawn.acting.loop);
+    const now = performance.now();
+    const busy = speed || drawn.airborne;
+    if (drawn.acting && (drawn.acting.until <= now || move.swim || (busy && !canSplit(drawn.model)))) drawn.acting = null;
+    // On the move, an ability plays on the arms over what the legs are doing.
+    drawn.upper ??= new UpperBody(drawn.mixer, drawn.clips);
+    const since = drawn.acting ? (now - drawn.acting.at) / 1000 : 0;
+    drawn.legsOnly = Boolean(drawn.acting && busy);
+    if (drawn.legsOnly) drawn.upper.show(drawn.acting, drawn.acting.name, { time: since, once: !drawn.acting.loop });
+    else drawn.upper.clear();
+    if (drawn.acting && !busy) {
+      this.play(drawn, drawn.acting.name, 1, !drawn.acting.loop, since);
       return;
     }
     const way = move.forward < 0 ? "back" : move.forward > 0 || !move.strafe ? "ahead" : move.strafe > 0 ? "left" : "right";
@@ -229,24 +238,27 @@ export class Others {
     this.play(drawn, clip, strideRate(drawn.clips.get(clip), drawn.model, speed));
   }
 
-  // Plays a clip on someone while they stand still: an ability's. Null lets it go.
+  // Plays a clip on someone: an ability's. Null lets it go.
   act(drawn, name, loop = false) {
     const clip = name && drawn.clips?.get(name);
-    drawn.acting = clip ? { name, loop, until: loop ? Infinity : performance.now() + clip.duration * 1000 } : null;
+    const now = performance.now();
+    drawn.acting = clip ? { name, loop, at: now, until: loop ? Infinity : now + clip.duration * 1000 } : null;
   }
 
   // Fades to a clip, or sets the playing one's speed.
-  play(drawn, name, rate = 1, once = false) {
-    const clip = drawn.clips.get(name);
-    if (!clip) return;
+  play(drawn, name, rate = 1, once = false, from = 0) {
+    if (!drawn.clips.has(name)) return;
+    const shown = drawn.legsOnly ? halfOf(drawn.clips, name, "lower") : name;
+    const clip = drawn.clips.get(shown);
     drawn.mixer.clipAction(clip).timeScale = rate;
-    if (drawn.playing === name) return;
+    if (drawn.playing === shown) return;
     const previous = drawn.playing && drawn.mixer.existingAction(drawn.clips.get(drawn.playing));
-    drawn.playing = name;
+    drawn.playing = shown;
     const action = drawn.mixer.clipAction(clip);
     action.reset();
     action.setLoop(once ? THREE.LoopOnce : THREE.LoopRepeat, Infinity);
     action.clampWhenFinished = once;
+    action.time = from;
     action.play();
     if (previous) action.crossFadeFrom(previous, FADE_S, false);
   }

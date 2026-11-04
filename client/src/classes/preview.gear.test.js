@@ -10,5 +10,6 @@ describe("what the preview's character holds", () => {
     expect(wielding("twoHanded")).toEqual({ weapon: "greatsword", offhand: "none" });
     expect(wielding("shield")).toEqual({ weapon: "sword", offhand: "shield" });
     expect(wielding("dual")).toEqual({ weapon: "sword", offhand: "axe" });
+    expect(gearFor(made, {}, "greatsword")).toEqual({ weapon: "greatsword", offhand: "none" });
   });
 });
