@@ -19,6 +19,14 @@ describe("nextTarget", () => {
 });
 
 describe("hitWords", () => {
+  it("says what a dispel removed and what an interrupt stopped", () => {
+    const statuses = [{ id: "pois", name: "Poison" }];
+    const abilities = [{ id: "bolt", name: "Bolt" }];
+    expect(hitWords({ effect: "dispel", removed: "pois" }, statuses).text).toBe("Poison removed");
+    expect(hitWords({ effect: "dispel", removed: "gone" }, statuses).text).toBe("gone removed");
+    expect(hitWords({ effect: "interrupt", stopped: "bolt" }, statuses, abilities).text).toBe("Bolt interrupted");
+  });
+
   it("shows damage, marking a crit", () => expect(hitWords({ effect: "damage", amount: 40, crit: true })).toEqual({ text: "40!", kind: "damage" }));
   it("shows healing", () => expect(hitWords({ effect: "heal", amount: 9 })).toEqual({ text: "+9", kind: "heal" }));
   it("names a status", () => expect(hitWords({ effect: "status", status: "c" }, [{ id: "c", name: "Chilled" }]).text).toBe("Chilled"));

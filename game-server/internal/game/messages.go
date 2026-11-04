@@ -115,6 +115,13 @@ type cooldown struct {
 	Seconds float64 `json:"seconds"`
 }
 
+// lockout is a school its hearer can't use for a while.
+type lockout struct {
+	Type    string  `json:"type"`
+	School  string  `json:"school"`
+	Seconds float64 `json:"seconds"`
+}
+
 // hit is one of an ability's effects landing on someone.
 type hit struct {
 	Type      string  `json:"type"`
@@ -129,7 +136,9 @@ type hit struct {
 	Status    string  `json:"status,omitempty"`
 	Avoided   string  `json:"avoided,omitempty"` // dodge or parry, along with missed
 	Blocked   bool    `json:"blocked,omitempty"`
-	Ticked    string  `json:"ticked,omitempty"` // the status whose periodic effect this was
+	Ticked    string  `json:"ticked,omitempty"`  // the status whose periodic effect this was
+	Removed   string  `json:"removed,omitempty"` // the status a dispel took off
+	Stopped   string  `json:"stopped,omitempty"` // the ability an interrupt stopped
 	Class     string  `json:"class,omitempty"`
 	Lasts     float64 `json:"lasts,omitempty"`
 	Stacks    int     `json:"stacks,omitempty"`

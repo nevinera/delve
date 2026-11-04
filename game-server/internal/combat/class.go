@@ -141,6 +141,13 @@ type Effect struct {
 	Reset     bool     `json:"reset"`
 	Charges   int      `json:"charges"`
 
+	// dispel
+	Dispels []string `json:"dispels"`
+	Count   int      `json:"count"`
+	Tags    []string `json:"tags"`
+
+	Lockout float64 `json:"lockout"` // interrupt
+
 	Param string `json:"param"` // names its number, for a `modify`
 
 	SoftCap int     `json:"softCap"` // past this many hit, those hit share this many's worth
@@ -165,6 +172,8 @@ type Status struct {
 	ID         string         `json:"id"`
 	Name       string         `json:"name"`
 	Kind       string         `json:"kind"`
+	Dispel     string         `json:"dispel"`
+	Tags       []string       `json:"tags"`
 	Duration   float64        `json:"duration"`
 	Effects    []StatusEffect `json:"effects"`
 	Stacking   string         `json:"stacking"` // refresh, stack or replace, which is what leaving it out means
@@ -177,6 +186,32 @@ type Status struct {
 	ConsumedBy *ConsumedBy    `json:"consumedBy"`
 
 	TickRate float64 `json:"-"` // how much faster than `every` its periodic effects tick, once a `modify` says
+}
+
+// Dispelled says whether a `dispel` of these kinds or tags takes this status: by the kind marked on
+// it, a tag, or a control its effects put on the holder.
+func (s *Status) Dispelled(by *Effect) bool {
+	if slices.ContainsFunc(by.Tags, func(t string) bool { return slices.Contains(s.Tags, t) }) {
+		return true
+	}
+	if s.Dispel != "" && slices.Contains(by.Dispels, s.Dispel) {
+		return true
+	}
+	for i := range s.Effects {
+		e := &s.Effects[i]
+		if e.Type == "control" && slices.Contains(by.Dispels, e.Control) {
+			return true
+		}
+		if slices.Contains(by.Dispels, "slow") && e.slows() {
+			return true
+		}
+	}
+	return false
+}
+
+// slows says whether this effect lowers its holder's movement speed.
+func (e *StatusEffect) slows() bool {
+	return e.Type == "stat" && e.Stat == "movementSpeed" && (e.Add < 0 || (e.Multiply != nil && *e.Multiply < 1))
 }
 
 // Period is how often this status's periodic effect ticks.
@@ -213,10 +248,11 @@ func (b *ConsumedBy) Matches(a *Ability) bool {
 
 // StatusEffect is what a status does while it's on.
 type StatusEffect struct {
-	Type   string
-	Every  float64
-	Does   string
-	Amount Amount
+	Type    string
+	Control string
+	Every   float64
+	Does    string
+	Amount  Amount
 
 	// A `stat`. Only `periodic` and `stat` have their numbers read so far.
 	Stat       string
@@ -304,6 +340,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		CasterOnly bool        `json:"casterOnly"`
 		Hit        string      `json:"hit"`
 		Source     string      `json:"source"`
+		Control    string      `json:"control"`
 		School     string      `json:"school"`
 		Schools    []string    `json:"schools"`
 		Category   string      `json:"category"`
@@ -348,7 +385,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 	if err := json.Unmarshal(b, &body); err != nil {
 		return err
 	}
-	*s = StatusEffect{head.Type, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
+	*s = StatusEffect{head.Type, body.Control, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
 		body.Hit, body.Source, body.School, body.Schools, body.Category, body.Categories, body.Abilities, body.Tag, body.Statuses, body.When,
 		body.Change, body.Set, body.AddAmount, body.AddTags, body.Chance, body.AtTargets, body.PerTargetHit, body.MaxTotal,
 		body.Affects, body.Radius, body.Max, body.SoftCap, body.Drain,

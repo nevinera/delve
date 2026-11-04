@@ -48,8 +48,10 @@ export function nextTarget(units, current) {
 }
 
 // What a `hit` reads as over who it lands on, or null for nothing, and its kind for its color.
-export function hitWords(hit, statuses = []) {
+export function hitWords(hit, statuses = [], abilities = []) {
   if (hit.missed) return { text: hit.avoided ?? "miss", kind: "miss" };
+  if (hit.removed) return { text: `${statuses.find((s) => s.id === hit.removed)?.name ?? hit.removed} removed`, kind: "status" };
+  if (hit.stopped) return { text: `${abilities.find((a) => a.id === hit.stopped)?.name ?? hit.stopped} interrupted`, kind: "status" };
   const crit = `${hit.crit ? "!" : ""}${hit.blocked ? " blocked" : ""}`;
   if (hit.effect === "damage") return { text: `${hit.amount}${crit}`, kind: hit.ticked ? "damage combat-float-tick" : "damage" };
   if (hit.effect === "heal") return { text: `+${hit.amount}${crit}`, kind: hit.ticked ? "heal combat-float-tick" : "heal" };
@@ -96,6 +98,7 @@ export class PlayCombat {
     this.runs = new Map(); // caster id -> its run
     this.floats = [];
     this.cooldowns = new Map(); // ability id -> when it's ready, in performance.now()
+    this.lockouts = new Map(); // school -> when it's back, in performance.now()
     this.gcdUntil = 0;
     this.resources = {};
     this.resourceMax = {};
@@ -529,6 +532,16 @@ export class PlayCombat {
     this.cooldowns.set(ability, performance.now() + seconds * 1000);
   }
 
+  lockout({ school, seconds }) {
+    this.lockouts.set(school, performance.now() + seconds * 1000);
+  }
+
+  // When an ability's school comes back from a lockout.
+  lockedUntil(ability) {
+    const schools = ability.schools ?? (ability.school ? [ability.school] : []);
+    return Math.max(0, ...schools.map((school) => this.lockouts.get(school) ?? 0));
+  }
+
   resources_({ resources, max }) {
     this.resources = resources;
     this.resourceMax = max ?? {};
@@ -537,7 +550,7 @@ export class PlayCombat {
 
   async hit(message) {
     const made = message.class ? await this.classOf(message.class) : null;
-    const words = hitWords(message, made?.statuses ?? []);
+    const words = hitWords(message, made?.statuses ?? [], made?.abilities ?? []);
     const unit = this.unit(message.on);
     if (words && unit) this.float(unit, words);
     this.setHealth(message.on, message.health, message.maxHealth, message.dps);
@@ -608,8 +621,9 @@ export class PlayCombat {
     if (this.slots) {
       const facts = this.facts();
       for (const { id, ability, shade, node } of this.slots) {
-        const ready = Math.max(this.cooldowns.get(id) ?? 0, this.gcdUntil);
+        const ready = Math.max(this.cooldowns.get(id) ?? 0, this.gcdUntil, this.lockedUntil(ability));
         shade.style.height = ready > now ? "100%" : "0";
+        node.classList.toggle("combat-action-locked", this.lockedUntil(ability) > now);
         node.classList.toggle("combat-action-off", !allHold(ability.requires, facts));
       }
     }

@@ -83,6 +83,7 @@ type fighter struct {
 	resChanged bool
 	gcdUntil   time.Time
 	cooldowns  map[string][]time.Time // when each spent charge of an ability comes back
+	lockouts   map[string]time.Time   // when each school it's been locked out of comes back
 	cast       *casting
 	attacking  int64                // who it's auto-attacking, or 0
 	swingAt    time.Time            // when its next swing can start
@@ -124,7 +125,7 @@ func classWithID(classes []*combat.Class, id string) *combat.Class {
 func (p *Player) enterFight(class *combat.Class, level int, build combat.Build) {
 	f := &p.fight
 	f.vitals = vitals{ID: p.state.ID, Statuses: map[statusKey]*activeStatus{}}
-	f.resources, f.pools, f.cooldowns, f.since = map[string]float64{}, map[string]combat.Pool{}, map[string][]time.Time{}, map[string]time.Time{}
+	f.resources, f.pools, f.cooldowns, f.lockouts, f.since = map[string]float64{}, map[string]combat.Pool{}, map[string][]time.Time{}, map[string]time.Time{}, map[string]time.Time{}
 	if class == nil {
 		f.vitals.base = combat.Plain(100)
 		f.vitals.MaxHealth, f.vitals.Health = 100, 100
@@ -376,6 +377,9 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 	if !slices.Contains(ability.Ignores, "cooldown") && len(live(f.cooldowns[ability.ID], now)) >= max(ability.Charges, 1) {
 		return nil, 0, "not ready yet"
 	}
+	if lockedOut(f, ability, now) {
+		return nil, 0, "that school is locked out"
+	}
 	if why := l.affordable(f, ability); why != "" {
 		return nil, 0, why
 	}
@@ -392,10 +396,14 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 			return nil, 0, "you need an enemy targeted"
 		}
 		target, at = d.ID, d.state.At
-	case "ally":
+	case "ally", "any":
+		if d := l.dummy(m.Target, p.state.Continent); d != nil && ability.Target == "any" {
+			target, at = d.ID, d.state.At
+			break
+		}
 		o := l.players[m.Target]
 		if o == nil || o.state.Continent != p.state.Continent {
-			o = p // with no ally targeted, it goes on you
+			o = p // with no one else targeted, it goes on you
 		}
 		target, at = o.ID(), o.state.At
 	case "ground":
@@ -730,6 +738,14 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 	case "cooldown":
 		l.changeCooldowns(p, c, e, now)
 		return
+	case "dispel":
+		l.dispel(p, c, e, on, now)
+		return
+	case "interrupt":
+		if !l.interrupt(p, e, on, &h, now) {
+			p.debugLine("%s: %s isn't casting", c.ability.Name, l.nameOf(on.ID))
+			return
+		}
 	case "heal":
 		n, crit := l.rollHeal(p, on, e.AmountFor(count), hitOf(c, e, on, count), now)
 		over := max(on.Health+n-on.MaxHealth, 0)
@@ -756,6 +772,65 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 	l.tell(p, encode(h))
 }
 
+// dispel takes statuses off a unit by kind, control or tag, up to `count`, oldest first. It takes
+// what harms a friend, and what helps an enemy.
+func (l *Layer) dispel(p *Player, c *casting, e *combat.Effect, on *vitals, now time.Time) {
+	keeps := "buff"
+	if on.ID < 0 { // only dummies are enemies so far
+		keeps = "debuff"
+	}
+	var found []statusKey
+	for key, held := range on.Statuses {
+		if held.def.Kind != keeps && held.def.Dispelled(e) {
+			found = append(found, key)
+		}
+	}
+	slices.SortFunc(found, func(a, b statusKey) int {
+		return cmp.Or(on.Statuses[a].since.Compare(on.Statuses[b].since), cmp.Compare(a.id, b.id), cmp.Compare(a.from, b.from))
+	})
+	if len(found) == 0 {
+		p.debugLine("%s: %s has nothing it removes", c.ability.Name, l.nameOf(on.ID))
+	}
+	for _, key := range found[:min(max(e.Count, 1), len(found))] {
+		held := on.Statuses[key]
+		if held == nil {
+			continue // something ending just now took this one with it
+		}
+		l.fire(event{on: "dispel", who: &p.fight.vitals, other: on.ID, ctx: castOf(c.ability), status: key.id, stacks: held.stacks}, now)
+		l.fire(statusEvent("dispelled", on, key, held), now)
+		if on.Statuses[key] != held {
+			continue
+		}
+		l.takeOff(on, key)
+		p.debugLine("%s: took %s off %s", c.ability.Name, key.id, l.nameOf(on.ID))
+		l.tell(p, encode(hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: e.Type, Removed: key.id, Class: held.class, Health: math.Round(on.Health), MaxHealth: on.MaxHealth}))
+	}
+}
+
+// interrupt stops a player's cast and locks it out of the cast's school. It says whether there was one.
+func (l *Layer) interrupt(p *Player, e *combat.Effect, on *vitals, h *hit, now time.Time) bool {
+	o := l.players[on.ID]
+	if o == nil || o.fight.cast == nil {
+		return false
+	}
+	f := &o.fight
+	stopped := f.cast.ability
+	l.stopCast(o)
+	for _, school := range schoolsOf("", nil, stopped) {
+		if e.Lockout > 0 {
+			f.lockouts[school] = now.Add(seconds(e.Lockout))
+			o.send(encode(lockout{"lockout", school, e.Lockout}))
+		}
+	}
+	h.Stopped, h.Class = stopped.ID, f.class.ID
+	l.fire(event{on: "interrupt", who: &p.fight.vitals, other: on.ID, ctx: castOf(stopped)}, now)
+	return true
+}
+
+func lockedOut(f *fighter, a *combat.Ability, now time.Time) bool {
+	return slices.ContainsFunc(schoolsOf("", nil, a), func(school string) bool { return f.lockouts[school].After(now) })
+}
+
 // changeCooldowns does a `cooldown` effect, on the caster's own cooldowns, and tells it where they stand.
 func (l *Layer) changeCooldowns(p *Player, c *casting, e *combat.Effect, now time.Time) {
 	f := &p.fight
@@ -769,9 +844,9 @@ func (l *Layer) changeCooldowns(p *Player, c *casting, e *combat.Effect, now tim
 			continue
 		}
 		f.cooldowns[a.ID] = sooner(spent, e, now)
-		seconds := readyIn(f, l.resolved(p, a, now), now)
-		p.debugLine("%s: %s is ready in %.1f s", c.ability.Name, a.Name, seconds)
-		p.send(encode(cooldown{"cooldown", a.ID, seconds}))
+		left := readyIn(f, l.resolved(p, a, now), now)
+		p.debugLine("%s: %s is ready in %.1f s", c.ability.Name, a.Name, left)
+		p.send(encode(cooldown{"cooldown", a.ID, left}))
 	}
 }
 
@@ -1729,7 +1804,7 @@ func (l *Layer) reached(p *Player, c *casting, e *combat.Effect) []*vitals {
 	case "self":
 		return []*vitals{&p.fight.vitals}
 	case "target":
-		if c.ability.Target != "enemy" && c.ability.Target != "ally" {
+		if c.ability.Target != "enemy" && c.ability.Target != "ally" && c.ability.Target != "any" {
 			return []*vitals{&p.fight.vitals}
 		}
 		if d := l.dummy(c.target, p.state.Continent); d != nil {

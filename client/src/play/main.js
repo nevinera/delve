@@ -92,6 +92,7 @@ async function play() {
     stopped: fight("stopped"),
     refused: fight("refused"),
     cooldown: fight("cooldown"),
+    lockout: fight("lockout"),
     hit: fight("hit"),
     resources: fight("resources_"),
     health: fight("health_"),

@@ -374,6 +374,10 @@ body.touch .play-bar button {
   opacity: 0.45;
 }
 
+.combat-action-locked {
+  outline: 2px solid #c04040;
+}
+
 .combat-action-on {
   outline: 2px solid #ffe060;
 }
