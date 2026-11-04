@@ -678,6 +678,13 @@ export class PlayCombat {
     }
   }
 
+  level_({ id, level }) {
+    if (id !== this.you.id) return;
+    this.you.level = level;
+    this.youFrame.name.textContent = `${this.you.name} (${level})`;
+    this.setClass(this.made);
+  }
+
   health_({ id, health, maxHealth }) {
     this.setHealth(id, health, maxHealth, 0);
   }

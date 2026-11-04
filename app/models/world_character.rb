@@ -9,6 +9,7 @@ class WorldCharacter < ApplicationRecord
   validates :continent, presence: true, on: :position
   validates :x, :y, :z, :yaw, numericality: true, on: :position
   validates :class_id, presence: true, on: :class_pick
+  validates :level, numericality: {only_integer: true, greater_than: 0}, on: :level
 
   def position = continent && {continent:, at: [x, y, z], yaw:}
 end

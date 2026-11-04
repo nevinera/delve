@@ -27,6 +27,10 @@ class InternalApi::CharactersController < InternalApi::BaseController
     write({specialization: params[:specialization].presence, talents: params[:talents]&.to_unsafe_h || {}}, :build)
   end
 
+  def level
+    write({level: params[:level]}, :level)
+  end
+
   private
 
   def write(attributes, context)

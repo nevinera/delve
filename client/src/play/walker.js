@@ -3,7 +3,7 @@ import { blocks } from "../world/objects.js";
 import { slabFootholds, slabHitsTrunk } from "../world/slabs.js";
 import { characterClips, loadAnimations, strideRate } from "../character/animations.js";
 import { UpperBody, canSplit, halfOf } from "../character/upperBody.js";
-import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
+import { characterMesh, disposeCharacter, setWeaponsDrawn } from "../character/characterMesh.js";
 import { TURN_RATE } from "../character/posed.js";
 import { randomLook } from "../character/recipe.js";
 import { trunkRadius } from "../render/treeMeshes.js";
@@ -78,6 +78,7 @@ const TWIST = [
 ];
 const TURN_LEAD = 0.12; // how far the chest and head lead a turn on the spot
 const FADE_S = 0.2;
+const WEAPONS_OUT_S = 6; // how long weapons stay out after an ability
 const AIRBORNE_S = 0.15; // off the ground this long, without jumping, is falling
 const ROLL_FT = 30; // landing faster than this, or moving after a long fall, rolls
 const LONG_FALL_S = 1.1;
@@ -320,6 +321,8 @@ export class Walker {
     this.untwistChest();
     this.mixer.update(dt);
     if (!this.clips) return;
+    if (this.acting) this.weaponsUntil = this.t + WEAPONS_OUT_S;
+    setWeaponsDrawn(this.model, this.t < (this.weaponsUntil ?? 0));
     const busy = moving || this.airTime > 0;
     if (this.acting && (this.t >= this.acting.until || swimming || (busy && !canSplit(this.model)))) this.acting = null;
     // On the move, an ability plays on the arms over what the legs are doing.

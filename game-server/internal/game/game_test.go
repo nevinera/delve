@@ -9,6 +9,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -49,6 +50,13 @@ func (f *fakeCharacters) Character(_ context.Context, _, id int64) (rails.Charac
 }
 
 func (f *fakeCharacters) SaveBars(_ context.Context, _, _ int64, _ [][]string) error {
+	return nil
+}
+
+func (f *fakeCharacters) SaveLevel(_ context.Context, _, id int64, level int) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.level[id] = level
 	return nil
 }
 
@@ -465,7 +473,7 @@ func TestOnlyASystemAdminTeleports(t *testing.T) {
 func TestHelpShowsAnAdminItsCommands(t *testing.T) {
 	_, p, _ := commanding(t, true)
 	say(t, p, "/help")
-	if got := heard(p, "log"); len(got) != 4 {
+	if got := heard(p, "log"); len(got) != 6 {
 		t.Fatalf("help = %v", got)
 	}
 }
@@ -542,5 +550,74 @@ func TestTeleportingAwayVanishesFromThoseNear(t *testing.T) {
 	say(t, p, "/teleport 90000 90000")
 	if got := heard(o, "vanish"); len(got) != 1 || got[0]["id"] != 1.0 {
 		t.Fatalf("vanish = %v", got)
+	}
+}
+
+func TestLevelCommand(t *testing.T) {
+	h, p, c := fighting(t)
+	say(t, p, "/level 12")
+	if got := lastLog(t, p); got != "error: You can't use /level." {
+		t.Fatal(got)
+	}
+	p.systemAdmin = true
+	before := p.fight.vitals.MaxHealth
+	p.fight.vitals.Health = 1
+	for _, bad := range []string{"/level", "/level 0", "/level 101", "/level high"} {
+		say(t, p, bad)
+		if got := lastLog(t, p); !strings.HasPrefix(got, "error: Use /level") {
+			t.Errorf("%s answered %q", bad, got)
+		}
+	}
+	say(t, p, "/level 12")
+	pass(h, c, 0.1)
+	f := &p.fight
+	if f.level != 12 || p.state.Level != 12 {
+		t.Fatalf("level = %d, state %d", f.level, p.state.Level)
+	}
+	if f.vitals.MaxHealth <= before || f.vitals.Health != f.vitals.MaxHealth {
+		t.Fatalf("health = %g of %g, from a most of %g", f.vitals.Health, f.vitals.MaxHealth, before)
+	}
+	if got := heard(p, "level"); len(got) != 1 || got[0]["level"] != 12.0 {
+		t.Fatalf("level messages = %v", got)
+	}
+	keeper := h.characters.(*fakeCharacters)
+	for i := 0; i < 100; i++ {
+		keeper.mu.Lock()
+		kept := keeper.level[p.ID()]
+		keeper.mu.Unlock()
+		if kept == 12 {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the level wasn't kept")
+}
+
+func TestWeaponCommand(t *testing.T) {
+	_, p, _ := fighting(t)
+	say(t, p, "/weapon greatsword")
+	if got := lastLog(t, p); got != "error: You can't use /weapon." {
+		t.Fatal(got)
+	}
+	p.systemAdmin = true
+	say(t, p, "/weapon banana")
+	if got := lastLog(t, p); !strings.HasPrefix(got, "error: There's no banana.") {
+		t.Fatal(got)
+	}
+	say(t, p, "/weapon greatsword shield")
+	if got := lastLog(t, p); got != "error: A greatsword takes both hands." {
+		t.Fatal(got)
+	}
+	say(t, p, "/weapon sword shield")
+	got := heard(p, "look")
+	if len(got) != 1 {
+		t.Fatalf("look messages = %v", got)
+	}
+	look := got[0]["look"].(map[string]any)
+	if look["weapon"] != "sword" || look["offhand"] != "shield" {
+		t.Fatalf("look = %v", look)
+	}
+	if !strings.Contains(string(p.state.Look), `"weapon":"sword"`) {
+		t.Fatalf("state's look = %s", p.state.Look)
 	}
 }

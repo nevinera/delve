@@ -70,6 +70,7 @@ export function characterMesh(look) {
   // pelvis's height; for others, as their frame says.
   mesh.userData.skeleton = skeleton;
   mesh.userData.look = look;
+  mesh.userData.weaponsDrawn = !look.sheathed;
   mesh.userData.scale = scale ?? joints.find((j) => j.name === "pelvis").at[1] / 3.15;
   mesh.userData.joints = joints;
   mesh.userData.held = skeleton === "humanoid" ? [hold(bones, look, look.weapon), hold(bones, look, look.offhand, true)].filter(Boolean) : [];
@@ -88,14 +89,28 @@ function hold(bones, look, type, offhand = false) {
   geometry.setAttribute("color", new THREE.BufferAttribute(linear(data.colors), 3));
   geometry.computeBoundingSphere();
   const item = new THREE.Mesh(geometry, weaponMaterial);
-  if (look.sheathed) {
-    sheathe(item, bones, look, sheathOf(type, offhand), data.positions);
-    return item;
-  }
+  const place = () => ({ parent: item.parent, position: item.position.clone(), quaternion: item.quaternion.clone() });
+  sheathe(item, bones, look, sheathOf(type, offhand), data.positions);
+  const away = place();
   item.position.set(...held.at.map((v) => v * s));
   item.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), new THREE.Vector3(...held.toward).normalize());
   bones.get(held.bone).add(item);
+  item.userData.places = { away, inHand: place() };
+  if (look.sheathed) putAt(item, away);
   return item;
+}
+
+const putAt = (item, { parent, position, quaternion }) => {
+  parent.add(item);
+  item.position.copy(position);
+  item.quaternion.copy(quaternion);
+};
+
+// Has a character hold its weapons, or put them away.
+export function setWeaponsDrawn(mesh, drawn) {
+  if (Boolean(mesh.userData.weaponsDrawn) === Boolean(drawn)) return;
+  mesh.userData.weaponsDrawn = Boolean(drawn);
+  for (const item of mesh.userData.held ?? []) putAt(item, item.userData.places[drawn ? "inHand" : "away"]);
 }
 
 // Hangs an item at a hip, its grip just above the belt, or centered across the back, just clear

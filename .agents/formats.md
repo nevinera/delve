@@ -1149,6 +1149,7 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `lockout` | `school`, `seconds` | an interrupt locked you out of this school |
 | `hit` | `from`, `ability` (none for an auto-attack or a tick), `on`, `effect`, `amount`, `crit`, `missed`, `avoided` (`dodge` or `parry`), `blocked`, `resource`, `status`, `ticked`, `class`, `lasts`, `stacks`, `dps`, `health`, `maxHealth` | one of an ability's effects landed on someone near you |
 | `health` | `id`, `health`, `maxHealth` | a training dummy reset |
+| `level` | `id`, `level` | someone's level changed |
 | `bars` | `bars` | the action bars you set, as you enter, if you ever have |
 | `build` | `specialization`, `talents` | what you've chosen, after you enter and whenever it changes |
 | `area` | `id`, `from`, `ability`, `affects`, `at`, `radius`, `line`, `width`, `dir`, `lasts`, `follows` | an area went down on your continent. `dir` is the way a line runs, and `follows` is who it moves with |
@@ -1176,6 +1177,8 @@ You type commands in the log's box, starting with `/`. The game server reads eac
 - `/help`: lists the commands you can use.
 - `/spar [on or off]`: training dummies in reach swing back at you every 2 s for 5% of your health, so you can try blocks, parries and what they set off. They leave you at least 1 health.
 - `/combatdebug [on or off]`: logs what your abilities do as you use them: what they spend and what goes into each effect, and which effects do nothing yet. It lasts until you leave. Your owner needs the `system_admin` role.
+- `/level <1 to 100>`: sets your level in this world, healed up, and keeps it. Your owner needs the `system_admin` role.
+- `/weapon <main hand> [off hand]`: changes what you hold until you leave, for everyone to see. It doesn't change what your abilities' `wielding` checks. Your owner needs the `system_admin` role.
 - `/teleport <x> <z> [continent]`, or `/teleport spawn`: moves you to that spot, standing on the ground, ending what you're casting. Your owner needs the `system_admin` role.
 
 ### Movement checks
@@ -1220,6 +1223,7 @@ They call each other with fixed shared tokens in an `X-Internal-Token` header. R
 
 - `GET /internal/worlds/:world/characters/:character` gives `{ id, name, look, class, level, specialization, talents, bars, position }`, `bars` being its action bars or null, `class` being the id it picked in that world or null, `talents` being the talent id picked for each tier's level, and `position` being `{ continent, at, yaw }` or null.
 - `PUT /internal/worlds/:world/characters/:character/position` with `{ continent, at, yaw }` keeps where the character is in that world (a `WorldCharacter`), and answers 204.
+- `PUT /internal/worlds/:world/characters/:character/level` with `{ level }` keeps its level there, and answers 204.
 - `PUT /internal/worlds/:world/characters/:character/bars` with `{ bars }` keeps its action bars there, and answers 204.
 - `PUT /internal/worlds/:world/characters/:character/build` with `{ specialization, talents }` keeps what it chose there, and answers 204.
 - `PUT /internal/worlds/:world/characters/:character/class` with `{ class }` keeps the class it picked there, and answers 204.

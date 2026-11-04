@@ -235,6 +235,13 @@ type hit struct {
 	MaxHealth float64 `json:"maxHealth"`
 }
 
+// levelMessage says a character's level changed.
+type levelMessage struct {
+	Type  string `json:"type"`
+	ID    int64  `json:"id"`
+	Level int    `json:"level"`
+}
+
 type healthMessage struct {
 	Type      string  `json:"type"`
 	ID        int64   `json:"id"`

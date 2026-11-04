@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { characterClips, loadAnimations, strideRate } from "../character/animations.js";
 import { UpperBody, canSplit, halfOf } from "../character/upperBody.js";
-import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
+import { characterMesh, disposeCharacter, setWeaponsDrawn } from "../character/characterMesh.js";
 import { TURN_RATE } from "../character/posed.js";
 import { resolveRecipe } from "../character/recipe.js";
 import { BACK_FT, GAITS, GRAVITY, JUMP_FT, RUN_FT, RUNNING_KINDS, SPRINT, SWIM_FT, tripAt, WALK_FT, walksDown } from "./walker.js";
@@ -15,6 +15,7 @@ const RUNNING = { ...STILL, forward: 1 };
 const CATCH_UP = 8; // how fast a drawn character closes the gap to where it should be, per second
 const SNAP_FT = 40; // further off than this across the ground, it jumps there
 const FADE_S = 0.2;
+const WEAPONS_OUT_MS = 6000; // how long weapons stay out after an ability
 const NAME_FT = 300; // names show out to this far from the camera
 const NAME_ABOVE_FT = 0.6; // how far over the head
 const NAME_SCREEN = 0.035; // a name's height, as a share of the view's height
@@ -217,6 +218,8 @@ export class Others {
     if (!drawn.clips) return;
     const speed = speedOf(move);
     const now = performance.now();
+    if (drawn.acting) drawn.weaponsUntil = now + WEAPONS_OUT_MS;
+    setWeaponsDrawn(drawn.model, now < (drawn.weaponsUntil ?? 0));
     const busy = speed || drawn.airborne;
     if (drawn.acting && (drawn.acting.until <= now || move.swim || (busy && !canSplit(drawn.model)))) drawn.acting = null;
     // On the move, an ability plays on the arms over what the legs are doing.

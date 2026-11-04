@@ -195,6 +195,19 @@ func (l *Layer) chooseBuild(p *Player, b combat.Build) {
 		p.send(encode(refused{"refused", "", "you can't change that in combat"}))
 		return
 	}
+	l.applyBuild(p, b, now)
+	world, id, spec, talents := l.worldID, p.ID(), f.build.Specialization, f.build.Talents
+	go func() {
+		if err := l.hub.characters.SaveBuild(context.Background(), world, id, spec, talents); err != nil {
+			log.Printf("character %d: couldn't keep its build: %v", id, err)
+		}
+	}()
+}
+
+// applyBuild gives a character as much of a build as its level allows, and the statuses that
+// come with it, and tells it.
+func (l *Layer) applyBuild(p *Player, b combat.Build, now time.Time) {
+	f := &p.fight
 	f.build = f.class.Allowed(b, f.level)
 	keep := f.class.HeldFrom(f.level, f.build)
 	for key, held := range f.vitals.Statuses {
@@ -211,10 +224,27 @@ func (l *Layer) chooseBuild(p *Player, b combat.Build) {
 		}
 	}
 	p.send(encode(buildMessage{"build", f.build.Specialization, f.build.Talents}))
-	world, id, spec, talents := l.worldID, p.ID(), f.build.Specialization, f.build.Talents
+}
+
+// setLevel moves a character to a level, healed up, and keeps it.
+func (l *Layer) setLevel(p *Player, level int) {
+	f := &p.fight
+	now := l.hub.now()
+	wanted := f.build
+	f.level = level
+	f.stats = combat.StatsFor(f.class, level)
+	f.vitals.base = f.stats
+	p.state.Level = level
+	l.tellOf(p.ID(), encode(levelMessage{"level", p.ID(), level}))
+	l.applyBuild(p, wanted, now)
+	l.refit(&f.vitals, now)
+	f.vitals.Health = f.vitals.MaxHealth
+	l.sync(&f.vitals)
+	l.tellOf(p.ID(), encode(healthMessage{"health", p.ID(), math.Round(f.vitals.Health), f.vitals.MaxHealth}))
+	world, id := l.worldID, p.ID()
 	go func() {
-		if err := l.hub.characters.SaveBuild(context.Background(), world, id, spec, talents); err != nil {
-			log.Printf("character %d: couldn't keep its build: %v", id, err)
+		if err := l.hub.characters.SaveLevel(context.Background(), world, id, level); err != nil {
+			log.Printf("character %d: couldn't keep its level: %v", id, err)
 		}
 	}()
 }

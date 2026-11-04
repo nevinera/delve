@@ -71,6 +71,15 @@ func (c *Client) SaveBuild(ctx context.Context, world, id int64, specialization 
 	return c.do(ctx, http.MethodPut, fmt.Sprintf("/internal/worlds/%d/characters/%d/build", world, id), body, nil)
 }
 
+// SaveLevel keeps a character's level in a world.
+func (c *Client) SaveLevel(ctx context.Context, world, id int64, level int) error {
+	body, err := json.Marshal(map[string]any{"level": level})
+	if err != nil {
+		return err
+	}
+	return c.do(ctx, http.MethodPut, fmt.Sprintf("/internal/worlds/%d/characters/%d/level", world, id), body, nil)
+}
+
 // SaveBars keeps a character's action bars in a world.
 func (c *Client) SaveBars(ctx context.Context, world, id int64, bars [][]string) error {
 	body, err := json.Marshal(map[string]any{"bars": bars})

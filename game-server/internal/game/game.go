@@ -38,6 +38,7 @@ type Characters interface {
 	Character(ctx context.Context, world, id int64) (rails.Character, error)
 	SaveClass(ctx context.Context, world, id int64, class string) error
 	SaveBuild(ctx context.Context, world, id int64, specialization string, talents map[string]string) error
+	SaveLevel(ctx context.Context, world, id int64, level int) error
 	SaveBars(ctx context.Context, world, id int64, bars [][]string) error
 	Positions
 }

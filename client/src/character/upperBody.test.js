@@ -2,7 +2,7 @@ import fs from "fs";
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { characterClips } from "./animations.js";
-import { characterMesh } from "./characterMesh.js";
+import { characterMesh, setWeaponsDrawn } from "./characterMesh.js";
 import { resolveRecipe } from "./recipe.js";
 import { UpperBody, canSplit, halfOf } from "./upperBody.js";
 
@@ -51,5 +51,17 @@ describe("a body split at the waist", () => {
     expect(first.time).toBeCloseTo(0.3);
     upper.clear();
     expect(upper.action).toBeNull();
+  });
+});
+
+describe("drawing weapons", () => {
+  it("moves them between the hand and where they're put away", () => {
+    const mesh = characterMesh({ ...resolveRecipe(), weapon: "sword", offhand: "shield", sheathed: true });
+    const [sword] = mesh.userData.held;
+    expect(sword.parent.name).toBe("pelvis");
+    setWeaponsDrawn(mesh, true);
+    expect(sword.parent.name).toBe("hand_r");
+    setWeaponsDrawn(mesh, false);
+    expect(sword.parent.name).toBe("pelvis");
   });
 });

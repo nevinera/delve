@@ -1,6 +1,7 @@
 package game
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"math"
@@ -26,8 +27,10 @@ func init() {
 	commands = map[string]command{
 		"combatdebug": {admin: true, usage: "/combatdebug [on or off]", run: runCombatDebug},
 		"help":        {usage: "/help", run: runHelp},
+		"level":       {admin: true, usage: "/level <1 to 100>", run: runLevel},
 		"spar":        {usage: "/spar [on or off]", run: runSpar},
 		"teleport":    {admin: true, usage: "/teleport <x> <z> [continent], or /teleport spawn", run: runTeleport},
+		"weapon":      {admin: true, usage: "/weapon <main hand> [off hand]", run: runWeapon},
 	}
 }
 
@@ -93,6 +96,65 @@ func runSpar(_ *Layer, p *Player, args []string) error {
 	} else {
 		answer(p, "system", "Training dummies have stopped swinging at you.")
 	}
+	return nil
+}
+
+const maxLevel = 100
+
+func runLevel(l *Layer, p *Player, args []string) error {
+	usage := fmt.Errorf("Use %s.", commands["level"].usage)
+	if len(args) != 1 {
+		return usage
+	}
+	level, err := strconv.Atoi(args[0])
+	if err != nil || level < 1 || level > maxLevel {
+		return usage
+	}
+	if p.fight.class == nil {
+		return fmt.Errorf("Pick a class first.")
+	}
+	l.setLevel(p, level)
+	answer(p, "system", fmt.Sprintf("You're level %d now, in this world.", level))
+	return nil
+}
+
+// What a character can hold (client/src/character/weapons.js).
+var (
+	twoHanded = []string{"greatsword", "greataxe", "maul", "polearm", "staff", "bow", "crossbow", "gun"}
+	oneHanded = []string{"none", "sword", "axe", "mace", "dagger", "fist", "wand", "thrown"}
+	offHands  = []string{"none", "shield", "orb", "sword", "axe", "mace", "dagger", "fist"}
+)
+
+// runWeapon changes what a character holds until it leaves.
+func runWeapon(l *Layer, p *Player, args []string) error {
+	if len(args) < 1 || len(args) > 2 {
+		return fmt.Errorf("Use %s.", commands["weapon"].usage)
+	}
+	main, off := strings.ToLower(args[0]), "none"
+	if len(args) == 2 {
+		off = strings.ToLower(args[1])
+	}
+	if !slices.Contains(twoHanded, main) && !slices.Contains(oneHanded, main) {
+		return fmt.Errorf("There's no %s. Main hands: %s.", main, strings.Join(append(slices.Clone(oneHanded), twoHanded...), ", "))
+	}
+	if !slices.Contains(offHands, off) {
+		return fmt.Errorf("There's no %s. Off hands: %s.", off, strings.Join(offHands, ", "))
+	}
+	if off != "none" && slices.Contains(twoHanded, main) {
+		return fmt.Errorf("A %s takes both hands.", main)
+	}
+	look := map[string]any{}
+	if err := json.Unmarshal(p.state.Look, &look); err != nil {
+		return fmt.Errorf("That character's look can't change.")
+	}
+	look["weapon"], look["offhand"] = main, off
+	encoded, err := json.Marshal(look)
+	if err != nil {
+		return err
+	}
+	p.state.Look = encoded
+	l.tellOf(p.ID(), encode(lookMessage{"look", p.ID(), encoded}))
+	answer(p, "system", fmt.Sprintf("You're holding %s and %s until you leave.", main, off))
 	return nil
 }
 

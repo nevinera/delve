@@ -46,6 +46,8 @@ func (anyone) SaveBars(context.Context, int64, int64, [][]string) error { return
 
 func (anyone) SaveBuild(context.Context, int64, int64, string, map[string]string) error { return nil }
 
+func (anyone) SaveLevel(context.Context, int64, int64, int) error { return nil }
+
 func (anyone) SaveClass(context.Context, int64, int64, string) error { return nil }
 
 func (anyone) SavePosition(context.Context, int64, int64, rails.Position) error { return nil }
@@ -68,6 +70,8 @@ func (k *classKeeper) Character(_ context.Context, _, id int64) (rails.Character
 }
 
 func (k *classKeeper) SaveBars(context.Context, int64, int64, [][]string) error { return nil }
+
+func (k *classKeeper) SaveLevel(context.Context, int64, int64, int) error { return nil }
 
 func (k *classKeeper) SaveBuild(context.Context, int64, int64, string, map[string]string) error {
 	return nil

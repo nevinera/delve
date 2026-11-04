@@ -117,6 +117,7 @@ async function play() {
     hit: fight("hit"),
     resources: fight("resources_"),
     health: fight("health_"),
+    level: fight("level_"),
     log: fight("logged"),
     speed: fight("speed_"),
     controls: fight("controls_"),

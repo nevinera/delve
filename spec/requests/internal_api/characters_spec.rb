@@ -85,6 +85,19 @@ RSpec.describe "The game server's character API", type: :request do
     expect(response.parsed_body).to include("specialization" => "guard", "talents" => {"15" => "both"})
   end
 
+  it "keeps its level" do
+    put("#{path}/level", params: {level: 12}, headers:, as: :json)
+    expect(response).to have_http_status(:no_content)
+
+    get(path, headers:)
+    expect(response.parsed_body).to include("level" => 12)
+  end
+
+  it "won't keep a level below 1" do
+    put("#{path}/level", params: {level: 0}, headers:, as: :json)
+    expect(response).to have_http_status(:unprocessable_content)
+  end
+
   it "keeps its action bars" do
     put("#{path}/bars", params: {bars: [["a", ""], ["b"]]}, headers:, as: :json)
     expect(response).to have_http_status(:no_content)
