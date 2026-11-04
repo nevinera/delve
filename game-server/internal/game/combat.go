@@ -6,6 +6,7 @@ import (
 	"log"
 	"math"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/delve-mmo/delve3d/game-server/internal/combat"
@@ -192,7 +193,7 @@ func (l *Layer) use(p *Player, m incoming) {
 	if gcd > 0 {
 		f.gcdUntil = now.Add(seconds(gcd))
 	}
-	l.tell(p, encode(used{Type: "used", ID: p.ID(), Class: f.class.ID, Ability: ability.ID, Target: target, Spot: m.Spot, GCD: gcd}))
+	l.tell(p, encode(used{Type: "used", ID: p.ID(), Class: f.class.ID, Ability: ability.ID, Target: target, Spot: m.Spot, GCD: gcd, CastTime: ability.CastTime, Channel: ability.Channel, Cost: ability.Cost}))
 	if ability.Range.Melee && ability.Target == "enemy" {
 		l.startAttacking(p, target)
 	}
@@ -208,6 +209,37 @@ func (l *Layer) use(p *Player, m incoming) {
 	l.release(p, c, now)
 }
 
+// modifiersOf is the `modify` effects that count for a unit right now.
+func (l *Layer) modifiersOf(v *vitals, now time.Time) []combat.Mod {
+	var mods []combat.Mod
+	for _, held := range v.Statuses {
+		for i := range held.def.Effects {
+			if e := &held.def.Effects[i]; e.Type == "modify" && l.holds(v, e, nil, now) {
+				mods = append(mods, combat.Mod{Effect: e, Stacks: held.stacks})
+			}
+		}
+	}
+	// Statuses are held in a map, so give ties between changes one order.
+	slices.SortStableFunc(mods, func(a, b combat.Mod) int {
+		return strings.Compare(a.Effect.Change+a.Effect.Tag, b.Effect.Change+b.Effect.Tag)
+	})
+	return mods
+}
+
+// resolved is an ability as this player would use it now.
+func (l *Layer) resolved(p *Player, a *combat.Ability, now time.Time) *combat.Ability {
+	f := &p.fight.vitals
+	mods := l.modifiersOf(f, now)
+	if len(mods) == 0 {
+		return a
+	}
+	mastery := l.statsOf(f, nil, now).MasteryPercent()
+	for i := range mods {
+		mods[i].Mastery = mastery
+	}
+	return p.fight.class.Resolve(a, mods, mastery, l.hub.roll)
+}
+
 // check says whether a player can use an ability now: the ability and its target, or why not.
 func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, int64, string) {
 	f := &p.fight
@@ -218,6 +250,7 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 	if ability == nil || !f.class.Knows(ability, f.level) {
 		return nil, 0, "you don't know that"
 	}
+	ability = l.resolved(p, ability, now)
 	if f.cast != nil {
 		return nil, 0, "you're busy"
 	}
@@ -552,7 +585,7 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 	h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: e.Type}
 	switch e.Type {
 	case "damage":
-		l.strike(p, on, e.Amount, hitOf(c, e, on, count), &h, now)
+		l.strike(p, on, e.AmountFor(count), hitOf(c, e, on, count), &h, now)
 	case "consume":
 		if e.Affects != "summons" {
 			l.consume(p, c, e, on, now)
@@ -564,11 +597,11 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 		l.extend(p, c, e, on, now)
 		return
 	case "heal":
-		n, crit := l.rollHeal(p, on, e.Amount, hitOf(c, e, on, count), now)
+		n, crit := l.rollHeal(p, on, e.AmountFor(count), hitOf(c, e, on, count), now)
 		on.Health = min(on.Health+n, on.MaxHealth)
 		h.Amount, h.Crit = math.Round(n), crit
 	case "resource":
-		n, _ := combat.Roll(e.Amount, l.statsOf(&p.fight.vitals, nil, now), false, l.hub.roll)
+		n, _ := combat.Roll(e.AmountFor(count), l.statsOf(&p.fight.vitals, nil, now), false, l.hub.roll)
 		if given, ok := l.addResource(&p.fight, e.Resource, n); ok {
 			h.Amount, h.Resource = math.Round(given), e.Resource
 		}
@@ -594,10 +627,13 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 		log.Printf("character %d: ability %s applies a status its class hasn't got: %s", p.ID(), a.ID, id)
 		return false
 	}
-	lasts := duration
-	if lasts == 0 {
-		lasts = s.Duration
+	mods := l.modifiersOf(&f.vitals, now)
+	mastery := 0.0
+	if len(mods) > 0 {
+		mastery = l.statsOf(&f.vitals, nil, now).MasteryPercent()
 	}
+	s = f.class.ResolveStatus(s, duration, mods, mastery)
+	lasts := s.Duration
 	key := statusKey{s.ID, p.ID()}
 	was := on.Statuses[key]
 	if s.Group != "" {
@@ -1044,7 +1080,8 @@ func withOther(ctx combat.HitContext, other int64) *combat.HitContext {
 func (l *Layer) rollDamage(p *Player, on *vitals, amount combat.Amount, ctx combat.HitContext, now time.Time) (float64, bool) {
 	mine, theirs := l.statsOf(&p.fight.vitals, withOther(ctx, on.ID), now), l.statsOf(on, withOther(ctx, p.ID()), now)
 	rolled := mine
-	rolled.CritChance += theirs.CritTaken
+	rolled.CritChance += theirs.CritTaken + ctx.CritChance
+	rolled.CritDamage += ctx.CritDamage
 	n, crit := combat.Roll(amount, rolled, true, l.hub.roll)
 	if times := mine.DamageDone * theirs.DamageTaken; times != 1 {
 		p.debugLine("damage %g x %g from statuses", n, times)
@@ -1057,7 +1094,8 @@ func (l *Layer) rollDamage(p *Player, on *vitals, amount combat.Amount, ctx comb
 func (l *Layer) rollHeal(p *Player, on *vitals, amount combat.Amount, ctx combat.HitContext, now time.Time) (float64, bool) {
 	mine, theirs := l.statsOf(&p.fight.vitals, withOther(ctx, on.ID), now), l.statsOf(on, withOther(ctx, p.ID()), now)
 	rolled := mine
-	rolled.CritDamage = mine.CritHealing
+	rolled.CritChance += ctx.CritChance
+	rolled.CritDamage = mine.CritHealing + ctx.CritDamage
 	n, crit := combat.Roll(amount, rolled, true, l.hub.roll)
 	if times := mine.HealingDone * theirs.HealingTaken; times != 1 {
 		p.debugLine("healing %g x %g from statuses", n, times)
@@ -1114,7 +1152,7 @@ func hitOf(c *casting, e *combat.Effect, on *vitals, count int) combat.HitContex
 	if count == 1 {
 		kinds = append(kinds, "single")
 	}
-	return combat.HitContext{Schools: schoolsOf(e.School, e.Schools, c.ability), Category: e.Category, Ability: c.ability, Kinds: kinds}
+	return combat.HitContext{Schools: schoolsOf(e.School, e.Schools, c.ability), Category: e.Category, Ability: c.ability, Kinds: kinds, CritChance: e.CritChance, CritDamage: e.CritDamage}
 }
 
 // refit brings what's kept from a unit's stats up to date: its most health, keeping the share it

@@ -62,6 +62,12 @@ export function knownAbilities(made, level) {
   return (made.abilities ?? []).filter((a) => (a.level ?? 1) <= level && !chosen.has(a.id)).sort((a, b) => (a.level ?? 1) - (b.level ?? 1));
 }
 
+// An ability as the server says it's being used, with what changes it counted. An older server's
+// message leaves those out.
+export function asUsed(ability, { castTime, channel, cost }) {
+  return { ...ability, ...(castTime === undefined ? {} : { castTime }), ...(channel ? { channel: { ...ability.channel, ...channel } } : {}), ...(cost ? { cost } : {}) };
+}
+
 // The ids of the statuses a character of this level always holds.
 export function heldStatuses(made, level) {
   const passives = (made.passives ?? []).filter((p) => (p.level ?? 1) <= level).map((p) => p.status);
@@ -324,7 +330,7 @@ export class PlayCombat {
   }
 
   // What the game server says.
-  async used({ id, class: classId, ability: abilityId, target, spot, gcd }) {
+  async used({ id, class: classId, ability: abilityId, target, spot, gcd, castTime, channel, cost }) {
     if (id === this.you.id && gcd) this.gcdUntil = performance.now() + gcd * 1000;
     const made = await this.classOf(classId);
     const ability = made?.abilities?.find((a) => a.id === abilityId);
@@ -332,7 +338,7 @@ export class PlayCombat {
     if (!ability || !caster) return;
     // Only the latest run's bar shows, and only its end takes the bar away.
     const on = {};
-    const run = this.stage.play(ability, { caster, target: target ? this.unit(target) : null, spot: spot ? new THREE.Vector3(...spot) : null, on });
+    const run = this.stage.play(asUsed(ability, { castTime, channel, cost }), { caster, target: target ? this.unit(target) : null, spot: spot ? new THREE.Vector3(...spot) : null, on });
     if (id === this.you.id) on.bar = (event) => this.runs.get(id) === run && this.showBar(event);
     this.runs.set(id, run);
   }

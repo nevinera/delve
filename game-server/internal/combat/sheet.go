@@ -13,6 +13,8 @@ type HitContext struct {
 	Status   string   // the status doing it, if one is
 	Kinds    []string // what kinds of hit it counts as: auto, ability, melee and the rest
 	Other    int64    // the unit at the other end of the hit
+
+	CritChance, CritDamage float64 // what a `modify` adds to this hit, in points
 }
 
 // narrowed says whether a stat only counts for some hits.
@@ -59,9 +61,10 @@ func (e *StatusEffect) Applies(h *HitContext, from int64) bool {
 
 // Mod is a stat effect that counts right now, from a status held.
 type Mod struct {
-	Effect *StatusEffect
-	Stacks int
-	Caster *Stats // the stats of whoever applied the status, for `ofCaster`
+	Effect  *StatusEffect
+	Stacks  int
+	Caster  *Stats  // the stats of whoever applied the status, for `ofCaster`
+	Mastery float64 // the holder's, on a `modify` waiting to see how many an ability hits
 }
 
 // gearStats feed what's worked out from them, so statuses change them first.

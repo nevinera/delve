@@ -3,6 +3,8 @@ package game
 import (
 	"encoding/json"
 	"math"
+
+	"github.com/delve-mmo/delve3d/game-server/internal/combat"
 )
 
 // The messages of .agents/formats.md.
@@ -56,6 +58,11 @@ type used struct {
 	Target  int64       `json:"target,omitempty"`
 	Spot    *[3]float64 `json:"spot,omitempty"`
 	GCD     float64     `json:"gcd"`
+
+	// The ability as it's being used, with what changes it counted.
+	CastTime float64         `json:"castTime"`
+	Channel  *combat.Channel `json:"channel,omitempty"`
+	Cost     []combat.Cost   `json:"cost,omitempty"`
 }
 
 // swung says someone has started an auto-attack swing.

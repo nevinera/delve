@@ -123,6 +123,13 @@ type Effect struct {
 	MaxShare  float64  `json:"maxShare"`
 	Refresh   bool     `json:"refresh"`
 	Apply     bool     `json:"apply"`
+
+	Param string `json:"param"` // names its number, for a `modify`
+
+	// What a `modify` adds, worked out as it's used.
+	CritChance float64 `json:"-"`
+	CritDamage float64 `json:"-"`
+	ByHits     []Mod   `json:"-"` // those that wait to see how many the ability hits
 }
 
 // StatusIDs is what a consume or extend works on, from `status` and `statuses`.
@@ -187,6 +194,7 @@ type StatusEffect struct {
 	Add        float64
 	Multiply   *float64
 	Mastery    float64
+	Param      string
 	FromStat   string
 	Share      float64
 	OfCaster   bool
@@ -201,6 +209,16 @@ type StatusEffect struct {
 	Tag        string
 	Statuses   []string
 	When       []Condition
+
+	// A `modify`.
+	Change       string
+	Set          *float64
+	AddAmount    *Amount
+	AddTags      []string
+	Chance       float64
+	AtTargets    int
+	PerTargetHit float64
+	MaxTotal     float64
 }
 
 // UnmarshalJSON reads the numbers of a periodic or stat effect, and just the type of the others.
@@ -212,7 +230,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	s.Type = head.Type
-	if head.Type != "periodic" && head.Type != "stat" {
+	if head.Type != "periodic" && head.Type != "stat" && head.Type != "modify" {
 		return nil
 	}
 	var body struct {
@@ -224,6 +242,7 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		Add        float64     `json:"add"`
 		Multiply   *float64    `json:"multiply"`
 		Mastery    float64     `json:"mastery"`
+		Param      string      `json:"param"`
 		FromStat   string      `json:"fromStat"`
 		Share      float64     `json:"share"`
 		OfCaster   bool        `json:"ofCaster"`
@@ -238,12 +257,22 @@ func (s *StatusEffect) UnmarshalJSON(b []byte) error {
 		Tag        string      `json:"tag"`
 		Statuses   []string    `json:"statuses"`
 		When       []Condition `json:"when"`
+
+		Change       string   `json:"change"`
+		Set          *float64 `json:"set"`
+		AddAmount    *Amount  `json:"addAmount"`
+		AddTags      []string `json:"addTags"`
+		Chance       float64  `json:"chance"`
+		AtTargets    int      `json:"atTargets"`
+		PerTargetHit float64  `json:"perTargetHit"`
+		MaxTotal     float64  `json:"maxTotal"`
 	}
 	if err := json.Unmarshal(b, &body); err != nil {
 		return err
 	}
-	*s = StatusEffect{head.Type, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
-		body.Hit, body.Source, body.School, body.Schools, body.Category, body.Categories, body.Abilities, body.Tag, body.Statuses, body.When}
+	*s = StatusEffect{head.Type, body.Every, body.Does, body.Amount, body.Stat, body.Resource, body.Add, body.Multiply, body.Mastery, body.Param, body.FromStat, body.Share, body.OfCaster, body.CasterOnly,
+		body.Hit, body.Source, body.School, body.Schools, body.Category, body.Categories, body.Abilities, body.Tag, body.Statuses, body.When,
+		body.Change, body.Set, body.AddAmount, body.AddTags, body.Chance, body.AtTargets, body.PerTargetHit, body.MaxTotal}
 	return nil
 }
 

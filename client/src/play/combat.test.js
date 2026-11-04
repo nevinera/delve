@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { heldStatuses, hitWords, knownAbilities, nextTarget, pickNearest, shownResources } from "./combat.js";
+import { asUsed, heldStatuses, hitWords, knownAbilities, nextTarget, pickNearest, shownResources } from "./combat.js";
 
 describe("pickNearest", () => {
   const units = [{ id: 1, x: 100, y: 100 }, { id: 2, x: 130, y: 100 }];
@@ -23,6 +23,13 @@ describe("hitWords", () => {
   it("names a status", () => expect(hitWords({ effect: "status", status: "c" }, [{ id: "c", name: "Chilled" }]).text).toBe("Chilled"));
   it("says when it missed", () => expect(hitWords({ effect: "damage", missed: true })).toEqual({ text: "miss", kind: "miss" }));
   it("says nothing of the rest", () => expect(hitWords({ effect: "resource" })).toBeNull());
+});
+
+describe("an ability as it's used", () => {
+  const ability = { id: "a", castTime: 2, channel: { duration: 3, ticks: 3 }, cost: [{ resource: "x", amount: 1 }] };
+  it("takes the server's numbers", () => expect(asUsed(ability, { castTime: 1, channel: { duration: 6 }, cost: [{ resource: "x", amount: 2 }] })).toEqual({ id: "a", castTime: 1, channel: { duration: 6, ticks: 3 }, cost: [{ resource: "x", amount: 2 }] }));
+  it("keeps its own when the server says nothing", () => expect(asUsed(ability, {})).toEqual(ability));
+  it("takes a cast time of none", () => expect(asUsed(ability, { castTime: 0 }).castTime).toBe(0));
 });
 
 describe("what you know", () => {

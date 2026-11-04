@@ -313,3 +313,65 @@ func TestPassivesAndMastery(t *testing.T) {
 		t.Fatalf("most = %g, want 3 at level 20", most)
 	}
 }
+
+// What you hold changes what your abilities cost and do, and the server says so as you use them.
+func TestModifyChangesAbilities(t *testing.T) {
+	h, p, c := statusFight(t, map[string]string{
+		"zeal":  `[{"type":"modify","abilities":["hit"],"change":"damage","multiply":2},{"type":"modify","abilities":["hit"],"change":"cost","add":3},{"type":"modify","abilities":["hit"],"change":"cooldown","add":5},{"type":"modify","abilities":["hit"],"change":"castTime","add":1},{"type":"modify","abilities":["hit"],"change":"critChance","add":100}]`,
+		"steep": `[{"type":"modify","abilities":["hit"],"change":"cost","add":1000}]`,
+	})
+	p.fight.class.Resources = append(p.fight.class.Resources, combat.Resource{Key: "grit", Kind: "points", Max: 10})
+	p.fight.resources["grit"] = 5
+	for i := range p.fight.class.Abilities {
+		if a := &p.fight.class.Abilities[i]; a.ID == "hit" {
+			a.Cost = []combat.Cost{{Resource: "grit", Amount: 1}}
+		}
+	}
+	use(t, p, "zeal")
+	pass(h, c, 2)
+	heard(p)
+	before := p.layer.dummies[0].Health
+	use(t, p, "hit")
+	got := heard(p, "used", "cooldown")
+	if len(got) != 1 || got[0]["castTime"] != 1.0 {
+		t.Fatalf("heard %v", got)
+	}
+	pass(h, c, 1.5)
+	if have := p.fight.resources["grit"]; have != 1 {
+		t.Fatalf("grit = %g, want 1 after spending 4", have)
+	}
+	if hurt := before - p.layer.dummies[0].Health; hurt != 400 {
+		t.Fatalf("hit for %g, want 100 x 2 x a crit", hurt)
+	}
+	if got := heard(p, "cooldown"); len(got) != 1 || got[0]["seconds"] != 5.0 {
+		t.Fatalf("cooldown %v", got)
+	}
+	if base := p.fight.class.Ability("hit"); base.CastTime != 0 || base.Cost[0].Amount != 1 {
+		t.Fatalf("changed the class's ability: %+v", base)
+	}
+	pass(h, c, 6)
+	use(t, p, "steep")
+	pass(h, c, 2)
+	heard(p)
+	use(t, p, "hit")
+	if got := heard(p, "refused"); len(got) != 1 {
+		t.Fatalf("not refused: %v", got)
+	}
+}
+
+// A modify of statuses changes how long the statuses you apply last.
+func TestModifyChangesStatuses(t *testing.T) {
+	h, p, c := statusFight(t, map[string]string{
+		"long": `[{"type":"modify","statuses":["brand"],"change":"duration","add":4}]`,
+	})
+	p.fight.class.Statuses = append(p.fight.class.Statuses, combat.Status{ID: "brand", Name: "Brand", Duration: 2})
+	p.fight.class.Abilities = append(p.fight.class.Abilities, selfBuff("brand", gaining("brand")))
+	use(t, p, "long")
+	pass(h, c, 2)
+	heard(p)
+	use(t, p, "brand")
+	pass(h, c, 0.1)
+	if got := heard(p, "hit"); got[len(got)-1]["lasts"] != 6.0 {
+		t.Fatalf("lasts %v", got[len(got)-1])
+	}
+}
