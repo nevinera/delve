@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_LOOK } from "../character/recipe.js";
-import { ABILITY_SECTIONS, abilityFields, classFields, classTabFields, lookFields, overridesField, readCondition, statusFields, writeCondition } from "./fields.js";
+import { ABILITY_CHOSEN, ABILITY_SECTIONS, abilityFields, classFields, classTabFields, lookFields, overridesField, readCondition, statusFields, writeCondition } from "./fields.js";
 import { readAmount, writeAmount } from "./form.js";
 
 const schema = (name) => JSON.parse(readFileSync(new URL(`../../../docs/schema/${name}.schema.json`, import.meta.url)));
@@ -37,8 +37,8 @@ describe("the class editor's fields", () => {
     expect(missing(schema("class").properties, classes, ["id", "abilities", "statuses"])).toEqual([]);
   });
 
-  it("put every ability field in one section", () => {
-    const sectioned = ABILITY_SECTIONS.flatMap((section) => section.keys);
+  it("put every ability field in the choices or in one section", () => {
+    const sectioned = [...ABILITY_CHOSEN, ...ABILITY_SECTIONS.flatMap((section) => section.keys)];
     expect(new Set(sectioned).size).toBe(sectioned.length);
     expect([...keysOf(abilities)].filter((key) => !sectioned.includes(key))).toEqual([]);
     expect(sectioned.filter((key) => !keysOf(abilities).has(key))).toEqual([]);

@@ -260,7 +260,7 @@ const defaulted = (word) => ({ read: (v) => (v === word ? undefined : v) });
 
 const spread = (e) => ["enemies", "allies"].includes(e.affects);
 
-const effectFields = (made, nested = false) => [
+export const effectFields = (made, nested = false) => [
   { key: "type", type: "select", options: ["damage", "heal", "status", "resource", "move", "dispel", "interrupt", "area"], more: ["taunt", "extend", "consume", "extraTargets", "castAbility", "threat", "reveal", "cooldown", "summon", "command", "resurrect"] },
   { key: "affects", type: "select", options: ["target", "self", "enemies", "allies", "hit", "holder", "caster", "summons"] },
   amountField(made, { show: is("damage", "heal", "resource") }),
@@ -745,12 +745,12 @@ const statusEffectFields = (made, nested = false) => [
 // What the Class tab leaves to the Spellbook and Talents tabs.
 export const classTabFields = (made) => classFields(made).filter((field) => !["talents", "passives"].includes(field.key));
 
-// The ability form's folding sections. Every field of abilityFields is in one, as fields.test.js checks.
+// What the ability form asks with choices (abilityBuilder.js), and the sections the rest fold into.
+// Every field of abilityFields is in one or the other, as fields.test.js checks.
+export const ABILITY_CHOSEN = ["name", "level", "description", "icon", "school", "target", "range", "speed", "castTime", "channel", "cooldown", "effects"];
 export const ABILITY_SECTIONS = [
-  { name: "Basics", open: true, keys: ["name", "level", "description", "icon", "school", "schools"] },
-  { name: "Targeting", keys: ["target", "range", "minRange", "facing", "speed", "creatureTypes", "requires"] },
-  { name: "Timing and cost", keys: ["castTime", "cooldown", "cost", "channel", "castWhileMoving", "whileCasting", "keepsStealth", "gcd", "gcdHasted", "charges", "cooldownHasted", "replaces"] },
-  { name: "Effects", open: true, keys: ["effects"] },
+  { name: "Rules", keys: ["schools", "minRange", "facing", "creatureTypes", "requires"] },
+  { name: "Casting", keys: ["cost", "castWhileMoving", "whileCasting", "keepsStealth", "gcd", "gcdHasted", "charges", "cooldownHasted", "replaces"] },
   { name: "Look and sound", keys: ["animation", ...FEEL_FIELDS.map((field) => field.key), "visuals", "sounds"] },
   { name: "Notes", keys: ["tags", "notes"] },
 ];

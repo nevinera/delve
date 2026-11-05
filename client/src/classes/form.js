@@ -2,8 +2,8 @@ import { iconNode } from "../play/icons.js";
 
 // Forms from lists of fields, for editing a plain object in place. A field is { key, label, type },
 // with `hint`, `show(value)` to show it only sometimes, `advanced`, the heading it goes under in the
-// fold-out that keeps rarer fields out of the way, and by type:
-// - text, area, color, check: as they sound.
+// fold-out that keeps rarer fields out of the way, `quiet` if it doesn't count as set there, and by type:
+// - text, area, color, check: as they sound. Text and area can have `placeholder(value)`.
 // - number: `min` and `step`.
 // - select: `options`, an array of names or [value, label]s, `more`, rarer options set apart, `none`,
 //   the label for leaving it out, `read` and `write` for values the form holds differently, and
@@ -75,7 +75,7 @@ const setFold = (owner, name, open) => {
 };
 
 // A fold-out that draws what's in it the first time it opens. It starts open if something in it is set.
-function fold({ owner, name, summary, className, startOpen, draw }) {
+export function fold({ owner, name, summary, className, startOpen, draw }) {
   const open = foldOf(owner, name) ?? startOpen;
   const box = el("div", { className: "form-fold-body" });
   let drawn = false;
@@ -113,7 +113,7 @@ function drawAdvanced(fields, value, hooks) {
 }
 
 function advancedFold(fields, value, hooks, { owner = value, name = "advanced", label = "advanced" } = {}) {
-  const set = countSet(fields, value);
+  const set = countSet(fields.filter((field) => !field.quiet), value);
   return fold({
     owner,
     name,
@@ -126,12 +126,12 @@ function advancedFold(fields, value, hooks, { owner = value, name = "advanced", 
 
 const RENDERERS = {
   text: (field, value, { changed }) => {
-    const input = el("input", { value: value[field.key] ?? "" });
+    const input = el("input", { value: value[field.key] ?? "", placeholder: field.placeholder?.(value) ?? "" });
     input.addEventListener("input", () => (setKey(value, field.key, input.value), changed()));
     return row(field, input);
   },
   area: (field, value, { changed }) => {
-    const input = el("textarea", { value: value[field.key] ?? "", rows: 2 });
+    const input = el("textarea", { value: value[field.key] ?? "", rows: 2, placeholder: field.placeholder?.(value) ?? "" });
     input.addEventListener("input", () => (setKey(value, field.key, input.value), changed()));
     return row(field, input);
   },
@@ -368,38 +368,18 @@ function fillRequired(fields, value) {
   }
 }
 
-// `fields` under folding headings, in the order of `sections`: { name, keys, open }. A section's
-// advanced fields fold away under "more", unless it has nothing else.
+// `fields` under folding headings, in the order of `sections`: { name, keys }. A field not in a section isn't drawn.
 export function renderSections(sections, fields, value, hooks) {
-  fillRequired(fields, value);
   return sections.map((section) => {
-    const inIt = fields.filter((field) => section.keys.includes(field.key));
-    const shown = () => inIt.filter((field) => !field.show || field.show(value));
-    const set = countSet(shown(), value);
+    const shown = fields.filter((field) => section.keys.includes(field.key) && (!field.show || field.show(value)));
+    const set = countSet(shown, value);
     return fold({
       owner: value,
       name: `section ${section.name}`,
       className: "form-section",
-      summary: `${section.name}${set && !section.open ? ` (${set} set)` : ""}`,
-      startOpen: Boolean(section.open),
-      draw: () => {
-        const plain = shown().filter((field) => !field.advanced);
-        const advanced = shown().filter((field) => field.advanced);
-        if (!plain.length) return advanced.map((field) => draw(field, value, hooks));
-        if (!advanced.length) return plain.map((field) => draw(field, value, hooks));
-        const setMore = countSet(advanced, value);
-        return [
-          ...plain.map((field) => draw(field, value, hooks)),
-          fold({
-            owner: value,
-            name: `more ${section.name}`,
-            className: "form-advanced",
-            summary: `more${setMore ? ` (${setMore} set)` : ""}`,
-            startOpen: setMore > 0,
-            draw: () => advanced.map((field) => draw(field, value, hooks)),
-          }),
-        ];
-      },
+      summary: `${section.name}${set ? ` (${set} set)` : ""}`,
+      startOpen: false,
+      draw: () => shown.map((field) => draw(field, value, hooks)),
     });
   });
 }

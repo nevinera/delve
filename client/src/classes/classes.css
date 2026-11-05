@@ -641,6 +641,163 @@
   outline: 2px solid #d8c08a;
 }
 
+.ability-head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) 150px;
+  gap: 8px;
+  align-items: start;
+  margin-bottom: 10px;
+}
+
+.ability-head > .form-row,
+.ability-head > .form-icon {
+  margin: 0;
+}
+
+.ability-head > [data-key="description"] {
+  grid-column: 1 / -1;
+}
+
+.ability-head [data-key="icon"] .form-label,
+.ability-head [data-key="name"] .form-label,
+.ability-head [data-key="description"] .form-label {
+  display: none;
+}
+
+.ability-head [data-key="level"] .form-label {
+  flex: none;
+}
+
+.ability-head [data-key="name"] input {
+  max-width: none;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.ability-head [data-key="description"] textarea {
+  max-width: none;
+}
+
+.ability-head [data-key="icon"] .form-icon-panel {
+  position: absolute;
+  z-index: 10;
+  width: 320px;
+  background: #1a1a1a;
+}
+
+.choice-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.choice {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 3px 9px;
+  border: 1px solid #444;
+  border-radius: 12px;
+}
+
+.choice.on {
+  color: #111;
+  background: #d8c08a;
+  border-color: #d8c08a;
+}
+
+.choice-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+
+.choice-other-box {
+  display: inline-flex;
+  gap: 3px;
+  align-items: center;
+  color: #aaa;
+}
+
+.choice-other {
+  width: 58px;
+}
+
+.aim-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
+}
+
+.aim-tile {
+  flex-direction: column;
+  min-height: 72px;
+  padding: 3px;
+  font-size: 12px;
+  line-height: 1.2;
+  text-align: center;
+  border-radius: 6px;
+}
+
+.aim-tile.on {
+  background: #3a3220;
+  color: inherit;
+  box-shadow: inset 0 0 0 1px #d8c08a;
+}
+
+.aim-picture {
+  display: block;
+  height: 36px;
+}
+
+.effect-card {
+  margin-bottom: 10px;
+  padding: 8px 10px 4px;
+  background: #24272c;
+  border-radius: 6px;
+}
+
+.effect-head {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+}
+
+.effect-title {
+  flex: 1;
+  font-weight: 600;
+}
+
+.effect-icon {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+}
+
+.effect-remove {
+  padding: 0 7px;
+}
+
+.effect-adds {
+  margin-bottom: 14px;
+}
+
+.effect-adds .choice-strip {
+  margin-bottom: 4px;
+}
+
+.effect-add {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  padding: 5px 10px;
+  border: 1px dashed #666;
+  border-radius: 6px;
+}
+
 @media (max-width: 900px) {
   .classes-body {
     flex-direction: column;
