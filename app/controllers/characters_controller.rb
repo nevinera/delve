@@ -5,6 +5,7 @@ class CharactersController < ApplicationController
 
   def index
     @characters = current_user.characters.order(:name)
+    @played = WorldCharacter.recent_worlds(@characters)
   end
 
   def new
