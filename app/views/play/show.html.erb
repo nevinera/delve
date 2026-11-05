@@ -31,5 +31,8 @@
   <%= link_to "exit now", worlds_path, data: {exit: true} %>
   <p class="play-leaving-note">Exiting now leaves your character standing here for 20 seconds.</p>
 </div>
-<div class="play-turn">Turn your phone sideways to play.</div>
+<div class="play-turn">
+  <p>Turn your phone sideways to play.</p>
+  <button type="button" id="playSideways" hidden>play sideways</button>
+</div>
 <script type="application/json" id="playConfig"><%= raw json_escape(@config.to_json) %></script>

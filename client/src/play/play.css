@@ -306,6 +306,8 @@ body.touch .play-bar button {
     display: flex;
     position: fixed;
     inset: 0;
+    flex-direction: column;
+    gap: 16px;
     align-items: center;
     justify-content: center;
     padding: 24px;
@@ -314,6 +316,15 @@ body.touch .play-bar button {
     text-align: center;
     z-index: 10;
   }
+}
+
+.play-turn button {
+  font: inherit;
+  padding: 10px 24px;
+  color: #1a1a1a;
+  background: #c8902a;
+  border: 1px solid #e8b04a;
+  border-radius: 6px;
 }
 
 /* Combat: frames top left, the action bar along the bottom, the log bottom left. */
