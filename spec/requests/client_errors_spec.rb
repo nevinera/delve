@@ -39,6 +39,14 @@ RSpec.describe "Client errors", type: :request do
     expect(ClientError.count).to eq(2)
   end
 
+  it "keeps only the kinds seen most lately" do
+    stub_const("ClientError::KEEP_ROWS", 3)
+    4.times { |n| ClientError.record!(report.merge(message: "kind #{"x" * n}"), now: Time.current + n) }
+    ClientError.record!(report.merge(message: "kind "), now: Time.current + 10)
+    ClientError.record!(report.merge(message: "new kind"), now: Time.current + 11)
+    expect(ClientError.order(:last_seen_at).pluck(:message)).to eq(["kind xxx", "kind ", "new kind"])
+  end
+
   it "cuts down what's too long" do
     post client_errors_path, params: {error: report.merge(message: "x" * 5_000, details: {lines: ["y" * 50_000]})}, as: :json
     error = ClientError.first
