@@ -260,7 +260,7 @@ A slab with `"kind": "stairs"` is a flight of stairs. It's walked on as the slop
 - `turn` is `[yaw, pitch, 0]`, pitch from -50° up to 0, so the flight climbs along v and its bottom and top edges are level. `at` is the bottom edge's first corner.
 - `steps` is how many steps it has, 1 to 128. The slope runs through the middle of each riser, so the first tread is level with the bottom edge and the last with the top.
 - `risers` is the risers' surface, `null` for open risers, or left out for the treads' surface.
-- The 64 ft reach limits how long a flight is.
+- The 256 ft reach limits how long a flight is.
 
 ### Surface
 
@@ -283,7 +283,7 @@ Or it's `{ color, preset, pattern, tile, palette }`, with at most one of `preset
 
 ### Which plate
 
-A slab belongs to the plate holding its home corner: the north-most top corner, the west-most of those. Every corner, top and bottom, is within 64 ft of the home corner. So to find the slabs near a point, read the plates that touch a 64 ft square around it.
+A slab belongs to the plate holding its home corner: the north-most top corner, the west-most of those. Every corner, top and bottom, is within 256 ft of the home corner. So to find the slabs near a point, read the plates that touch a 64 ft square around it.
 
 ## Templates
 

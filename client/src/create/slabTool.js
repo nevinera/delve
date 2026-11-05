@@ -49,7 +49,7 @@ const ROUND = 100; // positions to a hundredth of a foot
 const TURN_STEP = 5; // degrees the turning rings snap to
 const MOVE_STEP_FT = 0.25;
 const MAX_RECTANGLE_FT = 2048;
-const MAX_PIECE_FT = 40; // the most a piece of a cut-up rectangle is along each side
+const MAX_PIECE_FT = 160; // the most a piece of a cut-up rectangle is along each side
 const CLICK_PX = 5; // a press moving less than this before it's let go is a click
 const TREE_PROBLEM = "That slab would run into a tree.";
 

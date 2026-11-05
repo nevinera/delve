@@ -49,23 +49,23 @@ describe("rectangleSlab", () => {
 
 describe("cutting up long rectangles", () => {
   it("cuts a big floor into pieces a whole number of repeats across, meeting edge to edge", () => {
-    // Brick repeats every 4 ft, so the pieces are 40 ft, and what's left.
-    const pieces = rectanglePieces([0, 0, 0], [100, 0, 30], 0, { thickness: 1, surface: "brick" });
-    expect(pieces.map((p) => p.outline[2])).toEqual([[40, 30], [40, 30], [20, 30]]);
-    expect(pieces.map((p) => p.at[0])).toEqual([0, 40, 80]);
+    // Brick repeats every 4 ft, so the pieces are 160 ft, and what's left.
+    const pieces = rectanglePieces([0, 0, 0], [400, 0, 30], 0, { thickness: 1, surface: "brick" });
+    expect(pieces.map((p) => p.outline[2])).toEqual([[160, 30], [160, 30], [80, 30]]);
+    expect(pieces.map((p) => p.at[0])).toEqual([0, 160, 320]);
     for (const piece of pieces) expect(slabProblems(piece)).toEqual([]);
   });
 
   it("cuts a turned floor along its own sides", () => {
-    const pieces = rectanglePieces([0, 0, 0], [100, 0, 0], 45, { thickness: 2, surface: "stone" });
+    const pieces = rectanglePieces([0, 0, 0], [400, 0, 0], 45, { thickness: 2, surface: "stone" });
     expect(pieces.length).toBeGreaterThan(1);
     for (const piece of pieces) expect(slabProblems(piece)).toEqual([]);
   });
 
   it("cuts a long wall along its length", () => {
-    const pieces = wallPieces([0, 0, 0], [0, 0, 130], { foot: 0, height: 12, thickness: 1, surface: "stoneBlocks" });
-    expect(pieces.map((p) => p.outline[1][0])).toEqual([40, 40, 40, 10]);
-    expect(near(pieces.map((p) => slabTop(p)[0]))).toEqual([[0, 0, 0], [0, 0, 40], [0, 0, 80], [0, 0, 120]]);
+    const pieces = wallPieces([0, 0, 0], [0, 0, 520], { foot: 0, height: 12, thickness: 1, surface: "stoneBlocks" });
+    expect(pieces.map((p) => p.outline[1][0])).toEqual([160, 160, 160, 40]);
+    expect(near(pieces.map((p) => slabTop(p)[0]))).toEqual([[0, 0, 0], [0, 0, 160], [0, 0, 320], [0, 0, 480]]);
     for (const piece of pieces) expect(slabProblems(piece)).toEqual([]);
   });
 
@@ -195,10 +195,10 @@ describe("roofPieces", () => {
   });
 
   it("cuts a big roof into pieces", () => {
-    const pieces = roof("gable", [100, 10, 60]);
+    const pieces = roof("gable", [400, 10, 240]);
     expect(pieces.length).toBeGreaterThan(4);
     for (const piece of pieces) expect(slabProblems(piece)).toEqual([]);
-    expect(under(pieces, 50, 29.9)).toBeCloseTo(10 + 29.9 * tan, 2);
+    expect(under(pieces, 200, 119.9)).toBeCloseTo(10 + 119.9 * tan, 2);
   });
 });
 
@@ -207,15 +207,15 @@ const outlineArea = (outline) => Math.abs(outline.reduce((s, [x0, z0], i) => { c
 
 describe("polygon floors", () => {
   it("covers the polygon with valid level slabs, its top where asked", () => {
-    const l = [[0, 0], [100, 0], [100, 30], [30, 30], [30, 90], [0, 90]];
+    const l = [[0, 0], [400, 0], [400, 120], [120, 120], [120, 360], [0, 360]];
     const pieces = polygonPieces(l, 50, polygonOptions);
     expect(pieces.length).toBeGreaterThan(1);
     for (const piece of pieces) expect(slabProblems(piece)).toEqual([]);
-    expect(pieces.reduce((s, p) => s + outlineArea(p.outline), 0)).toBeCloseTo(100 * 30 + 30 * 60, 3);
+    expect(pieces.reduce((s, p) => s + outlineArea(p.outline), 0)).toBeCloseTo(400 * 120 + 120 * 240, 3);
     const top = (x, z) => pieces.map((p) => slabSpanAt(p, x, z)).find(Boolean)?.[1];
-    expect(top(10, 80)).toBeCloseTo(50);
-    expect(top(80, 20)).toBeCloseTo(50);
-    expect(top(80, 80)).toBe(undefined);
+    expect(top(40, 320)).toBeCloseTo(50);
+    expect(top(320, 80)).toBeCloseTo(50);
+    expect(top(320, 320)).toBe(undefined);
   });
 
   it("makes nothing of too few points, or edges that cross", () => {

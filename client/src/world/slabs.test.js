@@ -39,7 +39,7 @@ describe("slabs", () => {
     expect(slabProblems({ ...floor, thickness: 0 })).toEqual(["needs a thickness over 0 and at most 16 ft"]);
     expect(slabProblems({ ...floor, surface: { color: "#fff" } })).toEqual(["needs a surface: a preset's name, or { color }"]);
     expect(slabProblems({ ...floor, surface: { color: "#ffffff", pattern: "lava" } })).toEqual(['has pattern "lava", which isn\'t one of grass, dirt, sand, rock, path, shore, mud, moss, litter']);
-    expect(slabProblems({ ...floor, thickness: 16, outline: [[0, 0], [60, 0], [60, 20]] })).toEqual(["reaches more than 64 ft from its home corner"]);
+    expect(slabProblems({ ...floor, thickness: 16, outline: [[0, 0], [250, 0], [250, 80]] })).toEqual(["reaches more than 256 ft from its home corner"]);
   });
 });
 
@@ -330,12 +330,12 @@ describe("insideSlab", () => {
 
 describe("splitSlab", () => {
   it("cuts a slab too big for one into pieces that are slabs", () => {
-    const wall = { at: [0, 0, 0], turn: [0, -90, 0], outline: [[0, 0], [70, 0], [70, 20], [0, 20]], thickness: 1, surface: "stone", holes: [[[30, 2], [34, 2], [34, 9], [30, 9]]] };
+    const wall = { at: [0, 0, 0], turn: [0, -90, 0], outline: [[0, 0], [280, 0], [280, 80], [0, 80]], thickness: 1, surface: "stone", holes: [[[120, 8], [136, 8], [136, 36], [120, 36]]] };
     const pieces = splitSlab(wall);
     expect(pieces.length).toBe(3);
     for (const piece of pieces) expect(slabProblems(piece)).toEqual([]);
     // The hole straddles a cut, so it's two notches.
-    expect(pieces.reduce((sum, p) => sum + Math.abs(p.outline.reduce((a, q, i) => a + q[0] * p.outline[(i + 1) % p.outline.length][1] - p.outline[(i + 1) % p.outline.length][0] * q[1], 0)) / 2, 0)).toBeCloseTo(70 * 20 - 4 * 7);
+    expect(pieces.reduce((sum, p) => sum + Math.abs(p.outline.reduce((a, q, i) => a + q[0] * p.outline[(i + 1) % p.outline.length][1] - p.outline[(i + 1) % p.outline.length][0] * q[1], 0)) / 2, 0)).toBeCloseTo(280 * 80 - 16 * 28);
     expect(splitSlab({ ...wall, outline: [[0, 0], [10, 0], [10, 10], [0, 10]], holes: undefined })).toHaveLength(1);
   });
 });

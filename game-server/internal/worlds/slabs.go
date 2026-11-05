@@ -10,7 +10,7 @@ import (
 // them, and whether a move runs into one.
 
 // slabReachFt is how far a slab's corners can be from its home corner.
-const slabReachFt = 64.0
+const slabReachFt = 256.0
 
 // Slab is a slab as a plate's `slab` line holds it.
 type Slab struct {
