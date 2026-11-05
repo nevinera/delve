@@ -94,6 +94,20 @@ export function builtOf(type) {
 
 // What a type is, as OBJECT_TYPES gives it, for built objects too: { size, footprint, height,
 // built }. Undefined for a type that isn't known.
+// Every type in `type`'s variant set, itself included, or just itself when it isn't in one.
+export function variantsOf(type) {
+  const object = builtOf(type);
+  if (!object?.variantSet) return [type];
+  const same = [...built.values()].filter((b) => b.object.variantSet === object.variantSet && b.object.collection === object.collection);
+  return same.map((b) => BUILT_PREFIX + b.object.id);
+}
+
+// A random other type in `type`'s variant set, or `type` when it has no others.
+export function nextVariant(type, random = Math.random) {
+  const others = variantsOf(type).filter((t) => t !== type);
+  return others.length ? others[Math.floor(random() * others.length)] : type;
+}
+
 export function specOf(type) {
   if (!type?.startsWith(BUILT_PREFIX)) return OBJECT_TYPES[type];
   const b = built.get(type.slice(BUILT_PREFIX.length));

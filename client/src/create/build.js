@@ -8,7 +8,7 @@ import { mountSwatches, pickedSurface } from "./swatches.js";
 import { Thumbnails } from "../render/thumbnailRenderer.js";
 import { newObjectId, turnPoint } from "../world/builtObjects.js";
 import { CELL_FT as TEMPLATE_CELL_FT } from "../world/constants.js";
-import { makeObject, specOf } from "../world/objects.js";
+import { makeObject, nextVariant, specOf, variantsOf } from "../world/objects.js";
 import { MAX_STAIR_DEG, SLAB_REACH_FT, cutSlab, defaultSteps, insideSlab, raiseWall, rampSlab, splitSlab, slabBottom, slabProblems, slabTop, stairShape, stairSlab, unturned } from "../world/slabs.js";
 import { pressing } from "./press.js";
 import { MAJOR, planeRun, runLines, runPoint, snapInRun } from "./surfaceGrid.js";
@@ -286,7 +286,7 @@ export class Build {
       const tiles = entries.map((entry) => {
         const canvas = el("canvas", { width: THUMB_PX, height: THUMB_PX });
         const tile = el("button", { type: "button", className: "create-thumb", title: entry.name, onclick: () => this.arm(kind, entry.type) }, canvas);
-        tile.setAttribute("aria-pressed", String(entry.type === this.armed[tool]));
+        tile.setAttribute("aria-pressed", String(tool === "object" ? variantsOf(entry.type).includes(this.armed.object) : entry.type === this.armed.template));
         queue.push({ entry, canvas });
         return tile;
       });
@@ -622,6 +622,7 @@ export class Build {
     this.putNew([object]);
     this.library.used("objects", type);
     if ($("objectRandom").checked) this.yaw = Math.random() * Math.PI * 2;
+    this.armed.object = nextVariant(type);
     this.ghostOf = "";
   }
 

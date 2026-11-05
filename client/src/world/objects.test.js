@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
+import { afterAll, describe, it, expect } from "vitest";
 import { problems, shapeOf } from "./builtObjects.js";
 import { BUILTIN_COLLECTIONS } from "./builtinCollections.js";
-import { OBJECT_TYPES, blocks, makeObject, scatterObjects, tileOf } from "./objects.js";
+import { OBJECT_TYPES, blocks, makeObject, nextVariant, scatterObjects, setBuiltObjects, tileOf, variantsOf } from "./objects.js";
 
 const TERRAIN = ["grass", "rock", "sand", "tree_oak_1"];
 const BIOMES = ["plains", "forest", "rocky", "swamp"];
@@ -79,5 +79,26 @@ describe("objects", () => {
   it("lists every type in exactly one builtin collection", () => {
     const listed = BUILTIN_COLLECTIONS.flatMap((c) => c.types);
     expect([...listed].sort()).toEqual(Object.keys(OBJECT_TYPES).sort());
+  });
+});
+
+describe("variant sets", () => {
+  const rock = (id, collection, variantSet) => ({ id, name: id, collection, variantSet, palette: [{ color: "#808080", param: false }], pieces: [{ type: "box", size: [1, 1, 1], at: [0, 0.5, 0], turn: [0, 0, 0], color: 0 }] });
+  afterAll(() => setBuiltObjects([]));
+
+  it("switches to another member of the set in the same collection", () => {
+    setBuiltObjects([rock("rock0001", "c1", "rocks"), rock("rock0002", "c1", "rocks"), rock("rock0003", "c1", "rocks"), rock("rock0004", "c2", "rocks"), rock("rock0005", "c1")]);
+    expect(variantsOf("built:rock0001").sort()).toEqual(["built:rock0001", "built:rock0002", "built:rock0003"]);
+    for (const roll of [0, 0.5, 0.99]) {
+      const next = nextVariant("built:rock0001", () => roll);
+      expect(["built:rock0002", "built:rock0003"]).toContain(next);
+    }
+  });
+
+  it("stays put for an object outside a set, or alone in one, and a built-in kind", () => {
+    setBuiltObjects([rock("rock0005", "c1"), rock("rock0006", "c1", "alone")]);
+    expect(nextVariant("built:rock0005")).toBe("built:rock0005");
+    expect(nextVariant("built:rock0006")).toBe("built:rock0006");
+    expect(nextVariant("boulder")).toBe("boulder");
   });
 });

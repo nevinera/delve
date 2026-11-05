@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { World } from "../world/world.js";
-import { adoptStrays, allCollections, collections, images, keepTemplate, wornImages } from "./collections.js";
+import { adoptStrays, allCollections, collections, images, keepTemplate, oneTilePerSet, wornImages } from "./collections.js";
 
 describe("collections", () => {
   it("keeps templates in my templates, making it the first time, and lists them after the builtins", () => {
@@ -37,5 +37,16 @@ describe("collections", () => {
     expect([...world.files.keys()].filter((p) => p.includes("structure"))).toEqual([]);
     expect(allCollections(world, "objects").find((c) => c.kind === "own")).toMatchObject({ name: "my objects", entries: [{ name: "crate" }] });
     expect(adoptStrays(world)).toBe(false);
+  });
+});
+
+describe("oneTilePerSet", () => {
+  it("folds a variant set into one tile, counting its members", () => {
+    const entry = (type, variantSet) => ({ key: type, type, name: type, object: { variantSet } });
+    const tiles = oneTilePerSet([entry("a", "rocks"), entry("b"), entry("c", "rocks"), entry("d", "alone")]);
+    expect(tiles.map((t) => t.name)).toEqual(["rocks (2)", "b", "alone"]);
+    expect(tiles[0].type).toBe("a");
+    expect(tiles[0].members).toEqual(["a", "c"]);
+    expect(tiles[1].members).toEqual(["b"]);
   });
 });

@@ -17,6 +17,7 @@
 - **Builder:** the person walking and flying around in `/create`, and the figure they steer.
 - **Slab:** a flat piece placed by hand for a floor, wall, roof, ramp or stairs.
 - **Object:** a placed thing, either a built-in kind or `built:<id>` from the world's library.
+- **Variant set:** built objects in one collection sharing a set name; placing one switches to a random other.
 - **Template:** a group of slabs and objects kept in the library and placed as copies.
 - **Placed file:** a plate's JSON of hand-placed objects and slabs.
 - **Slots:** a tile's generated object positions, from a seed.

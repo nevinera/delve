@@ -170,3 +170,18 @@ describe("built objects", () => {
     expect(matches("stone", "village", "hut", ["thatched"])).toBe(false);
   });
 });
+
+describe("variant sets and walking through", () => {
+  const made = (extra) => ({ id: "abcd1234", name: "x", palette: [{ color: "#808080", param: false }], pieces: [{ type: "box", size: [2, 1, 2], at: [0, 0.5, 0], turn: [0, 0, 0], color: 0 }], ...extra });
+
+  it("checks them", () => {
+    expect(problems(made({ variantSet: "rocks", walkThrough: true }))).toEqual([]);
+    expect(problems(made({ variantSet: " " }))).toHaveLength(1);
+    expect(problems(made({ walkThrough: false }))).toHaveLength(1);
+  });
+
+  it("gives what you walk through an open footprint", () => {
+    expect(shapeOf(made()).footprint.open).toBeUndefined();
+    expect(shapeOf(made({ walkThrough: true })).footprint).toEqual({ open: expect.any(Number) });
+  });
+});

@@ -1,7 +1,7 @@
 import { strFromU8, strToU8 } from "fflate";
 import { addCollection, adoptStrays, allCollections, builtObjects, images, keepTemplate, ownCollections } from "../objects/collections.js";
 import { BUILTIN_TEMPLATES } from "../world/builtinTemplates.js";
-import { setBuiltObjects } from "../world/objects.js";
+import { setBuiltObjects, variantsOf } from "../world/objects.js";
 import { templatePath } from "../world/paths.js";
 import { TEMPLATE_PREFIX } from "../world/templates.js";
 
@@ -81,10 +81,11 @@ export class Library {
     return this.clipboard && `${CLIPBOARD_PREFIX}${this.clipboard.id}`;
   }
 
-  // Puts `type` first in the recent things of `kind`; not what was copied.
+  // Puts `type` first in the recent things of `kind`, in place of any of its variants; not what was copied.
   used(kind, type) {
     if (type?.startsWith(CLIPBOARD_PREFIX)) return;
-    this.recent[kind] = [type, ...this.recent[kind].filter((t) => t !== type)].slice(0, RECENT);
+    const same = variantsOf(type);
+    this.recent[kind] = [type, ...this.recent[kind].filter((t) => !same.includes(t))].slice(0, RECENT);
     try {
       localStorage.setItem(this.recentKey, JSON.stringify(this.recent));
     } catch {}

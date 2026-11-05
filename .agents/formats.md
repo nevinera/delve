@@ -203,6 +203,12 @@ Plate `(px, pz)` covers `[px * 2048, (px + 1) * 2048)` each way, in continent fe
 - `cave`, when there is one, is the cave network it's in: the one whose 32 ft chunk it's in, under the ground there. /create keeps it as things are placed and moved, places or moves things into a network only while it's being polished, and takes them all away if it goes back to layout.
 - `footprint` and `height` are what stands in the way, in feet, worked out from its type and scale when it's saved, so the game server needs no object library: `{ "circle": r }`, `{ "capsule": [r, half] }` along its own x, `{ "rect": [w, d] }`, or `{ "open": r }` for one that doesn't block. Files saved before they were kept leave them out, and the server works out a built-in kind's itself.
 
+### Variant sets
+
+A built object's `variantSet` names the set it's in. Objects in one collection with the same name are variants of each other. /create's picker shows a set as one tile, and placing one switches to a random other, so what you place in numbers varies. A placed object records the variant it is as its `type`, so nothing else reads sets.
+
+A built object with `walkThrough: true` doesn't stand in the way: its `footprint` comes out as `{ "open": r }`.
+
 ### Slabs in a placed file
 
 Each is a [slab](#slabs), with `template` when it was placed from one, and `cave` as objects have it.

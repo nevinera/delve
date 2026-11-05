@@ -1,8 +1,10 @@
+import { oneTilePerSet } from "../objects/collections.js";
 import { Thumbnails } from "../render/thumbnailRenderer.js";
 
 // The detail step's picker of things to place: a library's collections (objects/collections.js
 // allCollections), one at a time opened to its thumbnails. Clicking a thumbnail arms that type,
-// which clicking the ground then places; clicking it again, or disarm(), lets it go.
+// which clicking the ground then places; clicking it again, or disarm(), lets it go. A variant set
+// (objects/collections.js oneTilePerSet) shows as one tile, armed whichever of it is armed.
 
 const THUMB_PX = 72;
 
@@ -45,9 +47,10 @@ export class PlacePicker {
         },
       });
       if (!open) return head;
-      const tiles = collection.entries.map((entry) => {
+      const tiles = oneTilePerSet(collection.entries).map((entry) => {
+        const armed = entry.members.includes(this.armed);
         const canvas = el("canvas", { width: THUMB_PX, height: THUMB_PX });
-        const tile = el("button", { type: "button", className: `picker-tile${entry.type === this.armed ? " armed" : ""}`, title: entry.name, onclick: () => this.arm(entry.type === this.armed ? null : entry.type) }, canvas, el("span", { textContent: entry.name }));
+        const tile = el("button", { type: "button", className: `picker-tile${armed ? " armed" : ""}`, title: entry.name, onclick: () => this.arm(armed ? null : entry.type) }, canvas, el("span", { textContent: entry.name }));
         tile.addEventListener("pointerenter", () => this.thumbs.startTurning(entry, canvas));
         tile.addEventListener("pointerleave", () => this.thumbs.stopTurning());
         queue.push({ entry, canvas });

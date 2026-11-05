@@ -16,6 +16,10 @@ import { OLD_IMAGES, imagePath, objectPath } from "./paths.js";
 //   each { along: [x, y, z], outline } or { from: [x, y, z], outline }: the outline, 3 to
 //   MAX_CUT_CORNERS points in feet from the centre, swept right through the object both ways along
 //   `along`, or out from the point of view `from` as a cone (world/sightCuts.js).
+// - variantSet: the name of the set it's in, or absent. Objects in one collection with the same
+//   name are variants of each other, and /create switches to a random other one after each placing.
+// - walkThrough: true for an object a character walks through, such as petals or short grass; it
+//   stands in the way when absent.
 // - palette: the colors its pieces use, each { color: "#rrggbb", param, name }. Up to MAX_PARAMS of
 //   them are parameters, which a placement can override; their colors are the defaults. The first
 //   colors added are parameters until there are MAX_PARAMS of them.
@@ -233,6 +237,8 @@ export function problems(object) {
     const cutOk = (c) => way(c) && Array.isArray(c.outline) && c.outline.length >= 3 && c.outline.length <= MAX_CUT_CORNERS && c.outline.every(point);
     if (!(Array.isArray(object.sightCuts) && object.sightCuts.length <= MAX_CUTS && object.sightCuts.every(cutOk))) out.push(`its sightCuts should be up to ${MAX_CUTS}, each a direction or a point of view, and 3 to ${MAX_CUT_CORNERS} points`);
   }
+  if (object.variantSet !== undefined && !(typeof object.variantSet === "string" && object.variantSet.trim())) out.push("its variantSet should be a name, or left out");
+  if (object.walkThrough !== undefined && object.walkThrough !== true) out.push("walkThrough should be true, or left out");
   if (object.tags !== undefined && !(Array.isArray(object.tags) && object.tags.every((t) => typeof t === "string"))) out.push("its tags should be a list of words");
   object.pieces.forEach((piece, n) => {
     const name = `piece ${n + 1}`;
@@ -285,6 +291,7 @@ export function shapeOf(object) {
     }
   }
   const round = (v) => Math.round(v * 100) / 100;
+  if (object.walkThrough) return { footprint: { open: round(radius) || 1 }, height: round(height) };
   const footprint = Math.PI * radius ** 2 <= 4 * halfX * halfZ ? { circle: round(radius) } : { rect: [round(2 * halfX), round(2 * halfZ)] };
   return { footprint, height: round(height) };
 }

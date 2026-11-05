@@ -32,6 +32,15 @@
     "source": {
       "type": "string"
     },
+    "variantSet": {
+      "type": "string",
+      "minLength": 1,
+      "description": "the variant set it's in: objects in one collection with the same name are variants, and /create switches to a random other after each placing"
+    },
+    "walkThrough": {
+      "const": true,
+      "description": "true for an object characters walk through; it stands in the way when absent"
+    },
     "blocksSight": {
       "const": false,
       "description": "false for an object you see through; it blocks line of sight when absent"

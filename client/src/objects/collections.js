@@ -140,6 +140,25 @@ export function allCollections(world, kind = "objects") {
   return [...builtins, ...ours];
 }
 
+// Entries with each variant set folded into one, named for the set and counting its members:
+// { ...first member, name, members: [every member's type] }. An entry outside a set is its own only member.
+export function oneTilePerSet(entries) {
+  const sets = new Map();
+  const out = [];
+  for (const entry of entries) {
+    const set = entry.object?.variantSet;
+    if (!set) out.push({ ...entry, members: [entry.type] });
+    else if (sets.has(set)) sets.get(set).members.push(entry.type);
+    else {
+      const tile = { ...entry, name: set, members: [entry.type] };
+      sets.set(set, tile);
+      out.push(tile);
+    }
+  }
+  for (const tile of sets.values()) if (tile.members.length > 1) tile.name = `${tile.name} (${tile.members.length})`;
+  return out;
+}
+
 // A short hash of text, to tell versions of an object apart.
 function hashText(text) {
   let h = 2166136261;

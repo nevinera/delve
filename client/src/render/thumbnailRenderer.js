@@ -70,6 +70,17 @@ export class Thumbnails {
     this.drawing = requestAnimationFrame(step);
   }
 
+  // Draws one more over the next frames, behind any already waiting.
+  enqueue(entry, canvas) {
+    this.queue.push({ entry, canvas });
+    if (this.queue.length > 1) return;
+    const step = () => {
+      for (const { entry: e, canvas: c } of this.queue.splice(0, PER_FRAME)) this.draw(e, c);
+      if (this.queue.length) this.drawing = requestAnimationFrame(step);
+    };
+    this.drawing = requestAnimationFrame(step);
+  }
+
   dropUnused(keep) {
     for (const [key, group] of this.previews) {
       if (keep.has(key)) continue;

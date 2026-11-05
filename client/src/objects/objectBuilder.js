@@ -144,7 +144,17 @@ export class ObjectBuilder {
     this.collection = el("select", { title: "the collection it's in", onchange: () => this.change((o) => (o.collection = this.collection.value)) });
     this.sight = el("input", { type: "checkbox", onchange: () => this.change((o) => (this.sight.checked ? delete o.blocksSight : (o.blocksSight = false))) });
     const sight = el("label", { className: "ob-check", title: "whether it blocks line of sight: the game uses the outline drawn around it" }, this.sight, el("span", { textContent: "blocks sight" }));
-    this.details = div("ob-details", this.name, this.tags, el("label", { className: "ob-field" }, "collection", this.collection), sight);
+    this.walk = el("input", { type: "checkbox", onchange: () => this.change((o) => (this.walk.checked ? (o.walkThrough = true) : delete o.walkThrough)) });
+    const walk = el("label", { className: "ob-check", title: "whether characters walk straight through it, as with petals or short grass" }, this.walk, el("span", { textContent: "walk through" }));
+    this.variantSet = el("input", { type: "text", placeholder: "variant set", title: "objects in this collection with the same set name are variants: placing one switches to a random other" });
+    this.variantSet.addEventListener("change", () =>
+      this.change((o) => {
+        const name = this.variantSet.value.trim();
+        if (name) o.variantSet = name;
+        else delete o.variantSet;
+      }),
+    );
+    this.details = div("ob-details", this.name, this.tags, this.variantSet, el("label", { className: "ob-field" }, "collection", this.collection), sight, walk);
 
     const add = div("ob-row", ...PIECE_TYPES.map((type) => el("button", { type: "button", textContent: type, onclick: () => this.addPiece(type) })));
     this.handleButtons = Object.keys(HANDLES).map((name) => el("button", { type: "button", textContent: name, onclick: () => this.setHandle(name) }));
@@ -442,6 +452,8 @@ export class ObjectBuilder {
     this.tags.value = (object.tags ?? []).join(", ");
     this.collection.value = object.collection ?? "";
     this.sight.checked = object.blocksSight !== false;
+    this.walk.checked = object.walkThrough === true;
+    this.variantSet.value = object.variantSet ?? "";
     for (const b of this.handleButtons) b.classList.toggle("active", b.textContent === this.handle);
     this.worldBox.checked = this.worldMoves;
 

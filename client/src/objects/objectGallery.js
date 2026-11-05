@@ -3,7 +3,7 @@ import { Thumbnails } from "../render/thumbnailRenderer.js";
 
 // A library's gallery: every object type in the world's collections and the game's builtins, as
 // rendered thumbnails grouped by collection, filtered by a search. Your own collections start with a "+" tile for a new one.
-// Thumbnails (thumbnailRenderer.js) draws them.
+// Thumbnails (thumbnailRenderer.js) draws them as they scroll into view, since there are many.
 //
 // show(collections) takes [{ id, name, kind: "builtin" | "imported" | "own", source, entries }],
 // each entry { key, type, name, tags }: key is unique across the gallery and changes when the
@@ -56,7 +56,9 @@ export class ObjectGallery {
   }
 
   render() {
-    this.queue = [];
+    this.visible?.disconnect();
+    this.visible = globalThis.IntersectionObserver && new IntersectionObserver((seen) => this.drawSeen(seen), { rootMargin: "300px" });
+    this.queue = new Map();
     const text = this.search.value;
     this.sections.replaceChildren(
       ...this.collections
@@ -69,7 +71,17 @@ export class ObjectGallery {
         .filter(Boolean),
     );
     if (!this.sections.children.length) this.sections.append(el("p", { className: "gallery-none", textContent: "Nothing matches." }));
-    this.thumbs.drawAll(this.queue, new Set(this.collections.flatMap((c) => c.entries.map((e) => e.key))));
+    this.thumbs.drawAll([], new Set(this.collections.flatMap((c) => c.entries.map((e) => e.key))));
+    if (!this.visible) for (const { entry, canvas } of this.queue.values()) this.thumbs.enqueue(entry, canvas);
+  }
+
+  drawSeen(seen) {
+    for (const { target, isIntersecting } of seen) {
+      if (!isIntersecting) continue;
+      const { entry, canvas } = this.queue.get(target);
+      this.visible.unobserve(target);
+      this.thumbs.enqueue(entry, canvas);
+    }
   }
 
   section(collection, entries) {
@@ -93,10 +105,11 @@ export class ObjectGallery {
 
   tile(collection, entry) {
     const canvas = el("canvas", { width: THUMB_PX, height: THUMB_PX });
-    const tile = el("button", { type: "button", className: "gallery-tile", title: entry.tags?.length ? `${entry.name} · ${entry.tags.join(", ")}` : entry.name, onclick: () => this.onOpen?.(collection, entry) }, canvas, el("span", { className: "gallery-name", textContent: entry.name }));
+    const tile = el("button", { type: "button", className: "gallery-tile", title: [entry.name, entry.object?.variantSet && `a variant of ${entry.object.variantSet}`, entry.tags?.join(", ")].filter(Boolean).join(" · "), onclick: () => this.onOpen?.(collection, entry) }, canvas, el("span", { className: "gallery-name", textContent: entry.name }));
     tile.addEventListener("pointerenter", () => this.thumbs.startTurning(entry, canvas));
     tile.addEventListener("pointerleave", () => this.thumbs.stopTurning());
-    this.queue.push({ entry, canvas });
+    this.queue.set(tile, { entry, canvas });
+    this.visible?.observe(tile);
     return tile;
   }
 }
