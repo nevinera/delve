@@ -15,6 +15,7 @@
       <button type="button" data-work="geo" data-key="g" aria-pressed="true">geo<kbd class="create-key">G</kbd></button>
       <button type="button" data-work="build" data-key="y" aria-pressed="false">build<kbd class="create-key">Y</kbd></button>
       <button type="button" data-work="caves" data-key="i" aria-pressed="false">caves<kbd class="create-key">I</kbd></button>
+      <button type="button" data-work="units" data-key="x" aria-pressed="false">units<kbd class="create-key">X</kbd></button>
     </div>
     <div class="create-tools create-manage" data-work="manage" hidden>
       <button id="openWorld" type="button">upload world</button>
@@ -22,18 +23,6 @@
       <button id="newWorld" type="button" title="an empty world, all sea">new world</button>
       <a class="create-page-link" href="/objects">objects</a>
       <a class="create-page-link" href="/classes">classes</a>
-      <section class="create-repo" aria-label="training dummies">
-        <h3>Training dummies</h3>
-        <p id="dummyCount"></p>
-        <button id="dummyHere" type="button" title="puts a training dummy where the builder stands">dummy here</button>
-        <button id="dummyNearest" type="button" title="takes away the training dummy nearest the builder on this continent">remove nearest</button>
-      </section>
-      <section class="create-repo" aria-label="spawn point">
-        <h3>Spawn point</h3>
-        <p id="spawnAt"></p>
-        <button id="spawnHere" type="button" title="characters new to the world start where the builder stands">spawn here</button>
-        <button id="spawnGo" type="button">go to the spawn point</button>
-      </section>
       <section class="create-repo" aria-label="GitHub">
         <h3>GitHub</h3>
         <p id="repoSource"></p>
@@ -66,9 +55,23 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M4 16 L44 16 M4 10 L4 22 M24 12 L24 20 M14 14 L14 18 M34 14 L34 18 M44 10 L44 22" fill="none" stroke="#ffe9a0" stroke-width="2"/></svg>
         <span>measure</span><kbd class="create-key">M</kbd>
       </button>
+      <button type="button" data-tool="spawn" data-key="b" aria-pressed="false" title="set where characters new to the world start">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><line x1="20" y1="3" x2="20" y2="23" stroke="#8a6440" stroke-width="2"/><path d="M21 3 L33 7 L21 11 Z" fill="#e8c860"/></svg>
+        <span>spawn</span><kbd class="create-key">B</kbd>
+      </button>
       <button type="button" data-tool="path" data-key="l" aria-pressed="false" title="find the shortest way on foot from one place to another">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M6 18 C 14 18, 14 6, 24 8 C 32 10, 32 16, 42 6" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-linecap="round" stroke-dasharray="4 3"/><circle cx="6" cy="18" r="3" fill="#ffe9a0"/><circle cx="42" cy="6" r="3" fill="#ffe9a0"/></svg>
         <span>path</span><kbd class="create-key">L</kbd>
+      </button>
+    </div>
+    <div class="create-tools" data-work="units" hidden>
+      <button type="button" data-tool="unitSelect" data-key="h" aria-pressed="false" title="pick units, to move them or take them away">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><rect x="4" y="3" width="40" height="18" fill="none" stroke="#ffe14d" stroke-width="2" stroke-dasharray="4 3"/><line x1="24" y1="8" x2="24" y2="19" stroke="#8a6440" stroke-width="2"/><circle cx="24" cy="7" r="3" fill="#c8a858"/></svg>
+        <span>select</span><kbd class="create-key">H</kbd>
+      </button>
+      <button type="button" data-tool="dummy" data-key="j" aria-pressed="false" title="place training dummies">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><line x1="24" y1="6" x2="24" y2="23" stroke="#8a6440" stroke-width="2"/><line x1="17" y1="11" x2="31" y2="11" stroke="#8a6440" stroke-width="2"/><rect x="21" y="9" width="6" height="8" rx="2" fill="#c8a858"/><circle cx="24" cy="5" r="3" fill="#c8a858"/></svg>
+        <span>dummy</span><kbd class="create-key">J</kbd>
       </button>
     </div>
     <div class="create-tools" data-work="build" hidden>
@@ -220,6 +223,16 @@
         <button type="button" data-pen-width="3" aria-pressed="false" title="width 3"><svg width="32" height="12" viewBox="0 0 32 12" aria-hidden="true"><line x1="3" y1="6" x2="29" y2="6" stroke="currentColor" stroke-width="5" stroke-linecap="round"/></svg></button>
         <button type="button" data-pen-width="4" aria-pressed="false" title="width 4"><svg width="32" height="12" viewBox="0 0 32 12" aria-hidden="true"><line x1="3" y1="6" x2="29" y2="6" stroke="currentColor" stroke-width="8" stroke-linecap="round"/></svg></button>
       </div>
+    </div>
+    <div data-config="spawn" hidden>
+      <p class="create-note">Click the ground where characters new to the world start.</p>
+      <p id="spawnAt"></p>
+      <button id="spawnGo" type="button">go to the spawn point</button>
+    </div>
+    <div data-config="unitSelect dummy" hidden>
+      <p class="create-note" data-only="dummy">Click the ground to put up a training dummy. The game server puts them up for players to hit.</p>
+      <p class="create-note" data-only="unitSelect">Click a dummy to pick it, drag it to move it, and press Delete to take it away.</p>
+      <p id="dummyCount"></p>
     </div>
     <div data-config="pin" hidden>
       <p class="create-note">Click the ground to stick a pin in it, and give it a title and notes. Click a pin's head to open it again.</p>
@@ -720,6 +733,7 @@
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, measure measures distances and circles, and path finds the shortest way on foot from one place to another, to find where ranges and cliffs can be crossed. Click a pin's head to open it</dd>
     <dt>build</dt><dd>place objects and templates, from the ones used lately or the library, draw floors, walls, rooms and roofs as slabs, draw stairs and ramps, and pick what's placed to move, turn, delete or make a template of</dd>
     <dt>caves</dt><dd>lay out and polish cave networks. The panel shows the network you're in, or were last in, and switches it between layout and polish. Select picks points and entrances to see or change them; place entrance, from above the ground, starts or joins a network; in layout, add lays passages out from inside, to where you look; in polish, blocks, sculpt, smooth, flatten and paint edit the rock by hand. Number keys pick the rock: 1 the rock around it, 2 to 5 jagged, smooth, carved and mined</dd>
+    <dt>units</dt><dd>put up training dummies with the dummy tool, and pick them with select to drag them somewhere else or press Delete to take them away. Planning's spawn tool sets where characters new to the world start.</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, draw streams and rivers, and clear it away</dd>
   </dl>
 </div>

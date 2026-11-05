@@ -379,36 +379,26 @@ function start(world, changes, fresh) {
     $("spawnAt").textContent = spawn ? `${toward(spawn.at[0], "east", "west")}, ${toward(spawn.at[1], "south", "north")}` : "none yet: the game won't take the world without one";
     $("spawnGo").disabled = !spawn;
   };
-  showSpawn();
-  $("spawnHere").addEventListener("click", async () => {
-    const info = worldInfo();
-    info.spawn = { continent, at: [builder.state.x, builder.state.z].map((v) => Math.round(v * 10) / 10) };
-    changes.set("world.json", strToU8(`${JSON.stringify(info, null, 2)}\n`));
-    await store.set("changes", changes).catch(() => {});
-    showSpawn();
-  });
-  // Training dummies, kept in world.json: the game server puts them up to hit.
+  // Training dummies, kept in world.json too: the game server puts them up to hit. Both are set
+  // with the units and planning tools (units.js).
   const showDummies = () => {
-    const here = (worldInfo().dummies ?? []).filter((d) => d.continent === continent);
-    $("dummyCount").textContent = here.length ? `${here.length} on this continent` : "none on this continent";
-    $("dummyNearest").disabled = !here.length;
+    const here = (worldInfo().dummies ?? []).filter((d) => d.continent === continent).length;
+    $("dummyCount").textContent = here ? `${here} on this continent` : "none on this continent";
   };
-  const keepDummies = async (dummies) => {
+  const keepUnits = async ({ spawn, dummies }) => {
     const info = worldInfo();
+    if (spawn) info.spawn = spawn;
     info.dummies = dummies;
     if (!dummies.length) delete info.dummies;
     changes.set("world.json", strToU8(`${JSON.stringify(info, null, 2)}\n`));
     await store.set("changes", changes).catch(() => {});
+    showSpawn();
     showDummies();
   };
+  tools.units.load({ continent, spawn: worldInfo().spawn, dummies: worldInfo().dummies });
+  tools.units.onChange = keepUnits;
+  showSpawn();
   showDummies();
-  $("dummyHere").addEventListener("click", () => keepDummies([...(worldInfo().dummies ?? []), { continent, at: [builder.state.x, builder.state.z].map((v) => Math.round(v * 10) / 10) }]));
-  $("dummyNearest").addEventListener("click", () => {
-    const dummies = worldInfo().dummies ?? [];
-    const gap = (d) => (d.continent === continent ? Math.hypot(d.at[0] - builder.state.x, d.at[1] - builder.state.z) : Infinity);
-    const nearest = dummies.reduce((best, d) => (gap(d) < gap(best) ? d : best), dummies[0]);
-    keepDummies(dummies.filter((d) => d !== nearest));
-  });
   $("spawnGo").addEventListener("click", () => {
     const [x, z] = worldInfo().spawn.at;
     builder.state = { ...builder.state, x, z, y: walkAt(x, z), flying: false, falling: 0 };
@@ -507,6 +497,8 @@ function start(world, changes, fresh) {
       $("infoHeight").textContent = feet(y - SEA_LEVEL_FT);
       $("infoGround").textContent = feet(renditions.heightAt(x, z) ?? EMPTY_FT);
       $("infoFacing").textContent = facing(builder.state.yaw);
+      // The ground under units moves as it's shaped and as it's read in.
+      tools.units.restand();
       lastInfo = now;
     }
     if (now - lastHud > HUD_EVERY_MS) {

@@ -952,3 +952,10 @@ body.create {
 .create-slider input[hidden] {
   display: none;
 }
+
+/* The report button sits at the scene's bottom right, clear of the info panel and the tools. */
+.report-button {
+  left: auto;
+  right: 220px;
+  bottom: 150px;
+}

@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { Units } from "./units.js";
 import { CAVE_THEMES, VOXEL_FT } from "../v2/caves.js";
 import { slabHome } from "../world/slabs.js";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
@@ -70,6 +71,7 @@ const PLANNING = new Set(["marker", "eraser", "select", "measure"]); // tools th
 const OPENS_PINS = new Set([null, "pin"]); // tools with which clicking a pin opens it
 const BUILD = new Set(["pick", "object", "template", "slab", "stairs", "ramp"]);
 const PLANS = new Set(["caveSelect", "entrance", "caveAdd"]);
+const UNITS = new Set(["unitSelect", "dummy", "spawn"]);
 const POLISH = new Set(POLISH_TOOLS);
 // How each caves tool draws the rock and whether it shows the layout; null leaves it as it is.
 const CAVE_VIEWS = {
@@ -162,6 +164,7 @@ export class Tools {
     this.build.onPick = (tool) => this.tool !== tool && this.pick(tool);
     this.plan = new CavePlan({ scene, camera, canvas, layout, caves, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.cellHeightAt(x, z) ?? EMPTY_FT, here: () => [builder.state.x, builder.state.y, builder.state.z] });
     builder.wheel = (e) => PLANS.has(this.tool) && this.plan.wheel(e);
+    this.units = new Units({ scene, groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, hit: () => this.hit(), ray: () => this.build.ray() });
     this.polish = new CavePolish({ scene, caves, layout, camera, ray: () => this.build.ray() });
     $("caveUndo").addEventListener("click", () => this.caveUndo());
     for (const swatch of document.querySelectorAll("[data-rock] .create-swatch")) swatch.style.background = `rgb(${THEME_LOOK[CAVE_THEMES[Number(swatch.parentElement.dataset.rock)]].rgb.join(",")})`;
@@ -357,6 +360,7 @@ export class Tools {
       if (BUILD.has(this.tool)) this.build.move(e);
       if (PLANS.has(this.tool)) this.plan.move(e);
       if (POLISH.has(this.tool)) this.polish.move();
+      if (UNITS.has(this.tool)) this.units.move();
       if (this.moving) this.movePins();
       for (const areas of Object.values(this.outlined)) {
         if (!areas.dragging) continue;
@@ -416,6 +420,10 @@ export class Tools {
       if (PLANS.has(this.tool)) {
         canvas.setPointerCapture(e.pointerId);
         return this.plan.down(e);
+      }
+      if (UNITS.has(this.tool)) {
+        canvas.setPointerCapture(e.pointerId);
+        return this.units.down();
       }
       if (POLISH.has(this.tool)) {
         canvas.setPointerCapture(e.pointerId);
@@ -478,6 +486,7 @@ export class Tools {
       this.stroke = null;
       if (BUILD.has(this.tool)) this.build.up();
       if (PLANS.has(this.tool)) this.plan.up();
+      if (UNITS.has(this.tool)) this.units.up();
       if (POLISH.has(this.tool)) this.polish.up(e);
       if (this.clicked?.pin) this.openPin(this.clicked.pin);
       else if (this.clicked?.at) {
@@ -510,6 +519,7 @@ export class Tools {
       if (e.target.matches?.("input, textarea, select") || e.target.closest?.(":popover-open")) return;
       const areas = this.outlined[this.tool];
       if (BUILD.has(this.tool) && this.build.key(e)) return e.preventDefault();
+      if (UNITS.has(this.tool) && this.units.key(e)) return e.preventDefault();
       if ((PLANS.has(this.tool) || POLISH.has(this.tool)) && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         this.caveUndo();
         return e.preventDefault();
@@ -694,6 +704,7 @@ export class Tools {
     if (BUILD.has(tool) || BUILD.has(this.build.tool)) this.build.setTool(BUILD.has(tool) ? tool : null);
     this.plan.setTool(PLANS.has(tool) ? tool : null);
     this.polish.setTool(POLISH.has(tool) ? tool : null);
+    this.units.setTool(UNITS.has(tool) ? tool : null);
     if (CAVE_VIEWS[tool]) this.setCaveView(...CAVE_VIEWS[tool]);
     this.box = null;
     this.boxEl.hidden = true;
