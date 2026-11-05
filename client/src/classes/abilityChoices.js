@@ -163,15 +163,15 @@ export function toggleCost(made, ability, key) {
 }
 
 // How strong a hit or a heal is: a coefficient of one of the caster's powers.
-const defaultPower = (made) => (made.primaryStats?.[0] === "intellect" ? "spellPower" : "attackPower");
+export const defaultPower = (made) => (made.primaryStats?.[0] === "intellect" ? "spellPower" : "attackPower");
 
-function powerOf(made, effect) {
+export function powerOf(made, effect) {
   const parts = readAmount(effect.amount);
   if (parts.attackPower !== undefined) return "attackPower";
   return parts.spellPower !== undefined ? "spellPower" : defaultPower(made);
 }
 
-function setCoefficient(effect, power, coefficient) {
+export function setCoefficient(effect, power, coefficient) {
   const { attackPower, spellPower, ...rest } = readAmount(effect.amount);
   setKey(effect, "amount", writeAmount({ ...rest, ...(coefficient === undefined ? {} : { [power]: coefficient }) }));
 }

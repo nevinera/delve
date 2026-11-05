@@ -9,7 +9,7 @@ import { iconNode } from "../play/icons.js";
 //   the label for leaving it out, `read` and `write` for values the form holds differently, and
 //   `then(value)` for what picking one does to other fields.
 // - icon: `options`, the names of icons, picked from a grid of them.
-// - multi: `options`, kept as a list of those picked.
+// - multi: `options`, kept as a list of those picked. A long list adds from a dropdown.
 // - words: a list of words, written with commas.
 // - number or word: `word`, a value the check stands for, `after`, the words before the check.
 // - group: `fields`, or a function for them if they'd otherwise go on forever, kept as an object under
@@ -123,6 +123,9 @@ function advancedFold(fields, value, hooks, { owner = value, name = "advanced", 
     draw: () => drawAdvanced(fields, value, hooks),
   });
 }
+
+// The most a multi lists as checkboxes.
+const MULTI_LIMIT = 14;
 
 const RENDERERS = {
   text: (field, value, { changed }) => {
@@ -241,19 +244,37 @@ const RENDERERS = {
     }
     return row(field, select);
   },
-  multi: (field, value, { changed }) => {
+  multi: (field, value, hooks) => {
+    const { changed, reshaped } = hooks;
+    const options = optionsOf(field);
     const picked = new Set(value[field.key] ?? []);
-    const boxes = optionsOf(field).map(([v, label]) => {
+    const keep = () => setKey(value, field.key, options.map(([o]) => o).filter((o) => picked.has(o)));
+    const label = el("span", { className: "form-label", textContent: field.label ?? field.key });
+    // A long list would take over the form, so it's what's picked, and a list to add from.
+    if (options.length > MULTI_LIMIT) {
+      const chips = options
+        .filter(([v]) => picked.has(v))
+        .map(([v, name]) => {
+          const chip = el("button", { type: "button", className: "form-picked", textContent: `${name} ×`, title: `take off ${name}` });
+          chip.addEventListener("click", () => (picked.delete(v), keep(), reshaped()));
+          return chip;
+        });
+      const adder = el("select", {}, el("option", { value: "", textContent: "add one" }), ...options.filter(([v]) => !picked.has(v)).map(([v, name]) => el("option", { value: v, textContent: name })));
+      adder.setAttribute("aria-label", `add to ${field.label ?? field.key}`);
+      adder.addEventListener("change", () => (picked.add(adder.value), keep(), reshaped()));
+      return el("div", { className: "form-row", title: field.hint ?? "" }, label, el("div", { className: "form-picks" }, ...chips, adder));
+    }
+    const boxes = options.map(([v, name]) => {
       const box = el("input", { type: "checkbox", checked: picked.has(v) });
       box.addEventListener("change", () => {
         if (box.checked) picked.add(v);
         else picked.delete(v);
-        setKey(value, field.key, optionsOf(field).map(([o]) => o).filter((o) => picked.has(o)));
+        keep();
         changed();
       });
-      return el("label", { className: "form-pick" }, box, label);
+      return el("label", { className: "form-pick" }, box, name);
     });
-    return el("div", { className: "form-row", title: field.hint ?? "" }, el("span", { className: "form-label", textContent: field.label ?? field.key }), el("div", { className: "form-picks" }, ...boxes));
+    return el("div", { className: "form-row", title: field.hint ?? "" }, label, el("div", { className: "form-picks" }, ...boxes));
   },
   words: (field, value, { changed }) => {
     const input = el("input", { value: (value[field.key] ?? []).join(", ") });

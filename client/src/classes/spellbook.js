@@ -61,6 +61,7 @@ export const roomForPassive = (made, page) => {
 export function addPassive(made, page, level = 1, random = Math.random) {
   const status = addStatus(made, random);
   status.name = "new passive";
+  status.kind = "hidden";
   const spec = made.specializations?.find((s) => s.id === page);
   if (spec) spec.status = status.id;
   else made.passives = [...(made.passives ?? []), { status: status.id, level }];

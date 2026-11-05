@@ -15,7 +15,7 @@ const SCHOOLS = ["physical", "holy", "fire", "nature", "frost", "shadow", "arcan
 const SCHOOL_LISTS = [...SCHOOLS, "all"];
 const DISPELS = ["magic", "curse", "poison", "disease", "enrage", "stun", "root", "silence", "incapacitate", "disorient", "fear", "disarm", "slow"];
 const CREATURE_TYPES = ["beast", "humanoid", "undead", "elemental", "demon", "dragonkin", "giant", "mechanical", "aberration", "critter"];
-const STATS = ["strength", "agility", "intellect", "stamina", "armor", "critRating", "hasteRating", "masteryRating", "versatilityRating", "leechRating", "avoidanceRating", "speedRating", "attackPower", "spellPower", "maxHealth", "resourceMax", "resourceRegen", "resourceRest", "resourceDecay", "resourceGain", "critChance", "critDamage", "critHealing", "critTaken", "haste", "mastery", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed", "stealth", "detection", "damageDone", "healingDone", "damageTaken", "healingTaken", "threat"];
+export const STATS = ["strength", "agility", "intellect", "stamina", "armor", "critRating", "hasteRating", "masteryRating", "versatilityRating", "leechRating", "avoidanceRating", "speedRating", "attackPower", "spellPower", "maxHealth", "resourceMax", "resourceRegen", "resourceRest", "resourceDecay", "resourceGain", "critChance", "critDamage", "critHealing", "critTaken", "haste", "mastery", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed", "stealth", "detection", "damageDone", "healingDone", "damageTaken", "healingTaken", "threat"];
 const COMMON_STATS = ["strength", "agility", "intellect", "stamina", "armor", "attackPower", "spellPower", "maxHealth", "critChance", "haste", "movementSpeed", "damageDone", "healingDone", "damageTaken"];
 const HITS = ["auto", "ability", "melee", "direct", "periodic", "area", "main", "others", "single"];
 const COMMON_ANIMATIONS = ["attack", "bigAttack", "shoot", "cast", "castBig", "castChannel"];
@@ -82,7 +82,7 @@ const TRIGGERS = ["dealDamage", "takeDamage", "heal", "healed", "overheal", "cri
 const COMMON_TRIGGERS = ["dealDamage", "takeDamage", "heal", "crit", "cast", "kill", "healthBelow", "statusGained", "statusEnds"];
 const triggerOn = (...events) => (e) => e.type === "trigger" && events.includes(e.on);
 // What a modify can change: the built-in values, and every param the class has named.
-const changesOf = (made) => () => {
+export const changesOf = (made) => () => {
   const named = [...(made.abilities ?? []), ...(made.statuses ?? [])].flatMap((o) => (o.effects ?? []).map((e) => e.param)).filter(Boolean);
   return [...BUILT_IN_CHANGES, ...new Set(named)];
 };
@@ -645,7 +645,7 @@ export function overridesField(made, kind, fieldsOf, removable, show) {
   };
 }
 
-const statusEffectFields = (made, nested = false) => [
+export const statusEffectFields = (made, nested = false) => [
   { key: "type", type: "select", options: ["stat", "periodic", "absorb", "control", "trigger", "modify"], more: ["swing", "immune", "aura", "stealth", "transform", "store", "extraTargets", "gear", "untargetable", "redirectThreat", "countsAsStealthed", "stealthLinger", "stealthProtected", "none"] },
   ...FEEL_FIELDS.map((field) => ({ ...field, show: is("swing") })),
   { ...VISUALS_FIELD, show: is("swing") },
@@ -755,13 +755,21 @@ export const ABILITY_SECTIONS = [
   { name: "Notes", keys: ["tags", "notes"] },
 ];
 
+// The same for a status, by statusBuilder.js.
+export const STATUS_CHOSEN = ["name", "description", "icon", "kind", "duration", "stacking", "maxStacks", "dispel", "effects"];
+export const STATUS_SECTIONS = [
+  { name: "Rules", keys: ["breaksOn", "keptBy", "consumedBy", "limit", "group", "leash"] },
+  { name: "Look", keys: ["pose", "aura"] },
+  { name: "Notes", keys: ["tags", "notes"] },
+];
+
 export const statusFields = (made) => [
   { key: "name" },
   { key: "description", type: "area" },
   { key: "icon", type: "icon", options: iconNames },
   { key: "kind", type: "select", options: ["buff", "debuff", "hidden"] },
   { key: "duration", label: "duration s", type: "number", min: 0, hint: "leave it out for one that lasts until removed" },
-  { key: "stacking", type: "select", none: "refresh", options: ["replace", "stack"] },
+  { key: "stacking", type: "select", none: "replace", options: ["refresh", "stack"] },
   { key: "maxStacks", label: "max stacks", type: "number", min: 1, step: 1, show: (s) => s.stacking === "stack" },
   { key: "effects", type: "list", one: "effect", blank: () => ({ type: "stat" }), fields: statusEffectFields(made) },
   { key: "dispel", type: "select", none: "can't be", options: DISPELS, advanced: RULES },

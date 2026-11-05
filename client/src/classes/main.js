@@ -13,8 +13,10 @@ import { isClassPath } from "../world/paths.js";
 import { spellbookBoard, statusBoard, talentBoard } from "./boards.js";
 import { classPath, classProblems, classesOf, newClass } from "./classFile.js";
 import { abilityBuilder } from "./abilityBuilder.js";
-import { classFields, classTabFields, statusFields, talentFields } from "./fields.js";
+import { classFields, classTabFields, talentFields } from "./fields.js";
 import { renderFields } from "./form.js";
+import { statusBuilder } from "./statusBuilder.js";
+import { statusSummary } from "./statusChoices.js";
 import { AbilityPreview } from "./preview.js";
 import { GENERAL, addAbility, addPassive, addStatus, addTalent, bookPages, duplicateAbility, removeAbility, removePassive, removeStatus, removeTalent, roomForPassive, toggleOnSpec, usedBy } from "./spellbook.js";
 import { showMenu } from "./tileMenu.js";
@@ -149,7 +151,7 @@ function drawStatus(made) {
     remove.dataset.sure = "yes";
     remove.textContent = uses.length ? `yes, delete it (${uses.length} still use it)` : "yes, delete it";
   });
-  const body = el("div", { className: "status-dialog-body" }, el("p", { className: "status-uses", textContent: uses.length ? `Used by ${uses.join(", ")}.` : "Nothing uses this yet." }), ...renderFields(statusFields(made), status, { changed, reshaped, status: statusHooks(made) }));
+  const body = el("div", { className: "status-dialog-body" }, el("p", { className: "status-uses", textContent: uses.length ? `Used by ${uses.join(", ")}.` : "Nothing uses this yet." }), ...statusBuilder(made, status, { changed, reshaped, status: statusHooks(made) }));
   dialog.replaceChildren(el("div", { className: "status-dialog-head" }, title, el("span", { className: "library-spacer" }), remove, back), body);
 }
 
@@ -337,6 +339,20 @@ function showBoard(made) {
 const passiveFieldsFor = (made) => classFields(made).find((field) => field.key === "passives").fields;
 const specPassiveFieldsFor = (made) => classFields(made).find((field) => field.key === "specializations").fields.filter((field) => field.key === "status").map(({ advanced, ...field }) => field);
 
+// What a passive's status does, in a line each. Opening the status is how to change it.
+function passiveSummary(made, id) {
+  const status = statusOf(made, id);
+  const lines = status ? statusSummary(status) : [];
+  const box = el("div", { className: "passive-summary" });
+  if (!status) return box;
+  if (lines.length) box.append(el("ul", {}, ...lines.map((line) => el("li", { textContent: line }))));
+  else box.append(el("p", { className: "board-empty", textContent: "It doesn't do anything yet." }));
+  const open = el("button", { type: "button", textContent: lines.length ? "change what it does" : "make it do something" });
+  open.addEventListener("click", () => openStatus(made, id));
+  box.append(open);
+  return box;
+}
+
 // The form for what's picked on this tab.
 function showConfig(made) {
   const config = $("config");
@@ -393,8 +409,8 @@ function showConfig(made) {
     });
     config.append(el("div", { className: "classes-delete" }, remove, sure, keepIt), ...renderFields(classTabFields(made), made, hooks));
   } else if (inTab.kind === "ability") config.append(...abilityBuilder(made, thing, hooks));
-  else if (inTab.kind === "passive") config.append(el("h3", { textContent: "Passive" }), ...renderFields(passiveFieldsFor(made), thing, hooks));
-  else if (inTab.kind === "specPassive") config.append(el("h3", { textContent: `${thing.name || thing.id}'s passive` }), ...renderFields(specPassiveFieldsFor(made), thing, hooks));
+  else if (inTab.kind === "passive") config.append(el("h3", { textContent: "Passive" }), ...renderFields(passiveFieldsFor(made), thing, hooks), passiveSummary(made, thing.status));
+  else if (inTab.kind === "specPassive") config.append(el("h3", { textContent: `${thing.name || thing.id}'s passive` }), ...renderFields(specPassiveFieldsFor(made), thing, hooks), passiveSummary(made, thing.status));
   else config.append(el("h3", { textContent: `Level ${inTab.level} talent` }), ...renderFields(talentFields(made, Number(inTab.level)), thing, hooks));
 }
 

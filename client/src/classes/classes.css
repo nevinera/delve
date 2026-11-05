@@ -751,6 +751,37 @@
   height: 36px;
 }
 
+.form-picked {
+  padding: 1px 7px;
+  border-radius: 10px;
+}
+
+.form-picks select {
+  max-width: 180px;
+}
+
+.status-head {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.choice-more {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+.passive-summary {
+  margin-top: 10px;
+}
+
+.passive-summary ul {
+  margin: 0 0 10px;
+  padding-left: 18px;
+}
+
+.effect-card .effect-card {
+  background: #2c3036;
+}
+
 .effect-card {
   margin-bottom: 10px;
   padding: 8px 10px 4px;

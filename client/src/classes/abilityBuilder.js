@@ -1,16 +1,11 @@
 import { iconNode } from "../play/icons.js";
 import { addEffect, addLabel, aimStrip, chosenOnCard, cooldownStrip, costOf, effectChoices, effectLabel, flightStrip, hasStrength, isFree, moveStrip, powerStrip, radiusStrip, reachStrip, removeEffect, resourceStrips, schoolStrip, setFree, strengthStrip, timingStrip, toggleCost, whoStrip } from "./abilityChoices.js";
 import { ABILITY_SECTIONS, abilityFields, effectFields } from "./fields.js";
-import { fold, renderFields, renderSections, setKey } from "./form.js";
+import { addRow, asStrip, choice, drawStrip, el, foldOutFields } from "./choiceStrip.js";
+import { renderFields, renderSections, setKey } from "./form.js";
 
 // The ability form: rows of choices that say what they're asking by what they offer, each row showing
 // once it means something. What the choices don't cover folds away below them.
-
-const el = (tag, props = {}, ...children) => {
-  const node = Object.assign(document.createElement(tag), props);
-  node.append(...children);
-  return node;
-};
 
 const svg = (inner) => {
   const box = document.createElement("span");
@@ -31,44 +26,9 @@ const AIM_PICTURES = {
   none: `<circle cx="32" cy="18" r="6" fill="#d8c08a"/>`,
 };
 
-const SCHOOL_COLORS = { physical: "#b8b0a0", holy: "#f0d870", fire: "#f07030", nature: "#60c060", frost: "#70c8f0", shadow: "#9060c0", arcane: "#d070e0" };
 const EFFECT_ICONS = { damage: "crossed-swords", heal: "heart-drop", status: "checked-shield", resource: "stars-stack", move: "run", dispel: "cross-flare", interrupt: "stopwatch", area: "whirlwind" };
 
 const numberOf = (text) => (text.trim() === "" ? undefined : Number(text));
-
-function choice(option, on, pick) {
-  const button = el("button", { type: "button", className: "choice" });
-  if (option.swatch) button.append(el("span", { className: "choice-swatch", style: `background:${SCHOOL_COLORS[option.swatch]}` }));
-  button.append(option.label);
-  button.classList.toggle("on", on);
-  button.setAttribute("aria-pressed", on);
-  button.addEventListener("click", () => pick(option.value));
-  return button;
-}
-
-// A row of choices. It has no heading: what's on offer says what it's asking.
-function drawStrip(strip, { changed, reshaped }) {
-  const pick = (value) => {
-    strip.pick(value);
-    reshaped();
-  };
-  const offered = strip.options.some((o) => o.value === strip.value);
-  const node = el("div", { className: "choice-strip" }, ...strip.options.map((option) => choice(option, option.value === strip.value, pick)));
-  node.dataset.strip = strip.name;
-  node.setAttribute("role", "group");
-  node.setAttribute("aria-label", strip.name);
-  if (strip.other !== undefined) {
-    const input = el("input", { type: "number", min: 0, step: "any", className: "choice-other", placeholder: "other", value: !offered && typeof strip.value === "number" ? strip.value : "" });
-    input.setAttribute("aria-label", `${strip.name}, another number`);
-    input.addEventListener("input", () => {
-      strip.pick(numberOf(input.value));
-      changed();
-    });
-    input.addEventListener("change", reshaped);
-    node.append(el("label", { className: "choice-other-box" }, input, strip.other));
-  }
-  return node;
-}
 
 function drawAims(strip, { reshaped }) {
   const node = el(
@@ -85,38 +45,32 @@ function drawAims(strip, { reshaped }) {
       return button;
     }),
   );
-  node.dataset.strip = strip.name;
-  node.setAttribute("role", "group");
-  node.setAttribute("aria-label", strip.name);
-  return node;
+  return asStrip(node, strip.name);
 }
 
-// An effect's own fields, less what its card's choices ask, for its fold-out. The amount and who it
-// lands on are still there for what the choices can't say, without counting as anything set.
+// An effect's own fields, less what its card's choices ask, for its fold-out.
 function cardFields(made, effect) {
   const chosen = chosenOnCard(effect);
-  return effectFields(made).flatMap((field) => {
-    const quietly = field.key === "around" || field.key === "cone" ? chosen.includes("affects") : false;
-    if (field.advanced) return [quietly ? { ...field, quiet: true } : field];
-    if (field.key === "school") return [{ ...field, advanced: "other" }];
-    if (!chosen.includes(field.key)) return [field];
-    if (field.key === "amount" || field.key === "affects") return [{ ...field, advanced: field.key === "amount" ? "how much" : "who it lands on", quiet: true }];
-    return [];
+  const moved = ["amount", "affects"].filter((key) => chosen.includes(key));
+  return foldOutFields(effectFields(made), {
+    drop: chosen.filter((key) => !moved.includes(key)),
+    tuck: Object.fromEntries(moved.map((key) => [key, key === "amount" ? "how much" : "who it lands on"])),
+    quiet: chosen.includes("affects") ? ["around", "cone"] : [],
+    move: { school: "other" },
   });
 }
 
-function drawEffect(made, ability, effect, hooks) {
+// An effect's card. `gone()` takes it away. Statuses use this for what a trigger does, with `ability`
+// standing in for what the effect can land on.
+export function abilityEffectCard(made, ability, effect, hooks, gone) {
   const remove = el("button", { type: "button", textContent: "×", title: "remove this", className: "effect-remove" });
   remove.setAttribute("aria-label", `remove ${effectLabel(effect.type)}`);
-  remove.addEventListener("click", () => {
-    removeEffect(ability, effect);
-    hooks.reshaped();
-  });
+  remove.addEventListener("click", gone);
   const strips = [whoStrip(ability, effect), radiusStrip(effect), ...(hasStrength(effect) ? [strengthStrip(made, effect), powerStrip(made, effect)] : []), moveStrip(ability, effect), ...resourceStrips(made, effect)].filter(Boolean);
   const card = el(
     "div",
     { className: "effect-card" },
-    el("div", { className: "effect-head" }, iconNode(EFFECT_ICONS[effect.type], "effect-icon") ?? "", el("span", { className: "effect-title", textContent: effectLabel(effect.type) }), remove),
+    el("div", { className: "effect-head" }, ...[iconNode(EFFECT_ICONS[effect.type], "effect-icon")].filter(Boolean), el("span", { className: "effect-title", textContent: effectLabel(effect.type) }), remove),
     ...strips.map((strip) => drawStrip(strip, hooks)),
     ...renderFields(cardFields(made, effect), effect, hooks),
   );
@@ -124,24 +78,10 @@ function drawEffect(made, ability, effect, hooks) {
   return card;
 }
 
-function drawAddEffect(made, ability, hooks) {
-  const add = (type) => {
-    addEffect(made, ability, type);
-    hooks.reshaped();
-  };
-  const tile = (type) => {
-    const button = el("button", { type: "button", className: "effect-add" }, iconNode(EFFECT_ICONS[type], "effect-icon") ?? "", addLabel(ability, type));
-    button.dataset.add = type;
-    button.addEventListener("click", () => add(type));
-    return button;
-  };
+// Tiles for adding an effect, the likeliest for what `ability` aims at first. `owner` remembers the fold-out.
+export function effectAdds(ability, owner, add) {
   const { first, rest } = effectChoices(ability);
-  return el(
-    "div",
-    { className: "effect-adds" },
-    el("div", { className: "choice-strip" }, ...first.map(tile)),
-    fold({ owner: ability, name: "more effects", className: "form-advanced", summary: "other things it can do", startOpen: false, draw: () => [el("div", { className: "choice-strip" }, ...rest.map(tile))] }),
-  );
+  return addRow({ first, rest, owner, add, label: (type) => addLabel(ability, type), icon: (type) => iconNode(EFFECT_ICONS[type], "effect-icon"), summary: "other things it can do" });
 }
 
 function drawCost(made, ability, hooks) {
@@ -167,11 +107,7 @@ function drawCost(made, ability, hooks) {
     });
     return [button, el("label", { className: "choice-other-box" }, input, key === "percent" ? "%" : "")];
   });
-  const node = el("div", { className: "choice-strip" }, free, ...pieces);
-  node.dataset.strip = "cost";
-  node.setAttribute("role", "group");
-  node.setAttribute("aria-label", "cost");
-  return [node];
+  return [asStrip(el("div", { className: "choice-strip" }, free, ...pieces), "cost")];
 }
 
 export function abilityBuilder(made, ability, hooks) {
@@ -192,8 +128,16 @@ export function abilityBuilder(made, ability, hooks) {
     ...strip(reachStrip(ability)),
     ...strip(flightStrip(ability)),
     ...strip(schoolStrip(ability)),
-    ...(ability.effects ?? []).map((effect) => drawEffect(made, ability, effect, hooks)),
-    drawAddEffect(made, ability, hooks),
+    ...(ability.effects ?? []).map((effect) =>
+      abilityEffectCard(made, ability, effect, hooks, () => {
+        removeEffect(ability, effect);
+        hooks.reshaped();
+      }),
+    ),
+    effectAdds(ability, ability, (type) => {
+      addEffect(made, ability, type);
+      hooks.reshaped();
+    }),
     // How long and how much mean nothing until it does something.
     ...(started || ability.castTime || ability.channel || ability.cooldown || ability.cost?.length
       ? [

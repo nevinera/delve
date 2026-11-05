@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_LOOK } from "../character/recipe.js";
-import { ABILITY_CHOSEN, ABILITY_SECTIONS, abilityFields, classFields, classTabFields, lookFields, overridesField, readCondition, statusFields, writeCondition } from "./fields.js";
+import { ABILITY_CHOSEN, ABILITY_SECTIONS, STATUS_CHOSEN, STATUS_SECTIONS, abilityFields, classFields, classTabFields, lookFields, overridesField, readCondition, statusFields, writeCondition } from "./fields.js";
 import { readAmount, writeAmount } from "./form.js";
 
 const schema = (name) => JSON.parse(readFileSync(new URL(`../../../docs/schema/${name}.schema.json`, import.meta.url)));
@@ -42,6 +42,13 @@ describe("the class editor's fields", () => {
     expect(new Set(sectioned).size).toBe(sectioned.length);
     expect([...keysOf(abilities)].filter((key) => !sectioned.includes(key))).toEqual([]);
     expect(sectioned.filter((key) => !keysOf(abilities).has(key))).toEqual([]);
+  });
+
+  it("put every status field in the choices or in one section", () => {
+    const sectioned = [...STATUS_CHOSEN, ...STATUS_SECTIONS.flatMap((section) => section.keys)];
+    expect(new Set(sectioned).size).toBe(sectioned.length);
+    expect([...keysOf(statuses)].filter((key) => !sectioned.includes(key))).toEqual([]);
+    expect(sectioned.filter((key) => !keysOf(statuses).has(key))).toEqual([]);
   });
 
   it("leave talents and passives off the Class tab", () => {
