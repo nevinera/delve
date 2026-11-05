@@ -4,8 +4,8 @@
 const MOVING_FT_S = 3.5; // slower than this is a lean or a shuffle, with no steps in it
 const TELEPORT_FT = 10; // further than this in one frame isn't walking
 const OFF_GROUND_FT = 0.5;
-const MINE_VOLUME = 0.5;
-const THEIR_VOLUME = 0.4;
+const MINE_VOLUME = 0.12; // footsteps sit well under everything else
+const THEIR_VOLUME = 0.08;
 
 // Which stock sound each of look.js's patterns makes, other than soft ground. Snow's crunch is the nearest thing to sand.
 const STEP_ON = { rock: "step-stone", sand: "step-snow" };
