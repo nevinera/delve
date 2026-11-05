@@ -27,6 +27,17 @@ RSpec.describe "Problem reports", type: :request do
     expect(report.screenshot_path).to exist
   end
 
+  it "keeps a voice note sent with no note typed" do
+    sign_in user
+    firefox_voice = Rack::Test::UploadedFile.new(StringIO.new("OggS voice"), "audio/ogg; codecs=opus", original_filename: "voice")
+    post problem_reports_path, params: {kind: "bug", note: "", voice: firefox_voice}
+
+    expect(response).to have_http_status(:created)
+    report = ProblemReport.last
+    expect([report.note, report.voice_type]).to eq([nil, "audio/ogg"])
+    expect(report.voice_path.read).to eq("OggS voice")
+  end
+
   it "won't take a kind it doesn't know, or details that aren't JSON" do
     sign_in user
     post problem_reports_path, params: {kind: "nonsense"}
