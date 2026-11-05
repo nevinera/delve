@@ -35,4 +35,20 @@ RSpec.describe "Dashboard", type: :request do
     expect(response.body).not_to include("me/old")
     expect(response.body).to include(%(href="/worlds"))
   end
+
+  it "shows each character's four latest released worlds, each joining it as that character" do
+    ada = create(:character, user:, name: "Ada")
+    worlds = %w[one two three four five].each_with_index.map do |name, i|
+      world = create(:world, repo: "them/#{name}", released_sha: "abc")
+      WorldCharacter.create!(world:, character: ada, updated_at: i.hours.ago)
+      world
+    end
+    unreleased = create(:world, repo: "them/draft")
+    WorldCharacter.create!(world: unreleased, character: ada)
+    get home_path
+
+    worlds.first(4).each { |world| expect(response.body).to include(%(href="#{play_path(world, character: ada.id)}")) }
+    expect(response.body).not_to include(play_path(worlds.last, character: ada.id))
+    expect(response.body).not_to include("them/draft", ">draft<")
+  end
 end

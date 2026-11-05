@@ -7,4 +7,12 @@
       <%= button_to "delete", character_path(character), method: :delete, class: "compact secondary", form: {data: {turbo_confirm: "Delete #{character.name}? This can't be undone."}} %>
     </div>
   </div>
+  <% worlds = local_assigns[:played]&.fetch(character.id, []) || [] %>
+  <% if worlds.any? %>
+    <div class="character-worlds">
+      <% worlds.each do |world| %>
+        <%= link_to world.display_name, play_path(world, character: character.id), role: "button", class: "secondary", title: "Play #{world.display_name} as #{character.name}" %>
+      <% end %>
+    </div>
+  <% end %>
 </li>

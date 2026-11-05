@@ -168,6 +168,21 @@ input[type="submit"].secondary:hover {
   margin: 0;
 }
 
+/* The worlds a character played last, on the right of its card: each joins that world as it. */
+.character-worlds {
+  margin-left: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  align-items: stretch;
+  min-width: 10rem;
+}
+
+.character-worlds [role="button"] {
+  padding: 0.35rem 0.9rem;
+  text-align: center;
+}
+
 /* Links under a section of /home, the main one a button. */
 .section-links {
   display: flex;

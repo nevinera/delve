@@ -6,7 +6,7 @@
   <h2>Your characters</h2>
   <% if @characters.any? %>
     <ul class="character-list">
-      <%= render partial: "characters/character", collection: @characters %>
+      <%= render partial: "characters/character", collection: @characters, locals: {played: @played} %>
     </ul>
     <p class="section-links">
       <%= link_to "New character", new_character_path, role: "button" %>
