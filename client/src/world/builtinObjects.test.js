@@ -39,6 +39,14 @@ describe("builtin objects", () => {
     for (const set of ["stalagmites", "stalactites"]) for (const object of BUILTIN_OBJECTS.filter((o) => o.name.startsWith(set) || o.variantSet === set)) expect(object.collection, object.name).toBe("builtin:natural");
   });
 
+  it("vary in size when natural", () => {
+    const of = (id) => BUILTIN_OBJECTS.find((o) => o.id === id);
+    expect(of("bcave023").sizeVary).toBe(0.1); // loose rocks
+    expect(of("bcave003").sizeVary).toBe(0.1); // stalagmites
+    expect(of("bvill001").sizeVary).toBeUndefined(); // barrel
+    expect(BUILTIN_OBJECTS.filter((o) => o.sizeVary).length).toBeGreaterThan(250);
+  });
+
   it("don't reach far below the ground", () => {
     for (const object of BUILTIN_OBJECTS) {
       const lowest = Math.min(...object.pieces.filter((p) => !p.cut).flatMap((p) => pieceCorners(p).map((c) => c[1])));

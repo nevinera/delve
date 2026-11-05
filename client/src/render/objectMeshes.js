@@ -348,7 +348,7 @@ function seat(object, tileAt) {
     const b = ground(c * half, -s * half);
     return { y: (a + b) / 2 - sink, pitch: Math.atan2(b - a, half * 2) };
   }
-  const r = footprint.circle ?? Math.min(...footprint.rect) / 2;
+  const r = footprint.circle ?? (footprint.rect ? Math.min(...footprint.rect) / 2 : 0);
   const low = Math.min(ground(0, 0), ground(r, 0), ground(-r, 0), ground(0, r), ground(0, -r));
   return { y: low - sink, pitch: 0 };
 }

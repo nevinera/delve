@@ -366,8 +366,12 @@
         <button type="button" data-build-undo>undo</button>
       </div>
       <label id="objectScaleRow" hidden>size <output id="objectScaleOut"></output>
-        <input id="objectScale" type="range" min="0" max="1000">
+        <span class="create-slider">
+          <input id="objectScale" type="range" min="0" max="1000" aria-label="size, or the smallest size">
+          <input id="objectScaleHigh" type="range" min="0" max="1000" aria-label="largest size" hidden>
+        </span>
       </label>
+      <label id="objectSizeVaryRow" hidden><input type="checkbox" id="objectSizeVary"> vary size</label>
       <label><input type="checkbox" id="objectRandom" checked> turn at random</label>
     </div>
     <div data-config="template" hidden>

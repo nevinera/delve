@@ -52,6 +52,24 @@ const WALK_THROUGH = new Set([
   ...["broad003", "broad008", "bcave009"], // cobble patch, stepping stones, mine rails
 ]);
 
+// What grows or forms by itself, which varies in size when placed: whole collections, then objects
+// and sets elsewhere by name, then older objects by id.
+const NATURAL_COLLECTIONS = new Set(["natural", "flora", "woodland", "stones"]);
+const NOT_NATURAL = new Set(["stone ring", "fire ring"]);
+const NATURAL_NAMES = new Set([
+  ...["saguaro cactus", "barrel cactus", "prickly pear", "agave", "dead bush", "tumbleweed", "sandstone hoodoo", "desert skull", "termite mound", "oasis palm sapling"],
+  ...["snowdrift", "snowy rocks", "icicles", "ice spikes", "ice chunks", "frozen pond patch", "snowy firs"],
+  ...["cypress knees", "swamp mound", "hanging moss", "rotten stump", "bog bubbles", "giant lily"],
+  ...["giant ribcage", "giant skull", "loose bones", "skeletons", "antler pile", "mammoth tusks", "eggs", "big nest", "spider cocoon", "cocoon cluster", "egg sac", "beast carcass", "blood spatter", "ash piles"],
+  ...["wheat", "corn", "cabbages", "pumpkins", "carrot tops", "hay piles"],
+]);
+const NATURAL_IDS = new Set(["bruin009", "bcave012", "bcave017", "bmill006"]); // dead tree, ore lumps, spoil heap, cut stumps
+const NATURAL_SIZE_VARY = 0.1;
+const isNatural = (collection, object) => {
+  const name = object.variantSet ?? object.name;
+  return NATURAL_IDS.has(object.id) || NATURAL_NAMES.has(name) || (NATURAL_COLLECTIONS.has(collection) && !NOT_NATURAL.has(name));
+};
+
 // Sets that live in another collection than the file that makes them. Each member keeps its id.
 const MOVED_SETS = [
   ["stones", "stalagmites", "natural"],
@@ -113,6 +131,7 @@ export const BUILTIN_OBJECT_COLLECTIONS = regrouped([FARM, VILLAGE, HOUSEHOLD, M
     ...o,
     ...(SEE_THROUGH.has(o.id) || WALK_THROUGH.has(o.id) ? { blocksSight: false } : {}),
     ...(WALK_THROUGH.has(o.id) ? { walkThrough: true } : {}),
+    ...(isNatural(c.id, o) ? { sizeVary: NATURAL_SIZE_VARY } : {}),
   })),
 }));
 

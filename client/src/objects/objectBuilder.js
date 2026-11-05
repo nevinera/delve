@@ -1,7 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
 import { TransformControls } from "three/addons/controls/TransformControls.js";
-import { GRAY_INKS, MAX_PIECES, newObjectId, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, PALETTE_INKS, addColor, dropUnusedColors, emptyImage, inkColor, paletteColors, pieceCorners, problems, shapeOf, textsOf, tintable, turnPoint } from "../world/builtObjects.js";
+import { GRAY_INKS, MAX_PIECES, MAX_SIZE_VARY, newObjectId, MIN_SIZE_FT, PIECE_TYPES, REACH_FT, PALETTE_INKS, addColor, dropUnusedColors, emptyImage, inkColor, paletteColors, pieceCorners, problems, shapeOf, textsOf, tintable, turnPoint } from "../world/builtObjects.js";
 import { MAX_TEXT, TEXT_PLACEHOLDER, signText } from "../world/pixelFont.js";
 import { atlasTexture, builtMaterial, decalGeometry, decalMaterial, faceFrame, faceIdOf, faceSpot, objectGeometry, primitive, textGeometry, tileTexture, tiledGeometries, tiledMaterial } from "../render/builtMeshes.js";
 import { ImagePainter, drawImage } from "./imagePainter.js";
@@ -154,7 +154,15 @@ export class ObjectBuilder {
         else delete o.variantSet;
       }),
     );
-    this.details = div("ob-details", this.name, this.tags, this.variantSet, el("label", { className: "ob-field" }, "collection", this.collection), sight, walk);
+    this.sizeVary = el("input", { type: "number", min: "0", max: String(MAX_SIZE_VARY * 100), step: "1", title: "how much bigger or smaller each placing is, at most, unless you change it in /create" });
+    this.sizeVary.addEventListener("change", () =>
+      this.change((o) => {
+        const percent = Math.min(MAX_SIZE_VARY * 100, Math.max(0, Number(this.sizeVary.value) || 0));
+        if (percent) o.sizeVary = percent / 100;
+        else delete o.sizeVary;
+      }),
+    );
+    this.details = div("ob-details", this.name, this.tags, this.variantSet, el("label", { className: "ob-field" }, "collection", this.collection), el("label", { className: "ob-field" }, "size varies ±%", this.sizeVary), sight, walk);
 
     const add = div("ob-row", ...PIECE_TYPES.map((type) => el("button", { type: "button", textContent: type, onclick: () => this.addPiece(type) })));
     this.handleButtons = Object.keys(HANDLES).map((name) => el("button", { type: "button", textContent: name, onclick: () => this.setHandle(name) }));
@@ -454,6 +462,7 @@ export class ObjectBuilder {
     this.sight.checked = object.blocksSight !== false;
     this.walk.checked = object.walkThrough === true;
     this.variantSet.value = object.variantSet ?? "";
+    this.sizeVary.value = object.sizeVary ? String(Math.round(object.sizeVary * 100)) : "0";
     for (const b of this.handleButtons) b.classList.toggle("active", b.textContent === this.handle);
     this.worldBox.checked = this.worldMoves;
 
@@ -494,7 +503,7 @@ export class ObjectBuilder {
 
     const wrong = problems(object);
     const { footprint, height } = shapeOf(object);
-    this.info.textContent = `${object.pieces.length} of ${MAX_PIECES} pieces · ${tidy(height)} ft tall · blocks ${footprint.circle !== undefined ? `a circle ${tidy(footprint.circle * 2)} ft across` : `${footprint.rect.map(tidy).join(" × ")} ft`}`;
+    this.info.textContent = `${object.pieces.length} of ${MAX_PIECES} pieces · ${tidy(height)} ft tall · ${footprint.open !== undefined ? "walked through" : footprint.circle !== undefined ? `blocks a circle ${tidy(footprint.circle * 2)} ft across` : `blocks ${footprint.rect.map(tidy).join(" × ")} ft`}`;
     this.saveButton.disabled = wrong.length > 0 || !object.pieces.length;
     // Not a problem (a foundation on a slope wants it), but easy to do by accident.
     const below = Math.min(0, ...object.pieces.map(lowest));
@@ -899,7 +908,7 @@ export class ObjectBuilder {
     this.drawHull();
     const { footprint } = shapeOf(this.object);
     if (footprint.circle !== undefined) this.marks.add(ring(footprint.circle, COLORS.footprint));
-    else {
+    else if (footprint.rect) {
       const [w, d] = footprint.rect.map((v) => v / 2);
       const points = [[-w, -d], [w, -d], [w, d], [-w, d], [-w, -d]].map(([x, z]) => new THREE.Vector3(x, 0.03, z));
       this.marks.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), new THREE.LineBasicMaterial({ color: COLORS.footprint })));

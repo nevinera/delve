@@ -20,6 +20,9 @@ import { OLD_IMAGES, imagePath, objectPath } from "./paths.js";
 //   name are variants of each other, and /create switches to a random other one after each placing.
 // - walkThrough: true for an object a character walks through, such as petals or short grass; it
 //   stands in the way when absent.
+// - sizeVary: how far its size varies from one placing to the next as a share either side, up to
+//   MAX_SIZE_VARY, so 0.1 is 10% bigger or smaller. It doesn't vary when absent. /create starts from
+//   this and you can change it there.
 // - palette: the colors its pieces use, each { color: "#rrggbb", param, name }. Up to MAX_PARAMS of
 //   them are parameters, which a placement can override; their colors are the defaults. The first
 //   colors added are parameters until there are MAX_PARAMS of them.
@@ -61,6 +64,7 @@ export const MAX_PARAMS = 3;
 export const REACH_FT = 32;
 export const MIN_SIZE_FT = 0.1;
 export const MAX_CUTS = 16;
+export const MAX_SIZE_VARY = 0.5;
 export const MAX_CUT_CORNERS = 32;
 // Pieces reaching below this are what a character bumps into.
 const BLOCK_BELOW_FT = 6;
@@ -239,6 +243,7 @@ export function problems(object) {
   }
   if (object.variantSet !== undefined && !(typeof object.variantSet === "string" && object.variantSet.trim())) out.push("its variantSet should be a name, or left out");
   if (object.walkThrough !== undefined && object.walkThrough !== true) out.push("walkThrough should be true, or left out");
+  if (object.sizeVary !== undefined && !(typeof object.sizeVary === "number" && object.sizeVary > 0 && object.sizeVary <= MAX_SIZE_VARY)) out.push(`its sizeVary should be more than 0, up to ${MAX_SIZE_VARY}, or left out`);
   if (object.tags !== undefined && !(Array.isArray(object.tags) && object.tags.every((t) => typeof t === "string"))) out.push("its tags should be a list of words");
   object.pieces.forEach((piece, n) => {
     const name = `piece ${n + 1}`;

@@ -209,6 +209,8 @@ A built object's `variantSet` names the set it's in. Objects in one collection w
 
 A built object with `walkThrough: true` doesn't stand in the way: its `footprint` comes out as `{ "open": r }`.
 
+A built object's `sizeVary`, more than 0 and up to 0.5, is how far `/create` varies its size from one placing to the next, as a share either side, so 0.1 is 10% bigger or smaller. It's left out for an object that doesn't vary. It only sets where the size slider starts: each placement keeps the `scale` it got.
+
 ### Slabs in a placed file
 
 Each is a [slab](#slabs), with `template` when it was placed from one, and `cave` as objects have it.

@@ -41,6 +41,12 @@
       "const": true,
       "description": "true for an object characters walk through; it stands in the way when absent"
     },
+    "sizeVary": {
+      "type": "number",
+      "exclusiveMinimum": 0,
+      "maximum": 0.5,
+      "description": "how far its size varies from one placing to the next, as a share either side: 0.1 is 10% bigger or smaller. It doesn't vary when absent"
+    },
     "blocksSight": {
       "const": false,
       "description": "false for an object you see through; it blocks line of sight when absent"

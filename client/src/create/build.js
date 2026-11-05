@@ -15,6 +15,7 @@ import { MAJOR, planeRun, runLines, runPoint, snapInRun } from "./surfaceGrid.js
 import { captureTemplate, placedTemplate } from "../world/templates.js";
 import { CLIPBOARD_PREFIX } from "./library.js";
 import { isSlab, readyObject } from "./placed.js";
+import { DEFAULT_SIZE_VARY, rangeAround, rollSize } from "./sizeRange.js";
 import { footprint, templateDiff } from "./templateDiff.js";
 import { drawable, slabSpace } from "./things.js";
 
@@ -144,7 +145,8 @@ export class Build {
     this.tool = null;
     this.armed = { object: null, template: null }; // the type picked of each
     this.yaw = 0; // radians, objects' and templates' turn
-    this.scale = null; // the object picked's size
+    this.scale = null; // the size the next object goes down at
+    this.sizeRange = null; // the sizes it's rolled from, [low, high], when its size varies
     this.slab = { mode: "floor", surface: "floorboards", thickness: 1, height: 10, roof: "gable", pitch: 30, roomRoof: false };
     this.drawing = null; // a slab being dragged: { a: [x, y, z], yaw degrees, pieces }
     this.outlining = null; // a polygon floor being clicked out: { y, points: [[x, z], ...] }
@@ -188,7 +190,8 @@ export class Build {
       });
     }
     $("library").addEventListener("toggle", (e) => e.newState === "closed" && this.picker.hide());
-    $("objectScale").addEventListener("input", () => this.readScale());
+    for (const id of ["objectScale", "objectScaleHigh"]) $(id).addEventListener("input", (e) => this.readScale(e.target));
+    $("objectSizeVary").addEventListener("change", () => this.readSizeVary());
     for (const button of document.querySelectorAll("[data-build-undo]")) button.addEventListener("click", () => this.undo());
     $("pickedDelete").addEventListener("click", () => this.deletePicked());
     $("pickedScale").addEventListener("input", () => this.scalePicked());
@@ -271,7 +274,11 @@ export class Build {
     this.library.used(kind, type);
     $("library").hidePopover();
     if (tool === "object") {
-      this.scale = sizesOf(type)?.first ?? 1;
+      const sizes = sizesOf(type);
+      const vary = specOf(type)?.built?.sizeVary;
+      this.scale = sizes?.first ?? 1;
+      this.sizeRange = sizes && vary ? rangeAround(this.scale, vary, sizes) : null;
+      this.rollScale();
       this.showScale();
     }
     this.showRecent();
@@ -298,20 +305,57 @@ export class Build {
     $("templatePaste").setAttribute("aria-pressed", String(!!pasting && this.armed.template === pasting));
   }
 
-  // The object's size slider, on a log scale between its least and most.
+  // The object's size slider, on a log scale between its least and most, with a second thumb when
+  // its size varies.
   showScale() {
     const sizes = sizesOf(this.armed.object);
-    $("objectScaleRow").hidden = !sizes;
+    $("objectScaleRow").hidden = $("objectSizeVaryRow").hidden = !sizes;
     if (!sizes) return;
-    $("objectScale").value = String(Math.round((1000 * Math.log(this.scale / sizes.least)) / Math.log(sizes.most / sizes.least)));
-    $("objectScaleOut").textContent = specOf(this.armed.object).built ? `×${this.scale.toFixed(2)}` : `${this.scale.toFixed(1)} ft`;
+    const spot = (size) => Math.round((1000 * Math.log(size / sizes.least)) / Math.log(sizes.most / sizes.least));
+    const [low, high] = this.sizeRange ?? [this.scale, this.scale];
+    const shown = (size) => (specOf(this.armed.object).built ? `×${size.toFixed(2)}` : `${size.toFixed(1)} ft`);
+    $("objectScale").value = String(spot(low));
+    $("objectScaleHigh").value = String(spot(high));
+    $("objectScaleHigh").hidden = !this.sizeRange;
+    $("objectSizeVary").checked = !!this.sizeRange;
+    $("objectScaleOut").textContent = this.sizeRange ? `${shown(low)} to ${shown(high)}` : shown(this.scale);
+    const slider = $("objectScale").parentElement;
+    slider.classList.toggle("create-range", !!this.sizeRange);
+    slider.style.setProperty("--low", `${spot(low) / 10}%`);
+    slider.style.setProperty("--high", `${spot(high) / 10}%`);
+    // Thumbs together at the top of the slider: the low one has to be the one you can grab.
+    $("objectScale").style.zIndex = spot(low) >= 990 ? "1" : "";
   }
 
-  readScale() {
+  // Reads the size slider, `moved` being the thumb that moved, which stops at the other thumb.
+  readScale(moved) {
     const sizes = sizesOf(this.armed.object);
     if (!sizes) return;
-    this.scale = sizes.least * (sizes.most / sizes.least) ** (Number($("objectScale").value) / 1000);
+    const size = (id) => sizes.least * (sizes.most / sizes.least) ** (Number($(id).value) / 1000);
+    if (!this.sizeRange) this.scale = size("objectScale");
+    else {
+      const [low, high] = [size("objectScale"), size("objectScaleHigh")];
+      this.sizeRange = low <= high ? [low, high] : moved?.id === "objectScaleHigh" ? [low, low] : [high, high];
+      this.rollScale();
+    }
     this.showScale();
+  }
+
+  // The vary checkbox: on, it spreads the size by what the object says or else 10%.
+  readSizeVary() {
+    const sizes = sizesOf(this.armed.object);
+    if (!sizes) return;
+    if ($("objectSizeVary").checked) this.sizeRange = rangeAround(this.scale, specOf(this.armed.object).built?.sizeVary || DEFAULT_SIZE_VARY, sizes);
+    else {
+      this.scale = Math.sqrt(this.sizeRange[0] * this.sizeRange[1]);
+      this.sizeRange = null;
+    }
+    this.rollScale();
+    this.showScale();
+  }
+
+  rollScale() {
+    if (this.sizeRange) this.scale = rollSize(this.sizeRange);
   }
 
   readSlab() {
@@ -587,8 +631,7 @@ export class Build {
       return true;
     }
     if ((k === "[" || k === "]") && this.tool === "object") {
-      const scale = $("objectScale");
-      scale.value = String(Number(scale.value) + (k === "]" ? 50 : -50));
+      for (const id of ["objectScale", "objectScaleHigh"]) $(id).value = String(Number($(id).value) + (k === "]" ? 50 : -50));
       this.readScale();
       return true;
     }
@@ -623,6 +666,7 @@ export class Build {
     this.putNew([object]);
     this.library.used("objects", type);
     if ($("objectRandom").checked) this.yaw = Math.random() * Math.PI * 2;
+    this.rollScale();
     this.armed.object = nextVariant(type);
     this.ghostOf = "";
   }
