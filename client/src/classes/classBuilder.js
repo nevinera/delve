@@ -1,4 +1,4 @@
-import { addMastery, addResource, addSpecialization, armorOf, armorTypes, grantNewAbility, grantNewStatus, grantSpecStrip, MOST_RESOURCES, offhandStrip, primaryStrip, removeGrant, removeResource, removeSpecialization, requiresStrip, RESOURCE_KINDS, resourceKindStrip, resourceMaxStrip, resourceRegenStrip, startingOffhandStrip, startingWeaponStrip, toggleArmor, weaponStrip } from "./classChoices.js";
+import { addMastery, addResource, addSpecialization, armorOf, armorTypes, grantNewAbility, grantNewStatus, grantSpecStrip, MOST_RESOURCES, offhandStrip, primaryStrip, removeGrant, removeResource, removeSpecialization, requiresStrip, RESOURCE_KINDS, resourceKindStrip, resourceMaxStrip, resourceRegenStrip, settleStartingGear, startingOffhandStrip, startingWeaponStrip, toggleArmor, weaponStrip } from "./classChoices.js";
 import { asStrip, choice, drawStrip, el, foldOutFields } from "./choiceStrip.js";
 import { CLASS_SECTIONS, classFields, talentFields } from "./fields.js";
 import { renderFields, renderSections, setKey } from "./form.js";
@@ -113,6 +113,7 @@ function drawMastery(made, hooks, fields) {
 }
 
 export function classBuilder(made, hooks) {
+  settleStartingGear(made);
   const fields = classFields(made);
   const named = (key) => fields.find((field) => field.key === key);
   const strip = (s) => (s ? [drawStrip(s, hooks)] : []);

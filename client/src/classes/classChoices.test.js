@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addMastery, addResource, addSpecialization, grantNewAbility, grantNewStatus, offhandStrip, primaryStrip, removeSpecialization, requiresStrip, resourceKindStrip, resourceMaxStrip, resourceRegenStrip, startingOffhandStrip, startingWeaponStrip, toggleArmor, armorOf, weaponStrip } from "./classChoices.js";
+import { addMastery, addResource, addSpecialization, grantNewAbility, grantNewStatus, offhandStrip, primaryStrip, removeSpecialization, requiresStrip, resourceKindStrip, resourceMaxStrip, resourceRegenStrip, settleStartingGear, startingOffhandStrip, startingWeaponStrip, toggleArmor, armorOf, weaponStrip } from "./classChoices.js";
 import { classProblems } from "./classFile.js";
 import { addTalent, pageTiles, GENERAL } from "./spellbook.js";
 import { isPassive } from "./statusChoices.js";
@@ -23,20 +23,40 @@ describe("what a class wields and wears", () => {
     expect(offhandStrip({}).options.map((o) => o.value)).toContain("shield");
   });
 
-  it("only asks what it starts with where there's a choice, and forgets what it can't hold", () => {
-    const made = { weapons: ["mace"] };
+  it("always starts with something it can hold, the first until told otherwise", () => {
+    const made = {};
+    weaponStrip(made).pick("mace");
+    expect(made.startingGear).toEqual({ weapon: "mace" });
     expect(startingWeaponStrip(made)).toBeNull();
     weaponStrip(made).pick("sword");
+    expect(startingWeaponStrip(made).options.map((o) => o.value)).toEqual(["mace", "sword"]);
     startingWeaponStrip(made).pick("sword");
-    expect(made.startingGear).toEqual({ weapon: "sword" });
+    weaponStrip(made).pick("mace");
+    expect(made.startingGear.weapon).toBe("sword");
+    weaponStrip(made).pick("axe");
     weaponStrip(made).pick("sword");
+    expect(made.startingGear.weapon).toBe("axe");
+    weaponStrip(made).pick("axe");
     expect(made).not.toHaveProperty("startingGear");
+  });
+
+  it("can start with nothing in the off hand, until it has none to hold", () => {
+    const made = {};
     expect(startingOffhandStrip(made)).toBeNull();
-    made.offhands = ["shield"];
+    offhandStrip(made).pick("shield");
+    expect(made.startingGear).toEqual({ offhand: "shield" });
+    offhandStrip(made).pick("orb");
     startingOffhandStrip(made).pick("none");
-    expect(made.startingGear).toEqual({ offhand: "none" });
-    startingOffhandStrip(made).pick("");
+    offhandStrip(made).pick("shield");
+    expect(made.startingGear.offhand).toBe("none");
+    offhandStrip(made).pick("orb");
     expect(made).not.toHaveProperty("startingGear");
+  });
+
+  it("fills in what an older class left out", () => {
+    const made = { weapons: ["maul", "sword"], offhands: ["shield"] };
+    settleStartingGear(made);
+    expect(made.startingGear).toEqual({ weapon: "maul", offhand: "shield" });
   });
 
   it("wears from level 1 until told otherwise", () => {

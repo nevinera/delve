@@ -24,33 +24,31 @@ export const primaryStrip = (made) => ({
 
 const WEAPONS = Object.keys(HELD).filter((type) => !["shield", "orb"].includes(type));
 
+// What it starts holding is always something it can hold: what's picked, or else the first it has.
+export function settleStartingGear(made) {
+  const gear = { ...made.startingGear };
+  const { weapons = [], offhands = [] } = made;
+  setKey(gear, "weapon", weapons.includes(gear.weapon) ? gear.weapon : weapons[0]);
+  setKey(gear, "offhand", !offhands.length ? undefined : gear.offhand === "none" || offhands.includes(gear.offhand) ? gear.offhand : offhands[0]);
+  setKey(made, "startingGear", gear);
+}
+
 function pickedGear(made, key, picked) {
   setKey(made, key, picked);
-  // What it starts holding has to be something it can hold.
-  const part = key === "weapons" ? "weapon" : "offhand";
-  if (made.startingGear?.[part] && made.startingGear[part] !== "none" && !(picked ?? []).includes(made.startingGear[part])) {
-    delete made.startingGear[part];
-    if (!Object.keys(made.startingGear).length) delete made.startingGear;
-  }
+  settleStartingGear(made);
 }
 
 export const weaponStrip = (made) => ({ name: "weapons", options: WEAPONS.map(option), many: made.weapons ?? [], pick: (v) => pickedGear(made, "weapons", toggled(made.weapons, v)) });
 export const offhandStrip = (made) => ({ name: "off hands", options: OFFHANDS.filter((type) => type !== "none").map(option), many: made.offhands ?? [], pick: (v) => pickedGear(made, "offhands", toggled(made.offhands, v)) });
 
-function setStarting(made, part, value) {
-  const gear = { ...made.startingGear };
-  setKey(gear, part, value);
-  setKey(made, "startingGear", gear);
-}
-
 export function startingWeaponStrip(made) {
   if ((made.weapons?.length ?? 0) < 2) return null;
-  return { name: "starting weapon", options: [{ value: "", label: "Starts with the first" }, ...made.weapons.map((value) => ({ value, label: `Starts with ${value}` }))], value: made.startingGear?.weapon ?? "", pick: (v) => setStarting(made, "weapon", v) };
+  return { name: "starting weapon", options: made.weapons.map((value) => ({ value, label: `Starts with ${value}` })), value: made.startingGear?.weapon, pick: (v) => (made.startingGear.weapon = v) };
 }
 
 export function startingOffhandStrip(made) {
   if (!made.offhands?.length) return null;
-  return { name: "starting off hand", options: [{ value: "", label: "Starts with the first" }, { value: "none", label: "Starts with nothing" }, ...made.offhands.map((value) => ({ value, label: `Starts with ${value}` }))], value: made.startingGear?.offhand ?? "", pick: (v) => setStarting(made, "offhand", v) };
+  return { name: "starting off hand", options: [{ value: "none", label: "Starts with nothing" }, ...made.offhands.map((value) => ({ value, label: `Starts with ${value}` }))], value: made.startingGear?.offhand, pick: (v) => (made.startingGear.offhand = v) };
 }
 
 export const armorTypes = () => ARMOR_TYPES;
