@@ -14,7 +14,7 @@
     <%= javascript_importmap_tags %>
     <%= yield :head %>
 
-    <%= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
+    <%= tag.link rel: "manifest", href: pwa_manifest_path(format: :json, v: 2) %>
 
     <link rel="icon" href="/delve-icon.png" type="image/png">
     <link rel="icon" href="/delve-icon.svg" type="image/svg+xml">

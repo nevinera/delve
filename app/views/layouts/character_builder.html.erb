@@ -6,7 +6,7 @@
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
     <link rel="icon" href="/delve-icon.png" type="image/png">
-    <%= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
+    <%= tag.link rel: "manifest", href: pwa_manifest_path(format: :json, v: 2) %>
     <%= vite_stylesheet_tags "src/character/builder.js" %>
     <%= vite_script_tags "src/character/builder.js", "/client/characterBuilder.js" %>
   </head>
