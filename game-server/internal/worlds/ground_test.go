@@ -394,3 +394,40 @@ func TestFillIsTheClients(t *testing.T) {
 		t.Error("fill.json differs from client/src/v2/fill.json: copy it over")
 	}
 }
+
+func TestFillBiomesAreNamed(t *testing.T) {
+	for name := range fillTable.Biomes {
+		found := false
+		for _, known := range biomeNames {
+			found = found || known == name
+		}
+		if !found {
+			t.Errorf("fill.json has biome %q, which biomeNames doesn't", name)
+		}
+	}
+	for _, name := range biomeNames {
+		if _, ok := fillTable.Biomes[name]; !ok {
+			t.Errorf("fill.json has no biome %q", name)
+		}
+	}
+}
+
+func TestFillBuiltObjects(t *testing.T) {
+	any := false
+	for _, sizes := range fillTable.Biomes {
+		for _, entries := range sizes {
+			for _, e := range entries {
+				if !strings.HasPrefix(e.Object, "built:") {
+					continue
+				}
+				any = true
+				if e.Scales == nil || e.Footprint == nil {
+					t.Errorf("%s says no scales or footprint", e.Object)
+				}
+			}
+		}
+	}
+	if !any || len(fillThrough) == 0 {
+		t.Error("expected built objects in fill.json, some you see through")
+	}
+}

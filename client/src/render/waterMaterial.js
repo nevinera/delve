@@ -33,13 +33,16 @@ export function setWaterTime(seconds) {
   time.value = seconds;
 }
 
-export function waterMaterial(renderer, { color, opacity, shoreFadeFt = SHORE_FADE_FT, deep = false }) {
-  const material = new THREE.MeshLambertMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide });
+// `still` is how far ripples and foam are stilled, 0 to 1, so 1 is frozen flat, and `emissive` is a
+// color it gives off, for lava.
+export function waterMaterial(renderer, { color, opacity, shoreFadeFt = SHORE_FADE_FT, deep = false, still = 0, emissive = 0 }) {
+  const material = new THREE.MeshLambertMaterial({ color, transparent: true, opacity, side: THREE.DoubleSide, emissive });
   material.customProgramCacheKey = () => (deep ? "flowing-water-deep" : "flowing-water");
   material.onBeforeCompile = (shader) => {
     shader.uniforms.waterNoise = { value: noiseTexture(renderer) };
     shader.uniforms.waterTime = time;
     shader.uniforms.shoreFade = { value: shoreFadeFt };
+    shader.uniforms.waterStill = { value: still };
     shader.vertexShader = shader.vertexShader
       .replace("#include <common>", "#include <common>\nattribute vec3 flow;\nattribute float depth;\nvarying vec3 vFlow;\nvarying vec2 vWaterXZ;\nvarying float vDepth;")
       .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFlow = flow;\nvDepth = depth;\nvWaterXZ = (modelMatrix * vec4(transformed, 1.0)).xz;");
@@ -51,6 +54,7 @@ export function waterMaterial(renderer, { color, opacity, shoreFadeFt = SHORE_FA
         uniform sampler2D waterNoise;
         uniform float waterTime;
         uniform float shoreFade;
+        uniform float waterStill;
         varying vec3 vFlow;
         varying vec2 vWaterXZ;
         varying float vDepth;
@@ -67,7 +71,7 @@ export function waterMaterial(renderer, { color, opacity, shoreFadeFt = SHORE_FA
         float other = fract(phase + 0.5);
         float weight = abs(1.0 - 2.0 * phase);
         vec2 r = mix(ripples(vWaterXZ, phase * ${f(CYCLE_S)}, 0.0), ripples(vWaterXZ, other * ${f(CYCLE_S)}, 0.5), weight);
-        float ripple = (r.x - 0.5) * 1.4 + (r.y - 0.5) * 1.0;
+        float ripple = ((r.x - 0.5) * 1.4 + (r.y - 0.5) * 1.0) * (1.0 - waterStill);
         diffuseColor.rgb *= 1.0 + 0.5 * ripple;
         diffuseColor.rgb += vec3(0.22) * smoothstep(0.12, 0.3, ripple); // glints on the crests
         float foamy = smoothstep(${f(FOAM[0])}, ${f(FOAM[1])}, vFlow.z);
@@ -77,7 +81,7 @@ export function waterMaterial(renderer, { color, opacity, shoreFadeFt = SHORE_FA
         diffuseColor.a *= mix(1.0, ${f(SHALLOW_OPACITY)}, shallow * shallow);
         // Fast water over its shallows, at its edges and on its riffles, breaking white.
         foamy = max(foamy, smoothstep(${f(RUSH[0])}, ${f(RUSH[1])}, length(vFlow.xy)) * (1.0 - smoothstep(0.3, 1.5, vDepth)) * 0.8);` : ""}
-        float foam = foamy * smoothstep(0.6 - 0.12 * foamy, 0.66 - 0.12 * foamy, 0.6 * r.x + 0.4 * r.y);
+        float foam = (1.0 - waterStill) * foamy * smoothstep(0.6 - 0.12 * foamy, 0.66 - 0.12 * foamy, 0.6 * r.x + 0.4 * r.y);
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.92, 0.96, 1.0), foam);
         diffuseColor.a = mix(diffuseColor.a, 1.0, foam);
         diffuseColor.a *= smoothstep(0.0, shoreFade, vDepth);`,

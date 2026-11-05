@@ -5,23 +5,58 @@ import { STEEP_DEG } from "./look.js";
 import { CELL_FT, TILE_FT } from "./sizes.js";
 import { WATER_TYPES } from "./water.js";
 
-// Clutter by the water: reeds, pebbles, stones, lilies and water weed, as world/clutter.js's kinds,
-// worked out where it's drawn for each cell of a tile from its ground and water, never stored, so
-// it's the same every time. Each rule puts `per` of a kind in each cell of a kind of place (placeOf),
-// gathered into patches covering about `patches` of it where it says, in `biomes` where it says.
+// Clutter by the water (reeds, pebbles, stones, lilies and water weed) and on dry ground, by biome,
+// as world/clutter.js's kinds, worked out where it's drawn for each cell of a tile from its ground
+// and water, never stored, so it's the same every time. Each rule puts `per` of a kind in each cell
+// of a kind of place (placeOf), gathered into patches covering about `patches` of it where it says,
+// in `biomes` where it says.
 
 const RULES = [
-  { kind: "reeds", at: "stillEdge", per: 1.4, patches: 0.6 },
-  { kind: "reeds", at: "runningEdge", per: 0.5, patches: 0.35 },
+  { kind: "reeds", at: "stillEdge", per: 1.4, patches: 0.6, grows: true },
+  { kind: "reeds", at: "runningEdge", per: 0.5, patches: 0.35, grows: true },
   { kind: "pebble", at: "bank", per: 1.5 },
   { kind: "stone", at: "bank", per: 0.35 },
   { kind: "pebble", at: "shore", per: 0.4 },
   { kind: "pebble", at: "runningShallows", per: 1 },
   { kind: "stone", at: "runningShallows", per: 0.3 },
-  { kind: "lily", at: "stillSurface", per: 0.3, patches: 0.45 },
+  { kind: "lily", at: "stillSurface", per: 0.3, patches: 0.45, grows: true },
   { kind: "lily", at: "stillSurface", biomes: ["swamp"], per: 0.5, patches: 0.5 },
-  { kind: "waterweed", at: "stillBed", per: 0.5, patches: 0.4 },
+  { kind: "waterweed", at: "stillBed", per: 0.5, patches: 0.4, grows: true },
 ];
+// Where nothing with `grows` grows by the water.
+const BARREN = new Set(["snowfield", "frozen tundra", "glacier", "salt flats", "volcanic waste", "corrupted waste", "crystal forest", "snowy forest"]);
+
+// What grows on each biome's dry ground that isn't too steep, [kind, per, patches].
+const GROUND = {
+  "autumn forest": [["goldLeaves", 1, 0.5], ["goldGrass", 0.7], ["fern", 0.12, 0.3], ["twig", 0.15], ["mushrooms", 0.04]],
+  "giant woods": [["bigFern", 0.35, 0.55], ["fern", 0.5, 0.5], ["shadeGrass", 0.5], ["twig", 0.15], ["mushrooms", 0.05]],
+  taiga: [["coolGrass", 0.5, 0.5], ["bush", 0.03], ["fern", 0.12, 0.3], ["pebble", 0.15], ["twig", 0.12], ["mushrooms", 0.03]],
+  "blossom valley": [["softGrass", 1.6], ["petals", 0.6, 0.45], ["pinkFlowers", 0.4, 0.3], ["pebble", 0.05]],
+  "bamboo grove": [["shoots", 0.5, 0.5], ["fern", 0.35, 0.45], ["softGrass", 0.5], ["pebble", 0.08], ["stone", 0.04]],
+  "snowy forest": [["snowClump", 0.35, 0.5], ["twig", 0.06], ["snowStone", 0.03], ["frostGrass", 0.06, 0.2]],
+  highlands: [["heather", 0.9, 0.55], ["coolGrass", 1], ["bracken", 0.18, 0.3], ["gorse", 0.04, 0.2], ["stone", 0.08], ["pebble", 0.2]],
+  savanna: [["dryGrass", 1.6], ["sandGrass", 0.5, 0.5], ["scrub", 0.03], ["pebble", 0.08]],
+  "red canyon": [["redStone", 0.25], ["dryGrass", 0.2, 0.3], ["scrub", 0.04], ["pebble", 0.25]],
+  "sand desert": [["sandStone", 0.04], ["sandGrass", 0.05, 0.2]],
+  "salt flats": [["saltCrust", 0.4, 0.5], ["pebble", 0.03]],
+  jungle: [["jungleGrass", 1], ["bigFern", 0.4, 0.55], ["fern", 0.5, 0.5], ["brightFlowers", 0.1, 0.2], ["mushrooms", 0.04]],
+  "primeval valley": [["bigFern", 0.5, 0.55], ["brightGrass", 1], ["brightFlowers", 0.2, 0.3], ["stone", 0.05]],
+  "tropical coast": [["brightGrass", 0.9, 0.55], ["brightFlowers", 0.08, 0.2], ["shell", 0.04], ["sandGrass", 0.15, 0.3]],
+  "sandy beach": [["sandGrass", 0.15, 0.3], ["shell", 0.2], ["driftwood", 0.015], ["pebble", 0.06], ["seaweed", 0.02, 0.2]],
+  snowfield: [["snowClump", 0.2, 0.4], ["snowStone", 0.05], ["frostGrass", 0.03, 0.2]],
+  "frozen tundra": [["frostGrass", 0.8, 0.55], ["snowClump", 0.3, 0.45], ["lichen", 0.2, 0.3], ["stone", 0.08], ["pebble", 0.2]],
+  glacier: [["iceShard", 0.08, 0.3], ["snowClump", 0.1, 0.4]],
+  mangrove: [["mudGrass", 0.5, 0.5], ["swampFern", 0.25, 0.45], ["twig", 0.1]],
+  "fungal marsh": [["glowGrass", 0.7, 0.55], ["glowCaps", 0.5, 0.5], ["swampFern", 0.15, 0.35]],
+  "haunted woods": [["grimGrass", 0.7, 0.55], ["twig", 0.25], ["paleMushrooms", 0.08], ["stone", 0.04]],
+  "plague lands": [["sickGrass", 1, 0.55], ["sickCaps", 0.1, 0.3], ["twig", 0.1], ["pebble", 0.1]],
+  "volcanic waste": [["ashPatch", 0.25, 0.45], ["cinderStone", 0.3], ["ember", 0.08, 0.25]],
+  "corrupted waste": [["thornPlant", 0.12, 0.35], ["wineStone", 0.2], ["sickGrass", 0.15, 0.25]],
+  "enchanted glade": [["silverTuft", 1.2], ["glowFlowers", 0.3, 0.35], ["fern", 0.2, 0.35], ["glowCaps", 0.04]],
+  "crystal forest": [["lilacTuft", 0.6, 0.5], ["crystalShard", 0.2, 0.35], ["pebble", 0.1]],
+};
+const GROUND_RULES = Object.fromEntries(Object.entries(GROUND).map(([biome, rules], b) => [biome, rules.map(([kind, per, patches]) => ({ kind, per, patches, salt: (b + 1) * 64 }))]));
+
 const EDGE_FT = 1; // how far over the water, or under it, its edge reaches
 const SHALLOW_FT = 2; // how deep running water's shallows are
 const LILY_FT = [0.5, 6]; // how deep water lilies float on
@@ -54,21 +89,26 @@ export function placeOf(height, slope, water) {
   return places;
 }
 
-// Tile (tx, tz)'s clutter by the water, as world/clutter.js's clutterForTile gives it: [{ kind, x,
-// z, y, yaw, scale, normal, colors }]. cellAt(i, j) gives cell (i, j)'s { height, slope, biome,
-// water } (water as placeOf has it, or null where there's none near), and heightAt(x, z) the ground's.
-export function waterClutter(tx, tz, cellAt, heightAt) {
+// Which way is up off the ground at (x, z), for what lies along it.
+function groundNormal(heightAt, x, z) {
+  const [dx, dz] = [heightAt(x + 1, z) - heightAt(x - 1, z), heightAt(x, z + 1) - heightAt(x, z - 1)];
+  const length = Math.hypot(dx, 2, dz);
+  return [-dx / length, 2 / length, -dz / length];
+}
+
+// Tile (tx, tz)'s clutter, as world/clutter.js's clutterForTile gives it: [{ kind, x, z, y, yaw,
+// scale, normal, colors }]. cellAt(i, j) gives cell (i, j)'s { height, slope, biome, water } (water
+// as placeOf has it, or null where there's none near), and heightAt(x, z) the ground's.
+export function tileClutter(tx, tz, cellAt, heightAt) {
   const out = [];
   const n = TILE_FT / CELL_FT;
   for (let j = 0; j < n; j++) {
     for (let i = 0; i < n; i++) {
       const cell = cellAt(i, j);
-      if (!cell.water) continue;
-      const places = placeOf(cell.height, cell.slope, cell.water);
-      if (!places.size) continue;
       const [gi, gj] = [tx * n + i, tz * n + j];
-      RULES.forEach((rule, r) => {
-        if (!places.has(rule.at) || (rule.biomes && !rule.biomes.includes(BIOME_NAMES[cell.biome]))) return;
+      const biome = BIOME_NAMES[cell.biome];
+      // `r` picks a rule's rolls, so each rule's stay the same as others come and go.
+      const add = (rule, r) => {
         let per = rule.per;
         if (rule.patches) {
           const p = fbm(gi * CELL_FT, gj * CELL_FT, SEED ^ Math.imul(r + 1, 0x632be5ab), { wavelength: PATCH_FT, octaves: 2 });
@@ -87,10 +127,17 @@ export function waterClutter(tx, tz, cellAt, heightAt) {
             y: floats ? cell.water.level : heightAt(x, z),
             yaw: roll(m, 3) * Math.PI * 2,
             scale: spec.size[0] + (spec.size[1] - spec.size[0]) * roll(m, 4),
-            normal: [0, 1, 0],
+            normal: spec.lie ? groundNormal(heightAt, x, z) : [0, 1, 0],
             colors: spec.parts.map((part, p) => (part.chance !== undefined && roll(m, 5 + p * 4) >= part.chance ? null : colorIn(part.colors, (s) => roll(m, 6 + p * 4 + s)))),
           });
         }
+      };
+      if (!cell.water?.wet && cell.slope < STEEP_DEG) GROUND_RULES[biome]?.forEach((rule, k) => add(rule, rule.salt + k));
+      if (!cell.water) continue;
+      const places = placeOf(cell.height, cell.slope, cell.water);
+      RULES.forEach((rule, r) => {
+        if (!places.has(rule.at) || (rule.biomes && !rule.biomes.includes(biome)) || (rule.grows && BARREN.has(biome))) return;
+        add(rule, r);
       });
     }
   }

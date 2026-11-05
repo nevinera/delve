@@ -19,6 +19,8 @@ const { makeSlots } = await client("v2/slots.js");
 const { dryWater, WATER_TYPES } = await client("v2/water.js");
 const { EMPTY_FT, Renditions } = await client("create/ground.js");
 const { Scatter } = await client("create/scatter.js");
+const { setBuiltObjects } = await client("world/objects.js");
+setBuiltObjects([]); // as any world starts, with the built-in ones
 const { Placed } = await client("create/placed.js");
 const { Things } = await client("create/things.js");
 const { pressesOver } = await client("create/press.js");
@@ -52,6 +54,8 @@ const AREAS = [
   { biome: "forest", points: [[-256, 0], [400, 0], [400, 400], [-256, 400]] },
   { biome: "rocky", points: [[400, 0], [768, 0], [768, 300], [400, 300]] },
   { biome: "swamp", points: [[0, 400], [300, 400], [300, 768], [0, 768]] },
+  { biome: "fungal marsh", points: [[-256, 400], [0, 400], [0, 768], [-256, 768]] },
+  { biome: "snowy forest", points: [[300, 400], [768, 400], [768, 768], [300, 768]] },
 ];
 const biomes = new BiomeMap(AREAS);
 

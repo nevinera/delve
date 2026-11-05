@@ -4,7 +4,7 @@ import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
 import { ACROSS, AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, missingSea, partWater, seaEdges } from "../v2/water.js";
 import { LEDGE_RAISE_FT, LEVEE_FT, courseBox, shape } from "../v2/courses.js";
 import { waterMaterial } from "../render/waterMaterial.js";
-import { SHORE_FADE_FT, WATER_LOOKS } from "./waterSurface.js";
+import { SHORE_FADE_FT, waterLookOf } from "./waterSurface.js";
 import { PATTERNS, RUNNING, look, painted, slopeOf } from "../v2/look.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate, platePath, tileIndexInPlate } from "../v2/plate.js";
 import { loadZipper } from "../v2/zstd.js";
@@ -1310,7 +1310,7 @@ export class Ground {
           const tile = this.renditions.tile(tx, tz);
           // Where the plate's rendition draws the ground, `u` and `v` 0 to 1 across the tile.
           const drawn = t === PLATE && ((u, v) => (1 - v) * ((1 - u) * height(0, 0) + u * height(1, 0)) + v * ((1 - u) * height(0, 1) + u * height(1, 1)));
-          if (tile.water) addWater(water, tile, ox, oz, drawn);
+          if (tile.water) addWater(water, tile, ox, oz, drawn, () => this.renditions.biomeTile(tx, tz));
         }
         if (t === COARSE) faces.append(this.tileFaces(tx, tz), ox, oz);
         for (const [di, dj, from, to] of SIDES) {
@@ -1558,13 +1558,20 @@ const platterKeyOf = (key) => `platter:${platterOfPlate(...key.split(",").map(Nu
 // Each side of a plate, and how far the plate past it is.
 const PLATE_SIDES = { west: [-1, 0], east: [1, 0], north: [0, -1], south: [0, 1] };
 const SEA = WATER_TYPES.indexOf("sea");
-const PART_COLORS = WATER_TYPES.map((type) => new THREE.Color(WATER_LOOKS[type].color).toArray());
+// The color of water of a type in a biome, kept once worked out.
+const partColors = new Map();
+function partColor(kind, biome) {
+  const key = kind * 256 + biome;
+  if (!partColors.has(key)) partColors.set(key, new THREE.Color(waterLookOf(kind, biome).color).toArray());
+  return partColors.get(key);
+}
 const LIFT_FT = 1; // how far over the ground drawn from a plate's rendition its water's lifted
 
 // Adds the water of `tile`'s rendition (as platter.js has it) to `out`, but the sea: each wet part,
 // and a part more round them at the level of the water next to it, the tile's corner at (ox, oz).
 // With `drawn(u, v)`, where the ground's drawn across the tile, the water's lifted over it.
-function addWater(out, { heights, water }, ox, oz, drawn) {
+// `biomes()` gives the tile's cells' biomes, for how its water looks, asked for only where it's wet.
+function addWater(out, { heights, water }, ox, oz, drawn, biomes) {
   const n = TILE_CHUNKS;
   const at = (a, b) => (a < 0 || b < 0 || a >= n || b >= n || water.type[b * n + a] === SEA ? NaN : water.level[b * n + a]);
   for (let b = 0; b < n; b++) {
@@ -1579,11 +1586,12 @@ function addWater(out, { heights, water }, ox, oz, drawn) {
         }
       }
       if (Number.isNaN(level)) continue;
+      const color = partColor(kind, biomes()[(b * CHUNK_CELLS + CHUNK_CELLS_HALF) * TILE_CELLS + a * CHUNK_CELLS + CHUNK_CELLS_HALF]);
       const corner = (ca, cb) => {
         const y = drawn ? Math.max(level, drawn(ca / n, cb / n) + LIFT_FT) : level;
         out.positions.push(ox + ca * CHUNK_FT, y, oz + cb * CHUNK_FT);
         out.depths.push(level - heights[cb * CORNERS + ca]);
-        out.colors.push(...PART_COLORS[kind]);
+        out.colors.push(...color);
       };
       for (const [ca, cb] of [[a, b], [a, b + 1], [a + 1, b], [a + 1, b], [a, b + 1], [a + 1, b + 1]]) corner(ca, cb);
     }

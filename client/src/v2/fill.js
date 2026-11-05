@@ -79,7 +79,8 @@ export function fillSlots(slots, tx, tz, biomeAt, groundAt) {
     }
     const spec = specOf(entry.object);
     if (!spec) continue;
-    const scale = spec.size[0] + (spec.size[1] - spec.size[0]) * pick(0);
+    const [least, most] = entry.scales ?? spec.size;
+    const scale = least + (most - least) * pick(0);
     const object = makeObject(entry.object, [x, z], pick(1) * Math.PI * 2, scale, (n) => pick(2 + n));
     const r = reachOf(object);
     if (crowded(x, z, r)) continue;

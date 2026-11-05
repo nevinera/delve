@@ -25,7 +25,7 @@ const PATTERN_FADE_FT = [500, 1100];
 // A pattern for each kind of ground the generator paints (world/generator.js's TERRAIN), and leaf
 // litter for under trees.
 // Each stretches this many feet before it repeats.
-export const PATTERN_FT = { grass: 12, dirt: 14, sand: 16, rock: 30, path: 12, shore: 16, mud: 24, moss: 16, litter: 12 };
+export const PATTERN_FT = { grass: 12, dirt: 14, sand: 16, rock: 30, path: 12, shore: 16, mud: 24, moss: 16, litter: 12, snow: 22, ice: 34, ash: 16, cracked: 20 };
 const PATTERNS = Object.keys(PATTERN_FT);
 const LITTER = PATTERNS.indexOf("litter");
 const PATH = PATTERNS.indexOf("path");
@@ -482,6 +482,35 @@ const PAINT = {
       const color = leaves[Math.floor(c.random() * leaves.length)].map((v) => v * (0.75 + 0.35 * c.random()));
       c.blob(c.random() * c.size, c.random() * c.size, 3 + c.random() * 3, 1.5 + c.random() * 1.5, c.random() * Math.PI, color);
     }
+    return c.rgb;
+  },
+  snow: (c) => {
+    // Soft drifts and a little sparkle.
+    const drifts = c.noise([4, 8, 16], 1);
+    const grain = c.noise([128], 2);
+    c.each((k) => 0.93 + 0.1 * drifts[k] + 0.04 * grain[k]);
+    return c.rgb;
+  },
+  ice: (c) => {
+    // Clouded patches with long pale streaks and a few fine cracks.
+    const cloud = c.noise([4, 8], 1);
+    c.each((k) => [0.9 + 0.2 * cloud[k], 0.92 + 0.16 * cloud[k], 0.96 + 0.08 * cloud[k]]);
+    for (let n = 0; n < 60; n++) c.stroke(c.random() * c.size, c.random() * c.size, 30 + c.random() * 90, 0.3 + c.random() * 0.4, [1.14, 1.14, 1.12]);
+    for (let n = 0; n < 14; n++) c.stroke(c.random() * c.size, c.random() * c.size, 40 + c.random() * 80, c.random() * Math.PI * 2, [0.78, 0.82, 0.88]);
+    return c.rgb;
+  },
+  ash: (c) => {
+    const drifts = c.noise([8, 16], 1);
+    const speck = c.noise([128], 2);
+    c.each((k) => 0.72 + 0.42 * drifts[k] + 0.3 * speck[k]);
+    pebbles(c, 180, [1, 2]);
+    return c.rgb;
+  },
+  cracked: (c) => {
+    // Plates of dried crust, dark along the cracks between them.
+    const { near, second } = c.cells(70);
+    const tone = c.noise([16, 32], 1);
+    c.each((k) => (0.92 + 0.18 * tone[k]) * (0.55 + 0.45 * smooth(Math.min(1, (second[k] - near[k]) / 3))));
     return c.rgb;
   },
 };

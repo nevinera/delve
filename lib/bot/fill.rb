@@ -7,11 +7,26 @@ module Bot
     SLOT_SEED = 0x736c6f74
     SIZES = %w[small medium large].freeze
     GRIDS = [[2, 32], [1, 16], [0, 16]].freeze
-    BIOMES = %w[plains forest rocky swamp].freeze
+    # client/src/v2/biomes.js's BIOME_NAMES.
+    BIOMES = [
+      "plains", "forest", "rocky", "swamp",
+      "autumn forest", "giant woods", "taiga", "blossom valley", "bamboo grove", "snowy forest", "highlands",
+      "savanna", "red canyon", "sand desert", "salt flats",
+      "jungle", "primeval valley", "tropical coast", "sandy beach",
+      "snowfield", "frozen tundra", "glacier",
+      "mangrove", "fungal marsh",
+      "haunted woods", "plague lands", "volcanic waste", "corrupted waste", "enchanted glade", "crystal forest"
+    ].freeze
     WATER_TYPES = %w[sea lake pond swamp river stream].freeze
     TREE_ROOM = [0, 8, 12, 17].freeze
     TREE_SIZES = {1 => [60, 2.5], 2 => [90, 4], 3 => [120, 6]}.freeze # height, trunk
-    TREE_KINDS = {"oak" => [1, 1], "pine" => [1.15, 0.8], "willow" => [0.9, 1.2], "dead" => [0.85, 0.8]}.freeze
+    TREE_KINDS = {
+      "oak" => [1, 1], "pine" => [1.15, 0.8], "willow" => [0.9, 1.2], "dead" => [0.85, 0.8],
+      "autumn" => [1, 1], "giant" => [1.35, 2], "spruce" => [1.2, 0.8], "snowpine" => [1.15, 0.8], "blossom" => [0.8, 0.9],
+      "bamboo" => [0.7, 0.5], "acacia" => [0.8, 0.7], "palm" => [1, 0.45], "treefern" => [0.55, 0.6], "jungle" => [1.2, 1.1],
+      "mangrove" => [0.6, 0.7], "giantcap" => [0.55, 1.3], "gnarled" => [0.8, 1], "blighted" => [0.8, 0.9], "charred" => [0.7, 0.8],
+      "thorn" => [0.75, 0.9], "silverleaf" => [1.05, 0.85], "crystal" => [0.6, 1]
+    }.freeze
     # client/src/world/objects.js's OBJECT_TYPES: size range, footprint and height at scale 1.
     OBJECTS = {
       "boulder" => [[3, 8], {"circle" => 0.45}, 0.8],
@@ -69,7 +84,8 @@ module Bot
     end
 
     def scaled(footprint, scale)
-      footprint.transform_values { _1.is_a?(Array) ? _1.map { |v| v * scale } : _1 * scale }
+      # An open footprint doesn't scale.
+      footprint.to_h { |shape, v| [shape, (shape == "open") ? v : (v.is_a?(Array) ? v.map { _1 * scale } : v * scale)] }
     end
 
     def reach(footprint)
@@ -129,8 +145,9 @@ module Bot
           out << {type: entry["tree"], x:, z:, yaw: 0, footprint: {"circle" => trunk * kind_trunk}, height: size_height * kind_height, tree: true}
           next
         end
-        next unless OBJECTS[entry["object"]]
-        sizes, footprint, tall = OBJECTS[entry["object"]]
+        # A built object says its own, since it isn't one of OBJECTS.
+        sizes, footprint, tall = entry["footprint"] ? [entry["scales"], entry["footprint"], entry["height"]] : OBJECTS[entry["object"]]
+        next unless footprint
         scale = sizes[0] + (sizes[1] - sizes[0]) * pick.call(0)
         object = {type: entry["object"], x:, z:, yaw: pick.call(1) * Math::PI * 2, footprint: scaled(footprint, scale), height: tall * scale, tree: false}
         r = reach(object[:footprint])

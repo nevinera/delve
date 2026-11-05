@@ -148,6 +148,9 @@ func (g *Ground) seenThrough(kind string) (bool, error) {
 	if !built {
 		return seeThrough[kind], nil
 	}
+	if fillThrough[id] {
+		return true, nil
+	}
 	if through, read := g.through[id]; read {
 		return through, nil
 	}

@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { PATTERN_FT } from "../render/groundMaterial.js";
 import { BIOME_NAMES } from "./biomes.js";
 import { PATTERNS, groundClass, look, painted, slopeOf } from "./look.js";
 import { WATER_TYPES } from "./water.js";
@@ -7,6 +8,14 @@ const biome = (name) => BIOME_NAMES.indexOf(name);
 const pattern = (...args) => PATTERNS[look(...args).pattern];
 
 describe("ground's look", () => {
+  it("has a look for every biome and a pattern the ground can draw", () => {
+    for (const k of BIOME_NAMES.keys()) {
+      for (const [slope, height, water] of [[5, 10], [30, 10], [60, 10], [5, 11, { wet: false, level: 10 }], [5, 11, { wet: false, level: 10, running: true }]]) {
+        expect(PATTERN_FT[PATTERNS[look(k, slope, height, 3, 4, water ?? null).pattern]], BIOME_NAMES[k]).toBeGreaterThan(0);
+      }
+    }
+  });
+
   it("sorts ground into classes by slope and height", () => {
     expect(groundClass(5, 100)).toBe("flat");
     expect(groundClass(30, 100)).toBe("slope");

@@ -179,6 +179,8 @@ body.create {
 
 .create-biomes {
   grid-template-columns: repeat(2, 1fr);
+  max-height: 340px;
+  overflow-y: auto;
 }
 
 .create-biomes button {

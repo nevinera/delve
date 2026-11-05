@@ -4,6 +4,7 @@ import (
 	_ "embed"
 	"encoding/json"
 	"math"
+	"strings"
 )
 
 // What fills object slots (client/src/v2/fill.js), by fill.json, a copy of client/src/v2/fill.json:
@@ -17,6 +18,12 @@ type fillEntry struct {
 	Size   int     `json:"size"`
 	Object string  `json:"object"`
 	Share  float64 `json:"share"`
+	// A built object says these itself, since its type isn't one of objectTypes: its scales, and
+	// its footprint and height at scale 1. BlocksSight is false for one you see through.
+	Scales      *[2]float64 `json:"scales"`
+	Footprint   *footprint  `json:"footprint"`
+	Height      float64     `json:"height"`
+	BlocksSight *bool       `json:"blocksSight"`
 }
 
 var fillTable = func() (t struct {
@@ -31,7 +38,15 @@ var fillTable = func() (t struct {
 
 // The client's names: biomes (client/src/v2/biomes.js) and water types (client/src/v2/water.js).
 var (
-	biomeNames = []string{"plains", "forest", "rocky", "swamp"}
+	biomeNames = []string{
+		"plains", "forest", "rocky", "swamp",
+		"autumn forest", "giant woods", "taiga", "blossom valley", "bamboo grove", "snowy forest", "highlands",
+		"savanna", "red canyon", "sand desert", "salt flats",
+		"jungle", "primeval valley", "tropical coast", "sandy beach",
+		"snowfield", "frozen tundra", "glacier",
+		"mangrove", "fungal marsh",
+		"haunted woods", "plague lands", "volcanic waste", "corrupted waste", "enchanted glade", "crystal forest",
+	}
 	waterTypes = []string{"sea", "lake", "pond", "swamp", "river", "stream"}
 )
 
@@ -111,7 +126,13 @@ var objectTypes = map[string]objectType{
 // Trees' trunks and heights by size and kind (client/src/render/treeMeshes.js).
 var (
 	treeSizes = map[int]struct{ height, trunk, crown float64 }{1: {60, 2.5, 18}, 2: {90, 4, 28}, 3: {120, 6, 38}}
-	treeKinds = map[string]struct{ height, trunk float64 }{"oak": {1, 1}, "pine": {1.15, 0.8}, "willow": {0.9, 1.2}, "dead": {0.85, 0.8}}
+	treeKinds = map[string]struct{ height, trunk float64 }{
+		"oak": {1, 1}, "pine": {1.15, 0.8}, "willow": {0.9, 1.2}, "dead": {0.85, 0.8},
+		"autumn": {1, 1}, "giant": {1.35, 2}, "spruce": {1.2, 0.8}, "snowpine": {1.15, 0.8}, "blossom": {0.8, 0.9},
+		"bamboo": {0.7, 0.5}, "acacia": {0.8, 0.7}, "palm": {1, 0.45}, "treefern": {0.55, 0.6}, "jungle": {1.2, 1.1},
+		"mangrove": {0.6, 0.7}, "giantcap": {0.55, 1.3}, "gnarled": {0.8, 1}, "blighted": {0.8, 0.9}, "charred": {0.7, 0.8},
+		"thorn": {0.75, 0.9}, "silverleaf": {1.05, 0.85}, "crystal": {0.6, 1},
+	}
 )
 
 func treeKind(kind string) struct{ height, trunk float64 } {
@@ -141,7 +162,12 @@ type crown struct{ from, to, radius float64 }
 
 // Crowns' shapes by kind, as shares of the tree's height and its size's crown (treeMeshes.js
 // CROWNS). Dead trees have none.
-var treeCrowns = map[string]crown{"oak": {0.576, 1.216, 1}, "pine": {0.288, 1.108, 0.45}, "willow": {0.48, 0.98, 1.3}}
+var treeCrowns = map[string]crown{"oak": {0.576, 1.216, 1}, "pine": {0.288, 1.108, 0.45}, "willow": {0.48, 0.98, 1.3},
+	"autumn": {0.576, 1.216, 1}, "giant": {0.672, 1.232, 1.25}, "spruce": {0.192, 1.092, 0.4}, "snowpine": {0.192, 1.072, 0.45},
+	"blossom": {0.48, 1.04, 1.05}, "bamboo": {0.3, 1.02, 0.36}, "acacia": {0.76, 0.96, 1.25},
+	"jungle": {0.58, 1.02, 1.15}, "mangrove": {0.36, 0.88, 1.1}, "giantcap": {0.6, 1, 0.9},
+	"gnarled": {0.5, 0.94, 0.7}, "blighted": {0.5, 0.94, 0.7}, "silverleaf": {0.42, 1.02, 0.95},
+}
 
 // crownReachFt is the widest crown of all.
 const crownReachFt = 50.0
@@ -273,6 +299,9 @@ func fillSlots(slots []byte, tx, tz int, biomeAt func(i, j int) uint8, groundAt 
 			continue
 		}
 		spec, ok := objectTypes[entry.Object]
+		if entry.Footprint != nil && entry.Scales != nil {
+			spec, ok = objectType{*entry.Scales, *entry.Footprint, entry.Height}, true
+		}
 		if !ok {
 			continue
 		}
@@ -287,6 +316,22 @@ func fillSlots(slots []byte, tx, tz int, biomeAt func(i, j int) uint8, groundAt 
 	}
 	return out
 }
+
+// fillThrough is the built objects in fill.json you see through, by id. They're built into the
+// client, so a world's files don't say.
+var fillThrough = func() map[string]bool {
+	out := map[string]bool{}
+	for _, sizes := range fillTable.Biomes {
+		for _, entries := range sizes {
+			for _, e := range entries {
+				if id, built := strings.CutPrefix(e.Object, "built:"); built && e.BlocksSight != nil && !*e.BlocksSight {
+					out[id] = true
+				}
+			}
+		}
+	}
+	return out
+}()
 
 func biomeName(b uint8) string {
 	if int(b) < len(biomeNames) {

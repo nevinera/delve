@@ -1,9 +1,10 @@
 import { describe, expect, it } from "vitest";
 import { BIOME_NAMES } from "./biomes.js";
-import { placeOf, waterClutter } from "./clutter.js";
+import { CLUTTER } from "../world/clutter.js";
+import { placeOf, tileClutter } from "./clutter.js";
 import { WATER_TYPES } from "./water.js";
 
-const kinds = (cell) => new Set(waterClutter(0, 0, () => cell, () => cell.height).map((item) => item.kind));
+const kinds = (cell) => new Set(tileClutter(0, 0, () => cell, () => cell.height).map((item) => item.kind));
 
 describe("clutter by the water", () => {
   it("sorts cells by the water near them", () => {
@@ -25,8 +26,24 @@ describe("clutter by the water", () => {
     expect(pond.has("waterweed")).toBe(true);
   });
 
+  it("grows each new biome's own on dry ground, but not on steep ground or under water", () => {
+    for (const biome of BIOME_NAMES.slice(4)) {
+      const cell = { height: 10, slope: 5, biome: BIOME_NAMES.indexOf(biome), water: null };
+      expect(kinds(cell).size, biome).toBeGreaterThan(0);
+      for (const kind of kinds(cell)) expect(CLUTTER[kind], kind).toBeDefined();
+      expect(kinds({ ...cell, slope: 60 }).size, biome).toBe(0);
+    }
+    expect(kinds({ height: 10, slope: 5, biome: 0, water: null }).size).toBe(0);
+  });
+
+  it("leaves reeds and lilies out of barren biomes", () => {
+    const edge = { height: 10.5, slope: 5, water: { wet: false, level: 10, running: false } };
+    expect(kinds({ ...edge, biome: BIOME_NAMES.indexOf("glacier") }).has("reeds")).toBe(false);
+    expect(kinds({ ...edge, biome: BIOME_NAMES.indexOf("jungle") }).has("reeds")).toBe(true);
+  });
+
   it("floats lilies on the water", () => {
-    const items = waterClutter(0, 0, () => ({ height: 8, slope: 0, biome: 3, water: { wet: true, level: 10, type: WATER_TYPES.indexOf("swamp"), running: false } }), () => 8);
+    const items = tileClutter(0, 0, () => ({ height: 8, slope: 0, biome: 3, water: { wet: true, level: 10, type: WATER_TYPES.indexOf("swamp"), running: false } }), () => 8);
     expect(items.filter((item) => item.kind === "lily").every((item) => item.y === 10)).toBe(true);
   });
 });

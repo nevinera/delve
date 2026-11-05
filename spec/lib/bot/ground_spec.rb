@@ -47,6 +47,13 @@ RSpec.describe Bot::Ground do
     expect(expected["fills"].sum { ground.fill(*_1["tile"]).size }).to be > 100
   end
 
+  it "knows every biome and tree kind fill.json has" do
+    table = Bot::Fill.table
+    expect(table["biomes"].keys).to match_array(Bot::Fill::BIOMES)
+    trees = table["biomes"].values.flat_map { _1.values.flatten }.filter_map { _1["tree"] }.uniq
+    expect(trees - Bot::Fill::TREE_KINDS.keys).to be_empty
+  end
+
   it "stands placed objects where /create stands them" do
     expected["standing"].each do |s|
       t = ground.placed_objects(0, 0).find { _1[:x] == s["at"][0] && _1[:z] == s["at"][1] }

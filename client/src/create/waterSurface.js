@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { setWaterTime, waterMaterial } from "../render/waterMaterial.js";
+import { BIOME_NAMES } from "../v2/biomes.js";
 import { WATER_TYPES } from "../v2/water.js";
 import { courseBox, flowOf } from "../v2/courses.js";
 import { RUNNING } from "../v2/look.js";
@@ -32,13 +33,46 @@ export const WATER_LOOKS = {
   stream: { color: 0x4a8ac0, opacity: 0.8 },
 };
 
+// How water looks in a biome, over how its type does, for the biomes it's different in: only how it
+// looks, so a character wades through frozen water or lava as through any other.
+const ICE = { color: 0xe2f2fa, opacity: 0.98, still: 1 };
+const BIOME_WATER = {
+  "bamboo grove": { color: 0x4f9c8c },
+  "snowy forest": ICE,
+  highlands: { color: 0x3c3428, opacity: 0.92 },
+  savanna: { color: 0x6d8a5e },
+  "red canyon": { color: 0x8a6a48, opacity: 0.9 },
+  "sand desert": { color: 0x2f9fae },
+  "salt flats": { color: 0x9fd8d0, opacity: 0.8 },
+  jungle: { color: 0x3f7a58 },
+  "primeval valley": { color: 0x5cbba4 },
+  "tropical coast": { color: 0x27b5b8, opacity: 0.8 },
+  "sandy beach": { color: 0x3498b8, opacity: 0.8 },
+  snowfield: ICE,
+  "frozen tundra": ICE,
+  glacier: { color: 0xb6e0f6, opacity: 0.98, still: 1 },
+  mangrove: { color: 0x5f5230, opacity: 0.93 },
+  "fungal marsh": { color: 0x2c9a96, emissive: 0x0a2c2c },
+  "haunted woods": { color: 0x2a3036, opacity: 0.93 },
+  "plague lands": { color: 0x6c7a28, opacity: 0.94 },
+  "volcanic waste": { color: 0xc8440c, opacity: 1, still: 0.25, emissive: 0x962800 },
+  "corrupted waste": { color: 0x58c044, opacity: 0.95, emissive: 0x16400c },
+  "enchanted glade": { color: 0x6a80d0, emissive: 0x101838 },
+  "crystal forest": { color: 0x9a7ae0, emissive: 0x1c1038 },
+};
+const BIOME_LOOKS = BIOME_NAMES.map((name) => BIOME_WATER[name] ?? null);
+
+// How water of type `type` (an index into WATER_TYPES) looks in biome `biome` (into BIOME_NAMES).
+export const waterLookOf = (type, biome) => ({ ...WATER_LOOKS[WATER_TYPES[type]], ...BIOME_LOOKS[biome] });
+
 export class WaterSurfaces {
   constructor(scene, renditions, renderer, ground) {
     this.renditions = renditions;
     this.ground = ground;
     this.group = new THREE.Group();
     scene.add(this.group);
-    this.materials = WATER_TYPES.map((type) => waterMaterial(renderer, { ...WATER_LOOKS[type], shoreFadeFt: SHORE_FADE_FT, deep: true }));
+    this.renderer = renderer;
+    this.materials = new Map(); // "type,look" -> the material for water of that type and look
     this.meshes = new Map(); // "tx,tz" -> { made from, meshes }
     this.drawn = new Set(); // "tx,tz" of the tiles whose water's drawn here, wet or not
     this.version = 0; // counts changes to `drawn`
@@ -85,8 +119,17 @@ export class WaterSurfaces {
     return r.tile(tx, tz) && r.hasCells(tx, tz) ? (r.cells(tx, tz)?.water ?? null) : null;
   }
 
-  // The meshes for tile (tx, tz)'s water, one for each type in it.
+  // The material for water of `type` in `biome`, biomes with the same look sharing it.
+  materialOf(type, biome) {
+    const key = `${type},${BIOME_LOOKS.indexOf(BIOME_LOOKS[biome])}`;
+    if (!this.materials.has(key)) this.materials.set(key, waterMaterial(this.renderer, { ...waterLookOf(type, biome), shoreFadeFt: SHORE_FADE_FT, deep: true }));
+    return this.materials.get(key);
+  }
+
+  // The meshes for tile (tx, tz)'s water, one for each type and look in it.
   make(tx, tz, { water, heights }) {
+    const biomes = this.renditions.biomeTile(tx, tz);
+    const lookOf = (k) => BIOME_LOOKS.indexOf(BIOME_LOOKS[biomes[k]]);
     // The level and type each cell's drawn at: its own, or a wet neighbour's, the highest.
     const level = new Float32Array(CELLS * CELLS).fill(NaN);
     const type = new Uint8Array(CELLS * CELLS);
@@ -145,7 +188,7 @@ export class WaterSurfaces {
       return n ? sum / n : l;
     };
     // Quads along each row: deep runs at one level and type as one.
-    const byType = WATER_TYPES.map(() => ({ positions: [], depths: [], flow: [] }));
+    const byLook = new Map(); // "type,look" -> { material, positions, depths, flow }
     const deep = (i, j, l, kind) => l - heights[j * CORNERS + i] >= DEEP_FT && cornerOf(i, j, l, kind) === l;
     const deepCell = (i, j, l, kind) => deep(i, j, l, kind) && deep(i + 1, j, l, kind) && deep(i, j + 1, l, kind) && deep(i + 1, j + 1, l, kind);
     for (let j = 0; j < CELLS; j++) {
@@ -157,10 +200,12 @@ export class WaterSurfaces {
           continue;
         }
         let end = i + 1;
-        if (deepCell(i, j, l, type[k])) while (end < CELLS && level[j * CELLS + end] === l && type[j * CELLS + end] === type[k] && deepCell(end, j, l, type[k])) end++;
+        if (deepCell(i, j, l, type[k])) while (end < CELLS && level[j * CELLS + end] === l && type[j * CELLS + end] === type[k] && lookOf(j * CELLS + end) === lookOf(k) && deepCell(end, j, l, type[k])) end++;
         // Running water's drawn a cell at a time, for its flow at each corner.
         if (running) end = i + 1;
-        const { positions, depths, flow } = byType[type[k]];
+        const key = `${type[k]},${lookOf(k)}`;
+        if (!byLook.has(key)) byLook.set(key, { material: this.materialOf(type[k], biomes[k]), positions: [], depths: [], flow: [] });
+        const { positions, depths, flow } = byLook.get(key);
         const corner = (ci, cj) => {
           const at = cornerOf(ci, cj, l, type[k]);
           positions.push(x0 + ci * CELL_FT, at, z0 + cj * CELL_FT);
@@ -173,16 +218,15 @@ export class WaterSurfaces {
         i = end;
       }
     }
-    return byType.flatMap(({ positions, depths, flow }, t) => {
-      if (!positions.length) return [];
+    return [...byLook.values()].map(({ material, positions, depths, flow }) => {
       const g = new THREE.BufferGeometry();
       g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
       g.setAttribute("depth", new THREE.Float32BufferAttribute(depths, 1));
       g.setAttribute("flow", new THREE.Float32BufferAttribute(flow, 3));
       g.setAttribute("normal", new THREE.Float32BufferAttribute(Float32Array.from({ length: positions.length }, (_, n) => (n % 3 === 1 ? 1 : 0)), 3));
-      const mesh = new THREE.Mesh(g, this.materials[t]);
+      const mesh = new THREE.Mesh(g, material);
       mesh.renderOrder = 1;
-      return [mesh];
+      return mesh;
     });
   }
 

@@ -7,7 +7,17 @@ import { CELL_FT, PLATE_TILES, TILE_FT } from "./sizes.js";
 // (WARP), so every edge between biomes wanders. Plate files keep each cell's, as an index into
 // BIOME_NAMES (v2/plate.js).
 
-export const BIOME_NAMES = ["plains", "forest", "rocky", "swamp"];
+// Plate files keep indexes into this, so add to its end and never reorder it. A biome only changes
+// how things look and what stands there, never the ground's shape.
+export const BIOME_NAMES = [
+  "plains", "forest", "rocky", "swamp",
+  "autumn forest", "giant woods", "taiga", "blossom valley", "bamboo grove", "snowy forest", "highlands",
+  "savanna", "red canyon", "sand desert", "salt flats",
+  "jungle", "primeval valley", "tropical coast", "sandy beach",
+  "snowfield", "frozen tundra", "glacier",
+  "mangrove", "fungal marsh",
+  "haunted woods", "plague lands", "volcanic waste", "corrupted waste", "enchanted glade", "crystal forest",
+];
 export const REACH_FT = 1320; // a quarter mile
 const BUCKET_FT = 1024; // edges are kept in squares this wide, in each one they come within REACH_FT of
 const TILE_CELLS = TILE_FT / CELL_FT;
