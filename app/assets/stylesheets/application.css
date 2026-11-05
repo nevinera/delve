@@ -181,6 +181,26 @@ input[type="submit"].secondary:hover {
 .character-worlds [role="button"] {
   padding: 0.35rem 0.9rem;
   text-align: center;
+  overflow-wrap: anywhere;
+}
+
+.character-list li {
+  flex-wrap: wrap;
+}
+
+/* On a narrow screen they go under the picture and name, in rows. */
+@media (max-width: 640px) {
+  .character-worlds {
+    margin-left: 0;
+    min-width: 0;
+    flex: 1 1 100%;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .character-worlds [role="button"] {
+    flex: 1 1 8rem;
+  }
 }
 
 /* Links under a section of /home, the main one a button. */
