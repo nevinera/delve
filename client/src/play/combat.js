@@ -16,7 +16,7 @@ import { PlayLog } from "./log.js";
 import { swingLook } from "../abilities/timeline.js";
 import { DESKTOP_SOUNDS, PHONE_SOUNDS } from "../abilities/sounds.js";
 import { Footsteps } from "./footsteps.js";
-import { withHomeward } from "../abilities/homeward.js";
+import { withBuiltins } from "../abilities/builtins.js";
 import { LastingAuras } from "./lastingAuras.js";
 import { absorbBand, initials, timeLeft } from "./unitStatuses.js";
 import { AreaMarks } from "./areas.js";
@@ -155,7 +155,7 @@ export class PlayCombat {
 
   classOf(id) {
     if (!this.classes.has(id)) {
-      this.classes.set(id, this.loader.file(`classes/${id}.json`).then((bytes) => withHomeward(bytes ? JSON.parse(strFromU8(bytes)) : null)));
+      this.classes.set(id, this.loader.file(`classes/${id}.json`).then((bytes) => withBuiltins(bytes ? JSON.parse(strFromU8(bytes)) : null)));
     }
     return this.classes.get(id);
   }

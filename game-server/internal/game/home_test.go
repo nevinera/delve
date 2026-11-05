@@ -124,7 +124,7 @@ type homewardWorld struct{ fightWorld }
 func (h homewardWorld) Load(ctx context.Context, repo, sha string) (*worlds.World, error) {
 	w, err := h.fightWorld.Load(ctx, repo, sha)
 	for _, c := range w.Classes {
-		c.WithHomeward()
+		c.WithBuiltins()
 	}
 	return w, err
 }

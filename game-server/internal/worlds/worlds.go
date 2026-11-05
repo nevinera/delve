@@ -226,7 +226,7 @@ func readClasses(files map[string]*zip.File) []*combat.Class {
 			log.Printf("worlds: skipping a class: %v", err)
 			continue
 		}
-		c.WithHomeward()
+		c.WithBuiltins()
 		classes = append(classes, c)
 	}
 	return classes

@@ -3,6 +3,8 @@ package game
 import (
 	"maps"
 	"time"
+
+	"github.com/delve-mmo/delve3d/game-server/internal/combat"
 )
 
 const (
@@ -175,6 +177,31 @@ func (l *Layer) logOff(p *Player) {
 // lock is held.
 func (l *Layer) resting(p *Player) bool {
 	return l.world.Resting(p.state.Continent, p.state.At[0], p.state.At[2])
+}
+
+// showResting puts the Resting status on players in a rest point's area, and takes it off those
+// who've left one. The layer's lock is held.
+func (l *Layer) showResting(now time.Time) {
+	for _, p := range l.players {
+		f := &p.fight
+		if f.class == nil {
+			continue
+		}
+		s := f.class.Status(combat.RestingID)
+		if s == nil {
+			continue
+		}
+		key := statusKey{combat.RestingID, p.ID()}
+		held, resting := f.vitals.Statuses[key], l.resting(p)
+		switch {
+		case resting && held == nil:
+			held = &activeStatus{def: s, class: f.class.ID, owner: f.class, since: now, stacks: 1, uses: 1}
+			f.vitals.Statuses[key] = held
+			l.tellOf(p.ID(), encode(statusOn{"statusOn", p.ID(), shownOf(key, held, now)}))
+		case !resting && held != nil:
+			l.takeOff(&f.vitals, key)
+		}
+	}
 }
 
 // stopLoggingOff calls off a player's logging off, saying why. The layer's lock is held.

@@ -154,5 +154,33 @@ type restfulWorld struct{ fightWorld }
 func (r restfulWorld) Load(ctx context.Context, repo, sha string) (*worlds.World, error) {
 	w, err := r.fightWorld.Load(ctx, repo, sha)
 	w.RestPoints[0].Area = [][2]float64{{250, 250}, {350, 250}, {350, 350}, {250, 350}}
+	for _, c := range w.Classes {
+		c.WithBuiltins()
+	}
 	return w, err
+}
+
+func TestRestingIsAStatus(t *testing.T) {
+	people := characters(nil)
+	people.class[1] = "frst0001"
+	h := NewHub(restfulWorld{}, people)
+	clockOf(h)
+	p := enter(t, h, 1)
+	h.Tick()
+	key := statusKey{"resting", 1}
+	if p.fight.vitals.Statuses[key] != nil {
+		t.Fatal("resting away from a rest area")
+	}
+	move(t, p, 300, 300)
+	heard(p)
+	h.Tick()
+	if got := heard(p, "statusOn"); len(got) != 1 || got[0]["status"] != "resting" || p.fight.vitals.Statuses[key] == nil {
+		t.Fatalf("statusOn = %v", got)
+	}
+	move(t, p, 100, 100)
+	heard(p)
+	h.Tick()
+	if p.fight.vitals.Statuses[key] != nil {
+		t.Fatal("still resting after leaving the area")
+	}
 }

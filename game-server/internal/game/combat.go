@@ -2525,6 +2525,7 @@ func (h *Hub) Tick() {
 	for _, l := range layers {
 		l.mu.Lock()
 		l.tick(now)
+		l.showResting(now)
 		gone := l.leavings(now)
 		l.mu.Unlock()
 		for _, p := range gone {
