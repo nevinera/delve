@@ -1,3 +1,5 @@
+import { iconNode } from "../play/icons.js";
+
 // Forms from lists of fields, for editing a plain object in place. A field is { key, label, type },
 // with `hint`, `show(value)` to show it only sometimes, `advanced`, the heading it goes under in the
 // fold-out that keeps rarer fields out of the way, and by type:
@@ -6,6 +8,7 @@
 // - select: `options`, an array of names or [value, label]s, `more`, rarer options set apart, `none`,
 //   the label for leaving it out, `read` and `write` for values the form holds differently, and
 //   `then(value)` for what picking one does to other fields.
+// - icon: `options`, the names of icons, picked from a grid of them.
 // - multi: `options`, kept as a list of those picked.
 // - words: a list of words, written with commas.
 // - number or word: `word`, a value the check stands for, `after`, the words before the check.
@@ -157,7 +160,45 @@ const RENDERERS = {
     });
     return row(field, input);
   },
-  select: (field, value, { reshaped }) => {
+  icon: (field, value, { reshaped }) => {
+    const shown = iconNode(value[field.key], "form-icon-face");
+    const button = el("button", { type: "button", className: "form-icon-button" }, shown ?? el("span", { className: "form-icon-face form-icon-none" }), el("span", { textContent: value[field.key] ?? "pick an icon" }));
+    const panel = el("div", { className: "form-icon-panel", hidden: true });
+    const pick = (name) => {
+      setKey(value, field.key, name);
+      reshaped();
+    };
+    const fill = () => {
+      const search = el("input", { type: "search", placeholder: "find an icon" });
+      search.setAttribute("aria-label", "find an icon");
+      const grid = el("div", { className: "form-icon-grid" });
+      const show = () => {
+        const wanted = search.value.trim().toLowerCase();
+        grid.replaceChildren(
+          ...optionsOf(field)
+            .filter(([name]) => name.includes(wanted))
+            .map(([name]) => {
+              const tile = el("button", { type: "button", title: name, className: "form-icon-tile" }, iconNode(name, "form-icon-face"));
+              tile.setAttribute("aria-label", name);
+              tile.classList.toggle("active", name === value[field.key]);
+              tile.addEventListener("click", () => pick(name));
+              return tile;
+            }),
+        );
+      };
+      search.addEventListener("input", show);
+      show();
+      const clear = el("button", { type: "button", textContent: "no icon" });
+      clear.addEventListener("click", () => pick(undefined));
+      panel.append(el("div", { className: "form-icon-find" }, search, clear), grid);
+    };
+    button.addEventListener("click", () => {
+      if (!panel.childElementCount) fill();
+      panel.hidden = !panel.hidden;
+    });
+    return el("div", { className: "form-icon" }, el("div", { className: "form-row" }, el("span", { className: "form-label", textContent: field.label ?? field.key }), button), panel);
+  },
+  select: (field, value, { reshaped, status }) => {
     const options = optionsOf(field);
     const more = listOf(field.more);
     const read = field.read ?? ((v) => v);
@@ -178,6 +219,26 @@ const RENDERERS = {
       field.then?.(value);
       reshaped();
     });
+    // One that picks a status can make one, or open the one it's on, without leaving this form.
+    if (status && field.options?.picksStatus) {
+      const buttons = [];
+      if (shown) {
+        const open = el("button", { type: "button", textContent: "edit", className: "form-status-button" });
+        open.addEventListener("click", (event) => (event.preventDefault(), status.edit(shown)));
+        buttons.push(open);
+      }
+      const make = el("button", { type: "button", textContent: "new", className: "form-status-button" });
+      make.addEventListener("click", (event) => {
+        event.preventDefault();
+        status.create((id) => {
+          setKey(value, field.key, id);
+          field.then?.(value);
+          reshaped();
+        });
+      });
+      buttons.push(make);
+      return row(field, select, ...buttons);
+    }
     return row(field, select);
   },
   multi: (field, value, { changed }) => {
@@ -235,13 +296,14 @@ const RENDERERS = {
     );
     if (!field.more) return main;
     const reshaped = () => (keep(), hooks.reshaped());
-    return el("div", {}, main, advancedFold(field.more(), parts, { changed, reshaped }, { owner: value, name: `amount ${field.key}`, label: "advanced amount" }));
+    return el("div", {}, main, advancedFold(field.more(), parts, { ...hooks, changed, reshaped }, { owner: value, name: `amount ${field.key}`, label: "advanced amount" }));
   },
   group: (field, value, hooks) => {
     const inner = (field.read ?? ((held) => held ?? {}))(value[field.key]);
     const keep = () => setKey(value, field.key, field.write ? field.write(inner) : inner);
     const draw = () =>
       renderFields(typeof field.fields === "function" ? field.fields() : field.fields, inner, {
+        ...hooks,
         changed: () => (keep(), hooks.changed()),
         reshaped: () => (keep(), hooks.reshaped()),
       });
@@ -290,22 +352,63 @@ const RENDERERS = {
         items.splice(n, 1);
         reshaped();
       });
-      return el("div", { className: "form-item" }, remove, ...renderFields(field.fields, item, { changed, reshaped }));
+      return el("div", { className: "form-item" }, remove, ...renderFields(field.fields, item, { ...hooks, changed, reshaped }));
     });
     return el("fieldset", { className: "form-group" }, el("legend", { textContent: field.label ?? field.key }), ...nodes, add);
   },
 };
 
-// The nodes for `fields`, editing `value` in place. changed() hears any change, and reshaped() one
-// that changes which fields there are, so they have to be drawn again.
-export function renderFields(fields, value, hooks) {
-  // Which fields show can hang on one that has to have a value, so those get theirs first.
+// Which fields show can hang on one that has to have a value, so those get theirs first.
+function fillRequired(fields, value) {
   for (const field of fields) {
     if (field.type !== "select" || field.none !== undefined || field.advanced || value[field.key] !== undefined) continue;
     if (field.show && !field.show(value)) continue;
     const [first] = optionsOf(field);
     if (first) value[field.key] = (field.write ?? ((v) => v))(first[0]);
   }
+}
+
+// `fields` under folding headings, in the order of `sections`: { name, keys, open }. A section's
+// advanced fields fold away under "more", unless it has nothing else.
+export function renderSections(sections, fields, value, hooks) {
+  fillRequired(fields, value);
+  return sections.map((section) => {
+    const inIt = fields.filter((field) => section.keys.includes(field.key));
+    const shown = () => inIt.filter((field) => !field.show || field.show(value));
+    const set = countSet(shown(), value);
+    return fold({
+      owner: value,
+      name: `section ${section.name}`,
+      className: "form-section",
+      summary: `${section.name}${set && !section.open ? ` (${set} set)` : ""}`,
+      startOpen: Boolean(section.open),
+      draw: () => {
+        const plain = shown().filter((field) => !field.advanced);
+        const advanced = shown().filter((field) => field.advanced);
+        if (!plain.length) return advanced.map((field) => draw(field, value, hooks));
+        if (!advanced.length) return plain.map((field) => draw(field, value, hooks));
+        const setMore = countSet(advanced, value);
+        return [
+          ...plain.map((field) => draw(field, value, hooks)),
+          fold({
+            owner: value,
+            name: `more ${section.name}`,
+            className: "form-advanced",
+            summary: `more${setMore ? ` (${setMore} set)` : ""}`,
+            startOpen: setMore > 0,
+            draw: () => advanced.map((field) => draw(field, value, hooks)),
+          }),
+        ];
+      },
+    });
+  });
+}
+
+// The nodes for `fields`, editing `value` in place. changed() hears any change, and reshaped() one
+// that changes which fields there are, so they have to be drawn again. `status`, if there is one, has
+// edit(id) and create(done) for fields whose options are a class's statuses.
+export function renderFields(fields, value, hooks) {
+  fillRequired(fields, value);
   const shown = fields.filter((field) => !field.show || field.show(value));
   const advanced = shown.filter((field) => field.advanced);
   return [...shown.filter((field) => !field.advanced).map((field) => draw(field, value, hooks)), ...(advanced.length ? [advancedFold(advanced, value, hooks)] : [])];

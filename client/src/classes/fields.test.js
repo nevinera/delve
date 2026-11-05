@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_LOOK } from "../character/recipe.js";
-import { abilityFields, classFields, lookFields, overridesField, readCondition, statusFields, writeCondition } from "./fields.js";
+import { ABILITY_SECTIONS, abilityFields, classFields, classTabFields, lookFields, overridesField, readCondition, statusFields, writeCondition } from "./fields.js";
 import { readAmount, writeAmount } from "./form.js";
 
 const schema = (name) => JSON.parse(readFileSync(new URL(`../../../docs/schema/${name}.schema.json`, import.meta.url)));
@@ -35,6 +35,19 @@ describe("the class editor's fields", () => {
     expect(missing(defs.unit.properties, fieldOf(classes, "units").fields)).toEqual([]);
     expect(missing(defs.specialization.properties, fieldOf(classes, "specializations").fields)).toEqual([]);
     expect(missing(schema("class").properties, classes, ["id", "abilities", "statuses"])).toEqual([]);
+  });
+
+  it("put every ability field in one section", () => {
+    const sectioned = ABILITY_SECTIONS.flatMap((section) => section.keys);
+    expect(new Set(sectioned).size).toBe(sectioned.length);
+    expect([...keysOf(abilities)].filter((key) => !sectioned.includes(key))).toEqual([]);
+    expect(sectioned.filter((key) => !keysOf(abilities).has(key))).toEqual([]);
+  });
+
+  it("leave talents and passives off the Class tab", () => {
+    const keys = keysOf(classTabFields(made));
+    expect(keys.has("talents") || keys.has("passives")).toBe(false);
+    expect(keys.has("specializations")).toBe(true);
   });
 
   it("offer every animation", () => {

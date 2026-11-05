@@ -11,13 +11,25 @@
     <input id="repoMessage" placeholder="what you changed" aria-label="commit message" autocomplete="off">
     <button id="repoSave" type="button" disabled>save to GitHub</button>
   </header>
-  <div class="classes-body">
-    <nav class="classes-nav">
-      <button id="newClass" type="button">new class</button>
-      <div id="classList" class="classes-list"></div>
-      <div id="classParts"></div>
-    </nav>
+  <div class="classes-bar">
+    <select id="classPick" aria-label="class"></select>
+    <button id="newClass" type="button">new class</button>
+    <div id="classTabs" class="classes-tabs" role="tablist" hidden>
+      <button type="button" role="tab" data-tab="class">Class</button>
+      <button type="button" role="tab" data-tab="book">Spellbook</button>
+      <button type="button" role="tab" data-tab="talents">Talents</button>
+      <button type="button" role="tab" data-tab="statuses">Statuses</button>
+    </div>
+  </div>
+  <details id="problems" class="classes-problem-fold" hidden>
+    <summary id="problemCount"></summary>
+    <ul id="problemList" class="classes-problems"></ul>
+  </details>
+  <div id="classesBody" class="classes-body">
+    <section id="board" class="classes-board" hidden></section>
     <main id="config" class="classes-config"></main>
     <aside id="preview" class="classes-preview" hidden></aside>
   </div>
+  <dialog id="statusDialog" class="status-dialog" aria-label="status"></dialog>
+</div>
 </div>

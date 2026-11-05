@@ -11,45 +11,6 @@
   min-height: 0;
 }
 
-.classes-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  width: 200px;
-  padding: 12px;
-  overflow-y: auto;
-  border-right: 1px solid #333;
-}
-
-.classes-list {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.classes-list button {
-  overflow: hidden;
-  text-align: left;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-#classParts {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding-top: 10px;
-  border-top: 1px solid #333;
-}
-
-.classes-heading {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-top: 8px;
-  color: #aaa;
-}
-
 .classes-config {
   flex: 1;
   min-width: 340px;
@@ -63,8 +24,46 @@
   color: #f0b060;
 }
 
-.classes-problems:empty {
+.classes-problem-fold {
+  flex-shrink: 0;
+  max-height: 30vh;
+  padding: 6px 12px;
+  overflow-y: auto;
+  color: #f0b060;
+  border-bottom: 1px solid #333;
+}
+
+.classes-problem-fold summary {
+  cursor: pointer;
+}
+
+.classes-problem-fold[hidden] {
   display: none;
+}
+
+.classes-page .library-bar {
+  flex-wrap: wrap;
+}
+
+.form-row > select,
+.form-row > input {
+  min-width: 0;
+}
+
+.board-tile.active {
+  color: inherit;
+  background: #3a3220;
+}
+
+.book-row {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 4px;
+  align-items: start;
+}
+
+.book-row.apart {
+  display: block;
 }
 
 .form-row {
@@ -295,4 +294,386 @@
   display: flex;
   gap: 8px;
   margin-bottom: 8px;
+}
+
+.classes-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid #333;
+}
+
+.classes-tabs {
+  display: flex;
+  gap: 4px;
+  margin-left: 12px;
+}
+
+.classes-tabs[hidden] {
+  display: none;
+}
+
+.classes-tabs button.active,
+.book-pages button.active {
+  color: #111;
+  background: #d8c08a;
+}
+
+.classes-board {
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  gap: 10px;
+  width: 340px;
+  padding: 12px;
+  overflow-y: auto;
+  border-right: 1px solid #333;
+}
+
+.classes-board[hidden] {
+  display: none;
+}
+
+.classes-board.wide {
+  flex: 1;
+  width: auto;
+  min-width: 360px;
+}
+
+.classes-body[data-tab="statuses"] .classes-config {
+  display: none;
+}
+
+.classes-body[data-tab="talents"] .classes-config {
+  flex: 0 0 500px;
+  min-width: 0;
+}
+
+.book-pages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.book-body {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.book-level {
+  margin-bottom: 4px;
+  font-size: 12px;
+  color: #aaa;
+}
+
+.book-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 6px;
+}
+
+.board-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+  min-height: 84px;
+  padding: 8px 4px;
+  overflow: hidden;
+  border: 1px solid #444;
+  border-radius: 6px;
+}
+
+.board-tile.active {
+  border-color: #d8c08a;
+  box-shadow: inset 0 0 0 1px #d8c08a;
+}
+
+.board-tile.passive {
+  border-style: dashed;
+  border-radius: 18px;
+}
+
+.board-icon,
+.board-letters {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+}
+
+.board-letters {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 36px;
+  color: #bbb;
+  text-align: center;
+  background: #2a2a2a;
+  border-radius: 6px;
+}
+
+.board-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 12px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.board-note {
+  max-width: 100%;
+  font-size: 11px;
+  color: #aaa;
+}
+
+.board-empty {
+  color: #aaa;
+}
+
+.board-add {
+  align-self: flex-start;
+}
+
+.talent-tree {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.talent-lines {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+}
+
+.talent-lines line {
+  stroke: #d8c08a;
+  stroke-width: 2;
+}
+
+.talent-tier {
+  min-height: 44px;
+}
+
+.talent-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  gap: 8px;
+  min-height: 24px;
+  border-radius: 6px;
+}
+
+.talent-tier:has(.talent-card) .talent-cards {
+  background: none;
+}
+
+.talent-tier:not(:has(.talent-card)) .talent-cards {
+  border: 1px dashed #333;
+}
+
+.talent-card {
+  position: relative;
+  background: #1e1e1e;
+}
+
+.talent-text {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: 11px;
+  line-height: 1.25;
+  color: #aaa;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+
+.status-find {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.status-find input {
+  flex: 1;
+  max-width: 320px;
+}
+
+.tile-menu {
+  position: fixed;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 170px;
+  padding: 4px;
+  background: #222;
+  border: 1px solid #555;
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgb(0 0 0 / 50%);
+}
+
+.tile-menu button {
+  text-align: left;
+}
+
+.status-dialog {
+  width: min(620px, 94vw);
+  max-height: 88vh;
+  padding: 0;
+  color: inherit;
+  background: #1a1a1a;
+  border: 1px solid #555;
+  border-radius: 8px;
+}
+
+.status-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+
+.status-dialog::backdrop {
+  background: rgb(0 0 0 / 55%);
+}
+
+.status-dialog-head {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 14px;
+  border-bottom: 1px solid #333;
+}
+
+.status-dialog-head h3 {
+  margin: 0;
+}
+
+.status-dialog-body {
+  padding: 12px 14px;
+  overflow-y: auto;
+}
+
+.status-uses {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: #aaa;
+}
+
+.form-section {
+  margin-bottom: 8px;
+  border: 1px solid #333;
+  border-radius: 6px;
+}
+
+.form-section > summary {
+  padding: 8px 10px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.form-section > .form-fold-body {
+  padding: 0 10px 10px;
+}
+
+.form-status-button {
+  margin-left: 4px;
+}
+
+.form-icon-button {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.form-icon-face {
+  display: block;
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+}
+
+.form-icon-none {
+  border: 1px dashed #666;
+  border-radius: 4px;
+}
+
+.form-icon-panel {
+  margin: 4px 0 8px;
+  padding: 8px;
+  border: 1px solid #333;
+  border-radius: 6px;
+}
+
+.form-icon-panel[hidden] {
+  display: none;
+}
+
+.form-icon-find {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.form-icon-find input {
+  flex: 1;
+}
+
+.form-icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, 40px);
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.form-icon-tile {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+}
+
+.form-icon-tile.active {
+  outline: 2px solid #d8c08a;
+}
+
+@media (max-width: 900px) {
+  .classes-body {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+
+  .classes-page {
+    height: auto;
+  }
+
+  .classes-board,
+  .classes-board.wide,
+  .classes-config,
+  .classes-body[data-tab="talents"] .classes-config {
+    flex: none;
+    width: auto;
+    min-width: 0;
+    overflow-y: visible;
+    border-right: 0;
+  }
+
+  .classes-preview {
+    flex: none;
+    min-width: 0;
+    height: 320px;
+    border-left: 0;
+  }
+}
+
+.stock-icon {
+  display: block;
+  background: currentColor;
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
 }

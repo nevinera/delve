@@ -77,7 +77,7 @@ const AURA_LOOK_FIELDS = [...PARTICLE_FIELDS, ...SHAPE_FIELDS].map(asAuraField);
 
 const is = (...types) => (value) => types.includes(value.type);
 const abilitiesOf = (made) => () => (made.abilities ?? []).map((a) => [a.id, a.name || a.id]);
-const statusesOf = (made) => () => (made.statuses ?? []).map((s) => [s.id, s.name || s.id]);
+const statusesOf = (made) => Object.assign(() => (made.statuses ?? []).map((s) => [s.id, s.name || s.id]), { picksStatus: true });
 const TRIGGERS = ["dealDamage", "takeDamage", "heal", "healed", "overheal", "crit", "nonCrit", "dodge", "parry", "block", "cast", "channelEnd", "spend", "kill", "interrupt", "dispel", "pickup", "healthBelow", "allyHealthBelow", "wouldDie", "statusGained", "statusConsumed", "statusEnds", "dispelled", "holderDies"];
 const COMMON_TRIGGERS = ["dealDamage", "takeDamage", "heal", "crit", "cast", "kill", "healthBelow", "statusGained", "statusEnds"];
 const triggerOn = (...events) => (e) => e.type === "trigger" && events.includes(e.on);
@@ -436,6 +436,24 @@ export const lookFields = () => [
 
 export const blankEffect = () => ({ type: "damage", affects: "target" });
 
+export const talentFields = (made, level) => [
+  { key: "id", advanced: true },
+  { key: "name" },
+  { key: "description" },
+  { key: "requires", type: "select", none: "nothing", options: () => (made.talents?.[level - TALENT_TIER_STEP] ?? []).map((t) => [t.id, t.name || t.id]) },
+  {
+    key: "grants",
+    type: "list",
+    one: "grant",
+    blank: () => ({}),
+    fields: [
+      { key: "status", type: "select", none: "none", options: statusesOf(made) },
+      { key: "ability", type: "select", none: "none", options: abilitiesOf(made) },
+      { key: "spec", label: "only for", type: "select", none: "every specialization", options: () => (made.specializations ?? []).map((s) => [s.id, s.name || s.id]) },
+    ],
+  },
+];
+
 export const classFields = (made) => [
   { key: "name" },
   { key: "description", type: "area" },
@@ -514,23 +532,7 @@ export const classFields = (made) => [
       type: "list",
       one: "talent",
       blank: () => ({ id: "", name: "", grants: [{}] }),
-      fields: [
-        { key: "id" },
-        { key: "name" },
-        { key: "description" },
-        { key: "requires", type: "select", none: "nothing", options: () => (made.talents?.[level - TALENT_TIER_STEP] ?? []).map((t) => [t.id, t.name || t.id]) },
-        {
-          key: "grants",
-          type: "list",
-          one: "grant",
-          blank: () => ({}),
-          fields: [
-            { key: "status", type: "select", none: "none", options: statusesOf(made) },
-            { key: "ability", type: "select", none: "none", options: abilitiesOf(made) },
-            { key: "spec", label: "only for", type: "select", none: "every specialization", options: () => (made.specializations ?? []).map((s) => [s.id, s.name || s.id]) },
-          ],
-        },
-      ],
+      fields: talentFields(made, level),
     })),
   },
   { key: "passives", type: "list", one: "passive", blank: () => ({ status: "", level: 1 }), fields: [{ key: "status", type: "select", none: "pick one", options: statusesOf(made) }, { key: "level", type: "number", min: 1, step: 1 }] },
@@ -544,7 +546,7 @@ export const abilityFields = (made) => [
   { key: "name" },
   { key: "level", type: "number", min: 1, step: 1 },
   { key: "description", type: "area" },
-  { key: "icon", type: "select", none: "none", options: iconNames },
+  { key: "icon", type: "icon", options: iconNames },
   { key: "school", type: "select", none: "none", options: SCHOOLS },
   { key: "target", type: "select", options: ["enemy", "ally", "any", "self", "ground", "none"], then: (a) => ["self", "none"].includes(a.target) && delete a.range },
   { key: "range", type: "distance", show: (a) => (a.target !== "self" && a.target !== "none") || a.range !== undefined },
@@ -740,10 +742,23 @@ const statusEffectFields = (made, nested = false) => [
   { key: "param", label: "named", hint: "a name other things can change this number by", show: is("stat", "periodic", "absorb", "trigger", "aura"), advanced: OTHER },
 ];
 
+// What the Class tab leaves to the Spellbook and Talents tabs.
+export const classTabFields = (made) => classFields(made).filter((field) => !["talents", "passives"].includes(field.key));
+
+// The ability form's folding sections. Every field of abilityFields is in one, as fields.test.js checks.
+export const ABILITY_SECTIONS = [
+  { name: "Basics", open: true, keys: ["name", "level", "description", "icon", "school", "schools"] },
+  { name: "Targeting", keys: ["target", "range", "minRange", "facing", "speed", "creatureTypes", "requires"] },
+  { name: "Timing and cost", keys: ["castTime", "cooldown", "cost", "channel", "castWhileMoving", "whileCasting", "keepsStealth", "gcd", "gcdHasted", "charges", "cooldownHasted", "replaces"] },
+  { name: "Effects", open: true, keys: ["effects"] },
+  { name: "Look and sound", keys: ["animation", ...FEEL_FIELDS.map((field) => field.key), "visuals", "sounds"] },
+  { name: "Notes", keys: ["tags", "notes"] },
+];
+
 export const statusFields = (made) => [
   { key: "name" },
   { key: "description", type: "area" },
-  { key: "icon", type: "select", none: "none", options: iconNames },
+  { key: "icon", type: "icon", options: iconNames },
   { key: "kind", type: "select", options: ["buff", "debuff", "hidden"] },
   { key: "duration", label: "duration s", type: "number", min: 0, hint: "leave it out for one that lasts until removed" },
   { key: "stacking", type: "select", none: "refresh", options: ["replace", "stack"] },
