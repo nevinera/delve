@@ -3,6 +3,7 @@ import { addEffect, addLabel, aimStrip, chosenOnCard, cooldownStrip, costOf, eff
 import { ABILITY_SECTIONS, abilityFields, effectFields } from "./fields.js";
 import { addRow, asStrip, choice, drawStrip, el, foldOutFields } from "./choiceStrip.js";
 import { renderFields, renderSections, setKey } from "./form.js";
+import { lookBuilder } from "./lookBuilder.js";
 
 // The ability form: rows of choices that say what they're asking by what they offer, each row showing
 // once it means something. What the choices don't cover folds away below them.
@@ -145,6 +146,7 @@ export function abilityBuilder(made, ability, hooks) {
           ...(ability.channel ? renderFields([{ ...channel, collapsed: false, advanced: undefined, label: "channel" }], ability, hooks) : []),
           ...strip(cooldownStrip(ability)),
           ...drawCost(made, ability, hooks),
+          ...lookBuilder(ability, hooks),
         ]
       : []),
     ...renderSections(ABILITY_SECTIONS, fields, ability, hooks),

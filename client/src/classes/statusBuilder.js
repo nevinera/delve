@@ -4,6 +4,7 @@ import { addEffect } from "./abilityChoices.js";
 import { addRow, drawStrip, el, foldOutFields } from "./choiceStrip.js";
 import { STATS, STATUS_SECTIONS, changesOf, statusEffectFields, statusFields } from "./fields.js";
 import { renderFields, renderSections } from "./form.js";
+import { auraStrip } from "./lookChoices.js";
 import { addStatusEffect, amountStrips, chanceStrip, changeAmountStrip, changeStrip, controlStrip, dispelStrip, doesStrip, durationStrip, everyStrip, isPassive, kindStrip, maxStacksStrip, periodicSchoolStrip, removeStatusEffect, stackingStrip, statAmountStrip, statStrip, statusEffectChoices, statusEffectLabel, statusFoldOut, triggerCooldownStrip, triggerStrip } from "./statusChoices.js";
 
 // The status form, as the ability form is: rows of choices, with the rest folded away below them.
@@ -89,6 +90,7 @@ export function statusBuilder(made, status, hooks) {
         hooks.reshaped();
       },
     }),
+    drawStrip(auraStrip(status), hooks),
     ...renderSections(STATUS_SECTIONS, fields, status, hooks),
   ];
 }

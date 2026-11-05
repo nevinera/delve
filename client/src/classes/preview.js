@@ -316,7 +316,7 @@ export class AbilityPreview {
   }
 
   play() {
-    if (!this.ability) return;
+    if (!this.ability || !this.caster) return;
     this.stop();
     const distance = this.ability.target === "ground" ? this.spot.length() : this.distance;
     const on = { hit: (event) => this.land(event), bar: (event) => this.showBar(event), mine: true, shake: (strength) => this.stage.shake(strength) };

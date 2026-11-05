@@ -3,7 +3,8 @@ import { fold } from "./form.js";
 // A row of choices. It has no heading: what's on offer says what it's asking. A strip is
 // { name, options: [{ value, label, swatch }], value, pick(value) }, with `other`, the unit of a number
 // that's none of the options, `signed` if that number can be negative, and `more` and `owner` for rarer
-// options folded away, remembered against `owner`.
+// options folded away, remembered against `owner` and `moreName`. `many`, in place of `value`, lists
+// what's on for a row where several can be.
 
 export const el = (tag, props = {}, ...children) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -18,6 +19,7 @@ const numberOf = (text) => (text.trim() === "" ? undefined : Number(text));
 export function choice(option, on, pick) {
   const button = el("button", { type: "button", className: "choice" });
   if (option.swatch) button.append(el("span", { className: "choice-swatch", style: `background:${SCHOOL_COLORS[option.swatch]}` }));
+  button.dataset.value = option.value;
   button.append(option.label);
   button.classList.toggle("on", on);
   button.setAttribute("aria-pressed", on);
@@ -38,7 +40,8 @@ export function drawStrip(strip, { changed, reshaped }) {
     strip.pick(value);
     reshaped();
   };
-  const buttons = (options) => options.map((option) => choice(option, option.value === strip.value, pick));
+  const isOn = (value) => (strip.many ? strip.many.includes(value) : value === strip.value);
+  const buttons = (options) => options.map((option) => choice(option, isOn(option.value), pick));
   const offered = [...strip.options, ...(strip.more ?? [])].some((o) => o.value === strip.value);
   const node = asStrip(el("div", { className: "choice-strip" }, ...buttons(strip.options)), strip.name);
   if (strip.other !== undefined) {
@@ -56,10 +59,10 @@ export function drawStrip(strip, { changed, reshaped }) {
     node.append(
       fold({
         owner: strip.owner,
-        name: `strip ${strip.name}`,
+        name: `strip ${strip.moreName ?? strip.name}`,
         className: "form-advanced choice-more",
         summary: "more",
-        startOpen: strip.more.some((o) => o.value === strip.value),
+        startOpen: strip.more.some((o) => isOn(o.value)),
         draw: () => [el("div", { className: "choice-strip" }, ...buttons(strip.more))],
       }),
     );

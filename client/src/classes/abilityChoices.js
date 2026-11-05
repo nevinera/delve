@@ -1,4 +1,5 @@
 import { readAmount, setKey, writeAmount } from "./form.js";
+import { settleLook } from "./lookChoices.js";
 
 // The choices the ability form offers, and what picking each does to the ability. Nothing here draws.
 // A strip is { name, options: [{ value, label }], value, pick(value) }, with `other`, the unit of a
@@ -136,6 +137,7 @@ export const timingStrip = (ability) => ({
       delete ability.channel;
       setKey(ability, "castTime", v || undefined);
     }
+    settleLook(ability);
   },
 });
 

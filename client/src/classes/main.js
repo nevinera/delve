@@ -391,6 +391,7 @@ function showConfig(made) {
       config.scrollTop = top;
     },
     status: statusHooks(made),
+    tryIt: () => preview?.play(),
   };
   if (!inTab) {
     const remove = el("button", { type: "button", textContent: "delete class", className: "form-remove" });

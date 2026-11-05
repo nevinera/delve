@@ -751,7 +751,7 @@ export const ABILITY_CHOSEN = ["name", "level", "description", "icon", "school",
 export const ABILITY_SECTIONS = [
   { name: "Rules", keys: ["schools", "minRange", "facing", "creatureTypes", "requires"] },
   { name: "Casting", keys: ["cost", "castWhileMoving", "whileCasting", "keepsStealth", "gcd", "gcdHasted", "charges", "cooldownHasted", "replaces"] },
-  { name: "Look and sound", keys: ["animation", ...FEEL_FIELDS.map((field) => field.key), "visuals", "sounds"] },
+  { name: "Fine-tune look and sound", keys: ["animation", ...FEEL_FIELDS.map((field) => field.key), "visuals", "sounds"] },
   { name: "Notes", keys: ["tags", "notes"] },
 ];
 
