@@ -8,8 +8,11 @@ const options = (pairs) => pairs.map(([value, label]) => ({ value, label }));
 const seconds = (n) => (n < 60 ? `${n} s` : `${n / 60} min`);
 const rounded = (n) => Math.round(n * 100) / 100;
 
-// Whether it's held as a passive, which has it from a level on, for good.
-export const isPassive = (made, id) => (made.passives ?? []).some((p) => p.status === id) || (made.specializations ?? []).some((s) => s.status === id);
+// Whether it's something a character holds for good: a passive, a mastery or what a talent grants.
+export function isPassive(made, id) {
+  const talents = Object.values(made.talents ?? {}).flat();
+  return (made.passives ?? []).some((p) => p.status === id) || (made.specializations ?? []).some((s) => s.status === id) || made.mastery?.status === id || talents.some((t) => (t.grants ?? []).some((g) => g.status === id));
+}
 
 export const kindStrip = (status) => ({ name: "how it shows", options: options([["buff", "Buff"], ["debuff", "Debuff"], ["hidden", "Hidden"]]), value: status.kind ?? "buff", pick: (v) => (status.kind = v) });
 

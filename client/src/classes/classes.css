@@ -782,6 +782,57 @@
   padding: 6px 12px;
 }
 
+.class-head [data-key="colors"] {
+  margin: 0;
+  padding: 2px 8px;
+}
+
+.class-head [data-key="colors"] .form-row {
+  display: inline-flex;
+  margin: 0 8px 0 0;
+}
+
+.class-head [data-key="colors"] .form-label {
+  flex: none;
+  padding: 0;
+}
+
+.classes-body[data-tab="class"] .classes-config > * {
+  max-width: 820px;
+}
+
+.class-card-head [data-key="color"] button {
+  display: none;
+}
+
+.class-card-head .form-row {
+  margin: 0;
+}
+
+.class-card-head [data-key="name"] {
+  flex: 1;
+}
+
+.class-card-head [data-key="name"] .form-label,
+.class-card-head [data-key="color"] .form-label,
+.effect-card > [data-key="description"] .form-label {
+  display: none;
+}
+
+.effect-card > [data-key="description"] textarea {
+  max-width: none;
+}
+
+.class-mastery .effect-remove {
+  float: right;
+}
+
+.grant-summary {
+  margin: 0 0 8px;
+  padding-left: 18px;
+  color: #aaa;
+}
+
 .status-head {
   grid-template-columns: auto minmax(0, 1fr);
 }

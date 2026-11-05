@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_LOOK } from "../character/recipe.js";
-import { ABILITY_CHOSEN, ABILITY_SECTIONS, STATUS_CHOSEN, STATUS_SECTIONS, abilityFields, classFields, classTabFields, lookFields, overridesField, readCondition, statusFields, writeCondition } from "./fields.js";
+import { ABILITY_CHOSEN, ABILITY_SECTIONS, CLASS_CHOSEN, CLASS_SECTIONS, STATUS_CHOSEN, STATUS_SECTIONS, abilityFields, classFields, lookFields, overridesField, readCondition, statusFields, writeCondition } from "./fields.js";
 import { readAmount, writeAmount } from "./form.js";
 
 const schema = (name) => JSON.parse(readFileSync(new URL(`../../../docs/schema/${name}.schema.json`, import.meta.url)));
@@ -51,10 +51,11 @@ describe("the class editor's fields", () => {
     expect(sectioned.filter((key) => !keysOf(statuses).has(key))).toEqual([]);
   });
 
-  it("leave talents and passives off the Class tab", () => {
-    const keys = keysOf(classTabFields(made));
-    expect(keys.has("talents") || keys.has("passives")).toBe(false);
-    expect(keys.has("specializations")).toBe(true);
+  it("put every class field in the choices or in one section", () => {
+    const sectioned = [...CLASS_CHOSEN, ...CLASS_SECTIONS.flatMap((section) => section.keys)];
+    expect(new Set(sectioned).size).toBe(sectioned.length);
+    expect([...keysOf(classes)].filter((key) => !sectioned.includes(key))).toEqual([]);
+    expect(sectioned.filter((key) => !keysOf(classes).has(key))).toEqual([]);
   });
 
   it("offer every animation", () => {

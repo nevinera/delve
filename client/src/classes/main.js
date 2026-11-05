@@ -13,7 +13,8 @@ import { isClassPath } from "../world/paths.js";
 import { spellbookBoard, statusBoard, talentBoard } from "./boards.js";
 import { classPath, classProblems, classesOf, newClass } from "./classFile.js";
 import { abilityBuilder } from "./abilityBuilder.js";
-import { classFields, classTabFields, talentFields } from "./fields.js";
+import { classBuilder, talentBuilder } from "./classBuilder.js";
+import { classFields } from "./fields.js";
 import { renderFields } from "./form.js";
 import { statusBuilder } from "./statusBuilder.js";
 import { statusSummary } from "./statusChoices.js";
@@ -392,6 +393,17 @@ function showConfig(made) {
     },
     status: statusHooks(made),
     tryIt: () => preview?.play(),
+    openAbility: (id) => {
+      tab = "book";
+      page = GENERAL;
+      openAbility(id);
+    },
+    openPage: (id) => {
+      tab = "book";
+      page = id;
+      part = null;
+      show();
+    },
   };
   if (!inTab) {
     const remove = el("button", { type: "button", textContent: "delete class", className: "form-remove" });
@@ -408,11 +420,11 @@ function showConfig(made) {
       keep();
       pick(null);
     });
-    config.append(el("div", { className: "classes-delete" }, remove, sure, keepIt), ...renderFields(classTabFields(made), made, hooks));
+    config.append(el("div", { className: "classes-delete" }, remove, sure, keepIt), ...classBuilder(made, hooks));
   } else if (inTab.kind === "ability") config.append(...abilityBuilder(made, thing, hooks));
   else if (inTab.kind === "passive") config.append(el("h3", { textContent: "Passive" }), ...renderFields(passiveFieldsFor(made), thing, hooks), passiveSummary(made, thing.status));
   else if (inTab.kind === "specPassive") config.append(el("h3", { textContent: `${thing.name || thing.id}'s passive` }), ...renderFields(specPassiveFieldsFor(made), thing, hooks), passiveSummary(made, thing.status));
-  else config.append(el("h3", { textContent: `Level ${inTab.level} talent` }), ...renderFields(talentFields(made, Number(inTab.level)), thing, hooks));
+  else config.append(el("h3", { textContent: `Level ${inTab.level} talent` }), ...talentBuilder(made, thing, inTab.level, hooks));
 }
 
 // The preview's made the first time an ability's picked, since the page needs it only then.

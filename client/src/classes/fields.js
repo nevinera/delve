@@ -537,7 +537,6 @@ export const classFields = (made) => [
   },
   { key: "passives", type: "list", one: "passive", blank: () => ({ status: "", level: 1 }), fields: [{ key: "status", type: "select", none: "pick one", options: statusesOf(made) }, { key: "level", type: "number", min: 1, step: 1 }] },
   { key: "mastery", type: "group", collapsed: true, fields: [{ key: "name" }, { key: "description", type: "area" }, { key: "status", type: "select", none: "pick one", options: statusesOf(made) }] },
-  { key: "startingGear", label: "starting gear", type: "words", hint: "item ids, with commas", advanced: true },
   { key: "tags", type: "words", advanced: true },
   { key: "notes", type: "area", advanced: true },
 ];
@@ -742,9 +741,6 @@ export const statusEffectFields = (made, nested = false) => [
   { key: "param", label: "named", hint: "a name other things can change this number by", show: is("stat", "periodic", "absorb", "trigger", "aura"), advanced: OTHER },
 ];
 
-// What the Class tab leaves to the Spellbook and Talents tabs.
-export const classTabFields = (made) => classFields(made).filter((field) => !["talents", "passives"].includes(field.key));
-
 // What the ability form asks with choices (abilityBuilder.js), and the sections the rest fold into.
 // Every field of abilityFields is in one or the other, as fields.test.js checks.
 export const ABILITY_CHOSEN = ["name", "level", "description", "icon", "school", "target", "range", "speed", "castTime", "channel", "cooldown", "effects"];
@@ -752,6 +748,13 @@ export const ABILITY_SECTIONS = [
   { name: "Rules", keys: ["schools", "minRange", "facing", "creatureTypes", "requires"] },
   { name: "Casting", keys: ["cost", "castWhileMoving", "whileCasting", "keepsStealth", "gcd", "gcdHasted", "charges", "cooldownHasted", "replaces"] },
   { name: "Fine-tune look and sound", keys: ["animation", ...FEEL_FIELDS.map((field) => field.key), "visuals", "sounds"] },
+  { name: "Notes", keys: ["tags", "notes"] },
+];
+
+// The same for the Class tab, by classBuilder.js.
+export const CLASS_CHOSEN = ["name", "description", "colors", "primaryStats", "resources", "armor", "weapons", "offhands", "startingGear", "specializations", "talents", "passives", "mastery"];
+export const CLASS_SECTIONS = [
+  { name: "Summons", keys: ["units"] },
   { name: "Notes", keys: ["tags", "notes"] },
 ];
 

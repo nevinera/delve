@@ -195,12 +195,6 @@
         }
       }
     },
-    "startingGear": {
-      "type": "array",
-      "items": {
-        "$ref": "common.schema.json#/$defs/id"
-      }
-    },
     "tags": {
       "type": "array",
       "items": {

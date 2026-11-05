@@ -672,7 +672,7 @@ An area is a cylinder: `radius` across, and `height` above and below its center,
   ],
   "passives": [{ "status": "flow0001", "level": 1 }],
   "mastery": { "name": "Centered", "description": "Your strikes hit harder the more ki you hold.", "status": "cntr0001" },
-  "startingGear": ["wrap0001", "fist0001"]
+  "startingGear": { "weapon": "staff", "offhand": "none" }
 }
 ```
 
@@ -692,7 +692,6 @@ An area is a cylinder: `radius` across, and `height` above and below its center,
 - `talents`: what a character picks from, one per tier, keyed by the tier's level. The game sets the tiers: every 5 levels from 15. A class can leave a tier empty, and otherwise fills it with 3 to 6 talents. A talent has `id`, `name` and `grants`, each a `status` or an `ability`, with `spec` if it's only for that specialization. A talent with no grant for your specialization isn't offered to you. `requires` names a talent in the tier directly above that you have to have picked. Whatever you picked above, you always have at least two to pick from.
 - `passives`: statuses it has from their `level`. They never expire, and hidden ones don't show.
 - `mastery`: one mastery effect, a status the class always has, whose amounts use `mastery`.
-- `startingGear`: items a new character starts with.
 
 Only a class's `id` and `name` are required for now, so the class editor can save one as it's built. Every class has auto-attack from its weapons. The UI has 3 action bars of 12 slots.
 
