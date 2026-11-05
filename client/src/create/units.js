@@ -1,31 +1,14 @@
 import * as THREE from "three";
+import { dummyMaterials, dummyMesh } from "../world/dummy.js";
 
 // Units in /create: training dummies, placed and moved like objects with the units tools, and the
 // spawn point, set with planning's spawn tool. Both are kept in world.json ({ continent, at: [x, z] }
 // each); onChange({ spawn, dummies }) hands back the lot to keep whenever they change. Dummies on
 // other continents are kept as they are.
 
-const WOOD = 0x8a6440;
-const STRAW = 0xc8a858;
 const FLAG = 0xe8c860;
 const PICKED = 0xffe14d;
 const round = (v) => Math.round(v * 10) / 10;
-
-// A training dummy: a post, a crossbar for arms, and a stuffed head.
-function dummyMesh(material) {
-  const group = new THREE.Group();
-  const post = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.3, 5.5, 8), material.wood);
-  post.position.y = 2.75;
-  const bar = new THREE.Mesh(new THREE.CylinderGeometry(0.15, 0.15, 3.6, 6), material.wood);
-  bar.rotation.z = Math.PI / 2;
-  bar.position.y = 4.3;
-  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.7, 0.8, 2.2, 10), material.straw);
-  body.position.y = 3.6;
-  const head = new THREE.Mesh(new THREE.SphereGeometry(0.6, 10, 8), material.straw);
-  head.position.y = 5.5;
-  group.add(post, bar, body, head);
-  return group;
-}
 
 // The spawn point: a pole with a flag.
 function spawnMesh(material) {
@@ -41,7 +24,7 @@ function spawnMesh(material) {
 
 const materials = (opacity = 1) => {
   const make = (color) => new THREE.MeshLambertMaterial({ color, transparent: opacity < 1, opacity, side: THREE.DoubleSide, depthWrite: opacity === 1 });
-  return { wood: make(WOOD), straw: make(STRAW), flag: make(FLAG) };
+  return { ...dummyMaterials(opacity), flag: make(FLAG) };
 };
 
 export class Units {

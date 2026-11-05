@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { characterClips, loadAnimations, roleClips, strideRate } from "../character/animations.js";
 import { UpperBody, canSplit, halfOf } from "../character/upperBody.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
+import { dummyMaterials, dummyMesh, disposeDummy } from "../world/dummy.js";
 import { WeaponDraw } from "../character/weaponDraw.js";
 import { TURN_RATE } from "../character/posed.js";
 import { resolveRecipe } from "../character/recipe.js";
@@ -22,6 +23,8 @@ const NAME_FT = 300; // names show out to this far from the camera
 const NAME_ABOVE_FT = 0.6; // how far over the head
 const NAME_SCREEN = 0.035; // a name's height, as a share of the view's height
 const NAME_PX = 48; // the name's drawn text size
+const DUMMY_FT = 6.2; // a training dummy's height, for its name
+let dummyLook = null; // the dummies' materials, shared
 
 // How fast a `move` goes, in feet per second.
 export function speedOf(move) {
@@ -91,19 +94,21 @@ export class Others {
   appear(character) {
     this.vanish(character.id);
     const look = resolveRecipe(character.look, seeded(character.id));
-    const model = characterMesh({ ...look, sheathed: true });
+    // A training dummy is a still object, not a body.
+    const dummy = Boolean(character.dummy);
+    const model = dummy ? dummyMesh((dummyLook ??= dummyMaterials())) : characterMesh({ ...look, sheathed: true });
     const drawn = {
       id: character.id,
       name: character.name,
       look,
       own: character.look,
       class: character.class,
-      dummy: Boolean(character.dummy),
+      dummy,
       health: character.health,
       maxHealth: character.maxHealth,
       model,
       nameplate: nameplate(character.name),
-      height: look.height,
+      height: dummy ? DUMMY_FT : look.height,
       mixer: new THREE.AnimationMixer(model),
       clips: null,
       playing: null,
@@ -111,9 +116,10 @@ export class Others {
       shown: new THREE.Vector3(...character.at),
     };
     this.update(drawn, character);
-    loadAnimations().then((baked) => {
-      if (this.characters.get(drawn.id) === drawn) drawn.clips = characterClips(model, baked);
-    });
+    if (!dummy)
+      loadAnimations().then((baked) => {
+        if (this.characters.get(drawn.id) === drawn) drawn.clips = characterClips(model, baked);
+      });
     this.characters.set(drawn.id, drawn);
     this.view.scene.add(model, drawn.nameplate);
   }
@@ -169,7 +175,8 @@ export class Others {
     const drawn = this.characters.get(id);
     if (!drawn) return;
     this.view.scene.remove(drawn.model, drawn.nameplate);
-    disposeCharacter(drawn.model);
+    if (drawn.dummy) disposeDummy(drawn.model);
+    else disposeCharacter(drawn.model);
     drawn.nameplate.material.map.dispose();
     drawn.nameplate.material.dispose();
     this.characters.delete(id);
@@ -226,7 +233,7 @@ export class Others {
 
   animate(drawn, dt, move) {
     drawn.mixer.update(dt);
-    if (!drawn.clips) return;
+    if (drawn.dummy || !drawn.clips) return;
     const speed = speedOf(move);
     const now = performance.now();
     if (drawn.acting) drawn.weaponsUntil = now + WEAPONS_OUT_MS;

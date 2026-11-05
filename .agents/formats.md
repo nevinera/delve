@@ -1203,7 +1203,7 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `teleport` | `continent`, `at`, `yaw` | the server moved you there. On another continent, the client loads it |
 | `error` | `message` | before the server closes the connection |
 
-A character is `{ id, name, look, continent, at, yaw, move, class, level, dummy, health, maxHealth }`. `look` is the character builder's look. Training dummies come as characters with `dummy: true` and negative ids, in your `snapshot`: all of those on your continent.
+A character is `{ id, name, look, continent, at, yaw, move, class, level, dummy, health, maxHealth }`. `look` is the character builder's look. Training dummies come as characters with `dummy: true` and negative ids, in your `snapshot`: all of those on your continent. The client draws a dummy as a still post-and-sack dummy (`client/src/world/dummy.js`), whatever its `look`.
 
 "Near you" is the 3×3 tiles around your tile, on your continent and layer.
 
