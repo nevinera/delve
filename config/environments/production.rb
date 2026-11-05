@@ -1,4 +1,5 @@
 require "active_support/core_ext/integer/time"
+require_relative "../../lib/middleware/compressed_static"
 
 Rails.application.configure do
   # Settings specified here will take precedence over those in config/application.rb.
@@ -17,6 +18,8 @@ Rails.application.configure do
 
   # Cache assets for far-future expiry since they are all digest stamped.
   config.public_file_server.headers = {"cache-control" => "public, max-age=#{1.year.to_i}"}
+  # The build writes .br and .gz copies of the client's files, and these go to browsers that take them.
+  config.middleware.swap ActionDispatch::Static, CompressedStatic, Rails.root.join("public").to_s, headers: config.public_file_server.headers
 
   # Enable serving of images, stylesheets, and JavaScripts from an asset server.
   # config.asset_host = "http://assets.example.com"
