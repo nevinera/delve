@@ -6,6 +6,7 @@
     <%= csrf_meta_tags %>
     <%= csp_meta_tag %>
     <link rel="icon" href="/icon.png" type="image/png">
+    <%= tag.link rel: "manifest", href: pwa_manifest_path(format: :json) %>
     <%= vite_stylesheet_tags "src/play/main.js" %>
     <%= vite_script_tags "src/play/main.js", "/client/play.js" %>
   </head>

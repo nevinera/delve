@@ -7,6 +7,7 @@ import { setWorldEffectSheets } from "../abilities/effectTextures.js";
 import { SightLines } from "./sightLines.js";
 import { RestPoints } from "./restPoints.js";
 import { Leaving } from "./leaving.js";
+import { turnSideways } from "./orientation.js";
 import { builtObjects, images } from "../objects/collections.js";
 import { prepareAnimations } from "../character/animations.js";
 import { resolveRecipe } from "../character/recipe.js";
@@ -61,6 +62,8 @@ function enter(on, loader) {
 }
 
 // The menu: its buttons open pages in its place, and each page's back button returns.
+// A phone turns sideways for play, where it can.
+if (isTouch()) turnSideways();
 const menu = $("playMenu");
 const main = menu.querySelector(".play-menu-main");
 const showPage = (page) => {
