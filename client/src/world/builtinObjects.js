@@ -45,9 +45,75 @@ const SEE_THROUGH = new Set([
   "bques004", // lectern with scroll
 ]);
 
-export const BUILTIN_OBJECT_COLLECTIONS = [FARM, VILLAGE, HOUSEHOLD, MILL, COAST, BANDIT, MINES, NATURAL_CAVES, DENS, GOBLIN, WOODLAND, FORT, ROADS, RUINS, MARKET, QUEST, STONES, FLORA, FURNITURE, TABLEWARE, TRADES, SACRED, WAR, HARBOUR, STREET, ARCANE, LANDS, REMAINS, FARMYARD].map((c) => ({
+// The ones a character walks through, and sees through, for lying flat on the ground.
+const WALK_THROUGH = new Set([
+  ...["bwood001", "bwood004"], // mushroom ring, wildflowers
+  ...["bhome009", "bband005", "bcave026", "bcave027"], // rug, bedroll, hide bedding, gnawed scraps
+  ...["broad003", "broad008", "bcave009"], // cobble patch, stepping stones, mine rails
+]);
+
+// Sets that live in another collection than the file that makes them. Each member keeps its id.
+const MOVED_SETS = [
+  ["stones", "stalagmites", "natural"],
+  ["stones", "stalactites", "natural"],
+];
+
+// Objects that join a set in another collection and take on how it blocks: [collection, set, ids].
+const JOINED_SETS = [
+  ["natural", "stalagmites", ["bcave003"]],
+  ["natural", "stalactites", ["bcave020"]],
+  ["stones", "loose rocks", ["bcave023"]],
+  ["stones", "crystal cluster", ["bcave021"]],
+  ["stones", "cairn", ["broad004"]],
+  ["flora", "glowcaps", ["bcave007"]],
+  ["flora", "toadstools", ["bwood002"]],
+  ["flora", "ferns", ["bwood003"]],
+  ["flora", "cattails", ["bwood006"]],
+  ["flora", "flat lily pads", ["bwood007"]],
+  ["flora", "fallen branches", ["bwood008"]],
+  ["farmyard", "pumpkins", ["bfarm014"]],
+  ["harbour", "buoys", ["bcoas006"]],
+  ["harbour", "coiled rope", ["bcoas008"]],
+  ["sacred", "headstones", ["bruin001", "bruin003"]],
+  ["sacred", "grave crosses", ["bruin002"]],
+  ["remains", "loose bones", ["bcave006"]],
+  ["arcane", "treasure heap", ["bques008"]],
+  ["war", "palisade wall", ["bband009"]],
+];
+
+// The collections with MOVED_SETS and JOINED_SETS applied, each joiner next to its set.
+function regrouped(collections) {
+  const out = collections.map((c) => ({ ...c, objects: [...c.objects] }));
+  const named = (id) => out.find((c) => c.id === id);
+  const add = (collection, objects, set) => {
+    const last = collection.objects.findLastIndex((o) => o.variantSet === set);
+    collection.objects.splice(last < 0 ? collection.objects.length : last + 1, 0, ...objects);
+  };
+  for (const [from, set, to] of MOVED_SETS) {
+    const members = named(from).objects.filter((o) => o.variantSet === set);
+    named(from).objects = named(from).objects.filter((o) => o.variantSet !== set);
+    add(named(to), members, set);
+  }
+  for (const [home, set, ids] of JOINED_SETS) {
+    const { walkThrough, blocksSight } = named(home).objects.find((o) => o.variantSet === set);
+    const flags = { ...(walkThrough ? { walkThrough } : {}), ...(blocksSight === false ? { blocksSight } : {}) };
+    for (const id of ids) {
+      const from = out.find((c) => c.objects.some((o) => o.id === id));
+      const object = from.objects.find((o) => o.id === id);
+      from.objects = from.objects.filter((o) => o !== object);
+      add(named(home), [{ ...object, ...flags, variantSet: set }], set);
+    }
+  }
+  return out;
+}
+
+export const BUILTIN_OBJECT_COLLECTIONS = regrouped([FARM, VILLAGE, HOUSEHOLD, MILL, COAST, BANDIT, MINES, NATURAL_CAVES, DENS, GOBLIN, WOODLAND, FORT, ROADS, RUINS, MARKET, QUEST, STONES, FLORA, FURNITURE, TABLEWARE, TRADES, SACRED, WAR, HARBOUR, STREET, ARCANE, LANDS, REMAINS, FARMYARD]).map((c) => ({
   ...c,
-  objects: c.objects.map((o) => (SEE_THROUGH.has(o.id) ? { ...o, blocksSight: false } : o)),
+  objects: c.objects.map((o) => ({
+    ...o,
+    ...(SEE_THROUGH.has(o.id) || WALK_THROUGH.has(o.id) ? { blocksSight: false } : {}),
+    ...(WALK_THROUGH.has(o.id) ? { walkThrough: true } : {}),
+  })),
 }));
 
 export const BUILTIN_OBJECTS = BUILTIN_OBJECT_COLLECTIONS.flatMap((c) => c.objects.map((o) => ({ ...o, collection: `builtin:${c.id}` })));

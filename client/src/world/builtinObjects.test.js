@@ -31,6 +31,14 @@ describe("builtin objects", () => {
     for (const [set, size] of sizes) expect(size, set).toBeGreaterThan(1);
   });
 
+  it("keep older objects with the sets they joined, and stalagmites in the caves", () => {
+    const of = (id) => BUILTIN_OBJECTS.find((o) => o.id === id);
+    expect(of("bcave023")).toMatchObject({ collection: "builtin:stones", variantSet: "loose rocks", walkThrough: true, blocksSight: false });
+    expect(of("bwood003")).toMatchObject({ collection: "builtin:flora", variantSet: "ferns" });
+    expect(of("bcave003")).toMatchObject({ collection: "builtin:natural", variantSet: "stalagmites" });
+    for (const set of ["stalagmites", "stalactites"]) for (const object of BUILTIN_OBJECTS.filter((o) => o.name.startsWith(set) || o.variantSet === set)) expect(object.collection, object.name).toBe("builtin:natural");
+  });
+
   it("don't reach far below the ground", () => {
     for (const object of BUILTIN_OBJECTS) {
       const lowest = Math.min(...object.pieces.filter((p) => !p.cut).flatMap((p) => pieceCorners(p).map((c) => c[1])));

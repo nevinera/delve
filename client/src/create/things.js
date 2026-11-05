@@ -101,8 +101,10 @@ export class Things {
   }
 
   // What's under the pointer's ray: { thing, point } for the nearest object or slab, or null.
-  pick(raycaster) {
+  // With `slabsOnly`, the ray passes through objects.
+  pick(raycaster, slabsOnly = false) {
     for (const hit of raycaster.intersectObjects(this.group.children, false)) {
+      if (slabsOnly && hit.object.isInstancedMesh) continue;
       const thing = hit.object.isInstancedMesh ? hit.object.userData.objects?.[hit.instanceId] : slabAt(hit);
       if (thing) return { thing, point: hit.point };
     }

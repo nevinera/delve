@@ -334,11 +334,12 @@ export class Build {
   }
 
   // Where the pointer meets a slab or object, or the ground, or from in a cave, its rock:
-  // { at: [x, y, z], thing, cave, ceiling }, or null.
+  // { at: [x, y, z], thing, cave, ceiling }, or null. What you're placing goes through objects to
+  // the slab or ground behind them, so it never stands on one.
   hit() {
     const ray = this.ray();
     if (!ray) return null;
-    const on = this.things.pick(ray);
+    const on = this.things.pick(ray, this.tool === "object" || this.tool === "template");
     const cave = this.caveHit();
     if (cave && (!on || on.point.distanceTo(ray.ray.origin) > new THREE.Vector3(...cave.at).distanceTo(ray.ray.origin))) return { at: cave.at, thing: null, cave: true, ceiling: cave.ceiling, problem: cave.problem };
     const ground = this.groundHit();

@@ -1,6 +1,7 @@
 import { around, ba, bx, cn, cy, hang, ln, py, shelf, strewn, tb } from "./kit.js";
 
-// Stones and earth to place in numbers, mostly as variant sets.
+// Stones and earth to place in numbers, mostly as variant sets. builtinObjects.js moves stalagmites
+// and stalactites to the natural caves collection.
 
 const GRAY = "#7c7a74:stone";
 const lump = (r, x, y, z, s) => ba(s * r(0.8, 1.3), s * r(0.5, 0.9), s * r(0.8, 1.3), x, y, z, 0, r(0, 180));
