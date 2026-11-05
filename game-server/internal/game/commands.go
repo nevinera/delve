@@ -28,7 +28,7 @@ func init() {
 		"help":        {usage: "/help", run: runHelp},
 		"level":       {admin: true, usage: "/level <1 to 100>", run: runLevel},
 		"spar":        {usage: "/spar [on or off]", run: runSpar},
-		"teleport":    {admin: true, usage: "/teleport <x> <z> [continent], or /teleport spawn", run: runTeleport},
+		"teleport":    {admin: true, usage: "/teleport <x> <z> [continent], /teleport spawn or /teleport home", run: runTeleport},
 		"weapon":      {admin: true, usage: "/weapon <main hand> [off hand]", run: runWeapon},
 	}
 }
@@ -185,6 +185,13 @@ func runTeleport(l *Layer, p *Player, args []string) error {
 	case len(args) == 1 && strings.EqualFold(args[0], "spawn"):
 		continent = l.world.Spawn.Continent
 		at := l.world.SpawnAt()
+		x, z = at[0], at[2]
+	case len(args) == 1 && strings.EqualFold(args[0], "home"):
+		continent = l.world.Spawn.Continent
+		at := l.world.SpawnAt()
+		if r := l.world.RestPoint(p.home); r != nil {
+			continent, at = r.Continent, [3]float64{r.At[0], 0, r.At[1]}
+		}
 		x, z = at[0], at[2]
 	case len(args) == 2 || len(args) == 3:
 		var errX, errZ error

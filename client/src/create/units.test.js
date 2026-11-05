@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { Units } from "./units.js";
+import { Units, restPointId } from "./units.js";
 
 function units(at = [10.04, 5, 20.06]) {
   let pointer = at;
@@ -33,7 +33,7 @@ describe("units in /create", () => {
     u.down();
     u.setTool("unitSelect");
     const [dummy] = u.here();
-    u.dummyHit = () => dummy;
+    u.unitHit = () => dummy;
     u.down();
     point([30, 5, 40]);
     u.move();
@@ -47,9 +47,31 @@ describe("units in /create", () => {
   it("doesn't count a click on nothing as a change", () => {
     const { u, kept } = units();
     u.setTool("unitSelect");
-    u.dummyHit = () => null;
+    u.unitHit = () => null;
     u.down();
     u.up();
     expect(kept).toEqual([]);
+  });
+
+  it("puts up a named rest point with the rest tool, and renames and deletes it", () => {
+    const { u, kept } = units();
+    u.setTool("rest");
+    u.down();
+    const [rest] = kept.at(-1).restPoints;
+    expect(rest).toMatchObject({ continent: "main", at: [10, 20.1], name: "Rest point 1" });
+    expect(rest.id).toMatch(/^rest[0-9a-z]{4}$/);
+    u.setTool("unitSelect");
+    u.unitHit = () => u.restPoints[0];
+    u.down();
+    u.up();
+    u.rename("The Inn");
+    expect(kept.at(-1).restPoints[0].name).toBe("The Inn");
+    u.key({ key: "Delete" });
+    expect(kept.at(-1).restPoints).toEqual([]);
+  });
+
+  it("gives rest points ids no other has", () => {
+    const rolls = [0, 0, 0.5];
+    expect(restPointId([{ id: "rest0000" }], () => rolls.shift())).not.toBe("rest0000");
   });
 });

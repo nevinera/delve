@@ -33,6 +33,7 @@ type fakeCharacters struct {
 	class map[int64]string
 	admin map[int64]bool
 	level map[int64]int
+	home  map[int64]string
 	saves []rails.Position
 }
 
@@ -40,16 +41,23 @@ func characters(at map[int64]*rails.Position) *fakeCharacters {
 	if at == nil {
 		at = map[int64]*rails.Position{}
 	}
-	return &fakeCharacters{at: at, class: map[int64]string{}, admin: map[int64]bool{}, level: map[int64]int{}}
+	return &fakeCharacters{at: at, class: map[int64]string{}, admin: map[int64]bool{}, level: map[int64]int{}, home: map[int64]string{}}
 }
 
 func (f *fakeCharacters) Character(_ context.Context, _, id int64) (rails.Character, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return rails.Character{ID: id, Name: fmt.Sprintf("C%d", id), Look: json.RawMessage(`{"skin":1}`), Class: f.class[id], Level: f.level[id], Position: f.at[id], SystemAdmin: f.admin[id]}, nil
+	return rails.Character{ID: id, Name: fmt.Sprintf("C%d", id), Look: json.RawMessage(`{"skin":1}`), Class: f.class[id], Level: f.level[id], Position: f.at[id], SystemAdmin: f.admin[id], Home: f.home[id]}, nil
 }
 
 func (f *fakeCharacters) SaveBars(_ context.Context, _, _ int64, _ [][]string) error {
+	return nil
+}
+
+func (f *fakeCharacters) SaveHome(_ context.Context, _, id int64, home string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.home[id] = home
 	return nil
 }
 
@@ -503,10 +511,10 @@ func TestTeleportTakesOnlyWhatMakesSense(t *testing.T) {
 	_, p, _ := commanding(t, true)
 	from := p.state.At
 	for line, want := range map[string]string{
-		"/teleport":             "error: Use /teleport <x> <z> [continent], or /teleport spawn.",
-		"/teleport 1":           "error: Use /teleport <x> <z> [continent], or /teleport spawn.",
-		"/teleport a b":         "error: Use /teleport <x> <z> [continent], or /teleport spawn.",
-		"/teleport NaN 1":       "error: Use /teleport <x> <z> [continent], or /teleport spawn.",
+		"/teleport":             "error: Use /teleport <x> <z> [continent], /teleport spawn or /teleport home.",
+		"/teleport 1":           "error: Use /teleport <x> <z> [continent], /teleport spawn or /teleport home.",
+		"/teleport a b":         "error: Use /teleport <x> <z> [continent], /teleport spawn or /teleport home.",
+		"/teleport NaN 1":       "error: Use /teleport <x> <z> [continent], /teleport spawn or /teleport home.",
 		"/teleport 1 2 nowhere": `error: This world has no continent "nowhere".`,
 	} {
 		say(t, p, line)

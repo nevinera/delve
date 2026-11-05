@@ -19,7 +19,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 
 | Path | What it is | Format | Code |
 | --- | --- | --- | --- |
-| `world.json` | version (2), name, level cap, continents, dungeons, spawn point, training dummies | [schema](../docs/schema/world.schema.json) | `client/src/create/main.js` |
+| `world.json` | version (2), name, level cap, continents, dungeons, spawn point, training dummies, rest points | [schema](../docs/schema/world.schema.json) | `client/src/create/main.js` |
 | `collections.json` | the world's object collections | [schema](../docs/schema/collections.schema.json) | `client/src/objects/collections.js` |
 | `template-collections.json` | the world's template collections | [schema](../docs/schema/collections.schema.json) | `client/src/objects/collections.js` |
 | `objects/<id>.json` | a built object | [schema](../docs/schema/object.schema.json) | `client/src/world/builtObjects.js` |
@@ -1148,6 +1148,7 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `bars` | `bars` | you've set your action bars: up to 3 lists of up to 12 ability ids, `""` for an empty slot |
 | `build` | `specialization`, `talents` | you ask for this specialization and these talents, out of combat: the server keeps what's allowed and answers with `build` |
 | `stop` | none | you stop what you're casting or channelling |
+| `makeHome` | `rest` | you ask to make this rest point your home. You have to be within 20 ft of it, across the ground |
 | `attack` | `target` | you start auto-attacking `target`, or stop with 0 |
 | `sees` | `target` | you ask whether the server has you seeing `target`, within 200 ft, up to 40 times a second, for the line of sight overlay |
 | `command` | `line` | you typed a line starting with `/`. The server answers with `log` |
@@ -1185,6 +1186,8 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `lockout` | `school`, `seconds` | an interrupt locked you out of this school |
 | `hit` | `from`, `ability` (none for an auto-attack or a tick), `on`, `effect`, `amount`, `crit`, `missed`, `avoided` (`dodge` or `parry`), `blocked`, `resource`, `status`, `ticked`, `class`, `lasts`, `stacks`, `dps`, `health`, `maxHealth` | one of an ability's effects landed on someone near you |
 | `health` | `id`, `health`, `maxHealth` | a training dummy reset |
+| `restPoints` | `restPoints`, `home` | as you enter, if the world has rest points: those on your continent as `{ id, name, at }`, `at` standing on the ground, and your home's id or `""` |
+| `home` | `home` | you made this rest point your home |
 | `level` | `id`, `level` | someone's level changed |
 | `bars` | `bars` | the action bars you set, as you enter, if you ever have |
 | `build` | `specialization`, `talents` | what you've chosen, after you enter and whenever it changes |
@@ -1216,7 +1219,7 @@ You type commands in the log's box, starting with `/`. The game server reads eac
 - `/combatdebug [on or off]`: logs what your abilities do as you use them: what they spend and what goes into each effect, and which effects do nothing yet. It lasts until you leave. Your owner needs the `system_admin` role.
 - `/level <1 to 100>`: sets your level in this world, healed up, and keeps it. Your owner needs the `system_admin` role.
 - `/weapon <main hand> [off hand]`: changes what you hold until you leave, for everyone to see, in place of what your class gives you. It doesn't change what your abilities' `wielding` checks. Your owner needs the `system_admin` role.
-- `/teleport <x> <z> [continent]`, or `/teleport spawn`: moves you to that spot, standing on the ground, ending what you're casting. Your owner needs the `system_admin` role.
+- `/teleport <x> <z> [continent]`, `/teleport spawn` or `/teleport home`: moves you to that spot, to the spawn point, or to your home rest point (the spawn point without one), standing on the ground, ending what you're casting. Your owner needs the `system_admin` role.
 
 ### Movement checks
 
@@ -1251,6 +1254,7 @@ The game server decides what abilities do, from the class files in the released 
 - **Triggers:** whoever applied the status does what a trigger does, except that a `resource` goes to the player it lands on. `self` in a trigger's `effect` means the holder. At most 4 triggers set each other off in a row. `healthBelow` fires as you fall past `threshold`, not while you stay under it. `every`, `cooldown` and what they've counted carry on when a status goes on again.
 - **Attack table:** one roll says how an attack comes out: 5% it misses, then for melee your `dodge`, then from in front your `parry`, and spells and ranged attacks only miss. You start with 3 `dodge` and 3 `parry`, and `block` comes from statuses. A melee hit from in front then rolls against `block`, which takes 30% off. Periodic effects can't be avoided.
 - **What stats do:** ratings feed `critChance`, `haste`, `mastery`, `versatility`, `leech`, `avoidance` and `movementSpeed`, at 1 point for each 1 + half your level of rating. `haste` shortens casts, channels, swings, ticks and the GCD (never under 0.75 s) and speeds up energy. `versatility` adds to what you do and takes half as much off what you take. `avoidance` takes off damage from areas. `armor` takes `armor / (armor + 400 + 85 x attacker's level)` off physical damage, at most 85%. With no gear yet, only statuses give ratings and armor.
+- **Homeward:** every class has Homeward (`client/src/abilities/homeward.json`, the same as `game-server/internal/combat/homeward.json`), in place of any ability of its own with the id `homeward`. Its 10 s cast takes you to your home rest point, or the spawn point if you have none or the world no longer has it.
 - **Enemies:** only training dummies, for now. A dummy has 100000 health, never drops below 1, and heals up and starts its damage tally over after 5 s unhit.
 - **Not yet:** The `taunt` and `resurrect` effects do nothing, `consume` of `summons` does nothing, `summon`, `command` and `units` do nothing, `threat`, `reveal`, `keepsStealth`, `redirectThreat`, `countsAsStealthed`, `stealthLinger` and `stealthProtected` do nothing, `gear` does nothing, the `wielding` condition always holds, `around: "holders"` and a stat's `of` do nothing, `creatureTypes` counts for nothing, a number for `perTargetHit` counts for nothing, `healthSpent` comes to nothing, the `addTags` effect does nothing, `perCount` on a stat isn't checked, and `unitsOut` counts nothing, the `stealthed` and `unitsOut` conditions always hold, `outdoors` always is, `fear` and `disorient` hold you still where they should move you, what a status does while it's on (`effects`) doesn't apply apart from `stat`, `modify`, `periodic`, `trigger`, `control`, `immune`, `untargetable`, `aura`, `absorb`, `store`, `extraTargets` and `transform`, and `along: "path"` runs a line the way you face, the `kill`, `holderDies`, `wouldDie` and `pickup` events of a trigger never happen, `channelEnd` only happens when a channel runs its whole length, a trigger's `units` and `source: both` count only your own, a `periodic` that `does` anything but `damage`, `heal` or `resource` does nothing, a `modify` with `byMissingHealth` does nothing, `overrides` only reach the keys the game reads, and one whose `change` is `lockout`, `distance`, `delay`, `limit`, `uses`, `stacks`, `cooldownRate`, `others`, `every` or `byExtraSpent` does nothing, `atTargets` and `perTargetHit` on a `modify` only work on `amount`, `damage` and `healing`, a `stat`'s `atTargets` and `units` do nothing, `threat`, `stealth` and `detection` are kept but count for nothing.
 
@@ -1258,8 +1262,9 @@ The game server decides what abilities do, from the class files in the released 
 
 They call each other with fixed shared tokens in an `X-Internal-Token` header. Rails accepts the ones in `INTERNAL_API_TOKENS`, and the game server sends `RAILS_INTERNAL_TOKEN`.
 
-- `GET /internal/worlds/:world/characters/:character` gives `{ id, name, look, class, level, specialization, talents, bars, position }`, `bars` being its action bars or null, `class` being the id it picked in that world or null, `talents` being the talent id picked for each tier's level, and `position` being `{ continent, at, yaw }` or null.
+- `GET /internal/worlds/:world/characters/:character` gives `{ id, name, look, class, level, specialization, talents, bars, position, home }`, `bars` being its action bars or null, `class` being the id it picked in that world or null, `talents` being the talent id picked for each tier's level, `position` being `{ continent, at, yaw }` or null, and `home` being its home rest point's id or null.
 - `PUT /internal/worlds/:world/characters/:character/position` with `{ continent, at, yaw }` keeps where the character is in that world (a `WorldCharacter`), and answers 204.
+- `PUT /internal/worlds/:world/characters/:character/home` with `{ home }` keeps its home rest point there, and answers 204.
 - `PUT /internal/worlds/:world/characters/:character/level` with `{ level }` keeps its level there, and answers 204.
 - `PUT /internal/worlds/:world/characters/:character/bars` with `{ bars }` keeps its action bars there, and answers 204.
 - `PUT /internal/worlds/:world/characters/:character/build` with `{ specialization, talents }` keeps what it chose there, and answers 204.

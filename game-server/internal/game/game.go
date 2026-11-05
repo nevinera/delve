@@ -40,6 +40,7 @@ type Characters interface {
 	SaveBuild(ctx context.Context, world, id int64, specialization string, talents map[string]string) error
 	SaveLevel(ctx context.Context, world, id int64, level int) error
 	SaveBars(ctx context.Context, world, id int64, bars [][]string) error
+	SaveHome(ctx context.Context, world, id int64, home string) error
 	Positions
 }
 
@@ -98,6 +99,8 @@ type Player struct {
 	once      sync.Once
 	// systemAdmin says its owner has that role, which admin commands need.
 	systemAdmin bool
+	// home is the id of the rest point it has made its home, or "" for none.
+	home string
 	// combatDebug says to log what each of its abilities comes to, for this connection.
 	combatDebug bool
 }
@@ -173,6 +176,7 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 	p.enterFight(classWithID(layer.world.Classes, character.Class), character.Level, combat.Build{Specialization: character.Specialization, Talents: character.Talents})
 	p.fight.bars = character.Bars
 	p.systemAdmin = character.SystemAdmin
+	p.home = character.Home
 	p.saved = p.position()
 
 	h.mu.Lock()
@@ -297,6 +301,9 @@ func (l *Layer) join(p *Player) {
 		o.send(encode(appear{"appear", l.seen(p.state)}))
 	}
 	p.send(encode(snapshot{"snapshot", near}))
+	if len(l.world.RestPoints) > 0 {
+		p.send(encode(l.restPointsOn(p)))
+	}
 	now := l.hub.now()
 	for _, z := range l.zones {
 		if _, continent, ok := z.center(); ok && continent == p.state.Continent {
@@ -365,6 +372,9 @@ func (p *Player) Handle(raw []byte) error {
 		return nil
 	case "sees":
 		p.layer.answerSees(p, m.Target)
+		return nil
+	case "makeHome":
+		p.layer.makeHome(p, m.Rest)
 		return nil
 	case "stop":
 		p.layer.mu.Lock()

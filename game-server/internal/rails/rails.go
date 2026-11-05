@@ -43,6 +43,7 @@ type Character struct {
 	Talents        map[string]string `json:"talents"`
 	Bars           [][]string        `json:"bars"`
 	Position       *Position         `json:"position"`
+	Home           string            `json:"home"`
 	SystemAdmin    bool              `json:"systemAdmin"`
 }
 
@@ -87,6 +88,15 @@ func (c *Client) SaveBars(ctx context.Context, world, id int64, bars [][]string)
 		return err
 	}
 	return c.do(ctx, http.MethodPut, fmt.Sprintf("/internal/worlds/%d/characters/%d/bars", world, id), body, nil)
+}
+
+// SaveHome keeps the rest point a character has made its home in a world.
+func (c *Client) SaveHome(ctx context.Context, world, id int64, home string) error {
+	body, err := json.Marshal(map[string]string{"home": home})
+	if err != nil {
+		return err
+	}
+	return c.do(ctx, http.MethodPut, fmt.Sprintf("/internal/worlds/%d/characters/%d/home", world, id), body, nil)
 }
 
 // SaveClass keeps the class a character picked in a world.

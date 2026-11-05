@@ -1,0 +1,18 @@
+{
+  "id": "homeward",
+  "name": "Homeward",
+  "description": "Takes you to your home rest point, or to where you first came into the world if you haven't made one your home.",
+  "icon": "portal",
+  "level": 1,
+  "target": "self",
+  "school": "arcane",
+  "castTime": 10,
+  "gcd": 1.5,
+  "effects": [],
+  "tags": ["shared"],
+  "animation": "castSelf",
+  "visuals": [
+    { "effect": "motes", "when": "cast", "duration": "cast", "radius": 1.5, "rate": 30, "lifetime": 0.8, "at": "chest" },
+    { "effect": "flare", "when": "impact", "opacity": 0.5 }
+  ]
+}

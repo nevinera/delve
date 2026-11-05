@@ -99,6 +99,41 @@
           }
         }
       }
+    },
+    "restPoints": {
+      "type": "array",
+      "description": "version 2: rest points, which characters make their home and Homeward takes them back to, set in /create",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "continent",
+          "at"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "never changes once made; characters' homes keep it"
+          },
+          "name": {
+            "type": "string",
+            "description": "what players see, such as \"The Inn\""
+          },
+          "continent": {
+            "type": "string",
+            "description": "a continent's key"
+          },
+          "at": {
+            "type": "array",
+            "items": {
+              "type": "number"
+            },
+            "minItems": 2,
+            "maxItems": 2,
+            "description": "[x, z] in continent feet"
+          }
+        }
+      }
     }
   }
 }

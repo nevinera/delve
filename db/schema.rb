@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_05_193943) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_05_210908) do
   create_table "characters", force: :cascade do |t|
     t.integer "user_id", null: false
     t.string "name", null: false
@@ -100,6 +100,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_05_193943) do
     t.string "specialization"
     t.json "talents", default: {}, null: false
     t.json "bars"
+    t.string "home"
     t.index ["character_id"], name: "index_world_characters_on_character_id"
     t.index ["world_id", "character_id"], name: "index_world_characters_on_world_id_and_character_id", unique: true
     t.index ["world_id"], name: "index_world_characters_on_world_id"

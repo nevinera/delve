@@ -382,20 +382,33 @@ function start(world, changes, fresh) {
   // Training dummies, kept in world.json too: the game server puts them up to hit. Both are set
   // with the units and planning tools (units.js).
   const showDummies = () => {
-    const here = (worldInfo().dummies ?? []).filter((d) => d.continent === continent).length;
-    $("dummyCount").textContent = here ? `${here} on this continent` : "none on this continent";
+    const count = (list, one, many) => {
+      const here = (list ?? []).filter((d) => d.continent === continent).length;
+      return `${here || "no"} ${here === 1 ? one : many} on this continent`;
+    };
+    $("dummyCount").textContent = count(worldInfo().dummies, "dummy", "dummies");
+    $("restCount").textContent = count(worldInfo().restPoints, "rest point", "rest points");
   };
-  const keepUnits = async ({ spawn, dummies }) => {
+  const keepUnits = async ({ spawn, dummies, restPoints }) => {
     const info = worldInfo();
     if (spawn) info.spawn = spawn;
     info.dummies = dummies;
     if (!dummies.length) delete info.dummies;
+    info.restPoints = restPoints;
+    if (!restPoints.length) delete info.restPoints;
     changes.set("world.json", strToU8(`${JSON.stringify(info, null, 2)}\n`));
     await store.set("changes", changes).catch(() => {});
     showSpawn();
     showDummies();
   };
-  tools.units.load({ continent, spawn: worldInfo().spawn, dummies: worldInfo().dummies });
+  // A rest point picked with select can be named.
+  const restName = $("restName");
+  tools.units.onPick = (picked) => {
+    restName.hidden = !picked?.id;
+    if (picked?.id) restName.querySelector("input").value = picked.name ?? "";
+  };
+  restName.querySelector("input").addEventListener("input", (e) => tools.units.rename(e.target.value.trim()));
+  tools.units.load({ continent, spawn: worldInfo().spawn, dummies: worldInfo().dummies, restPoints: worldInfo().restPoints });
   tools.units.onChange = keepUnits;
   showSpawn();
   showDummies();

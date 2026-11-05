@@ -23,6 +23,10 @@ func (fightWorld) Load(_ context.Context, repo, sha string) (*worlds.World, erro
 		Repo: repo, Sha: sha, Continents: []string{"main", "far"},
 		Spawn:   worlds.Spawn{Continent: "main", At: [2]float64{100, 100}},
 		Dummies: []worlds.Dummy{{Continent: "main", At: [2]float64{100, 120}}},
+		RestPoints: []worlds.RestPoint{
+			{ID: "inn", Name: "The Inn", Continent: "main", At: [2]float64{300, 300}},
+			{ID: "camp", Continent: "far", At: [2]float64{50, 60}},
+		},
 		Classes: []*combat.Class{{
 			ID: "frst0001", Name: "Frost", PrimaryStats: []string{"intellect"},
 			Resources: []combat.Resource{{Key: "mana", Kind: "mana"}},

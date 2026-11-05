@@ -29,6 +29,7 @@ type World struct {
 	Continents   []string
 	Spawn        Spawn
 	Dummies      []Dummy         // training dummies
+	RestPoints   []RestPoint     // places characters can make their home
 	Classes      []*combat.Class // by id
 	path, prefix string          // the zip it was read from, and its top directory
 }
@@ -43,6 +44,24 @@ type Spawn struct {
 type Dummy struct {
 	Continent string     `json:"continent"`
 	At        [2]float64 `json:"at"`
+}
+
+// RestPoint is a place on a continent a character can make its home, which Homeward takes it to.
+type RestPoint struct {
+	ID        string     `json:"id"`
+	Name      string     `json:"name"`
+	Continent string     `json:"continent"`
+	At        [2]float64 `json:"at"`
+}
+
+// RestPoint is the rest point with that id, or nil.
+func (w *World) RestPoint(id string) *RestPoint {
+	for i := range w.RestPoints {
+		if w.RestPoints[i].ID == id {
+			return &w.RestPoints[i]
+		}
+	}
+	return nil
 }
 
 // Store downloads worlds into a directory, one download per world at a time.
@@ -146,6 +165,7 @@ func Read(path string) (*World, error) {
 		Continents []struct{ Key string } `json:"continents"`
 		Spawn      *Spawn                 `json:"spawn"`
 		Dummies    []Dummy                `json:"dummies"`
+		RestPoints []RestPoint            `json:"restPoints"`
 	}
 	if err := readJSON(files, "world.json", &info); err != nil {
 		return nil, err
@@ -162,6 +182,7 @@ func Read(path string) (*World, error) {
 	}
 	w.Spawn = *info.Spawn
 	w.Dummies = info.Dummies
+	w.RestPoints = info.RestPoints
 	w.Classes = readClasses(files)
 	return w, nil
 }
@@ -193,6 +214,7 @@ func readClasses(files map[string]*zip.File) []*combat.Class {
 			log.Printf("worlds: skipping a class: %v", err)
 			continue
 		}
+		c.WithHomeward()
 		classes = append(classes, c)
 	}
 	return classes

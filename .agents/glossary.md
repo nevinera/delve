@@ -37,6 +37,7 @@
 
 - **Layer:** a parallel copy of the open world on the game server. It means nothing else.
 - **Token:** the signed, time-limited credential for entering the game. Never "ticket".
+- **Rest point:** a place in a world that a character can make their **home**. **Homeward** is the ability every class has that takes them back to it.
 - **Bot:** a script playing a character (`script/game/bot`).
 
 ## Creature names

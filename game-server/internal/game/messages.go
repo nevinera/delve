@@ -71,6 +71,7 @@ type incoming struct {
 	Specialization string            `json:"specialization"`
 	Talents        map[string]string `json:"talents"`
 	Bars           [][]string        `json:"bars"`
+	Rest           string            `json:"rest"` // makeHome's rest point
 }
 
 // used says someone has started using an ability. The client plays its timeline from this.
@@ -292,6 +293,25 @@ type welcome struct {
 type snapshot struct {
 	Type       string      `json:"type"`
 	Characters []Character `json:"characters"`
+}
+
+// restPoints is the rest points on a player's continent, standing on the ground, and its home's id.
+type restPoints struct {
+	Type       string      `json:"type"`
+	RestPoints []restPoint `json:"restPoints"`
+	Home       string      `json:"home"`
+}
+
+type restPoint struct {
+	ID   string     `json:"id"`
+	Name string     `json:"name"`
+	At   [3]float64 `json:"at"`
+}
+
+// home says which rest point a player has made its home.
+type home struct {
+	Type string `json:"type"`
+	Home string `json:"home"`
 }
 
 type appear struct {

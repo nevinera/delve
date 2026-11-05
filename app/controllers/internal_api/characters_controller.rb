@@ -1,11 +1,11 @@
 # A character in a world, for the game server: who it is and how it looks as it enters, and its
-# class and where it is, which the server reads on entry and writes back as it plays.
+# class, where it is and its home rest point, which the server reads on entry and writes back as it plays.
 class InternalApi::CharactersController < InternalApi::BaseController
   before_action :find_records
 
   def show
     record = @world.world_characters.find_by(character: @character)
-    render json: {id: @character.id, name: @character.name, look: @character.look, class: record&.class_id, level: record&.level || 1, specialization: record&.specialization, talents: record&.talents || {}, bars: record&.bars, position: record&.position, systemAdmin: @character.user.system_admin?}
+    render json: {id: @character.id, name: @character.name, look: @character.look, class: record&.class_id, level: record&.level || 1, specialization: record&.specialization, talents: record&.talents || {}, bars: record&.bars, position: record&.position, home: record&.home, systemAdmin: @character.user.system_admin?}
   end
 
   def position
@@ -25,6 +25,10 @@ class InternalApi::CharactersController < InternalApi::BaseController
 
   def build
     write({specialization: params[:specialization].presence, talents: params[:talents]&.to_unsafe_h || {}}, :build)
+  end
+
+  def home
+    write({home: params[:home].presence}, :home)
   end
 
   def level

@@ -63,6 +63,7 @@ Rails.application.routes.draw do
         put :build, on: :member
         put :level, on: :member
         put :bars, on: :member
+        put :home, on: :member
       end
     end
   end

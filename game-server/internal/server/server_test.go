@@ -48,6 +48,8 @@ func (anyone) SaveBuild(context.Context, int64, int64, string, map[string]string
 
 func (anyone) SaveLevel(context.Context, int64, int64, int) error { return nil }
 
+func (anyone) SaveHome(context.Context, int64, int64, string) error { return nil }
+
 func (anyone) SaveClass(context.Context, int64, int64, string) error { return nil }
 
 func (anyone) SavePosition(context.Context, int64, int64, rails.Position) error { return nil }

@@ -5,6 +5,7 @@ import { graphicsPanel } from "../render/graphicsPanel.js";
 import { setWorldIcons } from "./icons.js";
 import { setWorldEffectSheets } from "../abilities/effectTextures.js";
 import { SightLines } from "./sightLines.js";
+import { RestPoints } from "./restPoints.js";
 import { builtObjects, images } from "../objects/collections.js";
 import { prepareAnimations } from "../character/animations.js";
 import { resolveRecipe } from "../character/recipe.js";
@@ -95,6 +96,8 @@ async function play() {
   let firstBuild = null;
   let firstBars = null;
   let earlyAreas = [];
+  let restPoints = null;
+  let firstRestPoints = null;
   const early = []; // what the server says before the view is ready, as [method, argument]
   const tell = (method, arg) => (others ? others[method](arg) : early.push([method, arg]));
   const unitStatuses = new UnitStatuses();
@@ -152,6 +155,8 @@ async function play() {
       unitStatuses.gone(message);
       combat?.statusGone_(message);
     },
+    restPoints: (message) => (restPoints ? restPoints.set(message) : (firstRestPoints = message)),
+    home: (message) => restPoints?.home_(message),
     swung: fight("swung"),
     sees: (message) => sightLines?.answer(message),
     attacking: fight("attacking_"),
@@ -208,11 +213,14 @@ async function play() {
   others = new Others(view);
   for (const [method, arg] of early) others[method](arg);
   sightLines = new SightLines(view, others, connection);
+  restPoints = new RestPoints(view, connection);
+  if (firstRestPoints) restPoints.set(firstRestPoints);
   sightLines.addOption(menu.querySelector(".play-graphics"));
   view.onWalkFrame = (dt) => {
     others.frame(dt);
     combat?.frame(dt);
     sightLines.frame(dt);
+    restPoints.frame();
   };
   view.onWalkPlaced = () => combat?.placed();
   const paused = () => ($("playPaused").hidden = false);
@@ -225,7 +233,7 @@ async function play() {
   if (firstBars) combat.bars_(firstBars);
   earlyAreas.forEach((message) => combat.area_(message));
   // A handle for scripts and the browser's console.
-  window.play = { view, connection, others, combat, renditions, placed, caves, sightLines };
+  window.play = { view, connection, others, combat, renditions, placed, caves, sightLines, restPoints };
   if (touch) new TouchControls(view, document.body);
   $("playResume").addEventListener("click", () => {
     $("playPaused").hidden = true;

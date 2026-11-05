@@ -743,3 +743,24 @@ body.touch .play-bar button {
   top: 10px;
   bottom: auto;
 }
+
+/* By a rest point: a button to make it your home, over the cast bar. */
+.play-home {
+  position: fixed;
+  left: 50%;
+  bottom: 130px;
+  transform: translateX(-50%);
+  font: inherit;
+  color: #ffe9b8;
+  background: rgba(40, 26, 12, 0.85);
+  border: 1px solid rgba(255, 200, 120, 0.6);
+  border-radius: 4px;
+  padding: 6px 18px;
+  cursor: pointer;
+}
+
+.play-home:disabled {
+  color: #d8c8a8;
+  cursor: default;
+  opacity: 0.8;
+}

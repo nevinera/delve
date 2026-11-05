@@ -848,6 +848,10 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 	if f.cast == c {
 		f.cast = nil
 	}
+	if a.ID == combat.HomewardID {
+		l.goHome(p)
+		return
+	}
 	strike := now
 	if a.Range.Melee {
 		strike = now.Add(strikeDelay)
