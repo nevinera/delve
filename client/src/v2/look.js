@@ -16,7 +16,7 @@ import { WATER_TYPES } from "./water.js";
 // darker, wet, just over the water.
 
 export const STEEP_DEG = 50;
-const SLOPE_DEG = 22;
+export const SLOPE_DEG = 22;
 const SHORE_FT = 3;
 const WET_FT = 1; // how far over the water banks and shores look wet
 const WET_DARK = 0.7; // how dark, at the water, as a share of their color

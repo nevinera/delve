@@ -251,8 +251,8 @@ export function objectMeshes(objects, tileAt, origin) {
   for (const { geometry, material, list } of groups.values()) {
     const mesh = new THREE.InstancedMesh(geometry, material, list.length);
     list.forEach(({ object, p }, n) => {
-      // Objects with a height stand there, upright.
-      const { y, pitch } = object.y !== undefined ? { y: object.y, pitch: 0 } : seat(object, tileAt);
+      // Objects with a height stand there, upright unless they say a pitch.
+      const { y, pitch } = object.y !== undefined ? { y: object.y, pitch: object.pitch ?? 0 } : seat(object, tileAt);
       q.setFromAxisAngle(UP, object.yaw).multiply(tilt.setFromAxisAngle(AXIS_Z, pitch));
       m.compose(new THREE.Vector3(object.at[0] - origin[0], y, object.at[1] - origin[1]), q, new THREE.Vector3(object.scale, object.scale, object.scale));
       mesh.setMatrixAt(n, m);
@@ -332,6 +332,18 @@ export function disposePreview(group) {
   });
 }
 
+// Where a long object rests with both ends on the ground, groundAt(x, z) giving its height, sunk a
+// little: { y, pitch }.
+export function seatLong(object, groundAt) {
+  const half = object.footprint.capsule[1];
+  const [c, s] = [Math.cos(object.yaw), Math.sin(object.yaw)];
+  const [x, z] = object.at;
+  // The object's +x points at (cos yaw, -sin yaw) in x, z.
+  const a = groundAt(x - c * half, z + s * half);
+  const b = groundAt(x + c * half, z - s * half);
+  return { y: (a + b) / 2 - (specOf(object.type).sink ?? 0.1) * object.height, pitch: Math.atan2(b - a, half * 2) };
+}
+
 // Where an object sits: long ones rest on the ground at both ends and tilt between them, others
 // on the lowest ground under them, so nothing floats. Each sinks in a little.
 function seat(object, tileAt) {
@@ -340,14 +352,7 @@ function seat(object, tileAt) {
   const ground = (dx, dz) => meshHeightAt(tileAt, x + dx, z + dz) ?? 0;
   const sink = (spec.sink ?? 0.1) * object.height;
   const { footprint } = object;
-  if (footprint.capsule) {
-    const half = footprint.capsule[1];
-    const [c, s] = [Math.cos(object.yaw), Math.sin(object.yaw)];
-    // The object's +x points at (cos yaw, -sin yaw) in x, z.
-    const a = ground(-c * half, s * half);
-    const b = ground(c * half, -s * half);
-    return { y: (a + b) / 2 - sink, pitch: Math.atan2(b - a, half * 2) };
-  }
+  if (footprint.capsule) return seatLong(object, (ax, az) => ground(ax - x, az - z));
   const r = footprint.circle ?? (footprint.rect ? Math.min(...footprint.rect) / 2 : 0);
   const low = Math.min(ground(0, 0), ground(r, 0), ground(-r, 0), ground(0, r), ground(0, -r));
   return { y: low - sink, pitch: 0 };

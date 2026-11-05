@@ -29,6 +29,8 @@ type fillEntry struct {
 var fillTable = func() (t struct {
 	Biomes map[string]map[string][]fillEntry `json:"biomes"`
 	Banks  map[string]map[string][]fillEntry `json:"banks"`
+	// BiomeBanks are the biomes that have their own banks instead of Banks.
+	BiomeBanks map[string]map[string]map[string][]fillEntry `json:"biomeBanks"`
 }) {
 	if err := json.Unmarshal(fillJSON, &t); err != nil {
 		panic(err)
@@ -129,7 +131,7 @@ var (
 	treeKinds = map[string]struct{ height, trunk float64 }{
 		"oak": {1, 1}, "pine": {1.15, 0.8}, "willow": {0.9, 1.2}, "dead": {0.85, 0.8},
 		"autumn": {1, 1}, "giant": {1.35, 2}, "spruce": {1.2, 0.8}, "snowpine": {1.15, 0.8}, "blossom": {0.8, 0.9},
-		"bamboo": {0.7, 0.5}, "acacia": {0.8, 0.7}, "palm": {1, 0.45}, "treefern": {0.55, 0.6}, "jungle": {1.2, 1.1},
+		"bamboo": {0.8, 1}, "acacia": {0.8, 0.7}, "palm": {1, 0.45}, "treefern": {0.55, 0.6}, "jungle": {1.2, 1.1},
 		"mangrove": {0.6, 0.7}, "giantcap": {0.55, 1.3}, "gnarled": {0.8, 1}, "blighted": {0.8, 0.9}, "charred": {0.7, 0.8},
 		"thorn": {0.75, 0.9}, "silverleaf": {1.05, 0.85}, "crystal": {0.6, 1},
 	}
@@ -164,7 +166,7 @@ type crown struct{ from, to, radius float64 }
 // CROWNS). Dead trees have none.
 var treeCrowns = map[string]crown{"oak": {0.576, 1.216, 1}, "pine": {0.288, 1.108, 0.45}, "willow": {0.48, 0.98, 1.3},
 	"autumn": {0.576, 1.216, 1}, "giant": {0.672, 1.232, 1.25}, "spruce": {0.192, 1.092, 0.4}, "snowpine": {0.192, 1.072, 0.45},
-	"blossom": {0.48, 1.04, 1.05}, "bamboo": {0.3, 1.02, 0.36}, "acacia": {0.76, 0.96, 1.25},
+	"blossom": {0.48, 1.04, 1.05}, "acacia": {0.76, 0.96, 1.25},
 	"jungle": {0.58, 1.02, 1.15}, "mangrove": {0.36, 0.88, 1.1}, "giantcap": {0.6, 1, 0.9},
 	"gnarled": {0.5, 0.94, 0.7}, "blighted": {0.5, 0.94, 0.7}, "silverleaf": {0.42, 1.02, 0.95},
 }
@@ -280,7 +282,11 @@ func fillSlots(slots []byte, tx, tz int, biomeAt func(i, j int) uint8, groundAt 
 			if water.running {
 				by = "running"
 			}
-			entry = pickFrom(fillTable.Banks[by][slotSizes[size]], roll, fine)
+			banks, own := fillTable.BiomeBanks[biomeName(biomeAt(sx>>2, sz>>2))]
+			if !own {
+				banks = fillTable.Banks
+			}
+			entry = pickFrom(banks[by][slotSizes[size]], roll, fine)
 		} else {
 			entry = pickFrom(fillTable.Biomes[biomeName(biomeAt(sx>>2, sz>>2))][slotSizes[size]], roll, fine)
 		}
@@ -307,6 +313,10 @@ func fillSlots(slots []byte, tx, tz int, biomeAt func(i, j int) uint8, groundAt 
 		}
 		scale := spec.size[0] + (spec.size[1]-spec.size[0])*pick(0)
 		o := thing{Type: entry.Object, X: x, Z: z, Yaw: pick(1) * math.Pi * 2, Footprint: spec.footprint.scaled(scale), Height: spec.height * scale}
+		// Logs would stick out of hillsides.
+		if len(o.Footprint.Capsule) > 0 && slope >= slopeDeg {
+			continue
+		}
 		r := o.Footprint.reach()
 		if crowded(x, z, r) {
 			continue
@@ -321,13 +331,21 @@ func fillSlots(slots []byte, tx, tz int, biomeAt func(i, j int) uint8, groundAt 
 // client, so a world's files don't say.
 var fillThrough = func() map[string]bool {
 	out := map[string]bool{}
-	for _, sizes := range fillTable.Biomes {
+	add := func(sizes map[string][]fillEntry) {
 		for _, entries := range sizes {
 			for _, e := range entries {
 				if id, built := strings.CutPrefix(e.Object, "built:"); built && e.BlocksSight != nil && !*e.BlocksSight {
 					out[id] = true
 				}
 			}
+		}
+	}
+	for _, sizes := range fillTable.Biomes {
+		add(sizes)
+	}
+	for _, banks := range fillTable.BiomeBanks {
+		for _, sizes := range banks {
+			add(sizes)
 		}
 	}
 	return out

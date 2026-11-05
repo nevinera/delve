@@ -467,7 +467,7 @@ Each continent has one of each, all in continent feet.
 { "version": 1, "areas": [{ "biome": "forest", "points": [[0, 0], [64, 0], [64, 64]] }] }
 ```
 
-A biome is one of `BIOME_NAMES` in `client/src/v2/biomes.js`. It changes the ground's look, clutter, what stands in object slots and how water looks, and never the ground's shape. Water looks frozen or like lava in some biomes but still acts as water.
+A biome is one of `BIOME_NAMES` in `client/src/v2/biomes.js`. It changes the ground's look, clutter, what stands in object slots and how water looks, and never the ground's shape. Water looks frozen or like lava in some biomes but still acts as water, and there its falls run down the ground. `client/src/v2/fill.json` says what stands in each biome and by its water.
 
 `planning.json` (`client/src/create/marks.js`) holds what a builder draws to plan with. Line `width` is 1 to 4:
 

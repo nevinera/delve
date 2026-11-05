@@ -23,7 +23,7 @@ const BIOMES = {
   "giant woods": { large: [T("giant", 3, 0.13)], medium: [T("giant", 2, 0.03), O("mossyBoulder", 0.012), O("rottingLog", 0.01)], small: [S("ferns", 0.03), O("hollowStump", 0.005), S("bracket fungus log", 0.004)] },
   taiga: { large: [T("spruce", 3, 0.14)], medium: [T("spruce", 2, 0.05), O("mossyBoulder", 0.008)], small: [T("spruce", 1, 0.02), S("fir saplings", 0.02), O("rootTangle", 0.004)] },
   "blossom valley": { large: [T("blossom", 3, 0.035)], medium: [T("blossom", 2, 0.03), S("low boulders", 0.004)], small: [T("blossom", 1, 0.012), S("flowering shrubs", 0.012), S("fallen petals", 0.012)] },
-  "bamboo grove": { large: [T("bamboo", 3, 0.05)], medium: [T("bamboo", 2, 0.08), S("mossy rocks", 0.01)], small: [T("bamboo", 1, 0.1), S("ferns", 0.01)] },
+  "bamboo grove": { large: [T("bamboo", 3, 0.09)], medium: [T("bamboo", 2, 0.1), S("mossy rocks", 0.01)], small: [T("bamboo", 1, 0.08), S("ferns", 0.01)] },
   "snowy forest": { large: [T("snowpine", 3, 0.12), T("dead", 3, 0.006)], medium: [T("snowpine", 2, 0.04), S("snowy rocks", 0.008)], small: [S("snowy firs", 0.025), S("snowdrift", 0.01), O("deadStump", 0.003)] },
   highlands: { large: [O("rock", 0.01), S("standing stone", 0.001), T("pine", 3, 0.002)], medium: [O("boulder", 0.012), S("low boulders", 0.01), S("mossy rocks", 0.006)], small: [S("loose rocks", 0.015), S("cairn", 0.001), S("thistles", 0.01)] },
   savanna: { large: [T("acacia", 3, 0.012), O("rock", 0.002)], medium: [T("acacia", 2, 0.01), S("dead bush", 0.006), S("termite mound", 0.003)], small: [S("dead bush", 0.006), S("dry grass", 0.012), S("desert skull", 0.0005)] },
@@ -45,6 +45,37 @@ const BIOMES = {
   "corrupted waste": { large: [T("thorn", 3, 0.02), S("slate shards", 0.012)], medium: [T("thorn", 2, 0.02), S("slate shards", 0.012)], small: [S("blood spatter", 0.004), S("loose bones", 0.005), S("slate shards", 0.01)] },
   "enchanted glade": { large: [T("silverleaf", 3, 0.09)], medium: [T("silverleaf", 2, 0.04), S("runestones", 0.002), S("glowcaps", 0.006)], small: [T("silverleaf", 1, 0.01), S("flowering shrubs", 0.012), S("glowcaps", 0.012), S("moss patch", 0.01)] },
   "crystal forest": { large: [T("crystal", 3, 0.035), T("silverleaf", 3, 0.03)], medium: [T("crystal", 2, 0.03), S("crystal cluster", 0.012)], small: [T("crystal", 1, 0.015), S("crystal cluster", 0.02), S("loose rocks", 0.005)] },
+};
+
+// What stands by water in each biome that isn't like the usual banks, the same by running or still
+// water but where it says.
+const BANKS = {
+  "autumn forest": { medium: [S("fallen branches", 0.02), O("mossyBoulder", 0.02)], small: [S("small stumps", 0.012), O("boulder", 0.02)] },
+  "giant woods": { large: [O("mossyBoulder", 0.04)], medium: [O("mossyBoulder", 0.05), O("rottingLog", 0.02)], small: [O("hollowStump", 0.01), S("ferns", 0.03)] },
+  taiga: { large: [O("boulder", 0.04)], medium: [O("boulder", 0.05), O("driftLog", 0.015)], small: [O("rubble", 0.03), S("fir saplings", 0.01)] },
+  "blossom valley": { medium: [S("low boulders", 0.015), T("blossom", 2, 0.006)], small: [S("flowering shrubs", 0.02), S("low boulders", 0.008)] },
+  "bamboo grove": { medium: [S("mossy rocks", 0.03), T("bamboo", 2, 0.03)], small: [T("bamboo", 1, 0.05), S("mossy rocks", 0.015)] },
+  "snowy forest": { large: [S("snowy rocks", 0.03)], medium: [S("snowy rocks", 0.04), S("ice chunks", 0.012)], small: [S("snowdrift", 0.03), S("ice chunks", 0.01)] },
+  highlands: { large: [O("rock", 0.04)], medium: [O("boulder", 0.06), S("mossy rocks", 0.02)], small: [S("loose rocks", 0.03), O("rubble", 0.02)] },
+  savanna: { medium: [T("acacia", 2, 0.012), S("dead bush", 0.008)], small: [S("dead bush", 0.015), S("dry grass", 0.03)] },
+  "red canyon": { large: [S("sandstone hoodoo", 0.015)], medium: [S("sandstone hoodoo", 0.02)], small: [S("dead bush", 0.015), S("prickly pear", 0.012)] },
+  "sand desert": { large: [T("palm", 3, 0.05)], medium: [T("palm", 2, 0.05), S("agave", 0.015)], small: [T("palm", 1, 0.02), S("agave", 0.015), S("prickly pear", 0.01)] },
+  "salt flats": { small: [S("desert skull", 0.002), S("dead bush", 0.004)] },
+  jungle: { large: [T("jungle", 3, 0.03)], medium: [T("treefern", 2, 0.03), O("mossyBoulder", 0.03)], small: [O("rootTangle", 0.03), S("ferns", 0.03)] },
+  "primeval valley": { large: [T("treefern", 3, 0.03)], medium: [T("treefern", 2, 0.04), O("mossyBoulder", 0.02)], small: [S("ferns", 0.04), S("eggs", 0.004)] },
+  "tropical coast": { medium: [T("palm", 2, 0.02), O("driftLog", 0.02)], small: [S("loose rocks", 0.01), O("driftLog", 0.008)] },
+  "sandy beach": { medium: [O("driftLog", 0.025)], small: [O("driftLog", 0.01), S("loose rocks", 0.012)] },
+  snowfield: { large: [S("snowy rocks", 0.03)], medium: [S("snowy rocks", 0.04), S("ice chunks", 0.02)], small: [S("ice chunks", 0.02), S("snowdrift", 0.02)] },
+  "frozen tundra": { large: [S("snowy rocks", 0.03)], medium: [S("snowy rocks", 0.04), S("ice chunks", 0.025)], small: [S("ice chunks", 0.025), O("rubble", 0.02)] },
+  glacier: { large: [S("ice spikes", 0.03)], medium: [S("ice chunks", 0.05), S("ice spikes", 0.02)], small: [S("ice chunks", 0.04)] },
+  mangrove: { large: [T("mangrove", 3, 0.08)], medium: [T("mangrove", 2, 0.08), S("cypress knees", 0.04)], small: [T("mangrove", 1, 0.03), S("cypress knees", 0.05), O("rootTangle", 0.02)] },
+  "fungal marsh": { large: [T("giantcap", 3, 0.03)], medium: [T("giantcap", 2, 0.04), S("swamp mound", 0.02)], small: [S("glowcaps", 0.06), S("pale mushrooms", 0.04)] },
+  "haunted woods": { medium: [T("gnarled", 2, 0.02), O("rottingLog", 0.02)], small: [S("exposed roots", 0.03), O("hollowStump", 0.01)] },
+  "plague lands": { medium: [T("blighted", 2, 0.012), S("loose bones", 0.012)], small: [S("loose bones", 0.02), S("rotten stump", 0.012), S("skeletons", 0.003)] },
+  "volcanic waste": { large: [S("slate shards", 0.05)], medium: [S("slate shards", 0.05), S("ash piles", 0.02)], small: [S("slate shards", 0.05), S("ash piles", 0.03)] },
+  "corrupted waste": { large: [S("slate shards", 0.03)], medium: [S("slate shards", 0.04), T("thorn", 2, 0.015)], small: [S("loose bones", 0.015), S("blood spatter", 0.01)] },
+  "enchanted glade": { medium: [T("silverleaf", 2, 0.012), S("mossy rocks", 0.02)], small: [S("glowcaps", 0.04), S("moss patch", 0.02)] },
+  "crystal forest": { large: [S("crystal cluster", 0.03)], medium: [S("crystal cluster", 0.05)], small: [S("crystal cluster", 0.05), S("loose rocks", 0.012)] },
 };
 
 const near = (v) => Math.round(v * 1e6) / 1e6;
@@ -71,7 +102,13 @@ for (const name of BIOME_NAMES) {
   if (!BIOMES[name]) continue;
   fill.biomes[name] = Object.fromEntries(Object.entries(BIOMES[name]).map(([size, list]) => [size, entries(list)]));
 }
-fill.about = "What fills each object slot (v2/slots.js), by the biome under it and the slot's size: each entry takes `share` of the rolls, in order (rolls are split finer by the slot's place, so shares can be small), and the rest are left empty. A tree is a kind and size from render/treeMeshes.js; an object is a type from world/objects.js, or a built-in object (built:<id>) with its `scales`, its `footprint` and `height` at scale 1, and `blocksSight` false if you see through it. Slots on banks of running water, shores of still water, or in shallows of either take theirs from `banks` instead, by whether the water runs. script/biome_fill.mjs writes the newer biomes.";
+fill.biomeBanks = Object.fromEntries(
+  BIOME_NAMES.filter((name) => BANKS[name]).map((name) => {
+    const sizes = Object.fromEntries(Object.entries(BANKS[name]).map(([size, list]) => [size, entries(list)]));
+    return [name, { running: sizes, still: sizes }];
+  }),
+);
+fill.about = "What fills each object slot (v2/slots.js), by the biome under it and the slot's size: each entry takes `share` of the rolls, in order (rolls are split finer by the slot's place, so shares can be small), and the rest are left empty. A tree is a kind and size from render/treeMeshes.js; an object is a type from world/objects.js, or a built-in object (built:<id>) with its `scales`, its `footprint` and `height` at scale 1, and `blocksSight` false if you see through it. Slots on banks of running water, shores of still water, or in shallows of either take theirs from `banks` instead, by whether the water runs, or from `biomeBanks` for a biome that has its own there. script/biome_fill.mjs writes the newer biomes.";
 const text = `${JSON.stringify(fill, null, 2)}\n`;
 fs.writeFileSync(path, text);
 fs.writeFileSync(new URL("../game-server/internal/worlds/fill.json", import.meta.url), text);

@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { objectMeshes, setObjectSight } from "../render/objectMeshes.js";
+import { objectMeshes, seatLong, setObjectSight } from "../render/objectMeshes.js";
 import { setTreeSight, treeMeshes, trunkRadius } from "../render/treeMeshes.js";
 import { objectShape, pushOut, treeShape } from "../v2/blocking.js";
 import { boulders, courseBox } from "../v2/courses.js";
@@ -79,9 +79,13 @@ export class Scatter {
     filled.trees = filled.trees.filter((tree) => open(tree.x, tree.z));
     filled.objects = filled.objects.filter((object) => open(...object.at));
     for (const tree of filled.trees) tree.ground = ground(tree.x, tree.z);
-    // Standing on the lowest ground under them, sunk a little.
+    // Standing on the lowest ground under them, sunk a little, and logs lying along it.
     for (const object of filled.objects) {
       const [x, z] = object.at;
+      if (object.footprint.capsule) {
+        Object.assign(object, seatLong(object, ground));
+        continue;
+      }
       const reach = object.footprint.circle ?? Math.min(...(object.footprint.rect ?? [0])) / 2;
       object.y = Math.min(ground(x, z), ground(x + reach, z), ground(x - reach, z), ground(x, z + reach), ground(x, z - reach)) - 0.1 * object.height;
     }

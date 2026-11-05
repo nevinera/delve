@@ -2,13 +2,22 @@ import * as THREE from "three";
 import { describe, expect, it } from "vitest";
 import { addColor, emptyObject } from "../world/builtObjects.js";
 import { setBuiltObjects } from "../world/objects.js";
-import { objectMeshes } from "./objectMeshes.js";
+import { objectMeshes, seatLong } from "./objectMeshes.js";
 
 const crate = () => {
   const object = { ...emptyObject("crate"), id: "crate000" };
   object.pieces.push({ type: "box", size: [2, 2, 2], at: [0, 1, 0], turn: [0, 0, 0], color: addColor(object, "#806040") });
   return object;
 };
+
+describe("a long object", () => {
+  it("rests with both ends on the ground", () => {
+    const log = { type: "log", at: [0, 0], yaw: 0, scale: 30, height: 6, footprint: { capsule: [3, 15] } };
+    const { y, pitch } = seatLong(log, (x) => x * 0.5);
+    expect(y).toBeCloseTo(-0.6);
+    expect(pitch).toBeCloseTo(Math.atan(0.5));
+  });
+});
 
 describe("object meshes", () => {
   it("stands an object with a height there, and leaves out missing kinds", () => {

@@ -2,6 +2,8 @@ import * as THREE from "three";
 import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 import { waterfallMeshes } from "../render/waterfalls.js";
 import { cascadesOf, fallsOf } from "../v2/courses.js";
+import { WATER_TYPES } from "../v2/water.js";
+import { waterLookOf } from "./waterSurface.js";
 
 // Courses' falls and their cascades' steps (v2/courses.js) within REACH_FT of the builder, drawn
 // with the editor's waterfalls: a curtain from each lip arcing out to its foot, churning foam where
@@ -16,6 +18,13 @@ const POOL = 0.7; // how far round its foot its foam and mist reach, as a share 
 const STEP_OUT = 0.4; // and for cascades' steps
 const STEP_OUT_FT = 1;
 const STEP_POOL = 0.3;
+// What runs down the ground instead of falling: a sheet this far over it, from this far back from the
+// lip, with a row this far apart and this many points across, going no farther than MOST_DOWN_FT.
+const SHEET_LIFT_FT = 0.5;
+const SHEET_BACK_FT = 1.5;
+const SHEET_ROW_FT = 2;
+const SHEET_ACROSS = 5;
+const MOST_DOWN_FT = 120;
 
 export class Falls {
   constructor(scene, renditions, renderer) {
@@ -33,6 +42,11 @@ export class Falls {
     if ((this.since += dt) < LOOK_S) return;
     this.since = 0;
     const file = this.renditions.waterFile;
+    // How falls are drawn goes by the biome they're in.
+    if (this.renditions.biomeAreas !== this.areas) {
+      this.areas = this.renditions.biomeAreas;
+      this.drawn = "";
+    }
     if (file !== this.file) {
       this.file = file;
       const drawn = (fall, step) => {
@@ -43,11 +57,17 @@ export class Falls {
           width: fall.width,
           pool: fall.width * (step ? STEP_POOL : POOL),
           mist: !step,
+          source: fall,
         };
       };
+      const of = (course, fall, step) => {
+        const out = drawn(fall, step);
+        out.type = WATER_TYPES.indexOf(course.type);
+        return out;
+      };
       this.falls = (file?.courses ?? []).flatMap((course) => [
-        ...fallsOf(course).map((fall) => drawn(fall, false)),
-        ...cascadesOf(course).flatMap(({ steps }) => steps.map((step) => drawn(step, true))),
+        ...fallsOf(course).map((fall) => of(course, fall, false)),
+        ...cascadesOf(course).flatMap(({ steps }) => steps.map((step) => of(course, step, true))),
       ]);
       this.drawn = "";
     }
@@ -58,7 +78,7 @@ export class Falls {
     for (const mesh of this.group.children) mesh.geometry.dispose();
     this.group.clear();
     const byMaterial = new Map();
-    for (const mesh of waterfallMeshes(near, [0, 0], this.renderer)) {
+    for (const mesh of waterfallMeshes(near.map((fall) => this.dressed(fall)), [0, 0], this.renderer)) {
       if (!byMaterial.has(mesh.material)) byMaterial.set(mesh.material, []);
       byMaterial.get(mesh.material).push(mesh);
     }
@@ -68,5 +88,29 @@ export class Falls {
       Object.assign(merged, { frustumCulled: false, renderOrder: meshes[0].renderOrder });
       this.group.add(merged);
     }
+  }
+
+  // `fall` as it's drawn in the biome at its lip: with a `sheet` in place of a curtain where what
+  // runs there stays on the ground, { rows: rows of [x, y, z], look }.
+  dressed(fall) {
+    const r = this.renditions;
+    const [x, top, z] = fall.top;
+    const look = waterLookOf(fall.type, r.biomes.at(x, z));
+    if (!look.surfaceFalls) return fall;
+    const { along, width, bottom } = fall.source;
+    const side = [-along[1] * width * 0.5, along[0] * width * 0.5];
+    const rows = [];
+    for (let down = -SHEET_BACK_FT; down <= MOST_DOWN_FT; down += SHEET_ROW_FT) {
+      const row = [];
+      for (let k = 0; k < SHEET_ACROSS; k++) {
+        const t = (2 * k) / (SHEET_ACROSS - 1) - 1;
+        const [px, pz] = [x + along[0] * down + side[0] * t, z + along[1] * down + side[1] * t];
+        row.push([px, Math.min(top, Math.max(bottom, r.heightAt(px, pz) ?? bottom)) + SHEET_LIFT_FT, pz]);
+      }
+      rows.push(row);
+      // Till it's reached the water at the foot.
+      if (down > 0 && row.every(([, y]) => y <= bottom + SHEET_LIFT_FT + 0.01)) break;
+    }
+    return { ...fall, sheet: { rows, look } };
   }
 }

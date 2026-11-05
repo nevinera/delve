@@ -35,7 +35,8 @@ describe("filling slots", () => {
   });
 
   it("keeps built objects' shapes in step with their definitions", () => {
-    for (const entry of Object.values(FILL.biomes).flatMap((sizes) => Object.values(sizes).flat())) {
+    const banks = Object.values(FILL.biomeBanks).flatMap((byWater) => Object.values(byWater));
+    for (const entry of [...Object.values(FILL.biomes), ...banks].flatMap((sizes) => Object.values(sizes).flat())) {
       if (!entry.object?.startsWith("built:")) continue;
       const object = BUILTIN_OBJECTS.find((o) => `built:${o.id}` === entry.object);
       const { footprint, height } = shapeOf(object);
@@ -47,7 +48,8 @@ describe("filling slots", () => {
 
   it("gives the game server the same trees", () => {
     const go = fs.readFileSync(new URL("../../../game-server/internal/worlds/fill.go", import.meta.url), "utf8");
-    const kinds = new Set(Object.values(FILL.biomes).flatMap((sizes) => Object.values(sizes).flat()).map((e) => e.tree).filter(Boolean));
+    const banks = Object.values(FILL.biomeBanks).flatMap((byWater) => Object.values(byWater));
+    const kinds = new Set([...Object.values(FILL.biomes), ...banks].flatMap((sizes) => Object.values(sizes).flat()).map((e) => e.tree).filter(Boolean));
     const treeKinds = go.slice(go.indexOf("treeKinds = map"));
     const crowns = go.slice(go.indexOf("var treeCrowns"));
     for (const kind of kinds) {
@@ -73,6 +75,20 @@ describe("filling slots", () => {
 
   it("fills forests thickly", () => {
     expect(count("forest", 20).trees).toBeGreaterThan(8);
+  });
+
+  it("stands each biome's own things by its water", () => {
+    const index = (name) => BIOME_NAMES.indexOf(name);
+    const fillBy = (name, t = 3) => fillSlots(makeSlots(t, 7), t, 7, () => index(name), () => ({ height: 51, slope: 0, water: { wet: false, level: 50, running: false } }));
+    const trees = (name) => Array.from({ length: 12 }, (_, t) => fillBy(name, t).trees).flat().map((tree) => tree.kind);
+    expect(trees("mangrove")).toContain("mangrove");
+    expect(trees("plains")).not.toContain("mangrove");
+  });
+
+  it("keeps logs off hillsides", () => {
+    const logs = (slope) => Array.from({ length: 200 }, (_, t) => fillSlots(makeSlots(t, 7), t, 7, () => BIOME_NAMES.indexOf("forest"), () => ({ height: 50, slope })).objects).flat().filter((o) => o.footprint.capsule).length;
+    expect(logs(5)).toBeGreaterThan(0);
+    expect(logs(30)).toBe(0);
   });
 
   it("leaves ground under water empty", () => {

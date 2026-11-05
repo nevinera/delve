@@ -28,6 +28,10 @@ const BARREN = new Set(["snowfield", "frozen tundra", "glacier", "salt flats", "
 
 // What grows on each biome's dry ground that isn't too steep, [kind, per, patches].
 const GROUND = {
+  plains: [["grass", 1.5], ["flowers", 0.5, 0.25], ["pebble", 0.1], ["bush", 0.02]],
+  forest: [["fern", 0.5, 0.5], ["shadeGrass", 0.8], ["mushrooms", 0.04], ["litter", 0.4, 0.4], ["twig", 0.15]],
+  rocky: [["pebble", 0.8], ["stone", 0.25], ["dryGrass", 0.5], ["thistle", 0.05]],
+  swamp: [["swampFern", 0.5, 0.5], ["paleMushrooms", 0.08], ["shadeGrass", 0.8]],
   "autumn forest": [["goldLeaves", 1, 0.5], ["goldGrass", 0.7], ["fern", 0.12, 0.3], ["twig", 0.15], ["mushrooms", 0.04]],
   "giant woods": [["bigFern", 0.35, 0.55], ["fern", 0.5, 0.5], ["shadeGrass", 0.5], ["twig", 0.15], ["mushrooms", 0.05]],
   taiga: [["coolGrass", 0.5, 0.5], ["bush", 0.03], ["fern", 0.12, 0.3], ["pebble", 0.15], ["twig", 0.12], ["mushrooms", 0.03]],
@@ -55,7 +59,43 @@ const GROUND = {
   "enchanted glade": [["silverTuft", 1.2], ["glowFlowers", 0.3, 0.35], ["fern", 0.2, 0.35], ["glowCaps", 0.04]],
   "crystal forest": [["lilacTuft", 0.6, 0.5], ["crystalShard", 0.2, 0.35], ["pebble", 0.1]],
 };
-const GROUND_RULES = Object.fromEntries(Object.entries(GROUND).map(([biome, rules], b) => [biome, rules.map(([kind, per, patches]) => ({ kind, per, patches, salt: (b + 1) * 64 }))]));
+// What grows or lies on each biome's shores and banks, as well as what RULES say.
+const SHORE = {
+  forest: [["fern", 0.3, 0.5], ["twig", 0.2]],
+  rocky: [["stone", 0.3], ["dryGrass", 0.3, 0.4]],
+  swamp: [["swampFern", 0.4, 0.5], ["paleMushrooms", 0.1]],
+  "autumn forest": [["goldLeaves", 0.8, 0.5], ["twig", 0.2]],
+  "giant woods": [["bigFern", 0.3, 0.5], ["twig", 0.2]],
+  taiga: [["coolGrass", 0.6, 0.5], ["stone", 0.1]],
+  "blossom valley": [["petals", 0.5, 0.5], ["softGrass", 1]],
+  "bamboo grove": [["shoots", 0.5, 0.5], ["fern", 0.3, 0.4]],
+  "snowy forest": [["snowClump", 0.5, 0.5], ["snowStone", 0.1]],
+  highlands: [["heather", 0.4, 0.5], ["coolGrass", 0.8], ["stone", 0.2]],
+  savanna: [["sandGrass", 0.6, 0.5], ["pebble", 0.1]],
+  "red canyon": [["redStone", 0.4], ["dryGrass", 0.2, 0.3]],
+  "sand desert": [["brightGrass", 0.6, 0.5], ["sandGrass", 0.4, 0.4]],
+  "salt flats": [["saltCrust", 0.8, 0.5]],
+  jungle: [["bigFern", 0.4, 0.5], ["jungleGrass", 0.8]],
+  "primeval valley": [["bigFern", 0.4, 0.5], ["brightFlowers", 0.2, 0.3]],
+  "tropical coast": [["shell", 0.3], ["driftwood", 0.02]],
+  "sandy beach": [["shell", 0.4], ["driftwood", 0.03], ["seaweed", 0.05, 0.3]],
+  snowfield: [["snowStone", 0.2], ["snowClump", 0.2, 0.4]],
+  "frozen tundra": [["frostGrass", 0.6, 0.5], ["stone", 0.15]],
+  glacier: [["iceShard", 0.4, 0.5]],
+  mangrove: [["mudGrass", 0.8, 0.5], ["twig", 0.2]],
+  "fungal marsh": [["glowCaps", 0.7, 0.5], ["glowGrass", 0.6]],
+  "haunted woods": [["grimGrass", 0.6, 0.5], ["twig", 0.3]],
+  "plague lands": [["sickCaps", 0.3, 0.4], ["sickGrass", 0.5]],
+  "volcanic waste": [["cinderStone", 0.6], ["ember", 0.2, 0.3]],
+  "corrupted waste": [["wineStone", 0.4], ["thornPlant", 0.15, 0.3]],
+  "enchanted glade": [["glowFlowers", 0.5, 0.4], ["silverTuft", 0.6]],
+  "crystal forest": [["crystalShard", 0.5, 0.4], ["lilacTuft", 0.4]],
+};
+// Each rule's own `r` picks its rolls, so they stay as others come and go.
+const rulesOf = (table, offset) =>
+  Object.fromEntries(Object.entries(table).map(([biome, rules]) => [biome, rules.map(([kind, per, patches], k) => ({ kind, per, patches, r: offset + BIOME_NAMES.indexOf(biome) * 16 + k }))]));
+const GROUND_RULES = rulesOf(GROUND, 64);
+const SHORE_RULES = rulesOf(SHORE, 1024);
 
 const EDGE_FT = 1; // how far over the water, or under it, its edge reaches
 const SHALLOW_FT = 2; // how deep running water's shallows are
@@ -107,7 +147,6 @@ export function tileClutter(tx, tz, cellAt, heightAt) {
       const cell = cellAt(i, j);
       const [gi, gj] = [tx * n + i, tz * n + j];
       const biome = BIOME_NAMES[cell.biome];
-      // `r` picks a rule's rolls, so each rule's stay the same as others come and go.
       const add = (rule, r) => {
         let per = rule.per;
         if (rule.patches) {
@@ -132,13 +171,14 @@ export function tileClutter(tx, tz, cellAt, heightAt) {
           });
         }
       };
-      if (!cell.water?.wet && cell.slope < STEEP_DEG) GROUND_RULES[biome]?.forEach((rule, k) => add(rule, rule.salt + k));
+      if (!cell.water?.wet && cell.slope < STEEP_DEG) GROUND_RULES[biome]?.forEach((rule) => add(rule, rule.r));
       if (!cell.water) continue;
       const places = placeOf(cell.height, cell.slope, cell.water);
       RULES.forEach((rule, r) => {
         if (!places.has(rule.at) || (rule.biomes && !rule.biomes.includes(biome)) || (rule.grows && BARREN.has(biome))) return;
         add(rule, r);
       });
+      if (places.has("shore") || places.has("bank")) SHORE_RULES[biome]?.forEach((rule) => add(rule, rule.r));
     }
   }
   return out;

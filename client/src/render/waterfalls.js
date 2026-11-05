@@ -22,6 +22,11 @@ export function waterfallMeshes(falls, origin, renderer) {
   materials ??= makeMaterials(renderer);
   return falls.flatMap((fall) => {
     const at = ([x, y, z]) => new THREE.Vector3(x - origin[0], y, z - origin[1]);
+    if (fall.sheet) {
+      const sheet = new THREE.Mesh(sheetGeometry(fall.sheet, origin), sheetMaterial(fall.sheet.look, renderer));
+      sheet.renderOrder = 1;
+      return [sheet];
+    }
     const [top, bottom] = [at(fall.top), at(fall.bottom)];
     const meshes = [
       new THREE.Mesh(curtainGeometry(fall, top, bottom, BACK), materials.curtain),
@@ -38,6 +43,59 @@ export function waterfallMeshes(falls, origin, renderer) {
     for (const mesh of meshes) mesh.renderOrder = 1;
     return meshes;
   });
+}
+
+// What runs down the ground rather than falling clear of it: a sheet over `rows` of points, its
+// `fallUv` running across it and down it in ft.
+function sheetGeometry({ rows }, origin) {
+  const positions = [];
+  const uv = [];
+  const indices = [];
+  const across = rows[0].length;
+  let down = 0;
+  rows.forEach((row, j) => {
+    if (j) down += Math.hypot(row[0][0] - rows[j - 1][0][0], row[0][1] - rows[j - 1][0][1], row[0][2] - rows[j - 1][0][2]);
+    row.forEach(([x, y, z], k) => {
+      positions.push(x - origin[0], y, z - origin[1]);
+      uv.push(Math.hypot(x - row[0][0], z - row[0][2]), down, 0, 0);
+      if (j && k) {
+        const v = j * across + k;
+        indices.push(v - across - 1, v - 1, v - across, v - across, v - 1, v);
+      }
+    });
+  });
+  const g = new THREE.BufferGeometry();
+  g.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
+  g.setAttribute("fallUv", new THREE.Float32BufferAttribute(uv, 4));
+  g.setIndex(indices);
+  g.computeVertexNormals();
+  return g;
+}
+
+// A sheet's material for a look (create/waterSurface.js), one for each: it creeps down the ground
+// unless it's still.
+const sheetMaterials = new Map();
+function sheetMaterial({ color, emissive = 0, still = 0 }, renderer) {
+  const key = `${color},${emissive},${still}`;
+  if (sheetMaterials.has(key)) return sheetMaterials.get(key);
+  const material = new THREE.MeshLambertMaterial({ color, emissive, side: THREE.DoubleSide });
+  material.customProgramCacheKey = () => "waterfall-sheet";
+  material.onBeforeCompile = (shader) => {
+    Object.assign(shader.uniforms, { waterNoise: { value: noiseTexture(renderer) }, waterTime, sheetStill: { value: still } });
+    shader.vertexShader = shader.vertexShader
+      .replace("#include <common>", "#include <common>\nattribute vec4 fallUv;\nvarying vec4 vFallUv;")
+      .replace("#include <begin_vertex>", "#include <begin_vertex>\nvFallUv = fallUv;");
+    shader.fragmentShader = shader.fragmentShader
+      .replace("#include <common>", "#include <common>\nuniform sampler2D waterNoise;\nuniform float waterTime;\nuniform float sheetStill;\nvarying vec4 vFallUv;")
+      .replace(
+        "#include <color_fragment>",
+        `#include <color_fragment>
+        vec2 sheetAt = vec2(vFallUv.x / 14.0, (vFallUv.y - waterTime * 3.0 * step(sheetStill, 0.99)) / 22.0);
+        diffuseColor.rgb *= 0.65 + 0.7 * texture2D(waterNoise, sheetAt).r;`,
+      );
+  };
+  sheetMaterials.set(key, material);
+  return material;
 }
 
 // The curtain: a strip along a curve that leaves the lip level and drops to the landing, a little

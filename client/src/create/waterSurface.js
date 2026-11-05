@@ -35,7 +35,8 @@ export const WATER_LOOKS = {
 
 // How water looks in a biome, over how its type does, for the biomes it's different in: only how it
 // looks, so a character wades through frozen water or lava as through any other.
-const ICE = { color: 0xe2f2fa, opacity: 0.98, still: 1 };
+// `surfaceFalls` is for what runs down the ground over a drop instead of falling clear of it.
+const ICE = { color: 0xe2f2fa, opacity: 0.98, still: 1, surfaceFalls: true };
 const BIOME_WATER = {
   "bamboo grove": { color: 0x4f9c8c },
   "snowy forest": ICE,
@@ -50,12 +51,12 @@ const BIOME_WATER = {
   "sandy beach": { color: 0x3498b8, opacity: 0.8 },
   snowfield: ICE,
   "frozen tundra": ICE,
-  glacier: { color: 0xb6e0f6, opacity: 0.98, still: 1 },
+  glacier: { color: 0xb6e0f6, opacity: 0.98, still: 1, surfaceFalls: true },
   mangrove: { color: 0x5f5230, opacity: 0.93 },
   "fungal marsh": { color: 0x2c9a96, emissive: 0x0a2c2c },
   "haunted woods": { color: 0x2a3036, opacity: 0.93 },
   "plague lands": { color: 0x6c7a28, opacity: 0.94 },
-  "volcanic waste": { color: 0xc8440c, opacity: 1, still: 0.25, emissive: 0x962800 },
+  "volcanic waste": { color: 0xc8440c, opacity: 1, still: 0.25, emissive: 0x962800, surfaceFalls: true },
   "corrupted waste": { color: 0x58c044, opacity: 0.95, emissive: 0x16400c },
   "enchanted glade": { color: 0x6a80d0, emissive: 0x101838 },
   "crystal forest": { color: 0x9a7ae0, emissive: 0x1c1038 },

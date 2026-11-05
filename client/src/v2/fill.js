@@ -2,7 +2,7 @@ import { hash2 } from "../world/noise.js";
 import { makeObject, reachOf, specOf } from "../world/objects.js";
 import { BIOME_NAMES } from "./biomes.js";
 import FILL from "./fill.json";
-import { groundClass } from "./look.js";
+import { SLOPE_DEG, groundClass } from "./look.js";
 import { TILE_FT } from "./sizes.js";
 import { SEED, SLOT_BYTES, SLOT_SIZES } from "./slots.js";
 
@@ -23,9 +23,11 @@ export function fillOf(biome, size, roll, fine = 0.5) {
   return pickFrom(FILL.biomes[BIOME_NAMES[biome]]?.[SLOT_SIZES[size]] ?? [], roll, fine);
 }
 
-// What fills a slot of `size` by running water, or still, with `roll` and `fine` as fillOf has them.
-export function bankFillOf(running, size, roll, fine = 0.5) {
-  return pickFrom(FILL.banks[running ? "running" : "still"]?.[SLOT_SIZES[size]] ?? [], roll, fine);
+// What fills a slot of `size` by running water, or still, in biome `biome`, with `roll` and `fine`
+// as fillOf has them: the biome's own banks if it has any, or the usual ones.
+export function bankFillOf(running, size, roll, fine = 0.5, biome = 0) {
+  const banks = FILL.biomeBanks?.[BIOME_NAMES[biome]] ?? FILL.banks;
+  return pickFrom(banks[running ? "running" : "still"]?.[SLOT_SIZES[size]] ?? [], roll, fine);
 }
 
 function pickFrom(entries, roll, fine) {
@@ -67,7 +69,8 @@ export function fillSlots(slots, tx, tz, biomeAt, groundAt) {
     const { height, slope, water } = groundAt(x, z);
     const kind = groundClass(slope, height, water);
     if (kind === "steep" || (kind === "bed" && water.level - height > SHALLOW_FT)) continue;
-    const entry = kind === "bank" || kind === "shore" || kind === "bed" ? bankFillOf(water.running, size, roll, fine) : fillOf(biomeAt(sx >> 2, sz >> 2), size, roll, fine);
+    const biome = biomeAt(sx >> 2, sz >> 2);
+    const entry = kind === "bank" || kind === "shore" || kind === "bed" ? bankFillOf(water.running, size, roll, fine, biome) : fillOf(biome, size, roll, fine);
     if (!entry) continue;
     const pick = (n) => hash2(Math.floor(x), Math.floor(z), SEED + 16 + n);
     if (entry.tree) {
@@ -82,6 +85,8 @@ export function fillSlots(slots, tx, tz, biomeAt, groundAt) {
     const [least, most] = entry.scales ?? spec.size;
     const scale = least + (most - least) * pick(0);
     const object = makeObject(entry.object, [x, z], pick(1) * Math.PI * 2, scale, (n) => pick(2 + n));
+    // Logs would stick out of hillsides.
+    if (object.footprint.capsule && slope >= SLOPE_DEG) continue;
     const r = reachOf(object);
     if (crowded(x, z, r)) continue;
     keep(x, z, r);

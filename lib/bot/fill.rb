@@ -23,7 +23,7 @@ module Bot
     TREE_KINDS = {
       "oak" => [1, 1], "pine" => [1.15, 0.8], "willow" => [0.9, 1.2], "dead" => [0.85, 0.8],
       "autumn" => [1, 1], "giant" => [1.35, 2], "spruce" => [1.2, 0.8], "snowpine" => [1.15, 0.8], "blossom" => [0.8, 0.9],
-      "bamboo" => [0.7, 0.5], "acacia" => [0.8, 0.7], "palm" => [1, 0.45], "treefern" => [0.55, 0.6], "jungle" => [1.2, 1.1],
+      "bamboo" => [0.8, 1], "acacia" => [0.8, 0.7], "palm" => [1, 0.45], "treefern" => [0.55, 0.6], "jungle" => [1.2, 1.1],
       "mangrove" => [0.6, 0.7], "giantcap" => [0.55, 1.3], "gnarled" => [0.8, 1], "blighted" => [0.8, 0.9], "charred" => [0.7, 0.8],
       "thorn" => [0.75, 0.9], "silverleaf" => [1.05, 0.85], "crystal" => [0.6, 1]
     }.freeze
@@ -130,7 +130,8 @@ module Bot
         next if kind == "steep" || (kind == "bed" && water[:level] - height > SHALLOW_FT)
         entry =
           if %w[bank shore bed].include?(kind)
-            pick_from(table.dig("banks", water[:running] ? "running" : "still", SIZES[size]), roll, fine)
+            banks = table.dig("biomeBanks", BIOMES[biome_at.call(sx >> 2, sz >> 2)].to_s) || table["banks"]
+            pick_from(banks.dig(water[:running] ? "running" : "still", SIZES[size]), roll, fine)
           else
             pick_from(table.dig("biomes", BIOMES[biome_at.call(sx >> 2, sz >> 2)].to_s, SIZES[size]), roll, fine)
           end
@@ -150,6 +151,8 @@ module Bot
         next unless footprint
         scale = sizes[0] + (sizes[1] - sizes[0]) * pick.call(0)
         object = {type: entry["object"], x:, z:, yaw: pick.call(1) * Math::PI * 2, footprint: scaled(footprint, scale), height: tall * scale, tree: false}
+        # Logs would stick out of hillsides.
+        next if object[:footprint]["capsule"] && slope >= SLOPE_DEG
         r = reach(object[:footprint])
         next if crowded.call(x, z, r)
         room[bucket.call(x, z)] << [x, z, r]

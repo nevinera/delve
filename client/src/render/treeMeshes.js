@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import { mergeGeometries } from "three/addons/utils/BufferGeometryUtils.js";
 
 // Tree models for the 3D view, as instanced meshes: one per part (trunk, crown, branch) per kind.
 // Each kind's parts are placed from its height `h`, crown radius `c` and the clearance `b` under
@@ -63,6 +64,39 @@ function frondCrown(count, seed) {
   g.computeVertexNormals();
   return g;
 }
+// A stand of bamboo, drawn at the trunk's radius across and the tree's height tall: thin poles, and
+// tiny leaves scattered up them. The biggest stand's poles are still under a foot thick.
+function bambooStand() {
+  let seed = 11;
+  const rand = () => {
+    seed = (seed * 9301 + 49297) % 233280;
+    return seed / 233280;
+  };
+  const poles = [];
+  const leaves = [];
+  const indices = [];
+  for (let p = 0; p < 16; p++) {
+    const [angle, out] = [rand() * Math.PI * 2, Math.sqrt(rand()) * 0.95];
+    const [x, z, tall] = [Math.cos(angle) * out, Math.sin(angle) * out, 0.7 + rand() * 0.3];
+    poles.push(new THREE.CylinderGeometry(0.05, 0.08, tall, 5, 1, true).translate(x, tall / 2, z));
+    for (let l = 0; l < 14; l++) {
+      const [turn, y] = [rand() * Math.PI * 2, tall * (0.4 + rand() * 0.6)];
+      const [dx, dz] = [Math.cos(turn), Math.sin(turn)];
+      const at = leaves.length / 3;
+      const LONG = 0.13;
+      const WIDE = 0.025;
+      leaves.push(x, y, z, x + dx * LONG * 0.5 - dz * WIDE, y - 0.002, z + dz * LONG * 0.5 + dx * WIDE, x + dx * LONG, y - 0.006, z + dz * LONG, x + dx * LONG * 0.5 + dz * WIDE, y - 0.002, z + dz * LONG * 0.5 - dx * WIDE);
+      indices.push(at, at + 1, at + 2, at, at + 2, at + 3);
+    }
+  }
+  const foliage = new THREE.BufferGeometry();
+  foliage.setAttribute("position", new THREE.Float32BufferAttribute(leaves, 3));
+  foliage.setIndex(indices);
+  foliage.computeVertexNormals();
+  return [mergeGeometries(poles), foliage];
+}
+const [bambooPoles, bambooLeaves] = bambooStand();
+
 const palmFronds = frondCrown(11, 3);
 const fernFronds = frondCrown(15, 5);
 
@@ -281,12 +315,11 @@ const KINDS = {
     ],
   },
   bamboo: {
-    height: 0.7,
-    trunk: 0.5,
+    height: 0.8,
+    trunk: 1,
     parts: [
-      { geometry: trunk, material: canes, at: (h, c, t) => [0, null, [t * 0.3, h * 0.92, t * 0.3], [0, 0]] },
-      ...[0, 1, 2, 3].map((k) => ({ geometry: trunk, material: canes, at: (h, c, t, r) => [0, null, [t * 0.24, h * (0.72 + 0.05 * k), t * 0.24], [Math.cos(k * 1.57 + r * 6) * t * 1.1, Math.sin(k * 1.57 + r * 6) * t * 1.1]] })),
-      ...crownParts(cone, { repeat: [8, 7], lift: 0.25 }, 0x86b84e, (h, c) => [h * 0.3, null, [c * 0.36, h * 0.72, c * 0.36]]),
+      { geometry: bambooPoles, material: canes, at: (h, c, t) => [0, null, [t, h, t]] },
+      { geometry: bambooLeaves, material: frondFlesh, color: 0x7fb84a, at: (h, c, t) => [0, null, [t, h, t]] },
     ],
   },
   acacia: {
@@ -416,7 +449,6 @@ const CROWNS = {
   spruce: [0.192, 1.092, 0.4],
   snowpine: [0.192, 1.072, 0.45],
   blossom: [0.48, 1.04, 1.05],
-  bamboo: [0.3, 1.02, 0.36],
   acacia: [0.76, 0.96, 1.25],
   jungle: [0.58, 1.02, 1.15],
   mangrove: [0.36, 0.88, 1.1],

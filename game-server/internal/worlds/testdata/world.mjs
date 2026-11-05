@@ -56,6 +56,7 @@ const AREAS = [
   { biome: "swamp", points: [[0, 400], [300, 400], [300, 768], [0, 768]] },
   { biome: "fungal marsh", points: [[-256, 400], [0, 400], [0, 768], [-256, 768]] },
   { biome: "snowy forest", points: [[300, 400], [768, 400], [768, 768], [300, 768]] },
+  { biome: "mangrove", points: [[200, 200], [400, 200], [400, 400], [200, 400]] },
 ];
 const biomes = new BiomeMap(AREAS);
 
