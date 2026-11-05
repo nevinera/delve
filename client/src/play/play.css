@@ -714,3 +714,32 @@ body.touch .play-bar button {
   margin: 5px 0 0;
   color: #ffd100;
 }
+
+/* Tiles, for the spellbook and the talent window. */
+.play-book, .play-specs, .play-talent-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.play-classes .play-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; width: 76px; margin: 0; padding: 6px 4px; border: 1px solid #555; border-radius: 6px; background: rgba(255, 255, 255, 0.04); color: inherit; cursor: pointer; text-align: center; }
+.play-classes .play-tile.play-spec { width: 108px; }
+.play-tile-icon { width: 44px; height: 44px; display: block; }
+.play-tile-icon.stock-icon { background: #d8d2c0; mask-size: contain; mask-repeat: no-repeat; mask-position: center; }
+.play-tile-letter { display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; border-radius: 6px; background: #333; color: #ccc; }
+.play-tile-name { font-size: 11px; line-height: 1.2; }
+.play-classes .play-tile.is-picked { border-color: #e8c860; background: rgba(232, 200, 96, 0.16); }
+.play-classes .play-tile.is-picked .stock-icon { background: #f4d870; }
+.play-classes .play-tile.is-needs, .play-classes .play-tile.is-locked { opacity: 0.45; cursor: default; }
+.play-classes .play-tile.is-held { cursor: default; }
+.play-talents { position: relative; display: grid; gap: 14px; margin-top: 4px; }
+.play-talent-row { position: relative; z-index: 1; align-items: center; }
+.play-talent-level { width: 28px; color: #e8c860; font-weight: 700; text-align: right; }
+.play-talent-lines { position: absolute; inset: 0; pointer-events: none; overflow: visible; }
+.play-talent-lines line { stroke: #777; stroke-width: 2; }
+.play-talent-lines line.is-picked { stroke: #e8c860; }
+.play-tile-detail { display: flex; flex-direction: column; gap: 2px; min-height: 3.6em; margin-top: 12px; padding: 8px 10px; border-top: 1px solid #444; }
+.play-tile-detail span { color: #bbb; }
+
+/* The report button sits top right here, clear of the log and the bars. */
+.report-button {
+  left: auto;
+  right: 10px;
+  top: 10px;
+  bottom: auto;
+}
