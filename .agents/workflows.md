@@ -65,6 +65,10 @@ World content for the core world is in `nevinera/delve-content`.
 
 Every page imports `client/src/errors/install.js` first. It keeps the last 100 console lines and reports errors, failed promises, `console.error` calls and lost WebGL contexts to `POST /client_errors`, with those lines. `ClientError` keeps a row for each kind of error, counted, for the 100 kinds seen most lately. Every report also goes to `log/client_errors/<day>.jsonl`, and files older than 7 days are deleted. System admins see them at `/client_errors`, with stacks mapped back to source lines from the build's hidden source maps.
 
+## Reports
+
+Every page imports `client/src/report/button.js`, a button in the bottom-left corner for reporting a bug, an object or structure you wish you had, something you can't work out how to do, or something annoying. You can type or talk. Talking records a voice note, and where the browser has speech recognition it also types what it hears. A report sends a screenshot of the page's scene where it fills the window, the error recorder's console lines, and what the page gives `setReportContext()`. `ProblemReport` keeps them, with voice notes and screenshots in `storage/problem_reports/<id>/` until a system admin marks the report done at `/problem_reports`.
+
 ## Deploying
 
 Use the [deploy-dev](skills/deploy-dev/SKILL.md) skill.

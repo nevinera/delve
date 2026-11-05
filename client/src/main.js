@@ -1,4 +1,5 @@
 import "./errors/install.js";
+import "./report/button.js";
 import { REVISION } from "three";
 
 // Client entry. The game client is built here in later phases.

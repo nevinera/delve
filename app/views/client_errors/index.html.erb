@@ -1,6 +1,7 @@
 <% content_for :title, "Errors - Delve" %>
 <main class="client-errors">
   <h1>Errors from browsers</h1>
+  <p><a href="<%= problem_reports_path %>">reports</a></p>
   <p>The latest of each kind, newest first, for the <%= ClientError::KEEP_ROWS %> kinds seen most lately. Every one is also in log/client_errors, a file a day, kept <%= ClientErrorLog::KEEP_DAYS %> days.</p>
   <% if @errors.empty? %>
     <p>None yet.</p>

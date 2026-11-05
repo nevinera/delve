@@ -1,0 +1,36 @@
+<% content_for :title, "Reports - Delve" %>
+<main class="client-errors">
+  <h1>Reports</h1>
+  <p><a href="<%= client_errors_path %>">errors from browsers</a></p>
+  <% if @open.empty? %>
+    <p>Nothing open.</p>
+  <% end %>
+  <% @open.each do |report| %>
+    <section class="problem-report">
+      <h2><%= report.kind_title %></h2>
+      <p class="client-error-when"><%= report.user&.email || "nobody signed in" %>, <%= time_ago_in_words(report.created_at) %> ago, on <%= report.page %></p>
+      <% if report.note %>
+        <p class="problem-report-note"><%= report.note %></p>
+      <% end %>
+      <% if report.voice_type %>
+        <audio controls preload="none" src="<%= voice_problem_report_path(report) %>"></audio>
+      <% end %>
+      <% if report.screenshot %>
+        <a href="<%= screenshot_problem_report_path(report) %>"><img class="problem-report-screenshot" src="<%= screenshot_problem_report_path(report) %>" alt="the page when it was reported" loading="lazy"></a>
+      <% end %>
+      <details>
+        <summary>what the page knew</summary>
+        <pre><%= JSON.pretty_generate(report.details || {}) %></pre>
+      </details>
+      <%= button_to "done", problem_report_path(report), method: :patch, form: {data: {turbo_confirm: false}} %>
+    </section>
+  <% end %>
+  <% if @done.any? %>
+    <h2>Done lately</h2>
+    <ul>
+      <% @done.each do |report| %>
+        <li><%= report.kind_title %>: <%= report.note.to_s.truncate(100).presence || "(voice note)" %>, done <%= time_ago_in_words(report.done_at) %> ago</li>
+      <% end %>
+    </ul>
+  <% end %>
+</main>

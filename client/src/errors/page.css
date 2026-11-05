@@ -5,4 +5,9 @@ body:has(.client-errors) { margin: 0; background: #1d1f22; }
 .client-error-count { color: #fc6; min-width: 3em; }
 .client-error-message { font-weight: 600; }
 .client-error-when { color: #9aa; }
-.client-error pre { white-space: pre-wrap; word-break: break-all; background: #26292d; padding: 8px; font-size: 12px; }
+.problem-report { border-top: 1px solid #444; padding: 8px 0; }
+.problem-report h2 { font-size: 16px; margin: 4px 0; }
+.problem-report-note { font-size: 16px; white-space: pre-wrap; }
+.problem-report-screenshot { display: block; max-width: 480px; width: 100%; margin: 6px 0; border: 1px solid #555; }
+.client-errors a { color: #9cf; }
+.client-error pre, .problem-report pre { white-space: pre-wrap; word-break: break-all; background: #26292d; padding: 8px; font-size: 12px; }

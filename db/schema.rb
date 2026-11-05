@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_05_192609) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_05_193943) do
   create_table "characters", force: :cascade do |t|
     t.integer "user_id", null: false
     t.string "name", null: false
@@ -49,6 +49,22 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_05_192609) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_github_connections_on_user_id", unique: true
+  end
+
+  create_table "problem_reports", force: :cascade do |t|
+    t.integer "user_id"
+    t.string "kind", null: false
+    t.text "note"
+    t.string "page"
+    t.string "build"
+    t.json "details"
+    t.string "voice_type"
+    t.boolean "screenshot", default: false, null: false
+    t.datetime "done_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["done_at"], name: "index_problem_reports_on_done_at"
+    t.index ["user_id"], name: "index_problem_reports_on_user_id"
   end
 
   create_table "users", force: :cascade do |t|
@@ -127,6 +143,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_05_192609) do
   add_foreign_key "characters", "users"
   add_foreign_key "client_errors", "users", on_delete: :nullify
   add_foreign_key "github_connections", "users"
+  add_foreign_key "problem_reports", "users", on_delete: :nullify
   add_foreign_key "world_characters", "characters"
   add_foreign_key "world_characters", "worlds"
   add_foreign_key "world_imports", "worlds"

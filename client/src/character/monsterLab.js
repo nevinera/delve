@@ -1,4 +1,5 @@
 import "../errors/install.js";
+import "../report/button.js";
 import "./monsterLab.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";

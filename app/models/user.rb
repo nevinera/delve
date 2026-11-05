@@ -8,6 +8,7 @@ class User < ApplicationRecord
   has_many :worlds, dependent: :destroy
   has_one :github_connection, dependent: :destroy
   has_many :client_errors, dependent: :nullify
+  has_many :problem_reports, dependent: :nullify
 
   validates :role, inclusion: {in: ROLES}, allow_nil: true
 

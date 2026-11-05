@@ -1,4 +1,5 @@
 import "../errors/install.js";
+import "../report/button.js";
 import "./builder.css";
 import "./lab.css";
 import * as THREE from "three";

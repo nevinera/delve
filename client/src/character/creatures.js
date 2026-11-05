@@ -1,4 +1,5 @@
 import "../errors/install.js";
+import "../report/button.js";
 import "./creatures.css";
 import * as THREE from "three";
 import { ROLES, characterClips, loadAnimations, roleClips } from "./animations.js";

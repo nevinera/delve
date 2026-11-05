@@ -1,4 +1,5 @@
 import "../errors/install.js";
+import { setReportContext } from "../report/button.js";
 import "./create.css";
 import * as THREE from "three";
 import { alert } from "./alerts.js";
@@ -133,6 +134,7 @@ function start(world, changes, fresh) {
   scene.background = new THREE.Color(SKY);
   scene.fog = new THREE.Fog(SKY, FAR_FT * FOG.near, FAR_FT * FOG.far);
   const camera = new THREE.PerspectiveCamera(60, 1, 0.5, REACH_FT * 4);
+  setReportContext(() => ({ world: name, camera: camera.position.toArray().map(Math.round), plates: renditions.decoded.size, reading: renditions.reading.size, unreadable: [...renditions.unreadable] }));
   scene.add(new THREE.HemisphereLight(0xdde8ff, 0x55503c, 1.6));
   const sun = new THREE.DirectionalLight(0xfff2dd, 1.8);
   sun.position.set(0.5, 1, 0.3);

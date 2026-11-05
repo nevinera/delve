@@ -1,4 +1,5 @@
 import "../errors/install.js";
+import { setReportContext } from "../report/button.js";
 import "./play.css";
 import { graphicsPanel } from "../render/graphicsPanel.js";
 import { setWorldIcons } from "./icons.js";
@@ -165,6 +166,7 @@ async function play() {
   status("Loading the land around you...");
   let showGraphics = null;
   const view = new PlayView($("scene"), { onGraphics: (graphics) => showGraphics?.(graphics) });
+  setReportContext(() => ({ camera: view.camera.position.toArray().map(Math.round), plates: renditions.decoded.size, unreadable: [...renditions.unreadable] }));
   const continent = await loader.continent(you.continent);
   const renditions = new Renditions();
   for (const bytes of continent.platters) renditions.addPlatter(bytes);

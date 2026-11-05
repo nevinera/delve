@@ -47,6 +47,12 @@ Rails.application.routes.draw do
   get "creatures" => "creatures#show"
   get "creature" => "creatures#creature"
   resources :client_errors, only: [:index, :create]
+  resources :problem_reports, only: [:index, :create, :update] do
+    member do
+      get :voice
+      get :screenshot
+    end
+  end
 
   # For the game server (.agents/formats.md).
   namespace :internal_api, path: "internal" do
