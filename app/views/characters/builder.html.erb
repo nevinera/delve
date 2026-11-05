@@ -6,10 +6,13 @@
   data-save-method="<%= @character.persisted? ? "PATCH" : "POST" %>">
   <section class="builder-config">
     <h1><%= @character.persisted? ? @character.name : "New character" %></h1>
-    <label class="builder-row builder-name">
-      <span>name</span>
-      <input id="name" type="text" maxlength="16" autocomplete="off" value="<%= @character.name %>">
-    </label>
+    <% unless @character.persisted? %>
+      <label class="builder-row builder-name">
+        <span>name</span>
+        <input id="name" type="text" maxlength="16" autocomplete="off">
+      </label>
+      <p class="builder-note">Others know your character by its name, so you can't change it later.</p>
+    <% end %>
     <div id="controls"></div>
     <div class="builder-buttons">
       <button id="random" type="button">random</button>
@@ -18,6 +21,9 @@
     <button id="save" type="button" class="builder-save"><%= @character.persisted? ? "Save changes" : "Create character" %></button>
     <p id="saveNote" class="builder-note"></p>
     <p><%= link_to "your characters", characters_path %></p>
+    <% if @character.persisted? %>
+      <%= button_to "delete #{@character.name}", character_path(@character), method: :delete, class: "builder-delete", form: {id: "deleteCharacter", data: {name: @character.name}} %>
+    <% end %>
   </section>
   <section class="builder-preview">
     <div id="moves" class="builder-moves"></div>

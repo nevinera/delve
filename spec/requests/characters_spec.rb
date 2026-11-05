@@ -67,11 +67,20 @@ RSpec.describe "Characters", type: :request do
       expect(response.body).to include("&quot;hair&quot;:&quot;long&quot;")
     end
 
-    it "changes a character's name and look" do
+    it "changes a character's look but never its name" do
       character = create(:character, user:, name: "Arwen")
       patch character_path(character), params: {character: {name: "Eowyn", look: {"hair" => "bun"}}}, as: :json
       expect(response).to have_http_status(:ok)
-      expect(character.reload).to have_attributes(name: "Eowyn", look: {"hair" => "bun"})
+      expect(character.reload).to have_attributes(name: "Arwen", look: {"hair" => "bun"})
+    end
+
+    it "has no name field or delete button when you're making a character, and both the other way round when editing" do
+      get new_character_path
+      expect(response.body).to include(%(id="name"))
+      expect(response.body).not_to include("deleteCharacter")
+      get edit_character_path(create(:character, user:, name: "Arwen"))
+      expect(response.body).not_to include(%(id="name"))
+      expect(response.body).to include(%(id="deleteCharacter"))
     end
 
     it "doesn't touch someone else's character" do

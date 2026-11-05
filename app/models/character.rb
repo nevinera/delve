@@ -15,8 +15,14 @@ class Character < ApplicationRecord
   validates :name, presence: true, length: {in: NAME_LENGTH}, uniqueness: true,
     format: {with: /\A\p{L}+\z/, message: "can only have letters"}
   validate :look_is_an_object
+  # A name is who a character is to other players, so it's set once.
+  validate :name_kept, on: :update
 
   private
+
+  def name_kept
+    errors.add(:name, "can't be changed") if name_changed?
+  end
 
   def look_is_an_object
     if !look.is_a?(Hash)

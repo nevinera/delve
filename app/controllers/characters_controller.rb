@@ -22,7 +22,7 @@ class CharactersController < ApplicationController
   end
 
   def update
-    @character.assign_attributes(character_params)
+    @character.assign_attributes(character_params.except(:name))
     save(@character, :ok)
   end
 

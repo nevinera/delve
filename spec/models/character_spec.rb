@@ -21,4 +21,11 @@ RSpec.describe Character do
   it "refuses a look that's too large" do
     expect(build(:character, look: {"notes" => "x" * 9000})).not_to be_valid
   end
+
+  it "keeps its name once made" do
+    character = create(:character, name: "Arwen")
+    character.name = "Eowyn"
+    expect(character).not_to be_valid
+    expect(character.errors[:name]).to include("can't be changed")
+  end
 end

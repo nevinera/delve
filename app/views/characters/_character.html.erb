@@ -4,7 +4,6 @@
     <strong><%= character.name %></strong>
     <div class="character-actions">
       <%= link_to "edit", edit_character_path(character) %>
-      <%= button_to "delete", character_path(character), method: :delete, class: "compact secondary", form: {data: {turbo_confirm: "Delete #{character.name}? This can't be undone."}} %>
     </div>
   </div>
   <% worlds = local_assigns[:played]&.fetch(character.id, []) || [] %>

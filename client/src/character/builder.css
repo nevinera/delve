@@ -145,6 +145,21 @@
   opacity: 0.6;
 }
 
+/* Deleting sits apart from the rest, at the bottom. */
+.builder form:has(.builder-delete) {
+  margin-top: 28px;
+}
+
+.builder .builder-delete {
+  background: #3a1c1c;
+  color: #f0b0a8;
+  border-color: #8a3a34;
+}
+
+.builder .builder-delete:hover {
+  background: #5a2420;
+}
+
 .builder-row[hidden] {
   display: none;
 }

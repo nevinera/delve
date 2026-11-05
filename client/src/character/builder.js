@@ -326,7 +326,7 @@ async function save() {
     const response = await fetch(page.saveUrl, {
       method: page.saveMethod,
       headers: { "Content-Type": "application/json", Accept: "application/json", "X-CSRF-Token": document.querySelector("meta[name=csrf-token]")?.content },
-      body: JSON.stringify({ character: { name: $("name").value, look: appearance(look) } }),
+      body: JSON.stringify({ character: { ...($("name") ? { name: $("name").value } : {}), look: appearance(look) } }),
     });
     const body = await response.json().catch(() => ({}));
     if (!response.ok) {
@@ -334,7 +334,9 @@ async function save() {
       return;
     }
     Object.assign(saved, { id: body.id, name: body.name, look: appearance(look) });
-    $("name").value = body.name;
+    // Once made, its name is fixed.
+    $("name")?.closest("label")?.nextElementSibling?.remove();
+    $("name")?.closest("label")?.remove();
     document.querySelector("#builder h1").textContent = body.name;
     document.title = `${body.name} - Delve`;
     if (page.saveMethod === "POST") {
@@ -351,7 +353,11 @@ async function save() {
   }
 }
 $("save").addEventListener("click", save);
-$("name").addEventListener("keydown", (e) => e.key === "Enter" && save());
+$("name")?.addEventListener("keydown", (e) => e.key === "Enter" && save());
+// Deleting can't be undone, so it asks first.
+$("deleteCharacter")?.addEventListener("submit", (e) => {
+  if (!window.confirm(`Delete ${e.target.dataset.name}? This can't be undone.`)) e.preventDefault();
+});
 
 function resize() {
   const { clientWidth: w, clientHeight: h } = canvas;
