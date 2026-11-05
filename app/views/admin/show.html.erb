@@ -1,0 +1,20 @@
+<% content_for :title, "Admin - Delve" %>
+<h1>Admin</h1>
+
+<section>
+  <h2>What players sent</h2>
+  <ul>
+    <li><%= link_to "Problem reports", problem_reports_path %> (<%= @open_reports %> open)</li>
+    <li><%= link_to "Errors from browsers", client_errors_path %> (<%= @error_kinds %> kinds)</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Labs</h2>
+  <ul>
+    <li><%= link_to "Animation lab", animation_lab_path %>: any clip on any of your characters, at any speed</li>
+    <li><%= link_to "Monster lab", monster_lab_path %>: creature bodies, several looks side by side</li>
+    <li><%= link_to "Creatures", creatures_path %>: each body playing its clips, by skeleton</li>
+    <li><%= link_to "One creature", creature_path %>: one creature playing each of its roles</li>
+  </ul>
+</section>

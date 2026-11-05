@@ -18,10 +18,10 @@ The client has one entry point per page (`vite.config.js`):
 | `/objects` | `client/src/objects/main.js` | the object builder |
 | `/characters/new` | `client/src/character/builder.js` | the character builder |
 | `/characters`, `/home` | `client/src/character/list.js` | your characters |
-| `/animation_lab` | `client/src/character/lab.js` | the animation lab |
-| `/creatures` | `client/src/character/creatures.js` | each creature body playing its clips, by skeleton |
-| `/creature` | `client/src/character/creature.js` | one creature playing each of its roles in turn, with a control for each setting |
-| `/monster_lab` | `client/src/character/monsterLab.js` | the shipped bodies, and a world's own from its `models.json` |
+| `/animation_lab` | `client/src/character/lab.js` | the animation lab (system admins only) |
+| `/creatures` | `client/src/character/creatures.js` | each creature body playing its clips, by skeleton (system admins only) |
+| `/creature` | `client/src/character/creature.js` | one creature playing each of its roles in turn, with a control for each setting (system admins only) |
+| `/monster_lab` | `client/src/character/monsterLab.js` | the shipped bodies, and a world's own from its `models.json` (system admins only) |
 | `/classes` | `client/src/classes/main.js` | the class editor |
 | `/play/:id` | `client/src/play/main.js` | the game |
 
@@ -101,7 +101,7 @@ The game server (`game-server/`) holds every character in a world. Browsers conn
 - `internal/token` checks entry tokens, which Rails signs (`Game::EntryToken`).
 - `internal/worlds` downloads each released commit's zip once, keeps it on disk, and reads a version 2 world's continents and spawn point. It reads a continent's plates and placed files as characters reach them, and samples the ground as `/create`'s builder walks it: heights pressed down by level slabs, water, slabs, objects placed by hand, the trees and objects in the tiles' slots (`fill.go`, by a copy of `client/src/v2/fill.json`), and boulders across courses' cascades from `water.json`. Off the tiles is sea. `testdata/world.mjs` writes its test world and what `/create` makes of it, with the client's own code.
 - `internal/game` places characters on a layer, works out who's near whom (the 3×3 tiles around each), checks that their movement adds up (speed, clocks, rising and falling, the ground, slabs and cave floors under them, and not walking into slabs, cave rock, trees or objects), and passes it on.
-- A user with the `system_admin` role (`users.role`, set from the Rails console) can use admin commands. Rails tells the game server with each character it reads.
+- A user with the `system_admin` role (`users.role`, set from the Rails console) can use admin commands and the pages controllers mark `system_admins_only` (everyone else gets a 404). `/admin` links those pages, and the home page links `/admin` for system admins. Rails tells the game server with each character it reads.
 - `internal/rails` reads characters from Rails's internal API (`/internal/...`, `InternalApi::` controllers), with a shared token, and writes their classes and positions back to it (`WorldCharacter`, one per character per world). The server never writes to the database itself.
 
 - `internal/game/commands.go` runs what players type after a slash. `client/src/play/log.js` is the log and its box on the play page.

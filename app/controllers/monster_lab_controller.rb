@@ -2,6 +2,7 @@
 # playing any of its clips at any speed.
 class MonsterLabController < ApplicationController
   layout "monster_lab"
+  system_admins_only
 
   def show
   end

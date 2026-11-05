@@ -3,7 +3,7 @@
 class ProblemReportsController < ApplicationController
   layout "client_errors"
   rate_limit to: 20, within: 1.hour, only: :create, by: -> { current_user.id }, with: -> { head :too_many_requests }
-  before_action :system_admins_only, except: :create
+  system_admins_only except: :create
   before_action :find_report, only: [:update, :voice, :screenshot]
 
   def create
@@ -37,9 +37,5 @@ class ProblemReportsController < ApplicationController
 
   def find_report
     @report = ProblemReport.find(params[:id])
-  end
-
-  def system_admins_only
-    head :not_found unless current_user.system_admin?
   end
 end

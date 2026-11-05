@@ -1,9 +1,15 @@
 require "rails_helper"
 
 RSpec.describe "Animation lab", type: :request do
-  let(:user) { create(:user) }
+  let(:user) { create(:user, role: "system_admin") }
 
   before { sign_in user }
+
+  it "is only for system admins" do
+    user.update!(role: nil)
+    get animation_lab_path
+    expect(response).to have_http_status(:not_found)
+  end
 
   it "needs you signed in" do
     sign_out user
