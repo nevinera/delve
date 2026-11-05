@@ -2,15 +2,22 @@ import { BANDIT } from "./builtin/bandit.js";
 import { DENS, MINES, NATURAL_CAVES } from "./builtin/cave.js";
 import { COAST } from "./builtin/coast.js";
 import { FARM } from "./builtin/farm.js";
+import { FLORA } from "./builtin/flora.js";
 import { FORT } from "./builtin/fort.js";
+import { FURNITURE, TABLEWARE } from "./builtin/furniture.js";
 import { GOBLIN } from "./builtin/goblin.js";
 import { HOUSEHOLD } from "./builtin/household.js";
 import { MARKET } from "./builtin/market.js";
 import { MILL } from "./builtin/mill.js";
+import { HARBOUR, STREET, WAR } from "./builtin/outdoors.js";
 import { QUEST } from "./builtin/quest.js";
 import { ROADS } from "./builtin/roads.js";
 import { RUINS } from "./builtin/ruins.js";
+import { SACRED } from "./builtin/sacred.js";
+import { STONES } from "./builtin/stones.js";
+import { TRADES } from "./builtin/trades.js";
 import { VILLAGE } from "./builtin/village.js";
+import { ARCANE, FARMYARD, LANDS, REMAINS } from "./builtin/wilds.js";
 import { WOODLAND } from "./builtin/woodland.js";
 
 // Built objects that ship with the game, in collections: read-only props of builtObjects.js's
@@ -38,7 +45,7 @@ const SEE_THROUGH = new Set([
   "bques004", // lectern with scroll
 ]);
 
-export const BUILTIN_OBJECT_COLLECTIONS = [FARM, VILLAGE, HOUSEHOLD, MILL, COAST, BANDIT, MINES, NATURAL_CAVES, DENS, GOBLIN, WOODLAND, FORT, ROADS, RUINS, MARKET, QUEST].map((c) => ({
+export const BUILTIN_OBJECT_COLLECTIONS = [FARM, VILLAGE, HOUSEHOLD, MILL, COAST, BANDIT, MINES, NATURAL_CAVES, DENS, GOBLIN, WOODLAND, FORT, ROADS, RUINS, MARKET, QUEST, STONES, FLORA, FURNITURE, TABLEWARE, TRADES, SACRED, WAR, HARBOUR, STREET, ARCANE, LANDS, REMAINS, FARMYARD].map((c) => ({
   ...c,
   objects: c.objects.map((o) => (SEE_THROUGH.has(o.id) ? { ...o, blocksSight: false } : o)),
 }));

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { problems, shapeOf } from "./builtObjects.js";
+import { pieceCorners, problems, shapeOf } from "./builtObjects.js";
 import { builtinImage } from "./builtinImages.js";
 import { BUILTIN_OBJECTS } from "./builtinObjects.js";
 import { setBuiltObjects, specOf } from "./objects.js";
@@ -18,7 +18,24 @@ describe("builtin objects", () => {
   });
 
   it("block line of sight but for the ones you see through", () => {
-    expect(BUILTIN_OBJECTS.filter((o) => o.blocksSight === false)).toHaveLength(57);
+    expect(BUILTIN_OBJECTS.filter((o) => o.blocksSight === false).length).toBeGreaterThan(57);
+    expect(BUILTIN_OBJECTS.find((o) => o.id === "bfarm011").blocksSight).toBe(false); // split-rail fence
+    expect(BUILTIN_OBJECTS.find((o) => o.id === "bvill001").blocksSight).toBeUndefined(); // barrel
+    for (const object of BUILTIN_OBJECTS.filter((o) => o.walkThrough)) expect(object.blocksSight, object.name).toBe(false);
+  });
+
+  it("have several members in every variant set", () => {
+    const sizes = new Map();
+    for (const { collection, variantSet } of BUILTIN_OBJECTS.filter((o) => o.variantSet)) sizes.set(`${collection}/${variantSet}`, (sizes.get(`${collection}/${variantSet}`) ?? 0) + 1);
+    expect(sizes.size).toBeGreaterThan(100);
+    for (const [set, size] of sizes) expect(size, set).toBeGreaterThan(1);
+  });
+
+  it("don't reach far below the ground", () => {
+    for (const object of BUILTIN_OBJECTS) {
+      const lowest = Math.min(...object.pieces.filter((p) => !p.cut).flatMap((p) => pieceCorners(p).map((c) => c[1])));
+      expect(lowest, object.name).toBeGreaterThan(-3);
+    }
   });
 
   it("are placeable types in every world", () => {
