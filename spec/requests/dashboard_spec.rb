@@ -11,6 +11,11 @@ RSpec.describe "Dashboard", type: :request do
     expect(response).to redirect_to(new_user_session_path)
   end
 
+  it "puts the importmap before its own client script, since Firefox ignores an importmap that comes after one" do
+    get home_path
+    expect(response.body.index('type="importmap"')).to be < response.body.index('<script type="module" src=')
+  end
+
   it "lists your three latest characters, with a link to them all" do
     %w[Ada Bree Cass Dov].each_with_index { |name, i| create(:character, user: user, name: name, updated_at: i.days.ago) }
     get home_path
