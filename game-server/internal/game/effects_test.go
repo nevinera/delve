@@ -918,7 +918,7 @@ func TestWhoAnEffectReaches(t *testing.T) {
 	h, p, c := fighting(t)
 	world := p.layer
 	second := *world.dummies[0]
-	second.vitals.ID, second.state.ID = -2, -2
+	second.ID, second.state.ID = -2, -2
 	second.Statuses = map[statusKey]*activeStatus{}
 	world.dummies = append(world.dummies, &second)
 	first := world.dummies[0]
@@ -959,7 +959,7 @@ func TestExtraTargetsSpill(t *testing.T) {
 	h, p, c := fighting(t)
 	world := p.layer
 	second := *world.dummies[0]
-	second.vitals.ID, second.state.ID = -2, -2
+	second.ID, second.state.ID = -2, -2
 	second.Statuses = map[statusKey]*activeStatus{}
 	world.dummies = append(world.dummies, &second)
 	first := world.dummies[0]

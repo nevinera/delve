@@ -34,6 +34,14 @@ func init() {
 }
 
 // answer sends a line to a player's log. Kind is system, error or debug.
+// reply is what a command says back to the player when it can't do what they asked: a sentence
+// for them to read, not an error for code.
+type reply string
+
+func (r reply) Error() string { return string(r) }
+
+func replyf(format string, args ...any) error { return reply(fmt.Sprintf(format, args...)) }
+
 func answer(p *Player, kind, text string) {
 	p.send(encode(logLine{"log", kind, text}))
 }
@@ -101,7 +109,7 @@ func runSpar(_ *Layer, p *Player, args []string) error {
 const maxLevel = 100
 
 func runLevel(l *Layer, p *Player, args []string) error {
-	usage := fmt.Errorf("Use %s.", commands["level"].usage)
+	usage := replyf("Use %s.", commands["level"].usage)
 	if len(args) != 1 {
 		return usage
 	}
@@ -110,7 +118,7 @@ func runLevel(l *Layer, p *Player, args []string) error {
 		return usage
 	}
 	if p.fight.class == nil {
-		return fmt.Errorf("Pick a class first.")
+		return replyf("Pick a class first.")
 	}
 	l.setLevel(p, level)
 	answer(p, "system", fmt.Sprintf("You're level %d now, in this world.", level))
@@ -127,20 +135,20 @@ var (
 // runWeapon changes what a character holds until it leaves.
 func runWeapon(l *Layer, p *Player, args []string) error {
 	if len(args) < 1 || len(args) > 2 {
-		return fmt.Errorf("Use %s.", commands["weapon"].usage)
+		return replyf("Use %s.", commands["weapon"].usage)
 	}
 	main, off := strings.ToLower(args[0]), "none"
 	if len(args) == 2 {
 		off = strings.ToLower(args[1])
 	}
 	if !slices.Contains(twoHanded, main) && !slices.Contains(oneHanded, main) {
-		return fmt.Errorf("There's no %s. Main hands: %s.", main, strings.Join(append(slices.Clone(oneHanded), twoHanded...), ", "))
+		return replyf("There's no %s. Main hands: %s.", main, strings.Join(append(slices.Clone(oneHanded), twoHanded...), ", "))
 	}
 	if !slices.Contains(offHands, off) {
-		return fmt.Errorf("There's no %s. Off hands: %s.", off, strings.Join(offHands, ", "))
+		return replyf("There's no %s. Off hands: %s.", off, strings.Join(offHands, ", "))
 	}
 	if off != "none" && slices.Contains(twoHanded, main) {
-		return fmt.Errorf("A %s takes both hands.", main)
+		return replyf("A %s takes both hands.", main)
 	}
 	p.fight.ownWeapons = true
 	if p.wear(main, off) {
@@ -159,7 +167,7 @@ func runCombatDebug(_ *Layer, p *Player, args []string) error {
 	case len(args) == 1 && strings.EqualFold(args[0], "off"):
 		p.combatDebug = false
 	default:
-		return fmt.Errorf("Use %s.", commands["combatdebug"].usage)
+		return replyf("Use %s.", commands["combatdebug"].usage)
 	}
 	if p.combatDebug {
 		answer(p, "system", "Combat debug is on.")
@@ -170,7 +178,7 @@ func runCombatDebug(_ *Layer, p *Player, args []string) error {
 }
 
 func runTeleport(l *Layer, p *Player, args []string) error {
-	usage := fmt.Errorf("Use %s.", commands["teleport"].usage)
+	usage := replyf("Use %s.", commands["teleport"].usage)
 	var continent string
 	var x, z float64
 	switch {
@@ -193,11 +201,11 @@ func runTeleport(l *Layer, p *Player, args []string) error {
 		return usage
 	}
 	if !slices.Contains(l.world.Continents, continent) {
-		return fmt.Errorf("This world has no continent %q.", continent)
+		return replyf("This world has no continent %q.", continent)
 	}
 	at, ok := l.standing(continent, x, z)
 	if !ok {
-		return fmt.Errorf("There's no ground at %.0f, %.0f.", x, z)
+		return replyf("There's no ground at %.0f, %.0f.", x, z)
 	}
 	l.teleport(p, continent, at)
 	answer(p, "system", fmt.Sprintf("Teleported to %.0f, %.0f on %s.", at[0], at[2], continent))

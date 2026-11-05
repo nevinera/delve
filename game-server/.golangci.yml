@@ -1,1 +1,14 @@
 version: "2"
+linters:
+  settings:
+    errcheck:
+      # Closing what's been read, and removing a temp file that may be gone, have nothing to act on.
+      exclude-functions:
+        - (io.Closer).Close
+        - (io.ReadCloser).Close
+        - (*os.File).Close
+        - (*archive/zip.ReadCloser).Close
+        - (net.Conn).Close
+        - (*github.com/gorilla/websocket.Conn).Close
+        - (*github.com/coder/websocket.Conn).Close
+        - os.Remove

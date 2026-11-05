@@ -57,7 +57,6 @@ var (
 	sprints  = &Move{Forward: 1, Gait: "sprint"}
 	swimming = &Move{Forward: 1, Gait: "run", Swim: true}
 	still    = &Move{Gait: "run"}
-	jump     = &Move{Forward: 1, Gait: "run", Jump: true}
 )
 
 func TestRunningAtSpeedIsFine(t *testing.T) {

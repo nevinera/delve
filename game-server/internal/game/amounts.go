@@ -48,9 +48,10 @@ func (l *Layer) worked(p *Player, c *casting, a combat.Amount, on *vitals, now t
 	}
 	if m := a.ByMissingHealth; m != nil {
 		who := on
-		if m.Of == "self" {
+		switch m.Of {
+		case "self":
 			who = &p.fight.vitals
-		} else if m.Of == "target" {
+		case "target":
 			if t := l.unitWithID(c.target, p.state.Continent); t != nil {
 				who = t
 			}

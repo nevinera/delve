@@ -134,7 +134,9 @@ func TestBreaksOn(t *testing.T) {
 
 	use(t, p, "food")
 	pass(h, c, 0.1)
-	p.Handle([]byte(`{"type":"move","at":[0,0,0],"yaw":0,"move":{"forward":0}}`))
+	if err := p.Handle([]byte(`{"type":"move","at":[0,0,0],"yaw":0,"move":{"forward":0}}`)); err != nil {
+		t.Fatal(err)
+	}
 	if on("food") == nil {
 		t.Fatal("standing still broke it")
 	}

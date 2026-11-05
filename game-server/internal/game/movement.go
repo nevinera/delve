@@ -273,7 +273,7 @@ func (m *motion) onGround(r incoming, t float64, g Ground) (footing, string) {
 	if y < s.Ground-underFt && !f.slab && !s.Open {
 		return f, fmt.Sprintf("went %.0f ft under the ground", s.Ground-y)
 	}
-	if swimming && !f.deep && !(last.known && last.deep) {
+	if swimming && !f.deep && (!last.known || !last.deep) {
 		return f, "swam where there's no deep water"
 	}
 	// Off the ground without a jump, it has to be falling: from where it left the ground, as far
