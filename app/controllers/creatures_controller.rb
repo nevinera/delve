@@ -2,6 +2,7 @@
 # skeleton. The creature page: one creature playing each of its roles, with its look's settings.
 class CreaturesController < ApplicationController
   layout "creatures"
+  system_admins_only
 
   def show
   end
