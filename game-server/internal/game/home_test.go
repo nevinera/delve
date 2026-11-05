@@ -91,6 +91,10 @@ func TestHomewardTakesYouHomeAfterItsCast(t *testing.T) {
 	}
 	p.home = "camp"
 	pass(h, c, 2)
+	heard(p)
+	use(t, p, "homeward")
+	refusal(t, p, "not ready yet") // a 20 minute cooldown
+	delete(p.fight.cooldowns, "homeward")
 	use(t, p, "homeward")
 	pass(h, c, 10.2)
 	if p.state.Continent != "far" || p.state.At != [3]float64{50, 0, 60} {

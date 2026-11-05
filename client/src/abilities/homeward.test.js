@@ -7,6 +7,7 @@ describe("withHomeward", () => {
     expect(made.abilities.map((a) => a.id)).toEqual(["strike", "homeward"]);
     expect(made.abilities[1]).toBe(HOMEWARD);
     expect(HOMEWARD.castTime).toBe(10);
+    expect(HOMEWARD.cooldown).toBe(1200);
   });
 
   it("leaves a missing class missing", () => {
