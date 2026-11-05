@@ -1,3 +1,4 @@
+import "../errors/install.js";
 import * as THREE from "three";
 import { characterClips, loadAnimations } from "./animations.js";
 import { characterMesh, disposeCharacter } from "./characterMesh.js";

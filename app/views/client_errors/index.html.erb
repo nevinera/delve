@@ -1,0 +1,20 @@
+<% content_for :title, "Errors - Delve" %>
+<main class="client-errors">
+  <h1>Errors from browsers</h1>
+  <p>The latest of each kind, newest first. Every one is also in log/client_errors, a file a day, kept <%= ClientErrorLog::KEEP_DAYS %> days.</p>
+  <% if @errors.empty? %>
+    <p>None yet.</p>
+  <% end %>
+  <% @errors.each do |error| %>
+    <details class="client-error">
+      <summary>
+        <span class="client-error-count"><%= error.count %>×</span>
+        <span class="client-error-message"><%= error.message %></span>
+        <span class="client-error-when"><%= error.page %>, <%= time_ago_in_words(error.last_seen_at) %> ago, <%= error.user&.email || "nobody signed in" %></span>
+      </summary>
+      <p>First seen <%= error.first_seen_at.utc.iso8601 %>, build <%= error.build %></p>
+      <pre class="client-error-stack" data-stack><%= error.stack %></pre>
+      <pre class="client-error-details"><%= JSON.pretty_generate(error.details || {}) %></pre>
+    </details>
+  <% end %>
+</main>

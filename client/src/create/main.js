@@ -1,3 +1,4 @@
+import "../errors/install.js";
 import "./create.css";
 import * as THREE from "three";
 import { alert } from "./alerts.js";

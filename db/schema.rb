@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_03_233000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_05_192609) do
   create_table "characters", force: :cascade do |t|
     t.integer "user_id", null: false
     t.string "name", null: false
@@ -19,6 +19,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_03_233000) do
     t.datetime "updated_at", null: false
     t.index ["name"], name: "index_characters_on_name", unique: true
     t.index ["user_id"], name: "index_characters_on_user_id"
+  end
+
+  create_table "client_errors", force: :cascade do |t|
+    t.string "fingerprint", null: false
+    t.text "message", null: false
+    t.string "page"
+    t.text "stack"
+    t.integer "count", default: 1, null: false
+    t.datetime "first_seen_at", null: false
+    t.datetime "last_seen_at", null: false
+    t.integer "user_id"
+    t.string "build"
+    t.json "details"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["fingerprint"], name: "index_client_errors_on_fingerprint", unique: true
+    t.index ["last_seen_at"], name: "index_client_errors_on_last_seen_at"
+    t.index ["user_id"], name: "index_client_errors_on_user_id"
   end
 
   create_table "github_connections", force: :cascade do |t|
@@ -107,6 +125,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_03_233000) do
   end
 
   add_foreign_key "characters", "users"
+  add_foreign_key "client_errors", "users", on_delete: :nullify
   add_foreign_key "github_connections", "users"
   add_foreign_key "world_characters", "characters"
   add_foreign_key "world_characters", "worlds"

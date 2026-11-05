@@ -1,3 +1,4 @@
+import "../errors/install.js";
 import "./play.css";
 import { graphicsPanel } from "../render/graphicsPanel.js";
 import { setWorldIcons } from "./icons.js";

@@ -7,6 +7,7 @@ class User < ApplicationRecord
   has_many :characters, dependent: :destroy
   has_many :worlds, dependent: :destroy
   has_one :github_connection, dependent: :destroy
+  has_many :client_errors, dependent: :nullify
 
   validates :role, inclusion: {in: ROLES}, allow_nil: true
 

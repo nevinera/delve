@@ -1,0 +1,8 @@
+body:has(.client-errors) { margin: 0; background: #1d1f22; }
+.client-errors { max-width: 1100px; margin: 0 auto; padding: 16px; font: 14px system-ui, sans-serif; color: #e8e6e0; background: #1d1f22; min-height: 100vh; }
+.client-error { border-top: 1px solid #444; padding: 6px 0; }
+.client-error summary { cursor: pointer; display: flex; gap: 10px; flex-wrap: wrap; }
+.client-error-count { color: #fc6; min-width: 3em; }
+.client-error-message { font-weight: 600; }
+.client-error-when { color: #9aa; }
+.client-error pre { white-space: pre-wrap; word-break: break-all; background: #26292d; padding: 8px; font-size: 12px; }

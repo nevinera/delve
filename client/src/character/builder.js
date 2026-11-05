@@ -1,3 +1,4 @@
+import "../errors/install.js";
 import "./builder.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";

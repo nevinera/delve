@@ -1,3 +1,4 @@
+import "../errors/install.js";
 import "../objects/library.css";
 import "./classes.css";
 import { keptSource, onSourceSaved, saveKept } from "../create/keptSave.js";

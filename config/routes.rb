@@ -46,6 +46,7 @@ Rails.application.routes.draw do
   get "monster_lab" => "monster_lab#show"
   get "creatures" => "creatures#show"
   get "creature" => "creatures#creature"
+  resources :client_errors, only: [:index, :create]
 
   # For the game server (.agents/formats.md).
   namespace :internal_api, path: "internal" do

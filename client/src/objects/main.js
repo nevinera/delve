@@ -1,3 +1,4 @@
+import "../errors/install.js";
 import "./library.css";
 import { strFromU8 } from "fflate";
 import { PLACED_PATH } from "../create/placed.js";

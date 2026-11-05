@@ -61,6 +61,10 @@ World content for the core world is in `nevinera/delve-content`.
 
 `script/game/bot --character <id|name> --world <id|name|repo> [--strategy null|follow]` plays a character in a released world. Its header has the details.
 
+## Browser errors
+
+Every page imports `client/src/errors/install.js` first. It keeps the last 100 console lines and reports errors, failed promises, `console.error` calls and lost WebGL contexts to `POST /client_errors`, with those lines. `ClientError` keeps a row for each kind of error, counted. Every report also goes to `log/client_errors/<day>.jsonl`, and files older than 7 days are deleted. System admins see them at `/client_errors`, with stacks mapped back to source lines from the build's hidden source maps.
+
 ## Deploying
 
 Use the [deploy-dev](skills/deploy-dev/SKILL.md) skill.
