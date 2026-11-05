@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Units } from "./units.js";
+import { RestAreas } from "./restAreas.js";
 import { CAVE_THEMES, VOXEL_FT } from "../v2/caves.js";
 import { slabHome } from "../world/slabs.js";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
@@ -139,7 +140,8 @@ export class Tools {
     this.water = new WaterBodies(scene, (x, z) => this.surface(x, z), canvas.parentElement, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT);
     const stillAt = (x, z) => this.water.at(x, z)?.level ?? (renditions.seaAt(x, z) ? SEA_LEVEL_FT : null);
     this.courses = new Courses(scene, (x, z) => this.surface(x, z), canvas.parentElement, (x, z) => renditions.baseAt(x, z), stillAt);
-    this.outlined = { biomes: this.biomes, water: this.water, courses: this.courses }; // each tool that draws areas, its areas
+    this.restAreas = new RestAreas(scene, (x, z) => this.surface(x, z), canvas.parentElement, () => this.units.here(this.units.restPoints));
+    this.outlined = { biomes: this.biomes, water: this.water, courses: this.courses, restArea: this.restAreas }; // each tool that draws areas, its areas
     this.draw = new Draw(scene, canvas.parentElement, renditions, ground, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, () => this.showDraw(), this.biomes);
     // Measure's, { from, to } for a ruler, { middle, radius } for a circle, and while the button's
     // down, where it went down and whether a ruler or circle was shown before.
@@ -315,7 +317,7 @@ export class Tools {
       });
     }
     // Each area tool's kinds' buttons, by tool.
-    this.kindButtons = { biomes: [...document.querySelectorAll("[data-biome]")], water: [...document.querySelectorAll("[data-water]")], courses: [...document.querySelectorAll("[data-course]")] };
+    this.kindButtons = { biomes: [...document.querySelectorAll("[data-biome]")], water: [...document.querySelectorAll("[data-water]")], courses: [...document.querySelectorAll("[data-course]")], restArea: [] };
     for (const [tool, buttons] of Object.entries(this.kindButtons)) {
       for (const button of buttons) {
         button.addEventListener("click", () => {
@@ -330,6 +332,8 @@ export class Tools {
     $("waterUndo").addEventListener("click", () => this.water.undo());
     $("coursesDelete").addEventListener("click", () => this.courses.deleteSelected());
     $("coursesUndo").addEventListener("click", () => this.courses.undo());
+    $("restAreaDelete").addEventListener("click", () => this.restAreas.deleteSelected());
+    $("restAreaUndo").addEventListener("click", () => this.restAreas.undo());
     for (const id of ["courseStart", "courseEnd"]) {
       $(id).addEventListener("change", () => {
         const [start, end] = [Number($("courseStart").value), Number($("courseEnd").value)];
@@ -699,6 +703,7 @@ export class Tools {
     this.biomes.setShown(tool === "biomes" || this.biomesShown);
     this.water.setShown(tool === "water" || tool === "courses");
     this.courses.setShown(tool === "courses" || tool === "water");
+    this.restAreas.setShown(tool === "restArea" || UNITS.has(tool));
     this.measuring = null;
     this.paths.setShown(tool === "path");
     if (BUILD.has(tool) || BUILD.has(this.build.tool)) this.build.setTool(BUILD.has(tool) ? tool : null);

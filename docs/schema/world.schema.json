@@ -131,6 +131,19 @@
             "minItems": 2,
             "maxItems": 2,
             "description": "[x, z] in continent feet"
+          },
+          "area": {
+            "type": "array",
+            "description": "where characters are resting, so logging off is instant: [x, z] corners in continent feet",
+            "minItems": 3,
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
           }
         }
       }

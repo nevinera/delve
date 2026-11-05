@@ -1,8 +1,11 @@
 package game
 
 import (
+	"context"
 	"testing"
 	"time"
+
+	"github.com/delve-mmo/delve3d/game-server/internal/worlds"
 )
 
 func send(t *testing.T, p *Player, raw string) {
@@ -121,4 +124,35 @@ func TestStateIsKeptForTenMinutes(t *testing.T) {
 	if p.fight.vitals.Health != p.fight.vitals.MaxHealth || len(p.fight.cooldowns) != 0 {
 		t.Fatalf("health %v, cooldowns %v", p.fight.vitals.Health, p.fight.cooldowns)
 	}
+}
+
+func TestRestingLeavesAtOnce(t *testing.T) {
+	h := NewHub(restfulWorld{}, characters(nil))
+	c := clockOf(h)
+	p := enter(t, h, 1)
+	move(t, p, 300, 300)
+	heard(p)
+	send(t, p, `{"type":"logOff"}`)
+	h.Tick()
+	if !p.loggedOff || !saidLast(p, "loggedOff") || p.layer.players[1] != nil {
+		t.Fatal("logging off in a rest area wasn't at once")
+	}
+	*c += 1
+	if err := h.Flush(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	p = enter(t, h, 1)
+	h.Leave(p)
+	if p.layer.players[1] != nil {
+		t.Fatal("exiting in a rest area lingered")
+	}
+}
+
+// restfulWorld is fightWorld with an area around its inn.
+type restfulWorld struct{ fightWorld }
+
+func (r restfulWorld) Load(ctx context.Context, repo, sha string) (*worlds.World, error) {
+	w, err := r.fightWorld.Load(ctx, repo, sha)
+	w.RestPoints[0].Area = [][2]float64{{250, 250}, {350, 250}, {350, 350}, {250, 350}}
+	return w, err
 }

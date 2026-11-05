@@ -77,6 +77,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M24 5 L29 19 L19 19 Z" fill="#ffa030"/><path d="M24 11 L26.5 19 L21.5 19 Z" fill="#ffe080"/><ellipse cx="15" cy="20" rx="3" ry="2" fill="#8a8580"/><ellipse cx="33" cy="20" rx="3" ry="2" fill="#8a8580"/><ellipse cx="24" cy="21.5" rx="3" ry="1.6" fill="#8a8580"/></svg>
         <span>rest</span><kbd class="create-key">K</kbd>
       </button>
+      <button type="button" data-tool="restArea" data-key="l" aria-pressed="false" title="draw the area around a rest point where characters are resting">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M8 6 L38 3 L44 18 L14 21 Z" fill="none" stroke="#ffb050" stroke-width="2"/><path d="M26 8 L29 17 L23 17 Z" fill="#ffa030"/></svg>
+        <span>resting area</span><kbd class="create-key">L</kbd>
+      </button>
     </div>
     <div class="create-tools" data-work="build" hidden>
       <button type="button" data-tool="pick" data-key="h" aria-pressed="false" title="pick objects and slabs, to move, turn, delete or make a template of">
@@ -240,6 +244,14 @@
       <label id="restName" hidden>name <input type="text" maxlength="40" spellcheck="false"></label>
       <p id="dummyCount"></p>
       <p id="restCount"></p>
+    </div>
+    <div data-config="restArea" hidden>
+      <p class="create-note">Click corners to draw the area around a rest point where characters are resting: there, logging off is instant. Click its first corner, double-click or press Enter to close it. It goes to the rest point inside it, or else the nearest, and replaces that one's area.</p>
+      <p class="create-note">Click an area or its outline to select it. Drag its corners, drag an edge to add a corner, and shift-click a corner to take it away. Delete or backspace deletes it.</p>
+      <div class="create-way">
+        <button type="button" id="restAreaDelete">delete</button>
+        <button type="button" id="restAreaUndo">undo</button>
+      </div>
     </div>
     <div data-config="pin" hidden>
       <p class="create-note">Click the ground to stick a pin in it, and give it a title and notes. Click a pin's head to open it again.</p>
@@ -740,7 +752,7 @@
     <dt>planning</dt><dd>mark the world up: the marker draws lines on the ground, in colors, widths and dashes, the eraser erases them, select picks them out to delete whole, pins hold notes, measure measures distances and circles, and path finds the shortest way on foot from one place to another, to find where ranges and cliffs can be crossed. Click a pin's head to open it</dd>
     <dt>build</dt><dd>place objects and templates, from the ones used lately or the library, draw floors, walls, rooms and roofs as slabs, draw stairs and ramps, and pick what's placed to move, turn, delete or make a template of</dd>
     <dt>caves</dt><dd>lay out and polish cave networks. The panel shows the network you're in, or were last in, and switches it between layout and polish. Select picks points and entrances to see or change them; place entrance, from above the ground, starts or joins a network; in layout, add lays passages out from inside, to where you look; in polish, blocks, sculpt, smooth, flatten and paint edit the rock by hand. Number keys pick the rock: 1 the rock around it, 2 to 5 jagged, smooth, carved and mined</dd>
-    <dt>units</dt><dd>put up training dummies with the dummy tool and rest points with the rest tool, and pick them with select to drag them somewhere else, name a rest point, or press Delete to take them away. Planning's spawn tool sets where characters new to the world start.</dd>
+    <dt>units</dt><dd>put up training dummies with the dummy tool and rest points with the rest tool, draw the resting area around each rest point with the resting area tool, and pick them with select to drag them somewhere else, name a rest point, or press Delete to take them away. Planning's spawn tool sets where characters new to the world start.</dd>
     <dt>geo</dt><dd>shape the ground: raise and lower it with brushes of different shapes, flatten it, smooth it, draw lines to grow hills and mountain ranges along, draw areas of each biome, draw lakes, ponds and swamp pools, draw streams and rivers, and clear it away</dd>
   </dl>
 </div>

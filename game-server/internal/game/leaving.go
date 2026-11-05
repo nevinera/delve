@@ -103,13 +103,13 @@ func (h *Hub) takeKept(world, character int64, now time.Time) *kept {
 	return k
 }
 
-// Leave is a player's connection ending. Logged off, it leaves the world now; otherwise it stays
-// there, standing still, for lingerFor, where it can still be hit.
+// Leave is a player's connection ending. Logged off or resting, it leaves the world now; otherwise
+// it stays there, standing still, for lingerFor, where it can still be hit.
 func (h *Hub) Leave(p *Player) {
 	p.Drop("")
 	l := p.layer
 	l.mu.Lock()
-	if l.players[p.ID()] == p && !p.loggedOff && p.lingerUntil.IsZero() {
+	if l.players[p.ID()] == p && !p.loggedOff && p.lingerUntil.IsZero() && !l.resting(p) {
 		p.lingerUntil = h.now().Add(lingerFor)
 		p.logOffAt = time.Time{}
 		l.stopCast(p)
@@ -162,8 +162,19 @@ func (l *Layer) logOff(p *Player) {
 	if !p.logOffAt.IsZero() {
 		return
 	}
+	// Resting, it's at once.
+	if l.resting(p) {
+		p.logOffAt = now
+		return
+	}
 	p.logOffAt = now.Add(logOffWait)
 	p.send(encode(loggingOff{"loggingOff", logOffWait.Seconds()}))
+}
+
+// resting says whether a player is in a rest point's area, where it leaves at once. The layer's
+// lock is held.
+func (l *Layer) resting(p *Player) bool {
+	return l.world.Resting(p.state.Continent, p.state.At[0], p.state.At[2])
 }
 
 // stopLoggingOff calls off a player's logging off, saying why. The layer's lock is held.

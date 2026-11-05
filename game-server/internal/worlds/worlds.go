@@ -52,6 +52,18 @@ type RestPoint struct {
 	Name      string     `json:"name"`
 	Continent string     `json:"continent"`
 	At        [2]float64 `json:"at"`
+	// Area is where characters are resting, [x, z] corners in continent feet, or none.
+	Area [][2]float64 `json:"area"`
+}
+
+// Resting says whether a place on a continent is in a rest point's area.
+func (w *World) Resting(continent string, x, z float64) bool {
+	for _, r := range w.RestPoints {
+		if r.Continent == continent && len(r.Area) >= 3 && inPolygon(r.Area, [2]float64{x, z}) {
+			return true
+		}
+	}
+	return false
 }
 
 // RestPoint is the rest point with that id, or nil.

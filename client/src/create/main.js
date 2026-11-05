@@ -2,6 +2,7 @@ import "../errors/install.js";
 import { setReportContext } from "../report/button.js";
 import "./create.css";
 import * as THREE from "three";
+import { areasOf, giveAreas } from "./restAreas.js";
 import { alert } from "./alerts.js";
 import { strFromU8, strToU8, unzipSync, zip, zipSync } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
@@ -396,6 +397,8 @@ function start(world, changes, fresh) {
     if (!dummies.length) delete info.dummies;
     info.restPoints = restPoints;
     if (!restPoints.length) delete info.restPoints;
+    // A rest point taken away takes its area with it.
+    if (!tools.restAreas.draft) tools.restAreas.show(areasOf(restPoints, continent));
     changes.set("world.json", strToU8(`${JSON.stringify(info, null, 2)}\n`));
     await store.set("changes", changes).catch(() => {});
     showSpawn();
@@ -410,6 +413,11 @@ function start(world, changes, fresh) {
   restName.querySelector("input").addEventListener("input", (e) => tools.units.rename(e.target.value.trim()));
   tools.units.load({ continent, spawn: worldInfo().spawn, dummies: worldInfo().dummies, restPoints: worldInfo().restPoints });
   tools.units.onChange = keepUnits;
+  tools.restAreas.load(areasOf(worldInfo().restPoints ?? [], continent));
+  tools.restAreas.onChange = () => {
+    giveAreas(tools.units.restPoints, tools.restAreas.toJSON(), continent);
+    tools.units.changed();
+  };
   showSpawn();
   showDummies();
   $("spawnGo").addEventListener("click", () => {
