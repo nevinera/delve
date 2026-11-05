@@ -15,21 +15,33 @@ import { COLLECTIONS_PATH, EFFECT_IMAGE_PATH, EFFECT_SHEET_PATH, ICON_PATH, IMAG
 // first; plate, placed and caves files as they're wanted.
 
 const FETCHES = 8; // at once
+const RETRY_MS = [500, 2000]; // how long to wait before each try again, after a fetch that failed but might not next time
 
 export const rawUrl = (repo, sha, path) => `https://raw.githubusercontent.com/${repo}/${sha}/${path}`;
 
 export class PlayWorld {
-  // paths: every file at the commit. fetchFn: fetch, or a stand-in.
-  constructor({ repo, sha, paths, fetchFn = (...args) => fetch(...args) }) {
-    Object.assign(this, { repo, sha, fetchFn });
+  // paths: every file at the commit. fetchFn: fetch, or a stand-in. wait(ms): waits that long.
+  constructor({ repo, sha, paths, fetchFn = (...args) => fetch(...args), wait = (ms) => new Promise((done) => setTimeout(done, ms)) }) {
+    Object.assign(this, { repo, sha, fetchFn, wait });
     this.paths = new Set(paths);
     this.files = new Map(); // path -> bytes, of what's been fetched to keep
   }
 
+  // Tries again after the network fails, or after GitHub says it's busy or broken, but not after
+  // it says there's no such file.
   async bytes(path) {
-    const res = await this.fetchFn(rawUrl(this.repo, this.sha, path));
-    if (!res.ok) throw new Error(`couldn't fetch ${path} (${res.status})`);
-    return new Uint8Array(await res.arrayBuffer());
+    for (let tries = 0; ; tries++) {
+      let res;
+      try {
+        res = await this.fetchFn(rawUrl(this.repo, this.sha, path));
+      } catch (err) {
+        if (tries >= RETRY_MS.length) throw new Error(`couldn't fetch ${path} (${err.message})`);
+      }
+      if (res?.ok) return new Uint8Array(await res.arrayBuffer());
+      const again = !res || res.status === 429 || res.status >= 500;
+      if (!again || tries >= RETRY_MS.length) throw new Error(`couldn't fetch ${path} (${res.status})`);
+      await this.wait(RETRY_MS[tries]);
+    }
   }
 
   // A file's bytes, or null where the commit hasn't got it.

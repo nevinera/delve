@@ -46,6 +46,7 @@ const LEAVE_FT = 32; // how far past their tile's edge the builder goes before w
 const SKIRT = 0.75; // how far a skirt hangs, as a share of a part's size
 const SKIRT_SHADE = 0.6;
 const KEEP_PLATES = 40; // plate files kept decoded
+const FETCH_AGAIN_MS = 5000; // how long after a plate file couldn't be fetched it's tried again, if it's still wanted
 const BUILD_MS = 6; // how long a frame spends making plates
 const NOTHING_COVERED = new Set();
 export { EMPTY_FT };
@@ -65,6 +66,8 @@ export class Renditions {
     this.decoded = new Map(); // "px,pz" -> decoded plate file, the latest used last
     this.reading = new Set(); // "px,pz" of plate files being read
     this.unreadable = new Set(); // "px,pz" of plate files that couldn't be read
+    this.unfetched = new Map(); // "px,pz" -> when its plate file last couldn't be fetched
+    this.onWorker = new Set(); // "px,pz" of plate files the worker's reading
     this.worker = null; // reads plates to draw
     this.saver = null; // writes files, so a big save doesn't hold up what's being drawn
     this.nextWrite = 1;
@@ -547,7 +550,24 @@ export class Renditions {
       this.writes.get(data.id)(data);
       this.writes.delete(data.id);
     };
+    // A reader that stops is started again, with the plates it was reading.
+    worker.onerror = (event) => {
+      if (worker !== this.worker) return;
+      console.error(`the plate reader stopped: ${event.message ?? "no reason given"}`);
+      this.restartReader();
+    };
     return worker;
+  }
+
+  restartReader() {
+    this.worker?.terminate();
+    this.worker = null;
+    const again = [...this.onWorker];
+    this.onWorker.clear();
+    for (const key of again) {
+      this.reading.delete(key);
+      this.read(key);
+    }
   }
 
   tellWorkers(message) {
@@ -693,6 +713,7 @@ export class Renditions {
   // Starts reading plate file `key`, on a worker where there are workers.
   read(key) {
     if (this.reading.has(key) || this.unreadable.has(key)) return;
+    if (performance.now() - (this.unfetched.get(key) ?? -Infinity) < FETCH_AGAIN_MS) return;
     if (!this.plateFiles.has(key)) {
       // Made by hand: nothing to read.
       if (this.made.has(key)) this.done({ key, plate: { coords: key.split(",").map(Number), palette: [], tiles: new Map() } });
@@ -703,6 +724,7 @@ export class Renditions {
     this.reading.add(key);
     if (typeof Worker === "undefined") return this.done({ key, plate: decodePlate(this.plateFiles.get(key)) });
     this.startWorker();
+    this.onWorker.add(key);
     this.worker.postMessage({ key, bytes: this.plateFiles.get(key) });
   }
 
@@ -716,12 +738,19 @@ export class Renditions {
         this.plateFiles.set(key, bytes);
         this.read(key);
       },
-      (error) => this.done({ key, error }),
+      (error) => {
+        // The network may be back by the next time it's wanted, unlike a file that can't be read.
+        this.reading.delete(key);
+        this.unfetched.set(key, performance.now());
+        console.warn(`plate ${key} couldn't be fetched, and will be tried again: ${error.message ?? error}`);
+      },
     );
   }
 
   done({ key, plate, error }) {
     this.reading.delete(key);
+    this.onWorker.delete(key);
+    this.unfetched.delete(key);
     if (error) {
       this.unreadable.add(key);
       console.error(`plate ${key} can't be read: ${error}`);

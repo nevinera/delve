@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { TILE_FT } from "../v2/sizes.js";
 import { trackOf } from "../v2/courses.js";
 import { decodePlate, encodePlate } from "../v2/plate.js";
@@ -76,6 +76,28 @@ describe("Renditions", () => {
     expect(renditions.cells(0, 0).palette).toEqual([]);
     expect(renditions.heightAt(10, 10)).toBe(12);
     expect(renditions.hasCells(9, 0)).toBe(false);
+  });
+
+  it("fetches a plate file again a little after it couldn't", async () => {
+    const renditions = new Renditions();
+    const tile = { heights: new Float32Array(65 * 65).fill(12), colors: new Uint8Array(64 * 64 * 3), terrain: new Uint8Array(64 * 64), forest: new Uint8Array(64 * 64) };
+    renditions.plate = () => ({}); // the platter has the plate
+    const bytes = encodePlate({ coords: [0, 0], palette: ["grass"], tiles: new Map([[0, tile]]) });
+    let tries = 0;
+    renditions.fetchPlate = async () => (++tries === 1 ? Promise.reject(new Error("offline")) : bytes);
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    let now = 0;
+    vi.spyOn(performance, "now").mockImplementation(() => now);
+    expect(renditions.hasCells(0, 0)).toBe(false);
+    await new Promise((done) => setTimeout(done));
+    expect(renditions.hasCells(0, 0)).toBe(false);
+    expect(tries).toBe(1);
+    now = 6000;
+    renditions.hasCells(0, 0);
+    await new Promise((done) => setTimeout(done));
+    expect(tries).toBe(2);
+    expect(renditions.hasCells(0, 0)).toBe(true);
+    vi.restoreAllMocks();
   });
 });
 

@@ -56,4 +56,20 @@ describe("playing a released world", () => {
     const { world } = served(new Map([["world.json", json({ version: 1, name: "Old", continents: [] })]]));
     await expect(world.open()).rejects.toThrow(/version 1/);
   });
+
+  it("tries again when the network or GitHub fails, but not for a file that isn't there", async () => {
+    const answers = [Promise.reject(new TypeError("offline")), { ok: false, status: 503 }, { ok: true, arrayBuffer: async () => strToU8("hi").buffer }];
+    const waits = [];
+    const world = new PlayWorld({ repo: "me/w", sha: "c0ffee", paths: ["a.txt"], fetchFn: async () => answers.shift(), wait: async (ms) => waits.push(ms) });
+    expect(new TextDecoder().decode(await world.bytes("a.txt"))).toBe("hi");
+    expect(waits).toEqual([500, 2000]);
+
+    let tries = 0;
+    const missing = new PlayWorld({ repo: "me/w", sha: "c0ffee", paths: ["a.txt"], fetchFn: async () => (tries++, { ok: false, status: 404 }), wait: async () => {} });
+    await expect(missing.bytes("a.txt")).rejects.toThrow("404");
+    expect(tries).toBe(1);
+
+    const down = new PlayWorld({ repo: "me/w", sha: "c0ffee", paths: ["a.txt"], fetchFn: async () => ({ ok: false, status: 502 }), wait: async () => {} });
+    await expect(down.bytes("a.txt")).rejects.toThrow("502");
+  });
 });
