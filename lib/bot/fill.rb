@@ -85,7 +85,10 @@ module Bot
 
     def scaled(footprint, scale)
       # An open footprint doesn't scale.
-      footprint.to_h { |shape, v| [shape, (shape == "open") ? v : (v.is_a?(Array) ? v.map { _1 * scale } : v * scale)] }
+      footprint.to_h do |shape, v|
+        next [shape, v] if shape == "open"
+        [shape, v.is_a?(Array) ? v.map { _1 * scale } : v * scale]
+      end
     end
 
     def reach(footprint)
