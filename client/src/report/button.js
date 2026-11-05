@@ -15,6 +15,7 @@ const KINDS = [
   { id: "annoying", icon: "😖", label: "Something's annoying" },
 ];
 const SCREEN_WIDTH = 1280;
+const STOP_WAIT_MS = 5000; // the longest send waits for a recording to finish
 
 let context = () => ({});
 
@@ -87,6 +88,7 @@ function openReport() {
   let recorder = null;
   let recognizer = null;
   let voice = null;
+  let stopped = null; // settles once the recorder has handed over the voice note
   let started = 0;
   let ticking = null;
 
@@ -138,6 +140,8 @@ function openReport() {
     recorder = new MediaRecorder(stream, type ? { mimeType: type } : {});
     const parts = [];
     recorder.ondataavailable = (event) => parts.push(event.data);
+    let finished;
+    stopped = new Promise((done) => (finished = done));
     recorder.onstop = () => {
       stream.getTracks().forEach((track) => track.stop());
       voice = new Blob(parts, { type: recorder.mimeType || type || "audio/webm" });
@@ -146,6 +150,7 @@ function openReport() {
       mic.textContent = "🎤 talk again";
       mic.classList.remove("is-on");
       time.textContent = "";
+      finished();
     };
     recorder.start();
     started = performance.now();
@@ -176,7 +181,8 @@ function openReport() {
 
   send.addEventListener("click", async () => {
     stopVoice();
-    if (recorder?.state === "recording" || (recorder && !voice)) await new Promise((done) => setTimeout(done, 300));
+    // The recorder hands over the voice note a moment after it stops, longer in some browsers.
+    if (stopped) await Promise.race([stopped, new Promise((done) => setTimeout(done, STOP_WAIT_MS))]);
     if (!note.value.trim() && !voice) {
       status.textContent = "Say or type something first.";
       return;
