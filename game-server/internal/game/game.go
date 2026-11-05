@@ -56,10 +56,11 @@ type Hub struct {
 	mu      sync.Mutex
 	layers  map[string]*Layer // by world id and sha
 	playing map[int64]*Player // by character id
+	kept    map[keepKey]*kept // what's kept of characters that left lately
 }
 
 func NewHub(w WorldLoader, c Characters) *Hub {
-	return &Hub{worlds: w, characters: c, idle: IdleUnload, saver: newSaver(c), now: time.Now, roll: combat.Random, layers: map[string]*Layer{}, playing: map[int64]*Player{}}
+	return &Hub{worlds: w, characters: c, idle: IdleUnload, saver: newSaver(c), now: time.Now, roll: combat.Random, layers: map[string]*Layer{}, playing: map[int64]*Player{}, kept: map[keepKey]*kept{}}
 }
 
 // Layer is one copy of a world's open land and the characters in it.
@@ -101,6 +102,11 @@ type Player struct {
 	systemAdmin bool
 	// home is the id of the rest point it has made its home, or "" for none.
 	home string
+	// logOffAt is when it's logged off, if it's logging off. loggedOff says it has, so it leaves at
+	// once; lingerUntil, when its connection ended without, is when it leaves the world.
+	logOffAt    time.Time
+	loggedOff   bool
+	lingerUntil time.Time
 	// combatDebug says to log what each of its abilities comes to, for this connection.
 	combatDebug bool
 }
@@ -166,10 +172,13 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 	h.mu.Lock()
 	old := h.playing[state.ID]
 	h.mu.Unlock()
-	// Still playing here: where it is now is newer than what Rails has.
+	// Still playing here, or lingering: where it is now is newer than what Rails has, and its
+	// state comes with it.
+	back := h.takeKept(c.World, state.ID, h.now())
 	if old != nil && old.layer == layer {
 		layer.mu.Lock()
 		state.Continent, state.At, state.Yaw = old.state.Continent, old.state.At, old.state.Yaw
+		back = layer.keep(old, h.now())
 		layer.mu.Unlock()
 	}
 	p := &Player{Send: make(chan []byte, SendQueue), Gone: make(chan struct{}), layer: layer, state: state, motion: motion{joined: h.now()}}
@@ -177,6 +186,7 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 	p.fight.bars = character.Bars
 	p.systemAdmin = character.SystemAdmin
 	p.home = character.Home
+	p.restore(back, layer.world.Sha, h.now())
 	p.saved = p.position()
 
 	h.mu.Lock()
@@ -184,7 +194,7 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 	h.mu.Unlock()
 	if old != nil {
 		old.Drop("you entered the game somewhere else")
-		h.Leave(old)
+		h.remove(old, false)
 	}
 	layer.join(p)
 	return p, nil
@@ -248,17 +258,6 @@ func (h *Hub) layer(ctx context.Context, c token.Claims) (*Layer, error) {
 	return h.layers[key], nil
 }
 
-// Leave takes a player out of the game, telling those near it, and saves where it was.
-func (h *Hub) Leave(p *Player) {
-	p.Drop("")
-	h.mu.Lock()
-	if h.playing[p.ID()] == p {
-		delete(h.playing, p.ID())
-	}
-	h.mu.Unlock()
-	p.layer.leave(p)
-}
-
 // Layers is how many layers are loaded.
 func (h *Hub) Layers() int {
 	h.mu.Lock()
@@ -311,6 +310,14 @@ func (l *Layer) join(p *Player) {
 		}
 	}
 	if p.fight.class != nil {
+		// Cooldowns kept from before it left.
+		for id := range p.fight.cooldowns {
+			if a := p.fight.class.Ability(id); a != nil {
+				if left := readyIn(&p.fight, a, now); left > 0 {
+					p.send(encode(cooldown{"cooldown", id, left}))
+				}
+			}
+		}
 		p.send(encode(buildMessage{"build", p.fight.build.Specialization, p.fight.build.Talents}))
 		if p.fight.bars != nil {
 			p.send(encode(barsMessage{"bars", p.fight.bars}))
@@ -318,12 +325,14 @@ func (l *Layer) join(p *Player) {
 	}
 }
 
-func (l *Layer) leave(p *Player) {
+// leave takes a player off the layer, and gives what to keep of it, or nil if it wasn't on it.
+func (l *Layer) leave(p *Player) *kept {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.players[p.ID()] != p {
-		return
+		return nil
 	}
+	k := l.keep(p, l.hub.now())
 	for _, o := range l.near(p) {
 		o.send(encode(vanish{"vanish", p.ID()}))
 	}
@@ -333,6 +342,7 @@ func (l *Layer) leave(p *Player) {
 	if len(l.players) == 0 {
 		l.unload = time.AfterFunc(l.hub.idle, l.unloadIfEmpty)
 	}
+	return k
 }
 
 func (l *Layer) unloadIfEmpty() {
@@ -372,6 +382,9 @@ func (p *Player) Handle(raw []byte) error {
 		return nil
 	case "sees":
 		p.layer.answerSees(p, m.Target)
+		return nil
+	case "logOff":
+		p.layer.logOff(p)
 		return nil
 	case "makeHome":
 		p.layer.makeHome(p, m.Rest)

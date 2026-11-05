@@ -93,6 +93,13 @@ func (f *fakeCharacters) saved() []rails.Position {
 	return append([]rails.Position(nil), f.saves...)
 }
 
+// gone ends a player's connection and waits out its linger, by the hub's clock.
+func gone(h *Hub, p *Player) {
+	h.Leave(p)
+	*clockOf(h) += lingerFor.Seconds() + 0.1
+	h.Tick()
+}
+
 func enter(t *testing.T, h *Hub, id int64) *Player {
 	t.Helper()
 	p, err := h.Enter(context.Background(), token.Claims{Character: id, World: 1, Repo: "them/vale", Sha: "s"})
@@ -212,7 +219,10 @@ func TestNearbyCharactersSeeEachOther(t *testing.T) {
 		t.Fatalf("b got %v", m)
 	}
 
-	h.Leave(b)
+	gone(h, b)
+	if m := next(t, a); m["type"] != "moved" || m["id"] != 2.0 {
+		t.Fatalf("a got %v", m) // b stops where it stands while it lingers
+	}
 	if m := next(t, a); m["type"] != "vanish" || m["id"] != 2.0 {
 		t.Fatalf("a got %v", m)
 	}
@@ -247,7 +257,7 @@ func TestLayersUnloadWhenEmpty(t *testing.T) {
 	loads := &fakeWorlds{}
 	h := NewHub(loads, characters(nil))
 	h.idle = 10 * time.Millisecond
-	h.Leave(enter(t, h, 1))
+	gone(h, enter(t, h, 1))
 	time.Sleep(50 * time.Millisecond)
 	if h.Layers() != 0 {
 		t.Fatal("layer didn't unload")
@@ -298,7 +308,7 @@ func TestSavingPositions(t *testing.T) {
 
 	// So does leaving, and entering again starts there.
 	move(t, p, 6300, 5400)
-	h.Leave(p)
+	gone(h, p)
 	if got := flush(); len(got) != 3 || got[2].At[0] != 6300 || got[2].Continent != "main" {
 		t.Fatalf("saved %v", got)
 	}

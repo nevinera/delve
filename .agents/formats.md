@@ -1130,7 +1130,10 @@ A token is `<payload>.<signature>`, both base64url without padding. The payload 
 ### Placing a character
 
 - The game server keeps each released commit's zip on disk, keyed by repo and sha, and downloads it from GitHub the first time someone enters it. A world stays in memory while it has players, and unloads a few minutes after the last one leaves.
-- Rails gives the character's last position in the world, or none. With none, the character starts at the world's spawn point (`spawn` in `world.json`). A character still connected elsewhere in the same layer keeps where it is there.
+- Rails gives the character's last position in the world, or none. With none, the character starts at the world's spawn point (`spawn` in `world.json`). A character still connected elsewhere in the same layer, or still lingering there, keeps where it is there, and its health, resources, cooldowns and statuses.
+- **Logging off:** you can't start in combat. It takes 20 s, and moving, using an ability or getting into combat calls it off. Then the server says `loggedOff` and closes the connection, and the character leaves at once.
+- **Lingering:** when a connection ends any other way, the character stays in the world for 20 s, standing still. It can be hit, and its statuses run on.
+- **Coming back:** for 10 minutes after a character leaves, the server keeps its health, resources, cooldowns and lockouts, and the statuses it put on itself, and gives them back if it enters the same release of the world with the same class and level. Its statuses stand still while it's gone, and its cooldowns and lockouts keep running.
 - The open world runs as layers (copies). The server puts each entering character on a layer. For now each world has one.
 
 ### Messages
@@ -1148,6 +1151,7 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `bars` | `bars` | you've set your action bars: up to 3 lists of up to 12 ability ids, `""` for an empty slot |
 | `build` | `specialization`, `talents` | you ask for this specialization and these talents, out of combat: the server keeps what's allowed and answers with `build` |
 | `stop` | none | you stop what you're casting or channelling |
+| `logOff` | none | you ask to log off |
 | `makeHome` | `rest` | you ask to make this rest point your home. You have to be within 20 ft of it, across the ground |
 | `attack` | `target` | you start auto-attacking `target`, or stop with 0 |
 | `sees` | `target` | you ask whether the server has you seeing `target`, within 200 ft, up to 40 times a second, for the line of sight overlay |
@@ -1188,6 +1192,9 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions a
 | `health` | `id`, `health`, `maxHealth` | a training dummy reset |
 | `restPoints` | `restPoints`, `home` | as you enter, if the world has rest points: those on your continent as `{ id, name, at }`, `at` standing on the ground, and your home's id or `""` |
 | `home` | `home` | you made this rest point your home |
+| `loggingOff` | `seconds` | you'll be logged off in this long |
+| `logOffStopped` | `why` | logging off was called off |
+| `loggedOff` | none | you're logged off, and the server closes the connection |
 | `level` | `id`, `level` | someone's level changed |
 | `bars` | `bars` | the action bars you set, as you enter, if you ever have |
 | `build` | `specialization`, `talents` | what you've chosen, after you enter and whenever it changes |

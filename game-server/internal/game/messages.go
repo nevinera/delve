@@ -314,6 +314,23 @@ type home struct {
 	Home string `json:"home"`
 }
 
+// loggingOff says you'll be logged off in `seconds`, unless you move, act or fight first.
+type loggingOff struct {
+	Type    string  `json:"type"`
+	Seconds float64 `json:"seconds"`
+}
+
+// logOffStopped says logging off was called off, and why.
+type logOffStopped struct {
+	Type string `json:"type"`
+	Why  string `json:"why"`
+}
+
+// loggedOff says you're logged off, just before the server closes the connection.
+type loggedOff struct {
+	Type string `json:"type"`
+}
+
 type appear struct {
 	Type      string    `json:"type"`
 	Character Character `json:"character"`

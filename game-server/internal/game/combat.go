@@ -330,6 +330,7 @@ func (l *Layer) use(p *Player, m incoming) {
 		return
 	}
 	f := &p.fight
+	l.stopLoggingOff(p, "you used an ability")
 	l.breakStatuses(&f.vitals, "action", func(s *combat.Status) bool { return s.KeptBy.Keeps(ability) })
 	gcd := combat.GCDSeconds
 	if ability.GCD != nil {
@@ -2508,6 +2509,7 @@ func (l *Layer) interruptMoving(p *Player) {
 	}
 	if movingNow(p.state.Move) {
 		l.breakStatuses(&p.fight.vitals, "move", nil)
+		l.stopLoggingOff(p, "you moved")
 	}
 }
 
@@ -2523,7 +2525,11 @@ func (h *Hub) Tick() {
 	for _, l := range layers {
 		l.mu.Lock()
 		l.tick(now)
+		gone := l.leavings(now)
 		l.mu.Unlock()
+		for _, p := range gone {
+			h.remove(p, true)
+		}
 	}
 }
 

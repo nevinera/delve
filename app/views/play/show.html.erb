@@ -18,13 +18,18 @@
     <p class="play-menu-title"><strong><%= @character.name %></strong> in <%= @world.display_name %><% if @preview %>, previewing <%= @preview.tag %><% end %></p>
     <button type="button" data-build>specialization and talents</button>
     <button type="button" data-open="playGraphics">graphics settings</button>
-    <%= link_to "leave world", worlds_path, class: "play-menu-leave" %>
+    <button type="button" class="play-menu-leave" data-log-off>log off</button>
     <a href="/icons/credits.txt" target="_blank" rel="noopener">icon credits</a>
   </div>
   <div id="playGraphics" class="play-menu-page" hidden>
     <button type="button" data-back>back</button>
     <div class="play-graphics"></div>
   </div>
+</div>
+<div id="playLeaving" class="play-leaving" hidden>
+  <p>Logging off in <span data-left>20</span> s. Move or act to stay.</p>
+  <%= link_to "exit now", worlds_path, data: {exit: true} %>
+  <p class="play-leaving-note">Exiting now leaves your character standing here for 20 seconds.</p>
 </div>
 <div class="play-turn">Turn your phone sideways to play.</div>
 <script type="application/json" id="playConfig"><%= raw json_escape(@config.to_json) %></script>

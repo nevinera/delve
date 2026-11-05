@@ -183,7 +183,8 @@ func TestPlay(t *testing.T) {
 	if m := receive(t, b); m["type"] != "error" {
 		t.Fatalf("b got %v", m)
 	}
-	if m := receive(t, a); m["type"] != "vanish" {
+	// b stays in the world a while, standing still.
+	if m := receive(t, a); m["type"] != "moved" || m["move"].(map[string]any)["forward"] != 0.0 {
 		t.Fatalf("a got %v", m)
 	}
 }

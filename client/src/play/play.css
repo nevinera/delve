@@ -764,3 +764,26 @@ body.touch .play-bar button {
   cursor: default;
   opacity: 0.8;
 }
+
+/* Logging off: the countdown, and a way out at once. */
+.play-leaving {
+  position: fixed;
+  left: 50%;
+  top: 30%;
+  transform: translateX(-50%);
+  padding: 14px 22px;
+  text-align: center;
+  color: #eee;
+  background: rgba(20, 18, 24, 0.9);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 6px;
+}
+
+.play-leaving a {
+  color: #ffd27a;
+}
+
+.play-leaving-note {
+  font-size: 0.85em;
+  opacity: 0.7;
+}

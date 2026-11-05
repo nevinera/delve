@@ -6,6 +6,7 @@ import { setWorldIcons } from "./icons.js";
 import { setWorldEffectSheets } from "../abilities/effectTextures.js";
 import { SightLines } from "./sightLines.js";
 import { RestPoints } from "./restPoints.js";
+import { Leaving } from "./leaving.js";
 import { builtObjects, images } from "../objects/collections.js";
 import { prepareAnimations } from "../character/animations.js";
 import { resolveRecipe } from "../character/recipe.js";
@@ -97,6 +98,8 @@ async function play() {
   let firstBars = null;
   let earlyAreas = [];
   let restPoints = null;
+  let earlyCooldowns = [];
+  let leaving = null;
   let firstRestPoints = null;
   const early = []; // what the server says before the view is ready, as [method, argument]
   const tell = (method, arg) => (others ? others[method](arg) : early.push([method, arg]));
@@ -130,7 +133,14 @@ async function play() {
     used: fight("used"),
     stopped: fight("stopped"),
     refused: fight("refused"),
-    cooldown: fight("cooldown"),
+    cooldown: (message) => (combat ? combat.cooldown(message) : earlyCooldowns.push(message)),
+    loggingOff: (message) => leaving?.started(message),
+    logOffStopped: (message) => {
+      leaving?.stopped();
+      status(`You stopped logging off: ${message.why}.`);
+      setTimeout(() => status(""), 3000);
+    },
+    loggedOff: () => leaving?.done(),
     lockout: fight("lockout"),
     hit: fight("hit"),
     resources: fight("resources_"),
@@ -167,6 +177,7 @@ async function play() {
       others?.clear();
     },
   }, loader);
+  leaving = new Leaving({ connection, panel: $("playLeaving"), button: menu.querySelector("[data-log-off]") });
 
   status("Loading the land around you...");
   let showGraphics = null;
@@ -232,6 +243,7 @@ async function play() {
   if (firstBuild) combat.build_(firstBuild);
   if (firstBars) combat.bars_(firstBars);
   earlyAreas.forEach((message) => combat.area_(message));
+  earlyCooldowns.forEach((message) => combat.cooldown(message));
   // A handle for scripts and the browser's console.
   window.play = { view, connection, others, combat, renditions, placed, caves, sightLines, restPoints };
   if (touch) new TouchControls(view, document.body);

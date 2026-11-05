@@ -101,6 +101,11 @@ export class GameConnection {
     if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: "command", line }));
   }
 
+  // Asks to log off; the server says when you are, or why it stopped.
+  logOff() {
+    if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: "logOff" }));
+  }
+
   // Asks to make a rest point your home; the server says whether it did.
   makeHome(rest) {
     if (this.socket.readyState === WebSocket.OPEN) this.socket.send(JSON.stringify({ type: "makeHome", rest }));
