@@ -13,4 +13,13 @@ class WorldCharacter < ApplicationRecord
   validates :level, numericality: {only_integer: true, greater_than: 0}, on: :level
 
   def position = continent && {continent:, at: [x, y, z], yaw:}
+
+  RECENT_WORLDS = 4
+
+  # For each character, by id, the released worlds it played most lately, up to RECENT_WORLDS. The
+  # game server writes a character's row in a world as it plays there.
+  def self.recent_worlds(characters)
+    rows = where(character: characters).includes(:world).order(updated_at: :desc)
+    rows.select { |row| row.world.released? }.group_by(&:character_id).transform_values { |list| list.first(RECENT_WORLDS).map(&:world) }
+  end
 end

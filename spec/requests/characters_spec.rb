@@ -20,6 +20,14 @@ RSpec.describe "Characters", type: :request do
       expect(response.body).not_to include("Boromir")
     end
 
+    it "gives each character buttons for the worlds it played last" do
+      arwen = create(:character, user:, name: "Arwen")
+      world = create(:world, repo: "them/vale", released_sha: "abc")
+      WorldCharacter.create!(world:, character: arwen)
+      get characters_path
+      expect(response.body).to include(%(href="#{play_path(world, character: arwen.id)}"))
+    end
+
     it "opens the builder for a new character" do
       get new_character_path
       expect(response).to have_http_status(:ok)

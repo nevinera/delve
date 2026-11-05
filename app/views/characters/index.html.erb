@@ -5,7 +5,7 @@
 <h1>Your characters</h1>
 <% if @characters.any? %>
   <ul class="character-list">
-    <%= render partial: "characters/character", collection: @characters %>
+    <%= render partial: "characters/character", collection: @characters, locals: {played: @played} %>
   </ul>
 <% else %>
   <p>You don't have any characters yet.</p>
