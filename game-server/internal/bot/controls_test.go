@@ -182,3 +182,12 @@ func TestSwimsInDeepWater(t *testing.T) {
 		t.Errorf("not swimming: %+v", out[len(out)-1])
 	}
 }
+
+func TestSwimsWhereItsPutInDeepWater(t *testing.T) {
+	var out sent
+	c := controlsAt(&out, [3]float64{-50, 5.5, 0}, 0, slope{rise: 1})
+	c.Report(0)
+	if !out[0].Move.Swim {
+		t.Errorf("standing in deep water: %+v", out[0])
+	}
+}
