@@ -130,6 +130,14 @@ func pass(h *Hub, c *float64, s float64) {
 }
 
 // heard is what's waiting for p, keeping the types asked for.
+// ask sends a client's message, as it would come over the socket.
+func ask(t *testing.T, p *Player, msg string) {
+	t.Helper()
+	if err := p.Handle([]byte(msg)); err != nil {
+		t.Fatalf("%s: %v", msg, err)
+	}
+}
+
 func heard(p *Player, types ...string) []map[string]any {
 	var out []map[string]any
 	for {

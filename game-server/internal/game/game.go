@@ -364,8 +364,19 @@ func (l *Layer) unloadIfEmpty() {
 
 var errBadMessage = errors.New("bad message")
 
+// handled, when set, sees every message from a client that Handle takes. Tests check them
+// against docs/schema/messages.schema.json.
+var handled func(raw []byte)
+
 // Handle takes a message from a player's client.
-func (p *Player) Handle(raw []byte) error {
+func (p *Player) Handle(raw []byte) (err error) {
+	if handled != nil {
+		defer func() {
+			if err == nil {
+				handled(raw)
+			}
+		}()
+	}
 	var m incoming
 	if err := json.Unmarshal(raw, &m); err != nil {
 		return errBadMessage

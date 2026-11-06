@@ -1,6 +1,7 @@
 package game
 
 import (
+	"fmt"
 	"math"
 	"testing"
 
@@ -85,7 +86,7 @@ func TestSightKeepsAreasOut(t *testing.T) {
 
 func TestAskingWhatTheServerSees(t *testing.T) {
 	_, p, _, d := behindWall(t)
-	p.layer.answerSees(p, d.ID)
+	ask(t, p, fmt.Sprintf(`{"type":"sees","target":%d}`, d.ID))
 	got := heard(p, "sees")
 	if len(got) != 1 || got[0]["clear"] != false || got[0]["target"] != float64(d.ID) {
 		t.Fatalf("sees = %v", got)

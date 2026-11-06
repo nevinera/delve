@@ -12,6 +12,7 @@ import (
 
 	"github.com/delve-mmo/delve3d/game-server/internal/combat"
 	"github.com/delve-mmo/delve3d/game-server/internal/game"
+	"github.com/delve-mmo/delve3d/game-server/internal/messagestest"
 	"github.com/delve-mmo/delve3d/game-server/internal/rails"
 	"github.com/delve-mmo/delve3d/game-server/internal/token"
 	"github.com/delve-mmo/delve3d/game-server/internal/worlds"
@@ -98,7 +99,7 @@ func TestPickingAClassBeforeEntering(t *testing.T) {
 	if m := receive(t, c); m["type"] != "pickClass" || len(m["classes"].([]any)) != 2 {
 		t.Fatalf("got %v", m)
 	}
-	_ = c.WriteJSON(map[string]any{"type": "pick", "class": "nope"})
+	send(t, c, map[string]any{"type": "pick", "class": "nope"})
 	if m := receive(t, c); m["type"] != "error" {
 		t.Fatalf("got %v", m)
 	}
@@ -110,8 +111,8 @@ func TestPickingAClassBeforeEntering(t *testing.T) {
 	}
 	defer c.Close()
 	receive(t, c)
-	_ = c.WriteJSON(map[string]any{"type": "heartbeat"})
-	_ = c.WriteJSON(map[string]any{"type": "pick", "class": "fire0001"})
+	send(t, c, map[string]any{"type": "heartbeat"})
+	send(t, c, map[string]any{"type": "pick", "class": "fire0001"})
 	if m := receive(t, c); m["type"] != "welcome" || m["you"].(map[string]any)["class"] != "fire0001" {
 		t.Fatalf("got %v", m)
 	}
@@ -135,11 +136,28 @@ func dial(t *testing.T, url, tok string) (*websocket.Conn, *http.Response, error
 func receive(t *testing.T, c *websocket.Conn) map[string]any {
 	t.Helper()
 	_ = c.SetReadDeadline(time.Now().Add(time.Second))
+	_, b, err := c.ReadMessage()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, why := messagestest.Check("server", b); why != "" {
+		t.Error(why)
+	}
 	var m map[string]any
-	if err := c.ReadJSON(&m); err != nil {
+	if err := json.Unmarshal(b, &m); err != nil {
 		t.Fatal(err)
 	}
 	return m
+}
+
+// send sends a client's message, checking it's one the schema has.
+func send(t *testing.T, c *websocket.Conn, m map[string]any) {
+	t.Helper()
+	b, _ := json.Marshal(m)
+	if _, why := messagestest.Check("client", b); why != "" {
+		t.Error(why)
+	}
+	_ = c.WriteMessage(websocket.TextMessage, b)
 }
 
 func TestPlay(t *testing.T) {
@@ -173,7 +191,7 @@ func TestPlay(t *testing.T) {
 		t.Fatalf("a got %v", m)
 	}
 	// Turning where it stands.
-	_ = b.WriteJSON(map[string]any{"type": "heartbeat", "at": at, "yaw": 2})
+	send(t, b, map[string]any{"type": "heartbeat", "at": at, "yaw": 2})
 	if m := receive(t, a); m["type"] != "moved" || m["yaw"] != 2.0 {
 		t.Fatalf("a got %v", m)
 	}

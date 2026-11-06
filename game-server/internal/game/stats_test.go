@@ -748,7 +748,7 @@ func TestChoosingABuild(t *testing.T) {
 	if got := heard(p, "refused"); len(got) != 1 {
 		t.Fatalf("knew a spec's ability with no spec: %v", got)
 	}
-	p.layer.chooseBuild(p, combat.Build{Specialization: "guard"})
+	ask(t, p, `{"type":"build","specialization":"guard","talents":{}}`)
 	got := heard(p, "build")
 	if len(got) != 1 || got[0]["specialization"] != "guard" {
 		t.Fatalf("heard %v", got)
@@ -762,7 +762,7 @@ func TestChoosingABuild(t *testing.T) {
 		t.Fatalf("hit for %g, want 200 with the spec's status", got)
 	}
 	// In combat now, from that hit.
-	p.layer.chooseBuild(p, combat.Build{Specialization: "blade"})
+	ask(t, p, `{"type":"build","specialization":"blade"}`)
 	if got := heard(p, "refused"); len(got) != 1 || p.fight.build.Specialization != "guard" {
 		t.Fatalf("changed in combat: %v", got)
 	}
@@ -777,11 +777,17 @@ func TestChoosingABuild(t *testing.T) {
 }
 
 func TestSettingBars(t *testing.T) {
-	_, p, _ := statusFight(t, nil)
-	bars := [][]string{{"a", ""}, {"b"}}
-	p.layer.setBars(p, bars)
+	h, p, _ := statusFight(t, nil)
+	ask(t, p, `{"type":"bars","bars":[["a",""],["b"]]}`)
 	if len(p.fight.bars) != 2 {
 		t.Fatalf("bars = %v", p.fight.bars)
+	}
+	// They come back as it enters again.
+	h.characters.(*fakeCharacters).bars[1] = p.fight.bars
+	gone(h, p)
+	again := enter(t, h, 1)
+	if got := heard(again, "bars"); len(got) != 1 {
+		t.Fatalf("heard bars %v", got)
 	}
 	for _, bad := range [][][]string{nil, {{}, {}, {}, {}}, {make([]string, maxSlots+1)}, {{strings.Repeat("x", maxSlotLen+1)}}} {
 		p.layer.setBars(p, bad)

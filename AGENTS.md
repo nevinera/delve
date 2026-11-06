@@ -9,7 +9,7 @@ A browser-based 3D MMO in a tiled, height-mapped world. People build worlds in `
 - [.agents/standards.md](.agents/standards.md): code, writing, naming, commits and tests.
 - [.agents/glossary.md](.agents/glossary.md): our words, and the ones we avoid.
 - [.agents/workflows.md](.agents/workflows.md): running, testing, screenshots, converting worlds and deploying.
-- [docs/schema/](docs/schema): JSON Schemas for a world's JSON files.
+- [docs/schema/](docs/schema): JSON Schemas for a world's JSON files and the game's messages.
 - `plans/`: designs and history, not in git and not on every machine. It's background, not binding.
 
 Skills, for jobs with steps and scripts:

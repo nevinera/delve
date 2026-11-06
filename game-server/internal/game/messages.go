@@ -375,8 +375,15 @@ type errorMessage struct {
 	Message string `json:"message"`
 }
 
+// encoded, when set, sees every message the server encodes. Tests check them against
+// docs/schema/messages.schema.json.
+var encoded func(b []byte)
+
 func encode(v any) []byte {
 	b, _ := json.Marshal(v)
+	if encoded != nil {
+		encoded(b)
+	}
 	return b
 }
 

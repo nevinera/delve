@@ -118,7 +118,7 @@ type Ability struct {
 type Channel struct {
 	Duration    float64 `json:"duration"`
 	Ticks       int     `json:"ticks"`
-	CostPerTick *Cost   `json:"costPerTick"`
+	CostPerTick *Cost   `json:"costPerTick,omitempty"`
 }
 
 // Cost is what using an ability spends.
@@ -127,10 +127,10 @@ type Cost struct {
 	Amount   float64 `json:"amount"`
 	Percent  float64 `json:"percent"` // of the resource's most
 
-	All       bool        `json:"all"`       // spends all you have, needing at least Amount
-	UpTo      float64     `json:"upTo"`      // spends more if you have it, up to this in all
-	PerSecond float64     `json:"perSecond"` // spends this each second of a channel
-	When      []Condition `json:"when"`      // it only counts while these hold
+	All       bool        `json:"all"`            // spends all you have, needing at least Amount
+	UpTo      float64     `json:"upTo"`           // spends more if you have it, up to this in all
+	PerSecond float64     `json:"perSecond"`      // spends this each second of a channel
+	When      []Condition `json:"when,omitempty"` // it only counts while these hold
 }
 
 // Effect is one thing an ability does.

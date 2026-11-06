@@ -314,7 +314,7 @@ func (l *Layer) refit(v *vitals, now time.Time) {
 	speed := max(stats.MovementSpeed, 0)
 	if controls := l.controlsOn(v); !slices.Equal(controls, o.fight.controls) {
 		o.fight.controls = controls
-		o.send(encode(controlsMessage{"controls", controls}))
+		o.send(encode(controlsMessage{"controls", append([]string{}, controls...)}))
 		if c := o.fight.cast; c != nil && combat.Blocked(controls, c.ability) != "" {
 			l.stopCast(o)
 		}

@@ -34,6 +34,7 @@ type fakeCharacters struct {
 	admin map[int64]bool
 	level map[int64]int
 	home  map[int64]string
+	bars  map[int64][][]string
 	saves []rails.Position
 }
 
@@ -41,13 +42,13 @@ func characters(at map[int64]*rails.Position) *fakeCharacters {
 	if at == nil {
 		at = map[int64]*rails.Position{}
 	}
-	return &fakeCharacters{at: at, class: map[int64]string{}, admin: map[int64]bool{}, level: map[int64]int{}, home: map[int64]string{}}
+	return &fakeCharacters{at: at, class: map[int64]string{}, admin: map[int64]bool{}, level: map[int64]int{}, home: map[int64]string{}, bars: map[int64][][]string{}}
 }
 
 func (f *fakeCharacters) Character(_ context.Context, _, id int64) (rails.Character, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return rails.Character{ID: id, Name: fmt.Sprintf("C%d", id), Look: json.RawMessage(`{"skin":1}`), Class: f.class[id], Level: f.level[id], Position: f.at[id], SystemAdmin: f.admin[id], Home: f.home[id]}, nil
+	return rails.Character{ID: id, Name: fmt.Sprintf("C%d", id), Look: json.RawMessage(`{"skin":1}`), Class: f.class[id], Level: f.level[id], Position: f.at[id], SystemAdmin: f.admin[id], Home: f.home[id], Bars: f.bars[id]}, nil
 }
 
 func (f *fakeCharacters) SaveBars(_ context.Context, _, _ int64, _ [][]string) error {
@@ -553,8 +554,8 @@ func TestReportsFromBeforeATeleportDontCount(t *testing.T) {
 	from := p.state.At
 	say(t, p, "/teleport 5000 5000")
 	report := func(at [3]float64) {
-		b, _ := json.Marshal(incoming{Type: "heartbeat", T: 1000, At: at})
-		if err := p.Handle(b); err != nil {
+		b := fmt.Sprintf(`{"type":"heartbeat","t":1000,"at":[%v,%v,%v],"yaw":0}`, at[0], at[1], at[2])
+		if err := p.Handle([]byte(b)); err != nil {
 			t.Fatal(err)
 		}
 	}

@@ -1164,7 +1164,7 @@ A token is `<payload>.<signature>`, both base64url without padding. The payload 
 
 ### Messages
 
-Each websocket message is a JSON text frame, `{ "type": ..., ... }`. Positions are continent feet `[x, y, z]` (x east, z south, y up), and `yaw` is radians, 0 facing +z.
+Each websocket message is a JSON text frame, `{ "type": ..., ... }`. [`messages.schema.json`](../docs/schema/messages.schema.json) defines each one. The game server's tests check every message they send and take against it. A client test checks that the play page handles each server message, sends only client messages, and that the tables below list the same messages. Positions are continent feet `[x, y, z]` (x east, z south, y up), and `yaw` is radians, 0 facing +z.
 
 #### Client to server
 

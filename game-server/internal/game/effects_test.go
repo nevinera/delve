@@ -357,7 +357,7 @@ func TestStunStopsEverythingUntilItEnds(t *testing.T) {
 		t.Fatal("not stunned as far as conditions go")
 	}
 	pass(h, c, 5.1)
-	if got := heard(p, "controls"); len(got) != 1 || got[0]["controls"] != nil {
+	if got := heard(p, "controls"); len(got) != 1 || len(got[0]["controls"].([]any)) != 0 {
 		t.Fatalf("after it ended: %v", got)
 	}
 	if p.motion.slowed != 0 {
