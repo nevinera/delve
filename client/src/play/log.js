@@ -1,10 +1,22 @@
 // The log on the play page: lines of what's happened, and a box for typing commands. Enter or a
-// slash opens the box. The game server reads what's typed and answers in the log, but for the
-// page's own commands, which it runs itself.
+// slash opens the box, and up and down in it go back through what you've typed. The game server
+// reads what's typed and answers in the log, but for the page's own commands, which it runs itself.
 
 const LINES = 200;
 const SIZE_KEPT = "playLogSize"; // the size you've dragged it to, in localStorage
+const FONT_KEPT = "playLogFont"; // its text size in px, in localStorage
+const TYPED_KEPT = "playLogTyped"; // what you've typed lately, in localStorage
 const MIN = [220, 60];
+const FONT_PX = [10, 24]; // the smallest and largest its text goes
+const TYPED = 50; // how many typed lines it remembers
+
+// What each line in the log is, which gives it its color (play.css): reply, an answer to what you
+// typed or did; status, what's happened to you or the world; error, for errors and warnings;
+// combat, what's landed in a fight; and debug, the server's combat debug lines.
+export const TYPES = ["reply", "status", "error", "combat", "debug"];
+// The server's older name for both replies and statuses.
+const OLD_TYPES = { system: "status" };
+export const typeOf = (type) => (TYPES.includes(type) ? type : (OLD_TYPES[type] ?? "status"));
 
 // What to send for what's typed, or an `error` to show, or nothing for an empty line. A command
 // named in `local` (name -> run(args)) is the page's own: what's given is that command's run and
@@ -18,12 +30,49 @@ export function readLine(text, local = {}) {
   return { send: line };
 }
 
-function keptSize() {
+function kept(key) {
   try {
-    const size = JSON.parse(localStorage.getItem(SIZE_KEPT));
-    return Array.isArray(size) && size.length === 2 && size.every(Number.isFinite) ? size : null;
+    return JSON.parse(localStorage.getItem(key));
   } catch {
     return null;
+  }
+}
+
+function keep(key, value) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {}
+}
+
+function keptSize() {
+  const size = kept(SIZE_KEPT);
+  return Array.isArray(size) && size.length === 2 && size.every(Number.isFinite) ? size : null;
+}
+
+// What you've typed, newest last, to step back through. up() and down() give the line to show, with
+// what you'd started typing kept to come back to at the bottom.
+export class Typed {
+  constructor(lines = []) {
+    this.lines = lines.slice(-TYPED);
+    this.at = this.lines.length;
+  }
+
+  add(line) {
+    if (line && line !== this.lines.at(-1)) this.lines.push(line);
+    this.lines = this.lines.slice(-TYPED);
+    this.at = this.lines.length;
+    this.draft = "";
+  }
+
+  up(current) {
+    if (this.at === this.lines.length) this.draft = current;
+    this.at = Math.max(0, this.at - 1);
+    return this.lines[this.at] ?? current;
+  }
+
+  down() {
+    this.at = Math.min(this.lines.length, this.at + 1);
+    return this.at === this.lines.length ? (this.draft ?? "") : this.lines[this.at];
   }
 }
 
@@ -37,10 +86,29 @@ export class PlayLog {
     this.box = Object.assign(document.createElement("input"), { className: "play-log-box", type: "text", placeholder: "/help", maxLength: 200, autocomplete: "off", spellcheck: false, hidden: true });
     this.box.setAttribute("aria-label", "command");
     this.grip = Object.assign(document.createElement("div"), { className: "play-log-grip", title: "Drag to resize" });
+    const button = (text, title, step) => {
+      const made = Object.assign(document.createElement("button"), { type: "button", className: "play-log-font", textContent: text, title });
+      made.tabIndex = -1;
+      // It never takes the keyboard, so space still jumps after a click.
+      made.addEventListener("pointerdown", (e) => e.preventDefault());
+      made.addEventListener("click", () => this.fontTo(this.font + step));
+      return made;
+    };
+    this.fonts = Object.assign(document.createElement("div"), { className: "play-log-fonts" });
+    this.fonts.append(button("A−", "Smaller text", -1), button("A+", "Larger text", 1));
     this.root = Object.assign(document.createElement("div"), { className: "play-log" });
-    this.root.append(this.grip, this.lines, this.box);
+    this.root.append(this.fonts, this.grip, this.lines, this.box);
     this.grip.addEventListener("pointerdown", (e) => this.resizeFrom(e));
+    // Ctrl or cmd and the wheel, over the log, sizes its text too.
+    this.lines.addEventListener("wheel", (e) => {
+      if (!e.ctrlKey && !e.metaKey) return;
+      e.preventDefault();
+      this.fontTo(this.font - Math.sign(e.deltaY));
+    });
+    this.typed = new Typed(Array.isArray(kept(TYPED_KEPT)) ? kept(TYPED_KEPT) : []);
     this.sizeTo(keptSize());
+    const font = kept(FONT_KEPT);
+    if (Number.isFinite(font)) this.fontTo(font, false);
     window.addEventListener("keydown", (e) => this.key(e), { capture: true });
   }
 
@@ -53,9 +121,7 @@ export class PlayLog {
     const up = () => {
       this.grip.removeEventListener("pointermove", move);
       this.grip.removeEventListener("pointerup", up);
-      try {
-        localStorage.setItem(SIZE_KEPT, JSON.stringify(this.size));
-      } catch {}
+      keep(SIZE_KEPT, this.size);
     };
     this.grip.addEventListener("pointermove", move);
     this.grip.addEventListener("pointerup", up);
@@ -71,10 +137,24 @@ export class PlayLog {
     this.lines.scrollTop = this.lines.scrollHeight;
   }
 
-  // kind: combat, system, error or debug. It keeps to the newest line, unless you've scrolled up.
-  add(text, kind = "combat") {
+  // The text's size in px, which it keeps in this browser.
+  get font() {
+    return this.fontPx ?? parseFloat(getComputedStyle(this.root).fontSize);
+  }
+
+  fontTo(px, kept = true) {
+    this.fontPx = Math.max(FONT_PX[0], Math.min(FONT_PX[1], Math.round(px)));
+    this.root.style.setProperty("--log-font", `${this.fontPx}px`);
+    this.lines.scrollTop = this.lines.scrollHeight;
+    if (kept) keep(FONT_KEPT, this.fontPx);
+  }
+
+  // type: one of TYPES, which colors it. It keeps to the newest line, unless you've scrolled up.
+  add(text, type = "combat") {
     const atEnd = this.lines.scrollHeight - this.lines.scrollTop - this.lines.clientHeight < 4;
-    this.lines.append(Object.assign(document.createElement("div"), { className: `play-log-${kind}`, textContent: text }));
+    const line = Object.assign(document.createElement("div"), { className: `play-log-line play-log-${typeOf(type)}`, textContent: text });
+    line.dataset.type = typeOf(type);
+    this.lines.append(line);
     while (this.lines.children.length > LINES) this.lines.firstChild.remove();
     if (atEnd) this.lines.scrollTop = this.lines.scrollHeight;
   }
@@ -95,10 +175,18 @@ export class PlayLog {
     if (document.activeElement === this.box) {
       e.stopPropagation();
       if (e.key === "Escape") this.close();
+      if (e.key === "ArrowUp" || e.key === "ArrowDown") {
+        e.preventDefault();
+        this.box.value = e.key === "ArrowUp" ? this.typed.up(this.box.value) : this.typed.down();
+        this.box.setSelectionRange(this.box.value.length, this.box.value.length);
+        return;
+      }
       if (e.key !== "Enter") return;
+      this.typed.add(this.box.value.trim());
+      keep(TYPED_KEPT, this.typed.lines);
       const { send, run, args, error } = readLine(this.box.value, this.local);
       if (send) this.send(send);
-      if (run) for (const line of run(args)) this.add(line, "debug");
+      if (run) for (const line of run(args)) this.add(line, "reply");
       if (error) this.add(error, "error");
       this.close();
       return;

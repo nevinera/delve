@@ -1169,6 +1169,7 @@
           "const": "log"
         },
         "kind": {
+          "description": "reply (an answer to what you typed or did), status (what's happened to you), error (errors and warnings) or debug",
           "type": "string"
         },
         "text": {

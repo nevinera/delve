@@ -34,16 +34,16 @@ func (l *Layer) makeHome(p *Player, id string) {
 	}
 	r := l.world.RestPoint(id)
 	if r == nil || r.Continent != p.state.Continent {
-		answer(p, "system", "There's no rest point there.")
+		answer(p, "error", "There's no rest point there.")
 		return
 	}
 	if distance(p.state.At, [3]float64{r.At[0], p.state.At[1], r.At[1]}) > homeReachFt {
-		answer(p, "system", "You need to be at the rest point to make it your home.")
+		answer(p, "error", "You need to be at the rest point to make it your home.")
 		return
 	}
 	p.home = id
 	p.send(encode(home{"home", id}))
-	answer(p, "system", fmt.Sprintf("%s is now your home.", nameOf(r.Name)))
+	answer(p, "reply", fmt.Sprintf("%s is now your home.", nameOf(r.Name)))
 	world, character := l.worldID, p.ID()
 	go func() {
 		if err := l.hub.characters.SaveHome(context.Background(), world, character, id); err != nil {
@@ -65,7 +65,7 @@ func (l *Layer) goHome(p *Player) {
 		at = [3]float64{x, 0, z}
 	}
 	l.teleport(p, continent, at)
-	answer(p, "system", fmt.Sprintf("You're back at %s.", name))
+	answer(p, "status", fmt.Sprintf("You're back at %s.", name))
 }
 
 func nameOf(name string) string {

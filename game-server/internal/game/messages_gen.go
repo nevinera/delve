@@ -370,6 +370,8 @@ type resources struct {
 // logLine: a line for your log
 type logLine struct {
 	Type string `json:"type"`
+	// reply (an answer to what you typed or did), status (what's happened to you), error (errors and
+	// warnings) or debug
 	Kind string `json:"kind"`
 	Text string `json:"text"`
 }

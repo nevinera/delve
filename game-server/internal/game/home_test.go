@@ -55,11 +55,11 @@ func TestMakingARestPointYourHome(t *testing.T) {
 	p := enter(t, h, 1)
 	heard(p)
 	makeHome(t, p, "inn")
-	if got := lastLog(t, p); got != "system: You need to be at the rest point to make it your home." || p.home != "" {
+	if got := lastLog(t, p); got != "error: You need to be at the rest point to make it your home." || p.home != "" {
 		t.Fatalf("from afar: %q, home %q", got, p.home)
 	}
 	makeHome(t, p, "camp")
-	if got := lastLog(t, p); got != "system: There's no rest point there." {
+	if got := lastLog(t, p); got != "error: There's no rest point there." {
 		t.Fatalf("another continent's: %q", got)
 	}
 	move(t, p, 290, 295)
@@ -100,7 +100,7 @@ func TestHomewardTakesYouHomeAfterItsCast(t *testing.T) {
 	if p.state.Continent != "far" || p.state.At != [3]float64{50, 0, 60} {
 		t.Fatalf("at %s %v, want the camp", p.state.Continent, p.state.At)
 	}
-	if got := lastLog(t, p); got != "system: You're back at the rest point." {
+	if got := lastLog(t, p); got != "status: You're back at the rest point." {
 		t.Fatal(got)
 	}
 }

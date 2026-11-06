@@ -33,7 +33,8 @@ func init() {
 	}
 }
 
-// answer sends a line to a player's log. Kind is system, error or debug.
+// answer sends a line to a player's log. Kind is reply (an answer to what they typed or did),
+// status (what's happened to them), error (for errors and warnings) or debug.
 // reply is what a command says back to the player when it can't do what they asked: a sentence
 // for them to read, not an error for code.
 type reply string
@@ -82,7 +83,7 @@ func runHelp(_ *Layer, p *Player, _ []string) error {
 	}
 	slices.Sort(names)
 	for _, name := range names {
-		answer(p, "system", commands[name].usage)
+		answer(p, "reply", commands[name].usage)
 	}
 	return nil
 }
@@ -99,9 +100,9 @@ func runSpar(_ *Layer, p *Player, args []string) error {
 		return fmt.Errorf("usage: %s", commands["spar"].usage)
 	}
 	if p.fight.sparring {
-		answer(p, "system", "Training dummies in reach now swing back at you, for 5% of your health. They won't kill you.")
+		answer(p, "reply", "Training dummies in reach now swing back at you, for 5% of your health. They won't kill you.")
 	} else {
-		answer(p, "system", "Training dummies have stopped swinging at you.")
+		answer(p, "reply", "Training dummies have stopped swinging at you.")
 	}
 	return nil
 }
@@ -121,7 +122,7 @@ func runLevel(l *Layer, p *Player, args []string) error {
 		return replyf("Pick a class first.")
 	}
 	l.setLevel(p, level)
-	answer(p, "system", fmt.Sprintf("You're level %d now, in this world.", level))
+	answer(p, "reply", fmt.Sprintf("You're level %d now, in this world.", level))
 	return nil
 }
 
@@ -154,7 +155,7 @@ func runWeapon(l *Layer, p *Player, args []string) error {
 	if p.wear(main, off) {
 		l.tellOf(p.ID(), encode(gearMessage{"gear", p.ID(), p.state.Look}))
 	}
-	answer(p, "system", fmt.Sprintf("You're holding %s and %s until you leave.", main, off))
+	answer(p, "reply", fmt.Sprintf("You're holding %s and %s until you leave.", main, off))
 	return nil
 }
 
@@ -170,9 +171,9 @@ func runCombatDebug(_ *Layer, p *Player, args []string) error {
 		return replyf("Use %s.", commands["combatdebug"].usage)
 	}
 	if p.combatDebug {
-		answer(p, "system", "Combat debug is on.")
+		answer(p, "reply", "Combat debug is on.")
 	} else {
-		answer(p, "system", "Combat debug is off.")
+		answer(p, "reply", "Combat debug is off.")
 	}
 	return nil
 }
@@ -215,7 +216,7 @@ func runTeleport(l *Layer, p *Player, args []string) error {
 		return replyf("There's no ground at %.0f, %.0f.", x, z)
 	}
 	l.teleport(p, continent, at)
-	answer(p, "system", fmt.Sprintf("Teleported to %.0f, %.0f on %s.", at[0], at[2], continent))
+	answer(p, "reply", fmt.Sprintf("Teleported to %.0f, %.0f on %s.", at[0], at[2], continent))
 	return nil
 }
 

@@ -1235,7 +1235,7 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. [`messages.
 | `statusChanged` | `id`, `status`, `from`, `stacks`, `lasts` | the copy of a status that `from` put on `id` has different stacks or time left now. `lasts` is seconds left, or 0 if it stays until removed |
 | `statusGone` | `id`, `status`, `from` | the copy of a status that `from` put on `id` ran out or something took it off |
 | `resources` | `resources`, `max` | how much of each resource you have and can hold, by key, at most twice a second |
-| `log` | `kind` (`system`, `error` or `debug`), `text` | a line for your log |
+| `log` | `kind` (`reply`, an answer to what you typed or did; `status`, what's happened to you; `error`, for errors and warnings; or `debug`), `text` | a line for your log, colored by its kind (`client/src/play/log.js`'s `TYPES`) |
 | `teleport` | `continent`, `at`, `yaw` | the server moved you there. On another continent, the client loads it |
 | `error` | `message` | before the server closes the connection |
 

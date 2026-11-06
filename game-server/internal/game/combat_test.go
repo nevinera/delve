@@ -349,7 +349,7 @@ func TestCombatDebugLogsWhatAbilitiesDo(t *testing.T) {
 		t.Fatalf("logged with it off: %v", got)
 	}
 	say(t, p, "/combatdebug")
-	if got := lastLog(t, p); got != "system: Combat debug is on." {
+	if got := lastLog(t, p); got != "reply: Combat debug is on." {
 		t.Fatal(got)
 	}
 	use(t, p, "zap")
@@ -363,7 +363,7 @@ func TestCombatDebugLogsWhatAbilitiesDo(t *testing.T) {
 		t.Fatalf("lines = %q", lines)
 	}
 	say(t, p, "/combatdebug off")
-	if got := lastLog(t, p); got != "system: Combat debug is off." {
+	if got := lastLog(t, p); got != "reply: Combat debug is off." {
 		t.Fatal(got)
 	}
 }

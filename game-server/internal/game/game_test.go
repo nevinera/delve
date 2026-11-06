@@ -478,8 +478,8 @@ func TestCommandsAnswerInTheLog(t *testing.T) {
 	for line, want := range map[string]string{
 		"/nope":  "error: There's no /nope. Try /help.",
 		"hello":  "error: Commands start with /. Try /help.",
-		"/help":  "system: /spar [on or off]",
-		"/HELP ": "system: /spar [on or off]",
+		"/help":  "reply: /spar [on or off]",
+		"/HELP ": "reply: /spar [on or off]",
 	} {
 		say(t, p, line)
 		if got := lastLog(t, p); got != want {
