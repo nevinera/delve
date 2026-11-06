@@ -1,7 +1,7 @@
 import { box, color, crate, cut, gable, object, post, rod, sign, sphere, tiled, wheel } from "./pieces.js";
 
 // Roadside props: milestones, shrines, cobbles, cairns, low walls, hitching posts, lanterns,
-// stepping stones and a broken cart.
+// stepping stones, a broken cart, edge stones and waymark posts.
 
 const STONE = "#8c8a84";
 const WOOD = "#7a5e40";
@@ -61,6 +61,19 @@ export const ROADS = {
       rod(0.25, 6, [5, 0.4, -1], 0, 20),
       ...crate(-2.6, 0, 2.6, 2, 2, 1, 25),
       box([1.2, 0.3, 0.3], [3.5, 0.15, 1.5], 1, [40, 0, 0]),
+    ]),
+    // What lines roads (v2/roadEdges.js): low stones along roads' edges, stepped over, and posts marking trails.
+    {
+      ...object("broad010", "edge stone", ["road", "edge"], [color(STONE, "stone"), color("#5f7f3a", "moss")], [
+        sphere([1.3, 0.7, 1], [0, 0.2, 0], 0, [20, 0, 0]),
+        sphere([0.5, 0.15, 0.4], [0.2, 0.52, 0.1], 1),
+      ]),
+      walkThrough: true,
+      blocksSight: false,
+    },
+    object("broad011", "waymark post", ["road", "marker"], [color(WOOD, "wood"), color("#c8a040", "band")], [
+      post(0.5, 3.6, [0, 1.8, 0], 0, { taper: 0.85 }),
+      post(0.54, 0.4, [0, 3.1, 0], 1),
     ]),
   ],
 };

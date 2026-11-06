@@ -59,7 +59,7 @@ export const isMissing = (object) => !specOf(object.type);
 const keptFootprint = (footprint) => Object.fromEntries(Object.entries(footprint).map(([shape, v]) => [shape, Array.isArray(v) ? v.map((n) => round(n, 3)) : round(v, 3)]));
 
 // An object as the file keeps it.
-function keptObject({ type, at, y, yaw, scale, colors, texts, template, cave, footprint, height, plain }) {
+function keptObject({ type, at, y, yaw, scale, colors, texts, template, road, cave, footprint, height, plain }) {
   return {
     type,
     at: at.map((v) => round(v)),
@@ -69,6 +69,7 @@ function keptObject({ type, at, y, yaw, scale, colors, texts, template, cave, fo
     ...(colors ? { colors } : {}),
     ...(texts && Object.keys(texts).length ? { texts } : {}),
     ...(template ? { template } : {}),
+    ...(road ? { road } : {}),
     ...(cave ? { cave } : {}),
     ...(footprint && !plain ? { footprint: keptFootprint(footprint), height: round(height, 3) } : {}),
   };
@@ -171,6 +172,29 @@ export class Placed {
     for (const thing of things) this.add(thing);
     this.kept({ added: things });
     return true;
+  }
+
+  // Makes the objects and slabs roads put in the placed files (those with `road`) `things`, keeping
+  // those already there that are the same, and taking away the rest. Not a change undo goes back
+  // over: the roads' own undo does that. Gives whether anything changed.
+  setRoadThings(things) {
+    const key = (thing) => JSON.stringify(isSlab(thing) ? thing : { type: thing.type, at: thing.at, y: thing.y, yaw: thing.yaw, scale: thing.scale, road: thing.road });
+    const had = new Map();
+    for (const plate of this.plates.values()) for (const thing of [...plate.objects, ...plate.slabs]) if (thing.road) had.set(key(thing), thing);
+    const wanted = new Map(things.map((thing) => [key(thing), thing]));
+    let changed = false;
+    for (const [k, thing] of had) {
+      if (wanted.has(k)) continue;
+      this.remove(thing);
+      changed = true;
+    }
+    for (const [k, thing] of wanted) {
+      if (had.has(k)) continue;
+      this.add(isSlab(thing) ? thing : (readyObject(thing) ?? standIn(thing)));
+      changed = true;
+    }
+    if (changed) this.version++;
+    return changed;
   }
 
   // Takes `things` away.

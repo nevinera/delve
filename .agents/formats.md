@@ -207,6 +207,7 @@ Plate `(px, pz)` covers `[px * 2048, (px + 1) * 2048)` each way, in continent fe
 - `yaw` is radians about up. `scale` is feet for a built-in kind, or a factor for a built object.
 - `colors` are the object's color overrides: `"#rrggbb"` for a built object, `[r, g, b]` from 0 to 1 for other kinds. `texts` are signs on its flat faces.
 - `template`, when there is one, is the template it was placed from.
+- `road`, when there is one, is the [road](#roads) that put it there. /create works out every road's things again when the roads or the water change, and takes away those of roads that have gone, so moving one by hand doesn't last.
 - `cave`, when there is one, is the cave network it's in: the one whose 32 ft chunk it's in, under the ground there. /create keeps it as things are placed and moved, places or moves things into a network only while it's being polished, and takes them all away if it goes back to layout.
 - `footprint` and `height` are what stands in the way, in feet, worked out from its type and scale when it's saved, so the game server needs no object library: `{ "circle": r }`, `{ "capsule": [r, half] }` along its own x, `{ "rect": [w, d] }`, or `{ "open": r }` for one that doesn't block. Files saved before they were kept leave them out, and the server works out a built-in kind's itself.
 
@@ -487,11 +488,14 @@ A biome is one of `BIOME_NAMES` in `client/src/v2/biomes.js`. It changes the gro
 
 ## Roads
 
-`roads.json` is `{ "version": 1, "roads": [{ "kind", "points", "seed", "bed" }] }`, drawn with /create's road tool. /create and play read it: play to draw each road's surface. Roads are baked into the plates' heights and [road cells](#road-cells), so the game server and bots walk on them without reading it. Code: `client/src/v2/roads.js`. [Schema](../docs/schema/roads.schema.json).
+`roads.json` is `{ "version": 1, "roads": [{ "id", "kind", "points", "seed", "bed" }] }`, drawn with /create's road tool. /create and play read it: play to draw each road's surface. Roads are baked into the plates' heights and [road cells](#road-cells), so the game server and bots walk on them without reading it. Code: `client/src/v2/roads.js`. [Schema](../docs/schema/roads.schema.json).
 
+- `id` is `road` and 4 base-36 characters. What the road puts in the [placed files](#objects) has it as `road`.
 - `kind` is `footpath`, `trail` or `road`. Each has a width for new roads, how steeply it climbs at most, how far it leans across, and how deep its banks are cut at most (`KINDS`).
 - `points` are `[x, z, width]` in continent feet. The road runs down a track through them, each corner rounded and a little wobble either side, by `seed`.
 - `bed` is the road's height under its middle every 8 ft down that track. /create works it out from the ground before courses and roads moved it, when the road's corners, kind or width change.
+
+Each kind is lined the same in every biome (`client/src/v2/roadEdges.js`): roads with edge stones along both sides every 20 ft or so, which you step over, and a milestone every 1,000 ft; trails with a waymark post every 160 ft or so, a side at a time; footpaths with a small cairn every 450 ft or so. None go in the water or on another road. /create puts them in the placed files, so the game server and bots stand them in the way as they do anything placed.
 
 Tiles drawn in full draw each road's surface from its middle (`render/groundMaterial.js`): packed earth with prints, paler with wheel ruts on roads, fainter ruts on trails, and a frayed edge on footpaths.
 

@@ -3,9 +3,10 @@ import { onTrack } from "./courses.js";
 // Roads: footpaths, trails and roads, drawn by hand as lines and kept in each continent's
 // roads.json. A road is
 //
-//   { kind: "footpath" | "trail" | "road", points: [[x, z, width], ...], seed, bed: [ft, ...] }
+//   { id, kind: "footpath" | "trail" | "road", points: [[x, z, width], ...], seed, bed: [ft, ...] }
 //
-// continent feet, each point with how wide the road is there. It doesn't follow that line
+// id being "road" and 4 base-36 characters (roadId), for what it puts in the placed files
+// (roadEdges.js) to say which road they're for, and the rest in continent feet, each point with how wide the road is there. It doesn't follow that line
 // straight: it runs down a track (roadTrack) rounded at each corner, more for wider kinds, and
 // wobbling a little either side of it, the way `seed` has it. `bed` is its surface's height
 // under its middle every BED_STEP_FT down that track, worked out once from the ground when it's
@@ -326,6 +327,14 @@ function simplified(track, a, b) {
   };
   split(a, b);
   return [...keep].sort((m, n) => m - n);
+}
+
+// A new road's id, none of `taken`'s.
+export function roadId(taken, random = Math.random) {
+  for (;;) {
+    const id = `road${Math.floor(random() * 36 ** 4).toString(36).padStart(4, "0")}`;
+    if (!taken.some((r) => r.id === id)) return id;
+  }
 }
 
 export const roadsPath = (continent) => `places/continents/${continent}/roads.json`;

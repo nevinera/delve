@@ -1,5 +1,5 @@
 import { Areas } from "./areas.js";
-import { KINDS, bedOf, roadTrack, troubleOf } from "../v2/roads.js";
+import { KINDS, bedOf, roadId, roadTrack, troubleOf } from "../v2/roads.js";
 
 // Roads drawn on the map with geo's road tool (areas.js, as open lines): footpaths, trails and
 // roads (v2/roads.js), each one width all along. A road's bed is worked out from the ground before
@@ -7,7 +7,7 @@ import { KINDS, bedOf, roadTrack, troubleOf } from "../v2/roads.js";
 // otherwise. Stretches it can't go along, too steep or cut too deep, are drawn over it in TROUBLE's
 // color. Kept in roads.json:
 //
-//   { "version": 1, "roads": [{ "kind": "trail", "points": [[x, z, width], ...], "seed": 412, "bed": [ft, ...] }, ...] }
+//   { "version": 1, "roads": [{ "id": "road3k9z", "kind": "trail", "points": [[x, z, width], ...], "seed": 412, "bed": [ft, ...] }, ...] }
 
 export const ROADS = { footpath: "#d9b38c", trail: "#b07a4a", road: "#f0e6c8" };
 const TROUBLE = { color: "rgba(224, 64, 64, 0.85)", px: 7 };
@@ -17,14 +17,17 @@ const round = (v) => Math.round(v * 10) / 10;
 export class Roads extends Areas {
   // baseAt(x, z) gives the ground before courses and roads moved it.
   constructor(scene, surface, stage, baseAt) {
-    super(scene, surface, stage, { colors: ROADS, kind: "trail", field: "kind", list: "roads", extras: ["width", "seed", "bed"], closed: false });
-    this.start = () => ({ width: KINDS[this.kind].width, seed: Math.floor(Math.random() * 1000), bed: null });
+    super(scene, surface, stage, { colors: ROADS, kind: "trail", field: "kind", list: "roads", extras: ["id", "width", "seed", "bed"], closed: false });
+    this.start = () => ({ id: roadId(this.areas), width: KINDS[this.kind].width, seed: Math.floor(Math.random() * 1000), bed: null });
     this.baseAt = baseAt;
   }
 
   show(json) {
-    super.show({ roads: (json.roads ?? []).map(({ kind, points, seed, bed }) => ({ kind, points: points.map(([x, z]) => [x, z]), width: points[0]?.[2] ?? KINDS[kind]?.width ?? KINDS.trail.width, seed: seed ?? 0, bed })) });
-    for (const area of this.areas) area.bedKey = this.keyOf(area);
+    super.show({ roads: (json.roads ?? []).map(({ id, kind, points, seed, bed }) => ({ id, kind, points: points.map(([x, z]) => [x, z]), width: points[0]?.[2] ?? KINDS[kind]?.width ?? KINDS.trail.width, seed: seed ?? 0, bed })) });
+    for (const area of this.areas) {
+      area.bedKey = this.keyOf(area);
+      area.id ??= roadId(this.areas);
+    }
   }
 
   toJSON() {
@@ -50,7 +53,7 @@ export class Roads extends Areas {
   roadOf(area) {
     const points = pointsOf(area);
     if (area.road?.points.length !== points.length || area.road.points.some((p, k) => p.some((v, n) => v !== points[k][n]))) area.road = { points };
-    return Object.assign(area.road, { kind: area.kind, seed: area.seed, bed: area.bed });
+    return Object.assign(area.road, { id: area.id, kind: area.kind, seed: area.seed, bed: area.bed });
   }
 
   // Sets the picked out road's width.

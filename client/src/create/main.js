@@ -11,6 +11,7 @@ import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { BIOME_NAMES } from "../v2/biomes.js";
 import { waterPath } from "../v2/water.js";
 import { roadsPath } from "../v2/roads.js";
+import { allEdges, wetIn } from "../v2/roadEdges.js";
 import { BIOMES, biomesPath } from "./biomes.js";
 import { Builder } from "./builder.js";
 import { Compass, facing } from "./compass.js";
@@ -318,6 +319,9 @@ function start(world, changes, fresh) {
   if (roadsBytes) tools.roads.load(JSON.parse(strFromU8(roadsBytes)));
   renditions.setRoads(tools.roads.toJSON(), false);
   let roadsBaked = tools.roads.version;
+  // What lines the roads, in the placed files, worked out again as they or the water change.
+  const lineRoads = () => placed.setRoadThings(allEdges(tools.roads.toJSON().roads, wetIn(waterFile())));
+  lineRoads();
 
   const resize = () => {
     const { clientWidth: w, clientHeight: h } = canvas;
@@ -564,10 +568,12 @@ function start(world, changes, fresh) {
     if (waterVersion() !== waterBaked && !tools.water.dragging && !tools.courses.dragging && !tools.courses.draft) {
       ground.refresh(renditions.setWater(waterFile()));
       waterBaked = waterVersion();
+      lineRoads();
     }
     if (tools.roads.version !== roadsBaked && !tools.roads.dragging && !tools.roads.draft) {
       ground.refresh(renditions.setRoads(tools.roads.toJSON()));
       roadsBaked = tools.roads.version;
+      lineRoads();
     }
     // Saves what's changed once there's been time to finish the stroke.
     if (!saving && !tools.stroke && !tools.drawing && now - lastChangeSave > SAVE_CHANGES_MS && unsaved()) save();
