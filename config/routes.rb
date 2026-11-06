@@ -41,7 +41,9 @@ Rails.application.routes.draw do
   get "objects" => "objects#show"
   get "classes" => "classes#show"
   get "character_builder", to: redirect("/characters/new")
-  resources :characters, except: [:show]
+  resources :characters, except: [:show] do
+    resource :keys, only: [:update], controller: "character_keys"
+  end
   get "admin" => "admin#show"
   get "animation_lab" => "animation_lab#show"
   get "monster_lab" => "monster_lab#show"

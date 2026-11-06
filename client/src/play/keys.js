@@ -1,10 +1,9 @@
-// The keys for play's actions, which you can change, kept in this browser. A key is a combo: the
+// The keys for play's actions, which you can change, kept on the character. A key is a combo: the
 // modifiers held, then the key's code, as "Shift+Digit1". Codes name a key by where it sits, so a
 // binding stays put whatever the keyboard's layout. Escape is never bound: it's always the way out.
 
 import { BAR_COUNT, BAR_SLOTS } from "./bars.js";
 
-const KEPT = "playKeys"; // the bindings you've changed, in localStorage
 const MODIFIERS = ["Ctrl", "Alt", "Shift", "Meta"];
 const SLOT_CODES = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7", "Digit8", "Digit9", "Digit0", "Minus", "Equal"];
 const BAR_MODIFIERS = ["", "Shift+", "Alt+"];
@@ -56,16 +55,13 @@ export function labelOf(combo) {
   return [...parts, name].join(" ");
 }
 
-// Your bindings: the defaults, with what you've changed over them. `storage` is localStorage, or
-// anything with getItem and setItem.
+// Your bindings: the defaults, with what you've changed over them. `kept` is what the character
+// has changed ({ action id: combo }, "" for none), and save(changes) keeps a new set of them.
 export class KeyBindings {
-  constructor(storage = null) {
-    this.storage = storage;
+  constructor(kept = {}, save = null) {
+    this.saver = save;
     this.changes = {};
-    try {
-      const kept = JSON.parse(storage?.getItem(KEPT) ?? "{}");
-      for (const [id, combo] of Object.entries(kept ?? {})) if (BY_ID.has(id) && typeof combo === "string") this.changes[id] = combo;
-    } catch {}
+    for (const [id, combo] of Object.entries(kept && typeof kept === "object" ? kept : {})) if (BY_ID.has(id) && typeof combo === "string") this.changes[id] = combo;
     this.heard = new Set();
     this.recording = false; // while the key settings wait for a new key, nothing else acts on keys
     this.index();
@@ -127,9 +123,7 @@ export class KeyBindings {
 
   save() {
     this.index();
-    try {
-      this.storage?.setItem(KEPT, JSON.stringify(this.changes));
-    } catch {}
+    this.saver?.({ ...this.changes });
     for (const hear of this.heard) hear();
   }
 
@@ -142,14 +136,14 @@ export class KeyBindings {
 
 let shared = null;
 
-// The page's bindings, kept in this browser's localStorage.
+// The page's bindings: the character's, once the page has given them with useKeyBindings, or else
+// the defaults.
 export function keyBindings() {
-  if (!shared) {
-    let storage = null;
-    try {
-      storage = globalThis.localStorage ?? null;
-    } catch {}
-    shared = new KeyBindings(storage);
-  }
+  shared ??= new KeyBindings();
+  return shared;
+}
+
+export function useKeyBindings(kept, save) {
+  shared = new KeyBindings(kept, save);
   return shared;
 }

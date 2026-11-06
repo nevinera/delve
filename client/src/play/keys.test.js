@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { KeyBindings, comboOf, labelOf } from "./keys.js";
 
-const storage = (kept = {}) => {
-  const items = { playKeys: JSON.stringify(kept) };
-  return { getItem: (k) => items[k] ?? null, setItem: (k, v) => (items[k] = v), items };
+// A character's kept bindings, and what was saved last.
+const character = (keys = {}) => {
+  const kept = { keys, saved: null };
+  kept.save = (changes) => ((kept.saved = changes), (kept.keys = changes));
+  return kept;
 };
 
 describe("comboOf", () => {
@@ -37,12 +39,13 @@ describe("KeyBindings", () => {
   });
 
   it("moves a key that's taken, leaving the other action unbound, and keeps it", () => {
-    const kept = storage();
-    const keys = new KeyBindings(kept);
+    const kept = character();
+    const keys = new KeyBindings(kept.keys, kept.save);
     expect(keys.bind("jump", "KeyW").moved.id).toBe("forward");
     expect(keys.actionFor({ code: "KeyW" }).id).toBe("jump");
     expect(keys.keyOf("forward")).toBe("");
-    expect(new KeyBindings(kept).actionFor({ code: "KeyW" }).id).toBe("jump");
+    expect(kept.saved).toEqual({ jump: "KeyW", forward: "" });
+    expect(new KeyBindings(kept.keys).actionFor({ code: "KeyW" }).id).toBe("jump");
   });
 
   it("never binds Escape", () => {
@@ -61,16 +64,16 @@ describe("KeyBindings", () => {
   });
 
   it("resets to the defaults, and tells those listening", () => {
-    const kept = storage({ jump: "KeyJ" });
-    const keys = new KeyBindings(kept);
+    const kept = character({ jump: "KeyJ" });
+    const keys = new KeyBindings(kept.keys, kept.save);
     let heard = 0;
     keys.onChange(() => heard++);
     expect(keys.keyOf("jump")).toBe("KeyJ");
     keys.reset();
-    expect([keys.keyOf("jump"), heard, kept.items.playKeys]).toEqual(["Space", 1, "{}"]);
+    expect([keys.keyOf("jump"), heard, kept.saved]).toEqual(["Space", 1, {}]);
   });
 
   it("ignores kept bindings for actions it doesn't have", () => {
-    expect(new KeyBindings(storage({ fly: "KeyF" })).changes).toEqual({});
+    expect(new KeyBindings({ fly: "KeyF", jump: 3 }).changes).toEqual({});
   });
 });
