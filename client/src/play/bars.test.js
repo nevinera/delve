@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BAR_COUNT, BAR_SLOTS, barsFor, cleared, cooldownText, defaultBars, keyLabel, placed, slotForKey, slotShows, swapped, sweepFor } from "./bars.js";
+import { BAR_COUNT, BAR_SLOTS, barsFor, cleared, cooldownText, defaultBars, placed, slotShows, swapped, sweepFor } from "./bars.js";
 
 const known = (n) => Array.from({ length: n }, (_, i) => ({ id: `a${i}` }));
 
@@ -29,13 +29,6 @@ describe("action bars", () => {
     expect([moved[0][0], moved[1][3]]).toEqual(["", "a0"]);
     expect(cleared(start, a)[0][0]).toBe("");
     expect(start[0][0]).toBe("a0");
-  });
-  it("reads keys", () => {
-    expect(slotForKey({ code: "Digit1" })).toEqual({ bar: 0, slot: 0 });
-    expect(slotForKey({ code: "Equal", shiftKey: true })).toEqual({ bar: 1, slot: 11 });
-    expect(slotForKey({ code: "Digit0", altKey: true })).toEqual({ bar: 2, slot: 9 });
-    expect(slotForKey({ code: "KeyW" })).toBeNull();
-    expect(keyLabel(1, 0)).toBe("shift 1");
   });
 
   it("counts a cooldown down in minutes, then seconds, then tenths", () => {

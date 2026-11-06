@@ -2,6 +2,8 @@ import "../errors/install.js";
 import { setReportContext } from "../report/button.js";
 import "./play.css";
 import { graphicsPanel } from "../render/graphicsPanel.js";
+import { keyBindings, useKeyBindings } from "./keys.js";
+import { keysPanel } from "./keysPanel.js";
 import { setWorldIcons } from "./icons.js";
 import { setWorldEffectSheets } from "../abilities/effectTextures.js";
 import { SightLines } from "./sightLines.js";
@@ -34,7 +36,14 @@ import { debugCommand } from "./debugCommand.js";
 // placed and caves files as you come near them. Others near you come and go as the game server says.
 
 const $ = (id) => document.getElementById(id);
-const config = JSON.parse($("playConfig").textContent); // { repo, sha, paths, look, game: { url, token } }
+const config = JSON.parse($("playConfig").textContent); // { repo, sha, paths, look, keys, keysUrl, game: { url, token } }
+// The character's keys, saved back to it as you change them.
+useKeyBindings(config.keys, (keys) => {
+  const token = document.querySelector("meta[name=csrf-token]")?.content ?? "";
+  fetch(config.keysUrl, { method: "PATCH", headers: { "Content-Type": "application/json", "X-CSRF-Token": token }, body: JSON.stringify({ keys }) })
+    .then((res) => res.ok || console.warn(`Couldn't save your keys (${res.status})`))
+    .catch((err) => console.warn(`Couldn't save your keys: ${err.message}`));
+});
 const status = (text) => ($("playStatus").textContent = text);
 const STREAM_MS = 1000; // how often to look for placed files coming into reach
 const PLACED_FT = 2 * PLATE_FT; // how near a plate's placed file is fetched
@@ -85,6 +94,8 @@ menu.querySelector("[data-build]").addEventListener("click", () => {
   window.play?.combat?.openBuild();
 });
 for (const button of menu.querySelectorAll("[data-back]")) button.addEventListener("click", () => showPage(null));
+const keysPage = keysPanel(menu.querySelector(".play-keys"), keyBindings());
+for (const button of menu.querySelectorAll("[data-back]")) button.addEventListener("click", () => keysPage.stop());
 menu.addEventListener("toggle", (e) => {
   if (e.newState === "closed") showPage(null);
 });
