@@ -141,10 +141,20 @@ describe("walker on ground too steep to walk", () => {
     return w;
   }
 
-  it("can't step up it slanting across it, though each step climbs gently", () => {
+  it("slips along it, going up it, however gently the step slants up", () => {
     // 1 ft east and 0.05 ft north climbs 0.14 ft in 1 ft, well under 50°, onto a 70° face.
-    expect(onFace().canStep(1, -0.05)).toBe(false);
-    expect(onFace().canStep(1, 0.05)).toBe(true);
+    const [dx, dz] = onFace().slipped(1, -0.05);
+    expect(dx).toBeCloseTo(1);
+    expect(dz).toBeCloseTo(0);
+    // Straight up it goes nowhere; down it, it isn't held back.
+    expect(onFace().slipped(0, -1).map((v) => Math.abs(v) < 1e-9)).toEqual([true, true]);
+    expect(onFace().slipped(0.5, 1)).toEqual([0.5, 1]);
+  });
+
+  it("walking straight up it, gets no higher", () => {
+    const w = onFace({ keys: ["w"] });
+    for (let n = 0; n < 10; n++) w.step(1 / 60);
+    expect(w.pos.z).toBeGreaterThanOrEqual(0);
   });
 
   it("slides down it, standing still", () => {

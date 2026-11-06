@@ -7,9 +7,9 @@ import { WALK_DEG } from "./growth.js";
 // The builder: a person (figure.js) who walks on the ground and flies over it, with a camera
 // behind them.
 //
-// On the ground: W/S run forward and back, A/D turn, Q/E strafe, and space takes off. They can't
-// walk up onto a face (v2/faces.js) steeper than WALK_DEG, whichever way they go up it, and slide
-// down it at SLIDE_FT where they're on it. In water
+// On the ground: W/S run forward and back, A/D turn, Q/E strafe, and space takes off. Walking up a
+// face (v2/faces.js) steeper than WALK_DEG, whichever way they go up it, they slip along it
+// instead, and where they're on one they slide down it at SLIDE_FT. In water
 // deeper than SWIM_FT they swim, slower, floating with their feet that far under its surface, or
 // anywhere under it: forward goes the way the camera looks, so looking down past where it rests
 // dives and looking up rises, space swims up and F down, and they stay where they are when still,
@@ -44,6 +44,9 @@ export const CEILING_FT = 150000;
 export const SLIDE_FT = 30; // a second, down ground too steep to walk on
 export const GRAVITY_FT = 32; // a second, each second, falling
 const STEEPEST = Math.tan((WALK_DEG * Math.PI) / 180); // rise over run
+// How much a step along a face too steep to walk up may rise and still count as level, rise over
+// run: a step along a slope is never quite level.
+export const LEVEL_RISE = 0.02;
 const DOUBLE_TAP_MS = 300;
 const EYE_FT = 5.5;
 const DIVE_FT = 8; // how far into the earth double-tapping F takes them at once, deep enough to be in its rock
@@ -90,7 +93,7 @@ export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z],
   if (length) {
     x += (mx / length) * speed * ahead * dt;
     z += (mz / length) * speed * ahead * dt;
-    if (!flying) [x, z] = push(...offSteep(state.x, state.z, x, z, groundAt, slopeAt));
+    if (!flying) [x, z] = push(...slipped(state.x, state.z, x, z, groundAt, slopeAt));
   }
   if (!flying && !swimming) [x, z] = slide(x, z, dt, groundAt, slopeAt);
   if (swimming) {
@@ -143,12 +146,20 @@ export function steepness(x, z, groundAt) {
   return Math.hypot(h(x + d, z) - h(x - d, z), h(x, z + d) - h(x, z - d)) / (2 * d);
 }
 
-// Where walking from (x0, z0) to (x, z) ends: there, or where it isn't up onto ground too steep,
-// going only across or only along, or nowhere.
-function offSteep(x0, z0, x, z, groundAt, slopeAt) {
+// Where walking from (x0, z0) to (x, z) ends: there, but where that's up a face too steep to
+// walk, along it instead, without the part of the step that goes up it. Nothing steep stops it.
+function slipped(x0, z0, x, z, groundAt, slopeAt) {
   const from = groundAt(x0, z0) ?? SEA_LEVEL_FT;
-  const fine = (a, b) => (groundAt(a, b) ?? SEA_LEVEL_FT) <= from || slopeAt(a, b) <= STEEPEST;
-  return [[x, z], [x, z0], [x0, z]].find(([a, b]) => fine(a, b)) ?? [x0, z0];
+  if ((groundAt(x, z) ?? SEA_LEVEL_FT) <= from + LEVEL_RISE * Math.hypot(x - x0, z - z0) || slopeAt(x, z) <= STEEPEST) return [x, z];
+  const [ax, az] = along(x - x0, z - z0, downhill(x, z, groundAt));
+  return [x0 + ax, z0 + az];
+}
+
+// A step [dx, dz] without the part of it that goes up the way `down` (a unit [x, z], downhill)
+// points against: across a slope, along it.
+export function along(dx, dz, [gx, gz]) {
+  const up = -(dx * gx + dz * gz);
+  return up > 0 ? [dx + up * gx, dz + up * gz] : [dx, dz];
 }
 
 // Where standing at (x, z) for dt slides to, down the ground where it's too steep.

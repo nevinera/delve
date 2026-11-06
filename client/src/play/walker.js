@@ -8,7 +8,7 @@ import { WeaponDraw } from "../character/weaponDraw.js";
 import { TURN_RATE } from "../character/posed.js";
 import { randomLook } from "../character/recipe.js";
 import { trunkRadius } from "../render/treeMeshes.js";
-import { SLIDE_FT, downhill, steepness } from "../create/builder.js";
+import { LEVEL_RISE, SLIDE_FT, along, downhill, steepness } from "../create/builder.js";
 
 // Walk mode for the 3D view: a person-sized character on the generated ground, with a third-person
 // camera, to get a feel for the land at eye level. Controls: W/S run forward and back,
@@ -21,10 +21,10 @@ import { SLIDE_FT, downhill, steepness } from "../create/builder.js";
 // way toward the going and twist the chest back toward the front; backing up while strafing turns
 // the other way.
 //
-// The character keeps to the tiles drawn in full, can't walk up onto ground whose face is steeper
-// than MAX_CLIMB, whichever way it goes up it, slides down that ground at SLIDE_FT and can't jump
-// from it, can't walk through tree trunks, and wades or swims where the water's deep. It stands on the highest slab
-// face gentle enough to climb within a step of its feet, steps up onto one at most STEP_FT, and
+// The character keeps to the tiles drawn in full. Walking up a face of the ground steeper than
+// MAX_CLIMB, whichever way it goes up it, it slips along it instead; on one, it slides down it at
+// SLIDE_FT and can't jump from it. It can't walk through tree trunks, and wades or swims where the
+// water's deep. It stands on the highest slab face gentle enough to climb within a step of its feet, steps up onto one at most STEP_FT, and
 // can't walk into slabs. Positions are scene feet.
 //
 // What it walks on comes from a ground source: the RenderView's decoded tiles (ViewGround), unless
@@ -266,6 +266,8 @@ export class Walker {
       this.sitting = null;
       mx = (mx / length) * speed * dt;
       mz = (mz / length) * speed * dt;
+      // Up a face too steep to walk, it slips along it instead.
+      [mx, mz] = this.slipped(mx, mz);
       // Try the whole step, then each axis alone, so you slide along what blocks you.
       for (const [dx, dz] of [[mx, mz], [mx, 0], [0, mz]]) {
         if (this.canStep(this.pos.x + dx, this.pos.z + dz)) {
@@ -415,8 +417,18 @@ export class Walker {
     if (there.slab) return rise <= STEP_FT || this.pos.y >= there.height - 0.01;
     const run = Math.hypot(x - this.pos.x, z - this.pos.z);
     if (here === null || run === 0 || this.pos.y > there.height + 2) return true;
-    if (rise > 0 && !there.swim && this.steepness(x, z) > MAX_CLIMB) return false;
     return rise / run <= MAX_CLIMB;
+  }
+
+  // The step [dx, dz] from where it is, but where that goes up a face of the ground or a cave's
+  // floor too steep to walk, along it instead, without the part going up it.
+  slipped(dx, dz) {
+    const [x, z] = [this.pos.x + dx, this.pos.z + dz];
+    const [here, there] = [this.stand(this.pos.x, this.pos.z), this.stand(x, z)];
+    if (!here || !there || there.slab || there.swim || this.pos.y > there.height + 2) return [dx, dz];
+    if (there.height - here.height <= LEVEL_RISE * Math.hypot(dx, dz) || this.steepness(x, z) <= MAX_CLIMB) return [dx, dz];
+    const under = this.pos.y + STEP_FT;
+    return along(dx, dz, downhill(x, z, (a, b) => this.ground.groundAt(a, b, under)));
   }
 
   // How steep the face of the ground or cave floor it stands on at (x, z) is, rise over run: the

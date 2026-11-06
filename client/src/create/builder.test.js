@@ -12,7 +12,7 @@ describe("the builder", () => {
     expect(s.flying).toBe(false);
   });
 
-  it("can't walk up ground steeper than it walks on, slanting across it or not, and slides down it", () => {
+  it("slips along ground steeper than it walks on instead of up it, slanting across it or not, and slides down it", () => {
     // Flat to x 10, then a face 60° steep.
     const face = (x) => Math.max(0, x - 10) * 1.73;
     let s = { x: 0, y: 0, z: 0, yaw: Math.PI / 4, flying: false };
