@@ -83,11 +83,12 @@ b ...
 s ...
 w ...
 c ...
+r ...
 tile <index>
 ...
 ```
 
-Each tile the plate has comes in row order, with `index` = `tz * 8 + tx` within the plate, and runs from its `tile` line to the next. A tile leaves out the lines it has none of: `w` with no water, `c` with no cuts.
+Each tile the plate has comes in row order, with `index` = `tz * 8 + tx` within the plate, and runs from its `tile` line to the next. A tile leaves out the lines it has none of: `w` with no water, `c` with no cuts, `r` with no roads.
 
 ### Heights
 
@@ -135,6 +136,10 @@ A type is 1 digit, an index into `WATER_TYPES` (`client/src/v2/water.js`). A lev
 ### Cuts
 
 How far courses and roads moved the corners down, for putting them back when one moves (`client/src/v2/courses.js`, `roads.js`). A line for each run of cut corners in a row: `c <row> <column> <cuts>`, row and column in 2 digits, then 2 digits a corner: its cut in quarter feet, plus 2,048 (under 2,048 where a course or road built the ground up).
+
+### Road cells
+
+`r <runs>`: which cells are on a road, as the `b` line keeps biomes: a run is 2 digits of its length less one, then a digit of the road's kind, 1 more than its index in `ROAD_KINDS` (`client/src/v2/roads.js`), or 0 for none. /create works it out as it carves roads: a cell's on a road where the road's track passes within half its width of the cell's middle, or 2.5 ft for a narrower road. Nothing fills the slots on a road's cells, in the client, the game server or bots.
 
 ### Older plates
 
@@ -482,7 +487,7 @@ A biome is one of `BIOME_NAMES` in `client/src/v2/biomes.js`. It changes the gro
 
 ## Roads
 
-`roads.json` is `{ "version": 1, "roads": [{ "kind", "points", "seed", "bed" }] }`, drawn with /create's road tool. Only /create reads it: roads are baked into the plates' heights, so play, the game server and bots walk on them without reading it. Code: `client/src/v2/roads.js`. [Schema](../docs/schema/roads.schema.json).
+`roads.json` is `{ "version": 1, "roads": [{ "kind", "points", "seed", "bed" }] }`, drawn with /create's road tool. Only /create reads it: roads are baked into the plates' heights and [road cells](#road-cells), so play, the game server and bots walk on them without reading it. Code: `client/src/v2/roads.js`. [Schema](../docs/schema/roads.schema.json).
 
 - `kind` is `footpath`, `trail` or `road`. Each has a width for new roads, how steeply it climbs at most, how far it leans across, and how deep its banks are cut at most (`KINDS`).
 - `points` are `[x, z, width]` in continent feet. The road runs down a track through them, each corner rounded and a little wobble either side, by `seed`.

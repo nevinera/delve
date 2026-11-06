@@ -31,6 +31,7 @@ import { dryWater } from "./water.js";
 //   c <row> <column> <cuts>   how far courses and roads cut the corners: a line for each run of cut corners
 //                             in a row, row and column in 2 digits, then 2 digits a corner of its
 //                             cut in quarter feet plus 2,048 (under 2,048 where it's built up)
+//   r <runs>                  the cells' road kinds, as runs as the b line has them (roads.js)
 //
 // Lines a tile has none of are left out. Plate files from before they were text are read too
 // (plateBinary.js); what they painted by hand on the ground is left out, as it's kept no more.
@@ -66,13 +67,14 @@ const CHUNK_CELL_LISTS = Array.from({ length: CHUNKS }, (_, c) => {
 
 // plate: { coords: [px, pz], tiles: Map(index -> { heights: 65×65 feet, biome: 64×64 indexes,
 // slots, slotSeed: [sx, sz] (the tile's coordinates where it has none), water: as water.js has it,
-// cut: 65×65 feet or null }) }, each layer all 0 where it's missing, slots scattered, water dry
-// and nothing cut. Tiles' `terrain` (painted by hand) isn't kept.
+// cut: 65×65 feet or null, road: 64×64 cells' road kinds, 1 + an index into roads.js's
+// ROAD_KINDS and 0 for none, or null }) }, each layer all 0 where it's missing, slots scattered,
+// water dry, nothing cut and no road. Tiles' `terrain` (painted by hand) isn't kept.
 export function encodePlate({ coords, tiles }) {
   const lines = [`plate ${VERSION} ${coords[0]} ${coords[1]}`];
   for (const index of [...tiles.keys()].sort((a, b) => a - b)) {
     const tile = tiles.get(index);
-    lines.push(`tile ${index}`, ...encodeTile(tile.heights), biomeLine(tile.biome), slotLine(tile, tileOf(coords, index)), ...waterLines(tile.water), ...cutLines(tile.cut));
+    lines.push(`tile ${index}`, ...encodeTile(tile.heights), biomeLine(tile.biome), slotLine(tile, tileOf(coords, index)), ...waterLines(tile.water), ...cutLines(tile.cut), ...roadLines(tile.road));
   }
   return new TextEncoder().encode(`${lines.join("\n")}\n`);
 }
@@ -96,7 +98,7 @@ export function decodePlate(bytes) {
   const read = () => {
     if (!own) return;
     const of = (tag) => own.lines.filter((line) => line.startsWith(`${tag} `));
-    const tile = { heights: decodeTile(of("h")), terrain: new Uint8Array(CELLS), biome: readBiome(of("b")[0]), slots: null, slotSeed: tileOf(coords, own.index), water: readWater(of("w")), cut: readCuts(of("c")) };
+    const tile = { heights: decodeTile(of("h")), terrain: new Uint8Array(CELLS), biome: readBiome(of("b")[0]), slots: null, slotSeed: tileOf(coords, own.index), water: readWater(of("w")), cut: readCuts(of("c")), road: readRoads(of("r")[0]) };
     readSlots(of("s")[0], tile);
     tiles.set(own.index, tile);
   };
@@ -119,6 +121,16 @@ function biomeLine(biome = new Uint8Array(CELLS)) {
     k += run;
   }
   return out;
+}
+
+// The road line, the cells' road kinds as runs as the biome line has them, for a tile with any.
+function roadLines(road) {
+  if (!road?.some((v) => v)) return [];
+  return [`r ${biomeLine(road).slice(2)}`];
+}
+
+function readRoads(line) {
+  return line ? readBiome(line) : null;
 }
 
 function readBiome(line) {

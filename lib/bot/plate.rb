@@ -2,7 +2,7 @@ require "zstd-ruby"
 
 module Bot
   # A version 2 plate file's tiles (.agents/formats.md, client/src/v2/plate.js): each tile's
-  # corner heights, cells' biomes, object slots and water, by its index in the plate.
+  # corner heights, cells' biomes, object slots, water and roads, by its index in the plate.
   module Plate
     CELL_FT = 4.0
     TILE_CELLS = 64
@@ -18,8 +18,8 @@ module Bot
 
     module_function
 
-    # {index => {heights:, biome:, slots:, level:, kind:}}; level and kind nil for a tile with no
-    # water, and level nil for each dry cell.
+    # {index => {heights:, biome:, slots:, level:, kind:, road:}}; level and kind nil for a tile
+    # with no water, and level nil for each dry cell; road, each cell's road kind, nil for no roads.
     def read(text, px, pz)
       raise ArgumentError, "a binary plate file, from before they were text" if text.start_with?("\x1f\x8b".b)
       lines = text.split("\n")
@@ -48,7 +48,9 @@ module Bot
     def tile(lines, tx, tz)
       of = ->(tag) { lines.select { _1.start_with?("#{tag} ") } }
       level, kind = water(of.call("w"))
-      {heights: heights(of.call("h")), biome: biome(of.call("b").first), slots: slots(of.call("s").first, tx, tz), level:, kind:}
+      # Roads are kept as runs as biomes are.
+      road = of.call("r").first&.then { |line| biome(line) }
+      {heights: heights(of.call("h")), biome: biome(of.call("b").first), slots: slots(of.call("s").first, tx, tz), level:, kind:, road:}
     end
 
     def digits(text, at, count)

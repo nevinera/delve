@@ -36,6 +36,7 @@ const FILL_RUN = 1.5; // and a slope below falls a foot every this many
 const SIDE_FT = 24; // how far past its edge a bank or slope reaches at most
 const TRENCH_FT = 1; // how far under the ground on both sides it is, at most, before that's a trench
 const GRID_FT = 32; // its track's segments are found by squares this wide
+const ROAD_CELL_FT = 2.5; // how near a cell's middle a narrow road's track passes for it to be on it
 
 const tracks = new WeakMap(); // points -> their track, by kind and seed
 
@@ -255,6 +256,18 @@ export function roadsAt(roads, x, z, ground) {
     if (made && (!best || made.out < best.out)) best = made;
   }
   return best ? best.height : ground;
+}
+
+// Which kind of road (x, z) is on, a cell's middle: 1 + its index in ROAD_KINDS, or 0 for none.
+// A cell's on a road whose track passes within half its width, or ROAD_CELL_FT for one narrower,
+// so even a footpath's cells run on unbroken.
+export function roadKindAt(roads, x, z) {
+  let best = 0;
+  for (const road of roads) {
+    const near = onTrack(roadTrack(road.points, road.kind, road.seed ?? 0), x, z, reachOf(road));
+    if (near && near.d <= Math.max(near.width / 2, ROAD_CELL_FT)) best = Math.max(best, ROAD_KINDS.indexOf(road.kind) + 1);
+  }
+  return best;
 }
 
 // The roads in `before` or `after` that aren't in both, as boxes [x0, z0, x1, z1], where the

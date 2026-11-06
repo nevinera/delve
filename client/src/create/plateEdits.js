@@ -54,7 +54,7 @@ export function smooth(grid, side, u0, v0, step, count) {
 }
 
 // Puts `edits` (Renditions' editsFor) into plate `key`, just read: takes out the tiles cleared,
-// and puts in tiles' water as last baked, cuts as last carved, the tiles made, and the moves.
+// and puts in tiles' water as last baked, cuts and roads as last carved, the tiles made, and the moves.
 export function applyEdits(key, plate, { cleared, made, tiles, plateMove }) {
   const [px, pz] = key.split(",").map(Number);
   for (const index of cleared ?? []) plate.tiles.delete(index);
@@ -62,6 +62,7 @@ export function applyEdits(key, plate, { cleared, made, tiles, plateMove }) {
     const edit = tiles?.get(index);
     if (edit?.water !== undefined) tile.water = edit.water;
     if (edit?.cut !== undefined) tile.cut = edit.cut;
+    if (edit?.road !== undefined) tile.road = edit.road;
   }
   for (const index of made ?? []) {
     if (plate.tiles.has(index)) continue;

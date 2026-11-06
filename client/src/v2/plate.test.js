@@ -44,6 +44,18 @@ describe("plate files' cuts", () => {
   });
 });
 
+describe("plate files' roads", () => {
+  it("keep each cell's road kind, and none for a tile with no road", () => {
+    const road = new Uint8Array(64 * 64);
+    road.fill(2, 640, 700);
+    road[4095] = 3;
+    const tiles = roundTrip([[0, { ...tile(null), road }], [1, { ...tile(null), road: new Uint8Array(64 * 64) }], [2, tile(null)]]);
+    expect([...tiles.get(0).road]).toEqual([...road]);
+    expect(tiles.get(1).road).toBeNull();
+    expect(tiles.get(2).road).toBeNull();
+  });
+});
+
 describe("plate files", () => {
   const heights = (f) => Float32Array.from({ length: 65 * 65 }, (_, k) => f(k % 65, Math.floor(k / 65)));
 

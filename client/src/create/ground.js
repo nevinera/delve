@@ -3,7 +3,7 @@ import { disposeGround, groundMaterial } from "../render/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
 import { ACROSS, AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, missingSea, partWater, seaEdges } from "../v2/water.js";
 import { LEDGE_RAISE_FT, LEVEE_FT, courseBox, shape } from "../v2/courses.js";
-import { changedRoadBoxes, roadBox, roadsAt } from "../v2/roads.js";
+import { changedRoadBoxes, roadBox, roadKindAt, roadsAt } from "../v2/roads.js";
 import { waterMaterial } from "../render/waterMaterial.js";
 import { SHORE_FADE_FT, waterLookOf } from "./waterSurface.js";
 import { PATTERNS, RUNNING, look, painted, slopeOf } from "../v2/look.js";
@@ -91,6 +91,7 @@ export class Renditions {
     this.water = new WaterMap(); // and the water from them, baked into plate files saved
     this.roadFile = { roads: [] }; // the roads, as roads.json keeps them
     this.cuts = new Map(); // "tx,tz" -> how far courses and roads moved the tile's corners, over what its plate file has
+    this.roadCells = new Map(); // "tx,tz" -> the tile's cells' road kinds as last carved, over what its plate file has
     this.waters = new Map(); // "tx,tz" -> the tile's water as last baked, over what its plate file has
     this.fileEdges = new Map(); // "px,pz" -> the sea along its sides as its file has it, for plates not read here
     this.wet = 0; // counts changes to tiles' water
@@ -191,6 +192,7 @@ export class Renditions {
   // plates moved.
   carve(boxes) {
     const moved = new Set();
+    const roadsMoved = new Set(); // "px,pz" of plates whose road cells were worked out again
     const overlaps = (b, [x0, z0, x1, z1]) => b[0] <= x1 && b[2] >= x0 && b[1] <= z1 && b[3] >= z0;
     for (const box of boxes) {
       const [x0, z0, x1, z1] = box;
@@ -227,11 +229,33 @@ export class Renditions {
           }
           tile.cut = cut.some((v) => v) ? cut : null;
           this.cuts.set(`${tx},${tz}`, tile.cut);
+          // Which of its cells in the box are on a road.
+          const road = tile.road ?? new Uint8Array(TILE_CELLS * TILE_CELLS);
+          for (let j = 0; j < TILE_CELLS; j++) {
+            const z = tz * TILE_FT + (j + 0.5) * CELL_FT;
+            if (z < z0 || z > z1) continue;
+            for (let i = 0; i < TILE_CELLS; i++) {
+              const x = tx * TILE_FT + (i + 0.5) * CELL_FT;
+              if (x >= x0 && x <= x1) road[j * TILE_CELLS + i] = roads.length ? roadKindAt(roads, x, z) : 0;
+            }
+          }
+          const roaded = road.some((v) => v) ? road : null;
+          if (roaded !== tile.road || roaded) {
+            tile.road = roaded;
+            this.roadCells.set(`${tx},${tz}`, roaded);
+            roadsMoved.add(key);
+          }
         }
       }
       if (!deltas.size) continue;
       const at = (x, z) => deltas.get(`${Math.round(x / CELL_FT)},${Math.round(z / CELL_FT)}`) ?? 0;
       for (const key of this.raise(at, [x0, z0, x1, z1], CELLS, false)) moved.add(key);
+    }
+    // Plates whose road cells changed are saved again, though their ground may not have moved.
+    for (const key of roadsMoved) {
+      this.changed.add(key);
+      this.unsaved.add(key);
+      moved.add(key);
     }
     return moved;
   }
@@ -327,14 +351,14 @@ export class Renditions {
   }
 
   // What's been done to plate `key` since its file was written, for applyEdits(): which tiles were
-  // cleared and made, and each tile's water as last baked, cuts as last carved and moves. A copy
+  // cleared and made, and each tile's water as last baked, cuts and roads as last carved and moves. A copy
   // of this goes with a plate to the worker that saves it.
   editsFor(key) {
     const [px, pz] = key.split(",").map(Number);
     const tiles = new Map();
     for (let index = 0; index < PLATE_TILES * PLATE_TILES; index++) {
       const tile = `${px * PLATE_TILES + (index % PLATE_TILES)},${pz * PLATE_TILES + Math.floor(index / PLATE_TILES)}`;
-      const edit = { water: this.waters.get(tile), cut: this.cuts.get(tile), fine: this.offsets[CELLS].get(tile), coarse: this.offsets[CHUNKS].get(tile) };
+      const edit = { water: this.waters.get(tile), cut: this.cuts.get(tile), road: this.roadCells.get(tile), fine: this.offsets[CELLS].get(tile), coarse: this.offsets[CHUNKS].get(tile) };
       if (Object.values(edit).some((value) => value !== undefined)) tiles.set(index, edit);
     }
     return { cleared: this.cleared.get(key), made: this.made.get(key), tiles, plateMove: this.offsets[TILES].get(key) };

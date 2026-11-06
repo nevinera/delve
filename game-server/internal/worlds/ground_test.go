@@ -431,3 +431,39 @@ func TestFillBuiltObjects(t *testing.T) {
 		t.Error("expected built objects in fill.json, some you see through")
 	}
 }
+
+func TestNothingGrowsOnRoads(t *testing.T) {
+	w, _ := fixture(t)
+	g := w.Ground("main")
+	cells := 0
+	for tz := 0; tz <= 2; tz++ {
+		for tx := -1; tx <= 2; tx++ {
+			tl, _, _, err := g.tileAt(tx, tz)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if tl == nil || tl.road == nil {
+				continue
+			}
+			things, err := g.fill(tx, tz)
+			if err != nil {
+				t.Fatal(err)
+			}
+			x0, z0 := float64(tx)*TileFt, float64(tz)*TileFt
+			for _, kind := range tl.road {
+				if kind != 0 {
+					cells++
+				}
+			}
+			for _, th := range things {
+				k := int(math.Floor((th.Z-z0)/cellFt))*tileCells + int(math.Floor((th.X-x0)/cellFt))
+				if tl.road[k] != 0 {
+					t.Errorf("a %s at (%.1f, %.1f), on the road", th.Type, th.X, th.Z)
+				}
+			}
+		}
+	}
+	if cells < 100 {
+		t.Errorf("%d road cells in the fixture, want the road through the forest", cells)
+	}
+}

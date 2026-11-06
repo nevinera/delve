@@ -67,7 +67,7 @@ module Bot
       end
     end
 
-    # The trees and objects in tile (tx, tz)'s slots, but under slabs.
+    # The trees and objects in tile (tx, tz)'s slots, but under slabs and on roads.
     def fill(tx, tz)
       tile, plate, index = tile_at(tx, tz)
       return [] unless tile
@@ -75,7 +75,11 @@ module Bot
         _, covered = pressed_tile(tx, tz)
         x0, z0 = tx * TILE_FT, tz * TILE_FT
         things = Fill.slots(tile[:slots], tx, tz, ->(i, j) { tile[:biome][j * Plate::TILE_CELLS + i] }, method(:slot_ground))
-        things.reject { |t| covered[((t[:z] - z0) / CELL_FT).floor * Plate::TILE_CELLS + ((t[:x] - x0) / CELL_FT).floor] }
+        road = tile[:road]
+        things.reject do |t|
+          k = ((t[:z] - z0) / CELL_FT).floor * Plate::TILE_CELLS + ((t[:x] - x0) / CELL_FT).floor
+          covered[k] || (road && road[k].to_i != 0)
+        end
       end
     end
 

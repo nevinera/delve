@@ -199,6 +199,22 @@ describe("raising the ground", () => {
     expect(renditions.heightAt(track.x[k], track.z[k])).toBeCloseTo(10);
   });
 
+  it("marks the cells under roads, saves them, and clears them when the road goes", () => {
+    const renditions = world();
+    renditions.cells(0, 0);
+    const road = { kind: "trail", points: [[20, 128, 6], [236, 128, 6]], seed: 1, bed: Array(40).fill(10) };
+    renditions.setRoads({ roads: [road] });
+    const saved = () => decodePlate(renditions.changedFiles("main").get("places/continents/main/plates/0_0.plate")).tiles.get(0).road;
+    const on = saved();
+    const count = on.reduce((n, v) => n + (v ? 1 : 0), 0);
+    // About 6 ft wide and 216 ft long, in 4 ft cells.
+    expect(count).toBeGreaterThan(54 * 1.2);
+    expect(count).toBeLessThan(54 * 3);
+    expect(on.every((v) => v === 0 || v === 2)).toBe(true);
+    renditions.setRoads({ roads: [] });
+    expect(saved()).toBeNull();
+  });
+
   it("keeps roads when courses are carved again near them", () => {
     const renditions = world();
     renditions.cells(0, 0);

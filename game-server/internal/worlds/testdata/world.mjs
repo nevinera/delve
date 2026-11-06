@@ -1,6 +1,6 @@
 // Writes the fixtures the worlds tests read: a small version 2 world in world/, written by the
 // client's own codecs, and in expected.json what /create finds on it: the ground's height and
-// water at points, what stands in each tile's slots and across the course's cascades, where
+// water at points, what stands in each tile's slots (but on its road) and across the course's cascades, where
 // objects placed by hand stand, footholds on the slabs, and the caves' floors and rock.
 //
 //   node game-server/internal/worlds/testdata/world.mjs
@@ -17,6 +17,7 @@ const { loadZipper } = await client("v2/zstd.js");
 const { BiomeMap } = await client("v2/biomes.js");
 const { makeSlots } = await client("v2/slots.js");
 const { dryWater, WATER_TYPES } = await client("v2/water.js");
+const { roadKindAt } = await client("v2/roads.js");
 const { EMPTY_FT, Renditions } = await client("create/ground.js");
 const { Scatter } = await client("create/scatter.js");
 const { setBuiltObjects } = await client("world/objects.js");
@@ -49,6 +50,8 @@ function heightAt(x, z) {
 const LAKE = 12;
 // A stream along z 650, a foot over the ground.
 const streamAt = (x, z) => Math.abs(z - 650) < 6 && x < 700;
+// A road through the forest, where nothing grows.
+const ROAD = { kind: "road", seed: 5, points: [[-200, 150, 14], [120, 120, 14], [380, 220, 14]] };
 
 const AREAS = [
   { biome: "forest", points: [[-256, 0], [400, 0], [400, 400], [-256, 400]] },
@@ -74,9 +77,11 @@ function tile(tx, tz) {
       else if (streamAt(x, z)) [water.level[k], water.type[k], wet] = [heightAt(x, z) + 1, WATER_TYPES.indexOf("stream"), true];
     }
   }
+  const road = new Uint8Array(64 * 64);
+  for (let j = 0; j < 64; j++) for (let i = 0; i < 64; i++) road[j * 64 + i] = roadKindAt([ROAD], tx * TILE_FT + (i + 0.5) * CELL_FT, tz * TILE_FT + (j + 0.5) * CELL_FT);
   // One tile keeps slots no seed makes.
   const slots = tx === 2 && tz === 2 ? makeSlots(99, 99) : null;
-  return { heights, biome: biomes.tile(tx, tz), slots, slotSeed: [tx, tz], water: wet ? water : null, cut: null };
+  return { heights, biome: biomes.tile(tx, tz), slots, slotSeed: [tx, tz], water: wet ? water : null, cut: null, road: road.some((v) => v) ? road : null };
 }
 
 const plates = new Map([["0,0", new Map()], ["-1,0", new Map()]]);

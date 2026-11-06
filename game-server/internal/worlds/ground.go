@@ -437,10 +437,11 @@ func (g *Ground) fill(tx, tz int) ([]thing, error) {
 			things = append(things, b)
 		}
 	}
-	// Nothing grows under slabs.
+	// Nothing grows under slabs or on roads.
 	var out []thing
 	for _, th := range things {
-		if pt.covered[int(math.Floor((th.Z-z0)/cellFt))*tileCells+int(math.Floor((th.X-x0)/cellFt))] {
+		k := int(math.Floor((th.Z-z0)/cellFt))*tileCells + int(math.Floor((th.X-x0)/cellFt))
+		if pt.covered[k] || (t.road != nil && k >= 0 && k < len(t.road) && t.road[k] != 0) {
 			continue
 		}
 		out = append(out, th)

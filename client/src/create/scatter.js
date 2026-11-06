@@ -44,7 +44,7 @@ export class Scatter {
     const cells = r.cells(tx, tz);
     if (!cells?.slots) return null;
     const covered = r.coveredCells(tx, tz, cells);
-    if (cells.filled?.colors === cells.colors && cells.filled.water === cells.water && cells.filled.covered === covered) return cells.filled;
+    if (cells.filled?.colors === cells.colors && cells.filled.water === cells.water && cells.filled.covered === covered && cells.filled.road === cells.road) return cells.filled;
     const ground = (x, z) => r.heightAt(x, z) ?? 0;
     const biomes = r.biomeTile(tx, tz);
     const filled = fillSlots(
@@ -74,8 +74,11 @@ export class Scatter {
         if (x >= x0 && x < x0 + TILE_FT && z >= z0 && z < z0 + TILE_FT) filled.objects.push(makeObject(roll(0) < 0.3 ? "mossyBoulder" : "boulder", [x, z], yaw, size, roll));
       }
     }
-    // Nothing grows under slabs.
-    const open = (x, z) => !covered.has(Math.floor((z - z0) / CELL_FT) * TILE_CELLS + Math.floor((x - x0) / CELL_FT));
+    // Nothing grows under slabs or on roads.
+    const open = (x, z) => {
+      const k = Math.floor((z - z0) / CELL_FT) * TILE_CELLS + Math.floor((x - x0) / CELL_FT);
+      return !covered.has(k) && !cells.road?.[k];
+    };
     filled.trees = filled.trees.filter((tree) => open(tree.x, tree.z));
     filled.objects = filled.objects.filter((object) => open(...object.at));
     for (const tree of filled.trees) tree.ground = ground(tree.x, tree.z);
@@ -93,6 +96,7 @@ export class Scatter {
     filled.colors = cells.colors;
     filled.water = cells.water;
     filled.covered = covered;
+    filled.road = cells.road;
     filled.id = (Scatter.ids = (Scatter.ids ?? 0) + 1);
     cells.filled = filled;
     return filled;

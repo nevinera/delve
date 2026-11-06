@@ -10,7 +10,7 @@ import (
 )
 
 // Plate files (.agents/formats.md, client/src/v2/plate.js): each tile's corner heights,
-// cells' biomes, object slots and water. Cuts aren't read: nothing here needs them.
+// cells' biomes, object slots, water and roads. Cuts aren't read: nothing here needs them.
 
 const (
 	cellFt     = 4.0
@@ -35,6 +35,7 @@ type tile struct {
 	slots   []byte    // slotBytes a slot
 	level   []float32 // the water's surface over each cell, NaN where it's dry; nil for no water
 	kind    []uint8   // each cell's water type, an index into waterTypes
+	road    []uint8   // each cell's road kind, 0 for none; nil for no roads
 }
 
 const digitChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -155,6 +156,12 @@ func readTile(lines []string, tx, tz int) (*tile, error) {
 	}
 	if t.level, t.kind, err = readWater(of("w")); err != nil {
 		return nil, err
+	}
+	// Roads are kept as runs as biomes are.
+	if roads := of("r"); len(roads) > 0 {
+		if t.road, err = readBiome(roads); err != nil {
+			return nil, fmt.Errorf("roads: %w", err)
+		}
 	}
 	return t, nil
 }
