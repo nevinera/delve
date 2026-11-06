@@ -27,6 +27,17 @@ body.play {
   display: none;
 }
 
+/* Frames a second, top right beside the chat button; above the loading cover. */
+.play-fps {
+  position: fixed;
+  top: 18px;
+  right: 72px;
+  margin: 0;
+  font-size: 12px;
+  color: #c8c8c8;
+  pointer-events: none;
+}
+
 .play-status {
   position: fixed;
   top: 10px;

@@ -35,7 +35,7 @@ const config = JSON.parse($("playConfig").textContent); // { repo, sha, paths, l
 const status = (text) => ($("playStatus").textContent = text);
 const STREAM_MS = 1000; // how often to look for placed files coming into reach
 const PLACED_FT = 2 * PLATE_FT; // how near a plate's placed file is fetched
-const SETTLE_MS = 10_000;
+const WATCH_MS = 30_000; // how long after you're in watchSettling waits for the land to settle
 const READ_NOW_FT = PLATE_FT; // how near a platter is read before you're in; the rest wait for idle time
 // Lighter graphics for phones: no extra pixel density, 30 frames a second to save the battery, less
 // ground clutter, and simple tree crowns.
@@ -89,6 +89,34 @@ menu.addEventListener("toggle", (e) => {
 menu.querySelector('[data-open="playGraphics"]').disabled = true; // until there's a view
 
 // Reads the platters play held back, one at a time when the page has nothing else to do.
+// Shows frames a second in the corner, from when there's a view.
+function showFps(view) {
+  const label = $("playFps");
+  setInterval(() => {
+    const fps = view.fps();
+    label.textContent = fps === null ? "" : `${Math.round(fps)} fps`;
+  }, 500);
+}
+
+// Records how long after you're in the land's done being built (play.load.after.built) and moving
+// is smooth (play.load.after.smooth). Where one isn't by WATCH_MS, plates_left and fps say how far
+// off it was.
+function watchSettling(view, tags) {
+  const start = performance.now();
+  const first = {};
+  const timer = setInterval(() => {
+    const ms = performance.now() - start;
+    if (view.built()) first.built ??= ms;
+    if (view.smooth()) first.smooth ??= ms;
+    if ((first.built !== undefined && first.smooth !== undefined) || ms >= WATCH_MS) {
+      clearInterval(timer);
+      for (const [part, at] of Object.entries(first)) metrics().timing(`play.load.after.${part}`, at, tags);
+      if (first.built === undefined) metrics().gauge("play.load.after.plates_left", view.ground.pending.length, tags);
+      if (first.smooth === undefined) metrics().gauge("play.load.after.fps", view.fps() ?? 0, tags);
+    }
+  }, 100);
+}
+
 function readHeldPlatters(renditions) {
   const later = globalThis.requestIdleCallback ?? ((then) => setTimeout(then, 50));
   const next = () => renditions.readHeld() && later(next);
@@ -216,6 +244,7 @@ async function play() {
   let showGraphics = null;
   const view = new PlayView($("scene"), { onGraphics: (graphics) => showGraphics?.(graphics) });
   const touch = isTouch();
+  showFps(view);
   // Before the first frame, so the land isn't built twice.
   if (touch) view.setGraphics(PHONE_GRAPHICS);
   mark("view");
@@ -258,7 +287,6 @@ async function play() {
     else metrics().timing(`play.load.ground.${part.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)}`, ms, tags);
   }
   await step("animations", prepareAnimations().catch((err) => console.warn(`Couldn't load animations: ${err.message}`)));
-  status("Getting the land ready...");
   // Players get the settings that trade looks for speed, not the editor's switch for each part.
   showGraphics = graphicsPanel(menu.querySelector(".play-graphics"), view, {
     check: "play-check",
@@ -292,15 +320,12 @@ async function play() {
   earlyCooldowns.forEach((message) => combat.cooldown(message));
   // A handle for scripts and the browser's console.
   window.play = { view, connection, others, combat, renditions, placed, caves, sightLines, restPoints };
-  // The cover stays till the land around you is built and moving is smooth, or SETTLE_MS at most.
-  const settling = performance.now();
-  while (!view.settled() && performance.now() - settling < SETTLE_MS) await new Promise((resolve) => setTimeout(resolve, 100));
-  mark("settle");
   // From when the page was asked for, so it includes fetching the page and its code.
   metrics().timing("play.load.total", performance.now(), tags);
   status("");
   $("playLoading").hidden = true;
   readHeldPlatters(renditions);
+  watchSettling(view, tags);
   if (touch) new TouchControls(view, document.body);
   $("playResume").addEventListener("click", () => {
     $("playPaused").hidden = true;

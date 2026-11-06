@@ -34,7 +34,7 @@ const SEA_BELOW_FT = 2;
 const DRAWN_FT = SIGHT.fogEndFt + TILE_FT; // how far off the ground's drawn: past the fog's end
 const pixelRatio = (resolution) => Math.min(window.devicePixelRatio || 1, resolution === "full" ? 2 : resolution);
 
-// Frames that came no more than SMOOTH_MS apart, SMOOTH_FRAMES in a row, are smooth (settled()).
+// Frames that came no more than SMOOTH_MS apart, SMOOTH_FRAMES in a row, are smooth (smooth()).
 const SMOOTH_FRAMES = 10;
 const SMOOTH_MS = 50;
 
@@ -100,10 +100,20 @@ export class PlayView {
     this.resize();
   }
 
-  // Whether the land's done being built and the last SMOOTH_FRAMES frames came quickly.
-  settled() {
+  // Whether the land's done being built, and whether the last SMOOTH_FRAMES frames came quickly.
+  built() {
+    return Boolean(this.ground) && !this.ground.pending.length;
+  }
+
+  smooth() {
     const gaps = this.gaps ?? [];
-    return !this.ground?.pending.length && gaps.length === SMOOTH_FRAMES && gaps.every((ms) => ms < SMOOTH_MS);
+    return gaps.length === SMOOTH_FRAMES && gaps.every((ms) => ms < SMOOTH_MS);
+  }
+
+  // Frames a second, over the last SMOOTH_FRAMES frames, or null before there are any.
+  fps() {
+    const gaps = this.gaps ?? [];
+    return gaps.length ? 1000 / (gaps.reduce((a, b) => a + b, 0) / gaps.length) : null;
   }
 
   // Draws the land round continent feet [x, z] till it's ready to walk on there. Gives how long,
