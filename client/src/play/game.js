@@ -16,7 +16,7 @@ export function movementOf(walker) {
     forward: key("w") - key("s"),
     strafe: key("q") - key("e"),
     turn: key("a") - key("d"),
-    gait: walker.sprinting && !swim ? "sprint" : walker.gait === "walk" ? "walk" : "run",
+    gait: walker.gait === "walk" ? "walk" : "run",
     swim,
     jump: false,
   };

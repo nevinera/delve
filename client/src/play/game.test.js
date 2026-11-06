@@ -10,9 +10,9 @@ describe("movementOf", () => {
     expect(movementOf(walker(["s", "e", "a"], { gait: "walk" }))).toMatchObject({ forward: -1, strafe: -1, turn: 1, gait: "walk" });
   });
 
-  it("sprints, but not in the water", () => {
-    expect(movementOf(walker([], { sprinting: true })).gait).toBe("sprint");
-    expect(movementOf(walker([], { sprinting: true, motion: { swimming: true } }))).toMatchObject({ gait: "run", swim: true });
+  it("runs unless it's walking, and in the water too", () => {
+    expect(movementOf(walker([])).gait).toBe("run");
+    expect(movementOf(walker([], { motion: { swimming: true } }))).toMatchObject({ gait: "run", swim: true });
   });
 });
 

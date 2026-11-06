@@ -29,8 +29,8 @@ type Character struct {
 }
 
 // Move: how a character is moving, so others can carry it on between messages: forward and strafe
-// are -1, 0 or 1 (strafe 1 is left), turn is -1 (right), 0 or 1 (left), gait is walk, run or
-// sprint, and jump is true as it leaves the ground.
+// are -1, 0 or 1 (strafe 1 is left), turn is -1 (right), 0 or 1 (left), gait is walk or run, and
+// jump is true as it leaves the ground.
 type Move struct {
 	Forward int    `json:"forward"`
 	Strafe  int    `json:"strafe"`

@@ -11,7 +11,7 @@ import { trunkRadius } from "../render/treeMeshes.js";
 
 // Walk mode for the 3D view: a person-sized character on the generated ground, with a third-person
 // camera, to get a feel for the land at eye level. Controls: W/S run forward and back,
-// A/D turn, Q/E strafe, space jumps, / toggles walking, X sits; Z toggles sprinting.
+// A/D turn, Q/E strafe, space jumps, Z toggles walking, X sits.
 // Left-drag swings the camera around the character, right-drag turns the character with it, and
 // the wheel zooms. Escape stops.
 //
@@ -33,7 +33,6 @@ export const RUN_FT = 21;
 export const WALK_FT = 7.5;
 export const BACK_FT = 13.5; // backing up at a run
 export const SWIM_FT = 14.2;
-export const SPRINT = 2;
 const TAP_PX = 5; // a press that moves less than this is a click or tap, not a drag
 const TURN = TURN_RATE; // radians per second, as the turning clips step round at
 export const JUMP_FT = 16; // upward speed at takeoff, per second
@@ -60,13 +59,12 @@ export const walksDown = (drop, across) => drop > 0 && drop <= across * MAX_CLIM
 export const frameDue = (last, now, fps) => last === null || now - last >= 1000 / fps - 2;
 const UP = new THREE.Vector3(0, 1, 0);
 const KEYS = new Set(["w", "a", "s", "d", "q", "e", " "]);
-const TOGGLES = new Set(["/", "x", "z"]);
+const TOGGLES = new Set(["x", "z"]);
 
 // The clips for moving at each gait, ahead, to the left and right and back.
 export const GAITS = {
   walk: { ahead: "Walk_Loop", left: "Walk_Left_Loop", right: "Walk_Right_Loop", back: "Walk_Back_Loop" },
   run: { ahead: "Run_Fwd_Loop", left: "Run_Left_Loop", right: "Run_Right_Loop", back: "Run_Back_Loop" },
-  sprint: { ahead: "Sprint_Loop", left: "Run_Left_Loop", right: "Run_Right_Loop", back: "Run_Back_Loop" },
 };
 const QUARTER = Math.PI / 4;
 // How the chest twists against the legs, shared down the spine to the head.
@@ -251,9 +249,8 @@ export class Walker {
     let mz = fz * forward - fx * strafe;
     const length = Math.hypot(mx, mz);
     const swimming = this.swimming();
-    const sprinting = this.sprinting && !swimming;
-    const gait = swimming ? "swim" : sprinting ? "sprint" : this.gait;
-    const speed = length ? (this.speedShare ?? 1) * (swimming ? SWIM_FT : gait === "walk" ? WALK_FT : forward < 0 ? BACK_FT : RUN_FT) * (sprinting ? SPRINT : 1) : 0;
+    const gait = swimming ? "swim" : this.gait;
+    const speed = length ? (this.speedShare ?? 1) * (swimming ? SWIM_FT : gait === "walk" ? WALK_FT : forward < 0 ? BACK_FT : RUN_FT) : 0;
     this.motion = { forward, strafe, speed, gait, swimming };
     if (speed && this.drag?.button !== 0) {
       const off = Math.atan2(Math.sin(this.cam.yaw), Math.cos(this.cam.yaw));
@@ -479,10 +476,9 @@ export class Walker {
     else this.held.delete(key);
   }
 
-  // / switches between walking and running; Z sprints, or stops; X sits down, or stands back up.
+  // Z switches between walking and running; X sits down, or stands back up.
   toggle(key) {
-    if (key === "/") this.gait = this.gait === "walk" ? "run" : "walk";
-    if (key === "z") this.sprinting = !this.sprinting;
+    if (key === "z") this.gait = this.gait === "walk" ? "run" : "walk";
     if (key !== "x" || this.motion?.speed || this.airTime > 0 || this.motion?.swimming) return;
     if (!this.sitting) this.sitting = { at: this.t };
     else if (!this.sitting.standing) this.sitting = { at: this.t, standing: true };

@@ -22,7 +22,6 @@ const (
 	walkFt  = 7.5
 	backFt  = 13.5 // backing up at a run
 	swimFt  = 14.2
-	sprint  = 2.0
 	jumpFt  = 16.0 // upward speed at takeoff
 	gravity = 48.0
 )
@@ -136,7 +135,7 @@ func (m *motion) check(r incoming, from [3]float64, now time.Time, g Ground) (ve
 		m.at, m.t = from, t
 		m.peak, m.peakT = from, t
 		// Before its first report, the client may have started moving, as fast as anyone can.
-		allowed := slackFt + runFt*sprint*now.Sub(m.joined).Seconds()*speedLeeway
+		allowed := slackFt + runFt*now.Sub(m.joined).Seconds()*speedLeeway
 		if moved := horizontal(from, r.At); moved > allowed {
 			// Reports sent before the client heard of the teleport don't count against it.
 			if m.arriving && now.Sub(m.joined) < correctWait {
@@ -399,9 +398,6 @@ func speedOf(mv Move) float64 {
 	s := runFt
 	if mv.Forward < 0 {
 		s = backFt
-	}
-	if mv.Gait == "sprint" {
-		s *= sprint
 	}
 	return s
 }

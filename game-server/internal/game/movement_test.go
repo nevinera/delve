@@ -54,7 +54,6 @@ func (r *reporter) want(want verdict, dt, x, y, z float64, mv *Move) string {
 var (
 	running  = &Move{Forward: 1, Gait: "run"}
 	walking  = &Move{Forward: 1, Gait: "walk"}
-	sprints  = &Move{Forward: 1, Gait: "sprint"}
 	swimming = &Move{Forward: 1, Gait: "run", Swim: true}
 	still    = &Move{Gait: "run"}
 )
@@ -80,7 +79,7 @@ func TestTooFast(t *testing.T) {
 		{"running too fast", running, 30, false},
 		{"walking at a run", walking, 21, false},
 		{"walking", walking, 7.5, true},
-		{"sprinting", sprints, 42, true},
+		{"sprinting, which there isn't", &Move{Forward: 1, Gait: "sprint"}, 42, false},
 		{"swimming at a run", swimming, 21, false},
 		{"standing still, moving", still, 10, false},
 		{"backing up at a run", &Move{Forward: -1, Gait: "run"}, 21, false},

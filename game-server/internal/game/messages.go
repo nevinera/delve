@@ -26,7 +26,7 @@ func encode(v any) []byte {
 func (m Move) clean() Move {
 	step := func(n int) int { return max(-1, min(1, n)) }
 	m.Forward, m.Strafe, m.Turn = step(m.Forward), step(m.Strafe), step(m.Turn)
-	if m.Gait != "walk" && m.Gait != "sprint" {
+	if m.Gait != "walk" {
 		m.Gait = "run"
 	}
 	return m

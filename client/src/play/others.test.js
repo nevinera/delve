@@ -9,7 +9,7 @@ describe("speedOf", () => {
     expect(speedOf(move({ forward: 1 }))).toBe(21);
     expect(speedOf(move({ forward: 1, gait: "walk" }))).toBe(7.5);
     expect(speedOf(move({ forward: -1 }))).toBe(13.5);
-    expect(speedOf(move({ strafe: 1, gait: "sprint" }))).toBe(42);
+    expect(speedOf(move({ strafe: 1, gait: "sprint" }))).toBe(21); // a gait it doesn't know runs
     expect(speedOf(move({ forward: 1, swim: true }))).toBe(14.2);
   });
 });

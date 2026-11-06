@@ -1191,7 +1191,7 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. [`messages.
 { "forward": 1, "strafe": 0, "turn": -1, "gait": "run", "swim": false, "jump": false }
 ```
 
-`forward` and `strafe` are -1, 0 or 1 (strafe 1 is left), `turn` is -1 (right), 0 or 1 (left), `gait` is `walk`, `run` or `sprint`, and `jump` is true in the message sent as it leaves the ground.
+`forward` and `strafe` are -1, 0 or 1 (strafe 1 is left), `turn` is -1 (right), 0 or 1 (left), `gait` is `walk` or `run`, and `jump` is true in the message sent as it leaves the ground.
 
 #### Server to client
 
@@ -1262,12 +1262,12 @@ The play page runs `/debug` itself (`client/src/play/debugCommand.js`), never se
 
 The game server checks that each report follows from the last one it took, the way the genre's servers do. It checks speeds and clocks, and where you stand against the continent's plates, placed files and caves.
 
-- **Speed:** how far you went across the ground since the last report, against how fast you were moving: run 21 ft/s, walk 7.5, back up 13.5, swim 14.2, and sprint doubles running. That allows 15% and 4 ft extra for timing. Standing still, you can't move. A report far away is a teleport and fails the same way.
+- **Speed:** how far you went across the ground since the last report, against how fast you were moving: run 21 ft/s, walk 7.5, back up 13.5, swim 14.2. That allows 15% and 4 ft extra for timing. Standing still, you can't move. A report far away is a teleport and fails the same way.
 - **Clock:** for the first 5 s, the server measures how far your clock is behind its own. After that, a report whose clock is more than half a second further ahead fails, since a fast clock would give you more time to move in. A clock that goes backward fails too.
 - **Rising:** you can climb 1.5 ft for each foot you move across, plus 4 ft, and a jump's height (about 2.7 ft) within 1.5 s of jumping.
 - **Falling:** you can drop as fast as gravity (48 ft/s²) takes you since you started down, plus 1.5 ft for each foot across.
 - **Ground:** you can't go more than 2 ft under the ground, except on a slab or through a cave's mouth, or move into a slab, a cave's rock, a tree or an object. Off the tiles is sea. Off the ground and not jumping, you have to fall as gravity would, after half a second's grace, so you can't float or walk on water. Walking from ground to ground, you can't climb slopes steeper than 50°, with 25% and 2 ft extra (`MaxClimb` in `game-server/internal/worlds/ground.go`). You can only swim in water deeper than 4.5 ft.
-- **Entering:** your first report has to be near where the server put you, allowing for moving at a sprint since then, and is checked against the ground too. The server puts you on the ground at the spawn point, or at swimming depth in deep water.
+- **Entering:** your first report has to be near where the server put you, allowing for running since then, and is checked against the ground too. The server puts you on the ground at the spawn point, or at swimming depth in deep water.
 
 The server keeps each fall's height and time when you land, for fall damage later.
 

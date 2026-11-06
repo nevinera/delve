@@ -6,7 +6,7 @@ import { dummyMaterials, dummyMesh, disposeDummy } from "../world/dummy.js";
 import { WeaponDraw } from "../character/weaponDraw.js";
 import { TURN_RATE } from "../character/posed.js";
 import { resolveRecipe } from "../character/recipe.js";
-import { BACK_FT, GAITS, GRAVITY, JUMP_FT, RUN_FT, RUNNING_KINDS, SPRINT, SWIM_FT, tripAt, WALK_FT, walksDown } from "./walker.js";
+import { BACK_FT, GAITS, GRAVITY, JUMP_FT, RUN_FT, RUNNING_KINDS, SWIM_FT, tripAt, WALK_FT, walksDown } from "./walker.js";
 
 // The other characters near you, as the game server reports them. Each carries on moving as it
 // last said it was, between messages, and eases toward where each message says it is. Each has its
@@ -30,8 +30,7 @@ let dummyLook = null; // the dummies' materials, shared
 export function speedOf(move) {
   if (!move.forward && !move.strafe) return 0;
   if (move.swim) return SWIM_FT;
-  const base = move.gait === "walk" ? WALK_FT : move.forward < 0 ? BACK_FT : RUN_FT;
-  return base * (move.gait === "sprint" ? SPRINT : 1);
+  return move.gait === "walk" ? WALK_FT : move.forward < 0 ? BACK_FT : RUN_FT;
 }
 
 // Where a character moving as `move`, facing `yaw`, goes in `dt` seconds: [dx, dz].
