@@ -27,6 +27,7 @@ import { PlayView } from "./view.js";
 import { UnitStatuses } from "./unitStatuses.js";
 import { metrics } from "../metrics/metrics.js";
 import { Startup } from "../metrics/timing.js";
+import { debugCommand } from "./debugCommand.js";
 
 // The play page: your character in a released version 2 world, where the game server puts it. The
 // world comes from raw GitHub at the released commit: its continent's platters first, and plate,
@@ -312,7 +313,7 @@ async function play() {
   view.walker.yaw = you.yaw;
   connection.report(view);
   unitStatuses.seen(you);
-  combat = new PlayCombat({ view, others, connection, loader, you, hud: $("playCombat"), unitStatuses });
+  combat = new PlayCombat({ view, others, connection, loader, you, hud: $("playCombat"), unitStatuses, commands: { debug: (args) => debugCommand(args, view) } });
   forCombat.arrive(combat);
   // A handle for scripts and the browser's console.
   window.play = { view, connection, others, combat, renditions, placed, caves, sightLines, restPoints };

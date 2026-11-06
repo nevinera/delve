@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { setClutterRadius } from "../render/clutterMeshes.js";
+import { Boundaries } from "./boundaries.js";
 import { RESOLUTIONS, SIGHT } from "../render/renderView.js";
 import { HORIZON, Sky } from "../render/sky.js";
 import { setTreeSight } from "../render/treeMeshes.js";
@@ -79,7 +80,7 @@ export class PlayView {
     this.surfaces = new WaterSurfaces(scene, renditions, renderer, this.ground);
     this.sea = new Sea(scene, DRAWN_FT * 6, renditions, this.surfaces);
     this.scatter = new Scatter(scene, renditions);
-    this.clutter = new Clutter(scene, renditions);
+    this.clutter = new Clutter(scene, renditions, { radiusFt: this.graphics.clutterRadiusFt, density: this.graphics.clutterDensity });
     this.falls = new Falls(scene, renditions, renderer);
     // The ground at caves' mouths is theirs to draw, with clutter round them as /create has it.
     this.caves = caves;
@@ -96,6 +97,8 @@ export class PlayView {
     caves.onMouths = (plates) => this.ground.refresh(plates);
     caves.groundMaterial = (tx, tz) => this.ground.fullMesh(tx, tz)?.material ?? null;
     this.things = new Things(scene, placed, (x, z, under) => caves.groundAt(x, z, under));
+    // Lines over the ground for /debug show-boundaries (debugCommand.js).
+    this.boundaries = new Boundaries(scene, (x, z) => renditions.heightAt(x, z), this.clutter);
     this.walkGround = new PlayGround({ renditions, placed, things: this.things, scatter: this.scatter, caves });
     this.resize();
   }
@@ -174,6 +177,7 @@ export class PlayView {
       this.things.tick(x, z);
       this.caves.tick(x, z);
       this.surfaces.tick(dt, x, z, near);
+      this.boundaries.tick(x, z, now);
     }
     this.sky.update(this.camera, now / 1000);
     this.hideParts();
@@ -213,6 +217,7 @@ export class PlayView {
   setGraphics(changes) {
     Object.assign(this.graphics, changes);
     setClutterRadius(this.graphics.clutterRadiusFt);
+    this.clutter?.setRadius(this.graphics.clutterRadiusFt, this.graphics.clutterDensity);
     this.renderer.setPixelRatio(pixelRatio(RESOLUTIONS.includes(this.graphics.resolution) ? this.graphics.resolution : "full"));
     this.resize();
     this.handlers.onGraphics?.(this.graphics);
