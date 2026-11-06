@@ -14,9 +14,10 @@ import { groundCells } from "./terrainMesh.js";
 // grain coming in, halfway at the lip, give or take a noise (lipNoise) the rock shares
 // (caveMaterial.js).
 //
-// Roads and highways in use are drawn over that from their middles (the tile's roads), so their
-// surface and edges are sharp, finer than the cells: packed earth, patchy, rutted and covered in
-// hoof and foot prints, paler and more trodden on highways.
+// Footpaths, trails and roads (v2/roads.js) are drawn over that from their middles (the tile's
+// roads), so their surface and edges are sharp, finer than the cells: packed earth, patchy and
+// covered in hoof and foot prints. Roads are paler and more trodden, with wheel ruts; trails have
+// fainter ruts; footpaths have none, and their edges fray into the ground beside them.
 
 const SIZE = 256;
 export const PATTERN_PX = SIZE;
@@ -31,6 +32,7 @@ const LITTER = PATTERNS.indexOf("litter");
 const PATH = PATTERNS.indexOf("path");
 const layerOf = (name) => Math.max(0, PATTERNS.indexOf(name));
 const MAX_ROAD_SEGMENTS = 96; // per tile; any past this are left out
+const KIND_SHADES = { footpath: 0, trail: 0.5, road: 1, highway: 1 }; // how roadKinds tells kinds apart
 
 let detail = null;
 let patterns = null;
@@ -154,7 +156,7 @@ float lipNoise( vec3 p ) {
           // The nearest road, by how far inside its edge this is (negative outside).
           float inward = -1e9;
           float across = 0.0;
-          float highway = 0.0;
+          float kind = 0.0; // 0 a footpath, 0.5 a trail, 1 a road
           for (int i = 0; i < ${MAX_ROAD_SEGMENTS}; i++) {
             if (i >= roadCount) break;
             vec4 seg = roadSegments[i];
@@ -165,11 +167,13 @@ float lipNoise( vec3 p ) {
             if (d > inward) {
               inward = d;
               across = roadKinds[i].x;
-              highway = roadKinds[i].y;
+              kind = roadKinds[i].y;
             }
           }
-          float aa = fwidth(inward) + 0.05;
-          float on = smoothstep(-aa, aa, inward);
+          // A footpath's edge frays, wandering in and out by up to a foot.
+          float fray = (1.0 - kind) * (texture2D(groundDetail, vGroundXZ * 0.4 + 0.31).g - 0.5) * 2.0;
+          float aa = fwidth(inward) + 0.05 + 0.4 * (1.0 - kind);
+          float on = smoothstep(-aa, aa, inward + fray);
           if (on > 0.0) {
             vec2 p = vGroundXZ;
             // Packed earth: the ground's dirt pattern over broad damp and dry patches, paler and
@@ -178,11 +182,12 @@ float lipNoise( vec3 p ) {
             float patches = texture2D(groundDetail, p * 0.035 + 0.41).g;
             float mottle = texture2D(groundDetail, p * 0.16 + 0.23).g;
             vec3 earth = mix(vec3(0.42, 0.32, 0.21), vec3(0.58, 0.47, 0.33), smoothstep(0.3, 0.7, patches));
-            earth = mix(earth, vec3(0.62, 0.55, 0.43), 0.45 * highway);
+            earth = mix(earth, vec3(0.62, 0.55, 0.43), 0.45 * step(0.75, kind));
             earth *= dirt * (0.85 + 0.3 * mottle);
             // Wheel ruts, wandering a little, a third of the way in from each edge.
             float wander = (texture2D(groundDetail, p * 0.02 + 0.77).g - 0.5) * 1.6;
             float rut = 1.0 - smoothstep(0.2, 1.0, abs(inward - across * 0.35 + wander));
+            rut *= smoothstep(0.25, 0.5, kind) * (0.5 + 0.5 * step(0.75, kind));
             earth *= 1.0 - 0.1 * rut;
             // Hoof and foot prints: small dark dents, thickest down the middle and in the ruts.
             float trodden = 0.5 + 0.5 * smoothstep(0.2, 0.8, inward / across) + rut;
@@ -200,7 +205,7 @@ float lipNoise( vec3 p ) {
 }
 
 // A tile's roads (tile.roads) as uniforms: each segment's ends in scene feet, and its road's half
-// width and whether it's a highway (1) or road (0). Null without any.
+// width and kind, 0 for a footpath, 0.5 a trail and 1 a road. Null without any.
 function roadSegments(tile, origin) {
   const list = (tile.roads ?? []).flatMap(({ kind, half, segments }) => segments.map((s) => ({ s, kind, half }))).slice(0, MAX_ROAD_SEGMENTS);
   if (!list.length) return null;
@@ -208,7 +213,7 @@ function roadSegments(tile, origin) {
   const pad = (make) => Array.from({ length: MAX_ROAD_SEGMENTS }, (_, i) => (list[i] ? make(list[i]) : make(null)));
   return {
     roadSegments: { value: pad((r) => (r ? new THREE.Vector4(r.s[0] - ox, r.s[1] - oz, r.s[2] - ox, r.s[3] - oz) : new THREE.Vector4())) },
-    roadKinds: { value: pad((r) => new THREE.Vector2(r?.half ?? 0, r?.kind === "highway" ? 1 : 0)) },
+    roadKinds: { value: pad((r) => new THREE.Vector2(r?.half ?? 0, KIND_SHADES[r?.kind] ?? 0)) },
     roadCount: { value: list.length },
   };
 }

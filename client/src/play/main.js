@@ -258,6 +258,7 @@ async function play() {
   }
   renditions.setBiomes(continent.biomes?.areas ?? [], false);
   renditions.setWater(continent.water ?? { bodies: [], courses: [] }, false);
+  renditions.setRoads(continent.roads ?? { roads: [] }, false);
   renditions.fetchPlate = (coords) => loader.plate(you.continent, coords);
   mark("platters");
   // Placed and caves files for the plates near you, once each.

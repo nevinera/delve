@@ -3,7 +3,7 @@ import { disposeGround, groundMaterial } from "../render/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
 import { ACROSS, AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, missingSea, partWater, seaEdges } from "../v2/water.js";
 import { LEDGE_RAISE_FT, LEVEE_FT, courseBox, shape } from "../v2/courses.js";
-import { changedRoadBoxes, roadBox, roadKindAt, roadsAt } from "../v2/roads.js";
+import { changedRoadBoxes, roadBox, roadKindAt, roadSegmentsIn, roadsAt } from "../v2/roads.js";
 import { waterMaterial } from "../render/waterMaterial.js";
 import { SHORE_FADE_FT, waterLookOf } from "./waterSurface.js";
 import { PATTERNS, RUNNING, look, painted, slopeOf } from "../v2/look.js";
@@ -90,6 +90,7 @@ export class Renditions {
     this.waterFile = { bodies: [], courses: [] }; // the water's bodies and courses, as water.json keeps them
     this.water = new WaterMap(); // and the water from them, baked into plate files saved
     this.roadFile = { roads: [] }; // the roads, as roads.json keeps them
+    this.roadsVersion = 0; // counts changes to them, to tell when tiles drawn in full draw them again
     this.cuts = new Map(); // "tx,tz" -> how far courses and roads moved the tile's corners, over what its plate file has
     this.roadCells = new Map(); // "tx,tz" -> the tile's cells' road kinds as last carved, over what its plate file has
     this.waters = new Map(); // "tx,tz" -> the tile's water as last baked, over what its plate file has
@@ -181,6 +182,7 @@ export class Renditions {
   setRoads(file, dirty = true) {
     const boxes = changedRoadBoxes(this.roadFile, file);
     this.roadFile = file;
+    this.roadsVersion++;
     return dirty ? this.carve(boxes) : new Set();
   }
 
@@ -1168,8 +1170,9 @@ let plateSquares = null; // the squares of a plate's tiles' grids, one after ano
 // The tile-shaped stand-in groundMaterial wants for a tile's cells: the pattern at each cell's
 // middle (Renditions' dress).
 const NO_FOREST = new Uint8Array(TILE_CELLS * TILE_CELLS);
-function groundTile(tx, tz, cells) {
-  return { coords: [tx, tz], cells: TILE_CELLS, cellFt: CELL_FT, palettes: { terrain: PATTERNS }, layers: { terrain: cells.kinds, forest: NO_FOREST }, roads: [] };
+// roads: the roads drawn over it, as roads.js's roadSegmentsIn has them.
+function groundTile(tx, tz, cells, roads = []) {
+  return { coords: [tx, tz], cells: TILE_CELLS, cellFt: CELL_FT, palettes: { terrain: PATTERNS }, layers: { terrain: cells.kinds, forest: NO_FOREST }, roads };
 }
 
 // The meshes round the builder, a group for each plate within FAR_FT: when the builder leaves
@@ -1536,6 +1539,8 @@ export class Ground {
       made.setIndex(new THREE.BufferAttribute(holes ? SQUARES.filter((_, n) => !holes.has(Math.floor(n / 6))) : SQUARES, 1));
       return made;
     };
+    const roads = roadSegmentsIn(this.renditions.roadFile.roads ?? [], [tx * TILE_FT, tz * TILE_FT, (tx + 1) * TILE_FT, (tz + 1) * TILE_FT]);
+    const material = () => withGrid(groundMaterial(this.renderer, { tile: groundTile(tx, tz, cells, roads), origin: [0, 0] }), CELL_FT);
     const kept = before.get(`${tx},${tz}`);
     if (kept) {
       group.add(kept);
@@ -1549,13 +1554,17 @@ export class Ground {
         kept.geometry.dispose();
         kept.geometry = geometry();
         kept.userData.grid = grid;
+      }
+      if (kept.userData.look !== grid || kept.userData.roads !== this.renditions.roadsVersion) {
         disposeGround(kept.material);
-        kept.material = withGrid(groundMaterial(this.renderer, { tile: groundTile(tx, tz, cells), origin: [0, 0] }), CELL_FT);
+        kept.material = material();
+        [kept.userData.look, kept.userData.roads] = [grid, this.renditions.roadsVersion];
       }
       return;
     }
-    const mesh = this.add(group, geometry(), withGrid(groundMaterial(this.renderer, { tile: groundTile(tx, tz, cells), origin: [0, 0] }), CELL_FT), "full");
+    const mesh = this.add(group, geometry(), material(), "full");
     mesh.userData.tile = `${tx},${tz}`;
+    [mesh.userData.look, mesh.userData.roads] = [grid, this.renditions.roadsVersion];
     mesh.userData.grid = grid;
     mesh.userData.holes = holesKey;
   }

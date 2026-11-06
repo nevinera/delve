@@ -279,4 +279,53 @@ export function changedRoadBoxes(before, after) {
   return changed.filter(({ points }) => points.length).map(roadBox);
 }
 
+// The roads crossing the box [x0, z0, x1, z1], as the ground's material draws them
+// (render/groundMaterial.js): [{ kind, half, its half width, segments: [[ax, az, bx, bz], ...] }],
+// each road's track there simplified till it's no further than SIMPLE_FT off it.
+export function roadSegmentsIn(roads, [x0, z0, x1, z1]) {
+  const out = [];
+  for (const road of roads) {
+    const box = roadBox(road);
+    if (box[0] > x1 || box[2] < x0 || box[1] > z1 || box[3] < z0) continue;
+    const track = roadTrack(road.points, road.kind, road.seed ?? 0);
+    const half = Math.max(...road.points.map((p) => p[2])) / 2;
+    const near = (k) => track.x[k] >= x0 - half && track.x[k] <= x1 + half && track.z[k] >= z0 - half && track.z[k] <= z1 + half;
+    // Each run of the track's points in or near the box, with one more either end.
+    const segments = [];
+    for (let k = 0; k < track.x.length; k++) {
+      if (!near(k)) continue;
+      const from = Math.max(0, k - 1);
+      while (k + 1 < track.x.length && near(k + 1)) k++;
+      const to = Math.min(track.x.length - 1, k + 1);
+      const run = simplified(track, from, to);
+      for (let n = 1; n < run.length; n++) segments.push([track.x[run[n - 1]], track.z[run[n - 1]], track.x[run[n]], track.z[run[n]]]);
+    }
+    if (segments.length) out.push({ kind: road.kind, half, segments });
+  }
+  return out;
+}
+
+const SIMPLE_FT = 0.25;
+
+// The indexes of a track's points from `a` to `b` that keep the line within SIMPLE_FT of all of
+// them (Douglas–Peucker).
+function simplified(track, a, b) {
+  const keep = new Set([a, b]);
+  const split = (i, j) => {
+    const [ax, az, bx, bz] = [track.x[i], track.z[i], track.x[j], track.z[j]];
+    const length = Math.hypot(bx - ax, bz - az) || 1;
+    let [far, at] = [0, -1];
+    for (let k = i + 1; k < j; k++) {
+      const off = Math.abs((bx - ax) * (az - track.z[k]) - (ax - track.x[k]) * (bz - az)) / length;
+      if (off > far) [far, at] = [off, k];
+    }
+    if (far <= SIMPLE_FT) return;
+    keep.add(at);
+    split(i, at);
+    split(at, j);
+  };
+  split(a, b);
+  return [...keep].sort((m, n) => m - n);
+}
+
 export const roadsPath = (continent) => `places/continents/${continent}/roads.json`;

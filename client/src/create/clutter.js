@@ -33,7 +33,7 @@ export class Clutter {
     const cells = r.cells(tx, tz);
     if (!cells?.colors) return null;
     const covered = r.coveredCells(tx, tz, cells);
-    if (cells.cluttered?.colors === cells.colors && cells.cluttered.water === cells.water && cells.cluttered.covered === covered) return cells.cluttered;
+    if (cells.cluttered?.colors === cells.colors && cells.cluttered.water === cells.water && cells.cluttered.covered === covered && cells.cluttered.road === cells.road) return cells.cluttered;
     const [near, runs] = r.nearWater(tx, tz, cells.water);
     const biomes = r.biomeTile(tx, tz);
     const h = cells.heights;
@@ -57,8 +57,12 @@ export class Clutter {
     );
     // Nothing grows under slabs.
     const [x0, z0] = [tx * TILE_FT, tz * TILE_FT];
-    const open = ({ x, z }) => !covered.has(Math.floor((z - z0) / CELL_FT) * CELLS + Math.floor((x - x0) / CELL_FT));
-    cells.cluttered = { instances: covered.size ? instances.filter(open) : instances, colors: cells.colors, water: cells.water, covered, id: (Clutter.ids = (Clutter.ids ?? 0) + 1) };
+    // None under slabs or on roads.
+    const open = ({ x, z }) => {
+      const k = Math.floor((z - z0) / CELL_FT) * CELLS + Math.floor((x - x0) / CELL_FT);
+      return !covered.has(k) && !cells.road?.[k];
+    };
+    cells.cluttered = { instances: covered.size || cells.road ? instances.filter(open) : instances, colors: cells.colors, water: cells.water, covered, road: cells.road, id: (Clutter.ids = (Clutter.ids ?? 0) + 1) };
     return cells.cluttered;
   }
 

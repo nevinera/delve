@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BED_STEP_FT, KINDS, bedAt, bedOf, changedRoadBoxes, roadTrack, roadsAt, shapeRoad, troubleOf } from "./roads.js";
+import { BED_STEP_FT, KINDS, bedAt, bedOf, changedRoadBoxes, roadSegmentsIn, roadTrack, roadsAt, shapeRoad, troubleOf } from "./roads.js";
 
 const road = (kind, points, groundAt, seed = 0) => {
   const made = { kind, points: points.map(([x, z]) => [x, z, KINDS[kind].width]), seed };
@@ -170,5 +170,28 @@ describe("changedRoadBoxes", () => {
     expect(boxes).toHaveLength(1);
     expect(boxes[0][0]).toBeLessThan(500);
     expect(boxes[0][2]).toBeGreaterThan(600);
+  });
+});
+
+describe("roadSegmentsIn", () => {
+  const flat = () => 0;
+  const made = road("trail", [
+    [0, 0],
+    [300, 0],
+    [300, 300],
+  ], flat);
+
+  it("gives a road's middle through a box as few segments as keep it true", () => {
+    const [found] = roadSegmentsIn([made], [0, -50, 256, 50]);
+    expect(found.kind).toBe("trail");
+    expect(found.half).toBe(3);
+    // The straight stretch, wobbling a little, in far fewer segments than its 4 ft steps.
+    expect(found.segments.length).toBeGreaterThan(1);
+    expect(found.segments.length).toBeLessThan(30);
+    expect(found.segments[0][0]).toBeLessThanOrEqual(0);
+  });
+
+  it("gives nothing for a box it doesn't cross", () => {
+    expect(roadSegmentsIn([made], [1000, 1000, 1256, 1256])).toEqual([]);
   });
 });

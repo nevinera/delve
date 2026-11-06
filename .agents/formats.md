@@ -38,7 +38,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 | `places/continents/<c>/biomes.json` | biome areas | [below](#biomes-planning-marks-and-water) | `client/src/create/biomes.js`, `client/src/play/loader.js` |
 | `places/continents/<c>/planning.json` | planning lines and pins | [below](#biomes-planning-marks-and-water) | `client/src/create/marks.js` |
 | `places/continents/<c>/water.json` | the water's bodies and courses | [below](#biomes-planning-marks-and-water) | `client/src/v2/water.js`, `courses.js` |
-| `places/continents/<c>/roads.json` | footpaths, trails and roads | [below](#roads), [schema](../docs/schema/roads.schema.json) | `client/src/v2/roads.js`, `client/src/create/roads.js` |
+| `places/continents/<c>/roads.json` | footpaths, trails and roads | [below](#roads), [schema](../docs/schema/roads.schema.json) | `client/src/v2/roads.js`, `client/src/create/roads.js`, `client/src/play/loader.js` |
 | `places/continents/<c>/spawns.json` | spawn regions, and mobs and NPCs placed one at a time | [Spawns](#spawns), [schema](../docs/schema/spawns.schema.json) | none yet |
 
 The JSON files that describe things (the world, objects, templates and game data) can have `notes`: free-form text on what a thing is for and its backstory. The game never reads them.
@@ -487,11 +487,13 @@ A biome is one of `BIOME_NAMES` in `client/src/v2/biomes.js`. It changes the gro
 
 ## Roads
 
-`roads.json` is `{ "version": 1, "roads": [{ "kind", "points", "seed", "bed" }] }`, drawn with /create's road tool. Only /create reads it: roads are baked into the plates' heights and [road cells](#road-cells), so play, the game server and bots walk on them without reading it. Code: `client/src/v2/roads.js`. [Schema](../docs/schema/roads.schema.json).
+`roads.json` is `{ "version": 1, "roads": [{ "kind", "points", "seed", "bed" }] }`, drawn with /create's road tool. /create and play read it: play to draw each road's surface. Roads are baked into the plates' heights and [road cells](#road-cells), so the game server and bots walk on them without reading it. Code: `client/src/v2/roads.js`. [Schema](../docs/schema/roads.schema.json).
 
 - `kind` is `footpath`, `trail` or `road`. Each has a width for new roads, how steeply it climbs at most, how far it leans across, and how deep its banks are cut at most (`KINDS`).
 - `points` are `[x, z, width]` in continent feet. The road runs down a track through them, each corner rounded and a little wobble either side, by `seed`.
 - `bed` is the road's height under its middle every 8 ft down that track. /create works it out from the ground before courses and roads moved it, when the road's corners, kind or width change.
+
+Tiles drawn in full draw each road's surface from its middle (`render/groundMaterial.js`): packed earth with prints, paler with wheel ruts on roads, fainter ruts on trails, and a frayed edge on footpaths.
 
 Across, a road is level, and trails and footpaths lean with the ground as far as their kind lets them. Beside it, the ground's cut back in a bank where it's higher and built up in a slope where it's lower, out to 24 ft. Courses carve first, and roads don't change the ground in a course's water. Where a road would climb more steeply than its kind's grade, as it does rather than run in a trench through a rise, or cut a bank deeper than its kind's deepest, /create draws that stretch red.
 ## Bodies
