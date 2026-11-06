@@ -1,15 +1,15 @@
 ---
-name: overnight
-description: Work through a queue of GitHub issues unattended, overnight, leaving decisions on the issues and a PR for each one that isn't blocked, merging nothing. Use when asked to work on issues overnight, or while the maintainer's away.
+name: issue-queue
+description: Work through several GitHub issues unattended, leaving decisions on the issues and a PR for each one that isn't blocked, merging nothing. Use whenever you're given work in more than one issue at once, such as "work on #1, #2 and #3" or "anything you can do in milestone 4", and for overnight queues.
 ---
 
-# Overnight queue
+# Issue queue
 
-You're asked for some issues by number, and maybe "anything you can do without me" in a milestone. Work them one at a time while nobody's watching, and leave everything ready to review in the morning. Nobody answers questions overnight, so the issues and PRs are where you talk.
+You're given work in several issues at once: some by number, and maybe "anything you can do without me" in a milestone. That means nobody's watching for a while, overnight or just away. Work them one at a time, and leave everything ready to review on return. Nobody answers questions meanwhile, so the issues and PRs are where you talk.
 
 ## What asking grants
 
-Asking for an overnight queue lets you, for the issues in it only:
+Being given a queue lets you, for the issues in it only:
 - push branches and open or update PRs
 - comment on the issues, and add or remove their `blocked` label
 - push and deploy `dev_merge` (see the end)
@@ -39,7 +39,7 @@ It doesn't let you merge, close an issue, push to main, or touch issues outside 
 
 ### Blocked
 
-An issue blocks on a decision (above), or on an action that's refused, such as a command or push the permissions turn down. When one's refused, look for another good way to keep the work going: a different approach, a different tool, or leaving that step for the morning and finishing the rest. Don't send the same action again reworded or split up to get it past the check: the refusal means that action needs a person. The issue is blocked only when there's no good way on without one. Either way, note what was refused and what you did instead.
+An issue blocks on a decision (above), or on an action that's refused, such as a command or push the permissions turn down. When one's refused, look for another good way to keep the work going: a different approach, a different tool, or leaving that step for later and finishing the rest. Don't send the same action again reworded or split up to get it past the check: the refusal means that action needs a person. The issue is blocked only when there's no good way on without one. Either way, note what was refused and what you did instead.
 
 When you have to block:
 1. Commit and push what you have to the branch, if it's worth keeping, and open the PR as a draft.
@@ -61,7 +61,7 @@ Each issue gets one comment when you're done with it, updated rather than added 
 
 1. Make `dev_merge` from `origin/main`, merge every ready PR's branch into it, the bottom of each stack first, and push it with `--force`. Leave out drafts.
 2. Deploy it with the deploy-dev skill: `~/bin/deploy-delve-dev [--full] dev_merge`, with `--full` if any of it touches `game-server/`, the Gemfile or migrations. Check the site loads.
-3. Finish with one message, the first thing read in the morning:
+3. Finish with one message, the first thing read on return:
    - for each issue: ready (with the PR link), blocked (with the question, or what was refused), or skipped (and why)
    - the decisions to review, by issue
    - stacks, in merge order. Merging one with `--rebase` gives its commits new SHAs, so the PR above it has to be rebased onto main before it merges.
