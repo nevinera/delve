@@ -10,12 +10,17 @@ description: Report where the work stands, from branches, PRs and issues: what's
 ```
 
 It prints, from git and GitHub:
+- work not on main, for each machine with a checkout: branches with commits not on main (local, or only on GitHub), main's commits not pushed, and changes not committed. It compares patches, so branches merged with `--rebase` don't show.
 - the current milestone: the lowest-numbered open one with open issues, and the others' counts
-- branches with commits not on main, local or only on GitHub. It compares patches, so branches merged with `--rebase` don't show.
 - open PRs: draft or ready, base, and how their checks went
 - issues labeled `blocked`
 - open issues with no milestone made in the last `days` days, 14 by default
 - the current milestone's open issues, and the PRs that close them
+
+Work goes on in the checkout on the maintainer's laptop and in `~/delve` on the dev box (`nevinera@delve.nevinera.dev`, or `DELVE_STATUS_BOX`). The laptop can reach the box but not the other way, so:
+- run on the laptop, it reads the box's checkout over SSH, as it is now
+- each run leaves its own machine's list in the box's `~/.delve-status/<host>.txt`, and run on the box, it shows those, with when each was left. A laptop's list is only as new as its last run. `status.sh --publish` only leaves the list, for git hooks to run.
+- without `gh`, as on the box now, it shows only the branches
 
 Then look further for what needs the maintainer:
 - the last comment on each open PR's issue, for "Decisions to review" (the issue-queue skill leaves these)
@@ -25,7 +30,7 @@ Then look further for what needs the maintainer:
 
 Four parts, in this order, each a heading and a few lines. Leave a part out if it's empty, and say so in a line.
 
-1. **In progress:** open branches and PRs still being worked. Leave out branches that are old backups or kept on purpose (such as `backup/*`, or ones a memory note says are kept), and say how many you left out.
+1. **In progress:** open branches and PRs still being worked, saying which machine each is on, and how old a machine's list is when it's from a snapshot. Leave out branches that are old backups or kept on purpose (such as `backup/*`, or ones a memory note says are kept), and say how many you left out.
 2. **Needs you:** ready PRs to merge, blocked issues and their questions, decisions to review, and work awaiting a verdict. Name what each wants from them: a merge, an answer, a look.
 3. **New and unsorted:** recent issues with no milestone.
 4. **Left in the milestone:** its open issues, and which have work started.
