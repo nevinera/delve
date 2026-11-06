@@ -14,7 +14,7 @@ import { isSlab } from "./placed.js";
 import { Draw } from "./draw.js";
 import { Marks } from "./marks.js";
 import { scatterPools } from "./marsh.js";
-import { Measure } from "./measure.js";
+import { MeasureTool } from "./measure.js";
 import { CavePlan } from "./cavePlan.js";
 import { CavePolish, TOOLS as POLISH_TOOLS } from "./cavePolish.js";
 import { alert } from "./alerts.js";
@@ -77,6 +77,7 @@ const BUILD = new Set(["pick", "object", "template", "slab", "stairs", "ramp"]);
 const PLANS = new Set(["caveSelect", "entrance", "caveAdd"]);
 const UNITS = new Set(["unitSelect", "dummy", "rest", "spawn"]);
 const POLISH = new Set(POLISH_TOOLS);
+const MEASURE = new Set(["measure"]);
 // How each caves tool draws the rock and whether it shows the layout; null leaves it as it is.
 const CAVE_VIEWS = {
   caveSelect: [null, true],
@@ -137,7 +138,7 @@ export class Tools {
     this.drawing = null; // the Stroke being drawn with the marker
     this.marks = new Marks(scene, (x, z) => this.surface(x, z), canvas.parentElement);
     this.pinColor = "red";
-    this.measure = new Measure(canvas.parentElement);
+    this.measure = new MeasureTool(canvas.parentElement, canvas, () => this.hit(this.drawAt), BOX_PX);
     this.biomes = new Biomes(scene, (x, z) => this.surface(x, z), canvas.parentElement);
     this.biomesShown = false; // whether biome areas are shown with other tools too
     this.water = new WaterBodies(scene, (x, z) => this.surface(x, z), canvas.parentElement, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT);
@@ -147,9 +148,6 @@ export class Tools {
     this.roads = new Roads(scene, (x, z) => this.surface(x, z), canvas.parentElement, (x, z) => renditions.baseAt(x, z));
     this.outlined = { biomes: this.biomes, water: this.water, courses: this.courses, roads: this.roads, restArea: this.restAreas }; // each tool that draws areas, its areas
     this.draw = new Draw(scene, canvas.parentElement, renditions, ground, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, () => this.showDraw(), this.biomes);
-    // Measure's, { from, to } for a ruler, { middle, radius } for a circle, and while the button's
-    // down, where it went down and whether a ruler or circle was shown before.
-    this.measuring = null;
     this.build = new Build({
       scene,
       camera,
@@ -172,6 +170,14 @@ export class Tools {
     builder.wheel = (e) => PLANS.has(this.tool) && this.plan.wheel(e);
     this.units = new Units({ scene, groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, hit: () => this.hit(), ray: () => this.build.ray() });
     this.polish = new CavePolish({ scene, caves, layout, camera, ray: () => this.build.ray() });
+    // The tools another object works, each with down(e), move(e), up(e), key(e) and setTool(tool).
+    this.workers = [
+      [BUILD, this.build],
+      [PLANS, this.plan],
+      [UNITS, this.units],
+      [POLISH, this.polish],
+      [MEASURE, this.measure],
+    ];
     $("caveUndo").addEventListener("click", () => this.caveUndo());
     for (const swatch of document.querySelectorAll("[data-rock] .create-swatch")) swatch.style.background = `rgb(${THEME_LOOK[CAVE_THEMES[Number(swatch.parentElement.dataset.rock)]].rgb.join(",")})`;
     this.caveViewButtons = [...document.querySelectorAll("[data-cave-view]")];
@@ -371,10 +377,7 @@ export class Tools {
     document.body.append(this.boxEl);
     canvas.addEventListener("pointermove", (e) => {
       this.point(e);
-      if (BUILD.has(this.tool)) this.build.move(e);
-      if (PLANS.has(this.tool)) this.plan.move(e);
-      if (POLISH.has(this.tool)) this.polish.move();
-      if (UNITS.has(this.tool)) this.units.move();
+      this.worker()?.move(e);
       if (this.moving) this.movePins();
       for (const areas of Object.values(this.outlined)) {
         if (!areas.dragging) continue;
@@ -384,15 +387,6 @@ export class Tools {
       if (this.draw.state === "drawing") {
         const at = this.hit();
         if (at) this.draw.add(at[0], at[2]);
-      }
-      if (this.measuring?.down) {
-        const at = this.hit(this.drawAt);
-        const r = canvas.getBoundingClientRect();
-        const [x, y] = this.measuring.down;
-        if (at && (this.measuring.radius || Math.hypot(e.clientX - r.left - x, e.clientY - r.top - y) >= BOX_PX)) {
-          const middle = this.measuring.from;
-          this.measuring = { ...this.measuring, middle, radius: Math.hypot(at[0] - middle[0], at[2] - middle[1]) };
-        }
       }
       if (this.box) {
         const r = canvas.getBoundingClientRect();
@@ -427,21 +421,10 @@ export class Tools {
         if (pin) return (this.clicked = { pin });
       }
       if (!this.tool) return;
-      if (BUILD.has(this.tool)) {
+      const worker = this.worker();
+      if (worker) {
         canvas.setPointerCapture(e.pointerId);
-        return this.build.down(e);
-      }
-      if (PLANS.has(this.tool)) {
-        canvas.setPointerCapture(e.pointerId);
-        return this.plan.down(e);
-      }
-      if (UNITS.has(this.tool)) {
-        canvas.setPointerCapture(e.pointerId);
-        return this.units.down();
-      }
-      if (POLISH.has(this.tool)) {
-        canvas.setPointerCapture(e.pointerId);
-        return this.polish.down(e);
+        return worker.down(e);
       }
       if (this.tool === "pin") {
         const at = this.hit();
@@ -458,12 +441,6 @@ export class Tools {
       if (this.tool === "path") {
         const at = this.hit();
         if (at) this.paths.click(at[0], at[2]);
-        return;
-      }
-      if (this.tool === "measure") {
-        const at = this.hit(this.drawAt);
-        const r = canvas.getBoundingClientRect();
-        if (at) this.measuring = { from: [at[0], at[2]], down: [e.clientX - r.left, e.clientY - r.top], shown: Boolean(this.measuring) };
         return;
       }
       if (this.tool === "select") {
@@ -498,10 +475,7 @@ export class Tools {
     });
     canvas.addEventListener("pointerup", (e) => {
       this.stroke = null;
-      if (BUILD.has(this.tool)) this.build.up();
-      if (PLANS.has(this.tool)) this.plan.up();
-      if (UNITS.has(this.tool)) this.units.up();
-      if (POLISH.has(this.tool)) this.polish.up(e);
+      this.worker()?.up(e);
       if (this.clicked?.pin) this.openPin(this.clicked.pin);
       else if (this.clicked?.at) {
         const before = this.marks.toJSON();
@@ -513,12 +487,6 @@ export class Tools {
       for (const areas of Object.values(this.outlined)) areas.letGo();
       if (this.box) this.endBox();
       if (this.draw.state === "drawing") this.draw.end();
-      // A click leaves a ruler following the pointer, or takes away the ruler or circle there was,
-      // and a drag leaves the circle drawn.
-      if (this.measuring?.down) {
-        const { from, middle, radius, shown } = this.measuring;
-        this.measuring = radius ? { middle, radius } : shown ? null : { from };
-      }
       if (this.moving?.moved) {
         this.marks.undos.push(this.moving.before);
         this.marks.version++;
@@ -532,9 +500,8 @@ export class Tools {
     window.addEventListener("keydown", (e) => {
       if (e.target.matches?.("input, textarea, select") || e.target.closest?.(":popover-open")) return;
       const areas = this.outlined[this.tool];
-      if (BUILD.has(this.tool) && this.build.key(e)) return e.preventDefault();
-      if (UNITS.has(this.tool) && this.units.key(e)) return e.preventDefault();
-      if ((PLANS.has(this.tool) || POLISH.has(this.tool)) && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+      const worker = this.worker();
+      if ((worker === this.plan || worker === this.polish) && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         this.caveUndo();
         return e.preventDefault();
       }
@@ -543,8 +510,7 @@ export class Tools {
         this.setCaveView(this.caves.view === "blocks" ? "finished" : "blocks", null);
         return e.preventDefault();
       }
-      if (PLANS.has(this.tool) && this.plan.key(e)) return e.preventDefault();
-      if (POLISH.has(this.tool) && this.polish.key(e)) return e.preventDefault();
+      if (worker?.key(e)) return e.preventDefault();
       if (e.key === "Escape" && areas?.draft) areas.drop();
       else if (e.key === "Escape") this.pick(null);
       else if ((e.key === "Delete" || e.key === "Backspace") && this.tool === "select") this.marks.deleteSelected();
@@ -715,16 +681,18 @@ export class Tools {
     this.courses.setShown(tool === "courses" || tool === "water");
     this.roads.setShown(tool === "roads");
     this.restAreas.setShown(tool === "restArea" || UNITS.has(tool));
-    this.measuring = null;
     this.paths.setShown(tool === "path");
     if (BUILD.has(tool) || BUILD.has(this.build.tool)) this.build.setTool(BUILD.has(tool) ? tool : null);
-    this.plan.setTool(PLANS.has(tool) ? tool : null);
-    this.polish.setTool(POLISH.has(tool) ? tool : null);
-    this.units.setTool(UNITS.has(tool) ? tool : null);
+    for (const [tools, worker] of this.workers) if (worker !== this.build) worker.setTool(tools.has(tool) ? tool : null);
     if (CAVE_VIEWS[tool]) this.setCaveView(...CAVE_VIEWS[tool]);
     this.box = null;
     this.boxEl.hidden = true;
     this.drawing = null;
+  }
+
+  // The object that works `tool`, when another does, or null.
+  worker(tool = this.tool) {
+    return this.workers.find(([tools]) => tools.has(tool))?.[1] ?? null;
   }
 
   // Only raise and lower's shapes that look different turned have an angle.
@@ -967,15 +935,7 @@ export class Tools {
     roadWidth.disabled = !this.roads.selected;
     if (document.activeElement !== roadWidth) roadWidth.value = this.roads.selected ? String(this.roads.selected.width) : "";
     $("growFlat").hidden = !this.draw.flat;
-    if (this.tool === "measure" && this.measuring) {
-      if (this.measuring.from && !this.measuring.radius) {
-        const at = this.hit(this.drawAt);
-        if (at) this.measuring.to = [at[0], at[2]];
-      }
-      this.measure.draw(this.camera, w, h, this.measuring);
-    } else {
-      this.measure.clear();
-    }
+    this.measure.tick(this.camera, w, h, this.tool === "measure");
     if (!BRUSHES.has(this.tool)) {
       this.ring.visible = false;
       return;

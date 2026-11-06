@@ -117,3 +117,60 @@ export class Measure {
     this.drawn = true;
   }
 }
+
+// The measuring tool's clicks and drags: a click starts a ruler that follows the pointer, a drag
+// from there draws a circle, and a click with a ruler or circle shown takes it away. `hit()` gives
+// where the pointer meets the ground, [x, y, z], or null; a drag starts `dragPx` from the click.
+export class MeasureTool {
+  constructor(stage, canvas, hit, dragPx) {
+    Object.assign(this, { canvas, hit, dragPx });
+    this.drawing = new Measure(stage);
+    this.shown = null; // { from, to } for a ruler, { middle, radius } for a circle, and while the button's down, where it went down and whether one was shown before
+  }
+
+  // Picking any tool takes away what's shown.
+  setTool() {
+    this.shown = null;
+  }
+
+  down(e) {
+    const at = this.hit();
+    if (at) this.shown = { from: [at[0], at[2]], down: this.px(e), shown: Boolean(this.shown) };
+  }
+
+  move(e) {
+    if (!this.shown?.down) return;
+    const at = this.hit();
+    const [x, y] = this.shown.down;
+    const [px, py] = this.px(e);
+    if (at && (this.shown.radius || Math.hypot(px - x, py - y) >= this.dragPx)) {
+      const middle = this.shown.from;
+      this.shown = { ...this.shown, middle, radius: Math.hypot(at[0] - middle[0], at[2] - middle[1]) };
+    }
+  }
+
+  up() {
+    if (!this.shown?.down) return;
+    const { from, middle, radius, shown } = this.shown;
+    this.shown = radius ? { middle, radius } : shown ? null : { from };
+  }
+
+  key() {
+    return false;
+  }
+
+  // Draws what's shown, while the tool's `active`.
+  tick(camera, width, height, active) {
+    if (!active || !this.shown) return this.drawing.clear();
+    if (this.shown.from && !this.shown.radius) {
+      const at = this.hit();
+      if (at) this.shown.to = [at[0], at[2]];
+    }
+    this.drawing.draw(camera, width, height, this.shown);
+  }
+
+  px(e) {
+    const r = this.canvas.getBoundingClientRect();
+    return [e.clientX - r.left, e.clientY - r.top];
+  }
+}
