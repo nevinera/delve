@@ -130,6 +130,36 @@ describe("walker going downhill", () => {
   });
 });
 
+describe("walker on ground too steep to walk", () => {
+  // A 70° face rising to the north: z falls as it rises.
+  const face = Math.tan((70 * Math.PI) / 180);
+  function onFace({ keys = [], y } = {}) {
+    const w = Object.create(Walker.prototype);
+    const groundAt = (x, z) => 1000 - z * face;
+    w.ground = { groundAt, waterAt: () => NaN, footholds: () => [], inWay: () => false };
+    Object.assign(w, { pos: { x: 0, y: y ?? 1000, z: 0 }, held: new Set(keys), cam: { yaw: 0 }, yaw: Math.PI, vy: 0, t: 0, airTime: 0, jumpedAt: -Infinity, gait: "run" });
+    return w;
+  }
+
+  it("can't step up it slanting across it, though each step climbs gently", () => {
+    // 1 ft east and 0.05 ft north climbs 0.14 ft in 1 ft, well under 50°, onto a 70° face.
+    expect(onFace().canStep(1, -0.05)).toBe(false);
+    expect(onFace().canStep(1, 0.05)).toBe(true);
+  });
+
+  it("slides down it, standing still", () => {
+    const w = onFace();
+    w.step(1 / 60);
+    expect(w.pos.z).toBeGreaterThan(0);
+  });
+
+  it("can't jump from it", () => {
+    const w = onFace({ keys: ["w", " "] });
+    w.step(1 / 60);
+    expect(w.vy).toBeLessThanOrEqual(0);
+  });
+});
+
 describe("tripAt", () => {
   const trip = { from: new THREE.Vector3(0, 10, 0), to: new THREE.Vector3(20, 10, 0), seconds: 2, height: 8 };
 

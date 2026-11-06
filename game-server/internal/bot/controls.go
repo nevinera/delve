@@ -120,7 +120,7 @@ func (c *Controls) Advance(dt float64) {
 }
 
 // stepOnto steps onto what's at (x, z) to stand on, unless there's nothing, it's too steep to
-// climb, or something's in the way.
+// climb or goes up onto ground whose face is, or something's in the way.
 func (c *Controls) stepOnto(x, z, step float64) {
 	if into, err := c.Ground.Enters(c.At, [3]float64{x, c.At[1], z}); err != nil || into != "" {
 		c.Stop()
@@ -132,7 +132,10 @@ func (c *Controls) stepOnto(x, z, step float64) {
 		return
 	}
 	height, swimming, ok := s.Stand(c.At[1], stepFt)
-	if !ok || (!swimming && !c.swimming && height-c.At[1] > maxClimb*step) {
+	rise := height - c.At[1]
+	// Nor up onto ground whose face is too steep, however gently the step climbs it.
+	onSteep := !swimming && height == s.Ground && s.Steep > maxClimb
+	if !ok || (!swimming && !c.swimming && (rise > maxClimb*step || (rise > 0 && onSteep))) {
 		c.Stop()
 		return
 	}

@@ -8,6 +8,7 @@ import { WeaponDraw } from "../character/weaponDraw.js";
 import { TURN_RATE } from "../character/posed.js";
 import { randomLook } from "../character/recipe.js";
 import { trunkRadius } from "../render/treeMeshes.js";
+import { SLIDE_FT, steepness } from "../create/builder.js";
 
 // Walk mode for the 3D view: a person-sized character on the generated ground, with a third-person
 // camera, to get a feel for the land at eye level. Controls: W/S run forward and back,
@@ -20,8 +21,9 @@ import { trunkRadius } from "../render/treeMeshes.js";
 // way toward the going and twist the chest back toward the front; backing up while strafing turns
 // the other way.
 //
-// The character keeps to the tiles drawn in full, can't climb slopes steeper than MAX_CLIMB or walk
-// through tree trunks, and wades or swims where the water's deep. It stands on the highest slab
+// The character keeps to the tiles drawn in full, can't walk up onto ground whose face is steeper
+// than MAX_CLIMB, whichever way it goes up it, slides down that ground at SLIDE_FT and can't jump
+// from it, can't walk through tree trunks, and wades or swims where the water's deep. It stands on the highest slab
 // face gentle enough to climb within a step of its feet, steps up onto one at most STEP_FT, and
 // can't walk into slabs. Positions are scene feet.
 //
@@ -258,6 +260,8 @@ export class Walker {
       this.cam.yaw = Math.sign(off) * Math.max(0, Math.abs(off) - close);
     }
     const [fromX, fromZ] = [this.pos.x, this.pos.z];
+    const sliding = this.airTime === 0 && this.vy === 0 && this.onSteep();
+    if (sliding) this.slide(dt);
     if (length > 0) {
       this.sitting = null;
       mx = (mx / length) * speed * dt;
@@ -276,7 +280,7 @@ export class Walker {
     const across = Math.hypot(this.pos.x - fromX, this.pos.z - fromZ);
     if (this.airTime === 0 && this.vy === 0 && walksDown(this.pos.y - ground, across)) this.pos.y = ground;
     const onGround = this.pos.y <= ground + 0.01;
-    if (onGround && !still && this.held.has(" ")) {
+    if (onGround && !still && !sliding && this.held.has(" ")) {
       this.vy = JUMP_FT;
       this.jumpedAt = this.t;
       this.sitting = null;
@@ -410,7 +414,33 @@ export class Walker {
     const rise = there.height - (here ?? there.height);
     if (there.slab) return rise <= STEP_FT || this.pos.y >= there.height - 0.01;
     const run = Math.hypot(x - this.pos.x, z - this.pos.z);
-    return here === null || run === 0 || rise / run <= MAX_CLIMB || this.pos.y > there.height + 2;
+    if (here === null || run === 0 || this.pos.y > there.height + 2) return true;
+    if (rise > 0 && !there.swim && this.steepness(x, z) > MAX_CLIMB) return false;
+    return rise / run <= MAX_CLIMB;
+  }
+
+  // How steep the ground's face is at (x, z), rise over run, as /create's builder judges it.
+  steepness(x, z) {
+    const under = (this.pos?.y ?? Infinity) + STEP_FT;
+    return steepness(x, z, (a, b) => this.ground.groundAt(a, b, under));
+  }
+
+  // Whether it stands on ground too steep to walk on: not on a slab, and not swimming.
+  onSteep() {
+    const there = this.stand(this.pos.x, this.pos.z);
+    return Boolean(there) && !there.slab && !there.swim && this.steepness(this.pos.x, this.pos.z) > MAX_CLIMB;
+  }
+
+  // Slides it down the steep ground it stands on for dt, but not into what's in the way.
+  slide(dt) {
+    const under = this.pos.y + STEP_FT;
+    const h = (a, b) => this.ground.groundAt(a, b, under) ?? this.pos.y;
+    const d = 2;
+    const [gx, gz] = [h(this.pos.x + d, this.pos.z) - h(this.pos.x - d, this.pos.z), h(this.pos.x, this.pos.z + d) - h(this.pos.x, this.pos.z - d)];
+    const length = Math.hypot(gx, gz);
+    if (!length) return;
+    const [x, z] = [this.pos.x - (gx / length) * SLIDE_FT * dt, this.pos.z - (gz / length) * SLIDE_FT * dt];
+    if (this.stand(x, z) && !this.ground.inWay(x, z, this.pos, BODY_FT)) [this.pos.x, this.pos.z] = [x, z];
   }
 
   // Where the feet rest at (x, z), for feet at `feet` (where they are now, unless said): see stand.

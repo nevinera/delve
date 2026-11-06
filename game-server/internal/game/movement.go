@@ -36,6 +36,8 @@ const (
 	speedLeeway  = 1.15 // on top of the speed it's moving at
 	slackFt      = 4.0  // on top of any distance
 	slopeRise    = 1.5  // feet up or down a foot across, walking up or down the steepest ground
+	steepLeeway  = 1.1  // on top of the steepest ground that counts as too steep, for where it's judged
+	slideFt      = 30.0 // a second, down ground too steep to walk on, as the walker slides
 	clockAhead   = 0.5  // seconds a client's clock can run ahead of the server's
 	calibrate    = 5.0  // seconds after entering that the client's clock is measured against the server's
 	airAfterJump = 1.5  // seconds after a jump that a character can still be rising
@@ -66,6 +68,9 @@ type motion struct {
 	at      [3]float64 // where the last report it took put the character
 	t       float64    // that report's client time, in seconds
 	move    Move       // how the character was moving since then
+	// steepClimb is how far it's climbed, net, over reports on ground too steep to walk, since it
+	// last stood on ground that isn't, never under 0.
+	steepClimb float64
 
 	slowed     float64   // how far from plain speed it goes by what it holds, as a share: -0.15 is 85%
 	leeway     float64   // the same that reports are held to, lagging behind as it slows down
@@ -100,6 +105,7 @@ type footing struct {
 	slab   bool    // they rest on a slab or a cave's floor
 	deep   bool    // water too deep to stand in
 	on     bool    // the feet were where they rest
+	steep  bool    // on ground whose face is too steep to walk on, not a slab or in deep water
 }
 
 // Ground is the ground of the continent a character is on (worlds.Ground).
@@ -178,7 +184,11 @@ func (m *motion) check(r incoming, from [3]float64, now time.Time, g Ground) (ve
 	}
 
 	across := horizontal(m.at, r.At)
-	if allowed := m.speed(r)*dt*speedLeeway + slackFt; across > allowed {
+	speed := m.speed(r)
+	if m.footing.steep {
+		speed += slideFt
+	}
+	if allowed := speed*dt*speedLeeway + slackFt; across > allowed {
 		return m.violation(now, fmt.Sprintf("moved %.0f ft in %.2f s, more than %.0f ft", across, dt, allowed))
 	}
 
@@ -262,6 +272,7 @@ func (m *motion) onGround(r incoming, t float64, g Ground) (footing, string) {
 		f.stand, f.slab, f.deep = best, true, false
 	}
 	f.on = y <= f.stand+slackFt
+	f.steep = !f.slab && !f.deep && s.Steep > maxClimb*steepLeeway
 	jumping := (r.Move != nil && r.Move.Jump) || t-m.jumped < airAfterJump
 	swimming := m.move.Swim
 	if r.Move != nil {
@@ -300,6 +311,10 @@ func (m *motion) onGround(r incoming, t float64, g Ground) (footing, string) {
 		if climb > maxClimb*across*1.25+underFt {
 			return f, fmt.Sprintf("climbed %.0f ft in %.0f ft, steeper than you can walk", climb, across)
 		}
+		// Nor up ground whose face is too steep, however gently it slants across it.
+		if last.steep && f.steep && m.steepClimb+climb > underFt {
+			return f, fmt.Sprintf("climbed %.0f ft up ground too steep to walk", m.steepClimb+climb)
+		}
 	}
 	return f, ""
 }
@@ -312,6 +327,11 @@ func (m *motion) take(r incoming, t float64, f footing) verdict {
 		m.aloft = false
 	case !m.aloft:
 		m.aloft, m.aloftT, m.aloftY = true, m.t, math.Max(m.at[1], r.At[1])
+	}
+	if m.footing.steep && f.steep && !jumping {
+		m.steepClimb = math.Max(0, m.steepClimb+f.ground-m.footing.ground)
+	} else {
+		m.steepClimb = 0
 	}
 	m.footing = f
 	if r.At[1] < m.at[1]-0.5 {

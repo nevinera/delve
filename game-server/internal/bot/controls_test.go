@@ -156,6 +156,29 @@ func TestStopsAtTheEndOfTheLandOrASteepSlope(t *testing.T) {
 	}
 }
 
+// face is ground rising 2.75 ft a foot south of z = 0, a 70° face, and flat to the north.
+type face struct{}
+
+func (face) At(_, z float64) (worlds.Sample, bool, error) {
+	if z <= 0 {
+		return worlds.Sample{Ground: 10, Water: math.NaN()}, true, nil
+	}
+	return worlds.Sample{Ground: 10 + 2.75*z, Water: math.NaN(), Steep: 2.75}, true, nil
+}
+
+func (face) Enters(a, b [3]float64) (string, error) { return "", nil }
+
+func TestDoesntSlantUpASteepFace(t *testing.T) {
+	var out sent
+	// Each step climbs about 0.11 ft a foot, but onto a face too steep to walk.
+	c := controlsAt(&out, [3]float64{0, 10 + 2.75*0.1, 0.1}, 0, face{})
+	c.MoveToward(50, 2, 0, nil)
+	c.Advance(1)
+	if c.At[0] > 1 || c.Forward != 0 {
+		t.Errorf("at %v, forward %d", c.At, c.Forward)
+	}
+}
+
 func TestStopsAtASlab(t *testing.T) {
 	var out sent
 	c := controlsAt(&out, [3]float64{0, 10, 0}, 0, slope{wall: 30})

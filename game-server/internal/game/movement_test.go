@@ -379,6 +379,34 @@ func TestTooSteep(t *testing.T) {
 	r.want(accept, 0.5, 110.5, 50+1.2*10.5, 100, nil)
 }
 
+// face is ground rising 2.75 ft a foot east, a 70° face.
+type face struct{}
+
+func (face) At(x, z float64) (worlds.Sample, bool, error) {
+	return worlds.Sample{Ground: 50 + 2.75*(x-100), Water: math.NaN(), Steep: 2.75}, true, nil
+}
+
+func (face) Enters(from, to [3]float64) (string, error) { return "", nil }
+
+func (face) Sees(from, to [3]float64) (bool, error) { return true, nil }
+
+func TestTooSteepSlantingAcross(t *testing.T) {
+	// Each report climbs gently, slanting across the face, but it adds up.
+	r := onGround(t, face{}, 50)
+	r.want(accept, 0.1, 100, 50, 100, running)
+	r.want(accept, 0.5, 100.5, 50+2.75*0.5, 108, nil)
+	if why := r.want(correct, 0.9, 101, 50+2.75, 116, nil); !strings.Contains(why, "too steep to walk") {
+		t.Errorf("why = %q", why)
+	}
+
+	// Going along it, and sliding down it standing still, are fine.
+	r = onGround(t, face{}, 50)
+	r.want(accept, 0.1, 100, 50, 100, running)
+	r.want(accept, 0.5, 100, 50, 108, nil)
+	r.want(accept, 0.6, 100, 50, 108, &Move{})
+	r.want(accept, 1.6, 90, 50-2.75*10, 100, nil)
+}
+
 func TestSlabsHoldYouUp(t *testing.T) {
 	r := onGround(t, slabbed{}, 60)
 	r.at[0] = 150

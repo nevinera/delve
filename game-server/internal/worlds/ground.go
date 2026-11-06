@@ -31,7 +31,10 @@ const SwimDepth = 4.5
 // Sample is the ground at a point.
 type Sample struct {
 	Ground float64 // feet, straight between cell corners
-	Water  float64 // the water's surface over the cell, or NaN
+	// Steep is how steep the ground's face is there, rise over run, as client/src/create/builder.js's
+	// steepness has it: from the heights half a cell either way.
+	Steep float64
+	Water float64 // the water's surface over the cell, or NaN
 	// Footholds are the heights of slab faces there gentle enough to stand on (Slab.Footholds).
 	Footholds []float64
 	// Floors are the smoothed floors of caves under the ground there, and Open is whether a cave
@@ -111,6 +114,9 @@ func (g *Ground) At(x, z float64) (s Sample, ok bool, err error) {
 	s.Ground = emptyFt
 	if found {
 		s.Ground = h
+		if s.Steep, err = g.steepness(x, z, h); err != nil {
+			return s, false, err
+		}
 	}
 	s.Water = math.NaN()
 	if level, _, wet, err := g.waterAt(x, z); err != nil {
@@ -128,6 +134,28 @@ func (g *Ground) At(x, z float64) (s Sample, ok bool, err error) {
 		s.Footholds = append(s.Footholds, slab.Footholds(x, z, MaxClimb)...)
 	}
 	return s, err == nil, err
+}
+
+// steepness is how steep the ground's face is at (x, z), where it's `h` high, rise over run. Off
+// the tiles it's taken as flat. The lock is held.
+func (g *Ground) steepness(x, z, h float64) (float64, error) {
+	const d = cellFt / 2
+	at := func(a, b float64) (float64, error) {
+		v, found, err := g.heightAt(a, b)
+		if !found {
+			v = h
+		}
+		return v, err
+	}
+	var hs [4]float64
+	for n, p := range [4][2]float64{{x + d, z}, {x - d, z}, {x, z + d}, {x, z - d}} {
+		v, err := at(p[0], p[1])
+		if err != nil {
+			return 0, err
+		}
+		hs[n] = v
+	}
+	return math.Hypot(hs[0]-hs[1], hs[2]-hs[3]) / (2 * d), nil
 }
 
 // Enters is what the straight move from a to b (continent feet, the feet's height) runs into, or
