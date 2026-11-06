@@ -98,21 +98,22 @@ export class PlayView {
 
   // Draws the land round continent feet [x, z] till it's ready to walk on there. Gives how long,
   // in milliseconds, its plate file took to fetch and to read after that, how long drawing took
-  // (all of it, and the first frame), and how many frames it drew.
+  // (all of it, and the first frame, split into making it and handing it to the GPU), and how many
+  // frames it drew.
   async ready([x, z]) {
     const y = this.renditions.heightAt(x, z) ?? SEA_LEVEL_FT;
     this.camera.position.set(x, y + 30, z + 40);
     this.camera.lookAt(x, y, z);
     const key = [x, z].map((ft) => Math.floor(ft / PLATE_FT)).join(",");
     const start = performance.now();
-    const took = { fetch: 0, read: 0, draw: 0, firstFrame: 0, frames: 0 };
+    const took = { fetch: 0, read: 0, draw: 0, firstFrame: 0, firstMake: 0, firstGpu: 0, frames: 0 };
     let fetched = null;
     while (this.walkGround.groundAt(x, z) === null) {
       if (fetched === null && this.renditions.plateFiles.has(key)) fetched = performance.now();
       const before = performance.now();
       this.render([x, y, z]);
       const drew = performance.now() - before;
-      if (took.frames++ === 0) took.firstFrame = drew;
+      if (took.frames++ === 0) Object.assign(took, { firstFrame: drew, firstMake: this.lastFrame.make, firstGpu: this.lastFrame.gpu });
       took.draw += drew;
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
@@ -155,7 +156,11 @@ export class PlayView {
     }
     this.sky.update(this.camera, now / 1000);
     this.hideParts();
+    const sent = performance.now();
     this.renderer.render(this.scene, this.camera);
+    // How long the frame took to make (meshes and the like) and to hand to the GPU (compiling
+    // shaders and uploading meshes the first time), in milliseconds.
+    this.lastFrame = { make: sent - now, gpu: performance.now() - sent };
   }
 
   // Moves the clock on while walking, and lights the scene and colors the sky for its time.
