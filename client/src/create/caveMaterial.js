@@ -93,17 +93,13 @@ vec2 caveStone( vec3 p, float theme ) {
   return vec2( 0.6 * gouges + 0.4 * caveFbm( p * 0.9 ), 1.0 );
 }
 
-// The normal n tilted by a height h over the surface at p (bump mapping from screen derivatives).
-vec3 caveBump( vec3 n, vec3 p, float h, float strength ) {
-  vec3 dpx = dFdx( p );
-  vec3 dpy = dFdy( p );
-  float dhx = dFdx( h ) * strength;
-  float dhy = dFdy( h ) * strength;
-  vec3 r1 = cross( dpy, n );
-  vec3 r2 = cross( n, dpx );
-  float det = dot( dpx, r1 );
-  vec3 grad = sign( det ) * ( dhx * r1 + dhy * r2 );
-  return normalize( abs( det ) * n - grad );
+// The normal n tilted by the stone's height h at p: by how the height changes across the surface
+// n faces, from the stone at points a little way off. It goes by n and p alone, not the face
+// drawn, so the edges between faces don't show.
+vec3 caveBump( vec3 n, vec3 p, float theme, float h, float strength ) {
+  const float e = 0.05;
+  vec3 grad = vec3( caveStone( p + vec3( e, 0.0, 0.0 ), theme ).x - h, caveStone( p + vec3( 0.0, e, 0.0 ), theme ).x - h, caveStone( p + vec3( 0.0, 0.0, e ), theme ).x - h ) / e;
+  return normalize( n - ( grad - dot( grad, n ) * n ) * strength );
 }
 `;
 
@@ -121,7 +117,7 @@ const SHADING = `
   vec3 own = mix( vColor.rgb, vCaveGround, toGround );
   diffuseColor.rgb = diffuse * own;
   float grainShare = 1.0 - toGround;
-  vec3 caveN = caveBump( caveBase, vCavePos, stone.x, stone.y * grainShare );
+  vec3 caveN = caveBump( caveBase, vCavePos, vCaveTheme, stone.x, stone.y * grainShare );
   diffuseColor.rgb *= ( 1.0 + 0.4 * ( stone.x - 0.5 ) * grainShare ) * mix( ${f(SHADE.down)}, ${f(SHADE.up)}, caveN.y * 0.5 + 0.5 );
   if ( vCaveDay > 0.0 ) {
     vec3 dayLit = pow( own, vec3( 2.2 ) ) * ${f(DAY.light)} * ( 1.0 + 0.4 * ( stone.x - 0.5 ) * grainShare ) * mix( ${f(DAY.down)}, ${f(DAY.up)}, caveN.y * 0.5 + 0.5 );

@@ -9,8 +9,10 @@ import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, floorAt, smoothFloor, stonePart, t
 // each grid edge it crosses. Up and down, a crossing is exactly at a floor or ceiling. Across,
 // between an open column and a solid one, it's where the open column's height would run out,
 // going by how it shrinks from the column behind it (wallAt), so walls aren't held to the
-// columns' grid. A floor's vertex is on the smooth floor walked on (v2/caves.js's floorAt),
-// not the voxels' steps, so feet meet it. Faces look into the air, so from outside a cave its rock
+// columns' grid. A floor's vertex stays on the columns' corner, at the smooth floor walked on
+// there (v2/caves.js's floorAt), not the voxels' steps, and isn't drawn toward its neighbours or
+// pushed by noise, so the floor's drawn as a grid of triangles, as the ground is, and feet meet
+// it. Its color varies smoothly with where it is, not by vertex, which would show the grid. Faces look into the air, so from outside a cave its rock
 // isn't drawn.
 //
 // Floors that can be walked on, no steeper than WALK_DEG, are drawn lighter (THEME_LOOK's floor),
@@ -56,10 +58,8 @@ export const THEME_LOOK = {
   mined: { rgb: [104, 96, 88], floor: [134, 124, 110], relax: 0.8, passes: 1, bumpFt: 0.7, waveFt: 3 },
 };
 const SHADE = 0.1; // how much each vertex's color varies, lighter or darker
+const FLOOR_SHADE_FT = 6; // how far apart a floor's lighter and darker patches are
 const WALK_SLOPE = Math.tan((WALK_DEG * Math.PI) / 180);
-// SPIKE: whether floors' vertices stay on the columns' corners at the walked floor's height, so
-// the drawn floor is a grid of triangles, as the ground is.
-export const PIN_FLOORS = { on: !new URLSearchParams(globalThis.location?.search ?? "").has("unpinned") };
 const BLEND_FLOORS = true; // whether floor and rock colors blend across faces, or each face is one or the other
 const LIP = { relax: 1, passes: 10 }; // how the ground round a mouth is drawn toward its neighbours
 const LIP_CUBES = 3; // how far from the lip, in grid cubes, rock and ground blend
@@ -296,6 +296,12 @@ export function caveMesh(tx, tz, world) {
     nearness.set(key, near);
     return near;
   };
+  // Whether the vertex in grid cube (a, b, c) is on a floor, away from a mouth's lip: it stays on
+  // the columns' corner, at the walked floor's height there.
+  const onGrid = (a, b, c) => {
+    const here = crossing(a, b, c);
+    return Boolean(here.floor) && !here.rim && !nearLip(a, b, c);
+  };
   // Where the vertex in grid cube (a, b, c) is drawn, as its theme draws it, or the ground's.
   const placed = new Map();
   const placeOf = (a, b, c) => {
@@ -311,7 +317,7 @@ export function caveMesh(tx, tz, world) {
         const smooth = relaxed(a, b, c, LIP.passes);
         at = at.map((v, i) => v + (smooth[i] - v) * LIP.relax * near);
       }
-    } else if (PIN_FLOORS.on && here.floor && !nearLip(a, b, c)) {
+    } else if (onGrid(a, b, c)) {
       const [x, z] = [(a + 1) * VOXEL_FT, (b + 1) * VOXEL_FT];
       at = [x, floorAt(spans, x, z, here.floor, smoothOf), z];
     } else {
@@ -344,7 +350,9 @@ export function caveMesh(tx, tz, world) {
     const walked = (x, z) => floorAt(spans, x, z, here.floor, smoothOf);
     const steep = here.floor && Math.hypot(walked(at[0] + 1, at[2]) - walked(at[0] - 1, at[2]), walked(at[0], at[2] + 1) - walked(at[0], at[2] - 1)) / 2 > WALK_SLOPE;
     const rgb = here.floor && !steep ? look.floor : look.rgb;
-    const shade = 1 + (hash2(a * 3 + c, b * 5 - c) * 2 - 1) * SHADE;
+    // Floors' vertices are on a grid, where a shade a vertex would show the grid: theirs vary
+    // smoothly with where they are instead.
+    const shade = 1 + ((onGrid(a, b, c) ? valueNoise(at[0] / FLOOR_SHADE_FT, at[2] / FLOOR_SHADE_FT, 0x666c6f72) : hash2(a * 3 + c, b * 5 - c)) * 2 - 1) * SHADE;
     const near = nearLip(a, b, c);
     // The ground's color is linear and the rock's isn't (caveMaterial.js makes it linear for the day).
     colors.push(...rgb.map((v) => Math.min(1, (v / 255) * shade)));
