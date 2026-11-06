@@ -1,5 +1,6 @@
 // Plays footsteps for whoever's moving, from how far they've gone, so they keep up with any speed.
-// Nothing here moves anyone: it only watches where they're drawn.
+// Nothing here moves anyone: it only watches where they're drawn. Play doesn't use it until
+// footsteps have sounds of their own.
 
 const MOVING_FT_S = 3.5; // slower than this is a lean or a shuffle, with no steps in it
 const TELEPORT_FT = 10; // further than this in one frame isn't walking

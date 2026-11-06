@@ -15,15 +15,12 @@ import { allHold } from "./conditions.js";
 import { PlayLog } from "./log.js";
 import { swingLook } from "../abilities/timeline.js";
 import { DESKTOP_SOUNDS, PHONE_SOUNDS } from "../abilities/sounds.js";
-import { Footsteps } from "./footsteps.js";
 import { withBuiltins } from "../abilities/builtins.js";
 import { LastingAuras } from "./lastingAuras.js";
 import { absorbBand, initials, timeLeft } from "./unitStatuses.js";
 import { AreaMarks } from "./areas.js";
 import { blockedBy, isHelpless } from "./controls.js";
 
-const MENU_VOLUME = 0.5;
-const ERROR_APART_MS = 800;
 const AURA_CHECK_S = 0.25; // how often to see which status-long auras should be showing
 
 // Fighting on the play page: frames for you and your target, an action bar, a cast bar, what lands
@@ -135,16 +132,6 @@ export class PlayCombat {
     document.querySelector("[data-abilities]")?.addEventListener("click", () => this.toggleAbilities());
     this.areas = new AreaMarks(view);
     this.auras = new LastingAuras(this.stage);
-    this.footsteps = new Footsteps((name, options) => this.stage.sound(name, options), {
-      heightAt: (x, z) => view.renditions?.heightAt(x, z),
-      waterAt: (x, z) => view.renditions?.waterAt(x, z),
-      patternAt: (x, z) => view.renditions?.patternAt(x, z),
-    });
-    // Any other button you press clicks. Those that open things say so, and using an ability sounds like the ability.
-    document.addEventListener("click", (event) => {
-      const button = event.target.closest?.("button");
-      if (button && !button.matches("[data-abilities], [popovertarget], .combat-action")) this.menuSound("ui-click");
-    });
     this.statuses = new Map(); // unit id -> the statuses you've put on it, as stacks by id
     this.statusLists = new Map(); // class id -> its statuses, null while its file loads
     this.health = you.health;
@@ -356,7 +343,6 @@ export class PlayCombat {
   toggleAbilities() {
     if (!this.pane || !this.made) return;
     this.pane.hidden = !this.pane.hidden;
-    this.menuSound(this.pane.hidden ? "ui-close" : "ui-open");
     this.pickedAbility = this.pickedSlot = null;
     this.drawPane();
     this.drawBars();
@@ -385,7 +371,6 @@ export class PlayCombat {
   // What the server says you've chosen.
   build_({ specialization, talents }) {
     // The server tells you this as you enter too, and only asking for it gets a sound.
-    if (this.buildAsked) this.menuSound("ui-confirm");
     this.buildAsked = false;
     this.buildRefused = "";
     this.chosen = { specialization, talents: talents ?? {} };
@@ -395,7 +380,6 @@ export class PlayCombat {
   openBuild() {
     if (!this.buildBox || !this.made) return;
     this.buildBox.hidden = false;
-    this.menuSound("ui-open");
     this.drawBuild();
   }
 
@@ -716,11 +700,7 @@ export class PlayCombat {
       this.drawBuild();
     }
     this.say.textContent = why;
-    // A swing that can't land can say so over and over, and that shouldn't all be heard.
-    const now = performance.now();
-    if (now - (this.erredAt ?? -Infinity) > ERROR_APART_MS) this.menuSound("ui-error");
-    this.erredAt = now;
-    this.saidAt = now;
+    this.saidAt = performance.now();
   }
 
   cooldown({ ability, seconds }) {
@@ -823,15 +803,8 @@ export class PlayCombat {
     this.view.camera.position.add(this.stage.shakeOffset());
   }
 
-  // Everyone drawn, for footsteps to listen for.
-  walkingUnits() {
-    const { walker } = this.view;
-    const others = [...this.others.characters.values()].map(({ model, height }) => ({ mesh: model, height, mine: false }));
-    return walker?.model ? [{ mesh: walker.model, height: walker.look?.height ?? 6, mine: true }, ...others] : others;
-  }
-
-  // Plays a menu's sound, which comes from nowhere and is only yours.
-  menuSound(name, volume = MENU_VOLUME) {
+  // Plays a sound that comes from nowhere and is only yours, as on levelling up.
+  menuSound(name, volume = 1) {
     this.stage.sound(name, { volume });
   }
 
@@ -852,7 +825,6 @@ export class PlayCombat {
   // Called each frame of the walk.
   frame(dt) {
     this.stage.frame(dt);
-    this.footsteps.frame(dt, this.walkingUnits());
     this.auraWait = (this.auraWait ?? 0) - dt;
     if (this.auraWait <= 0) {
       this.auraWait = AURA_CHECK_S;
