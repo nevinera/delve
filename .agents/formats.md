@@ -1164,7 +1164,7 @@ A token is `<payload>.<signature>`, both base64url without padding. The payload 
 
 ### Messages
 
-Each websocket message is a JSON text frame, `{ "type": ..., ... }`. [`messages.schema.json`](../docs/schema/messages.schema.json) defines each one. The game server's tests check every message they send and take against it. A client test checks that the play page handles each server message, sends only client messages, and that the tables below list the same messages. Positions are continent feet `[x, y, z]` (x east, z south, y up), and `yaw` is radians, 0 facing +z.
+Each websocket message is a JSON text frame, `{ "type": ..., ... }`. [`messages.schema.json`](../docs/schema/messages.schema.json) defines each one. To add or change a message, edit the schema and run `go generate ./internal/game` in `game-server/`. That writes the server's message structs (`internal/game/messages_gen.go`) and the play page's list of message types (`client/src/play/messageTypes.js`). Its `x-go` annotations name the Go structs and the Go types that don't follow from the JSON ones (`internal/messagesgen`). The game server's tests check every message they send and take against it. A client test checks that the play page handles each server message, sends only client messages, and that the tables below list the same messages. Positions are continent feet `[x, y, z]` (x east, z south, y up), and `yaw` is radians, 0 facing +z.
 
 #### Client to server
 

@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { parse } from "acorn";
 import { describe, expect, it } from "vitest";
+import { CLIENT_MESSAGES, SERVER_MESSAGES } from "./messageTypes.js";
 
 // The play page against the protocol's schema (docs/schema/messages.schema.json): it handles every
 // message the server sends and no others, and sends only messages the server takes.
@@ -41,8 +42,14 @@ function documented(heading) {
 }
 
 describe("the game protocol", () => {
+  it("has the table of message types written from the schema as it is now", () => {
+    // If not, run `go generate ./internal/game` in game-server.
+    expect([...SERVER_MESSAGES].sort()).toEqual(kinds("server"));
+    expect([...CLIENT_MESSAGES].sort()).toEqual(kinds("client"));
+  });
+
   it("has the play page handle every message the server sends, and no others", () => {
-    expect(handlers()).toEqual(kinds("server"));
+    expect(handlers()).toEqual([...SERVER_MESSAGES].sort());
   });
 
   it("has the play page send only messages the server takes, and each of them", () => {

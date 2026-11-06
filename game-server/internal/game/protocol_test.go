@@ -10,6 +10,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/delve-mmo/delve3d/game-server/internal/messagesgen"
 	"github.com/delve-mmo/delve3d/game-server/internal/messagestest"
 )
 
@@ -70,5 +71,21 @@ func checkMessages(sent, got [][]byte, full bool) []string {
 func TestTheProtocolSchemaCompiles(t *testing.T) {
 	if _, err := messagestest.Kinds(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestTheGeneratedMessagesAreCurrent fails when the schema has changed since messages_gen.go and
+// the play page's messageTypes.js were written.
+func TestTheGeneratedMessagesAreCurrent(t *testing.T) {
+	raw, err := os.ReadFile(messagestest.Path())
+	if err != nil {
+		t.Fatal(err)
+	}
+	want, err := messagesgen.Go(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if have, _ := os.ReadFile("messages_gen.go"); !bytes.Equal(have, want) {
+		t.Error("messages_gen.go is out of date: run go generate ./internal/game")
 	}
 }
