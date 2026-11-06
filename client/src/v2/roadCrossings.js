@@ -2,7 +2,7 @@ import { courseBox, pooledAt, poolsIn, shape } from "./courses.js";
 import { FORD_FT, ROAD_KINDS, bedAt, placeOn, roadTrack } from "./roads.js";
 
 // Where roads (roads.js) cross courses (courses.js), or their pools: a ford across a stream, its bed built up
-// FORD_FT under the water (create/ground.js's carve, with roads.js's fordAt) and stones strewn
+// FORD_FT under the water (shaping.js, with roads.js's fordAt) and stones strewn
 // over it; a plank bridge over a river, a deck of slabs from bank to bank with a beam down each
 // side. /create puts both in the placed files, each with `road`, as it does what lines roads
 // (roadEdges.js).

@@ -13,7 +13,7 @@ import { builtObjects, images } from "../objects/collections.js";
 import { prepareAnimations } from "../character/animations.js";
 import { resolveRecipe } from "../character/recipe.js";
 import { Caves } from "../create/caves.js";
-import { Renditions } from "../create/ground.js";
+import { Renditions } from "../create/renditions.js";
 import { Placed } from "../create/placed.js";
 import { PLATE_FT, PLATTER_FT } from "../v2/sizes.js";
 import { setBuiltObjects } from "../world/objects.js";

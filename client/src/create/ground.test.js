@@ -7,7 +7,8 @@ import { decodePlate, encodePlate } from "../v2/plate.js";
 import { loadZipper } from "../v2/zstd.js";
 import { decodePlatter, encodePlatter } from "../v2/platter.js";
 import { CELLS, CHUNKS, TILES } from "./geo.js";
-import { COARSE, COARSE_TILES, EMPTY_FT, FINE, FINE_TILES, FULL, FULL_TILES, Ground, PLATE, Renditions } from "./ground.js";
+import { COARSE, COARSE_TILES, EMPTY_FT, FINE, FINE_TILES, FULL, FULL_TILES, Ground, PLATE } from "./ground.js";
+import { Renditions } from "./renditions.js";
 
 // Flat ground at `height` everywhere, its plate files there but never read.
 const flat = (height = 0) => {

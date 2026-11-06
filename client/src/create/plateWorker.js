@@ -5,7 +5,7 @@ import { WaterMap } from "../v2/water.js";
 import { loadZipper } from "../v2/zstd.js";
 import { bakedPlate, plateEdges } from "./plateEdits.js";
 
-// Reads plate files off the main thread (ground.js's Renditions), handing back each plate's
+// Reads plate files off the main thread (renditions.js's Renditions), handing back each plate's
 // arrays rather than copies, and writes plate and platter files, for saving, with plates' biomes
 // worked out from the biome areas sent last and their water from the bodies sent last. A plate
 // to write comes as its tiles, or as its file and the edits to put in it. Writing waits for

@@ -17,7 +17,7 @@ const STEP_FT = 1.5; // as the walker steps up onto slabs
 const EYE_FT = 5.5;
 
 export class PlayGround {
-  // renditions: create/ground.js's Renditions; placed: create/placed.js's Placed; things and
+  // renditions: create/renditions.js's Renditions; placed: create/placed.js's Placed; things and
   // scatter: create/things.js's and scatter.js's, for objects' heights and what fills slots;
   // caves: create/caves.js's Caves.
   constructor({ renditions, placed, things, scatter, caves }) {
