@@ -181,7 +181,7 @@ func TestPlacedObjectsStandAsInCreate(t *testing.T) {
 		types = append(types, o.Type)
 	}
 	sort.Strings(types)
-	if jsonOf(types) != `["boulder","built:shed0001","rubble","stump"]` {
+	if jsonOf(types) != `["boulder","built:shed0001","rubble","stump","stump"]` {
 		t.Errorf("objects %v", types)
 	}
 }

@@ -44,6 +44,16 @@
     ]
    },
    "height": 3
+  },
+  {
+   "type": "stump",
+   "at": [
+    240,
+    610
+   ],
+   "yaw": 0,
+   "scale": 2,
+   "road": "roadtest"
   }
  ],
  "slabs": [
@@ -158,6 +168,39 @@
    ],
    "thickness": 1,
    "surface": "stone"
+  },
+  {
+   "at": [
+    150,
+    19.75,
+    500
+   ],
+   "turn": [
+    0,
+    0,
+    0
+   ],
+   "outline": [
+    [
+     0,
+     0
+    ],
+    [
+     10,
+     0
+    ],
+    [
+     10,
+     10
+    ],
+    [
+     0,
+     10
+    ]
+   ],
+   "thickness": 0.6,
+   "surface": "floorboards",
+   "road": "roadtest"
   }
  ]
 }

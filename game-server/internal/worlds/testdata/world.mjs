@@ -137,11 +137,14 @@ const placed = {
     { type: "stump", at: [420, 120], yaw: 0, scale: 5 },
     { type: "rubble", at: [112, 512], y: floorY, yaw: 0, scale: 6 },
     { type: "built:shed0001", at: [200, 600], yaw: 1, scale: 1, footprint: { rect: [4, 2] }, height: 3 },
+    { type: "stump", at: [240, 610], yaw: 0, scale: 2, road: "roadtest" },
   ],
   slabs: [
     { at: [100, floorY, 500], turn: [0, 0, 0], outline: square(30), thickness: 1.5, surface: "floorboards" },
     { at: [100, floorY, 499], turn: [0, -90, 0], outline: [[0, 0], [10, 0], [10, 7], [14, 7], [14, 0], [30, 0], [30, 10], [0, 10]], thickness: 1, surface: "brick" },
     { at: [130, floorY, 500], turn: [0, 0, 20], outline: square(20), thickness: 1, surface: "stone" },
+    // A slab and an object a road put there, which every reader takes as any other.
+    { at: [150, floorY, 500], turn: [0, 0, 0], outline: square(10), thickness: 0.6, surface: "floorboards", road: "roadtest" },
   ],
 };
 files.set("places/continents/main/placed/0_0.json", strToU8(`${JSON.stringify(placed, null, 1)}\n`));
@@ -192,7 +195,7 @@ for (let tz = 0; tz <= 2; tz++) {
 const things = new Things(new THREE.Scene(), p, (x, z) => r.heightAt(x, z) ?? EMPTY_FT);
 const standing = p.near(0, 0, 10).objects.map((o) => ({ type: o.type, at: o.at, y: things.objectY(o) }));
 
-const slabPoints = [[110, 510], [110, 499.5], [110, 498], [135, 510], [149, 510], [111, 499], [160, 510]];
+const slabPoints = [[110, 510], [110, 499.5], [110, 498], [135, 510], [149, 510], [111, 499], [160, 510], [155, 505]];
 const footholds = slabPoints.map(([x, z]) => ({ at: [x, z], footholds: placed.slabs.flatMap((slab) => slabFootholds(slab, x, z, Math.tan((50 * Math.PI) / 180))) }));
 
 // Floors and rock in the caves, as /create stands on them and keeps the builder out of them.
