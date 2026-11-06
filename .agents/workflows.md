@@ -71,6 +71,17 @@ Call `metrics()` from `client/src/metrics/metrics.js` to measure something on a 
 
 `Metric` keeps them in their own SQLite database (`storage/<env>_metrics.sqlite3`, migrations in `db/metrics_migrate`) for 30 days. To read them, run `bin/rails metrics:summary`, with `SINCE=<hours>`, `BY=<tag>` and `NAME=<prefix>` to narrow it. On the dev server, run it in `/home/deploy/delve` with the env file loaded.
 
+## Timing and debug logging
+
+`client/src/metrics/timing.js` is timing a page keeps for itself, not sent anywhere:
+- `Startup` times the steps of opening a page, each from the one before. Each step also goes on the browser's performance timeline as a measure, so it shows in the developer tools' performance panel.
+- `FrameParts` times each part of a frame, and gives each part's mean a frame and its slowest frame.
+- `debugLog(topic, ...)` logs only when the topic's turned on: in the page's address, as in `?debug=ground,perf`, or for every page in the browser with `localStorage.debug = "perf"` in the console. `all` turns on every topic.
+
+`/create` and `/play` both time their startup steps. `/play` also sends them as `play.load.<step>` metrics. In `/create`, the debug toggles in the bottom bar show the frame's parts and the startup steps. Its topics:
+- `perf`: each startup step as it's done, and every frame slower than 100 ms with what it spent its time on.
+- `ground`: each plate as it's read, with how many are still being read.
+
 ## Reports
 
 Every page imports `client/src/report/button.js`, a button in the bottom-left corner for reporting a bug, an object or structure you wish you had, something you can't work out how to do, or something annoying. You can type or talk. Talking records a voice note, and where the browser has speech recognition it also types what it hears. A report sends a screenshot of the page's scene where it fills the window, the error recorder's console lines, and what the page gives `setReportContext()`. `ProblemReport` keeps them, with voice notes and screenshots in `storage/problem_reports/<id>/` until a system admin marks the report done at `/problem_reports`.

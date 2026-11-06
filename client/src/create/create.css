@@ -420,7 +420,7 @@ body.create {
   border-right: 1px solid #44444e;
   justify-self: start;
   max-width: 100%;
-  overflow: hidden;
+  overflow: auto hidden;
 }
 
 /* Each part's values, in blocks of at most 5 rows, so they fit without scrolling. */
@@ -447,6 +447,20 @@ body.create {
   align-content: start;
   gap: 4px 10px;
   margin: 0;
+}
+
+/* A part's two times side by side, under a heading row. */
+.create-debug dl.create-debug-times {
+  grid-template-columns: max-content 5ch 5ch;
+}
+
+/* When a step was done can be past 10 s. */
+.create-debug dl.create-debug-times:is(#debugStartup, [data-more-of="debugStartup"]) {
+  grid-template-columns: max-content 5ch 7ch;
+}
+
+.create-debug dl.create-debug-times .create-debug-head {
+  grid-column: auto;
 }
 
 .create-debug dt {
