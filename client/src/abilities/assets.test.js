@@ -265,6 +265,11 @@ describe("SoundMixer", () => {
     expect(made.play("impact", { at: [1000, 0, 0] })).toBeNull();
   });
 
+  it("plays a quiet sound that's near", async () => {
+    const { made } = await mixer();
+    expect(made.play("impact", { volume: 0.01, at: [1, 0, 0] })).not.toBeNull();
+  });
+
   it("doesn't save anything up while the browser's holding sound back", async () => {
     const { made, context } = await mixer();
     context.state = "suspended";
@@ -286,6 +291,16 @@ describe("SoundMixer", () => {
     expect(panner).not.toHaveBeenCalled();
     made.play("impact", { at: [1, 2, 3] });
     expect(panner).toHaveBeenCalledOnce();
+  });
+
+  it("hears from where your character is, not the camera", async () => {
+    const { made } = await mixer();
+    const camera = new THREE.PerspectiveCamera();
+    camera.position.set(0, 0, 30);
+    made.hear(camera, [0, 0, 0]);
+    expect(made.loudness(1, [5, 0, 0])).toBe(1);
+    made.hear(camera);
+    expect(made.loudness(1, [5, 0, 0])).toBeLessThan(1);
   });
 
   it("plays nothing for a name it doesn't have", async () => {

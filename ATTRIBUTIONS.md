@@ -41,3 +41,11 @@ Packages in `package.json`, `Gemfile` and `game-server/go.mod` keep their own li
 **License:** [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
 
 **Source:** [Impact Sounds](https://kenney.nl/assets/impact-sounds), [RPG Audio](https://kenney.nl/assets/rpg-audio) and [Interface Sounds](https://kenney.nl/assets/interface-sounds) by Kenney. `client/src/abilities/stockSounds.json` says which sounds come from them. `script/bake_sounds.py` converts those, and synthesizes the rest, which are ours.
+
+## Footsteps
+
+**Where:** `public/sounds/footstep-*.mp3`, filtered to 200 Hz to 4 kHz and cut into single steps
+
+**License:** [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
+
+**Source:** [Footsteps wearing sneakers walking on sand](https://freesound.org/s/705747/) by felix.blume, on Freesound

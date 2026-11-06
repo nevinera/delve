@@ -6,6 +6,10 @@ import stock from "./stockSounds.json";
 // no more than so many at once.
 
 export const STOCK_SOUNDS = stock;
+// Sounds the game plays by itself, beside the stock ones, from recordings rather than the bake:
+// footstep is one soft step on sand (ATTRIBUTIONS.md), filtered and cut into six.
+const RECORDED = { footstep: { kind: "footstep", variations: 6, from: "freesound" } };
+const SOUNDS = { ...stock, ...RECORDED };
 export const soundUrl = (name, n) => `/sounds/${name}-${n}.mp3`;
 
 const HEARD_AT_FULL_FT = 12; // nearer than this, it's as loud as it gets
@@ -27,7 +31,7 @@ function bytesOf(url) {
 // Starts every stock sound on its way, so the first use of each one plays.
 export function fetchSounds() {
   if (typeof fetch !== "function" || typeof AudioContext !== "function") return;
-  for (const [name, { variations }] of Object.entries(stock)) {
+  for (const [name, { variations }] of Object.entries(SOUNDS)) {
     for (let n = 1; n <= variations; n++) bytesOf(soundUrl(name, n)).catch((err) => console.warn(`Couldn't load ${name}: ${err.message}`));
   }
 }
@@ -43,13 +47,13 @@ export class SoundMixer {
     // It squashes what's loudest, so that what's left of a big fight doesn't clip.
     this.out = context.createDynamicsCompressor();
     this.out.connect(context.destination);
-    for (const name of Object.keys(stock)) this.load(name);
+    for (const name of Object.keys(SOUNDS)) this.load(name);
   }
 
   load(name) {
     const loaded = [];
     this.buffers.set(name, loaded);
-    for (let n = 1; n <= stock[name].variations; n++) {
+    for (let n = 1; n <= SOUNDS[name].variations; n++) {
       Promise.resolve(this.bytes(name, n))
         // Decoding uses up what it's given, and other mixers can want the same bytes.
         .then((bytes) => this.context.decodeAudioData(bytes.slice(0)))
@@ -68,10 +72,11 @@ export class SoundMixer {
     return loaded[n];
   }
 
-  // Puts your ears where the camera is.
-  hear(camera) {
+  // Puts your ears at `at` ([x, y, z], where your character is), or else where the camera is,
+  // facing the way the camera looks, so how loud things are goes by how far they are from you.
+  hear(camera, at = null) {
     const { listener } = this.context;
-    const { x, y, z } = camera.position;
+    const [x, y, z] = at ?? camera.position.toArray();
     this.heardFrom = [x, y, z];
     const [fx, fy, fz] = camera.getWorldDirection(new THREE.Vector3()).toArray();
     const { x: ux, y: uy, z: uz } = camera.up;
@@ -98,8 +103,9 @@ export class SoundMixer {
     // Browsers hold sound back until you've pressed something, and what's played till then would
     // all come out at once.
     if (this.context.state === "suspended") return null;
+    // Too far off to hear goes by what distance takes away, so a quiet sound nearby still plays.
+    if (this.loudness(1, at) < HEARD_UNTIL) return null;
     const loud = this.loudness(volume, at);
-    if (loud < HEARD_UNTIL) return null;
     // How much it matters, for what gets dropped when too many are going.
     const worth = loud + (mine || !at ? MINE : 0);
     if (this.playing.length >= this.limit) {

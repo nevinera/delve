@@ -16,6 +16,7 @@ import { PlayLog } from "./log.js";
 import { swingLook } from "../abilities/timeline.js";
 import { DESKTOP_SOUNDS, PHONE_SOUNDS } from "../abilities/sounds.js";
 import { withBuiltins } from "../abilities/builtins.js";
+import { Footsteps, stepSound } from "./footsteps.js";
 import { LastingAuras } from "./lastingAuras.js";
 import { absorbBand, initials, timeLeft } from "./unitStatuses.js";
 import { AreaMarks } from "./areas.js";
@@ -132,6 +133,11 @@ export class PlayCombat {
     document.querySelector("[data-abilities]")?.addEventListener("click", () => this.toggleAbilities());
     this.areas = new AreaMarks(view);
     this.auras = new LastingAuras(this.stage);
+    this.footsteps = new Footsteps((_kind, { at, mine, landing }) => this.stage.sound("footstep", { ...stepSound({ mine, landing }), at }), {
+      heightAt: (x, z) => view.renditions?.heightAt(x, z),
+      waterAt: (x, z) => view.renditions?.waterAt(x, z),
+      patternAt: (x, z) => view.renditions?.patternAt(x, z),
+    });
     this.statuses = new Map(); // unit id -> the statuses you've put on it, as stacks by id
     this.statusLists = new Map(); // class id -> its statuses, null while its file loads
     this.health = you.health;
@@ -799,7 +805,9 @@ export class PlayCombat {
   // Called once everything's in place for this frame, as it's about to be drawn.
   placed() {
     this.stage.place();
-    this.stage.hear(this.view.camera);
+    // Your ears are at your character's head, not at the camera behind it.
+    const you = this.view.walker?.model;
+    this.stage.hear(this.view.camera, you && [you.position.x, you.position.y + (this.view.walker.look?.height ?? 6) * 0.9, you.position.z]);
     this.view.camera.position.add(this.stage.shakeOffset());
   }
 
@@ -822,9 +830,17 @@ export class PlayCombat {
     return wanted;
   }
 
+  // Everyone drawn, for footsteps to listen for.
+  walkingUnits() {
+    const { walker } = this.view;
+    const others = [...this.others.characters.values()].map(({ model, height }) => ({ mesh: model, height, mine: false }));
+    return walker?.model ? [{ mesh: walker.model, height: walker.look?.height ?? 6, mine: true }, ...others] : others;
+  }
+
   // Called each frame of the walk.
   frame(dt) {
     this.stage.frame(dt);
+    this.footsteps.frame(dt, this.walkingUnits());
     this.auraWait = (this.auraWait ?? 0) - dt;
     if (this.auraWait <= 0) {
       this.auraWait = AURA_CHECK_S;

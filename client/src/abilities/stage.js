@@ -345,9 +345,9 @@ export class AbilityStage {
     return this.mixer.play(name, options);
   }
 
-  // Puts your ears where the camera is.
-  hear(camera) {
-    this.mixer?.hear(camera);
+  // Puts your ears at `at`, where your character is, or else where the camera is.
+  hear(camera, at = null) {
+    this.mixer?.hear(camera, at);
   }
 
   // A plain swing, one that isn't an ability. look: what statuses make of it (timeline.js's swingLook).
