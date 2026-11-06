@@ -2,7 +2,9 @@
 // slash opens the box. The game server reads what's typed and answers in the log, but for the
 // page's own commands, which it runs itself.
 
-const LINES = 80;
+const LINES = 200;
+const SIZE_KEPT = "playLogSize"; // the size you've dragged it to, in localStorage
+const MIN = [220, 60];
 
 // What to send for what's typed, or an `error` to show, or nothing for an empty line. A command
 // named in `local` (name -> run(args)) is the page's own: what's given is that command's run and
@@ -16,6 +18,15 @@ export function readLine(text, local = {}) {
   return { send: line };
 }
 
+function keptSize() {
+  try {
+    const size = JSON.parse(localStorage.getItem(SIZE_KEPT));
+    return Array.isArray(size) && size.length === 2 && size.every(Number.isFinite) ? size : null;
+  } catch {
+    return null;
+  }
+}
+
 export class PlayLog {
   // send(line) sends a command to the game server. `local` holds the page's own commands, name ->
   // run(args), each giving the lines to answer with.
@@ -25,16 +36,47 @@ export class PlayLog {
     this.lines = Object.assign(document.createElement("div"), { className: "play-log-lines" });
     this.box = Object.assign(document.createElement("input"), { className: "play-log-box", type: "text", placeholder: "/help", maxLength: 200, autocomplete: "off", spellcheck: false, hidden: true });
     this.box.setAttribute("aria-label", "command");
+    this.grip = Object.assign(document.createElement("div"), { className: "play-log-grip", title: "Drag to resize" });
     this.root = Object.assign(document.createElement("div"), { className: "play-log" });
-    this.root.append(this.lines, this.box);
+    this.root.append(this.grip, this.lines, this.box);
+    this.grip.addEventListener("pointerdown", (e) => this.resizeFrom(e));
+    this.sizeTo(keptSize());
     window.addEventListener("keydown", (e) => this.key(e), { capture: true });
   }
 
-  // kind: combat, system, error or debug.
+  // Drags the top right corner to resize it: it stays put at the bottom left.
+  resizeFrom(down) {
+    down.preventDefault();
+    this.grip.setPointerCapture(down.pointerId);
+    const from = [this.lines.offsetWidth, this.lines.offsetHeight, down.clientX, down.clientY];
+    const move = (e) => this.sizeTo([from[0] + e.clientX - from[2], from[1] - (e.clientY - from[3])]);
+    const up = () => {
+      this.grip.removeEventListener("pointermove", move);
+      this.grip.removeEventListener("pointerup", up);
+      try {
+        localStorage.setItem(SIZE_KEPT, JSON.stringify(this.size));
+      } catch {}
+    };
+    this.grip.addEventListener("pointermove", move);
+    this.grip.addEventListener("pointerup", up);
+  }
+
+  // [width, height] of its lines in px, or null for the size that suits the screen.
+  sizeTo(size) {
+    if (!size) return;
+    const [w, h] = [Math.max(MIN[0], Math.min(window.innerWidth - 24, size[0])), Math.max(MIN[1], Math.min(window.innerHeight * 0.8, size[1]))];
+    this.size = [Math.round(w), Math.round(h)];
+    this.root.style.setProperty("--log-width", `${this.size[0]}px`);
+    this.root.style.setProperty("--log-height", `${this.size[1]}px`);
+    this.lines.scrollTop = this.lines.scrollHeight;
+  }
+
+  // kind: combat, system, error or debug. It keeps to the newest line, unless you've scrolled up.
   add(text, kind = "combat") {
+    const atEnd = this.lines.scrollHeight - this.lines.scrollTop - this.lines.clientHeight < 4;
     this.lines.append(Object.assign(document.createElement("div"), { className: `play-log-${kind}`, textContent: text }));
     while (this.lines.children.length > LINES) this.lines.firstChild.remove();
-    this.lines.scrollTop = this.lines.scrollHeight;
+    if (atEnd) this.lines.scrollTop = this.lines.scrollHeight;
   }
 
   open(text = "") {

@@ -618,14 +618,50 @@ body.touch .play-bar button {
   position: absolute;
   left: 12px;
   bottom: 16px;
-  width: 340px;
-  font-size: 12px;
+  width: var(--log-width, clamp(340px, 28vw, 720px));
+  font-size: clamp(12px, 0.8vw, 15px);
   text-shadow: 0 1px 2px #000;
 }
 
+/* Scrolls back through what's been said; a faint backing shows where it is while you're over it. */
 .play-log-lines {
-  max-height: 140px;
-  overflow: hidden;
+  height: var(--log-height, clamp(140px, 24vh, 420px));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: #ffffff40 transparent;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  border-radius: 4px;
+  transition: background 0.2s;
+}
+
+.play-log-lines > :first-child {
+  margin-top: auto;
+}
+
+.play-log:hover .play-log-lines {
+  background: #00000040;
+}
+
+/* The top right corner: drag it to size the log. */
+.play-log-grip {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 14px;
+  height: 14px;
+  cursor: nesw-resize;
+  pointer-events: auto;
+  opacity: 0;
+  border-top: 2px solid #ffffffa0;
+  border-right: 2px solid #ffffffa0;
+  transition: opacity 0.2s;
+}
+
+.play-log:hover .play-log-grip {
+  opacity: 1;
 }
 
 .play-log-system {
