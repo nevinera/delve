@@ -2,7 +2,8 @@ import { SPEC_LEVEL, allowedBuild, heldStatuses, knownAbilities } from "./build.
 import { drawBuildPanel } from "./buildPanel.js";
 import { drawAbilitiesPane } from "./abilitiesPane.js";
 import { AbilityTooltip } from "./abilityTooltip.js";
-import { barsFor, cleared, cooldownText, keyLabel, placed, slotForKey, slotShows, swapped, sweepFor } from "./bars.js";
+import { barsFor, cleared, cooldownText, placed, slotShows, swapped, sweepFor } from "./bars.js";
+import { keyBindings, slotAction } from "./keys.js";
 import * as THREE from "three";
 import { chestOf, AbilityStage, clipNameFor } from "../abilities/stage.js";
 import { DESKTOP_PARTICLES, PHONE_PARTICLES } from "../abilities/particles.js";
@@ -178,6 +179,7 @@ export class PlayCombat {
     document.body.append(this.tooltip.root); // the HUD sits under the menu buttons, and this goes over them
     this.hovered = null;
     this.hud.replaceChildren(el("div", { className: "combat-frames" }, this.youFrame.root, this.targetFrame.root), this.floatLayer, this.say, this.castBar, this.bar, this.log.root);
+    keyBindings().onChange(() => this.drawBars());
     this.youFrame.name.textContent = `${this.you.name}${this.you.level ? ` (${this.you.level})` : ""}`;
     this.drawFrame(this.youFrame, this.health, this.maxHealth);
     this.targetRing = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff5040, transparent: true, opacity: 0.8, depthWrite: false }));
@@ -278,7 +280,7 @@ export class PlayCombat {
     const at = { bar, slot };
     const shade = el("div", { className: "combat-action-shade" });
     const count = el("span", { className: "combat-action-count" });
-    const button = el("button", { type: "button", className: `combat-action${ability ? "" : " combat-action-empty"}` }, el("span", { className: "combat-action-key", textContent: keyLabel(bar, slot) }), el("span", { className: "combat-action-name", textContent: ability?.name ?? "" }), shade, count);
+    const button = el("button", { type: "button", className: `combat-action${ability ? "" : " combat-action-empty"}` }, el("span", { className: "combat-action-key", textContent: keyBindings().label(slotAction(bar, slot)) }), el("span", { className: "combat-action-name", textContent: ability?.name ?? "" }), shade, count);
     const icon = iconNode(ability?.icon, "combat-action-icon");
     if (icon) {
       button.prepend(icon);
@@ -409,25 +411,22 @@ export class PlayCombat {
 
   bind() {
     window.addEventListener("keydown", (e) => {
-      if (e.repeat || ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
-      if (e.key === "Tab") {
-        e.preventDefault();
-        this.tabTarget();
-        return;
-      }
+      if (e.repeat || keyBindings().recording || ["INPUT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
       if (e.key === "Escape" && this.aiming) {
         e.stopImmediatePropagation();
         this.stopAiming();
         return;
       }
-      if (e.key === "p" && !e.ctrlKey && !e.metaKey) {
-        this.toggleAbilities();
-        return;
-      }
-      const at = slotForKey(e);
-      if (at) {
+      const action = keyBindings().actionFor(e);
+      if (action?.id === "target") {
         e.preventDefault();
-        this.useSlot(at);
+        this.tabTarget();
+      } else if (action?.id === "spellbook") {
+        e.preventDefault();
+        this.toggleAbilities();
+      } else if (action?.slot) {
+        e.preventDefault();
+        this.useSlot(action.slot);
       }
     }, { capture: true });
     window.addEventListener("pointermove", (e) => this.aim(e), { capture: true });

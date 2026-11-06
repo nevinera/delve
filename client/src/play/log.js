@@ -2,6 +2,8 @@
 // slash opens the box, and up and down in it go back through what you've typed. The game server
 // reads what's typed and answers in the log, but for the page's own commands, which it runs itself.
 
+import { keyBindings } from "./keys.js";
+
 const LINES = 200;
 const SIZE_KEPT = "playLogSize"; // the size you've dragged it to, in localStorage
 const FONT_KEPT = "playLogFont"; // its text size in px, in localStorage
@@ -191,11 +193,12 @@ export class PlayLog {
       this.close();
       return;
     }
-    if (e.repeat || ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
-    if (e.key === "Enter" || e.key === "/") {
+    if (e.repeat || keyBindings().recording || ["INPUT", "TEXTAREA", "SELECT"].includes(document.activeElement?.tagName)) return;
+    const action = keyBindings().actionFor(e)?.id;
+    if (action === "chat" || action === "command") {
       e.preventDefault();
       e.stopPropagation();
-      this.open(e.key === "/" ? "/" : "");
+      this.open(action === "command" ? "/" : "");
     }
   }
 }
