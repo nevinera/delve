@@ -7,6 +7,7 @@ import { SEA_LEVEL_FT } from "../v2/sizes.js";
 import { PICK_PX } from "./areas.js";
 import { Biomes } from "./biomes.js";
 import { Courses } from "./courses.js";
+import { Roads } from "./roads.js";
 import { CELLS, SHAPES, TURNS, noiseBrush, pullBrush, raiseBrush } from "./geo.js";
 import { EMPTY_FT } from "./ground.js";
 import { isSlab } from "./placed.js";
@@ -42,6 +43,8 @@ import { WaterBodies } from "./water.js";
 //   one, clicking inside it starts another area there, and clicking outside puts it back.
 // - geo's water: the same for bodies of water (water.js), and the level of the one picked out
 //   can be typed.
+// - geo's roads: the same for footpaths, trails and roads, open lines (roads.js), and the width of
+//   the one picked out can be typed.
 // - geo's courses: the same for streams and rivers, open lines from their source down, finished
 //   by double-clicking or Enter (courses.js), and the widths of the one picked out can be typed.
 // - geo's brushes, raise and lower, flatten, smooth, noise and clear: dragging on the ground works
@@ -90,7 +93,7 @@ const FINE_TURN_DEG = 2;
 
 const $ = (id) => document.getElementById(id);
 // The kind an area tool's kind button picks.
-const kindOf = (button) => button.dataset.biome ?? button.dataset.water ?? button.dataset.course;
+const kindOf = (button) => button.dataset.biome ?? button.dataset.water ?? button.dataset.course ?? button.dataset.road;
 // The draw tool's sliders, 0 to 1000, and the growth settings they set, some on a log scale,
 // their ranges by what's grown.
 const logSlider = (key, ranges, show) => {
@@ -141,7 +144,8 @@ export class Tools {
     const stillAt = (x, z) => this.water.at(x, z)?.level ?? (renditions.seaAt(x, z) ? SEA_LEVEL_FT : null);
     this.courses = new Courses(scene, (x, z) => this.surface(x, z), canvas.parentElement, (x, z) => renditions.baseAt(x, z), stillAt);
     this.restAreas = new RestAreas(scene, (x, z) => this.surface(x, z), canvas.parentElement, () => this.units.here(this.units.restPoints));
-    this.outlined = { biomes: this.biomes, water: this.water, courses: this.courses, restArea: this.restAreas }; // each tool that draws areas, its areas
+    this.roads = new Roads(scene, (x, z) => this.surface(x, z), canvas.parentElement, (x, z) => renditions.baseAt(x, z));
+    this.outlined = { biomes: this.biomes, water: this.water, courses: this.courses, roads: this.roads, restArea: this.restAreas }; // each tool that draws areas, its areas
     this.draw = new Draw(scene, canvas.parentElement, renditions, ground, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, () => this.showDraw(), this.biomes);
     // Measure's, { from, to } for a ruler, { middle, radius } for a circle, and while the button's
     // down, where it went down and whether a ruler or circle was shown before.
@@ -317,7 +321,7 @@ export class Tools {
       });
     }
     // Each area tool's kinds' buttons, by tool.
-    this.kindButtons = { biomes: [...document.querySelectorAll("[data-biome]")], water: [...document.querySelectorAll("[data-water]")], courses: [...document.querySelectorAll("[data-course]")], restArea: [] };
+    this.kindButtons = { biomes: [...document.querySelectorAll("[data-biome]")], water: [...document.querySelectorAll("[data-water]")], courses: [...document.querySelectorAll("[data-course]")], roads: [...document.querySelectorAll("[data-road]")], restArea: [] };
     for (const [tool, buttons] of Object.entries(this.kindButtons)) {
       for (const button of buttons) {
         button.addEventListener("click", () => {
@@ -330,6 +334,12 @@ export class Tools {
     $("biomesUndo").addEventListener("click", () => this.biomes.undo());
     $("waterDelete").addEventListener("click", () => this.water.deleteSelected());
     $("waterUndo").addEventListener("click", () => this.water.undo());
+    $("roadsDelete").addEventListener("click", () => this.roads.deleteSelected());
+    $("roadsUndo").addEventListener("click", () => this.roads.undo());
+    $("roadWidth").addEventListener("change", () => {
+      const width = Number($("roadWidth").value);
+      if (width > 0) this.roads.setWidth(Math.round(width * 10) / 10);
+    });
     $("coursesDelete").addEventListener("click", () => this.courses.deleteSelected());
     $("coursesUndo").addEventListener("click", () => this.courses.undo());
     $("restAreaDelete").addEventListener("click", () => this.restAreas.deleteSelected());
@@ -703,6 +713,7 @@ export class Tools {
     this.biomes.setShown(tool === "biomes" || this.biomesShown);
     this.water.setShown(tool === "water" || tool === "courses");
     this.courses.setShown(tool === "courses" || tool === "water");
+    this.roads.setShown(tool === "roads");
     this.restAreas.setShown(tool === "restArea" || UNITS.has(tool));
     this.measuring = null;
     this.paths.setShown(tool === "path");
@@ -951,6 +962,10 @@ export class Tools {
       if (document.activeElement !== input) input.value = this.courses.selected ? String(this.courses.selected.widths[k]) : "";
     });
     $("courseRipple").checked = this.courses.ripple;
+    // And the road picked out's width.
+    const roadWidth = $("roadWidth");
+    roadWidth.disabled = !this.roads.selected;
+    if (document.activeElement !== roadWidth) roadWidth.value = this.roads.selected ? String(this.roads.selected.width) : "";
     $("growFlat").hidden = !this.draw.flat;
     if (this.tool === "measure" && this.measuring) {
       if (this.measuring.from && !this.measuring.radius) {

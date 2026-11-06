@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "roads.schema.json",
+  "title": "places/continents/<c>/roads.json",
+  "description": "A continent's footpaths, trails and roads, baked into its plates' heights.",
+  "type": "object",
+  "required": ["version", "roads"],
+  "properties": {
+    "version": { "const": 1 },
+    "roads": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["kind", "points", "seed", "bed"],
+        "properties": {
+          "kind": { "enum": ["footpath", "trail", "road"] },
+          "points": {
+            "description": "Corners [x, z, width], continent feet, two or more.",
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "array",
+              "prefixItems": [{ "type": "number" }, { "type": "number" }, { "type": "number", "exclusiveMinimum": 0 }],
+              "items": false,
+              "minItems": 3
+            }
+          },
+          "seed": { "type": "integer" },
+          "bed": {
+            "description": "The road's height under its middle every 8 ft down its track, ft.",
+            "type": "array",
+            "items": { "type": "number" }
+          }
+        },
+        "additionalProperties": false
+      }
+    }
+  },
+  "additionalProperties": false
+}

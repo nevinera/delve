@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import { TILE_FT } from "../v2/sizes.js";
 import { trackOf } from "../v2/courses.js";
+import { roadTrack } from "../v2/roads.js";
 import { decodePlate, encodePlate } from "../v2/plate.js";
 import { loadZipper } from "../v2/zstd.js";
 import { decodePlatter, encodePlatter } from "../v2/platter.js";
@@ -179,6 +180,34 @@ describe("raising the ground", () => {
     const { water, cut } = decodePlate(renditions.changedFiles("main").get("places/continents/main/plates/0_0.plate")).tiles.get(0);
     expect(cut[Math.round(mz / 4) * 65 + Math.round(mx / 4)]).toBeGreaterThan(1);
     expect(water.level[Math.floor(mz / 4) * 64 + Math.floor(mx / 4)]).toBe(9);
+  });
+
+  it("puts the ground where roads have it, and back when they're taken away", () => {
+    const renditions = world();
+    renditions.cells(0, 0);
+    // A road on a bank 2 ft over the flat ground, at 12.
+    const road = { kind: "road", points: [[20, 128, 14], [236, 128, 14]], seed: 1, bed: Array(40).fill(12) };
+    renditions.setRoads({ roads: [road] });
+    const track = roadTrack(road.points, road.kind, road.seed);
+    const k = track.x.findIndex((x) => x >= 128);
+    expect(renditions.heightAt(track.x[k], track.z[k])).toBeCloseTo(12);
+    expect(renditions.baseAt(track.x[k], track.z[k])).toBeCloseTo(10);
+    expect(renditions.heightAt(128, 200)).toBe(10);
+    const { cut } = decodePlate(renditions.changedFiles("main").get("places/continents/main/plates/0_0.plate")).tiles.get(0);
+    expect(cut[Math.round(track.z[k] / 4) * 65 + Math.round(track.x[k] / 4)]).toBeCloseTo(-2);
+    renditions.setRoads({ roads: [] });
+    expect(renditions.heightAt(track.x[k], track.z[k])).toBeCloseTo(10);
+  });
+
+  it("keeps roads when courses are carved again near them", () => {
+    const renditions = world();
+    renditions.cells(0, 0);
+    const road = { kind: "road", points: [[20, 128, 14], [236, 128, 14]], seed: 1, bed: Array(40).fill(12) };
+    renditions.setRoads({ roads: [road] });
+    renditions.setWater({ bodies: [], courses: [{ type: "stream", points: [[0, 60, 6], [256, 60, 6]], surface: [9, 9], seed: 1 }] });
+    const track = roadTrack(road.points, road.kind, road.seed);
+    const k = track.x.findIndex((x) => x >= 128);
+    expect(renditions.heightAt(track.x[k], track.z[k])).toBeCloseTo(12);
   });
 
   it("builds courses' banks up a little where they're lower than their water", () => {

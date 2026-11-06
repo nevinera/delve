@@ -197,6 +197,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 12 L46 12 L46 22 Z" fill="#c8b48a"/><path d="M4 18 C 14 12, 20 22, 30 16 C 36 12, 40 16, 44 14" fill="none" stroke="#3a78b8" stroke-width="4" stroke-linecap="round"/></svg>
         <span>courses</span><kbd class="create-key">R</kbd>
       </button>
+      <button type="button" data-tool="roads" data-key="o" aria-pressed="false" title="draw footpaths, trails and roads">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 12 L46 12 L46 22 Z" fill="#7fa35a"/><path d="M4 20 C 14 14, 22 20, 30 15 C 36 12, 40 14, 44 13" fill="none" stroke="#c8a878" stroke-width="4" stroke-linecap="round"/></svg>
+        <span>roads</span><kbd class="create-key">O</kbd>
+      </button>
       <button type="button" data-tool="clear" aria-pressed="false" title="clear the ground away, back to empty sea">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M2 22 L2 14 C 6 8, 10 12, 14 10 L14 22 Z M34 10 C 38 12, 42 8, 46 14 L46 22 L34 22 Z" fill="#c8b48a"/><path d="M14 22 L14 18 L34 18 L34 22 Z" fill="#2e608c"/></svg>
         <span>clear</span>
@@ -359,6 +363,20 @@
       <div class="create-way">
         <button type="button" id="waterDelete">delete</button>
         <button type="button" id="waterUndo">undo</button>
+      </div>
+    </div>
+    <div data-config="roads" hidden>
+      <p class="create-note">Click corners along a road to draw it. Double-click or press Enter to finish it, Backspace takes the last corner back, and Esc throws it away. Its corners are rounded, and it's cut into hillsides to stay level across. It's red where it's too steep or would cut too deep.</p>
+      <div class="create-swatches create-biomes" role="group" aria-label="kind of road">
+        <button type="button" data-road="footpath" aria-pressed="false" title="footpath: narrow, and climbs steeply"><span style="background:#d9b38c"></span>footpath</button>
+        <button type="button" data-road="trail" aria-pressed="true" title="trail: climbs gently, leans a little"><span style="background:#b07a4a"></span>trail</button>
+        <button type="button" data-road="road" aria-pressed="false" title="road: wide, climbs gently, level across"><span style="background:#f0e6c8"></span>road</button>
+      </div>
+      <label class="create-level">width <input type="number" id="roadWidth" step="1" min="1" disabled> ft</label>
+      <p class="create-note">Click a road to select it, then pick a kind or type its width to change it. Drag its corners, drag between them to add one, and shift-click a corner to take it away. Delete or backspace deletes it.</p>
+      <div class="create-way">
+        <button type="button" id="roadsDelete">delete</button>
+        <button type="button" id="roadsUndo">undo</button>
       </div>
     </div>
     <div data-config="courses" hidden>

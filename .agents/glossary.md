@@ -22,7 +22,8 @@
 - **Placed file:** a plate's JSON of hand-placed objects and slabs.
 - **Slots:** a tile's generated object positions, from a seed.
 - **Course:** a river or stream. **Body:** a sea, lake, pond or swamp pool.
-- **Cut:** how far a course lowers the ground at a corner.
+- **Road:** a footpath, trail or road, the three kinds; "road" is also the widest kind. **Bed:** a road's height down its middle.
+- **Cut:** how far a course or road moves the ground at a corner, down, or up where it builds it up.
 
 ## Caves
 

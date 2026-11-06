@@ -3,6 +3,7 @@ import { disposeGround, groundMaterial } from "../render/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
 import { ACROSS, AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, missingSea, partWater, seaEdges } from "../v2/water.js";
 import { LEDGE_RAISE_FT, LEVEE_FT, courseBox, shape } from "../v2/courses.js";
+import { changedRoadBoxes, roadBox, roadsAt } from "../v2/roads.js";
 import { waterMaterial } from "../render/waterMaterial.js";
 import { SHORE_FADE_FT, waterLookOf } from "./waterSurface.js";
 import { PATTERNS, RUNNING, look, painted, slopeOf } from "../v2/look.js";
@@ -88,7 +89,8 @@ export class Renditions {
     this.looks = 0; // counts changes to the biomes, to tell when what ground looks like is stale
     this.waterFile = { bodies: [], courses: [] }; // the water's bodies and courses, as water.json keeps them
     this.water = new WaterMap(); // and the water from them, baked into plate files saved
-    this.cuts = new Map(); // "tx,tz" -> how far courses cut the tile's corners, over what its plate file has
+    this.roadFile = { roads: [] }; // the roads, as roads.json keeps them
+    this.cuts = new Map(); // "tx,tz" -> how far courses and roads moved the tile's corners, over what its plate file has
     this.waters = new Map(); // "tx,tz" -> the tile's water as last baked, over what its plate file has
     this.fileEdges = new Map(); // "px,pz" -> the sea along its sides as its file has it, for plates not read here
     this.wet = 0; // counts changes to tiles' water
@@ -169,21 +171,31 @@ export class Renditions {
     this.water = new WaterMap(file.bodies, file.courses);
     this.tellWorkers({ water: file });
     if (!dirty) return new Set();
-    const moved = this.carve(courses, file.courses ?? []);
+    const moved = this.carve(courses);
     return new Set([...moved, ...this.markBoxes(boxes)]);
   }
 
-  // Carves `courses` into the ground within `boxes` ([x0, z0, x1, z1]): each cell corner there put
-  // back by what courses cut it before, then cut down under every course there (courses.js's
-  // shape), or where none cuts it, built up a little where a course's bank is lower than its
-  // water, or more under a fall's ledge, and how far kept with its cells. Gives the "px,pz" of the plates moved.
-  carve(boxes, courses) {
+  // Takes the roads, { roads } as roads.json keeps them, and with `dirty`, carves those that changed
+  // into the ground. Gives the "px,pz" of the plates moved.
+  setRoads(file, dirty = true) {
+    const boxes = changedRoadBoxes(this.roadFile, file);
+    this.roadFile = file;
+    return dirty ? this.carve(boxes) : new Set();
+  }
+
+  // Carves the courses and roads into the ground within `boxes` ([x0, z0, x1, z1]): each cell
+  // corner there put back by what they moved it before, then cut down under every course there
+  // (courses.js's shape), or where none cuts it, built up a little where a course's bank is lower
+  // than its water, or more under a fall's ledge; then, out of courses' water, put where the road
+  // there has it (roads.js's roadsAt); and how far kept with its cells. Gives the "px,pz" of the
+  // plates moved.
+  carve(boxes) {
     const moved = new Set();
-    for (const [x0, z0, x1, z1] of boxes) {
-      const near = courses.filter((course) => {
-        const b = courseBox(course);
-        return course.surface?.length && b[0] <= x1 && b[2] >= x0 && b[1] <= z1 && b[3] >= z0;
-      });
+    const overlaps = (b, [x0, z0, x1, z1]) => b[0] <= x1 && b[2] >= x0 && b[1] <= z1 && b[3] >= z0;
+    for (const box of boxes) {
+      const [x0, z0, x1, z1] = box;
+      const near = (this.waterFile.courses ?? []).filter((course) => course.surface?.length && overlaps(courseBox(course), box));
+      const roads = (this.roadFile.roads ?? []).filter((road) => road.bed?.length && overlaps(roadBox(road), box));
       const deltas = new Map(); // "ci,cj" of a corner -> how far it moves
       for (let tz = Math.floor(z0 / TILE_FT); tz <= Math.floor(z1 / TILE_FT); tz++) {
         for (let tx = Math.floor(x0 / TILE_FT); tx <= Math.floor(x1 / TILE_FT); tx++) {
@@ -199,14 +211,16 @@ export class Renditions {
               if (x < x0 || x > x1) continue;
               const k = j * CELL_CORNERS + i;
               const base = tile.heights[k] + cut[k];
-              let [top, levee] = [base, base];
+              let [top, levee, wet] = [base, base, false];
               for (const course of near) {
                 const made = shape(course, x, z);
                 if (!made) continue;
                 top = Math.min(top, made.top);
                 levee = Math.max(levee, Math.min(made.levee, base + (made.ledge ? LEDGE_RAISE_FT : LEVEE_FT)));
+                wet ||= made.wet;
               }
               if (top === base) top = levee;
+              if (roads.length && !wet) top = roadsAt(roads, x, z, top);
               cut[k] = base - top;
               if (top !== tile.heights[k]) deltas.set(`${tx * TILE_CELLS + i},${tz * TILE_CELLS + j}`, top - tile.heights[k]);
             }
@@ -222,7 +236,7 @@ export class Renditions {
     return moved;
   }
 
-  // The ground at (x, z) as it was before courses cut it, where its cells are read, else as
+  // The ground at (x, z) as it was before courses and roads moved it, where its cells are read, else as
   // heightAt has it.
   baseAt(x, z) {
     const height = this.heightAt(x, z);

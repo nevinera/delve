@@ -10,6 +10,7 @@ import { PLATTER_PATH } from "../v2/platter.js";
 import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { BIOME_NAMES } from "../v2/biomes.js";
 import { waterPath } from "../v2/water.js";
+import { roadsPath } from "../v2/roads.js";
 import { BIOMES, biomesPath } from "./biomes.js";
 import { Builder } from "./builder.js";
 import { Compass, facing } from "./compass.js";
@@ -312,6 +313,11 @@ function start(world, changes, fresh) {
   const waterVersion = () => `${tools.water.version},${tools.courses.version}`;
   renditions.setWater(waterFile(), false);
   let waterBaked = waterVersion();
+  // And with the roads.
+  const roadsBytes = world.files.get(roadsPath(continent));
+  if (roadsBytes) tools.roads.load(JSON.parse(strFromU8(roadsBytes)));
+  renditions.setRoads(tools.roads.toJSON(), false);
+  let roadsBaked = tools.roads.version;
 
   const resize = () => {
     const { clientWidth: w, clientHeight: h } = canvas;
@@ -326,15 +332,15 @@ function start(world, changes, fresh) {
   const FPS = 30;
   let lastSave = 0;
   let lastHud = 0;
-  let [saving, lastChangeSave, marksSaved, biomesSaved, waterSaved, layoutSaved] = [null, 0, 0, 0, "0,0", layout.dropped ? -1 : layout.version];
-  const unsaved = () => renditions.unsaved.size || placed.changed.size || library.dirty.size || caves.changed.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || waterVersion() !== waterSaved || layout.version !== layoutSaved;
+  let [saving, lastChangeSave, marksSaved, biomesSaved, waterSaved, layoutSaved, roadsSaved] = [null, 0, 0, 0, "0,0", layout.dropped ? -1 : layout.version, 0];
+  const unsaved = () => renditions.unsaved.size || placed.changed.size || library.dirty.size || caves.changed.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || waterVersion() !== waterSaved || layout.version !== layoutSaved || tools.roads.version !== roadsSaved;
   // Saves what's changed into `changes`, writing files on the worker: once what's being saved is,
   // where something is.
   let dropped = false; // its changes are being thrown away, so it keeps no more
   const save = async () => {
     while (saving) await saving;
     if (dropped || !unsaved()) return;
-    const [version, biomesVersion, waterNow, layoutNow] = [tools.marks.version, tools.biomes.version, waterVersion(), layout.version];
+    const [version, biomesVersion, waterNow, layoutNow, roadsNow] = [tools.marks.version, tools.biomes.version, waterVersion(), layout.version, tools.roads.version];
     saving = renditions
       .unsavedFiles(continent)
       .then(async (files) => {
@@ -342,9 +348,11 @@ function start(world, changes, fresh) {
         changes.set(planningPath(continent), strToU8(`${JSON.stringify(tools.marks.toJSON())}\n`));
         changes.set(biomesPath(continent), strToU8(`${JSON.stringify(tools.biomes.toJSON())}\n`));
         changes.set(waterPath(continent), strToU8(`${JSON.stringify(waterFile())}\n`));
+        // A world with no roads gets no roads file, unless it had one.
+        if (tools.roads.areas.length || roadsBytes || changes.has(roadsPath(continent))) changes.set(roadsPath(continent), strToU8(`${JSON.stringify(tools.roads.toJSON())}\n`));
         if (layout.networks.size || layout.carved.size || layoutBytes) changes.set(layoutPath(continent), strToU8(`${JSON.stringify(layout.toJSON())}\n`));
         await store.set("changes", changes);
-        [marksSaved, biomesSaved, waterSaved, layoutSaved] = [version, biomesVersion, waterNow, layoutNow];
+        [marksSaved, biomesSaved, waterSaved, layoutSaved, roadsSaved] = [version, biomesVersion, waterNow, layoutNow, roadsNow];
       })
       .catch((e) => console.error("couldn't save the changes", e))
       .finally(() => {
@@ -556,6 +564,10 @@ function start(world, changes, fresh) {
     if (waterVersion() !== waterBaked && !tools.water.dragging && !tools.courses.dragging && !tools.courses.draft) {
       ground.refresh(renditions.setWater(waterFile()));
       waterBaked = waterVersion();
+    }
+    if (tools.roads.version !== roadsBaked && !tools.roads.dragging && !tools.roads.draft) {
+      ground.refresh(renditions.setRoads(tools.roads.toJSON()));
+      roadsBaked = tools.roads.version;
     }
     // Saves what's changed once there's been time to finish the stroke.
     if (!saving && !tools.stroke && !tools.drawing && now - lastChangeSave > SAVE_CHANGES_MS && unsaved()) save();

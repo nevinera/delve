@@ -7,7 +7,7 @@ import { dryWater } from "./water.js";
 
 // Plate files: the ground of a plate's tiles at cell scale, which is what each chunk's rendition
 // is, each cell's biome, the tile's object slots (slots.js), its water (water.js) and how far
-// courses (courses.js) cut it. What the ground looks like is worked out where it's drawn
+// courses and roads (courses.js, roads.js) cut it. What the ground looks like is worked out where it's drawn
 // (look.js). A client loads one only when it's near.
 //
 //   places/continents/<continent>/plates/<px>_<pz>.plate
@@ -28,7 +28,7 @@ import { dryWater } from "./water.js";
 //                             a digit (water.js's WATER_TYPES), a level 3 digits of quarter feet
 //                             plus 32,768, ~~~ where a cell's dry
 //   w all 1 <type><level>     or for a tile all at one level, such as the sea's, one line
-//   c <row> <column> <cuts>   how far courses cut the corners: a line for each run of cut corners
+//   c <row> <column> <cuts>   how far courses and roads cut the corners: a line for each run of cut corners
 //                             in a row, row and column in 2 digits, then 2 digits a corner of its
 //                             cut in quarter feet plus 2,048 (under 2,048 where it's built up)
 //
