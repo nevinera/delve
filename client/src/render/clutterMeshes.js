@@ -9,9 +9,10 @@ import { CLUTTER } from "../world/clutter.js";
 const UP = new THREE.Vector3(0, 1, 0);
 // Clutter fades away with distance from the focus (scene x, z), to nothing at the radius the
 // graphics settings pick, so it doesn't stop at an edge. From FADE_FROM of the radius out, it gets
-// sparser, each piece going at its own distance, picked from where it stands, and the pieces left
-// get fainter, drawn with fewer of their pixels (dithered, so nothing needs sorting) and a little
-// smaller.
+// sparser, each piece going at its own distance, picked from where it stands (its "own" number,
+// 0 to 1: it goes once it's that far into the fade), and the pieces left get fainter, drawn with
+// fewer of their pixels (dithered, so nothing needs sorting) and a little smaller. gatherClutter
+// leaves out the pieces that are gone, so the GPU doesn't work through them.
 const FADE_FROM = 0.55;
 const SHRINK = 0.3; // how much smaller a piece is at the radius
 const focus = { value: new THREE.Vector2() };
@@ -29,15 +30,11 @@ function fading(material) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.clutterFocus = focus;
     shader.uniforms.clutterFade = fade;
-    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nuniform vec2 clutterFocus;\nuniform vec2 clutterFade;\nvarying float vClutterShown;").replace(
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nuniform vec2 clutterFocus;\nuniform vec2 clutterFade;\nattribute float clutterOwn;\nvarying float vClutterShown;").replace(
       "#include <begin_vertex>",
       `#include <begin_vertex>
         vec2 clutterAt = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
         float clutterOut = smoothstep(clutterFade.x, clutterFade.y, distance(clutterAt, clutterFocus));
-        // A number for this piece, from where it stands: it goes once it's that far into the fade.
-        vec3 clutterP = fract(vec3(clutterAt.xyx) * 0.1031);
-        clutterP += dot(clutterP, clutterP.yzx + 33.33);
-        float clutterOwn = fract((clutterP.x + clutterP.y) * clutterP.z);
         float clutterKept = clutterOwn > clutterOut ? 1.0 : 0.0;
         transformed *= clutterKept * (1.0 - ${SHRINK.toFixed(2)} * clutterOut);
         vClutterShown = 1.0 - clutterOut;`,
@@ -297,6 +294,25 @@ function cylinderBetween(a, b, radius) {
   return g.translate(...a);
 }
 
+const smoothstep = (a, b, v) => {
+  const t = Math.min(1, Math.max(0, (v - a) / (b - a)));
+  return t * t * (3 - 2 * t);
+};
+
+// A piece's own number, 0 to 1, from where it stands in continent feet, the same each time it's made.
+export function ownNumber(x, z) {
+  let h = Math.imul(Math.round(x * 16), 73856093) ^ Math.imul(Math.round(z * 16), 19349663);
+  h = Math.imul(h ^ (h >>> 13), 0x5bd1e995);
+  h ^= h >>> 15;
+  return (h >>> 0) / 4294967296;
+}
+
+// Whether a piece with its own number has gone, `distanceFt` from the focus, with clutter drawn
+// out to radiusFt, as the shader works it out.
+export function fadedOut(own, distanceFt, radiusFt) {
+  return own <= smoothstep(radiusFt * FADE_FROM, radiusFt, distanceFt);
+}
+
 // A shape's geometries: one, or several variants for shapes listed as an array of builders.
 const geometries = new Map();
 function variants(name) {
@@ -335,6 +351,7 @@ export function clutterMeshes(instances, origin) {
         if (!placed.length) return;
         const solid = part.shape === "stone" || part.shape === "pebble" || part.shape === "crag";
         const mesh = new THREE.InstancedMesh(geometry, solid ? flat : part.shape === "fern" ? leafy : material, placed.length);
+        const own = new Float32Array(placed.length);
         placed.forEach((item, n) => {
           q.setFromUnitVectors(UP, normal.set(...item.normal)).multiply(turn.setFromAxisAngle(UP, item.yaw));
           m.compose(
@@ -344,8 +361,13 @@ export function clutterMeshes(instances, origin) {
           );
           mesh.setMatrixAt(n, m);
           mesh.setColorAt(n, color.setRGB(...item.colors[p], THREE.SRGBColorSpace));
+          own[n] = ownNumber(item.x, item.z);
         });
-        mesh.userData.all = { matrices: mesh.instanceMatrix.array.slice(), colors: mesh.instanceColor.array.slice(), count: placed.length };
+        // Its own geometry for its own numbers, sharing the shape's.
+        mesh.geometry = new THREE.BufferGeometry();
+        for (const [name, attribute] of Object.entries(geometry.attributes)) mesh.geometry.setAttribute(name, attribute);
+        mesh.geometry.setAttribute("clutterOwn", new THREE.InstancedBufferAttribute(own.slice(), 1));
+        mesh.userData.all = { matrices: mesh.instanceMatrix.array.slice(), colors: mesh.instanceColor.array.slice(), own, count: placed.length };
         mesh.computeBoundingSphere();
         meshes.push(mesh);
       });
@@ -354,28 +376,40 @@ export function clutterMeshes(instances, origin) {
   return meshes;
 }
 
-// Draws only the instances within `radiusFt` of scene point (x, z): the rest have shrunk to
-// nothing, but the GPU would still work through their shapes. Density (0-1) is the share of them
-// drawn; the same ones are left out each time.
-export function gatherClutter(meshes, x, z, radiusFt, density = 1) {
-  const r2 = radiusFt * radiusFt;
+// Lets go of a mesh clutterMeshes made. The shapes it shares are sent to the GPU again when next
+// drawn, which is cheap.
+export function disposeClutter(mesh) {
+  mesh.dispose();
+  mesh.geometry.dispose();
+}
+
+// Draws only the instances that can show with the focus within `marginFt` of scene point (x, z),
+// with clutter drawn out to radiusFt: the rest have faded out, but the GPU would still work
+// through their shapes. Density (0-1) is the share of them drawn; the same ones are left out each
+// time.
+export function gatherClutter(meshes, x, z, radiusFt, density = 1, marginFt = 0) {
+  const reach = radiusFt + marginFt;
   for (const mesh of meshes) {
-    const { matrices, colors, count } = mesh.userData.all;
+    const { matrices, colors, own, count } = mesh.userData.all;
     const [toM, toC] = [mesh.instanceMatrix.array, mesh.instanceColor.array];
+    const toOwn = mesh.geometry.attributes.clutterOwn;
     let n = 0;
     for (let i = 0; i < count; i++) {
-      const [dx, dz] = [matrices[i * 16 + 12] - x, matrices[i * 16 + 14] - z];
-      if (dx * dx + dz * dz > r2 || (Math.imul(i + 1, 2654435761) >>> 0) / 4294967296 >= density) continue;
+      const d = Math.hypot(matrices[i * 16 + 12] - x, matrices[i * 16 + 14] - z);
+      // As near as the focus can come before it's gathered again.
+      if (d > reach || fadedOut(own[i], d - marginFt, radiusFt) || (Math.imul(i + 1, 2654435761) >>> 0) / 4294967296 >= density) continue;
       if (n !== i) {
         toM.set(matrices.subarray(i * 16, i * 16 + 16), n * 16);
         toC.set(colors.subarray(i * 3, i * 3 + 3), n * 3);
       }
+      toOwn.array[n] = own[i];
       n++;
     }
     mesh.count = n;
     mesh.visible = n > 0;
     mesh.instanceMatrix.needsUpdate = true;
     mesh.instanceColor.needsUpdate = true;
+    toOwn.needsUpdate = true;
     mesh.computeBoundingSphere();
   }
 }
