@@ -10,11 +10,14 @@ const UP = new THREE.Vector3(0, 1, 0);
 // Clutter fades away with distance from the focus (scene x, z), to nothing at the radius the
 // graphics settings pick, so it doesn't stop at an edge. From FADE_FROM of the radius out, it gets
 // sparser, each piece going at its own distance, picked from where it stands (its "own" number,
-// 0 to 1: it goes once it's that far into the fade), and the pieces left get fainter, drawn with
-// fewer of their pixels (dithered, so nothing needs sorting) and a little smaller. gatherClutter
+// 0 to 1: it goes once it's that far across the fade), fading in over FADE_IN_FT nearer than that
+// as you come up to it. The pieces left get fainter further off too, and a little smaller. Fainter
+// is drawn with fewer of a piece's pixels (dithered), so nothing needs sorting. gatherClutter
 // leaves out the pieces that are gone, so the GPU doesn't work through them.
 const FADE_FROM = 0.55;
+const FADE_IN_FT = 20;
 const SHRINK = 0.3; // how much smaller a piece is at the radius
+const FAINTER = 0.5; // how much fainter a piece is at the radius
 const focus = { value: new THREE.Vector2() };
 const fade = { value: new THREE.Vector2(130, 240) };
 
@@ -34,10 +37,12 @@ function fading(material) {
       "#include <begin_vertex>",
       `#include <begin_vertex>
         vec2 clutterAt = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
-        float clutterOut = smoothstep(clutterFade.x, clutterFade.y, distance(clutterAt, clutterFocus));
-        float clutterKept = clutterOwn > clutterOut ? 1.0 : 0.0;
-        transformed *= clutterKept * (1.0 - ${SHRINK.toFixed(2)} * clutterOut);
-        vClutterShown = 1.0 - clutterOut;`,
+        float clutterD = distance(clutterAt, clutterFocus);
+        float clutterOut = clamp((clutterD - clutterFade.x) / (clutterFade.y - clutterFade.x), 0.0, 1.0);
+        float clutterGoes = mix(clutterFade.x, clutterFade.y, clutterOwn);
+        float clutterIn = clamp((clutterGoes - clutterD) / ${FADE_IN_FT.toFixed(1)}, 0.0, 1.0);
+        transformed *= (clutterIn > 0.0 ? 1.0 : 0.0) * (1.0 - ${SHRINK.toFixed(2)} * clutterOut);
+        vClutterShown = clutterIn * (1.0 - ${FAINTER.toFixed(2)} * clutterOut);`,
     );
     // The share of a piece's pixels drawn, by a fixed noise over the screen.
     shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vClutterShown;").replace(
@@ -294,11 +299,6 @@ function cylinderBetween(a, b, radius) {
   return g.translate(...a);
 }
 
-const smoothstep = (a, b, v) => {
-  const t = Math.min(1, Math.max(0, (v - a) / (b - a)));
-  return t * t * (3 - 2 * t);
-};
-
 // A piece's own number, 0 to 1, from where it stands in continent feet, the same each time it's made.
 export function ownNumber(x, z) {
   let h = Math.imul(Math.round(x * 16), 73856093) ^ Math.imul(Math.round(z * 16), 19349663);
@@ -310,7 +310,8 @@ export function ownNumber(x, z) {
 // Whether a piece with its own number has gone, `distanceFt` from the focus, with clutter drawn
 // out to radiusFt, as the shader works it out.
 export function fadedOut(own, distanceFt, radiusFt) {
-  return own <= smoothstep(radiusFt * FADE_FROM, radiusFt, distanceFt);
+  const from = radiusFt * FADE_FROM;
+  return distanceFt >= from + own * (radiusFt - from);
 }
 
 // A shape's geometries: one, or several variants for shapes listed as an array of builders.
