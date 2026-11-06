@@ -51,7 +51,7 @@ function write(data, biomes, water) {
     if (data.write === "plate") {
       // With each tile's water as it's baked, for drawing.
       const { bytes, waters } = bakedPlate(data.value, biomes, water);
-      const buffers = (waters ?? []).flatMap(([, ...each]) => each.flatMap((w) => (w ? [w.level.buffer, w.type.buffer] : [])));
+      const buffers = (waters ?? []).flatMap(([, water, part, steep]) => [...[water, part].flatMap((w) => (w ? [w.level.buffer, w.type.buffer] : [])), ...(steep ? [steep.buffer] : [])]);
       self.postMessage({ id: data.id, bytes, waters }, bytes ? [bytes.buffer, ...buffers] : buffers);
       return;
     }

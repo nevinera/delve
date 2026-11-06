@@ -30,6 +30,15 @@ describe("platter files", () => {
     expect(back.plates.get(0).hash).toBe("fedcba9876543210");
   });
 
+  it("keep how steep each tile's parts are", () => {
+    const heights = new Float32Array(CORNERS * CORNERS);
+    const steep = Uint8Array.from({ length: 64 }, (_, k) => k % 64);
+    const tiles = new Map([[0, { heights, hash: "0123456789abcdef", steep }], [1, { heights, hash: "0123456789abcdef" }]]);
+    const back = decodePlatter(encodePlatter({ coords: [0, 0], tiles }));
+    expect([...back.tiles.get(0).steep]).toEqual([...steep]);
+    expect(back.tiles.get(1).steep).toBeNull();
+  });
+
   it("number tiles within their platter", () => {
     expect(indexIn(0, 0)).toBe(0);
     expect(indexIn(-1, 0)).toBe(63);

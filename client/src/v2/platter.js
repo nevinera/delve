@@ -22,6 +22,9 @@ import { PLATE_TILES, PLATTER_PLATES, PLATTER_TILES, TILE_CHUNKS } from "./sizes
 //   tw <index> <levels><types>   its water: 64 parts' levels, 3 digits of quarter feet plus 32,768
 //                                each, ~~~ where it's dry, then their 64 types (water.js's
 //                                WATER_TYPES)
+//   ts <index> <shares>          how steep it is: each of its 64 parts' share of cells too steep to
+//                                climb, a digit each in 63rds (rendition.js's steepParts). None
+//                                where no part has any.
 //   p <index> <hash> <heights>   a plate's rendition, the same as a tile's
 //
 // Platter files from before they were text are read too (platterBinary.js).
@@ -45,13 +48,14 @@ export const plateOf = (tx, tz) => [Math.floor(tx / PLATE_TILES), Math.floor(tz 
 
 // platter: { coords: [px, pz], tiles, plates }, tiles and plates each a Map(index -> rendition),
 // a rendition { heights: 81 feet, hash: 16 hex digits }, and a tile's `water`, null or { level: 64
-// feet, NaN where a part's dry, type: 64 }.
+// feet, NaN where a part's dry, type: 64 }, and its `steep`, null or 64 shares in 63rds.
 export function encodePlatter({ coords, tiles, plates = new Map() }) {
   const lines = [`platter ${VERSION} ${coords[0]} ${coords[1]}`];
   const rendition = (tag, index, { heights, hash }) => `${tag} ${index} ${hash} ${encodeLine(Int32Array.from(heights, quarters), CORNERS)}`;
   for (const index of [...tiles.keys()].sort((a, b) => a - b)) {
     const tile = tiles.get(index);
     lines.push(rendition("t", index, tile));
+    if (tile.steep) lines.push(`ts ${index} ${Array.from(tile.steep, digit).join("")}`);
     if (!tile.water) continue;
     const { level, type } = tile.water;
     let out = `tw ${index} `;
@@ -83,10 +87,14 @@ export function decodePlatter(bytes) {
       tiles.get(Number(index)).water = water;
       continue;
     }
+    if (tag === "ts") {
+      tiles.get(Number(index)).steep = Uint8Array.from({ length: PARTS }, (_, k) => readDigits(line, at + k, 1));
+      continue;
+    }
     const hash = line.slice(at, at + 16);
     const [q] = decodeLine(line, at + 17, CORNERS * CORNERS);
     const rendition = { heights: Float32Array.from(q, (v) => v / 4), hash };
-    if (tag === "t") tiles.set(Number(index), { ...rendition, water: null });
+    if (tag === "t") tiles.set(Number(index), { ...rendition, water: null, steep: null });
     else if (tag === "p") plates.set(Number(index), rendition);
     else throw new Error(`unknown platter line ${JSON.stringify(tag)}`);
   }

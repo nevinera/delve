@@ -23,6 +23,7 @@ import { classChoices, showClassPicker } from "./classPicker.js";
 import { PlayCombat } from "./combat.js";
 import { GameConnection } from "./game.js";
 import { PlayWorld } from "./loader.js";
+import { PlayMap } from "./map.js";
 import { Others } from "./others.js";
 import { TouchControls, isTouch } from "./touch.js";
 import { PlayView } from "./view.js";
@@ -311,6 +312,13 @@ async function play() {
   restPoints = new RestPoints(view, connection);
   forRestPoints.arrive(restPoints);
   sightLines.addOption(menu.querySelector(".play-graphics"));
+  const spawn = loader.info.spawn;
+  const map = new PlayMap({
+    platters: continent.platters,
+    roads: continent.roads,
+    at: () => view.walker?.pos && { x: view.walker.pos.x, z: view.walker.pos.z, yaw: view.walker.yaw },
+    pins: () => [...(spawn?.continent === you.continent ? [{ label: "Spawn", x: spawn.at[0], z: spawn.at[1] }] : []), ...restPoints.points.filter((p) => p.id === restPoints.home).map((p) => ({ label: "Home", x: p.at[0], z: p.at[2] }))],
+  });
   view.onWalkFrame = (dt) => {
     others.frame(dt);
     combat?.frame(dt);
@@ -326,7 +334,7 @@ async function play() {
   combat = new PlayCombat({ view, others, connection, loader, you, hud: $("playCombat"), unitStatuses, commands: { debug: (args) => debugCommand(args, view) } });
   forCombat.arrive(combat);
   // A handle for scripts and the browser's console.
-  window.play = { view, connection, others, combat, renditions, placed, caves, sightLines, restPoints };
+  window.play = { view, connection, others, combat, renditions, placed, caves, sightLines, restPoints, map };
   // From when the page was asked for, so it includes fetching the page and its code.
   metrics().timing("play.load.total", performance.now(), tags);
   status("");

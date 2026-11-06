@@ -1,3 +1,4 @@
+import { steepParts } from "../v2/rendition.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
 import { ACROSS, AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, missingSea, partWater, seaEdges } from "../v2/water.js";
 import { courseBox, poolsIn } from "../v2/courses.js";
@@ -343,7 +344,7 @@ export class Renditions {
         continue;
       }
       files.set(platePath(continent, [px, pz]), encodePlate(this.bake({ coords: [px, pz], palette: plate.palette, tiles: plate.tiles, around: this.around(px, pz), shores: this.shores(px, pz) })));
-      this.baked([px, pz], [...plate.tiles].map(([index, tile]) => [index, tile.water]));
+      this.baked([px, pz], [...plate.tiles].map(([index, tile]) => [index, tile.water, partWater(tile.water), steepParts(tile.heights)]));
     }
     for (const key of platters) {
       const platter = this.platters.get(key);
@@ -384,7 +385,7 @@ export class Renditions {
         continue;
       }
       const { coords, tiles, plates } = this.platters.get(key);
-      const bare = (map) => new Map([...map].map(([index, { heights, hash, water }]) => [index, { heights, hash, water }]));
+      const bare = (map) => new Map([...map].map(([index, { heights, hash, water, steep }]) => [index, { heights, hash, water, steep }]));
       writing.push(this.write("platter", { coords, tiles: bare(tiles), plates: bare(plates) }).then((bytes) => files.set(platterPath(continent, coords), bytes)));
     }
     await Promise.all(writing);
@@ -439,19 +440,19 @@ export class Renditions {
     );
   }
 
-  // Takes the water baked into plate (px, pz)'s tiles, [index, water, its parts' water if it's
-  // been worked out], to draw, and into their renditions. Where its sea along a side's changed, the plate past that side's to be saved
+  // Takes the water baked into plate (px, pz)'s tiles, [index, water, its parts' water, how steep
+  // its parts are], to draw, and into their renditions. Where its sea along a side's changed, the plate past that side's to be saved
   // again, to take the sea in from it.
   baked([px, pz], waters) {
     const plate = this.decoded.get(`${px},${pz}`);
     const before = this.edges(px, pz);
-    for (const [index, water, part = partWater(water)] of waters) {
+    for (const [index, water, part, steep] of waters) {
       const [tx, tz] = [px * PLATE_TILES + (index % PLATE_TILES), pz * PLATE_TILES + Math.floor(index / PLATE_TILES)];
       this.waters.set(`${tx},${tz}`, water);
       const tile = plate?.tiles.get(index);
       if (tile) tile.water = water;
       const rendition = this.tile(tx, tz);
-      if (rendition) rendition.water = part;
+      if (rendition) Object.assign(rendition, { water: part, steep });
     }
     this.wetPlates.add(`${px},${pz}`);
     this.wet++;

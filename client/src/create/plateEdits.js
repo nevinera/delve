@@ -1,3 +1,4 @@
+import { steepParts } from "../v2/rendition.js";
 import { BiomeMap, bakePlate } from "../v2/biomes.js";
 import { bakeWater, partWater, seaEdges } from "../v2/water.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate } from "../v2/plate.js";
@@ -97,7 +98,7 @@ export function plateEdges(value) {
 }
 
 // A plate's file, with its biomes and water baked in: its `bytes`, or null where it has no tiles
-// left, and each tile's water and its parts' water as they're baked, `waters`, or null. `value` has its `tiles`, or the
+// left, and each tile's water, its parts' water and how steep its parts are as they're baked, `waters`, or null. `value` has its `tiles`, or the
 // `bytes` and `edits` to read them from.
 export function bakedPlate(value, biomes = new BiomeMap(), water) {
   let plate = value;
@@ -107,5 +108,5 @@ export function bakedPlate(value, biomes = new BiomeMap(), water) {
     plate = { coords: value.coords, palette, tiles: fileTiles(tiles), around: value.around, shores: value.shores };
   }
   const bytes = encodePlate(bakeWater(bakePlate(plate, biomes), water));
-  return { bytes, waters: [...plate.tiles].map(([index, tile]) => [index, tile.water, partWater(tile.water)]) };
+  return { bytes, waters: [...plate.tiles].map(([index, tile]) => [index, tile.water, partWater(tile.water), steepParts(tile.heights)]) };
 }

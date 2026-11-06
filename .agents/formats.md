@@ -163,11 +163,13 @@ Numbers are written as in [plates](#numbers).
 platter 5 <px> <pz>
 t <index> <hash> <heights line>
 tw <index> <levels><types>
+ts <index> <shares>
 p <index> <hash> <heights line>
 ```
 
 - `t`: a tile's rendition. `index` is the tile's place in the platter in plain decimal, `tz * 64 + tx`. `hash` is 16 hex digits. The heights are one [heights line](#heights) of the 81 corners in row order, `d` taking rows of 9.
 - `tw`: the water of the tile before it: 64 parts' levels (3 digits each, written absolutely, `~~~` for dry), then their 64 types.
+- `ts`: how steep the tile before it is, for the map in play: each of its 64 parts' share of cells too steep to climb, a digit each in 63rds. A cell counts when both its triangles are steeper than the 50° limit. Only tiles with some steep ground have one. /create writes it as it saves the tile's plate (`steepParts` in `client/src/v2/rendition.js`), and `script/steep-platters.mjs` adds it to worlds saved before.
 - `p`: a plate's rendition, as a tile's, `index` = `pz * 8 + px` within the platter.
 
 ### Older platters

@@ -22,6 +22,7 @@ export const ACTIONS = [
   { id: "sit", label: "Sit or stand", group: "Moving", key: "KeyX", toggles: "x" },
   { id: "target", label: "Next target", group: "Fighting", key: "Tab" },
   { id: "spellbook", label: "Spellbook", group: "Fighting", key: "KeyP" },
+  { id: "map", label: "Map", group: "Finding your way", key: "KeyM" },
   { id: "chat", label: "Open chat", group: "Chat", key: "Enter" },
   { id: "command", label: "Type a command", group: "Chat", key: "Slash" },
   ...Array.from({ length: BAR_COUNT * BAR_SLOTS }, (_, i) => {

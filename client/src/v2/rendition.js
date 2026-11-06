@@ -1,5 +1,7 @@
+import { faceSlope } from "./faces.js";
+import { STEEP_DEG } from "./look.js";
 import { CORNERS } from "./platter.js";
-import { PLATE_TILES, TILE_CHUNKS } from "./sizes.js";
+import { CELL_FT, CHUNK_CELLS, PLATE_TILES, TILE_CHUNKS } from "./sizes.js";
 
 // Making renditions (platter.js) from the ones a level down.
 
@@ -35,4 +37,25 @@ export function plateRendition(tileAt) {
   }
   const hash = hash64(tiles.map((tile) => tile?.hash ?? "0".repeat(16)).join(""));
   return { heights, hash };
+}
+
+const STEEP_SLOPE = Math.tan((STEEP_DEG * Math.PI) / 180);
+const CELLS = TILE_CHUNKS * CHUNK_CELLS;
+export const STEEP_STEPS = 63; // a part's steep share, in 63rds
+
+// How much of each of a tile's 64 chunks is too steep to climb, from its 65×65 corner heights: the
+// share of its cells whose two triangles are both too steep, in 63rds. Null where none are.
+export function steepParts(heights) {
+  const counts = new Uint8Array(TILE_CHUNKS * TILE_CHUNKS);
+  let any = false;
+  for (let j = 0; j < CELLS; j++) {
+    for (let i = 0; i < CELLS; i++) {
+      const c = j * (CELLS + 1) + i;
+      const [nw, ne, sw, se] = [heights[c], heights[c + 1], heights[c + CELLS + 1], heights[c + CELLS + 2]];
+      if (faceSlope(nw, ne, sw, se, 0.25, 0.25, CELL_FT) < STEEP_SLOPE || faceSlope(nw, ne, sw, se, 0.75, 0.75, CELL_FT) < STEEP_SLOPE) continue;
+      counts[Math.floor(j / CHUNK_CELLS) * TILE_CHUNKS + Math.floor(i / CHUNK_CELLS)]++;
+      any = true;
+    }
+  }
+  return any ? counts.map((n) => Math.round((n * STEEP_STEPS) / (CHUNK_CELLS * CHUNK_CELLS))) : null;
 }
