@@ -17,21 +17,28 @@ function commit() {
 }
 
 // Writes a .br and a .gz copy beside each built file worth compressing, which Rails sends to
-// browsers that take them (config/environments/production.rb). Maps are left be.
+// browsers that take them (config/environments/production.rb). Maps are left be. Watch builds
+// (bin/dev) skip it, and a file that's gone by the time it's reached, as when another build is
+// writing the same folder, is passed over rather than stopping the build.
 const COMPRESSED = /\.(js|css|json|wasm|svg|html)$/;
 function precompress(dir) {
   return {
     name: "precompress",
     apply: "build",
     closeBundle() {
+      if (this.meta.watchMode) return;
       const walk = (at) => {
         for (const name of readdirSync(at)) {
           const path = resolve(at, name);
-          if (statSync(path).isDirectory()) walk(path);
-          else if (COMPRESSED.test(name) && statSync(path).size > 1024) {
-            const bytes = readFileSync(path);
-            writeFileSync(`${path}.br`, brotliCompressSync(bytes, { params: { [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length } }));
-            writeFileSync(`${path}.gz`, gzipSync(bytes, { level: 9 }));
+          try {
+            if (statSync(path).isDirectory()) walk(path);
+            else if (COMPRESSED.test(name) && statSync(path).size > 1024) {
+              const bytes = readFileSync(path);
+              writeFileSync(`${path}.br`, brotliCompressSync(bytes, { params: { [constants.BROTLI_PARAM_QUALITY]: 11, [constants.BROTLI_PARAM_SIZE_HINT]: bytes.length } }));
+              writeFileSync(`${path}.gz`, gzipSync(bytes, { level: 9 }));
+            }
+          } catch (err) {
+            if (err.code !== "ENOENT") throw err;
           }
         }
       };
