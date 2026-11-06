@@ -54,14 +54,17 @@ type goal struct {
 func NewControls(send func(any)) *Controls { return &Controls{send: send} }
 
 // Adopt takes where the server put the bot, on entering or when it moves the bot, and reports
-// afresh from there, swimming if that's in water too deep to stand in.
+// afresh from there. It settles onto what's there to stand on, as the walker would, swimming if
+// that's in water too deep to stand in.
 func (c *Controls) Adopt(at [3]float64, yaw float64) {
 	c.At, c.Yaw, c.sentMove, c.swimming = at, yaw, nil, false
 	if c.Ground == nil {
 		return
 	}
 	if s, ok, err := c.Ground.At(at[0], at[2]); ok && err == nil {
-		_, c.swimming, _ = s.Stand(at[1], stepFt)
+		if height, swimming, ok := s.Stand(at[1], stepFt); ok {
+			c.At[1], c.swimming = height, swimming
+		}
 	}
 }
 

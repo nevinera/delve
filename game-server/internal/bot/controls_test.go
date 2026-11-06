@@ -183,11 +183,11 @@ func TestSwimsInDeepWater(t *testing.T) {
 	}
 }
 
-func TestSwimsWhereItsPutInDeepWater(t *testing.T) {
+func TestSinksAndSwimsWhereItsPutInDeepWater(t *testing.T) {
 	var out sent
-	c := controlsAt(&out, [3]float64{-50, 5.5, 0}, 0, slope{rise: 1})
+	c := controlsAt(&out, [3]float64{-50, 10.8, 0}, 0, slope{rise: 1})
 	c.Report(0)
-	if !out[0].Move.Swim {
+	if !out[0].Move.Swim || out[0].At[1] != 5.5 {
 		t.Errorf("standing in deep water: %+v", out[0])
 	}
 }

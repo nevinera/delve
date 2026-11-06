@@ -75,9 +75,9 @@ func TestPicksTheFirstClassOffered(t *testing.T) {
 	}
 }
 
-func TestReportsWhereItEnters(t *testing.T) {
+func TestReportsWhereItEntersOnTheGround(t *testing.T) {
 	conn := run(Null{}, []string{welcome})
-	if m := conn.moves(); len(m) == 0 || m[0].Type != "move" || m[0].At != [3]float64{0, 5, 0} {
+	if m := conn.moves(); len(m) == 0 || m[0].Type != "move" || m[0].At != [3]float64{0, 7, 0} {
 		t.Errorf("sent %+v", conn.sent)
 	}
 }
@@ -106,7 +106,7 @@ func TestTakesTheGroundWhereItsMoved(t *testing.T) {
 	if len(asked) != 2 || asked[1] != "isle" {
 		t.Errorf("asked for %v", asked)
 	}
-	if m := conn.moves(); m[len(m)-1].At != [3]float64{50, 9, 50} {
+	if m := conn.moves(); m[len(m)-1].At != [3]float64{50, 7, 50} {
 		t.Errorf("last %+v", m[len(m)-1])
 	}
 }
