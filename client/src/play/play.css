@@ -645,7 +645,8 @@ body.touch .play-bar button {
   position: absolute;
   left: 12px;
   bottom: 16px;
-  width: var(--log-width, clamp(340px, 28vw, 720px));
+  /* Never past the action bars (--log-room, from log.js). */
+  width: min(var(--log-width, clamp(340px, 28vw, 720px)), var(--log-room, 100vw));
   font-size: var(--log-font, clamp(12px, 0.8vw, 15px));
   text-shadow: 0 1px 2px #000;
 }
@@ -732,6 +733,15 @@ body.touch .play-bar button {
 
 .play-log-debug {
   color: #a8a8a8;
+}
+
+/* Too little room beside the bars: hidden until you open the box to type. */
+.play-log-narrow:not(.play-log-typing) {
+  display: none;
+}
+
+.play-log-narrow.play-log-typing {
+  width: var(--log-width, clamp(340px, 28vw, 720px));
 }
 
 .play-log-box {

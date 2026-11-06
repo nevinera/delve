@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Typed, readLine, typeOf } from "./log.js";
+import { Typed, logRoom, readLine, typeOf } from "./log.js";
 
 describe("readLine", () => {
   it("sends a command, tidied", () => expect(readLine("  /teleport spawn ")).toEqual({ send: "/teleport spawn" }));
@@ -35,6 +35,12 @@ describe("Typed", () => {
   it("gives back what you're typing when there's nothing before it", () => {
     expect(new Typed().up("/he")).toBe("/he");
   });
+});
+
+describe("logRoom", () => {
+  it("reaches to just short of the bars", () => expect(logRoom(12, 600)).toEqual({ width: 580, hidden: false }));
+  it("hides where that's narrower than its least width", () => expect(logRoom(12, 200).hidden).toBe(true));
+  it("has no limit with no bars", () => expect(logRoom(12, NaN)).toEqual({ width: Infinity, hidden: false }));
 });
 
 describe("typeOf", () => {
