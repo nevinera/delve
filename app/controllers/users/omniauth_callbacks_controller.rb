@@ -1,18 +1,9 @@
 class Users::OmniauthCallbacksController < Devise::OmniauthCallbacksController
   def google_oauth2
-    auth = request.env["omniauth.auth"]
+    result = Invitations::SignIn.call(request.env["omniauth.auth"], invitation_token: session.delete(:invitation_token))
+    return redirect_to root_path, alert: result.error if result.error
 
-    unless AllowOnlyList.allows?("google", auth.info.email)
-      return redirect_to root_path, alert: "Sign in failed - this account is not permitted."
-    end
-
-    user = User.from_omniauth(auth)
-
-    if user.persisted?
-      sign_in_and_redirect user, event: :authentication
-    else
-      redirect_to root_path, alert: "Sign in failed - could not create account."
-    end
+    sign_in_and_redirect result.user, event: :authentication
   end
 
   def failure
