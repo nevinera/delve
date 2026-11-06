@@ -5,6 +5,7 @@ import { graphicsPanel } from "../render/graphicsPanel.js";
 import { setWorldIcons } from "./icons.js";
 import { setWorldEffectSheets } from "../abilities/effectTextures.js";
 import { SightLines } from "./sightLines.js";
+import { Waiting } from "./waiting.js";
 import { RestPoints } from "./restPoints.js";
 import { Leaving } from "./leaving.js";
 import { offerSideways, turnSideways } from "./orientation.js";
@@ -152,18 +153,16 @@ async function play() {
   let transformed = false;
   let combat = null;
   let sightLines = null;
-  // Combat news before you're in the world isn't yours to see: it's about others.
-  const fight = (method) => (message) => combat?.[method](message);
-  // The server says these as you enter, before combat is ready.
-  let firstBuild = null;
-  let firstBars = null;
-  let earlyAreas = [];
+  // What the server says before the parts it's for are ready. Combat news before you're in the
+  // world isn't yours to see, as it's about others, but your build, bars, cooldowns and the areas
+  // on the ground are.
+  const forCombat = new Waiting();
+  const fight = (method) => forCombat.to(method, "none");
+  const forOthers = new Waiting();
+  const tell = (method, arg) => forOthers.send(method, arg);
+  const forRestPoints = new Waiting();
   let restPoints = null;
-  let earlyCooldowns = [];
   let leaving = null;
-  let firstRestPoints = null;
-  const early = []; // what the server says before the view is ready, as [method, argument]
-  const tell = (method, arg) => (others ? others[method](arg) : early.push([method, arg]));
   const unitStatuses = new UnitStatuses();
   const appear = (character) => {
     unitStatuses.seen(character);
@@ -194,7 +193,7 @@ async function play() {
     used: fight("used"),
     stopped: fight("stopped"),
     refused: fight("refused"),
-    cooldown: (message) => (combat ? combat.cooldown(message) : earlyCooldowns.push(message)),
+    cooldown: forCombat.to("cooldown"),
     loggingOff: (message) => leaving?.started(message),
     logOffStopped: (message) => {
       leaving?.stopped();
@@ -210,14 +209,14 @@ async function play() {
     log: fight("logged"),
     speed: fight("speed_"),
     controls: fight("controls_"),
-    area: (message) => (combat ? combat.area_(message) : earlyAreas.push(message)),
-    areaGone: (message) => (combat ? combat.areaGone_(message) : (earlyAreas = earlyAreas.filter((a) => a.id !== message.id))),
+    area: forCombat.to("area_"),
+    areaGone: forCombat.to("areaGone_"),
     targetable: (message) => {
       unitStatuses.targetable(message);
       combat?.targetable_(message);
     },
-    build: (message) => (combat ? combat.build_(message) : (firstBuild = message)),
-    bars: (message) => (combat ? combat.bars_(message) : (firstBars = message)),
+    build: forCombat.to("build_", "last"),
+    bars: forCombat.to("bars_", "last"),
     statusChanged: (message) => {
       unitStatuses.changed(message);
       combat?.statusChanged_(message);
@@ -226,7 +225,7 @@ async function play() {
       unitStatuses.gone(message);
       combat?.statusGone_(message);
     },
-    restPoints: (message) => (restPoints ? restPoints.set(message) : (firstRestPoints = message)),
+    restPoints: forRestPoints.to("set", "last"),
     home: (message) => restPoints?.home_(message),
     swung: fight("swung"),
     sees: (message) => sightLines?.answer(message),
@@ -297,10 +296,10 @@ async function play() {
   });
   menu.querySelector('[data-open="playGraphics"]').disabled = false;
   others = new Others(view);
-  for (const [method, arg] of early) others[method](arg);
+  forOthers.arrive(others);
   sightLines = new SightLines(view, others, connection);
   restPoints = new RestPoints(view, connection);
-  if (firstRestPoints) restPoints.set(firstRestPoints);
+  forRestPoints.arrive(restPoints);
   sightLines.addOption(menu.querySelector(".play-graphics"));
   view.onWalkFrame = (dt) => {
     others.frame(dt);
@@ -315,10 +314,7 @@ async function play() {
   connection.report(view);
   unitStatuses.seen(you);
   combat = new PlayCombat({ view, others, connection, loader, you, hud: $("playCombat"), unitStatuses });
-  if (firstBuild) combat.build_(firstBuild);
-  if (firstBars) combat.bars_(firstBars);
-  earlyAreas.forEach((message) => combat.area_(message));
-  earlyCooldowns.forEach((message) => combat.cooldown(message));
+  forCombat.arrive(combat);
   // A handle for scripts and the browser's console.
   window.play = { view, connection, others, combat, renditions, placed, caves, sightLines, restPoints };
   // From when the page was asked for, so it includes fetching the page and its code.
