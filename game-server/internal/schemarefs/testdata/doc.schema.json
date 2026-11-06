@@ -1,0 +1,19 @@
+{
+  "type": "object",
+  "required": ["owner"],
+  "properties": {
+    "owner": { "type": "string", "x-refers": "person" },
+    "title": { "type": "string" },
+    "parts": { "type": "array", "items": { "$ref": "#/$defs/part" } },
+    "byName": { "type": "object", "additionalProperties": { "$ref": "parts.schema.json#/$defs/tag" } }
+  },
+  "$defs": {
+    "part": {
+      "x-what": "A part",
+      "oneOf": [
+        { "type": "object", "required": ["maker"], "properties": { "maker": { "type": "string", "x-refers": "person" } } },
+        { "type": "object", "required": ["inside"], "properties": { "inside": { "$ref": "#/$defs/part" }, "size": { "type": "number" } } }
+      ]
+    }
+  }
+}

@@ -16,7 +16,8 @@
     },
     "replaces": {
       "$ref": "common.schema.json#/$defs/id",
-      "description": "knowing this ability takes that one off your bar"
+      "description": "knowing this ability takes that one off your bar",
+      "x-refers": "ability"
     },
     "name": {
       "type": "string"
@@ -164,7 +165,8 @@
           "additionalProperties": false,
           "properties": {
             "resource": {
-              "type": "string"
+              "type": "string",
+              "x-refers": "resource"
             },
             "amount": {
               "type": "number",
@@ -202,7 +204,8 @@
         ],
         "properties": {
           "resource": {
-            "type": "string"
+            "type": "string",
+            "x-refers": "resource"
           },
           "amount": {
             "type": "number",
@@ -285,5 +288,6 @@
       "type": "string",
       "description": "free-form notes on intent and backstory; the game never reads them"
     }
-  }
+  },
+  "x-what": "An ability"
 }

@@ -95,7 +95,8 @@
         "abilities": {
           "type": "array",
           "items": {
-            "$ref": "common.schema.json#/$defs/id"
+            "$ref": "common.schema.json#/$defs/id",
+            "x-refers": "ability"
           }
         },
         "tags": {
@@ -113,7 +114,8 @@
         "abilities": {
           "type": "array",
           "items": {
-            "$ref": "common.schema.json#/$defs/id"
+            "$ref": "common.schema.json#/$defs/id",
+            "x-refers": "ability"
           }
         },
         "tag": {
@@ -260,7 +262,8 @@
           },
           "into": {
             "$ref": "common.schema.json#/$defs/id",
-            "description": "transform: shows the holder with the look of this unit, by id from the same class"
+            "description": "transform: shows the holder with the look of this unit, by id from the same class",
+            "x-refers": "unit"
           },
           "addTags": {
             "type": "array",
@@ -308,7 +311,8 @@
           },
           "resource": {
             "type": "string",
-            "description": "trigger, for spend: only spending this resource, by key. stat: the resource a resource stat is about"
+            "description": "trigger, for spend: only spending this resource, by key. stat: the resource a resource stat is about",
+            "x-refers": "resource"
           },
           "schools": {
             "$ref": "common.schema.json#/$defs/schools"
@@ -408,7 +412,8 @@
           "units": {
             "type": "array",
             "items": {
-              "$ref": "common.schema.json#/$defs/id"
+              "$ref": "common.schema.json#/$defs/id",
+              "x-refers": "unit"
             },
             "description": "with source: only these units"
           },
@@ -482,7 +487,8 @@
           "abilities": {
             "type": "array",
             "items": {
-              "$ref": "common.schema.json#/$defs/id"
+              "$ref": "common.schema.json#/$defs/id",
+              "x-refers": "ability"
             },
             "description": "modify: the abilities it changes. trigger: only for these. By id, from the same class"
           },
@@ -493,7 +499,8 @@
           "statuses": {
             "type": "array",
             "items": {
-              "$ref": "common.schema.json#/$defs/id"
+              "$ref": "common.schema.json#/$defs/id",
+              "x-refers": "status"
             },
             "description": "modify: the statuses it changes. trigger: only for these. By id, from the same class"
           },
@@ -563,7 +570,8 @@
           },
           "becomes": {
             "$ref": "common.schema.json#/$defs/id",
-            "description": "modify: the abilities are this one instead while the modify applies"
+            "description": "modify: the abilities are this one instead while the modify applies",
+            "x-refers": "ability"
           },
           "ignores": {
             "type": "array",
@@ -593,7 +601,8 @@
           },
           "status": {
             "$ref": "common.schema.json#/$defs/id",
-            "description": "aura: the status those inside have while they stay"
+            "description": "aura: the status those inside have while they stay",
+            "x-refers": "status"
           },
           "max": {
             "type": "integer",
@@ -640,5 +649,6 @@
       "type": "string",
       "description": "free-form notes on intent and backstory; the game never reads them"
     }
-  }
+  },
+  "x-what": "A status"
 }

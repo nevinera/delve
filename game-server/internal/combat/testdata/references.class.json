@@ -1,0 +1,38 @@
+{
+  "id": "refs0001",
+  "name": "References",
+  "resources": [{ "key": "ki", "name": "Ki" }],
+  "abilities": [
+    {
+      "id": "bolt0001",
+      "name": "Bolt",
+      "replaces": "gone0101",
+      "cost": [{ "resource": "rage", "amount": 1, "when": [{ "status": "gone0102", "on": "self" }] }],
+      "requires": [{ "anyOf": [{ "resource": "ki", "atLeast": 1 }, { "not": { "status": "gone0103", "on": "target" } }] }],
+      "channel": { "duration": 3, "ticks": 3, "effect": { "type": "damage", "affects": "target", "amount": 1, "perCount": { "statusStacks": "gone0104" } } },
+      "effects": [
+        { "type": "status", "affects": "target", "status": "" },
+        { "type": "summon", "affects": "self", "unit": "gone0105" },
+        { "type": "area", "affects": "enemies", "effect": { "type": "resource", "affects": "self", "resource": "fury", "amount": 1 } },
+        { "type": "cooldown", "affects": "self", "abilities": ["bolt0001", "gone0106"] }
+      ]
+    }
+  ],
+  "statuses": [
+    {
+      "id": "good0001",
+      "name": "Good",
+      "kind": "buff",
+      "keptBy": { "abilities": ["gone0107"] },
+      "effects": [
+        { "type": "modify", "statuses": ["good0001"], "statusEffects": [{ "type": "trigger", "on": "hit", "effect": { "type": "status", "affects": "self", "status": "gone0108" } }] },
+        { "type": "transform", "into": "gone0109" }
+      ]
+    }
+  ],
+  "specializations": [{ "id": "blood", "name": "Blood", "status": "gone0110", "abilities": ["gone0111"] }],
+  "talents": { "15": [{ "id": "tal00001", "name": "One", "grants": [{ "spec": "frost", "status": "good0001" }] }] },
+  "units": [{ "id": "ghou0001", "name": "Ghoul", "abilities": ["gone0112"] }],
+  "passives": [{ "level": 1 }],
+  "mastery": { "name": "Focus", "status": "gone0113" }
+}

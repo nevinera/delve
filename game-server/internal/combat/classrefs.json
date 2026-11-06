@@ -1,0 +1,438 @@
+{
+  "root": {
+    "props": {
+      "abilities": {
+        "items": {
+          "ref": "ability.schema.json#"
+        }
+      },
+      "mastery": {
+        "what": "The mastery",
+        "props": {
+          "status": {
+            "refers": "status"
+          }
+        },
+        "needs": [
+          "status"
+        ]
+      },
+      "passives": {
+        "items": {
+          "what": "A passive",
+          "props": {
+            "status": {
+              "refers": "status"
+            }
+          },
+          "needs": [
+            "status"
+          ]
+        }
+      },
+      "specializations": {
+        "items": {
+          "ref": "class.schema.json#/$defs/specialization"
+        }
+      },
+      "statuses": {
+        "items": {
+          "ref": "status.schema.json#"
+        }
+      },
+      "talents": {
+        "values": {
+          "items": {
+            "ref": "class.schema.json#/$defs/talent"
+          }
+        }
+      },
+      "units": {
+        "items": {
+          "ref": "class.schema.json#/$defs/unit"
+        }
+      }
+    }
+  },
+  "defs": {
+    "ability.schema.json#": {
+      "what": "An ability",
+      "props": {
+        "channel": {
+          "props": {
+            "costPerTick": {
+              "props": {
+                "resource": {
+                  "refers": "resource"
+                }
+              },
+              "needs": [
+                "resource"
+              ]
+            },
+            "effect": {
+              "ref": "common.schema.json#/$defs/effect"
+            }
+          }
+        },
+        "cost": {
+          "items": {
+            "props": {
+              "resource": {
+                "refers": "resource"
+              },
+              "when": {
+                "items": {
+                  "ref": "common.schema.json#/$defs/condition"
+                }
+              }
+            },
+            "needs": [
+              "resource"
+            ]
+          }
+        },
+        "effects": {
+          "items": {
+            "ref": "common.schema.json#/$defs/effect"
+          }
+        },
+        "replaces": {
+          "refers": "ability"
+        },
+        "requires": {
+          "items": {
+            "ref": "common.schema.json#/$defs/condition"
+          }
+        }
+      }
+    },
+    "class.schema.json#/$defs/specialization": {
+      "what": "A specialization",
+      "props": {
+        "abilities": {
+          "items": {
+            "refers": "ability"
+          }
+        },
+        "status": {
+          "refers": "status"
+        }
+      }
+    },
+    "class.schema.json#/$defs/talent": {
+      "what": "A talent",
+      "props": {
+        "grants": {
+          "items": {
+            "props": {
+              "ability": {
+                "refers": "ability"
+              },
+              "spec": {
+                "refers": "specialization"
+              },
+              "status": {
+                "refers": "status"
+              }
+            }
+          }
+        }
+      }
+    },
+    "class.schema.json#/$defs/unit": {
+      "what": "A unit",
+      "props": {
+        "abilities": {
+          "items": {
+            "refers": "ability"
+          }
+        }
+      }
+    },
+    "common.schema.json#/$defs/amount": {
+      "props": {
+        "maximum": {
+          "ref": "common.schema.json#/$defs/amount"
+        },
+        "minimum": {
+          "ref": "common.schema.json#/$defs/amount"
+        },
+        "perSpent": {
+          "ref": "common.schema.json#/$defs/amount"
+        },
+        "shareOf": {
+          "props": {
+            "resource": {
+              "refers": "resource"
+            },
+            "statuses": {
+              "items": {
+                "refers": "status"
+              }
+            }
+          }
+        }
+      }
+    },
+    "common.schema.json#/$defs/condition": {
+      "props": {
+        "anyOf": {
+          "items": {
+            "ref": "common.schema.json#/$defs/condition"
+          }
+        },
+        "holders": {
+          "refers": "status"
+        },
+        "inArea": {
+          "refers": "ability"
+        },
+        "not": {
+          "ref": "common.schema.json#/$defs/condition"
+        },
+        "resource": {
+          "refers": "resource"
+        },
+        "status": {
+          "refers": "status"
+        },
+        "unitsOut": {
+          "items": {
+            "refers": "unit"
+          }
+        }
+      }
+    },
+    "common.schema.json#/$defs/effect": {
+      "props": {
+        "abilities": {
+          "items": {
+            "refers": "ability"
+          }
+        },
+        "ability": {
+          "refers": "ability"
+        },
+        "alwaysCritWhen": {
+          "items": {
+            "ref": "common.schema.json#/$defs/condition"
+          }
+        },
+        "amount": {
+          "ref": "common.schema.json#/$defs/amount"
+        },
+        "effect": {
+          "ref": "common.schema.json#/$defs/effect"
+        },
+        "effects": {
+          "items": {
+            "ref": "common.schema.json#/$defs/effect"
+          }
+        },
+        "holding": {
+          "items": {
+            "refers": "status"
+          }
+        },
+        "onEnter": {
+          "ref": "common.schema.json#/$defs/effect"
+        },
+        "perCount": {
+          "ref": "common.schema.json#/$defs/perCount"
+        },
+        "perStack": {
+          "ref": "common.schema.json#/$defs/effect"
+        },
+        "resource": {
+          "refers": "resource"
+        },
+        "status": {
+          "refers": "status"
+        },
+        "statuses": {
+          "items": {
+            "refers": "status"
+          }
+        },
+        "unit": {
+          "refers": "unit"
+        },
+        "units": {
+          "items": {
+            "refers": "unit"
+          }
+        },
+        "when": {
+          "items": {
+            "ref": "common.schema.json#/$defs/condition"
+          }
+        }
+      }
+    },
+    "common.schema.json#/$defs/perCount": {
+      "props": {
+        "holders": {
+          "refers": "status"
+        },
+        "resource": {
+          "refers": "resource"
+        },
+        "statusStacks": {
+          "refers": "status"
+        },
+        "statusesOnTarget": {
+          "items": {
+            "refers": "status"
+          }
+        },
+        "unitsOut": {
+          "items": {
+            "refers": "unit"
+          }
+        }
+      }
+    },
+    "status.schema.json#": {
+      "what": "A status",
+      "props": {
+        "consumedBy": {
+          "props": {
+            "abilities": {
+              "items": {
+                "refers": "ability"
+              }
+            }
+          }
+        },
+        "effects": {
+          "items": {
+            "props": {
+              "abilities": {
+                "items": {
+                  "refers": "ability"
+                }
+              },
+              "addAmount": {
+                "ref": "common.schema.json#/$defs/amount"
+              },
+              "addEffects": {
+                "items": {
+                  "ref": "common.schema.json#/$defs/effect"
+                }
+              },
+              "amount": {
+                "ref": "common.schema.json#/$defs/amount"
+              },
+              "becomes": {
+                "refers": "ability"
+              },
+              "effect": {
+                "ref": "common.schema.json#/$defs/effect"
+              },
+              "into": {
+                "refers": "unit"
+              },
+              "perCount": {
+                "ref": "common.schema.json#/$defs/perCount"
+              },
+              "resource": {
+                "refers": "resource"
+              },
+              "status": {
+                "refers": "status"
+              },
+              "statusEffects": {
+                "items": {
+                  "ref": "status.schema.json#/properties/effects/items"
+                }
+              },
+              "statuses": {
+                "items": {
+                  "refers": "status"
+                }
+              },
+              "units": {
+                "items": {
+                  "refers": "unit"
+                }
+              },
+              "when": {
+                "items": {
+                  "ref": "common.schema.json#/$defs/condition"
+                }
+              }
+            }
+          }
+        },
+        "keptBy": {
+          "props": {
+            "abilities": {
+              "items": {
+                "refers": "ability"
+              }
+            }
+          }
+        }
+      }
+    },
+    "status.schema.json#/properties/effects/items": {
+      "props": {
+        "abilities": {
+          "items": {
+            "refers": "ability"
+          }
+        },
+        "addAmount": {
+          "ref": "common.schema.json#/$defs/amount"
+        },
+        "addEffects": {
+          "items": {
+            "ref": "common.schema.json#/$defs/effect"
+          }
+        },
+        "amount": {
+          "ref": "common.schema.json#/$defs/amount"
+        },
+        "becomes": {
+          "refers": "ability"
+        },
+        "effect": {
+          "ref": "common.schema.json#/$defs/effect"
+        },
+        "into": {
+          "refers": "unit"
+        },
+        "perCount": {
+          "ref": "common.schema.json#/$defs/perCount"
+        },
+        "resource": {
+          "refers": "resource"
+        },
+        "status": {
+          "refers": "status"
+        },
+        "statusEffects": {
+          "items": {
+            "ref": "status.schema.json#/properties/effects/items"
+          }
+        },
+        "statuses": {
+          "items": {
+            "refers": "status"
+          }
+        },
+        "units": {
+          "items": {
+            "refers": "unit"
+          }
+        },
+        "when": {
+          "items": {
+            "ref": "common.schema.json#/$defs/condition"
+          }
+        }
+      }
+    }
+  }
+}
