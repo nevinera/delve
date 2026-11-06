@@ -30,7 +30,7 @@ The client has one entry point per page (`vite.config.js`):
 ## Client code
 
 - `client/src/v2/` is the current world format, shared by every page: sizes (`sizes.js`), plates, platters, caves, water, slots and biomes.
-- `client/src/world/` is also shared and has no DOM: paths (`paths.js`), object, slab and template rules, built-in objects, and the day and night. It still holds version 1 code that `script/convert-v2.mjs` and `script/plates.mjs` need: `tileCodec.js`, `plateCodec.js`, `plates.js`, `landGrid.js`, `generator.js`.
+- `client/src/world/` is also shared and has no DOM: paths (`paths.js`), object, slab and template rules, built-in objects, and the day and night. It still holds version 1 code that `script/convert-v2.mjs` and `script/plates.mjs` need: `tileCodec.js`, `plateCodec.js`, `plates.js`.
 - `client/src/create/` is the world editor.
 - `client/src/render/` draws the world with three.js for `/create`, `/play` and the object builder: the ground's and water's materials, trees, objects, slabs, clutter, the sky, graphics settings and the performance overlay.
 - `client/src/play/` is the game page, and its walker, which the character builder uses too.

@@ -1,7 +1,6 @@
 import { gzipSync, strFromU8 } from "fflate";
 import { describe, expect, it } from "vitest";
-import { generateTile, prepareWorld } from "./generator.js";
-import { LandGrid, PER_TILE } from "./landGrid.js";
+import { CELLS, CELL_FT, WATER_KINDS } from "./constants.js";
 import { makeObject, setBuiltObjects } from "./objects.js";
 import { encodeTile } from "./tileCodec.js";
 import { blocksSight, meshOf, objectMesh, shapesFile, shapesText } from "./shapes.js";
@@ -96,10 +95,7 @@ describe("shapes", () => {
   });
 
   it("is written with the plates, for the kinds they place", async () => {
-    const land = new LandGrid();
-    for (let gz = -PER_TILE; gz <= 2 * PER_TILE; gz++) for (let gx = -PER_TILE; gx <= 2 * PER_TILE; gx++) land.set(gx, gz, 40);
-    const ctx = prepareWorld({ land: land.data, pins: [], paths: [], water: { rivers: [], lakes: [] } }, "t");
-    const tile = generateTile(ctx, 0, 0);
+    const tile = flatTile(0, 0);
     tile.objects = [makeObject("built:crate001", [100, 100], 0, 1), makeObject("bush", [200, 200], 0, 4)].map((o, n) => ({ ...o, id: `0.0.${n}` }));
     const world = World.empty();
     world.files.set("places/continents/main/tiles/surface/0/0.dlt.gz", gzipSync(encodeTile(tile)));
@@ -110,3 +106,11 @@ describe("shapes", () => {
     expect(Object.keys(kinds)).toEqual(["built:crate001"]);
   });
 });
+
+// A flat grass tile 40 ft up at (tx, tz), as a version 1 tile file has it, with `objects`.
+function flatTile(tx, tz, objects = []) {
+  const count = CELLS * CELLS;
+  const layers = { height: new Float32Array(count).fill(40), water: new Float32Array(count).fill(NaN), waterKind: new Uint8Array(count), terrain: new Uint8Array(count), biome: new Uint8Array(count), forest: new Uint8Array(count), clutter: new Uint8Array(count) };
+  const palettes = { terrain: ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"], biome: ["meadow"], water: [...WATER_KINDS] };
+  return { coords: [tx, tz], layer: "surface", cells: CELLS, cellFt: CELL_FT, palettes, objects, generator: { version: 23, seed: 1 }, layers, falls: [], roads: [], rivers: [] };
+}

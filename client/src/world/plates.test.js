@@ -1,18 +1,27 @@
 import { gunzipSync, gzipSync, strFromU8 } from "fflate";
 import { describe, expect, it } from "vitest";
-import { generateTile, prepareWorld } from "./generator.js";
-import { LandGrid, PER_TILE } from "./landGrid.js";
-import { kindSizes } from "./objects.js";
+import { CELLS, CELL_FT, TILE_FT, WATER_KINDS } from "./constants.js";
+import { kindSizes, makeObject } from "./objects.js";
 import { decodeTile, encodeTile } from "./tileCodec.js";
 import { packPlates, unpackPlates } from "./plates.js";
 
-// Gzipped tiles of a small island, two of them in plate (0, 0) and one in plate (1, 0).
+
+// A flat grass tile 40 ft up at (tx, tz), as a version 1 tile file has it, with `objects`.
+function flatTile(tx, tz, objects = []) {
+  const count = CELLS * CELLS;
+  const layers = { height: new Float32Array(count).fill(40), water: new Float32Array(count).fill(NaN), waterKind: new Uint8Array(count), terrain: new Uint8Array(count), biome: new Uint8Array(count), forest: new Uint8Array(count), clutter: new Uint8Array(count) };
+  const palettes = { terrain: ["grass", "dirt", "sand", "rock", "path", "shore", "mud", "moss"], biome: ["meadow"], water: [...WATER_KINDS] };
+  return { coords: [tx, tz], layer: "surface", cells: CELLS, cellFt: CELL_FT, palettes, objects, generator: { version: 23, seed: 1 }, layers, falls: [], roads: [], rivers: [] };
+}
+
+// Gzipped tiles, two of them in plate (0, 0) and one in plate (1, 0), each with a stump and a boulder.
 function tileFiles() {
-  const land = new LandGrid();
-  for (let gz = -PER_TILE; gz <= 2 * PER_TILE; gz++) for (let gx = -PER_TILE; gx <= 18 * PER_TILE; gx++) land.set(gx, gz, 40);
-  const ctx = prepareWorld({ land: land.data, pins: [], paths: [], water: { rivers: [], lakes: [] } }, "t");
   const files = new Map([["world.json", new Uint8Array([123, 125])]]);
-  for (const [tx, tz] of [[0, 0], [1, 0], [16, 0]]) files.set(`places/continents/main/tiles/surface/${tx}/${tz}.dlt.gz`, gzipSync(encodeTile(generateTile(ctx, tx, tz))));
+  for (const [tx, tz] of [[0, 0], [1, 0], [16, 0]]) {
+    const at = (u) => [tx * TILE_FT + u, tz * TILE_FT + u];
+    const objects = [makeObject("stump", at(40), 0, 4), makeObject("boulder", at(120), 1, 4)].map((o, n) => ({ ...o, id: `${tx}.${tz}.${n}` }));
+    files.set(`places/continents/main/tiles/surface/${tx}/${tz}.dlt.gz`, gzipSync(encodeTile(flatTile(tx, tz, objects))));
+  }
   return files;
 }
 

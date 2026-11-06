@@ -23,7 +23,7 @@ const SIZE = 256;
 export const PATTERN_PX = SIZE;
 const SCALES_FT = [9, 48, 210]; // how far each layer's texture stretches
 const PATTERN_FADE_FT = [500, 1100];
-// A pattern for each kind of ground the generator paints (world/generator.js's TERRAIN), and leaf
+// A pattern for each kind of ground (v2/look.js), and leaf
 // litter for under trees.
 // Each stretches this many feet before it repeats.
 export const PATTERN_FT = { grass: 12, dirt: 14, sand: 16, rock: 30, path: 12, shore: 16, mud: 24, moss: 16, litter: 12, snow: 22, ice: 34, ash: 16, cracked: 20 };
