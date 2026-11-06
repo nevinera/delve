@@ -18,7 +18,7 @@ import { Things } from "../create/things.js";
 import { WaterSurfaces } from "../create/waterSurface.js";
 import { CYCLE_MS, cyclesAt, skyAt } from "../world/dayNight.js";
 import { BIOME_NAMES } from "../v2/biomes.js";
-import { SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
+import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { PlayGround } from "./ground.js";
 
 // The play page's view of a version 2 world: the ground, water, trees, objects, slabs and caves as /create
@@ -96,15 +96,29 @@ export class PlayView {
     this.resize();
   }
 
-  // Draws the land round continent feet [x, z] till it's ready to walk on there.
+  // Draws the land round continent feet [x, z] till it's ready to walk on there. Gives how long,
+  // in milliseconds, its plate file took to fetch and to read after that, how long drawing took
+  // (all of it, and the first frame), and how many frames it drew.
   async ready([x, z]) {
     const y = this.renditions.heightAt(x, z) ?? SEA_LEVEL_FT;
     this.camera.position.set(x, y + 30, z + 40);
     this.camera.lookAt(x, y, z);
+    const key = [x, z].map((ft) => Math.floor(ft / PLATE_FT)).join(",");
+    const start = performance.now();
+    const took = { fetch: 0, read: 0, draw: 0, firstFrame: 0, frames: 0 };
+    let fetched = null;
     while (this.walkGround.groundAt(x, z) === null) {
+      if (fetched === null && this.renditions.plateFiles.has(key)) fetched = performance.now();
+      const before = performance.now();
       this.render([x, y, z]);
+      const drew = performance.now() - before;
+      if (took.frames++ === 0) took.firstFrame = drew;
+      took.draw += drew;
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
+    const end = performance.now();
+    fetched ??= end;
+    return { ...took, fetch: fetched - start, read: end - fetched };
   }
 
   // Walks from continent feet [x, z] as `look` (a resolved character recipe). onStop: when Escape

@@ -247,7 +247,12 @@ async function play() {
 
   view.show(renditions, placed, caves, continent.caveLayout);
   mark("show");
-  await step("ground", view.ready([you.at[0], you.at[2]]));
+  // Within ground: fetching and reading your plate's file, and drawing while that happens.
+  const ground = await step("ground", view.ready([you.at[0], you.at[2]]));
+  for (const [part, ms] of Object.entries(ground)) {
+    if (part === "frames") metrics().count("play.load.ground.frames", ms, tags);
+    else metrics().timing(`play.load.ground.${part.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)}`, ms, tags);
+  }
   await step("animations", prepareAnimations().catch((err) => console.warn(`Couldn't load animations: ${err.message}`)));
   // From when the page was asked for, so it includes fetching the page and its code.
   metrics().timing("play.load.total", performance.now(), tags);
