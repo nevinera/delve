@@ -34,6 +34,10 @@ const SEA_BELOW_FT = 2;
 const DRAWN_FT = SIGHT.fogEndFt + TILE_FT; // how far off the ground's drawn: past the fog's end
 const pixelRatio = (resolution) => Math.min(window.devicePixelRatio || 1, resolution === "full" ? 2 : resolution);
 
+// Frames that came no more than SMOOTH_MS apart, SMOOTH_FRAMES in a row, are smooth (settled()).
+const SMOOTH_FRAMES = 10;
+const SMOOTH_MS = 50;
+
 export class PlayView {
   constructor(canvas, handlers = {}) {
     Object.assign(this, { canvas, handlers });
@@ -96,6 +100,12 @@ export class PlayView {
     this.resize();
   }
 
+  // Whether the land's done being built and the last SMOOTH_FRAMES frames came quickly.
+  settled() {
+    const gaps = this.gaps ?? [];
+    return !this.ground?.pending.length && gaps.length === SMOOTH_FRAMES && gaps.every((ms) => ms < SMOOTH_MS);
+  }
+
   // Draws the land round continent feet [x, z] till it's ready to walk on there. Gives how long,
   // in milliseconds, its plate file took to fetch and to read after that, how long drawing took
   // (all of it, and the first frame, split into making it and handing it to the GPU), and how many
@@ -135,6 +145,7 @@ export class PlayView {
   render(at = this.walker?.pos && [this.walker.pos.x, this.walker.pos.y, this.walker.pos.z]) {
     const now = performance.now();
     const dt = this.last === null ? 0 : Math.min(0.05, (now - this.last) / 1000);
+    if (this.last !== null) this.gaps = [...(this.gaps ?? []).slice(1 - SMOOTH_FRAMES), now - this.last];
     this.last = now;
     this.tick(now);
     if (at && this.ground) {

@@ -35,6 +35,7 @@ const config = JSON.parse($("playConfig").textContent); // { repo, sha, paths, l
 const status = (text) => ($("playStatus").textContent = text);
 const STREAM_MS = 1000; // how often to look for placed files coming into reach
 const PLACED_FT = 2 * PLATE_FT; // how near a plate's placed file is fetched
+const SETTLE_MS = 10_000;
 const READ_NOW_FT = PLATE_FT; // how near a platter is read before you're in; the rest wait for idle time
 // Lighter graphics for phones: no extra pixel density, 30 frames a second to save the battery, less
 // ground clutter, and simple tree crowns.
@@ -214,6 +215,9 @@ async function play() {
   status("Loading the land around you...");
   let showGraphics = null;
   const view = new PlayView($("scene"), { onGraphics: (graphics) => showGraphics?.(graphics) });
+  const touch = isTouch();
+  // Before the first frame, so the land isn't built twice.
+  if (touch) view.setGraphics(PHONE_GRAPHICS);
   mark("view");
   setReportContext(() => ({ camera: view.camera.position.toArray().map(Math.round), plates: renditions.decoded.size, unreadable: [...renditions.unreadable] }));
   const continent = await step("continent", loader.continent(you.continent));
@@ -254,13 +258,7 @@ async function play() {
     else metrics().timing(`play.load.ground.${part.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`)}`, ms, tags);
   }
   await step("animations", prepareAnimations().catch((err) => console.warn(`Couldn't load animations: ${err.message}`)));
-  // From when the page was asked for, so it includes fetching the page and its code.
-  metrics().timing("play.load.total", performance.now(), tags);
-  status("");
-  $("playLoading").hidden = true;
-  readHeldPlatters(renditions);
-  const touch = isTouch();
-  if (touch) view.setGraphics(PHONE_GRAPHICS);
+  status("Getting the land ready...");
   // Players get the settings that trade looks for speed, not the editor's switch for each part.
   showGraphics = graphicsPanel(menu.querySelector(".play-graphics"), view, {
     check: "play-check",
@@ -294,6 +292,15 @@ async function play() {
   earlyCooldowns.forEach((message) => combat.cooldown(message));
   // A handle for scripts and the browser's console.
   window.play = { view, connection, others, combat, renditions, placed, caves, sightLines, restPoints };
+  // The cover stays till the land around you is built and moving is smooth, or SETTLE_MS at most.
+  const settling = performance.now();
+  while (!view.settled() && performance.now() - settling < SETTLE_MS) await new Promise((resolve) => setTimeout(resolve, 100));
+  mark("settle");
+  // From when the page was asked for, so it includes fetching the page and its code.
+  metrics().timing("play.load.total", performance.now(), tags);
+  status("");
+  $("playLoading").hidden = true;
+  readHeldPlatters(renditions);
   if (touch) new TouchControls(view, document.body);
   $("playResume").addEventListener("click", () => {
     $("playPaused").hidden = true;
