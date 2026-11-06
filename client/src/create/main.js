@@ -232,6 +232,11 @@ function start(world, changes, fresh) {
   let builder = null;
   const feetY = () => builder?.state.y ?? saved?.y ?? 0;
   const walkAt = (x, z) => things.standAt(x, z, feetY() + STEP_FT);
+  // How steep the face walkAt stands on is: a slab's tops are never too steep to walk.
+  const walkSlopeAt = (x, z) => {
+    const under = feetY() + STEP_FT;
+    return things.standAt(x, z, under) > caves.groundAt(x, z, under) ? 0 : caves.slopeAt(x, z, under);
+  };
   // Cave rock's in the way where it's between a step up and the builder's head, going only across
   // or only along where it's in the way of both.
   const rockAt = (x, z, y = feetY()) =>
@@ -258,7 +263,7 @@ function start(world, changes, fresh) {
     return tries.map((t) => ({ ...now, ...t })).find((s) => !stuck(s)) ?? { ...now, x: was.x, y: was.y, z: was.z };
   };
   const inCave = (p) => p.y < groundAt(p.x, p.z) && caves.near(p.x, p.z) && !caves.solid(p.x, p.y, p.z);
-  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push, clear, inCave, keep, ghost });
+  builder = new Builder({ scene, camera, canvas, groundAt: walkAt, slopeAt: walkSlopeAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push, clear, inCave, keep, ghost });
   tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves, layout, inEarth: ghost });
   startup.step("tools");
   const parts = new FrameParts();

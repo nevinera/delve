@@ -8,7 +8,7 @@ import { WeaponDraw } from "../character/weaponDraw.js";
 import { TURN_RATE } from "../character/posed.js";
 import { randomLook } from "../character/recipe.js";
 import { trunkRadius } from "../render/treeMeshes.js";
-import { SLIDE_FT, steepness } from "../create/builder.js";
+import { SLIDE_FT, downhill, steepness } from "../create/builder.js";
 
 // Walk mode for the 3D view: a person-sized character on the generated ground, with a third-person
 // camera, to get a feel for the land at eye level. Controls: W/S run forward and back,
@@ -419,9 +419,11 @@ export class Walker {
     return rise / run <= MAX_CLIMB;
   }
 
-  // How steep the ground's face is at (x, z), rise over run, as /create's builder judges it.
+  // How steep the face of the ground or cave floor it stands on at (x, z) is, rise over run: the
+  // ground's own (slopeAt), or for a ground known only by its heights, from them.
   steepness(x, z) {
     const under = (this.pos?.y ?? Infinity) + STEP_FT;
+    if (this.ground.slopeAt) return this.ground.slopeAt(x, z, under) ?? 0;
     return steepness(x, z, (a, b) => this.ground.groundAt(a, b, under));
   }
 
@@ -434,12 +436,9 @@ export class Walker {
   // Slides it down the steep ground it stands on for dt, but not into what's in the way.
   slide(dt) {
     const under = this.pos.y + STEP_FT;
-    const h = (a, b) => this.ground.groundAt(a, b, under) ?? this.pos.y;
-    const d = 2;
-    const [gx, gz] = [h(this.pos.x + d, this.pos.z) - h(this.pos.x - d, this.pos.z), h(this.pos.x, this.pos.z + d) - h(this.pos.x, this.pos.z - d)];
-    const length = Math.hypot(gx, gz);
-    if (!length) return;
-    const [x, z] = [this.pos.x - (gx / length) * SLIDE_FT * dt, this.pos.z - (gz / length) * SLIDE_FT * dt];
+    const [gx, gz] = downhill(this.pos.x, this.pos.z, (a, b) => this.ground.groundAt(a, b, under));
+    if (!gx && !gz) return;
+    const [x, z] = [this.pos.x + gx * SLIDE_FT * dt, this.pos.z + gz * SLIDE_FT * dt];
     if (this.stand(x, z) && !this.ground.inWay(x, z, this.pos, BODY_FT)) [this.pos.x, this.pos.z] = [x, z];
   }
 

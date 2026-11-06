@@ -6,6 +6,7 @@ import { changedRoadBoxes, roadBox, roadKindAt } from "../v2/roads.js";
 import { PATTERNS, RUNNING, look, painted, slopeOf } from "../v2/look.js";
 import { CELL_CORNERS, TILE_CELLS, decodePlate, encodePlate, platePath, tileIndexInPlate } from "../v2/plate.js";
 import { loadZipper } from "../v2/zstd.js";
+import { gridHeight, gridSlope } from "../v2/faces.js";
 import { CORNERS, decodePlatter, encodePlatter, indexIn, plateIndexIn, platterOf, platterOfPlate, platterPath } from "../v2/platter.js";
 import { CELL_FT, CHUNK_CELLS, CHUNK_FT, PLATE_FT, PLATE_TILES, PLATTER_TILES, SEA_LEVEL_FT, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
 import { CELLS, CHUNKS, TILES } from "./geo.js";
@@ -848,15 +849,26 @@ export class Renditions {
     return PATTERNS[kinds[j * TILE_CELLS + i]] ?? null;
   }
 
-  // The ground's height at continent feet (x, z), straight between cell corners, or chunk corners
-  // where there are no cells or they've not been read, or null where there's no tile. It reads no
-  // plate files.
+  // The ground's height at continent feet (x, z), on the faces between cell corners (v2/faces.js),
+  // or chunk corners where there are no cells or they've not been read, or null where there's no
+  // tile. It reads no plate files.
   heightAt(x, z) {
+    return this.onFaces(x, z, gridHeight);
+  }
+
+  // How steep the ground's face at (x, z) is, rise over run, as heightAt has the ground, or null
+  // where there's no tile.
+  slopeAt(x, z) {
+    return this.onFaces(x, z, gridSlope);
+  }
+
+  // `of` (gridHeight or gridSlope) at (x, z) on the cells' or chunks' corners, or null.
+  onFaces(x, z, of) {
     const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
     const cells = this.decoded.get(`${Math.floor(tx / PLATE_TILES)},${Math.floor(tz / PLATE_TILES)}`)?.tiles.get(tileIndexInPlate(tx, tz));
-    if (cells) return between(this.pressedHeights(tx, tz, cells), CELL_CORNERS, (x - tx * TILE_FT) / CELL_FT, (z - tz * TILE_FT) / CELL_FT);
+    if (cells) return of(this.pressedHeights(tx, tz, cells), CELL_CORNERS, (x - tx * TILE_FT) / CELL_FT, (z - tz * TILE_FT) / CELL_FT, CELL_FT);
     const tile = this.tile(tx, tz);
-    return tile && between(tile.heights, CORNERS, (x - tx * TILE_FT) / CHUNK_FT, (z - tz * TILE_FT) / CHUNK_FT);
+    return tile ? of(tile.heights, CORNERS, (x - tx * TILE_FT) / CHUNK_FT, (z - tz * TILE_FT) / CHUNK_FT, CHUNK_FT) : null;
   }
 
   // The ground's height at continent feet (x, z) between cell corners, its plate read now where
@@ -954,12 +966,6 @@ export class Renditions {
 }
 
 // A height straight between a grid's corners (`side` a row), at (u, v) in grid squares.
-function between(heights, side, u, v) {
-  const [i, j] = [Math.min(side - 2, Math.floor(u)), Math.min(side - 2, Math.floor(v))];
-  const [fu, fv] = [u - i, v - j];
-  const h = (a, b) => heights[(j + b) * side + i + a];
-  const top = h(0, 0) + (h(1, 0) - h(0, 0)) * fu;
-  const bottom = h(0, 1) + (h(1, 1) - h(0, 1)) * fu;
-  return top + (bottom - top) * fv;
-}
+// A height on the faces between a grid's corners (`side` a row), at (u, v) in grid squares.
+const between = gridHeight;
 

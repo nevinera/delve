@@ -1,6 +1,6 @@
 import { hash2, facets, valueNoise } from "../world/noise.js";
 import { WALK_DEG } from "./growth.js";
-import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, floorAt, smoothFloor, stonePart, themeOf } from "../v2/caves.js";
+import { CAVE_THEMES, TILE_COLUMNS, VOXEL_FT, floorAt, floorSlopeAt, smoothFloor, stonePart, themeOf } from "../v2/caves.js";
 
 // Mesh data for a tile's caves (v2/caves.js), without three.js, so it can be tested. The rock's
 // surface runs between the air of the caves' spans and the rock round them, smoothed by surface
@@ -347,8 +347,9 @@ export function caveMesh(tx, tz, world) {
     const index = positions.length / 3;
     positions.push(at[0] - ox, at[1], at[2] - oz);
     themes.push(CAVE_THEMES.indexOf(here.theme));
-    const walked = (x, z) => floorAt(spans, x, z, here.floor, smoothOf);
-    const steep = here.floor && Math.hypot(walked(at[0] + 1, at[2]) - walked(at[0] - 1, at[2]), walked(at[0], at[2] + 1) - walked(at[0], at[2] - 1)) / 2 > WALK_SLOPE;
+    // Steep where any of the floor's faces round it is (v2/faces.js).
+    const slope = (dx, dz) => floorSlopeAt(spans, at[0] + dx, at[2] + dz, here.floor, smoothOf);
+    const steep = here.floor && Math.max(slope(0.3, 0.3), slope(-0.3, -0.3), slope(0.3, -0.3), slope(-0.3, 0.3)) > WALK_SLOPE;
     const rgb = here.floor && !steep ? look.floor : look.rgb;
     // Floors' vertices are on a grid, where a shade a vertex would show the grid: theirs vary
     // smoothly with where they are instead.
@@ -391,9 +392,10 @@ export function caveMesh(tx, tz, world) {
     ground ||= cubes.every((cube) => crossing(...cube).rim);
     const [v0, v1, v2, v3] = cubes.map((cube) => (ground ? earthVertex : vertex)(...cube));
     const out = ground ? earth.indices : indices;
-    // The cubes run round the edge so that this order faces back along it.
-    if (way > 0) out.push(v0, v2, v1, v0, v3, v2);
-    else out.push(v0, v1, v2, v0, v2, v3);
+    // The cubes run round the edge so that this order faces back along it. It's split from v1 to
+    // v3: on a floor, from the northeast corner to the southwest, as the ground is (v2/faces.js).
+    if (way > 0) out.push(v0, v3, v1, v1, v3, v2);
+    else out.push(v0, v1, v3, v1, v2, v3);
   };
 
   for (let j = 0; j < TILE_COLUMNS; j++) {
@@ -505,7 +507,8 @@ export function bandGround(tx, tz, world) {
         colors.push(...color);
         normals.push(...normal);
       }
-      indices.push(n, n + 1, n + 2, n, n + 2, n + 3);
+      // Split from the northeast corner to the southwest, so it lies on the ground's faces.
+      indices.push(n, n + 1, n + 3, n + 1, n + 2, n + 3);
     }
   }
   if (!indices.length) return null;

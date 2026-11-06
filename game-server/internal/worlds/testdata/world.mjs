@@ -1,6 +1,6 @@
 // Writes the fixtures the worlds tests read: a small version 2 world in world/, written by the
 // client's own codecs, and in expected.json what /create finds on it: the ground's height and
-// water at points, what stands in each tile's slots (but on its road) and across the course's cascades, where
+// water at points and how steep its faces are there, what stands in each tile's slots (but on its road) and across the course's cascades, where
 // objects placed by hand stand, footholds on the slabs, and the caves' floors and rock.
 //
 //   node game-server/internal/worlds/testdata/world.mjs
@@ -18,7 +18,8 @@ const { BiomeMap } = await client("v2/biomes.js");
 const { makeSlots } = await client("v2/slots.js");
 const { dryWater, WATER_TYPES } = await client("v2/water.js");
 const { roadKindAt } = await client("v2/roads.js");
-const { EMPTY_FT, Renditions } = await client("create/ground.js");
+const { EMPTY_FT } = await client("create/ground.js");
+const { Renditions } = await client("create/renditions.js");
 const { Scatter } = await client("create/scatter.js");
 const { setBuiltObjects } = await client("world/objects.js");
 setBuiltObjects([]); // as any world starts, with the built-in ones
@@ -27,7 +28,7 @@ const { Things } = await client("create/things.js");
 const { pressesOver } = await client("create/press.js");
 const { slabFootholds } = await client("world/slabs.js");
 const { trunkRadius } = await client("render/treeMeshes.js");
-const { carve, encodeCaves, emptyColumns, floorAt, tileIndex } = await client("v2/caves.js");
+const { carve, encodeCaves, emptyColumns, floorAt, floorSlopeAt, tileIndex } = await client("v2/caves.js");
 const { Caves } = await client("create/caves.js");
 
 const here = new URL(".", import.meta.url);
@@ -175,7 +176,7 @@ for (const key of plates.keys()) r.hasCells(...key.split(",").map((v) => Number(
 const points = [];
 for (let z = -10; z <= 780; z += 37.3) for (let x = -270; x <= 780; x += 41.7) points.push([Math.round(x * 10) / 10, Math.round(z * 10) / 10]);
 points.push([110, 510], [100.5, 500.5], [129.9, 529.9], [0, 0], [-256, 0], [767.9, 767.9], [768, 100], [300, 300], [256, 51.2]);
-const ground = points.map(([x, z]) => ({ at: [x, z], ground: r.heightAt(x, z), water: r.waterCellAt(x, z)?.[0] ?? null }));
+const ground = points.map(([x, z]) => ({ at: [x, z], ground: r.heightAt(x, z), slope: r.slopeAt(x, z), water: r.waterCellAt(x, z)?.[0] ?? null }));
 
 const scatter = new Scatter(new THREE.Scene(), r);
 const fills = [];
@@ -205,7 +206,7 @@ const cavePoints = [[530, 300], [531.3, 301.7], [535, 325], [540, 350], [545.5, 
 const caveFloors = cavePoints.map(([x, z]) => {
   const g = r.heightAt(x, z) ?? EMPTY_FT;
   const spans = caves.spans(Math.floor(x / 2), Math.floor(z / 2));
-  return { at: [x, z], ground: g, floors: spans.filter((s) => s.floor <= g).map((s) => floorAt((ci, cj) => caves.spans(ci, cj), x, z, s)), open: spans.some((s) => s.floor < g && g < s.ceiling), rock: [-60, -45, -30, -20, -10, 0, 10, 20].map((y) => ({ y, solid: caves.near(x, z) && caves.solid(x, y, z) && y < g })) };
+  return { at: [x, z], ground: g, floors: spans.filter((s) => s.floor <= g).map((s) => floorAt((ci, cj) => caves.spans(ci, cj), x, z, s)), floorSlopes: spans.filter((s) => s.floor <= g).map((s) => floorSlopeAt((ci, cj) => caves.spans(ci, cj), x, z, s)), open: spans.some((s) => s.floor < g && g < s.ceiling), rock: [-60, -45, -30, -20, -10, 0, 10, 20].map((y) => ({ y, solid: caves.near(x, z) && caves.solid(x, y, z) && y < g })) };
 });
 fs.writeFileSync(new URL("expected.json", here), `${JSON.stringify({ ground, fills, standing, footholds, caveFloors })}\n`);
 console.log(`${ground.length} points, ${fills.reduce((n, f) => n + f.things.length, 0)} things, ${standing.length} placed objects`);

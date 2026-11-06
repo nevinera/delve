@@ -153,6 +153,16 @@ describe("walker on ground too steep to walk", () => {
     expect(w.pos.z).toBeGreaterThan(0);
   });
 
+  it("stays put on flat ground right by a drop, going by the face it's on", () => {
+    // Flat at 1000 north of z = 1, a cliff falling away south of it.
+    const w = onFace();
+    w.ground.groundAt = (x, z) => (z < 1 ? 1000 : 1000 - (z - 1) * face);
+    w.ground.slopeAt = (x, z) => (z < 1 ? 0 : face);
+    w.pos = { x: 0, y: 1000, z: 0.5 };
+    w.step(1 / 60);
+    expect(w.pos.z).toBe(0.5);
+  });
+
   it("can't jump from it", () => {
     const w = onFace({ keys: ["w", " "] });
     w.step(1 / 60);

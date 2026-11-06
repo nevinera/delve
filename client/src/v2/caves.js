@@ -1,6 +1,7 @@
 import { bytesToDigits, digit, digits, digitsToBytes, readDigits } from "./digits.js";
 import { CHUNK_FT, PLATE_TILES, TILE_FT } from "./sizes.js";
 import { unzip, zip } from "./zstd.js";
+import { faceHeight, faceSlope } from "./faces.js";
 
 // Caves (.agents/formats.md): air under the ground. Each tile that has any keeps a column of
 // air spans for each VOXEL_FT square of it, any number of them, lowest first, so ledges, arches
@@ -210,21 +211,33 @@ export function smoothFloor(spansAt, ci, cj, span) {
   return Math.max(span.floor - VOXEL_FT, Math.min(span.floor + VOXEL_FT, sum / n));
 }
 
-// The smooth floor of span `span` of the column (x, z) is in, at continent feet (x, z): between
-// the smoothed floors at the middles of the four columns round it, those not joined to it taking
-// its own. `smooth` is smoothFloor, or a kept copy of it.
+// The smooth floor of span `span` at the corner of columns (i, j), the northwest corner of column
+// (i, j): the mean of the smoothed floors of the four columns round it that are joined to it.
+// `smooth` is smoothFloor, or a kept copy of it.
+export function cornerFloor(spansAt, i, j, span, smooth = smoothFloor) {
+  let [sum, n] = [0, 0];
+  for (const [ci, cj] of [[i - 1, j - 1], [i, j - 1], [i - 1, j], [i, j]]) {
+    const s = joinedFloor(spansAt(ci, cj), span, VOXEL_FT);
+    if (s) [sum, n] = [sum + smooth(spansAt, ci, cj, s), n + 1];
+  }
+  return n ? sum / n : span.floor;
+}
+
+// The smooth floor of span `span` of the column (x, z) is in, at continent feet (x, z): on the
+// faces between its corners' (cornerFloor, v2/faces.js), as caveMesh.js draws it.
 export function floorAt(spansAt, x, z, span, smooth = smoothFloor) {
+  return onFloorFaces(spansAt, x, z, span, smooth, faceHeight);
+}
+
+// How steep that floor's face at (x, z) is, rise over run.
+export function floorSlopeAt(spansAt, x, z, span, smooth = smoothFloor) {
+  return onFloorFaces(spansAt, x, z, span, smooth, faceSlope);
+}
+
+function onFloorFaces(spansAt, x, z, span, smooth, of) {
   const [ci, cj] = [Math.floor(x / VOXEL_FT), Math.floor(z / VOXEL_FT)];
-  const own = smooth(spansAt, ci, cj, span);
-  const [u, v] = [x / VOXEL_FT - 0.5, z / VOXEL_FT - 0.5];
-  const [i0, j0] = [Math.floor(u), Math.floor(v)];
-  const at = (i, j) => {
-    if (i === ci && j === cj) return own;
-    const s = joinedFloor(spansAt(i, j), span, VOXEL_FT);
-    return s ? smooth(spansAt, i, j, s) : own;
-  };
-  const [fu, fv] = [u - i0, v - j0];
-  return (at(i0, j0) * (1 - fu) + at(i0 + 1, j0) * fu) * (1 - fv) + (at(i0, j0 + 1) * (1 - fu) + at(i0 + 1, j0 + 1) * fu) * fv;
+  const corner = (i, j) => cornerFloor(spansAt, i, j, span, smooth);
+  return of(corner(ci, cj), corner(ci + 1, cj), corner(ci, cj + 1), corner(ci + 1, cj + 1), x / VOXEL_FT - ci, z / VOXEL_FT - cj, VOXEL_FT);
 }
 
 // Closes the pockets of air with a column within a column of [x0, z0, x1, z1]: air joined through

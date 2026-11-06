@@ -92,7 +92,7 @@ Each tile the plate has comes in row order, with `index` = `tz * 8 + tx` within 
 
 ### Heights
 
-A tile has 65×65 corner heights, in row order, the last row and column the same as the next tiles' first. Its first `h` line says how they're kept:
+A tile has 65×65 corner heights, in row order, the last row and column the same as the next tiles' first. Each 4 ft cell between them is two flat triangles, split from its northeast corner to its southwest. Everything draws, walks and measures slopes on those faces (`client/src/v2/faces.js`, `game-server/internal/worlds/faces.go`). Its first `h` line says how they're kept:
 
 - `h z <data>`: zipped. `data` is a zstd frame in base64 (3 bytes to 4 digits, the last group short). Unzipped, it's the base (the tile's lowest height, 3 digits, written absolutely) and a newline, then 65 lines, one per row, each in the `d` form below. Only tiles spanning under 1,024 ft.
 - `h c`, then 65 lines `h <heights line>`: each of the tile's 64 chunks of 8×8 cells, in row order, with its own 8×8 corners in row order, then the tile's far edge, 129 corners: row 64 left to right, then column 64 from row 0 to row 63.
@@ -356,10 +356,11 @@ Only an entrance in the [cave layout](#cave-layout) may reach up through the gro
 
 ### Smooth floors
 
-Floors are walked on and drawn smooth, not as the voxels' 2 ft steps. Nothing about it is kept in the file; readers work it out from the spans, the same way everywhere (`smoothFloor` and `floorAt` in `client/src/v2/caves.js`):
+Floors are walked on and drawn smooth, not as the voxels' 2 ft steps. Nothing about it is kept in the file; readers work it out from the spans, the same way everywhere (`smoothFloor`, `cornerFloor` and `floorAt` in `client/src/v2/caves.js`):
 
 - A floor's smoothed height is the mean of the floors joined to it within 2 columns each way, its own included, kept within 2 ft of its own. A floor in another column joins it where it's within 2 ft for each column away and their air overlaps. A bigger drop is a ledge, and stays sharp.
-- Between the middles of columns, the floor runs evenly from one smoothed height to the next. A column beside it with no floor joined within 2 ft takes the floor's own.
+- At each corner of a column, the floor's height is the mean of the smoothed floors of the four columns round the corner that are joined to it within 2 ft (`cornerFloor`).
+- Each column's square is two flat triangles between its corners, split as the ground's cells are. Feet stand on them, and /create draws the floor on them.
 
 ### Mouths
 
@@ -1266,7 +1267,7 @@ The game server checks that each report follows from the last one it took, the w
 - **Clock:** for the first 5 s, the server measures how far your clock is behind its own. After that, a report whose clock is more than half a second further ahead fails, since a fast clock would give you more time to move in. A clock that goes backward fails too.
 - **Rising:** you can climb 1.5 ft for each foot you move across, plus 4 ft, and a jump's height (about 2.7 ft) within 1.5 s of jumping.
 - **Falling:** you can drop as fast as gravity (48 ft/s²) takes you since you started down, plus 1.5 ft for each foot across.
-- **Ground:** you can't go more than 2 ft under the ground, except on a slab or through a cave's mouth, or move into a slab, a cave's rock, a tree or an object. Off the tiles is sea. Off the ground and not jumping, you have to fall as gravity would, after half a second's grace, so you can't float or walk on water. Walking from ground to ground, you can't climb slopes steeper than 50°, with 25% and 2 ft extra (`MaxClimb` in `game-server/internal/worlds/ground.go`). Nor can you climb more than 2 ft, added up over reports, on ground whose face is steeper than 50° with 10% extra, however gently you slant across it. The face's steepness comes from the heights half a cell either way, as `/create`'s builder judges it. You can only swim in water deeper than 4.5 ft.
+- **Ground:** you can't go more than 2 ft under the ground, except on a slab or through a cave's mouth, or move into a slab, a cave's rock, a tree or an object. Off the tiles is sea. Off the ground and not jumping, you have to fall as gravity would, after half a second's grace, so you can't float or walk on water. Walking from ground to ground, you can't climb slopes steeper than 50°, with 25% and 2 ft extra (`MaxClimb` in `game-server/internal/worlds/ground.go`). Nor can you climb more than 2 ft, added up over reports, on ground whose face is steeper than 50° with 10% extra, however gently you slant across it. A face is one of the ground's or a cave floor's triangles. A slab's tops are never too steep. You can only swim in water deeper than 4.5 ft.
 - **Entering:** your first report has to be near where the server put you, allowing for running since then, and is checked against the ground too. The server puts you on the ground at the spawn point, or at swimming depth in deep water.
 
 The server keeps each fall's height and time when you land, for fall damage later.

@@ -134,7 +134,7 @@ func (c *Controls) stepOnto(x, z, step float64) {
 	height, swimming, ok := s.Stand(c.At[1], stepFt)
 	rise := height - c.At[1]
 	// Nor up onto ground whose face is too steep, however gently the step climbs it.
-	onSteep := !swimming && height == s.Ground && s.Steep > maxClimb
+	onSteep := !swimming && s.SlopeOf(height) > maxClimb
 	if !ok || (!swimming && !c.swimming && (rise > maxClimb*step || (rise > 0 && onSteep))) {
 		c.Stop()
 		return

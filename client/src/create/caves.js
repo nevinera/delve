@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { CAVES_PATH, TILE_COLUMNS, VOXEL_FT, allStone, carve, cavesPath, decodeCaves, emptyColumns, encodeCaves, floorAt, sharedChunks, tileIndex } from "../v2/caves.js";
+import { CAVES_PATH, TILE_COLUMNS, VOXEL_FT, allStone, carve, cavesPath, decodeCaves, emptyColumns, encodeCaves, floorAt, floorSlopeAt, sharedChunks, tileIndex } from "../v2/caves.js";
 import { CELL_FT, CHUNK_FT, PLATE_TILES, TILE_CHUNKS, TILE_FT } from "../v2/sizes.js";
 import { caveMaterial } from "./caveMaterial.js";
 import { PATTERNS } from "../v2/look.js";
@@ -567,14 +567,26 @@ export class Caves {
   // The height to stand at at (x, z) no higher than `under`: the highest floor there, a cave's or
   // the ground where no cave opens it, or the lowest where none is under it.
   groundAt(x, z, under = Infinity) {
+    return this.standingOn(x, z, under).height;
+  }
+
+  // How steep the face groundAt stands on at (x, z) is, rise over run.
+  slopeAt(x, z, under = Infinity) {
+    return this.standingOn(x, z, under).slope();
+  }
+
+  // What groundAt stands on: { height, slope(), how steep its face is }.
+  standingOn(x, z, under) {
     const g = this.renditions.heightAt(x, z) ?? EMPTY_FT;
+    const ground = { height: g, slope: () => this.renditions.slopeAt(x, z) ?? 0 };
     const spans = this.spans(Math.floor(x / VOXEL_FT), Math.floor(z / VOXEL_FT));
-    if (!spans.length) return g;
+    if (!spans.length) return ground;
     const spansAt = (ci, cj) => this.spans(ci, cj);
-    const floors = spans.filter((s) => s.floor <= g).map((s) => floorAt(spansAt, x, z, s));
-    if (!spans.some((s) => s.floor < g && g < s.ceiling)) floors.push(g);
-    const below = floors.filter((y) => y <= under);
-    return below.length ? Math.max(...below) : Math.min(...floors);
+    const floors = spans.filter((s) => s.floor <= g).map((s) => ({ height: floorAt(spansAt, x, z, s), slope: () => floorSlopeAt(spansAt, x, z, s) }));
+    if (!spans.some((s) => s.floor < g && g < s.ceiling)) floors.push(ground);
+    const below = floors.filter((f) => f.height <= under);
+    const pick = (list, better) => list.reduce((best, f) => (better(f.height, best.height) ? f : best));
+    return below.length ? pick(below, (a, b) => a > b) : pick(floors, (a, b) => a < b);
   }
 
   // Whether rock at (x, z) is anywhere from `low` to `high`, near caves; away from them, never.

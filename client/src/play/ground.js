@@ -33,6 +33,13 @@ export class PlayGround {
     return this.caves.groundAt(x, z, under);
   }
 
+  // How steep the face groundAt stands on at (x, z) is, rise over run (Caves' slopeAt).
+  slopeAt(x, z, under = Infinity) {
+    const [tx, tz] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
+    if (!this.renditions.tile(tx, tz) || !this.renditions.hasCells(tx, tz)) return 0;
+    return this.caves.slopeAt(x, z, under);
+  }
+
   waterAt(x, z) {
     return this.renditions.waterAt(x, z);
   }

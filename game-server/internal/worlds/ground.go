@@ -31,16 +31,17 @@ const SwimDepth = 4.5
 // Sample is the ground at a point.
 type Sample struct {
 	Ground float64 // feet, straight between cell corners
-	// Steep is how steep the ground's face is there, rise over run, as client/src/create/builder.js's
-	// steepness has it: from the heights half a cell either way.
+	// Steep is how steep the ground's face is there, rise over run (faces.go).
 	Steep float64
 	Water float64 // the water's surface over the cell, or NaN
 	// Footholds are the heights of slab faces there gentle enough to stand on (Slab.Footholds).
 	Footholds []float64
-	// Floors are the smoothed floors of caves under the ground there, and Open is whether a cave
-	// opens the ground itself, at a mouth, so it isn't there to stand on.
-	Floors []float64
-	Open   bool
+	// Floors are the smoothed floors of caves under the ground there, and FloorSlopes how steep
+	// each one's face is, rise over run. Open is whether a cave opens the ground itself, at a
+	// mouth, so it isn't there to stand on.
+	Floors      []float64
+	FloorSlopes []float64
+	Open        bool
 }
 
 // Stand is where feet at this height come to rest here: the highest thing to stand on no more
@@ -69,6 +70,24 @@ func (s Sample) Stand(feet, reach float64) (at float64, swimming, ok bool) {
 		at = slices.Min(heights)
 	}
 	return at, swim && !s.Open && at == ground, true
+}
+
+// SlopeOf is how steep the face is of what stands at height `at` here, rise over run, as Stand
+// finds it: a cave's floor's, the ground's, or 0 for a slab's tops (never too steep to stand on)
+// and for swimming.
+func (s Sample) SlopeOf(at float64) float64 {
+	if slices.Contains(s.Footholds, at) {
+		return 0
+	}
+	for n, f := range s.Floors {
+		if f == at && n < len(s.FloorSlopes) {
+			return s.FloorSlopes[n]
+		}
+	}
+	if at == s.Ground {
+		return s.Steep
+	}
+	return 0
 }
 
 // Ground reads one continent's ground, a plate at a time as it's needed, and keeps what it's read.
@@ -107,16 +126,13 @@ func (w *World) Ground(continent string) *Ground {
 func (g *Ground) At(x, z float64) (s Sample, ok bool, err error) {
 	g.mu.Lock()
 	defer g.mu.Unlock()
-	h, found, err := g.heightAt(x, z)
+	h, slope, found, err := g.faceAt(x, z)
 	if err != nil {
 		return s, false, err
 	}
 	s.Ground = emptyFt
 	if found {
-		s.Ground = h
-		if s.Steep, err = g.steepness(x, z, h); err != nil {
-			return s, false, err
-		}
+		s.Ground, s.Steep = h, slope
 	}
 	s.Water = math.NaN()
 	if level, _, wet, err := g.waterAt(x, z); err != nil {
@@ -125,7 +141,7 @@ func (g *Ground) At(x, z float64) (s Sample, ok bool, err error) {
 		s.Water = level
 	}
 	if found {
-		if s.Floors, s.Open, err = g.caveFloors(x, z, h); err != nil {
+		if s.Floors, s.FloorSlopes, s.Open, err = g.caveFloors(x, z, h); err != nil {
 			return s, false, err
 		}
 	}
@@ -134,28 +150,6 @@ func (g *Ground) At(x, z float64) (s Sample, ok bool, err error) {
 		s.Footholds = append(s.Footholds, slab.Footholds(x, z, MaxClimb)...)
 	}
 	return s, err == nil, err
-}
-
-// steepness is how steep the ground's face is at (x, z), where it's `h` high, rise over run. Off
-// the tiles it's taken as flat. The lock is held.
-func (g *Ground) steepness(x, z, h float64) (float64, error) {
-	const d = cellFt / 2
-	at := func(a, b float64) (float64, error) {
-		v, found, err := g.heightAt(a, b)
-		if !found {
-			v = h
-		}
-		return v, err
-	}
-	var hs [4]float64
-	for n, p := range [4][2]float64{{x + d, z}, {x - d, z}, {x, z + d}, {x, z - d}} {
-		v, err := at(p[0], p[1])
-		if err != nil {
-			return 0, err
-		}
-		hs[n] = v
-	}
-	return math.Hypot(hs[0]-hs[1], hs[2]-hs[3]) / (2 * d), nil
 }
 
 // Enters is what the straight move from a to b (continent feet, the feet's height) runs into, or
@@ -370,21 +364,27 @@ func (g *Ground) tileAt(tx, tz int) (*tile, *plate, int, error) {
 	return p.tiles[index], p, index, nil
 }
 
-// heightAt is the ground's height at (x, z), pressed down by slabs, straight between cell corners,
-// or false where there's no tile. The lock is held.
+// heightAt is the ground's height at (x, z), pressed down by slabs, on the faces between cell
+// corners (faces.go), or false where there's no tile. The lock is held.
 func (g *Ground) heightAt(x, z float64) (float64, bool, error) {
+	h, _, ok, err := g.faceAt(x, z)
+	return h, ok, err
+}
+
+// faceAt is the ground's height at (x, z) as heightAt has it, and how steep its face there is,
+// rise over run, or false where there's no tile. The lock is held.
+func (g *Ground) faceAt(x, z float64) (height, slope float64, ok bool, err error) {
 	tx, tz := int(math.Floor(x/TileFt)), int(math.Floor(z/TileFt))
 	pt, err := g.pressedTile(tx, tz)
 	if err != nil || pt == nil {
-		return 0, false, err
+		return 0, 0, false, err
 	}
 	u, v := (x-float64(tx)*TileFt)/cellFt, (z-float64(tz)*TileFt)/cellFt
 	i, j := min(cellCorner-2, int(math.Floor(u))), min(cellCorner-2, int(math.Floor(v)))
 	fu, fv := u-float64(i), v-float64(j)
 	h := func(a, b int) float64 { return float64(pt.heights[(j+b)*cellCorner+i+a]) }
-	top := h(0, 0) + (h(1, 0)-h(0, 0))*fu
-	bottom := h(0, 1) + (h(1, 1)-h(0, 1))*fu
-	return top + (bottom-top)*fv, true, nil
+	nw, ne, sw, se := h(0, 0), h(1, 0), h(0, 1), h(1, 1)
+	return faceHeight(nw, ne, sw, se, fu, fv), faceSlope(nw, ne, sw, se, fu, fv, cellFt), true, nil
 }
 
 // pressedTile is tile (tx, tz)'s heights pressed down by slabs, and the cells they cover, or nil

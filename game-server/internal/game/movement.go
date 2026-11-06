@@ -105,7 +105,7 @@ type footing struct {
 	slab   bool    // they rest on a slab or a cave's floor
 	deep   bool    // water too deep to stand in
 	on     bool    // the feet were where they rest
-	steep  bool    // on ground whose face is too steep to walk on, not a slab or in deep water
+	steep  bool    // on a face too steep to walk on, the ground's or a cave floor's, not in deep water
 }
 
 // Ground is the ground of the continent a character is on (worlds.Ground).
@@ -272,7 +272,7 @@ func (m *motion) onGround(r incoming, t float64, g Ground) (footing, string) {
 		f.stand, f.slab, f.deep = best, true, false
 	}
 	f.on = y <= f.stand+slackFt
-	f.steep = !f.slab && !f.deep && s.Steep > maxClimb*steepLeeway
+	f.steep = !f.deep && s.SlopeOf(f.stand) > maxClimb*steepLeeway
 	jumping := (r.Move != nil && r.Move.Jump) || t-m.jumped < airAfterJump
 	swimming := m.move.Swim
 	if r.Move != nil {
@@ -329,7 +329,7 @@ func (m *motion) take(r incoming, t float64, f footing) verdict {
 		m.aloft, m.aloftT, m.aloftY = true, m.t, math.Max(m.at[1], r.At[1])
 	}
 	if m.footing.steep && f.steep && !jumping {
-		m.steepClimb = math.Max(0, m.steepClimb+f.ground-m.footing.ground)
+		m.steepClimb = math.Max(0, m.steepClimb+f.stand-m.footing.stand)
 	} else {
 		m.steepClimb = 0
 	}

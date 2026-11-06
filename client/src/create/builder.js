@@ -8,7 +8,7 @@ import { WALK_DEG } from "./growth.js";
 // behind them.
 //
 // On the ground: W/S run forward and back, A/D turn, Q/E strafe, and space takes off. They can't
-// walk up onto ground whose face is steeper than WALK_DEG, whichever way they go up it, and slide
+// walk up onto a face (v2/faces.js) steeper than WALK_DEG, whichever way they go up it, and slide
 // down it at SLIDE_FT where they're on it. In water
 // deeper than SWIM_FT they swim, slower, floating with their feet that far under its surface, or
 // anywhere under it: forward goes the way the camera looks, so looking down past where it rests
@@ -66,7 +66,7 @@ const SWIM_LEVEL = 0.12; // how far, in radians, the camera can look either way 
 // where they'd be out of what's in the way. landAt(x, z), the land's height without what's built
 // on it, sets how fast flying goes. Returns the new state, with `swimming` whether they're in water
 // deeper than SWIM_FT.
-export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z], waterAt = () => null, landAt = groundAt) {
+export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z], waterAt = () => null, landAt = groundAt, slopeAt = (x, z) => steepness(x, z, groundAt)) {
   const ground = (x, z) => standAt(x, z, groundAt, waterAt);
   const bed = (x, z) => groundAt(x, z) ?? SEA_LEVEL_FT;
   let { x, y, z, yaw, flying } = state;
@@ -90,9 +90,9 @@ export function moveBuilder(state, input, dt, groundAt, push = (x, z) => [x, z],
   if (length) {
     x += (mx / length) * speed * ahead * dt;
     z += (mz / length) * speed * ahead * dt;
-    if (!flying) [x, z] = push(...offSteep(state.x, state.z, x, z, groundAt));
+    if (!flying) [x, z] = push(...offSteep(state.x, state.z, x, z, groundAt, slopeAt));
   }
-  if (!flying && !swimming) [x, z] = slide(x, z, dt, groundAt);
+  if (!flying && !swimming) [x, z] = slide(x, z, dt, groundAt, slopeAt);
   if (swimming) {
     const up = (length ? (input.forward * ahead * Math.sin(input.pitch ?? 0)) / length : 0) + rise - drop;
     y = Math.min(ground(x, z), Math.max(bed(x, z), y + up * speed * dt));
@@ -134,7 +134,9 @@ export function heightAfter(seconds) {
   return Math.min(CEILING_FT, steady * Math.exp(CLIMB_PER_FT * (seconds - t)));
 }
 
-// How steep the ground's face is at (x, z), rise over run.
+// How steep the ground is at (x, z), rise over run, from its heights a little way either way: for
+// ground known only by its heights. Where its faces are known, their own slope is used instead
+// (slopeAt), since this takes in faces beside the one at (x, z).
 export function steepness(x, z, groundAt) {
   const h = (a, b) => groundAt(a, b) ?? SEA_LEVEL_FT;
   const d = CELL_FT / 2;
@@ -143,21 +145,27 @@ export function steepness(x, z, groundAt) {
 
 // Where walking from (x0, z0) to (x, z) ends: there, or where it isn't up onto ground too steep,
 // going only across or only along, or nowhere.
-function offSteep(x0, z0, x, z, groundAt) {
+function offSteep(x0, z0, x, z, groundAt, slopeAt) {
   const from = groundAt(x0, z0) ?? SEA_LEVEL_FT;
-  const fine = (a, b) => (groundAt(a, b) ?? SEA_LEVEL_FT) <= from || steepness(a, b, groundAt) <= STEEPEST;
+  const fine = (a, b) => (groundAt(a, b) ?? SEA_LEVEL_FT) <= from || slopeAt(a, b) <= STEEPEST;
   return [[x, z], [x, z0], [x0, z]].find(([a, b]) => fine(a, b)) ?? [x0, z0];
 }
 
 // Where standing at (x, z) for dt slides to, down the ground where it's too steep.
-function slide(x, z, dt, groundAt) {
-  const steep = steepness(x, z, groundAt);
-  if (steep <= STEEPEST) return [x, z];
+function slide(x, z, dt, groundAt, slopeAt) {
+  if (slopeAt(x, z) <= STEEPEST) return [x, z];
+  const [gx, gz] = downhill(x, z, groundAt);
+  return [x + gx * SLIDE_FT * dt, z + gz * SLIDE_FT * dt];
+}
+
+// The way down the ground at (x, z), a unit [x, z], or [0, 0] where it's flat: from its heights a
+// hair either way, so on the face there.
+export function downhill(x, z, groundAt) {
   const h = (a, b) => groundAt(a, b) ?? SEA_LEVEL_FT;
-  const d = CELL_FT / 2;
+  const d = 0.05;
   const [gx, gz] = [h(x + d, z) - h(x - d, z), h(x, z + d) - h(x, z - d)];
   const length = Math.hypot(gx, gz);
-  return [x - (gx / length) * SLIDE_FT * dt, z - (gz / length) * SLIDE_FT * dt];
+  return length ? [-gx / length, -gz / length] : [0, 0];
 }
 
 // Whether the water at (x, z) is deep enough to swim in.
@@ -191,7 +199,7 @@ export class Builder {
   // `was`, where something's in the way that moveBuilder doesn't know of, told { soaring }, whether
   // space is double-tapped and held. ghost(): whether they're
   // a ghost, flying anywhere, through everything.
-  constructor({ scene, camera, canvas, groundAt, landAt = groundAt, waterAt = () => null, at, state, push, clear = (head, to) => to, inCave = () => false, keep = (was, now) => now, ghost = () => false }) {
+  constructor({ scene, camera, canvas, groundAt, slopeAt = (x, z) => steepness(x, z, groundAt), landAt = groundAt, waterAt = () => null, at, state, push, clear = (head, to) => to, inCave = () => false, keep = (was, now) => now, ghost = () => false }) {
     this.push = push;
     this.ghost = ghost;
     this.keep = keep;
@@ -202,6 +210,7 @@ export class Builder {
     this.camera = camera;
     this.canvas = canvas;
     this.groundAt = groundAt;
+    this.slopeAt = slopeAt; // slopeAt(x, z): how steep the face groundAt stands on there is
     this.state = state ?? { x: at[0], y: groundAt(...at) ?? SEA_LEVEL_FT, z: at[1], yaw: Math.PI, flying: false };
     this.cam = { yaw: 0, pitch: CAMERA.pitch, distance: CAMERA.distance };
     this.held = new Set();
@@ -262,7 +271,7 @@ export class Builder {
     const was = this.state;
     this.state = this.ghost()
       ? moveBuilder({ ...this.state, flying: true }, input, dt, () => -Infinity, undefined, undefined, this.landAt)
-      : this.keep(was, moveBuilder(this.state, input, dt, this.groundAt, this.push, this.waterAt, this.landAt), { soaring: this.fast.has(" ") });
+      : this.keep(was, moveBuilder(this.state, input, dt, this.groundAt, this.push, this.waterAt, this.landAt, this.slopeAt), { soaring: this.fast.has(" ") });
     if (this.drag?.button === 2) this.cam.yaw = 0;
     const now = this.state;
     const speed = dt > 0 ? Math.hypot(now.x - was.x, now.z - was.z) / dt : 0;

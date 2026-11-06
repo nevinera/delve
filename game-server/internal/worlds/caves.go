@@ -246,59 +246,65 @@ func (g *Ground) smoothFloor(ci, cj int, s span) (float64, error) {
 	return math.Max(s.floor-voxelFt, math.Min(s.floor+voxelFt, sum/n)), nil
 }
 
-// floorAt is span s's smooth floor at continent feet (x, z), between the smoothed floors at the
-// middles of the four columns round it. The lock is held.
-func (g *Ground) floorAt(x, z float64, s span) (float64, error) {
-	ci, cj := int(math.Floor(x/voxelFt)), int(math.Floor(z/voxelFt))
-	own, err := g.smoothFloor(ci, cj, s)
-	if err != nil {
-		return 0, err
-	}
-	u, v := x/voxelFt-0.5, z/voxelFt-0.5
-	i0, j0 := int(math.Floor(u)), int(math.Floor(v))
-	at := func(i, j int) (float64, error) {
-		if i == ci && j == cj {
-			return own, nil
-		}
-		spans, err := g.spans(i, j)
+// cornerFloor is span s's smooth floor at the corner of columns (i, j), the northwest corner of
+// column (i, j): the mean of the smoothed floors of the four columns round it that are joined to
+// it. The lock is held.
+func (g *Ground) cornerFloor(i, j int, s span) (float64, error) {
+	sum, n := 0.0, 0.0
+	for _, c := range [4][2]int{{i - 1, j - 1}, {i, j - 1}, {i - 1, j}, {i, j}} {
+		spans, err := g.spans(c[0], c[1])
 		if err != nil {
 			return 0, err
 		}
 		if t, ok := joinedFloor(spans, s, voxelFt); ok {
-			return g.smoothFloor(i, j, t)
+			f, err := g.smoothFloor(c[0], c[1], t)
+			if err != nil {
+				return 0, err
+			}
+			sum, n = sum+f, n+1
 		}
-		return own, nil
 	}
+	if n == 0 {
+		return s.floor, nil
+	}
+	return sum / n, nil
+}
+
+// floorAt is span s's smooth floor at continent feet (x, z), on the faces between the corners of
+// the column it's in (faces.go), and how steep its face there is, rise over run. The lock is held.
+func (g *Ground) floorAt(x, z float64, s span) (height, slope float64, err error) {
+	ci, cj := int(math.Floor(x/voxelFt)), int(math.Floor(z/voxelFt))
 	var h [4]float64
 	for k, ij := range [4][2]int{{0, 0}, {1, 0}, {0, 1}, {1, 1}} {
-		if h[k], err = at(i0+ij[0], j0+ij[1]); err != nil {
-			return 0, err
+		if h[k], err = g.cornerFloor(ci+ij[0], cj+ij[1], s); err != nil {
+			return 0, 0, err
 		}
 	}
-	fu, fv := u-float64(i0), v-float64(j0)
-	return (h[0]*(1-fu)+h[1]*fu)*(1-fv) + (h[2]*(1-fu)+h[3]*fu)*fv, nil
+	fu, fv := x/voxelFt-float64(ci), z/voxelFt-float64(cj)
+	return faceHeight(h[0], h[1], h[2], h[3], fu, fv), faceSlope(h[0], h[1], h[2], h[3], fu, fv, voxelFt), nil
 }
 
 // caveFloors are the smoothed floors of the caves under the ground at (x, z), ground `ground`
-// there, and whether a cave opens the ground itself there, at a mouth. The lock is held.
-func (g *Ground) caveFloors(x, z, ground float64) (floors []float64, open bool, err error) {
+// there, how steep each one's face is, and whether a cave opens the ground itself there, at a
+// mouth. The lock is held.
+func (g *Ground) caveFloors(x, z, ground float64) (floors, slopes []float64, open bool, err error) {
 	spans, err := g.spans(int(math.Floor(x/voxelFt)), int(math.Floor(z/voxelFt)))
 	if err != nil {
-		return nil, false, err
+		return nil, nil, false, err
 	}
 	for _, s := range spans {
 		if s.floor < ground && ground < s.ceiling {
 			open = true
 		}
 		if s.floor <= ground {
-			f, err := g.floorAt(x, z, s)
+			f, slope, err := g.floorAt(x, z, s)
 			if err != nil {
-				return nil, false, err
+				return nil, nil, false, err
 			}
-			floors = append(floors, f)
+			floors, slopes = append(floors, f), append(slopes, slope)
 		}
 	}
-	return floors, open, nil
+	return floors, slopes, open, nil
 }
 
 // inCaveRock is whether (x, y, z) is in a cave's rock: under the ground there, near a cave, and

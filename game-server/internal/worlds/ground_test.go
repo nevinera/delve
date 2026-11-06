@@ -51,6 +51,7 @@ type expected struct {
 	Ground []struct {
 		At     [2]float64
 		Ground *float64
+		Slope  *float64
 		Water  *float64
 	}
 	Fills []struct {
@@ -72,11 +73,12 @@ type expected struct {
 		Footholds []float64
 	}
 	CaveFloors []struct {
-		At     [2]float64
-		Ground float64
-		Floors []float64
-		Open   bool
-		Rock   []struct {
+		At          [2]float64
+		Ground      float64
+		Floors      []float64
+		FloorSlopes []float64
+		Open        bool
+		Rock        []struct {
 			Y     float64
 			Solid bool
 		}
@@ -96,6 +98,9 @@ func TestGroundMatchesCreate(t *testing.T) {
 		want := emptyFt
 		if p.Ground != nil {
 			want = *p.Ground
+		}
+		if p.Slope != nil && !near(s.Steep, *p.Slope) {
+			t.Errorf("%v: slope = %v, want %v", p.At, s.Steep, *p.Slope)
 		}
 		if !near(s.Ground, want) {
 			t.Errorf("%v: ground = %v, want %v", p.At, s.Ground, want)
@@ -304,6 +309,9 @@ func TestGroundFindsCaveFloorsAndRockAsCreateDoes(t *testing.T) {
 		for k := range s.Floors {
 			if !near(s.Floors[k], p.Floors[k]) {
 				t.Errorf("%v: floors = %v, want %v", p.At, s.Floors, p.Floors)
+			}
+			if !near(s.FloorSlopes[k], p.FloorSlopes[k]) {
+				t.Errorf("%v: floor slopes = %v, want %v", p.At, s.FloorSlopes, p.FloorSlopes)
 			}
 		}
 		g.mu.Lock()
