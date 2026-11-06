@@ -1,5 +1,5 @@
 class User < ApplicationRecord
-  ROLES = %w[system_admin server_admin].freeze
+  ROLES = %w[system_admin].freeze
 
   devise :rememberable, :trackable,
     :omniauthable, omniauth_providers: [:google_oauth2]
@@ -15,7 +15,4 @@ class User < ApplicationRecord
   validates :role, inclusion: {in: ROLES}, allow_nil: true
 
   def system_admin? = role == "system_admin"
-
-  # Server admins issue invitations. System admins can do everything they can.
-  def server_admin? = role == "server_admin" || system_admin?
 end

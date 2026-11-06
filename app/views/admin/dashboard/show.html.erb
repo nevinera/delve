@@ -6,7 +6,6 @@
   <p><%= link_to "Invitations", admin_invitations_path %> (<%= @unused_invitations %> unused)</p>
 </section>
 
-<% if current_user.system_admin? %>
 <section>
   <h2>What players sent</h2>
   <ul>
@@ -24,4 +23,3 @@
     <li><%= link_to "One creature", creature_path %>: one creature playing each of its roles</li>
   </ul>
 </section>
-<% end %>
