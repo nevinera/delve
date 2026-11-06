@@ -9,6 +9,15 @@ const TYPED_KEPT = "playLogTyped"; // what you've typed lately, in localStorage
 const MIN = [220, 60];
 const FONT_PX = [10, 24]; // the smallest and largest its text goes
 const TYPED = 50; // how many typed lines it remembers
+const BAR_GAP = 8; // how far short of the action bars it stops, in px
+
+// How wide the log can be between its left edge and the action bars' (px, from the window's left),
+// or `hidden` where that room is narrower than the log's least width. With no bars there's no limit.
+export function logRoom(logLeft, barLeft) {
+  if (!Number.isFinite(barLeft)) return { width: Infinity, hidden: false };
+  const width = Math.floor(barLeft - logLeft - BAR_GAP);
+  return { width, hidden: width < MIN[0] };
+}
 
 // What each line in the log is, which gives it its color (play.css): reply, an answer to what you
 // typed or did; status, what's happened to you or the world; error, for errors and warnings;
@@ -130,11 +139,30 @@ export class PlayLog {
   // [width, height] of its lines in px, or null for the size that suits the screen.
   sizeTo(size) {
     if (!size) return;
-    const [w, h] = [Math.max(MIN[0], Math.min(window.innerWidth - 24, size[0])), Math.max(MIN[1], Math.min(window.innerHeight * 0.8, size[1]))];
+    const [w, h] = [Math.max(MIN[0], Math.min(window.innerWidth - 24, this.room ?? Infinity, size[0])), Math.max(MIN[1], Math.min(window.innerHeight * 0.8, size[1]))];
     this.size = [Math.round(w), Math.round(h)];
     this.root.style.setProperty("--log-width", `${this.size[0]}px`);
     this.root.style.setProperty("--log-height", `${this.size[1]}px`);
     this.lines.scrollTop = this.lines.scrollHeight;
+  }
+
+  // Keeps the log short of `bars`, the action bars, as they and the window change size. Where
+  // there's too little room it hides, as on a phone, until you open the box to type.
+  keepLeftOf(bars) {
+    this.bars = bars;
+    const fit = () => this.fit();
+    new ResizeObserver(fit).observe(bars);
+    window.addEventListener("resize", fit);
+    fit();
+  }
+
+  fit() {
+    const box = this.bars?.getBoundingClientRect();
+    // Its left from the style sheet, which it has even while it's hidden.
+    const { width, hidden } = logRoom(parseFloat(getComputedStyle(this.root).left) || 0, box?.width ? box.left : NaN);
+    this.room = Number.isFinite(width) ? width : null;
+    this.root.style.setProperty("--log-room", this.room === null ? "100vw" : `${Math.max(width, 0)}px`);
+    this.root.classList.toggle("play-log-narrow", hidden);
   }
 
   // The text's size in px, which it keeps in this browser.
@@ -161,6 +189,7 @@ export class PlayLog {
 
   open(text = "") {
     this.box.hidden = false;
+    this.root.classList.add("play-log-typing");
     this.box.value = text;
     this.box.focus();
   }
@@ -168,6 +197,7 @@ export class PlayLog {
   close() {
     this.box.value = "";
     this.box.hidden = true;
+    this.root.classList.remove("play-log-typing");
     this.box.blur();
   }
 
