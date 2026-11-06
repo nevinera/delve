@@ -57,6 +57,9 @@ export const THEME_LOOK = {
 };
 const SHADE = 0.1; // how much each vertex's color varies, lighter or darker
 const WALK_SLOPE = Math.tan((WALK_DEG * Math.PI) / 180);
+// SPIKE: whether floors' vertices stay on the columns' corners at the walked floor's height, so
+// the drawn floor is a grid of triangles, as the ground is.
+export const PIN_FLOORS = { on: !new URLSearchParams(globalThis.location?.search ?? "").has("unpinned") };
 const BLEND_FLOORS = true; // whether floor and rock colors blend across faces, or each face is one or the other
 const LIP = { relax: 1, passes: 10 }; // how the ground round a mouth is drawn toward its neighbours
 const LIP_CUBES = 3; // how far from the lip, in grid cubes, rock and ground blend
@@ -308,6 +311,9 @@ export function caveMesh(tx, tz, world) {
         const smooth = relaxed(a, b, c, LIP.passes);
         at = at.map((v, i) => v + (smooth[i] - v) * LIP.relax * near);
       }
+    } else if (PIN_FLOORS.on && here.floor && !nearLip(a, b, c)) {
+      const [x, z] = [(a + 1) * VOXEL_FT, (b + 1) * VOXEL_FT];
+      at = [x, floorAt(spans, x, z, here.floor, smoothOf), z];
     } else {
       const near = nearLip(a, b, c);
       const smooth = relaxed(a, b, c, look.passes);
