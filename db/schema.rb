@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_11_05_210908) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_06_220801) do
   create_table "characters", force: :cascade do |t|
     t.integer "user_id", null: false
     t.string "name", null: false
@@ -49,6 +49,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_05_210908) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["user_id"], name: "index_github_connections_on_user_id", unique: true
+  end
+
+  create_table "invitations", force: :cascade do |t|
+    t.string "token", null: false
+    t.string "note"
+    t.integer "created_by_id"
+    t.integer "used_by_id"
+    t.datetime "used_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_invitations_on_created_by_id"
+    t.index ["token"], name: "index_invitations_on_token", unique: true
+    t.index ["used_by_id"], name: "index_invitations_on_used_by_id"
   end
 
   create_table "problem_reports", force: :cascade do |t|
@@ -144,6 +157,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_11_05_210908) do
   add_foreign_key "characters", "users"
   add_foreign_key "client_errors", "users", on_delete: :nullify
   add_foreign_key "github_connections", "users"
+  add_foreign_key "invitations", "users", column: "created_by_id"
+  add_foreign_key "invitations", "users", column: "used_by_id"
   add_foreign_key "problem_reports", "users", on_delete: :nullify
   add_foreign_key "world_characters", "characters"
   add_foreign_key "world_characters", "worlds"

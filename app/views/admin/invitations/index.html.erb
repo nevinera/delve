@@ -1,0 +1,33 @@
+<% content_for :title, "Invitations - Delve" %>
+<p><%= link_to "Admin", admin_path %></p>
+<h1>Invitations</h1>
+<p>Each link makes one new account, for whoever opens it first.</p>
+
+<%= form_with url: admin_invitations_path do |f| %>
+  <%= f.text_field :note, placeholder: "who it's for (only you see this)", maxlength: Invitation::NOTE_LIMIT %>
+  <%= f.submit "Make an invitation" %>
+<% end %>
+
+<% if @invitations.any? %>
+  <table>
+    <thead><tr><th>Made</th><th>Note</th><th>By</th><th>Status</th></tr></thead>
+    <tbody>
+      <% @invitations.each do |invitation| %>
+        <tr>
+          <td><%= invitation.created_at.to_date %></td>
+          <td><%= invitation.note %></td>
+          <td><%= invitation.created_by&.email || "the console" %></td>
+          <td>
+            <% if invitation.used? %>
+              used by <%= invitation.used_by&.email || "a deleted account" %> on <%= invitation.used_at.to_date %>
+            <% else %>
+              unused: <code><%= invitation_url(invitation.token) %></code>
+            <% end %>
+          </td>
+        </tr>
+      <% end %>
+    </tbody>
+  </table>
+<% else %>
+  <p>No invitations yet.</p>
+<% end %>

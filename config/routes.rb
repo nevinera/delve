@@ -42,7 +42,11 @@ Rails.application.routes.draw do
   get "classes" => "classes#show"
   get "character_builder", to: redirect("/characters/new")
   resources :characters, except: [:show]
-  get "admin" => "admin#show"
+  get "admin" => "admin/dashboard#show"
+  namespace :admin do
+    resources :invitations, only: [:index, :create]
+  end
+  get "invite/:token" => "invitations#show", :as => :invitation
   get "animation_lab" => "animation_lab#show"
   get "monster_lab" => "monster_lab#show"
   get "creatures" => "creatures#show"
