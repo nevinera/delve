@@ -986,7 +986,7 @@
     },
     "server.health": {
       "additionalProperties": false,
-      "description": "A training dummy reset",
+      "description": "Your health or most health changed other than by a hit: a new level, or a status changing your most health",
       "properties": {
         "type": {
           "const": "health"

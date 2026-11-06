@@ -44,7 +44,11 @@ Rails.application.routes.draw do
   resources :characters, except: [:show] do
     resource :keys, only: [:update], controller: "character_keys"
   end
-  get "admin" => "admin#show"
+  get "admin" => "admin/dashboard#show"
+  namespace :admin do
+    resources :invitations, only: [:index, :create]
+  end
+  get "invite/:token" => "invitations#show", :as => :invitation
   get "animation_lab" => "animation_lab#show"
   get "monster_lab" => "monster_lab#show"
   get "creatures" => "creatures#show"

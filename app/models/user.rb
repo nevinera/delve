@@ -9,15 +9,10 @@ class User < ApplicationRecord
   has_one :github_connection, dependent: :destroy
   has_many :client_errors, dependent: :nullify
   has_many :problem_reports, dependent: :nullify
+  has_many :invitations_issued, class_name: "Invitation", foreign_key: :created_by_id, dependent: :nullify, inverse_of: :created_by
+  has_one :invitation, foreign_key: :used_by_id, dependent: :nullify, inverse_of: :used_by
 
   validates :role, inclusion: {in: ROLES}, allow_nil: true
 
   def system_admin? = role == "system_admin"
-
-  def self.from_omniauth(auth)
-    find_or_create_by(provider: auth.provider, uid: auth.uid) do |user|
-      user.email = auth.info.email
-      user.name = auth.info.name
-    end
-  end
 end

@@ -49,10 +49,10 @@ func TestSightStopsACastLetGo(t *testing.T) {
 	})
 	use(t, p, "slowpoke")
 	p.layer.fakeGround = wall()
-	health := d.Health
+	health := d.damage
 	pass(h, c, 1.5)
-	if d.Health != health {
-		t.Fatalf("it hit through the wall: %g to %g", health, d.Health)
+	if d.damage != health {
+		t.Fatalf("it hit through the wall: %g to %g", health, d.damage)
 	}
 	refusal(t, p, cantSee)
 }
@@ -62,10 +62,10 @@ func TestSightStopsSwings(t *testing.T) {
 	p.layer.mu.Lock()
 	p.layer.startAttacking(p, d.ID)
 	p.layer.mu.Unlock()
-	health := d.Health
+	health := d.damage
 	pass(h, c, 3)
-	if d.Health != health {
-		t.Fatalf("it swung through the wall: %g to %g", health, d.Health)
+	if d.damage != health {
+		t.Fatalf("it swung through the wall: %g to %g", health, d.damage)
 	}
 	refusal(t, p, cantSee)
 }

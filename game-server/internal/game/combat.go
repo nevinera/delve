@@ -17,7 +17,7 @@ const (
 	CombatTick     = 50 * time.Millisecond
 	strikeDelay    = 300 * time.Millisecond // how far into its attack clip a melee hit lands
 	dummyHealth    = 100000.0
-	dummyResetIdle = 5 * time.Second // a dummy heals up and its tally starts over after this long unhit
+	dummyResetIdle = 5 * time.Second // a dummy's tally starts over after this long unhit
 	combatLasts    = 5 * time.Second // you're in combat until this long after you last attacked or were hit
 	resourceEvery  = 500 * time.Millisecond
 	sparShare      = 0.05 // what a dummy's swing takes of your most health
@@ -65,7 +65,8 @@ type activeStatus struct {
 	owner   *combat.Class     // the class it came from
 }
 
-// dummy is a training dummy: it takes damage, never dies or fights back, and tallies who's hit it.
+// dummy is a training dummy: it's always at full health and never fights back, and it tallies what
+// hits it.
 type dummy struct {
 	vitals
 	state    Character
@@ -254,12 +255,6 @@ func (l *Layer) tick(now time.Time) {
 	for _, d := range l.dummies {
 		if !d.lastHit.IsZero() && now.Sub(d.lastHit) >= dummyResetIdle {
 			d.firstHit, d.lastHit, d.damage = time.Time{}, time.Time{}, 0
-			d.Health, d.state.Health = d.MaxHealth, d.MaxHealth
-			for _, o := range l.players {
-				if o.state.Continent == d.state.Continent {
-					o.send(encode(healthMessage{"health", d.ID, d.Health, d.MaxHealth}))
-				}
-			}
 		}
 	}
 	l.sweep(now)

@@ -42,11 +42,11 @@ func statusFight(t *testing.T, statuses map[string]string) (*Hub, *Player, *floa
 
 func hitFor(t *testing.T, h *Hub, p *Player, c *float64) float64 {
 	t.Helper()
-	before := p.layer.dummies[0].Health
+	before := p.layer.dummies[0].damage
 	h.roll = func() float64 { return 0.5 }
 	use(t, p, "hit")
 	pass(h, c, 0.5)
-	return before - p.layer.dummies[0].Health
+	return math.Round((p.layer.dummies[0].damage-before)*1e6) / 1e6 // to a millionth, past float error
 }
 
 func TestDamageDoneAndTakenMultiply(t *testing.T) {
@@ -333,7 +333,7 @@ func TestModifyChangesAbilities(t *testing.T) {
 	use(t, p, "zeal")
 	pass(h, c, 2)
 	heard(p)
-	before := p.layer.dummies[0].Health
+	before := p.layer.dummies[0].damage
 	use(t, p, "hit")
 	got := heard(p, "used", "cooldown")
 	if len(got) != 1 || got[0]["castTime"] != 1.0 {
@@ -343,7 +343,7 @@ func TestModifyChangesAbilities(t *testing.T) {
 	if have := p.fight.resources["grit"]; have != 1 {
 		t.Fatalf("grit = %g, want 1 after spending 4", have)
 	}
-	if hurt := before - p.layer.dummies[0].Health; hurt != 400 {
+	if hurt := p.layer.dummies[0].damage - before; hurt != 400 {
 		t.Fatalf("hit for %g, want 100 x 2 x a crit", hurt)
 	}
 	if got := heard(p, "cooldown"); len(got) != 1 || got[0]["seconds"] != 5.0 {
@@ -430,11 +430,11 @@ func TestPeriodicTicks(t *testing.T) {
 	heard(p)
 	use(t, p, "ouch2")
 	pass(h, c, 0.1)
-	was := d.Health
+	was := d.damage
 	wasHealth := p.fight.vitals.Health
 	use(t, p, "cut")
 	pass(h, c, 7)
-	if got := was - d.Health; got != 30 {
+	if got := d.damage - was; got != 30 {
 		t.Fatalf("did %g over its 6 s, want 3 ticks of 10", got)
 	}
 	if got := p.fight.vitals.Health - wasHealth; got != 15 {
@@ -466,9 +466,9 @@ func TestPeriodicTicks(t *testing.T) {
 	use(t, p, "cut")
 	use(t, p, "cut")
 	pass(h, c, 0.05)
-	was = d.Health
+	was = d.damage
 	pass(h, c, 1.1)
-	if got := was - d.Health; got != 40 {
+	if got := d.damage - was; got != 40 {
 		t.Fatalf("a tick did %g, want 10 x 2 stacks x 2", got)
 	}
 }
@@ -480,7 +480,7 @@ func TestRefreshKeepsTheTickSchedule(t *testing.T) {
 	class.Statuses = append(class.Statuses, combat.Status{ID: "bleed", Name: "Bleed", Duration: 20, Stacking: "refresh", Effects: effects(t, `[{"type":"periodic","every":2,"does":"damage","amount":10}]`)})
 	class.Abilities = append(class.Abilities, onDummy("cut", combat.Effect{Type: "status", Affects: "target", Status: "bleed"}))
 	d := p.layer.dummies[0]
-	was := d.Health
+	was := d.damage
 	use(t, p, "cut")
 	for n := 0; n < 4; n++ {
 		pass(h, c, 0.5)
@@ -489,7 +489,7 @@ func TestRefreshKeepsTheTickSchedule(t *testing.T) {
 		}
 	}
 	pass(h, c, 0.2)
-	if got := was - d.Health; got != 10 {
+	if got := d.damage - was; got != 10 {
 		t.Fatalf("did %g by 2.2 s, want one tick", got)
 	}
 }
@@ -517,10 +517,10 @@ func TestPeriodicKinds(t *testing.T) {
 		t.Fatalf("grit = %g", p.fight.resources["grit"])
 	}
 	d := p.layer.dummies[0]
-	before := d.Health
+	before := d.damage
 	use(t, p, "burn")
 	pass(h, c, 1.1)
-	if got := before - d.Health; got != 10/float64(max(len(p.layer.dummies), 1)) {
+	if got := d.damage - before; got != 10/float64(max(len(p.layer.dummies), 1)) {
 		t.Fatalf("burned %g with %d dummies", got, len(p.layer.dummies))
 	}
 }

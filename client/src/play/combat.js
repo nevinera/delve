@@ -180,6 +180,7 @@ export class PlayCombat {
     this.hovered = null;
     this.hud.replaceChildren(el("div", { className: "combat-frames" }, this.youFrame.root, this.targetFrame.root), this.floatLayer, this.say, this.castBar, this.bar, this.log.root);
     keyBindings().onChange(() => this.drawBars());
+    this.log.keepLeftOf(this.bar);
     this.youFrame.name.textContent = `${this.you.name}${this.you.level ? ` (${this.you.level})` : ""}`;
     this.drawFrame(this.youFrame, this.health, this.maxHealth);
     this.targetRing = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0xff5040, transparent: true, opacity: 0.8, depthWrite: false }));
