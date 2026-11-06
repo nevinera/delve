@@ -16,6 +16,17 @@ body.play {
 }
 
 /* Loading and connection news, over the top middle while there's any. */
+/* Covers the scene till you're in, so you don't see the land drawn bit by bit. */
+.play-loading {
+  position: fixed;
+  inset: 0;
+  background: #0e0c12;
+}
+
+.play-loading[hidden] {
+  display: none;
+}
+
 .play-status {
   position: fixed;
   top: 10px;

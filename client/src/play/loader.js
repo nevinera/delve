@@ -67,7 +67,10 @@ export class PlayWorld {
     const platters = [...this.paths].filter((p) => PLATTER_PATH.exec(p)?.[1] === key);
     await this.fetchAll([...platters, biomesPath(key), waterPath(key), layoutPath(key)].filter((p) => this.paths.has(p)));
     return {
-      platters: platters.map((p) => this.files.get(p)),
+      platters: platters.map((p) => {
+        const [, , px, pz] = PLATTER_PATH.exec(p);
+        return [[Number(px), Number(pz)], this.files.get(p)];
+      }),
       biomes: this.readJson(biomesPath(key)),
       water: this.readJson(waterPath(key)),
       caveLayout: this.readJson(layoutPath(key)),

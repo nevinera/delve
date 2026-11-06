@@ -62,6 +62,7 @@ const SHORE_CELLS = 4; // how far from water ground can be shore
 export class Renditions {
   constructor() {
     this.platters = new Map(); // "px,pz" -> { coords, tiles, plates }
+    this.held = new Map(); // "px,pz" -> a platter file not read yet (holdPlatter)
     this.plateFiles = new Map(); // "px,pz" -> gzipped bytes
     this.decoded = new Map(); // "px,pz" -> decoded plate file, the latest used last
     this.reading = new Set(); // "px,pz" of plate files being read
@@ -698,6 +699,26 @@ export class Renditions {
     this.platters.set(platter.coords.join(","), platter);
   }
 
+  // Keeps platter [px, pz]'s file to read when it's first wanted, or by readHeld(). Reading takes a
+  // while on a phone, so play reads the platters near you first and holds the rest.
+  holdPlatter(coords, bytes) {
+    this.held.set(coords.join(","), bytes);
+  }
+
+  // Reads one held platter, giving whether there was one to read.
+  readHeld(key = this.held.keys().next().value) {
+    const bytes = this.held.get(key);
+    if (!bytes) return false;
+    this.held.delete(key);
+    this.addPlatter(bytes);
+    return true;
+  }
+
+  platterAt(key) {
+    if (this.held.has(key)) this.readHeld(key);
+    return this.platters.get(key);
+  }
+
   addPlate(coords, bytes) {
     this.fileEdges.delete(coords.join(","));
     this.plateFiles.set(coords.join(","), bytes);
@@ -770,11 +791,11 @@ export class Renditions {
   }
 
   tile(tx, tz) {
-    return this.platters.get(platterOf(tx, tz).join(","))?.tiles.get(indexIn(tx, tz)) ?? null;
+    return this.platterAt(platterOf(tx, tz).join(","))?.tiles.get(indexIn(tx, tz)) ?? null;
   }
 
   plate(px, pz) {
-    return this.platters.get(platterOfPlate(px, pz).join(","))?.plates.get(plateIndexIn(px, pz)) ?? null;
+    return this.platterAt(platterOfPlate(px, pz).join(","))?.plates.get(plateIndexIn(px, pz)) ?? null;
   }
 
   // A tile's ground at cell scale, { heights, terrain, biome, palette, and what it looks like

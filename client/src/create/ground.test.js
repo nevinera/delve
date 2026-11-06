@@ -421,3 +421,24 @@ describe("saving plates the worker reads", () => {
     expect(world.fileEdges.has("0,0")).toBe(false);
   });
 });
+
+describe("held platters", () => {
+  const rendition = () => ({ heights: new Float32Array(81).fill(7), colors: new Uint8Array(192), hash: "0000000000000000" });
+  const platter = (coords) => encodePlatter({ coords, tiles: new Map([[0, rendition()]]), plates: new Map([[0, rendition()]]) });
+
+  it("reads a held platter when its ground is first wanted", () => {
+    const renditions = new Renditions();
+    renditions.holdPlatter([1, 0], platter([1, 0]));
+    expect(renditions.platters.size).toBe(0);
+    expect(renditions.tile(64, 0)).not.toBeNull();
+    expect([renditions.platters.size, renditions.held.size]).toEqual([1, 0]);
+  });
+
+  it("reads held platters one at a time, saying when there are none left", () => {
+    const renditions = new Renditions();
+    renditions.holdPlatter([0, 0], platter([0, 0]));
+    renditions.holdPlatter([1, 0], platter([1, 0]));
+    expect([renditions.readHeld(), renditions.readHeld(), renditions.readHeld()]).toEqual([true, true, false]);
+    expect(renditions.plate(8, 0)).not.toBeNull();
+  });
+});

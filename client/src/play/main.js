@@ -14,7 +14,7 @@ import { resolveRecipe } from "../character/recipe.js";
 import { Caves } from "../create/caves.js";
 import { Renditions } from "../create/ground.js";
 import { Placed } from "../create/placed.js";
-import { PLATE_FT } from "../v2/sizes.js";
+import { PLATE_FT, PLATTER_FT } from "../v2/sizes.js";
 import { setBuiltObjects } from "../world/objects.js";
 import { classChoices, showClassPicker } from "./classPicker.js";
 import { PlayCombat } from "./combat.js";
@@ -35,6 +35,7 @@ const config = JSON.parse($("playConfig").textContent); // { repo, sha, paths, l
 const status = (text) => ($("playStatus").textContent = text);
 const STREAM_MS = 1000; // how often to look for placed files coming into reach
 const PLACED_FT = 2 * PLATE_FT; // how near a plate's placed file is fetched
+const READ_NOW_FT = PLATE_FT; // how near a platter is read before you're in; the rest wait for idle time
 // Lighter graphics for phones: no extra pixel density, 30 frames a second to save the battery, less
 // ground clutter, and simple tree crowns.
 const PHONE_GRAPHICS = { resolution: 1, maxFps: 30, clutterRadiusFt: 120, clutterDensity: 0.5, solidCanopies: true };
@@ -85,6 +86,13 @@ menu.addEventListener("toggle", (e) => {
   window.play?.combat?.menuSound(e.newState === "closed" ? "ui-close" : "ui-open");
 });
 menu.querySelector('[data-open="playGraphics"]').disabled = true; // until there's a view
+
+// Reads the platters play held back, one at a time when the page has nothing else to do.
+function readHeldPlatters(renditions) {
+  const later = globalThis.requestIdleCallback ?? ((then) => setTimeout(then, 50));
+  const next = () => renditions.readHeld() && later(next);
+  later(next);
+}
 
 async function play() {
   const loader = new PlayWorld(config);
@@ -210,7 +218,11 @@ async function play() {
   setReportContext(() => ({ camera: view.camera.position.toArray().map(Math.round), plates: renditions.decoded.size, unreadable: [...renditions.unreadable] }));
   const continent = await step("continent", loader.continent(you.continent));
   const renditions = new Renditions();
-  for (const bytes of continent.platters) renditions.addPlatter(bytes);
+  for (const [coords, bytes] of continent.platters) {
+    const near = coords.map((c, i) => Math.max(c * PLATTER_FT, Math.min(you.at[i * 2], (c + 1) * PLATTER_FT)) - you.at[i * 2]);
+    if (Math.hypot(...near) <= READ_NOW_FT) renditions.addPlatter(bytes);
+    else renditions.holdPlatter(coords, bytes);
+  }
   renditions.setBiomes(continent.biomes?.areas ?? [], false);
   renditions.setWater(continent.water ?? { bodies: [], courses: [] }, false);
   renditions.fetchPlate = (coords) => loader.plate(you.continent, coords);
@@ -240,6 +252,8 @@ async function play() {
   // From when the page was asked for, so it includes fetching the page and its code.
   metrics().timing("play.load.total", performance.now(), tags);
   status("");
+  $("playLoading").hidden = true;
+  readHeldPlatters(renditions);
   const touch = isTouch();
   if (touch) view.setGraphics(PHONE_GRAPHICS);
   // Players get the settings that trade looks for speed, not the editor's switch for each part.
