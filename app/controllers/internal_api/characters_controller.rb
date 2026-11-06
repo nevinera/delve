@@ -15,8 +15,10 @@ class InternalApi::CharactersController < InternalApi::BaseController
     write({continent: params[:continent], x: at[0], y: at[1], z: at[2], yaw: params[:yaw]}, :position)
   end
 
+  # A new class starts with its own default bars and no specialization or talents, since the old
+  # ones name abilities and choices the new class doesn't have.
   def pick_class
-    write({class_id: params[:class]}, :class_pick)
+    write({class_id: params[:class], specialization: nil, talents: {}, bars: nil}, :class_pick)
   end
 
   def bars

@@ -1137,7 +1137,7 @@ The play page talks to the Go game server (`game-server/`) over a websocket. The
 1. The play page gets an entry token from Rails, in its config with the game server's address.
 2. The client opens `wss://<game server>/play?token=<token>`. A browser websocket can't set headers, so the token goes in the URL.
 3. The game server checks the token's signature and expiry, loads the world, and asks Rails for the character.
-4. If the world has classes and the character has none of them, the server sends `pickClass` and waits for `pick`. It keeps the choice with Rails. A character asks again only if its class leaves the world.
+4. If the world has classes and the character has none of them, the server sends `pickClass` and waits for `pick`. It keeps the choice with Rails. A character asks again only if its class leaves the world, and then starts the new class with the default bars and no specialization or talents, at the level it had.
 5. The server places the character and sends `welcome`.
 
 A token lasts 5 minutes. To enter again after that, reload the page.
@@ -1305,7 +1305,7 @@ They call each other with fixed shared tokens in an `X-Internal-Token` header. R
 - `PUT /internal/worlds/:world/characters/:character/level` with `{ level }` keeps its level there, and answers 204.
 - `PUT /internal/worlds/:world/characters/:character/bars` with `{ bars }` keeps its action bars there, and answers 204.
 - `PUT /internal/worlds/:world/characters/:character/build` with `{ specialization, talents }` keeps what it chose there, and answers 204.
-- `PUT /internal/worlds/:world/characters/:character/class` with `{ class }` keeps the class it picked there, and answers 204.
+- `PUT /internal/worlds/:world/characters/:character/class` with `{ class }` keeps the class it picked there, clears its specialization, talents and bars, and answers 204.
 
 The game server never writes to the database directly.
 

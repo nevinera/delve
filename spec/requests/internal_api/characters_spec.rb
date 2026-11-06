@@ -64,6 +64,19 @@ RSpec.describe "The game server's character API", type: :request do
     expect(response.parsed_body).to include("class" => nil, "position" => {"continent" => "main", "at" => [1.0, 2.0, 3.0], "yaw" => 0.0})
   end
 
+  it "starts a newly picked class with no build and the default bars" do
+    put("#{path}/class", params: {class: "frst0001"}, headers:, as: :json)
+    put("#{path}/build", params: {specialization: "guard", talents: {"15" => "both"}}, headers:, as: :json)
+    put("#{path}/bars", params: {bars: [["frst0002"]]}, headers:, as: :json)
+    put("#{path}/level", params: {level: 12}, headers:, as: :json)
+
+    put("#{path}/class", params: {class: "advn0001"}, headers:, as: :json)
+    expect(response).to have_http_status(:no_content)
+
+    get(path, headers:)
+    expect(response.parsed_body).to include("class" => "advn0001", "specialization" => nil, "talents" => {}, "bars" => nil, "level" => 12)
+  end
+
   it "refuses an empty class" do
     put("#{path}/class", params: {class: ""}, headers:, as: :json)
     expect(response).to have_http_status(:unprocessable_content)
