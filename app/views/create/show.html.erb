@@ -689,12 +689,9 @@
         <dt>slowest</dt><dd id="debugSlowest">-</dd>
         <dt>draws</dt><dd id="debugDraws">-</dd>
       </dl>
-      <dl>
-        <dt class="create-debug-head" title="what the slowest frame spent its time on">slowest's</dt>
-        <dt>move</dt><dd id="debugMove">-</dd>
-        <dt>tools</dt><dd id="debugTool">-</dd>
-        <dt>ground</dt><dd id="debugGround">-</dd>
-        <dt>render</dt><dd id="debugRender">-</dd>
+      <dl class="create-debug-times" id="debugParts">
+        <dt class="create-debug-head" title="each part's time a frame, in ms: its mean, and its slowest frame">ms</dt>
+        <dd class="create-debug-head">mean</dd><dd class="create-debug-head" title="the slowest frame's">max</dd>
       </dl>
     </div>
     <div data-debug="ground" hidden>
@@ -708,6 +705,12 @@
       <dl>
         <dt title="how far off ground's drawn">reach</dt><dd id="debugReach">-</dd>
         <dt>hiding</dt><dd id="debugHidden">-</dd>
+      </dl>
+    </div>
+    <div data-debug="startup" hidden>
+      <dl class="create-debug-times" id="debugStartup">
+        <dt class="create-debug-head" title="each step of opening the page, in ms: how long it took, and when it was done">startup</dt>
+        <dd class="create-debug-head" title="ms">took</dd><dd class="create-debug-head" title="ms since the page was asked for">at</dd>
       </dl>
     </div>
     <div data-debug="builder" hidden>
@@ -733,9 +736,10 @@
     </fieldset>
     <fieldset>
       <legend>debug</legend>
-      <label title="frame rate, the slowest frame and what it spent its time on, and draw calls"><input type="checkbox" data-show-debug="frame"> frame</label>
+      <label title="frame rate, the longest gap between frames, draw calls, and the time each part of a frame takes"><input type="checkbox" data-show-debug="frame"> frame</label>
       <label title="how many tiles are drawn how finely, and how far off"><input type="checkbox" data-show-debug="ground"> ground</label>
       <label title="how the builder's moving, and where"><input type="checkbox" data-show-debug="builder"> builder</label>
+      <label title="how long each step of opening the page took"><input type="checkbox" data-show-debug="startup"> startup</label>
     </fieldset>
   </section>
 </footer>

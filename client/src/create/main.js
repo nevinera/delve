@@ -7,7 +7,7 @@ import { alert } from "./alerts.js";
 import { strFromU8, strToU8, unzipSync, zip, zipSync } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
-import { PLATE_FT, SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
+import { SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { BIOME_NAMES } from "../v2/biomes.js";
 import { waterPath } from "../v2/water.js";
 import { roadsPath } from "../v2/roads.js";
@@ -16,8 +16,8 @@ import { crossingThings } from "../v2/roadCrossings.js";
 import { ContinentFiles } from "./continentFiles.js";
 import { BIOMES, biomesPath } from "./biomes.js";
 import { Builder } from "./builder.js";
-import { Compass, facing } from "./compass.js";
-import { EMPTY_FT, FAR_FT, FINE, Ground, REACH_FT } from "./ground.js";
+import { Compass } from "./compass.js";
+import { EMPTY_FT, FINE, Ground, REACH_FT } from "./ground.js";
 import { Renditions } from "./renditions.js";
 import { grid } from "./grid.js";
 import { planningPath } from "./marks.js";
@@ -39,10 +39,11 @@ import { GithubAuthError, GithubClient } from "../github/github.js";
 import { openRepoKept } from "./keptOpen.js";
 import { BranchMoved, fromRepo, nextVersion, repoChanges, saveRepo } from "./repo.js";
 import { CAVES_PATH, Caves } from "./caves.js";
-import { VOXEL_FT } from "../v2/caves.js";
 import { Layout, layoutPath } from "./caveLayout.js";
-import { Overhead } from "./overhead.js";
-import { Earth } from "./earth.js";
+import { Atmosphere } from "./atmosphere.js";
+import { DebugPanel } from "./debugPanel.js";
+import { InfoBar, feet } from "./infoBar.js";
+import { FrameParts, Startup, debugLog, debugging } from "../metrics/timing.js";
 
 // /create: the new editor, so far a builder walking and flying over a version 2 world's ground.
 // The world comes from a zip you upload (script/convert-v2.mjs makes one from a v1 world) or a
@@ -51,13 +52,9 @@ import { Earth } from "./earth.js";
 // nothing in it: no tiles, all sea.
 
 const $ = (id) => document.getElementById(id);
-const SKY = 0x9cc4e4;
-const UNDERGROUND = 0x000000; // the sky, with the camera under the ground
-const OVERHEAD_EVERY_MS = 1000; // how often the ground drawn over the camera underground's read again
-// Where fog starts and closes in, as shares of how far off ground's drawn.
-const FOG = { near: 0.5, far: 1.02 };
-const [NEAR_FT, NEAR_PER_FT, NEAR_MOST_FT] = [0.5, 0.001, 100]; // the camera's near plane, by how high it is
-const UNDERWATER = { color: 0x1d4f5c, nearFt: -10, farFt: 70 }; // the fog with the camera under water
+// The steps of opening the page, shown in the debug pane and, with ?debug=perf, logged.
+const startup = new Startup("create");
+startup.step("code");
 const SAVE_EVERY_MS = 2000;
 const SEA_BELOW_FT = 2;
 const HUD_EVERY_MS = 250;
@@ -65,7 +62,6 @@ const BUILDER_RADIUS_FT = 1; // how much room the builder takes, walking among t
 const STEP_FT = 2.5; // how far up the builder steps onto a slab, or a cave's floor
 const HEAD_FT = 6; // how tall the builder is, for cave rock in the way
 const MID_FT = 3; // how far up the builder they're in the earth where it's rock
-const INFO_EVERY_MS = 100;
 
 // The world's kept in IndexedDB (store.js): the zip opened last, or the files of the repo's commit
 // opened or saved last, with that commit ("source"), and the files changed since, saved a little
@@ -137,14 +133,8 @@ function start(world, changes, fresh) {
   // A pixel a CSS pixel, even on high-density screens: the editor needn't be crisp.
   renderer.setPixelRatio(1);
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(SKY);
-  scene.fog = new THREE.Fog(SKY, FAR_FT * FOG.near, FAR_FT * FOG.far);
   const camera = new THREE.PerspectiveCamera(60, 1, 0.5, REACH_FT * 4);
   setReportContext(() => ({ world: name, camera: camera.position.toArray().map(Math.round), plates: renditions.decoded.size, reading: renditions.reading.size, unreadable: [...renditions.unreadable] }));
-  scene.add(new THREE.HemisphereLight(0xdde8ff, 0x55503c, 1.6));
-  const sun = new THREE.DirectionalLight(0xfff2dd, 1.8);
-  sun.position.set(0.5, 1, 0.3);
-  scene.add(sun, sun.target);
   // The ground draws the water of tiles drawn from renditions, the surfaces that of nearer tiles,
   // and the sea's plane the rest.
   const ground = new Ground(scene, renditions, renderer);
@@ -159,6 +149,7 @@ function start(world, changes, fresh) {
   // The builder stands on the ground, and swims in deep water.
   const groundAt = (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT;
   const waterAt = (x, z) => renditions.waterAt(x, z);
+  startup.step("scene");
   // The world's objects and templates, and the objects and slabs placed by hand.
   const library = new Library(world.files, name);
   // What was copied last is kept in this browser for each world, not in its files.
@@ -185,6 +176,7 @@ function start(world, changes, fresh) {
       return sync.push().catch(() => {});
     });
   };
+  startup.step("library");
   const placed = new Placed();
   const sayMissing = () => {
     const count = placed.missingCount();
@@ -197,9 +189,6 @@ function start(world, changes, fresh) {
   // The caves dug by hand: the builder stands on their floors, and the ground at their mouths is
   // theirs to draw.
   const caves = new Caves(scene, renditions);
-  const overhead = new Overhead(scene, (x, z) => renditions.heightAt(x, z));
-  const earth = new Earth(scene, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT);
-  let lastOverhead = 0;
   for (const [path, bytes] of world.files) {
     const match = CAVES_PATH.exec(path);
     if (match?.[1] === continent) caves.load(bytes, [Number(match[2]), Number(match[3])]);
@@ -217,11 +206,13 @@ function start(world, changes, fresh) {
   renditions.onRead = (key) => {
     groundRead(key);
     caves.groundRead(key);
+    debugLog("ground", `plate ${key} read, at ${Math.round(performance.now())} ms; ${renditions.reading.size} reading`);
   };
   caves.onMouths = (plates) => ground.refresh(plates);
   caves.groundMaterial = (tx, tz) => ground.fullMesh(tx, tz)?.material ?? null;
   const things = new Things(scene, placed, (x, z, under) => caves.groundAt(x, z, under), { showMissing: true });
   sayMissing();
+  startup.step("placed, caves");
   // Level slabs press the ground down under them (press.js).
   renditions.pressesOver = (tx, tz) => pressesOver(placed.near((tx + 0.5) * TILE_FT, (tz + 0.5) * TILE_FT, TILE_FT).slabs, tx, tz);
   let pressedVersion = placed.version;
@@ -269,6 +260,11 @@ function start(world, changes, fresh) {
   const inCave = (p) => p.y < groundAt(p.x, p.z) && caves.near(p.x, p.z) && !caves.solid(p.x, p.y, p.z);
   builder = new Builder({ scene, camera, canvas, groundAt: walkAt, landAt: groundAt, waterAt, at: renditions.middle(), state: saved ?? undefined, push, clear, inCave, keep, ghost });
   tools = new Tools({ scene, camera, canvas, builder, renditions, ground, placed, things, library, caves, layout, inEarth: ghost });
+  startup.step("tools");
+  const parts = new FrameParts();
+  const atmosphere = new Atmosphere({ scene, camera, renditions, groundAt, waterAt, ghost, parts, shown: { ground, caves, sea, falls, things, scatter, clutter, surfaces } });
+  const debug = new DebugPanel({ renderer, ground, builder, startup, kinds: KINDS, feet });
+  const info = new InfoBar({ tools, builder, renditions });
   // The bottom bar's display toggles.
   $("showGrid").checked = grid.value === 1;
   $("showGrid").addEventListener("change", () => (grid.value = $("showGrid").checked ? 1 : 0));
@@ -286,16 +282,6 @@ function start(world, changes, fresh) {
     ground.setTint($("showBiomes").checked ? TINT : null);
   });
   $("showPins").addEventListener("change", () => tools.marks.pins.setShown($("showPins").checked));
-  // The debug toggles each show their part of the debug pane, and the pane while any's on.
-  const debugToggles = [...document.querySelectorAll("[data-show-debug]")];
-  const debugShown = (part) => debugToggles.some((t) => t.checked && (!part || t.dataset.showDebug === part));
-  const showDebug = () => {
-    for (const toggle of debugToggles) document.querySelector(`[data-debug="${toggle.dataset.showDebug}"]`).hidden = !toggle.checked;
-    $("debug").hidden = !debugShown();
-  };
-  for (const toggle of debugToggles) toggle.addEventListener("change", showDebug);
-  // The browser may have kept them checked from before the page was loaded again.
-  showDebug();
   showLines();
   // Let go of the toggle clicked, so keys go back to flying and the tools.
   $("bottom").addEventListener("change", (e) => e.target.blur());
@@ -357,6 +343,7 @@ function start(world, changes, fresh) {
   );
   ownFiles.add({ path: layoutPath(continent), ...json(layout), keep: (had) => had || layout.networks.size > 0 || layout.carved.size > 0 }, layout.dropped ? -1 : layout.version);
   lineRoads();
+  startup.step("files");
 
   const resize = () => {
     const { clientWidth: w, clientHeight: h } = canvas;
@@ -410,9 +397,7 @@ function start(world, changes, fresh) {
     dropped = true;
     while (saving) await saving;
   });
-  let lastInfo = 0;
   const compass = new Compass($("stage"), document.querySelector(".create-bar"));
-  const feet = (ft) => `${Math.round(ft).toLocaleString()} ft`;
   const toward = (ft, ahead, back) => `${feet(Math.abs(ft))} ${ft < 0 ? back : ahead}`;
   // The spawn point, kept in world.json: where characters new to the world start.
   const worldInfo = () => JSON.parse(strFromU8(changes.get("world.json") ?? world.files.get("world.json")));
@@ -465,16 +450,11 @@ function start(world, changes, fresh) {
     const [x, z] = worldInfo().spawn.at;
     builder.state = { ...builder.state, x, z, y: walkAt(x, z), flying: false, falling: 0 };
   });
-  let frames = 0;
   let problem = null; // why the ground couldn't be drawn, shown in the HUD
-  // The slowest of each part of a frame since the HUD last showed them, in ms, and of the gaps
-  // between frames.
-  let worst = { gap: 0, move: 0, tool: 0, ground: 0, render: 0 };
-  const timed = (part, fn) => {
-    const start = performance.now();
-    fn();
-    worst[part] = Math.max(worst[part], performance.now() - start);
-  };
+  const timed = (part, fn) => parts.time(part, fn);
+  // A frame slower than this is logged with ?debug=perf, with what it spent its time on.
+  const SLOW_FRAME_MS = 100;
+  let groundWanted = false;
   // A handle for measuring from the browser's console or a script; paused stops the frames.
   store
     .get(clipboardKey)
@@ -487,11 +467,11 @@ function start(world, changes, fresh) {
     // At most FPS frames a second, with a little slack so a 60 Hz screen draws every other frame.
     if (last !== null && now - last < 1000 / FPS - 2) return requestAnimationFrame(frame);
     const dt = last === null ? 0 : Math.min(0.05, (now - last) / 1000);
-    if (last !== null) worst.gap = Math.max(worst.gap, now - last);
+    const gap = last === null ? 0 : now - last;
     last = now;
-    frames++;
+    const began = performance.now();
     timed("move", () => builder.tick(dt));
-    timed("tool", () => tools.tick(dt));
+    timed("tools", () => tools.tick(dt));
     const { x, y, z } = builder.state;
     timed("ground", () => {
       try {
@@ -503,93 +483,26 @@ function start(world, changes, fresh) {
       }
     });
     sea.tick(x, SEA_LEVEL_FT - SEA_BELOW_FT, z);
-    timed("ground", () => scatter.tick(dt, x, z, ground.finest <= FINE));
-    timed("ground", () => clutter.tick(dt, x, z, ground.finest <= FINE));
-    timed("ground", () => falls.tick(dt, x, z));
+    timed("scatter", () => scatter.tick(dt, x, z, ground.finest <= FINE));
+    timed("clutter", () => clutter.tick(dt, x, z, ground.finest <= FINE));
+    timed("falls", () => falls.tick(dt, x, z));
     if (placed.version !== pressedVersion) {
       pressedVersion = placed.version;
       timed("ground", () => ground.refresh(renditions.repress()));
     }
-    timed("ground", () => things.tick(x, z));
-    timed("ground", () => caves.tick(x, z));
-    timed("ground", () => surfaces.tick(dt, x, z, ground.finest <= FINE));
-    // The ground drawn ends ground.reach across from the builder, so fog closes in there, as far
-    // off as that is from the camera, high up too. High up, the camera's near plane's further
-    // off, to keep the far ground from flickering.
-    const back = Math.hypot(camera.position.x - x, camera.position.z - z);
-    const high = Math.max(0, camera.position.y - (groundAt(x, z) ?? SEA_LEVEL_FT));
-    scene.fog.near = Math.hypot(ground.reach * FOG.near + back, high);
-    scene.fog.far = Math.hypot(ground.reach * FOG.far + back, high);
-    const near = Math.min(NEAR_MOST_FT, Math.max(NEAR_FT, high * NEAR_PER_FT));
-    if (Math.abs(camera.near - near) > near * 0.1) {
-      camera.near = near;
-      camera.updateProjectionMatrix();
-    }
-    // Under water, murky, close in.
-    const surface = waterAt(camera.position.x, camera.position.z);
-    const under = surface != null && camera.position.y < surface;
-    // In the rock under the ground, dark, the ground over it drawn as a ceiling (overhead), and
-    // nothing on it. In a cave's air the world's drawn as ever, so it shows out of the mouth.
-    const [cx, cz] = [camera.position.x, camera.position.z];
-    const buried = camera.position.y < groundAt(cx, cz) && caves.solid(cx, camera.position.y, cz) && !caves.mouth(Math.floor(cx / VOXEL_FT), Math.floor(cz / VOXEL_FT));
-    ground.group.visible = !buried;
-    caves.groundGroup.visible = !buried;
-    // In the rock, the caves' outlines show.
-    caves.show("lines", buried);
-    caves.fromEarth(ghost());
-    timed("ground", () => overhead.tick(buried, x, z, now - lastOverhead > OVERHEAD_EVERY_MS && (lastOverhead = now)));
-    earth.tick(camera, ghost());
-    for (const shown of [sea.mesh, falls.group, things.group, things.outlines]) shown.visible = !buried;
-    if (buried) for (const shown of [scatter.group, clutter.group, surfaces.group]) shown.visible = false;
-    const sky = buried ? UNDERGROUND : under ? UNDERWATER.color : SKY;
-    scene.fog.color.set(sky);
-    scene.background.set(sky);
-    if (under) [scene.fog.near, scene.fog.far] = [UNDERWATER.nearFt, UNDERWATER.farFt];
-    sun.position.set(x + 500, 1000, z + 300);
-    sun.target.position.set(x, 0, z);
+    timed("things", () => things.tick(x, z));
+    timed("caves", () => caves.tick(x, z));
+    timed("water", () => surfaces.tick(dt, x, z, ground.finest <= FINE));
+    atmosphere.tick(now, x, z);
     compass.tick(camera);
     timed("render", () => renderer.render(scene, camera));
-    if (now - lastInfo > INFO_EVERY_MS) {
-      // A cave's rock, from in one, or else the ground.
-      const at = tools.caveHit()?.at ?? tools.hit();
-      // From the builder's feet, not the camera behind them.
-      $("infoPoint").textContent = at ? feet(Math.hypot(at[0] - x, at[1] - y, at[2] - z)) : "-";
-      $("infoHoriz").textContent = at ? feet(Math.hypot(at[0] - x, at[2] - z)) : "-";
-      $("infoSpot").textContent = at ? at.map((v) => Math.round(v)).join(", ") : "-";
-      $("infoHeight").textContent = feet(y - SEA_LEVEL_FT);
-      $("infoGround").textContent = feet(renditions.heightAt(x, z) ?? EMPTY_FT);
-      $("infoFacing").textContent = facing(builder.state.yaw);
-      // The ground under units moves as it's shaped and as it's read in.
-      tools.units.restand();
-      lastInfo = now;
-    }
+    // The ground under units moves as it's shaped and as it's read in.
+    if (timed("info", () => info.tick(now))) tools.units.restand();
     if (now - lastHud > HUD_EVERY_MS) {
-      const { flying, swimming } = builder.state;
       $("hud").classList.toggle("problem", Boolean(problem));
       $("hud").textContent = problem ? `can't draw the ground: ${problem}` : "";
-      if (debugShown("frame")) {
-        $("debugFps").textContent = String(Math.round((frames * 1000) / (now - lastHud)));
-        $("debugSlowest").textContent = `${worst.gap.toFixed(0)} ms`;
-        for (const [id, part] of [["debugMove", "move"], ["debugTool", "tool"], ["debugGround", "ground"], ["debugRender", "render"]]) $(id).textContent = `${worst[part].toFixed(1)} ms`;
-        $("debugDraws").textContent = String(renderer.info.render.calls);
-      }
-      if (debugShown("ground")) {
-        ["debugFull", "debugFine", "debugCoarse", "debugPlates"].forEach((id, k) => ($(id).textContent = ground.counts[k].toLocaleString()));
-        $("debugReach").textContent = `${(ground.reach / 5280).toFixed(1)} mi`;
-        const hidden = KINDS.filter((kind) => !ground.shown[kind]);
-        $("debugHidden").textContent = hidden.length ? hidden.join(", ") : "-";
-      }
-      if (debugShown("builder")) {
-        $("debugMoving").textContent = flying ? "flying" : swimming ? "swimming" : "walking";
-        $("debugAbove").textContent = feet(builder.above);
-        $("debugTile").textContent = `${Math.floor(x / TILE_FT)}, ${Math.floor(z / TILE_FT)}`;
-        $("debugPlate").textContent = `${Math.floor(x / PLATE_FT)}, ${Math.floor(z / PLATE_FT)}`;
-      }
-      worst = { gap: 0, move: 0, tool: 0, ground: 0, render: 0 };
-      lastHud = now;
-      frames = 0;
     }
-    ownFiles.bake();
+    timed("files", () => ownFiles.bake());
     // Saves what's changed once there's been time to finish the stroke.
     if (!saving && !tools.stroke && !tools.drawing && now - lastChangeSave > SAVE_CHANGES_MS && unsaved()) save();
     if (now - lastSave > SAVE_EVERY_MS) {
@@ -598,6 +511,21 @@ function start(world, changes, fresh) {
       } catch {}
       lastSave = now;
     }
+    const times = parts.frame(gap);
+    const took = performance.now() - began;
+    if (took > SLOW_FRAME_MS && debugging("perf")) {
+      const spent = Object.entries(times).filter(([, ms]) => ms >= 1).sort((a, b) => b[1] - a[1]);
+      debugLog("perf", `a slow frame, ${Math.round(took)} ms: ${spent.map(([name, ms]) => `${name} ${Math.round(ms)}`).join(", ")}`);
+    }
+    startup.once("first frame");
+    // The ground's drawn once the plates it wanted at first are read and built.
+    const busy = ground.pending.length || renditions.reading.size;
+    if (busy) groundWanted = true;
+    else if (groundWanted) startup.once("ground drawn");
+    if (now - lastHud > HUD_EVERY_MS) {
+      debug.show(parts.take(), now - lastHud);
+      lastHud = now;
+    }
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
@@ -605,7 +533,9 @@ function start(world, changes, fresh) {
 
 async function open(base, changes = new Map(), fresh = false) {
   try {
-    start(readWorld(base, changes), changes, fresh);
+    const world = readWorld(base, changes);
+    startup.step("world read");
+    start(world, changes, fresh);
     showing = true;
     return true;
   } catch (e) {
@@ -782,5 +712,6 @@ try {
   $("openError").textContent = e instanceof GithubAuthError ? "Connect GitHub first, from your worlds page." : `Couldn't open ${repo}: ${e.message}`;
   $("openKept").hidden = !kept;
 }
+startup.step(repo ? "repo opened" : "kept world");
 if (opened) await open(opened, new Map(), true);
 else if (!failed && (!kept || !(await open(kept, changes ?? new Map(), fresh)))) $("open").hidden = false;

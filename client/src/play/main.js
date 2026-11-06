@@ -26,6 +26,7 @@ import { TouchControls, isTouch } from "./touch.js";
 import { PlayView } from "./view.js";
 import { UnitStatuses } from "./unitStatuses.js";
 import { metrics } from "../metrics/metrics.js";
+import { Startup } from "../metrics/timing.js";
 
 // The play page: your character in a released version 2 world, where the game server puts it. The
 // world comes from raw GitHub at the released commit: its continent's platters first, and plate,
@@ -131,13 +132,11 @@ async function play() {
   const tags = { repo: config.repo };
   const nav = performance.getEntriesByType?.("navigation")[0];
   if (nav) metrics().timing("play.load.page", nav.responseEnd, tags); // asking for the page until it's here
-  let last = performance.now();
-  metrics().timing("play.load.code", last - (nav?.responseEnd ?? 0), tags); // until this code runs
-  const mark = (name) => {
-    const now = performance.now();
-    metrics().timing(`play.load.${name}`, now - last, tags);
-    last = now;
-  };
+  // The steps go on the browser's performance timeline too, and with ?debug=perf, in the console.
+  const startup = new Startup("play");
+  const { at: codeAt } = startup.step("code");
+  metrics().timing("play.load.code", codeAt - (nav?.responseEnd ?? 0), tags); // until this code runs
+  const mark = (name) => metrics().timing(`play.load.${name}`, startup.step(name).ms, tags);
   const step = async (name, promise) => {
     const result = await promise;
     mark(name);
