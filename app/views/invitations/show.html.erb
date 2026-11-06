@@ -1,0 +1,4 @@
+<% content_for :title, "You're invited - Delve" %>
+<h1>You're invited</h1>
+<p>This link makes one account. Sign in with Google to make yours.</p>
+<%= button_to "Sign in with Google", user_google_oauth2_omniauth_authorize_path, method: :post, data: {turbo: false} %>
