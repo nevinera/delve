@@ -216,7 +216,8 @@ type hit struct {
 	MaxHealth float64 `json:"maxHealth"`
 }
 
-// healthMessage: a training dummy reset
+// healthMessage: your health or most health changed other than by a hit: a new level, or a status
+// changing your most health
 type healthMessage struct {
 	Type      string  `json:"type"`
 	ID        int64   `json:"id"`

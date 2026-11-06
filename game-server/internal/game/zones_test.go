@@ -30,7 +30,7 @@ func ouchEvery(n float64) *combat.Effect {
 func TestAreaTicksThenEnds(t *testing.T) {
 	h, p, c := areaFight(t, combat.Effect{Radius: 10, Lasts: 3, Every: 1, Effect: ouchEvery(5)})
 	d := p.layer.dummies[0]
-	was := d.Health
+	was := d.damage
 	heard(p)
 	use(t, p, "lay")
 	pass(h, c, 0.05)
@@ -38,11 +38,11 @@ func TestAreaTicksThenEnds(t *testing.T) {
 		t.Fatalf("area = %v", got)
 	}
 	pass(h, c, 2.1)
-	if got := was - d.Health; got != 10 {
+	if got := d.damage - was; got != 10 {
 		t.Fatalf("dealt %g in 2 s", got)
 	}
 	pass(h, c, 3)
-	if got := was - d.Health; got > 15 {
+	if got := d.damage - was; got > 15 {
 		t.Fatalf("dealt %g, more than its 3 ticks", got)
 	}
 	if len(p.layer.zones) != 0 {
@@ -84,10 +84,10 @@ func TestAreaKeepsAStatusOnThoseInside(t *testing.T) {
 func TestAreaOnEnterLandsOnce(t *testing.T) {
 	h, p, c := areaFight(t, combat.Effect{Radius: 10, Lasts: 5, OnEnter: ouchEvery(7)})
 	d := p.layer.dummies[0]
-	was := d.Health
+	was := d.damage
 	use(t, p, "lay")
 	pass(h, c, 1)
-	if got := was - d.Health; got != 7 {
+	if got := d.damage - was; got != 7 {
 		t.Fatalf("dealt %g", got)
 	}
 }
@@ -111,13 +111,13 @@ func TestAreaCopiesOnlyStackIfTheyOverlap(t *testing.T) {
 		pass(h, c, 0.05)
 		use(t, p, "lay")
 		pass(h, c, 0.05)
-		was := d.Health
+		was := d.damage
 		pass(h, c, 1.2)
 		want := 5.0
 		if overlaps {
 			want = 10
 		}
-		if got := was - d.Health; got != want {
+		if got := d.damage - was; got != want {
 			t.Fatalf("overlaps %v: dealt %g, want %g", overlaps, got, want)
 		}
 	}
@@ -190,10 +190,10 @@ func TestAuraEffectLandsEachEvery(t *testing.T) {
 	h, p, _, c := two(t, []combat.Status{glow}, combat.Ability{ID: "flare", Name: "Flare", Target: "self", GCD: &zero, Effects: []combat.Effect{{Type: "status", Affects: "self", Status: "burns"}}})
 	d := p.layer.dummies[0]
 	d.state.At = p.state.At
-	was := d.Health
+	was := d.damage
 	use(t, p, "flare")
 	pass(h, c, 2.2)
-	if got := was - d.Health; got != 6 {
+	if got := d.damage - was; got != 6 {
 		t.Fatalf("dealt %g", got)
 	}
 }

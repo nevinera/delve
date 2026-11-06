@@ -256,6 +256,6 @@ func (l *Layer) harm(p *Player, on *vitals, n float64, h *hit, now time.Time) {
 	if d := l.dummy(on.ID, p.state.Continent); d != nil {
 		d.tally(n, now)
 		h.DPS = math.Round(d.dps(now))
-		on.Health = max(on.Health, 1) // it never dies
+		on.Health = on.MaxHealth // it's always at full health
 	}
 }

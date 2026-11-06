@@ -177,7 +177,7 @@ func TestAnInstantAbilityHitsTheDummyAndCostsMana(t *testing.T) {
 	}
 	pass(h, c, 0.6)
 	hits := heard(p, "hit")
-	if len(hits) != 1 || hits[0]["amount"] != 10.0 || hits[0]["on"] != -1.0 || hits[0]["health"] != dummyHealth-10 || hits[0]["dps"] != 10.0 {
+	if len(hits) != 1 || hits[0]["amount"] != 10.0 || hits[0]["on"] != -1.0 || hits[0]["health"] != dummyHealth || hits[0]["dps"] != 10.0 {
 		t.Fatalf("hits = %v", hits)
 	}
 	if p.fight.resources["mana"] > 900+20 {
@@ -306,18 +306,21 @@ func TestAreasReachWhoTheyReach(t *testing.T) {
 	}
 }
 
-func TestADummyNeverDiesAndResets(t *testing.T) {
+func TestADummyStaysAtFullHealthAndItsTallyResets(t *testing.T) {
 	h, p, c := fighting(t)
 	d := p.layer.dummies[0]
-	d.Health = 3
 	use(t, p, "nova")
 	pass(h, c, 0.1)
-	if d.Health != 1 {
-		t.Fatalf("health = %v", d.Health)
+	got := heard(p, "hit")
+	if len(got) != 1 || got[0]["amount"].(float64) <= 0 || got[0]["health"] != dummyHealth || d.Health != dummyHealth || d.state.Health != dummyHealth {
+		t.Fatalf("hits = %v, health %v", got, d.Health)
+	}
+	if d.damage <= 0 {
+		t.Fatalf("tally = %v", d.damage)
 	}
 	pass(h, c, dummyResetIdle.Seconds()+0.1)
-	if got := heard(p, "health"); len(got) != 1 || got[0]["health"] != dummyHealth || d.damage != 0 {
-		t.Fatalf("health = %v, tally %v", got, d.damage)
+	if d.damage != 0 {
+		t.Fatalf("tally = %v", d.damage)
 	}
 }
 
