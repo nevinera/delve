@@ -24,6 +24,7 @@ import { Others } from "./others.js";
 import { TouchControls, isTouch } from "./touch.js";
 import { PlayView } from "./view.js";
 import { UnitStatuses } from "./unitStatuses.js";
+import { metrics } from "../metrics/metrics.js";
 
 // The play page: your character in a released version 2 world, where the game server puts it. The
 // world comes from raw GitHub at the released commit: its continent's platters first, and plate,
@@ -87,8 +88,16 @@ menu.querySelector('[data-open="playGraphics"]').disabled = true; // until there
 
 async function play() {
   const loader = new PlayWorld(config);
+  // How long each step of loading takes, as play.load.<step>. "enter" includes picking a class.
+  const tags = { repo: config.repo };
+  const step = async (name, promise) => {
+    const done = metrics().time(`play.load.${name}`, tags);
+    const result = await promise;
+    done();
+    return result;
+  };
   status("Loading the world...");
-  await loader.open();
+  await step("open", loader.open());
   setBuiltObjects(builtObjects(loader), images(loader));
   setWorldIcons(loader.files);
   setWorldEffectSheets(loader.files);
@@ -115,7 +124,7 @@ async function play() {
     tell("appear", character);
   };
   status("Entering...");
-  const { connection, you } = await enter({
+  const { connection, you } = await step("enter", enter({
     snapshot: ({ characters }) => characters.forEach(appear),
     appear: ({ character }) => appear(character),
     vanish: ({ id }) => {
@@ -182,14 +191,14 @@ async function play() {
       status("You've left the game. Reload the page to enter again.");
       others?.clear();
     },
-  }, loader);
+  }, loader));
   leaving = new Leaving({ connection, panel: $("playLeaving"), button: menu.querySelector("[data-log-off]") });
 
   status("Loading the land around you...");
   let showGraphics = null;
   const view = new PlayView($("scene"), { onGraphics: (graphics) => showGraphics?.(graphics) });
   setReportContext(() => ({ camera: view.camera.position.toArray().map(Math.round), plates: renditions.decoded.size, unreadable: [...renditions.unreadable] }));
-  const continent = await loader.continent(you.continent);
+  const continent = await step("continent", loader.continent(you.continent));
   const renditions = new Renditions();
   for (const bytes of continent.platters) renditions.addPlatter(bytes);
   renditions.setBiomes(continent.biomes?.areas ?? [], false);
@@ -211,11 +220,13 @@ async function play() {
           if (caveBytes) caves.load(caveBytes, coords);
         }),
     );
-  await placedNear(you.at[0], you.at[2]);
+  await step("placed", placedNear(you.at[0], you.at[2]));
 
   view.show(renditions, placed, caves, continent.caveLayout);
-  await view.ready([you.at[0], you.at[2]]);
-  await prepareAnimations().catch((err) => console.warn(`Couldn't load animations: ${err.message}`));
+  await step("ground", view.ready([you.at[0], you.at[2]]));
+  await step("animations", prepareAnimations().catch((err) => console.warn(`Couldn't load animations: ${err.message}`)));
+  // From when the page was asked for, so it includes fetching the page and its code.
+  metrics().timing("play.load.total", performance.now(), tags);
   status("");
   const touch = isTouch();
   if (touch) view.setGraphics(PHONE_GRAPHICS);
