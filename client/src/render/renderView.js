@@ -10,7 +10,7 @@ import { terrainMesh, waterMesh } from "./terrainMesh.js";
 import { setWaterTime, waterMaterial } from "./waterMaterial.js";
 import { waterfallMeshes } from "./waterfalls.js";
 import { setTreeSight, treeMeshes, treeStage } from "./treeMeshes.js";
-import { clutterMeshes, gatherClutter, setClutterFocus, setClutterRadius } from "./clutterMeshes.js";
+import { clutterMeshes, disposeClutter, gatherClutter, setClutterFocus, setClutterRadius } from "./clutterMeshes.js";
 import { clutterForTile } from "../world/clutter.js";
 import { objectMeshes, setObjectSight } from "./objectMeshes.js";
 import { slabMeshes } from "./slabMeshes.js";
@@ -323,7 +323,7 @@ export class RenderView {
     }
     this.clutterAround = key;
     for (const child of [...this.clutter.children]) {
-      child.dispose();
+      disposeClutter(child);
       this.clutter.remove(child);
     }
     const tileAt = (x, z) => this.decoded.get(`${x},${z}`);
@@ -341,7 +341,7 @@ export class RenderView {
   gatherClutter(focus) {
     this.clutterGathered = [focus.x, focus.z];
     const { clutterRadiusFt, clutterDensity } = this.graphics;
-    gatherClutter(this.clutter.children, focus.x, focus.z, clutterRadiusFt + CLUTTER_REGATHER_FT, clutterDensity);
+    gatherClutter(this.clutter.children, focus.x, focus.z, clutterRadiusFt, clutterDensity, CLUTTER_REGATHER_FT);
   }
 
   // Walk mode (walker.js): a character dropped at scene [x, z]. onStop

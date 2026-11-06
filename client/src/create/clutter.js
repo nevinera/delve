@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { clutterMeshes, gatherClutter, setClutterFocus, setClutterRadius } from "../render/clutterMeshes.js";
+import { clutterMeshes, disposeClutter, gatherClutter, setClutterFocus, setClutterRadius } from "../render/clutterMeshes.js";
 import { tileClutter } from "../v2/clutter.js";
 import { RUNNING, slopeOf } from "../v2/look.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
@@ -107,12 +107,12 @@ export class Clutter {
     }
     if (!this.gathered || Math.hypot(x - this.gathered[0], z - this.gathered[1]) > GATHER_FT) {
       this.gathered = [x, z];
-      gatherClutter(this.group.children, x, z, this.radiusFt + GATHER_FT, this.density);
+      gatherClutter(this.group.children, x, z, this.radiusFt, this.density, GATHER_FT);
     }
   }
 
   clear() {
-    for (const mesh of this.group.children) mesh.dispose?.();
+    for (const mesh of this.group.children) disposeClutter(mesh);
     this.group.clear();
   }
 }

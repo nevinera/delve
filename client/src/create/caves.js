@@ -532,10 +532,11 @@ export class Caves {
       overlay.parent?.remove(overlay);
       overlay.geometry.dispose();
     }
-    // Clutter's shapes are shared, kept by clutterMeshes.js.
+    // Each piece's geometry is its own, though the shapes in it are shared (clutterMeshes.js).
     for (const piece of mesh.userData.clutter ?? []) {
       piece.parent?.remove(piece);
       piece.dispose();
+      piece.geometry.dispose();
     }
   }
 
