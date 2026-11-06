@@ -12,6 +12,7 @@ import { BIOME_NAMES } from "../v2/biomes.js";
 import { waterPath } from "../v2/water.js";
 import { roadsPath } from "../v2/roads.js";
 import { allEdges, wetIn } from "../v2/roadEdges.js";
+import { crossingThings } from "../v2/roadCrossings.js";
 import { BIOMES, biomesPath } from "./biomes.js";
 import { Builder } from "./builder.js";
 import { Compass, facing } from "./compass.js";
@@ -320,7 +321,10 @@ function start(world, changes, fresh) {
   renditions.setRoads(tools.roads.toJSON(), false);
   let roadsBaked = tools.roads.version;
   // What lines the roads, in the placed files, worked out again as they or the water change.
-  const lineRoads = () => placed.setRoadThings(allEdges(tools.roads.toJSON().roads, wetIn(waterFile())));
+  const lineRoads = () => {
+    const roads = tools.roads.toJSON().roads;
+    return placed.setRoadThings([...allEdges(roads, wetIn(waterFile())), ...crossingThings(roads, waterFile())]);
+  };
   lineRoads();
 
   const resize = () => {

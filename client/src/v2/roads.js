@@ -37,6 +37,8 @@ const FILL_RUN = 1.5; // and a slope below falls a foot every this many
 const SIDE_FT = 24; // how far past its edge a bank or slope reaches at most
 const TRENCH_FT = 1; // how far under the ground on both sides it is, at most, before that's a trench
 const GRID_FT = 32; // its track's segments are found by squares this wide
+export const FORD_FT = 0.6; // how far under a stream's water a road crosses it
+const FORD_RUN = 2; // a ford falls a foot every this many ft past the road's edge
 const ROAD_CELL_FT = 2.5; // how near a cell's middle a narrow road's track passes for it to be on it
 
 const tracks = new WeakMap(); // points -> their track, by kind and seed
@@ -154,7 +156,7 @@ export function roadBox(road) {
 }
 
 // Where a road's track is `t` ft down it: { x, z, width, across: [x, z], square to it, to its left }.
-function placeOn(track, t) {
+export function placeOn(track, t) {
   let k = 1;
   while (k < track.t.length - 1 && track.t[k] < t) k++;
   const span = track.t[k] - track.t[k - 1];
@@ -246,6 +248,18 @@ export function shapeRoad(road, x, z, ground) {
   const edge = Math.max(bed - lean * half, Math.min(bed + lean * half, ground));
   if (ground > edge) return { height: Math.min(ground, edge + out / CUT_RUN), out };
   return { height: Math.max(ground, edge - out / FILL_RUN), out };
+}
+
+// The ground at a cell corner in a stream's water, `level` its surface and `top` the ground the
+// stream's left, with every road in `roads` there: built up to a ford FORD_FT under the water
+// across each road's width, and falling back to the stream's bed a foot every FORD_RUN ft past it.
+export function fordAt(roads, x, z, top, level) {
+  let best = top;
+  for (const road of roads) {
+    const near = onTrack(roadTrack(road.points, road.kind, road.seed ?? 0), x, z, reachOf(road));
+    if (near) best = Math.max(best, level - FORD_FT - Math.max(0, near.d - near.width / 2) / FORD_RUN);
+  }
+  return best;
 }
 
 // The ground at a cell corner with every road in `roads` there, `ground` before they change it:

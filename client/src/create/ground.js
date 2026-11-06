@@ -2,8 +2,8 @@ import * as THREE from "three";
 import { disposeGround, groundMaterial } from "../render/groundMaterial.js";
 import { BiomeMap, bakePlate, changedBoxes } from "../v2/biomes.js";
 import { ACROSS, AROUND, WATER_TYPES, WaterMap, bakeWater, changedWaterBoxes, missingSea, partWater, seaEdges } from "../v2/water.js";
-import { LEDGE_RAISE_FT, LEVEE_FT, courseBox, shape } from "../v2/courses.js";
-import { changedRoadBoxes, roadBox, roadKindAt, roadSegmentsIn, roadsAt } from "../v2/roads.js";
+import { LEDGE_RAISE_FT, LEVEE_FT, courseBox, pooledAt, poolsIn, shape } from "../v2/courses.js";
+import { changedRoadBoxes, fordAt, roadBox, roadKindAt, roadSegmentsIn, roadsAt } from "../v2/roads.js";
 import { waterMaterial } from "../render/waterMaterial.js";
 import { SHORE_FADE_FT, waterLookOf } from "./waterSurface.js";
 import { PATTERNS, RUNNING, look, painted, slopeOf } from "../v2/look.js";
@@ -190,7 +190,7 @@ export class Renditions {
   // corner there put back by what they moved it before, then cut down under every course there
   // (courses.js's shape), or where none cuts it, built up a little where a course's bank is lower
   // than its water, or more under a fall's ledge; then, out of courses' water, put where the road
-  // there has it (roads.js's roadsAt); and how far kept with its cells. Gives the "px,pz" of the
+  // there has it (roads.js's roadsAt), and in a stream's or its pools', built up to a ford (fordAt); and how far kept with its cells. Gives the "px,pz" of the
   // plates moved.
   carve(boxes) {
     const moved = new Set();
@@ -200,6 +200,7 @@ export class Renditions {
       const [x0, z0, x1, z1] = box;
       const near = (this.waterFile.courses ?? []).filter((course) => course.surface?.length && overlaps(courseBox(course), box));
       const roads = (this.roadFile.roads ?? []).filter((road) => road.bed?.length && overlaps(roadBox(road), box));
+      const pools = roads.length ? poolsIn(near, box) : [];
       const deltas = new Map(); // "ci,cj" of a corner -> how far it moves
       for (let tz = Math.floor(z0 / TILE_FT); tz <= Math.floor(z1 / TILE_FT); tz++) {
         for (let tx = Math.floor(x0 / TILE_FT); tx <= Math.floor(x1 / TILE_FT); tx++) {
@@ -215,16 +216,25 @@ export class Renditions {
               if (x < x0 || x > x1) continue;
               const k = j * CELL_CORNERS + i;
               const base = tile.heights[k] + cut[k];
-              let [top, levee, wet] = [base, base, false];
+              let [top, levee, wet, ford] = [base, base, false, null];
               for (const course of near) {
                 const made = shape(course, x, z);
                 if (!made) continue;
                 top = Math.min(top, made.top);
                 levee = Math.max(levee, Math.min(made.levee, base + (made.ledge ? LEDGE_RAISE_FT : LEVEE_FT)));
                 wet ||= made.wet;
+                // Only a stream's fordable, and not where it runs into a river.
+                if (made.wet) ford = course.type === "stream" && ford !== false ? Math.max(ford ?? -Infinity, made.level) : false;
               }
               if (top === base) top = levee;
+              // A course's pools are its water too.
+              const pool = pools.length ? pooledAt(pools, x, z) : null;
+              if (pool) {
+                wet = true;
+                if (ford !== false) ford = pool.course.type === "stream" ? Math.max(ford ?? -Infinity, pool.level) : false;
+              }
               if (roads.length && !wet) top = roadsAt(roads, x, z, top);
+              else if (roads.length && typeof ford === "number") top = fordAt(roads, x, z, top, ford);
               cut[k] = base - top;
               if (top !== tile.heights[k]) deltas.set(`${tx * TILE_CELLS + i},${tz * TILE_CELLS + j}`, top - tile.heights[k]);
             }

@@ -1,6 +1,6 @@
 import { inside } from "./biomes.js";
-import { courseBox, shape } from "./courses.js";
-import { ROAD_KINDS, roadKindAt, roadTrack } from "./roads.js";
+import { courseBox, pooledAt, poolsIn, shape } from "./courses.js";
+import { ROAD_KINDS, placeOn, roadKindAt, roadTrack } from "./roads.js";
 
 // What lines each kind of road (roads.js), the same in every biome: low edge stones along both
 // sides of roads with a milestone now and then, waymark posts beside trails, and small cairns
@@ -55,25 +55,15 @@ export function edgesOf(road, roads, wetAt = () => false) {
   return out;
 }
 
-// Where a road's track is `t` ft down it: { x, z, width, across: [x, z], square to it, to its left }.
-function placeOn(track, t) {
-  let k = 1;
-  while (k < track.t.length - 1 && track.t[k] < t) k++;
-  const span = track.t[k] - track.t[k - 1];
-  const u = span ? Math.min(1, Math.max(0, (t - track.t[k - 1]) / span)) : 0;
-  const [dx, dz] = [track.x[k] - track.x[k - 1], track.z[k] - track.z[k - 1]];
-  const d = Math.hypot(dx, dz) || 1;
-  const mix = (v) => v[k - 1] + (v[k] - v[k - 1]) * u;
-  return { x: mix(track.x), z: mix(track.z), width: mix(track.width), across: [dz / d, -dx / d] };
-}
-
 // Whether (x, z) is in the water `file` (water.json) has: inside a body's outline, or in a
-// course's water. It reads no ground, so it's the same however much of the world's been read.
+// course's water or pools. It reads no ground, so it's the same however much of the world's been read.
 export function wetIn(file) {
   const bodies = (file?.bodies ?? []).filter(({ points }) => points.length >= 3);
   const courses = (file?.courses ?? []).filter((course) => course.surface?.length).map((course) => ({ course, box: courseBox(course) }));
+  const pools = poolsIn(courses.map(({ course }) => course));
   return (x, z) =>
     bodies.some(({ points }) => inside(points, x, z)) ||
+    !!pooledAt(pools, x, z) ||
     courses.some(({ course, box }) => x >= box[0] && x <= box[2] && z >= box[1] && z <= box[3] && shape(course, x, z)?.wet);
 }
 

@@ -1,4 +1,5 @@
 import { fbm } from "../world/noise.js";
+import { inside } from "./biomes.js";
 
 // Courses: streams and rivers, drawn by hand as lines running downstream and kept with the bodies
 // in each continent's water.json (water.js). A course is
@@ -339,6 +340,28 @@ export function shape(course, x, z) {
   const pooled = (course.pools ?? []).some((pool) => near.t >= pool.from && near.t <= pool.to);
   const levee = ledge ? top : out <= 0 || pooled ? -Infinity : level + LEVEE_OVER_FT - Math.max(0, out - LEVEE_TOP_FT) / run;
   return { top, levee, ledge, level, wet: out <= MARGIN_FT };
+}
+
+// The pools of `courses` reaching into `box` ([x0, z0, x1, z1]), for pooledAt: [{ course, level,
+// points, box }].
+export function poolsIn(courses, [x0, z0, x1, z1] = [-Infinity, -Infinity, Infinity, Infinity]) {
+  const out = [];
+  for (const course of courses) {
+    for (const { level, points } of course.pools ?? []) {
+      if (points.length < 3) continue;
+      const xs = points.map((p) => p[0]);
+      const zs = points.map((p) => p[1]);
+      const box = [Math.min(...xs), Math.min(...zs), Math.max(...xs), Math.max(...zs)];
+      if (box[0] <= x1 && box[2] >= x0 && box[1] <= z1 && box[3] >= z0) out.push({ course, level, points, box });
+    }
+  }
+  return out;
+}
+
+// The pool of `pools` (poolsIn) that (x, z) is inside the outline of, or null.
+export function pooledAt(pools, x, z) {
+  for (const pool of pools) if (x >= pool.box[0] && x <= pool.box[2] && z >= pool.box[1] && z <= pool.box[3] && inside(pool.points, x, z)) return pool;
+  return null;
 }
 
 const SPEEDS = { stream: 1.5, river: 2.5 }; // how fast courses run on the level, ft/s

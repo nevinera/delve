@@ -221,7 +221,7 @@ A built object's `sizeVary`, more than 0 and up to 0.5, is how far `/create` var
 
 ### Slabs in a placed file
 
-Each is a [slab](#slabs), with `template` when it was placed from one, and `cave` as objects have it.
+Each is a [slab](#slabs), with `template` when it was placed from one, and `cave` and `road` as objects have them.
 
 A placed object's `type` can name a kind the world doesn't have, after its object was deleted or its changes dropped. Every reader keeps going: `/create` keeps it in the file through saves and shows it as a pink box you can pick and delete, and the game draws nothing there. It stands in the way only if it has its `footprint` and `height` kept, for the client and server alike.
 
@@ -497,9 +497,11 @@ A biome is one of `BIOME_NAMES` in `client/src/v2/biomes.js`. It changes the gro
 
 Each kind is lined the same in every biome (`client/src/v2/roadEdges.js`): roads with edge stones along both sides every 20 ft or so, which you step over, and a milestone every 1,000 ft; trails with a waymark post every 160 ft or so, a side at a time; footpaths with a small cairn every 450 ft or so. None go in the water or on another road. /create puts them in the placed files, so the game server and bots stand them in the way as they do anything placed.
 
+Where a road crosses a course or its pools (`client/src/v2/roadCrossings.js`), it crosses a stream by a ford, with flat stones strewn over it that you walk over, and a river by a plank bridge. The bridge is slabs in a straight line from 4 ft onto one bank to 4 ft onto the other, at most 48 ft each, its ends 0.3 ft over the road's bed and its middle at least 1.5 ft over the water, with a beam down each side. It's as wide as the road, and at least 4 ft. /create puts these in the placed files with `road` too.
+
 Tiles drawn in full draw each road's surface from its middle (`render/groundMaterial.js`): packed earth with prints, paler with wheel ruts on roads, fainter ruts on trails, and a frayed edge on footpaths.
 
-Across, a road is level, and trails and footpaths lean with the ground as far as their kind lets them. Beside it, the ground's cut back in a bank where it's higher and built up in a slope where it's lower, out to 24 ft. Courses carve first, and roads don't change the ground in a course's water. Where a road would climb more steeply than its kind's grade, as it does rather than run in a trench through a rise, or cut a bank deeper than its kind's deepest, /create draws that stretch red.
+Across, a road is level, and trails and footpaths lean with the ground as far as their kind lets them. Beside it, the ground's cut back in a bank where it's higher and built up in a slope where it's lower, out to 24 ft. Courses carve first, and roads don't change the ground in a course's water or its pools, except to build a stream's bed up to a ford 0.6 ft under its water across the road's width (`fordAt`). Where a road would climb more steeply than its kind's grade, as it does rather than run in a trench through a rise, or cut a bank deeper than its kind's deepest, /create draws that stretch red.
 ## Bodies
 
 A body is a creature's shape on one skeleton, and the ranges and colors each creature with that body picks its look from. The game ships its bodies as one file each. Code: `client/src/character/bodies.js`. [Schema](../docs/schema/body.schema.json).

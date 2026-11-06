@@ -2,7 +2,7 @@ import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
 import { TILE_FT } from "../v2/sizes.js";
 import { trackOf } from "../v2/courses.js";
-import { roadTrack } from "../v2/roads.js";
+import { FORD_FT, roadTrack } from "../v2/roads.js";
 import { decodePlate, encodePlate } from "../v2/plate.js";
 import { loadZipper } from "../v2/zstd.js";
 import { decodePlatter, encodePlatter } from "../v2/platter.js";
@@ -224,6 +224,27 @@ describe("raising the ground", () => {
     const track = roadTrack(road.points, road.kind, road.seed);
     const k = track.x.findIndex((x) => x >= 128);
     expect(renditions.heightAt(track.x[k], track.z[k])).toBeCloseTo(12);
+  });
+
+  it("builds a stream's bed up to a ford where a road crosses it, but not a river's", () => {
+    // The ground in its middle where the road crosses, with the road and without.
+    const crossed = (type, width) => {
+      const course = { type, points: [[0, 128, width], [256, 128, width]], surface: [9, 9], seed: 1 };
+      const track = trackOf(course.points, 1);
+      const k = track.x.findIndex((x) => x >= 128);
+      return [true, false].map((roaded) => {
+        const renditions = world();
+        renditions.cells(0, 0);
+        renditions.setWater({ bodies: [], courses: [course] });
+        if (roaded) renditions.setRoads({ roads: [{ kind: "trail", points: [[128, 20, 6], [128, 236, 6]], seed: 1, bed: Array(40).fill(10) }] });
+        return renditions.heightAt(track.x[k], track.z[k]);
+      });
+    };
+    const [ford, bed] = crossed("stream", 6);
+    expect(Math.abs(ford - (9 - FORD_FT))).toBeLessThan(0.15);
+    expect(bed).toBeLessThan(ford - 0.3);
+    const [bridged, river] = crossed("river", 30);
+    expect(bridged).toBeCloseTo(river);
   });
 
   it("builds courses' banks up a little where they're lower than their water", () => {
