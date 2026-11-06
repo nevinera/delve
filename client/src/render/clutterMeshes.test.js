@@ -3,7 +3,8 @@ import { describe, expect, it } from "vitest";
 // The module draws a texture on a canvas as it loads; here there's no page, so it draws on nothing.
 const nothing = new Proxy(() => nothing, { get: (_, key) => (key === Symbol.toPrimitive ? () => 0 : nothing), apply: () => nothing });
 globalThis.document ??= { createElement: () => ({ getContext: () => nothing }) };
-const { clutterMeshes, fadedOut, gatherClutter, ownNumber } = await import("./clutterMeshes.js");
+const { ClutterSet, clutterMeshes, fadedOut, gatherClutter, ownNumber, prepareClutter } = await import("./clutterMeshes.js");
+const THREE = await import("three");
 
 // Grass in a row going east from the focus, a foot apart.
 const row = (count) =>
@@ -42,5 +43,26 @@ describe("gatherClutter", () => {
       const own = mesh.geometry.attributes.clutterOwn.array;
       for (let n = 0; n < mesh.count; n++) expect(own[n]).toBe(Math.fround(ownNumber(mesh.instanceMatrix.array[n * 16 + 12], 0.5)));
     }
+  });
+});
+
+describe("ClutterSet", () => {
+  it("draws what gatherClutter would from tiles' pieces, keeping its meshes as tiles go", () => {
+    const pieces = row(300);
+    const merged = clutterMeshes(pieces, [0, 0]);
+    gatherClutter(merged, 0, 0, 240, 1, 40);
+    const set = new ClutterSet(new THREE.Group());
+    const chunks = [
+      { slots: prepareClutter(pieces.slice(0, 150), [0, 0]), born: 1 },
+      { slots: prepareClutter(pieces.slice(150), [0, 0]), born: 2 },
+    ];
+    set.gather(chunks, 0, 0, 240, 1, 40);
+    const meshes = [...set.meshes.values()];
+    expect(drawn(meshes)).toBe(drawn(merged));
+    const born = meshes[0].geometry.attributes.clutterBorn.array;
+    expect([born[0], born[meshes[0].count - 1]]).toEqual([1, 2]);
+    set.gather(chunks.slice(0, 1), 0, 0, 240, 1, 40);
+    expect([...set.meshes.values()]).toEqual(meshes);
+    expect(drawn(meshes)).toBe(150);
   });
 });

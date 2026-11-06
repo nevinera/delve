@@ -1,13 +1,14 @@
 import * as THREE from "three";
-import { clutterMeshes, disposeClutter, gatherClutter, setClutterFocus, setClutterRadius } from "../render/clutterMeshes.js";
+import { ClutterSet, prepareClutter, setClutterFocus, setClutterRadius } from "../render/clutterMeshes.js";
 import { tileClutter } from "../v2/clutter.js";
 import { RUNNING, slopeOf } from "../v2/look.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 
-// Clutter round the builder (v2/clutter.js): by the water, and on biomes' dry ground, drawn with the editor's shapes (render/clutterMeshes.js), fading away to nothing
-// radiusFt off, made from every tile that reaches into. What's in a tile is kept till its cells are dressed again or its water changes,
-// and the meshes are made again when the builder leaves their tile or that changes, at most every
-// REMAKE_S, and only those within reach drawn as the builder moves.
+// Clutter round the builder (v2/clutter.js): by the water, and on biomes' dry ground, drawn with
+// the editor's shapes (render/clutterMeshes.js), fading away to nothing radiusFt off, from every
+// tile that reaches into. What's in a tile is kept till its cells are dressed again or its water
+// changes, and its pieces are prepared again then, looked for at most every REMAKE_S. Which pieces
+// are drawn is picked again as the builder moves GATHER_FT.
 
 const RADIUS_FT = 240;
 const REMAKE_S = 0.5;
@@ -20,8 +21,9 @@ export class Clutter {
     this.group = new THREE.Group();
     scene.add(this.group);
     this.tiles = null; // [tx0, tz0, tx1, tz1], the tiles it's made from
+    this.set = new ClutterSet(this.group);
+    this.chunks = new Map(); // "tx,tz" -> { tx, tz, id, slots, born }, each tile's pieces prepared
     this.setRadius(radiusFt, density);
-    this.drawn = "";
     this.gathered = null;
     this.since = REMAKE_S;
   }
@@ -76,43 +78,45 @@ export class Clutter {
   }
 
   // Each frame, with the builder at continent feet (x, z), and `shown` whether the ground near is
-  // drawn finely enough to stand things on.
+  // drawn finely enough to stand things on. A tile's pieces are prepared when it comes in reach
+  // or changes, one tile a frame, nearest first, and fade in as they're first drawn.
   tick(dt, x, z, shown) {
     setClutterFocus(x, z);
     this.group.visible = shown;
     if (!shown) return;
-    if ((this.since += dt) >= REMAKE_S) {
-      this.since = 0;
-      const reach = this.radiusFt + GATHER_FT;
-      const [tx0, tz0, tx1, tz1] = (this.tiles = [x - reach, z - reach, x + reach, z + reach].map((ft) => Math.floor(ft / TILE_FT)));
-      const filled = [];
-      for (let tz = tz0; tz <= tz1; tz++) {
-        for (let tx = tx0; tx <= tx1; tx++) {
-          if (!this.renditions.tile(tx, tz)) continue;
-          const f = this.fill(tx, tz);
-          if (f?.instances.length) filled.push(f);
-        }
-      }
-      const drawn = `${this.tiles}:${filled.map((f) => f.id)}`;
-      if (drawn !== this.drawn) {
-        this.drawn = drawn;
-        this.clear();
-        const instances = filled.flatMap((f) => f.instances);
-        for (const mesh of instances.length ? clutterMeshes(instances, [0, 0]) : []) {
-          mesh.frustumCulled = false;
-          this.group.add(mesh);
-        }
-        this.gathered = null;
+    const reach = this.radiusFt + GATHER_FT;
+    const [tx0, tz0, tx1, tz1] = (this.tiles = [x - reach, z - reach, x + reach, z + reach].map((ft) => Math.floor(ft / TILE_FT)));
+    let changed = false;
+    for (const [key, chunk] of this.chunks) {
+      if (chunk.tx < tx0 || chunk.tx > tx1 || chunk.tz < tz0 || chunk.tz > tz1) {
+        this.chunks.delete(key);
+        changed = true;
       }
     }
-    if (!this.gathered || Math.hypot(x - this.gathered[0], z - this.gathered[1]) > GATHER_FT) {
+    if ((this.since += dt) >= REMAKE_S) {
+      this.since = 0;
+      const near = [];
+      for (let tz = tz0; tz <= tz1; tz++) for (let tx = tx0; tx <= tx1; tx++) near.push([tx, tz, Math.hypot((tx + 0.5) * TILE_FT - x, (tz + 0.5) * TILE_FT - z)]);
+      for (const [tx, tz] of near.sort((a, b) => a[2] - b[2])) {
+        if (!this.renditions.tile(tx, tz)) continue;
+        const f = this.fill(tx, tz);
+        const key = `${tx},${tz}`;
+        if (!f || this.chunks.get(key)?.id === f.id) continue;
+        this.chunks.set(key, { tx, tz, id: f.id, slots: prepareClutter(f.instances, [0, 0]), born: performance.now() / 1000 });
+        changed = true;
+        // One a frame: look again next frame for the next.
+        this.since = REMAKE_S;
+        break;
+      }
+    }
+    if (changed || !this.gathered || Math.hypot(x - this.gathered[0], z - this.gathered[1]) > GATHER_FT) {
       this.gathered = [x, z];
-      gatherClutter(this.group.children, x, z, this.radiusFt, this.density, GATHER_FT);
+      this.set.gather([...this.chunks.values()], x, z, this.radiusFt, this.density, GATHER_FT);
     }
   }
 
   clear() {
-    for (const mesh of this.group.children) disposeClutter(mesh);
-    this.group.clear();
+    this.set.dispose();
+    this.chunks.clear();
   }
 }
