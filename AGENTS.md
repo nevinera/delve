@@ -19,6 +19,7 @@ Skills, for jobs with steps and scripts:
 - [measure-world](.agents/skills/measure-world/SKILL.md): measure a world's file sizes and read times.
 - [deploy-dev](.agents/skills/deploy-dev/SKILL.md): deploy to the dev server.
 - [issue-queue](.agents/skills/issue-queue/SKILL.md): work several issues unattended, leaving decisions on the issues and PRs to review.
+- [status](.agents/skills/status/SKILL.md): report what's in progress, what needs the maintainer, new issues and what's left in the milestone.
 
 ## Hard rules
 
