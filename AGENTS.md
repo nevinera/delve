@@ -18,6 +18,7 @@ Skills, for jobs with steps and scripts:
 - [convert-world](.agents/skills/convert-world/SKILL.md): run the world converters and check the result.
 - [measure-world](.agents/skills/measure-world/SKILL.md): measure a world's file sizes and read times.
 - [deploy-dev](.agents/skills/deploy-dev/SKILL.md): deploy to the dev server.
+- [overnight](.agents/skills/overnight/SKILL.md): work a queue of issues unattended, leaving decisions on the issues and PRs to review.
 
 ## Hard rules
 
