@@ -1,0 +1,17 @@
+{
+  "ignored_warnings": [
+    {
+      "fingerprint": "c77cef309333dcb178b881dc1f3b41ac66d7974f0cd0fe13942f4d64ee6684ea",
+      "warning_type": "File Access",
+      "file": "app/controllers/problem_reports_controller.rb",
+      "note": "The path is the report's own directory, from its integer id, and a fixed name whose extension comes from VOICE_TYPES, which voice_type is validated against."
+    },
+    {
+      "fingerprint": "ee7279007197e04eedf0f9c0aeed0a75a3fdf4663821511d1218f58f00af0188",
+      "warning_type": "File Access",
+      "file": "app/controllers/problem_reports_controller.rb",
+      "note": "The path is the report's own directory, from its integer id, and the fixed name screenshot.jpg."
+    }
+  ],
+  "brakeman_version": "8.1.0"
+}
