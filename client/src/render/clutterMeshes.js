@@ -18,11 +18,14 @@ const FADE_FROM = 0.55;
 const FADE_IN_FT = 20;
 const SHRINK = 0.3; // how much smaller a piece is at the radius
 const FAINTER = 0.5; // how much fainter a piece is at the radius
+const APPEAR_S = 0.6; // how long clutter takes to fade in where it's first drawn
 const focus = { value: new THREE.Vector2() };
+const clock = { value: 0 }; // seconds, as performance.now() counts them
 const fade = { value: new THREE.Vector2(130, 240) };
 
 export function setClutterFocus(x, z) {
   focus.value.set(x, z);
+  clock.value = performance.now() / 1000;
 }
 
 export function setClutterRadius(radiusFt) {
@@ -33,7 +36,8 @@ function fading(material) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.clutterFocus = focus;
     shader.uniforms.clutterFade = fade;
-    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nuniform vec2 clutterFocus;\nuniform vec2 clutterFade;\nattribute float clutterOwn;\nvarying float vClutterShown;").replace(
+    shader.uniforms.clutterNow = clock;
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nuniform vec2 clutterFocus;\nuniform vec2 clutterFade;\nuniform float clutterNow;\nattribute float clutterOwn;\nattribute float clutterBorn;\nvarying float vClutterShown;").replace(
       "#include <begin_vertex>",
       `#include <begin_vertex>
         vec2 clutterAt = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
@@ -42,7 +46,8 @@ function fading(material) {
         float clutterGoes = mix(clutterFade.x, clutterFade.y, clutterOwn);
         float clutterIn = clamp((clutterGoes - clutterD) / ${FADE_IN_FT.toFixed(1)}, 0.0, 1.0);
         transformed *= (clutterIn > 0.0 ? 1.0 : 0.0) * (1.0 - ${SHRINK.toFixed(2)} * clutterOut);
-        vClutterShown = clutterIn * (1.0 - ${FAINTER.toFixed(2)} * clutterOut);`,
+        float clutterNew = clamp((clutterNow - clutterBorn) / ${APPEAR_S.toFixed(2)}, 0.0, 1.0);
+        vClutterShown = clutterNew * clutterIn * (1.0 - ${FAINTER.toFixed(2)} * clutterOut);`,
     );
     // The share of a piece's pixels drawn, by a fixed noise over the screen.
     shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vClutterShown;").replace(
@@ -330,19 +335,23 @@ function variants(name) {
   return geometries.get(name);
 }
 
-// instances: from clutterForTile. origin: the continent position of the scene's origin.
-export function clutterMeshes(instances, origin) {
+// The pieces of `instances` (from clutterForTile or tileClutter) ready to draw, by shape: a map
+// of "kind:part:variant" to { geometry, material, matrices, colors, own, count }, with matrices
+// placed from `origin`, the continent position of the scene's origin.
+export function prepareClutter(instances, origin) {
   const byKind = new Map();
   for (const item of instances) {
     if (!byKind.has(item.kind)) byKind.set(item.kind, []);
     byKind.get(item.kind).push(item);
   }
-  const meshes = [];
+  const slots = new Map();
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const turn = new THREE.Quaternion();
   const normal = new THREE.Vector3();
   const color = new THREE.Color();
+  const at = new THREE.Vector3();
+  const size = new THREE.Vector3();
   for (const [kind, list] of byKind) {
     CLUTTER[kind].parts.forEach((part, p) => {
       const shapes = variants(part.shape);
@@ -351,28 +360,44 @@ export function clutterMeshes(instances, origin) {
         const placed = list.filter((item) => item.colors[p] && Math.floor(item.yaw * 1000) % shapes.length === v);
         if (!placed.length) return;
         const solid = part.shape === "stone" || part.shape === "pebble" || part.shape === "crag";
-        const mesh = new THREE.InstancedMesh(geometry, solid ? flat : part.shape === "fern" ? leafy : material, placed.length);
+        const matrices = new Float32Array(placed.length * 16);
+        const colors = new Float32Array(placed.length * 3);
         const own = new Float32Array(placed.length);
         placed.forEach((item, n) => {
           q.setFromUnitVectors(UP, normal.set(...item.normal)).multiply(turn.setFromAxisAngle(UP, item.yaw));
-          m.compose(
-            new THREE.Vector3(item.x - origin[0], item.y, item.z - origin[1]),
-            q,
-            new THREE.Vector3(item.scale, item.scale, item.scale),
-          );
-          mesh.setMatrixAt(n, m);
-          mesh.setColorAt(n, color.setRGB(...item.colors[p], THREE.SRGBColorSpace));
+          m.compose(at.set(item.x - origin[0], item.y, item.z - origin[1]), q, size.setScalar(item.scale)).toArray(matrices, n * 16);
+          color.setRGB(...item.colors[p], THREE.SRGBColorSpace).toArray(colors, n * 3);
           own[n] = ownNumber(item.x, item.z);
         });
-        // Its own geometry for its own numbers, sharing the shape's.
-        mesh.geometry = new THREE.BufferGeometry();
-        for (const [name, attribute] of Object.entries(geometry.attributes)) mesh.geometry.setAttribute(name, attribute);
-        mesh.geometry.setAttribute("clutterOwn", new THREE.InstancedBufferAttribute(own.slice(), 1));
-        mesh.userData.all = { matrices: mesh.instanceMatrix.array.slice(), colors: mesh.instanceColor.array.slice(), own, count: placed.length };
-        mesh.computeBoundingSphere();
-        meshes.push(mesh);
+        slots.set(`${kind}:${p}:${v}`, { geometry, material: solid ? flat : part.shape === "fern" ? leafy : material, matrices, colors, own, count: placed.length });
       });
     });
+  }
+  return slots;
+}
+
+// An instanced mesh of a shape with room for `count`, with its own geometry for each piece's own
+// number and when it was first drawn, sharing the shape's.
+function slotMesh({ geometry, material: drawnWith }, count) {
+  const mesh = new THREE.InstancedMesh(new THREE.BufferGeometry(), drawnWith, count);
+  for (const [name, attribute] of Object.entries(geometry.attributes)) mesh.geometry.setAttribute(name, attribute);
+  mesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(count * 3), 3);
+  mesh.geometry.setAttribute("clutterOwn", new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
+  mesh.geometry.setAttribute("clutterBorn", new THREE.InstancedBufferAttribute(new Float32Array(count), 1));
+  return mesh;
+}
+
+// Meshes of `instances`, all drawn, as prepareClutter places them. gatherClutter picks which.
+export function clutterMeshes(instances, origin) {
+  const meshes = [];
+  for (const slot of prepareClutter(instances, origin).values()) {
+    const mesh = slotMesh(slot, slot.count);
+    mesh.instanceMatrix.array.set(slot.matrices);
+    mesh.instanceColor.array.set(slot.colors);
+    mesh.geometry.attributes.clutterOwn.array.set(slot.own);
+    mesh.userData.all = { matrices: slot.matrices, colors: slot.colors, own: slot.own, count: slot.count };
+    mesh.computeBoundingSphere();
+    meshes.push(mesh);
   }
   return meshes;
 }
@@ -384,34 +409,101 @@ export function disposeClutter(mesh) {
   mesh.geometry.dispose();
 }
 
+// A test of whether a piece at scene (px, pz) with its own number can show, with the focus within
+// marginFt of (x, z), drawn out to radiusFt with `density` of it. It works in squared distances,
+// taking a root only in the fade.
+function keeper(x, z, radiusFt, density, marginFt) {
+  const reach2 = (radiusFt + marginFt) ** 2;
+  const near = radiusFt * FADE_FROM + marginFt; // nearer than this, everything shows
+  const near2 = near * near;
+  return (px, pz, own) => {
+    const d2 = (px - x) ** 2 + (pz - z) ** 2;
+    if (d2 > reach2) return false;
+    if (d2 > near2 && fadedOut(own, Math.sqrt(d2) - marginFt, radiusFt)) return false;
+    // A second number from its own, for the share drawn.
+    return density >= 1 || (own * 7919) % 1 < density;
+  };
+}
+
+// Copies the pieces of `from` that `keeps` into `mesh` from its nth instance on, each first drawn
+// at `born`, and gives where it got to.
+function copyKept(keeps, from, mesh, n, born) {
+  const { matrices, colors, own, count } = from;
+  const [toM, toC] = [mesh.instanceMatrix.array, mesh.instanceColor.array];
+  const [toOwn, toBorn] = [mesh.geometry.attributes.clutterOwn.array, mesh.geometry.attributes.clutterBorn.array];
+  for (let i = 0; i < count; i++) {
+    if (!keeps(matrices[i * 16 + 12], matrices[i * 16 + 14], own[i])) continue;
+    for (let k = 0; k < 16; k++) toM[n * 16 + k] = matrices[i * 16 + k];
+    for (let k = 0; k < 3; k++) toC[n * 3 + k] = colors[i * 3 + k];
+    toOwn[n] = own[i];
+    toBorn[n] = born;
+    n++;
+  }
+  return n;
+}
+
 // Draws only the instances that can show with the focus within `marginFt` of scene point (x, z),
 // with clutter drawn out to radiusFt: the rest have faded out, but the GPU would still work
 // through their shapes. Density (0-1) is the share of them drawn; the same ones are left out each
 // time.
 export function gatherClutter(meshes, x, z, radiusFt, density = 1, marginFt = 0) {
-  const reach = radiusFt + marginFt;
+  const keeps = keeper(x, z, radiusFt, density, marginFt);
   for (const mesh of meshes) {
-    const { matrices, colors, own, count } = mesh.userData.all;
-    const [toM, toC] = [mesh.instanceMatrix.array, mesh.instanceColor.array];
-    const toOwn = mesh.geometry.attributes.clutterOwn;
-    let n = 0;
-    for (let i = 0; i < count; i++) {
-      const d = Math.hypot(matrices[i * 16 + 12] - x, matrices[i * 16 + 14] - z);
-      // As near as the focus can come before it's gathered again.
-      if (d > reach || fadedOut(own[i], d - marginFt, radiusFt) || (Math.imul(i + 1, 2654435761) >>> 0) / 4294967296 >= density) continue;
-      if (n !== i) {
-        toM.set(matrices.subarray(i * 16, i * 16 + 16), n * 16);
-        toC.set(colors.subarray(i * 3, i * 3 + 3), n * 3);
-      }
-      toOwn.array[n] = own[i];
-      n++;
-    }
+    const n = copyKept(keeps, mesh.userData.all, mesh, 0, 0);
     mesh.count = n;
     mesh.visible = n > 0;
     mesh.instanceMatrix.needsUpdate = true;
     mesh.instanceColor.needsUpdate = true;
-    toOwn.needsUpdate = true;
+    mesh.geometry.attributes.clutterOwn.needsUpdate = true;
     mesh.computeBoundingSphere();
+  }
+}
+
+// Clutter drawn from tiles' prepared pieces (prepareClutter), one mesh a shape kept in `group`
+// and filled again from the tiles each time it's gathered, so no meshes are made as tiles come
+// and go but when there's more of a shape than there's room for.
+export class ClutterSet {
+  constructor(group) {
+    this.group = group;
+    this.meshes = new Map(); // "kind:part:variant" -> its mesh
+  }
+
+  // chunks: [{ slots, born }], born being when the tile's pieces were first drawn, in seconds.
+  gather(chunks, x, z, radiusFt, density = 1, marginFt = 0) {
+    const room = new Map();
+    for (const { slots } of chunks) for (const [key, slot] of slots) room.set(key, (room.get(key) ?? 0) + slot.count);
+    for (const [key, count] of room) {
+      const mesh = this.meshes.get(key);
+      if (mesh && mesh.instanceMatrix.count >= count) continue;
+      if (mesh) this.drop(key);
+      const slot = chunks.find(({ slots }) => slots.has(key)).slots.get(key);
+      const made = slotMesh(slot, Math.ceil(count * 1.25));
+      made.frustumCulled = false;
+      this.meshes.set(key, made);
+      this.group.add(made);
+    }
+    const keeps = keeper(x, z, radiusFt, density, marginFt);
+    const filled = new Map();
+    for (const { slots, born } of chunks) for (const [key, slot] of slots) filled.set(key, copyKept(keeps, slot, this.meshes.get(key), filled.get(key) ?? 0, born));
+    for (const [key, mesh] of this.meshes) {
+      mesh.count = filled.get(key) ?? 0;
+      mesh.visible = mesh.count > 0;
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.instanceColor.needsUpdate = true;
+      mesh.geometry.attributes.clutterOwn.needsUpdate = true;
+      mesh.geometry.attributes.clutterBorn.needsUpdate = true;
+    }
+  }
+
+  drop(key) {
+    const mesh = this.meshes.get(key);
+    this.group.remove(mesh);
+    disposeClutter(mesh);
+    this.meshes.delete(key);
+  }
+
+  dispose() {
+    for (const key of [...this.meshes.keys()]) this.drop(key);
   }
 }
 
