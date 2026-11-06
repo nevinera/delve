@@ -654,7 +654,7 @@ The game server and `/classes` read classes, as [Combat](#combat) describes, and
 | `dialogues/<id>.json` | a dialogue tree | [dialogue](../docs/schema/dialogue.schema.json) |
 | `places/continents/<c>/spawns.json` | the continent's spawn regions, placed mobs and NPCs | [spawns](../docs/schema/spawns.schema.json) |
 
-Ids are 8 lowercase base-36 characters, and a file's id matches its name. Files point at each other by id. Every file, and each spawn region and placed mob or NPC, can have `notes`: what it's for and its backstory. The game never reads them. Distances are feet, times are seconds, angles are degrees, and money is copper (100 copper make a silver, 100 silver a gold).
+Ids are 8 lowercase base-36 characters, and a file's id matches its name. Files point at each other by id. Within a class, a field that names one of its statuses, abilities, resources, units or specializations has an `x-refers` mark in the schema. `go generate ./internal/combat` in `game-server/` turns the marks into a map of where those fields are (`internal/combat/classrefs.json` and `client/src/classes/classRefs.json`). `/classes` and the game server both check a class against it. The editor shows what's missing, and the server logs it as it loads the world. When you add such a field, mark it and run the generator. Every file, and each spawn region and placed mob or NPC, can have `notes`: what it's for and its backstory. The game never reads them. Distances are feet, times are seconds, angles are degrees, and money is copper (100 copper make a silver, 100 silver a gold).
 
 `world.json` sets `levelCap`, 1 to 20 for now.
 

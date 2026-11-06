@@ -138,13 +138,15 @@
                 "statuses": {
                   "type": "array",
                   "items": {
-                    "$ref": "#/$defs/id"
+                    "$ref": "#/$defs/id",
+                    "x-refers": "status"
                   },
                   "description": "statusLeft: which, by default the one that set off the trigger"
                 },
                 "resource": {
                   "type": "string",
-                  "description": "maxResource: which"
+                  "description": "maxResource: which",
+                  "x-refers": "resource"
                 }
               }
             },
@@ -227,7 +229,8 @@
           "additionalProperties": false,
           "properties": {
             "status": {
-              "$ref": "#/$defs/id"
+              "$ref": "#/$defs/id",
+              "x-refers": "status"
             },
             "on": {
               "enum": [
@@ -407,7 +410,8 @@
           "additionalProperties": false,
           "properties": {
             "resource": {
-              "type": "string"
+              "type": "string",
+              "x-refers": "resource"
             },
             "below": {
               "type": "number",
@@ -443,7 +447,8 @@
           "additionalProperties": false,
           "properties": {
             "holders": {
-              "$ref": "#/$defs/id"
+              "$ref": "#/$defs/id",
+              "x-refers": "status"
             },
             "atLeast": {
               "type": "integer",
@@ -479,7 +484,8 @@
               "type": "array",
               "minItems": 1,
               "items": {
-                "$ref": "#/$defs/id"
+                "$ref": "#/$defs/id",
+                "x-refers": "unit"
               },
               "description": "you have one of these units out"
             }
@@ -494,7 +500,8 @@
           "properties": {
             "inArea": {
               "$ref": "#/$defs/id",
-              "description": "the target stands in the area this ability of yours put down"
+              "description": "the target stands in the area this ability of yours put down",
+              "x-refers": "ability"
             }
           }
         },
@@ -847,7 +854,8 @@
           "type": "array",
           "minItems": 1,
           "items": {
-            "$ref": "#/$defs/id"
+            "$ref": "#/$defs/id",
+            "x-refers": "status"
           },
           "description": "with affects enemies or allies: only those holding one of these statuses from you, wherever they are"
         },
@@ -930,19 +938,23 @@
           "$ref": "#/$defs/schools"
         },
         "resource": {
-          "type": "string"
+          "type": "string",
+          "x-refers": "resource"
         },
         "status": {
-          "$ref": "#/$defs/id"
+          "$ref": "#/$defs/id",
+          "x-refers": "status"
         },
         "unit": {
           "$ref": "#/$defs/id",
-          "description": "summon: which of the class's units"
+          "description": "summon: which of the class's units",
+          "x-refers": "unit"
         },
         "units": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/id"
+            "$ref": "#/$defs/id",
+            "x-refers": "unit"
           },
           "description": "with affects summons, consume or command: only these units"
         },
@@ -964,7 +976,8 @@
         },
         "ability": {
           "$ref": "#/$defs/id",
-          "description": "command: the ability your summons use. castAbility: the ability it casts"
+          "description": "command: the ability your summons use. castAbility: the ability it casts",
+          "x-refers": "ability"
         },
         "free": {
           "type": "boolean",
@@ -991,7 +1004,8 @@
         "statuses": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/id"
+            "$ref": "#/$defs/id",
+            "x-refers": "status"
           },
           "description": "summon: statuses it arrives with"
         },
@@ -1078,7 +1092,8 @@
         "abilities": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/id"
+            "$ref": "#/$defs/id",
+            "x-refers": "ability"
           },
           "description": "cooldown: these abilities, by id from the same class"
         },
@@ -1485,7 +1500,8 @@
       "properties": {
         "statusStacks": {
           "$ref": "#/$defs/id",
-          "description": "stacks of this status"
+          "description": "stacks of this status",
+          "x-refers": "status"
         },
         "statusesFromMe": {
           "type": "boolean",
@@ -1494,7 +1510,8 @@
         "statusesOnTarget": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/id"
+            "$ref": "#/$defs/id",
+            "x-refers": "status"
           },
           "description": "which of these the target has"
         },
@@ -1508,13 +1525,15 @@
         "unitsOut": {
           "type": "array",
           "items": {
-            "$ref": "#/$defs/id"
+            "$ref": "#/$defs/id",
+            "x-refers": "unit"
           },
           "description": "how many of these units you have out"
         },
         "resource": {
           "type": "string",
-          "description": "how much of this resource you have"
+          "description": "how much of this resource you have",
+          "x-refers": "resource"
         },
         "add": {
           "type": "number",
@@ -1527,7 +1546,8 @@
         },
         "holders": {
           "$ref": "#/$defs/id",
-          "description": "how many units hold this status from you"
+          "description": "how many units hold this status from you",
+          "x-refers": "status"
         }
       }
     },

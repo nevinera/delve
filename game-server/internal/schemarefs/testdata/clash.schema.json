@@ -1,0 +1,1 @@
+{ "oneOf": [{ "properties": { "x": { "x-refers": "person" } } }, { "properties": { "x": { "x-refers": "place" } } }] }

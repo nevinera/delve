@@ -226,6 +226,13 @@ func readClasses(files map[string]*zip.File) []*combat.Class {
 			log.Printf("worlds: skipping a class: %v", err)
 			continue
 		}
+		// What it names that it doesn't have does nothing in play, but whoever made it should hear.
+		if raw, err := readBytes(files, path); err == nil {
+			problems, _ := combat.ReferenceProblems(raw)
+			for _, p := range problems {
+				log.Printf("worlds: %s: %s", path, p)
+			}
+		}
 		c.WithBuiltins()
 		classes = append(classes, c)
 	}
@@ -233,17 +240,25 @@ func readClasses(files map[string]*zip.File) []*combat.Class {
 }
 
 func readJSON(files map[string]*zip.File, path string, out any) error {
-	f := files[path]
-	if f == nil {
-		return fmt.Errorf("worlds: no %s", path)
-	}
-	r, err := f.Open()
+	raw, err := readBytes(files, path)
 	if err != nil {
 		return err
 	}
-	defer r.Close()
-	if err := json.NewDecoder(r).Decode(out); err != nil {
+	if err := json.Unmarshal(raw, out); err != nil {
 		return fmt.Errorf("worlds: %s: %w", path, err)
 	}
 	return nil
+}
+
+func readBytes(files map[string]*zip.File, path string) ([]byte, error) {
+	f := files[path]
+	if f == nil {
+		return nil, fmt.Errorf("worlds: no %s", path)
+	}
+	r, err := f.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer r.Close()
+	return io.ReadAll(r)
 }

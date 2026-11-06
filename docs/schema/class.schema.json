@@ -168,13 +168,15 @@
         ],
         "properties": {
           "status": {
-            "$ref": "common.schema.json#/$defs/id"
+            "$ref": "common.schema.json#/$defs/id",
+            "x-refers": "status"
           },
           "level": {
             "type": "integer",
             "minimum": 1
           }
-        }
+        },
+        "x-what": "A passive"
       }
     },
     "mastery": {
@@ -191,9 +193,11 @@
           "type": "string"
         },
         "status": {
-          "$ref": "common.schema.json#/$defs/id"
+          "$ref": "common.schema.json#/$defs/id",
+          "x-refers": "status"
         }
-      }
+      },
+      "x-what": "The mastery"
     },
     "tags": {
       "type": "array",
@@ -264,7 +268,8 @@
         "abilities": {
           "type": "array",
           "items": {
-            "$ref": "common.schema.json#/$defs/id"
+            "$ref": "common.schema.json#/$defs/id",
+            "x-refers": "ability"
           },
           "description": "from the same class"
         },
@@ -284,7 +289,8 @@
         "notes": {
           "type": "string"
         }
-      }
+      },
+      "x-what": "A unit"
     },
     "specialization": {
       "type": "object",
@@ -305,16 +311,19 @@
         },
         "status": {
           "$ref": "common.schema.json#/$defs/id",
-          "description": "a status it has for as long as it's this, so effects can ask with when"
+          "description": "a status it has for as long as it's this, so effects can ask with when",
+          "x-refers": "status"
         },
         "abilities": {
           "type": "array",
           "items": {
-            "$ref": "common.schema.json#/$defs/id"
+            "$ref": "common.schema.json#/$defs/id",
+            "x-refers": "ability"
           },
           "description": "abilities only it gets"
         }
-      }
+      },
+      "x-what": "A specialization"
     },
     "talent": {
       "type": "object",
@@ -346,19 +355,23 @@
             "additionalProperties": false,
             "properties": {
               "status": {
-                "$ref": "common.schema.json#/$defs/id"
+                "$ref": "common.schema.json#/$defs/id",
+                "x-refers": "status"
               },
               "ability": {
-                "$ref": "common.schema.json#/$defs/id"
+                "$ref": "common.schema.json#/$defs/id",
+                "x-refers": "ability"
               },
               "spec": {
                 "type": "string",
-                "description": "only for this specialization"
+                "description": "only for this specialization",
+                "x-refers": "specialization"
               }
             }
           }
         }
-      }
+      },
+      "x-what": "A talent"
     }
   }
 }

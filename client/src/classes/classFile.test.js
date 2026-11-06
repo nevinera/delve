@@ -1,7 +1,22 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { classPath, classProblems, classesOf, newAbility, newClass, newStatus } from "./classFile.js";
+import { classPath, classProblems, classesOf, newAbility, newClass, newStatus, referenceProblems } from "./classFile.js";
 import { readAmount, setKey, writeAmount } from "./form.js";
 import { readCondition, writeCondition } from "./fields.js";
+
+const readRepo = (path) => readFileSync(new URL(`../../../${path}`, import.meta.url), "utf8");
+
+describe("what a class names that it doesn't have", () => {
+  it("finds what the game server finds, in the same order", () => {
+    const made = JSON.parse(readRepo("game-server/internal/combat/testdata/references.class.json"));
+    expect(referenceProblems(made)).toEqual(JSON.parse(readRepo("game-server/internal/combat/testdata/references.problems.json")));
+  });
+
+  it("reads the same map of references as the game server", () => {
+    // If not, run `go generate ./internal/combat` in game-server.
+    expect(readRepo("client/src/classes/classRefs.json")).toEqual(readRepo("game-server/internal/combat/classrefs.json"));
+  });
+});
 
 const worldOf = (...classes) => ({
   files: new Map([["world.json", {}], ["objects/abcd1234.json", {}], ...classes.map((c) => [classPath(c.id), c])]),
@@ -45,9 +60,9 @@ describe("what's wrong with a class", () => {
       ],
     };
     expect(classProblems(made)).toEqual([
-      "Bad modifies an ability this class doesn't have (gone0001).",
-      "Bad needs an ability, a tag or a status to modify.",
+      "Bad points at an ability this class doesn't have (gone0001).",
       "Bad points at a status this class doesn't have (gone0002).",
+      "Bad needs an ability, a tag or a status to modify.",
     ]);
   });
 
@@ -73,7 +88,7 @@ describe("what's wrong with a class", () => {
       ],
     };
     expect(classProblems(made)).toEqual([
-      "Bad waits for an ability this class doesn't have (gone0001).",
+      "Bad points at an ability this class doesn't have (gone0001).",
       "Bad points at a status this class doesn't have (gone0002).",
     ]);
   });
@@ -81,7 +96,7 @@ describe("what's wrong with a class", () => {
   it("names what a narrowed stat counts that's gone", () => {
     const made = { statuses: [{ id: "good0001", name: "Good", effects: [{ type: "stat", stat: "damageDone", abilities: ["gone0001"], statuses: ["gone0002"], multiply: 1.1 }] }] };
     expect(classProblems(made)).toEqual([
-      "Good counts an ability this class doesn't have (gone0001).",
+      "Good points at an ability this class doesn't have (gone0001).",
       "Good points at a status this class doesn't have (gone0002).",
     ]);
   });
@@ -100,7 +115,7 @@ describe("what's wrong with a class", () => {
     for (const condition of [{ not: { status: "bloo0001", on: "self" } }, { targetIs: "ally" }, { status: "bloo0001", on: "target", stacks: 5 }, { state: "casting", on: "target" }, { position: "behind" }, { since: "stealth", below: 6 }, { resource: "energy", below: 30, percent: true }, { holders: "bloo0001", atLeast: 5 }, { unitsOut: ["pet00001"] }, { inArea: "deat0001" }, { spentAtLeast: 5 }, { targetsHitAtLeast: 3 }, { outcome: "crit" }, { targetHealthBelowMine: true }, { group: "form", on: "self" }, { wielding: "dual" }]) {
       expect(writeCondition(readCondition(condition))).toEqual(condition);
     }
-    expect(classProblems({ statuses: [{ id: "bloo0001", name: "Blood", when: [{ not: { status: "gone0001", on: "self" } }], effects: [] }] })).toEqual([
+    expect(classProblems({ statuses: [{ id: "bloo0001", name: "Blood", effects: [{ type: "stat", stat: "haste", add: 1, when: [{ not: { status: "gone0001", on: "self" } }] }] }] })).toEqual([
       "Blood points at a status this class doesn't have (gone0001).",
     ]);
   });
@@ -115,10 +130,10 @@ describe("what's wrong with a class", () => {
     };
     expect(classProblems(made)).toEqual([
       "Bolt points at a status this class doesn't have (gone0002).",
-      "Bolt summons a unit this class doesn't have (gone0003).",
+      "Bolt points at a unit this class doesn't have (gone0003).",
+      "Bolt points at an ability this class doesn't have (gone0004).",
       "Bolt points at a unit this class doesn't have (gone0005).",
-      "Bolt commands an ability this class doesn't have (gone0004).",
-      "Ghoul uses an ability this class doesn't have (gone0001).",
+      "Ghoul points at an ability this class doesn't have (gone0001).",
       "Ghoul autocasts an ability it doesn't have (bolt0001).",
     ]);
   });
@@ -169,10 +184,10 @@ describe("what's wrong with a class", () => {
       const problems = classProblems({ ...base, specializations, talents });
       for (const expected of [
         "One points at a status this class doesn't have (gone0001).",
-        "One grants an ability this class doesn't have (gone0002).",
-        "One is for a specialization this class doesn't have (gone).",
+        "One points at an ability this class doesn't have (gone0002).",
+        "One points at a specialization this class doesn't have (gone).",
         "Blood points at a status this class doesn't have (gone0003).",
-        "Blood grants an ability this class doesn't have (gone0004).",
+        "Blood points at an ability this class doesn't have (gone0004).",
       ]) expect(problems).toContain(expected);
     });
   });
@@ -189,7 +204,7 @@ describe("what's wrong with a class", () => {
 
   it("names a cooldown effect's ability that's gone", () => {
     const made = { abilities: [{ id: "bolt0001", name: "Bolt", effects: [{ type: "cooldown", affects: "self", abilities: ["bolt0001", "gone0001"], by: 2 }] }] };
-    expect(classProblems(made)).toEqual(["Bolt changes the cooldown of an ability this class doesn't have (gone0001)."]);
+    expect(classProblems(made)).toEqual(["Bolt points at an ability this class doesn't have (gone0001)."]);
   });
 
   it("names what using up a status points at that's gone", () => {
@@ -199,7 +214,7 @@ describe("what's wrong with a class", () => {
     };
     expect(classProblems(made)).toEqual([
       "Bolt points at a status this class doesn't have (gone0001).",
-      "Good is used up by an ability this class doesn't have (gone0002).",
+      "Good points at an ability this class doesn't have (gone0002).",
     ]);
   });
 
@@ -210,10 +225,10 @@ describe("what's wrong with a class", () => {
       mastery: { name: "Focus" },
     };
     expect(classProblems(made)).toEqual([
-      "Bolt uses a resource this class doesn't have (ki).",
-      "Bolt points at a status this class doesn't have (gone0002).",
+      "Bolt points at a resource this class doesn't have (ki).",
       "Bolt points at a status this class doesn't have (gone0001).",
-      "The mastery needs a status picked.",
+      "Bolt points at a status this class doesn't have (gone0002).",
+      "Focus needs a status picked.",
     ]);
   });
 });

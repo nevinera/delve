@@ -1,5 +1,6 @@
 import { newObjectId } from "../world/builtObjects.js";
 import { gameDataPath, isClassPath } from "../world/paths.js";
+import CLASS_REFS from "./classRefs.json";
 
 // A class, as the world keeps it in classes/<id>.json.
 
@@ -24,77 +25,52 @@ const MIN_TALENTS_ON_OFFER = 2;
 const isTalentTier = (level) => level >= FIRST_TALENT_TIER && (level - FIRST_TALENT_TIER) % TALENT_TIER_STEP === 0;
 const offeredTo = (talent, spec) => talent.grants?.some((g) => !g.spec || g.spec === spec);
 
-// What in a class points at something it doesn't have: a list of sentences, for the page to show.
-export function classProblems(made) {
-  const statuses = new Set((made.statuses ?? []).map((s) => s.id));
-  const abilities = new Set((made.abilities ?? []).map((a) => a.id));
-  const resources = new Set((made.resources ?? []).map((r) => r.key));
-  const units = new Set((made.units ?? []).map((u) => u.id));
+// Where a class names its statuses, abilities, resources, units and specializations, written from
+// the class schema's x-refers marks by `go generate ./internal/combat` in game-server.
+const article = (kind) => (kind === "ability" ? "an" : "a");
+const needs = (where, kind) => `${where} needs ${article(kind)} ${kind} picked.`;
+const byCode = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
+
+// What in a class names something the class doesn't have, as sentences. The game server makes the
+// same check from the same map (game-server/internal/combat/refs.go), in the same order.
+export function referenceProblems(made) {
+  const ids = (list, key = "id") => new Set((list ?? []).map((each) => each?.[key]).filter((id) => typeof id === "string"));
+  const has = { status: ids(made.statuses), ability: ids(made.abilities), unit: ids(made.units), specialization: ids(made.specializations), resource: ids(made.resources, "key") };
   const problems = [];
-  const status = (where, id) => {
-    if (!statuses.has(id)) problems.push(`${where} ${id ? `points at a status this class doesn't have (${id})` : "needs a status picked"}.`);
-  };
-  const resource = (where, key) => {
-    if (!resources.has(key)) problems.push(`${where} ${key ? `uses a resource this class doesn't have (${key})` : "needs a resource picked"}.`);
-  };
-  const conditions = (where, list = []) =>
-    list.forEach((c) => {
-      if ("status" in c) status(where, c.status);
-      if ("holders" in c) status(where, c.holders);
-      if ("resource" in c) resource(where, c.resource);
-      (c.unitsOut ?? []).filter((id) => !units.has(id)).forEach((id) => problems.push(`${where} points at a unit this class doesn't have (${id}).`));
-      if ("inArea" in c && !(made.abilities ?? []).some((a) => a.id === c.inArea)) problems.push(`${where} points at an ability this class doesn't have (${c.inArea}).`);
-      if (c.anyOf) conditions(where, c.anyOf);
-      if (c.not) conditions(where, [c.not]);
-    });
-  const counted = (where, c) => {
-    if (!c) return;
-    if (c.statusStacks) status(where, c.statusStacks);
-    if (c.holders) status(where, c.holders);
-    (c.statusesOnTarget ?? []).forEach((id) => status(where, id));
-    (c.unitsOut ?? []).filter((id) => !units.has(id)).forEach((id) => problems.push(`${where} points at a unit this class doesn't have (${id}).`));
-    if (c.resource) resource(where, c.resource);
-  };
-  const effect = (where, e) => {
-    counted(where, e.perCount);
-    (e.amount?.shareOf?.statuses ?? []).forEach((id) => status(where, id));
-    (e.holding ?? []).forEach((id) => status(where, id));
-    conditions(where, e.when);
-    if (e.type === "status" || (e.type === "consume" && !e.statuses)) status(where, e.status);
-    (e.type === "extend" || e.type === "consume" ? (e.statuses ?? []) : []).forEach((id) => status(where, id));
-    if (e.type === "resource") resource(where, e.resource);
-    if (e.type === "area") {
-      if (e.status) status(where, e.status);
-      if (e.effect) effect(where, e.effect);
-      if (e.onEnter) effect(where, e.onEnter);
-      (e.effects ?? []).forEach((each) => effect(where, each));
+  const add = (problem) => problems.includes(problem) || problems.push(problem);
+  const walk = (node, value, where) => {
+    if (!node || value === undefined || value === null) return;
+    if (node.ref) walk(CLASS_REFS.defs[node.ref], value, where);
+    const object = typeof value === "object" && !Array.isArray(value) ? value : null;
+    if (node.what && object) where = typeof object.name === "string" && object.name ? object.name : node.what;
+    if (node.refers) {
+      const id = typeof value === "string" ? value : "";
+      if (!id) add(needs(where, node.refers));
+      else if (!has[node.refers].has(id)) add(`${where} points at ${article(node.refers)} ${node.refers} this class doesn't have (${id}).`);
+      return;
     }
-    if (e.type === "summon" && !units.has(e.unit)) problems.push(`${where} summons a unit this class doesn't have (${e.unit}).`);
-    (e.units ?? []).filter((id) => !units.has(id)).forEach((id) => problems.push(`${where} points at a unit this class doesn't have (${id}).`));
-    if (e.type === "castAbility" && !abilities.has(e.ability)) problems.push(`${where} casts an ability this class doesn't have (${e.ability}).`);
-    if (e.type === "command" && !abilities.has(e.ability)) problems.push(`${where} commands an ability this class doesn't have (${e.ability}).`);
-    (e.statuses ?? []).forEach((id) => status(where, id));
-    if (e.type === "cooldown") (e.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} changes the cooldown of an ability this class doesn't have (${id}).`));
+    for (const key of object ? Object.keys(node.props ?? {}).sort(byCode) : []) {
+      if (!(key in object) && node.needs?.includes(key)) add(needs(where, node.props[key].refers));
+      walk(node.props[key], object[key], where);
+    }
+    if (Array.isArray(value) && node.items) value.forEach((each) => walk(node.items, each, where));
+    if (object && node.values) for (const key of Object.keys(object).sort(byCode)) walk(node.values, object[key], where);
   };
+  walk(CLASS_REFS.root, made, "The class");
+  return problems;
+}
+
+// What's wrong with a class: what it names that it doesn't have, and the rules its talents,
+// costs, units, modifies and resources break. A list of sentences, for the page to show.
+export function classProblems(made) {
+  const problems = referenceProblems(made);
   for (const ability of made.abilities ?? []) {
-    if (ability.replaces && !abilities.has(ability.replaces)) problems.push(`Ability ${ability.name || ability.id} replaces an ability this class doesn't have (${ability.replaces}).`);
     const where = ability.name || "An ability";
-    (ability.cost ?? []).forEach((c) => {
-      resource(where, c.resource);
-      conditions(where, c.when);
-    });
-    conditions(where, ability.requires);
-    (ability.effects ?? []).forEach((e) => effect(where, e));
     const spendsAll = (ability.cost ?? []).filter((c) => c.all).length;
     if (spendsAll > 1) problems.push(`${where} spends all of more than one resource, so it can't tell what to scale with.`);
     if (!spendsAll && (ability.effects ?? []).some((e) => e.durationPerSpent !== undefined || e.amount?.perSpent !== undefined)) problems.push(`${where} scales with points spent, but no cost spends all.`);
   }
   const specs = new Set((made.specializations ?? []).map((s) => s.id));
-  for (const s of made.specializations ?? []) {
-    const where = s.name || "A specialization";
-    if (s.status) status(where, s.status);
-    (s.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} grants an ability this class doesn't have (${id}).`));
-  }
   const tiers = made.talents ?? {};
   for (const [key, talents] of Object.entries(tiers)) {
     const level = Number(key);
@@ -103,13 +79,7 @@ export function classProblems(made) {
     if (talents.length < MIN_TALENTS_IN_TIER || talents.length > MAX_TALENTS_IN_TIER) problems.push(`The level ${key} tier has ${talents.length} talents, and needs ${MIN_TALENTS_IN_TIER} to ${MAX_TALENTS_IN_TIER}.`);
     const above = tiers[level - TALENT_TIER_STEP] ?? [];
     for (const t of talents) {
-      const where = t.name || "A talent";
-      if (t.requires && !above.some((a) => a.id === t.requires)) problems.push(`${where} requires a talent that isn't in the tier directly above (${t.requires}).`);
-      for (const g of t.grants ?? []) {
-        if (g.status) status(where, g.status);
-        if (g.ability && !abilities.has(g.ability)) problems.push(`${where} grants an ability this class doesn't have (${g.ability}).`);
-        if (g.spec && !specs.has(g.spec)) problems.push(`${where} is for a specialization this class doesn't have (${g.spec}).`);
-      }
+      if (t.requires && !above.some((a) => a.id === t.requires)) problems.push(`${t.name || "A talent"} requires a talent that isn't in the tier directly above (${t.requires}).`);
     }
     for (const spec of specs.size ? specs : [undefined]) {
       const offered = talents.filter((t) => offeredTo(t, spec));
@@ -124,52 +94,18 @@ export function classProblems(made) {
     }
   }
   for (const u of made.units ?? []) {
-    const where = u.name || "A unit";
-    (u.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} uses an ability this class doesn't have (${id}).`));
-    (u.autocast ?? []).filter((id) => !u.abilities?.includes(id)).forEach((id) => problems.push(`${where} autocasts an ability it doesn't have (${id}).`));
+    (u.autocast ?? []).filter((id) => !u.abilities?.includes(id)).forEach((id) => problems.push(`${u.name || "A unit"} autocasts an ability it doesn't have (${id}).`));
   }
   for (const s of made.statuses ?? []) {
     const where = s.name || "A status";
-    conditions(where, s.when);
-    (s.effects ?? []).filter((e) => e.becomes && !abilities.has(e.becomes)).forEach((e) => problems.push(`${where} becomes an ability this class doesn't have (${e.becomes}).`));
-    (s.effects ?? []).filter((e) => e.type === "stat" && e.resource).forEach((e) => resource(where, e.resource));
-    (s.keptBy?.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} is kept by an ability this class doesn't have (${id}).`));
-    (s.consumedBy?.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} is used up by an ability this class doesn't have (${id}).`));
-    for (const e of s.effects ?? []) {
-      conditions(where, e.when);
-      counted(where, e.perCount);
-      (e.amount?.shareOf?.statuses ?? []).forEach((id) => status(where, id));
-      if (e.into && !units.has(e.into)) problems.push(`${where} turns into a unit this class doesn't have (${e.into}).`);
-      if (e.type === "periodic" && e.does === "resource") resource(where, e.resource);
-      if ((e.type === "trigger" || e.type === "aura") && e.effect) effect(where, e.effect);
-      if (e.type === "aura" && e.status) status(where, e.status);
-      if (e.type === "stat") {
-        (e.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} counts an ability this class doesn't have (${id}).`));
-        (e.statuses ?? []).forEach((id) => status(where, id));
-      }
-      if (e.type === "trigger") {
-        (e.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} waits for an ability this class doesn't have (${id}).`));
-        (e.statuses ?? []).forEach((id) => status(where, id));
-      }
-      if (e.type === "modify") {
-        if (!e.abilities?.length && !e.tag && !e.statuses?.length) problems.push(`${where} needs an ability, a tag or a status to modify.`);
-        (e.statuses ?? []).forEach((id) => status(where, id));
-        (e.abilities ?? []).filter((id) => !abilities.has(id)).forEach((id) => problems.push(`${where} modifies an ability this class doesn't have (${id}).`));
-        if (e.change && !BUILT_IN_CHANGES.has(e.change) && !e.tag) {
-          const targets = [...(made.abilities ?? []).filter((a) => e.abilities?.includes(a.id)), ...(made.statuses ?? []).filter((t) => e.statuses?.includes(t.id))];
-          targets.filter((t) => !(t.effects ?? []).some((f) => f.param === e.change || f.effect?.param === e.change)).forEach((t) => problems.push(`${where} changes "${e.change}", which ${t.name || t.id} doesn't name.`));
-        }
-        (e.addEffects ?? []).forEach((added) => effect(where, added));
-        (e.statusEffects ?? []).forEach((added) => {
-          conditions(where, added.when);
-          if (added.type === "periodic" && added.does === "resource") resource(where, added.resource);
-          if (added.type === "trigger" && added.effect) effect(where, added.effect);
-        });
+    for (const e of (s.effects ?? []).filter((e) => e.type === "modify")) {
+      if (!e.abilities?.length && !e.tag && !e.statuses?.length) problems.push(`${where} needs an ability, a tag or a status to modify.`);
+      if (e.change && !BUILT_IN_CHANGES.has(e.change) && !e.tag) {
+        const targets = [...(made.abilities ?? []).filter((a) => e.abilities?.includes(a.id)), ...(made.statuses ?? []).filter((t) => e.statuses?.includes(t.id))];
+        targets.filter((t) => !(t.effects ?? []).some((f) => f.param === e.change || f.effect?.param === e.change)).forEach((t) => problems.push(`${where} changes "${e.change}", which ${t.name || t.id} doesn't name.`));
       }
     }
   }
-  (made.passives ?? []).forEach((p) => status("A passive", p.status));
-  if (made.mastery) status("The mastery", made.mastery.status);
   const keys = (made.resources ?? []).map((r) => r.key);
   if (keys.some((key) => !/^[a-z][a-z0-9_]*$/.test(key))) problems.push("A resource's key has to be lowercase letters, digits and _, starting with a letter.");
   if (new Set(keys).size !== keys.length) problems.push("Two resources have the same key.");
