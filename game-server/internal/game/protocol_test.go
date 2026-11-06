@@ -64,3 +64,11 @@ func checkMessages(sent, got [][]byte, full bool) []string {
 	slices.Sort(problems)
 	return problems
 }
+
+// TestTheProtocolSchemaCompiles reads the schema inside a test, where the test cache sees it, so a
+// change to it runs these tests again.
+func TestTheProtocolSchemaCompiles(t *testing.T) {
+	if _, err := messagestest.Kinds(); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -22,10 +22,11 @@ var (
 	failed  error
 )
 
-// Path is where the schema is.
+// Path is where the schema is: a link to it in docs/schema, inside the module, as the test cache
+// only sees a change to a file inside it.
 func Path() string {
 	_, here, _, _ := runtime.Caller(0)
-	return filepath.Join(filepath.Dir(here), "../../../docs/schema/messages.schema.json")
+	return filepath.Join(filepath.Dir(here), "messages.schema.json")
 }
 
 func load() {
