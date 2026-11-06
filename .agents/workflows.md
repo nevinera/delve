@@ -65,6 +65,12 @@ World content for the core world is in `nevinera/delve-content`.
 
 Every page imports `client/src/errors/install.js` first. It keeps the last 100 console lines and reports errors, failed promises, `console.error` calls and lost WebGL contexts to `POST /client_errors`, with those lines. `ClientError` keeps a row for each kind of error, counted, for the 100 kinds seen most lately. Every report also goes to `log/client_errors/<day>.jsonl`, and files older than 7 days are deleted. System admins see them at `/client_errors`, with stacks mapped back to source lines from the build's hidden source maps.
 
+## Metrics
+
+Call `metrics()` from `client/src/metrics/metrics.js` to measure something on a page: `timing(name, ms, tags)`, `count(name, n, tags)`, `gauge(name, value, tags)`, or `time(name)`, which returns a function that records how long it's been. Names are lowercase words joined by dots, such as `play.load.platters`. Every measurement gets the page, build and device (phone or desktop) as tags. The page sends them to `POST /metrics` every 10 seconds and when it's hidden or closed.
+
+`Metric` keeps them in their own SQLite database (`storage/<env>_metrics.sqlite3`, migrations in `db/metrics_migrate`) for 30 days. To read them, run `bin/rails metrics:summary`, with `SINCE=<hours>`, `BY=<tag>` and `NAME=<prefix>` to narrow it. On the dev server, run it in `/home/deploy/delve` with the env file loaded.
+
 ## Reports
 
 Every page imports `client/src/report/button.js`, a button in the bottom-left corner for reporting a bug, an object or structure you wish you had, something you can't work out how to do, or something annoying. You can type or talk. Talking records a voice note, and where the browser has speech recognition it also types what it hears. A report sends a screenshot of the page's scene where it fills the window, the error recorder's console lines, and what the page gives `setReportContext()`. `ProblemReport` keeps them, with voice notes and screenshots in `storage/problem_reports/<id>/` until a system admin marks the report done at `/problem_reports`.

@@ -48,6 +48,7 @@ Rails.application.routes.draw do
   get "creatures" => "creatures#show"
   get "creature" => "creatures#creature"
   resources :client_errors, only: [:index, :create]
+  resources :metrics, only: [:create]
   resources :problem_reports, only: [:index, :create, :update] do
     member do
       get :voice
