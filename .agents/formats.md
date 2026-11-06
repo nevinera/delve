@@ -1254,6 +1254,10 @@ You type commands in the log's box, starting with `/`. The game server reads eac
 - `/weapon <main hand> [off hand]`: changes what you hold until you leave, for everyone to see, in place of what your class gives you. It doesn't change what your abilities' `wielding` checks. Your owner needs the `system_admin` role.
 - `/teleport <x> <z> [continent]`, `/teleport spawn` or `/teleport home`: moves you to that spot, to the spawn point, or to your home rest point (the spawn point without one), standing on the ground, ending what you're casting. Your owner needs the `system_admin` role.
 
+The play page runs `/debug` itself (`client/src/play/debugCommand.js`), never sending it. It only changes what you see, so anyone can use it, and `/help` leaves it out.
+
+- `/debug show-boundaries <tile, plate, clutter or all>` draws lines over the ground near you: tile edges in yellow, plate edges in red, and in blue the clutter's radius and the square of tiles it's made from. `/debug hide-boundaries [kind or all]` takes them away.
+
 ### Movement checks
 
 The game server checks that each report follows from the last one it took, the way the genre's servers do. It checks speeds and clocks, and where you stand against the continent's plates, placed files and caves.

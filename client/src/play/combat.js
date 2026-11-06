@@ -112,7 +112,9 @@ export function modifyPicks(effect, ability) {
 
 export class PlayCombat {
   // you: the welcome's character. loader: the world's files. hud: the element to build in.
-  constructor({ view, others, connection, loader, you, hud, unitStatuses }) {
+  // `commands` are the page's own, for its log (log.js).
+  constructor({ view, others, connection, loader, you, hud, unitStatuses, commands = {} }) {
+    this.commands = commands;
     Object.assign(this, { view, others, connection, loader, you, hud, unitStatuses });
     this.classes = new Map(); // id -> a promise of its file
     this.target = null;
@@ -173,7 +175,7 @@ export class PlayCombat {
     this.bar = el("div", { className: "combat-actions" });
     this.castBar = el("div", { className: "combat-cast", hidden: true }, el("div", { className: "combat-cast-fill" }), el("span", { className: "combat-cast-label" }));
     this.say = el("div", { className: "combat-say" });
-    this.log = new PlayLog((line) => this.connection.command(line));
+    this.log = new PlayLog((line) => this.connection.command(line), this.commands);
     this.floatLayer = el("div", { className: "combat-floats" });
     this.tooltip = new AbilityTooltip();
     document.body.append(this.tooltip.root); // the HUD sits under the menu buttons, and this goes over them

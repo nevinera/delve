@@ -4,23 +4,23 @@ import { tileClutter } from "../v2/clutter.js";
 import { RUNNING, slopeOf } from "../v2/look.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 
-// Clutter round the builder (v2/clutter.js): by the water, and on biomes' dry ground, drawn with the editor's shapes (render/clutterMeshes.js), shrinking away to nothing
-// RADIUS_FT off. What's in a tile is kept till its cells are dressed again or its water changes,
+// Clutter round the builder (v2/clutter.js): by the water, and on biomes' dry ground, drawn with the editor's shapes (render/clutterMeshes.js), fading away to nothing
+// radiusFt off, made from every tile that reaches into. What's in a tile is kept till its cells are dressed again or its water changes,
 // and the meshes are made again when the builder leaves their tile or that changes, at most every
 // REMAKE_S, and only those within reach drawn as the builder moves.
 
 const RADIUS_FT = 240;
-const REACH_TILES = 1;
 const REMAKE_S = 0.5;
 const GATHER_FT = 40; // what's drawn is picked again when the builder's moved this far
 const CELLS = TILE_FT / CELL_FT;
 
 export class Clutter {
-  constructor(scene, renditions) {
+  constructor(scene, renditions, { radiusFt = RADIUS_FT, density = 1 } = {}) {
     this.renditions = renditions;
     this.group = new THREE.Group();
     scene.add(this.group);
-    setClutterRadius(RADIUS_FT);
+    this.tiles = null; // [tx0, tz0, tx1, tz1], the tiles it's made from
+    this.setRadius(radiusFt, density);
     this.drawn = "";
     this.gathered = null;
     this.since = REMAKE_S;
@@ -66,6 +66,15 @@ export class Clutter {
     return cells.cluttered;
   }
 
+  // How far off it's drawn, and the share of it drawn, 0 to 1.
+  setRadius(radiusFt, density = 1) {
+    if (radiusFt === this.radiusFt && density === this.density) return;
+    [this.radiusFt, this.density] = [radiusFt, density];
+    setClutterRadius(radiusFt);
+    this.since = REMAKE_S;
+    this.gathered = null;
+  }
+
   // Each frame, with the builder at continent feet (x, z), and `shown` whether the ground near is
   // drawn finely enough to stand things on.
   tick(dt, x, z, shown) {
@@ -74,16 +83,17 @@ export class Clutter {
     if (!shown) return;
     if ((this.since += dt) >= REMAKE_S) {
       this.since = 0;
-      const [ax, az] = [Math.floor(x / TILE_FT), Math.floor(z / TILE_FT)];
+      const reach = this.radiusFt + GATHER_FT;
+      const [tx0, tz0, tx1, tz1] = (this.tiles = [x - reach, z - reach, x + reach, z + reach].map((ft) => Math.floor(ft / TILE_FT)));
       const filled = [];
-      for (let tz = az - REACH_TILES; tz <= az + REACH_TILES; tz++) {
-        for (let tx = ax - REACH_TILES; tx <= ax + REACH_TILES; tx++) {
+      for (let tz = tz0; tz <= tz1; tz++) {
+        for (let tx = tx0; tx <= tx1; tx++) {
           if (!this.renditions.tile(tx, tz)) continue;
           const f = this.fill(tx, tz);
           if (f?.instances.length) filled.push(f);
         }
       }
-      const drawn = `${ax},${az}:${filled.map((f) => f.id)}`;
+      const drawn = `${this.tiles}:${filled.map((f) => f.id)}`;
       if (drawn !== this.drawn) {
         this.drawn = drawn;
         this.clear();
@@ -97,7 +107,7 @@ export class Clutter {
     }
     if (!this.gathered || Math.hypot(x - this.gathered[0], z - this.gathered[1]) > GATHER_FT) {
       this.gathered = [x, z];
-      gatherClutter(this.group.children, x, z, RADIUS_FT + GATHER_FT);
+      gatherClutter(this.group.children, x, z, this.radiusFt + GATHER_FT, this.density);
     }
   }
 

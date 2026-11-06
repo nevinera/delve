@@ -7,11 +7,13 @@ import { CLUTTER } from "../world/clutter.js";
 // each instance scales, turns and colors its shape.
 
 const UP = new THREE.Vector3(0, 1, 0);
-// Clutter shrinks away with distance from the focus (scene x, z), to nothing at the radius the
-// graphics settings pick, so it thins out instead of stopping at an edge. It starts shrinking at
-// FADE_FROM of the radius. The radius stays inside a tile, the least distance from the focus to the
-// edge of the tiles clutter is made for.
+// Clutter fades away with distance from the focus (scene x, z), to nothing at the radius the
+// graphics settings pick, so it doesn't stop at an edge. From FADE_FROM of the radius out, it gets
+// sparser, each piece going at its own distance, picked from where it stands, and the pieces left
+// get fainter, drawn with fewer of their pixels (dithered, so nothing needs sorting) and a little
+// smaller.
 const FADE_FROM = 0.55;
+const SHRINK = 0.3; // how much smaller a piece is at the radius
 const focus = { value: new THREE.Vector2() };
 const fade = { value: new THREE.Vector2(130, 240) };
 
@@ -27,11 +29,24 @@ function fading(material) {
   material.onBeforeCompile = (shader) => {
     shader.uniforms.clutterFocus = focus;
     shader.uniforms.clutterFade = fade;
-    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nuniform vec2 clutterFocus;\nuniform vec2 clutterFade;").replace(
+    shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nuniform vec2 clutterFocus;\nuniform vec2 clutterFade;\nvarying float vClutterShown;").replace(
       "#include <begin_vertex>",
       `#include <begin_vertex>
         vec2 clutterAt = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xz;
-        transformed *= 1.0 - smoothstep(clutterFade.x, clutterFade.y, distance(clutterAt, clutterFocus));`,
+        float clutterOut = smoothstep(clutterFade.x, clutterFade.y, distance(clutterAt, clutterFocus));
+        // A number for this piece, from where it stands: it goes once it's that far into the fade.
+        vec3 clutterP = fract(vec3(clutterAt.xyx) * 0.1031);
+        clutterP += dot(clutterP, clutterP.yzx + 33.33);
+        float clutterOwn = fract((clutterP.x + clutterP.y) * clutterP.z);
+        float clutterKept = clutterOwn > clutterOut ? 1.0 : 0.0;
+        transformed *= clutterKept * (1.0 - ${SHRINK.toFixed(2)} * clutterOut);
+        vClutterShown = 1.0 - clutterOut;`,
+    );
+    // The share of a piece's pixels drawn, by a fixed noise over the screen.
+    shader.fragmentShader = shader.fragmentShader.replace("#include <common>", "#include <common>\nvarying float vClutterShown;").replace(
+      "#include <clipping_planes_fragment>",
+      `#include <clipping_planes_fragment>
+        if (vClutterShown < 1.0 && fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) > vClutterShown) discard;`,
     );
   };
   return material;
