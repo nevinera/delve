@@ -180,6 +180,17 @@ func TestEnterAtTheSpawnPointOrWhereItWas(t *testing.T) {
 	next(t, b)
 }
 
+func TestEnterAtTheSpawnPointWhenTheTokenSays(t *testing.T) {
+	h := NewHub(&fakeWorlds{}, characters(map[int64]*rails.Position{2: {Continent: "main", At: [3]float64{1, 2, 3}, Yaw: 0.5}}))
+	p, err := h.Enter(context.Background(), token.Claims{Character: 2, World: 1, Repo: "them/vale", Sha: "s", Spawn: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if you := next(t, p)["you"].(map[string]any); fmt.Sprint(you["at"]) != "[5376 0 5376]" {
+		t.Errorf("at = %v", you["at"])
+	}
+}
+
 func TestNearbyCharactersSeeEachOther(t *testing.T) {
 	h := NewHub(&fakeWorlds{}, characters(nil))
 	a := enter(t, h, 1)

@@ -1150,7 +1150,7 @@ A token is `<payload>.<signature>`, both base64url without padding. The payload 
 { "user": 7, "character": 12, "world": 3, "repo": "owner/name", "sha": "<released commit>", "exp": 1798000000 }
 ```
 
-`exp` is in Unix seconds. The signature is HMAC-SHA256 of the payload's base64url text, keyed with `GAME_TOKEN_SECRET`, which Rails and the game server share.
+`exp` is in Unix seconds. A bot's token can also have `"spawn": true`, which starts the character at the spawn point wherever it was. The signature is HMAC-SHA256 of the payload's base64url text, keyed with `GAME_TOKEN_SECRET`, which Rails and the game server share.
 
 ### Placing a character
 

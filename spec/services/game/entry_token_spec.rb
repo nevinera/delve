@@ -14,6 +14,11 @@ RSpec.describe Game::EntryToken do
     expect(Base64.urlsafe_decode64(signature)).to eq(OpenSSL::HMAC.digest("SHA256", described_class::LOCAL_SECRET, body))
   end
 
+  it "asks for the spawn point only when told to" do
+    body = described_class.issue(character:, world:, now:, spawn: true).split(".").first
+    expect(JSON.parse(Base64.urlsafe_decode64(body))).to include("spawn" => true)
+  end
+
   it "uses GAME_TOKEN_SECRET when it's set" do
     body, signature = with_env("GAME_TOKEN_SECRET" => "shh") { described_class.issue(character:, world:, now:).split(".") }
     expect(Base64.urlsafe_decode64(signature)).to eq(OpenSSL::HMAC.digest("SHA256", "shh", body))

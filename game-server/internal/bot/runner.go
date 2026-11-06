@@ -85,7 +85,7 @@ func (r *Runner) handle(m Message) {
 		me := r.state.Me
 		r.arrive(me.Continent)
 		r.Log.Info("Entered as %s, on %s at (%.0f, %.0f, %.0f)", me.Name, me.Continent, me.At[0], me.At[1], me.At[2])
-	case "teleported":
+	case "teleport":
 		r.arrive(m.Continent)
 		r.Log.Info("The server moved the bot to %s at (%.0f, %.0f, %.0f)", m.Continent, m.At[0], m.At[1], m.At[2])
 	case "correct":

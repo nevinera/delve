@@ -6,7 +6,7 @@
 # issues the entry token; the bot itself is game-server/cmd/bot, which this runs with `go run`.
 #
 # Usage:
-#   script/game/bot --character <id|name> --world <id|name|repo> [--strategy <name>] [--config <json|file>] [-v]
+#   script/game/bot --character <id|name> --world <id|name|repo> [--strategy <name>] [--config <json|file>] [--spawn] [-v]
 #
 # Strategies: null (stands still, the default), follow ({"target": "<character name>",
 # "notice_feet": 100, "stop_feet": 5}).
@@ -17,13 +17,14 @@
 
 require "optparse"
 
-options = {verbosity: 0, strategy: "null", config: "{}"}
+options = {verbosity: 0, strategy: "null", config: "{}", spawn: false}
 OptionParser.new do |opts|
-  opts.banner = "Usage: script/game/bot --character <id|name> --world <id|name|repo> [--strategy <name>] [--config <json|file>]"
+  opts.banner = "Usage: script/game/bot --character <id|name> --world <id|name|repo> [--strategy <name>] [--config <json|file>] [--spawn]"
   opts.on("-C", "--character ID_OR_NAME", "Character id or name") { |v| options[:character] = v }
   opts.on("-W", "--world ID_OR_NAME_OR_REPO", "World id, name, or repo (owner/name)") { |v| options[:world] = v }
   opts.on("-s", "--strategy NAME", "Strategy (default: null)") { |v| options[:strategy] = v }
   opts.on("-c", "--config JSON_OR_FILE", "The strategy's config, as JSON or a JSON file") { |v| options[:config] = v }
+  opts.on("--spawn", "Start at the world's spawn point, wherever the character was") { options[:spawn] = true }
   opts.on("-v", "--verbose", "Log what's sent and heard (-vv: others' movement too)") { options[:verbosity] += 1 }
 end.parse!
 
@@ -56,7 +57,7 @@ end
 character = find_character(options[:character])
 world = find_world(options[:world])
 config = JSON.generate(read_config(options[:config]))
-token = Game::EntryToken.issue(character:, world:)
+token = Game::EntryToken.issue(character:, world:, spawn: options[:spawn])
 url = "#{Game::EntryToken.server_url}/play?token=#{CGI.escape(token)}"
 
 ENV["PATH"] = "#{ENV["PATH"]}:/usr/local/go/bin"

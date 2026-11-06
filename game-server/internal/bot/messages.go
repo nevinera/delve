@@ -13,10 +13,10 @@ type Message struct {
 	Characters []game.Character `json:"characters"` // snapshot
 	Character  *game.Character  `json:"character"`  // appear
 	ID         int64            `json:"id"`         // vanish, moved
-	At         *[3]float64      `json:"at"`         // moved, correct, teleported
+	At         *[3]float64      `json:"at"`         // moved, correct, teleport
 	Yaw        float64          `json:"yaw"`
 	Move       *game.Move       `json:"move"`
-	Continent  string           `json:"continent"` // teleported
+	Continent  string           `json:"continent"` // teleport
 	Classes    []string         `json:"classes"`   // pickClass
 	Message    string           `json:"message"`   // error
 

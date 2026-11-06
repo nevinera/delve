@@ -19,6 +19,8 @@ type Claims struct {
 	Repo      string `json:"repo"`
 	Sha       string `json:"sha"`
 	Exp       int64  `json:"exp"`
+	// Spawn starts the character at the world's spawn point, wherever it was. Bots ask for it.
+	Spawn bool `json:"spawn,omitempty"`
 }
 
 var (

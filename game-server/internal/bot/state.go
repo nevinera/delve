@@ -40,7 +40,7 @@ func (s *State) Apply(m Message) {
 				c.Move = *m.Move
 			}
 		}
-	case "teleported":
+	case "teleport":
 		if s.Me != nil && m.At != nil {
 			s.Me.Continent, s.Me.At, s.Me.Yaw = m.Continent, *m.At, m.Yaw
 		}

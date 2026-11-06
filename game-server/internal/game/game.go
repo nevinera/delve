@@ -137,7 +137,8 @@ func (p *Player) send(b []byte) {
 }
 
 // Enter places the character a token names: on its world's layer, where it last was there or at
-// the spawn point. A character already playing is dropped from where it was.
+// the spawn point, or at the spawn point when the token says to. A character already playing is
+// dropped from where it was.
 func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 	character, err := h.characters.Character(ctx, c.World, c.Character)
 	if err != nil {
@@ -157,13 +158,16 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 	if len(state.Look) == 0 {
 		state.Look = json.RawMessage("{}")
 	}
-	if pos := character.Position; pos != nil && pos.Continent != "" {
-		state.Continent, state.At, state.Yaw = pos.Continent, pos.At, pos.Yaw
-	} else {
+	spawn := func() {
 		state.Continent, state.At = layer.world.Spawn.Continent, layer.world.SpawnAt()
 		if at, ok := layer.standing(state.Continent, state.At[0], state.At[2]); ok {
 			state.At = at
 		}
+	}
+	if pos := character.Position; pos != nil && pos.Continent != "" && !c.Spawn {
+		state.Continent, state.At, state.Yaw = pos.Continent, pos.At, pos.Yaw
+	} else {
+		spawn()
 	}
 	// Reading the plate it's on now spares the layer the wait when the first report comes.
 	if g := layer.ground(state.Continent); g != nil {
@@ -177,7 +181,9 @@ func (h *Hub) Enter(ctx context.Context, c token.Claims) (*Player, error) {
 	back := h.takeKept(c.World, state.ID, h.now())
 	if old != nil && old.layer == layer {
 		layer.mu.Lock()
-		state.Continent, state.At, state.Yaw = old.state.Continent, old.state.At, old.state.Yaw
+		if !c.Spawn {
+			state.Continent, state.At, state.Yaw = old.state.Continent, old.state.At, old.state.Yaw
+		}
 		back = layer.keep(old, h.now())
 		layer.mu.Unlock()
 	}

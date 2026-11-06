@@ -100,7 +100,7 @@ func TestFollowsACharacter(t *testing.T) {
 
 func TestTakesTheGroundWhereItsMoved(t *testing.T) {
 	var asked []string
-	conn := &script{batches: [][]string{{welcome}, {`{"type":"teleported","continent":"isle","at":[50,9,50],"yaw":1}`}}}
+	conn := &script{batches: [][]string{{welcome}, {`{"type":"teleport","continent":"isle","at":[50,9,50],"yaw":1}`}}}
 	r := &Runner{Conn: conn, Strategy: Null{}, Log: NewLog(io.Discard, 0), Ground: func(c string) Ground { asked = append(asked, c); return level{} }}
 	r.Run()
 	if len(asked) != 2 || asked[1] != "isle" {

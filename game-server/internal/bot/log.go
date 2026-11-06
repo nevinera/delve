@@ -27,7 +27,9 @@ func NewLog(out io.Writer, verbosity int) *Log {
 
 func (l *Log) Info(format string, args ...any) { _, _ = fmt.Fprintf(l.out, format+"\n", args...) }
 
-func (l *Log) Warn(format string, args ...any) { _, _ = fmt.Fprintf(l.out, "WARN: "+format+"\n", args...) }
+func (l *Log) Warn(format string, args ...any) {
+	_, _ = fmt.Fprintf(l.out, "WARN: "+format+"\n", args...)
+}
 
 func (l *Log) Verbose(format string, args ...any) {
 	if l.Verbosity >= 1 {
