@@ -564,18 +564,45 @@ body.touch .play-bar button {
   border-radius: 4px;
 }
 
+/* Key labels only show while you point at the bars, and then on every slot. */
 .combat-action-key {
   position: absolute;
   top: 2px;
   left: 4px;
+  z-index: 1;
   color: #ffd070;
+  visibility: hidden;
+}
+
+.combat-bars:hover .combat-action:not(.combat-action-unused) .combat-action-key {
+  visibility: visible;
+}
+
+/* An empty slot past the first bar keeps its place but doesn't show. */
+.combat-action-unused {
+  visibility: hidden;
+}
+
+.combat-action-attacking {
+  outline: 2px solid #ffe060;
 }
 
 .combat-action-shade {
   position: absolute;
-  inset: auto 0 0 0;
-  height: 0;
-  background: rgba(0, 0, 0, 0.6);
+  inset: 0;
+  pointer-events: none;
+}
+
+.combat-action-count {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 18px system-ui, sans-serif;
+  color: #fff;
+  text-shadow: 0 0 3px #000, 0 0 3px #000;
+  pointer-events: none;
 }
 
 .combat-cast {
@@ -749,6 +776,10 @@ body.touch .play-bar button {
     width: 44px;
     height: 44px;
     font-size: 9px;
+  }
+
+  .combat-action-count {
+    font-size: 14px;
   }
 
   .play-abilities {

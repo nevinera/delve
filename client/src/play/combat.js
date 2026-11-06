@@ -2,7 +2,7 @@ import { SPEC_LEVEL, allowedBuild, heldStatuses, knownAbilities } from "./build.
 import { drawBuildPanel } from "./buildPanel.js";
 import { drawAbilitiesPane } from "./abilitiesPane.js";
 import { AbilityTooltip } from "./abilityTooltip.js";
-import { barsFor, cleared, keyLabel, placed, slotForKey, swapped } from "./bars.js";
+import { barsFor, cleared, cooldownText, keyLabel, placed, slotForKey, slotShows, swapped, sweepFor } from "./bars.js";
 import * as THREE from "three";
 import { chestOf, AbilityStage, clipNameFor } from "../abilities/stage.js";
 import { DESKTOP_PARTICLES, PHONE_PARTICLES } from "../abilities/particles.js";
@@ -28,7 +28,11 @@ const AURA_CHECK_S = 0.25; // how often to see which status-long auras should be
 // floating over who it lands on, and a log. The game server decides everything: this asks it to use
 // abilities, and shows what it says happened.
 
-const ATTACK_KEY = "`";
+// Auto-attack, which every character has whatever its class. It goes on the bars like an ability,
+// by an id no class ability can have (those are 8 characters).
+export const ATTACK = { id: "attack", name: "Attack", icon: "crossed-swords", description: "Auto-attack your target, or stop." };
+const NONE = { from: 0, until: 0 };
+const later = (a, b) => (b && b.until > a.until ? b : a); // of two waits, the one that ends later
 const FLOAT_S = 1.2;
 const REFUSED_S = 2;
 const PICK_PX = 60; // how far from someone's chest on screen a click still picks them
@@ -119,10 +123,10 @@ export class PlayCombat {
     this.stage = new AbilityStage(view.scene, { sounds: isTouch() ? PHONE_SOUNDS : DESKTOP_SOUNDS, ground: (x, z) => view.renditions?.heightAt(x, z), audio: () => this.audioContext(), particles: isTouch() ? PHONE_PARTICLES : DESKTOP_PARTICLES });
     this.runs = new Map(); // caster id -> its run
     this.floats = [];
-    this.cooldowns = new Map(); // ability id -> when it's ready, in performance.now()
-    this.lockouts = new Map(); // school -> when it's back, in performance.now()
+    this.cooldowns = new Map(); // ability id -> { from, until }: when it started and when it's ready, in performance.now()
+    this.lockouts = new Map(); // school -> { from, until }, the same
     this.controls = []; // the controls on you
-    this.gcdUntil = 0;
+    this.gcd = { from: 0, until: 0 };
     this.resources = {};
     this.resourceMax = {};
     this.chosen = { specialization: "", talents: {} }; // your specialization and talents
@@ -205,6 +209,7 @@ export class PlayCombat {
     const level = this.you.level ?? 1;
     const build = allowedBuild(made, this.chosen, level);
     this.known = knownAbilities(made, level, build);
+    this.usable = [ATTACK, ...this.known]; // what can go on the bars
     if (!this.statuses.has(this.you.id)) this.statuses.set(this.you.id, new Map());
     const mine = this.statuses.get(this.you.id);
     for (const id of this.held ?? []) mine.delete(id);
@@ -232,23 +237,25 @@ export class PlayCombat {
     );
   }
 
-  // The bars and their buttons. A bar with nothing on it only shows while you're arranging them.
+  // The bars and their buttons. Past the first bar, an empty slot only shows while you're arranging
+  // them, and keeps its place so each slot stays over the same key on the bar below.
   drawBars() {
     if (!this.made) return;
-    this.bars = barsFor(this.savedBars, this.known);
+    this.bars = barsFor(this.savedBars, this.usable);
     this.slots = [];
     this.hideTooltip();
     const arranging = !this.pane?.hidden;
     const rows = this.bars.map((bar, b) => {
       const row = el("div", { className: b === this.barPage ? "combat-bar" : "combat-bar combat-bar-away" });
       row.hidden = b > 0 && !arranging && !bar.some((id) => this.knownById(id));
-      bar.forEach((id, s) => row.append(this.slotButton(b, s, this.knownById(id))));
+      bar.forEach((id, s) => {
+        const ability = this.knownById(id);
+        const button = this.slotButton(b, s, ability);
+        button.classList.toggle("combat-action-unused", !slotShows(b, ability, arranging));
+        row.append(button);
+      });
       return row;
     });
-    if (!this.attackButton) {
-      this.attackButton = el("button", { type: "button", className: "combat-action", title: "Auto-attack your target, or stop" }, el("span", { className: "combat-action-key", textContent: ATTACK_KEY }), el("span", { className: "combat-action-name", textContent: "Attack" }));
-      this.attackButton.addEventListener("click", () => this.toggleAttack());
-    }
     if (!this.pageButton) {
       this.pageButton = el("button", { type: "button", className: "combat-action combat-page", title: "Show another action bar" });
       this.pageButton.addEventListener("click", () => {
@@ -259,18 +266,19 @@ export class PlayCombat {
     }
     this.pageButton.textContent = `bar ${this.barPage + 1}`;
     const box = el("div", { className: `combat-bars${arranging ? " combat-bars-arranging" : ""}` }, ...rows);
-    this.bar.replaceChildren(el("div", { className: "combat-bar-side" }, this.pageButton, this.attackButton), box);
+    this.bar.replaceChildren(el("div", { className: "combat-bar-side" }, this.pageButton), box);
     this.castBar.style.bottom = `${innerHeight - this.bar.getBoundingClientRect().top + 10}px`;
   }
 
   knownById(id) {
-    return id ? this.known.find((a) => a.id === id) : null;
+    return id ? this.usable.find((a) => a.id === id) : null;
   }
 
   slotButton(bar, slot, ability) {
     const at = { bar, slot };
     const shade = el("div", { className: "combat-action-shade" });
-    const button = el("button", { type: "button", className: `combat-action${ability ? "" : " combat-action-empty"}` }, el("span", { className: "combat-action-key", textContent: keyLabel(bar, slot) }), el("span", { className: "combat-action-name", textContent: ability?.name ?? "" }), shade);
+    const count = el("span", { className: "combat-action-count" });
+    const button = el("button", { type: "button", className: `combat-action${ability ? "" : " combat-action-empty"}` }, el("span", { className: "combat-action-key", textContent: keyLabel(bar, slot) }), el("span", { className: "combat-action-name", textContent: ability?.name ?? "" }), shade, count);
     const icon = iconNode(ability?.icon, "combat-action-icon");
     if (icon) {
       button.prepend(icon);
@@ -282,6 +290,7 @@ export class PlayCombat {
     button.addEventListener("dragstart", (e) => {
       if (this.pane?.hidden) return e.preventDefault();
       e.dataTransfer.setData("text/plain", JSON.stringify({ from: at }));
+      e.dataTransfer.setDragImage(button, 0, 0); // held by its corner, so you can see where it'll land
     });
     button.addEventListener("dragend", (e) => {
       if (!this.pane?.hidden && e.dataTransfer.dropEffect === "none") this.setBars(cleared(this.bars, at));
@@ -302,14 +311,14 @@ export class PlayCombat {
       button.addEventListener("pointerleave", () => this.hideTooltip());
       button.addEventListener("dragstart", () => this.hideTooltip());
     }
-    if (ability) this.slots.push({ id: ability.id, ability, shade, node: button, label: button.querySelector(".combat-action-name") });
+    if (ability) this.slots.push({ id: ability.id, ability, shade, count, node: button, label: button.querySelector(".combat-action-name") });
     return button;
   }
 
   // Says what the ability under the mouse comes to, and what's true of you for it now.
   showTooltip() {
     const shown = this.inForce(this.hovered);
-    const ready = this.cooldowns.get(shown.id) ?? 0;
+    const ready = this.cooldowns.get(shown.id)?.until ?? 0;
     this.tooltip.show(shown, {
       resources: this.resources,
       names: Object.fromEntries((this.made?.resources ?? []).map(({ key, name }) => [key, name ?? key])),
@@ -357,7 +366,7 @@ export class PlayCombat {
   drawPane() {
     if (!this.pane || this.pane.hidden || !this.made) return;
     const passives = this.held.map((id) => this.made.statuses?.find((s) => s.id === id)).filter(Boolean);
-    drawAbilitiesPane(this.pane, { known: this.known, passives, picked: this.pickedAbility }, {
+    drawAbilitiesPane(this.pane, { known: this.usable, passives, picked: this.pickedAbility }, {
       onPick: (id) => {
         this.pickedAbility = id;
         this.pickedSlot = null;
@@ -409,10 +418,6 @@ export class PlayCombat {
       if (e.key === "Escape" && this.aiming) {
         e.stopImmediatePropagation();
         this.stopAiming();
-        return;
-      }
-      if (e.key === ATTACK_KEY) {
-        this.toggleAttack();
         return;
       }
       if (e.key === "p" && !e.ctrlKey && !e.metaKey) {
@@ -511,6 +516,7 @@ export class PlayCombat {
 
   // The ability a slot's ability comes to right now: a status's `becomes` can turn it into another.
   inForce(ability) {
+    if (ability.id === ATTACK.id) return ability;
     for (const held of this.unitStatuses.of(this.you.id)) {
       if (held.class !== this.made?.id && held.class !== this.you.class) continue;
       const made = this.made?.statuses?.find((s) => s.id === held.status);
@@ -546,6 +552,7 @@ export class PlayCombat {
   useSlot({ bar, slot }) {
     const ability = this.knownById(this.bars?.[bar]?.[slot]);
     if (!ability) return;
+    if (ability.id === ATTACK.id) return this.toggleAttack();
     if (ability.target === "ground") {
       this.aiming = ability;
       this.reticle.scale.setScalar((ability.effects ?? []).find((e) => e.radius)?.radius ?? 5);
@@ -612,7 +619,7 @@ export class PlayCombat {
 
   // What the game server says.
   async used({ id, class: classId, ability: abilityId, target, spot, gcd, castTime, channel, cost, school, schools, animation }) {
-    if (id === this.you.id && gcd) this.gcdUntil = performance.now() + gcd * 1000;
+    if (id === this.you.id && gcd) this.gcd = { from: performance.now(), until: performance.now() + gcd * 1000 };
     const made = await this.classOf(classId);
     const ability = made?.abilities?.find((a) => a.id === abilityId);
     const caster = this.unit(id);
@@ -644,7 +651,6 @@ export class PlayCombat {
 
   attacking_({ target }) {
     this.attacking = target;
-    this.attackButton?.classList.toggle("combat-action-on", Boolean(target));
   }
 
   stopped({ id }) {
@@ -710,17 +716,17 @@ export class PlayCombat {
   }
 
   cooldown({ ability, seconds }) {
-    this.cooldowns.set(ability, performance.now() + seconds * 1000);
+    this.cooldowns.set(ability, { from: performance.now(), until: performance.now() + seconds * 1000 });
   }
 
   lockout({ school, seconds }) {
-    this.lockouts.set(school, performance.now() + seconds * 1000);
+    this.lockouts.set(school, { from: performance.now(), until: performance.now() + seconds * 1000 });
   }
 
-  // When an ability's school comes back from a lockout.
-  lockedUntil(ability) {
+  // The lockout on an ability's schools that lasts longest, or none.
+  lockedFor(ability) {
     const schools = ability.schools ?? (ability.school ? [ability.school] : []);
-    return Math.max(0, ...schools.map((school) => this.lockouts.get(school) ?? 0));
+    return schools.map((school) => this.lockouts.get(school)).reduce(later, NONE);
   }
 
   resources_({ resources, max }) {
@@ -855,12 +861,18 @@ export class PlayCombat {
     if (this.hovered) this.showTooltip();
     if (this.slots) {
       const facts = this.facts();
-      for (const { id, ability, shade, node, label } of this.slots) {
+      for (const slot of this.slots) {
+        const { id, ability, shade, count, node, label } = slot;
         const force = this.inForce(ability);
         if (label && label.textContent !== (force.name ?? force.id)) label.textContent = force.name ?? force.id;
-        const ready = Math.max(this.cooldowns.get(id) ?? 0, this.gcdUntil, this.lockedUntil(ability));
-        shade.style.height = ready > now ? "100%" : "0";
-        node.classList.toggle("combat-action-locked", this.lockedUntil(ability) > now);
+        const own = this.cooldowns.get(id) ?? NONE;
+        const locked = this.lockedFor(ability);
+        const sweep = sweepFor([own, locked, id === ATTACK.id ? NONE : this.gcd].reduce(later, NONE), now);
+        if (slot.sweep !== sweep) shade.style.background = slot.sweep = sweep; // the page rewrites what it's given, so keep our own
+        const left = cooldownText((own.until - now) / 1000);
+        if (count.textContent !== left) count.textContent = left;
+        node.classList.toggle("combat-action-locked", locked.until > now);
+        node.classList.toggle("combat-action-attacking", id === ATTACK.id && Boolean(this.attacking));
         node.classList.toggle("combat-action-off", !allHold(ability.requires, facts) || Boolean(blockedBy(this.controls, ability)));
       }
     }

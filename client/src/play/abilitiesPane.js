@@ -50,7 +50,10 @@ export function drawAbilitiesPane(box, { known, passives, picked }, { onPick, on
       show();
       onPick(picked === ability.id ? null : ability.id);
     });
-    node.addEventListener("dragstart", (e) => e.dataTransfer.setData("text/plain", JSON.stringify({ ability: ability.id })));
+    node.addEventListener("dragstart", (e) => {
+      e.dataTransfer.setData("text/plain", JSON.stringify({ ability: ability.id }));
+      e.dataTransfer.setDragImage(node, 0, 0); // held by its corner, so you can see where it'll land
+    });
     book.append(node);
   }
   box.append(book);

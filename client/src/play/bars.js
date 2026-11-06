@@ -46,3 +46,24 @@ export function slotForKey({ code, shiftKey, altKey }) {
 }
 
 export const keyLabel = (bar, slot) => `${MODIFIERS[bar]}${SLOT_KEYS[slot]}`;
+
+// The seconds left on a cooldown as a slot shows them: minutes past a minute, whole seconds past
+// 10, and tenths under that.
+export function cooldownText(seconds) {
+  if (seconds <= 0) return "";
+  if (seconds >= 60) return `${Math.ceil(seconds / 60)}m`;
+  if (seconds >= 10) return `${Math.ceil(seconds)}`;
+  return seconds.toFixed(1);
+}
+
+// The dark sweep over a slot while it waits: the part still to go, from `from` to `until`, starting
+// at 12 o'clock and uncovered clockwise. "" once it's ready.
+export function sweepFor({ from, until }, now) {
+  if (until <= now || until <= from) return "";
+  const done = Math.min(1, Math.max(0, (now - from) / (until - from)));
+  return `conic-gradient(transparent ${(done * 360).toFixed(1)}deg, rgba(0, 0, 0, 0.6) 0)`;
+}
+
+// Whether a slot on `bar` shows: bar 1 always shows every slot, and the others only the slots that
+// hold something, unless you're arranging them.
+export const slotShows = (bar, ability, arranging) => bar === 0 || arranging || Boolean(ability);

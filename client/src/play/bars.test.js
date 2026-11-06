@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { BAR_COUNT, BAR_SLOTS, barsFor, cleared, defaultBars, keyLabel, placed, slotForKey, swapped } from "./bars.js";
+import { BAR_COUNT, BAR_SLOTS, barsFor, cleared, cooldownText, defaultBars, keyLabel, placed, slotForKey, slotShows, swapped, sweepFor } from "./bars.js";
 
 const known = (n) => Array.from({ length: n }, (_, i) => ({ id: `a${i}` }));
 
@@ -36,5 +36,27 @@ describe("action bars", () => {
     expect(slotForKey({ code: "Digit0", altKey: true })).toEqual({ bar: 2, slot: 9 });
     expect(slotForKey({ code: "KeyW" })).toBeNull();
     expect(keyLabel(1, 0)).toBe("shift 1");
+  });
+
+  it("counts a cooldown down in minutes, then seconds, then tenths", () => {
+    expect(cooldownText(125)).toBe("3m");
+    expect(cooldownText(60)).toBe("1m");
+    expect(cooldownText(59.2)).toBe("60");
+    expect(cooldownText(10.1)).toBe("11");
+    expect(cooldownText(9.94)).toBe("9.9");
+    expect(cooldownText(0)).toBe("");
+    expect(cooldownText(-1)).toBe("");
+  });
+  it("uncovers a waiting slot clockwise from 12 o'clock", () => {
+    expect(sweepFor({ from: 0, until: 1000 }, 0)).toBe("conic-gradient(transparent 0.0deg, rgba(0, 0, 0, 0.6) 0)");
+    expect(sweepFor({ from: 0, until: 1000 }, 250)).toBe("conic-gradient(transparent 90.0deg, rgba(0, 0, 0, 0.6) 0)");
+    expect(sweepFor({ from: 0, until: 1000 }, 1000)).toBe("");
+    expect(sweepFor({ from: 0, until: 0 }, 0)).toBe("");
+  });
+  it("shows every slot on the first bar, but only full ones on the others unless you're arranging", () => {
+    expect(slotShows(0, null, false)).toBe(true);
+    expect(slotShows(1, null, false)).toBe(false);
+    expect(slotShows(2, { id: "a" }, false)).toBe(true);
+    expect(slotShows(1, null, true)).toBe(true);
   });
 });
