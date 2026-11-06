@@ -88,12 +88,21 @@ menu.querySelector('[data-open="playGraphics"]').disabled = true; // until there
 
 async function play() {
   const loader = new PlayWorld(config);
-  // How long each step of loading takes, as play.load.<step>. "enter" includes picking a class.
+  // How long each step of loading takes, as play.load.<step>, each from where the last ended, so
+  // together they add up to play.load.total. "enter" includes picking a class.
   const tags = { repo: config.repo };
+  const nav = performance.getEntriesByType?.("navigation")[0];
+  if (nav) metrics().timing("play.load.page", nav.responseEnd, tags); // asking for the page until it's here
+  let last = performance.now();
+  metrics().timing("play.load.code", last - (nav?.responseEnd ?? 0), tags); // until this code runs
+  const mark = (name) => {
+    const now = performance.now();
+    metrics().timing(`play.load.${name}`, now - last, tags);
+    last = now;
+  };
   const step = async (name, promise) => {
-    const done = metrics().time(`play.load.${name}`, tags);
     const result = await promise;
-    done();
+    mark(name);
     return result;
   };
   status("Loading the world...");
@@ -197,6 +206,7 @@ async function play() {
   status("Loading the land around you...");
   let showGraphics = null;
   const view = new PlayView($("scene"), { onGraphics: (graphics) => showGraphics?.(graphics) });
+  mark("view");
   setReportContext(() => ({ camera: view.camera.position.toArray().map(Math.round), plates: renditions.decoded.size, unreadable: [...renditions.unreadable] }));
   const continent = await step("continent", loader.continent(you.continent));
   const renditions = new Renditions();
@@ -204,6 +214,7 @@ async function play() {
   renditions.setBiomes(continent.biomes?.areas ?? [], false);
   renditions.setWater(continent.water ?? { bodies: [], courses: [] }, false);
   renditions.fetchPlate = (coords) => loader.plate(you.continent, coords);
+  mark("platters");
   // Placed and caves files for the plates near you, once each.
   const placed = new Placed();
   const caves = new Caves(view.scene, renditions);
@@ -223,6 +234,7 @@ async function play() {
   await step("placed", placedNear(you.at[0], you.at[2]));
 
   view.show(renditions, placed, caves, continent.caveLayout);
+  mark("show");
   await step("ground", view.ready([you.at[0], you.at[2]]));
   await step("animations", prepareAnimations().catch((err) => console.warn(`Couldn't load animations: ${err.message}`)));
   // From when the page was asked for, so it includes fetching the page and its code.
