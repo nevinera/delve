@@ -2,6 +2,7 @@
 // the page's entry token, reports how your character moves, puts your character back where the
 // server says when it corrects you, and hands what it hears about everyone else to `on`.
 
+import { SERVER_MESSAGES } from "./messageTypes.js";
 import { RUNNING_KINDS } from "./walker.js";
 
 const TICK_MS = 100; // how often to look at how you're moving
@@ -40,12 +41,22 @@ export class GameConnection {
     this.socket.addEventListener("message", (e) => {
       const message = JSON.parse(e.data);
       if (message.type === "correct") this.correct(message);
-      else this.on[message.type]?.(message);
+      else if (this.on[message.type]) this.on[message.type](message);
+      else this.unhandled(message.type);
     });
     this.socket.addEventListener("close", () => {
       clearInterval(this.timer);
       this.on.closed?.();
     });
+  }
+
+  // Says once in the console when the server sends a message the page has no use for, or one the
+  // protocol doesn't have: the server or the page is out of date.
+  unhandled(type) {
+    this.warned ??= new Set();
+    if (this.warned.has(type)) return;
+    this.warned.add(type);
+    console.warn(SERVER_MESSAGES.includes(type) ? `nothing handles the server's ${type} message` : `the server sent ${type}, which the protocol doesn't have`);
   }
 
   // Keeps the connection open while the player chooses a class, with nothing to report yet.

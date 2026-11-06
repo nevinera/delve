@@ -18,22 +18,37 @@
         "ticks"
       ],
       "type": "object",
-      "description": "How an ability channels, as modify left it."
+      "description": "How an ability channels, as modify left it.",
+      "x-go": "combat.Channel"
     },
     "character": {
       "additionalProperties": false,
       "properties": {
-        "absorb": {
-          "type": "number"
+        "id": {
+          "type": "integer"
+        },
+        "name": {
+          "type": "string"
+        },
+        "look": {},
+        "continent": {
+          "type": "string"
         },
         "at": {
           "$ref": "#/$defs/point"
         },
+        "yaw": {
+          "type": "number"
+        },
+        "move": {
+          "$ref": "#/$defs/move"
+        },
         "class": {
           "type": "string"
         },
-        "continent": {
-          "type": "string"
+        "level": {
+          "type": "integer",
+          "x-go-type": "int"
         },
         "dummy": {
           "type": "boolean"
@@ -41,32 +56,20 @@
         "health": {
           "type": "number"
         },
-        "id": {
-          "type": "integer"
-        },
-        "level": {
-          "type": "integer"
-        },
-        "look": {},
         "maxHealth": {
           "type": "number"
-        },
-        "move": {
-          "$ref": "#/$defs/move"
-        },
-        "name": {
-          "type": "string"
         },
         "statuses": {
           "items": {
             "$ref": "#/$defs/shownStatus"
           },
-          "type": "array"
+          "type": "array",
+          "description": "What it holds, as it comes into view"
         },
         "untargetable": {
           "type": "boolean"
         },
-        "yaw": {
+        "absorb": {
           "type": "number"
         }
       },
@@ -82,7 +85,8 @@
         "maxHealth"
       ],
       "type": "object",
-      "description": "A character as others see it. Training dummies have dummy true and negative ids."
+      "description": "A character as others see it. Training dummies have dummy true and negative ids.",
+      "x-go": "Character"
     },
     "clientMove": {
       "additionalProperties": false,
@@ -144,7 +148,8 @@
         "perSecond"
       ],
       "type": "object",
-      "description": "What using an ability spends, as modify left it."
+      "description": "What using an ability spends, as modify left it.",
+      "x-go": "combat.Cost"
     },
     "fromClient": {
       "description": "A message a client sends.",
@@ -185,7 +190,8 @@
         {
           "$ref": "#/$defs/client.command"
         }
-      ]
+      ],
+      "x-go": "incoming"
     },
     "fromServer": {
       "description": "A message the game server sends.",
@@ -319,22 +325,25 @@
       "additionalProperties": false,
       "properties": {
         "forward": {
-          "type": "integer"
+          "type": "integer",
+          "x-go-type": "int"
+        },
+        "strafe": {
+          "type": "integer",
+          "x-go-type": "int"
+        },
+        "turn": {
+          "type": "integer",
+          "x-go-type": "int"
         },
         "gait": {
           "type": "string"
         },
-        "jump": {
-          "type": "boolean"
-        },
-        "strafe": {
-          "type": "integer"
-        },
         "swim": {
           "type": "boolean"
         },
-        "turn": {
-          "type": "integer"
+        "jump": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -346,7 +355,8 @@
         "jump"
       ],
       "type": "object",
-      "description": "How a character is moving, so others can carry it on between messages: forward and strafe are -1, 0 or 1 (strafe 1 is left), turn is -1 (right), 0 or 1 (left), gait is walk, run or sprint, and jump is true as it leaves the ground."
+      "description": "How a character is moving, so others can carry it on between messages: forward and strafe are -1, 0 or 1 (strafe 1 is left), turn is -1 (right), 0 or 1 (left), gait is walk, run or sprint, and jump is true as it leaves the ground.",
+      "x-go": "Move"
     },
     "point": {
       "description": "Continent feet [x, y, z]: x east, z south, y up.",
@@ -360,14 +370,14 @@
     "restPoint": {
       "additionalProperties": false,
       "properties": {
-        "at": {
-          "$ref": "#/$defs/point"
-        },
         "id": {
           "type": "string"
         },
         "name": {
           "type": "string"
+        },
+        "at": {
+          "$ref": "#/$defs/point"
         }
       },
       "required": [
@@ -376,25 +386,28 @@
         "at"
       ],
       "type": "object",
-      "description": "A rest point on your continent, at standing on the ground."
+      "description": "A rest point on your continent, at standing on the ground.",
+      "x-go": "restPoint"
     },
     "shownStatus": {
       "additionalProperties": false,
       "properties": {
-        "class": {
+        "status": {
           "type": "string"
         },
         "from": {
           "type": "integer"
         },
-        "lasts": {
-          "type": "number"
+        "class": {
+          "type": "string"
         },
         "stacks": {
-          "type": "integer"
+          "type": "integer",
+          "x-go-type": "int"
         },
-        "status": {
-          "type": "string"
+        "lasts": {
+          "type": "number",
+          "description": "Seconds left, if it runs out"
         }
       },
       "required": [
@@ -404,17 +417,18 @@
         "stacks"
       ],
       "type": "object",
-      "description": "A status a unit holds, for its frame. lasts is seconds left, if it runs out."
+      "description": "A status a unit holds, for its frame. lasts is seconds left, if it runs out.",
+      "x-go": "shownStatus"
     },
     "client.attack": {
       "additionalProperties": false,
       "description": "You start auto-attacking `target`, or stop with 0",
       "properties": {
-        "target": {
-          "type": "integer"
-        },
         "type": {
           "const": "attack"
+        },
+        "target": {
+          "type": "integer"
         }
       },
       "required": [
@@ -427,6 +441,9 @@
       "additionalProperties": false,
       "description": "You've set your action bars: up to 3 lists of up to 12 ability ids, `\"\"` for an empty slot",
       "properties": {
+        "type": {
+          "const": "bars"
+        },
         "bars": {
           "items": {
             "items": {
@@ -437,9 +454,6 @@
           },
           "maxItems": 3,
           "type": "array"
-        },
-        "type": {
-          "const": "bars"
         }
       },
       "required": [
@@ -452,6 +466,9 @@
       "additionalProperties": false,
       "description": "You ask for this specialization and these talents, out of combat: the server keeps what's allowed and answers with `build`",
       "properties": {
+        "type": {
+          "const": "build"
+        },
         "specialization": {
           "type": "string"
         },
@@ -460,9 +477,6 @@
             "type": "string"
           },
           "type": "object"
-        },
-        "type": {
-          "const": "build"
         }
       },
       "required": [
@@ -474,11 +488,11 @@
       "additionalProperties": false,
       "description": "You typed a line starting with `/`. The server answers with `log`",
       "properties": {
-        "line": {
-          "type": "string"
-        },
         "type": {
           "const": "command"
+        },
+        "line": {
+          "type": "string"
         }
       },
       "required": [
@@ -491,14 +505,14 @@
       "additionalProperties": false,
       "description": "Twice a second while moving or turning, once a second otherwise",
       "properties": {
-        "at": {
-          "$ref": "#/$defs/point"
+        "type": {
+          "const": "heartbeat"
         },
         "t": {
           "type": "number"
         },
-        "type": {
-          "const": "heartbeat"
+        "at": {
+          "$ref": "#/$defs/point"
         },
         "yaw": {
           "type": "number"
@@ -526,11 +540,12 @@
       "additionalProperties": false,
       "description": "You ask to make this rest point your home. You have to be within 20 ft of it, across the ground",
       "properties": {
-        "rest": {
-          "type": "string"
-        },
         "type": {
           "const": "makeHome"
+        },
+        "rest": {
+          "type": "string",
+          "description": "MakeHome's rest point"
         }
       },
       "required": [
@@ -543,20 +558,21 @@
       "additionalProperties": false,
       "description": "Whenever its movement changes: starting, stopping, turning, jumping, changing gait",
       "properties": {
-        "at": {
-          "$ref": "#/$defs/point"
-        },
-        "move": {
-          "$ref": "#/$defs/clientMove"
+        "type": {
+          "const": "move"
         },
         "t": {
           "type": "number"
         },
-        "type": {
-          "const": "move"
+        "at": {
+          "$ref": "#/$defs/point"
         },
         "yaw": {
           "type": "number"
+        },
+        "move": {
+          "$ref": "#/$defs/clientMove",
+          "x-go-type": "*Move"
         }
       },
       "required": [
@@ -571,11 +587,11 @@
       "additionalProperties": false,
       "description": "You choose from `pickClass`. Send `heartbeat`s while you decide; the server ignores all else until `pick`",
       "properties": {
-        "class": {
-          "type": "string"
-        },
         "type": {
           "const": "pick"
+        },
+        "class": {
+          "type": "string"
         }
       },
       "required": [
@@ -588,11 +604,11 @@
       "additionalProperties": false,
       "description": "You ask whether the server has you seeing `target`, within 200 ft, up to 40 times a second, for the line of sight overlay",
       "properties": {
-        "target": {
-          "type": "integer"
-        },
         "type": {
           "const": "sees"
+        },
+        "target": {
+          "type": "integer"
         }
       },
       "required": [
@@ -618,17 +634,18 @@
       "additionalProperties": false,
       "description": "You ask to use an ability: `target` is who it's aimed at, 0 for no one, and `spot` is `[x, y, z]` for one aimed at the ground",
       "properties": {
+        "type": {
+          "const": "use"
+        },
         "ability": {
           "type": "string"
-        },
-        "spot": {
-          "$ref": "#/$defs/point"
         },
         "target": {
           "type": "integer"
         },
-        "type": {
-          "const": "use"
+        "spot": {
+          "$ref": "#/$defs/point",
+          "x-go-type": "*[3]float64"
         }
       },
       "required": [
@@ -641,14 +658,14 @@
       "additionalProperties": false,
       "description": "What someone near you can still soak up changed. A character carries `absorb` too",
       "properties": {
-        "absorb": {
-          "type": "number"
+        "type": {
+          "const": "absorb"
         },
         "id": {
           "type": "integer"
         },
-        "type": {
-          "const": "absorb"
+        "absorb": {
+          "type": "number"
         }
       },
       "required": [
@@ -656,29 +673,40 @@
         "id",
         "absorb"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "absorbMessage"
     },
     "server.appear": {
       "additionalProperties": false,
       "description": "Someone comes near you. A character carries the `statuses` it holds then, each with `status`, `from`, `class`, `stacks` and `lasts`",
       "properties": {
-        "character": {
-          "$ref": "#/$defs/character"
-        },
         "type": {
           "const": "appear"
+        },
+        "character": {
+          "$ref": "#/$defs/character"
         }
       },
       "required": [
         "type",
         "character"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "appear"
     },
     "server.area": {
       "additionalProperties": false,
       "description": "An area went down on your continent. `dir` is the way a line runs, and `follows` is who it moves with",
       "properties": {
+        "type": {
+          "const": "area"
+        },
+        "id": {
+          "type": "integer"
+        },
+        "from": {
+          "type": "integer"
+        },
         "ability": {
           "type": "string"
         },
@@ -688,6 +716,15 @@
         "at": {
           "$ref": "#/$defs/point"
         },
+        "radius": {
+          "type": "number"
+        },
+        "line": {
+          "type": "boolean"
+        },
+        "width": {
+          "type": "number"
+        },
         "dir": {
           "items": {
             "type": "number"
@@ -696,29 +733,11 @@
           "minItems": 2,
           "type": "array"
         },
-        "follows": {
-          "type": "integer"
-        },
-        "from": {
-          "type": "integer"
-        },
-        "id": {
-          "type": "integer"
-        },
         "lasts": {
           "type": "number"
         },
-        "line": {
-          "type": "boolean"
-        },
-        "radius": {
-          "type": "number"
-        },
-        "type": {
-          "const": "area"
-        },
-        "width": {
-          "type": "number"
+        "follows": {
+          "type": "integer"
         }
       },
       "required": [
@@ -732,46 +751,52 @@
         "dir",
         "lasts"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "areaMessage"
     },
     "server.areaGone": {
       "additionalProperties": false,
       "description": "An area ended",
       "properties": {
-        "id": {
-          "type": "integer"
-        },
         "type": {
           "const": "areaGone"
+        },
+        "id": {
+          "type": "integer"
         }
       },
       "required": [
         "type",
         "id"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "areaGone"
     },
     "server.attacking": {
       "additionalProperties": false,
       "description": "Who you're auto-attacking now, 0 for no one",
       "properties": {
-        "target": {
-          "type": "integer"
-        },
         "type": {
           "const": "attacking"
+        },
+        "target": {
+          "type": "integer"
         }
       },
       "required": [
         "type",
         "target"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "attacking"
     },
     "server.bars": {
       "additionalProperties": false,
       "description": "The action bars you set, as you enter, if you ever have",
       "properties": {
+        "type": {
+          "const": "bars"
+        },
         "bars": {
           "items": {
             "items": {
@@ -780,21 +805,22 @@
             "type": "array"
           },
           "type": "array"
-        },
-        "type": {
-          "const": "bars"
         }
       },
       "required": [
         "type",
         "bars"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "barsMessage"
     },
     "server.build": {
       "additionalProperties": false,
       "description": "What you've chosen, after you enter and whenever it changes",
       "properties": {
+        "type": {
+          "const": "build"
+        },
         "specialization": {
           "type": "string"
         },
@@ -803,9 +829,6 @@
             "type": "string"
           },
           "type": "object"
-        },
-        "type": {
-          "const": "build"
         }
       },
       "required": [
@@ -813,40 +836,42 @@
         "specialization",
         "talents"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "buildMessage"
     },
     "server.controls": {
       "additionalProperties": false,
       "description": "What's holding you now, a list of `control` words",
       "properties": {
+        "type": {
+          "const": "controls"
+        },
         "controls": {
           "items": {
             "type": "string"
           },
           "type": "array"
-        },
-        "type": {
-          "const": "controls"
         }
       },
       "required": [
         "type",
         "controls"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "controlsMessage"
     },
     "server.cooldown": {
       "additionalProperties": false,
       "description": "An ability of yours can't be used for this long, 0 once it can",
       "properties": {
+        "type": {
+          "const": "cooldown"
+        },
         "ability": {
           "type": "string"
         },
         "seconds": {
           "type": "number"
-        },
-        "type": {
-          "const": "cooldown"
         }
       },
       "required": [
@@ -854,17 +879,18 @@
         "ability",
         "seconds"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "cooldown"
     },
     "server.correct": {
       "additionalProperties": false,
       "description": "Your last report didn't add up: you're back at `at`",
       "properties": {
-        "at": {
-          "$ref": "#/$defs/point"
-        },
         "type": {
           "const": "correct"
+        },
+        "at": {
+          "$ref": "#/$defs/point"
         },
         "yaw": {
           "type": "number"
@@ -875,37 +901,33 @@
         "at",
         "yaw"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "correction"
     },
     "server.error": {
       "additionalProperties": false,
       "description": "Before the server closes the connection",
       "properties": {
-        "message": {
-          "type": "string"
-        },
         "type": {
           "const": "error"
+        },
+        "message": {
+          "type": "string"
         }
       },
       "required": [
         "type",
         "message"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "errorMessage"
     },
     "server.forced": {
       "additionalProperties": false,
       "description": "An effect moved you or someone near you. It's at `at` already, and clients play the trip over `seconds`, arcing `height` ft up. The server ignores your reports until then",
       "properties": {
-        "at": {
-          "$ref": "#/$defs/point"
-        },
-        "from": {
-          "$ref": "#/$defs/point"
-        },
-        "height": {
-          "type": "number"
+        "type": {
+          "const": "forced"
         },
         "id": {
           "type": "integer"
@@ -913,13 +935,19 @@
         "kind": {
           "type": "string"
         },
+        "from": {
+          "$ref": "#/$defs/point"
+        },
+        "at": {
+          "$ref": "#/$defs/point"
+        },
+        "yaw": {
+          "type": "number"
+        },
         "seconds": {
           "type": "number"
         },
-        "type": {
-          "const": "forced"
-        },
-        "yaw": {
+        "height": {
           "type": "number"
         }
       },
@@ -933,42 +961,44 @@
         "seconds",
         "height"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "forced"
     },
     "server.gear": {
       "additionalProperties": false,
       "description": "What someone near you holds changed, and `look` is their own look with it",
       "properties": {
+        "type": {
+          "const": "gear"
+        },
         "id": {
           "type": "integer"
         },
-        "look": {},
-        "type": {
-          "const": "gear"
-        }
+        "look": {}
       },
       "required": [
         "type",
         "id",
         "look"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "gearMessage"
     },
     "server.health": {
       "additionalProperties": false,
       "description": "A training dummy reset",
       "properties": {
-        "health": {
-          "type": "number"
+        "type": {
+          "const": "health"
         },
         "id": {
           "type": "integer"
         },
-        "maxHealth": {
+        "health": {
           "type": "number"
         },
-        "type": {
-          "const": "health"
+        "maxHealth": {
+          "type": "number"
         }
       },
       "required": [
@@ -977,77 +1007,84 @@
         "health",
         "maxHealth"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "healthMessage"
     },
     "server.hit": {
       "additionalProperties": false,
       "description": "One of an ability's effects landed on someone near you",
       "properties": {
-        "ability": {
-          "type": "string"
-        },
-        "absorbed": {
-          "type": "number"
-        },
-        "amount": {
-          "type": "number"
-        },
-        "avoided": {
-          "type": "string"
-        },
-        "blocked": {
-          "type": "boolean"
-        },
-        "class": {
-          "type": "string"
-        },
-        "crit": {
-          "type": "boolean"
-        },
-        "dps": {
-          "type": "number"
-        },
-        "effect": {
-          "type": "string"
+        "type": {
+          "const": "hit"
         },
         "from": {
           "type": "integer"
         },
-        "health": {
-          "type": "number"
-        },
-        "lasts": {
-          "type": "number"
-        },
-        "maxHealth": {
-          "type": "number"
-        },
-        "missed": {
-          "type": "boolean"
+        "ability": {
+          "type": "string",
+          "description": "None for an auto-attack"
         },
         "on": {
           "type": "integer"
         },
-        "removed": {
+        "effect": {
           "type": "string"
+        },
+        "amount": {
+          "type": "number"
+        },
+        "crit": {
+          "type": "boolean"
+        },
+        "missed": {
+          "type": "boolean"
         },
         "resource": {
           "type": "string"
         },
-        "stacks": {
-          "type": "integer"
-        },
         "status": {
           "type": "string"
         },
-        "stopped": {
-          "type": "string"
+        "avoided": {
+          "type": "string",
+          "description": "Dodge or parry, along with missed"
+        },
+        "blocked": {
+          "type": "boolean"
         },
         "ticked": {
+          "type": "string",
+          "description": "The status whose periodic effect this was"
+        },
+        "absorbed": {
+          "type": "number"
+        },
+        "removed": {
+          "type": "string",
+          "description": "The status a dispel took off"
+        },
+        "stopped": {
+          "type": "string",
+          "description": "The ability an interrupt stopped"
+        },
+        "class": {
           "type": "string"
         },
-        "type": {
-          "const": "hit"
+        "lasts": {
+          "type": "number"
+        },
+        "stacks": {
+          "type": "integer",
+          "x-go-type": "int"
+        },
+        "dps": {
+          "type": "number"
+        },
+        "health": {
+          "type": "number"
+        },
+        "maxHealth": {
+          "type": "number"
         }
       },
       "required": [
@@ -1058,37 +1095,40 @@
         "health",
         "maxHealth"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "hit"
     },
     "server.home": {
       "additionalProperties": false,
       "description": "You made this rest point your home",
       "properties": {
-        "home": {
-          "type": "string"
-        },
         "type": {
           "const": "home"
+        },
+        "home": {
+          "type": "string"
         }
       },
       "required": [
         "type",
         "home"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "home"
     },
     "server.level": {
       "additionalProperties": false,
       "description": "Someone's level changed",
       "properties": {
+        "type": {
+          "const": "level"
+        },
         "id": {
           "type": "integer"
         },
         "level": {
-          "type": "integer"
-        },
-        "type": {
-          "const": "level"
+          "type": "integer",
+          "x-go-type": "int"
         }
       },
       "required": [
@@ -1096,20 +1136,21 @@
         "id",
         "level"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "levelMessage"
     },
     "server.lockout": {
       "additionalProperties": false,
       "description": "An interrupt locked you out of this school",
       "properties": {
+        "type": {
+          "const": "lockout"
+        },
         "school": {
           "type": "string"
         },
         "seconds": {
           "type": "number"
-        },
-        "type": {
-          "const": "lockout"
         }
       },
       "required": [
@@ -1117,20 +1158,21 @@
         "school",
         "seconds"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "lockout"
     },
     "server.log": {
       "additionalProperties": false,
       "description": "A line for your log",
       "properties": {
+        "type": {
+          "const": "log"
+        },
         "kind": {
           "type": "string"
         },
         "text": {
           "type": "string"
-        },
-        "type": {
-          "const": "log"
         }
       },
       "required": [
@@ -1138,7 +1180,8 @@
         "kind",
         "text"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "logLine"
     },
     "server.logOffStopped": {
       "additionalProperties": false,
@@ -1155,7 +1198,8 @@
         "type",
         "why"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "logOffStopped"
     },
     "server.loggedOff": {
       "additionalProperties": false,
@@ -1168,62 +1212,65 @@
       "required": [
         "type"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "loggedOff"
     },
     "server.loggingOff": {
       "additionalProperties": false,
       "description": "You'll be logged off in this long",
       "properties": {
-        "seconds": {
-          "type": "number"
-        },
         "type": {
           "const": "loggingOff"
+        },
+        "seconds": {
+          "type": "number"
         }
       },
       "required": [
         "type",
         "seconds"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "loggingOff"
     },
     "server.look": {
       "additionalProperties": false,
       "description": "Someone near you started or stopped looking like something else. Without a `look`, they went back to their own",
       "properties": {
+        "type": {
+          "const": "look"
+        },
         "id": {
           "type": "integer"
         },
-        "look": {},
-        "type": {
-          "const": "look"
-        }
+        "look": {}
       },
       "required": [
         "type",
         "id",
         "look"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "lookMessage"
     },
     "server.moved": {
       "additionalProperties": false,
       "description": "Someone near you sent `move` or `heartbeat`",
       "properties": {
-        "at": {
-          "$ref": "#/$defs/point"
+        "type": {
+          "const": "moved"
         },
         "id": {
           "type": "integer"
         },
-        "move": {
-          "$ref": "#/$defs/move"
-        },
-        "type": {
-          "const": "moved"
+        "at": {
+          "$ref": "#/$defs/point"
         },
         "yaw": {
           "type": "number"
+        },
+        "move": {
+          "$ref": "#/$defs/move"
         }
       },
       "required": [
@@ -1233,7 +1280,8 @@
         "yaw",
         "move"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "moved"
     },
     "server.pickClass": {
       "additionalProperties": false,
@@ -1259,11 +1307,11 @@
       "additionalProperties": false,
       "description": "You can't use that now",
       "properties": {
-        "ability": {
-          "type": "string"
-        },
         "type": {
           "const": "refused"
+        },
+        "ability": {
+          "type": "string"
         },
         "why": {
           "type": "string"
@@ -1274,17 +1322,15 @@
         "ability",
         "why"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "refused"
     },
     "server.resources": {
       "additionalProperties": false,
       "description": "How much of each resource you have and can hold, by key, at most twice a second",
       "properties": {
-        "max": {
-          "additionalProperties": {
-            "type": "number"
-          },
-          "type": "object"
+        "type": {
+          "const": "resources"
         },
         "resources": {
           "additionalProperties": {
@@ -1292,8 +1338,11 @@
           },
           "type": "object"
         },
-        "type": {
-          "const": "resources"
+        "max": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "type": "object"
         }
       },
       "required": [
@@ -1301,14 +1350,15 @@
         "resources",
         "max"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "resources"
     },
     "server.restPoints": {
       "additionalProperties": false,
       "description": "As you enter, if the world has rest points: those on your continent as `{ id, name, at }`, `at` standing on the ground, and your home's id or `\"\"`",
       "properties": {
-        "home": {
-          "type": "string"
+        "type": {
+          "const": "restPoints"
         },
         "restPoints": {
           "items": {
@@ -1316,8 +1366,8 @@
           },
           "type": "array"
         },
-        "type": {
-          "const": "restPoints"
+        "home": {
+          "type": "string"
         }
       },
       "required": [
@@ -1325,20 +1375,21 @@
         "restPoints",
         "home"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "restPoints"
     },
     "server.sees": {
       "additionalProperties": false,
       "description": "Whether the server has you seeing a unit, for what you asked with `sees`",
       "properties": {
-        "clear": {
-          "type": "boolean"
+        "type": {
+          "const": "sees"
         },
         "target": {
           "type": "integer"
         },
-        "type": {
-          "const": "sees"
+        "clear": {
+          "type": "boolean"
         }
       },
       "required": [
@@ -1346,66 +1397,71 @@
         "target",
         "clear"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "seesAnswer"
     },
     "server.snapshot": {
       "additionalProperties": false,
       "description": "Once, after `welcome`: everyone near you",
       "properties": {
+        "type": {
+          "const": "snapshot"
+        },
         "characters": {
           "items": {
             "$ref": "#/$defs/character"
           },
           "type": "array"
-        },
-        "type": {
-          "const": "snapshot"
         }
       },
       "required": [
         "type",
         "characters"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "snapshot"
     },
     "server.speed": {
       "additionalProperties": false,
       "description": "How fast you go now, 100 being plain",
       "properties": {
-        "movementSpeed": {
-          "type": "number"
-        },
         "type": {
           "const": "speed"
+        },
+        "movementSpeed": {
+          "type": "number"
         }
       },
       "required": [
         "type",
         "movementSpeed"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "speedMessage"
     },
     "server.statusChanged": {
       "additionalProperties": false,
       "description": "The copy of a status that `from` put on `id` has different stacks or time left now. `lasts` is seconds left, or 0 if it stays until removed",
       "properties": {
-        "from": {
-          "type": "integer"
+        "type": {
+          "const": "statusChanged"
         },
         "id": {
-          "type": "integer"
-        },
-        "lasts": {
-          "type": "number"
-        },
-        "stacks": {
           "type": "integer"
         },
         "status": {
           "type": "string"
         },
-        "type": {
-          "const": "statusChanged"
+        "from": {
+          "type": "integer"
+        },
+        "stacks": {
+          "type": "integer",
+          "x-go-type": "int"
+        },
+        "lasts": {
+          "type": "number",
+          "description": "Seconds left, or 0 if it stays until removed"
         }
       },
       "required": [
@@ -1416,14 +1472,15 @@
         "stacks",
         "lasts"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "statusChanged"
     },
     "server.statusGone": {
       "additionalProperties": false,
       "description": "The copy of a status that `from` put on `id` ran out or something took it off",
       "properties": {
-        "from": {
-          "type": "integer"
+        "type": {
+          "const": "statusGone"
         },
         "id": {
           "type": "integer"
@@ -1431,8 +1488,8 @@
         "status": {
           "type": "string"
         },
-        "type": {
-          "const": "statusGone"
+        "from": {
+          "type": "integer"
         }
       },
       "required": [
@@ -1441,32 +1498,33 @@
         "status",
         "from"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "statusGone"
     },
     "server.statusOn": {
       "additionalProperties": false,
       "description": "A status went on someone near you, or a dummy",
       "properties": {
-        "class": {
-          "type": "string"
-        },
-        "from": {
-          "type": "integer"
+        "type": {
+          "const": "statusOn"
         },
         "id": {
-          "type": "integer"
-        },
-        "lasts": {
-          "type": "number"
-        },
-        "stacks": {
           "type": "integer"
         },
         "status": {
           "type": "string"
         },
-        "type": {
-          "const": "statusOn"
+        "from": {
+          "type": "integer"
+        },
+        "class": {
+          "type": "string"
+        },
+        "stacks": {
+          "type": "integer"
+        },
+        "lasts": {
+          "type": "number"
         }
       },
       "required": [
@@ -1477,37 +1535,40 @@
         "class",
         "stacks"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "statusOn",
+      "x-go-embed": "shownStatus"
     },
     "server.stopped": {
       "additionalProperties": false,
       "description": "Someone's cast or channel ended early",
       "properties": {
-        "id": {
-          "type": "integer"
-        },
         "type": {
           "const": "stopped"
+        },
+        "id": {
+          "type": "integer"
         }
       },
       "required": [
         "type",
         "id"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "stopped"
     },
     "server.swung": {
       "additionalProperties": false,
       "description": "Someone near you started an auto-attack swing",
       "properties": {
+        "type": {
+          "const": "swung"
+        },
         "id": {
           "type": "integer"
         },
         "target": {
           "type": "integer"
-        },
-        "type": {
-          "const": "swung"
         }
       },
       "required": [
@@ -1515,20 +1576,21 @@
         "id",
         "target"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "swung"
     },
     "server.targetable": {
       "additionalProperties": false,
       "description": "Someone near you became targetable or stopped being. A character carries `untargetable` while it can't be",
       "properties": {
+        "type": {
+          "const": "targetable"
+        },
         "id": {
           "type": "integer"
         },
         "targetable": {
           "type": "boolean"
-        },
-        "type": {
-          "const": "targetable"
         }
       },
       "required": [
@@ -1536,20 +1598,21 @@
         "id",
         "targetable"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "targetable"
     },
     "server.teleport": {
       "additionalProperties": false,
       "description": "The server moved you there. On another continent, the client loads it",
       "properties": {
-        "at": {
-          "$ref": "#/$defs/point"
+        "type": {
+          "const": "teleport"
         },
         "continent": {
           "type": "string"
         },
-        "type": {
-          "const": "teleport"
+        "at": {
+          "$ref": "#/$defs/point"
         },
         "yaw": {
           "type": "number"
@@ -1561,38 +1624,48 @@
         "at",
         "yaw"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "teleported"
     },
     "server.used": {
       "additionalProperties": false,
       "description": "Someone near you started using an ability, with those numbers as `modify` left them: clients play its timeline from this",
       "properties": {
-        "ability": {
-          "type": "string"
+        "type": {
+          "const": "used"
         },
-        "animation": {
-          "type": "string"
-        },
-        "castTime": {
-          "type": "number"
-        },
-        "channel": {
-          "$ref": "#/$defs/channel"
+        "id": {
+          "type": "integer"
         },
         "class": {
           "type": "string"
+        },
+        "ability": {
+          "type": "string"
+        },
+        "target": {
+          "type": "integer"
+        },
+        "spot": {
+          "$ref": "#/$defs/point",
+          "x-go-type": "*[3]float64"
+        },
+        "gcd": {
+          "type": "number"
+        },
+        "castTime": {
+          "type": "number",
+          "description": "The ability as it's being used, with what changes it counted."
+        },
+        "channel": {
+          "$ref": "#/$defs/channel",
+          "x-go-type": "*combat.Channel"
         },
         "cost": {
           "items": {
             "$ref": "#/$defs/cost"
           },
           "type": "array"
-        },
-        "gcd": {
-          "type": "number"
-        },
-        "id": {
-          "type": "integer"
         },
         "school": {
           "type": "string"
@@ -1603,14 +1676,8 @@
           },
           "type": "array"
         },
-        "spot": {
-          "$ref": "#/$defs/point"
-        },
-        "target": {
-          "type": "integer"
-        },
-        "type": {
-          "const": "used"
+        "animation": {
+          "type": "string"
         }
       },
       "required": [
@@ -1621,37 +1688,40 @@
         "gcd",
         "castTime"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "used"
     },
     "server.vanish": {
       "additionalProperties": false,
       "description": "Someone leaves your area, or the game",
       "properties": {
-        "id": {
-          "type": "integer"
-        },
         "type": {
           "const": "vanish"
+        },
+        "id": {
+          "type": "integer"
         }
       },
       "required": [
         "type",
         "id"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "vanish"
     },
     "server.welcome": {
       "additionalProperties": false,
       "description": "Once, on entering",
       "properties": {
-        "layer": {
-          "type": "integer"
-        },
         "type": {
           "const": "welcome"
         },
         "you": {
           "$ref": "#/$defs/character"
+        },
+        "layer": {
+          "type": "integer",
+          "x-go-type": "int"
         }
       },
       "required": [
@@ -1659,7 +1729,8 @@
         "you",
         "layer"
       ],
-      "type": "object"
+      "type": "object",
+      "x-go": "welcome"
     }
   },
   "$id": "messages.schema.json",
