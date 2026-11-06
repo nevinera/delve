@@ -15,6 +15,12 @@ jobs:
         with:
           ruby-version: "3.3.9"
           bundler-cache: true
+      # Some services run the client's Node scripts.
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
       - run: bin/brakeman --no-pager
       - run: bin/bundler-audit
       - run: bundle exec standardrb
