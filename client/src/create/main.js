@@ -13,6 +13,7 @@ import { waterPath } from "../v2/water.js";
 import { roadsPath } from "../v2/roads.js";
 import { allEdges, wetIn } from "../v2/roadEdges.js";
 import { crossingThings } from "../v2/roadCrossings.js";
+import { ContinentFiles } from "./continentFiles.js";
 import { BIOMES, biomesPath } from "./biomes.js";
 import { Builder } from "./builder.js";
 import { Compass, facing } from "./compass.js";
@@ -297,34 +298,63 @@ function start(world, changes, fresh) {
   showLines();
   // Let go of the toggle clicked, so keys go back to flying and the tools.
   $("bottom").addEventListener("change", (e) => e.target.blur());
-  const planning = world.files.get(planningPath(continent));
-  if (planning) tools.marks.load(JSON.parse(strFromU8(planning)));
-  const biomes = world.files.get(biomesPath(continent));
-  if (biomes) tools.biomes.load(JSON.parse(strFromU8(biomes)));
-  // Plate files are baked with the biomes, again where they change.
-  renditions.setBiomes(tools.biomes.toJSON().areas, false);
-  let biomesBaked = tools.biomes.version;
-  // And with the water's bodies.
-  const water = world.files.get(waterPath(continent));
-  if (water) {
-    tools.water.load(JSON.parse(strFromU8(water)));
-    tools.courses.load(JSON.parse(strFromU8(water)));
-  }
   // What the water file has: the bodies and courses.
   const waterFile = () => ({ version: 1, bodies: tools.water.toJSON().bodies, courses: tools.courses.toJSON().courses, ripple: tools.courses.ripple });
-  const waterVersion = () => `${tools.water.version},${tools.courses.version}`;
-  renditions.setWater(waterFile(), false);
-  let waterBaked = waterVersion();
-  // And with the roads.
-  const roadsBytes = world.files.get(roadsPath(continent));
-  if (roadsBytes) tools.roads.load(JSON.parse(strFromU8(roadsBytes)));
-  renditions.setRoads(tools.roads.toJSON(), false);
-  let roadsBaked = tools.roads.version;
   // What lines the roads, in the placed files, worked out again as they or the water change.
   const lineRoads = () => {
     const roads = tools.roads.toJSON().roads;
     return placed.setRoadThings([...allEdges(roads, wetIn(waterFile())), ...crossingThings(roads, waterFile())]);
   };
+  // The continent's own files. Plate files are baked with the biomes, the water and the roads,
+  // again where they change.
+  const ownFiles = new ContinentFiles(world.files, changes);
+  const json = (tool) => ({ toJSON: () => tool.toJSON(), version: () => tool.version });
+  ownFiles.add({ path: planningPath(continent), load: (j) => tools.marks.load(j), ...json(tools.marks) }, 0);
+  ownFiles.add(
+    {
+      path: biomesPath(continent),
+      load: (j) => tools.biomes.load(j),
+      ...json(tools.biomes),
+      bake: (opening) => {
+        renditions.setBiomes(tools.biomes.toJSON().areas, !opening);
+        if (!opening) ground.retint();
+      },
+      busy: () => tools.biomes.dragging,
+    },
+    0,
+  );
+  ownFiles.add(
+    {
+      path: waterPath(continent),
+      load: (j) => [tools.water, tools.courses].forEach((tool) => tool.load(j)),
+      toJSON: waterFile,
+      version: () => `${tools.water.version},${tools.courses.version}`,
+      bake: (opening) => {
+        if (opening) return renditions.setWater(waterFile(), false);
+        ground.refresh(renditions.setWater(waterFile()));
+        lineRoads();
+      },
+      busy: () => tools.water.dragging || tools.courses.dragging || tools.courses.draft,
+    },
+    "0,0",
+  );
+  // A world with no roads gets no roads file, unless it had one.
+  ownFiles.add(
+    {
+      path: roadsPath(continent),
+      load: (j) => tools.roads.load(j),
+      ...json(tools.roads),
+      keep: (had) => had || tools.roads.areas.length > 0,
+      bake: (opening) => {
+        if (opening) return renditions.setRoads(tools.roads.toJSON(), false);
+        ground.refresh(renditions.setRoads(tools.roads.toJSON()));
+        lineRoads();
+      },
+      busy: () => tools.roads.dragging || tools.roads.draft,
+    },
+    0,
+  );
+  ownFiles.add({ path: layoutPath(continent), ...json(layout), keep: (had) => had || layout.networks.size > 0 || layout.carved.size > 0 }, layout.dropped ? -1 : layout.version);
   lineRoads();
 
   const resize = () => {
@@ -340,27 +370,21 @@ function start(world, changes, fresh) {
   const FPS = 30;
   let lastSave = 0;
   let lastHud = 0;
-  let [saving, lastChangeSave, marksSaved, biomesSaved, waterSaved, layoutSaved, roadsSaved] = [null, 0, 0, 0, "0,0", layout.dropped ? -1 : layout.version, 0];
-  const unsaved = () => renditions.unsaved.size || placed.changed.size || library.dirty.size || caves.changed.size || tools.marks.version !== marksSaved || tools.biomes.version !== biomesSaved || waterVersion() !== waterSaved || layout.version !== layoutSaved || tools.roads.version !== roadsSaved;
+  let [saving, lastChangeSave] = [null, 0];
+  const unsaved = () => renditions.unsaved.size || placed.changed.size || library.dirty.size || caves.changed.size || ownFiles.unsaved();
   // Saves what's changed into `changes`, writing files on the worker: once what's being saved is,
   // where something is.
   let dropped = false; // its changes are being thrown away, so it keeps no more
   const save = async () => {
     while (saving) await saving;
     if (dropped || !unsaved()) return;
-    const [version, biomesVersion, waterNow, layoutNow, roadsNow] = [tools.marks.version, tools.biomes.version, waterVersion(), layout.version, tools.roads.version];
     saving = renditions
       .unsavedFiles(continent)
       .then(async (files) => {
         for (const [path, bytes] of [...files, ...placed.unsavedFiles(continent), ...caves.unsavedFiles(continent), ...library.unsavedFiles()]) changes.set(path, bytes);
-        changes.set(planningPath(continent), strToU8(`${JSON.stringify(tools.marks.toJSON())}\n`));
-        changes.set(biomesPath(continent), strToU8(`${JSON.stringify(tools.biomes.toJSON())}\n`));
-        changes.set(waterPath(continent), strToU8(`${JSON.stringify(waterFile())}\n`));
-        // A world with no roads gets no roads file, unless it had one.
-        if (tools.roads.areas.length || roadsBytes || changes.has(roadsPath(continent))) changes.set(roadsPath(continent), strToU8(`${JSON.stringify(tools.roads.toJSON())}\n`));
-        if (layout.networks.size || layout.carved.size || layoutBytes) changes.set(layoutPath(continent), strToU8(`${JSON.stringify(layout.toJSON())}\n`));
+        const written = ownFiles.write();
         await store.set("changes", changes);
-        [marksSaved, biomesSaved, waterSaved, layoutSaved, roadsSaved] = [version, biomesVersion, waterNow, layoutNow, roadsNow];
+        written();
       })
       .catch((e) => console.error("couldn't save the changes", e))
       .finally(() => {
@@ -564,21 +588,7 @@ function start(world, changes, fresh) {
       lastHud = now;
       frames = 0;
     }
-    if (tools.biomes.version !== biomesBaked && !tools.biomes.dragging) {
-      renditions.setBiomes(tools.biomes.toJSON().areas);
-      biomesBaked = tools.biomes.version;
-      ground.retint();
-    }
-    if (waterVersion() !== waterBaked && !tools.water.dragging && !tools.courses.dragging && !tools.courses.draft) {
-      ground.refresh(renditions.setWater(waterFile()));
-      waterBaked = waterVersion();
-      lineRoads();
-    }
-    if (tools.roads.version !== roadsBaked && !tools.roads.dragging && !tools.roads.draft) {
-      ground.refresh(renditions.setRoads(tools.roads.toJSON()));
-      roadsBaked = tools.roads.version;
-      lineRoads();
-    }
+    ownFiles.bake();
     // Saves what's changed once there's been time to finish the stroke.
     if (!saving && !tools.stroke && !tools.drawing && now - lastChangeSave > SAVE_CHANGES_MS && unsaved()) save();
     if (now - lastSave > SAVE_EVERY_MS) {
