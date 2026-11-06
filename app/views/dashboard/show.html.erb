@@ -43,9 +43,9 @@
   <% end %>
 </section>
 
-<% if current_user.server_admin? %>
+<% if current_user.system_admin? %>
   <section>
     <h2>Admin</h2>
-    <p class="section-links"><%= link_to "Admin", admin_path, role: "button" %> <%= current_user.system_admin? ? "invitations, labs, problem reports and errors from browsers" : "invitations" %></p>
+    <p class="section-links"><%= link_to "Admin", admin_path, role: "button" %> invitations, labs, problem reports and errors from browsers</p>
   </section>
 <% end %>

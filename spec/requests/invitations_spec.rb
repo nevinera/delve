@@ -1,7 +1,7 @@
 require "rails_helper"
 
 RSpec.describe "Invitations", type: :request do
-  let(:admin) { create(:user, role: "server_admin") }
+  let(:admin) { create(:user, role: "system_admin") }
 
   it "shows an unused invitation's page to someone signed out" do
     invitation = Invitation.create!
@@ -20,11 +20,10 @@ RSpec.describe "Invitations", type: :request do
     expect(response).to have_http_status(:not_found)
   end
 
-  it "lets server admins list and make invitations, from the admin page" do
+  it "lets system admins list and make invitations, from the admin page" do
     sign_in admin
     get admin_path
     expect(response.body).to include(admin_invitations_path)
-    expect(response.body).not_to include(problem_reports_path)
 
     expect { post admin_invitations_path, params: {note: "for Sam"} }.to change(Invitation, :count).by(1)
     invitation = Invitation.last
@@ -40,17 +39,12 @@ RSpec.describe "Invitations", type: :request do
     expect(response.body).to include("used by sam@example.com")
   end
 
-  it "is only for server admins, and system admins" do
-    user = create(:user)
-    sign_in user
+  it "is only for system admins" do
+    sign_in create(:user)
     get admin_invitations_path
     expect(response).to have_http_status(:not_found)
     post admin_invitations_path
     expect(response).to have_http_status(:not_found)
     expect(Invitation.count).to eq(0)
-
-    user.update!(role: "system_admin")
-    get admin_invitations_path
-    expect(response).to have_http_status(:ok)
   end
 end

@@ -1,6 +1,6 @@
-# Server admins list every invitation and whether it's been used, and issue new ones.
+# System admins list every invitation and whether it's been used, and issue new ones.
 class Admin::InvitationsController < ApplicationController
-  server_admins_only
+  system_admins_only
 
   def index
     @invitations = Invitation.order(created_at: :desc).includes(:created_by, :used_by)
