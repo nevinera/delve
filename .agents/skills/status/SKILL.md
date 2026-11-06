@@ -19,7 +19,7 @@ It prints, from git and GitHub:
 
 Work goes on in the checkout on the maintainer's laptop and in `~/delve` on the dev box (`nevinera@delve.nevinera.dev`, or `DELVE_STATUS_BOX`). The laptop can reach the box but not the other way, so:
 - run on the laptop, it reads the box's checkout over SSH, as it is now
-- each run leaves its own machine's list in the box's `~/.delve-status/<host>.txt`, and run on the box, it shows those, with when each was left. A laptop's list is only as new as its last run. `status.sh --publish` only leaves the list, for git hooks to run.
+- each run leaves its own machine's list in the box's `~/.delve-status/<host>.txt`, and run on the box, it shows those, with when each was left. `status.sh --publish` only leaves the list. The laptop runs it from git hooks (post-commit, post-checkout and post-merge) and a launchd job every 10 minutes while it's awake, so its list is as new as its last change, or as when it went to sleep.
 - without `gh`, as on the box now, it shows only the branches
 
 Then look further for what needs the maintainer:
