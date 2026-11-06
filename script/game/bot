@@ -1,8 +1,9 @@
 #!/usr/bin/env ruby
 
-# Plays a character as a bot (lib/bot/): enters the game server as the play page would, and runs a
-# strategy until it quits or is interrupted, then leaves. The world has to be released. A bot
-# playing a character you're playing in a browser takes it over.
+# Plays a character as a bot: enters the game server as the play page would, and runs a strategy
+# until it quits or is interrupted, then leaves. The world has to be released. A bot playing a
+# character you're playing in a browser takes it over. This finds the character and world and
+# issues the entry token; the bot itself is game-server/cmd/bot, which this runs with `go run`.
 #
 # Usage:
 #   script/game/bot --character <id|name> --world <id|name|repo> [--strategy <name>] [--config <json|file>] [-v]
@@ -52,18 +53,13 @@ rescue JSON::ParserError => e
   abort "Config isn't valid JSON: #{e.message}"
 end
 
-log = Bot::Log.new(verbosity: options[:verbosity])
-strategy = begin
-  Bot::Strategies.build(options[:strategy], read_config(options[:config]))
-rescue Bot::Strategy::ConfigError => e
-  abort "Error: #{e.message}"
-end
+character = find_character(options[:character])
+world = find_world(options[:world])
+config = JSON.generate(read_config(options[:config]))
+token = Game::EntryToken.issue(character:, world:)
+url = "#{Game::EntryToken.server_url}/play?token=#{CGI.escape(token)}"
 
-runner = Bot::Runner.new(character: find_character(options[:character]), world: find_world(options[:world]), strategy:, log:)
-%w[INT TERM].each { |signal| trap(signal) { runner.interrupt! } }
-
-begin
-  runner.run
-rescue SystemCallError, OpenSSL::SSL::SSLError => e
-  abort "Couldn't reach the game server: #{e.message}"
-end
+ENV["PATH"] = "#{ENV["PATH"]}:/usr/local/go/bin"
+Dir.chdir(Rails.root.join("game-server"))
+exec("go", "run", "./cmd/bot", "--url", url, "--repo", world.repo, "--sha", world.released_sha,
+  "--strategy", options[:strategy], "--config", config, *(["-v"] * options[:verbosity]))

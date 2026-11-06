@@ -467,3 +467,21 @@ func TestNothingGrowsOnRoads(t *testing.T) {
 		t.Errorf("%d road cells in the fixture, want the road through the forest", cells)
 	}
 }
+
+func TestSampleStand(t *testing.T) {
+	deep := Sample{Ground: 0, Water: 10}
+	if at, swim, ok := deep.Stand(8, 2.5); !ok || !swim || at != 10-SwimDepth {
+		t.Errorf("deep water: %v %v %v", at, swim, ok)
+	}
+	slab := Sample{Ground: 0, Water: math.NaN(), Footholds: []float64{3}}
+	if at, swim, ok := slab.Stand(1, 2.5); !ok || swim || at != 3 {
+		t.Errorf("onto a slab: %v %v %v", at, swim, ok)
+	}
+	if at, _, _ := slab.Stand(0, 2.5); at != 0 {
+		t.Errorf("under a slab too high to step onto: %v", at)
+	}
+	mouth := Sample{Ground: 0, Water: math.NaN(), Open: true}
+	if _, _, ok := mouth.Stand(0, 2.5); ok {
+		t.Errorf("a cave's mouth with no floor has something to stand on")
+	}
+}

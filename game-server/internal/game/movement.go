@@ -28,7 +28,7 @@ const (
 )
 
 // The ground, as the walker keeps to it.
-const swimDepth = 4.5 // how far below the water's surface a swimming character's feet are
+const swimDepth = worlds.SwimDepth
 
 var maxClimb = worlds.MaxClimb // rise over run of the steepest ground a character walks up
 

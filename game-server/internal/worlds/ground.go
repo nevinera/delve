@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"math"
+	"slices"
 	"sync"
 )
 
@@ -24,6 +25,9 @@ const (
 	leeway  = 0.25   // how far into something a move can go before it's in the way
 )
 
+// SwimDepth is how far below the water's surface a swimming character's feet are.
+const SwimDepth = 4.5
+
 // Sample is the ground at a point.
 type Sample struct {
 	Ground float64 // feet, straight between cell corners
@@ -34,6 +38,34 @@ type Sample struct {
 	// opens the ground itself, at a mouth, so it isn't there to stand on.
 	Floors []float64
 	Open   bool
+}
+
+// Stand is where feet at this height come to rest here: the highest thing to stand on no more
+// than `reach` above them, or else the lowest there is. Things to stand on are the ground (but at
+// a cave's mouth), a swimming depth under water too deep to stand in, slabs' footholds and caves'
+// floors. swimming is whether that's the swimming depth; ok is false where there's nothing.
+func (s Sample) Stand(feet, reach float64) (at float64, swimming, ok bool) {
+	heights := slices.Concat(s.Footholds, s.Floors)
+	ground, swim := s.Ground, !math.IsNaN(s.Water) && s.Water-SwimDepth > s.Ground
+	if swim {
+		ground = s.Water - SwimDepth
+	}
+	if !s.Open {
+		heights = append(heights, ground)
+	}
+	if len(heights) == 0 {
+		return 0, false, false
+	}
+	found := false
+	for _, h := range heights {
+		if h <= feet+reach && (!found || h > at) {
+			at, found = h, true
+		}
+	}
+	if !found {
+		at = slices.Min(heights)
+	}
+	return at, swim && !s.Open && at == ground, true
 }
 
 // Ground reads one continent's ground, a plate at a time as it's needed, and keeps what it's read.

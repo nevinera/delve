@@ -2,7 +2,7 @@
 
 Every file in a version 2 world, plus the game protocol. JSON Schemas are in [docs/schema](../docs/schema). When a format and its code disagree, the code wins: fix this file in the same commit.
 
-A change to a format has to reach every reader of it. The client's is in the code column below. The game server (`game-server/internal/worlds/`) and bots (`lib/bot/`) also read `world.json`, plates, placed and caves files, and `water.json` on the server. Regenerate their shared test world with `node game-server/internal/worlds/testdata/world.mjs`. `.agents/skills/measure-world/measure.mjs` decodes plates, platters and caves.
+A change to a format has to reach every reader of it. The client's is in the code column below. The game server and bots (`game-server/internal/worlds/`) also read `world.json`, plates, placed and caves files, and `water.json`. Regenerate their shared test world with `node game-server/internal/worlds/testdata/world.mjs`. `.agents/skills/measure-world/measure.mjs` decodes plates, platters and caves.
 
 - [A world's files](#a-worlds-files)
 - [Plates](#plates) and [platters](#platters)
@@ -333,7 +333,7 @@ Everything in a template is in feet from its anchor: a corner of an 8 ft grid, a
 
 ## Caves
 
-A world keeps its caves in a text file for each plate (8×8 tiles, 2,048 ft square) that has any. Code: `client/src/v2/caves.js`, with readers in `game-server/internal/worlds/caves.go` and `lib/bot/caves.rb`.
+A world keeps its caves in a text file for each plate (8×8 tiles, 2,048 ft square) that has any. Code: `client/src/v2/caves.js`, with a reader in `game-server/internal/worlds/caves.go`.
 
 ```
 places/continents/<continent>/caves/<px>_<pz>.caves

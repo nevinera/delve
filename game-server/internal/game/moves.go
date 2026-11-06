@@ -3,7 +3,6 @@ package game
 import (
 	"log"
 	"math"
-	"slices"
 	"time"
 
 	"github.com/delve-mmo/delve3d/game-server/internal/combat"
@@ -211,27 +210,10 @@ func stoppingAt(g Ground, a, b [3]float64, flies bool) [3]float64 {
 // standingOn is the height a character comes down on there, from feet at this height: the highest
 // thing to stand on not far above them, or else the lowest there is.
 func standingOn(s worlds.Sample, feet float64) float64 {
-	heights := slices.Concat(s.Footholds, s.Floors)
-	if !s.Open {
-		ground := s.Ground
-		if !math.IsNaN(s.Water) && s.Water-swimDepth > ground {
-			ground = s.Water - swimDepth
-		}
-		heights = append(heights, ground)
+	if at, _, ok := s.Stand(feet, moveStandFt); ok {
+		return at
 	}
-	if len(heights) == 0 {
-		return feet
-	}
-	best, found := 0.0, false
-	for _, h := range heights {
-		if h <= feet+moveStandFt && (!found || h > best) {
-			best, found = h, true
-		}
-	}
-	if found {
-		return best
-	}
-	return slices.Min(heights)
+	return feet
 }
 
 // relocate puts a player somewhere else. It hears `own`. Those near it before and after hear `seen`,
