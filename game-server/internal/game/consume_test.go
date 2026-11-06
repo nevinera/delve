@@ -80,11 +80,11 @@ func TestConsumeDealsWhatWasLeft(t *testing.T) {
 		h, p, c := consuming(t, bleed, withEffects("dry", combat.Effect{Type: "consume", Affects: "target", Status: "bleed", DealsLeft: 0.5, Keeps: keeps}))
 		use(t, p, "put")
 		pass(h, c, 0.1)
-		health := p.layer.dummies[0].Health
+		health := p.layer.dummies[0].damage
 		use(t, p, "dry")
 		pass(h, c, 0.1)
 		// It has all 6 of its ticks to come, 10 each, and half of that is 30.
-		if got := health - p.layer.dummies[0].Health; got != 30 {
+		if got := p.layer.dummies[0].damage - health; got != 30 {
 			t.Fatalf("keeps %v: dealt %g, want 30", keeps, got)
 		}
 		if (held(p, "bleed") != nil) != keeps {
@@ -101,10 +101,10 @@ func TestConsumeDoesSomethingPerStack(t *testing.T) {
 	use(t, p, "put")
 	pass(h, c, 0.1)
 	held(p, "mark").stacks = 3
-	health := p.layer.dummies[0].Health
+	health := p.layer.dummies[0].damage
 	use(t, p, "burst")
 	pass(h, c, 0.1)
-	if got := health - p.layer.dummies[0].Health; got != 21 {
+	if got := p.layer.dummies[0].damage - health; got != 21 {
 		t.Fatalf("dealt %g, want 21", got)
 	}
 }

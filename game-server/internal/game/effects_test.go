@@ -450,11 +450,11 @@ func TestImmuneToDamageFromSchools(t *testing.T) {
 	use(t, p, "itward")
 	pass(h, c, 0.05)
 	d := p.layer.dummies[0]
-	was := d.Health
+	was := d.damage
 	heard(p)
 	use(t, p, "zapit")
 	pass(h, c, 0.05)
-	if d.Health != was {
+	if d.damage != was {
 		t.Fatal("holy got through")
 	}
 	if got := heard(p, "hit"); len(got) != 1 || got[0]["avoided"] != "immune" || got[0]["missed"] != true {
@@ -462,7 +462,7 @@ func TestImmuneToDamageFromSchools(t *testing.T) {
 	}
 	use(t, p, "coldit")
 	pass(h, c, 0.05)
-	if d.Health == was {
+	if d.damage == was {
 		t.Fatal("frost didn't")
 	}
 }
@@ -632,11 +632,11 @@ func dealing(perSpent float64) combat.Effect {
 func TestAnAllCostSpendsAllOfIt(t *testing.T) {
 	h, p, c := spender(t, combat.Ability{ID: "finish", Name: "Finish", Cost: []combat.Cost{{Resource: "combo", Amount: 1, All: true}}, Effects: []combat.Effect{dealing(10)}})
 	d := p.layer.dummies[0]
-	was := d.Health
+	was := d.damage
 	p.fight.resources["combo"] = 4
 	use(t, p, "finish")
 	pass(h, c, 0.5)
-	if got := was - d.Health; got != 40 {
+	if got := d.damage - was; got != 40 {
 		t.Fatalf("dealt %g for 4 points", got)
 	}
 	if p.fight.resources["combo"] != 0 {
@@ -652,11 +652,11 @@ func TestAnUpToCostSpendsWhatItCan(t *testing.T) {
 	grown := combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 10, Max: 10}, ByExtraSpent: 3}
 	h, p, c := spender(t, combat.Ability{ID: "bite", Name: "Bite", Cost: []combat.Cost{{Resource: "combo", Amount: 2, UpTo: 6}}, Effects: []combat.Effect{grown}})
 	d := p.layer.dummies[0]
-	was := d.Health
+	was := d.damage
 	p.fight.resources["combo"] = 4 // 2 past its 2, of the 4 it could
 	use(t, p, "bite")
 	pass(h, c, 0.5)
-	if got := was - d.Health; got != 20 {
+	if got := d.damage - was; got != 20 {
 		t.Fatalf("dealt %g", got)
 	}
 	if p.fight.resources["combo"] != 0 {
@@ -735,11 +735,11 @@ func TestSpentAsCountsWhatAModifySays(t *testing.T) {
 	p.fight.class.Statuses = append(p.fight.class.Statuses, ramp)
 	p.fight.vitals.Statuses[statusKey{"ramp", p.ID()}] = &activeStatus{def: p.fight.class.Status("ramp"), since: h.now(), stacks: 1, uses: 1}
 	d := p.layer.dummies[0]
-	was := d.Health
+	was := d.damage
 	p.fight.resources["combo"] = 2
 	use(t, p, "finish")
 	pass(h, c, 0.5)
-	if got := was - d.Health; got != 70 {
+	if got := d.damage - was; got != 70 {
 		t.Fatalf("dealt %g", got)
 	}
 }
@@ -749,15 +749,15 @@ func TestEffectChance(t *testing.T) {
 	h, p, c := spender(t, combat.Ability{ID: "lucky", Name: "Lucky", Effects: []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 9, Max: 9}, Chance: &half}}},
 		combat.Ability{ID: "earned", Name: "Earned", Cost: []combat.Cost{{Resource: "combo", Amount: 4}}, Effects: []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 9, Max: 9}, Chance: &half, ChancePerSpent: 0.1}}})
 	d := p.layer.dummies[0]
-	was := d.Health
+	was := d.damage
 	use(t, p, "lucky") // the rolls are 0.5
 	pass(h, c, 0.5)
-	if d.Health != was {
+	if d.damage != was {
 		t.Fatal("it landed at a 25% chance")
 	}
 	use(t, p, "earned")
 	pass(h, c, 0.5)
-	if d.Health != was-9 {
+	if d.damage != was+9 {
 		t.Fatal("it missed at 65%")
 	}
 }
@@ -774,10 +774,10 @@ func hitting(t *testing.T, e combat.Effect) (*Hub, *Player, *float64, *dummy) {
 
 func dealt(t *testing.T, h *Hub, p *Player, c *float64, d *dummy) float64 {
 	t.Helper()
-	was := d.Health
+	was := d.damage
 	use(t, p, "bonk")
 	pass(h, c, 0.5)
-	return was - d.Health
+	return d.damage - was
 }
 
 func TestCritRules(t *testing.T) {
@@ -858,10 +858,10 @@ func TestPerCount(t *testing.T) {
 	pass(h, c, 0.1)
 	d := p.layer.dummies[0]
 	held(p, "mark").stacks = 5
-	was := d.Health
+	was := d.damage
 	use(t, p, "count")
 	pass(h, c, 0.1)
-	if got := was - d.Health; got < 19 || got > 21 {
+	if got := d.damage - was; got < 19 || got > 21 {
 		t.Fatalf("dealt %g, want 2 counts of 10", got)
 	}
 }
@@ -875,20 +875,20 @@ func TestAbsorbSoaksThenEnds(t *testing.T) {
 	if got := heard(p, "absorb"); len(got) != 1 || got[0]["absorb"] != 30.0 {
 		t.Fatalf("absorb = %v", got)
 	}
-	was := d.Health
+	was := d.damage
 	use(t, p, "slap")
 	pass(h, c, 0.5)
 	hits := heard(p, "hit")
 	last := hits[len(hits)-1]
-	if d.Health != was || last["absorbed"] == nil {
-		t.Fatalf("first hit: health down %g, %v", was-d.Health, last)
+	if d.damage != was || last["absorbed"] == nil {
+		t.Fatalf("first hit: health down %g, %v", d.damage-was, last)
 	}
 	use(t, p, "slap")
 	pass(h, c, 0.5)
 	if held(p, "ward") != nil {
 		t.Fatal("it stayed once spent")
 	}
-	if got := was - d.Health; got < 8 {
+	if got := d.damage - was; got < 8 {
 		t.Fatalf("second hit let %g through", got)
 	}
 }
@@ -938,10 +938,10 @@ func TestWhoAnEffectReaches(t *testing.T) {
 	effect("less", combat.Effect{Radius: 50, Others: 0.5})
 	check := func(id string, wantFirst, wantSecond float64) {
 		t.Helper()
-		a, b := first.Health, second.Health
+		a, b := first.damage, second.damage
 		use(t, p, id)
 		pass(h, c, 0.5)
-		x, y := a-first.Health, b-second.Health
+		x, y := first.damage-a, second.damage-b
 		if math.Abs(x-wantFirst) > 1.5 || math.Abs(y-wantSecond) > 1.5 {
 			t.Fatalf("%s: dealt %g and %g, want %g and %g", id, x, y, wantFirst, wantSecond)
 		}
@@ -967,10 +967,10 @@ func TestExtraTargetsSpill(t *testing.T) {
 	p.fight.class.Abilities = append(p.fight.class.Abilities, combat.Ability{ID: "cleave", Name: "Cleave", Target: "enemy", GCD: &zero, Range: combat.Distance{Feet: 1000},
 		Effects:      []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 100, Max: 100}}},
 		ExtraTargets: &combat.ExtraTargets{Max: 1, Radius: 10, Share: 0.5}})
-	a, b := first.Health, second.Health
+	a, b := first.damage, second.damage
 	use(t, p, "cleave")
 	pass(h, c, 0.5)
-	x, y := a-first.Health, b-second.Health
+	x, y := first.damage-a, second.damage-b
 	if x == 0 || math.Abs(y-x/2) > 1 {
 		t.Fatalf("dealt %g, spilled %g", x, y)
 	}
@@ -1004,17 +1004,17 @@ func TestBecomesSwapsWhileItHolds(t *testing.T) {
 		combat.Ability{ID: "bigone", Name: "Big", Level: 99, Effects: []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 500, Max: 500}}}})
 	p.fight.class.Statuses = append(p.fight.class.Statuses, form)
 	d := p.layer.dummies[0]
-	was := d.Health
+	was := d.damage
 	use(t, p, "weakone")
 	pass(h, c, 0.5)
-	if got := was - d.Health; got > 5 {
+	if got := d.damage - was; got > 5 {
 		t.Fatalf("before: dealt %g", got)
 	}
 	p.fight.vitals.Statuses[statusKey{"form", p.ID()}] = &activeStatus{def: p.fight.class.Status("form"), since: h.now(), stacks: 1, uses: 1}
-	was = d.Health
+	was = d.damage
 	use(t, p, "weakone")
 	pass(h, c, 0.5)
-	if got := was - d.Health; got < 400 {
+	if got := d.damage - was; got < 400 {
 		t.Fatalf("after: dealt %g", got)
 	}
 }
@@ -1026,27 +1026,27 @@ func TestCastAbilityAtOnce(t *testing.T) {
 		combat.Ability{ID: "gratis", Name: "Gratis", Effects: []combat.Effect{{Type: "castAbility", Affects: "target", Ability: "innerone", Free: true, Strength: 0.5}}},
 		combat.Ability{ID: "selfish", Name: "Selfish", Effects: []combat.Effect{{Type: "castAbility", Affects: "target", Ability: "selfish"}}})
 	d := p.layer.dummies[0]
-	was := d.Health
+	was := d.damage
 	heard(p)
 	use(t, p, "paid")
 	pass(h, c, 0.5)
 	if p.fight.resources["combo"] != 7 {
 		t.Fatalf("%g left", p.fight.resources["combo"])
 	}
-	dealtFull := was - d.Health
+	dealtFull := d.damage - was
 	if dealtFull < 90 {
 		t.Fatalf("dealt %g", dealtFull)
 	}
 	if got := heard(p, "used"); len(got) != 2 || got[1]["ability"] != "innerone" {
 		t.Fatalf("used = %v", got)
 	}
-	was = d.Health
+	was = d.damage
 	use(t, p, "gratis")
 	pass(h, c, 0.5)
 	if p.fight.resources["combo"] != 7 {
 		t.Fatalf("free cost: %g left", p.fight.resources["combo"])
 	}
-	if got := was - d.Health; math.Abs(got-dealtFull/2) > 2 {
+	if got := d.damage - was; math.Abs(got-dealtFull/2) > 2 {
 		t.Fatalf("at half strength dealt %g, %g at full", got, dealtFull)
 	}
 	use(t, p, "selfish") // it stops on its own
@@ -1067,10 +1067,10 @@ func TestConditionsOnTheFightSoFar(t *testing.T) {
 	d := p.layer.dummies[0]
 	check := func(id string, lands bool) {
 		t.Helper()
-		was := d.Health
+		was := d.damage
 		use(t, p, id)
 		pass(h, c, 0.5)
-		if got := d.Health < was; got != lands {
+		if got := d.damage > was; got != lands {
 			t.Fatalf("%s: landed = %v", id, got)
 		}
 	}
@@ -1087,10 +1087,10 @@ func TestConditionsOnTheFightSoFar(t *testing.T) {
 	d.Health = 10
 	check("weaker", true)
 	d.Health = d.MaxHealth
-	was := d.Health
+	was := d.damage
 	use(t, p, "afterCrit") // the fight never crits: only the first lands
 	pass(h, c, 0.5)
-	if got := was - d.Health; got > 5 {
+	if got := d.damage - was; got > 5 {
 		t.Fatalf("after a hit that didn't crit, dealt %g", got)
 	}
 }
