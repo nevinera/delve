@@ -2,9 +2,6 @@
 
 export const BAR_COUNT = 3;
 export const BAR_SLOTS = 12;
-export const SLOT_KEYS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0", "-", "="];
-const SLOT_CODES = ["Digit1", "Digit2", "Digit3", "Digit4", "Digit5", "Digit6", "Digit7", "Digit8", "Digit9", "Digit0", "Minus", "Equal"];
-const MODIFIERS = ["", "shift ", "alt "];
 
 const empty = () => Array.from({ length: BAR_COUNT }, () => Array(BAR_SLOTS).fill(""));
 const copy = (bars) => bars.map((bar) => [...bar]);
@@ -38,14 +35,6 @@ export function swapped(bars, a, b) {
 }
 
 export const cleared = (bars, at) => placed(bars, at, "");
-
-// The slot a key means: plain for the first bar, shift for the second and alt for the third.
-export function slotForKey({ code, shiftKey, altKey }) {
-  const slot = SLOT_CODES.indexOf(code);
-  return slot < 0 ? null : { bar: altKey ? 2 : shiftKey ? 1 : 0, slot };
-}
-
-export const keyLabel = (bar, slot) => `${MODIFIERS[bar]}${SLOT_KEYS[slot]}`;
 
 // The seconds left on a cooldown as a slot shows them: minutes past a minute, whole seconds past
 // 10, and tenths under that.

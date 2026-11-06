@@ -9,6 +9,7 @@ import { TURN_RATE } from "../character/posed.js";
 import { randomLook } from "../character/recipe.js";
 import { trunkRadius } from "../render/treeMeshes.js";
 import { LEVEL_RISE, SLIDE_FT, along, downhill, steepness } from "../create/builder.js";
+import { keyBindings } from "./keys.js";
 
 // Walk mode for the 3D view: a person-sized character on the generated ground, with a third-person
 // camera, to get a feel for the land at eye level. Controls: W/S run forward and back,
@@ -60,8 +61,6 @@ export const walksDown = (drop, across) => drop > 0 && drop <= across * MAX_CLIM
 
 export const frameDue = (last, now, fps) => last === null || now - last >= 1000 / fps - 2;
 const UP = new THREE.Vector3(0, 1, 0);
-const KEYS = new Set(["w", "a", "s", "d", "q", "e", " "]);
-const TOGGLES = new Set(["x", "z"]);
 
 // The clips for moving at each gait, ahead, to the left and right and back.
 export const GAITS = {
@@ -497,27 +496,35 @@ export class Walker {
     camera.lookAt(camera.position.clone().sub(away));
   }
 
+  // Keys go by your bindings (keys.js). A moving key held down moves you whatever else you hold,
+  // and letting go of it stops you, so a modifier pressed meanwhile can't leave you running.
   onKey(e, down) {
-    const key = e.key.toLowerCase();
     if (e.target.matches?.("input, textarea, select")) return;
-    if (down && key === "escape") {
+    if (down && e.key === "Escape") {
       this.stop();
       return;
     }
-    if (TOGGLES.has(key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      if (down && !e.repeat) this.toggle(key);
+    const keys = keyBindings();
+    if (keys.recording) return;
+    if (!down) {
+      for (const action of keys.releasedBy(e.code)) this.held.delete(action.holds);
       return;
     }
-    if (!KEYS.has(key) || e.ctrlKey || e.metaKey || e.altKey) return;
+    const action = keys.actionFor(e);
+    if (action?.toggles) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (!e.repeat) this.toggle(action.toggles);
+      return;
+    }
+    const moving = action?.holds ? [action] : e.ctrlKey || e.metaKey || e.altKey ? [] : keys.heldFor(e.code);
+    if (!moving.length) return;
     e.preventDefault();
     e.stopImmediatePropagation();
-    if (down) this.held.add(key);
-    else this.held.delete(key);
+    for (const each of moving) this.held.add(each.holds);
   }
 
-  // Z switches between walking and running; X sits down, or stands back up.
+  // "z" switches between walking and running; "x" sits down, or stands back up.
   toggle(key) {
     if (key === "z") this.gait = this.gait === "walk" ? "run" : "walk";
     if (key !== "x" || this.motion?.speed || this.airTime > 0 || this.motion?.swimming) return;

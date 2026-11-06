@@ -2,6 +2,8 @@ import "../errors/install.js";
 import { setReportContext } from "../report/button.js";
 import "./play.css";
 import { graphicsPanel } from "../render/graphicsPanel.js";
+import { keyBindings } from "./keys.js";
+import { keysPanel } from "./keysPanel.js";
 import { setWorldIcons } from "./icons.js";
 import { setWorldEffectSheets } from "../abilities/effectTextures.js";
 import { SightLines } from "./sightLines.js";
@@ -85,6 +87,8 @@ menu.querySelector("[data-build]").addEventListener("click", () => {
   window.play?.combat?.openBuild();
 });
 for (const button of menu.querySelectorAll("[data-back]")) button.addEventListener("click", () => showPage(null));
+const keysPage = keysPanel(menu.querySelector(".play-keys"), keyBindings());
+for (const button of menu.querySelectorAll("[data-back]")) button.addEventListener("click", () => keysPage.stop());
 menu.addEventListener("toggle", (e) => {
   if (e.newState === "closed") showPage(null);
 });
