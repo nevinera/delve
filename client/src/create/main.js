@@ -516,7 +516,7 @@ function start(world, changes, fresh) {
     }
     timed("files", () => ownFiles.bake());
     // Saves what's changed once there's been time to finish the stroke.
-    if (!saving && !tools.stroke && !tools.drawing && now - lastChangeSave > SAVE_CHANGES_MS && unsaved()) save();
+    if (!saving && !tools.busy() && now - lastChangeSave > SAVE_CHANGES_MS && unsaved()) save();
     if (now - lastSave > SAVE_EVERY_MS) {
       try {
         localStorage.setItem(placeKey, JSON.stringify(builder.state));
