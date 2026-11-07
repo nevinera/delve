@@ -52,22 +52,22 @@ type statusKey struct {
 
 // activeStatus is a status on a unit, until it runs out. With no `until`, it stays until removed.
 type activeStatus struct {
-	def     *combat.Status
-	class   string
-	since   time.Time // when it was last put on
-	until   time.Time
-	stacks  int
-	uses    int               // what's left of `consumedBy.uses`
-	fired   map[int]time.Time // when each of its triggers last fired, by its place in the status
-	counts  map[int]float64   // how far along each `every` is, by the same
-	granted bool              // what the class gives you for good: a passive, your mastery, a spec's or a talent's
-	ticks   map[int]time.Time // when each of its periodic effects next ticks, by its place in the status
-	spent   float64           // what the ability that applied it spent
-	absorb  float64           // what its `absorb` has left
-	stored  float64           // what it holds for `stored` amounts
-	zone    *zone             // the area or aura keeping it on, if any
-	zones   map[int]*zone     // its own auras, by their place in the status
-	owner   *combat.Class     // the class it came from
+	def         *combat.Status
+	class       string
+	since       time.Time // when it was last put on
+	until       time.Time
+	stacks      int
+	uses        int                 // what's left of `consumedBy.uses`
+	fired       map[int]time.Time   // when each of its triggers last fired, by its place in the status
+	counts      map[int]float64     // how far along each `every` is, by the same
+	granted     bool                // what the class gives you for good: a passive, your mastery, a spec's or a talent's
+	ticks       map[int]time.Time   // when each of its periodic effects next ticks, by its place in the status
+	spent       float64             // what the ability that applied it spent
+	absorb      float64             // what its `absorb` has left
+	stored      float64             // what it holds for `stored` amounts
+	effectZone  *effectZone         // the area or aura keeping it on, if any
+	effectZones map[int]*effectZone // its own auras, by their place in the status
+	owner       *combat.Class       // the class it came from
 }
 
 // dummy is a training dummy: it's always at full health and never fights back, and it tallies what

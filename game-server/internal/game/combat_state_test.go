@@ -71,7 +71,7 @@ func (s *fakeState) removeStatus(on *unit, key statusKey) *activeStatus {
 	held := on.Statuses[key]
 	delete(on.Statuses, key)
 	if held != nil {
-		s.cm.endZones(held)
+		s.cm.endEffectZones(held)
 	}
 	return held
 }

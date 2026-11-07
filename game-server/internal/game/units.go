@@ -83,7 +83,7 @@ func (l *Layer) removeStatus(on *unit, key statusKey) *activeStatus {
 	held := on.Statuses[key]
 	delete(on.Statuses, key)
 	if held != nil {
-		l.combat.endZones(held)
+		l.combat.endEffectZones(held)
 	}
 	l.tellOf(on.ID, encode(statusGone{"statusGone", on.ID, key.id, key.from}))
 	return held
@@ -186,12 +186,12 @@ type combatState interface {
 // Combat works out what abilities, hits, statuses and areas do, on a world copy's state. It holds
 // no locks, and changes the state only through its update methods, which tell whoever should hear.
 type Combat struct {
-	state     combatState
-	now       func() time.Time
-	roll      func() float64
-	zones     []*zone // areas on the ground, oldest first
-	zoneCount int64
-	landings  []*landing
-	firing    int // how many triggers are setting each other off right now
-	lastTick  time.Time
+	state           combatState
+	now             func() time.Time
+	roll            func() float64
+	effectZones     []*effectZone // areas on the ground, oldest first
+	effectZoneCount int64
+	landings        []*landing
+	firing          int // how many triggers are setting each other off right now
+	lastTick        time.Time
 }

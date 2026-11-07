@@ -47,7 +47,7 @@ func (cm *Combat) facts(u *unit, target int64, now time.Time) *combat.Facts {
 			}
 		}
 	}
-	for _, z := range cm.zones {
+	for _, z := range cm.effectZones {
 		if z.from == u && z.inside[target] != nil {
 			out.InAreas[z.kind] = true
 		}
