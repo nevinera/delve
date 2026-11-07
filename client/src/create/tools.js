@@ -20,6 +20,9 @@ import { CavePolish, TOOLS as POLISH_TOOLS } from "./cavePolish.js";
 import { alert } from "./alerts.js";
 import { THEME_LOOK } from "./caveMesh.js";
 import { Build } from "./build.js";
+import { PlayMap } from "../play/map.js";
+import { MapPins } from "../v2/mapPins.js";
+import { MapPinForm } from "./mapPinForm.js";
 import { Paths } from "./paths.js";
 import { TITLE_MAX } from "./pins.js";
 import { STROKE_MAX_FT, Stroke } from "./stroke.js";
@@ -195,6 +198,24 @@ export class Tools {
       this.polish.undos.delete(net);
       this.placed.dropCave(net);
     };
+    // Planning's map: the continent as the map in play draws it, from the platters as they are,
+    // with its map pins, put in, changed and taken away by clicking (mapPinForm.js).
+    this.spawnPins = () => [];
+    this.pinStore = new MapPins();
+    this.pinForm = new MapPinForm(this.pinStore);
+    this.map = new PlayMap({
+      platters: () => [...renditions.platters.values()],
+      roads: () => renditions.roadFile,
+      at: () => ({ x: builder.state.x, z: builder.state.z, yaw: builder.state.yaw }),
+      pins: () => this.spawnPins(),
+      markers: () => this.pinStore.pins,
+      onClick: (x, z, marker, screen) => this.pinForm.open(marker, [x, z], screen),
+      key: false,
+      onClose: () => {
+        this.pinForm.close();
+        if (this.tool === "map") this.pick(null);
+      },
+    });
     this.paths = new Paths(scene, canvas.parentElement, renditions, (x, z) => this.surface(x, z), (text) => ($("pathStatus").textContent = text));
     this.moving = null; // pins being dragged, { from, pins: [[pin, x, z]], before, moved }
     this.clicked = null; // a pin clicked, { pin }, or where the pin tool was clicked, { at }
@@ -682,6 +703,8 @@ export class Tools {
     this.roads.setShown(tool === "roads");
     this.restAreas.setShown(tool === "restArea" || UNITS.has(tool));
     this.paths.setShown(tool === "path");
+    if (tool === "map") this.map.refresh();
+    this.map.toggle(tool === "map");
     if (BUILD.has(tool) || BUILD.has(this.build.tool)) this.build.setTool(BUILD.has(tool) ? tool : null);
     for (const [tools, worker] of this.workers) if (worker !== this.build) worker.setTool(tools.has(tool) ? tool : null);
     if (CAVE_VIEWS[tool]) this.setCaveView(...CAVE_VIEWS[tool]);

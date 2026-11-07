@@ -4,6 +4,7 @@ import { biomesPath } from "../create/biomes.js";
 import { layoutPath } from "../create/caveLayout.js";
 import { PLACED_PATH, placedPath } from "../create/placed.js";
 import { CAVES_PATH, cavesPath } from "../v2/caves.js";
+import { mapPinsPath, readMapPins } from "../v2/mapPins.js";
 import { PLATE_PATH, platePath } from "../v2/plate.js";
 import { PLATTER_PATH } from "../v2/platter.js";
 import { roadsPath } from "../v2/roads.js";
@@ -12,7 +13,7 @@ import { COLLECTIONS_PATH, EFFECT_IMAGE_PATH, EFFECT_SHEET_PATH, ICON_PATH, IMAG
 
 // A released version 2 world, read straight from raw GitHub at its commit: no API calls and no
 // token. The page knows the commit's files (its import's list), so nothing has to be probed for.
-// World.json, the object library, icons and a continent's platters, biomes, water, roads and cave layout come
+// World.json, the object library, icons and a continent's platters, biomes, water, roads, cave layout and map pins come
 // first; plate, placed and caves files as they're wanted.
 
 const FETCHES = 8; // at once
@@ -63,10 +64,10 @@ export class PlayWorld {
     if (this.info.version !== 2) throw new Error(`this is a version ${this.info.version} world, and only version 2 worlds can be played`);
   }
 
-  // A continent's platters (as [coords, bytes]), biomes, water, roads and cave layout.
+  // A continent's platters (as [coords, bytes]), biomes, water, roads, cave layout and map pins.
   async continent(key) {
     const platters = [...this.paths].filter((p) => PLATTER_PATH.exec(p)?.[1] === key);
-    await this.fetchAll([...platters, biomesPath(key), waterPath(key), roadsPath(key), layoutPath(key)].filter((p) => this.paths.has(p)));
+    await this.fetchAll([...platters, biomesPath(key), waterPath(key), roadsPath(key), layoutPath(key), mapPinsPath(key)].filter((p) => this.paths.has(p)));
     return {
       platters: platters.map((p) => {
         const [, , px, pz] = PLATTER_PATH.exec(p);
@@ -76,6 +77,7 @@ export class PlayWorld {
       water: this.readJson(waterPath(key)),
       roads: this.readJson(roadsPath(key)),
       caveLayout: this.readJson(layoutPath(key)),
+      mapPins: readMapPins(this.readJson(mapPinsPath(key))),
     };
   }
 

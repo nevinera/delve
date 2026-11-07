@@ -10,6 +10,7 @@ import { PLATTER_PATH } from "../v2/platter.js";
 import { SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { BIOME_NAMES } from "../v2/biomes.js";
 import { waterPath } from "../v2/water.js";
+import { mapPinsPath } from "../v2/mapPins.js";
 import { roadsPath } from "../v2/roads.js";
 import { allEdges, wetIn } from "../v2/roadEdges.js";
 import { crossingThings } from "../v2/roadCrossings.js";
@@ -346,6 +347,8 @@ function start(world, changes, fresh) {
     },
     0,
   );
+  // A world with no map pins gets no map file, unless it had one.
+  ownFiles.add({ path: mapPinsPath(continent), load: (j) => tools.pinStore.load(j), ...json(tools.pinStore), keep: (had) => had || tools.pinStore.pins.length > 0 }, 0);
   ownFiles.add({ path: layoutPath(continent), ...json(layout), keep: (had) => had || layout.networks.size > 0 || layout.carved.size > 0 }, layout.dropped ? -1 : layout.version);
   lineRoads();
   startup.step("files");
@@ -406,6 +409,10 @@ function start(world, changes, fresh) {
   const toward = (ft, ahead, back) => `${feet(Math.abs(ft))} ${ft < 0 ? back : ahead}`;
   // The spawn point, kept in world.json: where characters new to the world start.
   const worldInfo = () => JSON.parse(strFromU8(changes.get("world.json") ?? world.files.get("world.json")));
+  tools.spawnPins = () => {
+    const { spawn } = worldInfo();
+    return spawn ? [{ label: "Spawn", x: spawn.at[0], z: spawn.at[1] }] : [];
+  };
   const showSpawn = () => {
     const { spawn } = worldInfo();
     $("spawnAt").textContent = spawn ? `${toward(spawn.at[0], "east", "west")}, ${toward(spawn.at[1], "south", "north")}` : "none yet: the game won't take the world without one";

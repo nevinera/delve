@@ -10,6 +10,7 @@ A change to a format has to reach every reader of it. The client's is in the cod
 - [Caves](#caves) and [cave layout](#cave-layout)
 - [Biomes, planning marks and water](#biomes-planning-marks-and-water)
 - [Roads](#roads)
+- [Map pins](#map-pins)
 - [Bodies](#bodies)
 - [Game data](#game-data)
 - [The game protocol](#the-game-protocol)
@@ -39,6 +40,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 | `places/continents/<c>/planning.json` | planning lines and pins | [below](#biomes-planning-marks-and-water) | `client/src/create/marks.js` |
 | `places/continents/<c>/water.json` | the water's bodies and courses | [below](#biomes-planning-marks-and-water) | `client/src/v2/water.js`, `courses.js` |
 | `places/continents/<c>/roads.json` | footpaths, trails and roads | [below](#roads), [schema](../docs/schema/roads.schema.json) | `client/src/v2/roads.js`, `client/src/create/roads.js`, `client/src/play/loader.js` |
+| `places/continents/<c>/map.json` | map pins: places marked on the map in play | [Map pins](#map-pins), [schema](../docs/schema/map.schema.json) | `client/src/v2/mapPins.js`, `client/src/play/loader.js` |
 | `places/continents/<c>/spawns.json` | spawn regions, and mobs and NPCs placed one at a time | [Spawns](#spawns), [schema](../docs/schema/spawns.schema.json) | none yet |
 
 The JSON files that describe things (the world, objects, templates and game data) can have `notes`: free-form text on what a thing is for and its backstory. The game never reads them.
@@ -505,6 +507,16 @@ Where a road crosses a course or its pools (`client/src/v2/roadCrossings.js`), i
 Tiles drawn in full draw each road's surface from its middle (`render/groundMaterial.js`): packed earth with prints, paler with wheel ruts on roads, fainter ruts on trails, and a frayed edge on footpaths.
 
 Across, a road is level, and trails and footpaths lean with the ground as far as their kind lets them. Beside it, the ground's cut back in a bank where it's higher and built up in a slope where it's lower, out to 24 ft. Courses carve first, and roads don't change the ground in a course's water or its pools, except to build a stream's bed up to a ford 0.6 ft under its water across the road's width (`fordAt`). Where a road would climb more steeply than its kind's grade, as it does rather than run in a trench through a rise, or cut a bank deeper than its kind's deepest, /create draws that stretch red.
+## Map pins
+
+`map.json` holds the places marked on a continent's map, put in, changed and taken away by clicking with `/create`'s map tool. Play's map (`client/src/play/map.js`) draws each with its type's icon, a pin for a `place` and a cave's mouth for a `cave`, and shows its name as the pointer's over it. Code: `client/src/v2/mapPins.js`. [Schema](../docs/schema/map.schema.json).
+
+```json
+{ "version": 1, "pins": [{ "id": "old-mine", "name": "The Old Mine", "type": "cave", "at": [1383, -7390] }] }
+```
+
+An `id` is 1 to 32 lowercase letters, digits and dashes, starting with a letter or digit, and unique on its continent, for other files to point at. A `name` is 1 to 64 characters. Readers leave out a pin that isn't whole. A continent with no pins has no file.
+
 ## Bodies
 
 A body is a creature's shape on one skeleton, and the ranges and colors each creature with that body picks its look from. The game ships its bodies as one file each. Code: `client/src/character/bodies.js`. [Schema](../docs/schema/body.schema.json).

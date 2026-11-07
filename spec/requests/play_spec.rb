@@ -31,9 +31,16 @@ RSpec.describe "Playing a world", type: :request do
     with_env("GAME_SERVER_PUBLIC_URL" => nil) { get play_path(world, character: character.id) }
     config = JSON.parse(response.body[%r{<script type="application/json" id="playConfig">(.*?)</script>}m, 1])
     game = config.delete("game")
-    expect(config).to eq("repo" => "them/vale", "sha" => "c" * 40, "paths" => import.files.keys, "look" => {"skin" => 3}, "keys" => {}, "keysUrl" => character_keys_path(character))
+    expect(config).to eq("repo" => "them/vale", "sha" => "c" * 40, "paths" => import.files.keys, "look" => {"skin" => 3}, "keys" => {}, "keysUrl" => character_keys_path(character), "admin" => false)
     expect(game["url"]).to eq("ws://localhost:8090")
     expect(JSON.parse(Base64.urlsafe_decode64(game["token"].split(".").first))).to include("character" => character.id, "world" => world.id)
+  end
+
+  it "tells the page when you're a system admin, for its admin-only debug commands" do
+    user.update!(role: "system_admin")
+    get play_path(world, character: character.id)
+    config = JSON.parse(response.body[%r{<script type="application/json" id="playConfig">(.*?)</script>}m, 1])
+    expect(config["admin"]).to be(true)
   end
 
   it "won't play a world that isn't released" do

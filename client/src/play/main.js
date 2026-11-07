@@ -17,6 +17,7 @@ import { resolveRecipe } from "../character/recipe.js";
 import { Caves } from "../create/caves.js";
 import { Renditions } from "../create/renditions.js";
 import { Placed } from "../create/placed.js";
+import { decodePlatter } from "../v2/platter.js";
 import { PLATE_FT, PLATTER_FT } from "../v2/sizes.js";
 import { setBuiltObjects } from "../world/objects.js";
 import { classChoices, showClassPicker } from "./classPicker.js";
@@ -37,7 +38,7 @@ import { debugCommand } from "./debugCommand.js";
 // placed and caves files as you come near them. Others near you come and go as the game server says.
 
 const $ = (id) => document.getElementById(id);
-const config = JSON.parse($("playConfig").textContent); // { repo, sha, paths, look, keys, keysUrl, game: { url, token } }
+const config = JSON.parse($("playConfig").textContent); // { repo, sha, paths, look, keys, keysUrl, admin, game: { url, token } }
 // The character's keys, saved back to it as you change them.
 useKeyBindings(config.keys, (keys) => {
   const token = document.querySelector("meta[name=csrf-token]")?.content ?? "";
@@ -314,8 +315,9 @@ async function play() {
   sightLines.addOption(menu.querySelector(".play-graphics"));
   const spawn = loader.info.spawn;
   const map = new PlayMap({
-    platters: continent.platters,
-    roads: continent.roads,
+    platters: () => continent.platters.map(([, bytes]) => decodePlatter(bytes)),
+    roads: () => continent.roads,
+    markers: () => continent.mapPins,
     at: () => view.walker?.pos && { x: view.walker.pos.x, z: view.walker.pos.z, yaw: view.walker.yaw },
     pins: () => [...(spawn?.continent === you.continent ? [{ label: "Spawn", x: spawn.at[0], z: spawn.at[1] }] : []), ...restPoints.points.filter((p) => p.id === restPoints.home).map((p) => ({ label: "Home", x: p.at[0], z: p.at[2] }))],
   });
@@ -331,7 +333,7 @@ async function play() {
   view.walker.yaw = you.yaw;
   connection.report(view);
   unitStatuses.seen(you);
-  combat = new PlayCombat({ view, others, connection, loader, you, hud: $("playCombat"), unitStatuses, commands: { debug: (args) => debugCommand(args, view) } });
+  combat = new PlayCombat({ view, others, connection, loader, you, hud: $("playCombat"), unitStatuses, commands: { debug: (args) => debugCommand(args, { boundaries: view.boundaries, map, admin: config.admin }) } });
   forCombat.arrive(combat);
   // A handle for scripts and the browser's console.
   window.play = { view, connection, others, combat, renditions, placed, caves, sightLines, restPoints, map };

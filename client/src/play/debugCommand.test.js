@@ -27,4 +27,15 @@ describe("debugCommand", () => {
     expect(debugCommand([], { boundaries })).toHaveLength(2);
     expect(boundaries.shown.size).toBe(0);
   });
+
+  it("switches the map between smoothed and pixels, for system admins only", () => {
+    const map = { raw: false };
+    expect(debugCommand(["map", "pixels"], { boundaries: fake(), map, admin: true })[0]).toMatch(/pixel a chunk/);
+    expect(map.raw).toBe(true);
+    debugCommand(["map", "smoothed"], { boundaries: fake(), map, admin: true });
+    expect(map.raw).toBe(false);
+    expect(debugCommand(["map", "pixels"], { boundaries: fake(), map })[0]).toBe("There's no /debug map.");
+    expect(map.raw).toBe(false);
+    expect(debugCommand([], { boundaries: fake(), map, admin: true })).toHaveLength(3);
+  });
 });

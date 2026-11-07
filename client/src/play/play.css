@@ -962,13 +962,3 @@ body.touch .play-bar button {
   font-size: 0.85em;
   opacity: 0.7;
 }
-
-/* The map, over the scene while it's open. */
-.play-map {
-  position: fixed;
-  inset: 0;
-  width: 100vw;
-  height: 100vh;
-  z-index: 20;
-  cursor: grab;
-}

@@ -19,7 +19,7 @@ class PlayController < ApplicationController
 
     @config = {
       repo: @world.repo, sha: import.sha, paths: import.files.keys, look: @character.look,
-      keys: @character.keys, keysUrl: character_keys_path(@character),
+      keys: @character.keys, keysUrl: character_keys_path(@character), admin: current_user.system_admin?,
       game: {url: Game::EntryToken.server_url, token: Game::EntryToken.issue(character: @character, world: @world, sha: import.sha)}
     }
     render :show, layout: "play"
