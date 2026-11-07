@@ -75,8 +75,7 @@ func (l *Layer) placeArea(p *Player, c *casting, e *combat.Effect, now time.Time
 	if e.Limit > 0 {
 		l.limitZones(p, z.kind, e.Limit-1)
 	}
-	l.zones = append(l.zones, z)
-	l.tellContinent(continent, encode(l.areaMessage(z, now)))
+	l.addZone(z, continent, now)
 	p.debugLine("%s: an area %.0f ft across for %g s", c.ability.Name, e.Radius, e.Lasts)
 }
 
@@ -130,6 +129,13 @@ func (l *Layer) limitZones(p *Player, kind string, keep int) {
 }
 
 // endZone stops a zone, and takes off what it was keeping on those inside.
+// addZone puts an area on the ground, and shows it to those on its continent.
+func (l *Layer) addZone(z *zone, continent string, now time.Time) {
+	l.zones = append(l.zones, z)
+	l.tellContinent(continent, encode(l.areaMessage(z, now)))
+}
+
+// endZone takes a zone away, letting go of those inside it, and takes its area off the ground.
 func (l *Layer) endZone(z *zone) {
 	for id := range z.inside {
 		l.leaveZone(z, id)

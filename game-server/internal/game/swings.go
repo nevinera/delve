@@ -1,7 +1,6 @@
 package game
 
 import (
-	"math"
 	"time"
 
 	"github.com/delve-mmo/delve3d/game-server/internal/combat"
@@ -90,8 +89,6 @@ func (l *Layer) swing(p *Player, now time.Time) {
 		h := hit{Type: "hit", From: p.ID(), On: target, Effect: "damage"}
 		ctx := combat.HitContext{Schools: []string{"physical"}, Kinds: []string{"auto", "melee", "direct", "main", "single"}}
 		l.strike(p, &d.unit, combat.Amount{Weapon: 1}, ctx, &h, now)
-		h.Health, h.MaxHealth = math.Round(d.Health), d.MaxHealth
-		l.sync(&d.unit)
-		l.tell(p, encode(h))
+		l.showHit(p.ID(), &d.unit, h)
 	})
 }

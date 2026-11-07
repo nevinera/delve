@@ -63,7 +63,7 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *unit, count in
 		n, crit := l.rollHeal(p, on, l.amountFor(p, c, e, on, count, now), healing, now)
 		c.lastDone = n
 		over := max(on.Health+n-on.MaxHealth, 0)
-		on.Health = min(on.Health+n, on.MaxHealth)
+		l.setHealth(on, on.Health+n)
 		h.Amount, h.Crit = math.Round(n), crit
 		ctx := hitOf(c, e, on, count)
 		defer l.healedBy(p, on, n, over, ctx, now)
@@ -99,9 +99,7 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *unit, count in
 		return
 	}
 	p.debugLine("%s", l.debugHit(p, c.ability.Name, e, on, h))
-	h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
-	l.sync(on)
-	l.tell(p, encode(h))
+	l.showHit(p.ID(), on, h)
 }
 
 // dispel takes statuses off a unit by kind, control or tag, up to `count`, oldest first. It takes
@@ -135,7 +133,7 @@ func (l *Layer) dispel(p *Player, c *casting, e *combat.Effect, on *unit, now ti
 		}
 		l.takeOff(on, key)
 		p.debugLine("%s: took %s off %s", c.ability.Name, key.id, l.nameOf(on.ID))
-		l.tell(p, encode(hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: e.Type, Removed: key.id, Class: held.class, Health: math.Round(on.Health), MaxHealth: on.MaxHealth}))
+		l.showHit(p.ID(), on, hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: e.Type, Removed: key.id, Class: held.class})
 	}
 }
 
@@ -316,15 +314,13 @@ func (l *Layer) dealLeft(p *Player, c *casting, id string, held *activeStatus, s
 			l.leech(p, on, total, ctx, c.ability.ID, now)
 			l.drain(p, total, each.Drain, c.ability.ID)
 		case "heal":
-			on.Health = min(on.Health+total, on.MaxHealth)
+			l.setHealth(on, on.Health+total)
 			h.Amount = math.Round(total)
 		default:
 			continue
 		}
 		p.debugLine("%s: %s had %d ticks left, %g %s", c.ability.Name, id, ticks*stacks, h.Amount, each.Does)
-		h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
-		l.sync(on)
-		l.tellOf(on.ID, encode(h))
+		l.showHit(on.ID, on, h)
 		if each.Does == "damage" {
 			l.damaged(p, on, total, crit, ctx, now)
 		} else {
@@ -348,8 +344,7 @@ func (l *Layer) extend(p *Player, c *casting, e *combat.Effect, on *unit, now ti
 			h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: "status"}
 			if l.applyStatus(p, c.ability, id, e.Duration, on, &h, now) {
 				p.debugLine("%s", l.debugHit(p, c.ability.Name, &combat.Effect{Type: "status"}, on, h))
-				h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
-				l.tellOf(on.ID, encode(h))
+				l.showHit(on.ID, on, h)
 			}
 			continue
 		}

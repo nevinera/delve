@@ -2,7 +2,6 @@ package game
 
 import (
 	"encoding/json"
-	"math"
 	"time"
 
 	"github.com/delve-mmo/delve3d/game-server/internal/combat"
@@ -81,9 +80,7 @@ func (l *Layer) spar(p *Player, now time.Time) {
 		}
 		l.fire(event{on: "takeDamage", who: on, other: d.ID, ctx: &ctx, amount: n}, now)
 	}
-	h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
-	l.sync(on)
-	l.tell(p, encode(h))
+	l.showHit(p.ID(), on, h)
 }
 
 func (d *dummy) tally(n float64, now time.Time) {

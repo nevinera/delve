@@ -96,9 +96,7 @@ func (l *Layer) applyBuild(p *Player, b combat.Build, now time.Time) {
 	keep := f.class.HeldFrom(f.level, f.build)
 	for key, held := range f.unit.Statuses {
 		if held.granted && !slices.Contains(keep, key.id) {
-			delete(f.unit.Statuses, key)
-			l.endZones(held)
-			l.tellOf(p.ID(), encode(statusGone{"statusGone", p.ID(), key.id, key.from}))
+			l.removeStatus(&f.unit, key)
 		}
 	}
 	p.grantStatuses(now)
@@ -125,9 +123,7 @@ func (l *Layer) setLevel(p *Player, level int) {
 	l.tellOf(p.ID(), encode(levelMessage{"level", p.ID(), level}))
 	l.applyBuild(p, wanted, now)
 	l.refit(&f.unit, now)
-	f.unit.Health = f.unit.MaxHealth
-	l.sync(&f.unit)
-	l.tellOf(p.ID(), encode(healthMessage{"health", p.ID(), math.Round(f.unit.Health), f.unit.MaxHealth}))
+	l.resizeHealth(&f.unit, f.unit.MaxHealth, f.unit.MaxHealth)
 	world, id := l.worldID, p.ID()
 	go func() {
 		if err := l.hub.characters.SaveLevel(context.Background(), world, id, level); err != nil {
@@ -198,11 +194,6 @@ func (f *fighter) pool(r combat.Resource) combat.Pool {
 		return pool
 	}
 	return combat.PoolOf(r, f.unit.base, f.unit.primary, nil)
-}
-
-// sync puts what's been done to a unit where those arriving will see it.
-func (l *Layer) sync(on *unit) {
-	on.char.Health, on.char.MaxHealth = on.Health, on.MaxHealth
 }
 
 // regen brings back resources and tells the player how they stand, every so often.

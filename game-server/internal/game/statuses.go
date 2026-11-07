@@ -67,8 +67,7 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 	if was != nil {
 		held.ticks, held.fired, held.counts, held.zones = was.ticks, was.fired, was.counts, was.zones // putting it on again doesn't start these over
 	}
-	on.Statuses[key] = held
-	l.tellOf(on.ID, encode(statusOn{"statusOn", on.ID, shownOf(key, held, now)}))
+	l.addStatus(on, key, held, now)
 	l.fire(statusEvent("statusGained", on, key, held), now)
 	h.Status, h.Lasts, h.Class, h.Stacks = s.ID, lasts, f.class.ID, held.stacks
 	return true
@@ -89,15 +88,11 @@ func (l *Layer) makeRoom(p *Player, s *combat.Status) {
 	}
 }
 
-// takeOff removes a status from a unit and says so.
+// takeOff removes a status from a unit, says so, and fires what watches for it ending.
 func (l *Layer) takeOff(on *unit, key statusKey) {
-	held := on.Statuses[key]
-	delete(on.Statuses, key)
-	if held != nil {
-		l.endZones(held)
+	if held := l.removeStatus(on, key); held != nil {
 		l.fire(statusEvent("statusEnds", on, key, held), l.hub.now())
 	}
-	l.tellOf(on.ID, encode(statusGone{"statusGone", on.ID, key.id, key.from}))
 }
 
 // dropFrom takes off everything a unit put on, when it leaves: nothing's left to carry it on or end it.
@@ -200,7 +195,7 @@ func (l *Layer) tickOf(p *Player, holder *unit, id string, held *activeStatus, e
 			n, crit := l.rollHeal(p, on, amount, ctx, now)
 			h.Crit = crit
 			over := max(on.Health+n-on.MaxHealth, 0)
-			on.Health = min(on.Health+n, on.MaxHealth)
+			l.setHealth(on, on.Health+n)
 			h.Amount = math.Round(n)
 			defer l.healedBy(p, on, n, over, ctx, now)
 		case "resource":
@@ -219,9 +214,7 @@ func (l *Layer) tickOf(p *Player, holder *unit, id string, held *activeStatus, e
 			continue
 		}
 		p.debugLine("%s on %s ticks: %s %g", id, l.nameOf(on.ID), e.Does, h.Amount)
-		h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
-		l.sync(on)
-		l.tellOf(on.ID, encode(h))
+		l.showHit(on.ID, on, h)
 	}
 }
 
@@ -297,10 +290,7 @@ func (l *Layer) refit(v *unit, now time.Time) {
 	}
 	stats := l.statsOf(v, nil, now)
 	if most := max(stats.MaxHealth, 1); most != v.MaxHealth {
-		v.Health *= most / v.MaxHealth
-		v.MaxHealth = most
-		l.sync(v)
-		l.tellOf(v.ID, encode(healthMessage{"health", v.ID, math.Round(v.Health), v.MaxHealth}))
+		l.resizeHealth(v, v.Health*most/v.MaxHealth, most)
 	}
 	if o == nil {
 		return

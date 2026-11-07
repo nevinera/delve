@@ -315,9 +315,7 @@ func (l *Layer) spill(p *Player, c *casting, e *combat.Effect, on *unit, center 
 		for _, other := range others {
 			h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: other.ID, Effect: "damage"}
 			l.harm(p, other, l.soak(other, n*share, schoolsOf(e.School, e.Schools, c.ability), &h, now), &h, now)
-			l.sync(other)
-			h.Health, h.MaxHealth = math.Round(other.Health), other.MaxHealth
-			l.tell(p, encode(h))
+			l.showHit(p.ID(), other, h)
 		}
 		return true
 	}

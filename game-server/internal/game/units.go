@@ -1,6 +1,10 @@
 package game
 
-import "iter"
+import (
+	"iter"
+	"math"
+	"time"
+)
 
 // unit is the unit with that id on `continent`, or on any continent with "", or nil: a training
 // dummy, or a player on the layer.
@@ -36,4 +40,42 @@ func (l *Layer) playerOf(u *unit) *Player {
 		return nil
 	}
 	return u.player
+}
+
+// setHealth puts a unit's health at n, kept between none and its most, where those arriving will
+// see it. What did it says so, as a hit (showHit).
+func (l *Layer) setHealth(u *unit, n float64) {
+	u.Health = min(max(n, 0), u.MaxHealth)
+	u.char.Health, u.char.MaxHealth = u.Health, u.MaxHealth
+}
+
+// resizeHealth gives a unit `most` health at most and `n` now, and says so.
+func (l *Layer) resizeHealth(u *unit, n, most float64) {
+	u.MaxHealth = most
+	l.setHealth(u, n)
+	l.tellOf(u.ID, encode(healthMessage{"health", u.ID, math.Round(u.Health), u.MaxHealth}))
+}
+
+// showHit tells those near `near` what landed on `on`, with its health as it is now.
+func (l *Layer) showHit(near int64, on *unit, h hit) {
+	h.Health, h.MaxHealth = math.Round(on.Health), on.MaxHealth
+	l.tellOf(near, encode(h))
+}
+
+// addStatus puts a status on a unit, in place of any copy from the same unit, and says so.
+func (l *Layer) addStatus(on *unit, key statusKey, held *activeStatus, now time.Time) {
+	on.Statuses[key] = held
+	l.tellOf(on.ID, encode(statusOn{"statusOn", on.ID, shownOf(key, held, now)}))
+}
+
+// removeStatus takes a status off a unit, ending its auras, and says so. It returns what was held,
+// or nil.
+func (l *Layer) removeStatus(on *unit, key statusKey) *activeStatus {
+	held := on.Statuses[key]
+	delete(on.Statuses, key)
+	if held != nil {
+		l.endZones(held)
+	}
+	l.tellOf(on.ID, encode(statusGone{"statusGone", on.ID, key.id, key.from}))
+	return held
 }

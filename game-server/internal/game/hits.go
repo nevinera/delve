@@ -196,9 +196,8 @@ func (l *Layer) drain(p *Player, n, share float64, ability string) {
 	if back <= 0 {
 		return
 	}
-	f.Health += back
-	l.sync(f)
-	l.tell(p, encode(hit{Type: "hit", From: p.ID(), Ability: ability, On: p.ID(), Effect: "heal", Amount: math.Round(back), Health: math.Round(f.Health), MaxHealth: f.MaxHealth}))
+	l.setHealth(f, f.Health+back)
+	l.showHit(p.ID(), f, hit{Type: "hit", From: p.ID(), Ability: ability, On: p.ID(), Effect: "heal", Amount: math.Round(back)})
 }
 
 // schoolsOf is the schools a hit counts as: its own, or else its ability's.
@@ -247,12 +246,12 @@ func (l *Layer) harm(p *Player, on *unit, n float64, h *hit, now time.Time) {
 	if o := l.playerOf(on); o != nil {
 		o.fight.since["damageTaken"] = now
 	}
-	on.Health = max(on.Health-n, 0)
+	l.setHealth(on, on.Health-n)
 	h.Amount = math.Round(n)
 	l.breakStatuses(on, "damage", nil)
 	if d := on.dummy; d != nil {
 		d.tally(n, now)
 		h.DPS = math.Round(d.dps(now))
-		on.Health = on.MaxHealth // it's always at full health
+		l.setHealth(on, on.MaxHealth) // it's always at full health
 	}
 }

@@ -196,8 +196,7 @@ func (l *Layer) showResting(now time.Time) {
 		switch {
 		case resting && held == nil:
 			held = &activeStatus{def: s, class: f.class.ID, owner: f.class, since: now, stacks: 1, uses: 1}
-			f.unit.Statuses[key] = held
-			l.tellOf(p.ID(), encode(statusOn{"statusOn", p.ID(), shownOf(key, held, now)}))
+			l.addStatus(&f.unit, key, held, now)
 		case !resting && held != nil:
 			l.takeOff(&f.unit, key)
 		}
