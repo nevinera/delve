@@ -40,6 +40,7 @@ const PICK_PX = 60; // how far from someone's chest on screen a click still pick
 const TARGET_FT = 150; // how far Tab looks for someone to target
 const RETICLE_STEP_FT = 1;
 const RETICLE_FT = 300;
+const LEVEL_UP_VOLUME = 0.35; // a little under combat sounds, which play at half of about as loud
 
 const el = (tag, props = {}, ...children) => {
   const node = Object.assign(document.createElement(tag), props);
@@ -762,6 +763,8 @@ export class PlayCombat {
 
   level_({ id, level }) {
     if (id !== this.you.id) return;
+    // A quiet chime that comes from nowhere and is only yours.
+    if (this.you.level !== undefined && level > this.you.level) this.stage.sound("level-up", { volume: LEVEL_UP_VOLUME });
     this.you.level = level;
     this.youFrame.name.textContent = `${this.you.name} (${level})`;
     this.setClass(this.made);

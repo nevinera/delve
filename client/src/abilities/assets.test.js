@@ -224,9 +224,14 @@ describe("SoundMixer", () => {
   it("sets volume, pitch and delay", async () => {
     const { made, context } = await mixer();
     const voice = made.play("impact", { volume: 0.5, pitch: 2, delay: 0.25 });
-    expect(voice.gain.gain.value).toBe(0.5);
+    expect(voice.gain.gain.value).toBe(0.25); // stock sounds play at half their volume
     expect(voice.source.playbackRate.value).toBe(2);
     expect(context.sources[0].start).toHaveBeenCalledWith(0.25);
+  });
+
+  it("plays recorded sounds at their own volume", async () => {
+    const { made } = await mixer();
+    expect(made.play("footstep", { volume: 0.5 }).gain.gain.value).toBe(0.5);
   });
 
   it("varies the pitch by its share either way", async () => {

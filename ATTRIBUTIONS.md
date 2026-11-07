@@ -40,7 +40,7 @@ Packages in `package.json`, `Gemfile` and `game-server/go.mod` keep their own li
 
 **License:** [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
 
-**Source:** [Impact Sounds](https://kenney.nl/assets/impact-sounds), [RPG Audio](https://kenney.nl/assets/rpg-audio) and [Interface Sounds](https://kenney.nl/assets/interface-sounds) by Kenney. `client/src/abilities/stockSounds.json` says which sounds come from them. `script/bake_sounds.py` converts those, and synthesizes the rest, which are ours.
+**Source:** [Impact Sounds](https://kenney.nl/assets/impact-sounds) and [RPG Audio](https://kenney.nl/assets/rpg-audio) by Kenney. `client/src/abilities/stockSounds.json` says which sounds come from them. `script/bake_sounds.py` converts those, and synthesizes the rest, which are ours.
 
 ## Footsteps
 
@@ -49,3 +49,11 @@ Packages in `package.json`, `Gemfile` and `game-server/go.mod` keep their own li
 **License:** [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
 
 **Source:** [Footsteps wearing sneakers walking on sand](https://freesound.org/s/705747/) by felix.blume, on Freesound
+
+## Level-up chime
+
+**Where:** `public/sounds/level-up-1.mp3`, trimmed, filtered above 200 Hz and evened out in loudness
+
+**License:** [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
+
+**Source:** [Vibrato Celesta C.wav](https://freesound.org/s/573617/) by acollier123, on Freesound

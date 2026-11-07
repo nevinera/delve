@@ -7,9 +7,15 @@ import stock from "./stockSounds.json";
 
 export const STOCK_SOUNDS = stock;
 // Sounds the game plays by itself, beside the stock ones, from recordings rather than the bake:
-// footstep is one soft step on sand (ATTRIBUTIONS.md), filtered and cut into six.
-const RECORDED = { footstep: { kind: "footstep", variations: 6, from: "freesound" } };
+// footstep is one soft step on sand (ATTRIBUTIONS.md), filtered and cut into six, and level-up is one
+// celesta note.
+const RECORDED = {
+  footstep: { kind: "footstep", variations: 6, from: "freesound" },
+  "level-up": { kind: "ui", variations: 1, from: "freesound" },
+};
 const SOUNDS = { ...stock, ...RECORDED };
+// The stock sounds, what abilities and hits play, all come out at this share of their volume.
+const STOCK_GAIN = 0.5;
 export const soundUrl = (name, n) => `/sounds/${name}-${n}.mp3`;
 
 const HEARD_AT_FULL_FT = 12; // nearer than this, it's as loud as it gets
@@ -120,7 +126,7 @@ export class SoundMixer {
     source.buffer = buffer;
     source.playbackRate.value = pitch * (1 + pitchVariation * (this.rand() * 2 - 1));
     const gain = context.createGain();
-    gain.gain.value = volume;
+    gain.gain.value = volume * (name in stock ? STOCK_GAIN : 1);
     source.connect(gain);
     if (at) {
       const panner = context.createPanner();

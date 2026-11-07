@@ -64,7 +64,7 @@ const FIRST_SOUNDS = {
 };
 const SCHOOL_SOUNDS = ["holy", "fire", "nature", "frost", "shadow", "arcane"];
 const VISUAL_LABELS = { flare: "Flash", decal: "Circle on the ground", ribbon: "Trail", scorch: "Scorch mark", cone: "Cone", sparks: "Sparks" };
-const SOUND_HIDDEN = /^step-|^(coins|loot-cloth|death|mob-|miss$)/;
+const SOUND_HIDDEN = /^step-|^(coins|loot-cloth|level-up|death|mob-|miss$)/;
 
 const capitalized = (name) => `${name[0].toUpperCase()}${name.slice(1).replaceAll("-", " ")}`;
 const visualLabel = (effect) => VISUAL_LABELS[effect] ?? capitalized(effect);
