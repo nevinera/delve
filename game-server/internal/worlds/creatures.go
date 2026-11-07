@@ -30,7 +30,16 @@ type Creature struct {
 		Range  combat.Distance `json:"range"`
 		School string          `json:"school"`
 	} `json:"attack"`
-	Speed float64 `json:"speed"`
+	Speed     float64          `json:"speed"`
+	Abilities []AbilityPick    `json:"abilities"`
+	Resource  *combat.Resource `json:"resource"`
+	OnDeath   string           `json:"onDeath"`
+	Tactics   struct {
+		Type      string   `json:"type"` // random (the default), priority or rotation
+		Abilities []string `json:"abilities"`
+	} `json:"tactics"`
+	// Kit is what it casts with, from its abilities and the world's statuses, or nil with none.
+	Kit *combat.Class `json:"-"`
 }
 
 // Levels is a level, or the lowest and highest a mob can be.

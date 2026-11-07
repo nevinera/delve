@@ -32,6 +32,8 @@ type World struct {
 	RestPoints   []RestPoint       // places characters can make their home
 	Classes      []*combat.Class   // by id
 	Creatures    []*Creature       // by id
+	Abilities    []combat.Ability  // the world's own, from abilities/, by id
+	Statuses     []combat.Status   // and from statuses/
 	Placed       []Placed          // mobs placed by hand
 	Areas        map[string][]Area // each continent's areas, from its regions.json
 	path, prefix string            // the zip it was read from, and its top directory
@@ -215,7 +217,12 @@ func Read(path string) (*World, error) {
 	w.Dummies = info.Dummies
 	w.RestPoints = info.RestPoints
 	w.Classes = readClasses(files)
+	w.Abilities = readGameData(files, "abilities", func(a *combat.Ability) string { return a.ID })
+	w.Statuses = readGameData(files, "statuses", func(s *combat.Status) string { return s.ID })
 	w.Creatures = readCreatures(files)
+	for _, c := range w.Creatures {
+		c.Kit = kitOf(c, w.Abilities, w.Statuses)
+	}
 	w.Placed = readPlacedMobs(files, w.Continents, w.Creature)
 	w.Areas = readAreas(files, w.Continents)
 	for i := range w.RestPoints {

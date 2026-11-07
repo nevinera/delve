@@ -87,7 +87,7 @@ type mob struct {
 	damage   float64
 }
 
-// fighter is a player's part in combat.
+// fighter is a unit's part in casting: every player's, and a mob's that uses abilities.
 type fighter struct {
 	sparring   bool // a dummy in reach swings back at it
 	sparAt     time.Time
@@ -97,7 +97,8 @@ type fighter struct {
 	class      *combat.Class
 	level      int
 	stats      combat.Stats
-	unit       unit
+	unit       unit  // a player's unit
+	self       *unit // the unit it fights for: a player's, or a mob's own
 	resources  map[string]float64
 	pools      map[string]combat.Pool // how each resource behaves, as of the last tick
 	sentAt     time.Time
@@ -225,6 +226,18 @@ func (h *Hub) Tick() {
 	}
 }
 
+// advanceCast lets go of a unit's cast when it's due, and forgets it once it's over.
+func (cm *Combat) advanceCast(u *unit, now time.Time) {
+	f := u.fight
+	if c := f.cast; c != nil {
+		if !c.released && !now.Before(c.release) {
+			cm.release(u, c, now)
+		} else if c.released && !now.Before(c.ends) {
+			f.cast = nil
+		}
+	}
+}
+
 func (cm *Combat) tick(now time.Time) {
 	dt := 0.0
 	if !cm.lastTick.IsZero() {
@@ -232,17 +245,16 @@ func (cm *Combat) tick(now time.Time) {
 	}
 	cm.lastTick = now
 	for u := range cm.state.playerUnits() {
-		f := u.fight
-		if c := f.cast; c != nil {
-			if !c.released && !now.Before(c.release) {
-				cm.release(u, c, now)
-			} else if c.released && !now.Before(c.ends) {
-				f.cast = nil
-			}
-		}
+		cm.advanceCast(u, now)
 		cm.swing(u, now)
 		cm.spar(u, now)
 		cm.regen(u, dt, now)
+	}
+	for _, m := range cm.state.mobList() {
+		if m.fight != nil && !m.char.Dead {
+			cm.advanceCast(&m.unit, now)
+			cm.regen(&m.unit, dt, now)
+		}
 	}
 	// Landings can add landings, so go by index.
 	var later []*landing

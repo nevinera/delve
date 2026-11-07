@@ -51,6 +51,16 @@ func (cm *Combat) think(m *mob, dt float64, now time.Time) {
 			cm.giveUp(m, now)
 			return
 		}
+		if m.fight != nil {
+			face := math.Atan2(t.char.At[0]-m.char.At[0], t.char.At[2]-m.char.At[2])
+			if cm.casting(m, now) {
+				cm.say(m, m.char.At, face, Move{Gait: "run"}, now) // it stands still to cast
+				return
+			}
+			if cm.useAbility(m, t, now) {
+				return
+			}
+		}
 		reach := m.reach()
 		if distance(m.char.At, t.char.At) > reach {
 			cm.walk(m, t.char.At, runFt*m.speed(), reach*0.8, "run", dt, now)
@@ -86,6 +96,9 @@ func (cm *Combat) engage(m *mob, t *unit, now time.Time) {
 
 // giveUp sends a mob home: it can't be hurt or targeted on its way, and heals when it gets there.
 func (cm *Combat) giveUp(m *mob, now time.Time) {
+	if m.fight != nil {
+		cm.stopCast(&m.unit)
+	}
 	m.mind = mind{mode: "home"}
 	for key := range m.Statuses {
 		cm.state.removeStatus(&m.unit, key)
@@ -263,3 +276,33 @@ func (m *mob) swingDamage() float64 {
 
 // eyes is where someone at `at` looks from.
 func eyes(at [3]float64) [3]float64 { return [3]float64{at[0], at[1] + 5, at[2]} }
+
+// casting says whether a mob is casting or channelling.
+func (cm *Combat) casting(m *mob, now time.Time) bool {
+	c := m.fight.cast
+	return c != nil && (!c.released || (c.channel && now.Before(c.ends)))
+}
+
+// useAbility has a fighting mob use the first of its abilities it can on its target now, and says
+// whether it did. Its onDeath ability is only for dying.
+func (cm *Combat) useAbility(m *mob, t *unit, now time.Time) bool {
+	face := math.Atan2(t.char.At[0]-m.char.At[0], t.char.At[2]-m.char.At[2])
+	for _, a := range m.fight.class.Abilities {
+		if a.ID == m.creature.OnDeath {
+			continue
+		}
+		use := incoming{Type: "use", Ability: a.ID, Target: t.ID}
+		// A mob stops and turns to cast, so it's checked standing, facing its target.
+		moving, yaw := m.char.Move, m.char.Yaw
+		m.char.Move, m.char.Yaw = Move{Gait: moving.Gait}, face
+		_, _, why := cm.check(&m.unit, use, now)
+		m.char.Move, m.char.Yaw = moving, yaw
+		if why != "" {
+			continue
+		}
+		cm.say(m, m.char.At, face, Move{Gait: "run"}, now)
+		cm.use(&m.unit, use)
+		return true
+	}
+	return false
+}

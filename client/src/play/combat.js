@@ -10,6 +10,7 @@ import { DESKTOP_PARTICLES, PHONE_PARTICLES } from "../abilities/particles.js";
 import { roleClips } from "../character/animations.js";
 import { iconNode } from "./icons.js";
 import { isTouch } from "./touch.js";
+import { KIT_PREFIX, creatureKit } from "./creatureKit.js";
 import { skeletonOf } from "../character/characterMesh.js";
 import { strFromU8 } from "fflate";
 import { allHold } from "./conditions.js";
@@ -157,9 +158,11 @@ export class PlayCombat {
     if (you.class) this.classOf(you.class).then((made) => this.setClass(made));
   }
 
+  // A class by id, or a mob's kit (creatureKit.js).
   classOf(id) {
     if (!this.classes.has(id)) {
-      this.classes.set(id, this.loader.file(`classes/${id}.json`).then((bytes) => withBuiltins(bytes ? JSON.parse(strFromU8(bytes)) : null)));
+      const file = (path) => this.loader.file(path);
+      this.classes.set(id, id.startsWith(KIT_PREFIX) ? creatureKit(id.slice(KIT_PREFIX.length), file) : file(`classes/${id}.json`).then((bytes) => withBuiltins(bytes ? JSON.parse(strFromU8(bytes)) : null)));
     }
     return this.classes.get(id);
   }

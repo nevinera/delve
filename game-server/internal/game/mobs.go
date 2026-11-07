@@ -26,7 +26,21 @@ func (l *Layer) placed(id int64, p worlds.Placed) *mob {
 		state:    Character{ID: id, Name: c.Name, Look: c.Look, Continent: p.Continent, At: at, Yaw: p.Yaw * math.Pi / 180, Move: Move{Gait: "run"}, Level: level, Health: health, MaxHealth: health},
 	}
 	made.char, made.mob = &made.state, made
+	if c.Kit != nil {
+		made.fight = mobFighter(c.Kit, level)
+		made.fight.self = &made.unit
+	}
 	return made
+}
+
+// mobFighter is what a mob that uses abilities casts with: its creature's kit, at its level, with
+// its resource full.
+func mobFighter(kit *combat.Class, level int) *fighter {
+	f := &fighter{class: kit, level: level, resources: map[string]float64{}, pools: map[string]combat.Pool{}, cooldowns: map[string][]time.Time{}, lockouts: map[string]time.Time{}, since: map[string]time.Time{}}
+	for _, r := range kit.Resources {
+		f.resources[r.Key] = combat.StartResource(r)
+	}
+	return f
 }
 
 // mobHealth is a creature's health at a level: for now, a player's at that level, times the
@@ -48,6 +62,9 @@ const respawnSeconds = 300
 // dies is a mob dying: it lets go of what it holds, those fighting it stop, and it lies where it
 // fell until it's due back.
 func (cm *Combat) dies(m *mob, now time.Time) {
+	if m.fight != nil {
+		cm.stopCast(&m.unit)
+	}
 	m.char.Dead = true
 	for key := range m.Statuses {
 		cm.state.removeStatus(&m.unit, key)
@@ -75,6 +92,9 @@ func (l *Layer) comeBack(m *mob) {
 	}
 	*m = *l.placed(m.ID, m.placing)
 	m.char, m.mob = &m.state, m
+	if m.fight != nil {
+		m.fight.self = &m.unit
+	}
 	back := encode(appear{"appear", l.seen(m.state)})
 	for _, o := range l.playersNear(m.state.Continent, m.state.At) {
 		o.send(back)
