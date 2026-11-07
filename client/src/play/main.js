@@ -32,6 +32,7 @@ import { UnitStatuses } from "./unitStatuses.js";
 import { metrics } from "../metrics/metrics.js";
 import { Startup } from "../metrics/timing.js";
 import { debugCommand } from "./debugCommand.js";
+import { InterfaceSounds } from "./interfaceSounds.js";
 
 // The play page: your character in a released version 2 world, where the game server puts it. The
 // world comes from raw GitHub at the released commit: its continent's platters first, and plate,
@@ -47,6 +48,15 @@ useKeyBindings(config.keys, (keys) => {
     .catch((err) => console.warn(`Couldn't save your keys: ${err.message}`));
 });
 const status = (text) => ($("playStatus").textContent = text);
+// One AudioContext for the page. Browsers only let a press start one, so it's made on the first.
+let audio = null;
+const pageAudio = () => {
+  audio ??= new AudioContext();
+  if (audio.state === "suspended") audio.resume();
+  return audio;
+};
+const interfaceSounds = new InterfaceSounds(pageAudio);
+for (const type of ["pointerdown", "keydown"]) addEventListener(type, () => interfaceSounds.ready(), { once: true, capture: true });
 const STREAM_MS = 1000; // how often to look for placed files coming into reach
 const PLACED_FT = 2 * PLATE_FT; // how near a plate's placed file is fetched
 const WATCH_MS = 30_000; // how long after you're in watchSettling waits for the land to settle
@@ -72,7 +82,7 @@ function enter(on, loader) {
         });
       },
       welcome: (message) => ((welcomed = true), resolve({ connection, you: message.you })),
-      error: (message) => (welcomed ? status(message.message) : reject(new Error(message.message))),
+      error: (message) => (welcomed ? (interfaceSounds.error(), status(message.message)) : reject(new Error(message.message))),
       closed: () => (welcomed ? on.closed() : reject(new Error("the game server isn't answering"))),
     });
   });
@@ -102,6 +112,10 @@ menu.addEventListener("toggle", (e) => {
   if (e.newState === "closed") showPage(null);
 });
 menu.querySelector('[data-open="playGraphics"]').disabled = true; // until there's a view
+// The buttons that click, and the windows that sound as they open and close.
+interfaceSounds.clicks(menu, $("playClasses"), $("playAbilities"), $("playBuild"));
+interfaceSounds.popover(menu);
+for (const id of ["playAbilities", "playBuild"]) interfaceSounds.window($(id));
 
 // Reads the platters play held back, one at a time when the page has nothing else to do.
 // Shows frames a second in the corner, from when there's a view.
@@ -321,6 +335,7 @@ async function play() {
     at: () => view.walker?.pos && { x: view.walker.pos.x, z: view.walker.pos.z, yaw: view.walker.yaw },
     pins: () => [...(spawn?.continent === you.continent ? [{ label: "Spawn", x: spawn.at[0], z: spawn.at[1] }] : []), ...restPoints.points.filter((p) => p.id === restPoints.home).map((p) => ({ label: "Home", x: p.at[0], z: p.at[2] }))],
   });
+  interfaceSounds.window(map.canvas);
   view.onWalkFrame = (dt) => {
     others.frame(dt);
     combat?.frame(dt);
@@ -333,7 +348,7 @@ async function play() {
   view.walker.yaw = you.yaw;
   connection.report(view);
   unitStatuses.seen(you);
-  combat = new PlayCombat({ view, others, connection, loader, you, hud: $("playCombat"), unitStatuses, commands: { debug: (args) => debugCommand(args, { boundaries: view.boundaries, map, admin: config.admin }) } });
+  combat = new PlayCombat({ view, others, connection, loader, you, hud: $("playCombat"), unitStatuses, commands: { debug: (args) => debugCommand(args, { boundaries: view.boundaries, map, admin: config.admin }) }, audio: pageAudio, interfaceSounds });
   forCombat.arrive(combat);
   // A handle for scripts and the browser's console.
   window.play = { view, connection, others, combat, renditions, placed, caves, sightLines, restPoints, map };

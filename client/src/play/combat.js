@@ -116,10 +116,12 @@ export function modifyPicks(effect, ability) {
 
 export class PlayCombat {
   // you: the welcome's character. loader: the world's files. hud: the element to build in.
-  // `commands` are the page's own, for its log (log.js).
-  constructor({ view, others, connection, loader, you, hud, unitStatuses, commands = {} }) {
+  // `commands` are the page's own, for its log (log.js). audio gives the page's AudioContext, and
+  // interfaceSounds are its InterfaceSounds.
+  constructor({ view, others, connection, loader, you, hud, unitStatuses, commands = {}, audio = null, interfaceSounds = null }) {
     this.commands = commands;
-    Object.assign(this, { view, others, connection, loader, you, hud, unitStatuses });
+    Object.assign(this, { view, others, connection, loader, you, hud, unitStatuses, interfaceSounds });
+    this.pageAudio = audio;
     this.classes = new Map(); // id -> a promise of its file
     this.target = null;
     this.stage = new AbilityStage(view.scene, { sounds: isTouch() ? PHONE_SOUNDS : DESKTOP_SOUNDS, ground: (x, z) => view.renditions?.heightAt(x, z), audio: () => this.audioContext(), particles: isTouch() ? PHONE_PARTICLES : DESKTOP_PARTICLES });
@@ -162,6 +164,7 @@ export class PlayCombat {
   }
 
   audioContext() {
+    if (this.pageAudio) return this.pageAudio();
     this.audio ??= new AudioContext();
     if (this.audio.state === "suspended") this.audio.resume();
     return this.audio;
@@ -711,6 +714,7 @@ export class PlayCombat {
       this.buildAsked = false;
       this.buildRefused = why;
       this.drawBuild();
+      this.interfaceSounds?.error();
     }
     this.say.textContent = why;
     this.saidAt = performance.now();

@@ -52,8 +52,20 @@ Packages in `package.json`, `Gemfile` and `game-server/go.mod` keep their own li
 
 ## Level-up chime
 
-**Where:** `public/sounds/level-up-1.mp3`, trimmed, filtered above 200 Hz and evened out in loudness
+**Where:** `public/sounds/level-up-1.*.mp3`, trimmed, filtered above 200 Hz and evened out in loudness
 
 **License:** [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
 
 **Source:** [Vibrato Celesta C.wav](https://freesound.org/s/573617/) by acollier123, on Freesound
+
+## Interface sounds
+
+**Where:** `public/sounds/ui-*.mp3`, each trimmed, filtered above 150 Hz and evened out in loudness
+
+**License:** [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
+
+**Source:** on Freesound:
+- `ui-click`: [Button Tick](https://freesound.org/s/268108/) by NenadSimic
+- `ui-open`: [Page Turn 2](https://freesound.org/s/737005/) by redagee
+- `ui-close`: [Closing book](https://freesound.org/s/221910/) by Huminaatio
+- `ui-error`: [UI_Cancel](https://freesound.org/s/565133/) by unfa

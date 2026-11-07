@@ -1,6 +1,8 @@
+import { createHash } from "crypto";
 import fs from "fs";
 import * as THREE from "three";
 import { describe, expect, it, vi } from "vitest";
+import soundFiles from "./soundFiles.json";
 import stock from "./stockTextures.json";
 import { SHAPES, SHAPE_EFFECTS, SHAPE_STOCK, fadeAt, shapeSpec } from "./shapeStock.js";
 import { STOCK_SOUNDS, SoundMixer, heardAt, soundUrl } from "./sounds.js";
@@ -184,6 +186,16 @@ describe("the stock sounds", () => {
     expect(variations).toBeGreaterThanOrEqual(2);
     expect(variations).toBeLessThanOrEqual(4);
     for (let n = 1; n <= variations; n++) expect(fs.existsSync(new URL(`../../../public${soundUrl(name, n)}`, import.meta.url)), `${name} ${n}`).toBe(true);
+  });
+
+  it("are each named by a hash of what's in them, with nothing left over", () => {
+    const dir = new URL("../../../public/sounds/", import.meta.url);
+    const named = Object.values(soundFiles);
+    expect(fs.readdirSync(dir).filter((file) => file.endsWith(".mp3")).sort()).toEqual([...named].sort());
+    for (const file of named) {
+      const hash = createHash("sha256").update(fs.readFileSync(new URL(file, dir))).digest("hex").slice(0, 8);
+      expect(file, "run script/hash_sounds.mjs").toMatch(new RegExp(`\\.${hash}\\.mp3$`));
+    }
   });
 });
 

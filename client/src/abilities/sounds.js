@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import stock from "./stockSounds.json";
+import files from "./soundFiles.json";
 
 // The stock sounds: a few recordings of each, in public/sounds (script/bake_sounds.py makes them).
 // SoundMixer plays them through one context, each from a place in the scene if it's given one, and
@@ -7,16 +8,22 @@ import stock from "./stockSounds.json";
 
 export const STOCK_SOUNDS = stock;
 // Sounds the game plays by itself, beside the stock ones, from recordings rather than the bake:
-// footstep is one soft step on sand (ATTRIBUTIONS.md), filtered and cut into six, and level-up is one
-// celesta note.
+// footstep is one soft step on sand (ATTRIBUTIONS.md), filtered and cut into six, level-up is one
+// celesta note, and the interface's own are a tick, a page turn, a book shutting and a soft
+// "no".
 const RECORDED = {
   footstep: { kind: "footstep", variations: 6, from: "freesound" },
   "level-up": { kind: "ui", variations: 1, from: "freesound" },
+  "ui-click": { kind: "ui", variations: 1, from: "freesound" },
+  "ui-open": { kind: "ui", variations: 1, from: "freesound" },
+  "ui-close": { kind: "ui", variations: 1, from: "freesound" },
+  "ui-error": { kind: "ui", variations: 1, from: "freesound" },
 };
 const SOUNDS = { ...stock, ...RECORDED };
 // The stock sounds, what abilities and hits play, all come out at this share of their volume.
 const STOCK_GAIN = 0.5;
-export const soundUrl = (name, n) => `/sounds/${name}-${n}.mp3`;
+// Each file is named by a hash of what it holds (script/hash_sounds.mjs), so a changed one is fetched anew.
+export const soundUrl = (name, n) => `/sounds/${files[`${name}-${n}`]}`;
 
 const HEARD_AT_FULL_FT = 12; // nearer than this, it's as loud as it gets
 const HEARD_UNTIL = 0.04; // it isn't played if distance leaves less than this of its volume
@@ -43,8 +50,9 @@ export function fetchSounds() {
 }
 
 export class SoundMixer {
-  // bytes(name, n): gives a recording's bytes, for tests to replace.
-  constructor(context, { limit = DESKTOP_SOUNDS, bytes = (name, n) => bytesOf(soundUrl(name, n)), rand = Math.random } = {}) {
+  // bytes(name, n): gives a recording's bytes, for tests to replace. names: the sounds it loads,
+  // every one by default.
+  constructor(context, { limit = DESKTOP_SOUNDS, bytes = (name, n) => bytesOf(soundUrl(name, n)), rand = Math.random, names = Object.keys(SOUNDS) } = {}) {
     Object.assign(this, { context, limit, bytes, rand });
     this.buffers = new Map(); // name -> its decoded variations, which fill in as they arrive
     this.last = new Map(); // name -> the variation it played last
@@ -53,7 +61,7 @@ export class SoundMixer {
     // It squashes what's loudest, so that what's left of a big fight doesn't clip.
     this.out = context.createDynamicsCompressor();
     this.out.connect(context.destination);
-    for (const name of Object.keys(SOUNDS)) this.load(name);
+    for (const name of names) this.load(name);
   }
 
   load(name) {

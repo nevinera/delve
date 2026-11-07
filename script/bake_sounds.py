@@ -473,6 +473,8 @@ def main():
     with open(LIST, "w") as out:
         json.dump(listed, out, indent=2)
         out.write("\n")
+    # Names each file by what's in it, so browsers fetch the ones that changed.
+    subprocess.run(["node", os.path.join(ROOT, "script", "hash_sounds.mjs")], check=True)
 
 
 if __name__ == "__main__":
