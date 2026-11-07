@@ -246,6 +246,7 @@ func (cm *Combat) damaged(u *unit, on *unit, n float64, crit bool, ctx combat.Hi
 // healedBy says a player healed a unit, for what's watching. `over` is the part past full health.
 func (cm *Combat) healedBy(u *unit, on *unit, n, over float64, ctx combat.HitContext, now time.Time) {
 	cm.keepShare(u, u.ID, "heal", n, &ctx)
+	cm.healThreatOf(u, on, n-over, now)
 	cm.fire(event{on: "heal", who: u, other: on.ID, ctx: &ctx, amount: n}, now)
 	cm.fire(event{on: "healed", who: on, other: u.ID, ctx: &ctx, amount: n}, now)
 	if over > 0 {

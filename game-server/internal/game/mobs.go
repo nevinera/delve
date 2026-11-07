@@ -108,18 +108,15 @@ func (l *Layer) placeMob(m *mob, at [3]float64, yaw float64, move Move, say bool
 	}
 }
 
-// playerDies is a player's health running out: the mobs fighting it go home, what mobs put on it
-// comes off, and it wakes at home once this tick's done, after it's heard what killed it.
+// playerDies is a player's health running out: it drops off mobs' threat, and those with no one
+// else to fight go home. What mobs put on it comes off, and it wakes at home once this tick's done,
+// after it's heard what killed it.
 func (cm *Combat) playerDies(u *unit, now time.Time) {
 	if slices.Contains(cm.waking, u) {
 		return
 	}
 	cm.waking = append(cm.waking, u)
-	for _, m := range cm.state.mobList() {
-		if m.mind.mode == "fight" && m.mind.target == u.ID {
-			cm.giveUp(m, now)
-		}
-	}
+	cm.dropThreat(u, now)
 	for key := range u.Statuses {
 		if key.from < 0 {
 			cm.takeOff(u, key)

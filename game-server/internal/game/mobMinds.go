@@ -24,6 +24,7 @@ const (
 type mind struct {
 	mode     string // "" (at peace), "fight" or "home"
 	target   int64
+	threat   map[int64]float64 // who's fighting it, and how much it wants to hit each (threat.go)
 	swingAt  time.Time
 	wanderAt time.Time
 	goal     *[3]float64 // where it's wandering to
@@ -45,8 +46,8 @@ func (cm *Combat) think(m *mob, dt float64, now time.Time) {
 			m.mind = mind{wanderAt: now.Add(seconds(wanderEvery))}
 		}
 	case "fight":
-		t := cm.state.unit(m.mind.target, m.char.Continent)
-		if t == nil || !cm.state.present(t) || t.Health <= 0 || distance(m.char.At, m.home) > leashFt {
+		t := cm.target(m)
+		if t == nil || distance(m.char.At, m.home) > leashFt {
 			cm.giveUp(m, now)
 			return
 		}
@@ -74,12 +75,13 @@ func (cm *Combat) think(m *mob, dt float64, now time.Time) {
 	}
 }
 
-// engage has a mob at peace fight a unit, as it noticed or was hit by it.
+// engage has a mob at peace fight a unit, as it noticed or was hit by it, which goes on its threat
+// table.
 func (cm *Combat) engage(m *mob, t *unit, now time.Time) {
 	if m.training || m.creature == nil || m.char.Dead || m.mind.mode != "" || !cm.state.present(t) {
 		return
 	}
-	m.mind = mind{mode: "fight", target: t.ID, swingAt: now}
+	m.mind = mind{mode: "fight", target: t.ID, swingAt: now, threat: map[int64]float64{t.ID: 0}}
 }
 
 // giveUp sends a mob home: it can't be hurt or targeted on its way, and heals when it gets there.

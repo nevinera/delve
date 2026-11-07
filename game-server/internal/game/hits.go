@@ -258,7 +258,7 @@ func (cm *Combat) harm(u *unit, on *unit, n float64, h *hit, now time.Time) {
 	case d != nil && !d.training && on.Health <= 0:
 		cm.dies(d, now)
 	case d != nil:
-		cm.engage(d, u, now)
+		cm.addThreat(d, u, n, now)
 	case on.Health <= 0 && cm.state.present(on):
 		cm.playerDies(on, now)
 	}
