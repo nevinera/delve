@@ -3,7 +3,7 @@ import * as THREE from "three";
 import { discGeometry, drapedMeshes, stripGeometry } from "../abilities/decal.js";
 
 const COLORS = { enemies: "#ff5040", allies: "#50e070" };
-const AREA_LAYER = { color: "main", opacity: 1, repeat: [1, 1], scroll: [0, 0], edge: 0, rim: 0, trail: false, solid: 0.75 };
+const EFFECT_AREA_LAYER = { color: "main", opacity: 1, repeat: [1, 1], scroll: [0, 0], edge: 0, rim: 0, trail: false, solid: 0.75 };
 
 // What shape to draw an area: a ring, or a strip running from its start. Pure, for testing.
 export function markOf({ radius, line, width, dir }) {
@@ -16,18 +16,18 @@ function partsOf(mark) {
   if (mark.shape === "strip") {
     const geometry = () => stripGeometry(mark);
     return [
-      { geometry: geometry(), layer: { ...AREA_LAYER, texture: "energy", scroll: [0.5, 0], edge: 0.15, opacity: 0.4 } },
-      { geometry: geometry(), layer: { ...AREA_LAYER, texture: "plain", edge: 0.08, opacity: 0.15 } },
+      { geometry: geometry(), layer: { ...EFFECT_AREA_LAYER, texture: "energy", scroll: [0.5, 0], edge: 0.15, opacity: 0.4 } },
+      { geometry: geometry(), layer: { ...EFFECT_AREA_LAYER, texture: "plain", edge: 0.08, opacity: 0.15 } },
     ];
   }
   const { radius } = mark;
   return [
-    { geometry: discGeometry({ radius }), layer: { ...AREA_LAYER, texture: "swirl", repeat: [3, 0.5], scroll: [0.1, 0], edge: 0.12, opacity: 0.22 } },
-    { geometry: discGeometry({ radius, inner: 0.93 }), layer: { ...AREA_LAYER, texture: "plain", edge: 0.5, opacity: 0.9 } },
+    { geometry: discGeometry({ radius }), layer: { ...EFFECT_AREA_LAYER, texture: "swirl", repeat: [3, 0.5], scroll: [0.1, 0], edge: 0.12, opacity: 0.22 } },
+    { geometry: discGeometry({ radius, inner: 0.93 }), layer: { ...EFFECT_AREA_LAYER, texture: "plain", edge: 0.5, opacity: 0.9 } },
   ];
 }
 
-export class AreaMarks {
+export class EffectAreaMarks {
   constructor(view) {
     this.view = view;
     this.marks = new Map(); // id -> { draped, from, until, follows }

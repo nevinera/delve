@@ -216,7 +216,7 @@ export class AbilityStage {
         }
         break;
       }
-      case "area":
+      case "effectArea":
         this.showArea(run, event);
         break;
       case "lunge":

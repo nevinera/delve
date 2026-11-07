@@ -276,9 +276,9 @@ type buildMessage struct {
 	Talents        map[string]string `json:"talents"`
 }
 
-// areaMessage: an area went down on your continent. `dir` is the way a line runs, and `follows` is
-// who it moves with
-type areaMessage struct {
+// effectAreaMessage: an effect area went down on your continent. `dir` is the way a line runs, and
+// `follows` is who it moves with
+type effectAreaMessage struct {
 	Type    string     `json:"type"`
 	ID      int64      `json:"id"`
 	From    int64      `json:"from"`
@@ -293,8 +293,8 @@ type areaMessage struct {
 	Follows int64      `json:"follows,omitempty"`
 }
 
-// areaGone: an area ended
-type areaGone struct {
+// effectAreaGone: an effect area ended
+type effectAreaGone struct {
 	Type string `json:"type"`
 	ID   int64  `json:"id"`
 }

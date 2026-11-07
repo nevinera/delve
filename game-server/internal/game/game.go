@@ -310,7 +310,7 @@ func (l *Layer) join(p *Player) {
 	now := l.hub.now()
 	for _, z := range l.combat.effectZones {
 		if _, continent, ok := z.center(); ok && continent == p.state.Continent {
-			p.send(encode(areaMessageOf(z, now)))
+			p.send(encode(effectAreaMessageOf(z, now)))
 		}
 	}
 	if p.fight.class != nil {

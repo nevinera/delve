@@ -235,8 +235,8 @@ async function play() {
     log: fight("logged"),
     speed: fight("speed_"),
     controls: fight("controls_"),
-    area: forCombat.to("area_"),
-    areaGone: forCombat.to("areaGone_"),
+    effectArea: forCombat.to("effectArea_"),
+    effectAreaGone: forCombat.to("effectAreaGone_"),
     targetable: (message) => {
       unitStatuses.targetable(message);
       combat?.targetable_(message);

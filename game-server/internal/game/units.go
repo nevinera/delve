@@ -35,7 +35,7 @@ func (l *Layer) units() iter.Seq[*unit] {
 }
 
 // caster is the unit of the player with that id on the layer, or nil: what put a status on, or
-// keeps an area going.
+// keeps an effect area going.
 func (l *Layer) caster(id int64) *unit {
 	if o := l.players[id]; o != nil {
 		return &o.fight.unit
@@ -183,13 +183,13 @@ type combatState interface {
 	motionOf(u *unit) *motion
 }
 
-// Combat works out what abilities, hits, statuses and areas do, on a world copy's state. It holds
+// Combat works out what abilities, hits, statuses and effect areas do, on a world copy's state. It holds
 // no locks, and changes the state only through its update methods, which tell whoever should hear.
 type Combat struct {
 	state           combatState
 	now             func() time.Time
 	roll            func() float64
-	effectZones     []*effectZone // areas on the ground, oldest first
+	effectZones     []*effectZone // effect areas on the ground, oldest first
 	effectZoneCount int64
 	landings        []*landing
 	firing          int // how many triggers are setting each other off right now

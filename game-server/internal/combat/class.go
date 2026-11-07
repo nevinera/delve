@@ -190,13 +190,13 @@ type Effect struct {
 	CritMultiplier float64     `json:"critMultiplier"`
 
 	// Who it reaches, and how they share it.
-	Split        bool      `json:"split"`
-	Others       float64   `json:"others"`
-	Prefers      string    `json:"prefers"`
-	Holding      []string  `json:"holding"`
-	ExceptTarget bool      `json:"exceptTarget"`
-	PerCount     *PerCount `json:"perCount"`
-	AreaHeight   float64   `json:"-"`
+	Split            bool      `json:"split"`
+	Others           float64   `json:"others"`
+	Prefers          string    `json:"prefers"`
+	Holding          []string  `json:"holding"`
+	ExceptTarget     bool      `json:"exceptTarget"`
+	PerCount         *PerCount `json:"perCount"`
+	EffectAreaHeight float64   `json:"-"`
 
 	// What was spent.
 	DurationPerSpent float64  `json:"durationPerSpent"`
@@ -204,7 +204,7 @@ type Effect struct {
 	ChancePerSpent   float64  `json:"chancePerSpent"`
 	ByExtraSpent     float64  `json:"byExtraSpent"`
 
-	// area
+	// effect area
 	Lasts         float64  `json:"lasts"`
 	Every         float64  `json:"every"`
 	Effect        *Effect  `json:"effect"`

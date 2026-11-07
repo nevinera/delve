@@ -688,13 +688,13 @@ Damage, healing and absorbs take an amount, one of:
 
 Power grows with level and gear, so an ability gets stronger as you level without new ranks. A creature has attack and spell power from its level, so the same ability works on a mob.
 
-### Distance and areas
+### Distance and effect areas
 
 Every unit has a `reach`, how far its body extends from its center: 4.5 ft for a player, and for a creature its `reach`, or one from its body and size. Ranges run from your edge to the target's, so a big target is easier to reach. Range is measured in 3D, so height counts.
 
 Melee is `"melee"` rather than a number: you reach the target when you're within your reach plus its reach plus 4 ft, and never less than 15 ft.
 
-An area is a cylinder: `radius` across, and `height` above and below its center, 15 ft by default. It only takes in units with line of sight from its center.
+An effect area is a cylinder: `radius` across, and `height` above and below its center, 15 ft by default. It only takes in units with line of sight from its center.
 
 ### Schools
 
@@ -769,7 +769,7 @@ Only a class's `id` and `name` are required for now, so the class editor can sav
 
 - `target`: what you need targeted to use it. `enemy` or `ally`, `any` for either (its effects tell them apart with `targetIs`), or `self`, `ground` (you pick a place within range) or `none`. An `ally` ability with no friendly target lands on you.
 - `icon`: its action bar icon, by name from the world's own or the [stock icons](#icons). Without one, the bar shows its name.
-- `range`: how far the target can be, a number or `"melee"` (see Distance and areas). `minRange` is how near it can be.
+- `range`: how far the target can be, a number or `"melee"` (see Distance and effect areas). `minRange` is how near it can be.
 - `requires`: conditions to use it, each `{ health, below or above }` (`health` is `self` or `target`, in percent) or `{ status, on, stacks }` (a status you put `on` `self` or `target`, with at least `stacks` stacks if it says), or `{ targetIs }` (what you're using it on: `enemy`, `ally`, `self`, `other`, `player` or `nonPlayer`), or `{ stealthed }` or `{ inCombat }` (true or false, about you), or `{ anyOf: [conditions] }`, which holds when any of them does, or `{ not: condition }`, which holds when it doesn't, or one of these:
   - `{ state, on }`: `casting`, `inCombat`, `slowed`, `airborne`, `falling`, `controlled`, `stunned` or `outdoors`, for `on` `self` (by default) or `target`.
   - `{ position }`: you're `behind` the target or `inFront` of it.
@@ -777,7 +777,7 @@ Only a class's `id` and `name` are required for now, so the class editor can sav
   - `{ resource, below or above, percent }`: how much of a resource you have, in percent of its maximum with `percent`.
   - `{ holders, atLeast or atMost }`: how many units hold this status from you.
   - `{ unitsOut }`: you have one of these units out.
-  - `{ inArea }`: the target stands in the area this ability of yours put down.
+  - `{ inEffectArea }`: the target stands in the effect area this ability of yours put down.
   - `{ spentAtLeast }`, `{ targetsHitAtLeast }`: what the ability spent, and how many it hit.
   - `{ outcome }`: the hit just made was a `crit`, or the target `survived` it.
   - `{ targetHealthBelowMine }`: the target has less health than you.
@@ -821,7 +821,7 @@ Each effect has a `type` and an `affects`:
 - `target`: whoever you targeted, or the place, for `ground`.
 - `hit`: whoever this ability's other effects hit.
 - `self`.
-- `enemies` or `allies`: everyone of that side in an area (see Distance and areas) of `radius` and `height` around `around` (`self`, `target` or `ground`; `self` by default). `cone` narrows it to a slice that many degrees wide in front of you, around yourself only. `max` caps how many it hits, nearest first.
+- `enemies` or `allies`: everyone of that side in an effect area (see Distance and effect areas) of `radius` and `height` around `around` (`self`, `target` or `ground`; `self` by default). `cone` narrows it to a slice that many degrees wide in front of you, around yourself only. `max` caps how many it hits, nearest first.
 
 Types:
 
@@ -839,9 +839,9 @@ Types:
 - `command`: your summons, or just `units`, use `ability`.
 - `source: "summons"`, on a damage or heal effect: your summons do it, not you.
 - `category`, on a damage or heal effect or a periodic: a word the class picks, like `bleed` or `disease`. A `stat` or `trigger` with `category` or `categories` only counts those.
-- `area`: a lasting area `around` `self`, `target` or `ground`, `radius` ft across and `lasts` seconds, touching those it `affects`. Those inside have `status` while they stay, and `effect` lands on them each `every` seconds. In that `effect`, `affects: "self"` means whoever's inside. `max` caps how many it touches each time, and `limit` caps how many of these you can have out. `around` can also be `random`, somewhere near you. `onEnter` is an effect that lands once on someone who comes inside. `effects` lists more than one effect for each `every`, in place of `effect`. `overlaps` makes copies of it each work on those inside.
+- `effectArea`: a lasting effect area `around` `self`, `target` or `ground`, `radius` ft across and `lasts` seconds, touching those it `affects`. Those inside have `status` while they stay, and `effect` lands on them each `every` seconds. In that `effect`, `affects: "self"` means whoever's inside. `max` caps how many it touches each time, and `limit` caps how many of these you can have out. `around` can also be `random`, somewhere near you. `onEnter` is an effect that lands once on someone who comes inside. `effects` lists more than one effect for each `every`, in place of `effect`. `overlaps` makes copies of it each work on those inside.
 - `extend`: adds `seconds`, or `perSpent` seconds for each point spent, to your copy of `status` or `statuses` on those it `affects`, up to `maxTotal` seconds left or `maxShare` of its full duration. `refresh` starts it over instead, and `apply` puts it on if it isn't there.
-- `line`, on an `area` or an effect with `affects: "enemies"` or `"allies"`: it covers a strip `radius` ft long and `width` ft wide instead of a circle. `along` says which way it runs: `facing` (the default), `path` (along the path you just moved) or `ground` (to the ground you picked).
+- `line`, on an `effectArea` or an effect with `affects: "enemies"` or `"allies"`: it covers a strip `radius` ft long and `width` ft wide instead of a circle. `along` says which way it runs: `facing` (the default), `path` (along the path you just moved) or `ground` (to the ground you picked).
 - `flying`, on a `move`: it flies over whatever is in the way.
 - `castAbility`: casts `ability` from the same class at those it `affects`, with no cast time. `free` makes it cost nothing, `strength` multiplies what it does and `max` limits how many it goes at. `when` works as usual.
 - `threat`: changes how much those it `affects` want to hit you. `clear` wipes it and `multiply` scales it.
@@ -914,7 +914,7 @@ Any effect can have `when`, conditions written as an ability's `requires`, check
   - outcomes: `damageDone`, `healingDone`, `damageTaken`, `healingTaken` and `threat`, which multiply.
 
   `critChance` starts at 5, `critDamage` and `critHealing` at 100, so a crit does 200%, and `movementSpeed` and `attackSpeed` at 100. `critTaken` adds to the chance of those hitting the holder. `leech` heals you by that percent of the damage you do. `stamina` gives 10 `maxHealth` a point, and a change to `maxHealth` keeps the share of health you have. When `resourceMax` drops below what you have, you fall to it, and when it rises you keep what you have. A stat's `add`s go before its `multiply`s, and stacks scale them. A stat narrowed to some hits changes only those: `maxHealth`, `movementSpeed`, `attackSpeed` and the resource stats don't count one that's narrowed.
-- `periodic`: every `every` seconds (shorter with the caster's haste), does `damage`, `heal` or `resource` by `amount`. With `affects` and `radius` it hits an area, and `softCap` works as for ability effects. `school`, `schools` and `resource` as for ability effects.
+- `periodic`: every `every` seconds (shorter with the caster's haste), does `damage`, `heal` or `resource` by `amount`. With `affects` and `radius` it hits an effect area, and `softCap` works as for ability effects. `school`, `schools` and `resource` as for ability effects.
 - `absorb`: soaks up `amount` of damage, of `schools` if it lists them, then ends.
 - `control`: one of `stun`, `root`, `silence`, `incapacitate`, `disorient`, `fear` and `disarm`. Damage breaks incapacitate, disorient and fear. `root` holds you still, and `stun`, `incapacitate`, `disorient` and `fear` also stop everything you can do. `silence` stops everything but physical abilities, and `disarm` stops auto-attacks and physical abilities in melee. They stop casts they'd have refused.
 - `trigger`: when `on` happens, with `chance` (0 to 1, 1 by default), at most once each `cooldown` seconds, applies `effect`, an ability effect that `affects` `self` or `target`. `on` is one of:
@@ -930,13 +930,13 @@ Any effect can have `when`, conditions written as an ability's `requires`, check
 
   `every` makes it fire only on every this-many-th time, like `{ "on": "cast", "abilities": ["bolt0001"], "every": 4 }`. On `spend` it counts points, so `every: 20` with `resource` means each 20 spent. `resetOn` is another event that starts the count over, so `{ "on": "crit", "every": 2, "resetOn": "nonCrit" }` is two crits in a row.
 
-  It can be narrowed, and each filter it has must match. `abilities` or `tag` limits it to those abilities, `statuses` to those statuses, by id from the same class, and `school` or `schools` to those schools. `hit` limits it to a kind of hit: `auto` (a weapon swing), `ability` (not a swing), `melee`, `direct` (not periodic), `periodic`, `area`, `main` (the ability's target), `others` (not its target) or `single` (the only one hit). `atTargets` needs the ability to hit at least that many. `source` says whose stat or hit it is: `self` by default, `summons`, or `both`, and `units` narrows it to those. `casterOnly`, on a status you put on someone, limits it to what the one who applied it does. `atStacks` needs at least that many stacks of the status, for `statusGained` and `statusConsumed`. `full` needs a channel to run its whole length. `pickup` limits it to a kind of pickup, and `resource` to spending that resource, by key.
+  It can be narrowed, and each filter it has must match. `abilities` or `tag` limits it to those abilities, `statuses` to those statuses, by id from the same class, and `school` or `schools` to those schools. `hit` limits it to a kind of hit: `auto` (a weapon swing), `ability` (not a swing), `melee`, `direct` (not periodic), `periodic`, `effectArea` (one that hits everyone in an effect area), `main` (the ability's target), `others` (not its target) or `single` (the only one hit). `atTargets` needs the ability to hit at least that many. `source` says whose stat or hit it is: `self` by default, `summons`, or `both`, and `units` narrows it to those. `casterOnly`, on a status you put on someone, limits it to what the one who applied it does. `atStacks` needs at least that many stacks of the status, for `statusGained` and `statusConsumed`. `full` needs a channel to run its whole length. `pickup` limits it to a kind of pickup, and `resource` to spending that resource, by key.
 - `stealth`: hides the holder. Others see it only when they detect it, which depends on how near it is, whether they face it, and the gap between its level plus its `stealth` stat and their level plus their `detection` stat. Undetected, it can't be targeted, but areas still hit it. Entering combat, or being hit, ends the status. Stealth's slower movement is a `movementSpeed` stat effect beside it.
 - `modify`: changes abilities the holder uses while it's on, as `stat` changes a stat. The ability itself doesn't know about it. `abilities` picks them by id, from the same class, and `tag` picks all with that tag. Then either:
   - `spentAs` makes the abilities count as spending this much, whatever they spent, or `max` for the most they can. `spendsUpTo` lets them spend this much more of their cost, and `byExtraSpent` works as on a hit.
   - `change` can also be `resourceGain`, for what the abilities give back, or `byExtraSpent`.
   - `becomes` turns the abilities into this one while the modify applies, and `when` limits that.
-  - `change` says what changes, by `add`, `multiply` or `set` (`set` goes first, then `add`, then `multiply`). `cost` covers each thing it spends, or with `resource` just that one, and `set` with a `resource` adds that cost if it had none, `cooldown`, `castTime` and `charges` are its own, `amount` and `absorb` are its effects' amounts, `others` is a share for those besides the main target, `every` is a trigger's count, `lockout`, `cone`, `distance` and `delay` are the numbers on its effects with those names, `limit` is how many it can have out or hit, `uses` is a status's `consumedBy` uses, `stacks` is how many stacks it takes, `cooldownRate` is how fast its cooldown runs while the status lasts, `tickRate` is how fast its periodic or channel ticks, `channelDuration` and `channelTicks` are its channel's, `range` and `radius` are in feet, `maxTargets` is the `max` of its area effects, `duration` is how long the statuses it applies last, `damage` and `healing` are what its effects do, and `critChance` and `critDamage` add in points. One `modify` makes one change, so two changes are two effects, like `{ "type": "modify", "abilities": ["frst0001"], "change": "cooldown", "add": -2 }`.
+  - `change` says what changes, by `add`, `multiply` or `set` (`set` goes first, then `add`, then `multiply`). `cost` covers each thing it spends, or with `resource` just that one, and `set` with a `resource` adds that cost if it had none, `cooldown`, `castTime` and `charges` are its own, `amount` and `absorb` are its effects' amounts, `others` is a share for those besides the main target, `every` is a trigger's count, `lockout`, `cone`, `distance` and `delay` are the numbers on its effects with those names, `limit` is how many it can have out or hit, `uses` is a status's `consumedBy` uses, `stacks` is how many stacks it takes, `cooldownRate` is how fast its cooldown runs while the status lasts, `tickRate` is how fast its periodic or channel ticks, `channelDuration` and `channelTicks` are its channel's, `range` and `radius` are in feet, `maxTargets` is the `max` of its effect area effects, `duration` is how long the statuses it applies last, `damage` and `healing` are what its effects do, and `critChance` and `critDamage` add in points. One `modify` makes one change, so two changes are two effects, like `{ "type": "modify", "abilities": ["frst0001"], "change": "cooldown", "add": -2 }`.
   - `addEffects` lists more ability effects for them to do.
   - `addAmount`, with `change`, adds an [amount](#amounts) worked out in the fight, where `add` takes a number. `byMissingHealth`, with `change`, grows it as health falls.
   - `perTargetHit`, with `change`, gives that share more for each one the ability hits, up to `maxTotal`. For `cost` it's that much more.
@@ -946,7 +946,7 @@ Any effect can have `when`, conditions written as an ability's `requires`, check
 - `overrides`, on a `modify`: replaces those keys of the status's or ability's definition, for things that aren't numbers, like `{ "type": "modify", "statuses": ["life0001"], "overrides": { "stacking": "stack", "maxStacks": 3, "dispel": null } }`. `null` removes a key. With several, the last one a holder has wins. Numbers should use `change`, which adds up.
 - `chance`, on a `modify`: it only applies to that share of uses.
 - `ignores`, on a `modify` of abilities: `cooldown`, `requires` or both, which they can be used through. `{ "type": "modify", "abilities": ["exec0001"], "ignores": ["requires"] }` lets an execute hit at any health.
-- `aura`: an area that follows the holder while the status lasts, with `radius`, `affects`, `every`, `effect`, `status` and `max` as in an ability's `area`.
+- `aura`: an effect area that follows the holder while the status lasts, with `radius`, `affects`, `every`, `effect`, `status` and `max` as in an ability's `effectArea`.
 - `param` on an effect names its number, so a `modify` can change just that number: `{ "type": "stat", "stat": "damageTaken", "multiply": 0.8, "param": "reduction" }` on a status, and `{ "type": "modify", "statuses": ["bark0001"], "change": "reduction", "add": -0.1 }` on a talent. Ability effects can have one too, for a `modify` of `abilities`. The number is a stat's `add` or `multiply`, or its `share` with `fromStat`, the `amount` of a periodic, absorb, damage or heal effect, a `cooldown` effect's `by`, a `share` or `count`, or a trigger's `chance`. A trigger's `effect` can have its own. An `amount` that's an object takes `multiply` and `set`, not `add`. Several talents changing one `param` all count, in the `set`, `add`, `multiply` order.
 - `fromStat`, on a `stat` or a `modify` with `change`: it comes to `share` of this stat, like `{ "type": "stat", "stat": "armor", "fromStat": "agility", "share": 0.5 }`. `ofCaster` reads whoever applied the status instead of the holder, as their class and level give it. `primary` means the holder's main stat.
 - `mastery` scales with the holder's mastery percentage. `{ "type": "stat", "stat": "damageDone", "mastery": 1, "school": "frost" }` means 1% more frost damage per point. On a percentage stat like `block` it adds the points. On a `modify` it grows what `change` picks, like `{ "type": "modify", "tag": "finisher", "change": "damage", "mastery": 1 }`, and on a `trigger` it adds to `chance`. A `modify` can change `mastery` itself, to give an ability's or status's numbers more from it.
@@ -1037,7 +1037,7 @@ The rest is as for items.
 - `flesh` is `living`, `rotting`, `stitched` (rotting, sewn together), `bone`, an element's (`stone`, `fire`, `water` or `air`), or `fur`, `shell`, `chitin`, `wrapped` (a mummy's linen), `spirit` (pale and see-through), `shadow` (dark and see-through), `bark`, `fungal` or `molten` (dark rock with glowing cracks). Fur, shell, chitin, wrapped, spirit, shadow, bark, fungal and molten wear no clothes, though they wear armor.
 - The humanoid creature bodies are made of these: orc, ogre, kobold, gnoll, lizardfolk, tauros, skeleton, zombie, giant, harpy, gargoyle, imp, centaur, naga, amphen, the elementals georite, furite, aquite and aerite (earth, fire, water and air), boric (boar-folk), ursol (bear-folk), trog, homari (lobster-folk), tyrshaug, drakel, abomination, ghoul, mummy, lich, banshee, ghost, deepshaug, smoulder, treant, dryad, succubus, hivelord, cindershaug, golem, mycosi (mushroom-folk) and drakesh (a drakel's upper body on a drake's).
 - `creatureType`: `beast`, `humanoid`, `undead`, `elemental`, `demon`, `dragonkin`, `giant`, `mechanical`, `aberration` or `critter`. Some abilities only work on some types. `family` groups creatures in the editor.
-- `reach`: how far its body extends from its center (see Distance and areas). Left out, it's its body's [reach](#bodies) at its size.
+- `reach`: how far its body extends from its center (see Distance and effect areas). Left out, it's its body's [reach](#bodies) at its size.
 - `classification`: `normal` by default, or `trivial`, `elite`, `rare`, `rareElite` or `boss`. With the level, it sets health, damage and armor, and `health`, `damage` and `armor` multiply those (1 by default).
 - `reaction`: `hostile` attacks you on sight, `neutral` only when attacked.
 - `aggroRadius`: how near you get before it notices, 60 ft by default, longer when it outlevels you and shorter when you outlevel it. It's measured in 3D, and it has to see you.
@@ -1239,8 +1239,8 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. [`messages.
 | `level` | `id`, `level` | someone's level changed |
 | `bars` | `bars` | the action bars you set, as you enter, if you ever have |
 | `build` | `specialization`, `talents` | what you've chosen, after you enter and whenever it changes |
-| `area` | `id`, `from`, `ability`, `affects`, `at`, `radius`, `line`, `width`, `dir`, `lasts`, `follows` | an area went down on your continent. `dir` is the way a line runs, and `follows` is who it moves with |
-| `areaGone` | `id` | an area ended |
+| `effectArea` | `id`, `from`, `ability`, `affects`, `at`, `radius`, `line`, `width`, `dir`, `lasts`, `follows` | an effect area went down on your continent. `dir` is the way a line runs, and `follows` is who it moves with |
+| `effectAreaGone` | `id` | an effect area ended |
 | `absorb` | `id`, `absorb` | what someone near you can still soak up changed. A character carries `absorb` too |
 | `look` | `id`, `look` | someone near you started or stopped looking like something else. Without a `look`, they went back to their own |
 | `gear` | `id`, `look` | what someone near you holds changed, and `look` is their own look with it |

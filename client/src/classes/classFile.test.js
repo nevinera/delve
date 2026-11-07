@@ -112,7 +112,7 @@ describe("what's wrong with a class", () => {
   });
 
   it("reads and writes not, targetIs and stacks conditions", () => {
-    for (const condition of [{ not: { status: "bloo0001", on: "self" } }, { targetIs: "ally" }, { status: "bloo0001", on: "target", stacks: 5 }, { state: "casting", on: "target" }, { position: "behind" }, { since: "stealth", below: 6 }, { resource: "energy", below: 30, percent: true }, { holders: "bloo0001", atLeast: 5 }, { unitsOut: ["pet00001"] }, { inArea: "deat0001" }, { spentAtLeast: 5 }, { targetsHitAtLeast: 3 }, { outcome: "crit" }, { targetHealthBelowMine: true }, { group: "form", on: "self" }, { wielding: "dual" }]) {
+    for (const condition of [{ not: { status: "bloo0001", on: "self" } }, { targetIs: "ally" }, { status: "bloo0001", on: "target", stacks: 5 }, { state: "casting", on: "target" }, { position: "behind" }, { since: "stealth", below: 6 }, { resource: "energy", below: 30, percent: true }, { holders: "bloo0001", atLeast: 5 }, { unitsOut: ["pet00001"] }, { inEffectArea: "deat0001" }, { spentAtLeast: 5 }, { targetsHitAtLeast: 3 }, { outcome: "crit" }, { targetHealthBelowMine: true }, { group: "form", on: "self" }, { wielding: "dual" }]) {
       expect(writeCondition(readCondition(condition))).toEqual(condition);
     }
     expect(classProblems({ statuses: [{ id: "bloo0001", name: "Blood", effects: [{ type: "stat", stat: "haste", add: 1, when: [{ not: { status: "gone0001", on: "self" } }] }] }] })).toEqual([

@@ -44,7 +44,7 @@ func (l *Layer) keep(p *Player, now time.Time) *kept {
 		}
 	}
 	// What a class gives for good comes back with it, what others put on goes when they do, and
-	// what an area keeps on goes with the area.
+	// what an effect area keeps on goes with the effect area.
 	for key, held := range f.unit.Statuses {
 		if held.granted || key.from != p.ID() || held.effectZone != nil || len(held.effectZones) > 0 {
 			continue

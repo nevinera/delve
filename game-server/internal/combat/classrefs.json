@@ -185,7 +185,7 @@
         "holders": {
           "refers": "status"
         },
-        "inArea": {
+        "inEffectArea": {
           "refers": "ability"
         },
         "not": {

@@ -292,7 +292,7 @@ func TestAChannelWithACastTimeTicksAfterItAndThenEnds(t *testing.T) {
 	}
 }
 
-func TestAreasReachWhoTheyReach(t *testing.T) {
+func TestEffectAreasReachWhoTheyReach(t *testing.T) {
 	h, p, c := fighting(t)
 	use(t, p, "far")
 	pass(h, c, 1.6)

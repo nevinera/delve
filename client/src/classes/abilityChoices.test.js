@@ -110,7 +110,7 @@ describe("effects", () => {
     expect(whoOf(addEffect(made, ability({ target: "self" }), "status"))).toBe("self");
     expect(addEffect(made, ability(), "resource")).toMatchObject({ affects: "self", resource: "rage", amount: 1 });
     expect(addEffect(made, ability(), "move")).toMatchObject({ kind: "charge", affects: "self" });
-    expect(addEffect(made, ability({ target: "ground" }), "area")).toMatchObject({ affects: "enemies", around: "ground", radius: 10, lasts: 8, every: 1 });
+    expect(addEffect(made, ability({ target: "ground" }), "effectArea")).toMatchObject({ affects: "enemies", around: "ground", radius: 10, lasts: 8, every: 1 });
   });
 
   it("set who they land on, cleaning up after an area", () => {

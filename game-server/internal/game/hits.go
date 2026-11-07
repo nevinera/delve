@@ -222,7 +222,7 @@ func hitOf(c *casting, e *combat.Effect, on *unit, count int) combat.HitContext 
 		kinds = append(kinds, "melee")
 	}
 	if e.Affects == "enemies" || e.Affects == "allies" {
-		kinds = append(kinds, "area")
+		kinds = append(kinds, "effectArea")
 	}
 	if on.ID == c.target || e.Affects == "self" || e.Affects == "target" {
 		kinds = append(kinds, "main")

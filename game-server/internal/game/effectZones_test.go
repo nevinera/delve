@@ -6,12 +6,12 @@ import (
 	"github.com/delve-mmo/delve3d/game-server/internal/combat"
 )
 
-// areaFight is a fight with an ability that puts an area down, a status to keep, and a dummy at the
+// effectAreaFight is a fight with an ability that puts an effect area down, a status to keep, and a dummy at the
 // player's feet, 30 ft from nowhere else.
-func areaFight(t *testing.T, e combat.Effect) (*Hub, *Player, *float64) {
+func effectAreaFight(t *testing.T, e combat.Effect) (*Hub, *Player, *float64) {
 	t.Helper()
 	zero := 0.0
-	e.Type = "area"
+	e.Type = "effectArea"
 	if e.Affects == "" {
 		e.Affects = "enemies"
 	}
@@ -27,15 +27,15 @@ func ouchEvery(n float64) *combat.Effect {
 	return &combat.Effect{Type: "damage", Affects: "self", Amount: combat.Amount{Min: n, Max: n}}
 }
 
-func TestAreaTicksThenEnds(t *testing.T) {
-	h, p, c := areaFight(t, combat.Effect{Radius: 10, Lasts: 3, Every: 1, Effect: ouchEvery(5)})
+func TestEffectAreaTicksThenEnds(t *testing.T) {
+	h, p, c := effectAreaFight(t, combat.Effect{Radius: 10, Lasts: 3, Every: 1, Effect: ouchEvery(5)})
 	d := p.layer.dummies[0]
 	was := d.damage
 	heard(p)
 	use(t, p, "lay")
 	pass(h, c, 0.05)
-	if got := heard(p, "area"); len(got) != 1 || got[0]["radius"] != 10.0 || got[0]["lasts"] != 3.0 || got[0]["affects"] != "enemies" {
-		t.Fatalf("area = %v", got)
+	if got := heard(p, "effectArea"); len(got) != 1 || got[0]["radius"] != 10.0 || got[0]["lasts"] != 3.0 || got[0]["affects"] != "enemies" {
+		t.Fatalf("effect area = %v", got)
 	}
 	pass(h, c, 2.1)
 	if got := d.damage - was; got != 10 {
@@ -48,13 +48,13 @@ func TestAreaTicksThenEnds(t *testing.T) {
 	if len(p.layer.combat.effectZones) != 0 {
 		t.Fatal("it stayed")
 	}
-	if got := heard(p, "areaGone"); len(got) != 1 {
-		t.Fatalf("areaGone = %v", got)
+	if got := heard(p, "effectAreaGone"); len(got) != 1 {
+		t.Fatalf("effectAreaGone = %v", got)
 	}
 }
 
-func TestAreaKeepsAStatusOnThoseInside(t *testing.T) {
-	h, p, c := areaFight(t, combat.Effect{Radius: 10, Lasts: 5, Status: "inside"})
+func TestEffectAreaKeepsAStatusOnThoseInside(t *testing.T) {
+	h, p, c := effectAreaFight(t, combat.Effect{Radius: 10, Lasts: 5, Status: "inside"})
 	d := p.layer.dummies[0]
 	use(t, p, "lay")
 	pass(h, c, 0.1)
@@ -77,12 +77,12 @@ func TestAreaKeepsAStatusOnThoseInside(t *testing.T) {
 	}
 	pass(h, c, 4)
 	if held(p, "inside") != nil {
-		t.Fatal("it outlasted the area")
+		t.Fatal("it outlasted the effect area")
 	}
 }
 
-func TestAreaOnEnterLandsOnce(t *testing.T) {
-	h, p, c := areaFight(t, combat.Effect{Radius: 10, Lasts: 5, OnEnter: ouchEvery(7)})
+func TestEffectAreaOnEnterLandsOnce(t *testing.T) {
+	h, p, c := effectAreaFight(t, combat.Effect{Radius: 10, Lasts: 5, OnEnter: ouchEvery(7)})
 	d := p.layer.dummies[0]
 	was := d.damage
 	use(t, p, "lay")
@@ -92,8 +92,8 @@ func TestAreaOnEnterLandsOnce(t *testing.T) {
 	}
 }
 
-func TestAreaLimitEndsTheOldest(t *testing.T) {
-	h, p, c := areaFight(t, combat.Effect{Radius: 10, Lasts: 50, Limit: 2})
+func TestEffectAreaLimitEndsTheOldest(t *testing.T) {
+	h, p, c := effectAreaFight(t, combat.Effect{Radius: 10, Lasts: 50, Limit: 2})
 	for i := 0; i < 3; i++ {
 		use(t, p, "lay")
 		pass(h, c, 0.05)
@@ -103,9 +103,9 @@ func TestAreaLimitEndsTheOldest(t *testing.T) {
 	}
 }
 
-func TestAreaCopiesOnlyStackIfTheyOverlap(t *testing.T) {
+func TestEffectAreaCopiesOnlyStackIfTheyOverlap(t *testing.T) {
 	for _, overlaps := range []bool{false, true} {
-		h, p, c := areaFight(t, combat.Effect{Radius: 10, Lasts: 50, Every: 1, Effect: ouchEvery(5), Overlaps: overlaps})
+		h, p, c := effectAreaFight(t, combat.Effect{Radius: 10, Lasts: 50, Every: 1, Effect: ouchEvery(5), Overlaps: overlaps})
 		d := p.layer.dummies[0]
 		use(t, p, "lay")
 		pass(h, c, 0.05)
@@ -124,7 +124,7 @@ func TestAreaCopiesOnlyStackIfTheyOverlap(t *testing.T) {
 }
 
 func TestLineOnlyCoversItsStrip(t *testing.T) {
-	h, p, c := areaFight(t, combat.Effect{Radius: 30, Width: 4, Line: true, Lasts: 50, Status: "inside"})
+	h, p, c := effectAreaFight(t, combat.Effect{Radius: 30, Width: 4, Line: true, Lasts: 50, Status: "inside"})
 	d := p.layer.dummies[0]
 	p.state.Yaw = 0
 	start := p.state.At
@@ -142,8 +142,8 @@ func TestLineOnlyCoversItsStrip(t *testing.T) {
 	}
 }
 
-func TestLeavingEndsYourAreas(t *testing.T) {
-	h, p, c := areaFight(t, combat.Effect{Radius: 10, Lasts: 50})
+func TestLeavingEndsYourEffectAreas(t *testing.T) {
+	h, p, c := effectAreaFight(t, combat.Effect{Radius: 10, Lasts: 50})
 	use(t, p, "lay")
 	pass(h, c, 0.05)
 	layer := p.layer

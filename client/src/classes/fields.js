@@ -17,7 +17,7 @@ const DISPELS = ["magic", "curse", "poison", "disease", "enrage", "stun", "root"
 const CREATURE_TYPES = ["beast", "humanoid", "undead", "elemental", "demon", "dragonkin", "giant", "mechanical", "aberration", "critter"];
 export const STATS = ["strength", "agility", "intellect", "stamina", "armor", "critRating", "hasteRating", "masteryRating", "versatilityRating", "leechRating", "avoidanceRating", "speedRating", "attackPower", "spellPower", "maxHealth", "resourceMax", "resourceRegen", "resourceRest", "resourceDecay", "resourceGain", "critChance", "critDamage", "critHealing", "critTaken", "haste", "mastery", "versatility", "leech", "avoidance", "dodge", "parry", "block", "movementSpeed", "attackSpeed", "stealth", "detection", "damageDone", "healingDone", "damageTaken", "healingTaken", "threat"];
 const COMMON_STATS = ["strength", "agility", "intellect", "stamina", "armor", "attackPower", "spellPower", "maxHealth", "critChance", "haste", "movementSpeed", "damageDone", "healingDone", "damageTaken"];
-const HITS = ["auto", "ability", "melee", "direct", "periodic", "area", "main", "others", "single"];
+const HITS = ["auto", "ability", "melee", "direct", "periodic", "effectArea", "main", "others", "single"];
 const COMMON_ANIMATIONS = ["attack", "bigAttack", "shoot", "cast", "castBig", "castChannel"];
 const MORE_ANIMATIONS = ["offhandAttack", "dualAttack", "spinningAttack", "stab", "kick", "spinningKick", "punch", "shieldBash", "groundSlam", "aimedShot", "rapidShot", "throw", "castGround", "castOverhead", "castSelf", "castOnAlly", "pray", "shout", "breath", "roll", "drink", "transform", "none"];
 const WHEN = ["cast", "launch", "flight", "impact", "channel"];
@@ -116,7 +116,7 @@ const spendsStack = (made) => ({ type: "select", none: "no", options: () => [["t
 
 const simpleConditionFields = (made) => [
   // A new kind starts clean: what the last one held would read as that one again.
-  { key: "kind", type: "select", label: "needs", then: (c) => Object.keys(c).filter((key) => key !== "kind").forEach((key) => delete c[key]), options: [["health", "health"], ["status", "a status"], ["resource", "a resource"], ["targetIs", "used on"], ["inCombat", "combat"], ["stealthed", "stealth"]], more: [["state", "a state"], ["position", "position"], ["since", "time since"], ["holders", "units holding"], ["unitsOut", "a unit out"], ["inArea", "in your area"], ["spentAtLeast", "spent at least"], ["targetsHitAtLeast", "hit at least"], ["outcome", "the hit"], ["targetHealthBelowMine", "target under your health"], ["group", "a status group"], ["wielding", "what you wield"]] },
+  { key: "kind", type: "select", label: "needs", then: (c) => Object.keys(c).filter((key) => key !== "kind").forEach((key) => delete c[key]), options: [["health", "health"], ["status", "a status"], ["resource", "a resource"], ["targetIs", "used on"], ["inCombat", "combat"], ["stealthed", "stealth"]], more: [["state", "a state"], ["position", "position"], ["since", "time since"], ["holders", "units holding"], ["unitsOut", "a unit out"], ["inEffectArea", "in your effect area"], ["spentAtLeast", "spent at least"], ["targetsHitAtLeast", "hit at least"], ["outcome", "the hit"], ["targetHealthBelowMine", "target under your health"], ["group", "a status group"], ["wielding", "what you wield"]] },
   { key: "group", label: "of group", show: (c) => c.kind === "group" },
   { key: "wielding", type: "select", options: ["shield", "oneHanded", "twoHanded", "dual"], show: (c) => c.kind === "wielding" },
   { key: "state", type: "select", options: ["casting", "inCombat", "slowed", "airborne", "falling", "controlled", "stunned", "outdoors"], show: (c) => c.kind === "state" },
@@ -128,7 +128,7 @@ const simpleConditionFields = (made) => [
   { key: "atLeast", type: "number", label: "at least", min: 0, step: 1, show: (c) => c.kind === "holders" },
   { key: "atMost", type: "number", label: "at most", min: 0, step: 1, show: (c) => c.kind === "holders" },
   { key: "unitsOut", label: "units", type: "multi", options: unitsOf(made), show: (c) => c.kind === "unitsOut" },
-  { key: "inArea", label: "of ability", type: "select", none: "pick one", options: abilitiesOf(made), show: (c) => c.kind === "inArea" },
+  { key: "inEffectArea", label: "of ability", type: "select", none: "pick one", options: abilitiesOf(made), show: (c) => c.kind === "inEffectArea" },
   { key: "spentAtLeast", label: "points", type: "number", min: 0, show: (c) => c.kind === "spentAtLeast" },
   { key: "targetsHitAtLeast", label: "targets", type: "number", min: 1, step: 1, show: (c) => c.kind === "targetsHitAtLeast" },
   { key: "outcome", type: "select", options: ["crit", "survived"], show: (c) => c.kind === "outcome" },
@@ -172,7 +172,7 @@ const conditionFields = (made, depth = 2) => {
 };
 
 // A condition as the form edits it, with the `kind` the format leaves implicit.
-const PLAIN_CONDITIONS = { state: "casting", position: "behind", since: "attack", resource: "", holders: "", unitsOut: [], inArea: "", spentAtLeast: 1, targetsHitAtLeast: 2, outcome: "crit", targetHealthBelowMine: true, group: "", wielding: "shield" };
+const PLAIN_CONDITIONS = { state: "casting", position: "behind", since: "attack", resource: "", holders: "", unitsOut: [], inEffectArea: "", spentAtLeast: 1, targetsHitAtLeast: 2, outcome: "crit", targetHealthBelowMine: true, group: "", wielding: "shield" };
 
 export function readCondition(condition) {
   if ("health" in condition) return { kind: "health", ...condition };
@@ -261,14 +261,14 @@ const defaulted = (word) => ({ read: (v) => (v === word ? undefined : v) });
 const spread = (e) => ["enemies", "allies"].includes(e.affects);
 
 export const effectFields = (made, nested = false) => [
-  { key: "type", type: "select", options: ["damage", "heal", "status", "resource", "move", "dispel", "interrupt", "area"], more: ["taunt", "extend", "consume", "extraTargets", "castAbility", "threat", "reveal", "cooldown", "summon", "command", "resurrect"] },
+  { key: "type", type: "select", options: ["damage", "heal", "status", "resource", "move", "dispel", "interrupt", "effectArea"], more: ["taunt", "extend", "consume", "extraTargets", "castAbility", "threat", "reveal", "cooldown", "summon", "command", "resurrect"] },
   { key: "affects", type: "select", options: ["target", "self", "enemies", "allies", "hit", "holder", "caster", "summons"] },
   amountField(made, { show: is("damage", "heal", "resource") }),
   { key: "school", type: "select", none: "the ability's", options: SCHOOLS, show: is("damage") },
   { key: "resource", type: "select", none: "pick one", options: resourcesOf(made), show: is("resource") },
   { key: "status", type: "select", none: "pick one", options: statusesOf(made), show: is("status", "consume") },
   { key: "status", type: "select", none: "none", options: statusesOf(made), show: is("extend") },
-  { key: "status", label: "those inside have", type: "select", none: "none", options: statusesOf(made), show: is("area") },
+  { key: "status", label: "those inside have", type: "select", none: "none", options: statusesOf(made), show: is("effectArea") },
   { key: "duration", type: "number", label: "duration s", min: 0, hint: "how long it lasts", show: is("status", "taunt") },
   { key: "stacks", type: "number", min: 1, step: 1, hint: "all of them by default", show: is("consume") },
   { key: "seconds", type: "number", show: is("extend", "consume") },
@@ -279,11 +279,11 @@ export const effectFields = (made, nested = false) => [
   { key: "speed", type: "number", label: "speed ft/s", min: 0, show: (e) => e.type === "move" && e.kind === "charge" },
   { key: "dispels", type: "multi", label: "removes", options: DISPELS, show: is("dispel") },
   { key: "count", type: "number", label: "how many", min: 1, step: 1, show: is("dispel") },
-  { key: "around", type: "select", none: "self", options: ["target", "ground", "holders", "random"], ...defaulted("self"), show: is("area") },
-  { key: "radius", type: "number", label: "radius ft", min: 0, show: (e) => spread(e) || ["extraTargets", "castAbility", "area"].includes(e.type) },
-  { key: "lasts", label: "lasts s", type: "number", min: 0, show: is("area") },
-  { key: "every", label: "every s", type: "number", min: 0, show: is("area") },
-  ...(nested ? [] : [{ key: "effect", label: "each time", type: "group", collapsed: true, fields: effectFields(made, true), show: is("area") }]),
+  { key: "around", type: "select", none: "self", options: ["target", "ground", "holders", "random"], ...defaulted("self"), show: is("effectArea") },
+  { key: "radius", type: "number", label: "radius ft", min: 0, show: (e) => spread(e) || ["extraTargets", "castAbility", "effectArea"].includes(e.type) },
+  { key: "lasts", label: "lasts s", type: "number", min: 0, show: is("effectArea") },
+  { key: "every", label: "every s", type: "number", min: 0, show: is("effectArea") },
+  ...(nested ? [] : [{ key: "effect", label: "each time", type: "group", collapsed: true, fields: effectFields(made, true), show: is("effectArea") }]),
   { key: "unit", type: "select", none: "pick one", options: unitsOf(made), show: is("summon") },
   { key: "count", type: "number", min: 1, step: 1, show: is("summon") },
   { key: "lasts", label: "lasts s", type: "number", min: 0, hint: "left out, until it dies or is dismissed", show: is("summon") },
@@ -299,7 +299,7 @@ export const effectFields = (made, nested = false) => [
   { key: "multiply", type: "number", show: is("threat") },
   { key: "health", type: "number", label: "health %", min: 0, show: is("resurrect") },
 
-  { key: "around", type: "select", none: "self", options: ["target", "ground", "holders", "random"], ...defaulted("self"), show: (e) => spread(e) && e.type !== "area", advanced: WHO },
+  { key: "around", type: "select", none: "self", options: ["target", "ground", "holders", "random"], ...defaulted("self"), show: (e) => spread(e) && e.type !== "effectArea", advanced: WHO },
   { key: "max", type: "number", label: "at most", min: 1, step: 1, hint: "how many it hits", show: (e) => spread(e) || ["castAbility", "status"].includes(e.type), advanced: WHO },
   { key: "max", label: "at most out", type: "number", min: 1, step: 1, show: is("summon"), advanced: WHO },
   { key: "prefers", type: "select", none: "nearest", options: ["injured", "farthest", "lowestHealth"], ...defaulted("nearest"), show: (e) => e.max !== undefined, advanced: WHO },
@@ -308,7 +308,7 @@ export const effectFields = (made, nested = false) => [
   { key: "creatureTypes", label: "only on", type: "multi", options: CREATURE_TYPES, advanced: WHO },
   { key: "height", type: "number", label: "height ft", min: 0, hint: "above and below its center, 15 by default", show: (e) => e.type !== "move" && spread(e), advanced: WHO },
   { key: "cone", type: "number", label: "cone °", min: 0, hint: "a slice in front of you, around yourself only", show: spread, advanced: WHO },
-  { key: "line", label: "in a line", type: "check", show: (e) => e.type === "area" || spread(e), advanced: WHO },
+  { key: "line", label: "in a line", type: "check", show: (e) => e.type === "effectArea" || spread(e), advanced: WHO },
   { key: "width", type: "number", min: 0, show: (e) => e.line, advanced: WHO },
   { key: "along", type: "select", none: "facing", options: ["path", "ground"], show: (e) => e.line, advanced: WHO },
   { key: "units", type: "multi", options: unitsOf(made), show: (e) => e.type === "command" || e.type === "consume" || e.affects === "summons", advanced: WHO },
@@ -322,7 +322,7 @@ export const effectFields = (made, nested = false) => [
   { ...perCountField(made), show: is("damage", "heal", "resource", "status", "extend", "cooldown"), advanced: HOW },
   { key: "perTargetHit", label: "per target hit", type: "numberOr", word: true, after: "or once each", show: is("damage", "heal", "resource", "cooldown"), advanced: HOW },
   { key: "maxTotal", label: "at most in all", type: "number", min: 0, show: (e) => e.type === "extend" || e.perTargetHit !== undefined, advanced: HOW },
-  { key: "softCap", label: "soft cap", type: "number", min: 1, step: 1, hint: "past this many hit, they share this many's worth", show: is("damage", "heal", "status", "extraTargets", "area"), advanced: HOW },
+  { key: "softCap", label: "soft cap", type: "number", min: 1, step: 1, hint: "past this many hit, they share this many's worth", show: is("damage", "heal", "status", "extraTargets", "effectArea"), advanced: HOW },
   { key: "split", type: "check", hint: "those hit share the amount", show: is("damage", "heal", "status"), advanced: HOW },
   { key: "others", type: "number", min: 0, hint: "those besides the main target take this share", show: is("damage", "heal"), advanced: HOW },
   { key: "drain", type: "number", hint: "heals you by this share of what it does", show: is("damage"), advanced: HOW },
@@ -345,14 +345,14 @@ export const effectFields = (made, nested = false) => [
   { key: "dealsLeft", label: "does this share of what's left", type: "number", show: is("consume"), advanced: OTHER },
   { key: "keeps", label: "leaves it on", type: "check", show: (e) => e.type === "consume" && e.dealsLeft !== undefined, advanced: OTHER },
   ...(nested ? [] : [{ key: "perStack", label: "for each stack taken", type: "group", collapsed: true, fields: effectFields(made, true), show: is("consume"), advanced: OTHER }]),
-  { key: "overlaps", label: "copies each work", type: "check", show: is("area"), advanced: OTHER },
-  { key: "followsTarget", label: "follows its target", type: "check", show: is("area"), advanced: OTHER },
-  { key: "limit", label: "at most out", type: "number", min: 1, step: 1, show: is("area"), advanced: OTHER },
+  { key: "overlaps", label: "copies each work", type: "check", show: is("effectArea"), advanced: OTHER },
+  { key: "followsTarget", label: "follows its target", type: "check", show: is("effectArea"), advanced: OTHER },
+  { key: "limit", label: "at most out", type: "number", min: 1, step: 1, show: is("effectArea"), advanced: OTHER },
   ...(nested
     ? []
     : [
-        { key: "onEnter", label: "on entering", type: "group", collapsed: true, fields: effectFields(made, true), show: is("area"), advanced: OTHER },
-        { key: "effects", label: "several each time", type: "list", one: "effect", blank: () => ({ type: "damage", affects: "self" }), fields: effectFields(made, true), show: is("area"), advanced: OTHER },
+        { key: "onEnter", label: "on entering", type: "group", collapsed: true, fields: effectFields(made, true), show: is("effectArea"), advanced: OTHER },
+        { key: "effects", label: "several each time", type: "list", one: "effect", blank: () => ({ type: "damage", affects: "self" }), fields: effectFields(made, true), show: is("effectArea"), advanced: OTHER },
       ]),
   { key: "height", type: "number", label: "arc ft", min: 0, show: (e) => e.type === "move" && ["leap", "knockback"].includes(e.kind), advanced: OTHER },
   { key: "flying", type: "check", show: is("move"), advanced: OTHER },

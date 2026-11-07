@@ -229,7 +229,7 @@ func (cm *Combat) around(e *combat.StatusEffect, at [3]float64, continent string
 			found = append(found, reach{v, gap})
 		}
 	}
-	return areaOf{most: e.Max}.ranked(found)
+	return effectAreaOf{most: e.Max}.ranked(found)
 }
 
 // statusChanged tells those near a unit how a status on it stands now.

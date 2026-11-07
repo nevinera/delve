@@ -73,7 +73,7 @@ func TestTaken(t *testing.T) {
 	if got := s.Taken(100, HitContext{Schools: []string{"physical"}}, 1); math.Abs(got-45) > 1e-9 {
 		t.Fatalf("physical, half from armor: %g", got)
 	}
-	if got := s.Taken(100, HitContext{Schools: []string{"holy"}, Kinds: []string{"area"}}, 1); math.Abs(got-81) > 1e-9 {
-		t.Fatalf("area: %g", got)
+	if got := s.Taken(100, HitContext{Schools: []string{"holy"}, Kinds: []string{"effectArea"}}, 1); math.Abs(got-81) > 1e-9 {
+		t.Fatalf("effect area: %g", got)
 	}
 }

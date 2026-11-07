@@ -494,7 +494,7 @@ func TestRefreshKeepsTheTickSchedule(t *testing.T) {
 	}
 }
 
-// A periodic can hit an area, share past its soft cap, heal, and give resources.
+// A periodic can hit an effect area, share past its soft cap, heal, and give resources.
 func TestPeriodicKinds(t *testing.T) {
 	h, p, c := statusFight(t, nil)
 	class := p.fight.class

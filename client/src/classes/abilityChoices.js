@@ -43,7 +43,7 @@ const WHO_LABELS = { target: "The target", self: "You", "enemies:target": "Enemi
 export function whoChoices(ability, effect) {
   const foe = effect.type !== "heal";
   const friend = effect.type !== "damage";
-  const area = effect.type === "area";
+  const area = effect.type === "effectArea";
   return [
     ...(aimed(ability) && !area ? ["target"] : []),
     ...(friend && !area ? ["self"] : []),
@@ -58,11 +58,11 @@ export function whoChoices(ability, effect) {
 }
 
 // The types whose card asks who they land on with choices, and not with a list.
-const WITH_WHO = ["damage", "heal", "status", "dispel", "area"];
+const WITH_WHO = ["damage", "heal", "status", "dispel", "effectArea"];
 
 function firstWho(ability, type) {
   const hostile = type === "damage" || (type !== "heal" && !["ally", "any", "self"].includes(ability.target));
-  if (type === "area") return `${hostile ? "enemies" : "allies"}:${ability.target === "ground" ? "ground" : aimed(ability) ? "target" : "self"}`;
+  if (type === "effectArea") return `${hostile ? "enemies" : "allies"}:${ability.target === "ground" ? "ground" : aimed(ability) ? "target" : "self"}`;
   if (hostile) return ability.target === "enemy" || ability.target === "any" ? "target" : ability.target === "ground" ? "enemies:ground" : "enemies:self";
   if (["ally", "any"].includes(ability.target)) return "target";
   if (ability.target === "ground") return "allies:ground";
@@ -212,7 +212,7 @@ export function whoStrip(ability, effect) {
 }
 
 export function radiusStrip(effect) {
-  if (!["enemies", "allies"].includes(effect.affects) && effect.type !== "area") return null;
+  if (!["enemies", "allies"].includes(effect.affects) && effect.type !== "effectArea") return null;
   return { name: "radius", options: [5, 8, 10, 15, 20, 30].map((value) => ({ value, label: `${value} ft` })), value: effect.radius, other: "ft", pick: (v) => setKey(effect, "radius", v) };
 }
 
@@ -245,7 +245,7 @@ export function chosenOnCard(effect) {
     "type",
     ...(WITH_WHO.includes(effect.type) ? ["affects"] : []),
     ...(radiusStrip(effect) ? ["radius"] : []),
-    ...(effect.type === "area" ? ["around"] : []),
+    ...(effect.type === "effectArea" ? ["around"] : []),
     ...(effect.type === "move" ? ["kind"] : []),
     ...(effect.type === "resource" ? ["resource"] : []),
     ...(hasStrength(effect) || effect.type === "resource" ? ["amount"] : []),
@@ -258,11 +258,11 @@ const FIRST_EFFECTS = {
   ally: ["heal", "status", "dispel", "resource"],
   any: ["heal", "damage", "status", "dispel"],
   self: ["status", "heal", "move", "resource", "summon"],
-  ground: ["area", "damage", "heal", "status", "move"],
-  none: ["damage", "heal", "status", "area", "resource"],
+  ground: ["effectArea", "damage", "heal", "status", "move"],
+  none: ["damage", "heal", "status", "effectArea", "resource"],
 };
-const ALL_EFFECTS = ["damage", "heal", "status", "resource", "move", "dispel", "interrupt", "area", "taunt", "extend", "consume", "extraTargets", "castAbility", "threat", "reveal", "cooldown", "summon", "command", "resurrect"];
-const EFFECT_LABELS = { damage: "Damage", heal: "Heal", status: "Status", resource: "Give a resource", move: "Movement", dispel: "Dispel", interrupt: "Interrupt", area: "Lasting area", taunt: "Taunt", extend: "Extend a status", consume: "Use up a status", extraTargets: "Extra targets", castAbility: "Cast another ability", threat: "Threat", reveal: "Reveal", cooldown: "Change a cooldown", summon: "Summon", command: "Command summons", resurrect: "Resurrect" };
+const ALL_EFFECTS = ["damage", "heal", "status", "resource", "move", "dispel", "interrupt", "effectArea", "taunt", "extend", "consume", "extraTargets", "castAbility", "threat", "reveal", "cooldown", "summon", "command", "resurrect"];
+const EFFECT_LABELS = { damage: "Damage", heal: "Heal", status: "Status", resource: "Give a resource", move: "Movement", dispel: "Dispel", interrupt: "Interrupt", effectArea: "Lasting area", taunt: "Taunt", extend: "Extend a status", consume: "Use up a status", extraTargets: "Extra targets", castAbility: "Cast another ability", threat: "Threat", reveal: "Reveal", cooldown: "Change a cooldown", summon: "Summon", command: "Command summons", resurrect: "Resurrect" };
 
 export const effectLabel = (type) => EFFECT_LABELS[type] ?? type;
 
@@ -282,7 +282,7 @@ export function addEffect(made, ability, type) {
   if (hasStrength(effect)) effect.amount = { [defaultPower(made)]: 1 };
   if (WITH_WHO.includes(type)) setWho(effect, firstWho(ability, type));
   else effect.affects = ["resource", "summon", "cooldown", "castAbility"].includes(type) || !aimed(ability) ? "self" : "target";
-  if (type === "area") Object.assign(effect, { radius: 10, lasts: 8, every: 1 });
+  if (type === "effectArea") Object.assign(effect, { radius: 10, lasts: 8, every: 1 });
   if (type === "resource") Object.assign(effect, { resource: made.resources?.[0]?.key, amount: 1 });
   if (type === "interrupt") effect.lockout = 4;
   if (type === "move") setMoveKind(ability, effect, ability.target === "enemy" ? "charge" : ability.target === "ground" ? "leap" : "dash");

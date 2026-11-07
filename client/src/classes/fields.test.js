@@ -126,7 +126,7 @@ describe("conditions in the form", () => {
   });
 
   it("stay the kind you pick, before anything else is set", () => {
-    for (const kind of ["state", "position", "since", "resource", "holders", "unitsOut", "inArea", "spentAtLeast", "targetsHitAtLeast", "outcome", "targetHealthBelowMine", "group", "wielding"]) {
+    for (const kind of ["state", "position", "since", "resource", "holders", "unitsOut", "inEffectArea", "spentAtLeast", "targetsHitAtLeast", "outcome", "targetHealthBelowMine", "group", "wielding"]) {
       expect(readCondition(writeCondition({ kind })).kind).toBe(kind);
     }
   });

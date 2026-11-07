@@ -13,7 +13,7 @@
       "effects": [
         { "type": "status", "affects": "target", "status": "" },
         { "type": "summon", "affects": "self", "unit": "gone0105" },
-        { "type": "area", "affects": "enemies", "effect": { "type": "resource", "affects": "self", "resource": "fury", "amount": 1 } },
+        { "type": "effectArea", "affects": "enemies", "effect": { "type": "resource", "affects": "self", "resource": "fury", "amount": 1 } },
         { "type": "cooldown", "affects": "self", "abilities": ["bolt0001", "gone0106"] }
       ]
     }

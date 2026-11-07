@@ -70,7 +70,7 @@ describe("an ability's timeline", () => {
 
   it("marks what an area effect covers", () => {
     const line = abilityTimeline({ target: "ground", range: 90, effects: [{ type: "damage", affects: "enemies", around: "ground", radius: 20 }], visuals: [{ effect: "ring", when: "impact" }] });
-    expect(kinds(line, "area")[0]).toMatchObject({ radius: 20, around: "ground" });
+    expect(kinds(line, "effectArea")[0]).toMatchObject({ radius: 20, around: "ground" });
     expect(kinds(line, "visual")[0].on).toBe("ground");
   });
 

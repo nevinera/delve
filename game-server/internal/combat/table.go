@@ -72,10 +72,10 @@ func (s Stats) Armored(n float64, schools []string, level int) float64 {
 }
 
 // Taken is what's left of a hit on someone with these stats, from someone of this level: armor,
-// avoidance against areas and half of versatility, as well as what it holds.
+// avoidance against effect areas and half of versatility, as well as what it holds.
 func (s Stats) Taken(n float64, ctx HitContext, level int) float64 {
 	n = s.Armored(n, ctx.Schools, level) * s.DamageTaken * (1 - s.other("versatility")/200)
-	if slices.Contains(ctx.Kinds, "area") {
+	if slices.Contains(ctx.Kinds, "effectArea") {
 		n *= 1 - min(max(s.other("avoidance"), 0), 100)/100
 	}
 	return n

@@ -68,7 +68,7 @@ func TestANarrowedStatMatchesHits(t *testing.T) {
 		{`{"type":"stat","stat":"damageDone","school":"frost"}`, false},
 		{`{"type":"stat","stat":"damageDone","schools":["frost","fire"]}`, true},
 		{`{"type":"stat","stat":"damageDone","hit":"melee"}`, true},
-		{`{"type":"stat","stat":"damageDone","hit":"area"}`, false},
+		{`{"type":"stat","stat":"damageDone","hit":"effectArea"}`, false},
 		{`{"type":"stat","stat":"damageDone","category":"bleed"}`, true},
 		{`{"type":"stat","stat":"damageDone","categories":["disease"]}`, false},
 		{`{"type":"stat","stat":"damageDone","abilities":["a"]}`, true},

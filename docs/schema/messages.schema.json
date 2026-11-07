@@ -278,10 +278,10 @@
           "$ref": "#/$defs/server.build"
         },
         {
-          "$ref": "#/$defs/server.area"
+          "$ref": "#/$defs/server.effectArea"
         },
         {
-          "$ref": "#/$defs/server.areaGone"
+          "$ref": "#/$defs/server.effectAreaGone"
         },
         {
           "$ref": "#/$defs/server.absorb"
@@ -694,12 +694,12 @@
       "type": "object",
       "x-go": "appear"
     },
-    "server.area": {
+    "server.effectArea": {
       "additionalProperties": false,
-      "description": "An area went down on your continent. `dir` is the way a line runs, and `follows` is who it moves with",
+      "description": "An effect area went down on your continent. `dir` is the way a line runs, and `follows` is who it moves with",
       "properties": {
         "type": {
-          "const": "area"
+          "const": "effectArea"
         },
         "id": {
           "type": "integer"
@@ -752,14 +752,14 @@
         "lasts"
       ],
       "type": "object",
-      "x-go": "areaMessage"
+      "x-go": "effectAreaMessage"
     },
-    "server.areaGone": {
+    "server.effectAreaGone": {
       "additionalProperties": false,
-      "description": "An area ended",
+      "description": "An effect area ended",
       "properties": {
         "type": {
-          "const": "areaGone"
+          "const": "effectAreaGone"
         },
         "id": {
           "type": "integer"
@@ -770,7 +770,7 @@
         "id"
       ],
       "type": "object",
-      "x-go": "areaGone"
+      "x-go": "effectAreaGone"
     },
     "server.attacking": {
       "additionalProperties": false,

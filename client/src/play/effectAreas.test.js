@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { describe, expect, it } from "vitest";
-import { AreaMarks, markOf } from "./areas.js";
+import { EffectAreaMarks, markOf } from "./effectAreas.js";
 
 describe("markOf", () => {
   it("draws a circle as a ring, and a line as a strip the way it runs", () => {
@@ -11,13 +11,13 @@ describe("markOf", () => {
   });
 });
 
-describe("AreaMarks", () => {
+describe("EffectAreaMarks", () => {
   const view = () => ({ scene: new THREE.Scene(), origin: [100, 200] });
   const area = { id: 1, affects: "enemies", at: [110, 5, 220], radius: 8, dir: [0, 1], lasts: 2 };
 
   it("puts a mark where the area is, until it runs out", () => {
     const v = view();
-    const marks = new AreaMarks(v);
+    const marks = new EffectAreaMarks(v);
     marks.add(area, 0);
     const { group } = marks.marks.get(1).draped;
     expect(group.position.x).toBe(10);
@@ -29,7 +29,7 @@ describe("AreaMarks", () => {
   });
 
   it("moves one that follows someone", () => {
-    const marks = new AreaMarks(view());
+    const marks = new EffectAreaMarks(view());
     marks.add({ ...area, follows: 5 }, 0);
     marks.frame(1, (id) => (id === 5 ? new THREE.Vector3(1, 2, 3) : null));
     const { group } = marks.marks.get(1).draped;
@@ -39,7 +39,7 @@ describe("AreaMarks", () => {
 
   it("follows the ground under it, and again where it's followed someone to", () => {
     const v = { ...view(), renditions: { heightAt: (x) => x } };
-    const marks = new AreaMarks(v);
+    const marks = new EffectAreaMarks(v);
     marks.add({ ...area, at: [100, 0, 200], follows: 5 }, 0);
     const { group } = marks.marks.get(1).draped;
     const { position } = group.children[0].geometry.attributes;
@@ -51,7 +51,7 @@ describe("AreaMarks", () => {
 
   it("turns a strip the way it runs when it follows the ground", () => {
     const v = { ...view(), renditions: { heightAt: (x) => x } };
-    const marks = new AreaMarks(v);
+    const marks = new EffectAreaMarks(v);
     marks.add({ id: 2, affects: "enemies", at: [100, 0, 200], radius: 30, line: true, width: 4, dir: [1, 0], lasts: 2 }, 0);
     const { position } = marks.marks.get(2).draped.group.children[0].geometry.attributes;
     const far = position.count - 1; // the end of the strip, 30 ft along +x once it's turned
@@ -60,7 +60,7 @@ describe("AreaMarks", () => {
 
   it("forgets one that's gone early", () => {
     const v = view();
-    const marks = new AreaMarks(v);
+    const marks = new EffectAreaMarks(v);
     marks.add(area, 0);
     marks.remove(1);
     marks.remove(1);

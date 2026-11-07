@@ -494,13 +494,13 @@
         {
           "type": "object",
           "required": [
-            "inArea"
+            "inEffectArea"
           ],
           "additionalProperties": false,
           "properties": {
-            "inArea": {
+            "inEffectArea": {
               "$ref": "#/$defs/id",
-              "description": "the target stands in the area this ability of yours put down",
+              "description": "the target stands in the effect area this ability of yours put down",
               "x-refers": "ability"
             }
           }
@@ -821,7 +821,7 @@
             "cooldown",
             "summon",
             "command",
-            "area",
+            "effectArea",
             "extend",
             "extraTargets",
             "castAbility",
@@ -1135,7 +1135,7 @@
         },
         "followsTarget": {
           "type": "boolean",
-          "description": "area: it moves with its target"
+          "description": "effectArea: it moves with its target"
         },
         "line": {
           "type": "boolean",
@@ -1156,18 +1156,18 @@
         },
         "onEnter": {
           "$ref": "#/$defs/effect",
-          "description": "area: what lands on someone once when they come inside"
+          "description": "effectArea: what lands on someone once when they come inside"
         },
         "effects": {
           "type": "array",
           "items": {
             "$ref": "#/$defs/effect"
           },
-          "description": "area: more than one effect landing each every seconds, in place of effect"
+          "description": "effectArea: more than one effect landing each every seconds, in place of effect"
         },
         "overlaps": {
           "type": "boolean",
-          "description": "area: copies of it each work on those inside"
+          "description": "effectArea: copies of it each work on those inside"
         },
         "flying": {
           "type": "boolean",
@@ -1260,16 +1260,16 @@
         "every": {
           "type": "number",
           "exclusiveMinimum": 0,
-          "description": "area: seconds between each time effect lands on those inside"
+          "description": "effectArea: seconds between each time effect lands on those inside"
         },
         "effect": {
           "$ref": "#/$defs/effect",
-          "description": "area: what lands on those inside, each every seconds. affects self means whoever's inside"
+          "description": "effectArea: what lands on those inside, each every seconds. affects self means whoever's inside"
         },
         "limit": {
           "type": "integer",
           "minimum": 1,
-          "description": "area: how many of these you can have out at once"
+          "description": "effectArea: how many of these you can have out at once"
         }
       }
     },

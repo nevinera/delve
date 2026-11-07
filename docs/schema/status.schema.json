@@ -393,7 +393,7 @@
               "ability",
               "melee",
               "direct",
-              "area",
+              "effectArea",
               "main",
               "others",
               "single",

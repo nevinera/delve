@@ -70,16 +70,16 @@ func TestSightStopsSwings(t *testing.T) {
 	refusal(t, p, cantSee)
 }
 
-func TestSightKeepsAreasOut(t *testing.T) {
+func TestSightKeepsEffectAreasOut(t *testing.T) {
 	_, p, _, d := behindWall(t)
 	p.layer.mu.Lock()
 	defer p.layer.mu.Unlock()
-	a := areaOf{center: p.state.At, continent: p.state.Continent, affects: "enemies", radius: 1000}
-	if got := p.layer.combat.inArea(a); len(got) != 0 {
+	a := effectAreaOf{center: p.state.At, continent: p.state.Continent, affects: "enemies", radius: 1000}
+	if got := p.layer.combat.inEffectArea(a); len(got) != 0 {
 		t.Fatalf("with the wall up: %d in it", len(got))
 	}
 	p.layer.fakeGround = nil
-	if got := p.layer.combat.inArea(a); len(got) != 1 || got[0].ID != d.ID {
+	if got := p.layer.combat.inEffectArea(a); len(got) != 1 || got[0].ID != d.ID {
 		t.Fatalf("with the wall down: %v", got)
 	}
 }

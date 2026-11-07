@@ -38,7 +38,7 @@ func (cm *Combat) facts(u *unit, target int64, now time.Time) *combat.Facts {
 	for what, at := range f.since {
 		out.Since[what] = now.Sub(at).Seconds()
 	}
-	out.Holders, out.InAreas = map[string]int{}, map[string]bool{}
+	out.Holders, out.InEffectAreas = map[string]int{}, map[string]bool{}
 	out.Groups = groupsOn(&f.unit)
 	for v := range cm.state.units() {
 		for key := range v.Statuses {
@@ -49,7 +49,7 @@ func (cm *Combat) facts(u *unit, target int64, now time.Time) *combat.Facts {
 	}
 	for _, z := range cm.effectZones {
 		if z.from == u && z.inside[target] != nil {
-			out.InAreas[z.kind] = true
+			out.InEffectAreas[z.kind] = true
 		}
 	}
 	if t := cm.state.unit(target, u.char.Continent); t != nil {

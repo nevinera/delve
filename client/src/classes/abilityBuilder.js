@@ -27,7 +27,7 @@ const AIM_PICTURES = {
   none: `<circle cx="32" cy="18" r="6" fill="#d8c08a"/>`,
 };
 
-const EFFECT_ICONS = { damage: "crossed-swords", heal: "heart-drop", status: "checked-shield", resource: "stars-stack", move: "run", dispel: "cross-flare", interrupt: "stopwatch", area: "whirlwind" };
+const EFFECT_ICONS = { damage: "crossed-swords", heal: "heart-drop", status: "checked-shield", resource: "stars-stack", move: "run", dispel: "cross-flare", interrupt: "stopwatch", effectArea: "whirlwind" };
 
 const numberOf = (text) => (text.trim() === "" ? undefined : Number(text));
 

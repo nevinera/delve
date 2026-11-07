@@ -20,7 +20,7 @@ import { withBuiltins } from "../abilities/builtins.js";
 import { Footsteps, stepSound } from "./footsteps.js";
 import { LastingAuras } from "./lastingAuras.js";
 import { absorbBand, initials, timeLeft } from "./unitStatuses.js";
-import { AreaMarks } from "./areas.js";
+import { EffectAreaMarks } from "./effectAreas.js";
 import { blockedBy, isHelpless } from "./controls.js";
 
 const AURA_CHECK_S = 0.25; // how often to see which status-long auras should be showing
@@ -139,7 +139,7 @@ export class PlayCombat {
     this.savedBars = null; // null until you've set them
     this.barPage = 0; // which bar a small screen shows
     document.querySelector("[data-abilities]")?.addEventListener("click", () => this.toggleAbilities());
-    this.areas = new AreaMarks(view);
+    this.effectAreas = new EffectAreaMarks(view);
     this.auras = new LastingAuras(this.stage);
     this.footsteps = new Footsteps((_kind, { at, mine, landing }) => this.stage.sound("footstep", { ...stepSound({ mine, landing }), at }), {
       heightAt: (x, z) => view.renditions?.heightAt(x, z),
@@ -668,12 +668,12 @@ export class PlayCombat {
     this.view.walker.speedShare = movementSpeed / 100;
   }
 
-  area_(message) {
-    this.areas.add(message, performance.now());
+  effectArea_(message) {
+    this.effectAreas.add(message, performance.now());
   }
 
-  areaGone_({ id }) {
-    this.areas.remove(id);
+  effectAreaGone_({ id }) {
+    this.effectAreas.remove(id);
   }
 
   targetable_({ id, targetable }) {
@@ -877,7 +877,7 @@ export class PlayCombat {
         node.classList.toggle("combat-action-off", !allHold(ability.requires, facts) || Boolean(blockedBy(this.controls, ability)));
       }
     }
-    this.areas.frame(now, (id) => (id === this.you.id ? this.view.walker?.model?.position : this.others.characters.get(id)?.model.position));
+    this.effectAreas.frame(now, (id) => (id === this.you.id ? this.view.walker?.model?.position : this.others.characters.get(id)?.model.position));
     this.drawStatuses(this.youFrame, this.you.id, now);
     this.drawAbsorb(this.youFrame, this.you.id, this.health, this.maxHealth);
     const aimedAt = this.target !== null ? this.others.characters.get(this.target) : null;

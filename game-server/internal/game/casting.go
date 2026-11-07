@@ -566,24 +566,24 @@ func (cm *Combat) landWhich(u *unit, c *casting, now time.Time, which func(*comb
 			continue
 		}
 		var reached []*unit
-		if e.Type != "area" {
+		if e.Type != "effectArea" {
 			reached = cm.reached(u, c, e)
 			if len(reached) == 0 {
 				u.debugLine("%s: %s reached no one", c.ability.Name, e.Type)
 			}
 		}
-		if e.Type == "area" {
+		if e.Type == "effectArea" {
 			if failed, ok := combat.All(e.When, cm.facts(u, c.target, now)); ok {
-				cm.placeArea(u, c, e, now)
+				cm.placeEffectArea(u, c, e, now)
 			} else {
-				u.debugLine("%s: area skipped: %s", c.ability.Name, failed.Why(statusNames(u)))
+				u.debugLine("%s: effect area skipped: %s", c.ability.Name, failed.Why(statusNames(u)))
 			}
 			continue
 		}
 		for _, on := range reached {
 			target := c.target
 			if e.Affects == "enemies" || e.Affects == "allies" {
-				target = on.ID // an area's conditions ask about each one it reaches
+				target = on.ID // an effect area's conditions ask about each one it reaches
 			}
 			if failed, ok := combat.All(e.When, cm.factsInUse(u, c, target, len(reached), now)); !ok {
 				u.debugLine("%s: %s skipped: %s", c.ability.Name, e.Type, failed.Why(statusNames(u)))
@@ -675,14 +675,14 @@ func (cm *Combat) reached(u *unit, c *casting, e *combat.Effect) []*unit {
 	if e.Line {
 		way = lineWay(u, c, e, center)
 	}
-	a := areaOf{center: center, continent: u.char.Continent, yaw: u.char.Yaw, affects: e.Affects, radius: e.Radius, cone: e.Cone, line: e.Line, width: e.Width, dir: way, most: e.Max, prefers: e.Prefers, from: u.ID, holding: e.Holding}
+	a := effectAreaOf{center: center, continent: u.char.Continent, yaw: u.char.Yaw, affects: e.Affects, radius: e.Radius, cone: e.Cone, line: e.Line, width: e.Width, dir: way, most: e.Max, prefers: e.Prefers, from: u.ID, holding: e.Holding}
 	if e.Type != "move" {
 		a.height = e.Height
 	}
 	if e.ExceptTarget {
 		a.except = c.target
 	}
-	return cm.inArea(a)
+	return cm.inEffectArea(a)
 }
 
 // stopCast ends what a player's casting.

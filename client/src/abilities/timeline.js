@@ -141,7 +141,7 @@ export function abilityTimeline(ability, { distance = MELEE_FT, ranged = false }
     beats.forEach((at, n) => {
       events.push({ at, kind: "hit", effect, n });
       if (["enemies", "allies"].includes(effect.affects) && effect.radius) {
-        events.push({ at, kind: "area", radius: effect.radius, cone: effect.cone ?? null, around: effect.around ?? "self", colors: schoolColors(ability) });
+        events.push({ at, kind: "effectArea", radius: effect.radius, cone: effect.cone ?? null, around: effect.around ?? "self", colors: schoolColors(ability) });
       }
     });
     if (effect.type === "move" && effect.kind === "charge") {
