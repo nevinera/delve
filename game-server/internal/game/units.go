@@ -182,6 +182,7 @@ type combatState interface {
 	sendHome(u *unit)
 	motionOf(u *unit) *motion
 	comeBack(m *mob)
+	placeMob(m *mob, at [3]float64, yaw float64, move Move, say bool)
 }
 
 // Combat works out what abilities, hits, statuses and effect areas do, on a world copy's state. It holds

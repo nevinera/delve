@@ -60,28 +60,7 @@ func (cm *Combat) spar(u *unit, now time.Time) {
 		return
 	}
 	f.sparAt = now.Add(seconds(combat.SwingSeconds))
-	on := &f.unit
-	cm.state.tellOf(u.ID, encode(swung{"swung", d.ID, u.ID}))
-	ctx := combat.HitContext{Schools: []string{"physical"}, Kinds: []string{"auto", "melee", "direct", "main", "single"}, Other: d.ID}
-	h := hit{Type: "hit", From: d.ID, On: u.ID, Effect: "damage"}
-	theirs := cm.statsOf(on, &ctx, now)
-	front := facing(u.char.At, u.char.Yaw, d.state.At)
-	if !cm.avoided(on, d.ID, theirs, true, front, &ctx, &h, now) {
-		n := theirs.Taken(on.MaxHealth*sparShare, ctx, f.level)
-		blocked := combat.Blocks(theirs, true, front, cm.roll)
-		if blocked {
-			n *= 1 - combat.BlockShare
-			h.Blocked = true
-		}
-		n = cm.soak(on, n, ctx.Schools, &h, now)
-		n = min(n, on.Health-1)
-		cm.harm(u, on, max(n, 0), &h, now)
-		if blocked {
-			cm.fire(event{on: "block", who: on, other: d.ID, ctx: &ctx, amount: n}, now)
-		}
-		cm.fire(event{on: "takeDamage", who: on, other: d.ID, ctx: &ctx, amount: n}, now)
-	}
-	cm.state.showHit(u.ID, on, h)
+	cm.mobSwing(d, &f.unit, f.unit.MaxHealth*sparShare, now)
 }
 
 func (d *mob) tally(n float64, now time.Time) {

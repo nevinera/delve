@@ -61,6 +61,7 @@ func (cm *Combat) dies(m *mob, now time.Time) {
 		back = respawnSeconds
 	}
 	m.backAt = now.Add(seconds(back))
+	m.mind = mind{}
 	cm.state.tellOf(m.ID, encode(died{"died", m.ID}))
 }
 
@@ -80,5 +81,28 @@ func (l *Layer) comeBack(m *mob) {
 	}
 	for o := range gone {
 		o.send(encode(vanish{"vanish", m.ID})) // the body's gone from where it fell
+	}
+}
+
+// placeMob moves a mob, and shows it to those it's come near, and takes it away from those it's
+// left. With `say`, those who still see it hear how it's moving.
+func (l *Layer) placeMob(m *mob, at [3]float64, yaw float64, move Move, say bool) {
+	before := map[*Player]bool{}
+	for _, o := range l.playersNear(m.state.Continent, m.state.At) {
+		before[o] = true
+	}
+	m.state.At, m.state.Yaw, m.state.Move = at, yaw, move
+	update := encode(moved{"moved", m.ID, at, yaw, move})
+	for _, o := range l.playersNear(m.state.Continent, at) {
+		switch {
+		case !before[o]:
+			o.send(encode(appear{"appear", l.seen(m.state)}))
+		case say:
+			o.send(update)
+		}
+		delete(before, o)
+	}
+	for o := range before {
+		o.send(encode(vanish{"vanish", m.ID}))
 	}
 }

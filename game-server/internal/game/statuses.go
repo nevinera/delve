@@ -351,7 +351,7 @@ func (cm *Combat) immuneToStatus(v *unit, s *combat.Status, from int64, now time
 
 // untargetable says whether nothing can pick a unit as a target right now.
 func (cm *Combat) untargetable(v *unit, now time.Time) bool {
-	if v.dead() {
+	if v.dead() || (v.mob != nil && v.mob.mind.mode == "home") {
 		return true
 	}
 	for _, held := range v.Statuses {

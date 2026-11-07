@@ -81,6 +81,7 @@ type mob struct {
 	home     [3]float64       // where it was placed
 	placing  worlds.Placed    // how it was placed, to come back the same way
 	backAt   time.Time        // when it comes back, while it's dead
+	mind     mind             // what it's doing, if it was placed
 	firstHit time.Time
 	lastHit  time.Time
 	damage   float64
@@ -261,6 +262,7 @@ func (cm *Combat) tick(now time.Time) {
 		if d.char.Dead && !now.Before(d.backAt) {
 			cm.state.comeBack(d)
 		}
+		cm.think(d, dt, now)
 		if !d.lastHit.IsZero() && now.Sub(d.lastHit) >= dummyResetIdle {
 			d.firstHit, d.lastHit, d.damage = time.Time{}, time.Time{}, 0
 		}

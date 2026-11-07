@@ -256,5 +256,7 @@ func (cm *Combat) harm(u *unit, on *unit, n float64, h *hit, now time.Time) {
 	}
 	if d := on.mob; d != nil && !d.training && on.Health <= 0 {
 		cm.dies(d, now)
+	} else if d != nil {
+		cm.engage(d, u, now)
 	}
 }
