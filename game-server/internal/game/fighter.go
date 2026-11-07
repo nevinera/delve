@@ -26,6 +26,7 @@ func classWithID(classes []*combat.Class, id string) *combat.Class {
 func (p *Player) enterFight(class *combat.Class, level int, build combat.Build) {
 	f := &p.fight
 	f.unit = unit{ID: p.state.ID, char: &p.state, player: p, fight: f, Statuses: map[statusKey]*activeStatus{}}
+	f.self = &f.unit
 	f.resources, f.pools, f.cooldowns, f.lockouts, f.since = map[string]float64{}, map[string]combat.Pool{}, map[string][]time.Time{}, map[string]time.Time{}, map[string]time.Time{}
 	if class == nil {
 		f.unit.base = combat.Plain(100)
@@ -193,7 +194,7 @@ func (f *fighter) pool(r combat.Resource) combat.Pool {
 	if pool, ok := f.pools[r.Key]; ok {
 		return pool
 	}
-	return combat.PoolOf(r, f.unit.base, f.unit.primary, nil)
+	return combat.PoolOf(r, f.self.base, f.self.primary, nil)
 }
 
 // regen brings back resources and tells the player how they stand, every so often.
@@ -202,14 +203,14 @@ func (cm *Combat) regen(u *unit, dt float64, now time.Time) {
 	if f.class == nil {
 		return
 	}
-	mods := cm.modsOf(&f.unit, nil, now)
-	sheet := f.unit.base
+	mods := cm.modsOf(f.self, nil, now)
+	sheet := f.self.base
 	if len(mods) > 0 {
-		sheet = combat.Sheet(f.unit.base, f.unit.primary, mods)
+		sheet = combat.Sheet(f.self.base, f.self.primary, mods)
 	}
 	fighting := f.inCombat(now)
 	for _, r := range f.class.Resources {
-		pool := combat.PoolOf(r, sheet, f.unit.primary, mods)
+		pool := combat.PoolOf(r, sheet, f.self.primary, mods)
 		if old, ok := f.pools[r.Key]; ok && old.Max != pool.Max {
 			f.resChanged = true
 		}

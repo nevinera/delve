@@ -12,9 +12,15 @@ import (
 
 // Using abilities: checking a use, paying for it, casts and channels, and what lands when.
 
-// use starts the ability a player asks for, or says why it can't.
+// casts says whether a unit can cast and keep what it cast going: a player on the layer, or a mob
+// that uses abilities and isn't lying dead.
+func (cm *Combat) casts(u *unit) bool {
+	return cm.state.present(u) || (u != nil && u.mob != nil && u.fight != nil && !u.char.Dead)
+}
+
+// use starts the ability a player or mob asks for, or says why it can't.
 func (cm *Combat) use(u *unit, m incoming) {
-	if !cm.state.present(u) {
+	if !cm.casts(u) {
 		return
 	}
 	now := cm.now()
@@ -26,7 +32,7 @@ func (cm *Combat) use(u *unit, m incoming) {
 	}
 	f := u.fight
 	cm.state.acted(u, "you used an ability")
-	cm.breakStatuses(&f.unit, "action", func(s *combat.Status) bool { return s.KeptBy.Keeps(ability) })
+	cm.breakStatuses(f.self, "action", func(s *combat.Status) bool { return s.KeptBy.Keeps(ability) })
 	gcd := combat.GCDSeconds
 	if ability.GCD != nil {
 		gcd = *ability.GCD
@@ -53,8 +59,8 @@ func (cm *Combat) use(u *unit, m incoming) {
 // inForce is the ability a use of this one comes to: a `modify`'s `becomes` can turn it into another.
 func (cm *Combat) inForce(u *unit, a *combat.Ability, now time.Time) *combat.Ability {
 	f := u.fight
-	for _, m := range cm.modifiersOf(&f.unit, now) {
-		if e := m.Effect; e.Becomes != "" && e.Picks(a) && cm.holds(&f.unit, e, nil, now) {
+	for _, m := range cm.modifiersOf(f.self, now) {
+		if e := m.Effect; e.Becomes != "" && e.Picks(a) && cm.holds(f.self, e, nil, now) {
 			if to := f.class.Ability(e.Becomes); to != nil {
 				return to
 			}
@@ -216,7 +222,7 @@ func (cm *Combat) ready(u *unit, m incoming, now time.Time) (*combat.Ability, st
 	if !slices.Contains(ability.Ignores, "cooldown") && len(live(f.cooldowns[ability.ID], now)) >= max(ability.Charges, 1) {
 		return nil, "not ready yet"
 	}
-	if why := combat.Blocked(cm.controlsOn(&f.unit), ability); why != "" {
+	if why := combat.Blocked(cm.controlsOn(f.self), ability); why != "" {
 		return nil, why
 	}
 	if lockedOut(f, ability, now) {
@@ -245,7 +251,7 @@ func (cm *Combat) aim(u *unit, ability *combat.Ability, m incoming, now time.Tim
 		return 0, nil, ""
 	}
 	t := cm.state.unit(m.Target, u.char.Continent)
-	enemy := t != nil && t.mob != nil // mobs are enemies, players allies
+	enemy := t != nil && (t.mob != nil) != (u.mob != nil) // to a player, mobs are enemies and players allies; to a mob, the other way round
 	switch {
 	case ability.Target == "enemy" && !enemy:
 		return 0, nil, "you need an enemy targeted"
@@ -459,10 +465,10 @@ func (cm *Combat) release(u *unit, c *casting, now time.Time) {
 		f.resChanged = true
 		countSpent(f, c, cost, spent)
 		u.debugLine("%s: spent %g %s", a.Name, spent, cost.Resource)
-		cm.fire(event{on: "spend", who: &f.unit, other: c.target, ctx: castOf(a), amount: spent, resource: cost.Resource}, now)
+		cm.fire(event{on: "spend", who: f.self, other: c.target, ctx: castOf(a), amount: spent, resource: cost.Resource}, now)
 	}
 	c.spent = countedSpent(f, c)
-	cm.fire(event{on: "cast", who: &f.unit, other: c.target, ctx: castOf(a)}, now)
+	cm.fire(event{on: "cast", who: f.self, other: c.target, ctx: castOf(a)}, now)
 	if a.Cooldown > 0 {
 		spent := live(f.cooldowns[a.ID], now)
 		from := now
@@ -488,7 +494,7 @@ func (cm *Combat) release(u *unit, c *casting, now time.Time) {
 			})
 		}
 		cm.after(now.Add(seconds(a.Channel.Duration)), c, func(now time.Time) {
-			cm.fire(event{on: "channelEnd", who: &f.unit, other: c.target, ctx: castOf(a)}, now)
+			cm.fire(event{on: "channelEnd", who: f.self, other: c.target, ctx: castOf(a)}, now)
 		})
 		return
 	}
@@ -551,7 +557,7 @@ func (cm *Combat) landArriving(u *unit, c *casting, now time.Time) {
 // landWhich lands the effects `which` picks. It reads all their conditions first, so one effect
 // can't change whether another lands: one button can start a status or end it.
 func (cm *Combat) landWhich(u *unit, c *casting, now time.Time, which func(*combat.Effect) bool) {
-	if !cm.state.present(u) {
+	if !cm.casts(u) {
 		return
 	}
 	type landingOn struct {
@@ -617,7 +623,7 @@ func (cm *Combat) unmet(u *unit, a *combat.Ability, target int64, now time.Time)
 // usedBy finds the statuses that using an ability spends.
 func usedBy(f *fighter, a *combat.Ability) []usingUp {
 	var out []usingUp
-	for key, each := range f.unit.Statuses {
+	for key, each := range f.self.Statuses {
 		if each.def.ConsumedBy.Matches(a) {
 			out = append(out, usingUp{key, each})
 		}
@@ -627,7 +633,7 @@ func usedBy(f *fighter, a *combat.Ability) []usingUp {
 
 // spend takes a use or stacks from statuses an ability used, unless they've been put on afresh since.
 func (cm *Combat) spend(u *unit, used []usingUp, now time.Time) {
-	if !cm.state.present(u) {
+	if !cm.casts(u) {
 		return
 	}
 	for _, up := range used {

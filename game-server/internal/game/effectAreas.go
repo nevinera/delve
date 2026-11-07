@@ -165,7 +165,7 @@ func (cm *Combat) leaveEffectArea(z *effectArea, id int64) {
 // sweepEffectAreas keeps effect areas and auras up to date.
 func (cm *Combat) sweepEffectAreas(now time.Time) {
 	for _, z := range slices.Clone(cm.effectAreas) {
-		if !cm.state.present(z.from) || !now.Before(z.until) {
+		if !cm.casts(z.from) || !now.Before(z.until) {
 			cm.endEffectArea(z)
 			continue
 		}
@@ -225,7 +225,7 @@ func (cm *Combat) touchEffectArea(z *effectArea, now time.Time) {
 		cm.endEffectArea(z)
 		return
 	}
-	found := cm.inEffectArea(effectShape{center: center, continent: continent, affects: z.affects, radius: z.radius, line: z.line, width: z.width, dir: z.dir, most: z.max})
+	found := cm.inEffectArea(effectShape{center: center, continent: continent, from: z.from.ID, affects: z.affects, radius: z.radius, line: z.line, width: z.width, dir: z.dir, most: z.max})
 	here := map[int64]bool{}
 	c := &casting{ability: z.ability}
 	for _, on := range found {
@@ -344,13 +344,15 @@ type reach struct {
 	gap float64
 }
 
-// side says whether a unit is on the side an effect area affects. Mobs are enemies, and players allies.
+// side says whether a unit is on the side an effect area affects. For a player's, mobs are enemies
+// and players allies; for a mob's (its `from` below 0), the other way round.
 func (a effectShape) side(u *unit) bool {
+	mobs := a.from < 0
 	switch a.affects {
 	case "enemies":
-		return u.mob != nil
+		return (u.mob != nil) != mobs
 	case "allies":
-		return u.fight != nil
+		return (u.mob != nil) == mobs
 	}
 	return false
 }

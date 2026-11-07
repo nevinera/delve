@@ -20,10 +20,10 @@ func (cm *Combat) applyStatus(u *unit, a *combat.Ability, id string, duration fl
 		log.Printf("character %d: ability %s applies a status its class hasn't got: %s", u.ID, a.ID, id)
 		return false
 	}
-	mods := cm.modifiersOf(&f.unit, now)
+	mods := cm.modifiersOf(f.self, now)
 	mastery := 0.0
 	if len(mods) > 0 {
-		mastery = cm.statsOf(&f.unit, nil, now).MasteryPercent()
+		mastery = cm.statsOf(f.self, nil, now).MasteryPercent()
 	}
 	s = f.class.ResolveStatus(s, duration, mods, mastery)
 	if cm.immuneToStatus(on, s, u.ID, now) {
@@ -273,6 +273,10 @@ func (cm *Combat) refit(v *unit, now time.Time) {
 		cm.state.resizeHealth(v, v.Health*most/v.MaxHealth, most)
 	}
 	if o == nil {
+		// A mob's cast stops when what's on it stops it, as a player's does.
+		if f := v.fight; f != nil && f.cast != nil && combat.Blocked(cm.controlsOn(v), f.cast.ability) != "" {
+			cm.stopCast(v)
+		}
 		return
 	}
 	speed := max(stats.MovementSpeed, 0)

@@ -31,7 +31,7 @@ func (cm *Combat) factsInUse(u *unit, c *casting, target int64, hits int, now ti
 func (cm *Combat) facts(u *unit, target int64, now time.Time) *combat.Facts {
 	f := u.fight
 	out := &combat.Facts{
-		Self:      unitOf(&f.unit, u.ID, cm.fighterState(u, now)),
+		Self:      unitOf(f.self, u.ID, cm.fighterState(u, now)),
 		Since:     map[string]float64{},
 		Resources: map[string]combat.ResourceAmount{},
 	}
@@ -39,7 +39,7 @@ func (cm *Combat) facts(u *unit, target int64, now time.Time) *combat.Facts {
 		out.Since[what] = now.Sub(at).Seconds()
 	}
 	out.Holders, out.InEffectAreas = map[string]int{}, map[string]bool{}
-	out.Groups = groupsOn(&f.unit)
+	out.Groups = groupsOn(f.self)
 	for v := range cm.state.units() {
 		for key := range v.Statuses {
 			if key.from == u.ID {
@@ -77,6 +77,16 @@ func (cm *Combat) facts(u *unit, target int64, now time.Time) *combat.Facts {
 			out.TargetIs = append(out.TargetIs, "other")
 		}
 		out.Position = positionOf(u.char.At, o.char.At, o.char.Yaw)
+	}
+	if u.mob != nil { // to a mob, players are enemies and mobs allies
+		for i, is := range out.TargetIs {
+			switch is {
+			case "enemy":
+				out.TargetIs[i] = "ally"
+			case "ally":
+				out.TargetIs[i] = "enemy"
+			}
+		}
 	}
 	return out
 }
@@ -132,7 +142,7 @@ func groupsOn(v *unit) map[string]bool {
 	return out
 }
 
-// fighterState is which of a `state` condition's words are true of a player. Everywhere counts as
+// fighterState is which of a `state` condition's words are true of a player, or a mob that casts. Everywhere counts as
 // outdoors.
 func (cm *Combat) fighterState(u *unit, now time.Time) []string {
 	state := []string{"outdoors"}
@@ -143,13 +153,14 @@ func (cm *Combat) fighterState(u *unit, now time.Time) []string {
 	if slices.Contains(controls, "stun") {
 		state = append(state, "stunned")
 	}
-	if cm.state.motionOf(u).slowed < 0 {
+	motion := cm.state.motionOf(u) // nil for a mob
+	if motion != nil && motion.slowed < 0 {
 		state = append(state, "slowed")
 	}
 	if u.fight.cast != nil {
 		state = append(state, "casting")
 	}
-	if cm.state.motionOf(u).aloft {
+	if motion != nil && motion.aloft {
 		state = append(state, "airborne", "falling")
 	}
 	if u.fight.inCombat(now) {

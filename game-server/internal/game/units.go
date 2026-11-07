@@ -34,11 +34,14 @@ func (l *Layer) units() iter.Seq[*unit] {
 	}
 }
 
-// caster is the unit of the player with that id on the layer, or nil: what put a status on, or
-// keeps an effect area going.
+// caster is the unit of the player, or the mob that uses abilities, with that id on the layer, or
+// nil: what put a status on, or keeps an effect area going.
 func (l *Layer) caster(id int64) *unit {
 	if o := l.players[id]; o != nil {
 		return &o.fight.unit
+	}
+	if d := l.mob(id, ""); d != nil && d.fight != nil {
+		return &d.unit
 	}
 	return nil
 }
@@ -145,7 +148,11 @@ func (l *Layer) playerUnits() iter.Seq[*unit] {
 func (l *Layer) mobList() []*mob { return l.mobs }
 
 // acted calls off a player's logging off, since it did something: `why`.
-func (l *Layer) acted(u *unit, why string) { l.stopLoggingOff(u.player, why) }
+func (l *Layer) acted(u *unit, why string) {
+	if u.player != nil {
+		l.stopLoggingOff(u.player, why)
+	}
+}
 
 // sendHome takes a player to its home rest point.
 func (l *Layer) sendHome(u *unit) { l.goHome(u.player) }
