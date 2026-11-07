@@ -14,9 +14,7 @@ import (
 
 // use starts the ability a player asks for, or says why it can't.
 func (cm *Combat) use(u *unit, m incoming) {
-	cm.state.mu.Lock()
-	defer cm.state.mu.Unlock()
-	if cm.state.playerOf(u) == nil {
+	if !cm.state.present(u) {
 		return
 	}
 	now := cm.now()
@@ -27,7 +25,7 @@ func (cm *Combat) use(u *unit, m incoming) {
 		return
 	}
 	f := u.fight
-	cm.state.stopLoggingOff(u.player, "you used an ability")
+	cm.state.acted(u, "you used an ability")
 	cm.breakStatuses(&f.unit, "action", func(s *combat.Status) bool { return s.KeptBy.Keeps(ability) })
 	gcd := combat.GCDSeconds
 	if ability.GCD != nil {
@@ -226,7 +224,7 @@ func (cm *Combat) check(u *unit, m incoming, now time.Time) (*combat.Ability, in
 			break
 		}
 		o := cm.state.unit(m.Target, u.char.Continent)
-		if o == nil || o.player == nil {
+		if o == nil || o.fight == nil {
 			o = u // with no one else targeted, it goes on you
 		}
 		if o != u && cm.untargetable(o, now) {
@@ -482,7 +480,7 @@ func (cm *Combat) release(u *unit, c *casting, now time.Time) {
 		f.cast = nil
 	}
 	if a.ID == combat.HomewardID {
-		cm.state.goHome(u.player)
+		cm.state.sendHome(u)
 		return
 	}
 	strike := now
@@ -537,7 +535,7 @@ func (cm *Combat) landArriving(u *unit, c *casting, now time.Time) {
 // landWhich lands the effects `which` picks. It reads all their conditions first, so one effect
 // can't change whether another lands: one button can start a status or end it.
 func (cm *Combat) landWhich(u *unit, c *casting, now time.Time, which func(*combat.Effect) bool) {
-	if cm.state.playerOf(u) == nil {
+	if !cm.state.present(u) {
 		return
 	}
 	type landingOn struct {
@@ -613,7 +611,7 @@ func usedBy(f *fighter, a *combat.Ability) []usingUp {
 
 // spend takes a use or stacks from statuses an ability used, unless they've been put on afresh since.
 func (cm *Combat) spend(u *unit, used []usingUp, now time.Time) {
-	if cm.state.playerOf(u) == nil {
+	if !cm.state.present(u) {
 		return
 	}
 	for _, up := range used {
@@ -689,6 +687,6 @@ func (cm *Combat) interruptMoving(u *unit) {
 	}
 	if movingNow(u.char.Move) {
 		cm.breakStatuses(u, "move", nil)
-		cm.state.stopLoggingOff(u.player, "you moved")
+		cm.state.acted(u, "you moved")
 	}
 }

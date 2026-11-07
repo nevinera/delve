@@ -47,7 +47,7 @@ func (cm *Combat) facts(u *unit, target int64, now time.Time) *combat.Facts {
 			}
 		}
 	}
-	for _, z := range cm.state.zones {
+	for _, z := range cm.zones {
 		if z.from == u && z.inside[target] != nil {
 			out.InAreas[z.kind] = true
 		}
@@ -68,15 +68,15 @@ func (cm *Combat) facts(u *unit, target int64, now time.Time) *combat.Facts {
 		unit := unitOf(&d.unit, u.ID, state)
 		out.Target, out.TargetIs = &unit, []string{"enemy", "other", "nonPlayer"}
 		out.Position = positionOf(u.char.At, d.state.At, d.state.Yaw)
-	} else if o := cm.state.players[target]; o != nil && target != 0 {
-		unit := unitOf(&o.fight.unit, u.ID, cm.fighterState(&o.fight.unit, now))
+	} else if o := cm.state.caster(target); o != nil && target != 0 {
+		unit := unitOf(o, u.ID, cm.fighterState(o, now))
 		out.Target, out.TargetIs = &unit, []string{"ally", "player"}
-		if o == u.player {
+		if o == u {
 			out.TargetIs = append(out.TargetIs, "self")
 		} else {
 			out.TargetIs = append(out.TargetIs, "other")
 		}
-		out.Position = positionOf(u.char.At, o.state.At, o.state.Yaw)
+		out.Position = positionOf(u.char.At, o.char.At, o.char.Yaw)
 	}
 	return out
 }
@@ -143,13 +143,13 @@ func (cm *Combat) fighterState(u *unit, now time.Time) []string {
 	if slices.Contains(controls, "stun") {
 		state = append(state, "stunned")
 	}
-	if u.player.motion.slowed < 0 {
+	if cm.state.motionOf(u).slowed < 0 {
 		state = append(state, "slowed")
 	}
 	if u.fight.cast != nil {
 		state = append(state, "casting")
 	}
-	if u.player.motion.aloft {
+	if cm.state.motionOf(u).aloft {
 		state = append(state, "airborne", "falling")
 	}
 	if u.fight.inCombat(now) {

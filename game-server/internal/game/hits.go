@@ -93,7 +93,7 @@ func (cm *Combat) avoided(on *unit, from int64, theirs combat.Stats, melee, fron
 		return true
 	}
 	h.Avoided = outcome
-	if o := cm.state.playerOf(on); o != nil {
+	if o := cm.state.playerUnit(on); o != nil {
 		o.fight.since["damageTaken"] = now
 	}
 	cm.fire(event{on: outcome, who: on, other: from, ctx: ctx}, now)
@@ -131,7 +131,7 @@ func (cm *Combat) holds(v *unit, e *combat.StatusEffect, ctx *combat.HitContext,
 		return true
 	}
 	facts := &combat.Facts{Self: unitOf(v, v.ID, nil), Since: map[string]float64{}, Resources: map[string]combat.ResourceAmount{}}
-	if o := cm.state.playerOf(v); o != nil {
+	if o := cm.state.playerUnit(v); o != nil {
 		target := int64(0)
 		if ctx != nil {
 			target = ctx.Other
@@ -243,7 +243,7 @@ func (cm *Combat) harm(u *unit, on *unit, n float64, h *hit, now time.Time) {
 			on.recent = on.recent[1:]
 		}
 	}
-	if o := cm.state.playerOf(on); o != nil {
+	if o := cm.state.playerUnit(on); o != nil {
 		o.fight.since["damageTaken"] = now
 	}
 	cm.state.setHealth(on, on.Health-n)

@@ -10,9 +10,7 @@ import (
 
 // attack starts or stops a player's auto-attack, as it asks.
 func (cm *Combat) attack(u *unit, m incoming) {
-	cm.state.mu.Lock()
-	defer cm.state.mu.Unlock()
-	if cm.state.playerOf(u) == nil || u.fight.class == nil {
+	if !cm.state.present(u) || u.fight.class == nil {
 		return
 	}
 	if m.Target == 0 {
@@ -83,7 +81,7 @@ func (cm *Combat) swing(u *unit, now time.Time) {
 	cm.breakStatuses(&f.unit, "action", func(s *combat.Status) bool { return s.KeptBy != nil })
 	cm.after(now.Add(strikeDelay), nil, func(now time.Time) {
 		d := cm.state.dummy(target, "")
-		if cm.state.playerOf(u) == nil || d == nil {
+		if !cm.state.present(u) || d == nil {
 			return
 		}
 		h := hit{Type: "hit", From: u.ID, On: target, Effect: "damage"}

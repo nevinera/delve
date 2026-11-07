@@ -139,7 +139,7 @@ func (cm *Combat) dispel(u *unit, c *casting, e *combat.Effect, on *unit, now ti
 
 // interrupt stops a player's cast and locks it out of the cast's school. It says whether there was one.
 func (cm *Combat) interrupt(u *unit, e *combat.Effect, on *unit, h *hit, now time.Time) bool {
-	o := cm.state.playerOf(on)
+	o := cm.state.playerUnit(on)
 	if o == nil || o.fight.cast == nil {
 		return false
 	}
@@ -147,7 +147,7 @@ func (cm *Combat) interrupt(u *unit, e *combat.Effect, on *unit, h *hit, now tim
 		h.Missed, h.Avoided = true, "immune"
 		return true
 	}
-	f := &o.fight
+	f := o.fight
 	stopped := f.cast.ability
 	cm.stopCast(on)
 	for _, school := range schoolsOf("", nil, stopped) {

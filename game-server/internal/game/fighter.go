@@ -197,8 +197,8 @@ func (f *fighter) pool(r combat.Resource) combat.Pool {
 }
 
 // regen brings back resources and tells the player how they stand, every so often.
-func (cm *Combat) regen(p *Player, dt float64, now time.Time) {
-	f := &p.fight
+func (cm *Combat) regen(u *unit, dt float64, now time.Time) {
+	f := u.fight
 	if f.class == nil {
 		return
 	}
@@ -225,7 +225,7 @@ func (cm *Combat) regen(p *Player, dt float64, now time.Time) {
 		for _, r := range f.class.Resources {
 			out[r.Key], most[r.Key] = shownResource(r, f.resources[r.Key]), math.Round(f.pool(r).Max)
 		}
-		p.send(encode(resources{"resources", out, most}))
+		u.send(encode(resources{"resources", out, most}))
 		f.sentAt, f.resChanged = now, false
 	}
 }

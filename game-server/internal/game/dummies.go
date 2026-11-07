@@ -50,7 +50,7 @@ func (cm *Combat) spar(u *unit, now time.Time) {
 		return
 	}
 	var d *dummy
-	for _, each := range cm.state.dummies {
+	for _, each := range cm.state.dummyList() {
 		if each.state.Continent == u.char.Continent && distance(u.char.At, each.state.At) <= combat.MeleeFt && (d == nil || distance(u.char.At, each.state.At) < distance(u.char.At, d.state.At)) {
 			d = each
 		}

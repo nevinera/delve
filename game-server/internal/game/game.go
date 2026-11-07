@@ -65,8 +65,6 @@ func NewHub(w WorldLoader, c Characters) *Hub {
 
 // Layer is one copy of a world's open land and the characters in it.
 type Layer struct {
-	zones      []*zone // areas on the ground, oldest first
-	zoneCount  int64
 	hub        *Hub
 	key        string
 	worldID    int64
@@ -310,9 +308,9 @@ func (l *Layer) join(p *Player) {
 		p.send(encode(l.restPointsOn(p)))
 	}
 	now := l.hub.now()
-	for _, z := range l.zones {
+	for _, z := range l.combat.zones {
 		if _, continent, ok := z.center(); ok && continent == p.state.Continent {
-			p.send(encode(l.areaMessage(z, now)))
+			p.send(encode(areaMessageOf(z, now)))
 		}
 	}
 	if p.fight.class != nil {
@@ -383,7 +381,7 @@ func (p *Player) Handle(raw []byte) (err error) {
 	}
 	switch m.Type {
 	case "use":
-		p.layer.combat.use(&p.fight.unit, m)
+		p.layer.use(p, m)
 		return nil
 	case "command":
 		p.layer.command(p, m.Line)
@@ -395,7 +393,7 @@ func (p *Player) Handle(raw []byte) (err error) {
 		p.layer.chooseBuild(p, combat.Build{Specialization: m.Specialization, Talents: m.Talents})
 		return nil
 	case "attack":
-		p.layer.combat.attack(&p.fight.unit, m)
+		p.layer.attack(p, m)
 		return nil
 	case "sees":
 		p.layer.answerSees(p, m.Target)

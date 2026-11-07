@@ -103,13 +103,95 @@ func (u *unit) send(b []byte) {
 	}
 }
 
+// use asks combat to use the ability a player asks for, under the layer's lock.
+func (l *Layer) use(p *Player, m incoming) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.combat.use(&p.fight.unit, m)
+}
+
+// attack asks combat to start or stop a player's auto-attack, under the layer's lock.
+func (l *Layer) attack(p *Player, m incoming) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.combat.attack(&p.fight.unit, m)
+}
+
+// present says whether a unit is a player on the layer.
+func (l *Layer) present(u *unit) bool {
+	return l.playerOf(u) != nil
+}
+
+// playerUnit is a unit if it's a player on the layer, or else nil.
+func (l *Layer) playerUnit(u *unit) *unit {
+	if !l.present(u) {
+		return nil
+	}
+	return u
+}
+
+// playerUnits goes over the units of the players on the layer.
+func (l *Layer) playerUnits() iter.Seq[*unit] {
+	return func(yield func(*unit) bool) {
+		for _, o := range l.players {
+			if !yield(&o.fight.unit) {
+				return
+			}
+		}
+	}
+}
+
+// dummyList is the layer's training dummies.
+func (l *Layer) dummyList() []*dummy { return l.dummies }
+
+// acted calls off a player's logging off, since it did something: `why`.
+func (l *Layer) acted(u *unit, why string) { l.stopLoggingOff(u.player, why) }
+
+// sendHome takes a player to its home rest point.
+func (l *Layer) sendHome(u *unit) { l.goHome(u.player) }
+
+// motionOf is how a player's been moving, as its reports are checked, or nil for a dummy.
+func (l *Layer) motionOf(u *unit) *motion {
+	if u.player == nil {
+		return nil
+	}
+	return &u.player.motion
+}
+
+// combatState is what combat works on: the units and where they are, the ground, and the update
+// methods that change what clients see and tell them.
+type combatState interface {
+	unit(id int64, continent string) *unit
+	units() iter.Seq[*unit]
+	playerUnits() iter.Seq[*unit]
+	dummyList() []*dummy
+	dummy(id int64, continent string) *dummy
+	caster(id int64) *unit
+	present(u *unit) bool
+	playerUnit(u *unit) *unit
+	ground(continent string) Ground
+	setHealth(u *unit, n float64)
+	resizeHealth(u *unit, n, most float64)
+	addStatus(on *unit, key statusKey, held *activeStatus, now time.Time)
+	removeStatus(on *unit, key statusKey) *activeStatus
+	relocate(u *unit, continent string, at [3]float64, own, seen []byte)
+	showHit(near int64, on *unit, h hit)
+	tellOf(id int64, b []byte)
+	tellContinent(continent string, b []byte)
+	acted(u *unit, why string)
+	sendHome(u *unit)
+	motionOf(u *unit) *motion
+}
+
 // Combat works out what abilities, hits, statuses and areas do, on a world copy's state. It holds
 // no locks, and changes the state only through its update methods, which tell whoever should hear.
 type Combat struct {
-	state    *Layer
-	now      func() time.Time
-	roll     func() float64
-	landings []*landing
-	firing   int // how many triggers are setting each other off right now
-	lastTick time.Time
+	state     combatState
+	now       func() time.Time
+	roll      func() float64
+	zones     []*zone // areas on the ground, oldest first
+	zoneCount int64
+	landings  []*landing
+	firing    int // how many triggers are setting each other off right now
+	lastTick  time.Time
 }

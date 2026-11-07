@@ -80,8 +80,8 @@ func (cm *Combat) placeArea(u *unit, c *casting, e *combat.Effect, now time.Time
 }
 
 func (cm *Combat) nextZone() int64 {
-	cm.state.zoneCount++
-	return cm.state.zoneCount
+	cm.zoneCount++
+	return cm.zoneCount
 }
 
 func (cm *Combat) zoneOf(u *unit, a *combat.Ability, affects string, radius float64, most int, status string, every float64, effects []combat.Effect, onEnter *combat.Effect) *zone {
@@ -118,7 +118,7 @@ func (cm *Combat) unitAt(id int64, was [3]float64, continent string) ([3]float64
 // limitZones ends a player's oldest zones of a kind, until `keep` are left.
 func (cm *Combat) limitZones(u *unit, kind string, keep int) {
 	var mine []*zone
-	for _, z := range cm.state.zones {
+	for _, z := range cm.zones {
 		if z.from == u && z.kind == kind {
 			mine = append(mine, z)
 		}
@@ -131,8 +131,8 @@ func (cm *Combat) limitZones(u *unit, kind string, keep int) {
 // endZone stops a zone, and takes off what it was keeping on those inside.
 // addZone puts an area on the ground, and shows it to those on its continent.
 func (cm *Combat) addZone(z *zone, continent string, now time.Time) {
-	cm.state.zones = append(cm.state.zones, z)
-	cm.state.tellContinent(continent, encode(cm.state.areaMessage(z, now)))
+	cm.zones = append(cm.zones, z)
+	cm.state.tellContinent(continent, encode(areaMessageOf(z, now)))
 }
 
 // endZone takes a zone away, letting go of those inside it, and takes its area off the ground.
@@ -140,14 +140,14 @@ func (cm *Combat) endZone(z *zone) {
 	for id := range z.inside {
 		cm.leaveZone(z, id)
 	}
-	if i := slices.Index(cm.state.zones, z); i >= 0 {
-		cm.state.zones = slices.Delete(cm.state.zones, i, i+1)
+	if i := slices.Index(cm.zones, z); i >= 0 {
+		cm.zones = slices.Delete(cm.zones, i, i+1)
 	}
 	if z.id != 0 {
 		if _, continent, ok := z.center(); ok {
 			cm.state.tellContinent(continent, encode(areaGone{"areaGone", z.id}))
 		} else {
-			for _, o := range cm.state.players {
+			for o := range cm.state.playerUnits() {
 				o.send(encode(areaGone{"areaGone", z.id}))
 			}
 		}
@@ -165,8 +165,8 @@ func (cm *Combat) leaveZone(z *zone, id int64) {
 
 // sweepZones keeps areas and auras up to date.
 func (cm *Combat) sweepZones(now time.Time) {
-	for _, z := range slices.Clone(cm.state.zones) {
-		if cm.state.playerOf(z.from) == nil || !now.Before(z.until) {
+	for _, z := range slices.Clone(cm.zones) {
+		if !cm.state.present(z.from) || !now.Before(z.until) {
 			cm.endZone(z)
 			continue
 		}
@@ -263,7 +263,7 @@ func (cm *Combat) touchZone(z *zone, now time.Time) {
 
 // olderZoneHas says whether an older copy of a zone is already working on a unit.
 func (cm *Combat) olderZoneHas(z *zone, id int64) bool {
-	for _, other := range cm.state.zones {
+	for _, other := range cm.zones {
 		if other == z {
 			return false
 		}
@@ -280,7 +280,7 @@ func (cm *Combat) zoneLands(z *zone, c *casting, e *combat.Effect, on *unit, cou
 		return
 	}
 	runner := z.from
-	if cm.state.playerOf(on) != nil && e.Type == "resource" {
+	if cm.state.present(on) && e.Type == "resource" {
 		runner = on
 	}
 	cm.land(runner, c, e, on, count, now)
@@ -354,7 +354,7 @@ func (cm *Combat) inArea(a areaOf) []*unit {
 		return gap, cm.sees(a.continent, a.center, at)
 	}
 	if a.affects == "enemies" {
-		for _, d := range cm.state.dummies {
+		for _, d := range cm.state.dummyList() {
 			if d.state.Continent != a.continent {
 				continue
 			}
@@ -363,12 +363,12 @@ func (cm *Combat) inArea(a areaOf) []*unit {
 			}
 		}
 	} else if a.affects == "allies" {
-		for _, o := range cm.state.players {
-			if o.state.Continent != a.continent {
+		for o := range cm.state.playerUnits() {
+			if o.char.Continent != a.continent {
 				continue
 			}
-			if gap, ok := inside(o.state.At); ok && a.counts(&o.fight.unit) {
-				found = append(found, reach{&o.fight.unit, gap})
+			if gap, ok := inside(o.char.At); ok && a.counts(o) {
+				found = append(found, reach{o, gap})
 			}
 		}
 	}
@@ -416,7 +416,8 @@ func (l *Layer) tellContinent(continent string, b []byte) {
 	}
 }
 
-func (l *Layer) areaMessage(z *zone, now time.Time) areaMessage {
+// areaMessageOf is an area as those on its continent see it.
+func areaMessageOf(z *zone, now time.Time) areaMessage {
 	at, _, _ := z.center()
 	return areaMessage{"area", z.id, z.from.ID, z.ability.ID, z.affects, at, z.radius, z.line, z.width, z.dir, z.until.Sub(now).Seconds(), z.follows}
 }

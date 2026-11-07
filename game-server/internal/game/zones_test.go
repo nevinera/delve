@@ -45,7 +45,7 @@ func TestAreaTicksThenEnds(t *testing.T) {
 	if got := d.damage - was; got > 15 {
 		t.Fatalf("dealt %g, more than its 3 ticks", got)
 	}
-	if len(p.layer.zones) != 0 {
+	if len(p.layer.combat.zones) != 0 {
 		t.Fatal("it stayed")
 	}
 	if got := heard(p, "areaGone"); len(got) != 1 {
@@ -98,7 +98,7 @@ func TestAreaLimitEndsTheOldest(t *testing.T) {
 		use(t, p, "lay")
 		pass(h, c, 0.05)
 	}
-	if got := len(p.layer.zones); got != 2 {
+	if got := len(p.layer.combat.zones); got != 2 {
 		t.Fatalf("%d out", got)
 	}
 }
@@ -151,7 +151,7 @@ func TestLeavingEndsYourAreas(t *testing.T) {
 	delete(layer.players, p.ID())
 	layer.mu.Unlock()
 	pass(h, c, 0.1)
-	if len(layer.zones) != 0 {
+	if len(layer.combat.zones) != 0 {
 		t.Fatal("it stayed")
 	}
 }

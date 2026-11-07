@@ -222,18 +222,18 @@ func (cm *Combat) tick(now time.Time) {
 		dt = now.Sub(cm.lastTick).Seconds()
 	}
 	cm.lastTick = now
-	for _, p := range cm.state.players {
-		f := &p.fight
+	for u := range cm.state.playerUnits() {
+		f := u.fight
 		if c := f.cast; c != nil {
 			if !c.released && !now.Before(c.release) {
-				cm.release(&p.fight.unit, c, now)
+				cm.release(u, c, now)
 			} else if c.released && !now.Before(c.ends) {
 				f.cast = nil
 			}
 		}
-		cm.swing(&p.fight.unit, now)
-		cm.spar(&p.fight.unit, now)
-		cm.regen(p, dt, now)
+		cm.swing(u, now)
+		cm.spar(u, now)
+		cm.regen(u, dt, now)
 	}
 	// Landings can add landings, so go by index.
 	var later []*landing
@@ -249,7 +249,7 @@ func (cm *Combat) tick(now time.Time) {
 		a.run(now)
 	}
 	cm.landings = later
-	for _, d := range cm.state.dummies {
+	for _, d := range cm.state.dummyList() {
 		if !d.lastHit.IsZero() && now.Sub(d.lastHit) >= dummyResetIdle {
 			d.firstHit, d.lastHit, d.damage = time.Time{}, time.Time{}, 0
 		}

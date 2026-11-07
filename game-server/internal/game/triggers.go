@@ -201,7 +201,7 @@ func (cm *Combat) runTrigger(w watcher, ev event, now time.Time) {
 			continue
 		}
 		runner := caster
-		if cm.state.playerOf(on) != nil && effect.Type == "resource" {
+		if cm.state.present(on) && effect.Type == "resource" {
 			runner = on // what it gives goes to the one it lands on
 		}
 		caster.debugLine("%s fires on %s", w.held.def.Name, ev.on)

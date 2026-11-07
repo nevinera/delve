@@ -199,12 +199,12 @@ func (cm *Combat) tickOf(u *unit, holder *unit, id string, held *activeStatus, e
 			h.Amount = math.Round(n)
 			defer cm.healedBy(u, on, n, over, ctx, now)
 		case "resource":
-			o := cm.state.playerOf(on)
+			o := cm.state.playerUnit(on)
 			if o == nil {
 				continue
 			}
 			n, _ := combat.Roll(amount, cm.statsOf(u, nil, now), false, cm.roll)
-			given, ok := cm.addResource(&o.fight, e.Resource, n)
+			given, ok := cm.addResource(o.fight, e.Resource, n)
 			if !ok {
 				continue
 			}
@@ -272,7 +272,7 @@ func shownOf(key statusKey, held *activeStatus, now time.Time) shownStatus {
 // refit brings what's kept from a unit's stats up to date: its most health, keeping the share it
 // has, and a player's speed.
 func (cm *Combat) refit(v *unit, now time.Time) {
-	o := cm.state.playerOf(v)
+	o := cm.state.playerUnit(v)
 	if look := lookOn(v); !bytes.Equal(look, v.lookShown) {
 		v.lookShown = look
 		cm.state.tellOf(v.ID, encode(lookMessage{"look", v.ID, look}))
@@ -281,7 +281,7 @@ func (cm *Combat) refit(v *unit, now time.Time) {
 		v.absorbShown = left
 		cm.state.tellOf(v.ID, encode(absorbMessage{"absorb", v.ID, left}))
 	}
-	if len(v.Statuses) == 0 && v.MaxHealth == v.base.MaxHealth && !v.untargetable && (o == nil || (o.motion.settled() && len(o.fight.controls) == 0)) {
+	if len(v.Statuses) == 0 && v.MaxHealth == v.base.MaxHealth && !v.untargetable && (o == nil || (cm.state.motionOf(o).settled() && len(o.fight.controls) == 0)) {
 		return
 	}
 	if out := cm.untargetable(v, now); out != v.untargetable {
@@ -306,7 +306,7 @@ func (cm *Combat) refit(v *unit, now time.Time) {
 	if combat.HoldsStill(o.fight.controls) {
 		speed = 0
 	}
-	if o.motion.setSpeed(speed/100, now) {
+	if cm.state.motionOf(o).setSpeed(speed/100, now) {
 		o.send(encode(speedMessage{"speed", speed}))
 	}
 }
