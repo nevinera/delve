@@ -194,10 +194,10 @@ func (l *Layer) runTrigger(w watcher, ev event, now time.Time) {
 			targets = []*unit{on}
 		}
 	default:
-		targets = l.reached(caster, c, &effect)
+		targets = l.reached(&caster.fight.unit, c, &effect)
 	}
 	for _, on := range targets {
-		if _, ok := combat.All(effect.When, l.facts(caster, on.ID, now)); !ok {
+		if _, ok := combat.All(effect.When, l.facts(&caster.fight.unit, on.ID, now)); !ok {
 			continue
 		}
 		runner := caster
@@ -205,7 +205,7 @@ func (l *Layer) runTrigger(w watcher, ev event, now time.Time) {
 			runner = o // what it gives goes to the one it lands on
 		}
 		caster.debugLine("%s fires on %s", w.held.def.Name, ev.on)
-		l.land(runner, c, &effect, on, len(targets), now)
+		l.land(&runner.fight.unit, c, &effect, on, len(targets), now)
 	}
 	if w.on.Statuses[w.key] != w.held {
 		return
@@ -224,19 +224,19 @@ func (l *Layer) runTrigger(w watcher, ev event, now time.Time) {
 }
 
 // damaged says a player did damage, for what's watching. `n` has already come off.
-func (l *Layer) damaged(p *Player, on *unit, n float64, crit bool, ctx combat.HitContext, now time.Time) {
-	mine := &p.fight.unit
-	l.keepShare(mine, p.ID(), "dealDamage", n, &ctx)
+func (l *Layer) damaged(u *unit, on *unit, n float64, crit bool, ctx combat.HitContext, now time.Time) {
+	mine := u
+	l.keepShare(mine, u.ID, "dealDamage", n, &ctx)
 	outcome := "nonCrit"
 	if crit {
 		outcome = "crit"
 	}
 	l.fire(event{on: "dealDamage", who: mine, other: on.ID, ctx: &ctx, amount: n}, now)
 	l.fire(event{on: outcome, who: mine, other: on.ID, ctx: &ctx, amount: n}, now)
-	l.fire(event{on: "takeDamage", who: on, other: p.ID(), ctx: &ctx, amount: n}, now)
+	l.fire(event{on: "takeDamage", who: on, other: u.ID, ctx: &ctx, amount: n}, now)
 	if on.MaxHealth > 0 {
 		before, after := 100*min(on.Health+n, on.MaxHealth)/on.MaxHealth, 100*on.Health/on.MaxHealth
-		l.fire(event{on: "healthBelow", who: on, other: p.ID(), ctx: &ctx, amount: n, below: before, above: after}, now)
+		l.fire(event{on: "healthBelow", who: on, other: u.ID, ctx: &ctx, amount: n, below: before, above: after}, now)
 		if on.ID > 0 {
 			l.fire(event{on: "allyHealthBelow", who: on, other: on.ID, ctx: &ctx, amount: n, below: before, above: after}, now)
 		}
@@ -244,12 +244,12 @@ func (l *Layer) damaged(p *Player, on *unit, n float64, crit bool, ctx combat.Hi
 }
 
 // healedBy says a player healed a unit, for what's watching. `over` is the part past full health.
-func (l *Layer) healedBy(p *Player, on *unit, n, over float64, ctx combat.HitContext, now time.Time) {
-	l.keepShare(&p.fight.unit, p.ID(), "heal", n, &ctx)
-	l.fire(event{on: "heal", who: &p.fight.unit, other: on.ID, ctx: &ctx, amount: n}, now)
-	l.fire(event{on: "healed", who: on, other: p.ID(), ctx: &ctx, amount: n}, now)
+func (l *Layer) healedBy(u *unit, on *unit, n, over float64, ctx combat.HitContext, now time.Time) {
+	l.keepShare(u, u.ID, "heal", n, &ctx)
+	l.fire(event{on: "heal", who: u, other: on.ID, ctx: &ctx, amount: n}, now)
+	l.fire(event{on: "healed", who: on, other: u.ID, ctx: &ctx, amount: n}, now)
 	if over > 0 {
-		l.fire(event{on: "overheal", who: &p.fight.unit, other: on.ID, ctx: &ctx, amount: over}, now)
+		l.fire(event{on: "overheal", who: u, other: on.ID, ctx: &ctx, amount: over}, now)
 	}
 }
 

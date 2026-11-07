@@ -25,7 +25,7 @@ func classWithID(classes []*combat.Class, id string) *combat.Class {
 // enterFight gives a player its class's numbers. With no class, it has plain health and no abilities.
 func (p *Player) enterFight(class *combat.Class, level int, build combat.Build) {
 	f := &p.fight
-	f.unit = unit{ID: p.state.ID, char: &p.state, player: p, Statuses: map[statusKey]*activeStatus{}}
+	f.unit = unit{ID: p.state.ID, char: &p.state, player: p, fight: f, Statuses: map[statusKey]*activeStatus{}}
 	f.resources, f.pools, f.cooldowns, f.lockouts, f.since = map[string]float64{}, map[string]combat.Pool{}, map[string][]time.Time{}, map[string]time.Time{}, map[string]time.Time{}
 	if class == nil {
 		f.unit.base = combat.Plain(100)

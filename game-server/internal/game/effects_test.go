@@ -350,7 +350,7 @@ func TestStunStopsEverythingUntilItEnds(t *testing.T) {
 	pass(h, c, 0.05)
 	refusal(t, p, "you're stunned")
 	found := false
-	for _, s := range p.layer.fighterState(p, h.now()) {
+	for _, s := range p.layer.fighterState(&p.fight.unit, h.now()) {
 		found = found || s == "stunned"
 	}
 	if !found {
@@ -406,7 +406,7 @@ func TestDamageBreaksFear(t *testing.T) {
 	if held(p, "held") == nil {
 		t.Fatal("it never landed")
 	}
-	p.layer.harm(p, &p.layer.dummies[0].unit, 1, &hit{}, h.now())
+	p.layer.harm(&p.fight.unit, &p.layer.dummies[0].unit, 1, &hit{}, h.now())
 	if held(p, "held") != nil {
 		t.Fatal("damage didn't break it")
 	}
@@ -825,7 +825,7 @@ func TestByMissingHealth(t *testing.T) {
 func TestShareOfWhatTheFightKept(t *testing.T) {
 	h, p, c, d := hitting(t, combat.Effect{Amount: combat.Amount{ShareOf: &combat.ShareOf{Of: "recentDamage", Share: 0.5, Seconds: 5}}})
 	p.fight.unit.Health = p.fight.unit.MaxHealth
-	p.layer.harm(p, &p.fight.unit, 40, &hit{}, h.now())
+	p.layer.harm(&p.fight.unit, &p.fight.unit, 40, &hit{}, h.now())
 	got := dealt(t, h, p, c, d)
 	if got < 15 || got > 25 {
 		t.Fatalf("dealt %g for half of 40", got)

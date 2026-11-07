@@ -13,21 +13,21 @@ import (
 // Using abilities: checking a use, paying for it, casts and channels, and what lands when.
 
 // use starts the ability a player asks for, or says why it can't.
-func (l *Layer) use(p *Player, m incoming) {
+func (l *Layer) use(u *unit, m incoming) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if l.players[p.ID()] != p {
+	if l.playerOf(u) == nil {
 		return
 	}
 	now := l.hub.now()
-	ability, target, why := l.check(p, m, now)
+	ability, target, why := l.check(u, m, now)
 	if why != "" {
-		p.debugLine("%s: refused: %s", m.Ability, why)
-		p.send(encode(refused{"refused", m.Ability, why}))
+		u.debugLine("%s: refused: %s", m.Ability, why)
+		u.send(encode(refused{"refused", m.Ability, why}))
 		return
 	}
-	f := &p.fight
-	l.stopLoggingOff(p, "you used an ability")
+	f := u.fight
+	l.stopLoggingOff(u.player, "you used an ability")
 	l.breakStatuses(&f.unit, "action", func(s *combat.Status) bool { return s.KeptBy.Keeps(ability) })
 	gcd := combat.GCDSeconds
 	if ability.GCD != nil {
@@ -36,9 +36,9 @@ func (l *Layer) use(p *Player, m incoming) {
 	if gcd > 0 {
 		f.gcdUntil = now.Add(seconds(gcd))
 	}
-	l.tell(p, encode(used{Type: "used", ID: p.ID(), Class: f.class.ID, Ability: ability.ID, Target: target, Spot: m.Spot, GCD: gcd, CastTime: ability.CastTime, Channel: ability.Channel, Cost: ability.Cost, School: ability.School, Schools: ability.Schools, Animation: ability.Animation}))
+	l.tellOf(u.ID, encode(used{Type: "used", ID: u.ID, Class: f.class.ID, Ability: ability.ID, Target: target, Spot: m.Spot, GCD: gcd, CastTime: ability.CastTime, Channel: ability.Channel, Cost: ability.Cost, School: ability.School, Schools: ability.Schools, Animation: ability.Animation}))
 	if ability.Range.Melee && ability.Target == "enemy" {
-		l.startAttacking(p, target)
+		l.startAttacking(u, target)
 	}
 	c := &casting{ability: ability, target: target, spot: m.Spot, release: now.Add(seconds(ability.CastTime)), channel: ability.Channel != nil}
 	c.ends = c.release
@@ -49,12 +49,12 @@ func (l *Layer) use(p *Player, m incoming) {
 		f.cast = c
 		return
 	}
-	l.release(p, c, now)
+	l.release(u, c, now)
 }
 
 // inForce is the ability a use of this one comes to: a `modify`'s `becomes` can turn it into another.
-func (l *Layer) inForce(p *Player, a *combat.Ability, now time.Time) *combat.Ability {
-	f := &p.fight
+func (l *Layer) inForce(u *unit, a *combat.Ability, now time.Time) *combat.Ability {
+	f := u.fight
 	for _, m := range l.modifiersOf(&f.unit, now) {
 		if e := m.Effect; e.Becomes != "" && e.Picks(a) && l.holds(&f.unit, e, nil, now) {
 			if to := f.class.Ability(e.Becomes); to != nil {
@@ -66,17 +66,17 @@ func (l *Layer) inForce(p *Player, a *combat.Ability, now time.Time) *combat.Abi
 }
 
 // castNow does a `castAbility`: another of the class's abilities, at once.
-func (l *Layer) castNow(p *Player, c *casting, e *combat.Effect, on *unit, now time.Time) {
-	f := &p.fight
+func (l *Layer) castNow(u *unit, c *casting, e *combat.Effect, on *unit, now time.Time) {
+	f := u.fight
 	if c.depth >= maxCastDepth || f.level < e.Level {
 		return
 	}
 	found := f.class.Ability(e.Ability)
 	if found == nil {
-		log.Printf("character %d: ability %s casts one its class hasn't got: %s", p.ID(), c.ability.ID, e.Ability)
+		log.Printf("character %d: ability %s casts one its class hasn't got: %s", u.ID, c.ability.ID, e.Ability)
 		return
 	}
-	a := *l.resolved(p, found, now)
+	a := *l.resolved(u, found, now)
 	if e.Strength != 0 && e.Strength != 1 {
 		a.Effects = slices.Clone(a.Effects)
 		for i := range a.Effects {
@@ -86,13 +86,13 @@ func (l *Layer) castNow(p *Player, c *casting, e *combat.Effect, on *unit, now t
 	if e.Free {
 		a.Cost = nil
 	}
-	if why := l.affordable(p, &a, on.ID, now); why != "" {
-		p.debugLine("%s: %s: %s", c.ability.Name, a.Name, why)
+	if why := l.affordable(u, &a, on.ID, now); why != "" {
+		u.debugLine("%s: %s: %s", c.ability.Name, a.Name, why)
 		return
 	}
 	inner := &casting{ability: &a, target: on.ID, spot: c.spot, depth: c.depth + 1}
 	for _, cost := range a.Cost {
-		if l.costCounts(p, cost, on.ID, now) {
+		if l.costCounts(u, cost, on.ID, now) {
 			spent := spendFor(f, &a, cost)
 			f.resources[cost.Resource] -= spent
 			f.resChanged = true
@@ -100,8 +100,8 @@ func (l *Layer) castNow(p *Player, c *casting, e *combat.Effect, on *unit, now t
 		}
 	}
 	inner.spent = countedSpent(f, inner)
-	l.tell(p, encode(used{Type: "used", ID: p.ID(), Class: f.class.ID, Ability: a.ID, Target: on.ID, Spot: c.spot, School: a.School, Schools: a.Schools, Animation: a.Animation}))
-	l.landWhich(p, inner, now, func(*combat.Effect) bool { return true })
+	l.tellOf(u.ID, encode(used{Type: "used", ID: u.ID, Class: f.class.ID, Ability: a.ID, Target: on.ID, Spot: c.spot, School: a.School, Schools: a.Schools, Animation: a.Animation}))
+	l.landWhich(u, inner, now, func(*combat.Effect) bool { return true })
 }
 
 // modifiersOf is the `modify` effects that count for a unit right now.
@@ -134,15 +134,15 @@ func (l *Layer) modifiersOf(v *unit, now time.Time) []combat.Mod {
 }
 
 // resolved is an ability as this player would use it now.
-func (l *Layer) resolved(p *Player, a *combat.Ability, now time.Time) *combat.Ability {
-	f := &p.fight.unit
+func (l *Layer) resolved(u *unit, a *combat.Ability, now time.Time) *combat.Ability {
+	f := u
 	mods := l.modifiersOf(f, now)
 	sheet := l.statsOf(f, nil, now)
 	for i := range mods {
 		mods[i].Mastery = sheet.MasteryPercent()
 	}
 	if len(mods) > 0 {
-		a = p.fight.class.Resolve(a, mods, sheet.MasteryPercent(), l.hub.roll)
+		a = u.fight.class.Resolve(a, mods, sheet.MasteryPercent(), l.hub.roll)
 	}
 	if sheet.Haste() == 0 {
 		return a
@@ -169,8 +169,8 @@ func (l *Layer) resolved(p *Player, a *combat.Ability, now time.Time) *combat.Ab
 }
 
 // check says whether a player can use an ability now: the ability and its target, or why not.
-func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, int64, string) {
-	f := &p.fight
+func (l *Layer) check(u *unit, m incoming, now time.Time) (*combat.Ability, int64, string) {
+	f := u.fight
 	if f.class == nil {
 		return nil, 0, "you have no class"
 	}
@@ -178,7 +178,7 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 	if ability == nil || !f.class.Knows(ability, f.level, f.build) {
 		return nil, 0, "you don't know that"
 	}
-	ability = l.resolved(p, l.inForce(p, ability, now), now)
+	ability = l.resolved(u, l.inForce(u, ability, now), now)
 	if f.cast != nil && !ability.WhileCasting {
 		return nil, 0, "you're busy"
 	}
@@ -198,18 +198,18 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 	if lockedOut(f, ability, now) {
 		return nil, 0, "that school is locked out"
 	}
-	if why := l.affordable(p, ability, m.Target, now); why != "" {
+	if why := l.affordable(u, ability, m.Target, now); why != "" {
 		return nil, 0, why
 	}
 	waits := ability.CastTime > 0 || ability.Channel != nil
-	if waits && !ability.CastWhileMoving && movingNow(p.state.Move) {
+	if waits && !ability.CastWhileMoving && movingNow(u.char.Move) {
 		return nil, 0, "you can't do that while moving"
 	}
 	var target int64
 	var at [3]float64
 	switch ability.Target {
 	case "enemy":
-		d := l.dummy(m.Target, p.state.Continent)
+		d := l.dummy(m.Target, u.char.Continent)
 		if d == nil {
 			return nil, 0, "you need an enemy targeted"
 		}
@@ -218,33 +218,33 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 		}
 		target, at = d.ID, d.state.At
 	case "ally", "any":
-		if d := l.dummy(m.Target, p.state.Continent); d != nil && ability.Target == "any" {
+		if d := l.dummy(m.Target, u.char.Continent); d != nil && ability.Target == "any" {
 			if l.untargetable(&d.unit, now) {
 				return nil, 0, "you can't target that"
 			}
 			target, at = d.ID, d.state.At
 			break
 		}
-		o := l.players[m.Target]
-		if o == nil || o.state.Continent != p.state.Continent {
-			o = p // with no one else targeted, it goes on you
+		o := l.unit(m.Target, u.char.Continent)
+		if o == nil || o.player == nil {
+			o = u // with no one else targeted, it goes on you
 		}
-		if o != p && l.untargetable(&o.fight.unit, now) {
+		if o != u && l.untargetable(o, now) {
 			return nil, 0, "you can't target that"
 		}
-		target, at = o.ID(), o.state.At
+		target, at = o.ID, o.char.At
 	case "ground":
 		if m.Spot == nil || !finite(*m.Spot, 0, 0) {
 			return nil, 0, "you need to pick a spot"
 		}
 		at = *m.Spot
 	default:
-		if why := l.unmet(p, ability, 0, now); why != "" {
+		if why := l.unmet(u, ability, 0, now); why != "" {
 			return nil, 0, why
 		}
 		return ability, 0, ""
 	}
-	gap := distance(p.state.At, at)
+	gap := distance(u.char.At, at)
 	reach := ability.Range.Feet
 	if ability.Range.Melee {
 		reach = combat.MeleeFt
@@ -252,13 +252,13 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 	if (reach > 0 && gap > reach) || gap < ability.MinRange {
 		return nil, 0, "out of range"
 	}
-	if needsFacing(ability) && !facing(p.state.At, p.state.Yaw, at) {
+	if needsFacing(ability) && !facing(u.char.At, u.char.Yaw, at) {
 		return nil, 0, "you're not facing it"
 	}
-	if target != p.ID() && !l.sees(p.state.Continent, p.state.At, at) {
+	if target != u.ID && !l.sees(u.char.Continent, u.char.At, at) {
 		return nil, 0, cantSee
 	}
-	if why := l.unmet(p, ability, target, now); why != "" {
+	if why := l.unmet(u, ability, target, now); why != "" {
 		return nil, 0, why
 	}
 	return ability, target, ""
@@ -272,10 +272,10 @@ func needsFacing(a *combat.Ability) bool {
 }
 
 // affordable says what the ability needs that the fighter hasn't got.
-func (l *Layer) affordable(p *Player, a *combat.Ability, target int64, now time.Time) string {
-	f := &p.fight
+func (l *Layer) affordable(u *unit, a *combat.Ability, target int64, now time.Time) string {
+	f := u.fight
 	for _, cost := range a.Cost {
-		if l.costCounts(p, cost, target, now) && f.resources[cost.Resource] < costOf(f, cost) {
+		if l.costCounts(u, cost, target, now) && f.resources[cost.Resource] < costOf(f, cost) {
 			return "not enough " + cost.Resource
 		}
 	}
@@ -283,11 +283,11 @@ func (l *Layer) affordable(p *Player, a *combat.Ability, target int64, now time.
 }
 
 // costCounts says whether a cost's conditions hold.
-func (l *Layer) costCounts(p *Player, cost combat.Cost, target int64, now time.Time) bool {
+func (l *Layer) costCounts(u *unit, cost combat.Cost, target int64, now time.Time) bool {
 	if len(cost.When) == 0 {
 		return true
 	}
-	_, ok := combat.All(cost.When, l.facts(p, target, now))
+	_, ok := combat.All(cost.When, l.facts(u, target, now))
 	return ok
 }
 
@@ -370,8 +370,8 @@ func (l *Layer) chanceHolds(c *casting, e *combat.Effect) bool {
 }
 
 // payForTick takes what a channel costs each tick, and says whether it could.
-func (l *Layer) payForTick(p *Player, c *casting, ticks int) bool {
-	f, a := &p.fight, c.ability
+func (l *Layer) payForTick(u *unit, c *casting, ticks int) bool {
+	f, a := u.fight, c.ability
 	type due struct {
 		resource string
 		amount   float64
@@ -387,7 +387,7 @@ func (l *Layer) payForTick(p *Player, c *casting, ticks int) bool {
 	}
 	for _, each := range owed {
 		if f.resources[each.resource] < each.amount {
-			p.send(encode(refused{"refused", a.ID, "not enough " + each.resource}))
+			u.send(encode(refused{"refused", a.ID, "not enough " + each.resource}))
 			return false
 		}
 	}
@@ -417,24 +417,24 @@ func castOf(a *combat.Ability) *combat.HitContext {
 
 // release lets go of a cast: it spends what the ability costs, starts its cooldown, and sets off
 // what lands.
-func (l *Layer) release(p *Player, c *casting, now time.Time) {
-	f := &p.fight
+func (l *Layer) release(u *unit, c *casting, now time.Time) {
+	f := u.fight
 	a := c.ability
 	c.released = true
-	why := l.affordable(p, a, c.target, now)
-	if why == "" && !c.channel && a.Target != "self" && !l.seesCast(p, c) {
+	why := l.affordable(u, a, c.target, now)
+	if why == "" && !c.channel && a.Target != "self" && !l.seesCast(u, c) {
 		why = cantSee
 	}
 	if why != "" {
 		if f.cast == c {
 			f.cast = nil
 		}
-		p.send(encode(refused{"refused", a.ID, why}))
-		l.tell(p, encode(stopped{"stopped", p.ID()}))
+		u.send(encode(refused{"refused", a.ID, why}))
+		l.tellOf(u.ID, encode(stopped{"stopped", u.ID}))
 		return
 	}
 	for _, cost := range a.Cost {
-		if !l.costCounts(p, cost, c.target, now) {
+		if !l.costCounts(u, cost, c.target, now) {
 			continue
 		}
 		spent := spendFor(f, a, cost)
@@ -444,7 +444,7 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 		f.resources[cost.Resource] -= spent
 		f.resChanged = true
 		countSpent(f, c, cost, spent)
-		p.debugLine("%s: spent %g %s", a.Name, spent, cost.Resource)
+		u.debugLine("%s: spent %g %s", a.Name, spent, cost.Resource)
 		l.fire(event{on: "spend", who: &f.unit, other: c.target, ctx: castOf(a), amount: spent, resource: cost.Resource}, now)
 	}
 	c.spent = countedSpent(f, c)
@@ -456,21 +456,21 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 			from = spent[len(spent)-1]
 		}
 		f.cooldowns[a.ID] = append(spent, from.Add(seconds(a.Cooldown)))
-		p.send(encode(cooldown{"cooldown", a.ID, readyIn(f, a, now)}))
+		u.send(encode(cooldown{"cooldown", a.ID, readyIn(f, a, now)}))
 	}
 	used := usedBy(f, a)
 	if c.channel {
-		l.spend(p, used, now)
+		l.spend(u, used, now)
 		f.cast = c
 		ticks := max(a.Channel.Ticks, 1)
 		for n := 1; n <= ticks; n++ {
 			at := now.Add(seconds(a.Channel.Duration * float64(n) / float64(ticks)))
 			l.after(at, c, func(now time.Time) {
-				if !l.payForTick(p, c, ticks) {
-					l.stopCast(p)
+				if !l.payForTick(u, c, ticks) {
+					l.stopCast(u)
 					return
 				}
-				l.landAll(p, c, now, false)
+				l.landAll(u, c, now, false)
 			})
 		}
 		l.after(now.Add(seconds(a.Channel.Duration)), c, func(now time.Time) {
@@ -482,7 +482,7 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 		f.cast = nil
 	}
 	if a.ID == combat.HomewardID {
-		l.goHome(p)
+		l.goHome(u.player)
 		return
 	}
 	strike := now
@@ -491,18 +491,18 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 	}
 	flight := strike
 	if a.Speed > 0 {
-		if at, ok := l.pointOf(c, p); ok {
-			flight = strike.Add(seconds(distance(p.state.At, at) / a.Speed))
+		if at, ok := l.pointOf(c, u); ok {
+			flight = strike.Add(seconds(distance(u.char.At, at) / a.Speed))
 		}
 	}
 	// What flies lands when it arrives; the rest as it's let go.
-	l.after(strike, nil, func(now time.Time) { l.landAll(p, c, now, true) })
+	l.after(strike, nil, func(now time.Time) { l.landAll(u, c, now, true) })
 	if flight != strike {
-		l.after(flight, nil, func(now time.Time) { l.landArriving(p, c, now) })
+		l.after(flight, nil, func(now time.Time) { l.landArriving(u, c, now) })
 	} else {
-		l.after(strike, nil, func(now time.Time) { l.landArriving(p, c, now) })
+		l.after(strike, nil, func(now time.Time) { l.landArriving(u, c, now) })
 	}
-	l.after(strike, nil, func(now time.Time) { l.spend(p, used, now) })
+	l.after(strike, nil, func(now time.Time) { l.spend(u, used, now) })
 }
 
 func (l *Layer) after(at time.Time, c *casting, run func(time.Time)) {
@@ -510,7 +510,7 @@ func (l *Layer) after(at time.Time, c *casting, run func(time.Time)) {
 }
 
 // pointOf is where an ability's going: its unit or its spot.
-func (l *Layer) pointOf(c *casting, p *Player) ([3]float64, bool) {
+func (l *Layer) pointOf(c *casting, u *unit) ([3]float64, bool) {
 	if c.spot != nil {
 		return *c.spot, true
 	}
@@ -526,18 +526,18 @@ func arrives(a *combat.Ability, e *combat.Effect) bool {
 }
 
 // landAll lands an ability's effects, other than those flying if leaveFlying says so.
-func (l *Layer) landAll(p *Player, c *casting, now time.Time, leaveFlying bool) {
-	l.landWhich(p, c, now, func(e *combat.Effect) bool { return !leaveFlying || !arrives(c.ability, e) })
+func (l *Layer) landAll(u *unit, c *casting, now time.Time, leaveFlying bool) {
+	l.landWhich(u, c, now, func(e *combat.Effect) bool { return !leaveFlying || !arrives(c.ability, e) })
 }
 
-func (l *Layer) landArriving(p *Player, c *casting, now time.Time) {
-	l.landWhich(p, c, now, func(e *combat.Effect) bool { return arrives(c.ability, e) })
+func (l *Layer) landArriving(u *unit, c *casting, now time.Time) {
+	l.landWhich(u, c, now, func(e *combat.Effect) bool { return arrives(c.ability, e) })
 }
 
 // landWhich lands the effects `which` picks. It reads all their conditions first, so one effect
 // can't change whether another lands: one button can start a status or end it.
-func (l *Layer) landWhich(p *Player, c *casting, now time.Time, which func(*combat.Effect) bool) {
-	if l.players[p.ID()] != p {
+func (l *Layer) landWhich(u *unit, c *casting, now time.Time, which func(*combat.Effect) bool) {
+	if l.playerOf(u) == nil {
 		return
 	}
 	type landingOn struct {
@@ -553,16 +553,16 @@ func (l *Layer) landWhich(p *Player, c *casting, now time.Time, which func(*comb
 		}
 		var reached []*unit
 		if e.Type != "area" {
-			reached = l.reached(p, c, e)
+			reached = l.reached(u, c, e)
 			if len(reached) == 0 {
-				p.debugLine("%s: %s reached no one", c.ability.Name, e.Type)
+				u.debugLine("%s: %s reached no one", c.ability.Name, e.Type)
 			}
 		}
 		if e.Type == "area" {
-			if failed, ok := combat.All(e.When, l.facts(p, c.target, now)); ok {
-				l.placeArea(p, c, e, now)
+			if failed, ok := combat.All(e.When, l.facts(u, c.target, now)); ok {
+				l.placeArea(u, c, e, now)
 			} else {
-				p.debugLine("%s: area skipped: %s", c.ability.Name, failed.Why(statusNames(p)))
+				u.debugLine("%s: area skipped: %s", c.ability.Name, failed.Why(statusNames(u)))
 			}
 			continue
 		}
@@ -571,8 +571,8 @@ func (l *Layer) landWhich(p *Player, c *casting, now time.Time, which func(*comb
 			if e.Affects == "enemies" || e.Affects == "allies" {
 				target = on.ID // an area's conditions ask about each one it reaches
 			}
-			if failed, ok := combat.All(e.When, l.factsInUse(p, c, target, len(reached), now)); !ok {
-				p.debugLine("%s: %s skipped: %s", c.ability.Name, e.Type, failed.Why(statusNames(p)))
+			if failed, ok := combat.All(e.When, l.factsInUse(u, c, target, len(reached), now)); !ok {
+				u.debugLine("%s: %s skipped: %s", c.ability.Name, e.Type, failed.Why(statusNames(u)))
 				continue
 			}
 			plan = append(plan, landingOn{e, on, len(reached)})
@@ -581,21 +581,21 @@ func (l *Layer) landWhich(p *Player, c *casting, now time.Time, which func(*comb
 	for _, each := range plan {
 		// How a hit went is only known once it's landed, so what asks about that waits till now.
 		if slices.ContainsFunc(each.effect.When, func(w combat.Condition) bool { return w.Outcome != "" }) {
-			if _, ok := combat.All(each.effect.When, l.factsInUse(p, c, each.on.ID, each.count, now)); !ok {
+			if _, ok := combat.All(each.effect.When, l.factsInUse(u, c, each.on.ID, each.count, now)); !ok {
 				continue
 			}
 		}
-		l.land(p, c, each.effect, each.on, each.count, now)
+		l.land(u, c, each.effect, each.on, each.count, now)
 	}
 }
 
 // unmet says why a player can't use an ability on a target, going by its `requires`.
-func (l *Layer) unmet(p *Player, a *combat.Ability, target int64, now time.Time) string {
+func (l *Layer) unmet(u *unit, a *combat.Ability, target int64, now time.Time) string {
 	if slices.Contains(a.Ignores, "requires") {
 		return ""
 	}
-	if failed, ok := combat.All(a.Requires, l.facts(p, target, now)); !ok {
-		return failed.Why(statusNames(p))
+	if failed, ok := combat.All(a.Requires, l.facts(u, target, now)); !ok {
+		return failed.Why(statusNames(u))
 	}
 	return ""
 }
@@ -612,57 +612,56 @@ func usedBy(f *fighter, a *combat.Ability) []usingUp {
 }
 
 // spend takes a use or stacks from statuses an ability used, unless they've been put on afresh since.
-func (l *Layer) spend(p *Player, used []usingUp, now time.Time) {
-	if l.players[p.ID()] != p {
+func (l *Layer) spend(u *unit, used []usingUp, now time.Time) {
+	if l.playerOf(u) == nil {
 		return
 	}
-	on := &p.fight.unit
-	for _, u := range used {
-		if on.Statuses[u.key] != u.held {
+	for _, up := range used {
+		if u.Statuses[up.key] != up.held {
 			continue
 		}
-		l.fire(statusEvent("statusConsumed", on, u.key, u.held), now)
-		if n := u.held.def.ConsumedBy.Stacks; n > 0 {
-			u.held.stacks -= n
-			if u.held.stacks > 0 {
-				l.statusChanged(on.ID, u.key, u.held, now)
+		l.fire(statusEvent("statusConsumed", u, up.key, up.held), now)
+		if n := up.held.def.ConsumedBy.Stacks; n > 0 {
+			up.held.stacks -= n
+			if up.held.stacks > 0 {
+				l.statusChanged(u.ID, up.key, up.held, now)
 				continue
 			}
-		} else if u.held.uses--; u.held.uses > 0 {
+		} else if up.held.uses--; up.held.uses > 0 {
 			continue
 		}
-		l.takeOff(on, u.key)
-		p.debugLine("%s is used up", u.held.def.Name)
+		l.takeOff(u, up.key)
+		u.debugLine("%s is used up", up.held.def.Name)
 	}
 }
 
 // reached is who an effect lands on.
-func (l *Layer) reached(p *Player, c *casting, e *combat.Effect) []*unit {
+func (l *Layer) reached(u *unit, c *casting, e *combat.Effect) []*unit {
 	switch e.Affects {
 	case "self":
-		return []*unit{&p.fight.unit}
+		return []*unit{u}
 	case "target":
 		if c.ability.Target != "enemy" && c.ability.Target != "ally" && c.ability.Target != "any" {
-			return []*unit{&p.fight.unit}
+			return []*unit{u}
 		}
 		if u := l.unit(c.target, ""); u != nil {
 			return []*unit{u}
 		}
 		return nil
 	}
-	center := p.state.At
+	center := u.char.At
 	if e.Around == "ground" && c.spot != nil {
 		center = *c.spot
 	} else if e.Around == "target" {
-		if at, ok := l.pointOf(c, p); ok {
+		if at, ok := l.pointOf(c, u); ok {
 			center = at
 		}
 	}
 	way := [2]float64{}
 	if e.Line {
-		way = lineWay(p, c, e, center)
+		way = lineWay(u, c, e, center)
 	}
-	a := areaOf{center: center, continent: p.state.Continent, yaw: p.state.Yaw, affects: e.Affects, radius: e.Radius, cone: e.Cone, line: e.Line, width: e.Width, dir: way, most: e.Max, prefers: e.Prefers, from: p.ID(), holding: e.Holding}
+	a := areaOf{center: center, continent: u.char.Continent, yaw: u.char.Yaw, affects: e.Affects, radius: e.Radius, cone: e.Cone, line: e.Line, width: e.Width, dir: way, most: e.Max, prefers: e.Prefers, from: u.ID, holding: e.Holding}
 	if e.Type != "move" {
 		a.height = e.Height
 	}
@@ -673,23 +672,23 @@ func (l *Layer) reached(p *Player, c *casting, e *combat.Effect) []*unit {
 }
 
 // stopCast ends what a player's casting.
-func (l *Layer) stopCast(p *Player) {
-	f := &p.fight
+func (l *Layer) stopCast(u *unit) {
+	f := u.fight
 	if f.cast == nil {
 		return
 	}
 	f.cast.stopped = true
 	f.cast = nil
-	l.tell(p, encode(stopped{"stopped", p.ID()}))
+	l.tellOf(u.ID, encode(stopped{"stopped", u.ID}))
 }
 
 // interruptMoving ends a cast its caster has moved during, and the statuses that break on moving.
-func (l *Layer) interruptMoving(p *Player) {
-	if c := p.fight.cast; c != nil && !c.ability.CastWhileMoving && movingNow(p.state.Move) {
-		l.stopCast(p)
+func (l *Layer) interruptMoving(u *unit) {
+	if c := u.fight.cast; c != nil && !c.ability.CastWhileMoving && movingNow(u.char.Move) {
+		l.stopCast(u)
 	}
-	if movingNow(p.state.Move) {
-		l.breakStatuses(&p.fight.unit, "move", nil)
-		l.stopLoggingOff(p, "you moved")
+	if movingNow(u.char.Move) {
+		l.breakStatuses(u, "move", nil)
+		l.stopLoggingOff(u.player, "you moved")
 	}
 }

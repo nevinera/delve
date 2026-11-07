@@ -12,99 +12,99 @@ import (
 // What an ability's effects do as they land: damage and healing, dispels, interrupts, cooldowns, consuming and extending statuses.
 
 // land does one effect to one unit. Effects that aren't here yet do nothing.
-func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *unit, count int, now time.Time) {
+func (l *Layer) land(u *unit, c *casting, e *combat.Effect, on *unit, count int, now time.Time) {
 	if !l.chanceHolds(c, e) {
 		return
 	}
-	h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: e.Type}
+	h := hit{Type: "hit", From: u.ID, Ability: c.ability.ID, On: on.ID, Effect: e.Type}
 	switch e.Type {
 	case "damage":
 		ctx := hitOf(c, e, on, count)
-		l.critRules(p, e, on, &ctx, now)
-		l.strike(p, on, l.amountFor(p, c, e, on, count, now), ctx, &h, now)
+		l.critRules(u, e, on, &ctx, now)
+		l.strike(u, on, l.amountFor(u, c, e, on, count, now), ctx, &h, now)
 		if !h.Missed {
 			c.landed, c.crit, c.survived = true, h.Crit, on.Health > 0
-			l.drain(p, h.Amount, e.Drain, c.ability.ID)
+			l.drain(u, h.Amount, e.Drain, c.ability.ID)
 			c.lastDone = h.Amount
 			if center, continent, ok := l.unitAt(on.ID, [3]float64{}, ""); ok {
-				defer l.spill(p, c, e, on, center, continent, h.Amount, count, now)
+				defer l.spill(u, c, e, on, center, continent, h.Amount, count, now)
 			}
 		}
 	case "consume":
 		if e.Affects != "summons" {
-			l.consume(p, c, e, on, now)
+			l.consume(u, c, e, on, now)
 			return
 		}
-		p.debugLine("%s: consume of summons does nothing yet", c.ability.Name)
+		u.debugLine("%s: consume of summons does nothing yet", c.ability.Name)
 		return
 	case "extend":
-		l.extend(p, c, e, on, now)
+		l.extend(u, c, e, on, now)
 		return
 	case "cooldown":
-		l.changeCooldowns(p, c, e, now)
+		l.changeCooldowns(u, c, e, now)
 		return
 	case "dispel":
-		l.dispel(p, c, e, on, now)
+		l.dispel(u, c, e, on, now)
 		return
 	case "castAbility":
-		l.castNow(p, c, e, on, now)
+		l.castNow(u, c, e, on, now)
 		return
 	case "move":
-		l.forceMove(p, c, e, on, now)
+		l.forceMove(u, c, e, on, now)
 		return
 	case "interrupt":
-		if !l.interrupt(p, e, on, &h, now) {
-			p.debugLine("%s: %s isn't casting", c.ability.Name, l.nameOf(on.ID))
+		if !l.interrupt(u, e, on, &h, now) {
+			u.debugLine("%s: %s isn't casting", c.ability.Name, l.nameOf(on.ID))
 			return
 		}
 	case "heal":
 		healing := hitOf(c, e, on, count)
-		l.critRules(p, e, on, &healing, now)
-		n, crit := l.rollHeal(p, on, l.amountFor(p, c, e, on, count, now), healing, now)
+		l.critRules(u, e, on, &healing, now)
+		n, crit := l.rollHeal(u, on, l.amountFor(u, c, e, on, count, now), healing, now)
 		c.lastDone = n
 		over := max(on.Health+n-on.MaxHealth, 0)
 		l.setHealth(on, on.Health+n)
 		h.Amount, h.Crit = math.Round(n), crit
 		ctx := hitOf(c, e, on, count)
-		defer l.healedBy(p, on, n, over, ctx, now)
+		defer l.healedBy(u, on, n, over, ctx, now)
 	case "resource":
-		n, _ := combat.Roll(l.amountFor(p, c, e, on, count, now), l.statsOf(&p.fight.unit, nil, now), false, l.hub.roll)
-		if given, ok := l.addResource(&p.fight, e.Resource, n); ok {
+		n, _ := combat.Roll(l.amountFor(u, c, e, on, count, now), l.statsOf(u, nil, now), false, l.hub.roll)
+		if given, ok := l.addResource(u.fight, e.Resource, n); ok {
 			h.Amount, h.Resource = math.Round(given), e.Resource
 		}
 	case "status":
 		duration := e.Duration
 		if e.DurationPerSpent != 0 {
 			if duration == 0 {
-				if s := p.fight.class.Status(e.Status); s != nil {
+				if s := u.fight.class.Status(e.Status); s != nil {
 					duration = s.Duration
 				}
 			}
 			duration += e.DurationPerSpent * c.spent
 		}
-		if !l.applyStatus(p, c.ability, e.Status, duration, on, &h, now) {
+		if !l.applyStatus(u, c.ability, e.Status, duration, on, &h, now) {
 			return
 		}
-		if held := on.Statuses[statusKey{e.Status, p.ID()}]; held != nil {
+		if held := on.Statuses[statusKey{e.Status, u.ID}]; held != nil {
 			held.spent = c.spent
 			var given *combat.Amount
 			if e.Amount != (combat.Amount{}) {
-				worked := l.amountFor(p, c, e, on, count, now)
+				worked := l.amountFor(u, c, e, on, count, now)
 				given = &worked
 			}
-			l.startAbsorb(p, held, given, on, now)
+			l.startAbsorb(u, held, given, on, now)
 		}
 	default:
-		p.debugLine("%s: %s does nothing yet", c.ability.Name, e.Type)
+		u.debugLine("%s: %s does nothing yet", c.ability.Name, e.Type)
 		return
 	}
-	p.debugLine("%s", l.debugHit(p, c.ability.Name, e, on, h))
-	l.showHit(p.ID(), on, h)
+	u.debugLine("%s", l.debugHit(u, c.ability.Name, e, on, h))
+	l.showHit(u.ID, on, h)
 }
 
 // dispel takes statuses off a unit by kind, control or tag, up to `count`, oldest first. It takes
 // what harms a friend, and what helps an enemy.
-func (l *Layer) dispel(p *Player, c *casting, e *combat.Effect, on *unit, now time.Time) {
+func (l *Layer) dispel(u *unit, c *casting, e *combat.Effect, on *unit, now time.Time) {
 	keeps := "buff"
 	if on.ID < 0 { // only dummies are enemies so far
 		keeps = "debuff"
@@ -119,26 +119,26 @@ func (l *Layer) dispel(p *Player, c *casting, e *combat.Effect, on *unit, now ti
 		return cmp.Or(on.Statuses[a].since.Compare(on.Statuses[b].since), cmp.Compare(a.id, b.id), cmp.Compare(a.from, b.from))
 	})
 	if len(found) == 0 {
-		p.debugLine("%s: %s has nothing it removes", c.ability.Name, l.nameOf(on.ID))
+		u.debugLine("%s: %s has nothing it removes", c.ability.Name, l.nameOf(on.ID))
 	}
 	for _, key := range found[:min(max(e.Count, 1), len(found))] {
 		held := on.Statuses[key]
 		if held == nil {
 			continue // something ending just now took this one with it
 		}
-		l.fire(event{on: "dispel", who: &p.fight.unit, other: on.ID, ctx: castOf(c.ability), status: key.id, stacks: held.stacks}, now)
+		l.fire(event{on: "dispel", who: u, other: on.ID, ctx: castOf(c.ability), status: key.id, stacks: held.stacks}, now)
 		l.fire(statusEvent("dispelled", on, key, held), now)
 		if on.Statuses[key] != held {
 			continue
 		}
 		l.takeOff(on, key)
-		p.debugLine("%s: took %s off %s", c.ability.Name, key.id, l.nameOf(on.ID))
-		l.showHit(p.ID(), on, hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: e.Type, Removed: key.id, Class: held.class})
+		u.debugLine("%s: took %s off %s", c.ability.Name, key.id, l.nameOf(on.ID))
+		l.showHit(u.ID, on, hit{Type: "hit", From: u.ID, Ability: c.ability.ID, On: on.ID, Effect: e.Type, Removed: key.id, Class: held.class})
 	}
 }
 
 // interrupt stops a player's cast and locks it out of the cast's school. It says whether there was one.
-func (l *Layer) interrupt(p *Player, e *combat.Effect, on *unit, h *hit, now time.Time) bool {
+func (l *Layer) interrupt(u *unit, e *combat.Effect, on *unit, h *hit, now time.Time) bool {
 	o := l.playerOf(on)
 	if o == nil || o.fight.cast == nil {
 		return false
@@ -149,7 +149,7 @@ func (l *Layer) interrupt(p *Player, e *combat.Effect, on *unit, h *hit, now tim
 	}
 	f := &o.fight
 	stopped := f.cast.ability
-	l.stopCast(o)
+	l.stopCast(&o.fight.unit)
 	for _, school := range schoolsOf("", nil, stopped) {
 		if e.Lockout > 0 {
 			f.lockouts[school] = now.Add(seconds(e.Lockout))
@@ -157,7 +157,7 @@ func (l *Layer) interrupt(p *Player, e *combat.Effect, on *unit, h *hit, now tim
 		}
 	}
 	h.Stopped, h.Class = stopped.ID, f.class.ID
-	l.fire(event{on: "interrupt", who: &p.fight.unit, other: on.ID, ctx: castOf(stopped)}, now)
+	l.fire(event{on: "interrupt", who: u, other: on.ID, ctx: castOf(stopped)}, now)
 	return true
 }
 
@@ -166,8 +166,8 @@ func lockedOut(f *fighter, a *combat.Ability, now time.Time) bool {
 }
 
 // changeCooldowns does a `cooldown` effect, on the caster's own cooldowns, and tells it where they stand.
-func (l *Layer) changeCooldowns(p *Player, c *casting, e *combat.Effect, now time.Time) {
-	f := &p.fight
+func (l *Layer) changeCooldowns(u *unit, c *casting, e *combat.Effect, now time.Time) {
+	f := u.fight
 	for i := range f.class.Abilities {
 		a := &f.class.Abilities[i]
 		if !slices.Contains(e.Abilities, a.ID) && (e.Tag == "" || !slices.Contains(a.Tags, e.Tag)) {
@@ -178,9 +178,9 @@ func (l *Layer) changeCooldowns(p *Player, c *casting, e *combat.Effect, now tim
 			continue
 		}
 		f.cooldowns[a.ID] = sooner(spent, e, now)
-		left := readyIn(f, l.resolved(p, a, now), now)
-		p.debugLine("%s: %s is ready in %.1f s", c.ability.Name, a.Name, left)
-		p.send(encode(cooldown{"cooldown", a.ID, left}))
+		left := readyIn(f, l.resolved(u, a, now), now)
+		u.debugLine("%s: %s is ready in %.1f s", c.ability.Name, a.Name, left)
+		u.send(encode(cooldown{"cooldown", a.ID, left}))
 	}
 }
 
@@ -209,12 +209,12 @@ func readyIn(f *fighter, a *combat.Ability, now time.Time) float64 {
 }
 
 // consume takes statuses off a unit, or stacks or seconds of them, and does what that's worth.
-func (l *Layer) consume(p *Player, c *casting, e *combat.Effect, on *unit, now time.Time) {
+func (l *Layer) consume(u *unit, c *casting, e *combat.Effect, on *unit, now time.Time) {
 	for _, id := range e.StatusIDs() {
-		key := statusKey{id, p.ID()}
+		key := statusKey{id, u.ID}
 		held := on.Statuses[key]
 		if held == nil {
-			p.debugLine("%s: %s has no %s to consume", c.ability.Name, l.nameOf(on.ID), id)
+			u.debugLine("%s: %s has no %s to consume", c.ability.Name, l.nameOf(on.ID), id)
 			continue
 		}
 		l.fire(statusEvent("statusConsumed", on, key, held), now)
@@ -232,47 +232,47 @@ func (l *Layer) consume(p *Player, c *casting, e *combat.Effect, on *unit, now t
 			}
 		}
 		if e.DealsLeft > 0 {
-			l.dealLeft(p, c, id, held, e.DealsLeft, taken, window, on, now)
+			l.dealLeft(u, c, id, held, e.DealsLeft, taken, window, on, now)
 		}
 		switch {
 		case e.Keeps:
-			p.debugLine("%s: %s keeps %s", c.ability.Name, l.nameOf(on.ID), id)
+			u.debugLine("%s: %s keeps %s", c.ability.Name, l.nameOf(on.ID), id)
 		case e.Stacks > 0 && taken < held.stacks:
 			held.stacks -= taken
 			l.statusChanged(on.ID, key, held, now)
-			p.debugLine("%s: took %d stacks of %s off %s, %d left", c.ability.Name, taken, id, l.nameOf(on.ID), held.stacks)
+			u.debugLine("%s: took %d stacks of %s off %s, %d left", c.ability.Name, taken, id, l.nameOf(on.ID), held.stacks)
 		case e.Seconds > 0 && !held.until.IsZero() && window < held.until.Sub(now):
 			held.until = held.until.Add(-window)
 			l.statusChanged(on.ID, key, held, now)
-			p.debugLine("%s: took %g s of %s off %s", c.ability.Name, window.Seconds(), id, l.nameOf(on.ID))
+			u.debugLine("%s: took %g s of %s off %s", c.ability.Name, window.Seconds(), id, l.nameOf(on.ID))
 		case e.Seconds > 0 && held.until.IsZero():
-			p.debugLine("%s: %s has no time to take off %s", c.ability.Name, id, l.nameOf(on.ID))
+			u.debugLine("%s: %s has no time to take off %s", c.ability.Name, id, l.nameOf(on.ID))
 		default:
 			l.takeOff(on, key)
-			p.debugLine("%s: took %s off %s", c.ability.Name, id, l.nameOf(on.ID))
+			u.debugLine("%s: took %s off %s", c.ability.Name, id, l.nameOf(on.ID))
 		}
 		if e.PerStack != nil {
 			for n := 0; n < taken; n++ {
-				l.landNested(p, c, e.PerStack, on, now)
+				l.landNested(u, c, e.PerStack, on, now)
 			}
 		}
 	}
 }
 
 // landNested lands an effect inside another, on the same unit unless it says who it affects.
-func (l *Layer) landNested(p *Player, c *casting, e *combat.Effect, on *unit, now time.Time) {
+func (l *Layer) landNested(u *unit, c *casting, e *combat.Effect, on *unit, now time.Time) {
 	if e.Affects == "" {
-		l.land(p, c, e, on, 1, now)
+		l.land(u, c, e, on, 1, now)
 		return
 	}
-	reached := l.reached(p, c, e)
+	reached := l.reached(u, c, e)
 	for _, each := range reached {
-		l.land(p, c, e, each, len(reached), now)
+		l.land(u, c, e, each, len(reached), now)
 	}
 }
 
 // dealLeft does a share of what a status had left to do over a stretch of its time, all at once.
-func (l *Layer) dealLeft(p *Player, c *casting, id string, held *activeStatus, share float64, stacks int, window time.Duration, on *unit, now time.Time) {
+func (l *Layer) dealLeft(u *unit, c *casting, id string, held *activeStatus, share float64, stacks int, window time.Duration, on *unit, now time.Time) {
 	for i, each := range held.def.Effects {
 		period := held.def.Period(&each)
 		if each.Type != "periodic" || period <= 0 {
@@ -295,61 +295,61 @@ func (l *Layer) dealLeft(p *Player, c *casting, id string, held *activeStatus, s
 			rolled, critical := 0.0, false
 			switch each.Does {
 			case "damage":
-				rolled, critical = l.rollDamage(p, on, each.Amount, ctx, now)
+				rolled, critical = l.rollDamage(u, on, each.Amount, ctx, now)
 			case "heal":
-				rolled, critical = l.rollHeal(p, on, each.Amount, ctx, now)
+				rolled, critical = l.rollHeal(u, on, each.Amount, ctx, now)
 			}
 			total += rolled
 			crit = crit || critical
 		}
 		total *= share
-		h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: each.Does, Crit: crit}
+		h := hit{Type: "hit", From: u.ID, Ability: c.ability.ID, On: on.ID, Effect: each.Does, Crit: crit}
 		switch each.Does {
 		case "damage":
 			if l.immuneToDamage(on, ctx.Schools, now) {
 				h.Missed, h.Avoided, h.Crit = true, "immune", false
 				break
 			}
-			l.harm(p, on, l.soak(on, total, ctx.Schools, &h, now), &h, now)
-			l.leech(p, on, total, ctx, c.ability.ID, now)
-			l.drain(p, total, each.Drain, c.ability.ID)
+			l.harm(u, on, l.soak(on, total, ctx.Schools, &h, now), &h, now)
+			l.leech(u, on, total, ctx, c.ability.ID, now)
+			l.drain(u, total, each.Drain, c.ability.ID)
 		case "heal":
 			l.setHealth(on, on.Health+total)
 			h.Amount = math.Round(total)
 		default:
 			continue
 		}
-		p.debugLine("%s: %s had %d ticks left, %g %s", c.ability.Name, id, ticks*stacks, h.Amount, each.Does)
+		u.debugLine("%s: %s had %d ticks left, %g %s", c.ability.Name, id, ticks*stacks, h.Amount, each.Does)
 		l.showHit(on.ID, on, h)
 		if each.Does == "damage" {
-			l.damaged(p, on, total, crit, ctx, now)
+			l.damaged(u, on, total, crit, ctx, now)
 		} else {
-			l.healedBy(p, on, total, 0, ctx, now)
+			l.healedBy(u, on, total, 0, ctx, now)
 		}
 	}
 }
 
 // extend adds time to statuses on a unit, starts them over, or puts them on if they're missing.
-func (l *Layer) extend(p *Player, c *casting, e *combat.Effect, on *unit, now time.Time) {
-	f := &p.fight
+func (l *Layer) extend(u *unit, c *casting, e *combat.Effect, on *unit, now time.Time) {
+	f := u.fight
 	for _, id := range e.StatusIDs() {
 		s := f.class.Status(id)
-		key := statusKey{id, p.ID()}
+		key := statusKey{id, u.ID}
 		held := on.Statuses[key]
 		if held == nil {
 			if !e.Apply {
-				p.debugLine("%s: %s has no %s to extend", c.ability.Name, l.nameOf(on.ID), id)
+				u.debugLine("%s: %s has no %s to extend", c.ability.Name, l.nameOf(on.ID), id)
 				continue
 			}
-			h := hit{Type: "hit", From: p.ID(), Ability: c.ability.ID, On: on.ID, Effect: "status"}
-			if l.applyStatus(p, c.ability, id, e.Duration, on, &h, now) {
-				p.debugLine("%s", l.debugHit(p, c.ability.Name, &combat.Effect{Type: "status"}, on, h))
+			h := hit{Type: "hit", From: u.ID, Ability: c.ability.ID, On: on.ID, Effect: "status"}
+			if l.applyStatus(u, c.ability, id, e.Duration, on, &h, now) {
+				u.debugLine("%s", l.debugHit(u, c.ability.Name, &combat.Effect{Type: "status"}, on, h))
 				l.showHit(on.ID, on, h)
 			}
 			continue
 		}
 		if held.until.IsZero() {
-			p.debugLine("%s: %s has no end to move", c.ability.Name, id)
+			u.debugLine("%s: %s has no end to move", c.ability.Name, id)
 			continue
 		}
 		full := 0.0
@@ -376,7 +376,7 @@ func (l *Layer) extend(p *Player, c *casting, e *combat.Effect, on *unit, now ti
 			}
 		}
 		l.statusChanged(on.ID, key, held, now)
-		p.debugLine("%s: %s on %s now has %g s left", c.ability.Name, id, l.nameOf(on.ID), held.until.Sub(now).Seconds())
+		u.debugLine("%s: %s on %s now has %g s left", c.ability.Name, id, l.nameOf(on.ID), held.until.Sub(now).Seconds())
 	}
 }
 

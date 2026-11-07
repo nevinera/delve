@@ -37,24 +37,24 @@ var moveKinds = map[string]moveKind{
 
 // forceMove does a `move` effect. The server puts the character where it ends straight away, and the
 // clients play the trip. Training dummies stay put.
-func (l *Layer) forceMove(p *Player, c *casting, e *combat.Effect, on *unit, now time.Time) {
+func (l *Layer) forceMove(u *unit, c *casting, e *combat.Effect, on *unit, now time.Time) {
 	o := l.playerOf(on)
 	if o == nil {
-		p.debugLine("%s: %s stays put", c.ability.Name, l.nameOf(on.ID))
+		u.debugLine("%s: %s stays put", c.ability.Name, l.nameOf(on.ID))
 		return
 	}
 	kind, known := moveKinds[e.Kind]
 	if !known {
-		log.Printf("character %d: ability %s has a move of a kind there isn't: %q", p.ID(), c.ability.ID, e.Kind)
+		log.Printf("character %d: ability %s has a move of a kind there isn't: %q", u.ID, c.ability.ID, e.Kind)
 		return
 	}
-	if (e.Kind == "knockback" || e.Kind == "pull") && o != p && l.immuneTo(on, e.Kind, now) {
-		p.debugLine("%s: %s is immune", c.ability.Name, l.nameOf(on.ID))
+	if (e.Kind == "knockback" || e.Kind == "pull") && o != u.player && l.immuneTo(on, e.Kind, now) {
+		u.debugLine("%s: %s is immune", c.ability.Name, l.nameOf(on.ID))
 		return
 	}
-	to, yaw, ok := l.moveEnd(p, c, e, o, kind)
+	to, yaw, ok := l.moveEnd(u, c, e, o, kind)
 	if !ok {
-		p.debugLine("%s: nowhere for %s to go", c.ability.Name, l.nameOf(on.ID))
+		u.debugLine("%s: nowhere for %s to go", c.ability.Name, l.nameOf(on.ID))
 		return
 	}
 	from := o.state.At
@@ -75,19 +75,19 @@ func (l *Layer) forceMove(p *Player, c *casting, e *combat.Effect, on *unit, now
 		lasts = max(lasts, leastArc)
 	}
 	if o.fight.cast != nil && o.fight.cast != c {
-		l.stopCast(o)
+		l.stopCast(&o.fight.unit)
 	}
 	o.state.Yaw = yaw
 	l.breakStatuses(&o.fight.unit, "move", nil)
 	o.motion.teleported(now.Add(seconds(lasts)))
 	said := encode(forced{"forced", o.ID(), e.Kind, from, end, yaw, lasts, height})
-	l.relocate(o, o.state.Continent, end, said, said)
-	p.debugLine("%s: %s moves %.0f ft in %.1f s", c.ability.Name, l.nameOf(on.ID), distance(from, end), lasts)
+	l.relocate(&o.fight.unit, o.state.Continent, end, said, said)
+	u.debugLine("%s: %s moves %.0f ft in %.1f s", c.ability.Name, l.nameOf(on.ID), distance(from, end), lasts)
 }
 
 // moveEnd is where a move means to put a character, before the ground has its say, and which way
 // it faces after.
-func (l *Layer) moveEnd(p *Player, c *casting, e *combat.Effect, o *Player, kind moveKind) ([3]float64, float64, bool) {
+func (l *Layer) moveEnd(u *unit, c *casting, e *combat.Effect, o *Player, kind moveKind) ([3]float64, float64, bool) {
 	from, yaw := o.state.At, o.state.Yaw
 	reach := kind.distance
 	if e.Distance > 0 {
@@ -131,10 +131,10 @@ func (l *Layer) moveEnd(p *Player, c *casting, e *combat.Effect, o *Player, kind
 		}
 		return toward(*c.spot, 0)
 	case "self":
-		if o == p {
+		if o == u.player {
 			return from, yaw, false
 		}
-		return toward(p.state.At, moveStopFt)
+		return toward(u.char.At, moveStopFt)
 	case "target":
 		at, targetYaw, ok := unit(c.target)
 		if !ok {
@@ -154,9 +154,9 @@ func (l *Layer) moveEnd(p *Player, c *casting, e *combat.Effect, o *Player, kind
 	case "knockup":
 		return from, yaw, true
 	case "knockback":
-		away := p.state.At
+		away := u.char.At
 		gap := horizontal(away, from)
-		if o == p || gap == 0 {
+		if o == u.player || gap == 0 {
 			return ahead(-1)
 		}
 		return [3]float64{from[0] + (from[0]-away[0])/gap*reach, from[1], from[2] + (from[2]-away[2])/gap*reach}, yaw, true
@@ -215,25 +215,25 @@ func standingOn(s worlds.Sample, feet float64) float64 {
 
 // relocate puts a player somewhere else. It hears `own`. Those near it before and after hear `seen`,
 // and those it's come near or left see it come and go, and it them.
-func (l *Layer) relocate(p *Player, continent string, at [3]float64, own, seen []byte) {
+func (l *Layer) relocate(u *unit, continent string, at [3]float64, own, seen []byte) {
 	before := map[int64]*Player{}
-	for _, o := range l.near(p) {
+	for _, o := range l.near(u.player) {
 		before[o.ID()] = o
 	}
-	p.state.Continent, p.state.At, p.state.Move = continent, at, Move{Gait: "run"}
-	l.save(p)
-	p.send(own)
-	for _, o := range l.near(p) {
+	u.char.Continent, u.char.At, u.char.Move = continent, at, Move{Gait: "run"}
+	l.save(u.player)
+	u.send(own)
+	for _, o := range l.near(u.player) {
 		if before[o.ID()] != nil {
 			delete(before, o.ID())
 			o.send(seen)
 			continue
 		}
-		o.send(encode(appear{"appear", l.seen(p.state)}))
-		p.send(encode(appear{"appear", l.seen(o.state)}))
+		o.send(encode(appear{"appear", l.seen(*u.char)}))
+		u.send(encode(appear{"appear", l.seen(o.state)}))
 	}
 	for _, o := range before {
-		o.send(encode(vanish{"vanish", p.ID()}))
-		p.send(encode(vanish{"vanish", o.ID()}))
+		o.send(encode(vanish{"vanish", u.ID}))
+		u.send(encode(vanish{"vanish", o.ID()}))
 	}
 }

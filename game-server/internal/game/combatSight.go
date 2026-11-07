@@ -31,15 +31,15 @@ func (l *Layer) feetOf(id int64) ([3]float64, bool) {
 }
 
 // seesCast is whether the caster can still see what a cast is on.
-func (l *Layer) seesCast(p *Player, c *casting) bool {
+func (l *Layer) seesCast(u *unit, c *casting) bool {
 	if c.spot != nil {
-		return l.sees(p.state.Continent, p.state.At, *c.spot)
+		return l.sees(u.char.Continent, u.char.At, *c.spot)
 	}
-	if c.target == 0 || c.target == p.ID() {
+	if c.target == 0 || c.target == u.ID {
 		return true
 	}
 	at, here := l.feetOf(c.target)
-	return !here || l.sees(p.state.Continent, p.state.At, at)
+	return !here || l.sees(u.char.Continent, u.char.At, at)
 }
 
 // answerSees tells the player whether the server has them seeing a unit, for the line of sight

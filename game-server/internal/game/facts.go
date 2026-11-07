@@ -11,9 +11,9 @@ import (
 // The facts conditions are judged on: units, their statuses and the fighter's state.
 
 // statusNames gives a status's name by id, for what a player reads.
-func statusNames(p *Player) func(string) string {
+func statusNames(u *unit) func(string) string {
 	return func(id string) string {
-		if s := p.fight.class.Status(id); s != nil {
+		if s := u.fight.class.Status(id); s != nil {
 			return s.Name
 		}
 		return id
@@ -21,17 +21,17 @@ func statusNames(p *Player) func(string) string {
 }
 
 // factsInUse is what an ability's effects are read against, with how the use is going.
-func (l *Layer) factsInUse(p *Player, c *casting, target int64, hits int, now time.Time) *combat.Facts {
-	out := l.facts(p, target, now)
+func (l *Layer) factsInUse(u *unit, c *casting, target int64, hits int, now time.Time) *combat.Facts {
+	out := l.facts(u, target, now)
 	out.Used = &combat.UseSoFar{Spent: c.spent, Hits: hits, Crit: c.crit, Survived: c.survived, Landed: c.landed}
 	return out
 }
 
 // facts is what conditions are read against, for a player and its target.
-func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
-	f := &p.fight
+func (l *Layer) facts(u *unit, target int64, now time.Time) *combat.Facts {
+	f := u.fight
 	out := &combat.Facts{
-		Self:      unitOf(&f.unit, p.ID(), l.fighterState(p, now)),
+		Self:      unitOf(&f.unit, u.ID, l.fighterState(u, now)),
 		Since:     map[string]float64{},
 		Resources: map[string]combat.ResourceAmount{},
 	}
@@ -42,17 +42,17 @@ func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
 	out.Groups = groupsOn(&f.unit)
 	for v := range l.units() {
 		for key := range v.Statuses {
-			if key.from == p.ID() {
+			if key.from == u.ID {
 				out.Holders[key.id]++
 			}
 		}
 	}
 	for _, z := range l.zones {
-		if z.from == p && z.inside[target] != nil {
+		if z.from == u && z.inside[target] != nil {
 			out.InAreas[z.kind] = true
 		}
 	}
-	if t := l.unit(target, p.state.Continent); t != nil {
+	if t := l.unit(target, u.char.Continent); t != nil {
 		out.TargetGroups = groupsOn(t)
 	}
 	if f.class != nil {
@@ -60,23 +60,23 @@ func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
 			out.Resources[r.Key] = combat.ResourceAmount{Have: f.resources[r.Key], Max: f.pool(r).Max}
 		}
 	}
-	if d := l.dummy(target, p.state.Continent); d != nil {
+	if d := l.dummy(target, u.char.Continent); d != nil {
 		state := []string{}
 		if !d.lastHit.IsZero() && now.Sub(d.lastHit) < combatLasts {
 			state = append(state, "inCombat")
 		}
-		unit := unitOf(&d.unit, p.ID(), state)
+		unit := unitOf(&d.unit, u.ID, state)
 		out.Target, out.TargetIs = &unit, []string{"enemy", "other", "nonPlayer"}
-		out.Position = positionOf(p.state.At, d.state.At, d.state.Yaw)
+		out.Position = positionOf(u.char.At, d.state.At, d.state.Yaw)
 	} else if o := l.players[target]; o != nil && target != 0 {
-		unit := unitOf(&o.fight.unit, p.ID(), l.fighterState(o, now))
+		unit := unitOf(&o.fight.unit, u.ID, l.fighterState(&o.fight.unit, now))
 		out.Target, out.TargetIs = &unit, []string{"ally", "player"}
-		if o == p {
+		if o == u.player {
 			out.TargetIs = append(out.TargetIs, "self")
 		} else {
 			out.TargetIs = append(out.TargetIs, "other")
 		}
-		out.Position = positionOf(p.state.At, o.state.At, o.state.Yaw)
+		out.Position = positionOf(u.char.At, o.state.At, o.state.Yaw)
 	}
 	return out
 }
@@ -134,25 +134,25 @@ func groupsOn(v *unit) map[string]bool {
 
 // fighterState is which of a `state` condition's words are true of a player. Everywhere counts as
 // outdoors.
-func (l *Layer) fighterState(p *Player, now time.Time) []string {
+func (l *Layer) fighterState(u *unit, now time.Time) []string {
 	state := []string{"outdoors"}
-	controls := l.controlsOn(&p.fight.unit)
+	controls := l.controlsOn(u)
 	if combat.Helpless(controls) {
 		state = append(state, "controlled")
 	}
 	if slices.Contains(controls, "stun") {
 		state = append(state, "stunned")
 	}
-	if p.motion.slowed < 0 {
+	if u.player.motion.slowed < 0 {
 		state = append(state, "slowed")
 	}
-	if p.fight.cast != nil {
+	if u.fight.cast != nil {
 		state = append(state, "casting")
 	}
-	if p.motion.aloft {
+	if u.player.motion.aloft {
 		state = append(state, "airborne", "falling")
 	}
-	if p.fight.inCombat(now) {
+	if u.fight.inCombat(now) {
 		state = append(state, "inCombat")
 	}
 	return state

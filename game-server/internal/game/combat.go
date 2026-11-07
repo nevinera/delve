@@ -31,6 +31,7 @@ type unit struct {
 	char      *Character // where it is and how it's seen
 	player    *Player    // the player it is, or nil for a dummy
 	dummy     *dummy     // the dummy it is, or nil for a player
+	fight     *fighter   // its side of combat, if it's a player
 	Health    float64
 	MaxHealth float64
 	Statuses  map[statusKey]*activeStatus
@@ -225,13 +226,13 @@ func (l *Layer) tick(now time.Time) {
 		f := &p.fight
 		if c := f.cast; c != nil {
 			if !c.released && !now.Before(c.release) {
-				l.release(p, c, now)
+				l.release(&p.fight.unit, c, now)
 			} else if c.released && !now.Before(c.ends) {
 				f.cast = nil
 			}
 		}
-		l.swing(p, now)
-		l.spar(p, now)
+		l.swing(&p.fight.unit, now)
+		l.spar(&p.fight.unit, now)
 		l.regen(p, dt, now)
 	}
 	// Landings can add landings, so go by index.

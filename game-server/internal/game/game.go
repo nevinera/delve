@@ -383,7 +383,7 @@ func (p *Player) Handle(raw []byte) (err error) {
 	}
 	switch m.Type {
 	case "use":
-		p.layer.use(p, m)
+		p.layer.use(&p.fight.unit, m)
 		return nil
 	case "command":
 		p.layer.command(p, m.Line)
@@ -395,7 +395,7 @@ func (p *Player) Handle(raw []byte) (err error) {
 		p.layer.chooseBuild(p, combat.Build{Specialization: m.Specialization, Talents: m.Talents})
 		return nil
 	case "attack":
-		p.layer.attack(p, m)
+		p.layer.attack(&p.fight.unit, m)
 		return nil
 	case "sees":
 		p.layer.answerSees(p, m.Target)
@@ -409,7 +409,7 @@ func (p *Player) Handle(raw []byte) (err error) {
 	case "stop":
 		p.layer.mu.Lock()
 		defer p.layer.mu.Unlock()
-		p.layer.stopCast(p)
+		p.layer.stopCast(&p.fight.unit)
 		return nil
 	case "move", "heartbeat":
 	default:
@@ -453,7 +453,7 @@ func (l *Layer) moved(p *Player, m incoming) {
 	}
 	if m.Move != nil {
 		p.state.Move = m.Move.clean()
-		l.interruptMoving(p)
+		l.interruptMoving(&p.fight.unit)
 	}
 	update := encode(moved{"moved", p.ID(), p.state.At, p.state.Yaw, p.state.Move})
 	for _, o := range l.near(p) {

@@ -79,3 +79,17 @@ func (l *Layer) removeStatus(on *unit, key statusKey) *activeStatus {
 	l.tellOf(on.ID, encode(statusGone{"statusGone", on.ID, key.id, key.from}))
 	return held
 }
+
+// debugLine logs a line about what a player's abilities come to, if it asked for that.
+func (u *unit) debugLine(format string, args ...any) {
+	if u.player != nil {
+		u.player.debugLine(format, args...)
+	}
+}
+
+// send sends a message to the player a unit is, if it is one.
+func (u *unit) send(b []byte) {
+	if u.player != nil {
+		u.player.send(b)
+	}
+}

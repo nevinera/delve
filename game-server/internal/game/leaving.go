@@ -114,8 +114,8 @@ func (h *Hub) Leave(p *Player) {
 	if l.players[p.ID()] == p && !p.loggedOff && p.lingerUntil.IsZero() && !l.resting(p) {
 		p.lingerUntil = h.now().Add(lingerFor)
 		p.logOffAt = time.Time{}
-		l.stopCast(p)
-		l.stopAttacking(p)
+		l.stopCast(&p.fight.unit)
+		l.stopAttacking(&p.fight.unit)
 		p.state.Move = Move{Gait: "run"}
 		update := encode(moved{"moved", p.ID(), p.state.At, p.state.Yaw, p.state.Move})
 		for _, o := range l.near(p) {

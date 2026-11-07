@@ -14,11 +14,11 @@ import (
 // Statuses on units: putting them on, ticking, breaking and taking them off, and the immunities and controls they give.
 
 // applyStatus puts a status on a unit and notes it in the hit. It says whether the class has that status.
-func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration float64, on *unit, h *hit, now time.Time) bool {
-	f := &p.fight
+func (l *Layer) applyStatus(u *unit, a *combat.Ability, id string, duration float64, on *unit, h *hit, now time.Time) bool {
+	f := u.fight
 	s := f.class.Status(id)
 	if s == nil {
-		log.Printf("character %d: ability %s applies a status its class hasn't got: %s", p.ID(), a.ID, id)
+		log.Printf("character %d: ability %s applies a status its class hasn't got: %s", u.ID, a.ID, id)
 		return false
 	}
 	mods := l.modifiersOf(&f.unit, now)
@@ -27,12 +27,12 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 		mastery = l.statsOf(&f.unit, nil, now).MasteryPercent()
 	}
 	s = f.class.ResolveStatus(s, duration, mods, mastery)
-	if l.immuneToStatus(on, s, p.ID(), now) {
+	if l.immuneToStatus(on, s, u.ID, now) {
 		h.Missed, h.Avoided = true, "immune"
 		return true
 	}
 	lasts := s.Duration
-	key := statusKey{s.ID, p.ID()}
+	key := statusKey{s.ID, u.ID}
 	was := on.Statuses[key]
 	if s.Group != "" {
 		for other, each := range on.Statuses {
@@ -42,7 +42,7 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 		}
 	}
 	if s.Limit > 0 && was == nil {
-		l.makeRoom(p, s)
+		l.makeRoom(u, s)
 	}
 	held := &activeStatus{def: s, class: f.class.ID, owner: f.class, since: now, stacks: 1, uses: 1}
 	if s.ConsumedBy != nil && s.ConsumedBy.Uses > 0 {
@@ -74,8 +74,8 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 }
 
 // makeRoom takes a status off the oldest units holding it from a player, so one more stays within its limit.
-func (l *Layer) makeRoom(p *Player, s *combat.Status) {
-	key := statusKey{s.ID, p.ID()}
+func (l *Layer) makeRoom(u *unit, s *combat.Status) {
+	key := statusKey{s.ID, u.ID}
 	var holders []*unit
 	for v := range l.units() {
 		if v.Statuses[key] != nil {
@@ -160,7 +160,7 @@ func (l *Layer) tickStatus(v *unit, key statusKey, held *activeStatus, at [3]flo
 			next = held.since.Add(seconds(period))
 		}
 		for !now.Before(next) && (held.until.IsZero() || !next.After(held.until)) && v.Statuses[key] == held {
-			l.tickOf(p, v, key.id, held, e, at, continent, now)
+			l.tickOf(&p.fight.unit, v, key.id, held, e, at, continent, now)
 			next = next.Add(seconds(period))
 		}
 		held.ticks[i] = next
@@ -168,7 +168,7 @@ func (l *Layer) tickStatus(v *unit, key statusKey, held *activeStatus, at [3]flo
 }
 
 // tickOf lands one tick of a periodic effect, from the one who applied it. Ticks don't miss.
-func (l *Layer) tickOf(p *Player, holder *unit, id string, held *activeStatus, e *combat.StatusEffect, at [3]float64, continent string, now time.Time) {
+func (l *Layer) tickOf(u *unit, holder *unit, id string, held *activeStatus, e *combat.StatusEffect, at [3]float64, continent string, now time.Time) {
 	targets := []*unit{holder}
 	if e.Affects == "enemies" || e.Affects == "allies" {
 		targets = l.around(e, at, continent)
@@ -176,44 +176,44 @@ func (l *Layer) tickOf(p *Player, holder *unit, id string, held *activeStatus, e
 	amount := combat.Shared(e.Amount.Spending(held.spent), e.SoftCap, len(targets)).Scaled(float64(held.stacks))
 	ctx := combat.HitContext{Schools: schoolsOf(e.School, e.Schools, nil), Category: e.Category, Status: id, Kinds: []string{"periodic"}}
 	for _, on := range targets {
-		h := hit{Type: "hit", From: p.ID(), On: on.ID, Effect: e.Does, Ticked: id, Class: held.class}
+		h := hit{Type: "hit", From: u.ID, On: on.ID, Effect: e.Does, Ticked: id, Class: held.class}
 		switch e.Does {
 		case "damage":
-			if on.ID != p.ID() {
-				p.fight.attacked(now)
+			if on.ID != u.ID {
+				u.fight.attacked(now)
 			}
 			if l.immuneToDamage(on, ctx.Schools, now) {
 				continue
 			}
-			n, crit := l.rollDamage(p, on, amount, ctx, now)
+			n, crit := l.rollDamage(u, on, amount, ctx, now)
 			h.Crit = crit
-			l.harm(p, on, l.soak(on, n, ctx.Schools, &h, now), &h, now)
-			l.leech(p, on, n, ctx, "", now)
-			l.drain(p, n, e.Drain, "")
-			defer l.damaged(p, on, n, crit, ctx, now)
+			l.harm(u, on, l.soak(on, n, ctx.Schools, &h, now), &h, now)
+			l.leech(u, on, n, ctx, "", now)
+			l.drain(u, n, e.Drain, "")
+			defer l.damaged(u, on, n, crit, ctx, now)
 		case "heal":
-			n, crit := l.rollHeal(p, on, amount, ctx, now)
+			n, crit := l.rollHeal(u, on, amount, ctx, now)
 			h.Crit = crit
 			over := max(on.Health+n-on.MaxHealth, 0)
 			l.setHealth(on, on.Health+n)
 			h.Amount = math.Round(n)
-			defer l.healedBy(p, on, n, over, ctx, now)
+			defer l.healedBy(u, on, n, over, ctx, now)
 		case "resource":
 			o := l.playerOf(on)
 			if o == nil {
 				continue
 			}
-			n, _ := combat.Roll(amount, l.statsOf(&p.fight.unit, nil, now), false, l.hub.roll)
+			n, _ := combat.Roll(amount, l.statsOf(u, nil, now), false, l.hub.roll)
 			given, ok := l.addResource(&o.fight, e.Resource, n)
 			if !ok {
 				continue
 			}
 			h.Amount, h.Resource = math.Round(given), e.Resource
 		default:
-			p.debugLine("%s: a periodic that does %s does nothing yet", id, e.Does)
+			u.debugLine("%s: a periodic that does %s does nothing yet", id, e.Does)
 			continue
 		}
-		p.debugLine("%s on %s ticks: %s %g", id, l.nameOf(on.ID), e.Does, h.Amount)
+		u.debugLine("%s on %s ticks: %s %g", id, l.nameOf(on.ID), e.Does, h.Amount)
 		l.showHit(on.ID, on, h)
 	}
 }
@@ -300,7 +300,7 @@ func (l *Layer) refit(v *unit, now time.Time) {
 		o.fight.controls = controls
 		o.send(encode(controlsMessage{"controls", append([]string{}, controls...)}))
 		if c := o.fight.cast; c != nil && combat.Blocked(controls, c.ability) != "" {
-			l.stopCast(o)
+			l.stopCast(&o.fight.unit)
 		}
 	}
 	if combat.HoldsStill(o.fight.controls) {

@@ -16,7 +16,7 @@ const randomAreaFt = 20.0 // how far from you an area `around` `random` can land
 type zone struct {
 	id       int64 // 0 for an aura, which nobody draws
 	follows  int64 // the unit an area moves with, if any
-	from     *Player
+	from     *unit
 	kind     string // copies of the same kind don't stack unless they overlap
 	ability  *combat.Ability
 	center   func() ([3]float64, string, bool)
@@ -37,18 +37,18 @@ type zone struct {
 }
 
 // placeArea does an `area` effect: it stays where it lands and works on its own from then on.
-func (l *Layer) placeArea(p *Player, c *casting, e *combat.Effect, now time.Time) {
-	continent := p.state.Continent
-	at, ok := p.state.At, true
+func (l *Layer) placeArea(u *unit, c *casting, e *combat.Effect, now time.Time) {
+	continent := u.char.Continent
+	at, ok := u.char.At, true
 	var follows int64
 	switch e.Around {
 	case "target":
-		at, ok = l.pointOf(c, p)
+		at, ok = l.pointOf(c, u)
 		if e.FollowsTarget {
 			follows = c.target
 		}
 	case "ground":
-		at, ok = l.pointOf(c, p)
+		at, ok = l.pointOf(c, u)
 	case "random":
 		angle, gap := 2*math.Pi*l.hub.roll(), randomAreaFt*l.hub.roll()
 		at[0] += math.Sin(angle) * gap
@@ -60,12 +60,12 @@ func (l *Layer) placeArea(p *Player, c *casting, e *combat.Effect, now time.Time
 		}
 	}
 	if !ok {
-		p.debugLine("%s: nowhere for its area to go", c.ability.Name)
+		u.debugLine("%s: nowhere for its area to go", c.ability.Name)
 		return
 	}
-	z := l.zoneOf(p, c.ability, e.Affects, e.Radius, e.Max, e.Status, e.Every, effectsIn(e), e.OnEnter)
+	z := l.zoneOf(u, c.ability, e.Affects, e.Radius, e.Max, e.Status, e.Every, effectsIn(e), e.OnEnter)
 	z.id, z.overlaps = l.nextZone(), e.Overlaps
-	z.line, z.width, z.dir = e.Line, e.Width, lineWay(p, c, e, at)
+	z.line, z.width, z.dir = e.Line, e.Width, lineWay(u, c, e, at)
 	z.until = now.Add(seconds(e.Lasts))
 	z.center = func() ([3]float64, string, bool) { return at, continent, true }
 	z.follows = follows
@@ -73,10 +73,10 @@ func (l *Layer) placeArea(p *Player, c *casting, e *combat.Effect, now time.Time
 		z.center = func() ([3]float64, string, bool) { return l.unitAt(follows, at, continent) }
 	}
 	if e.Limit > 0 {
-		l.limitZones(p, z.kind, e.Limit-1)
+		l.limitZones(u, z.kind, e.Limit-1)
 	}
 	l.addZone(z, continent, now)
-	p.debugLine("%s: an area %.0f ft across for %g s", c.ability.Name, e.Radius, e.Lasts)
+	u.debugLine("%s: an area %.0f ft across for %g s", c.ability.Name, e.Radius, e.Lasts)
 }
 
 func (l *Layer) nextZone() int64 {
@@ -84,8 +84,8 @@ func (l *Layer) nextZone() int64 {
 	return l.zoneCount
 }
 
-func (l *Layer) zoneOf(p *Player, a *combat.Ability, affects string, radius float64, most int, status string, every float64, effects []combat.Effect, onEnter *combat.Effect) *zone {
-	return &zone{from: p, kind: a.ID, ability: a, affects: affects, radius: radius, max: most, status: status, every: every, effects: effects, onEnter: onEnter, inside: map[int64]*unit{}, next: l.hub.now().Add(seconds(every))}
+func (l *Layer) zoneOf(u *unit, a *combat.Ability, affects string, radius float64, most int, status string, every float64, effects []combat.Effect, onEnter *combat.Effect) *zone {
+	return &zone{from: u, kind: a.ID, ability: a, affects: affects, radius: radius, max: most, status: status, every: every, effects: effects, onEnter: onEnter, inside: map[int64]*unit{}, next: l.hub.now().Add(seconds(every))}
 }
 
 // effectsIn is what an area does each `every`.
@@ -97,14 +97,14 @@ func effectsIn(e *combat.Effect) []combat.Effect {
 }
 
 // lineWay is the way a line runs from where it starts.
-func lineWay(p *Player, c *casting, e *combat.Effect, from [3]float64) [2]float64 {
+func lineWay(u *unit, c *casting, e *combat.Effect, from [3]float64) [2]float64 {
 	if e.Along == "ground" && c.spot != nil {
 		dx, dz := c.spot[0]-from[0], c.spot[2]-from[2]
 		if gap := math.Hypot(dx, dz); gap > 0 {
 			return [2]float64{dx / gap, dz / gap}
 		}
 	}
-	return [2]float64{math.Sin(p.state.Yaw), math.Cos(p.state.Yaw)}
+	return [2]float64{math.Sin(u.char.Yaw), math.Cos(u.char.Yaw)}
 }
 
 // unitAt is where a unit is on a continent, or where it was last known to be if it's gone.
@@ -116,10 +116,10 @@ func (l *Layer) unitAt(id int64, was [3]float64, continent string) ([3]float64, 
 }
 
 // limitZones ends a player's oldest zones of a kind, until `keep` are left.
-func (l *Layer) limitZones(p *Player, kind string, keep int) {
+func (l *Layer) limitZones(u *unit, kind string, keep int) {
 	var mine []*zone
 	for _, z := range l.zones {
-		if z.from == p && z.kind == kind {
+		if z.from == u && z.kind == kind {
 			mine = append(mine, z)
 		}
 	}
@@ -157,7 +157,7 @@ func (l *Layer) endZone(z *zone) {
 func (l *Layer) leaveZone(z *zone, id int64) {
 	on := z.inside[id]
 	delete(z.inside, id)
-	key := statusKey{z.status, z.from.ID()}
+	key := statusKey{z.status, z.from.ID}
 	if on != nil && z.status != "" && on.Statuses[key] != nil && on.Statuses[key].zone == z {
 		l.takeOff(on, key)
 	}
@@ -166,7 +166,7 @@ func (l *Layer) leaveZone(z *zone, id int64) {
 // sweepZones keeps areas and auras up to date.
 func (l *Layer) sweepZones(now time.Time) {
 	for _, z := range slices.Clone(l.zones) {
-		if l.players[z.from.ID()] != z.from || !now.Before(z.until) {
+		if l.playerOf(z.from) == nil || !now.Before(z.until) {
 			l.endZone(z)
 			continue
 		}
@@ -200,7 +200,7 @@ func (l *Layer) sweepZones(now time.Time) {
 			if e.Effect != nil {
 				effects = []combat.Effect{*e.Effect}
 			}
-			z = l.zoneOf(from, &combat.Ability{ID: a.held.def.ID, Name: a.held.def.Name}, e.Affects, e.Radius, e.Max, e.Status, e.Every, effects, nil)
+			z = l.zoneOf(&from.fight.unit, &combat.Ability{ID: a.held.def.ID, Name: a.held.def.Name}, e.Affects, e.Radius, e.Max, e.Status, e.Every, effects, nil)
 			id := a.v.ID
 			z.center = func() ([3]float64, string, bool) { return l.unitAt(id, [3]float64{}, "") }
 			if a.held.zones == nil {
@@ -280,15 +280,15 @@ func (l *Layer) zoneLands(z *zone, c *casting, e *combat.Effect, on *unit, count
 		return
 	}
 	runner := z.from
-	if o := l.playerOf(on); o != nil && e.Type == "resource" {
-		runner = o
+	if l.playerOf(on) != nil && e.Type == "resource" {
+		runner = on
 	}
 	l.land(runner, c, e, on, count, now)
 }
 
 // keepStatus puts a zone's status on someone inside, for as long as they stay.
 func (l *Layer) keepStatus(z *zone, on *unit, now time.Time) {
-	key := statusKey{z.status, z.from.ID()}
+	key := statusKey{z.status, z.from.ID}
 	if on.Statuses[key] != nil {
 		return
 	}
@@ -418,5 +418,5 @@ func (l *Layer) tellContinent(continent string, b []byte) {
 
 func (l *Layer) areaMessage(z *zone, now time.Time) areaMessage {
 	at, _, _ := z.center()
-	return areaMessage{"area", z.id, z.from.ID(), z.ability.ID, z.affects, at, z.radius, z.line, z.width, z.dir, z.until.Sub(now).Seconds(), z.follows}
+	return areaMessage{"area", z.id, z.from.ID, z.ability.ID, z.affects, at, z.radius, z.line, z.width, z.dir, z.until.Sub(now).Seconds(), z.follows}
 }

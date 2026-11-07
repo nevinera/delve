@@ -30,11 +30,11 @@ func TestSightStopsAbilities(t *testing.T) {
 	h, p, _, d := behindWall(t)
 	zero := 0.0
 	p.fight.class.Abilities = append(p.fight.class.Abilities, combat.Ability{ID: "peek", Name: "Peek", Target: "enemy", GCD: &zero, Range: combat.Distance{Feet: 1000}})
-	if _, _, why := p.layer.check(p, incoming{Ability: "peek", Target: d.ID}, h.now()); why != cantSee {
+	if _, _, why := p.layer.check(&p.fight.unit, incoming{Ability: "peek", Target: d.ID}, h.now()); why != cantSee {
 		t.Fatalf("why = %q", why)
 	}
 	p.layer.fakeGround = nil
-	if _, _, why := p.layer.check(p, incoming{Ability: "peek", Target: d.ID}, h.now()); why != "" {
+	if _, _, why := p.layer.check(&p.fight.unit, incoming{Ability: "peek", Target: d.ID}, h.now()); why != "" {
 		t.Fatalf("with the wall gone, why = %q", why)
 	}
 }
@@ -60,7 +60,7 @@ func TestSightStopsACastLetGo(t *testing.T) {
 func TestSightStopsSwings(t *testing.T) {
 	h, p, c, d := behindWall(t)
 	p.layer.mu.Lock()
-	p.layer.startAttacking(p, d.ID)
+	p.layer.startAttacking(&p.fight.unit, d.ID)
 	p.layer.mu.Unlock()
 	health := d.damage
 	pass(h, c, 3)
