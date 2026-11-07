@@ -43,7 +43,7 @@ func (cm *Combat) think(m *mob, dt float64, now time.Time) {
 		}
 	case "fight":
 		t := cm.state.unit(m.mind.target, m.char.Continent)
-		if t == nil || !cm.state.present(t) || t.Health <= 1 || distance(m.char.At, m.home) > leashFt {
+		if t == nil || !cm.state.present(t) || t.Health <= 0 || distance(m.char.At, m.home) > leashFt {
 			cm.giveUp(m, now)
 			return
 		}
@@ -104,7 +104,7 @@ func (cm *Combat) noticed(m *mob) *unit {
 	var found *unit
 	for u := range cm.state.playerUnits() {
 		gap := distance(m.char.At, u.char.At)
-		if u.char.Continent != m.char.Continent || gap > radius || u.Health <= 1 || cm.untargetable(u, cm.now()) {
+		if u.char.Continent != m.char.Continent || gap > radius || u.Health <= 0 || cm.untargetable(u, cm.now()) {
 			continue
 		}
 		if (found == nil || gap < distance(m.char.At, found.char.At)) && cm.sees(m.char.Continent, eyes(m.char.At), eyes(u.char.At)) {
@@ -179,8 +179,7 @@ func (cm *Combat) say(m *mob, at [3]float64, yaw float64, move Move, now time.Ti
 }
 
 // mobSwing is a mob's swing at a unit, for `base` damage before what the target's stats make of it.
-// A training dummy's sparring swing is one too. Neither takes the last of your health, until dying
-// is played.
+// A training dummy's sparring swing is one too, and never takes the last of your health.
 func (cm *Combat) mobSwing(m *mob, on *unit, base float64, now time.Time) {
 	cm.state.tellOf(on.ID, encode(swung{"swung", m.ID, on.ID}))
 	ctx := combat.HitContext{Schools: []string{"physical"}, Kinds: []string{"auto", "melee", "direct", "main", "single"}, Other: m.ID}
@@ -199,7 +198,9 @@ func (cm *Combat) mobSwing(m *mob, on *unit, base float64, now time.Time) {
 			h.Blocked = true
 		}
 		n = cm.soak(on, n, ctx.Schools, &h, now)
-		n = min(n, on.Health-1)
+		if m.training {
+			n = min(n, on.Health-1)
+		}
 		cm.harm(&m.unit, on, max(n, 0), &h, now)
 		if blocked {
 			cm.fire(event{on: "block", who: on, other: m.ID, ctx: &ctx, amount: n}, now)

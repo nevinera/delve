@@ -150,6 +150,14 @@ func (l *Layer) acted(u *unit, why string) { l.stopLoggingOff(u.player, why) }
 // sendHome takes a player to its home rest point.
 func (l *Layer) sendHome(u *unit) { l.goHome(u.player) }
 
+// wakeHome brings a player who died back at its home rest point, at full health. Until there's a
+// ghost run (#220), that's all dying does.
+func (l *Layer) wakeHome(u *unit) {
+	answer(u.player, "status", "You died.")
+	l.goHome(u.player)
+	l.resizeHealth(u, u.MaxHealth, u.MaxHealth)
+}
+
 // motionOf is how a player's been moving, as its reports are checked, or nil for a dummy.
 func (l *Layer) motionOf(u *unit) *motion {
 	if u.player == nil {
@@ -182,6 +190,7 @@ type combatState interface {
 	sendHome(u *unit)
 	motionOf(u *unit) *motion
 	comeBack(m *mob)
+	wakeHome(u *unit)
 	placeMob(m *mob, at [3]float64, yaw float64, move Move, say bool)
 }
 

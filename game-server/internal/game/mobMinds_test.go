@@ -106,3 +106,35 @@ func TestAMobAtPeaceWanders(t *testing.T) {
 		t.Fatalf("after wandering it's %v ft from home", gap)
 	}
 }
+
+func TestAPlayerKilledByAMobWakesAtHome(t *testing.T) {
+	people := characters(nil)
+	people.class[1] = "frst0001"
+	h := NewHub(fightingWorld{}, people)
+	h.roll = func() float64 { return 0.99 } // nothing's avoided
+	c := clockOf(h)
+	p := enter(t, h, 1)
+	l := p.layer
+	mean := l.mobs[1]
+	mean.creature = &worlds.Creature{ID: "gobl0001", Name: "Goblin", Reaction: "hostile", Damage: 1000}
+	l.mu.Lock()
+	l.teleport(p, "main", [3]float64{100, 0, 130})
+	l.mu.Unlock()
+	heard(p)
+	for i := 0; i < 60 && p.state.At[2] != 100; i++ {
+		pass(h, c, 0.05)
+	}
+	if p.fight.unit.Health != p.fight.unit.MaxHealth || p.state.At[2] != 100 {
+		t.Fatalf("after dying: health %v at %v", p.fight.unit.Health, p.state.At)
+	}
+	if mean.mind.mode != "home" {
+		t.Fatalf("the goblin is %+v", mean.mind)
+	}
+	var said []string
+	for _, m := range heard(p, "log") {
+		said = append(said, m["text"].(string))
+	}
+	if len(said) < 2 || said[0] != "You died." {
+		t.Fatalf("told %v", said)
+	}
+}

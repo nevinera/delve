@@ -106,3 +106,19 @@ func (l *Layer) placeMob(m *mob, at [3]float64, yaw float64, move Move, say bool
 		o.send(encode(vanish{"vanish", m.ID}))
 	}
 }
+
+// playerDies is a player's health running out: the mobs fighting it go home, what mobs put on it
+// comes off, and it wakes at home.
+func (cm *Combat) playerDies(u *unit, now time.Time) {
+	for _, m := range cm.state.mobList() {
+		if m.mind.mode == "fight" && m.mind.target == u.ID {
+			cm.giveUp(m, now)
+		}
+	}
+	for key := range u.Statuses {
+		if key.from < 0 {
+			cm.takeOff(u, key)
+		}
+	}
+	cm.state.wakeHome(u)
+}

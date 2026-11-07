@@ -88,6 +88,7 @@ func (s *fakeState) tellContinent(_ string, b []byte) { s.tellOf(0, b) }
 func (s *fakeState) acted(*unit, string)              {}
 func (s *fakeState) sendHome(*unit)                   {}
 func (s *fakeState) comeBack(*mob)                    {}
+func (s *fakeState) wakeHome(u *unit)                 { u.Health = u.MaxHealth }
 func (s *fakeState) placeMob(m *mob, at [3]float64, yaw float64, move Move, _ bool) {
 	m.char.At, m.char.Yaw, m.char.Move = at, yaw, move
 }

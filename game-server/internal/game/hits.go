@@ -254,9 +254,12 @@ func (cm *Combat) harm(u *unit, on *unit, n float64, h *hit, now time.Time) {
 		h.DPS = math.Round(d.dps(now))
 		cm.state.setHealth(on, on.MaxHealth) // it's always at full health
 	}
-	if d := on.mob; d != nil && !d.training && on.Health <= 0 {
+	switch d := on.mob; {
+	case d != nil && !d.training && on.Health <= 0:
 		cm.dies(d, now)
-	} else if d != nil {
+	case d != nil:
 		cm.engage(d, u, now)
+	case on.Health <= 0 && cm.state.present(on):
+		cm.playerDies(on, now)
 	}
 }
