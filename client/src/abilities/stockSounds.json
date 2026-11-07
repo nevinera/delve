@@ -148,35 +148,5 @@
     "kind": "loot",
     "variations": 3,
     "from": "kenney"
-  },
-  "ui-click": {
-    "kind": "ui",
-    "variations": 3,
-    "from": "kenney"
-  },
-  "ui-open": {
-    "kind": "ui",
-    "variations": 3,
-    "from": "kenney"
-  },
-  "ui-close": {
-    "kind": "ui",
-    "variations": 3,
-    "from": "kenney"
-  },
-  "ui-error": {
-    "kind": "ui",
-    "variations": 3,
-    "from": "kenney"
-  },
-  "ui-confirm": {
-    "kind": "ui",
-    "variations": 3,
-    "from": "kenney"
-  },
-  "level-up": {
-    "kind": "ui",
-    "variations": 2,
-    "from": "made"
   }
 }

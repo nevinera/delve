@@ -762,7 +762,6 @@ export class PlayCombat {
 
   level_({ id, level }) {
     if (id !== this.you.id) return;
-    if (this.you.level !== undefined && level > this.you.level) this.menuSound("level-up", 1);
     this.you.level = level;
     this.youFrame.name.textContent = `${this.you.name} (${level})`;
     this.setClass(this.made);
@@ -815,11 +814,6 @@ export class PlayCombat {
     const you = this.view.walker?.model;
     this.stage.hear(this.view.camera, you && [you.position.x, you.position.y + (this.view.walker.look?.height ?? 6) * 0.9, you.position.z]);
     this.view.camera.position.add(this.stage.shakeOffset());
-  }
-
-  // Plays a sound that comes from nowhere and is only yours, as on levelling up.
-  menuSound(name, volume = 1) {
-    this.stage.sound(name, { volume });
   }
 
   // What status-long auras there should be right now: who has what, and how it looks.

@@ -7,7 +7,7 @@ the same loudness.
 
     script/bake_sounds.py <folder holding Kenney's packs> [--alternates <folder>]
 
-The packs go in folders named impact-sounds, rpg-audio, interface-sounds and sci-fi-sounds. With
+The packs go in folders named impact-sounds, rpg-audio and sci-fi-sounds. With
 --alternates it also writes the sounds in ALTERNATES there, to compare against the stock ones.
 """
 import json
@@ -336,14 +336,6 @@ def death(rng):
     return add(out, times(filtered(noise(0.3, rng), 1800, "band", 1), bell(0.3)), at=0.36, gain=0.12)
 
 
-def level_up(rng):
-    root = rng.choice([392.0, 440.0])
-    out = blank(1.2)
-    for k, ratio in enumerate([1, 1.26, 1.5, 2]):
-        voice = filtered(tone(0.65 if k == 3 else 0.28, root * ratio, shape="saw"), 2400, "low", 1)
-        add(out, times(voice, decay(len(voice) / RATE, 0.008, 1.5)), at=k * 0.12, gain=0.8)
-    return add(out, sparkles(1.2, 14, 2500, 6000, rng, 0.25), at=0.3, gain=0.3)
-
 
 def block(rng):
     out = metal(0.4, rng.uniform(640, 820), rng, power=6)
@@ -369,7 +361,6 @@ def rpg(stem, picks):
 
 FOUR = ["_000", "_001", "_002", "_003"]
 THREE = FOUR[:3]
-FROM_ONE = ["_001", "_002", "_003"]  # the interface pack counts from 1
 
 # name -> (what it's for, its variations). The first sets are what abilities pick from.
 STOCK = {
@@ -403,12 +394,6 @@ STOCK = {
     "step-snow": ("footstep", pack("impact-sounds", "footstep_snow", FOUR)),
     "coins": ("loot", rpg("handleCoins", ["", "2"])),
     "loot-cloth": ("loot", rpg("cloth", ["1", "2", "3"])),
-    "ui-click": ("ui", pack("interface-sounds", "select", FROM_ONE)),
-    "ui-open": ("ui", pack("interface-sounds", "open", FROM_ONE)),
-    "ui-close": ("ui", pack("interface-sounds", "close", FROM_ONE)),
-    "ui-error": ("ui", pack("interface-sounds", "error", FROM_ONE)),
-    "ui-confirm": ("ui", pack("interface-sounds", "confirmation", FROM_ONE)),
-    "level-up": ("ui", made(level_up, 2)),
 }
 
 # Other takes on some of them, to compare by ear. These don't go in the game.
@@ -423,8 +408,6 @@ ALTERNATES = {
     "shimmer": pack("sci-fi-sounds", "forceField", THREE),
     "nature": pack("sci-fi-sounds", "slime", ["_000", "_001"]),
     "lightning": pack("sci-fi-sounds", "laserLarge", THREE),
-    "ui-click": pack("interface-sounds", "click", ["_001"]) + pack("interface-sounds", "tick", ["_001", "_002"]),
-    "ui-confirm": pack("interface-sounds", "bong", ["_001"]),
     "loot-cloth": rpg("dropLeather", [""]) + rpg("handleSmallLeather", ["", "2"]),
     "step-stone": pack("impact-sounds", "footstep_carpet", ["_000", "_001"]),
 }

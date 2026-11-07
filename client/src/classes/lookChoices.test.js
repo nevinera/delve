@@ -89,7 +89,7 @@ describe("sounds", () => {
   });
 
   it("still show one that's not on offer", () => {
-    expect(soundStrip({ sounds: [{ sound: "ui-click", when: "impact" }] }, "impact").options.at(-1).value).toBe("ui-click");
+    expect(soundStrip({ sounds: [{ sound: "coins", when: "impact" }] }, "impact").options.at(-1).value).toBe("coins");
   });
 });
 

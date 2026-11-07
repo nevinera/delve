@@ -287,7 +287,7 @@ describe("SoundMixer", () => {
   it("goes without a place for what's only heard", async () => {
     const { made, context } = await mixer();
     const panner = vi.spyOn(context, "createPanner");
-    made.play("ui-click");
+    made.play("coins");
     expect(panner).not.toHaveBeenCalled();
     made.play("impact", { at: [1, 2, 3] });
     expect(panner).toHaveBeenCalledOnce();
