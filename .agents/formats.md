@@ -1120,7 +1120,7 @@ Each line has the NPC's `text` and your `choices`. A choice goes to the line `ne
 
 Mobs near one that's pulled, of the same `family`, may join it too.
 
-`/create`'s mob tool places creatures one at a time, with ids of `mob` and four more letters, and keeps the file's regions, NPCs and other fields as they were. It writes `at`'s height as the ground's there, and leaves `wander` out unless you set one. A continent with no placed mobs gets no spawns file, unless it had one.
+`/create`'s mob tool places creatures one at a time, with ids of `mob` and five more letters or digits, and keeps the file's regions, NPCs and other fields as they were. It writes `at`'s height as the ground's there, and leaves `wander` out unless you set one. A continent with no placed mobs gets no spawns file, unless it had one.
 
 ### Icons
 

@@ -97,7 +97,7 @@ describe("mobs placed in /create", () => {
     expect(file.placed[0]).toEqual(npc);
     expect(file.placed[1]).toMatchObject({ creature: "gobl0001", levels: [2, 4], respawn: 60, yaw: 90, at: [10, 5, 20.1] });
     expect(file.placed[1]).not.toHaveProperty("wander");
-    expect(file.placed[1].id).toMatch(/^mob[0-9a-z]{4}$/);
+    expect(file.placed[1].id).toMatch(/^mob[0-9a-z]{5}$/);
     expect(u.mobVersion).toBe(1);
     expect(u.meshes.get(file.placed[1]).userData.character).toBe(true);
   });

@@ -36,10 +36,11 @@ const materials = (opacity = 1) => {
   return { ...dummyMaterials(opacity), flag: make(FLAG), rest: restPointMaterials(opacity) };
 };
 
-// A new id of `prefix` and four more letters, one nothing in `taken` has.
+// A new id of `prefix` and random letters, eight in all, one nothing in `taken` has.
 function newId(prefix, taken, random) {
+  const more = 8 - prefix.length;
   for (;;) {
-    const id = `${prefix}${Math.floor(random() * 36 ** 4).toString(36).padStart(4, "0")}`;
+    const id = `${prefix}${Math.floor(random() * 36 ** more).toString(36).padStart(more, "0")}`;
     if (!taken.some((r) => r.id === id)) return id;
   }
 }
