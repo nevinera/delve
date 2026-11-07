@@ -655,7 +655,7 @@ A humanoid's areas are its look's color slots, and an area with no rule takes th
 
 ## Game data
 
-The game server and `/classes` read classes, as [Combat](#combat) describes, and nothing reads the rest yet, so this section is their only definition. What a world defines for combat: classes, abilities, statuses, items, creatures, NPCs, dialogue and spawns. Each is a JSON file in the world, with a schema in [docs/schema](../docs/schema). The rules follow the genre's modern standard as closely as we can: its stats, rating conversions, attack table, GCD and resources.
+The game server and `/classes` read classes, as [Combat](#combat) describes. The game server reads creatures and the creatures placed in spawns files, but doesn't play them yet. Nothing reads the rest yet, so this section is their only definition. What a world defines for combat: classes, abilities, statuses, items, creatures, NPCs, dialogue and spawns. Each is a JSON file in the world, with a schema in [docs/schema](../docs/schema). The rules follow the genre's modern standard as closely as we can: its stats, rating conversions, attack table, GCD and resources.
 
 | Path | What it is | Schema |
 | --- | --- | --- |

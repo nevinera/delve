@@ -31,6 +31,8 @@ type World struct {
 	Dummies      []Dummy         // training dummies
 	RestPoints   []RestPoint     // places characters can make their home
 	Classes      []*combat.Class // by id
+	Creatures    []*Creature     // by id
+	Placed       []Placed        // mobs placed by hand
 	path, prefix string          // the zip it was read from, and its top directory
 }
 
@@ -196,6 +198,8 @@ func Read(path string) (*World, error) {
 	w.Dummies = info.Dummies
 	w.RestPoints = info.RestPoints
 	w.Classes = readClasses(files)
+	w.Creatures = readCreatures(files)
+	w.Placed = readPlacedMobs(files, w.Continents, w.Creature)
 	return w, nil
 }
 
