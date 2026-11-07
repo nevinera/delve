@@ -81,6 +81,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M24 5 L29 19 L19 19 Z" fill="#ffa030"/><path d="M24 11 L26.5 19 L21.5 19 Z" fill="#ffe080"/><ellipse cx="15" cy="20" rx="3" ry="2" fill="#8a8580"/><ellipse cx="33" cy="20" rx="3" ry="2" fill="#8a8580"/><ellipse cx="24" cy="21.5" rx="3" ry="1.6" fill="#8a8580"/></svg>
         <span>rest</span><kbd class="create-key">K</kbd>
       </button>
+      <button type="button" data-tool="mob" data-key="n" aria-pressed="false" title="place mobs, one at a time, from the world's creatures">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><circle cx="24" cy="7" r="4" fill="#7aa84a"/><path d="M19 7 L14 4 M29 7 L34 4" stroke="#7aa84a" stroke-width="2" stroke-linecap="round"/><path d="M18 22 L20 12 L28 12 L30 22 Z" fill="#8a6440"/><line x1="31" y1="10" x2="36" y2="21" stroke="#c8ccd0" stroke-width="2"/></svg>
+        <span>mob</span><kbd class="create-key">N</kbd>
+      </button>
       <button type="button" data-tool="restArea" data-key="l" aria-pressed="false" title="draw the area around a rest point where characters are resting">
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M8 6 L38 3 L44 18 L14 21 Z" fill="none" stroke="#ffb050" stroke-width="2"/><path d="M26 8 L29 17 L23 17 Z" fill="#ffa030"/></svg>
         <span>resting area</span><kbd class="create-key">L</kbd>
@@ -245,11 +249,21 @@
       <p id="spawnAt"></p>
       <button id="spawnGo" type="button">go to the spawn point</button>
     </div>
-    <div data-config="unitSelect dummy rest" hidden>
+    <div data-config="unitSelect dummy rest mob" hidden>
       <p class="create-note" data-only="dummy">Click the ground to put up a training dummy. The game server puts them up for players to hit.</p>
       <p class="create-note" data-only="rest">Click the ground to put a rest point there. A character standing by one can make it their home, and Homeward takes them back to it.</p>
-      <p class="create-note" data-only="unitSelect">Click a dummy or rest point to pick it, drag it to move it, and press Delete to take it away.</p>
+      <p class="create-note" data-only="mob">Click the ground to put a mob there: the creature below, at a level from the range, coming back that many seconds after it dies. The game server puts them up.</p>
+      <p class="create-note" data-only="unitSelect">Click a dummy, rest point or mob to pick it, drag it to move it, and press Delete to take it away. A picked mob's settings show below.</p>
       <label id="restName" hidden>name <input type="text" maxlength="40" spellcheck="false"></label>
+      <div id="mobFields" class="create-mob" hidden>
+        <p id="mobNone" class="create-note" hidden>This world has no creatures yet. Add one in <code>creatures/</code> to place it.</p>
+        <label>creature <select id="mobCreature"></select></label>
+        <label>levels <input id="mobLevelMin" type="number" min="1" max="99" step="1"> to <input id="mobLevelMax" type="number" min="1" max="99" step="1"></label>
+        <label>respawn <input id="mobRespawn" type="number" min="1" step="1"> seconds</label>
+        <label>facing <input id="mobYaw" type="number" min="0" max="359" step="15"> degrees</label>
+        <label>wander <input id="mobWander" type="number" min="0" step="5" placeholder="30"> feet</label>
+      </div>
+      <p id="mobCount"></p>
       <p id="dummyCount"></p>
       <p id="restCount"></p>
     </div>

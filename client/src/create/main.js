@@ -11,6 +11,7 @@ import { SEA_LEVEL_FT, TILE_FT } from "../v2/sizes.js";
 import { BIOME_NAMES } from "../v2/biomes.js";
 import { waterPath } from "../v2/water.js";
 import { mapPinsPath } from "../v2/mapPins.js";
+import { spawnsPath } from "../world/paths.js";
 import { roadsPath } from "../v2/roads.js";
 import { allEdges, wetIn } from "../v2/roadEdges.js";
 import { crossingThings } from "../v2/roadCrossings.js";
@@ -349,6 +350,9 @@ function start(world, changes, fresh) {
   );
   // A world with no map pins gets no map file, unless it had one.
   ownFiles.add({ path: mapPinsPath(continent), load: (j) => tools.pinStore.load(j), ...json(tools.pinStore), keep: (had) => had || tools.pinStore.pins.length > 0 }, 0);
+  // Mobs placed by hand, in spawns.json beside the regions and NPCs. A world with none gets no
+  // spawns file, unless it had one.
+  ownFiles.add({ path: spawnsPath(continent), load: (j) => tools.units.loadSpawns(j), toJSON: () => tools.units.spawnsJSON(), version: () => tools.units.mobVersion, keep: (had) => had || tools.units.mobs().length > 0 }, 0);
   ownFiles.add({ path: layoutPath(continent), ...json(layout), keep: (had) => had || layout.networks.size > 0 || layout.carved.size > 0 }, layout.dropped ? -1 : layout.version);
   lineRoads();
   startup.step("files");
@@ -444,10 +448,63 @@ function start(world, changes, fresh) {
   };
   // A rest point picked with select can be named.
   const restName = $("restName");
-  tools.units.onPick = (picked) => {
-    restName.hidden = !picked?.id;
-    if (picked?.id) restName.querySelector("input").value = picked.name ?? "";
+  // The world's creatures, which the mob tool places, and its settings or a picked mob's.
+  const creatures = [...world.files]
+    .filter(([path]) => /^creatures\/[^/]+\.json$/.test(path))
+    .flatMap(([path, bytes]) => {
+      try {
+        return [JSON.parse(strFromU8(bytes))];
+      } catch {
+        console.warn(`skipping ${path}: it isn't JSON`);
+        return [];
+      }
+    })
+    .filter((c) => c?.id)
+    .sort((a, b) => (a.name ?? a.id).localeCompare(b.name ?? b.id));
+  tools.units.setCreatures(creatures);
+  const mobInputs = { creature: $("mobCreature"), min: $("mobLevelMin"), max: $("mobLevelMax"), respawn: $("mobRespawn"), yaw: $("mobYaw"), wander: $("mobWander") };
+  const creatureOptions = () => creatures.map((c) => new Option(`${c.name ?? c.id} (${c.id})`, c.id));
+  const showMob = (picked) => {
+    const mob = tools.units.isMob(picked) ? picked : tools.units.tool === "mob" ? tools.units.mobSettings : null;
+    $("mobFields").hidden = !mob;
+    if (!mob) return;
+    $("mobNone").hidden = creatures.length > 0;
+    mobInputs.creature.replaceChildren(...creatureOptions());
+    if (mob.creature && !creatures.some((c) => c.id === mob.creature)) mobInputs.creature.append(new Option(`${mob.creature} (not in this world)`, mob.creature));
+    mobInputs.creature.value = mob.creature ?? "";
+    const [min, max] = Array.isArray(mob.levels) ? mob.levels : [mob.levels ?? 1, mob.levels ?? 1];
+    mobInputs.min.value = min;
+    mobInputs.max.value = max;
+    mobInputs.respawn.value = mob.respawn ?? "";
+    mobInputs.yaw.value = mob.yaw ?? 0;
+    mobInputs.wander.value = mob.wander ?? "";
   };
+  const readMob = () => {
+    const number = (input, fallback) => (input.value === "" || !Number.isFinite(Number(input.value)) ? fallback : Number(input.value));
+    const min = Math.max(1, Math.round(number(mobInputs.min, 1)));
+    const max = Math.max(min, Math.round(number(mobInputs.max, min)));
+    const wander = number(mobInputs.wander, null);
+    return {
+      creature: mobInputs.creature.value || null,
+      levels: min === max ? min : [min, max],
+      respawn: Math.max(1, number(mobInputs.respawn, 300)),
+      yaw: ((number(mobInputs.yaw, 0) % 360) + 360) % 360,
+      wander: wander === null ? null : Math.max(0, wander),
+    };
+  };
+  for (const input of Object.values(mobInputs)) input.addEventListener("change", () => tools.units.setMob(readMob()));
+  const showMobCount = () => {
+    const here = tools.units.mobs().length;
+    $("mobCount").textContent = `${here || "no"} ${here === 1 ? "mob" : "mobs"} placed on this continent`;
+  };
+  tools.units.onMobs = showMobCount;
+  tools.units.onPick = (picked) => {
+    const named = picked?.id && !tools.units.isMob(picked);
+    restName.hidden = !named;
+    if (named) restName.querySelector("input").value = picked.name ?? "";
+    showMob(picked);
+  };
+  showMobCount();
   restName.querySelector("input").addEventListener("input", (e) => tools.units.rename(e.target.value.trim()));
   tools.units.load({ continent, spawn: worldInfo().spawn, dummies: worldInfo().dummies, restPoints: worldInfo().restPoints });
   tools.units.onChange = keepUnits;

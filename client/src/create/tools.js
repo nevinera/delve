@@ -57,7 +57,7 @@ const PLANNING = new Set(["marker", "eraser", "select", "measure"]); // tools th
 const OPENS_PINS = new Set([null, "pin"]); // tools with which clicking a pin opens it
 const BUILD = new Set(["pick", "object", "template", "slab", "stairs", "ramp"]);
 const PLANS = new Set(["caveSelect", "entrance", "caveAdd"]);
-const UNITS = new Set(["unitSelect", "dummy", "rest", "spawn"]);
+const UNITS = new Set(["unitSelect", "dummy", "rest", "mob", "spawn"]);
 const POLISH = new Set(POLISH_TOOLS);
 const MEASURE = new Set(["measure"]);
 // How each caves tool draws the rock and whether it shows the layout; null leaves it as it is.

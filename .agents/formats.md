@@ -41,7 +41,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 | `places/continents/<c>/water.json` | the water's bodies and courses | [below](#biomes-planning-marks-and-water) | `client/src/v2/water.js`, `courses.js` |
 | `places/continents/<c>/roads.json` | footpaths, trails and roads | [below](#roads), [schema](../docs/schema/roads.schema.json) | `client/src/v2/roads.js`, `client/src/create/roads.js`, `client/src/play/loader.js` |
 | `places/continents/<c>/map.json` | map pins: places marked on the map in play | [Map pins](#map-pins), [schema](../docs/schema/map.schema.json) | `client/src/v2/mapPins.js`, `client/src/play/loader.js` |
-| `places/continents/<c>/spawns.json` | spawn regions, and mobs and NPCs placed one at a time | [Spawns](#spawns), [schema](../docs/schema/spawns.schema.json) | none yet |
+| `places/continents/<c>/spawns.json` | spawn regions, and mobs and NPCs placed one at a time | [Spawns](#spawns), [schema](../docs/schema/spawns.schema.json) | `client/src/create/units.js`, `game-server/internal/worlds/creatures.go` |
 
 The JSON files that describe things (the world, objects, templates and game data) can have `notes`: free-form text on what a thing is for and its backstory. The game never reads them.
 
@@ -1119,6 +1119,8 @@ Each line has the NPC's `text` and your `choices`. A choice goes to the line `ne
   - `patrol`: `points`, each `[x, z]` in feet, that it walks between, on the ground. With `loop` it goes back to the first; without, it turns back. A patrolling creature doesn't wander.
 
 Mobs near one that's pulled, of the same `family`, may join it too.
+
+`/create`'s mob tool places creatures one at a time, with ids of `mob` and four more letters, and keeps the file's regions, NPCs and other fields as they were. It writes `at`'s height as the ground's there, and leaves `wander` out unless you set one. A continent with no placed mobs gets no spawns file, unless it had one.
 
 ### Icons
 

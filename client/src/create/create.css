@@ -973,3 +973,16 @@ body.create {
   right: 220px;
   bottom: 150px;
 }
+
+.create-mob {
+  display: grid;
+  gap: 6px;
+}
+
+.create-mob input[type="number"] {
+  width: 3.5em;
+}
+
+.create-mob label {
+  white-space: nowrap;
+}
