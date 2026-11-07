@@ -64,6 +64,7 @@ const respawnSeconds = 300
 func (cm *Combat) dies(m *mob, now time.Time) {
 	if m.fight != nil {
 		cm.stopCast(&m.unit)
+		cm.lastAct(m, now)
 	}
 	m.char.Dead = true
 	for key := range m.Statuses {

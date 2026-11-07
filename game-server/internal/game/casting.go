@@ -557,7 +557,7 @@ func (cm *Combat) landArriving(u *unit, c *casting, now time.Time) {
 // landWhich lands the effects `which` picks. It reads all their conditions first, so one effect
 // can't change whether another lands: one button can start a status or end it.
 func (cm *Combat) landWhich(u *unit, c *casting, now time.Time, which func(*combat.Effect) bool) {
-	if !cm.casts(u) {
+	if !cm.casts(u) && !c.last {
 		return
 	}
 	type landingOn struct {
