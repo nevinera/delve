@@ -52,6 +52,16 @@ describe("the walk search", () => {
     expect(search.path.points.some((p) => p.swum)).toBe(true);
   });
 
+  it("swims down a falls, but not up it", () => {
+    // A gorge 20 ft wide along z = 100, cliffs 200 ft high either side, its river 10 ft deep: at
+    // its surface 40 ft up west of x = 300, falling to 0 past it.
+    const level = (x) => (x < 300 ? 40 : 0);
+    const inGorge = (z) => z > 90 && z < 110;
+    const gorge = world((x, z) => (inGorge(z) ? level(x) - 10 : 200), (x, z) => (inGorge(z) ? level(x) : NaN), 2);
+    expect(run(new WalkSearch({ from: [150, 100], to: [450, 100], most: 1000, cellsOf: gorge }))).toBe("found");
+    expect(run(new WalkSearch({ from: [450, 100], to: [150, 100], most: 1000, cellsOf: gorge }))).toBe("none");
+  });
+
   it("can't climb out of the water up a high bank", () => {
     const ground = (x) => (x > 200 && x < 300 ? -10 : x >= 300 ? 30 : 0);
     const water = (x) => (x > 196 && x < 304 ? 0 : NaN);

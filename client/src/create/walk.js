@@ -1,3 +1,4 @@
+import { CASCADE_STEEP } from "../v2/courses.js";
 import { CELL_FT, TILE_FT } from "../v2/sizes.js";
 import { SWIM_FT } from "./builder.js";
 import { WALK_DEG } from "./growth.js";
@@ -7,7 +8,8 @@ import { WALK_DEG } from "./growth.js";
 // CELL_FT straight or about 1.41 of that across. It's walked onto a cell whose face is no steeper
 // than WALK_DEG, whichever way it's crossed, climbing or dropping no more than that face would
 // across CELL_FT; or swum where both cells' water is deeper than SWIM_FT: swimmers are at its
-// surface, so getting out wants a bank near its level. Where there are no tiles is open sea. It's
+// surface, so getting out wants a bank near its level, and they can swim down a cascade or a falls
+// but not up one, where its surface rises more steeply than CASCADE_STEEP. Where there are no tiles is open sea. It's
 // searched a few thousand cells at a time (step()), nearest first by how far they are on foot and
 // how far they'd still be in a straight line (A*), so it spreads from the start like water, leaning
 // toward the end, and it's done when it gets there or nothing's left that could within `most`.
@@ -138,6 +140,7 @@ export class WalkSearch {
         if (next.way[m] & CLOSED) return;
         const swum = deep && next.way[m] & DEEP;
         if (!swum && (next.way[m] & STEEP || Math.abs(next.height[m] - h) > MOST_STEP)) return;
+        if (swum && next.height[m] - h > cost * CASCADE_STEEP) return;
         const to = g + cost;
         const guess = to + this.left(i + di, j + dj);
         if (to >= next.g[m] || guess > this.most) return;
