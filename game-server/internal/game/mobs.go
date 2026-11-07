@@ -2,6 +2,7 @@ package game
 
 import (
 	"math"
+	"slices"
 	"time"
 
 	"github.com/delve-mmo/delve3d/game-server/internal/combat"
@@ -108,8 +109,12 @@ func (l *Layer) placeMob(m *mob, at [3]float64, yaw float64, move Move, say bool
 }
 
 // playerDies is a player's health running out: the mobs fighting it go home, what mobs put on it
-// comes off, and it wakes at home.
+// comes off, and it wakes at home once this tick's done, after it's heard what killed it.
 func (cm *Combat) playerDies(u *unit, now time.Time) {
+	if slices.Contains(cm.waking, u) {
+		return
+	}
+	cm.waking = append(cm.waking, u)
 	for _, m := range cm.state.mobList() {
 		if m.mind.mode == "fight" && m.mind.target == u.ID {
 			cm.giveUp(m, now)
@@ -120,5 +125,14 @@ func (cm *Combat) playerDies(u *unit, now time.Time) {
 			cm.takeOff(u, key)
 		}
 	}
-	cm.state.wakeHome(u)
+}
+
+// wake brings those who died this tick back at home.
+func (cm *Combat) wake() {
+	for _, u := range cm.waking {
+		if cm.state.present(u) {
+			cm.state.wakeHome(u)
+		}
+	}
+	cm.waking = nil
 }

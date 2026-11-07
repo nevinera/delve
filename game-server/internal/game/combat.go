@@ -268,6 +268,7 @@ func (cm *Combat) tick(now time.Time) {
 		}
 	}
 	cm.sweep(now)
+	cm.wake()
 }
 
 func movingNow(m Move) bool { return m.Forward != 0 || m.Strafe != 0 || m.Jump }

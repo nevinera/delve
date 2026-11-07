@@ -205,4 +205,5 @@ type Combat struct {
 	landings        []*landing
 	firing          int // how many triggers are setting each other off right now
 	lastTick        time.Time
+	waking          []*unit // players who died this tick, to wake at home at its end
 }

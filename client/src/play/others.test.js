@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nameWithLevel, Others, speedOf, stepOf } from "./others.js";
+import { levelColor, nameWithLevel, Others, speedOf, stepOf } from "./others.js";
 
 const move = (m) => ({ forward: 0, strafe: 0, turn: 0, gait: "run", swim: false, jump: false, ...m });
 
@@ -55,5 +55,14 @@ describe("nameWithLevel", () => {
     expect(nameWithLevel({ id: -2, name: "Goblin", level: 3 })).toBe("Goblin (3)");
     expect(nameWithLevel({ id: 7, name: "Ann", level: 3 })).toBe("Ann");
     expect(nameWithLevel({ id: -1, name: "Training Dummy", dummy: true })).toBe("Training Dummy");
+  });
+});
+
+describe("levelColor", () => {
+  it("goes from grey for far under you to red for far over", () => {
+    expect([1, 4, 5, 8, 10, 12, 13, 14, 15, 20].map((level) => levelColor(level, 10))).toEqual(["#a6a6a6", "#a6a6a6", "#5fd35f", "#ffd84d", "#ffd84d", "#ffd84d", "#ff9a2e", "#ff9a2e", "#ff4d3d", "#ff4d3d"]);
+  });
+  it("is white when it doesn't know a level", () => {
+    expect(levelColor(3, null)).toBe("#ffffff");
   });
 });

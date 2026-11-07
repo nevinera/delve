@@ -53,14 +53,31 @@ function seeded(seed) {
   };
 }
 
+// The color a mob's name shows in, by how its level compares with yours: red five or more over
+// you, orange three or four over, yellow within two, green up to five under, and grey below that.
+export function levelColor(level, yours) {
+  if (!level || !yours) return "#ffffff";
+  const gap = level - yours;
+  if (gap >= 5) return "#ff4d3d";
+  if (gap >= 3) return "#ff9a2e";
+  if (gap >= -2) return "#ffd84d";
+  if (gap >= -5) return "#5fd35f";
+  return "#a6a6a6";
+}
+
 // A character's name, with its level if it's a mob: players' levels show in frames, not over heads.
 export function nameWithLevel({ id, name, level, dummy }) {
   return id < 0 && level && !dummy ? `${name} (${level})` : name;
 }
 
+function disposeNameplate(sprite) {
+  sprite.material.map.dispose();
+  sprite.material.dispose();
+}
+
 // A name to hang over a character's head: white with a dark edge, readable over sky or ground,
 // and not dimmed by fog.
-function nameplate(name) {
+function nameplate(name, color = "#ffffff") {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
   const font = `600 ${NAME_PX}px system-ui, sans-serif`;
@@ -75,7 +92,7 @@ function nameplate(name) {
   ctx.lineWidth = NAME_PX / 6;
   ctx.strokeStyle = "rgba(0, 0, 0, 0.85)";
   ctx.strokeText(name, canvas.width / 2, canvas.height / 2);
-  ctx.fillStyle = "#ffffff";
+  ctx.fillStyle = color;
   ctx.fillText(name, canvas.width / 2, canvas.height / 2);
 
   const texture = new THREE.CanvasTexture(canvas);
@@ -92,6 +109,24 @@ export class Others {
   constructor(view) {
     this.view = view;
     this.characters = new Map(); // id -> drawn character
+    this.yourLevel = null;
+  }
+
+  // Your level changed, so mobs' names change color.
+  setYourLevel(level) {
+    this.yourLevel = level;
+    for (const drawn of this.characters.values()) {
+      if (drawn.id >= 0 || drawn.dummy) continue;
+      this.view.scene.remove(drawn.nameplate);
+      disposeNameplate(drawn.nameplate);
+      drawn.nameplate = this.nameplateOf(drawn);
+      this.view.scene.add(drawn.nameplate);
+    }
+  }
+
+  nameplateOf(character) {
+    const mob = character.id < 0 && !character.dummy;
+    return nameplate(nameWithLevel(character), mob ? levelColor(character.level, this.yourLevel) : undefined);
   }
 
   // Characters as the server sends them: { id, name, look, continent, at, yaw, move }.
@@ -113,7 +148,7 @@ export class Others {
       health: character.health,
       maxHealth: character.maxHealth,
       model,
-      nameplate: nameplate(nameWithLevel(character)),
+      nameplate: this.nameplateOf(character),
       height: dummy ? DUMMY_FT : look.height,
       mixer: new THREE.AnimationMixer(model),
       clips: null,
@@ -192,8 +227,7 @@ export class Others {
     this.view.scene.remove(drawn.model, drawn.nameplate);
     if (drawn.dummy) disposeDummy(drawn.model);
     else disposeCharacter(drawn.model);
-    drawn.nameplate.material.map.dispose();
-    drawn.nameplate.material.dispose();
+    disposeNameplate(drawn.nameplate);
     this.characters.delete(id);
   }
 

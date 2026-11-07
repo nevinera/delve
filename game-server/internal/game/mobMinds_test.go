@@ -130,12 +130,18 @@ func TestAPlayerKilledByAMobWakesAtHome(t *testing.T) {
 	if mean.mind.mode != "home" {
 		t.Fatalf("the goblin is %+v", mean.mind)
 	}
-	var said []string
-	for _, m := range heard(p, "log") {
-		said = append(said, m["text"].(string))
+	// It hears the blow that killed it, and then that it died.
+	lastHit, died := -1, -1
+	for i, m := range heard(p, "log", "hit") {
+		switch {
+		case m["type"] == "hit":
+			lastHit = i
+		case m["text"] == "You died." && died < 0:
+			died = i
+		}
 	}
-	if len(said) < 2 || said[0] != "You died." {
-		t.Fatalf("told %v", said)
+	if lastHit < 0 || died < 0 || lastHit > died {
+		t.Fatalf("the last hit came at %d, and dying at %d", lastHit, died)
 	}
 }
 

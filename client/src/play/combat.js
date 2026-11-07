@@ -21,6 +21,7 @@ import { Footsteps, stepSound } from "./footsteps.js";
 import { LastingAuras } from "./lastingAuras.js";
 import { absorbBand, initials, timeLeft } from "./unitStatuses.js";
 import { EffectAreaMarks } from "./effectAreas.js";
+import { levelColor } from "./others.js";
 import { blockedBy, isHelpless } from "./controls.js";
 
 const AURA_CHECK_S = 0.25; // how often to see which status-long auras should be showing
@@ -554,6 +555,7 @@ export class PlayCombat {
     this.targetRing.visible = Boolean(drawn);
     if (!drawn) return;
     this.targetFrame.name.textContent = drawn.level ? `${drawn.name} (${drawn.level})` : drawn.name;
+    this.targetFrame.name.style.color = drawn.id < 0 && !drawn.dummy ? levelColor(drawn.level, this.you.level) : "";
     this.drawFrame(this.targetFrame, drawn.health, drawn.maxHealth);
     this.targetFrame.resources.textContent = drawn.dps ? `${drawn.dps} damage a second` : "";
   }
@@ -775,6 +777,7 @@ export class PlayCombat {
     // A quiet chime that comes from nowhere and is only yours.
     if (this.you.level !== undefined && level > this.you.level) this.stage.sound("level-up", { volume: LEVEL_UP_VOLUME });
     this.you.level = level;
+    this.others.setYourLevel(level);
     this.youFrame.name.textContent = `${this.you.name} (${level})`;
     this.setClass(this.made);
   }

@@ -324,6 +324,7 @@ async function play() {
   });
   menu.querySelector('[data-open="playGraphics"]').disabled = false;
   others = new Others(view);
+  others.setYourLevel(you.level ?? null);
   forOthers.arrive(others);
   sightLines = new SightLines(view, others, connection);
   restPoints = new RestPoints(view, connection);
