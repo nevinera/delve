@@ -1270,9 +1270,9 @@ Each websocket message is a JSON text frame, `{ "type": ..., ... }`. [`messages.
 | `teleport` | `continent`, `at`, `yaw` | the server moved you there. On another continent, the client loads it |
 | `error` | `message` | before the server closes the connection |
 
-A character is `{ id, name, look, continent, at, yaw, move, class, level, dummy, dead, health, maxHealth }`. `dead` marks a mob lying dead. `look` is the character builder's look. Mobs, training dummies and placed creatures, come as characters with negative ids. You see those in the 3×3 tiles around you, as you see other players: in your `snapshot`, and as `appear` and `vanish` when you come near and leave, and only those near a mob hear what happens to it. Training dummies have `dummy: true`. The client draws a dummy as a still post-and-sack dummy (`client/src/world/dummy.js`), whatever its `look`.
+A character is `{ id, name, look, continent, at, yaw, move, class, level, dummy, dead, health, maxHealth }`. `dead` marks a mob lying dead. `look` is the character builder's look. Mobs, training dummies and placed creatures, come as characters with negative ids. You see those in the 5×5 tiles around you, as you see other players: in your `snapshot`, and as `appear` and `vanish` when you come near and leave, and only those near a mob hear what happens to it. Training dummies have `dummy: true`. The client draws a dummy as a still post-and-sack dummy (`client/src/world/dummy.js`), whatever its `look`.
 
-"Near you" is the 3×3 tiles around your tile, on your continent and layer.
+"Near you" is the 5×5 tiles around your tile, on your continent and layer.
 
 ### Commands
 

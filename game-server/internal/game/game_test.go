@@ -651,3 +651,13 @@ func TestWeaponCommand(t *testing.T) {
 		t.Fatalf("state's look = %s", p.state.Look)
 	}
 }
+
+func TestNearbyIsTheFiveByFiveTilesAround(t *testing.T) {
+	at := func(tx, tz float64) [3]float64 { return [3]float64{tx*256 + 1, 0, tz*256 + 1} }
+	if !nearby(at(0, 0), at(2, -2)) || !nearby(at(0, 0), at(-2, 1)) {
+		t.Fatal("two tiles off isn't near")
+	}
+	if nearby(at(0, 0), at(3, 0)) || nearby(at(0, 0), at(0, -3)) {
+		t.Fatal("three tiles off is near")
+	}
+}

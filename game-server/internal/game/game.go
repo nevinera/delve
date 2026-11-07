@@ -552,7 +552,7 @@ func plateOf(at [3]float64) [2]int {
 	return [2]int{int(math.Floor(at[0] / worlds.PlateFt)), int(math.Floor(at[2] / worlds.PlateFt))}
 }
 
-// near is everyone else in the 3×3 tiles around p, on its continent. It looks at every player in
+// near is everyone else in the 5×5 tiles around p, on its continent. It looks at every player in
 // the layer, which is fine while layers are small.
 func (l *Layer) near(p *Player) []*Player {
 	var out []*Player
@@ -564,7 +564,7 @@ func (l *Layer) near(p *Player) []*Player {
 	return out
 }
 
-// playersNear is the players in the 3×3 tiles around a place on a continent.
+// playersNear is the players in the 5×5 tiles around a place on a continent.
 func (l *Layer) playersNear(continent string, at [3]float64) []*Player {
 	var out []*Player
 	for _, o := range l.players {
@@ -575,7 +575,7 @@ func (l *Layer) playersNear(continent string, at [3]float64) []*Player {
 	return out
 }
 
-// mobsNear is the mobs in the 3×3 tiles around a place on a continent.
+// mobsNear is the mobs in the 5×5 tiles around a place on a continent.
 func (l *Layer) mobsNear(continent string, at [3]float64) []*mob {
 	var out []*mob
 	for _, m := range l.mobs {
@@ -586,10 +586,14 @@ func (l *Layer) mobsNear(continent string, at [3]float64) []*mob {
 	return out
 }
 
-// nearby says whether two places are in tiles next to each other, or the same one.
+// nearTiles is how many tiles out from yours you see others: 2 makes the 5×5 tiles around you,
+// so everyone within 512 ft, past where the fog starts.
+const nearTiles = 2
+
+// nearby says whether two places are within nearTiles tiles of each other, each way.
 func nearby(a, b [3]float64) bool {
 	ta, tb := worlds.TileOf(a[0], a[2]), worlds.TileOf(b[0], b[2])
-	return abs(ta[0]-tb[0]) <= 1 && abs(ta[1]-tb[1]) <= 1
+	return abs(ta[0]-tb[0]) <= nearTiles && abs(ta[1]-tb[1]) <= nearTiles
 }
 
 // showMobs tells a player about the mobs it has come near and left, from where it was.
