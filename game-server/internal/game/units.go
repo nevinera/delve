@@ -34,6 +34,15 @@ func (l *Layer) units() iter.Seq[*unit] {
 	}
 }
 
+// caster is the unit of the player with that id on the layer, or nil: what put a status on, or
+// keeps an area going.
+func (l *Layer) caster(id int64) *unit {
+	if o := l.players[id]; o != nil {
+		return &o.fight.unit
+	}
+	return nil
+}
+
 // playerOf is the player a unit is, while it's on the layer, or nil.
 func (l *Layer) playerOf(u *unit) *Player {
 	if u == nil || u.player == nil || l.players[u.ID] != u.player {

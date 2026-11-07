@@ -116,8 +116,8 @@ func (l *Layer) modsOf(v *unit, ctx *combat.HitContext, now time.Time) []combat.
 				continue
 			}
 			mod := combat.Mod{Effect: e, Stacks: held.stacks, Spent: held.spent}
-			if o := l.players[key.from]; o != nil {
-				mod.Caster = &o.fight.unit.base
+			if o := l.caster(key.from); o != nil {
+				mod.Caster = &o.base
 			}
 			mods = append(mods, mod)
 		}
@@ -136,7 +136,7 @@ func (l *Layer) holds(v *unit, e *combat.StatusEffect, ctx *combat.HitContext, n
 		if ctx != nil {
 			target = ctx.Other
 		}
-		facts = l.facts(&o.fight.unit, target, now)
+		facts = l.facts(v, target, now)
 	}
 	_, ok := combat.All(e.When, facts)
 	return ok

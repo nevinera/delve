@@ -189,7 +189,7 @@ func (l *Layer) sweepZones(now time.Time) {
 		}
 	}
 	for _, a := range auras {
-		from := l.players[a.key.from]
+		from := l.caster(a.key.from)
 		if from == nil || a.v.Statuses[a.key] != a.held {
 			continue
 		}
@@ -200,7 +200,7 @@ func (l *Layer) sweepZones(now time.Time) {
 			if e.Effect != nil {
 				effects = []combat.Effect{*e.Effect}
 			}
-			z = l.zoneOf(&from.fight.unit, &combat.Ability{ID: a.held.def.ID, Name: a.held.def.Name}, e.Affects, e.Radius, e.Max, e.Status, e.Every, effects, nil)
+			z = l.zoneOf(from, &combat.Ability{ID: a.held.def.ID, Name: a.held.def.Name}, e.Affects, e.Radius, e.Max, e.Status, e.Every, effects, nil)
 			id := a.v.ID
 			z.center = func() ([3]float64, string, bool) { return l.unitAt(id, [3]float64{}, "") }
 			if a.held.zones == nil {

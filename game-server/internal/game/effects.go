@@ -149,7 +149,7 @@ func (l *Layer) interrupt(u *unit, e *combat.Effect, on *unit, h *hit, now time.
 	}
 	f := &o.fight
 	stopped := f.cast.ability
-	l.stopCast(&o.fight.unit)
+	l.stopCast(on)
 	for _, school := range schoolsOf("", nil, stopped) {
 		if e.Lockout > 0 {
 			f.lockouts[school] = now.Add(seconds(e.Lockout))

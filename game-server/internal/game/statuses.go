@@ -128,8 +128,8 @@ func (l *Layer) sweep(now time.Time) {
 			}
 			over := !each.until.IsZero() && !now.Before(each.until)
 			if each.def.Leash > 0 && !over {
-				from := l.players[key.from]
-				over = from == nil || from.state.Continent != continent || distance(from.state.At, at) > each.def.Leash
+				from := l.caster(key.from)
+				over = from == nil || from.char.Continent != continent || distance(from.char.At, at) > each.def.Leash
 			}
 			if over {
 				l.takeOff(v, key)
@@ -142,7 +142,7 @@ func (l *Layer) sweep(now time.Time) {
 
 // tickStatus lands whatever's due of a status's periodic effects. A last tick due as it ends still lands.
 func (l *Layer) tickStatus(v *unit, key statusKey, held *activeStatus, at [3]float64, continent string, now time.Time) {
-	p := l.players[key.from]
+	p := l.caster(key.from)
 	if p == nil {
 		return
 	}
@@ -151,7 +151,7 @@ func (l *Layer) tickStatus(v *unit, key statusKey, held *activeStatus, at [3]flo
 		if e.Type != "periodic" || held.def.Period(e) <= 0 {
 			continue
 		}
-		period := l.statsOf(&p.fight.unit, nil, now).Hasted(held.def.Period(e))
+		period := l.statsOf(p, nil, now).Hasted(held.def.Period(e))
 		if held.ticks == nil {
 			held.ticks = map[int]time.Time{}
 		}
@@ -160,7 +160,7 @@ func (l *Layer) tickStatus(v *unit, key statusKey, held *activeStatus, at [3]flo
 			next = held.since.Add(seconds(period))
 		}
 		for !now.Before(next) && (held.until.IsZero() || !next.After(held.until)) && v.Statuses[key] == held {
-			l.tickOf(&p.fight.unit, v, key.id, held, e, at, continent, now)
+			l.tickOf(p, v, key.id, held, e, at, continent, now)
 			next = next.Add(seconds(period))
 		}
 		held.ticks[i] = next
@@ -300,7 +300,7 @@ func (l *Layer) refit(v *unit, now time.Time) {
 		o.fight.controls = controls
 		o.send(encode(controlsMessage{"controls", append([]string{}, controls...)}))
 		if c := o.fight.cast; c != nil && combat.Blocked(controls, c.ability) != "" {
-			l.stopCast(&o.fight.unit)
+			l.stopCast(v)
 		}
 	}
 	if combat.HoldsStill(o.fight.controls) {

@@ -174,7 +174,7 @@ func (l *Layer) triggerDue(w watcher, ev event, now time.Time) bool {
 
 // runTrigger does what a trigger does. Whoever applied the status does it.
 func (l *Layer) runTrigger(w watcher, ev event, now time.Time) {
-	caster := l.players[w.key.from]
+	caster := l.caster(w.key.from)
 	if caster == nil {
 		return
 	}
@@ -188,24 +188,24 @@ func (l *Layer) runTrigger(w watcher, ev event, now time.Time) {
 	case "", "self", "holder":
 		targets = []*unit{w.on}
 	case "caster":
-		targets = []*unit{&caster.fight.unit}
+		targets = []*unit{caster}
 	case "target":
-		if on := l.unit(ev.other, caster.state.Continent); on != nil {
+		if on := l.unit(ev.other, caster.char.Continent); on != nil {
 			targets = []*unit{on}
 		}
 	default:
-		targets = l.reached(&caster.fight.unit, c, &effect)
+		targets = l.reached(caster, c, &effect)
 	}
 	for _, on := range targets {
-		if _, ok := combat.All(effect.When, l.facts(&caster.fight.unit, on.ID, now)); !ok {
+		if _, ok := combat.All(effect.When, l.facts(caster, on.ID, now)); !ok {
 			continue
 		}
 		runner := caster
-		if o := l.playerOf(on); o != nil && effect.Type == "resource" {
-			runner = o // what it gives goes to the one it lands on
+		if l.playerOf(on) != nil && effect.Type == "resource" {
+			runner = on // what it gives goes to the one it lands on
 		}
 		caster.debugLine("%s fires on %s", w.held.def.Name, ev.on)
-		l.land(&runner.fight.unit, c, &effect, on, len(targets), now)
+		l.land(runner, c, &effect, on, len(targets), now)
 	}
 	if w.on.Statuses[w.key] != w.held {
 		return

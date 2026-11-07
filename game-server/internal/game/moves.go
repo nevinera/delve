@@ -75,13 +75,13 @@ func (l *Layer) forceMove(u *unit, c *casting, e *combat.Effect, on *unit, now t
 		lasts = max(lasts, leastArc)
 	}
 	if o.fight.cast != nil && o.fight.cast != c {
-		l.stopCast(&o.fight.unit)
+		l.stopCast(on)
 	}
 	o.state.Yaw = yaw
-	l.breakStatuses(&o.fight.unit, "move", nil)
+	l.breakStatuses(on, "move", nil)
 	o.motion.teleported(now.Add(seconds(lasts)))
 	said := encode(forced{"forced", o.ID(), e.Kind, from, end, yaw, lasts, height})
-	l.relocate(&o.fight.unit, o.state.Continent, end, said, said)
+	l.relocate(on, o.state.Continent, end, said, said)
 	u.debugLine("%s: %s moves %.0f ft in %.1f s", c.ability.Name, l.nameOf(on.ID), distance(from, end), lasts)
 }
 
