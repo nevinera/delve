@@ -29,6 +29,7 @@ type mind struct {
 	wanderAt time.Time
 	goal     *[3]float64 // where it's wandering to
 	saidAt   time.Time   // when those near last heard how it's moving
+	turn     int         // where a rotation's up to (tactics.go)
 }
 
 // think moves a placed mob on by dt seconds.
@@ -281,28 +282,4 @@ func eyes(at [3]float64) [3]float64 { return [3]float64{at[0], at[1] + 5, at[2]}
 func (cm *Combat) casting(m *mob, now time.Time) bool {
 	c := m.fight.cast
 	return c != nil && (!c.released || (c.channel && now.Before(c.ends)))
-}
-
-// useAbility has a fighting mob use the first of its abilities it can on its target now, and says
-// whether it did. Its onDeath ability is only for dying.
-func (cm *Combat) useAbility(m *mob, t *unit, now time.Time) bool {
-	face := math.Atan2(t.char.At[0]-m.char.At[0], t.char.At[2]-m.char.At[2])
-	for _, a := range m.fight.class.Abilities {
-		if a.ID == m.creature.OnDeath {
-			continue
-		}
-		use := incoming{Type: "use", Ability: a.ID, Target: t.ID}
-		// A mob stops and turns to cast, so it's checked standing, facing its target.
-		moving, yaw := m.char.Move, m.char.Yaw
-		m.char.Move, m.char.Yaw = Move{Gait: moving.Gait}, face
-		_, _, why := cm.check(&m.unit, use, now)
-		m.char.Move, m.char.Yaw = moving, yaw
-		if why != "" {
-			continue
-		}
-		cm.say(m, m.char.At, face, Move{Gait: "run"}, now)
-		cm.use(&m.unit, use)
-		return true
-	}
-	return false
 }

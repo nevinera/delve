@@ -131,6 +131,7 @@ type casting struct {
 	landed, crit, survived bool          // its last hit: whether there's been one, and how it went
 	spentOpen              bool          // those include one that can spend more
 	extra                  float64       // how far past its least that one went, as a share
+	last                   bool          // a dying mob's onDeath use, which lands though its caster's dead
 }
 
 // landing is something that happens at a time: a hit arriving, a channel's tick.
