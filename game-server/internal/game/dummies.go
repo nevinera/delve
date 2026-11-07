@@ -11,10 +11,10 @@ import (
 
 // placeDummies puts a world's training dummies on the layer, standing on the ground.
 func (l *Layer) placeDummies() {
-	if l.dummies != nil {
+	if l.mobs != nil {
 		return
 	}
-	l.dummies = []*dummy{}
+	l.mobs = []*mob{}
 	for i, d := range l.world.Dummies {
 		at := [3]float64{d.At[0], 0, d.At[1]}
 		if g := l.ground(d.Continent); g != nil {
@@ -23,18 +23,19 @@ func (l *Layer) placeDummies() {
 			}
 		}
 		id := int64(-1 - i) // characters' ids are positive
-		made := &dummy{
-			unit:  unit{ID: id, base: combat.Plain(dummyHealth), Health: dummyHealth, MaxHealth: dummyHealth, Statuses: map[statusKey]*activeStatus{}},
-			state: Character{ID: id, Name: "Training Dummy", Look: json.RawMessage(`{"body":"goblin"}`), Continent: d.Continent, At: at, Move: Move{Gait: "run"}, Dummy: true, Health: dummyHealth, MaxHealth: dummyHealth},
+		made := &mob{
+			unit:     unit{ID: id, base: combat.Plain(dummyHealth), Health: dummyHealth, MaxHealth: dummyHealth, Statuses: map[statusKey]*activeStatus{}},
+			training: true,
+			state:    Character{ID: id, Name: "Training Dummy", Look: json.RawMessage(`{"body":"goblin"}`), Continent: d.Continent, At: at, Move: Move{Gait: "run"}, Dummy: true, Health: dummyHealth, MaxHealth: dummyHealth},
 		}
-		made.char, made.dummy = &made.state, made
-		l.dummies = append(l.dummies, made)
+		made.char, made.mob = &made.state, made
+		l.mobs = append(l.mobs, made)
 	}
 }
 
-func (l *Layer) dummiesOn(continent string) []Character {
+func (l *Layer) mobsOn(continent string) []Character {
 	out := []Character{}
-	for _, d := range l.dummies {
+	for _, d := range l.mobs {
 		if d.state.Continent == continent {
 			out = append(out, l.seen(d.state))
 		}
@@ -42,16 +43,16 @@ func (l *Layer) dummiesOn(continent string) []Character {
 	return out
 }
 
-// spar has the nearest dummy in reach swing back at a player who asked for that. It's how you try
+// spar has the nearest training dummy in reach swing back at a player who asked for that. It's how you try
 // out what happens when you're hit, while nothing else in the world attacks. It can't kill you.
 func (cm *Combat) spar(u *unit, now time.Time) {
 	f := u.fight
 	if !f.sparring || now.Before(f.sparAt) {
 		return
 	}
-	var d *dummy
-	for _, each := range cm.state.dummyList() {
-		if each.state.Continent == u.char.Continent && distance(u.char.At, each.state.At) <= combat.MeleeFt && (d == nil || distance(u.char.At, each.state.At) < distance(u.char.At, d.state.At)) {
+	var d *mob
+	for _, each := range cm.state.mobList() {
+		if each.training && each.state.Continent == u.char.Continent && distance(u.char.At, each.state.At) <= combat.MeleeFt && (d == nil || distance(u.char.At, each.state.At) < distance(u.char.At, d.state.At)) {
 			d = each
 		}
 	}
@@ -83,7 +84,7 @@ func (cm *Combat) spar(u *unit, now time.Time) {
 	cm.state.showHit(u.ID, on, h)
 }
 
-func (d *dummy) tally(n float64, now time.Time) {
+func (d *mob) tally(n float64, now time.Time) {
 	if d.firstHit.IsZero() {
 		d.firstHit = now
 	}
@@ -91,12 +92,12 @@ func (d *dummy) tally(n float64, now time.Time) {
 }
 
 // dps is damage a second since the first hit, counting that first hit as a full second.
-func (d *dummy) dps(now time.Time) float64 {
+func (d *mob) dps(now time.Time) float64 {
 	return d.damage / max(1, now.Sub(d.firstHit).Seconds())
 }
 
-func (l *Layer) dummy(id int64, continent string) *dummy {
-	for _, d := range l.dummies {
+func (l *Layer) mob(id int64, continent string) *mob {
+	for _, d := range l.mobs {
 		if d.ID == id && (continent == "" || d.state.Continent == continent) {
 			return d
 		}

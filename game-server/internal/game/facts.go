@@ -60,7 +60,7 @@ func (cm *Combat) facts(u *unit, target int64, now time.Time) *combat.Facts {
 			out.Resources[r.Key] = combat.ResourceAmount{Have: f.resources[r.Key], Max: f.pool(r).Max}
 		}
 	}
-	if d := cm.state.dummy(target, u.char.Continent); d != nil {
+	if d := cm.state.mob(target, u.char.Continent); d != nil {
 		state := []string{}
 		if !d.lastHit.IsZero() && now.Sub(d.lastHit) < combatLasts {
 			state = append(state, "inCombat")

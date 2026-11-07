@@ -50,7 +50,7 @@ func (cm *Combat) watchers(ev event) []watcher {
 			}
 			mine := v == ev.who
 			if ev.on == "allyHealthBelow" {
-				mine = v != ev.who && v.ID > 0
+				mine = v != ev.who && v.mob == nil
 			}
 			if e.Of == "caster" {
 				mine = key.from == ev.who.ID
@@ -237,7 +237,7 @@ func (cm *Combat) damaged(u *unit, on *unit, n float64, crit bool, ctx combat.Hi
 	if on.MaxHealth > 0 {
 		before, after := 100*min(on.Health+n, on.MaxHealth)/on.MaxHealth, 100*on.Health/on.MaxHealth
 		cm.fire(event{on: "healthBelow", who: on, other: u.ID, ctx: &ctx, amount: n, below: before, above: after}, now)
-		if on.ID > 0 {
+		if on.mob == nil {
 			cm.fire(event{on: "allyHealthBelow", who: on, other: on.ID, ctx: &ctx, amount: n, below: before, above: after}, now)
 		}
 	}

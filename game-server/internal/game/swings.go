@@ -17,7 +17,7 @@ func (cm *Combat) attack(u *unit, m incoming) {
 		cm.stopAttacking(u)
 		return
 	}
-	d := cm.state.dummy(m.Target, u.char.Continent)
+	d := cm.state.mob(m.Target, u.char.Continent)
 	if d == nil {
 		u.send(encode(refused{Type: "refused", Why: "you need an enemy targeted"}))
 		return
@@ -52,7 +52,7 @@ func (cm *Combat) swing(u *unit, now time.Time) {
 	if f.attacking == 0 || f.cast != nil || now.Before(f.swingAt) || !combat.CanSwing(cm.controlsOn(&f.unit)) {
 		return
 	}
-	d := cm.state.dummy(f.attacking, u.char.Continent)
+	d := cm.state.mob(f.attacking, u.char.Continent)
 	if d == nil || cm.untargetable(&d.unit, now) {
 		cm.stopAttacking(u)
 		return
@@ -80,7 +80,7 @@ func (cm *Combat) swing(u *unit, now time.Time) {
 	cm.state.tellOf(u.ID, encode(swung{"swung", u.ID, target}))
 	cm.breakStatuses(&f.unit, "action", func(s *combat.Status) bool { return s.KeptBy != nil })
 	cm.after(now.Add(strikeDelay), nil, func(now time.Time) {
-		d := cm.state.dummy(target, "")
+		d := cm.state.mob(target, "")
 		if !cm.state.present(u) || d == nil {
 			return
 		}

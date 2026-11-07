@@ -18,9 +18,9 @@ func wall() Ground {
 }
 
 // behindWall puts the player and the dummy in melee range, facing it, with a wall between them.
-func behindWall(t *testing.T) (*Hub, *Player, *float64, *dummy) {
+func behindWall(t *testing.T) (*Hub, *Player, *float64, *mob) {
 	h, p, c := fighting(t)
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	d.state.At = [3]float64{p.state.At[0] + 3*math.Sin(p.state.Yaw), p.state.At[1], p.state.At[2] + 3*math.Cos(p.state.Yaw)}
 	p.layer.fakeGround = wall()
 	return h, p, c, d
@@ -41,7 +41,7 @@ func TestSightStopsAbilities(t *testing.T) {
 
 func TestSightStopsACastLetGo(t *testing.T) {
 	h, p, c := fighting(t)
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	zero := 0.0
 	p.fight.class.Abilities = append(p.fight.class.Abilities, combat.Ability{
 		ID: "slowpoke", Name: "Slowpoke", Target: "enemy", GCD: &zero, CastTime: 1, Range: combat.Distance{Feet: 1000},

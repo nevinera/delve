@@ -18,7 +18,7 @@ func effectAreaFight(t *testing.T, e combat.Effect) (*Hub, *Player, *float64) {
 	h, p, c := fighting(t)
 	p.fight.class.Statuses = append(p.fight.class.Statuses, combat.Status{ID: "inside", Name: "Inside", Kind: "debuff", Duration: 1})
 	p.fight.class.Abilities = append(p.fight.class.Abilities, combat.Ability{ID: "lay", Name: "Lay", Target: "self", GCD: &zero, Effects: []combat.Effect{e}})
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	d.state.At = p.state.At
 	return h, p, c
 }
@@ -29,7 +29,7 @@ func ouchEvery(n float64) *combat.Effect {
 
 func TestEffectAreaTicksThenEnds(t *testing.T) {
 	h, p, c := effectAreaFight(t, combat.Effect{Radius: 10, Lasts: 3, Every: 1, Effect: ouchEvery(5)})
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	was := d.damage
 	heard(p)
 	use(t, p, "lay")
@@ -55,7 +55,7 @@ func TestEffectAreaTicksThenEnds(t *testing.T) {
 
 func TestEffectAreaKeepsAStatusOnThoseInside(t *testing.T) {
 	h, p, c := effectAreaFight(t, combat.Effect{Radius: 10, Lasts: 5, Status: "inside"})
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	use(t, p, "lay")
 	pass(h, c, 0.1)
 	if held(p, "inside") == nil {
@@ -83,7 +83,7 @@ func TestEffectAreaKeepsAStatusOnThoseInside(t *testing.T) {
 
 func TestEffectAreaOnEnterLandsOnce(t *testing.T) {
 	h, p, c := effectAreaFight(t, combat.Effect{Radius: 10, Lasts: 5, OnEnter: ouchEvery(7)})
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	was := d.damage
 	use(t, p, "lay")
 	pass(h, c, 1)
@@ -106,7 +106,7 @@ func TestEffectAreaLimitEndsTheOldest(t *testing.T) {
 func TestEffectAreaCopiesOnlyStackIfTheyOverlap(t *testing.T) {
 	for _, overlaps := range []bool{false, true} {
 		h, p, c := effectAreaFight(t, combat.Effect{Radius: 10, Lasts: 50, Every: 1, Effect: ouchEvery(5), Overlaps: overlaps})
-		d := p.layer.dummies[0]
+		d := p.layer.mobs[0]
 		use(t, p, "lay")
 		pass(h, c, 0.05)
 		use(t, p, "lay")
@@ -125,7 +125,7 @@ func TestEffectAreaCopiesOnlyStackIfTheyOverlap(t *testing.T) {
 
 func TestLineOnlyCoversItsStrip(t *testing.T) {
 	h, p, c := effectAreaFight(t, combat.Effect{Radius: 30, Width: 4, Line: true, Lasts: 50, Status: "inside"})
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	p.state.Yaw = 0
 	start := p.state.At
 	use(t, p, "lay")
@@ -188,7 +188,7 @@ func TestAuraEffectLandsEachEvery(t *testing.T) {
 	zero := 0.0
 	glow := combat.Status{ID: "burns", Name: "Burns", Kind: "buff", Effects: []combat.StatusEffect{{Type: "aura", Radius: 30, Affects: "enemies", Every: 1, Effect: ouchEvery(3)}}}
 	h, p, _, c := two(t, []combat.Status{glow}, combat.Ability{ID: "flare", Name: "Flare", Target: "self", GCD: &zero, Effects: []combat.Effect{{Type: "status", Affects: "self", Status: "burns"}}})
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	d.state.At = p.state.At
 	was := d.damage
 	use(t, p, "flare")

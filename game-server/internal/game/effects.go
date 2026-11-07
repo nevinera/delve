@@ -106,7 +106,7 @@ func (cm *Combat) land(u *unit, c *casting, e *combat.Effect, on *unit, count in
 // what harms a friend, and what helps an enemy.
 func (cm *Combat) dispel(u *unit, c *casting, e *combat.Effect, on *unit, now time.Time) {
 	keeps := "buff"
-	if on.ID < 0 { // only dummies are enemies so far
+	if on.mob != nil { // mobs are enemies
 		keeps = "debuff"
 	}
 	var found []statusKey

@@ -179,7 +179,7 @@ func TestASwingBreaksActionStatusesButNotKeptOnes(t *testing.T) {
 	}, combat.Ability{ID: "both", Name: "both", Target: "self", GCD: new(float64), Effects: []combat.Effect{gaining("hide"), gaining("form")}})
 	use(t, p, "both")
 	pass(h, c, 0.1)
-	p.state.Yaw, p.state.At = 0, p.layer.dummies[0].state.At
+	p.state.Yaw, p.state.At = 0, p.layer.mobs[0].state.At
 	if err := p.Handle([]byte(`{"type":"attack","target":-1}`)); err != nil {
 		t.Fatal(err)
 	}
@@ -295,7 +295,7 @@ func TestTwoCastersKeepTheirOwnCopies(t *testing.T) {
 		onDummy("take", combat.Effect{Type: "consume", Affects: "target", Status: "mark"}),
 		onDummy("more", combat.Effect{Type: "extend", Affects: "target", Status: "mark", Seconds: 5}),
 		combat.Ability{ID: "needs", Name: "needs", Target: "enemy", GCD: new(float64), Range: combat.Distance{Feet: 100}, Requires: []combat.Condition{marked}})
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	use(t, p, "put")
 	use(t, other, "put")
 	pass(h, c, 0.1)
@@ -331,7 +331,7 @@ func TestTwoCastersKeepTheirOwnCopies(t *testing.T) {
 func TestLimitCountsOnlyYourOwnCopies(t *testing.T) {
 	h, p, other, c := two(t, []combat.Status{{ID: "mark", Name: "Mark", Duration: 60, Limit: 1}},
 		onDummy("put", combat.Effect{Type: "status", Affects: "target", Status: "mark"}))
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	use(t, p, "put")
 	use(t, other, "put")
 	pass(h, c, 0.1)
@@ -343,7 +343,7 @@ func TestLimitCountsOnlyYourOwnCopies(t *testing.T) {
 func TestAGroupHoldsOneStatusWhoeverPutItOn(t *testing.T) {
 	h, p, other, c := two(t, []combat.Status{{ID: "aura", Name: "Aura", Group: "aura"}},
 		onDummy("put", combat.Effect{Type: "status", Affects: "target", Status: "aura"}))
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	use(t, p, "put")
 	pass(h, c, 0.1)
 	use(t, other, "put")
@@ -356,7 +356,7 @@ func TestAGroupHoldsOneStatusWhoeverPutItOn(t *testing.T) {
 func TestLeavingTakesOffWhatYouPutOn(t *testing.T) {
 	h, p, other, c := two(t, []combat.Status{{ID: "mark", Name: "Mark"}},
 		onDummy("put", combat.Effect{Type: "status", Affects: "target", Status: "mark"}))
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	use(t, p, "put")
 	use(t, other, "put")
 	pass(h, c, 0.1)

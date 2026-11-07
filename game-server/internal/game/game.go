@@ -78,7 +78,7 @@ type Layer struct {
 	players   map[int64]*Player
 	unload    *time.Timer
 	gone      bool // unloaded, so no one joins it
-	dummies   []*dummy
+	mobs      []*mob
 	combat    *Combat
 }
 
@@ -298,7 +298,7 @@ func (l *Layer) join(p *Player) {
 	l.players[p.ID()] = p
 	l.placeDummies()
 	p.send(encode(welcome{"welcome", l.seen(p.state), l.number}))
-	near := l.dummiesOn(p.state.Continent)
+	near := l.mobsOn(p.state.Continent)
 	for _, o := range l.near(p) {
 		near = append(near, l.seen(o.state))
 		o.send(encode(appear{"appear", l.seen(p.state)}))

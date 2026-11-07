@@ -15,7 +15,7 @@ import (
 type fakeState struct {
 	cm     *Combat
 	me     *unit
-	target *dummy
+	target *mob
 	told   []string
 	hits   []hit
 	at     time.Time
@@ -40,11 +40,11 @@ func (s *fakeState) playerUnits() iter.Seq[*unit] {
 	return func(yield func(*unit) bool) { yield(s.me) }
 }
 
-func (s *fakeState) dummyList() []*dummy { return []*dummy{s.target} }
+func (s *fakeState) mobList() []*mob { return []*mob{s.target} }
 
-func (s *fakeState) dummy(id int64, continent string) *dummy {
+func (s *fakeState) mob(id int64, continent string) *mob {
 	if u := s.unit(id, continent); u != nil {
-		return u.dummy
+		return u.mob
 	}
 	return nil
 }
@@ -94,16 +94,17 @@ func (s *fakeState) motionOf(u *unit) *motion {
 	return &u.player.motion
 }
 
-// fakeCombat is combat on a fake state: a Frost player at the spawn point, facing a dummy 20 ft away.
+// fakeCombat is combat on a fake state: a Frost player at the spawn point, facing a mob 20 ft away
+// that isn't a training dummy.
 func fakeCombat(t *testing.T) (*Combat, *fakeState, *Player) {
 	t.Helper()
 	w, _ := fightWorld{}.Load(context.Background(), "them/vale", "s")
 	p := &Player{Send: make(chan []byte, 64), Gone: make(chan struct{})}
 	p.state = Character{ID: 1, Continent: "main", At: [3]float64{100, 0, 100}, Move: Move{Gait: "run"}}
 	p.enterFight(w.Classes[0], 1, combat.Build{})
-	d := &dummy{unit: unit{ID: -1, base: combat.Plain(dummyHealth), MaxHealth: dummyHealth, Health: dummyHealth, Statuses: map[statusKey]*activeStatus{}}}
+	d := &mob{unit: unit{ID: -1, base: combat.Plain(dummyHealth), MaxHealth: dummyHealth, Health: dummyHealth, Statuses: map[statusKey]*activeStatus{}}}
 	d.state = Character{ID: -1, Continent: "main", At: [3]float64{100, 0, 120}, Dummy: true}
-	d.char, d.dummy = &d.state, d
+	d.char, d.mob = &d.state, d
 	s := &fakeState{me: &p.fight.unit, target: d}
 	s.at = time.Unix(1000, 0)
 	cm := &Combat{state: s, now: func() time.Time { return s.at }, roll: func() float64 { return 0.5 }}
@@ -117,6 +118,10 @@ func TestCombatRunsOnAnyState(t *testing.T) {
 	cm.tick(cm.now())
 	if len(s.hits) != 1 || s.hits[0].On != -1 || s.hits[0].Amount != 10 {
 		t.Fatalf("hits = %+v after a zap", s.hits)
+	}
+	// A mob that isn't a training dummy keeps the damage, and tallies none.
+	if s.target.Health != dummyHealth-10 || s.target.damage != 0 || s.hits[0].DPS != 0 {
+		t.Fatalf("health %v, tally %v, dps %v", s.target.Health, s.target.damage, s.hits[0].DPS)
 	}
 	if len(s.told) == 0 || s.told[0] != "used" {
 		t.Fatalf("told = %v", s.told)

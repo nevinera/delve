@@ -9,7 +9,7 @@ import (
 // unit is the unit with that id on `continent`, or on any continent with "", or nil: a training
 // dummy, or a player on the layer.
 func (l *Layer) unit(id int64, continent string) *unit {
-	if d := l.dummy(id, continent); d != nil {
+	if d := l.mob(id, continent); d != nil {
 		return &d.unit
 	}
 	if o := l.players[id]; o != nil && (continent == "" || o.state.Continent == continent) {
@@ -21,7 +21,7 @@ func (l *Layer) unit(id int64, continent string) *unit {
 // units goes over every unit on the layer, the dummies first.
 func (l *Layer) units() iter.Seq[*unit] {
 	return func(yield func(*unit) bool) {
-		for _, d := range l.dummies {
+		for _, d := range l.mobs {
 			if !yield(&d.unit) {
 				return
 			}
@@ -141,8 +141,8 @@ func (l *Layer) playerUnits() iter.Seq[*unit] {
 	}
 }
 
-// dummyList is the layer's training dummies.
-func (l *Layer) dummyList() []*dummy { return l.dummies }
+// mobList is the layer's mobs.
+func (l *Layer) mobList() []*mob { return l.mobs }
 
 // acted calls off a player's logging off, since it did something: `why`.
 func (l *Layer) acted(u *unit, why string) { l.stopLoggingOff(u.player, why) }
@@ -164,8 +164,8 @@ type combatState interface {
 	unit(id int64, continent string) *unit
 	units() iter.Seq[*unit]
 	playerUnits() iter.Seq[*unit]
-	dummyList() []*dummy
-	dummy(id int64, continent string) *dummy
+	mobList() []*mob
+	mob(id int64, continent string) *mob
 	caster(id int64) *unit
 	present(u *unit) bool
 	playerUnit(u *unit) *unit

@@ -308,7 +308,7 @@ func TestEffectAreasReachWhoTheyReach(t *testing.T) {
 
 func TestADummyStaysAtFullHealthAndItsTallyResets(t *testing.T) {
 	h, p, c := fighting(t)
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	use(t, p, "nova")
 	pass(h, c, 0.1)
 	got := heard(p, "hit")
@@ -516,7 +516,7 @@ func TestRequiresRefusesWithAReason(t *testing.T) {
 	conditional(p, combat.Ability{ID: "finish", Target: "enemy", Range: combat.Distance{Feet: 30}, Requires: []combat.Condition{{Health: "target", Below: &twenty}}})
 	use(t, p, "finish")
 	refusal(t, p, "your target's health is too high")
-	p.layer.dummies[0].Health = 100
+	p.layer.mobs[0].Health = 100
 	use(t, p, "finish")
 	if got := heard(p, "used"); len(got) != 1 {
 		t.Fatalf("used = %v", got)

@@ -344,11 +344,11 @@ type reach struct {
 	gap float64
 }
 
-// side says whether a unit is on the side an effect area affects. Only dummies are enemies, for now.
+// side says whether a unit is on the side an effect area affects. Mobs are enemies, and players allies.
 func (a effectShape) side(u *unit) bool {
 	switch a.affects {
 	case "enemies":
-		return u.dummy != nil
+		return u.mob != nil
 	case "allies":
 		return u.fight != nil
 	}

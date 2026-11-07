@@ -20,7 +20,7 @@ func moving(t *testing.T, e combat.Effect, target string) (*Hub, *Player, *float
 		e.Affects = "self"
 	}
 	p.fight.class.Abilities = append(p.fight.class.Abilities, combat.Ability{ID: "shift", Name: "Shift", Target: target, GCD: &zero, Range: combat.Distance{Feet: 1000}, Effects: []combat.Effect{e}})
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	d.state.At = [3]float64{p.state.At[0], p.state.At[1], p.state.At[2] + 30}
 	p.state.Yaw = 0
 	return h, p, c
@@ -63,7 +63,7 @@ func TestMoveKinds(t *testing.T) {
 		t.Run(each.e.Kind, func(t *testing.T) {
 			h, p, c := moving(t, each.e, each.target)
 			if each.e.Kind == "behind" {
-				p.layer.dummies[0].state.Yaw = 0
+				p.layer.mobs[0].state.Yaw = 0
 			}
 			from := p.state.At
 			heard(p)
@@ -126,10 +126,10 @@ func TestKnockbackAndPullMoveOthers(t *testing.T) {
 
 func TestMovesLeaveDummiesWhereTheyAre(t *testing.T) {
 	h, p, c := moving(t, combat.Effect{Kind: "knockback", Affects: "target"}, "enemy")
-	was := p.layer.dummies[0].state.At
+	was := p.layer.mobs[0].state.At
 	use(t, p, "shift")
 	pass(h, c, 0.05)
-	if p.layer.dummies[0].state.At != was {
+	if p.layer.mobs[0].state.At != was {
 		t.Fatal("the dummy moved")
 	}
 }

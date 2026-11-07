@@ -245,7 +245,7 @@ func (cm *Combat) aim(u *unit, ability *combat.Ability, m incoming, now time.Tim
 		return 0, nil, ""
 	}
 	t := cm.state.unit(m.Target, u.char.Continent)
-	enemy := t != nil && t.dummy != nil // only dummies are enemies, for now
+	enemy := t != nil && t.mob != nil // mobs are enemies, players allies
 	switch {
 	case ability.Target == "enemy" && !enemy:
 		return 0, nil, "you need an enemy targeted"

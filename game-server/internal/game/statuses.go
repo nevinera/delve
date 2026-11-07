@@ -221,7 +221,7 @@ func (cm *Combat) tickOf(u *unit, holder *unit, id string, held *activeStatus, e
 func (cm *Combat) around(e *combat.StatusEffect, at [3]float64, continent string) []*unit {
 	var found []reach
 	for v := range cm.state.units() {
-		isEnemy := v.dummy != nil // only dummies are enemies, for now
+		isEnemy := v.mob != nil // mobs are enemies, players allies
 		if v.char.Continent != continent || isEnemy != (e.Affects == "enemies") {
 			continue
 		}

@@ -29,8 +29,8 @@ const (
 type unit struct {
 	ID        int64
 	char      *Character // where it is and how it's seen
-	player    *Player    // the player it is, or nil for a dummy
-	dummy     *dummy     // the dummy it is, or nil for a player
+	player    *Player    // the player it is, or nil for a mob
+	mob       *mob       // the mob it is, or nil for a player
 	fight     *fighter   // its side of combat, if it's a player
 	Health    float64
 	MaxHealth float64
@@ -70,11 +70,12 @@ type activeStatus struct {
 	owner       *combat.Class       // the class it came from
 }
 
-// dummy is a training dummy: it's always at full health and never fights back, and it tallies what
-// hits it.
-type dummy struct {
+// mob is a unit that isn't a player. A training dummy is a mob that's always at full health, never
+// fights back unless you spar with it, and tallies what hits it.
+type mob struct {
 	unit
 	state    Character
+	training bool // it's a training dummy
 	firstHit time.Time
 	lastHit  time.Time
 	damage   float64
@@ -249,7 +250,7 @@ func (cm *Combat) tick(now time.Time) {
 		a.run(now)
 	}
 	cm.landings = later
-	for _, d := range cm.state.dummyList() {
+	for _, d := range cm.state.mobList() {
 		if !d.lastHit.IsZero() && now.Sub(d.lastHit) >= dummyResetIdle {
 			d.firstHit, d.lastHit, d.damage = time.Time{}, time.Time{}, 0
 		}

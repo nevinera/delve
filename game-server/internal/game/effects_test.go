@@ -188,7 +188,7 @@ func TestDispelLeavesFriendsBuffsAndEnemiesDebuffs(t *testing.T) {
 	if s := p.fight.unit.Statuses; len(s) != 1 || s[statusKey{"good", p.ID()}] == nil {
 		t.Fatalf("on you: %v", s)
 	}
-	if s := p.layer.dummies[0].Statuses; len(s) != 1 || s[statusKey{"bad", p.ID()}] == nil {
+	if s := p.layer.mobs[0].Statuses; len(s) != 1 || s[statusKey{"bad", p.ID()}] == nil {
 		t.Fatalf("on the dummy: %v", s)
 	}
 }
@@ -212,7 +212,7 @@ func TestDispelSetsOffItsTriggers(t *testing.T) {
 
 func TestAnyTargetTakesEnemiesAndFriends(t *testing.T) {
 	h, p, c := dispelling(t, nil, combat.Effect{Type: "heal", Affects: "target", Amount: combat.Amount{Min: 5, Max: 5}})
-	dummy := p.layer.dummies[0]
+	dummy := p.layer.mobs[0]
 	dummy.Health = 10
 	p.fight.unit.Health = 10
 	useOn(t, p, "clean", -1)
@@ -406,7 +406,7 @@ func TestDamageBreaksFear(t *testing.T) {
 	if held(p, "held") == nil {
 		t.Fatal("it never landed")
 	}
-	p.layer.combat.harm(&p.fight.unit, &p.layer.dummies[0].unit, 1, &hit{}, h.now())
+	p.layer.combat.harm(&p.fight.unit, &p.layer.mobs[0].unit, 1, &hit{}, h.now())
 	if held(p, "held") != nil {
 		t.Fatal("damage didn't break it")
 	}
@@ -449,7 +449,7 @@ func TestImmuneToDamageFromSchools(t *testing.T) {
 	h, p, c := shielded(t, immune(combat.StatusEffect{Schools: []string{"holy"}}))
 	use(t, p, "itward")
 	pass(h, c, 0.05)
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	was := d.damage
 	heard(p)
 	use(t, p, "zapit")
@@ -571,7 +571,7 @@ func TestUntargetable(t *testing.T) {
 	if got := heard(p, "refused"); len(got) != 0 {
 		t.Fatalf("at full health: %v", got)
 	}
-	p.layer.dummies[0].Health = 10
+	p.layer.mobs[0].Health = 10
 	pass(h, c, 0.1)
 	use(t, p, "zapit")
 	pass(h, c, 0.05)
@@ -631,7 +631,7 @@ func dealing(perSpent float64) combat.Effect {
 
 func TestAnAllCostSpendsAllOfIt(t *testing.T) {
 	h, p, c := spender(t, combat.Ability{ID: "finish", Name: "Finish", Cost: []combat.Cost{{Resource: "combo", Amount: 1, All: true}}, Effects: []combat.Effect{dealing(10)}})
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	was := d.damage
 	p.fight.resources["combo"] = 4
 	use(t, p, "finish")
@@ -651,7 +651,7 @@ func TestAnAllCostSpendsAllOfIt(t *testing.T) {
 func TestAnUpToCostSpendsWhatItCan(t *testing.T) {
 	grown := combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 10, Max: 10}, ByExtraSpent: 3}
 	h, p, c := spender(t, combat.Ability{ID: "bite", Name: "Bite", Cost: []combat.Cost{{Resource: "combo", Amount: 2, UpTo: 6}}, Effects: []combat.Effect{grown}})
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	was := d.damage
 	p.fight.resources["combo"] = 4 // 2 past its 2, of the 4 it could
 	use(t, p, "bite")
@@ -734,7 +734,7 @@ func TestSpentAsCountsWhatAModifySays(t *testing.T) {
 	h, p, c := spender(t, combat.Ability{ID: "finish", Name: "Finish", Cost: []combat.Cost{{Resource: "combo", Amount: 1, All: true}}, Effects: []combat.Effect{dealing(10)}})
 	p.fight.class.Statuses = append(p.fight.class.Statuses, ramp)
 	p.fight.unit.Statuses[statusKey{"ramp", p.ID()}] = &activeStatus{def: p.fight.class.Status("ramp"), since: h.now(), stacks: 1, uses: 1}
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	was := d.damage
 	p.fight.resources["combo"] = 2
 	use(t, p, "finish")
@@ -748,7 +748,7 @@ func TestEffectChance(t *testing.T) {
 	half := 0.25
 	h, p, c := spender(t, combat.Ability{ID: "lucky", Name: "Lucky", Effects: []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 9, Max: 9}, Chance: &half}}},
 		combat.Ability{ID: "earned", Name: "Earned", Cost: []combat.Cost{{Resource: "combo", Amount: 4}}, Effects: []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 9, Max: 9}, Chance: &half, ChancePerSpent: 0.1}}})
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	was := d.damage
 	use(t, p, "lucky") // the rolls are 0.5
 	pass(h, c, 0.5)
@@ -763,16 +763,16 @@ func TestEffectChance(t *testing.T) {
 }
 
 // hitting is a fight with one ability, dealing whatever this effect does to the dummy.
-func hitting(t *testing.T, e combat.Effect) (*Hub, *Player, *float64, *dummy) {
+func hitting(t *testing.T, e combat.Effect) (*Hub, *Player, *float64, *mob) {
 	t.Helper()
 	zero := 0.0
 	h, p, c := fighting(t)
 	e.Type, e.Affects = "damage", "target"
 	p.fight.class.Abilities = append(p.fight.class.Abilities, combat.Ability{ID: "bonk", Name: "Bonk", Target: "enemy", GCD: &zero, Range: combat.Distance{Feet: 100}, Effects: []combat.Effect{e}})
-	return h, p, c, p.layer.dummies[0]
+	return h, p, c, p.layer.mobs[0]
 }
 
-func dealt(t *testing.T, h *Hub, p *Player, c *float64, d *dummy) float64 {
+func dealt(t *testing.T, h *Hub, p *Player, c *float64, d *mob) float64 {
 	t.Helper()
 	was := d.damage
 	use(t, p, "bonk")
@@ -856,7 +856,7 @@ func TestPerCount(t *testing.T) {
 	h, p, c := consuming(t, mark, withEffects("count", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 10, Max: 10}, PerCount: &combat.PerCount{StatusStacks: "mark", Max: 2}}))
 	use(t, p, "put")
 	pass(h, c, 0.1)
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	held(p, "mark").stacks = 5
 	was := d.damage
 	use(t, p, "count")
@@ -871,7 +871,7 @@ func TestAbsorbSoaksThenEnds(t *testing.T) {
 	h, p, c := consuming(t, ward, withEffects("slap", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 20, Max: 20}}))
 	use(t, p, "put")
 	pass(h, c, 0.1)
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	if got := heard(p, "absorb"); len(got) != 1 || got[0]["absorb"] != 30.0 {
 		t.Fatalf("absorb = %v", got)
 	}
@@ -917,12 +917,12 @@ func TestWhoAnEffectReaches(t *testing.T) {
 	zero := 0.0
 	h, p, c := fighting(t)
 	world := p.layer
-	second := *world.dummies[0]
-	second.char, second.dummy = &second.state, &second
+	second := *world.mobs[0]
+	second.char, second.mob = &second.state, &second
 	second.ID, second.state.ID = -2, -2
 	second.Statuses = map[statusKey]*activeStatus{}
-	world.dummies = append(world.dummies, &second)
-	first := world.dummies[0]
+	world.mobs = append(world.mobs, &second)
+	first := world.mobs[0]
 	first.state.At = p.state.At
 	second.state.At = [3]float64{p.state.At[0] + 5, p.state.At[1], p.state.At[2]}
 	first.Health, second.Health = 900, 500
@@ -959,12 +959,12 @@ func TestExtraTargetsSpill(t *testing.T) {
 	zero := 0.0
 	h, p, c := fighting(t)
 	world := p.layer
-	second := *world.dummies[0]
-	second.char, second.dummy = &second.state, &second
+	second := *world.mobs[0]
+	second.char, second.mob = &second.state, &second
 	second.ID, second.state.ID = -2, -2
 	second.Statuses = map[statusKey]*activeStatus{}
-	world.dummies = append(world.dummies, &second)
-	first := world.dummies[0]
+	world.mobs = append(world.mobs, &second)
+	first := world.mobs[0]
 	second.state.At = first.state.At
 	p.fight.class.Abilities = append(p.fight.class.Abilities, combat.Ability{ID: "cleave", Name: "Cleave", Target: "enemy", GCD: &zero, Range: combat.Distance{Feet: 1000},
 		Effects:      []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 100, Max: 100}}},
@@ -1005,7 +1005,7 @@ func TestBecomesSwapsWhileItHolds(t *testing.T) {
 		combat.Ability{ID: "weakone", Name: "Weak", Effects: []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 1, Max: 1}}}},
 		combat.Ability{ID: "bigone", Name: "Big", Level: 99, Effects: []combat.Effect{{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 500, Max: 500}}}})
 	p.fight.class.Statuses = append(p.fight.class.Statuses, form)
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	was := d.damage
 	use(t, p, "weakone")
 	pass(h, c, 0.5)
@@ -1027,7 +1027,7 @@ func TestCastAbilityAtOnce(t *testing.T) {
 		combat.Ability{ID: "paid", Name: "Paid", Effects: []combat.Effect{{Type: "castAbility", Affects: "target", Ability: "innerone"}}},
 		combat.Ability{ID: "gratis", Name: "Gratis", Effects: []combat.Effect{{Type: "castAbility", Affects: "target", Ability: "innerone", Free: true, Strength: 0.5}}},
 		combat.Ability{ID: "selfish", Name: "Selfish", Effects: []combat.Effect{{Type: "castAbility", Affects: "target", Ability: "selfish"}}})
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	was := d.damage
 	heard(p)
 	use(t, p, "paid")
@@ -1066,7 +1066,7 @@ func TestConditionsOnTheFightSoFar(t *testing.T) {
 		withEffects("weaker", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 1, Max: 1}, When: []combat.Condition{{TargetHealthBelowMine: true}}}),
 		withEffects("spent", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 1, Max: 1}, When: []combat.Condition{{SpentAtLeast: &two}}}),
 		withEffects("afterCrit", combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 1, Max: 1}}, combat.Effect{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 50, Max: 50}, When: []combat.Condition{{Outcome: "crit"}}}))
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	check := func(id string, lands bool) {
 		t.Helper()
 		was := d.damage

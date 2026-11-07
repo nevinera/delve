@@ -249,7 +249,7 @@ func (cm *Combat) harm(u *unit, on *unit, n float64, h *hit, now time.Time) {
 	cm.state.setHealth(on, on.Health-n)
 	h.Amount = math.Round(n)
 	cm.breakStatuses(on, "damage", nil)
-	if d := on.dummy; d != nil {
+	if d := on.mob; d != nil && d.training {
 		d.tally(n, now)
 		h.DPS = math.Round(d.dps(now))
 		cm.state.setHealth(on, on.MaxHealth) // it's always at full health

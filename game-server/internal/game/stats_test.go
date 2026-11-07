@@ -42,11 +42,11 @@ func statusFight(t *testing.T, statuses map[string]string) (*Hub, *Player, *floa
 
 func hitFor(t *testing.T, h *Hub, p *Player, c *float64) float64 {
 	t.Helper()
-	before := p.layer.dummies[0].damage
+	before := p.layer.mobs[0].damage
 	h.roll = func() float64 { return 0.5 }
 	use(t, p, "hit")
 	pass(h, c, 0.5)
-	return math.Round((p.layer.dummies[0].damage-before)*1e6) / 1e6 // to a millionth, past float error
+	return math.Round((p.layer.mobs[0].damage-before)*1e6) / 1e6 // to a millionth, past float error
 }
 
 func TestDamageDoneAndTakenMultiply(t *testing.T) {
@@ -160,7 +160,7 @@ func TestAttackSpeedShortensSwings(t *testing.T) {
 	h, p, c := statusFight(t, map[string]string{"fast": `[{"type":"stat","stat":"attackSpeed","add":100}]`})
 	use(t, p, "fast")
 	pass(h, c, 0.5)
-	p.state.At = p.layer.dummies[0].state.At
+	p.state.At = p.layer.mobs[0].state.At
 	heard(p, "swung")
 	if err := p.Handle([]byte(`{"type":"attack","target":-1}`)); err != nil {
 		t.Fatal(err)
@@ -333,7 +333,7 @@ func TestModifyChangesAbilities(t *testing.T) {
 	use(t, p, "zeal")
 	pass(h, c, 2)
 	heard(p)
-	before := p.layer.dummies[0].damage
+	before := p.layer.mobs[0].damage
 	use(t, p, "hit")
 	got := heard(p, "used", "cooldown")
 	if len(got) != 1 || got[0]["castTime"] != 1.0 {
@@ -343,7 +343,7 @@ func TestModifyChangesAbilities(t *testing.T) {
 	if have := p.fight.resources["grit"]; have != 1 {
 		t.Fatalf("grit = %g, want 1 after spending 4", have)
 	}
-	if hurt := p.layer.dummies[0].damage - before; hurt != 400 {
+	if hurt := p.layer.mobs[0].damage - before; hurt != 400 {
 		t.Fatalf("hit for %g, want 100 x 2 x a crit", hurt)
 	}
 	if got := heard(p, "cooldown"); len(got) != 1 || got[0]["seconds"] != 5.0 {
@@ -426,7 +426,7 @@ func TestPeriodicTicks(t *testing.T) {
 		combat.Status{ID: "quick", Name: "Quick", Effects: effects(t, `[{"type":"modify","statuses":["bleed"],"change":"tickRate","multiply":2}]`)})
 	class.Abilities = append(class.Abilities, onDummy("cut", combat.Effect{Type: "status", Affects: "target", Status: "bleed"}), selfBuff("more", gaining("more")), selfBuff("quick", gaining("quick")),
 		selfBuff("ouch2", combat.Effect{Type: "damage", Affects: "self", Amount: combat.Amount{Min: 50, Max: 50}}))
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	heard(p)
 	use(t, p, "ouch2")
 	pass(h, c, 0.1)
@@ -479,7 +479,7 @@ func TestRefreshKeepsTheTickSchedule(t *testing.T) {
 	class := p.fight.class
 	class.Statuses = append(class.Statuses, combat.Status{ID: "bleed", Name: "Bleed", Duration: 20, Stacking: "refresh", Effects: effects(t, `[{"type":"periodic","every":2,"does":"damage","amount":10}]`)})
 	class.Abilities = append(class.Abilities, onDummy("cut", combat.Effect{Type: "status", Affects: "target", Status: "bleed"}))
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	was := d.damage
 	use(t, p, "cut")
 	for n := 0; n < 4; n++ {
@@ -516,12 +516,12 @@ func TestPeriodicKinds(t *testing.T) {
 	if p.fight.resources["grit"] != 1 {
 		t.Fatalf("grit = %g", p.fight.resources["grit"])
 	}
-	d := p.layer.dummies[0]
+	d := p.layer.mobs[0]
 	before := d.damage
 	use(t, p, "burn")
 	pass(h, c, 1.1)
-	if got := d.damage - before; got != 10/float64(max(len(p.layer.dummies), 1)) {
-		t.Fatalf("burned %g with %d dummies", got, len(p.layer.dummies))
+	if got := d.damage - before; got != 10/float64(max(len(p.layer.mobs), 1)) {
+		t.Fatalf("burned %g with %d dummies", got, len(p.layer.mobs))
 	}
 }
 
@@ -729,7 +729,7 @@ func TestTriggerWatchingTheCaster(t *testing.T) {
 	pass(h, c, 0.1)
 	hitFor(t, h, p, c)
 	// It lands on its holder, a dummy, who has no grit: the caster did it, and nothing's given.
-	if got := p.layer.dummies[0].Statuses[statusKey{"mark", p.ID()}]; got == nil || got.fired == nil {
+	if got := p.layer.mobs[0].Statuses[statusKey{"mark", p.ID()}]; got == nil || got.fired == nil {
 		t.Fatalf("didn't fire: %+v", got)
 	}
 }
@@ -811,7 +811,7 @@ func TestSparringAndTheAttackTable(t *testing.T) {
 		t.Run(c.stat, func(t *testing.T) {
 			h, p, clock := triggered(t, `[{"type":"stat","stat":"dodge","add":-3},{"type":"stat","stat":"parry","add":-3},{"type":"stat","stat":"`+c.stat+`","add":100},{"type":"trigger","on":"`+c.on+`",`+giveGrit+`}]`)
 			p.fight.sparring = true
-			p.state.At = p.layer.dummies[0].state.At
+			p.state.At = p.layer.mobs[0].state.At
 			p.state.At[2] -= 5
 			p.state.Yaw = 0
 			h.roll = func() float64 { return c.roll }
@@ -840,7 +840,7 @@ func TestSparringAndTheAttackTable(t *testing.T) {
 func TestBehindCantBeParried(t *testing.T) {
 	h, p, c := triggered(t, `[{"type":"stat","stat":"dodge","add":-3},{"type":"stat","stat":"parry","add":100}]`)
 	p.fight.sparring = true
-	p.state.At = p.layer.dummies[0].state.At
+	p.state.At = p.layer.mobs[0].state.At
 	p.state.At[2] += 5
 	p.state.Yaw = 0 // facing away from the dummy, which is on the -z side
 	h.roll = func() float64 { return 0.5 }
@@ -854,7 +854,7 @@ func TestBehindCantBeParried(t *testing.T) {
 func TestSparNeverKills(t *testing.T) {
 	h, p, c := statusFight(t, nil)
 	p.fight.sparring = true
-	p.state.At = p.layer.dummies[0].state.At
+	p.state.At = p.layer.mobs[0].state.At
 	p.fight.unit.Health = 2
 	pass(h, c, 10)
 	if got := p.fight.unit.Health; got != 1 {
