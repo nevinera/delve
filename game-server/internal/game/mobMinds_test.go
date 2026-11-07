@@ -138,3 +138,33 @@ func TestAPlayerKilledByAMobWakesAtHome(t *testing.T) {
 		t.Fatalf("told %v", said)
 	}
 }
+
+func TestAggroGrowsAndShrinksWithTheLevelGap(t *testing.T) {
+	m := &mob{creature: &worlds.Creature{AggroRadius: 40}}
+	m.base.Level = 10
+	for _, c := range []struct {
+		level int
+		want  float64
+	}{{10, 40}, {5, 60}, {15, 20}, {40, 10}, {1, 76}} {
+		if got := m.aggroRadius(&unit{fight: &fighter{level: c.level}}); got-c.want > 1e-9 || c.want-got > 1e-9 {
+			t.Errorf("against level %d: %v, want %v", c.level, got, c.want)
+		}
+	}
+}
+
+func TestAMobWithNoOneNearWaits(t *testing.T) {
+	h := NewHub(fightingWorld{}, characters(nil))
+	h.roll = func() float64 { return 0.5 }
+	c := clockOf(h)
+	p := enter(t, h, 1)
+	calm := p.layer.mobs[2]
+	far := 20.0
+	calm.placing.Wander = &far
+	p.layer.mu.Lock()
+	p.layer.teleport(p, "main", [3]float64{5000, 0, 5000})
+	p.layer.mu.Unlock()
+	pass(h, c, 20)
+	if calm.char.At != calm.home {
+		t.Fatalf("it wandered to %v with no one near", calm.char.At)
+	}
+}

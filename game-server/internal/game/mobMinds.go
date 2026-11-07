@@ -35,6 +35,9 @@ func (cm *Combat) think(m *mob, dt float64, now time.Time) {
 	if m.training || m.creature == nil || m.char.Dead {
 		return
 	}
+	if m.mind.mode == "" && !cm.watched(m) {
+		return // at peace with no one near, it waits
+	}
 	switch m.mind.mode {
 	case "home":
 		if cm.walk(m, m.home, runFt*m.speed()*homeSpeedup, 0, "run", dt, now) {
@@ -97,13 +100,9 @@ func (cm *Combat) noticed(m *mob) *unit {
 	if m.creature.Reaction == "neutral" {
 		return nil
 	}
-	radius := m.creature.AggroRadius
-	if radius <= 0 {
-		radius = aggroFt
-	}
 	var found *unit
 	for u := range cm.state.playerUnits() {
-		gap := distance(m.char.At, u.char.At)
+		gap, radius := distance(m.char.At, u.char.At), m.aggroRadius(u)
 		if u.char.Continent != m.char.Continent || gap > radius || u.Health <= 0 || cm.untargetable(u, cm.now()) {
 			continue
 		}
@@ -112,6 +111,31 @@ func (cm *Combat) noticed(m *mob) *unit {
 		}
 	}
 	return found
+}
+
+// watched says whether a player is near enough a mob to see it.
+func (cm *Combat) watched(m *mob) bool {
+	for u := range cm.state.playerUnits() {
+		if u.char.Continent == m.char.Continent && nearby(u.char.At, m.char.At) {
+			return true
+		}
+	}
+	return false
+}
+
+// aggroRadius is how near a hostile mob notices a player: its creature's radius, a tenth longer
+// for each level it has over the player and a tenth shorter for each the player has over it, from
+// a quarter of it to twice it.
+func (m *mob) aggroRadius(u *unit) float64 {
+	radius := m.creature.AggroRadius
+	if radius <= 0 {
+		radius = aggroFt
+	}
+	level := 1
+	if u.fight != nil {
+		level = u.fight.level
+	}
+	return radius * min(max(1+0.1*float64(m.base.Level-level), 0.25), 2)
 }
 
 // wander has a mob at peace stroll somewhere near home now and then.
