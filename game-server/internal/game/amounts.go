@@ -18,7 +18,7 @@ type taken struct {
 
 // amountFor is what an effect's amount comes to as it lands on someone, with what the fight has
 // kept track of counted.
-func (l *Layer) amountFor(u *unit, c *casting, e *combat.Effect, on *unit, count int, now time.Time) combat.Amount {
+func (cm *Combat) amountFor(u *unit, c *casting, e *combat.Effect, on *unit, count int, now time.Time) combat.Amount {
 	out := amountOf(c, e, count)
 	if e.Split && count > 1 {
 		out = out.Grown(1 / float64(count))
@@ -27,7 +27,7 @@ func (l *Layer) amountFor(u *unit, c *casting, e *combat.Effect, on *unit, count
 		out = out.Grown(e.Others)
 	}
 	if e.PerCount != nil {
-		n := l.counted(u, e.PerCount, on, now)
+		n := cm.counted(u, e.PerCount, on, now)
 		if e.PerCount.Add != 0 {
 			out.Min += e.PerCount.Add * n
 			out.Max += e.PerCount.Add * n
@@ -35,13 +35,13 @@ func (l *Layer) amountFor(u *unit, c *casting, e *combat.Effect, on *unit, count
 			out = out.Grown(n)
 		}
 	}
-	return l.worked(u, c, out, on, now)
+	return cm.worked(u, c, out, on, now)
 }
 
 // worked adds a `shareOf` to an amount, and grows it by missing health.
-func (l *Layer) worked(u *unit, c *casting, a combat.Amount, on *unit, now time.Time) combat.Amount {
+func (cm *Combat) worked(u *unit, c *casting, a combat.Amount, on *unit, now time.Time) combat.Amount {
 	if a.ShareOf != nil {
-		n := a.ShareOf.Share * l.shareBase(u, c, a.ShareOf, on, now)
+		n := a.ShareOf.Share * cm.shareBase(u, c, a.ShareOf, on, now)
 		a.ShareOf = nil
 		a.Min += n
 		a.Max += n
@@ -52,7 +52,7 @@ func (l *Layer) worked(u *unit, c *casting, a combat.Amount, on *unit, now time.
 		case "self":
 			who = u
 		case "target":
-			if t := l.unit(c.target, u.char.Continent); t != nil {
+			if t := cm.state.unit(c.target, u.char.Continent); t != nil {
 				who = t
 			}
 		}
@@ -65,7 +65,7 @@ func (l *Layer) worked(u *unit, c *casting, a combat.Amount, on *unit, now time.
 }
 
 // shareBase is what a `shareOf` is a share of.
-func (l *Layer) shareBase(u *unit, c *casting, s *combat.ShareOf, on *unit, now time.Time) float64 {
+func (cm *Combat) shareBase(u *unit, c *casting, s *combat.ShareOf, on *unit, now time.Time) float64 {
 	switch s.Of {
 	case "recentDamage":
 		who := u
@@ -103,7 +103,7 @@ func (l *Layer) shareBase(u *unit, c *casting, s *combat.ShareOf, on *unit, now 
 	case "casterMaxHealth":
 		return u.MaxHealth
 	case "unitMaxHealth":
-		if u := l.unit(c.target, u.char.Continent); u != nil {
+		if u := cm.state.unit(c.target, u.char.Continent); u != nil {
 			return u.MaxHealth
 		}
 	case "maxResource":
@@ -141,7 +141,7 @@ func leftToDo(held *activeStatus, now time.Time) float64 {
 }
 
 // counted is what a `perCount` comes to.
-func (l *Layer) counted(u *unit, c *combat.PerCount, on *unit, now time.Time) float64 {
+func (cm *Combat) counted(u *unit, c *combat.PerCount, on *unit, now time.Time) float64 {
 	weigh := func(id string) float64 {
 		if n, ok := c.Weights[id]; ok {
 			return n
@@ -169,7 +169,7 @@ func (l *Layer) counted(u *unit, c *combat.PerCount, on *unit, now time.Time) fl
 	case c.Resource != "":
 		n = u.fight.resources[c.Resource]
 	case c.Holders != "":
-		for v := range l.units() {
+		for v := range cm.state.units() {
 			continent := v.char.Continent
 			if continent == u.char.Continent && v.Statuses[statusKey{c.Holders, u.ID}] != nil {
 				n++
@@ -183,17 +183,17 @@ func (l *Layer) counted(u *unit, c *combat.PerCount, on *unit, now time.Time) fl
 }
 
 // critRules is what an effect says about crits, for the hit it's landing.
-func (l *Layer) critRules(u *unit, e *combat.Effect, on *unit, ctx *combat.HitContext, now time.Time) {
+func (cm *Combat) critRules(u *unit, e *combat.Effect, on *unit, ctx *combat.HitContext, now time.Time) {
 	ctx.AlwaysCrit, ctx.ScalesWithCrit, ctx.CritMultiplier = e.AlwaysCrit, e.ScalesWithCrit, e.CritMultiplier
 	if len(e.AlwaysCritWhen) > 0 {
-		if _, ok := combat.All(e.AlwaysCritWhen, l.facts(u, on.ID, now)); ok {
+		if _, ok := combat.All(e.AlwaysCritWhen, cm.facts(u, on.ID, now)); ok {
 			ctx.AlwaysCrit = true
 		}
 	}
 }
 
 // soak takes what a unit's absorbs catch out of a hit, and says what's left.
-func (l *Layer) soak(on *unit, n float64, schools []string, h *hit, now time.Time) float64 {
+func (cm *Combat) soak(on *unit, n float64, schools []string, h *hit, now time.Time) float64 {
 	keys := make([]statusKey, 0, len(on.Statuses))
 	for key, held := range on.Statuses {
 		if held.absorb > 0 {
@@ -212,7 +212,7 @@ func (l *Layer) soak(on *unit, n float64, schools []string, h *hit, now time.Tim
 		n -= caught
 		h.Absorbed += math.Round(caught)
 		if held.absorb <= 0 {
-			l.takeOff(on, key)
+			cm.takeOff(on, key)
 		}
 	}
 	return n
@@ -235,8 +235,8 @@ func absorbsFrom(s *combat.Status, schools []string) bool {
 }
 
 // startAbsorb sizes a status's absorb as it goes on: its own amount, or what applied it says.
-func (l *Layer) startAbsorb(u *unit, held *activeStatus, given *combat.Amount, on *unit, now time.Time) {
-	stats := l.statsOf(u, nil, now)
+func (cm *Combat) startAbsorb(u *unit, held *activeStatus, given *combat.Amount, on *unit, now time.Time) {
+	stats := cm.statsOf(u, nil, now)
 	has := false
 	for i := range held.def.Effects {
 		e := &held.def.Effects[i]
@@ -248,18 +248,18 @@ func (l *Layer) startAbsorb(u *unit, held *activeStatus, given *combat.Amount, o
 		if amount == (combat.Amount{}) && given != nil {
 			amount = *given
 		}
-		n, _ := combat.Roll(amount.On(on.MaxHealth), stats, false, l.hub.roll)
+		n, _ := combat.Roll(amount.On(on.MaxHealth), stats, false, cm.roll)
 		held.absorb += n
 	}
 	if !has && given != nil {
-		n, _ := combat.Roll(given.On(on.MaxHealth), stats, false, l.hub.roll)
+		n, _ := combat.Roll(given.On(on.MaxHealth), stats, false, cm.roll)
 		held.stored = n
 	}
 }
 
 // keepShare adds to what `store` effects hold, for what's just been done.
-func (l *Layer) keepShare(doer *unit, doerID int64, on string, n float64, ctx *combat.HitContext) {
-	for v := range l.units() {
+func (cm *Combat) keepShare(doer *unit, doerID int64, on string, n float64, ctx *combat.HitContext) {
+	for v := range cm.state.units() {
 		for key, held := range v.Statuses {
 			for i := range held.def.Effects {
 				e := &held.def.Effects[i]
@@ -291,16 +291,16 @@ func absorbOn(v *unit) float64 {
 }
 
 // spill lands a share of a hit on others near whoever it hit: a status's or an ability's `extraTargets`.
-func (l *Layer) spill(u *unit, c *casting, e *combat.Effect, on *unit, center [3]float64, continent string, n float64, count int, now time.Time) {
+func (cm *Combat) spill(u *unit, c *casting, e *combat.Effect, on *unit, center [3]float64, continent string, n float64, count int, now time.Time) {
 	land := func(x *combat.ExtraTargets) bool {
 		if x.Hit == "single" && count > 1 {
 			return false
 		}
-		if _, ok := combat.All(x.When, l.facts(u, on.ID, now)); !ok {
+		if _, ok := combat.All(x.When, cm.facts(u, on.ID, now)); !ok {
 			return false
 		}
 		others := []*unit{}
-		for _, v := range l.inArea(areaOf{center: center, continent: continent, affects: "enemies", radius: x.Radius}) {
+		for _, v := range cm.inArea(areaOf{center: center, continent: continent, affects: "enemies", radius: x.Radius}) {
 			if v != on && (x.Max == 0 || len(others) < x.Max) {
 				others = append(others, v)
 			}
@@ -314,8 +314,8 @@ func (l *Layer) spill(u *unit, c *casting, e *combat.Effect, on *unit, center [3
 		}
 		for _, other := range others {
 			h := hit{Type: "hit", From: u.ID, Ability: c.ability.ID, On: other.ID, Effect: "damage"}
-			l.harm(u, other, l.soak(other, n*share, schoolsOf(e.School, e.Schools, c.ability), &h, now), &h, now)
-			l.showHit(u.ID, other, h)
+			cm.harm(u, other, cm.soak(other, n*share, schoolsOf(e.School, e.Schools, c.ability), &h, now), &h, now)
+			cm.state.showHit(u.ID, other, h)
 		}
 		return true
 	}
@@ -330,9 +330,9 @@ func (l *Layer) spill(u *unit, c *casting, e *combat.Effect, on *unit, center [3
 				continue
 			}
 			if held.stacks--; held.stacks <= 0 {
-				l.takeOff(v, key)
+				cm.takeOff(v, key)
 			} else {
-				l.statusChanged(v.ID, key, held, now)
+				cm.statusChanged(v.ID, key, held, now)
 			}
 		}
 	}

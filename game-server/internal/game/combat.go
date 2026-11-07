@@ -206,7 +206,7 @@ func (h *Hub) Tick() {
 	now := h.now()
 	for _, l := range layers {
 		l.mu.Lock()
-		l.tick(now)
+		l.combat.tick(now)
 		l.showResting(now)
 		gone := l.leavings(now)
 		l.mu.Unlock()
@@ -216,29 +216,29 @@ func (h *Hub) Tick() {
 	}
 }
 
-func (l *Layer) tick(now time.Time) {
+func (cm *Combat) tick(now time.Time) {
 	dt := 0.0
-	if !l.lastTick.IsZero() {
-		dt = now.Sub(l.lastTick).Seconds()
+	if !cm.lastTick.IsZero() {
+		dt = now.Sub(cm.lastTick).Seconds()
 	}
-	l.lastTick = now
-	for _, p := range l.players {
+	cm.lastTick = now
+	for _, p := range cm.state.players {
 		f := &p.fight
 		if c := f.cast; c != nil {
 			if !c.released && !now.Before(c.release) {
-				l.release(&p.fight.unit, c, now)
+				cm.release(&p.fight.unit, c, now)
 			} else if c.released && !now.Before(c.ends) {
 				f.cast = nil
 			}
 		}
-		l.swing(&p.fight.unit, now)
-		l.spar(&p.fight.unit, now)
-		l.regen(p, dt, now)
+		cm.swing(&p.fight.unit, now)
+		cm.spar(&p.fight.unit, now)
+		cm.regen(p, dt, now)
 	}
 	// Landings can add landings, so go by index.
 	var later []*landing
-	for i := 0; i < len(l.landings); i++ {
-		a := l.landings[i]
+	for i := 0; i < len(cm.landings); i++ {
+		a := cm.landings[i]
 		if a.cast != nil && a.cast.stopped {
 			continue
 		}
@@ -248,13 +248,13 @@ func (l *Layer) tick(now time.Time) {
 		}
 		a.run(now)
 	}
-	l.landings = later
-	for _, d := range l.dummies {
+	cm.landings = later
+	for _, d := range cm.state.dummies {
 		if !d.lastHit.IsZero() && now.Sub(d.lastHit) >= dummyResetIdle {
 			d.firstHit, d.lastHit, d.damage = time.Time{}, time.Time{}, 0
 		}
 	}
-	l.sweep(now)
+	cm.sweep(now)
 }
 
 func movingNow(m Move) bool { return m.Forward != 0 || m.Strafe != 0 || m.Jump }

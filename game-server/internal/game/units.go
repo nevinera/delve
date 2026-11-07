@@ -83,7 +83,7 @@ func (l *Layer) removeStatus(on *unit, key statusKey) *activeStatus {
 	held := on.Statuses[key]
 	delete(on.Statuses, key)
 	if held != nil {
-		l.endZones(held)
+		l.combat.endZones(held)
 	}
 	l.tellOf(on.ID, encode(statusGone{"statusGone", on.ID, key.id, key.from}))
 	return held
@@ -101,4 +101,15 @@ func (u *unit) send(b []byte) {
 	if u.player != nil {
 		u.player.send(b)
 	}
+}
+
+// Combat works out what abilities, hits, statuses and areas do, on a world copy's state. It holds
+// no locks, and changes the state only through its update methods, which tell whoever should hear.
+type Combat struct {
+	state    *Layer
+	now      func() time.Time
+	roll     func() float64
+	landings []*landing
+	firing   int // how many triggers are setting each other off right now
+	lastTick time.Time
 }

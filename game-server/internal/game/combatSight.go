@@ -9,8 +9,8 @@ import (
 
 // sees is whether someone with their feet at from can see what has its feet at to. With no ground
 // to go by, or trouble reading it, nothing's in the way.
-func (l *Layer) sees(continent string, from, to [3]float64) bool {
-	g := l.ground(continent)
+func (cm *Combat) sees(continent string, from, to [3]float64) bool {
+	g := cm.state.ground(continent)
 	if g == nil {
 		return true
 	}
@@ -23,23 +23,23 @@ func (l *Layer) sees(continent string, from, to [3]float64) bool {
 }
 
 // feetOf is where a unit's feet are, if it's here.
-func (l *Layer) feetOf(id int64) ([3]float64, bool) {
-	if u := l.unit(id, ""); u != nil {
+func (cm *Combat) feetOf(id int64) ([3]float64, bool) {
+	if u := cm.state.unit(id, ""); u != nil {
 		return u.char.At, true
 	}
 	return [3]float64{}, false
 }
 
 // seesCast is whether the caster can still see what a cast is on.
-func (l *Layer) seesCast(u *unit, c *casting) bool {
+func (cm *Combat) seesCast(u *unit, c *casting) bool {
 	if c.spot != nil {
-		return l.sees(u.char.Continent, u.char.At, *c.spot)
+		return cm.sees(u.char.Continent, u.char.At, *c.spot)
 	}
 	if c.target == 0 || c.target == u.ID {
 		return true
 	}
-	at, here := l.feetOf(c.target)
-	return !here || l.sees(u.char.Continent, u.char.At, at)
+	at, here := cm.feetOf(c.target)
+	return !here || cm.sees(u.char.Continent, u.char.At, at)
 }
 
 // answerSees tells the player whether the server has them seeing a unit, for the line of sight
@@ -51,17 +51,17 @@ func (l *Layer) answerSees(p *Player, target int64) {
 	if now.Sub(p.seesFrom) >= time.Second {
 		p.seesFrom, p.seesAsked = now, 0
 	}
-	at, here := l.feetOf(target)
+	at, here := l.combat.feetOf(target)
 	if !here || p.seesAsked >= maxSeesPerSecond || distance(p.state.At, at) > seesReachFt {
 		return
 	}
 	p.seesAsked++
-	p.send(encode(seesAnswer{"sees", target, l.sees(p.state.Continent, p.state.At, at)}))
+	p.send(encode(seesAnswer{"sees", target, l.combat.sees(p.state.Continent, p.state.At, at)}))
 }
 
 // seesFromFront says whether a unit is facing what's at `from`.
-func (l *Layer) seesFromFront(on *unit, from [3]float64) bool {
-	if l.unit(on.ID, "") != on {
+func (cm *Combat) seesFromFront(on *unit, from [3]float64) bool {
+	if cm.state.unit(on.ID, "") != on {
 		return true
 	}
 	return facing(on.char.At, on.char.Yaw, from)

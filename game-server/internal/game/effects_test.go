@@ -350,7 +350,7 @@ func TestStunStopsEverythingUntilItEnds(t *testing.T) {
 	pass(h, c, 0.05)
 	refusal(t, p, "you're stunned")
 	found := false
-	for _, s := range p.layer.fighterState(&p.fight.unit, h.now()) {
+	for _, s := range p.layer.combat.fighterState(&p.fight.unit, h.now()) {
 		found = found || s == "stunned"
 	}
 	if !found {
@@ -406,7 +406,7 @@ func TestDamageBreaksFear(t *testing.T) {
 	if held(p, "held") == nil {
 		t.Fatal("it never landed")
 	}
-	p.layer.harm(&p.fight.unit, &p.layer.dummies[0].unit, 1, &hit{}, h.now())
+	p.layer.combat.harm(&p.fight.unit, &p.layer.dummies[0].unit, 1, &hit{}, h.now())
 	if held(p, "held") != nil {
 		t.Fatal("damage didn't break it")
 	}
@@ -500,12 +500,12 @@ func TestImmuneToControls(t *testing.T) {
 	// A stun you've already got doesn't count once you're immune.
 	use(t, p, "medaze")
 	pass(h, c, 0.05)
-	if got := p.layer.controlsOn(&p.fight.unit); len(got) != 1 {
+	if got := p.layer.combat.controlsOn(&p.fight.unit); len(got) != 1 {
 		t.Fatalf("controls = %v", got)
 	}
 	use(t, p, "meward")
 	p.fight.unit.Statuses[statusKey{"ward", p.ID()}] = &activeStatus{def: p.fight.class.Status("ward"), class: p.fight.class.ID, since: h.now(), stacks: 1, uses: 1}
-	if got := p.layer.controlsOn(&p.fight.unit); len(got) != 0 {
+	if got := p.layer.combat.controlsOn(&p.fight.unit); len(got) != 0 {
 		t.Fatalf("controls = %v", got)
 	}
 }
@@ -713,7 +713,7 @@ func TestDurationsAndStatsGrowWithWhatWasSpent(t *testing.T) {
 	fury := combat.Status{ID: "fury", Name: "Fury", Duration: 4, Effects: []combat.StatusEffect{{Type: "stat", Stat: "strength", AddPerSpent: 3}}}
 	h, p, c := spender(t, combat.Ability{ID: "rouse", Name: "Rouse", Target: "self", Cost: []combat.Cost{{Resource: "combo", Amount: 1, All: true}}, Effects: []combat.Effect{{Type: "status", Affects: "self", Status: "fury", DurationPerSpent: 2}}})
 	p.fight.class.Statuses = append(p.fight.class.Statuses, fury)
-	before := p.layer.statsOf(&p.fight.unit, nil, h.now()).Strength
+	before := p.layer.combat.statsOf(&p.fight.unit, nil, h.now()).Strength
 	p.fight.resources["combo"] = 5
 	use(t, p, "rouse")
 	pass(h, c, 0.05)
@@ -724,7 +724,7 @@ func TestDurationsAndStatsGrowWithWhatWasSpent(t *testing.T) {
 	if got := held.until.Sub(held.since).Seconds(); got != 14 {
 		t.Fatalf("lasts %g", got)
 	}
-	if got := p.layer.statsOf(&p.fight.unit, nil, h.now()).Strength - before; got != 15 {
+	if got := p.layer.combat.statsOf(&p.fight.unit, nil, h.now()).Strength - before; got != 15 {
 		t.Fatalf("strength up %g", got)
 	}
 }
@@ -825,7 +825,7 @@ func TestByMissingHealth(t *testing.T) {
 func TestShareOfWhatTheFightKept(t *testing.T) {
 	h, p, c, d := hitting(t, combat.Effect{Amount: combat.Amount{ShareOf: &combat.ShareOf{Of: "recentDamage", Share: 0.5, Seconds: 5}}})
 	p.fight.unit.Health = p.fight.unit.MaxHealth
-	p.layer.harm(&p.fight.unit, &p.fight.unit, 40, &hit{}, h.now())
+	p.layer.combat.harm(&p.fight.unit, &p.fight.unit, 40, &hit{}, h.now())
 	got := dealt(t, h, p, c, d)
 	if got < 15 || got > 25 {
 		t.Fatalf("dealt %g for half of 40", got)

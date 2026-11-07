@@ -122,7 +122,7 @@ func (l *Layer) setLevel(p *Player, level int) {
 	p.state.Level = level
 	l.tellOf(p.ID(), encode(levelMessage{"level", p.ID(), level}))
 	l.applyBuild(p, wanted, now)
-	l.refit(&f.unit, now)
+	l.combat.refit(&f.unit, now)
 	l.resizeHealth(&f.unit, f.unit.MaxHealth, f.unit.MaxHealth)
 	world, id := l.worldID, p.ID()
 	go func() {
@@ -173,7 +173,7 @@ func (f *fighter) attacked(now time.Time) {
 
 // addResource gives a fighter some of a resource, or takes it with a negative amount. It says
 // how much that came to with resourceGain, and whether the fighter has the resource.
-func (l *Layer) addResource(f *fighter, key string, n float64) (float64, bool) {
+func (cm *Combat) addResource(f *fighter, key string, n float64) (float64, bool) {
 	for _, r := range f.class.Resources {
 		if r.Key == key {
 			pool := f.pool(r)
@@ -197,12 +197,12 @@ func (f *fighter) pool(r combat.Resource) combat.Pool {
 }
 
 // regen brings back resources and tells the player how they stand, every so often.
-func (l *Layer) regen(p *Player, dt float64, now time.Time) {
+func (cm *Combat) regen(p *Player, dt float64, now time.Time) {
 	f := &p.fight
 	if f.class == nil {
 		return
 	}
-	mods := l.modsOf(&f.unit, nil, now)
+	mods := cm.modsOf(&f.unit, nil, now)
 	sheet := f.unit.base
 	if len(mods) > 0 {
 		sheet = combat.Sheet(f.unit.base, f.unit.primary, mods)

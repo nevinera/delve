@@ -149,7 +149,7 @@ func TestBreaksOn(t *testing.T) {
 	pass(h, c, 0.1)
 	p.state.Move = Move{Forward: 1}
 	p.layer.mu.Lock()
-	p.layer.interruptMoving(&p.fight.unit)
+	p.layer.combat.interruptMoving(&p.fight.unit)
 	p.layer.mu.Unlock()
 	if on("food") != nil {
 		t.Fatal("moving didn't break it")

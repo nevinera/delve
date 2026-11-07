@@ -40,7 +40,7 @@ type watcher struct {
 }
 
 // watchers is every trigger that's watching whoever an event belongs to.
-func (l *Layer) watchers(ev event) []watcher {
+func (cm *Combat) watchers(ev event) []watcher {
 	var out []watcher
 	look := func(v *unit, key statusKey, held *activeStatus) {
 		for i := range held.def.Effects {
@@ -60,7 +60,7 @@ func (l *Layer) watchers(ev event) []watcher {
 			}
 		}
 	}
-	for v := range l.units() {
+	for v := range cm.state.units() {
 		for key, held := range v.Statuses {
 			look(v, key, held)
 		}
@@ -81,24 +81,24 @@ func (l *Layer) watchers(ev event) []watcher {
 }
 
 // fire sets off the triggers watching for an event.
-func (l *Layer) fire(ev event, now time.Time) {
-	if l.firing >= firingDepth {
+func (cm *Combat) fire(ev event, now time.Time) {
+	if cm.firing >= firingDepth {
 		return
 	}
-	l.firing++
-	defer func() { l.firing-- }()
-	for _, w := range l.watchers(ev) {
+	cm.firing++
+	defer func() { cm.firing-- }()
+	for _, w := range cm.watchers(ev) {
 		if w.e.ResetOn == ev.on {
 			delete(w.held.counts, w.place)
 		}
-		if w.e.On == ev.on && l.triggerMatches(w, ev, now) && l.triggerDue(w, ev, now) {
-			l.runTrigger(w, ev, now)
+		if w.e.On == ev.on && cm.triggerMatches(w, ev, now) && cm.triggerDue(w, ev, now) {
+			cm.runTrigger(w, ev, now)
 		}
 	}
 }
 
 // triggerMatches checks a trigger's filters.
-func (l *Layer) triggerMatches(w watcher, ev event, now time.Time) bool {
+func (cm *Combat) triggerMatches(w watcher, ev event, now time.Time) bool {
 	e := w.e
 	ctx := combat.HitContext{Status: ev.status}
 	if ev.ctx != nil {
@@ -124,7 +124,7 @@ func (l *Layer) triggerMatches(w watcher, ev event, now time.Time) bool {
 	case e.Threshold > 0 && (ev.below < e.Threshold || ev.above >= e.Threshold):
 		return false
 	}
-	return l.holds(w.on, e, &ctx, now)
+	return cm.holds(w.on, e, &ctx, now)
 }
 
 // statusesOrOwn is the statuses a trigger on a status's life watches: those it names, or its own.
@@ -136,7 +136,7 @@ func statusesOrOwn(e *combat.StatusEffect, held *activeStatus) []string {
 }
 
 // triggerDue checks what limits how often a trigger fires, and keeps its count.
-func (l *Layer) triggerDue(w watcher, ev event, now time.Time) bool {
+func (cm *Combat) triggerDue(w watcher, ev event, now time.Time) bool {
 	e := w.e
 	if at, ok := w.held.fired[w.place]; ok && e.Cooldown > 0 && now.Before(at.Add(seconds(e.Cooldown))) {
 		return false
@@ -160,9 +160,9 @@ func (l *Layer) triggerDue(w watcher, ev event, now time.Time) bool {
 		chance = 1
 	}
 	if e.Mastery != 0 {
-		chance += e.Mastery * l.statsOf(w.on, nil, now).MasteryPercent() / 100
+		chance += e.Mastery * cm.statsOf(w.on, nil, now).MasteryPercent() / 100
 	}
-	if chance < 1 && l.hub.roll() >= chance {
+	if chance < 1 && cm.roll() >= chance {
 		return false
 	}
 	if w.held.fired == nil {
@@ -173,8 +173,8 @@ func (l *Layer) triggerDue(w watcher, ev event, now time.Time) bool {
 }
 
 // runTrigger does what a trigger does. Whoever applied the status does it.
-func (l *Layer) runTrigger(w watcher, ev event, now time.Time) {
-	caster := l.caster(w.key.from)
+func (cm *Combat) runTrigger(w watcher, ev event, now time.Time) {
+	caster := cm.state.caster(w.key.from)
 	if caster == nil {
 		return
 	}
@@ -190,66 +190,66 @@ func (l *Layer) runTrigger(w watcher, ev event, now time.Time) {
 	case "caster":
 		targets = []*unit{caster}
 	case "target":
-		if on := l.unit(ev.other, caster.char.Continent); on != nil {
+		if on := cm.state.unit(ev.other, caster.char.Continent); on != nil {
 			targets = []*unit{on}
 		}
 	default:
-		targets = l.reached(caster, c, &effect)
+		targets = cm.reached(caster, c, &effect)
 	}
 	for _, on := range targets {
-		if _, ok := combat.All(effect.When, l.facts(caster, on.ID, now)); !ok {
+		if _, ok := combat.All(effect.When, cm.facts(caster, on.ID, now)); !ok {
 			continue
 		}
 		runner := caster
-		if l.playerOf(on) != nil && effect.Type == "resource" {
+		if cm.state.playerOf(on) != nil && effect.Type == "resource" {
 			runner = on // what it gives goes to the one it lands on
 		}
 		caster.debugLine("%s fires on %s", w.held.def.Name, ev.on)
-		l.land(runner, c, &effect, on, len(targets), now)
+		cm.land(runner, c, &effect, on, len(targets), now)
 	}
 	if w.on.Statuses[w.key] != w.held {
 		return
 	}
 	switch {
 	case w.e.Resets:
-		l.takeOff(w.on, w.key)
+		cm.takeOff(w.on, w.key)
 	case w.e.SpendsStack:
 		w.held.stacks--
 		if w.held.stacks <= 0 {
-			l.takeOff(w.on, w.key)
+			cm.takeOff(w.on, w.key)
 		} else {
-			l.statusChanged(w.on.ID, w.key, w.held, now)
+			cm.statusChanged(w.on.ID, w.key, w.held, now)
 		}
 	}
 }
 
 // damaged says a player did damage, for what's watching. `n` has already come off.
-func (l *Layer) damaged(u *unit, on *unit, n float64, crit bool, ctx combat.HitContext, now time.Time) {
+func (cm *Combat) damaged(u *unit, on *unit, n float64, crit bool, ctx combat.HitContext, now time.Time) {
 	mine := u
-	l.keepShare(mine, u.ID, "dealDamage", n, &ctx)
+	cm.keepShare(mine, u.ID, "dealDamage", n, &ctx)
 	outcome := "nonCrit"
 	if crit {
 		outcome = "crit"
 	}
-	l.fire(event{on: "dealDamage", who: mine, other: on.ID, ctx: &ctx, amount: n}, now)
-	l.fire(event{on: outcome, who: mine, other: on.ID, ctx: &ctx, amount: n}, now)
-	l.fire(event{on: "takeDamage", who: on, other: u.ID, ctx: &ctx, amount: n}, now)
+	cm.fire(event{on: "dealDamage", who: mine, other: on.ID, ctx: &ctx, amount: n}, now)
+	cm.fire(event{on: outcome, who: mine, other: on.ID, ctx: &ctx, amount: n}, now)
+	cm.fire(event{on: "takeDamage", who: on, other: u.ID, ctx: &ctx, amount: n}, now)
 	if on.MaxHealth > 0 {
 		before, after := 100*min(on.Health+n, on.MaxHealth)/on.MaxHealth, 100*on.Health/on.MaxHealth
-		l.fire(event{on: "healthBelow", who: on, other: u.ID, ctx: &ctx, amount: n, below: before, above: after}, now)
+		cm.fire(event{on: "healthBelow", who: on, other: u.ID, ctx: &ctx, amount: n, below: before, above: after}, now)
 		if on.ID > 0 {
-			l.fire(event{on: "allyHealthBelow", who: on, other: on.ID, ctx: &ctx, amount: n, below: before, above: after}, now)
+			cm.fire(event{on: "allyHealthBelow", who: on, other: on.ID, ctx: &ctx, amount: n, below: before, above: after}, now)
 		}
 	}
 }
 
 // healedBy says a player healed a unit, for what's watching. `over` is the part past full health.
-func (l *Layer) healedBy(u *unit, on *unit, n, over float64, ctx combat.HitContext, now time.Time) {
-	l.keepShare(u, u.ID, "heal", n, &ctx)
-	l.fire(event{on: "heal", who: u, other: on.ID, ctx: &ctx, amount: n}, now)
-	l.fire(event{on: "healed", who: on, other: u.ID, ctx: &ctx, amount: n}, now)
+func (cm *Combat) healedBy(u *unit, on *unit, n, over float64, ctx combat.HitContext, now time.Time) {
+	cm.keepShare(u, u.ID, "heal", n, &ctx)
+	cm.fire(event{on: "heal", who: u, other: on.ID, ctx: &ctx, amount: n}, now)
+	cm.fire(event{on: "healed", who: on, other: u.ID, ctx: &ctx, amount: n}, now)
 	if over > 0 {
-		l.fire(event{on: "overheal", who: u, other: on.ID, ctx: &ctx, amount: over}, now)
+		cm.fire(event{on: "overheal", who: u, other: on.ID, ctx: &ctx, amount: over}, now)
 	}
 }
 

@@ -19,8 +19,8 @@ func (p *Player) debugLine(format string, args ...any) {
 }
 
 // debugHit says what an effect came to and how.
-func (l *Layer) debugHit(u *unit, ability string, e *combat.Effect, on *unit, h hit) string {
-	line := fmt.Sprintf("%s on %s: %s", ability, l.nameOf(on.ID), e.Type)
+func (cm *Combat) debugHit(u *unit, ability string, e *combat.Effect, on *unit, h hit) string {
+	line := fmt.Sprintf("%s on %s: %s", ability, cm.nameOf(on.ID), e.Type)
 	if h.Missed {
 		return line + " missed"
 	}
@@ -40,51 +40,51 @@ func (l *Layer) debugHit(u *unit, ability string, e *combat.Effect, on *unit, h 
 }
 
 // nameOf is a unit's name, for the log.
-func (l *Layer) nameOf(id int64) string {
-	if u := l.unit(id, ""); u != nil {
+func (cm *Combat) nameOf(id int64) string {
+	if u := cm.state.unit(id, ""); u != nil {
 		return u.char.Name
 	}
 	return "someone"
 }
 
 // strike rolls an attack on an enemy and does what it comes to, noting it in the hit.
-func (l *Layer) strike(u *unit, on *unit, amount combat.Amount, ctx combat.HitContext, h *hit, now time.Time) {
+func (cm *Combat) strike(u *unit, on *unit, amount combat.Amount, ctx combat.HitContext, h *hit, now time.Time) {
 	blocked := false
 	if on.ID != u.ID {
 		u.fight.attacked(now)
-		theirs := l.statsOf(on, withOther(ctx, u.ID), now)
-		melee, front := slices.Contains(ctx.Kinds, "melee"), l.seesFromFront(on, u.char.At)
-		if l.avoided(on, u.ID, theirs, melee, front, &ctx, h, now) {
+		theirs := cm.statsOf(on, withOther(ctx, u.ID), now)
+		melee, front := slices.Contains(ctx.Kinds, "melee"), cm.seesFromFront(on, u.char.At)
+		if cm.avoided(on, u.ID, theirs, melee, front, &ctx, h, now) {
 			return
 		}
-		blocked = combat.Blocks(theirs, melee, front, l.hub.roll)
+		blocked = combat.Blocks(theirs, melee, front, cm.roll)
 	}
-	if l.immuneToDamage(on, ctx.Schools, now) {
+	if cm.immuneToDamage(on, ctx.Schools, now) {
 		h.Missed, h.Avoided = true, "immune"
 		return
 	}
-	n, crit := l.rollDamage(u, on, amount, ctx, now)
+	n, crit := cm.rollDamage(u, on, amount, ctx, now)
 	h.Crit = crit
 	if blocked {
 		n *= 1 - combat.BlockShare
 		h.Blocked = true
 	}
-	l.harm(u, on, l.soak(on, n, ctx.Schools, h, now), h, now)
+	cm.harm(u, on, cm.soak(on, n, ctx.Schools, h, now), h, now)
 	if blocked {
-		l.fire(event{on: "block", who: on, other: u.ID, ctx: &ctx, amount: n}, now)
+		cm.fire(event{on: "block", who: on, other: u.ID, ctx: &ctx, amount: n}, now)
 	}
 	ability := ""
 	if ctx.Ability != nil {
 		ability = ctx.Ability.ID
 	}
-	l.leech(u, on, n, ctx, ability, now)
-	l.damaged(u, on, n, crit, ctx, now)
+	cm.leech(u, on, n, ctx, ability, now)
+	cm.damaged(u, on, n, crit, ctx, now)
 }
 
 // avoided rolls an attack on a unit, and says whether it came to nothing. A unit that dodges or
 // parries is still in the fight.
-func (l *Layer) avoided(on *unit, from int64, theirs combat.Stats, melee, front bool, ctx *combat.HitContext, h *hit, now time.Time) bool {
-	outcome := combat.AttackRoll(theirs, melee, front, l.hub.roll)
+func (cm *Combat) avoided(on *unit, from int64, theirs combat.Stats, melee, front bool, ctx *combat.HitContext, h *hit, now time.Time) bool {
+	outcome := combat.AttackRoll(theirs, melee, front, cm.roll)
 	if outcome == "" {
 		return false
 	}
@@ -93,30 +93,30 @@ func (l *Layer) avoided(on *unit, from int64, theirs combat.Stats, melee, front 
 		return true
 	}
 	h.Avoided = outcome
-	if o := l.playerOf(on); o != nil {
+	if o := cm.state.playerOf(on); o != nil {
 		o.fight.since["damageTaken"] = now
 	}
-	l.fire(event{on: outcome, who: on, other: from, ctx: ctx}, now)
+	cm.fire(event{on: outcome, who: on, other: from, ctx: ctx}, now)
 	return true
 }
 
 // statsOf is a unit's stats with what it holds counted. With a hit, stats narrowed to some hits
 // count if they match it, and otherwise they don't.
-func (l *Layer) statsOf(v *unit, ctx *combat.HitContext, now time.Time) combat.Stats {
-	return combat.Sheet(v.base, v.primary, l.modsOf(v, ctx, now))
+func (cm *Combat) statsOf(v *unit, ctx *combat.HitContext, now time.Time) combat.Stats {
+	return combat.Sheet(v.base, v.primary, cm.modsOf(v, ctx, now))
 }
 
 // modsOf is the stat effects that count for a unit right now.
-func (l *Layer) modsOf(v *unit, ctx *combat.HitContext, now time.Time) []combat.Mod {
+func (cm *Combat) modsOf(v *unit, ctx *combat.HitContext, now time.Time) []combat.Mod {
 	var mods []combat.Mod
 	for key, held := range v.Statuses {
 		for i := range held.def.Effects {
 			e := &held.def.Effects[i]
-			if e.Type != "stat" || !e.Applies(ctx, key.from) || !l.holds(v, e, ctx, now) {
+			if e.Type != "stat" || !e.Applies(ctx, key.from) || !cm.holds(v, e, ctx, now) {
 				continue
 			}
 			mod := combat.Mod{Effect: e, Stacks: held.stacks, Spent: held.spent}
-			if o := l.caster(key.from); o != nil {
+			if o := cm.state.caster(key.from); o != nil {
 				mod.Caster = &o.base
 			}
 			mods = append(mods, mod)
@@ -126,17 +126,17 @@ func (l *Layer) modsOf(v *unit, ctx *combat.HitContext, now time.Time) []combat.
 }
 
 // holds says whether a stat's own conditions hold for the unit holding it.
-func (l *Layer) holds(v *unit, e *combat.StatusEffect, ctx *combat.HitContext, now time.Time) bool {
+func (cm *Combat) holds(v *unit, e *combat.StatusEffect, ctx *combat.HitContext, now time.Time) bool {
 	if len(e.When) == 0 {
 		return true
 	}
 	facts := &combat.Facts{Self: unitOf(v, v.ID, nil), Since: map[string]float64{}, Resources: map[string]combat.ResourceAmount{}}
-	if o := l.playerOf(v); o != nil {
+	if o := cm.state.playerOf(v); o != nil {
 		target := int64(0)
 		if ctx != nil {
 			target = ctx.Other
 		}
-		facts = l.facts(v, target, now)
+		facts = cm.facts(v, target, now)
 	}
 	_, ok := combat.All(e.When, facts)
 	return ok
@@ -149,14 +149,14 @@ func withOther(ctx combat.HitContext, other int64) *combat.HitContext {
 }
 
 // rollDamage is what a hit comes to, by the stats of who does it and who takes it.
-func (l *Layer) rollDamage(u *unit, on *unit, amount combat.Amount, ctx combat.HitContext, now time.Time) (float64, bool) {
+func (cm *Combat) rollDamage(u *unit, on *unit, amount combat.Amount, ctx combat.HitContext, now time.Time) (float64, bool) {
 	amount = amount.On(on.MaxHealth)
-	mine, theirs := l.statsOf(u, withOther(ctx, on.ID), now), l.statsOf(on, withOther(ctx, u.ID), now)
+	mine, theirs := cm.statsOf(u, withOther(ctx, on.ID), now), cm.statsOf(on, withOther(ctx, u.ID), now)
 	rolled := mine
 	rolled.CritChance += theirs.CritTaken + ctx.CritChance
 	rolled.CritDamage += ctx.CritDamage
 	amount, rolled = combat.WithCritRules(amount, rolled, ctx)
-	n, crit := combat.Roll(amount, rolled, true, l.hub.roll)
+	n, crit := combat.Roll(amount, rolled, true, cm.roll)
 	before := n
 	n = theirs.Taken(n*mine.DamageDone*(1+mine.Versatility()/100), ctx, mine.Level)
 	if n != before {
@@ -166,14 +166,14 @@ func (l *Layer) rollDamage(u *unit, on *unit, amount combat.Amount, ctx combat.H
 }
 
 // rollHeal is what a heal comes to, by the stats of who does it and who takes it.
-func (l *Layer) rollHeal(u *unit, on *unit, amount combat.Amount, ctx combat.HitContext, now time.Time) (float64, bool) {
+func (cm *Combat) rollHeal(u *unit, on *unit, amount combat.Amount, ctx combat.HitContext, now time.Time) (float64, bool) {
 	amount = amount.On(on.MaxHealth)
-	mine, theirs := l.statsOf(u, withOther(ctx, on.ID), now), l.statsOf(on, withOther(ctx, u.ID), now)
+	mine, theirs := cm.statsOf(u, withOther(ctx, on.ID), now), cm.statsOf(on, withOther(ctx, u.ID), now)
 	rolled := mine
 	rolled.CritChance += ctx.CritChance
 	rolled.CritDamage = mine.CritHealing + ctx.CritDamage
 	amount, rolled = combat.WithCritRules(amount, rolled, ctx)
-	n, crit := combat.Roll(amount, rolled, true, l.hub.roll)
+	n, crit := combat.Roll(amount, rolled, true, cm.roll)
 	if times := mine.HealingDone * theirs.HealingTaken * (1 + mine.Versatility()/100); times != 1 {
 		u.debugLine("healing %g x %g from stats", n, times)
 		n *= times
@@ -182,22 +182,22 @@ func (l *Layer) rollHeal(u *unit, on *unit, amount combat.Amount, ctx combat.Hit
 }
 
 // leech heals a player by its share of the damage it did to another.
-func (l *Layer) leech(u *unit, on *unit, n float64, ctx combat.HitContext, ability string, now time.Time) {
+func (cm *Combat) leech(u *unit, on *unit, n float64, ctx combat.HitContext, ability string, now time.Time) {
 	if on.ID == u.ID {
 		return
 	}
-	l.drain(u, n, l.statsOf(u, withOther(ctx, on.ID), now).Leech/100, ability)
+	cm.drain(u, n, cm.statsOf(u, withOther(ctx, on.ID), now).Leech/100, ability)
 }
 
 // drain heals a player by a share of what it did.
-func (l *Layer) drain(u *unit, n, share float64, ability string) {
+func (cm *Combat) drain(u *unit, n, share float64, ability string) {
 	f := u
 	back := min(n*share, f.MaxHealth-f.Health)
 	if back <= 0 {
 		return
 	}
-	l.setHealth(f, f.Health+back)
-	l.showHit(u.ID, f, hit{Type: "hit", From: u.ID, Ability: ability, On: u.ID, Effect: "heal", Amount: math.Round(back)})
+	cm.state.setHealth(f, f.Health+back)
+	cm.state.showHit(u.ID, f, hit{Type: "hit", From: u.ID, Ability: ability, On: u.ID, Effect: "heal", Amount: math.Round(back)})
 }
 
 // schoolsOf is the schools a hit counts as: its own, or else its ability's.
@@ -236,22 +236,22 @@ func hitOf(c *casting, e *combat.Effect, on *unit, count int) combat.HitContext 
 }
 
 // harm takes health off a unit, noting it in the hit.
-func (l *Layer) harm(u *unit, on *unit, n float64, h *hit, now time.Time) {
+func (cm *Combat) harm(u *unit, on *unit, n float64, h *hit, now time.Time) {
 	if n > 0 {
 		on.recent = append(on.recent, taken{now, n})
 		for len(on.recent) > 0 && now.Sub(on.recent[0].at) > recentDamageLasts {
 			on.recent = on.recent[1:]
 		}
 	}
-	if o := l.playerOf(on); o != nil {
+	if o := cm.state.playerOf(on); o != nil {
 		o.fight.since["damageTaken"] = now
 	}
-	l.setHealth(on, on.Health-n)
+	cm.state.setHealth(on, on.Health-n)
 	h.Amount = math.Round(n)
-	l.breakStatuses(on, "damage", nil)
+	cm.breakStatuses(on, "damage", nil)
 	if d := on.dummy; d != nil {
 		d.tally(n, now)
 		h.DPS = math.Round(d.dps(now))
-		l.setHealth(on, on.MaxHealth) // it's always at full health
+		cm.state.setHealth(on, on.MaxHealth) // it's always at full health
 	}
 }

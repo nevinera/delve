@@ -21,17 +21,17 @@ func statusNames(u *unit) func(string) string {
 }
 
 // factsInUse is what an ability's effects are read against, with how the use is going.
-func (l *Layer) factsInUse(u *unit, c *casting, target int64, hits int, now time.Time) *combat.Facts {
-	out := l.facts(u, target, now)
+func (cm *Combat) factsInUse(u *unit, c *casting, target int64, hits int, now time.Time) *combat.Facts {
+	out := cm.facts(u, target, now)
 	out.Used = &combat.UseSoFar{Spent: c.spent, Hits: hits, Crit: c.crit, Survived: c.survived, Landed: c.landed}
 	return out
 }
 
 // facts is what conditions are read against, for a player and its target.
-func (l *Layer) facts(u *unit, target int64, now time.Time) *combat.Facts {
+func (cm *Combat) facts(u *unit, target int64, now time.Time) *combat.Facts {
 	f := u.fight
 	out := &combat.Facts{
-		Self:      unitOf(&f.unit, u.ID, l.fighterState(u, now)),
+		Self:      unitOf(&f.unit, u.ID, cm.fighterState(u, now)),
 		Since:     map[string]float64{},
 		Resources: map[string]combat.ResourceAmount{},
 	}
@@ -40,19 +40,19 @@ func (l *Layer) facts(u *unit, target int64, now time.Time) *combat.Facts {
 	}
 	out.Holders, out.InAreas = map[string]int{}, map[string]bool{}
 	out.Groups = groupsOn(&f.unit)
-	for v := range l.units() {
+	for v := range cm.state.units() {
 		for key := range v.Statuses {
 			if key.from == u.ID {
 				out.Holders[key.id]++
 			}
 		}
 	}
-	for _, z := range l.zones {
+	for _, z := range cm.state.zones {
 		if z.from == u && z.inside[target] != nil {
 			out.InAreas[z.kind] = true
 		}
 	}
-	if t := l.unit(target, u.char.Continent); t != nil {
+	if t := cm.state.unit(target, u.char.Continent); t != nil {
 		out.TargetGroups = groupsOn(t)
 	}
 	if f.class != nil {
@@ -60,7 +60,7 @@ func (l *Layer) facts(u *unit, target int64, now time.Time) *combat.Facts {
 			out.Resources[r.Key] = combat.ResourceAmount{Have: f.resources[r.Key], Max: f.pool(r).Max}
 		}
 	}
-	if d := l.dummy(target, u.char.Continent); d != nil {
+	if d := cm.state.dummy(target, u.char.Continent); d != nil {
 		state := []string{}
 		if !d.lastHit.IsZero() && now.Sub(d.lastHit) < combatLasts {
 			state = append(state, "inCombat")
@@ -68,8 +68,8 @@ func (l *Layer) facts(u *unit, target int64, now time.Time) *combat.Facts {
 		unit := unitOf(&d.unit, u.ID, state)
 		out.Target, out.TargetIs = &unit, []string{"enemy", "other", "nonPlayer"}
 		out.Position = positionOf(u.char.At, d.state.At, d.state.Yaw)
-	} else if o := l.players[target]; o != nil && target != 0 {
-		unit := unitOf(&o.fight.unit, u.ID, l.fighterState(&o.fight.unit, now))
+	} else if o := cm.state.players[target]; o != nil && target != 0 {
+		unit := unitOf(&o.fight.unit, u.ID, cm.fighterState(&o.fight.unit, now))
 		out.Target, out.TargetIs = &unit, []string{"ally", "player"}
 		if o == u.player {
 			out.TargetIs = append(out.TargetIs, "self")
@@ -134,9 +134,9 @@ func groupsOn(v *unit) map[string]bool {
 
 // fighterState is which of a `state` condition's words are true of a player. Everywhere counts as
 // outdoors.
-func (l *Layer) fighterState(u *unit, now time.Time) []string {
+func (cm *Combat) fighterState(u *unit, now time.Time) []string {
 	state := []string{"outdoors"}
-	controls := l.controlsOn(u)
+	controls := cm.controlsOn(u)
 	if combat.Helpless(controls) {
 		state = append(state, "controlled")
 	}

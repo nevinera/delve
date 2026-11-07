@@ -243,8 +243,8 @@ func (l *Layer) standing(continent string, x, z float64) ([3]float64, bool) {
 // teleport moves a player there at once, ending what it was casting. Those it leaves see it vanish,
 // and those it arrives by see it appear. The layer's lock is held.
 func (l *Layer) teleport(p *Player, continent string, at [3]float64) {
-	l.stopCast(&p.fight.unit)
-	l.stopAttacking(&p.fight.unit)
+	l.combat.stopCast(&p.fight.unit)
+	l.combat.stopAttacking(&p.fight.unit)
 	log.Printf("character %d: teleported to %s %v", p.ID(), continent, at)
 	p.motion.teleported(l.hub.now())
 	l.relocate(&p.fight.unit, continent, at, encode(teleported{"teleport", continent, at, p.state.Yaw}), encode(moved{"moved", p.ID(), at, p.state.Yaw, Move{Gait: "run"}}))

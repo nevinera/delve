@@ -30,11 +30,11 @@ func TestSightStopsAbilities(t *testing.T) {
 	h, p, _, d := behindWall(t)
 	zero := 0.0
 	p.fight.class.Abilities = append(p.fight.class.Abilities, combat.Ability{ID: "peek", Name: "Peek", Target: "enemy", GCD: &zero, Range: combat.Distance{Feet: 1000}})
-	if _, _, why := p.layer.check(&p.fight.unit, incoming{Ability: "peek", Target: d.ID}, h.now()); why != cantSee {
+	if _, _, why := p.layer.combat.check(&p.fight.unit, incoming{Ability: "peek", Target: d.ID}, h.now()); why != cantSee {
 		t.Fatalf("why = %q", why)
 	}
 	p.layer.fakeGround = nil
-	if _, _, why := p.layer.check(&p.fight.unit, incoming{Ability: "peek", Target: d.ID}, h.now()); why != "" {
+	if _, _, why := p.layer.combat.check(&p.fight.unit, incoming{Ability: "peek", Target: d.ID}, h.now()); why != "" {
 		t.Fatalf("with the wall gone, why = %q", why)
 	}
 }
@@ -60,7 +60,7 @@ func TestSightStopsACastLetGo(t *testing.T) {
 func TestSightStopsSwings(t *testing.T) {
 	h, p, c, d := behindWall(t)
 	p.layer.mu.Lock()
-	p.layer.startAttacking(&p.fight.unit, d.ID)
+	p.layer.combat.startAttacking(&p.fight.unit, d.ID)
 	p.layer.mu.Unlock()
 	health := d.damage
 	pass(h, c, 3)
@@ -75,11 +75,11 @@ func TestSightKeepsAreasOut(t *testing.T) {
 	p.layer.mu.Lock()
 	defer p.layer.mu.Unlock()
 	a := areaOf{center: p.state.At, continent: p.state.Continent, affects: "enemies", radius: 1000}
-	if got := p.layer.inArea(a); len(got) != 0 {
+	if got := p.layer.combat.inArea(a); len(got) != 0 {
 		t.Fatalf("with the wall up: %d in it", len(got))
 	}
 	p.layer.fakeGround = nil
-	if got := p.layer.inArea(a); len(got) != 1 || got[0].ID != d.ID {
+	if got := p.layer.combat.inArea(a); len(got) != 1 || got[0].ID != d.ID {
 		t.Fatalf("with the wall down: %v", got)
 	}
 }

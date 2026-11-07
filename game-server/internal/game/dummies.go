@@ -44,43 +44,43 @@ func (l *Layer) dummiesOn(continent string) []Character {
 
 // spar has the nearest dummy in reach swing back at a player who asked for that. It's how you try
 // out what happens when you're hit, while nothing else in the world attacks. It can't kill you.
-func (l *Layer) spar(u *unit, now time.Time) {
+func (cm *Combat) spar(u *unit, now time.Time) {
 	f := u.fight
 	if !f.sparring || now.Before(f.sparAt) {
 		return
 	}
 	var d *dummy
-	for _, each := range l.dummies {
+	for _, each := range cm.state.dummies {
 		if each.state.Continent == u.char.Continent && distance(u.char.At, each.state.At) <= combat.MeleeFt && (d == nil || distance(u.char.At, each.state.At) < distance(u.char.At, d.state.At)) {
 			d = each
 		}
 	}
-	if d == nil || !combat.CanSwing(l.controlsOn(&d.unit)) {
+	if d == nil || !combat.CanSwing(cm.controlsOn(&d.unit)) {
 		return
 	}
 	f.sparAt = now.Add(seconds(combat.SwingSeconds))
 	on := &f.unit
-	l.tellOf(u.ID, encode(swung{"swung", d.ID, u.ID}))
+	cm.state.tellOf(u.ID, encode(swung{"swung", d.ID, u.ID}))
 	ctx := combat.HitContext{Schools: []string{"physical"}, Kinds: []string{"auto", "melee", "direct", "main", "single"}, Other: d.ID}
 	h := hit{Type: "hit", From: d.ID, On: u.ID, Effect: "damage"}
-	theirs := l.statsOf(on, &ctx, now)
+	theirs := cm.statsOf(on, &ctx, now)
 	front := facing(u.char.At, u.char.Yaw, d.state.At)
-	if !l.avoided(on, d.ID, theirs, true, front, &ctx, &h, now) {
+	if !cm.avoided(on, d.ID, theirs, true, front, &ctx, &h, now) {
 		n := theirs.Taken(on.MaxHealth*sparShare, ctx, f.level)
-		blocked := combat.Blocks(theirs, true, front, l.hub.roll)
+		blocked := combat.Blocks(theirs, true, front, cm.roll)
 		if blocked {
 			n *= 1 - combat.BlockShare
 			h.Blocked = true
 		}
-		n = l.soak(on, n, ctx.Schools, &h, now)
+		n = cm.soak(on, n, ctx.Schools, &h, now)
 		n = min(n, on.Health-1)
-		l.harm(u, on, max(n, 0), &h, now)
+		cm.harm(u, on, max(n, 0), &h, now)
 		if blocked {
-			l.fire(event{on: "block", who: on, other: d.ID, ctx: &ctx, amount: n}, now)
+			cm.fire(event{on: "block", who: on, other: d.ID, ctx: &ctx, amount: n}, now)
 		}
-		l.fire(event{on: "takeDamage", who: on, other: d.ID, ctx: &ctx, amount: n}, now)
+		cm.fire(event{on: "takeDamage", who: on, other: d.ID, ctx: &ctx, amount: n}, now)
 	}
-	l.showHit(u.ID, on, h)
+	cm.state.showHit(u.ID, on, h)
 }
 
 func (d *dummy) tally(n float64, now time.Time) {

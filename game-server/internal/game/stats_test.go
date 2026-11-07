@@ -244,10 +244,10 @@ func TestResourceStats(t *testing.T) {
 		t.Fatalf("gained %g in a second, want about 2", gained)
 	}
 	p.fight.resources["grit"] = 1
-	if given, ok := p.layer.addResource(&p.fight, "grit", 1); !ok || given != 3 || p.fight.resources["grit"] != 4 {
+	if given, ok := p.layer.combat.addResource(&p.fight, "grit", 1); !ok || given != 3 || p.fight.resources["grit"] != 4 {
 		t.Fatalf("given %g, have %g", given, p.fight.resources["grit"])
 	}
-	if given, _ := p.layer.addResource(&p.fight, "grit", -1); given != -1 {
+	if given, _ := p.layer.combat.addResource(&p.fight, "grit", -1); given != -1 {
 		t.Fatalf("resourceGain changed a loss to %g", given)
 	}
 }
@@ -541,12 +541,12 @@ func TestDrainAndSlowed(t *testing.T) {
 	if got := p.fight.unit.Health - was; got != 10 {
 		t.Fatalf("drained %g, want 10", got)
 	}
-	if slices.Contains(p.layer.fighterState(&p.fight.unit, h.now()), "slowed") {
+	if slices.Contains(p.layer.combat.fighterState(&p.fight.unit, h.now()), "slowed") {
 		t.Fatal("slowed with nothing on")
 	}
 	use(t, p, "mire")
 	pass(h, c, 0.1)
-	if !slices.Contains(p.layer.fighterState(&p.fight.unit, h.now()), "slowed") {
+	if !slices.Contains(p.layer.combat.fighterState(&p.fight.unit, h.now()), "slowed") {
 		t.Fatal("not slowed")
 	}
 }
@@ -629,13 +629,13 @@ func TestTriggerLimits(t *testing.T) {
 		_ = c
 		w := p.fight.unit.Statuses[statusKey{"watch", p.ID()}]
 		v := &p.fight.unit
-		p.layer.fire(event{on: "crit", who: v, other: -1}, h.now())
-		p.layer.fire(event{on: "nonCrit", who: v, other: -1}, h.now())
-		p.layer.fire(event{on: "crit", who: v, other: -1}, h.now())
+		p.layer.combat.fire(event{on: "crit", who: v, other: -1}, h.now())
+		p.layer.combat.fire(event{on: "nonCrit", who: v, other: -1}, h.now())
+		p.layer.combat.fire(event{on: "crit", who: v, other: -1}, h.now())
 		if grit(p) != 0 {
 			t.Fatalf("fired with no two in a row, counts %v", w.counts)
 		}
-		p.layer.fire(event{on: "crit", who: v, other: -1}, h.now())
+		p.layer.combat.fire(event{on: "crit", who: v, other: -1}, h.now())
 		if grit(p) != 1 {
 			t.Fatalf("didn't fire on two in a row, counts %v", w.counts)
 		}

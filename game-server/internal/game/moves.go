@@ -37,10 +37,10 @@ var moveKinds = map[string]moveKind{
 
 // forceMove does a `move` effect. The server puts the character where it ends straight away, and the
 // clients play the trip. Training dummies stay put.
-func (l *Layer) forceMove(u *unit, c *casting, e *combat.Effect, on *unit, now time.Time) {
-	o := l.playerOf(on)
+func (cm *Combat) forceMove(u *unit, c *casting, e *combat.Effect, on *unit, now time.Time) {
+	o := cm.state.playerOf(on)
 	if o == nil {
-		u.debugLine("%s: %s stays put", c.ability.Name, l.nameOf(on.ID))
+		u.debugLine("%s: %s stays put", c.ability.Name, cm.nameOf(on.ID))
 		return
 	}
 	kind, known := moveKinds[e.Kind]
@@ -48,17 +48,17 @@ func (l *Layer) forceMove(u *unit, c *casting, e *combat.Effect, on *unit, now t
 		log.Printf("character %d: ability %s has a move of a kind there isn't: %q", u.ID, c.ability.ID, e.Kind)
 		return
 	}
-	if (e.Kind == "knockback" || e.Kind == "pull") && o != u.player && l.immuneTo(on, e.Kind, now) {
-		u.debugLine("%s: %s is immune", c.ability.Name, l.nameOf(on.ID))
+	if (e.Kind == "knockback" || e.Kind == "pull") && o != u.player && cm.immuneTo(on, e.Kind, now) {
+		u.debugLine("%s: %s is immune", c.ability.Name, cm.nameOf(on.ID))
 		return
 	}
-	to, yaw, ok := l.moveEnd(u, c, e, o, kind)
+	to, yaw, ok := cm.moveEnd(u, c, e, o, kind)
 	if !ok {
-		u.debugLine("%s: nowhere for %s to go", c.ability.Name, l.nameOf(on.ID))
+		u.debugLine("%s: nowhere for %s to go", c.ability.Name, cm.nameOf(on.ID))
 		return
 	}
 	from := o.state.At
-	end := stoppingAt(l.ground(o.state.Continent), from, to, kind.flies || e.Flying)
+	end := stoppingAt(cm.state.ground(o.state.Continent), from, to, kind.flies || e.Flying)
 	height := kind.height
 	if e.Height > 0 {
 		height = e.Height
@@ -75,26 +75,26 @@ func (l *Layer) forceMove(u *unit, c *casting, e *combat.Effect, on *unit, now t
 		lasts = max(lasts, leastArc)
 	}
 	if o.fight.cast != nil && o.fight.cast != c {
-		l.stopCast(on)
+		cm.stopCast(on)
 	}
 	o.state.Yaw = yaw
-	l.breakStatuses(on, "move", nil)
+	cm.breakStatuses(on, "move", nil)
 	o.motion.teleported(now.Add(seconds(lasts)))
 	said := encode(forced{"forced", o.ID(), e.Kind, from, end, yaw, lasts, height})
-	l.relocate(on, o.state.Continent, end, said, said)
-	u.debugLine("%s: %s moves %.0f ft in %.1f s", c.ability.Name, l.nameOf(on.ID), distance(from, end), lasts)
+	cm.state.relocate(on, o.state.Continent, end, said, said)
+	u.debugLine("%s: %s moves %.0f ft in %.1f s", c.ability.Name, cm.nameOf(on.ID), distance(from, end), lasts)
 }
 
 // moveEnd is where a move means to put a character, before the ground has its say, and which way
 // it faces after.
-func (l *Layer) moveEnd(u *unit, c *casting, e *combat.Effect, o *Player, kind moveKind) ([3]float64, float64, bool) {
+func (cm *Combat) moveEnd(u *unit, c *casting, e *combat.Effect, o *Player, kind moveKind) ([3]float64, float64, bool) {
 	from, yaw := o.state.At, o.state.Yaw
 	reach := kind.distance
 	if e.Distance > 0 {
 		reach = e.Distance
 	}
 	unit := func(id int64) ([3]float64, float64, bool) {
-		if t := l.unit(id, o.state.Continent); t != nil {
+		if t := cm.state.unit(id, o.state.Continent); t != nil {
 			return t.char.At, t.char.Yaw, true
 		}
 		return from, 0, false

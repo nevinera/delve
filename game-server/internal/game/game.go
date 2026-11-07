@@ -67,7 +67,6 @@ func NewHub(w WorldLoader, c Characters) *Hub {
 type Layer struct {
 	zones      []*zone // areas on the ground, oldest first
 	zoneCount  int64
-	firing     int // how many triggers are setting each other off right now
 	hub        *Hub
 	key        string
 	worldID    int64
@@ -82,8 +81,7 @@ type Layer struct {
 	unload    *time.Timer
 	gone      bool // unloaded, so no one joins it
 	dummies   []*dummy
-	landings  []*landing
-	lastTick  time.Time
+	combat    *Combat
 }
 
 // Player is a connected character. Its connection reads Send until Gone closes.
@@ -259,7 +257,9 @@ func (h *Hub) layer(ctx context.Context, c token.Claims) (*Layer, error) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.layers[key] == nil {
-		h.layers[key] = &Layer{hub: h, key: key, worldID: c.World, number: 1, world: world, grounds: map[string]*worlds.Ground{}, players: map[int64]*Player{}}
+		l := &Layer{hub: h, key: key, worldID: c.World, number: 1, world: world, grounds: map[string]*worlds.Ground{}, players: map[int64]*Player{}}
+		l.combat = &Combat{state: l, now: func() time.Time { return h.now() }, roll: func() float64 { return h.roll() }}
+		h.layers[key] = l
 	}
 	return h.layers[key], nil
 }
@@ -295,7 +295,7 @@ func (l *Layer) join(p *Player) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	if l.players[p.ID()] != nil {
-		l.dropFrom(p.ID()) // the same character, entering again before its old connection left
+		l.combat.dropFrom(p.ID()) // the same character, entering again before its old connection left
 	}
 	l.players[p.ID()] = p
 	l.placeDummies()
@@ -343,7 +343,7 @@ func (l *Layer) leave(p *Player) *kept {
 		o.send(encode(vanish{"vanish", p.ID()}))
 	}
 	delete(l.players, p.ID())
-	l.dropFrom(p.ID())
+	l.combat.dropFrom(p.ID())
 	l.save(p)
 	if len(l.players) == 0 {
 		l.unload = time.AfterFunc(l.hub.idle, l.unloadIfEmpty)
@@ -383,7 +383,7 @@ func (p *Player) Handle(raw []byte) (err error) {
 	}
 	switch m.Type {
 	case "use":
-		p.layer.use(&p.fight.unit, m)
+		p.layer.combat.use(&p.fight.unit, m)
 		return nil
 	case "command":
 		p.layer.command(p, m.Line)
@@ -395,7 +395,7 @@ func (p *Player) Handle(raw []byte) (err error) {
 		p.layer.chooseBuild(p, combat.Build{Specialization: m.Specialization, Talents: m.Talents})
 		return nil
 	case "attack":
-		p.layer.attack(&p.fight.unit, m)
+		p.layer.combat.attack(&p.fight.unit, m)
 		return nil
 	case "sees":
 		p.layer.answerSees(p, m.Target)
@@ -409,7 +409,7 @@ func (p *Player) Handle(raw []byte) (err error) {
 	case "stop":
 		p.layer.mu.Lock()
 		defer p.layer.mu.Unlock()
-		p.layer.stopCast(&p.fight.unit)
+		p.layer.combat.stopCast(&p.fight.unit)
 		return nil
 	case "move", "heartbeat":
 	default:
@@ -453,7 +453,7 @@ func (l *Layer) moved(p *Player, m incoming) {
 	}
 	if m.Move != nil {
 		p.state.Move = m.Move.clean()
-		l.interruptMoving(&p.fight.unit)
+		l.combat.interruptMoving(&p.fight.unit)
 	}
 	update := encode(moved{"moved", p.ID(), p.state.At, p.state.Yaw, p.state.Move})
 	for _, o := range l.near(p) {
