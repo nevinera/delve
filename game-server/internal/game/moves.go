@@ -220,6 +220,7 @@ func (l *Layer) relocate(u *unit, continent string, at [3]float64, own, seen []b
 	for _, o := range l.near(u.player) {
 		before[o.ID()] = o
 	}
+	wasOn, was := u.char.Continent, u.char.At
 	u.char.Continent, u.char.At, u.char.Move = continent, at, Move{Gait: "run"}
 	l.save(u.player)
 	u.send(own)
@@ -236,4 +237,5 @@ func (l *Layer) relocate(u *unit, continent string, at [3]float64, own, seen []b
 		o.send(encode(vanish{"vanish", u.ID}))
 		u.send(encode(vanish{"vanish", o.ID()}))
 	}
+	l.showMobs(u.player, wasOn, was)
 }

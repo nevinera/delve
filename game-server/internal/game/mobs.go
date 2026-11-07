@@ -61,13 +61,24 @@ func (cm *Combat) dies(m *mob, now time.Time) {
 		back = respawnSeconds
 	}
 	m.backAt = now.Add(seconds(back))
-	cm.state.tellContinent(m.char.Continent, encode(died{"died", m.ID}))
+	cm.state.tellOf(m.ID, encode(died{"died", m.ID}))
 }
 
 // comeBack puts a dead mob back where it was placed, at full health, at a new level from its
-// levels, and shows it to those on its continent.
+// levels, and shows it to those near. Those near only where it fell see the body go.
 func (l *Layer) comeBack(m *mob) {
+	gone := map[*Player]bool{}
+	for _, o := range l.playersNear(m.state.Continent, m.state.At) {
+		gone[o] = true
+	}
 	*m = *l.placed(m.ID, m.placing)
 	m.char, m.mob = &m.state, m
-	l.tellContinent(m.state.Continent, encode(appear{"appear", l.seen(m.state)}))
+	back := encode(appear{"appear", l.seen(m.state)})
+	for _, o := range l.playersNear(m.state.Continent, m.state.At) {
+		o.send(back)
+		delete(gone, o)
+	}
+	for o := range gone {
+		o.send(encode(vanish{"vanish", m.ID})) // the body's gone from where it fell
+	}
 }

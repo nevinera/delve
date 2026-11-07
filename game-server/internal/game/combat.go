@@ -189,7 +189,9 @@ func (l *Layer) tellOf(id int64, b []byte) {
 	case u.player != nil:
 		l.tell(u.player, b)
 	default:
-		l.tellContinent(u.char.Continent, b)
+		for _, o := range l.playersNear(u.char.Continent, u.char.At) {
+			o.send(b)
+		}
 	}
 }
 

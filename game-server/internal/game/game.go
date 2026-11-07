@@ -298,7 +298,10 @@ func (l *Layer) join(p *Player) {
 	l.players[p.ID()] = p
 	l.placeMobs()
 	p.send(encode(welcome{"welcome", l.seen(p.state), l.number}))
-	near := l.mobsOn(p.state.Continent)
+	near := []Character{}
+	for _, m := range l.mobsNear(p.state.Continent, p.state.At) {
+		near = append(near, l.seen(m.state))
+	}
 	for _, o := range l.near(p) {
 		near = append(near, l.seen(o.state))
 		o.send(encode(appear{"appear", l.seen(p.state)}))
@@ -444,7 +447,7 @@ func (l *Layer) moved(p *Player, m incoming) {
 	for _, o := range l.near(p) {
 		before[o.ID()] = o
 	}
-	plate := plateOf(p.state.At)
+	plate, was := plateOf(p.state.At), p.state.At
 	p.state.At, p.state.Yaw = m.At, m.Yaw
 	if plateOf(p.state.At) != plate {
 		l.save(p)
@@ -467,6 +470,7 @@ func (l *Layer) moved(p *Player, m incoming) {
 		o.send(encode(vanish{"vanish", p.ID()}))
 		p.send(encode(vanish{"vanish", o.ID()}))
 	}
+	l.showMobs(p, p.state.Continent, was)
 	// The jump is news once; after it the character is just in the air.
 	p.state.Move.Jump = false
 }
@@ -551,18 +555,58 @@ func plateOf(at [3]float64) [2]int {
 // near is everyone else in the 3×3 tiles around p, on its continent. It looks at every player in
 // the layer, which is fine while layers are small.
 func (l *Layer) near(p *Player) []*Player {
-	tile := worlds.TileOf(p.state.At[0], p.state.At[2])
 	var out []*Player
-	for _, o := range l.players {
-		if o == p || o.state.Continent != p.state.Continent {
-			continue
-		}
-		t := worlds.TileOf(o.state.At[0], o.state.At[2])
-		if abs(t[0]-tile[0]) <= 1 && abs(t[1]-tile[1]) <= 1 {
+	for _, o := range l.playersNear(p.state.Continent, p.state.At) {
+		if o != p {
 			out = append(out, o)
 		}
 	}
 	return out
+}
+
+// playersNear is the players in the 3×3 tiles around a place on a continent.
+func (l *Layer) playersNear(continent string, at [3]float64) []*Player {
+	var out []*Player
+	for _, o := range l.players {
+		if o.state.Continent == continent && nearby(o.state.At, at) {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// mobsNear is the mobs in the 3×3 tiles around a place on a continent.
+func (l *Layer) mobsNear(continent string, at [3]float64) []*mob {
+	var out []*mob
+	for _, m := range l.mobs {
+		if m.state.Continent == continent && nearby(m.state.At, at) {
+			out = append(out, m)
+		}
+	}
+	return out
+}
+
+// nearby says whether two places are in tiles next to each other, or the same one.
+func nearby(a, b [3]float64) bool {
+	ta, tb := worlds.TileOf(a[0], a[2]), worlds.TileOf(b[0], b[2])
+	return abs(ta[0]-tb[0]) <= 1 && abs(ta[1]-tb[1]) <= 1
+}
+
+// showMobs tells a player about the mobs it has come near and left, from where it was.
+func (l *Layer) showMobs(p *Player, continent string, at [3]float64) {
+	before := map[*mob]bool{}
+	for _, m := range l.mobsNear(continent, at) {
+		before[m] = true
+	}
+	for _, m := range l.mobsNear(p.state.Continent, p.state.At) {
+		if !before[m] {
+			p.send(encode(appear{"appear", l.seen(m.state)}))
+		}
+		delete(before, m)
+	}
+	for m := range before {
+		p.send(encode(vanish{"vanish", m.ID}))
+	}
 }
 
 func abs(n int) int {

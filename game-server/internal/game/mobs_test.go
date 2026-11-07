@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"math"
+	"slices"
 	"testing"
 
 	"github.com/delve-mmo/delve3d/game-server/internal/combat"
@@ -97,5 +98,73 @@ func TestTheFixturesGoblinsStandOnTheGround(t *testing.T) {
 		if !ok || err != nil || m.char.At[1] != s.Ground || m.char.At[1] == 0 || m.char.Name != "Goblin" {
 			t.Fatalf("%s at %v, ground %v", m.char.Name, m.char.At, s.Ground)
 		}
+	}
+}
+
+// nearWorld is fightWorld with a goblin by the spawn point and another 2000 ft east.
+type nearWorld struct{}
+
+func (nearWorld) Load(ctx context.Context, repo, sha string) (*worlds.World, error) {
+	w, _ := fightWorld{}.Load(ctx, repo, sha)
+	w.Creatures = []*worlds.Creature{{ID: "gobl0001", Name: "Goblin", Look: json.RawMessage(`{"body":"goblin"}`)}}
+	w.Placed = []worlds.Placed{
+		{ID: "near", Creature: "gobl0001", Continent: "main", At: [3]float64{110, 0, 100}, Levels: worlds.Levels{1, 1}, Respawn: 10},
+		{ID: "far", Creature: "gobl0001", Continent: "main", At: [3]float64{2100, 0, 100}, Levels: worlds.Levels{1, 1}},
+	}
+	return w, nil
+}
+
+func ids(characters []any) []float64 {
+	var out []float64
+	for _, c := range characters {
+		out = append(out, c.(map[string]any)["id"].(float64))
+	}
+	return out
+}
+
+func TestMobsAreSeenOnlyByThoseNearThem(t *testing.T) {
+	h := NewHub(nearWorld{}, characters(nil))
+	c := clockOf(h)
+	here := enter(t, h, 1)
+	next(t, here)
+	if got := ids(next(t, here)["characters"].([]any)); !slices.Equal(got, []float64{-1, -2}) {
+		t.Fatalf("snapshot by the spawn point = %v, want the dummy and the near goblin", got)
+	}
+	far := enter(t, h, 2)
+	l := here.layer
+	heard(far)
+	l.mu.Lock()
+	l.teleport(far, "main", [3]float64{2100, 0, 120})
+	l.mu.Unlock()
+	var appeared, vanished []float64
+	for _, m := range heard(far, "appear", "vanish") {
+		if m["type"] == "appear" {
+			appeared = append(appeared, m["character"].(map[string]any)["id"].(float64))
+		} else {
+			vanished = append(vanished, m["id"].(float64))
+		}
+	}
+	slices.Sort(vanished)
+	if !slices.Equal(appeared, []float64{-3}) || !slices.Equal(vanished, []float64{-2, -1, 1}) {
+		t.Fatalf("going east, saw %v come and %v go", appeared, vanished)
+	}
+
+	// The near goblin dies: only those near it hear, and it comes back where it was placed.
+	near := l.mobs[1]
+	heard(here)
+	l.mu.Lock()
+	l.combat.harm(&here.fight.unit, &near.unit, 1e6, &hit{}, h.now())
+	l.mu.Unlock()
+	if len(heard(here, "died")) != 1 || len(heard(far, "died")) != 0 {
+		t.Fatal("died went to the wrong players")
+	}
+	// Moved while dead, its body is out of here's sight but in far's, and coming back swaps them.
+	near.state.At = [3]float64{2100, 0, 140}
+	pass(h, c, 10.1)
+	if got := heard(here, "appear"); len(got) != 1 || got[0]["character"].(map[string]any)["id"] != -2.0 {
+		t.Fatalf("here heard %v", got)
+	}
+	if got := heard(far, "vanish"); len(got) != 1 || got[0]["id"] != -2.0 {
+		t.Fatalf("far heard %v", got)
 	}
 }

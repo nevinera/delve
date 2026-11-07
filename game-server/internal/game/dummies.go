@@ -43,16 +43,6 @@ func (l *Layer) onGround(continent string, x, z float64) [3]float64 {
 	return at
 }
 
-func (l *Layer) mobsOn(continent string) []Character {
-	out := []Character{}
-	for _, d := range l.mobs {
-		if d.state.Continent == continent {
-			out = append(out, l.seen(d.state))
-		}
-	}
-	return out
-}
-
 // spar has the nearest training dummy in reach swing back at a player who asked for that. It's how you try
 // out what happens when you're hit, while nothing else in the world attacks. It can't kill you.
 func (cm *Combat) spar(u *unit, now time.Time) {
