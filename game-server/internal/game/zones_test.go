@@ -165,21 +165,21 @@ func TestAuraKeepsAStatusOnThoseNear(t *testing.T) {
 	use(t, p, "shine")
 	other.state.At = p.state.At
 	pass(h, c, 0.1)
-	if p.fight.vitals.Statuses[key] == nil || other.fight.vitals.Statuses[key] == nil {
+	if p.fight.unit.Statuses[key] == nil || other.fight.unit.Statuses[key] == nil {
 		t.Fatal("it didn't reach them both")
 	}
 	other.state.At[0] += 40
 	pass(h, c, 0.1)
-	if other.fight.vitals.Statuses[key] != nil {
+	if other.fight.unit.Statuses[key] != nil {
 		t.Fatal("it stayed on someone who left")
 	}
-	if p.fight.vitals.Statuses[key] == nil {
+	if p.fight.unit.Statuses[key] == nil {
 		t.Fatal("the holder lost it")
 	}
 	other.state.At = p.state.At
 	pass(h, c, 0.1)
 	pass(h, c, 5)
-	if p.fight.vitals.Statuses[key] != nil || other.fight.vitals.Statuses[key] != nil {
+	if p.fight.unit.Statuses[key] != nil || other.fight.unit.Statuses[key] != nil {
 		t.Fatal("it outlasted the aura")
 	}
 }

@@ -590,8 +590,8 @@ func TestLevelCommand(t *testing.T) {
 		t.Fatal(got)
 	}
 	p.systemAdmin = true
-	before := p.fight.vitals.MaxHealth
-	p.fight.vitals.Health = 1
+	before := p.fight.unit.MaxHealth
+	p.fight.unit.Health = 1
 	for _, bad := range []string{"/level", "/level 0", "/level 101", "/level high"} {
 		say(t, p, bad)
 		if got := lastLog(t, p); !strings.HasPrefix(got, "error: Use /level") {
@@ -604,8 +604,8 @@ func TestLevelCommand(t *testing.T) {
 	if f.level != 12 || p.state.Level != 12 {
 		t.Fatalf("level = %d, state %d", f.level, p.state.Level)
 	}
-	if f.vitals.MaxHealth <= before || f.vitals.Health != f.vitals.MaxHealth {
-		t.Fatalf("health = %g of %g, from a most of %g", f.vitals.Health, f.vitals.MaxHealth, before)
+	if f.unit.MaxHealth <= before || f.unit.Health != f.unit.MaxHealth {
+		t.Fatalf("health = %g of %g, from a most of %g", f.unit.Health, f.unit.MaxHealth, before)
 	}
 	if got := heard(p, "level"); len(got) != 1 || got[0]["level"] != 12.0 {
 		t.Fatalf("level messages = %v", got)

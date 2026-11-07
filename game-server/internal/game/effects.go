@@ -12,7 +12,7 @@ import (
 // What an ability's effects do as they land: damage and healing, dispels, interrupts, cooldowns, consuming and extending statuses.
 
 // land does one effect to one unit. Effects that aren't here yet do nothing.
-func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count int, now time.Time) {
+func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *unit, count int, now time.Time) {
 	if !l.chanceHolds(c, e) {
 		return
 	}
@@ -68,7 +68,7 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 		ctx := hitOf(c, e, on, count)
 		defer l.healedBy(p, on, n, over, ctx, now)
 	case "resource":
-		n, _ := combat.Roll(l.amountFor(p, c, e, on, count, now), l.statsOf(&p.fight.vitals, nil, now), false, l.hub.roll)
+		n, _ := combat.Roll(l.amountFor(p, c, e, on, count, now), l.statsOf(&p.fight.unit, nil, now), false, l.hub.roll)
 		if given, ok := l.addResource(&p.fight, e.Resource, n); ok {
 			h.Amount, h.Resource = math.Round(given), e.Resource
 		}
@@ -106,7 +106,7 @@ func (l *Layer) land(p *Player, c *casting, e *combat.Effect, on *vitals, count 
 
 // dispel takes statuses off a unit by kind, control or tag, up to `count`, oldest first. It takes
 // what harms a friend, and what helps an enemy.
-func (l *Layer) dispel(p *Player, c *casting, e *combat.Effect, on *vitals, now time.Time) {
+func (l *Layer) dispel(p *Player, c *casting, e *combat.Effect, on *unit, now time.Time) {
 	keeps := "buff"
 	if on.ID < 0 { // only dummies are enemies so far
 		keeps = "debuff"
@@ -128,7 +128,7 @@ func (l *Layer) dispel(p *Player, c *casting, e *combat.Effect, on *vitals, now 
 		if held == nil {
 			continue // something ending just now took this one with it
 		}
-		l.fire(event{on: "dispel", who: &p.fight.vitals, other: on.ID, ctx: castOf(c.ability), status: key.id, stacks: held.stacks}, now)
+		l.fire(event{on: "dispel", who: &p.fight.unit, other: on.ID, ctx: castOf(c.ability), status: key.id, stacks: held.stacks}, now)
 		l.fire(statusEvent("dispelled", on, key, held), now)
 		if on.Statuses[key] != held {
 			continue
@@ -140,8 +140,8 @@ func (l *Layer) dispel(p *Player, c *casting, e *combat.Effect, on *vitals, now 
 }
 
 // interrupt stops a player's cast and locks it out of the cast's school. It says whether there was one.
-func (l *Layer) interrupt(p *Player, e *combat.Effect, on *vitals, h *hit, now time.Time) bool {
-	o := l.players[on.ID]
+func (l *Layer) interrupt(p *Player, e *combat.Effect, on *unit, h *hit, now time.Time) bool {
+	o := l.playerOf(on)
 	if o == nil || o.fight.cast == nil {
 		return false
 	}
@@ -159,7 +159,7 @@ func (l *Layer) interrupt(p *Player, e *combat.Effect, on *vitals, h *hit, now t
 		}
 	}
 	h.Stopped, h.Class = stopped.ID, f.class.ID
-	l.fire(event{on: "interrupt", who: &p.fight.vitals, other: on.ID, ctx: castOf(stopped)}, now)
+	l.fire(event{on: "interrupt", who: &p.fight.unit, other: on.ID, ctx: castOf(stopped)}, now)
 	return true
 }
 
@@ -211,7 +211,7 @@ func readyIn(f *fighter, a *combat.Ability, now time.Time) float64 {
 }
 
 // consume takes statuses off a unit, or stacks or seconds of them, and does what that's worth.
-func (l *Layer) consume(p *Player, c *casting, e *combat.Effect, on *vitals, now time.Time) {
+func (l *Layer) consume(p *Player, c *casting, e *combat.Effect, on *unit, now time.Time) {
 	for _, id := range e.StatusIDs() {
 		key := statusKey{id, p.ID()}
 		held := on.Statuses[key]
@@ -262,7 +262,7 @@ func (l *Layer) consume(p *Player, c *casting, e *combat.Effect, on *vitals, now
 }
 
 // landNested lands an effect inside another, on the same unit unless it says who it affects.
-func (l *Layer) landNested(p *Player, c *casting, e *combat.Effect, on *vitals, now time.Time) {
+func (l *Layer) landNested(p *Player, c *casting, e *combat.Effect, on *unit, now time.Time) {
 	if e.Affects == "" {
 		l.land(p, c, e, on, 1, now)
 		return
@@ -274,7 +274,7 @@ func (l *Layer) landNested(p *Player, c *casting, e *combat.Effect, on *vitals, 
 }
 
 // dealLeft does a share of what a status had left to do over a stretch of its time, all at once.
-func (l *Layer) dealLeft(p *Player, c *casting, id string, held *activeStatus, share float64, stacks int, window time.Duration, on *vitals, now time.Time) {
+func (l *Layer) dealLeft(p *Player, c *casting, id string, held *activeStatus, share float64, stacks int, window time.Duration, on *unit, now time.Time) {
 	for i, each := range held.def.Effects {
 		period := held.def.Period(&each)
 		if each.Type != "periodic" || period <= 0 {
@@ -334,7 +334,7 @@ func (l *Layer) dealLeft(p *Player, c *casting, id string, held *activeStatus, s
 }
 
 // extend adds time to statuses on a unit, starts them over, or puts them on if they're missing.
-func (l *Layer) extend(p *Player, c *casting, e *combat.Effect, on *vitals, now time.Time) {
+func (l *Layer) extend(p *Player, c *casting, e *combat.Effect, on *unit, now time.Time) {
 	f := &p.fight
 	for _, id := range e.StatusIDs() {
 		s := f.class.Status(id)

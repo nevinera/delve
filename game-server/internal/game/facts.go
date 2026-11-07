@@ -31,7 +31,7 @@ func (l *Layer) factsInUse(p *Player, c *casting, target int64, hits int, now ti
 func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
 	f := &p.fight
 	out := &combat.Facts{
-		Self:      unitOf(&f.vitals, p.ID(), l.fighterState(p, now)),
+		Self:      unitOf(&f.unit, p.ID(), l.fighterState(p, now)),
 		Since:     map[string]float64{},
 		Resources: map[string]combat.ResourceAmount{},
 	}
@@ -39,20 +39,20 @@ func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
 		out.Since[what] = now.Sub(at).Seconds()
 	}
 	out.Holders, out.InAreas = map[string]int{}, map[string]bool{}
-	out.Groups = groupsOn(&f.vitals)
-	l.eachUnit(func(v *vitals, _ [3]float64, _ string) {
+	out.Groups = groupsOn(&f.unit)
+	for v := range l.units() {
 		for key := range v.Statuses {
 			if key.from == p.ID() {
 				out.Holders[key.id]++
 			}
 		}
-	})
+	}
 	for _, z := range l.zones {
 		if z.from == p && z.inside[target] != nil {
 			out.InAreas[z.kind] = true
 		}
 	}
-	if t := l.unitWithID(target, p.state.Continent); t != nil {
+	if t := l.unit(target, p.state.Continent); t != nil {
 		out.TargetGroups = groupsOn(t)
 	}
 	if f.class != nil {
@@ -65,11 +65,11 @@ func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
 		if !d.lastHit.IsZero() && now.Sub(d.lastHit) < combatLasts {
 			state = append(state, "inCombat")
 		}
-		unit := unitOf(&d.vitals, p.ID(), state)
+		unit := unitOf(&d.unit, p.ID(), state)
 		out.Target, out.TargetIs = &unit, []string{"enemy", "other", "nonPlayer"}
 		out.Position = positionOf(p.state.At, d.state.At, d.state.Yaw)
 	} else if o := l.players[target]; o != nil && target != 0 {
-		unit := unitOf(&o.fight.vitals, p.ID(), l.fighterState(o, now))
+		unit := unitOf(&o.fight.unit, p.ID(), l.fighterState(o, now))
 		out.Target, out.TargetIs = &unit, []string{"ally", "player"}
 		if o == p {
 			out.TargetIs = append(out.TargetIs, "self")
@@ -82,7 +82,7 @@ func (l *Layer) facts(p *Player, target int64, now time.Time) *combat.Facts {
 }
 
 // unitOf is a unit as one reader's conditions see it: its statuses are the ones that reader put on.
-func unitOf(v *vitals, reader int64, state []string) combat.Unit {
+func unitOf(v *unit, reader int64, state []string) combat.Unit {
 	stacks := map[string]int{}
 	for key, s := range v.Statuses {
 		if key.from == reader {
@@ -93,7 +93,7 @@ func unitOf(v *vitals, reader int64, state []string) combat.Unit {
 }
 
 // lookOn is the look a unit's holding a `transform` gives it, the latest put on, or nil for its own.
-func lookOn(v *vitals) json.RawMessage {
+func lookOn(v *unit) json.RawMessage {
 	var look json.RawMessage
 	var since time.Time
 	for _, held := range v.Statuses {
@@ -122,7 +122,7 @@ func (a *activeStatus) unit(id string) *combat.ClassUnit {
 }
 
 // groupsOn is the status groups a unit holds something of.
-func groupsOn(v *vitals) map[string]bool {
+func groupsOn(v *unit) map[string]bool {
 	out := map[string]bool{}
 	for _, held := range v.Statuses {
 		if held.def.Group != "" {
@@ -136,7 +136,7 @@ func groupsOn(v *vitals) map[string]bool {
 // outdoors.
 func (l *Layer) fighterState(p *Player, now time.Time) []string {
 	state := []string{"outdoors"}
-	controls := l.controlsOn(&p.fight.vitals)
+	controls := l.controlsOn(&p.fight.unit)
 	if combat.Helpless(controls) {
 		state = append(state, "controlled")
 	}

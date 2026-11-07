@@ -34,7 +34,7 @@ type kept struct {
 // keep is what to keep of a player as it leaves. The layer's lock is held.
 func (l *Layer) keep(p *Player, now time.Time) *kept {
 	f := &p.fight
-	k := &kept{at: now, sha: l.world.Sha, level: f.level, health: f.vitals.Health, resources: maps.Clone(f.resources), cooldowns: map[string][]time.Time{}, lockouts: maps.Clone(f.lockouts), since: maps.Clone(f.since), statuses: map[statusKey]*activeStatus{}}
+	k := &kept{at: now, sha: l.world.Sha, level: f.level, health: f.unit.Health, resources: maps.Clone(f.resources), cooldowns: map[string][]time.Time{}, lockouts: maps.Clone(f.lockouts), since: maps.Clone(f.since), statuses: map[statusKey]*activeStatus{}}
 	if f.class != nil {
 		k.class = f.class.ID
 	}
@@ -45,7 +45,7 @@ func (l *Layer) keep(p *Player, now time.Time) *kept {
 	}
 	// What a class gives for good comes back with it, what others put on goes when they do, and
 	// what an area keeps on goes with the area.
-	for key, held := range f.vitals.Statuses {
+	for key, held := range f.unit.Statuses {
 		if held.granted || key.from != p.ID() || held.zone != nil || len(held.zones) > 0 {
 			continue
 		}
@@ -68,8 +68,8 @@ func (p *Player) restore(k *kept, sha string, now time.Time) {
 		return
 	}
 	away := now.Sub(k.at)
-	f.vitals.Health = min(k.health, f.vitals.MaxHealth)
-	p.state.Health = f.vitals.Health
+	f.unit.Health = min(k.health, f.unit.MaxHealth)
+	p.state.Health = f.unit.Health
 	for key, v := range k.resources {
 		if _, ok := f.resources[key]; ok {
 			f.resources[key] = v
@@ -87,7 +87,7 @@ func (p *Player) restore(k *kept, sha string, now time.Time) {
 		for i := range held.fired {
 			held.fired[i] = held.fired[i].Add(away)
 		}
-		f.vitals.Statuses[key] = held
+		f.unit.Statuses[key] = held
 	}
 	f.resChanged = true
 }
@@ -192,14 +192,14 @@ func (l *Layer) showResting(now time.Time) {
 			continue
 		}
 		key := statusKey{combat.RestingID, p.ID()}
-		held, resting := f.vitals.Statuses[key], l.resting(p)
+		held, resting := f.unit.Statuses[key], l.resting(p)
 		switch {
 		case resting && held == nil:
 			held = &activeStatus{def: s, class: f.class.ID, owner: f.class, since: now, stacks: 1, uses: 1}
-			f.vitals.Statuses[key] = held
+			f.unit.Statuses[key] = held
 			l.tellOf(p.ID(), encode(statusOn{"statusOn", p.ID(), shownOf(key, held, now)}))
 		case !resting && held != nil:
-			l.takeOff(&f.vitals, key)
+			l.takeOff(&f.unit, key)
 		}
 	}
 }

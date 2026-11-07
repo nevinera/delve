@@ -148,7 +148,7 @@ func TestDispelByKindControlSlowAndTag(t *testing.T) {
 		useOn(t, p, "clean", 0)
 		pass(h, c, 0.05)
 		for _, s := range statuses {
-			have := p.fight.vitals.Statuses[statusKey{s.ID, p.ID()}] != nil
+			have := p.fight.unit.Statuses[statusKey{s.ID, p.ID()}] != nil
 			if have == (s.ID == each.gone) {
 				t.Fatalf("%v: %s held = %v", each.dispel, s.ID, have)
 			}
@@ -169,7 +169,7 @@ func TestDispelCountsOldestFirst(t *testing.T) {
 	}
 	useOn(t, p, "clean", 0)
 	pass(h, c, 0.05)
-	if s := p.fight.vitals.Statuses; len(s) != 1 || s[statusKey{"aaa", p.ID()}] == nil {
+	if s := p.fight.unit.Statuses; len(s) != 1 || s[statusKey{"aaa", p.ID()}] == nil {
 		t.Fatalf("left on: %v", s)
 	}
 }
@@ -185,7 +185,7 @@ func TestDispelLeavesFriendsBuffsAndEnemiesDebuffs(t *testing.T) {
 	useOn(t, p, "clean", 0)
 	useOn(t, p, "clean", -1)
 	pass(h, c, 0.05)
-	if s := p.fight.vitals.Statuses; len(s) != 1 || s[statusKey{"good", p.ID()}] == nil {
+	if s := p.fight.unit.Statuses; len(s) != 1 || s[statusKey{"good", p.ID()}] == nil {
 		t.Fatalf("on you: %v", s)
 	}
 	if s := p.layer.dummies[0].Statuses; len(s) != 1 || s[statusKey{"bad", p.ID()}] == nil {
@@ -214,16 +214,16 @@ func TestAnyTargetTakesEnemiesAndFriends(t *testing.T) {
 	h, p, c := dispelling(t, nil, combat.Effect{Type: "heal", Affects: "target", Amount: combat.Amount{Min: 5, Max: 5}})
 	dummy := p.layer.dummies[0]
 	dummy.Health = 10
-	p.fight.vitals.Health = 10
+	p.fight.unit.Health = 10
 	useOn(t, p, "clean", -1)
 	pass(h, c, 0.05)
-	if dummy.Health != 15 || p.fight.vitals.Health < 10 || p.fight.vitals.Health >= 15 {
-		t.Fatalf("on the dummy: it has %g, you have %g", dummy.Health, p.fight.vitals.Health)
+	if dummy.Health != 15 || p.fight.unit.Health < 10 || p.fight.unit.Health >= 15 {
+		t.Fatalf("on the dummy: it has %g, you have %g", dummy.Health, p.fight.unit.Health)
 	}
 	useOn(t, p, "clean", 0)
 	pass(h, c, 0.05)
-	if dummy.Health != 15 || p.fight.vitals.Health < 15 {
-		t.Fatalf("with no target: it has %g, you have %g", dummy.Health, p.fight.vitals.Health)
+	if dummy.Health != 15 || p.fight.unit.Health < 15 {
+		t.Fatalf("with no target: it has %g, you have %g", dummy.Health, p.fight.unit.Health)
 	}
 }
 
@@ -334,7 +334,7 @@ func TestStunStopsEverythingUntilItEnds(t *testing.T) {
 	use(t, p, "singing")
 	pass(h, c, 0.1)
 	heard(p)
-	p.fight.vitals.Statuses[statusKey{"held", p.ID()}] = &activeStatus{def: p.fight.class.Status("held"), class: p.fight.class.ID, since: h.now(), until: h.now().Add(seconds(5)), stacks: 1, uses: 1}
+	p.fight.unit.Statuses[statusKey{"held", p.ID()}] = &activeStatus{def: p.fight.class.Status("held"), class: p.fight.class.ID, since: h.now(), until: h.now().Add(seconds(5)), stacks: 1, uses: 1}
 	pass(h, c, 0.1)
 	got := heard(p, "controls", "speed", "stopped")
 	if len(got) != 3 {
@@ -406,7 +406,7 @@ func TestDamageBreaksFear(t *testing.T) {
 	if held(p, "held") == nil {
 		t.Fatal("it never landed")
 	}
-	p.layer.harm(p, &p.layer.dummies[0].vitals, 1, &hit{}, h.now())
+	p.layer.harm(p, &p.layer.dummies[0].unit, 1, &hit{}, h.now())
 	if held(p, "held") != nil {
 		t.Fatal("damage didn't break it")
 	}
@@ -500,12 +500,12 @@ func TestImmuneToControls(t *testing.T) {
 	// A stun you've already got doesn't count once you're immune.
 	use(t, p, "medaze")
 	pass(h, c, 0.05)
-	if got := p.layer.controlsOn(&p.fight.vitals); len(got) != 1 {
+	if got := p.layer.controlsOn(&p.fight.unit); len(got) != 1 {
 		t.Fatalf("controls = %v", got)
 	}
 	use(t, p, "meward")
-	p.fight.vitals.Statuses[statusKey{"ward", p.ID()}] = &activeStatus{def: p.fight.class.Status("ward"), class: p.fight.class.ID, since: h.now(), stacks: 1, uses: 1}
-	if got := p.layer.controlsOn(&p.fight.vitals); len(got) != 0 {
+	p.fight.unit.Statuses[statusKey{"ward", p.ID()}] = &activeStatus{def: p.fight.class.Status("ward"), class: p.fight.class.ID, since: h.now(), stacks: 1, uses: 1}
+	if got := p.layer.controlsOn(&p.fight.unit); len(got) != 0 {
 		t.Fatalf("controls = %v", got)
 	}
 }
@@ -673,7 +673,7 @@ func TestACostOnlyCountsWhileItsConditionsHold(t *testing.T) {
 		t.Fatalf("%g left", p.fight.resources["combo"])
 	}
 	p.fight.class.Statuses = append(p.fight.class.Statuses, combat.Status{ID: "free", Name: "Free"})
-	p.fight.vitals.Statuses[statusKey{"free", p.ID()}] = &activeStatus{def: p.fight.class.Status("free"), since: h.now(), stacks: 1, uses: 1}
+	p.fight.unit.Statuses[statusKey{"free", p.ID()}] = &activeStatus{def: p.fight.class.Status("free"), since: h.now(), stacks: 1, uses: 1}
 	use(t, p, "maybe")
 	pass(h, c, 0.05)
 	if p.fight.resources["combo"] != 7 {
@@ -713,18 +713,18 @@ func TestDurationsAndStatsGrowWithWhatWasSpent(t *testing.T) {
 	fury := combat.Status{ID: "fury", Name: "Fury", Duration: 4, Effects: []combat.StatusEffect{{Type: "stat", Stat: "strength", AddPerSpent: 3}}}
 	h, p, c := spender(t, combat.Ability{ID: "rouse", Name: "Rouse", Target: "self", Cost: []combat.Cost{{Resource: "combo", Amount: 1, All: true}}, Effects: []combat.Effect{{Type: "status", Affects: "self", Status: "fury", DurationPerSpent: 2}}})
 	p.fight.class.Statuses = append(p.fight.class.Statuses, fury)
-	before := p.layer.statsOf(&p.fight.vitals, nil, h.now()).Strength
+	before := p.layer.statsOf(&p.fight.unit, nil, h.now()).Strength
 	p.fight.resources["combo"] = 5
 	use(t, p, "rouse")
 	pass(h, c, 0.05)
-	held := p.fight.vitals.Statuses[statusKey{"fury", p.ID()}]
+	held := p.fight.unit.Statuses[statusKey{"fury", p.ID()}]
 	if held == nil {
 		t.Fatal("no status")
 	}
 	if got := held.until.Sub(held.since).Seconds(); got != 14 {
 		t.Fatalf("lasts %g", got)
 	}
-	if got := p.layer.statsOf(&p.fight.vitals, nil, h.now()).Strength - before; got != 15 {
+	if got := p.layer.statsOf(&p.fight.unit, nil, h.now()).Strength - before; got != 15 {
 		t.Fatalf("strength up %g", got)
 	}
 }
@@ -733,7 +733,7 @@ func TestSpentAsCountsWhatAModifySays(t *testing.T) {
 	ramp := combat.Status{ID: "ramp", Name: "Ramp", Effects: []combat.StatusEffect{{Type: "modify", Abilities: []string{"finish"}, SpentAs: 7}}}
 	h, p, c := spender(t, combat.Ability{ID: "finish", Name: "Finish", Cost: []combat.Cost{{Resource: "combo", Amount: 1, All: true}}, Effects: []combat.Effect{dealing(10)}})
 	p.fight.class.Statuses = append(p.fight.class.Statuses, ramp)
-	p.fight.vitals.Statuses[statusKey{"ramp", p.ID()}] = &activeStatus{def: p.fight.class.Status("ramp"), since: h.now(), stacks: 1, uses: 1}
+	p.fight.unit.Statuses[statusKey{"ramp", p.ID()}] = &activeStatus{def: p.fight.class.Status("ramp"), since: h.now(), stacks: 1, uses: 1}
 	d := p.layer.dummies[0]
 	was := d.damage
 	p.fight.resources["combo"] = 2
@@ -824,8 +824,8 @@ func TestByMissingHealth(t *testing.T) {
 
 func TestShareOfWhatTheFightKept(t *testing.T) {
 	h, p, c, d := hitting(t, combat.Effect{Amount: combat.Amount{ShareOf: &combat.ShareOf{Of: "recentDamage", Share: 0.5, Seconds: 5}}})
-	p.fight.vitals.Health = p.fight.vitals.MaxHealth
-	p.layer.harm(p, &p.fight.vitals, 40, &hit{}, h.now())
+	p.fight.unit.Health = p.fight.unit.MaxHealth
+	p.layer.harm(p, &p.fight.unit, 40, &hit{}, h.now())
 	got := dealt(t, h, p, c, d)
 	if got < 15 || got > 25 {
 		t.Fatalf("dealt %g for half of 40", got)
@@ -843,10 +843,10 @@ func TestShareOfTheEffectBefore(t *testing.T) {
 		{Type: "damage", Affects: "target", Amount: combat.Amount{Min: 100, Max: 100}},
 		{Type: "heal", Affects: "self", Amount: combat.Amount{ShareOf: &combat.ShareOf{Of: "effect", Share: 0.5}}},
 	}})
-	p.fight.vitals.Health = 1
+	p.fight.unit.Health = 1
 	use(t, p, "twice")
 	pass(h, c, 0.5)
-	if got := p.fight.vitals.Health; got < 40 {
+	if got := p.fight.unit.Health; got < 40 {
 		t.Fatalf("health %g", got)
 	}
 }
@@ -906,9 +906,9 @@ func TestStoreKeepsAShareForLater(t *testing.T) {
 	if s := held(p, "keep"); s == nil || s.stored < 15 {
 		t.Fatalf("holding %+v", s)
 	}
-	p.fight.vitals.Health = 1
+	p.fight.unit.Health = 1
 	pass(h, c, 2)
-	if got := p.fight.vitals.Health; got < 15 {
+	if got := p.fight.unit.Health; got < 15 {
 		t.Fatalf("health %g after it ended", got)
 	}
 }
@@ -918,6 +918,7 @@ func TestWhoAnEffectReaches(t *testing.T) {
 	h, p, c := fighting(t)
 	world := p.layer
 	second := *world.dummies[0]
+	second.char, second.dummy = &second.state, &second
 	second.ID, second.state.ID = -2, -2
 	second.Statuses = map[statusKey]*activeStatus{}
 	world.dummies = append(world.dummies, &second)
@@ -959,6 +960,7 @@ func TestExtraTargetsSpill(t *testing.T) {
 	h, p, c := fighting(t)
 	world := p.layer
 	second := *world.dummies[0]
+	second.char, second.dummy = &second.state, &second
 	second.ID, second.state.ID = -2, -2
 	second.Statuses = map[statusKey]*activeStatus{}
 	world.dummies = append(world.dummies, &second)
@@ -1010,7 +1012,7 @@ func TestBecomesSwapsWhileItHolds(t *testing.T) {
 	if got := d.damage - was; got > 5 {
 		t.Fatalf("before: dealt %g", got)
 	}
-	p.fight.vitals.Statuses[statusKey{"form", p.ID()}] = &activeStatus{def: p.fight.class.Status("form"), since: h.now(), stacks: 1, uses: 1}
+	p.fight.unit.Statuses[statusKey{"form", p.ID()}] = &activeStatus{def: p.fight.class.Status("form"), since: h.now(), stacks: 1, uses: 1}
 	was = d.damage
 	use(t, p, "weakone")
 	pass(h, c, 0.5)

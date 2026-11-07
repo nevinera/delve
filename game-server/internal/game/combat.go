@@ -24,9 +24,13 @@ const (
 	refreshKeeps   = 0.3  // the share of a status's duration that a refresh can keep of what was left
 )
 
-// vitals are what can be hurt and healed: a player's, or a dummy's.
-type vitals struct {
+// unit is anyone combat acts on: a player's character or a training dummy, with what can be hurt
+// and healed and what it holds.
+type unit struct {
 	ID        int64
+	char      *Character // where it is and how it's seen
+	player    *Player    // the player it is, or nil for a dummy
+	dummy     *dummy     // the dummy it is, or nil for a player
 	Health    float64
 	MaxHealth float64
 	Statuses  map[statusKey]*activeStatus
@@ -68,7 +72,7 @@ type activeStatus struct {
 // dummy is a training dummy: it's always at full health and never fights back, and it tallies what
 // hits it.
 type dummy struct {
-	vitals
+	unit
 	state    Character
 	firstHit time.Time
 	lastHit  time.Time
@@ -85,7 +89,7 @@ type fighter struct {
 	class      *combat.Class
 	level      int
 	stats      combat.Stats
-	vitals     vitals
+	unit       unit
 	resources  map[string]float64
 	pools      map[string]combat.Pool // how each resource behaves, as of the last tick
 	sentAt     time.Time
@@ -152,12 +156,7 @@ type usingUp struct {
 
 // seen is a character as someone coming across it should see it, with what it holds.
 func (l *Layer) seen(c Character) Character {
-	var v *vitals
-	if d := l.dummy(c.ID, ""); d != nil {
-		v = &d.vitals
-	} else if o := l.players[c.ID]; o != nil {
-		v = &o.fight.vitals
-	}
+	v := l.unit(c.ID, "")
 	if v == nil {
 		return c
 	}
@@ -176,17 +175,14 @@ func (l *Layer) seen(c Character) Character {
 }
 
 // tellOf sends a message about a unit to those who can see it.
-func (l *Layer) tellOf(unit int64, b []byte) {
-	if d := l.dummy(unit, ""); d != nil {
-		for _, o := range l.players {
-			if o.state.Continent == d.state.Continent {
-				o.send(b)
-			}
-		}
-		return
-	}
-	if o := l.players[unit]; o != nil {
-		l.tell(o, b)
+func (l *Layer) tellOf(id int64, b []byte) {
+	u := l.unit(id, "")
+	switch {
+	case u == nil:
+	case u.player != nil:
+		l.tell(u.player, b)
+	default:
+		l.tellContinent(u.char.Continent, b)
 	}
 }
 

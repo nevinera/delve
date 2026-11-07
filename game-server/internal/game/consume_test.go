@@ -177,12 +177,12 @@ func TestOathButtonSwearsAndEnds(t *testing.T) {
 	}})
 	use(t, p, "swear")
 	pass(h, c, 0.1)
-	if p.fight.vitals.Statuses[statusKey{"oath", p.ID()}] == nil || p.fight.resources["oath"] != 1 {
-		t.Fatalf("after swearing: status %v, oath %g", p.fight.vitals.Statuses[statusKey{"oath", p.ID()}], p.fight.resources["oath"])
+	if p.fight.unit.Statuses[statusKey{"oath", p.ID()}] == nil || p.fight.resources["oath"] != 1 {
+		t.Fatalf("after swearing: status %v, oath %g", p.fight.unit.Statuses[statusKey{"oath", p.ID()}], p.fight.resources["oath"])
 	}
 	use(t, p, "swear")
 	pass(h, c, 0.1)
-	if p.fight.vitals.Statuses[statusKey{"oath", p.ID()}] != nil || p.fight.resources["oath"] != 0 {
-		t.Fatalf("after ending: status %v, oath %g", p.fight.vitals.Statuses[statusKey{"oath", p.ID()}], p.fight.resources["oath"])
+	if p.fight.unit.Statuses[statusKey{"oath", p.ID()}] != nil || p.fight.resources["oath"] != 0 {
+		t.Fatalf("after ending: status %v, oath %g", p.fight.unit.Statuses[statusKey{"oath", p.ID()}], p.fight.resources["oath"])
 	}
 }

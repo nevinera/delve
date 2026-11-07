@@ -28,7 +28,7 @@ func (l *Layer) use(p *Player, m incoming) {
 	}
 	f := &p.fight
 	l.stopLoggingOff(p, "you used an ability")
-	l.breakStatuses(&f.vitals, "action", func(s *combat.Status) bool { return s.KeptBy.Keeps(ability) })
+	l.breakStatuses(&f.unit, "action", func(s *combat.Status) bool { return s.KeptBy.Keeps(ability) })
 	gcd := combat.GCDSeconds
 	if ability.GCD != nil {
 		gcd = *ability.GCD
@@ -55,8 +55,8 @@ func (l *Layer) use(p *Player, m incoming) {
 // inForce is the ability a use of this one comes to: a `modify`'s `becomes` can turn it into another.
 func (l *Layer) inForce(p *Player, a *combat.Ability, now time.Time) *combat.Ability {
 	f := &p.fight
-	for _, m := range l.modifiersOf(&f.vitals, now) {
-		if e := m.Effect; e.Becomes != "" && e.Picks(a) && l.holds(&f.vitals, e, nil, now) {
+	for _, m := range l.modifiersOf(&f.unit, now) {
+		if e := m.Effect; e.Becomes != "" && e.Picks(a) && l.holds(&f.unit, e, nil, now) {
 			if to := f.class.Ability(e.Becomes); to != nil {
 				return to
 			}
@@ -66,7 +66,7 @@ func (l *Layer) inForce(p *Player, a *combat.Ability, now time.Time) *combat.Abi
 }
 
 // castNow does a `castAbility`: another of the class's abilities, at once.
-func (l *Layer) castNow(p *Player, c *casting, e *combat.Effect, on *vitals, now time.Time) {
+func (l *Layer) castNow(p *Player, c *casting, e *combat.Effect, on *unit, now time.Time) {
 	f := &p.fight
 	if c.depth >= maxCastDepth || f.level < e.Level {
 		return
@@ -105,7 +105,7 @@ func (l *Layer) castNow(p *Player, c *casting, e *combat.Effect, on *vitals, now
 }
 
 // modifiersOf is the `modify` effects that count for a unit right now.
-func (l *Layer) modifiersOf(v *vitals, now time.Time) []combat.Mod {
+func (l *Layer) modifiersOf(v *unit, now time.Time) []combat.Mod {
 	// What you gained last goes last, so with several `overrides` it wins. Statuses are held in a
 	// map, so ties go by id.
 	held := make([]statusKey, 0, len(v.Statuses))
@@ -135,7 +135,7 @@ func (l *Layer) modifiersOf(v *vitals, now time.Time) []combat.Mod {
 
 // resolved is an ability as this player would use it now.
 func (l *Layer) resolved(p *Player, a *combat.Ability, now time.Time) *combat.Ability {
-	f := &p.fight.vitals
+	f := &p.fight.unit
 	mods := l.modifiersOf(f, now)
 	sheet := l.statsOf(f, nil, now)
 	for i := range mods {
@@ -192,7 +192,7 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 	if !slices.Contains(ability.Ignores, "cooldown") && len(live(f.cooldowns[ability.ID], now)) >= max(ability.Charges, 1) {
 		return nil, 0, "not ready yet"
 	}
-	if why := combat.Blocked(l.controlsOn(&f.vitals), ability); why != "" {
+	if why := combat.Blocked(l.controlsOn(&f.unit), ability); why != "" {
 		return nil, 0, why
 	}
 	if lockedOut(f, ability, now) {
@@ -213,13 +213,13 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 		if d == nil {
 			return nil, 0, "you need an enemy targeted"
 		}
-		if l.untargetable(&d.vitals, now) {
+		if l.untargetable(&d.unit, now) {
 			return nil, 0, "you can't target that"
 		}
 		target, at = d.ID, d.state.At
 	case "ally", "any":
 		if d := l.dummy(m.Target, p.state.Continent); d != nil && ability.Target == "any" {
-			if l.untargetable(&d.vitals, now) {
+			if l.untargetable(&d.unit, now) {
 				return nil, 0, "you can't target that"
 			}
 			target, at = d.ID, d.state.At
@@ -229,7 +229,7 @@ func (l *Layer) check(p *Player, m incoming, now time.Time) (*combat.Ability, in
 		if o == nil || o.state.Continent != p.state.Continent {
 			o = p // with no one else targeted, it goes on you
 		}
-		if o != p && l.untargetable(&o.fight.vitals, now) {
+		if o != p && l.untargetable(&o.fight.unit, now) {
 			return nil, 0, "you can't target that"
 		}
 		target, at = o.ID(), o.state.At
@@ -445,10 +445,10 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 		f.resChanged = true
 		countSpent(f, c, cost, spent)
 		p.debugLine("%s: spent %g %s", a.Name, spent, cost.Resource)
-		l.fire(event{on: "spend", who: &f.vitals, other: c.target, ctx: castOf(a), amount: spent, resource: cost.Resource}, now)
+		l.fire(event{on: "spend", who: &f.unit, other: c.target, ctx: castOf(a), amount: spent, resource: cost.Resource}, now)
 	}
 	c.spent = countedSpent(f, c)
-	l.fire(event{on: "cast", who: &f.vitals, other: c.target, ctx: castOf(a)}, now)
+	l.fire(event{on: "cast", who: &f.unit, other: c.target, ctx: castOf(a)}, now)
 	if a.Cooldown > 0 {
 		spent := live(f.cooldowns[a.ID], now)
 		from := now
@@ -474,7 +474,7 @@ func (l *Layer) release(p *Player, c *casting, now time.Time) {
 			})
 		}
 		l.after(now.Add(seconds(a.Channel.Duration)), c, func(now time.Time) {
-			l.fire(event{on: "channelEnd", who: &f.vitals, other: c.target, ctx: castOf(a)}, now)
+			l.fire(event{on: "channelEnd", who: &f.unit, other: c.target, ctx: castOf(a)}, now)
 		})
 		return
 	}
@@ -514,11 +514,8 @@ func (l *Layer) pointOf(c *casting, p *Player) ([3]float64, bool) {
 	if c.spot != nil {
 		return *c.spot, true
 	}
-	if d := l.dummy(c.target, p.state.Continent); d != nil {
-		return d.state.At, true
-	}
-	if o := l.players[c.target]; o != nil {
-		return o.state.At, true
+	if u := l.unit(c.target, ""); u != nil {
+		return u.char.At, true
 	}
 	return [3]float64{}, false
 }
@@ -545,7 +542,7 @@ func (l *Layer) landWhich(p *Player, c *casting, now time.Time, which func(*comb
 	}
 	type landingOn struct {
 		effect *combat.Effect
-		on     *vitals
+		on     *unit
 		count  int // how many it reached
 	}
 	var plan []landingOn
@@ -554,7 +551,7 @@ func (l *Layer) landWhich(p *Player, c *casting, now time.Time, which func(*comb
 		if !which(e) {
 			continue
 		}
-		var reached []*vitals
+		var reached []*unit
 		if e.Type != "area" {
 			reached = l.reached(p, c, e)
 			if len(reached) == 0 {
@@ -606,7 +603,7 @@ func (l *Layer) unmet(p *Player, a *combat.Ability, target int64, now time.Time)
 // usedBy finds the statuses that using an ability spends.
 func usedBy(f *fighter, a *combat.Ability) []usingUp {
 	var out []usingUp
-	for key, each := range f.vitals.Statuses {
+	for key, each := range f.unit.Statuses {
 		if each.def.ConsumedBy.Matches(a) {
 			out = append(out, usingUp{key, each})
 		}
@@ -619,7 +616,7 @@ func (l *Layer) spend(p *Player, used []usingUp, now time.Time) {
 	if l.players[p.ID()] != p {
 		return
 	}
-	on := &p.fight.vitals
+	on := &p.fight.unit
 	for _, u := range used {
 		if on.Statuses[u.key] != u.held {
 			continue
@@ -640,19 +637,16 @@ func (l *Layer) spend(p *Player, used []usingUp, now time.Time) {
 }
 
 // reached is who an effect lands on.
-func (l *Layer) reached(p *Player, c *casting, e *combat.Effect) []*vitals {
+func (l *Layer) reached(p *Player, c *casting, e *combat.Effect) []*unit {
 	switch e.Affects {
 	case "self":
-		return []*vitals{&p.fight.vitals}
+		return []*unit{&p.fight.unit}
 	case "target":
 		if c.ability.Target != "enemy" && c.ability.Target != "ally" && c.ability.Target != "any" {
-			return []*vitals{&p.fight.vitals}
+			return []*unit{&p.fight.unit}
 		}
-		if d := l.dummy(c.target, p.state.Continent); d != nil {
-			return []*vitals{&d.vitals}
-		}
-		if o := l.players[c.target]; o != nil {
-			return []*vitals{&o.fight.vitals}
+		if u := l.unit(c.target, ""); u != nil {
+			return []*unit{u}
 		}
 		return nil
 	}
@@ -695,7 +689,7 @@ func (l *Layer) interruptMoving(p *Player) {
 		l.stopCast(p)
 	}
 	if movingNow(p.state.Move) {
-		l.breakStatuses(&p.fight.vitals, "move", nil)
+		l.breakStatuses(&p.fight.unit, "move", nil)
 		l.stopLoggingOff(p, "you moved")
 	}
 }

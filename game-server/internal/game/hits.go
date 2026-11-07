@@ -19,7 +19,7 @@ func (p *Player) debugLine(format string, args ...any) {
 }
 
 // debugHit says what an effect came to and how.
-func (l *Layer) debugHit(p *Player, ability string, e *combat.Effect, on *vitals, h hit) string {
+func (l *Layer) debugHit(p *Player, ability string, e *combat.Effect, on *unit, h hit) string {
 	line := fmt.Sprintf("%s on %s: %s", ability, l.nameOf(on.ID), e.Type)
 	if h.Missed {
 		return line + " missed"
@@ -41,17 +41,14 @@ func (l *Layer) debugHit(p *Player, ability string, e *combat.Effect, on *vitals
 
 // nameOf is a unit's name, for the log.
 func (l *Layer) nameOf(id int64) string {
-	if d := l.dummy(id, ""); d != nil {
-		return d.state.Name
-	}
-	if o := l.players[id]; o != nil {
-		return o.state.Name
+	if u := l.unit(id, ""); u != nil {
+		return u.char.Name
 	}
 	return "someone"
 }
 
 // strike rolls an attack on an enemy and does what it comes to, noting it in the hit.
-func (l *Layer) strike(p *Player, on *vitals, amount combat.Amount, ctx combat.HitContext, h *hit, now time.Time) {
+func (l *Layer) strike(p *Player, on *unit, amount combat.Amount, ctx combat.HitContext, h *hit, now time.Time) {
 	blocked := false
 	if on.ID != p.ID() {
 		p.fight.attacked(now)
@@ -86,7 +83,7 @@ func (l *Layer) strike(p *Player, on *vitals, amount combat.Amount, ctx combat.H
 
 // avoided rolls an attack on a unit, and says whether it came to nothing. A unit that dodges or
 // parries is still in the fight.
-func (l *Layer) avoided(on *vitals, from int64, theirs combat.Stats, melee, front bool, ctx *combat.HitContext, h *hit, now time.Time) bool {
+func (l *Layer) avoided(on *unit, from int64, theirs combat.Stats, melee, front bool, ctx *combat.HitContext, h *hit, now time.Time) bool {
 	outcome := combat.AttackRoll(theirs, melee, front, l.hub.roll)
 	if outcome == "" {
 		return false
@@ -96,7 +93,7 @@ func (l *Layer) avoided(on *vitals, from int64, theirs combat.Stats, melee, fron
 		return true
 	}
 	h.Avoided = outcome
-	if o := l.players[on.ID]; o != nil {
+	if o := l.playerOf(on); o != nil {
 		o.fight.since["damageTaken"] = now
 	}
 	l.fire(event{on: outcome, who: on, other: from, ctx: ctx}, now)
@@ -105,12 +102,12 @@ func (l *Layer) avoided(on *vitals, from int64, theirs combat.Stats, melee, fron
 
 // statsOf is a unit's stats with what it holds counted. With a hit, stats narrowed to some hits
 // count if they match it, and otherwise they don't.
-func (l *Layer) statsOf(v *vitals, ctx *combat.HitContext, now time.Time) combat.Stats {
+func (l *Layer) statsOf(v *unit, ctx *combat.HitContext, now time.Time) combat.Stats {
 	return combat.Sheet(v.base, v.primary, l.modsOf(v, ctx, now))
 }
 
 // modsOf is the stat effects that count for a unit right now.
-func (l *Layer) modsOf(v *vitals, ctx *combat.HitContext, now time.Time) []combat.Mod {
+func (l *Layer) modsOf(v *unit, ctx *combat.HitContext, now time.Time) []combat.Mod {
 	var mods []combat.Mod
 	for key, held := range v.Statuses {
 		for i := range held.def.Effects {
@@ -120,7 +117,7 @@ func (l *Layer) modsOf(v *vitals, ctx *combat.HitContext, now time.Time) []comba
 			}
 			mod := combat.Mod{Effect: e, Stacks: held.stacks, Spent: held.spent}
 			if o := l.players[key.from]; o != nil {
-				mod.Caster = &o.fight.vitals.base
+				mod.Caster = &o.fight.unit.base
 			}
 			mods = append(mods, mod)
 		}
@@ -129,12 +126,12 @@ func (l *Layer) modsOf(v *vitals, ctx *combat.HitContext, now time.Time) []comba
 }
 
 // holds says whether a stat's own conditions hold for the unit holding it.
-func (l *Layer) holds(v *vitals, e *combat.StatusEffect, ctx *combat.HitContext, now time.Time) bool {
+func (l *Layer) holds(v *unit, e *combat.StatusEffect, ctx *combat.HitContext, now time.Time) bool {
 	if len(e.When) == 0 {
 		return true
 	}
 	facts := &combat.Facts{Self: unitOf(v, v.ID, nil), Since: map[string]float64{}, Resources: map[string]combat.ResourceAmount{}}
-	if o := l.players[v.ID]; o != nil {
+	if o := l.playerOf(v); o != nil {
 		target := int64(0)
 		if ctx != nil {
 			target = ctx.Other
@@ -152,9 +149,9 @@ func withOther(ctx combat.HitContext, other int64) *combat.HitContext {
 }
 
 // rollDamage is what a hit comes to, by the stats of who does it and who takes it.
-func (l *Layer) rollDamage(p *Player, on *vitals, amount combat.Amount, ctx combat.HitContext, now time.Time) (float64, bool) {
+func (l *Layer) rollDamage(p *Player, on *unit, amount combat.Amount, ctx combat.HitContext, now time.Time) (float64, bool) {
 	amount = amount.On(on.MaxHealth)
-	mine, theirs := l.statsOf(&p.fight.vitals, withOther(ctx, on.ID), now), l.statsOf(on, withOther(ctx, p.ID()), now)
+	mine, theirs := l.statsOf(&p.fight.unit, withOther(ctx, on.ID), now), l.statsOf(on, withOther(ctx, p.ID()), now)
 	rolled := mine
 	rolled.CritChance += theirs.CritTaken + ctx.CritChance
 	rolled.CritDamage += ctx.CritDamage
@@ -169,9 +166,9 @@ func (l *Layer) rollDamage(p *Player, on *vitals, amount combat.Amount, ctx comb
 }
 
 // rollHeal is what a heal comes to, by the stats of who does it and who takes it.
-func (l *Layer) rollHeal(p *Player, on *vitals, amount combat.Amount, ctx combat.HitContext, now time.Time) (float64, bool) {
+func (l *Layer) rollHeal(p *Player, on *unit, amount combat.Amount, ctx combat.HitContext, now time.Time) (float64, bool) {
 	amount = amount.On(on.MaxHealth)
-	mine, theirs := l.statsOf(&p.fight.vitals, withOther(ctx, on.ID), now), l.statsOf(on, withOther(ctx, p.ID()), now)
+	mine, theirs := l.statsOf(&p.fight.unit, withOther(ctx, on.ID), now), l.statsOf(on, withOther(ctx, p.ID()), now)
 	rolled := mine
 	rolled.CritChance += ctx.CritChance
 	rolled.CritDamage = mine.CritHealing + ctx.CritDamage
@@ -185,16 +182,16 @@ func (l *Layer) rollHeal(p *Player, on *vitals, amount combat.Amount, ctx combat
 }
 
 // leech heals a player by its share of the damage it did to another.
-func (l *Layer) leech(p *Player, on *vitals, n float64, ctx combat.HitContext, ability string, now time.Time) {
+func (l *Layer) leech(p *Player, on *unit, n float64, ctx combat.HitContext, ability string, now time.Time) {
 	if on.ID == p.ID() {
 		return
 	}
-	l.drain(p, n, l.statsOf(&p.fight.vitals, withOther(ctx, on.ID), now).Leech/100, ability)
+	l.drain(p, n, l.statsOf(&p.fight.unit, withOther(ctx, on.ID), now).Leech/100, ability)
 }
 
 // drain heals a player by a share of what it did.
 func (l *Layer) drain(p *Player, n, share float64, ability string) {
-	f := &p.fight.vitals
+	f := &p.fight.unit
 	back := min(n*share, f.MaxHealth-f.Health)
 	if back <= 0 {
 		return
@@ -220,7 +217,7 @@ func schoolsOf(school string, schools []string, a *combat.Ability) []string {
 }
 
 // hitOf describes an ability's effect landing on a unit, out of `count` it reached.
-func hitOf(c *casting, e *combat.Effect, on *vitals, count int) combat.HitContext {
+func hitOf(c *casting, e *combat.Effect, on *unit, count int) combat.HitContext {
 	kinds := []string{"ability", "direct"}
 	if c.ability.Range.Melee {
 		kinds = append(kinds, "melee")
@@ -240,20 +237,20 @@ func hitOf(c *casting, e *combat.Effect, on *vitals, count int) combat.HitContex
 }
 
 // harm takes health off a unit, noting it in the hit.
-func (l *Layer) harm(p *Player, on *vitals, n float64, h *hit, now time.Time) {
+func (l *Layer) harm(p *Player, on *unit, n float64, h *hit, now time.Time) {
 	if n > 0 {
 		on.recent = append(on.recent, taken{now, n})
 		for len(on.recent) > 0 && now.Sub(on.recent[0].at) > recentDamageLasts {
 			on.recent = on.recent[1:]
 		}
 	}
-	if o := l.players[on.ID]; o != nil {
+	if o := l.playerOf(on); o != nil {
 		o.fight.since["damageTaken"] = now
 	}
 	on.Health = max(on.Health-n, 0)
 	h.Amount = math.Round(n)
 	l.breakStatuses(on, "damage", nil)
-	if d := l.dummy(on.ID, p.state.Continent); d != nil {
+	if d := on.dummy; d != nil {
 		d.tally(n, now)
 		h.DPS = math.Round(d.dps(now))
 		on.Health = on.MaxHealth // it's always at full health

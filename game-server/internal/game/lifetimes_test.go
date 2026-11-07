@@ -9,7 +9,7 @@ import (
 
 // mine reads the copies of statuses a player has put on itself.
 func mine(p *Player) func(string) *activeStatus {
-	return func(id string) *activeStatus { return p.fight.vitals.Statuses[statusKey{id, p.ID()}] }
+	return func(id string) *activeStatus { return p.fight.unit.Statuses[statusKey{id, p.ID()}] }
 }
 
 func selfBuff(id string, effects ...combat.Effect) combat.Ability {
@@ -112,7 +112,7 @@ func TestAGroupHoldsOneStatus(t *testing.T) {
 	pass(h, c, 0.1)
 	on := mine(p)
 	if on("bear") != nil || on("cat") == nil {
-		t.Fatalf("statuses = %v", p.fight.vitals.Statuses)
+		t.Fatalf("statuses = %v", p.fight.unit.Statuses)
 	}
 }
 
@@ -186,7 +186,7 @@ func TestASwingBreaksActionStatusesButNotKeptOnes(t *testing.T) {
 	pass(h, c, 0.1)
 	on := mine(p)
 	if on("hide") != nil || on("form") == nil {
-		t.Fatalf("statuses = %v, swung %d", p.fight.vitals.Statuses, len(heard(p, "swung")))
+		t.Fatalf("statuses = %v, swung %d", p.fight.unit.Statuses, len(heard(p, "swung")))
 	}
 }
 

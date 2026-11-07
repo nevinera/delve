@@ -33,7 +33,7 @@ type zone struct {
 	overlaps bool
 	until    time.Time // zero for an aura, which lasts as long as its status
 	next     time.Time
-	inside   map[int64]*vitals
+	inside   map[int64]*unit
 }
 
 // placeArea does an `area` effect: it stays where it lands and works on its own from then on.
@@ -86,7 +86,7 @@ func (l *Layer) nextZone() int64 {
 }
 
 func (l *Layer) zoneOf(p *Player, a *combat.Ability, affects string, radius float64, most int, status string, every float64, effects []combat.Effect, onEnter *combat.Effect) *zone {
-	return &zone{from: p, kind: a.ID, ability: a, affects: affects, radius: radius, max: most, status: status, every: every, effects: effects, onEnter: onEnter, inside: map[int64]*vitals{}, next: l.hub.now().Add(seconds(every))}
+	return &zone{from: p, kind: a.ID, ability: a, affects: affects, radius: radius, max: most, status: status, every: every, effects: effects, onEnter: onEnter, inside: map[int64]*unit{}, next: l.hub.now().Add(seconds(every))}
 }
 
 // effectsIn is what an area does each `every`.
@@ -110,11 +110,8 @@ func lineWay(p *Player, c *casting, e *combat.Effect, from [3]float64) [2]float6
 
 // unitAt is where a unit is on a continent, or where it was last known to be if it's gone.
 func (l *Layer) unitAt(id int64, was [3]float64, continent string) ([3]float64, string, bool) {
-	if d := l.dummy(id, ""); d != nil {
-		return d.state.At, d.state.Continent, true
-	}
-	if o := l.players[id]; o != nil {
-		return o.state.At, o.state.Continent, true
+	if u := l.unit(id, ""); u != nil {
+		return u.char.At, u.char.Continent, true
 	}
 	return was, continent, false
 }
@@ -170,13 +167,13 @@ func (l *Layer) sweepZones(now time.Time) {
 		l.touchZone(z, now)
 	}
 	type aura struct {
-		v    *vitals
+		v    *unit
 		key  statusKey
 		held *activeStatus
 		i    int
 	}
 	var auras []aura
-	l.eachUnit(func(v *vitals, _ [3]float64, _ string) {
+	for v := range l.units() {
 		for key, held := range v.Statuses {
 			for i := range held.def.Effects {
 				if held.def.Effects[i].Type == "aura" {
@@ -184,7 +181,7 @@ func (l *Layer) sweepZones(now time.Time) {
 				}
 			}
 		}
-	})
+	}
 	for _, a := range auras {
 		from := l.players[a.key.from]
 		if from == nil || a.v.Statuses[a.key] != a.held {
@@ -272,19 +269,19 @@ func (l *Layer) olderZoneHas(z *zone, id int64) bool {
 }
 
 // zoneLands lands an effect on someone inside a zone. `self` there means them.
-func (l *Layer) zoneLands(z *zone, c *casting, e *combat.Effect, on *vitals, count int, now time.Time) {
+func (l *Layer) zoneLands(z *zone, c *casting, e *combat.Effect, on *unit, count int, now time.Time) {
 	if _, ok := combat.All(e.When, l.facts(z.from, on.ID, now)); !ok {
 		return
 	}
 	runner := z.from
-	if o := l.players[on.ID]; o != nil && e.Type == "resource" {
+	if o := l.playerOf(on); o != nil && e.Type == "resource" {
 		runner = o
 	}
 	l.land(runner, c, e, on, count, now)
 }
 
 // keepStatus puts a zone's status on someone inside, for as long as they stay.
-func (l *Layer) keepStatus(z *zone, on *vitals, now time.Time) {
+func (l *Layer) keepStatus(z *zone, on *unit, now time.Time) {
 	key := statusKey{z.status, z.from.ID()}
 	if on.Statuses[key] != nil {
 		return
@@ -319,9 +316,9 @@ type areaOf struct {
 }
 
 // inArea is who of a side is in an area, nearest first, up to its most.
-func (l *Layer) inArea(a areaOf) []*vitals {
+func (l *Layer) inArea(a areaOf) []*unit {
 	type reach struct {
-		v   *vitals
+		v   *unit
 		gap float64
 	}
 	var found []reach
@@ -355,8 +352,8 @@ func (l *Layer) inArea(a areaOf) []*vitals {
 			if d.state.Continent != a.continent {
 				continue
 			}
-			if gap, ok := inside(d.state.At); ok && a.counts(&d.vitals) {
-				found = append(found, reach{&d.vitals, gap})
+			if gap, ok := inside(d.state.At); ok && a.counts(&d.unit) {
+				found = append(found, reach{&d.unit, gap})
 			}
 		}
 	} else if a.affects == "allies" {
@@ -364,8 +361,8 @@ func (l *Layer) inArea(a areaOf) []*vitals {
 			if o.state.Continent != a.continent {
 				continue
 			}
-			if gap, ok := inside(o.state.At); ok && a.counts(&o.fight.vitals) {
-				found = append(found, reach{&o.fight.vitals, gap})
+			if gap, ok := inside(o.state.At); ok && a.counts(&o.fight.unit) {
+				found = append(found, reach{&o.fight.unit, gap})
 			}
 		}
 	}
@@ -387,7 +384,7 @@ func (l *Layer) inArea(a areaOf) []*vitals {
 	if a.most > 0 && len(found) > a.most {
 		found = found[:a.most]
 	}
-	out := make([]*vitals, len(found))
+	out := make([]*unit, len(found))
 	for i, r := range found {
 		out[i] = r.v
 	}
@@ -395,7 +392,7 @@ func (l *Layer) inArea(a areaOf) []*vitals {
 }
 
 // counts says whether a unit in an area is one it's after.
-func (a areaOf) counts(v *vitals) bool {
+func (a areaOf) counts(v *unit) bool {
 	if v.ID == a.except && a.except != 0 {
 		return false
 	}

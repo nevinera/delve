@@ -24,10 +24,12 @@ func (l *Layer) placeDummies() {
 			}
 		}
 		id := int64(-1 - i) // characters' ids are positive
-		l.dummies = append(l.dummies, &dummy{
-			vitals: vitals{ID: id, base: combat.Plain(dummyHealth), Health: dummyHealth, MaxHealth: dummyHealth, Statuses: map[statusKey]*activeStatus{}},
-			state:  Character{ID: id, Name: "Training Dummy", Look: json.RawMessage(`{"body":"goblin"}`), Continent: d.Continent, At: at, Move: Move{Gait: "run"}, Dummy: true, Health: dummyHealth, MaxHealth: dummyHealth},
-		})
+		made := &dummy{
+			unit:  unit{ID: id, base: combat.Plain(dummyHealth), Health: dummyHealth, MaxHealth: dummyHealth, Statuses: map[statusKey]*activeStatus{}},
+			state: Character{ID: id, Name: "Training Dummy", Look: json.RawMessage(`{"body":"goblin"}`), Continent: d.Continent, At: at, Move: Move{Gait: "run"}, Dummy: true, Health: dummyHealth, MaxHealth: dummyHealth},
+		}
+		made.char, made.dummy = &made.state, made
+		l.dummies = append(l.dummies, made)
 	}
 }
 
@@ -54,11 +56,11 @@ func (l *Layer) spar(p *Player, now time.Time) {
 			d = each
 		}
 	}
-	if d == nil || !combat.CanSwing(l.controlsOn(&d.vitals)) {
+	if d == nil || !combat.CanSwing(l.controlsOn(&d.unit)) {
 		return
 	}
 	f.sparAt = now.Add(seconds(combat.SwingSeconds))
-	on := &f.vitals
+	on := &f.unit
 	l.tell(p, encode(swung{"swung", d.ID, p.ID()}))
 	ctx := combat.HitContext{Schools: []string{"physical"}, Kinds: []string{"auto", "melee", "direct", "main", "single"}, Other: d.ID}
 	h := hit{Type: "hit", From: d.ID, On: p.ID(), Effect: "damage"}

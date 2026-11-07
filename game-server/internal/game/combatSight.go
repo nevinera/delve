@@ -24,11 +24,8 @@ func (l *Layer) sees(continent string, from, to [3]float64) bool {
 
 // feetOf is where a unit's feet are, if it's here.
 func (l *Layer) feetOf(id int64) ([3]float64, bool) {
-	if d := l.dummy(id, ""); d != nil {
-		return d.state.At, true
-	}
-	if o := l.players[id]; o != nil {
-		return o.state.At, true
+	if u := l.unit(id, ""); u != nil {
+		return u.char.At, true
 	}
 	return [3]float64{}, false
 }
@@ -63,12 +60,9 @@ func (l *Layer) answerSees(p *Player, target int64) {
 }
 
 // seesFromFront says whether a unit is facing what's at `from`.
-func (l *Layer) seesFromFront(on *vitals, from [3]float64) bool {
-	if o := l.players[on.ID]; o != nil {
-		return facing(o.state.At, o.state.Yaw, from)
+func (l *Layer) seesFromFront(on *unit, from [3]float64) bool {
+	if l.unit(on.ID, "") != on {
+		return true
 	}
-	if d := l.dummy(on.ID, ""); d != nil {
-		return facing(d.state.At, d.state.Yaw, from)
-	}
-	return true
+	return facing(on.char.At, on.char.Yaw, from)
 }

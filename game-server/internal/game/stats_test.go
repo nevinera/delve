@@ -110,9 +110,9 @@ func TestLeechHealsFromDamageDone(t *testing.T) {
 	use(t, p, "sip")
 	use(t, p, "ouch")
 	pass(h, c, 0.5)
-	was := p.fight.vitals.Health
+	was := p.fight.unit.Health
 	hitFor(t, h, p, c)
-	if got := p.fight.vitals.Health - was; got != 10 {
+	if got := p.fight.unit.Health - was; got != 10 {
 		t.Fatalf("leeched %g, want 10", got)
 	}
 }
@@ -124,17 +124,17 @@ func TestHealingStats(t *testing.T) {
 	use(t, p, "ouch")
 	use(t, p, "warm")
 	pass(h, c, 0.5)
-	was := p.fight.vitals.Health
+	was := p.fight.unit.Health
 	use(t, p, "soothe")
 	pass(h, c, 0.5)
-	if got := p.fight.vitals.Health - was; got != 15 {
+	if got := p.fight.unit.Health - was; got != 15 {
 		t.Fatalf("healed %g, want 15", got)
 	}
 }
 
 func TestMaxHealthFollowsStatusesAndKeepsTheShare(t *testing.T) {
 	h, p, c := statusFight(t, map[string]string{"big": `[{"type":"stat","stat":"stamina","multiply":2}]`})
-	v := &p.fight.vitals
+	v := &p.fight.unit
 	base := v.MaxHealth
 	v.Health = base / 2
 	heard(p, "health")
@@ -184,7 +184,7 @@ func TestMovementSpeedReachesTheClientAndTheLimits(t *testing.T) {
 	if got := p.motion.speed(run); got != 2*plain {
 		t.Fatalf("allowed %g, plain %g", got, plain)
 	}
-	delete(p.fight.vitals.Statuses, statusKey{"gust", p.ID()})
+	delete(p.fight.unit.Statuses, statusKey{"gust", p.ID()})
 	pass(h, c, 0.2)
 	if got := p.motion.speed(run); got != 2*plain {
 		t.Fatalf("it should still allow the old speed till the client hears: %g", got)
@@ -205,7 +205,7 @@ func TestAStatsConditionsAreChecked(t *testing.T) {
 	if got := hitFor(t, h, p, c); got != 100 {
 		t.Fatalf("hit at full health = %g", got)
 	}
-	p.fight.vitals.Health = 1
+	p.fight.unit.Health = 1
 	if got := hitFor(t, h, p, c); got != 200 {
 		t.Fatalf("hit at low health = %g", got)
 	}
@@ -431,13 +431,13 @@ func TestPeriodicTicks(t *testing.T) {
 	use(t, p, "ouch2")
 	pass(h, c, 0.1)
 	was := d.damage
-	wasHealth := p.fight.vitals.Health
+	wasHealth := p.fight.unit.Health
 	use(t, p, "cut")
 	pass(h, c, 7)
 	if got := d.damage - was; got != 30 {
 		t.Fatalf("did %g over its 6 s, want 3 ticks of 10", got)
 	}
-	if got := p.fight.vitals.Health - wasHealth; got != 15 {
+	if got := p.fight.unit.Health - wasHealth; got != 15 {
 		t.Fatalf("drained %g, want 15", got)
 	}
 	ticks := 0
@@ -507,10 +507,10 @@ func TestPeriodicKinds(t *testing.T) {
 		selfBuff("ouch3", combat.Effect{Type: "damage", Affects: "self", Amount: combat.Amount{Min: 50, Max: 50}}))
 	use(t, p, "ouch3")
 	pass(h, c, 0.1)
-	was := p.fight.vitals.Health
+	was := p.fight.unit.Health
 	use(t, p, "warm")
 	pass(h, c, 1.1)
-	if got := p.fight.vitals.Health - was; got != p.fight.vitals.MaxHealth*0.1 {
+	if got := p.fight.unit.Health - was; got != p.fight.unit.MaxHealth*0.1 {
 		t.Fatalf("healed %g", got)
 	}
 	if p.fight.resources["grit"] != 1 {
@@ -535,10 +535,10 @@ func TestDrainAndSlowed(t *testing.T) {
 		selfBuff("ouch4", combat.Effect{Type: "damage", Affects: "self", Amount: combat.Amount{Min: 50, Max: 50}}))
 	use(t, p, "ouch4")
 	pass(h, c, 0.1)
-	was := p.fight.vitals.Health
+	was := p.fight.unit.Health
 	use(t, p, "sap")
 	pass(h, c, 0.5)
-	if got := p.fight.vitals.Health - was; got != 10 {
+	if got := p.fight.unit.Health - was; got != 10 {
 		t.Fatalf("drained %g, want 10", got)
 	}
 	if slices.Contains(p.layer.fighterState(p, h.now()), "slowed") {
@@ -627,8 +627,8 @@ func TestTriggerLimits(t *testing.T) {
 	t.Run("resetOn", func(t *testing.T) {
 		h, p, c := triggered(t, `[{"type":"trigger","on":"crit","every":2,"resetOn":"nonCrit",`+giveGrit+`}]`)
 		_ = c
-		w := p.fight.vitals.Statuses[statusKey{"watch", p.ID()}]
-		v := &p.fight.vitals
+		w := p.fight.unit.Statuses[statusKey{"watch", p.ID()}]
+		v := &p.fight.unit
 		p.layer.fire(event{on: "crit", who: v, other: -1}, h.now())
 		p.layer.fire(event{on: "nonCrit", who: v, other: -1}, h.now())
 		p.layer.fire(event{on: "crit", who: v, other: -1}, h.now())
@@ -711,7 +711,7 @@ func TestTriggerOnHealthAndHeals(t *testing.T) {
 	if got := p.fight.resources["grit"]; got != 2 {
 		t.Fatalf("grit = %g, want 2 after a heal", got)
 	}
-	p.fight.vitals.Health = p.fight.vitals.MaxHealth - 4
+	p.fight.unit.Health = p.fight.unit.MaxHealth - 4
 	use(t, p, "soothe")
 	pass(h, c, 0.5)
 	if got := p.fight.resources["grit"]; got != 9 {
@@ -768,8 +768,8 @@ func TestChoosingABuild(t *testing.T) {
 	}
 	pass(h, c, 6)
 	p.layer.chooseBuild(p, combat.Build{Specialization: "blade"})
-	if p.fight.vitals.Statuses[statusKey{"sguard", p.ID()}] != nil || p.fight.vitals.Statuses[statusKey{"sblade", p.ID()}] == nil {
-		t.Fatalf("holding %v", p.fight.vitals.Statuses)
+	if p.fight.unit.Statuses[statusKey{"sguard", p.ID()}] != nil || p.fight.unit.Statuses[statusKey{"sblade", p.ID()}] == nil {
+		t.Fatalf("holding %v", p.fight.unit.Statuses)
 	}
 	if got := hitFor(t, h, p, c); got != 100 {
 		t.Fatalf("hit for %g, want 100 with the old spec gone", got)
@@ -816,9 +816,9 @@ func TestSparringAndTheAttackTable(t *testing.T) {
 			p.state.Yaw = 0
 			h.roll = func() float64 { return c.roll }
 			heard(p)
-			was := p.fight.vitals.Health
+			was := p.fight.unit.Health
 			pass(h, clock, 0.1)
-			if got := was - p.fight.vitals.Health; math.Abs(got-c.took) > 1e-9 {
+			if got := was - p.fight.unit.Health; math.Abs(got-c.took) > 1e-9 {
 				t.Fatalf("took %g, want %g", got, c.took)
 			}
 			if p.fight.resources["grit"] != 1 {
@@ -844,9 +844,9 @@ func TestBehindCantBeParried(t *testing.T) {
 	p.state.At[2] += 5
 	p.state.Yaw = 0 // facing away from the dummy, which is on the -z side
 	h.roll = func() float64 { return 0.5 }
-	was := p.fight.vitals.Health
+	was := p.fight.unit.Health
 	pass(h, c, 0.1)
-	if got := was - p.fight.vitals.Health; got != 6 {
+	if got := was - p.fight.unit.Health; got != 6 {
 		t.Fatalf("took %g, want 6", got)
 	}
 }
@@ -855,9 +855,9 @@ func TestSparNeverKills(t *testing.T) {
 	h, p, c := statusFight(t, nil)
 	p.fight.sparring = true
 	p.state.At = p.layer.dummies[0].state.At
-	p.fight.vitals.Health = 2
+	p.fight.unit.Health = 2
 	pass(h, c, 10)
-	if got := p.fight.vitals.Health; got != 1 {
+	if got := p.fight.unit.Health; got != 1 {
 		t.Fatalf("health = %g, want 1", got)
 	}
 }

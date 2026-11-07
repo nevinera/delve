@@ -25,19 +25,19 @@ func classWithID(classes []*combat.Class, id string) *combat.Class {
 // enterFight gives a player its class's numbers. With no class, it has plain health and no abilities.
 func (p *Player) enterFight(class *combat.Class, level int, build combat.Build) {
 	f := &p.fight
-	f.vitals = vitals{ID: p.state.ID, Statuses: map[statusKey]*activeStatus{}}
+	f.unit = unit{ID: p.state.ID, char: &p.state, player: p, Statuses: map[statusKey]*activeStatus{}}
 	f.resources, f.pools, f.cooldowns, f.lockouts, f.since = map[string]float64{}, map[string]combat.Pool{}, map[string][]time.Time{}, map[string]time.Time{}, map[string]time.Time{}
 	if class == nil {
-		f.vitals.base = combat.Plain(100)
-		f.vitals.MaxHealth, f.vitals.Health = 100, 100
+		f.unit.base = combat.Plain(100)
+		f.unit.MaxHealth, f.unit.Health = 100, 100
 		p.state.Health, p.state.MaxHealth = 100, 100
 		return
 	}
 	f.class = class
 	f.level = max(level, 1)
 	f.stats = combat.StatsFor(f.class, f.level)
-	f.vitals.base, f.vitals.primary = f.stats, f.class.PrimaryStats
-	f.vitals.MaxHealth, f.vitals.Health = f.stats.MaxHealth, f.stats.MaxHealth
+	f.unit.base, f.unit.primary = f.stats, f.class.PrimaryStats
+	f.unit.MaxHealth, f.unit.Health = f.stats.MaxHealth, f.stats.MaxHealth
 	for _, r := range f.class.Resources {
 		f.resources[r.Key] = combat.StartResource(r)
 	}
@@ -46,7 +46,7 @@ func (p *Player) enterFight(class *combat.Class, level int, build combat.Build) 
 	f.ownWeapons = holdsOwnWeapon(p.state.Look)
 	p.wearGear()
 	p.grantStatuses(time.Time{})
-	p.state.Class, p.state.Level, p.state.Health, p.state.MaxHealth = f.class.ID, f.level, f.vitals.Health, f.vitals.MaxHealth
+	p.state.Class, p.state.Level, p.state.Health, p.state.MaxHealth = f.class.ID, f.level, f.unit.Health, f.unit.MaxHealth
 }
 
 // grantStatuses puts on what a character's class, level and build give it for good, and says
@@ -55,11 +55,11 @@ func (p *Player) grantStatuses(now time.Time) {
 	f := &p.fight
 	for _, id := range f.class.HeldFrom(f.level, f.build) {
 		key := statusKey{id, p.state.ID}
-		if f.vitals.Statuses[key] != nil {
+		if f.unit.Statuses[key] != nil {
 			continue
 		}
 		if s := f.class.Status(id); s != nil {
-			f.vitals.Statuses[key] = &activeStatus{def: s, class: f.class.ID, owner: f.class, since: now, stacks: 1, uses: 1, granted: true}
+			f.unit.Statuses[key] = &activeStatus{def: s, class: f.class.ID, owner: f.class, since: now, stacks: 1, uses: 1, granted: true}
 		} else {
 			log.Printf("character %d: class %s holds a status it hasn't got: %s", p.state.ID, f.class.ID, id)
 		}
@@ -94,15 +94,15 @@ func (l *Layer) applyBuild(p *Player, b combat.Build, now time.Time) {
 	f := &p.fight
 	f.build = f.class.Allowed(b, f.level)
 	keep := f.class.HeldFrom(f.level, f.build)
-	for key, held := range f.vitals.Statuses {
+	for key, held := range f.unit.Statuses {
 		if held.granted && !slices.Contains(keep, key.id) {
-			delete(f.vitals.Statuses, key)
+			delete(f.unit.Statuses, key)
 			l.endZones(held)
 			l.tellOf(p.ID(), encode(statusGone{"statusGone", p.ID(), key.id, key.from}))
 		}
 	}
 	p.grantStatuses(now)
-	for key, held := range f.vitals.Statuses {
+	for key, held := range f.unit.Statuses {
 		if held.granted {
 			l.tellOf(p.ID(), encode(statusOn{"statusOn", p.ID(), shownOf(key, held, now)}))
 		}
@@ -120,14 +120,14 @@ func (l *Layer) setLevel(p *Player, level int) {
 	wanted := f.build
 	f.level = level
 	f.stats = combat.StatsFor(f.class, level)
-	f.vitals.base = f.stats
+	f.unit.base = f.stats
 	p.state.Level = level
 	l.tellOf(p.ID(), encode(levelMessage{"level", p.ID(), level}))
 	l.applyBuild(p, wanted, now)
-	l.refit(&f.vitals, now)
-	f.vitals.Health = f.vitals.MaxHealth
-	l.sync(&f.vitals)
-	l.tellOf(p.ID(), encode(healthMessage{"health", p.ID(), math.Round(f.vitals.Health), f.vitals.MaxHealth}))
+	l.refit(&f.unit, now)
+	f.unit.Health = f.unit.MaxHealth
+	l.sync(&f.unit)
+	l.tellOf(p.ID(), encode(healthMessage{"health", p.ID(), math.Round(f.unit.Health), f.unit.MaxHealth}))
 	world, id := l.worldID, p.ID()
 	go func() {
 		if err := l.hub.characters.SaveLevel(context.Background(), world, id, level); err != nil {
@@ -197,20 +197,12 @@ func (f *fighter) pool(r combat.Resource) combat.Pool {
 	if pool, ok := f.pools[r.Key]; ok {
 		return pool
 	}
-	return combat.PoolOf(r, f.vitals.base, f.vitals.primary, nil)
+	return combat.PoolOf(r, f.unit.base, f.unit.primary, nil)
 }
 
 // sync puts what's been done to a unit where those arriving will see it.
-func (l *Layer) sync(on *vitals) {
-	if on.ID < 0 {
-		if d := l.dummy(on.ID, ""); d != nil {
-			d.state.Health = on.Health
-		}
-		return
-	}
-	if o := l.players[on.ID]; o != nil {
-		o.state.Health, o.state.MaxHealth = on.Health, on.MaxHealth
-	}
+func (l *Layer) sync(on *unit) {
+	on.char.Health, on.char.MaxHealth = on.Health, on.MaxHealth
 }
 
 // regen brings back resources and tells the player how they stand, every so often.
@@ -219,14 +211,14 @@ func (l *Layer) regen(p *Player, dt float64, now time.Time) {
 	if f.class == nil {
 		return
 	}
-	mods := l.modsOf(&f.vitals, nil, now)
-	sheet := f.vitals.base
+	mods := l.modsOf(&f.unit, nil, now)
+	sheet := f.unit.base
 	if len(mods) > 0 {
-		sheet = combat.Sheet(f.vitals.base, f.vitals.primary, mods)
+		sheet = combat.Sheet(f.unit.base, f.unit.primary, mods)
 	}
 	fighting := f.inCombat(now)
 	for _, r := range f.class.Resources {
-		pool := combat.PoolOf(r, sheet, f.vitals.primary, mods)
+		pool := combat.PoolOf(r, sheet, f.unit.primary, mods)
 		if old, ok := f.pools[r.Key]; ok && old.Max != pool.Max {
 			f.resChanged = true
 		}

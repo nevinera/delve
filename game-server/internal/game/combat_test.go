@@ -564,7 +564,7 @@ func TestAStatusWithNoDurationStays(t *testing.T) {
 	conditional(p, combat.Ability{ID: "swear", Target: "self", Effects: []combat.Effect{{Type: "status", Affects: "self", Status: "oath"}}})
 	use(t, p, "swear")
 	pass(h, c, 60)
-	if p.fight.vitals.Statuses[statusKey{"oath", p.ID()}] == nil {
+	if p.fight.unit.Statuses[statusKey{"oath", p.ID()}] == nil {
 		t.Fatal("it ran out")
 	}
 }
@@ -591,10 +591,10 @@ func TestYouDontMissYourself(t *testing.T) {
 	h, p, c := fighting(t)
 	h.roll = func() float64 { return 0 }
 	conditional(p, combat.Ability{ID: "bleed", Target: "self", Effects: []combat.Effect{{Type: "damage", Affects: "self", Amount: combat.Amount{Min: 3, Max: 3}}}})
-	before := p.fight.vitals.Health
+	before := p.fight.unit.Health
 	use(t, p, "bleed")
 	pass(h, c, 1)
-	if p.fight.vitals.Health >= before {
-		t.Fatalf("health = %v", p.fight.vitals.Health)
+	if p.fight.unit.Health >= before {
+		t.Fatalf("health = %v", p.fight.unit.Health)
 	}
 }

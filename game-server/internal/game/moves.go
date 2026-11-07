@@ -37,8 +37,8 @@ var moveKinds = map[string]moveKind{
 
 // forceMove does a `move` effect. The server puts the character where it ends straight away, and the
 // clients play the trip. Training dummies stay put.
-func (l *Layer) forceMove(p *Player, c *casting, e *combat.Effect, on *vitals, now time.Time) {
-	o := l.players[on.ID]
+func (l *Layer) forceMove(p *Player, c *casting, e *combat.Effect, on *unit, now time.Time) {
+	o := l.playerOf(on)
 	if o == nil {
 		p.debugLine("%s: %s stays put", c.ability.Name, l.nameOf(on.ID))
 		return
@@ -78,7 +78,7 @@ func (l *Layer) forceMove(p *Player, c *casting, e *combat.Effect, on *vitals, n
 		l.stopCast(o)
 	}
 	o.state.Yaw = yaw
-	l.breakStatuses(&o.fight.vitals, "move", nil)
+	l.breakStatuses(&o.fight.unit, "move", nil)
 	o.motion.teleported(now.Add(seconds(lasts)))
 	said := encode(forced{"forced", o.ID(), e.Kind, from, end, yaw, lasts, height})
 	l.relocate(o, o.state.Continent, end, said, said)
@@ -94,11 +94,8 @@ func (l *Layer) moveEnd(p *Player, c *casting, e *combat.Effect, o *Player, kind
 		reach = e.Distance
 	}
 	unit := func(id int64) ([3]float64, float64, bool) {
-		if d := l.dummy(id, o.state.Continent); d != nil {
-			return d.state.At, d.state.Yaw, true
-		}
-		if t := l.players[id]; t != nil && t.state.Continent == o.state.Continent {
-			return t.state.At, t.state.Yaw, true
+		if t := l.unit(id, o.state.Continent); t != nil {
+			return t.char.At, t.char.Yaw, true
 		}
 		return from, 0, false
 	}

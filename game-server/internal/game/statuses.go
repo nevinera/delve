@@ -14,17 +14,17 @@ import (
 // Statuses on units: putting them on, ticking, breaking and taking them off, and the immunities and controls they give.
 
 // applyStatus puts a status on a unit and notes it in the hit. It says whether the class has that status.
-func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration float64, on *vitals, h *hit, now time.Time) bool {
+func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration float64, on *unit, h *hit, now time.Time) bool {
 	f := &p.fight
 	s := f.class.Status(id)
 	if s == nil {
 		log.Printf("character %d: ability %s applies a status its class hasn't got: %s", p.ID(), a.ID, id)
 		return false
 	}
-	mods := l.modifiersOf(&f.vitals, now)
+	mods := l.modifiersOf(&f.unit, now)
 	mastery := 0.0
 	if len(mods) > 0 {
-		mastery = l.statsOf(&f.vitals, nil, now).MasteryPercent()
+		mastery = l.statsOf(&f.unit, nil, now).MasteryPercent()
 	}
 	s = f.class.ResolveStatus(s, duration, mods, mastery)
 	if l.immuneToStatus(on, s, p.ID(), now) {
@@ -77,30 +77,20 @@ func (l *Layer) applyStatus(p *Player, a *combat.Ability, id string, duration fl
 // makeRoom takes a status off the oldest units holding it from a player, so one more stays within its limit.
 func (l *Layer) makeRoom(p *Player, s *combat.Status) {
 	key := statusKey{s.ID, p.ID()}
-	var holders []*vitals
-	l.eachUnit(func(v *vitals, _ [3]float64, _ string) {
+	var holders []*unit
+	for v := range l.units() {
 		if v.Statuses[key] != nil {
 			holders = append(holders, v)
 		}
-	})
-	slices.SortFunc(holders, func(a, b *vitals) int { return a.Statuses[key].since.Compare(b.Statuses[key].since) })
+	}
+	slices.SortFunc(holders, func(a, b *unit) int { return a.Statuses[key].since.Compare(b.Statuses[key].since) })
 	for i := 0; i <= len(holders)-s.Limit; i++ {
 		l.takeOff(holders[i], key)
 	}
 }
 
-// eachUnit goes over every unit on the layer that can hold a status.
-func (l *Layer) eachUnit(do func(v *vitals, at [3]float64, continent string)) {
-	for _, d := range l.dummies {
-		do(&d.vitals, d.state.At, d.state.Continent)
-	}
-	for _, o := range l.players {
-		do(&o.fight.vitals, o.state.At, o.state.Continent)
-	}
-}
-
 // takeOff removes a status from a unit and says so.
-func (l *Layer) takeOff(on *vitals, key statusKey) {
+func (l *Layer) takeOff(on *unit, key statusKey) {
 	held := on.Statuses[key]
 	delete(on.Statuses, key)
 	if held != nil {
@@ -112,17 +102,17 @@ func (l *Layer) takeOff(on *vitals, key statusKey) {
 
 // dropFrom takes off everything a unit put on, when it leaves: nothing's left to carry it on or end it.
 func (l *Layer) dropFrom(from int64) {
-	l.eachUnit(func(v *vitals, _ [3]float64, _ string) {
+	for v := range l.units() {
 		for key := range v.Statuses {
 			if key.from == from {
 				l.takeOff(v, key)
 			}
 		}
-	})
+	}
 }
 
 // breakStatuses takes off a unit's statuses that end when this happens. Only an ability has anything to keep them on.
-func (l *Layer) breakStatuses(on *vitals, what string, kept func(*combat.Status) bool) {
+func (l *Layer) breakStatuses(on *unit, what string, kept func(*combat.Status) bool) {
 	for key, each := range on.Statuses {
 		if (slices.Contains(each.def.BreaksOn, what) || (what == "damage" && each.def.BreaksOnDamage())) && (kept == nil || !kept(each.def)) {
 			l.takeOff(on, key)
@@ -133,7 +123,9 @@ func (l *Layer) breakStatuses(on *vitals, what string, kept func(*combat.Status)
 // sweep takes off statuses that have run out or whose holder has gone too far from who put them
 // on, and refits each unit to what it holds now.
 func (l *Layer) sweep(now time.Time) {
-	l.eachUnit(func(v *vitals, at [3]float64, continent string) {
+	for v := range l.units() {
+		at := v.char.At
+		continent := v.char.Continent
 		for key, each := range v.Statuses {
 			l.tickStatus(v, key, each, at, continent, now)
 			if v.Statuses[key] != each {
@@ -149,12 +141,12 @@ func (l *Layer) sweep(now time.Time) {
 			}
 		}
 		l.refit(v, now)
-	})
+	}
 	l.sweepZones(now)
 }
 
 // tickStatus lands whatever's due of a status's periodic effects. A last tick due as it ends still lands.
-func (l *Layer) tickStatus(v *vitals, key statusKey, held *activeStatus, at [3]float64, continent string, now time.Time) {
+func (l *Layer) tickStatus(v *unit, key statusKey, held *activeStatus, at [3]float64, continent string, now time.Time) {
 	p := l.players[key.from]
 	if p == nil {
 		return
@@ -164,7 +156,7 @@ func (l *Layer) tickStatus(v *vitals, key statusKey, held *activeStatus, at [3]f
 		if e.Type != "periodic" || held.def.Period(e) <= 0 {
 			continue
 		}
-		period := l.statsOf(&p.fight.vitals, nil, now).Hasted(held.def.Period(e))
+		period := l.statsOf(&p.fight.unit, nil, now).Hasted(held.def.Period(e))
 		if held.ticks == nil {
 			held.ticks = map[int]time.Time{}
 		}
@@ -181,8 +173,8 @@ func (l *Layer) tickStatus(v *vitals, key statusKey, held *activeStatus, at [3]f
 }
 
 // tickOf lands one tick of a periodic effect, from the one who applied it. Ticks don't miss.
-func (l *Layer) tickOf(p *Player, holder *vitals, id string, held *activeStatus, e *combat.StatusEffect, at [3]float64, continent string, now time.Time) {
-	targets := []*vitals{holder}
+func (l *Layer) tickOf(p *Player, holder *unit, id string, held *activeStatus, e *combat.StatusEffect, at [3]float64, continent string, now time.Time) {
+	targets := []*unit{holder}
 	if e.Affects == "enemies" || e.Affects == "allies" {
 		targets = l.around(e, at, continent)
 	}
@@ -212,11 +204,11 @@ func (l *Layer) tickOf(p *Player, holder *vitals, id string, held *activeStatus,
 			h.Amount = math.Round(n)
 			defer l.healedBy(p, on, n, over, ctx, now)
 		case "resource":
-			o := l.players[on.ID]
+			o := l.playerOf(on)
 			if o == nil {
 				continue
 			}
-			n, _ := combat.Roll(amount, l.statsOf(&p.fight.vitals, nil, now), false, l.hub.roll)
+			n, _ := combat.Roll(amount, l.statsOf(&p.fight.unit, nil, now), false, l.hub.roll)
 			given, ok := l.addResource(&o.fight, e.Resource, n)
 			if !ok {
 				continue
@@ -234,21 +226,23 @@ func (l *Layer) tickOf(p *Player, holder *vitals, id string, held *activeStatus,
 }
 
 // around is who an area periodic reaches around its holder, nearest first.
-func (l *Layer) around(e *combat.StatusEffect, at [3]float64, continent string) []*vitals {
+func (l *Layer) around(e *combat.StatusEffect, at [3]float64, continent string) []*unit {
 	type reach struct {
-		v   *vitals
+		v   *unit
 		gap float64
 	}
 	var found []reach
-	l.eachUnit(func(v *vitals, there [3]float64, on string) {
+	for v := range l.units() {
+		there := v.char.At
+		on := v.char.Continent
 		isEnemy := v.ID < 0 // only dummies are enemies, for now
 		if on != continent || isEnemy != (e.Affects == "enemies") {
-			return
+			continue
 		}
 		if gap := distance(at, there); e.Radius <= 0 || gap <= e.Radius {
 			found = append(found, reach{v, gap})
 		}
-	})
+	}
 	slices.SortFunc(found, func(a, b reach) int {
 		if n := cmp.Compare(a.gap, b.gap); n != 0 {
 			return n
@@ -258,7 +252,7 @@ func (l *Layer) around(e *combat.StatusEffect, at [3]float64, continent string) 
 	if e.Max > 0 && len(found) > e.Max {
 		found = found[:e.Max]
 	}
-	out := make([]*vitals, len(found))
+	out := make([]*unit, len(found))
 	for i, each := range found {
 		out[i] = each.v
 	}
@@ -284,8 +278,8 @@ func shownOf(key statusKey, held *activeStatus, now time.Time) shownStatus {
 
 // refit brings what's kept from a unit's stats up to date: its most health, keeping the share it
 // has, and a player's speed.
-func (l *Layer) refit(v *vitals, now time.Time) {
-	o := l.players[v.ID]
+func (l *Layer) refit(v *unit, now time.Time) {
+	o := l.playerOf(v)
 	if look := lookOn(v); !bytes.Equal(look, v.lookShown) {
 		v.lookShown = look
 		l.tellOf(v.ID, encode(lookMessage{"look", v.ID, look}))
@@ -328,7 +322,7 @@ func (l *Layer) refit(v *vitals, now time.Time) {
 }
 
 // controlsOn is the controls a unit's statuses hold it with, sorted, each once, less those it's immune to.
-func (l *Layer) controlsOn(v *vitals) []string {
+func (l *Layer) controlsOn(v *unit) []string {
 	var out []string
 	now := l.hub.now()
 	for _, held := range v.Statuses {
@@ -344,7 +338,7 @@ func (l *Layer) controlsOn(v *vitals) []string {
 
 // immunities calls f with each `immune` effect a unit holds right now, until it says true, and
 // says whether it did.
-func (l *Layer) immunities(v *vitals, now time.Time, f func(e *combat.StatusEffect) bool) bool {
+func (l *Layer) immunities(v *unit, now time.Time, f func(e *combat.StatusEffect) bool) bool {
 	for _, held := range v.Statuses {
 		for i := range held.def.Effects {
 			if e := &held.def.Effects[i]; e.Type == "immune" && l.holds(v, e, nil, now) && f(e) {
@@ -356,12 +350,12 @@ func (l *Layer) immunities(v *vitals, now time.Time, f func(e *combat.StatusEffe
 }
 
 // immuneTo says whether a unit is immune to a kind of control.
-func (l *Layer) immuneTo(v *vitals, control string, now time.Time) bool {
+func (l *Layer) immuneTo(v *unit, control string, now time.Time) bool {
 	return l.immunities(v, now, func(e *combat.StatusEffect) bool { return e.All || slices.Contains(e.Controls, control) })
 }
 
 // immuneToDamage says whether a unit takes nothing from a hit of these schools.
-func (l *Layer) immuneToDamage(v *vitals, schools []string, now time.Time) bool {
+func (l *Layer) immuneToDamage(v *unit, schools []string, now time.Time) bool {
 	return l.immunities(v, now, func(e *combat.StatusEffect) bool {
 		if e.All {
 			return true
@@ -372,7 +366,7 @@ func (l *Layer) immuneToDamage(v *vitals, schools []string, now time.Time) bool 
 
 // immuneToStatus says whether a status from someone else bounces off a unit: it's harmful, or
 // holds with a control it's immune to. You can always do it to yourself.
-func (l *Layer) immuneToStatus(v *vitals, s *combat.Status, from int64, now time.Time) bool {
+func (l *Layer) immuneToStatus(v *unit, s *combat.Status, from int64, now time.Time) bool {
 	if v.ID == from {
 		return false
 	}
@@ -386,7 +380,7 @@ func (l *Layer) immuneToStatus(v *vitals, s *combat.Status, from int64, now time
 }
 
 // untargetable says whether nothing can pick a unit as a target right now.
-func (l *Layer) untargetable(v *vitals, now time.Time) bool {
+func (l *Layer) untargetable(v *unit, now time.Time) bool {
 	for _, held := range v.Statuses {
 		for i := range held.def.Effects {
 			e := &held.def.Effects[i]

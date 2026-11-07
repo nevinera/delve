@@ -18,7 +18,7 @@ type taken struct {
 
 // amountFor is what an effect's amount comes to as it lands on someone, with what the fight has
 // kept track of counted.
-func (l *Layer) amountFor(p *Player, c *casting, e *combat.Effect, on *vitals, count int, now time.Time) combat.Amount {
+func (l *Layer) amountFor(p *Player, c *casting, e *combat.Effect, on *unit, count int, now time.Time) combat.Amount {
 	out := amountOf(c, e, count)
 	if e.Split && count > 1 {
 		out = out.Grown(1 / float64(count))
@@ -39,7 +39,7 @@ func (l *Layer) amountFor(p *Player, c *casting, e *combat.Effect, on *vitals, c
 }
 
 // worked adds a `shareOf` to an amount, and grows it by missing health.
-func (l *Layer) worked(p *Player, c *casting, a combat.Amount, on *vitals, now time.Time) combat.Amount {
+func (l *Layer) worked(p *Player, c *casting, a combat.Amount, on *unit, now time.Time) combat.Amount {
 	if a.ShareOf != nil {
 		n := a.ShareOf.Share * l.shareBase(p, c, a.ShareOf, on, now)
 		a.ShareOf = nil
@@ -50,9 +50,9 @@ func (l *Layer) worked(p *Player, c *casting, a combat.Amount, on *vitals, now t
 		who := on
 		switch m.Of {
 		case "self":
-			who = &p.fight.vitals
+			who = &p.fight.unit
 		case "target":
-			if t := l.unitWithID(c.target, p.state.Continent); t != nil {
+			if t := l.unit(c.target, p.state.Continent); t != nil {
 				who = t
 			}
 		}
@@ -65,10 +65,10 @@ func (l *Layer) worked(p *Player, c *casting, a combat.Amount, on *vitals, now t
 }
 
 // shareBase is what a `shareOf` is a share of.
-func (l *Layer) shareBase(p *Player, c *casting, s *combat.ShareOf, on *vitals, now time.Time) float64 {
+func (l *Layer) shareBase(p *Player, c *casting, s *combat.ShareOf, on *unit, now time.Time) float64 {
 	switch s.Of {
 	case "recentDamage":
-		who := &p.fight.vitals
+		who := &p.fight.unit
 		if s.On == "target" {
 			who = on
 		}
@@ -101,9 +101,9 @@ func (l *Layer) shareBase(p *Player, c *casting, s *combat.ShareOf, on *vitals, 
 	case "effect":
 		return c.lastDone
 	case "casterMaxHealth":
-		return p.fight.vitals.MaxHealth
+		return p.fight.unit.MaxHealth
 	case "unitMaxHealth":
-		if u := l.unitWithID(c.target, p.state.Continent); u != nil {
+		if u := l.unit(c.target, p.state.Continent); u != nil {
 			return u.MaxHealth
 		}
 	case "maxResource":
@@ -141,7 +141,7 @@ func leftToDo(held *activeStatus, now time.Time) float64 {
 }
 
 // counted is what a `perCount` comes to.
-func (l *Layer) counted(p *Player, c *combat.PerCount, on *vitals, now time.Time) float64 {
+func (l *Layer) counted(p *Player, c *combat.PerCount, on *unit, now time.Time) float64 {
 	weigh := func(id string) float64 {
 		if n, ok := c.Weights[id]; ok {
 			return n
@@ -169,11 +169,12 @@ func (l *Layer) counted(p *Player, c *combat.PerCount, on *vitals, now time.Time
 	case c.Resource != "":
 		n = p.fight.resources[c.Resource]
 	case c.Holders != "":
-		l.eachUnit(func(v *vitals, _ [3]float64, continent string) {
+		for v := range l.units() {
+			continent := v.char.Continent
 			if continent == p.state.Continent && v.Statuses[statusKey{c.Holders, p.ID()}] != nil {
 				n++
 			}
-		})
+		}
 	}
 	if c.Max > 0 {
 		n = min(n, c.Max)
@@ -182,7 +183,7 @@ func (l *Layer) counted(p *Player, c *combat.PerCount, on *vitals, now time.Time
 }
 
 // critRules is what an effect says about crits, for the hit it's landing.
-func (l *Layer) critRules(p *Player, e *combat.Effect, on *vitals, ctx *combat.HitContext, now time.Time) {
+func (l *Layer) critRules(p *Player, e *combat.Effect, on *unit, ctx *combat.HitContext, now time.Time) {
 	ctx.AlwaysCrit, ctx.ScalesWithCrit, ctx.CritMultiplier = e.AlwaysCrit, e.ScalesWithCrit, e.CritMultiplier
 	if len(e.AlwaysCritWhen) > 0 {
 		if _, ok := combat.All(e.AlwaysCritWhen, l.facts(p, on.ID, now)); ok {
@@ -192,7 +193,7 @@ func (l *Layer) critRules(p *Player, e *combat.Effect, on *vitals, ctx *combat.H
 }
 
 // soak takes what a unit's absorbs catch out of a hit, and says what's left.
-func (l *Layer) soak(on *vitals, n float64, schools []string, h *hit, now time.Time) float64 {
+func (l *Layer) soak(on *unit, n float64, schools []string, h *hit, now time.Time) float64 {
 	keys := make([]statusKey, 0, len(on.Statuses))
 	for key, held := range on.Statuses {
 		if held.absorb > 0 {
@@ -234,8 +235,8 @@ func absorbsFrom(s *combat.Status, schools []string) bool {
 }
 
 // startAbsorb sizes a status's absorb as it goes on: its own amount, or what applied it says.
-func (l *Layer) startAbsorb(p *Player, held *activeStatus, given *combat.Amount, on *vitals, now time.Time) {
-	stats := l.statsOf(&p.fight.vitals, nil, now)
+func (l *Layer) startAbsorb(p *Player, held *activeStatus, given *combat.Amount, on *unit, now time.Time) {
+	stats := l.statsOf(&p.fight.unit, nil, now)
 	has := false
 	for i := range held.def.Effects {
 		e := &held.def.Effects[i]
@@ -257,8 +258,8 @@ func (l *Layer) startAbsorb(p *Player, held *activeStatus, given *combat.Amount,
 }
 
 // keepShare adds to what `store` effects hold, for what's just been done.
-func (l *Layer) keepShare(doer *vitals, doerID int64, on string, n float64, ctx *combat.HitContext) {
-	l.eachUnit(func(v *vitals, _ [3]float64, _ string) {
+func (l *Layer) keepShare(doer *unit, doerID int64, on string, n float64, ctx *combat.HitContext) {
+	for v := range l.units() {
 		for key, held := range v.Statuses {
 			for i := range held.def.Effects {
 				e := &held.def.Effects[i]
@@ -277,11 +278,11 @@ func (l *Layer) keepShare(doer *vitals, doerID int64, on string, n float64, ctx 
 				held.stored += e.Share * n
 			}
 		}
-	})
+	}
 }
 
 // absorbOn is how much a unit's absorbs have left.
-func absorbOn(v *vitals) float64 {
+func absorbOn(v *unit) float64 {
 	total := 0.0
 	for _, held := range v.Statuses {
 		total += held.absorb
@@ -290,7 +291,7 @@ func absorbOn(v *vitals) float64 {
 }
 
 // spill lands a share of a hit on others near whoever it hit: a status's or an ability's `extraTargets`.
-func (l *Layer) spill(p *Player, c *casting, e *combat.Effect, on *vitals, center [3]float64, continent string, n float64, count int, now time.Time) {
+func (l *Layer) spill(p *Player, c *casting, e *combat.Effect, on *unit, center [3]float64, continent string, n float64, count int, now time.Time) {
 	land := func(x *combat.ExtraTargets) bool {
 		if x.Hit == "single" && count > 1 {
 			return false
@@ -298,7 +299,7 @@ func (l *Layer) spill(p *Player, c *casting, e *combat.Effect, on *vitals, cente
 		if _, ok := combat.All(x.When, l.facts(p, on.ID, now)); !ok {
 			return false
 		}
-		others := []*vitals{}
+		others := []*unit{}
 		for _, v := range l.inArea(areaOf{center: center, continent: continent, affects: "enemies", radius: x.Radius}) {
 			if v != on && (x.Max == 0 || len(others) < x.Max) {
 				others = append(others, v)
@@ -323,7 +324,7 @@ func (l *Layer) spill(p *Player, c *casting, e *combat.Effect, on *vitals, cente
 	if c.ability.ExtraTargets != nil {
 		land(c.ability.ExtraTargets)
 	}
-	v := &p.fight.vitals
+	v := &p.fight.unit
 	for key, held := range v.Statuses {
 		for i := range held.def.Effects {
 			se := &held.def.Effects[i]

@@ -50,11 +50,11 @@ func TestEnteringWhileLingeringTakesOver(t *testing.T) {
 	h := NewHub(fightWorld{}, characters(nil))
 	clockOf(h)
 	p := enter(t, h, 1)
-	p.fight.vitals.Health = 40
+	p.fight.unit.Health = 40
 	h.Leave(p)
 	again := enter(t, h, 1)
-	if again.layer.players[1] != again || again.fight.vitals.Health != 40 {
-		t.Fatalf("took over with health %v", again.fight.vitals.Health)
+	if again.layer.players[1] != again || again.fight.unit.Health != 40 {
+		t.Fatalf("took over with health %v", again.fight.unit.Health)
 	}
 }
 
@@ -97,10 +97,10 @@ func TestStateIsKeptForTenMinutes(t *testing.T) {
 	h.Tick()
 	use(t, p, "homeward")
 	pass(h, c, 10.2)
-	p.fight.vitals.Health = 30
+	p.fight.unit.Health = 30
 	start := h.now()
 	key := statusKey{"chill001", 1}
-	p.fight.vitals.Statuses[key] = &activeStatus{def: p.fight.class.Status("chill001"), since: start, until: start.Add(60 * time.Second), stacks: 1}
+	p.fight.unit.Statuses[key] = &activeStatus{def: p.fight.class.Status("chill001"), since: start, until: start.Add(60 * time.Second), stacks: 1}
 	gone(h, p)
 
 	// Five minutes later: the cooldown has run on, the status has stood still.
@@ -113,7 +113,7 @@ func TestStateIsKeptForTenMinutes(t *testing.T) {
 	if got := heard(p, "cooldown"); len(got) != 1 || got[0]["ability"] != "homeward" || got[0]["seconds"].(float64) > 1200-300 {
 		t.Fatalf("cooldowns = %v", got)
 	}
-	if held := p.fight.vitals.Statuses[key]; held == nil || held.until.Sub(h.now()) < 39*time.Second {
+	if held := p.fight.unit.Statuses[key]; held == nil || held.until.Sub(h.now()) < 39*time.Second {
 		t.Fatalf("status = %+v", held)
 	}
 
@@ -121,8 +121,8 @@ func TestStateIsKeptForTenMinutes(t *testing.T) {
 	gone(h, p)
 	*c += 601
 	p = enter(t, h, 1)
-	if p.fight.vitals.Health != p.fight.vitals.MaxHealth || len(p.fight.cooldowns) != 0 {
-		t.Fatalf("health %v, cooldowns %v", p.fight.vitals.Health, p.fight.cooldowns)
+	if p.fight.unit.Health != p.fight.unit.MaxHealth || len(p.fight.cooldowns) != 0 {
+		t.Fatalf("health %v, cooldowns %v", p.fight.unit.Health, p.fight.cooldowns)
 	}
 }
 
@@ -168,19 +168,19 @@ func TestRestingIsAStatus(t *testing.T) {
 	p := enter(t, h, 1)
 	h.Tick()
 	key := statusKey{"resting", 1}
-	if p.fight.vitals.Statuses[key] != nil {
+	if p.fight.unit.Statuses[key] != nil {
 		t.Fatal("resting away from a rest area")
 	}
 	move(t, p, 300, 300)
 	heard(p)
 	h.Tick()
-	if got := heard(p, "statusOn"); len(got) != 1 || got[0]["status"] != "resting" || p.fight.vitals.Statuses[key] == nil {
+	if got := heard(p, "statusOn"); len(got) != 1 || got[0]["status"] != "resting" || p.fight.unit.Statuses[key] == nil {
 		t.Fatalf("statusOn = %v", got)
 	}
 	move(t, p, 100, 100)
 	heard(p)
 	h.Tick()
-	if p.fight.vitals.Statuses[key] != nil {
+	if p.fight.unit.Statuses[key] != nil {
 		t.Fatal("still resting after leaving the area")
 	}
 }
