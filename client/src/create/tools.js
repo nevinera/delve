@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { Units } from "./units.js";
-import { RestAreas } from "./restAreas.js";
+import { ContinentAreas } from "./continentAreas.js";
 import { CAVE_THEMES, VOXEL_FT } from "../v2/caves.js";
 import { slabHome } from "../world/slabs.js";
 import { SEA_LEVEL_FT } from "../v2/sizes.js";
@@ -100,9 +100,9 @@ export class Tools {
     this.water = new WaterBodies(scene, (x, z) => this.surface(x, z), parent, (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT);
     const stillAt = (x, z) => this.water.at(x, z)?.level ?? (renditions.seaAt(x, z) ? SEA_LEVEL_FT : null);
     this.courses = new Courses(scene, (x, z) => this.surface(x, z), parent, (x, z) => renditions.baseAt(x, z), stillAt);
-    this.restAreas = new RestAreas(scene, (x, z) => this.surface(x, z), parent, () => this.units.here(this.units.restPoints));
+    this.areas = new ContinentAreas(scene, (x, z) => this.surface(x, z), parent, () => this.units.here(this.units.restPoints));
     this.roads = new Roads(scene, (x, z) => this.surface(x, z), parent, (x, z) => renditions.baseAt(x, z));
-    this.outlined = { biomes: this.biomes, water: this.water, courses: this.courses, roads: this.roads, restArea: this.restAreas }; // each tool that draws areas, its areas
+    this.outlined = { biomes: this.biomes, water: this.water, courses: this.courses, roads: this.roads, restArea: this.areas }; // each tool that draws areas, its areas
     this.drawTool = new DrawTool(this, { scene, parent, renditions, ground, heightAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, biomes: this.biomes });
     this.draw = this.drawTool.draw;
     this.build = new Build({
@@ -364,7 +364,8 @@ export class Tools {
     this.water.setShown(tool === "water" || tool === "courses");
     this.courses.setShown(tool === "courses" || tool === "water");
     this.roads.setShown(tool === "roads");
-    this.restAreas.setShown(tool === "restArea" || UNITS.has(tool));
+    this.areas.setShown(tool === "restArea" || UNITS.has(tool));
+    this.areas.forRest = tool === "restArea";
     if (tool === "map") this.map.refresh();
     this.map.toggle(tool === "map");
     if (BUILD.has(tool) || BUILD.has(this.build.tool)) this.build.setTool(BUILD.has(tool) ? tool : null);
@@ -460,9 +461,11 @@ export class Tools {
     this.plan.tick(this.inEarth());
     this.polish.tick();
     if (this.work === "caves") this.showCaves();
-    for (const [tool, areas] of Object.entries(this.outlined)) {
-      const to = this.tool === tool && areas.draft && this.hit();
-      areas.tick(dt, this.camera, w, h, to ? [to[0], to[2]] : null, this.tool === tool);
+    // Tools can share areas, which tick once.
+    for (const areas of new Set(Object.values(this.outlined))) {
+      const active = this.outlined[this.tool] === areas;
+      const to = active && areas.draft && this.hit();
+      areas.tick(dt, this.camera, w, h, to ? [to[0], to[2]] : null, active);
     }
     this.measure.tick(this.camera, w, h, this.tool === "measure");
     const worker = this.worker();

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "regions.schema.json",
+  "title": "places/continents/<c>/regions.json",
+  "description": "A continent's areas: polygons on the ground that other things point at by id.",
+  "type": "object",
+  "required": [
+    "version",
+    "areas"
+  ],
+  "properties": {
+    "version": {
+      "const": 1
+    },
+    "areas": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "points"
+        ],
+        "properties": {
+          "id": {
+            "$ref": "common.schema.json#/$defs/id",
+            "description": "the area's own, apart from whatever points at it"
+          },
+          "points": {
+            "type": "array",
+            "minItems": 3,
+            "description": "[x, z] corners in continent feet",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "number"
+              },
+              "minItems": 2,
+              "maxItems": 2
+            }
+          },
+          "notes": {
+            "type": "string",
+            "description": "free-form notes on intent and backstory; the game never reads them"
+          }
+        }
+      }
+    }
+  }
+}

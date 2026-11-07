@@ -28,12 +28,13 @@ type World struct {
 	Repo, Sha    string
 	Continents   []string
 	Spawn        Spawn
-	Dummies      []Dummy         // training dummies
-	RestPoints   []RestPoint     // places characters can make their home
-	Classes      []*combat.Class // by id
-	Creatures    []*Creature     // by id
-	Placed       []Placed        // mobs placed by hand
-	path, prefix string          // the zip it was read from, and its top directory
+	Dummies      []Dummy           // training dummies
+	RestPoints   []RestPoint       // places characters can make their home
+	Classes      []*combat.Class   // by id
+	Creatures    []*Creature       // by id
+	Placed       []Placed          // mobs placed by hand
+	Areas        map[string][]Area // each continent's areas, from its regions.json
+	path, prefix string            // the zip it was read from, and its top directory
 }
 
 // Spawn is where characters new to the world start: a continent and a place in its feet.
@@ -54,8 +55,24 @@ type RestPoint struct {
 	Name      string     `json:"name"`
 	Continent string     `json:"continent"`
 	At        [2]float64 `json:"at"`
-	// Area is where characters are resting, [x, z] corners in continent feet, or none.
-	Area [][2]float64 `json:"area"`
+	// AreaID is the area (in the continent's regions.json) where characters are resting, or "".
+	AreaID areaRef `json:"area"`
+	// Area is that area's corners, [x, z] in continent feet, or none.
+	Area [][2]float64 `json:"-"`
+}
+
+// areaRef is an area's id. Anything else, such as the polygon rest points held before areas, reads
+// as no area.
+type areaRef string
+
+func (r *areaRef) UnmarshalJSON(b []byte) error {
+	var id string
+	if json.Unmarshal(b, &id) != nil {
+		log.Printf("worlds: a rest point's area isn't an area's id: convert the world with script/rest-areas.mjs")
+		return nil
+	}
+	*r = areaRef(id)
+	return nil
 }
 
 // Resting says whether a place on a continent is in a rest point's area.
@@ -200,6 +217,18 @@ func Read(path string) (*World, error) {
 	w.Classes = readClasses(files)
 	w.Creatures = readCreatures(files)
 	w.Placed = readPlacedMobs(files, w.Continents, w.Creature)
+	w.Areas = readAreas(files, w.Continents)
+	for i := range w.RestPoints {
+		r := &w.RestPoints[i]
+		if r.AreaID == "" {
+			continue
+		}
+		if area := w.Area(r.Continent, string(r.AreaID)); area != nil {
+			r.Area = area.Points
+		} else {
+			log.Printf("worlds: rest point %s points at an area there isn't: %s", r.ID, r.AreaID)
+		}
+	}
 	return w, nil
 }
 

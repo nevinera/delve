@@ -2,7 +2,6 @@ import "../errors/install.js";
 import { setReportContext } from "../report/button.js";
 import "./create.css";
 import * as THREE from "three";
-import { areasOf, giveAreas } from "./restAreas.js";
 import { alert } from "./alerts.js";
 import { strFromU8, strToU8, unzipSync, zip, zipSync } from "fflate";
 import { PLATE_PATH, decodePlate } from "../v2/plate.js";
@@ -12,6 +11,7 @@ import { BIOME_NAMES } from "../v2/biomes.js";
 import { waterPath } from "../v2/water.js";
 import { mapPinsPath } from "../v2/mapPins.js";
 import { spawnsPath } from "../world/paths.js";
+import { moveRestAreas, regionsPath } from "../v2/regions.js";
 import { roadsPath } from "../v2/roads.js";
 import { allEdges, wetIn } from "../v2/roadEdges.js";
 import { crossingThings } from "../v2/roadCrossings.js";
@@ -127,6 +127,16 @@ async function download({ name, files }, changes, save) {
 
 function start(world, changes, fresh) {
   const { name, continent, renditions } = world;
+  // Rest points that hold their own polygon get areas in regions.json, as script/rest-areas.mjs
+  // does, kept as changes.
+  const converting = new Map(world.files);
+  if (moveRestAreas(converting)) {
+    for (const [path, bytes] of converting) {
+      if (world.files.get(path) === bytes) continue;
+      world.files.set(path, bytes);
+      changes.set(path, bytes);
+    }
+  }
   $("open").hidden = true;
   $("worldName").textContent = name;
   const canvas = $("view");
@@ -350,6 +360,9 @@ function start(world, changes, fresh) {
   );
   // A world with no map pins gets no map file, unless it had one.
   ownFiles.add({ path: mapPinsPath(continent), load: (j) => tools.pinStore.load(j), ...json(tools.pinStore), keep: (had) => had || tools.pinStore.pins.length > 0 }, 0);
+  // The continent's areas, which rest points point at. A world with none gets no regions file,
+  // unless it had one.
+  ownFiles.add({ path: regionsPath(continent), load: (j) => tools.areas.load(j), ...json(tools.areas), keep: (had) => had || tools.areas.areas.length > 0 }, 0);
   // Mobs placed by hand, in spawns.json beside the regions and NPCs. A world with none gets no
   // spawns file, unless it had one.
   ownFiles.add({ path: spawnsPath(continent), load: (j) => tools.units.loadSpawns(j), toJSON: () => tools.units.spawnsJSON(), version: () => tools.units.mobVersion, keep: (had) => had || tools.units.mobs().length > 0 }, 0);
@@ -432,6 +445,7 @@ function start(world, changes, fresh) {
     $("dummyCount").textContent = count(worldInfo().dummies, "dummy", "dummies");
     $("restCount").textContent = count(worldInfo().restPoints, "rest point", "rest points");
   };
+  let restAreaIds = new Set((worldInfo().restPoints ?? []).filter((r) => r.continent === continent && r.area).map((r) => r.area));
   const keepUnits = async ({ spawn, dummies, restPoints }) => {
     const info = worldInfo();
     if (spawn) info.spawn = spawn;
@@ -439,8 +453,14 @@ function start(world, changes, fresh) {
     if (!dummies.length) delete info.dummies;
     info.restPoints = restPoints;
     if (!restPoints.length) delete info.restPoints;
-    // A rest point taken away takes its area with it.
-    if (!tools.restAreas.draft) tools.restAreas.show(areasOf(restPoints, continent));
+    // An area a rest point stops pointing at, when it's taken away or given another, goes too.
+    const pointed = new Set(restPoints.filter((r) => r.continent === continent && r.area).map((r) => r.area));
+    for (const id of restAreaIds) {
+      const area = !pointed.has(id) && tools.areas.byId(id);
+      if (area) tools.areas.removeArea(area);
+    }
+    restAreaIds = pointed;
+    tools.areas.recolor();
     changes.set("world.json", strToU8(`${JSON.stringify(info, null, 2)}\n`));
     await store.set("changes", changes).catch(() => {});
     showSpawn();
@@ -508,9 +528,12 @@ function start(world, changes, fresh) {
   restName.querySelector("input").addEventListener("input", (e) => tools.units.rename(e.target.value.trim()));
   tools.units.load({ continent, spawn: worldInfo().spawn, dummies: worldInfo().dummies, restPoints: worldInfo().restPoints });
   tools.units.onChange = keepUnits;
-  tools.restAreas.load(areasOf(worldInfo().restPoints ?? [], continent));
-  tools.restAreas.onChange = () => {
-    giveAreas(tools.units.restPoints, tools.restAreas.toJSON(), continent);
+  // The resting area tool gives a rest point the area it draws, and a rest point whose area is
+  // taken away has none.
+  tools.areas.recolor();
+  tools.areas.onRest = (rest, id) => (rest.area = id);
+  tools.areas.onChange = () => {
+    for (const rest of tools.units.here(tools.units.restPoints)) if (rest.area && !tools.areas.byId(rest.area)) delete rest.area;
     tools.units.changed();
   };
   showSpawn();

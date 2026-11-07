@@ -2,7 +2,7 @@
 
 Every file in a version 2 world, plus the game protocol. JSON Schemas are in [docs/schema](../docs/schema). When a format and its code disagree, the code wins: fix this file in the same commit.
 
-A change to a format has to reach every reader of it. The client's is in the code column below. The game server and bots (`game-server/internal/worlds/`) also read `world.json`, plates, placed and caves files, and `water.json`. Regenerate their shared test world with `node game-server/internal/worlds/testdata/world.mjs`. `.agents/skills/measure-world/measure.mjs` decodes plates, platters and caves.
+A change to a format has to reach every reader of it. The client's is in the code column below. The game server and bots (`game-server/internal/worlds/`) also read `world.json`, plates, placed and caves files, `water.json`, `regions.json` and `spawns.json`. Regenerate their shared test world with `node game-server/internal/worlds/testdata/world.mjs`. `.agents/skills/measure-world/measure.mjs` decodes plates, platters and caves.
 
 - [A world's files](#a-worlds-files)
 - [Plates](#plates) and [platters](#platters)
@@ -11,6 +11,7 @@ A change to a format has to reach every reader of it. The client's is in the cod
 - [Biomes, planning marks and water](#biomes-planning-marks-and-water)
 - [Roads](#roads)
 - [Map pins](#map-pins)
+- [Areas](#areas)
 - [Bodies](#bodies)
 - [Game data](#game-data)
 - [The game protocol](#the-game-protocol)
@@ -41,6 +42,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 | `places/continents/<c>/water.json` | the water's bodies and courses | [below](#biomes-planning-marks-and-water) | `client/src/v2/water.js`, `courses.js` |
 | `places/continents/<c>/roads.json` | footpaths, trails and roads | [below](#roads), [schema](../docs/schema/roads.schema.json) | `client/src/v2/roads.js`, `client/src/create/roads.js`, `client/src/play/loader.js` |
 | `places/continents/<c>/map.json` | map pins: places marked on the map in play | [Map pins](#map-pins), [schema](../docs/schema/map.schema.json) | `client/src/v2/mapPins.js`, `client/src/play/loader.js` |
+| `places/continents/<c>/regions.json` | areas: polygons that rest points and other things point at | [Areas](#areas), [schema](../docs/schema/regions.schema.json) | `client/src/v2/regions.js`, `client/src/create/continentAreas.js`, `game-server/internal/worlds/areas.go` |
 | `places/continents/<c>/spawns.json` | spawn regions, and mobs and NPCs placed one at a time | [Spawns](#spawns), [schema](../docs/schema/spawns.schema.json) | `client/src/create/units.js`, `game-server/internal/worlds/creatures.go` |
 
 The JSON files that describe things (the world, objects, templates and game data) can have `notes`: free-form text on what a thing is for and its backstory. The game never reads them.
@@ -516,6 +518,16 @@ Across, a road is level, and trails and footpaths lean with the ground as far as
 ```
 
 An `id` is 1 to 32 lowercase letters, digits and dashes, starting with a letter or digit, and unique on its continent, for other files to point at. A `name` is 1 to 64 characters. Readers leave out a pin that isn't whole. A continent with no pins has no file.
+
+## Areas
+
+`regions.json` holds a continent's areas: polygons on the ground, of any size, that other things point at by id. Areas can overlap. An area's `id` is its own, apart from whatever points at it, and `points` are its `[x, z]` corners in continent feet, three or more. Readers leave out an area that isn't whole. /create draws them with the tools that use them: rest points' with units' resting area tool. A continent with no areas has no file. Code: `client/src/v2/regions.js`. [Schema](../docs/schema/regions.schema.json).
+
+```json
+{ "version": 1, "areas": [{ "id": "areak2m9", "points": [[4199, -7357.3], [4221.2, -7380], [4180, -7402]] }] }
+```
+
+A rest point in `world.json` points at the area where characters are resting by its id, as `area`. Worlds saved before areas held the polygon on the rest point itself: `node script/rest-areas.mjs` moves those into `regions.json`, and /create does the same as it opens one.
 
 ## Bodies
 
@@ -1174,7 +1186,7 @@ A token is `<payload>.<signature>`, both base64url without padding. The payload 
 - The game server keeps each released commit's zip on disk, keyed by repo and sha, and downloads it from GitHub the first time someone enters it. A world stays in memory while it has players, and unloads a few minutes after the last one leaves.
 - Rails gives the character's last position in the world, or none. With none, the character starts at the world's spawn point (`spawn` in `world.json`). A character still connected elsewhere in the same layer, or still lingering there, keeps where it is there, and its health, resources, cooldowns and statuses.
 - **Logging off:** you can't start in combat. It takes 20 s, and moving, using an ability or getting into combat calls it off. Then the server says `loggedOff` and closes the connection, and the character leaves at once.
-- **Resting:** inside a rest point's `area` (in `world.json`), logging off and exiting are both at once, and the character doesn't linger.
+- **Resting:** inside the [area](#areas) a rest point points at, logging off and exiting are both at once, and the character doesn't linger.
 - **Lingering:** when a connection ends any other way, the character stays in the world for 20 s, standing still. It can be hit, and its statuses run on.
 - **Coming back:** for 10 minutes after a character leaves, the server keeps its health, resources, cooldowns and lockouts, and the statuses it put on itself, and gives them back if it enters the same release of the world with the same class and level. Its statuses stand still while it's gone, and its cooldowns and lockouts keep running.
 - The open world runs as layers (copies). The server puts each entering character on a layer. For now each world has one.

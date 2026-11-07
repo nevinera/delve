@@ -1,7 +1,7 @@
 import { PICK_PX } from "./areas.js";
 
 // The tools that draw areas (areas.js): geo's biomes (biomes.js), water (water.js), roads
-// (roads.js) and courses (courses.js), and units' rest areas (restAreas.js). Clicking corners
+// (roads.js) and courses (courses.js), units' resting areas (continentAreas.js). Clicking corners
 // draws an area, closed by clicking its first corner, double-clicking or Enter, and Esc throws it
 // away. Roads and courses are open lines, courses from their source down. Clicking an area or its
 // outline picks it out; then its corners drag, shift-clicking one takes it away, dragging an edge

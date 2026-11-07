@@ -41,7 +41,8 @@
 - **Rest point:** a place in a world that a character can make their **home**. **Homeward** is the ability every class has that takes them back to it.
 - **Bot:** a script playing a character (`script/game/bot`).
 - **Mob:** a creature in play, any unit the game server runs that isn't a player. A **training dummy** is a mob that never dies or fights back unless you spar with it.
-- **Zone:** a named region of a continent. **Area:** a named region inside one zone.
+- **Area:** a polygon on a continent, of any size, with its own id, kept in `regions.json`. Areas can overlap. Zones, regions, spawn areas and rest points point at them by id.
+- **Zone:** a named part of a continent. **Region:** a named sub-zone, inside one zone.
 - **Effect area:** the ground an ability's effect covers, or a lasting `effectArea` effect or aura that keeps a status on those inside. Never just "area" or "zone".
 
 ## Creature names
