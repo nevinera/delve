@@ -53,6 +53,10 @@
         "dummy": {
           "type": "boolean"
         },
+        "dead": {
+          "type": "boolean",
+          "description": "a mob that has died, lying where it fell until it comes back"
+        },
         "health": {
           "type": "number"
         },
@@ -210,6 +214,9 @@
         },
         {
           "$ref": "#/$defs/server.vanish"
+        },
+        {
+          "$ref": "#/$defs/server.died"
         },
         {
           "$ref": "#/$defs/server.moved"
@@ -693,6 +700,24 @@
       ],
       "type": "object",
       "x-go": "appear"
+    },
+    "server.died": {
+      "additionalProperties": false,
+      "description": "A mob died, and lies where it fell",
+      "properties": {
+        "type": {
+          "const": "died"
+        },
+        "id": {
+          "type": "integer"
+        }
+      },
+      "required": [
+        "type",
+        "id"
+      ],
+      "type": "object",
+      "x-go": "died"
     },
     "server.effectArea": {
       "additionalProperties": false,

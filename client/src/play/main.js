@@ -193,6 +193,7 @@ async function play() {
   const appear = (character) => {
     unitStatuses.seen(character);
     tell("appear", character);
+    fight("appeared")(character.id);
   };
   status("Entering...");
   const { connection, you } = await step("enter", enter({
@@ -202,6 +203,7 @@ async function play() {
       unitStatuses.vanish(id);
       tell("vanish", id);
     },
+    died: ({ id }) => tell("died", id),
     statusOn: (message) => unitStatuses.on(message),
     absorb: (message) => unitStatuses.absorb(message),
     moved: (message) => tell("moved", message),

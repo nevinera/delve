@@ -246,16 +246,15 @@ func (cm *Combat) harm(u *unit, on *unit, n float64, h *hit, now time.Time) {
 	if o := cm.state.playerUnit(on); o != nil {
 		o.fight.since["damageTaken"] = now
 	}
-	after := on.Health - n
-	if on.mob != nil && !on.mob.training {
-		after = max(after, 1) // mobs can't die yet
-	}
-	cm.state.setHealth(on, after)
+	cm.state.setHealth(on, on.Health-n)
 	h.Amount = math.Round(n)
 	cm.breakStatuses(on, "damage", nil)
 	if d := on.mob; d != nil && d.training {
 		d.tally(n, now)
 		h.DPS = math.Round(d.dps(now))
 		cm.state.setHealth(on, on.MaxHealth) // it's always at full health
+	}
+	if d := on.mob; d != nil && !d.training && on.Health <= 0 {
+		cm.dies(d, now)
 	}
 }

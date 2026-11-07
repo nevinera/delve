@@ -79,6 +79,8 @@ type mob struct {
 	training bool             // it's a training dummy
 	creature *worlds.Creature // what it is, if it was placed in a spawns file
 	home     [3]float64       // where it was placed
+	placing  worlds.Placed    // how it was placed, to come back the same way
+	backAt   time.Time        // when it comes back, while it's dead
 	firstHit time.Time
 	lastHit  time.Time
 	damage   float64
@@ -254,6 +256,9 @@ func (cm *Combat) tick(now time.Time) {
 	}
 	cm.landings = later
 	for _, d := range cm.state.mobList() {
+		if d.char.Dead && !now.Before(d.backAt) {
+			cm.state.comeBack(d)
+		}
 		if !d.lastHit.IsZero() && now.Sub(d.lastHit) >= dummyResetIdle {
 			d.firstHit, d.lastHit, d.damage = time.Time{}, time.Time{}, 0
 		}

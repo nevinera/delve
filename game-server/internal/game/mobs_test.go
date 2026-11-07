@@ -6,6 +6,7 @@ import (
 	"math"
 	"testing"
 
+	"github.com/delve-mmo/delve3d/game-server/internal/combat"
 	"github.com/delve-mmo/delve3d/game-server/internal/worlds"
 )
 
@@ -45,13 +46,40 @@ func TestPlacedCreaturesStandInTheWorld(t *testing.T) {
 		t.Fatalf("the far goblin = %+v", far.char)
 	}
 
-	// It takes damage, but can't die yet.
+	// At no health it dies, can't be targeted, and comes back where it was after its respawn time.
+	c := clockOf(h)
 	gob := p.layer.mobs[1]
+	gob.placing.Respawn = 30
+	heard(p)
 	p.layer.mu.Lock()
 	p.layer.combat.harm(&p.fight.unit, &gob.unit, 1000, &hit{}, h.now())
+	dead := p.layer.combat.untargetable(&gob.unit, h.now())
 	p.layer.mu.Unlock()
-	if gob.Health != 1 || gob.damage != 0 {
-		t.Fatalf("health %v, tally %v", gob.Health, gob.damage)
+	if gob.Health != 0 || !gob.char.Dead || !dead || gob.damage != 0 {
+		t.Fatalf("health %v, dead %v, untargetable %v, tally %v", gob.Health, gob.char.Dead, dead, gob.damage)
+	}
+	if got := heard(p, "died"); len(got) != 1 || got[0]["id"] != float64(gob.ID) {
+		t.Fatalf("died = %v", got)
+	}
+	// What was on its way when it died doesn't land on the body.
+	p.layer.mu.Lock()
+	p.layer.combat.land(&p.fight.unit, &casting{ability: &combat.Ability{ID: "zap"}}, &combat.Effect{Type: "damage", Amount: combat.Amount{Min: 5, Max: 5}}, &gob.unit, 1, h.now())
+	p.layer.mu.Unlock()
+	if got := heard(p, "hit"); len(got) != 0 || gob.Health != 0 {
+		t.Fatalf("hits on the body = %v, health %v", got, gob.Health)
+	}
+	gob.char.At[0] = 500 // where it fell
+	pass(h, c, 29)
+	if !p.layer.mobs[1].char.Dead {
+		t.Fatal("came back early")
+	}
+	pass(h, c, 1.1)
+	back := p.layer.mobs[1]
+	if back.char.Dead || back.Health != 80 || back.char.At[0] != 100 || back.char.Level != 3 {
+		t.Fatalf("came back as %+v, health %v", back.char, back.Health)
+	}
+	if got := heard(p, "appear"); len(got) != 1 || got[0]["character"].(map[string]any)["dead"] != nil {
+		t.Fatalf("appear = %v", got)
 	}
 }
 

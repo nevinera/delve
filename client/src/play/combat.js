@@ -455,7 +455,7 @@ export class PlayCombat {
   }
 
   tabTarget() {
-    const next = nextTarget(this.visible().filter((u) => u.onScreen && u.gap <= TARGET_FT), this.target);
+    const next = nextTarget(this.visible().filter((u) => u.onScreen && u.gap <= TARGET_FT && !u.drawn.dead), this.target);
     this.setTarget(next?.id ?? null);
   }
 
@@ -541,6 +541,11 @@ export class PlayCombat {
       this.classOf(classId).then((made) => this.statusLists.set(classId, made?.statuses ?? []));
     }
     return this.statusLists.get(classId);
+  }
+
+  // Someone came into view, or came back: if it's who you have targeted, its frame shows it as it is now.
+  appeared(id) {
+    if (id === this.target) this.drawTarget();
   }
 
   drawTarget() {

@@ -13,7 +13,7 @@ import (
 
 // land does one effect to one unit. Effects that aren't here yet do nothing.
 func (cm *Combat) land(u *unit, c *casting, e *combat.Effect, on *unit, count int, now time.Time) {
-	if !cm.chanceHolds(c, e) {
+	if on.dead() || !cm.chanceHolds(c, e) {
 		return
 	}
 	h := hit{Type: "hit", From: u.ID, Ability: c.ability.ID, On: on.ID, Effect: e.Type}

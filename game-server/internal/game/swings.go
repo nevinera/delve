@@ -81,7 +81,7 @@ func (cm *Combat) swing(u *unit, now time.Time) {
 	cm.breakStatuses(&f.unit, "action", func(s *combat.Status) bool { return s.KeptBy != nil })
 	cm.after(now.Add(strikeDelay), nil, func(now time.Time) {
 		d := cm.state.mob(target, "")
-		if !cm.state.present(u) || d == nil {
+		if !cm.state.present(u) || d == nil || d.dead() {
 			return
 		}
 		h := hit{Type: "hit", From: u.ID, On: target, Effect: "damage"}

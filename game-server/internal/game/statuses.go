@@ -351,6 +351,9 @@ func (cm *Combat) immuneToStatus(v *unit, s *combat.Status, from int64, now time
 
 // untargetable says whether nothing can pick a unit as a target right now.
 func (cm *Combat) untargetable(v *unit, now time.Time) bool {
+	if v.dead() {
+		return true
+	}
 	for _, held := range v.Statuses {
 		for i := range held.def.Effects {
 			e := &held.def.Effects[i]

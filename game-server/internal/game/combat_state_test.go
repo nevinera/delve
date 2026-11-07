@@ -87,6 +87,7 @@ func (s *fakeState) tellOf(_ int64, b []byte) {
 func (s *fakeState) tellContinent(_ string, b []byte) { s.tellOf(0, b) }
 func (s *fakeState) acted(*unit, string)              {}
 func (s *fakeState) sendHome(*unit)                   {}
+func (s *fakeState) comeBack(*mob)                    {}
 func (s *fakeState) motionOf(u *unit) *motion {
 	if u.player == nil {
 		return nil

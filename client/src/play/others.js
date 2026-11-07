@@ -109,6 +109,7 @@ export class Others {
       class: character.class,
       level: character.level,
       dummy,
+      dead: Boolean(character.dead),
       health: character.health,
       maxHealth: character.maxHealth,
       model,
@@ -129,6 +130,15 @@ export class Others {
     this.view.scene.add(model, drawn.nameplate);
   }
 
+  // A mob died: it falls, and lies there until it comes back.
+  died(id) {
+    const drawn = this.characters.get(id);
+    if (!drawn) return;
+    drawn.dead = true;
+    drawn.diedAt = performance.now();
+    drawn.health = 0;
+  }
+
   moved(message) {
     const drawn = this.characters.get(message.id);
     if (drawn) this.update(drawn, message);
@@ -138,8 +148,8 @@ export class Others {
   look({ id, look }) {
     const drawn = this.characters.get(id);
     if (!drawn) return;
-    const { name, class: classId, level, dummy, health, maxHealth, dps, at, yaw, move, own } = drawn;
-    this.appear({ id, name, look: look ?? own, class: classId, level, dummy, health, maxHealth, at: [at.x, at.y, at.z], yaw, move });
+    const { name, class: classId, level, dummy, dead, health, maxHealth, dps, at, yaw, move, own } = drawn;
+    this.appear({ id, name, look: look ?? own, class: classId, level, dummy, dead, health, maxHealth, at: [at.x, at.y, at.z], yaw, move });
     const next = this.characters.get(id);
     next.own = own;
     next.dps = dps;
@@ -239,6 +249,16 @@ export class Others {
   animate(drawn, dt, move) {
     drawn.mixer.update(dt);
     if (drawn.dummy || !drawn.clips) return;
+    if (drawn.dead) {
+      // It plays its death once. One seen dead on arriving is already lying there.
+      const death = roleClips(drawn.model.userData.look, drawn.model.userData.skeleton).death;
+      const fell = drawn.diedAt === undefined ? Infinity : (performance.now() - drawn.diedAt) / 1000;
+      drawn.acting = null;
+      drawn.upper?.clear();
+      drawn.legsOnly = false;
+      if (death) this.play(drawn, death, 1, true, Math.min(fell, drawn.clips.get(death)?.duration ?? 0));
+      return;
+    }
     const speed = speedOf(move);
     const now = performance.now();
     if (drawn.acting) drawn.weaponsUntil = now + WEAPONS_OUT_MS;

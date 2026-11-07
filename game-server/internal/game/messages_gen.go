@@ -20,8 +20,10 @@ type Character struct {
 	Class     string          `json:"class,omitempty"`
 	Level     int             `json:"level,omitempty"`
 	Dummy     bool            `json:"dummy,omitempty"`
-	Health    float64         `json:"health"`
-	MaxHealth float64         `json:"maxHealth"`
+	// a mob that has died, lying where it fell until it comes back
+	Dead      bool    `json:"dead,omitempty"`
+	Health    float64 `json:"health"`
+	MaxHealth float64 `json:"maxHealth"`
 	// What it holds, as it comes into view
 	Statuses     []shownStatus `json:"statuses,omitempty"`
 	Untargetable bool          `json:"untargetable,omitempty"`
@@ -79,6 +81,12 @@ type appear struct {
 
 // vanish: someone leaves your area, or the game
 type vanish struct {
+	Type string `json:"type"`
+	ID   int64  `json:"id"`
+}
+
+// died: a mob died, and lies where it fell
+type died struct {
 	Type string `json:"type"`
 	ID   int64  `json:"id"`
 }
