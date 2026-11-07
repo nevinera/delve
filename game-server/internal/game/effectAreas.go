@@ -11,9 +11,9 @@ import (
 
 const randomEffectAreaFt = 20.0 // how far from you an effect area `around` `random` can land
 
-// effectZone is an effect area on the ground or an aura on a unit: while it lasts it keeps a status on those
+// effectArea is an effect area on the ground or an aura on a unit: while it lasts it keeps a status on those
 // inside and lands its effects on them.
-type effectZone struct {
+type effectArea struct {
 	id       int64 // 0 for an aura, which nobody draws
 	follows  int64 // the unit an effect area moves with, if any
 	from     *unit
@@ -63,8 +63,8 @@ func (cm *Combat) placeEffectArea(u *unit, c *casting, e *combat.Effect, now tim
 		u.debugLine("%s: nowhere for its effect area to go", c.ability.Name)
 		return
 	}
-	z := cm.effectZoneOf(u, c.ability, e.Affects, e.Radius, e.Max, e.Status, e.Every, effectsIn(e), e.OnEnter)
-	z.id, z.overlaps = cm.nextEffectZone(), e.Overlaps
+	z := cm.newEffectArea(u, c.ability, e.Affects, e.Radius, e.Max, e.Status, e.Every, effectsIn(e), e.OnEnter)
+	z.id, z.overlaps = cm.nextEffectArea(), e.Overlaps
 	z.line, z.width, z.dir = e.Line, e.Width, lineWay(u, c, e, at)
 	z.until = now.Add(seconds(e.Lasts))
 	z.center = func() ([3]float64, string, bool) { return at, continent, true }
@@ -73,19 +73,19 @@ func (cm *Combat) placeEffectArea(u *unit, c *casting, e *combat.Effect, now tim
 		z.center = func() ([3]float64, string, bool) { return cm.unitAt(follows, at, continent) }
 	}
 	if e.Limit > 0 {
-		cm.limitEffectZones(u, z.kind, e.Limit-1)
+		cm.limitEffectAreas(u, z.kind, e.Limit-1)
 	}
-	cm.addEffectZone(z, continent, now)
+	cm.addEffectArea(z, continent, now)
 	u.debugLine("%s: an effect area %.0f ft across for %g s", c.ability.Name, e.Radius, e.Lasts)
 }
 
-func (cm *Combat) nextEffectZone() int64 {
-	cm.effectZoneCount++
-	return cm.effectZoneCount
+func (cm *Combat) nextEffectArea() int64 {
+	cm.effectAreaCount++
+	return cm.effectAreaCount
 }
 
-func (cm *Combat) effectZoneOf(u *unit, a *combat.Ability, affects string, radius float64, most int, status string, every float64, effects []combat.Effect, onEnter *combat.Effect) *effectZone {
-	return &effectZone{from: u, kind: a.ID, ability: a, affects: affects, radius: radius, max: most, status: status, every: every, effects: effects, onEnter: onEnter, inside: map[int64]*unit{}, next: cm.now().Add(seconds(every))}
+func (cm *Combat) newEffectArea(u *unit, a *combat.Ability, affects string, radius float64, most int, status string, every float64, effects []combat.Effect, onEnter *combat.Effect) *effectArea {
+	return &effectArea{from: u, kind: a.ID, ability: a, affects: affects, radius: radius, max: most, status: status, every: every, effects: effects, onEnter: onEnter, inside: map[int64]*unit{}, next: cm.now().Add(seconds(every))}
 }
 
 // effectsIn is what an effect area does each `every`.
@@ -115,32 +115,32 @@ func (cm *Combat) unitAt(id int64, was [3]float64, continent string) ([3]float64
 	return was, continent, false
 }
 
-// limitEffectZones ends a player's oldest effect zones of a kind, until `keep` are left.
-func (cm *Combat) limitEffectZones(u *unit, kind string, keep int) {
-	var mine []*effectZone
-	for _, z := range cm.effectZones {
+// limitEffectAreas ends a player's oldest effect areas of a kind, until `keep` are left.
+func (cm *Combat) limitEffectAreas(u *unit, kind string, keep int) {
+	var mine []*effectArea
+	for _, z := range cm.effectAreas {
 		if z.from == u && z.kind == kind {
 			mine = append(mine, z)
 		}
 	}
 	for i := 0; i < len(mine)-keep; i++ {
-		cm.endEffectZone(mine[i])
+		cm.endEffectArea(mine[i])
 	}
 }
 
-// addEffectZone puts an effect area on the ground, and shows it to those on its continent.
-func (cm *Combat) addEffectZone(z *effectZone, continent string, now time.Time) {
-	cm.effectZones = append(cm.effectZones, z)
+// addEffectArea puts an effect area on the ground, and shows it to those on its continent.
+func (cm *Combat) addEffectArea(z *effectArea, continent string, now time.Time) {
+	cm.effectAreas = append(cm.effectAreas, z)
 	cm.state.tellContinent(continent, encode(effectAreaMessageOf(z, now)))
 }
 
-// endEffectZone takes an effect zone away, letting go of those inside it, and takes its effect area off the ground.
-func (cm *Combat) endEffectZone(z *effectZone) {
+// endEffectArea takes an effect area away, letting go of those inside it, and takes its effect area off the ground.
+func (cm *Combat) endEffectArea(z *effectArea) {
 	for id := range z.inside {
-		cm.leaveEffectZone(z, id)
+		cm.leaveEffectArea(z, id)
 	}
-	if i := slices.Index(cm.effectZones, z); i >= 0 {
-		cm.effectZones = slices.Delete(cm.effectZones, i, i+1)
+	if i := slices.Index(cm.effectAreas, z); i >= 0 {
+		cm.effectAreas = slices.Delete(cm.effectAreas, i, i+1)
 	}
 	if z.id != 0 {
 		if _, continent, ok := z.center(); ok {
@@ -153,23 +153,23 @@ func (cm *Combat) endEffectZone(z *effectZone) {
 	}
 }
 
-func (cm *Combat) leaveEffectZone(z *effectZone, id int64) {
+func (cm *Combat) leaveEffectArea(z *effectArea, id int64) {
 	on := z.inside[id]
 	delete(z.inside, id)
 	key := statusKey{z.status, z.from.ID}
-	if on != nil && z.status != "" && on.Statuses[key] != nil && on.Statuses[key].effectZone == z {
+	if on != nil && z.status != "" && on.Statuses[key] != nil && on.Statuses[key].effectArea == z {
 		cm.takeOff(on, key)
 	}
 }
 
-// sweepEffectZones keeps effect areas and auras up to date.
-func (cm *Combat) sweepEffectZones(now time.Time) {
-	for _, z := range slices.Clone(cm.effectZones) {
+// sweepEffectAreas keeps effect areas and auras up to date.
+func (cm *Combat) sweepEffectAreas(now time.Time) {
+	for _, z := range slices.Clone(cm.effectAreas) {
 		if !cm.state.present(z.from) || !now.Before(z.until) {
-			cm.endEffectZone(z)
+			cm.endEffectArea(z)
 			continue
 		}
-		cm.touchEffectZone(z, now)
+		cm.touchEffectArea(z, now)
 	}
 	type aura struct {
 		v    *unit
@@ -192,40 +192,40 @@ func (cm *Combat) sweepEffectZones(now time.Time) {
 		if from == nil || a.v.Statuses[a.key] != a.held {
 			continue
 		}
-		z := a.held.effectZones[a.i]
+		z := a.held.effectAreas[a.i]
 		if z == nil {
 			e := &a.held.def.Effects[a.i]
 			var effects []combat.Effect
 			if e.Effect != nil {
 				effects = []combat.Effect{*e.Effect}
 			}
-			z = cm.effectZoneOf(from, &combat.Ability{ID: a.held.def.ID, Name: a.held.def.Name}, e.Affects, e.Radius, e.Max, e.Status, e.Every, effects, nil)
+			z = cm.newEffectArea(from, &combat.Ability{ID: a.held.def.ID, Name: a.held.def.Name}, e.Affects, e.Radius, e.Max, e.Status, e.Every, effects, nil)
 			id := a.v.ID
 			z.center = func() ([3]float64, string, bool) { return cm.unitAt(id, [3]float64{}, "") }
-			if a.held.effectZones == nil {
-				a.held.effectZones = map[int]*effectZone{}
+			if a.held.effectAreas == nil {
+				a.held.effectAreas = map[int]*effectArea{}
 			}
-			a.held.effectZones[a.i] = z
+			a.held.effectAreas[a.i] = z
 		}
-		cm.touchEffectZone(z, now)
+		cm.touchEffectArea(z, now)
 	}
 }
 
-// endEffectZones ends the auras of a status that's coming off.
-func (cm *Combat) endEffectZones(held *activeStatus) {
-	for _, z := range held.effectZones {
-		cm.endEffectZone(z)
+// endEffectAreas ends the auras of a status that's coming off.
+func (cm *Combat) endEffectAreas(held *activeStatus) {
+	for _, z := range held.effectAreas {
+		cm.endEffectArea(z)
 	}
 }
 
-// touchEffectZone works out who's inside an effect zone and does what's due to them.
-func (cm *Combat) touchEffectZone(z *effectZone, now time.Time) {
+// touchEffectArea works out who's inside an effect area and does what's due to them.
+func (cm *Combat) touchEffectArea(z *effectArea, now time.Time) {
 	center, continent, ok := z.center()
 	if !ok {
-		cm.endEffectZone(z)
+		cm.endEffectArea(z)
 		return
 	}
-	found := cm.inEffectArea(effectAreaOf{center: center, continent: continent, affects: z.affects, radius: z.radius, line: z.line, width: z.width, dir: z.dir, most: z.max})
+	found := cm.inEffectArea(effectShape{center: center, continent: continent, affects: z.affects, radius: z.radius, line: z.line, width: z.width, dir: z.dir, most: z.max})
 	here := map[int64]bool{}
 	c := &casting{ability: z.ability}
 	for _, on := range found {
@@ -235,7 +235,7 @@ func (cm *Combat) touchEffectZone(z *effectZone, now time.Time) {
 		}
 		z.inside[on.ID] = on
 		if z.onEnter != nil {
-			cm.effectZoneLands(z, c, z.onEnter, on, len(found), now)
+			cm.effectAreaLands(z, c, z.onEnter, on, len(found), now)
 		}
 		if z.status != "" {
 			cm.keepStatus(z, on, now)
@@ -243,7 +243,7 @@ func (cm *Combat) touchEffectZone(z *effectZone, now time.Time) {
 	}
 	for id := range z.inside {
 		if !here[id] {
-			cm.leaveEffectZone(z, id)
+			cm.leaveEffectArea(z, id)
 		}
 	}
 	if z.every <= 0 || now.Before(z.next) {
@@ -251,18 +251,18 @@ func (cm *Combat) touchEffectZone(z *effectZone, now time.Time) {
 	}
 	z.next = z.next.Add(seconds(z.every))
 	for _, on := range found {
-		if !z.overlaps && cm.olderEffectZoneHas(z, on.ID) {
+		if !z.overlaps && cm.olderEffectAreaHas(z, on.ID) {
 			continue
 		}
 		for i := range z.effects {
-			cm.effectZoneLands(z, c, &z.effects[i], on, len(found), now)
+			cm.effectAreaLands(z, c, &z.effects[i], on, len(found), now)
 		}
 	}
 }
 
-// olderEffectZoneHas says whether an older copy of an effect zone is already working on a unit.
-func (cm *Combat) olderEffectZoneHas(z *effectZone, id int64) bool {
-	for _, other := range cm.effectZones {
+// olderEffectAreaHas says whether an older copy of an effect area is already working on a unit.
+func (cm *Combat) olderEffectAreaHas(z *effectArea, id int64) bool {
+	for _, other := range cm.effectAreas {
 		if other == z {
 			return false
 		}
@@ -273,8 +273,8 @@ func (cm *Combat) olderEffectZoneHas(z *effectZone, id int64) bool {
 	return false
 }
 
-// effectZoneLands lands an effect on someone inside an effect zone. `self` there means them.
-func (cm *Combat) effectZoneLands(z *effectZone, c *casting, e *combat.Effect, on *unit, count int, now time.Time) {
+// effectAreaLands lands an effect on someone inside an effect area. `self` there means them.
+func (cm *Combat) effectAreaLands(z *effectArea, c *casting, e *combat.Effect, on *unit, count int, now time.Time) {
 	if _, ok := combat.All(e.When, cm.facts(z.from, on.ID, now)); !ok {
 		return
 	}
@@ -285,8 +285,8 @@ func (cm *Combat) effectZoneLands(z *effectZone, c *casting, e *combat.Effect, o
 	cm.land(runner, c, e, on, count, now)
 }
 
-// keepStatus puts an effect zone's status on someone inside, for as long as they stay.
-func (cm *Combat) keepStatus(z *effectZone, on *unit, now time.Time) {
+// keepStatus puts an effect area's status on someone inside, for as long as they stay.
+func (cm *Combat) keepStatus(z *effectArea, on *unit, now time.Time) {
 	key := statusKey{z.status, z.from.ID}
 	if on.Statuses[key] != nil {
 		return
@@ -296,13 +296,13 @@ func (cm *Combat) keepStatus(z *effectZone, on *unit, now time.Time) {
 		return
 	}
 	if held := on.Statuses[key]; held != nil {
-		held.effectZone, held.until = z, time.Time{}
+		held.effectArea, held.until = z, time.Time{}
 		cm.statusChanged(on.ID, key, held, now)
 	}
 }
 
-// effectAreaOf is a place to find units in.
-type effectAreaOf struct {
+// effectShape is a place to find units in.
+type effectShape struct {
 	center    [3]float64
 	continent string
 	yaw       float64
@@ -321,7 +321,7 @@ type effectAreaOf struct {
 }
 
 // inEffectArea is who of a side is in an area, nearest first, up to its most.
-func (cm *Combat) inEffectArea(a effectAreaOf) []*unit {
+func (cm *Combat) inEffectArea(a effectShape) []*unit {
 	var found []reach
 	for u := range cm.state.units() {
 		if u.char.Continent != a.continent || !a.side(u) || !a.counts(u) {
@@ -345,7 +345,7 @@ type reach struct {
 }
 
 // side says whether a unit is on the side an effect area affects. Only dummies are enemies, for now.
-func (a effectAreaOf) side(u *unit) bool {
+func (a effectShape) side(u *unit) bool {
 	switch a.affects {
 	case "enemies":
 		return u.dummy != nil
@@ -357,7 +357,7 @@ func (a effectAreaOf) side(u *unit) bool {
 
 // reaches says whether `at` is within the area's shape, and how far it is from its middle. An
 // effect area of those `holding` something reaches them wherever they are.
-func (a effectAreaOf) reaches(at [3]float64) (float64, bool) {
+func (a effectShape) reaches(at [3]float64) (float64, bool) {
 	gap := distance(a.center, at)
 	if a.height > 0 && math.Abs(at[1]-a.center[1]) > a.height {
 		return gap, false
@@ -378,7 +378,7 @@ func (a effectAreaOf) reaches(at [3]float64) (float64, bool) {
 
 // ranked is those found in the order the area prefers them, nearest first by default, up to its
 // most.
-func (a effectAreaOf) ranked(found []reach) []*unit {
+func (a effectShape) ranked(found []reach) []*unit {
 	slices.SortFunc(found, func(x, y reach) int {
 		switch a.prefers {
 		case "farthest":
@@ -405,7 +405,7 @@ func (a effectAreaOf) ranked(found []reach) []*unit {
 }
 
 // counts says whether a unit in an effect area is one it's after.
-func (a effectAreaOf) counts(v *unit) bool {
+func (a effectShape) counts(v *unit) bool {
 	if v.ID == a.except && a.except != 0 {
 		return false
 	}
@@ -424,7 +424,7 @@ func (l *Layer) tellContinent(continent string, b []byte) {
 }
 
 // effectAreaMessageOf is an effect area as those on its continent see it.
-func effectAreaMessageOf(z *effectZone, now time.Time) effectAreaMessage {
+func effectAreaMessageOf(z *effectArea, now time.Time) effectAreaMessage {
 	at, _, _ := z.center()
 	return effectAreaMessage{"effectArea", z.id, z.from.ID, z.ability.ID, z.affects, at, z.radius, z.line, z.width, z.dir, z.until.Sub(now).Seconds(), z.follows}
 }

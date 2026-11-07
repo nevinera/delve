@@ -300,7 +300,7 @@ func (cm *Combat) spill(u *unit, c *casting, e *combat.Effect, on *unit, center 
 			return false
 		}
 		others := []*unit{}
-		for _, v := range cm.inEffectArea(effectAreaOf{center: center, continent: continent, affects: "enemies", radius: x.Radius}) {
+		for _, v := range cm.inEffectArea(effectShape{center: center, continent: continent, affects: "enemies", radius: x.Radius}) {
 			if v != on && (x.Max == 0 || len(others) < x.Max) {
 				others = append(others, v)
 			}

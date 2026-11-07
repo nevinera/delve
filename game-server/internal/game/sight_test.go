@@ -74,7 +74,7 @@ func TestSightKeepsEffectAreasOut(t *testing.T) {
 	_, p, _, d := behindWall(t)
 	p.layer.mu.Lock()
 	defer p.layer.mu.Unlock()
-	a := effectAreaOf{center: p.state.At, continent: p.state.Continent, affects: "enemies", radius: 1000}
+	a := effectShape{center: p.state.At, continent: p.state.Continent, affects: "enemies", radius: 1000}
 	if got := p.layer.combat.inEffectArea(a); len(got) != 0 {
 		t.Fatalf("with the wall up: %d in it", len(got))
 	}

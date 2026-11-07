@@ -65,8 +65,8 @@ type activeStatus struct {
 	spent       float64             // what the ability that applied it spent
 	absorb      float64             // what its `absorb` has left
 	stored      float64             // what it holds for `stored` amounts
-	effectZone  *effectZone         // the effect area or aura keeping it on, if any
-	effectZones map[int]*effectZone // its own auras, by their place in the status
+	effectArea  *effectArea         // the effect area or aura keeping it on, if any
+	effectAreas map[int]*effectArea // its own auras, by their place in the status
 	owner       *combat.Class       // the class it came from
 }
 

@@ -64,7 +64,7 @@ func (cm *Combat) applyStatus(u *unit, a *combat.Ability, id string, duration fl
 		held.until = now.Add(seconds(lasts))
 	}
 	if was != nil {
-		held.ticks, held.fired, held.counts, held.effectZones = was.ticks, was.fired, was.counts, was.effectZones // putting it on again doesn't start these over
+		held.ticks, held.fired, held.counts, held.effectAreas = was.ticks, was.fired, was.counts, was.effectAreas // putting it on again doesn't start these over
 	}
 	cm.state.addStatus(on, key, held, now)
 	cm.fire(statusEvent("statusGained", on, key, held), now)
@@ -136,7 +136,7 @@ func (cm *Combat) sweep(now time.Time) {
 		}
 		cm.refit(v, now)
 	}
-	cm.sweepEffectZones(now)
+	cm.sweepEffectAreas(now)
 }
 
 // tickStatus lands whatever's due of a status's periodic effects. A last tick due as it ends still lands.
@@ -229,7 +229,7 @@ func (cm *Combat) around(e *combat.StatusEffect, at [3]float64, continent string
 			found = append(found, reach{v, gap})
 		}
 	}
-	return effectAreaOf{most: e.Max}.ranked(found)
+	return effectShape{most: e.Max}.ranked(found)
 }
 
 // statusChanged tells those near a unit how a status on it stands now.

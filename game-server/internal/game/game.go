@@ -308,7 +308,7 @@ func (l *Layer) join(p *Player) {
 		p.send(encode(l.restPointsOn(p)))
 	}
 	now := l.hub.now()
-	for _, z := range l.combat.effectZones {
+	for _, z := range l.combat.effectAreas {
 		if _, continent, ok := z.center(); ok && continent == p.state.Continent {
 			p.send(encode(effectAreaMessageOf(z, now)))
 		}

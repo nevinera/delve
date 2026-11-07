@@ -675,7 +675,7 @@ func (cm *Combat) reached(u *unit, c *casting, e *combat.Effect) []*unit {
 	if e.Line {
 		way = lineWay(u, c, e, center)
 	}
-	a := effectAreaOf{center: center, continent: u.char.Continent, yaw: u.char.Yaw, affects: e.Affects, radius: e.Radius, cone: e.Cone, line: e.Line, width: e.Width, dir: way, most: e.Max, prefers: e.Prefers, from: u.ID, holding: e.Holding}
+	a := effectShape{center: center, continent: u.char.Continent, yaw: u.char.Yaw, affects: e.Affects, radius: e.Radius, cone: e.Cone, line: e.Line, width: e.Width, dir: way, most: e.Max, prefers: e.Prefers, from: u.ID, holding: e.Holding}
 	if e.Type != "move" {
 		a.height = e.Height
 	}

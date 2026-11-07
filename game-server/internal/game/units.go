@@ -83,7 +83,7 @@ func (l *Layer) removeStatus(on *unit, key statusKey) *activeStatus {
 	held := on.Statuses[key]
 	delete(on.Statuses, key)
 	if held != nil {
-		l.combat.endEffectZones(held)
+		l.combat.endEffectAreas(held)
 	}
 	l.tellOf(on.ID, encode(statusGone{"statusGone", on.ID, key.id, key.from}))
 	return held
@@ -189,8 +189,8 @@ type Combat struct {
 	state           combatState
 	now             func() time.Time
 	roll            func() float64
-	effectZones     []*effectZone // effect areas on the ground, oldest first
-	effectZoneCount int64
+	effectAreas     []*effectArea // effect areas on the ground, oldest first
+	effectAreaCount int64
 	landings        []*landing
 	firing          int // how many triggers are setting each other off right now
 	lastTick        time.Time

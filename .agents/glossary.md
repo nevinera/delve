@@ -41,7 +41,7 @@
 - **Rest point:** a place in a world that a character can make their **home**. **Homeward** is the ability every class has that takes them back to it.
 - **Bot:** a script playing a character (`script/game/bot`).
 - **Zone:** a named region of a continent. **Area:** a named region inside one zone.
-- **Effect area:** the ground an ability's effect covers, and the `effectArea` effect that lasts there. **Effect zone:** the server's lasting effect area or aura, keeping a status on those inside. Never just "area" or "zone".
+- **Effect area:** the ground an ability's effect covers, or a lasting `effectArea` effect or aura that keeps a status on those inside. Never just "area" or "zone".
 
 ## Creature names
 
@@ -62,4 +62,4 @@ Names from myth and folklore stay as they are.
 | ticket | token |
 | chamber | cavern |
 | layer, for anything but parallel world copies | whatever it is: plate, band, level |
-| zone or area, for what an ability covers | effect area, effect zone |
+| zone or area, for what an ability covers | effect area |
