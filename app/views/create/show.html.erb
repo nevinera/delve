@@ -89,6 +89,10 @@
         <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M8 6 L38 3 L44 18 L14 21 Z" fill="none" stroke="#ffb050" stroke-width="2"/><path d="M26 8 L29 17 L23 17 Z" fill="#ffa030"/></svg>
         <span>resting area</span><kbd class="create-key">L</kbd>
       </button>
+      <button type="button" data-tool="spawnArea" data-key="m" aria-pressed="false" title="draw spawn areas, which scatter mobs inside them">
+        <svg width="48" height="24" viewBox="0 0 48 24" aria-hidden="true"><path d="M6 6 L38 3 L44 18 L12 21 Z" fill="none" stroke="#e8506a" stroke-width="2"/><circle cx="17" cy="11" r="2.2" fill="#7aa84a"/><circle cx="28" cy="9" r="2.2" fill="#7aa84a"/><circle cx="31" cy="15" r="2.2" fill="#7aa84a"/><circle cx="21" cy="16" r="2.2" fill="#7aa84a"/></svg>
+        <span>spawn area</span><kbd class="create-key">M</kbd>
+      </button>
     </div>
     <div class="create-tools" data-work="build" hidden>
       <button type="button" data-tool="pick" data-key="h" aria-pressed="false" title="pick objects and slabs, to move, turn, delete or make a template of">
@@ -273,6 +277,15 @@
       <div class="create-way">
         <button type="button" id="restAreaDelete">delete</button>
         <button type="button" id="restAreaUndo">undo</button>
+      </div>
+    </div>
+    <div data-config="spawnArea" hidden>
+      <p class="create-note">Click corners to draw a spawn area, closing it at its first corner, with a double-click or Enter. Select one to set what spawns there.</p>
+      <p class="create-note">Mobs scatter on dry ground you can walk on, and again when you reshape it. A mob you move or change with select stays put.</p>
+      <div id="spawnAreaSpawns" class="create-spawns"></div>
+      <div class="create-way">
+        <button type="button" id="spawnAreaDelete">delete</button>
+        <button type="button" id="spawnAreaUndo">undo</button>
       </div>
     </div>
     <div data-config="pin" hidden>

@@ -160,7 +160,7 @@ const goblin = { id: "gobl0001", name: "Goblin", creatureType: "humanoid", look:
 files.set("creatures/gobl0001.json", strToU8(`${JSON.stringify(goblin, null, 2)}\n`));
 const spawns = {
   version: 1,
-  regions: [],
+  spawnAreas: [],
   placed: [
     { id: "gob00001", creature: "gobl0001", at: [276, 0, 60], yaw: 180, levels: 2, respawn: 60 },
     { id: "gob00002", creature: "gobl0001", at: [290, 0, 40], yaw: 270, levels: [1, 3], respawn: 60 },

@@ -2,19 +2,19 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "spawns.schema.json",
   "title": "places/continents/<c>/spawns.json",
-  "description": "A continent's spawn regions, and the mobs and NPCs placed one at a time.",
+  "description": "A continent's spawn areas, and the mobs and NPCs placed one at a time.",
   "type": "object",
   "required": [
     "version",
-    "regions",
     "placed"
   ],
   "properties": {
     "version": {
       "const": 1
     },
-    "regions": {
+    "spawnAreas": {
       "type": "array",
+      "description": "/create's spawn areas: each scatters placed mobs inside an area; the game server only reads the placed mobs",
       "items": {
         "type": "object",
         "required": [
@@ -26,11 +26,9 @@
           "id": {
             "$ref": "common.schema.json#/$defs/id"
           },
-          "name": {
-            "type": "string"
-          },
           "area": {
-            "$ref": "common.schema.json#/$defs/region"
+            "$ref": "common.schema.json#/$defs/id",
+            "description": "the area, in the continent's regions.json, it scatters mobs inside"
           },
           "notes": {
             "type": "string",
@@ -51,7 +49,8 @@
                 },
                 "density": {
                   "type": "number",
-                  "exclusiveMinimum": 0
+                  "minimum": 0,
+                  "description": "mobs per 512 ft square"
                 },
                 "pack": {
                   "type": "array",
@@ -148,6 +147,10 @@
                 "type": "boolean"
               }
             }
+          },
+          "spawnArea": {
+            "$ref": "common.schema.json#/$defs/id",
+            "description": "the spawn area that scattered this mob; /create scatters it again with the rest, until it's edited by hand"
           }
         },
         "oneOf": [

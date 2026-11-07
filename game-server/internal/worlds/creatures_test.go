@@ -51,7 +51,7 @@ func TestReadPlacedMobs(t *testing.T) {
 	w := readWorld(t, map[string]string{
 		"world.json":              twoContinents,
 		"creatures/gobl0001.json": `{"id":"gobl0001","name":"Goblin","look":{"body":"goblin"}}`,
-		"places/continents/main/spawns.json": `{"version":1,"regions":[],"placed":[
+		"places/continents/main/spawns.json": `{"version":1,"spawnAreas":[],"placed":[
 			{"id":"p1","creature":"gobl0001","at":[10,2,20],"yaw":90,"levels":3,"respawn":300},
 			{"id":"p2","creature":"gobl0001","at":[30,0,40],"levels":[5,2],"wander":0},
 			{"id":"p3","npc":"vend0001","at":[0,0,0]},

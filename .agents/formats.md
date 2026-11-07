@@ -43,7 +43,7 @@ A world is a directory of files, usually a GitHub repo. Paths are relative to it
 | `places/continents/<c>/roads.json` | footpaths, trails and roads | [below](#roads), [schema](../docs/schema/roads.schema.json) | `client/src/v2/roads.js`, `client/src/create/roads.js`, `client/src/play/loader.js` |
 | `places/continents/<c>/map.json` | map pins: places marked on the map in play | [Map pins](#map-pins), [schema](../docs/schema/map.schema.json) | `client/src/v2/mapPins.js`, `client/src/play/loader.js` |
 | `places/continents/<c>/regions.json` | areas: polygons that rest points and other things point at | [Areas](#areas), [schema](../docs/schema/regions.schema.json) | `client/src/v2/regions.js`, `client/src/create/continentAreas.js`, `game-server/internal/worlds/areas.go` |
-| `places/continents/<c>/spawns.json` | spawn regions, and mobs and NPCs placed one at a time | [Spawns](#spawns), [schema](../docs/schema/spawns.schema.json) | `client/src/create/units.js`, `game-server/internal/worlds/creatures.go` |
+| `places/continents/<c>/spawns.json` | spawn areas, and mobs and NPCs placed one at a time | [Spawns](#spawns), [schema](../docs/schema/spawns.schema.json) | `client/src/create/units.js`, `game-server/internal/worlds/creatures.go` |
 
 The JSON files that describe things (the world, objects, templates and game data) can have `notes`: free-form text on what a thing is for and its backstory. The game never reads them.
 
@@ -521,7 +521,7 @@ An `id` is 1 to 32 lowercase letters, digits and dashes, starting with a letter 
 
 ## Areas
 
-`regions.json` holds a continent's areas: polygons on the ground, of any size, that other things point at by id. Areas can overlap. An area's `id` is its own, apart from whatever points at it, and `points` are its `[x, z]` corners in continent feet, three or more. Readers leave out an area that isn't whole. /create draws them with the tools that use them: rest points' with units' resting area tool. A continent with no areas has no file. Code: `client/src/v2/regions.js`. [Schema](../docs/schema/regions.schema.json).
+`regions.json` holds a continent's areas: polygons on the ground, of any size, that other things point at by id. Areas can overlap. An area's `id` is its own, apart from whatever points at it, and `points` are its `[x, z]` corners in continent feet, three or more. Readers leave out an area that isn't whole. /create draws them with the tools that use them: units' resting area and spawn area tools. A continent with no areas has no file. Code: `client/src/v2/regions.js`. [Schema](../docs/schema/regions.schema.json).
 
 ```json
 { "version": 1, "areas": [{ "id": "areak2m9", "points": [[4199, -7357.3], [4221.2, -7380], [4180, -7402]] }] }
@@ -679,9 +679,9 @@ The game server and `/classes` read classes, as [Combat](#combat) describes. The
 | `creatures/<id>.json` | a kind of mob | [creature](../docs/schema/creature.schema.json) |
 | `npcs/<id>.json` | a friendly character who talks or sells | [npc](../docs/schema/npc.schema.json) |
 | `dialogues/<id>.json` | a dialogue tree | [dialogue](../docs/schema/dialogue.schema.json) |
-| `places/continents/<c>/spawns.json` | the continent's spawn regions, placed mobs and NPCs | [spawns](../docs/schema/spawns.schema.json) |
+| `places/continents/<c>/spawns.json` | the continent's spawn areas, placed mobs and NPCs | [spawns](../docs/schema/spawns.schema.json) |
 
-Ids are 8 lowercase base-36 characters, and a file's id matches its name. Files point at each other by id. Within a class, a field that names one of its statuses, abilities, resources, units or specializations has an `x-refers` mark in the schema. `go generate ./internal/combat` in `game-server/` turns the marks into a map of where those fields are (`internal/combat/classrefs.json` and `client/src/classes/classRefs.json`). `/classes` and the game server both check a class against it. The editor shows what's missing, and the server logs it as it loads the world. When you add such a field, mark it and run the generator. Every file, and each spawn region and placed mob or NPC, can have `notes`: what it's for and its backstory. The game never reads them. Distances are feet, times are seconds, angles are degrees, and money is copper (100 copper make a silver, 100 silver a gold).
+Ids are 8 lowercase base-36 characters, and a file's id matches its name. Files point at each other by id. Within a class, a field that names one of its statuses, abilities, resources, units or specializations has an `x-refers` mark in the schema. `go generate ./internal/combat` in `game-server/` turns the marks into a map of where those fields are (`internal/combat/classrefs.json` and `client/src/classes/classRefs.json`). `/classes` and the game server both check a class against it. The editor shows what's missing, and the server logs it as it loads the world. When you add such a field, mark it and run the generator. Every file, and each spawn area and placed mob or NPC, can have `notes`: what it's for and its backstory. The game never reads them. Distances are feet, times are seconds, angles are degrees, and money is copper (100 copper make a silver, 100 silver a gold).
 
 `world.json` sets `levelCap`, 1 to 20 for now.
 
@@ -1108,11 +1108,10 @@ Each line has the NPC's `text` and your `choices`. A choice goes to the line `ne
 ```json
 {
   "version": 1,
-  "regions": [
+  "spawnAreas": [
     {
-      "id": "r8k2m1qa",
-      "name": "Wolf Den",
-      "area": [[[[10, 12], [14, 12], [14, 15], [10, 15]]]],
+      "id": "spwn8k2m",
+      "area": "areaw0lf",
       "spawns": [{ "creature": "wolf0001", "density": 6, "pack": [1, 3], "levels": [3, 4], "respawn": 300 }]
     }
   ],
@@ -1120,19 +1119,21 @@ Each line has the NPC's `text` and your `choices`. A choice goes to the line `ne
     { "id": "p1x9z2aa", "npc": "vend0001", "at": [5120, 82, 6400], "yaw": 90 },
     { "id": "p2b7c3dd", "creature": "wolf0002", "at": [5400, 80, 6600], "levels": 6, "respawn": 900, "pack": "den00001" },
     { "id": "p3c8d4ee", "creature": "wolf0002", "at": [5410, 80, 6604], "levels": 6, "respawn": 900, "pack": "den00001" },
-    { "id": "p4d9e5ff", "creature": "wolf0001", "at": [5600, 85, 6500], "levels": 5, "patrol": { "points": [[5600, 6500], [5800, 6500], [5800, 6700]], "loop": true } }
+    { "id": "p4d9e5ff", "creature": "wolf0001", "at": [5600, 85, 6500], "levels": 5, "patrol": { "points": [[5600, 6500], [5800, 6500], [5800, 6700]], "loop": true } },
+    { "id": "mob3k9qz", "creature": "wolf0001", "at": [5900, 84, 6550], "yaw": 212, "levels": [3, 4], "respawn": 300, "spawnArea": "spwn8k2m" }
   ]
 }
 ```
 
-- `regions`: areas marked on the map, named or not. `area` is a multipolygon in units of 512 ft, which isn't a tile's size now: settle this when spawns are built. Each of its `spawns` scatters `density` mobs per 512 ft square of `creature` across the area at random, at a level from `levels` (a number, or `[min, max]`), each coming back `respawn` seconds after it dies. `pack`, `[min, max]`, spawns them in packs of that many, 1 by default. `wander` is how far each strays from where it spawned, 30 ft by default.
-- `placed`: one `creature` or `npc` each, `at` a point in feet, facing `yaw` in degrees (0 toward +z, 90 toward +x). A placed creature stands on the ground under `at`. Creatures take `levels`, `respawn`, `wander`, `pack` and `patrol`:
+- `spawnAreas`: /create's, and the game server never reads them. Each points at an [area](#areas) by id, and /create scatters each of its `spawns` inside it as placed mobs: `density` mobs per 512 ft square of `creature`, on dry ground you can walk on, at least 20 ft apart, each with the spawn's `levels` (a number, or `[min, max]`), `respawn`, and `wander` if it has one. `pack`, `[min, max]`, puts them down in packs of that many, sharing a `pack` id, 1 by default. /create scatters them again when the area moves or changes shape or the spawns change, and takes them away with the area.
+- `placed`: one `creature` or `npc` each, `at` a point in feet, facing `yaw` in degrees (0 toward +z, 90 toward +x). A placed creature stands on the ground under `at`. Creatures take `levels`, `respawn`, `wander`, `pack`, `patrol` and `spawnArea`:
   - `pack`: an id that placed creatures share. When one is pulled, the rest join.
   - `patrol`: `points`, each `[x, z]` in feet, that it walks between, on the ground. With `loop` it goes back to the first; without, it turns back. A patrolling creature doesn't wander.
+  - `spawnArea`: the spawn area that scattered it. /create takes it off a mob you move or change by hand, which then stays as you left it.
 
 Mobs near one that's pulled, of the same `family`, may join it too.
 
-`/create`'s mob tool places creatures one at a time, with ids of `mob` and five more letters or digits, and keeps the file's regions, NPCs and other fields as they were. It writes `at`'s height as the ground's there, and leaves `wander` out unless you set one. A continent with no placed mobs gets no spawns file, unless it had one.
+`/create`'s mob tool places creatures one at a time, with ids of `mob` and five more letters or digits, and keeps the file's NPCs and other fields as they were. It writes `at`'s height as the ground's there, and leaves `wander` out unless you set one. A continent with no placed mobs or spawn areas gets no spawns file, unless it had one.
 
 ### Icons
 

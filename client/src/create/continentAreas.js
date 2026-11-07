@@ -2,15 +2,17 @@ import { Areas } from "./areas.js";
 import { inside } from "../v2/biomes.js";
 import { areaId, readAreas } from "../v2/regions.js";
 
-// A continent's areas (v2/regions.js), drawn by the tools that use them: units' resting area tool
-// for now (areas.js). Rest points point at them by id, as `area` in world.json: inside
-// one, a character is resting, and logs off at once. An area a rest point points at is drawn in
-// the resting color. One drawn with the resting area tool goes to the rest point inside it, or else
-// the nearest, in place of the area it had; one drawn with no rest point on the continent, or
-// that no rest point points at any more, is a plain area.
+// A continent's areas (v2/regions.js), drawn by the tools that use them: units' resting area and
+// spawn area tools (areas.js). Rest points point at them by id, as `area` in world.json: inside
+// one, a character is resting, and logs off at once. Spawn areas point at them too, in
+// spawns.json. An area a rest point points at is drawn in the resting color, and one a spawn area
+// points at in the spawn color. One drawn with the resting area tool goes to the rest point inside
+// it, or else the nearest, in place of the area it had; one drawn with the spawn area tool becomes
+// a spawn area. One nothing points at is a plain area.
 
 export const AREA_COLOR = "#7ec8e8";
 export const RESTING_COLOR = "#ffb050";
+export const SPAWN_COLOR = "#e8506a";
 
 // The rest point an area is for: the one inside it, or else the one nearest its middle.
 export function ownerOf(points, restPoints) {
@@ -23,20 +25,24 @@ export function ownerOf(points, restPoints) {
 
 export class ContinentAreas extends Areas {
   // restPoints(): the continent's rest points. onChange(): when areas change. onRest(rest, id):
-  // when the resting area tool gives a rest point a new area.
+  // when the resting area tool gives a rest point a new area. onSpawn(id, points): when the spawn
+  // area tool draws one. spawnAreas(): the ids of the areas spawn areas point at.
   constructor(scene, surface, stage, restPoints) {
-    super(scene, surface, stage, { colors: { area: AREA_COLOR, resting: RESTING_COLOR }, kind: "area", field: "kind", list: "areas", extras: ["id"], start: (points) => this.started(points) });
+    super(scene, surface, stage, { colors: { area: AREA_COLOR, resting: RESTING_COLOR, spawn: SPAWN_COLOR }, kind: "area", field: "kind", list: "areas", extras: ["id"], start: (points) => this.started(points) });
     this.restPoints = restPoints;
-    this.forRest = false; // whether new areas are drawn for rest points
+    this.spawnAreas = () => [];
+    this.mode = null; // "rest" or "spawn": what new areas are drawn for
     this.onChange = () => {};
     this.onRest = () => {};
+    this.onSpawn = () => {};
   }
 
-  // A new area's id, given to the rest point it's for when drawn for one.
+  // A new area's id, given to the rest point or spawn area it's drawn for.
   started(points) {
     const id = areaId(this.areas);
-    const owner = this.forRest ? ownerOf(points, this.restPoints()) : null;
+    const owner = this.mode === "rest" ? ownerOf(points, this.restPoints()) : null;
     if (owner) this.onRest(owner, id);
+    if (this.mode === "spawn") this.onSpawn(id, points);
     return { id };
   }
 
@@ -60,11 +66,13 @@ export class ContinentAreas extends Areas {
     return this.areas.find((a) => a.id === id) ?? null;
   }
 
-  // Draws each area a rest point points at in the resting color, and the rest plain.
+  // Draws each area a rest point points at in the resting color, one a spawn area points at in
+  // the spawn color, and the rest plain.
   recolor() {
     const resting = new Set(this.restPoints().map((r) => r.area));
+    const spawning = new Set(this.spawnAreas());
     for (const area of this.areas) {
-      const kind = resting.has(area.id) ? "resting" : "area";
+      const kind = resting.has(area.id) ? "resting" : spawning.has(area.id) ? "spawn" : "area";
       if (area.kind === kind) continue;
       area.kind = kind;
       area.line.material = this.material(kind, area === this.selected);

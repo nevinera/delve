@@ -986,3 +986,24 @@ body.create {
 .create-mob label {
   white-space: nowrap;
 }
+
+.create-spawns {
+  display: grid;
+  gap: 10px;
+}
+
+.create-spawn {
+  display: grid;
+  gap: 4px;
+  padding: 6px;
+  border: 1px solid #3a3e48;
+  border-radius: 4px;
+}
+
+.create-spawn label {
+  white-space: nowrap;
+}
+
+.create-spawn input[type="number"] {
+  width: 3.5em;
+}

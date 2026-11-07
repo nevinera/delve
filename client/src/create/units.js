@@ -3,6 +3,7 @@ import { dummyMaterials, dummyMesh } from "../world/dummy.js";
 import { restPointMaterials, restPointMesh } from "../world/restPoint.js";
 import { characterMesh, disposeCharacter } from "../character/characterMesh.js";
 import { resolveRecipe } from "../character/recipe.js";
+import { newSpawn, scatter } from "./spawnAreas.js";
 
 // Units in /create: training dummies and rest points, placed and moved like objects with the units
 // tools, and the spawn point, set with planning's spawn tool. All are kept in world.json
@@ -12,8 +13,9 @@ import { resolveRecipe } from "../character/recipe.js";
 //
 // Mobs placed by hand are kept in this continent's spawns.json instead: the mob tool puts the
 // chosen creature down with the mob settings, and select picks, drags and deletes them like the
-// rest. loadSpawns(json) reads the file and spawnsJSON() gives it back, its regions and NPCs as
-// they were, and mobVersion moves on whenever a mob changes.
+// rest. loadSpawns(json) reads the file and spawnsJSON() gives it back, its NPCs as they were,
+// and mobVersion moves on whenever a mob or spawn area changes. Spawn areas (spawnAreas.js) are
+// kept there too, and scatter mobs of their own.
 
 const FLAG = 0xe8c860;
 const PICKED = 0xffe14d;
@@ -51,6 +53,9 @@ export const restPointId = (taken, random = Math.random) => newId("rest", taken,
 // A new placed id, one nothing placed in `taken` has.
 export const placedId = (taken, random = Math.random) => newId("mob", taken, random);
 
+// A new spawn area id, one no spawn area in `taken` has.
+export const spawnAreaId = (taken, random = Math.random) => newId("spwn", taken, random);
+
 // A seeded random from a string, so a placed mob looks the same each time it's drawn.
 function seeded(text) {
   let s = 1;
@@ -74,8 +79,9 @@ const mobSettings = ({ creature, levels, respawn, yaw, wander }) => {
 export class Units {
   // groundAt(x, z): where the ground or a slab is to stand on. hit(): where the pointer meets the
   // ground, [x, y, z], or null. ray(): the pointer's ray, or null.
-  constructor({ scene, groundAt, hit, ray }) {
-    Object.assign(this, { scene, groundAt, hit, ray });
+  // standAt(x, z): the height of dry ground not too steep to walk there, or null.
+  constructor({ scene, groundAt, hit, ray, standAt = groundAt }) {
+    Object.assign(this, { scene, groundAt, hit, ray, standAt });
     this.group = new THREE.Group();
     scene.add(this.group);
     this.solid = materials();
@@ -92,6 +98,7 @@ export class Units {
     this.restPoints = []; // every continent's
     this.spawns = null; // spawns.json as the world had it
     this.placed = []; // its placed list: mobs, and NPCs kept as they are
+    this.spawnAreas = []; // { id, area, spawns }
     this.mobVersion = 0;
     this.creatures = new Map(); // id -> the world's creature
     this.mobSettings = { ...MOB_DEFAULTS };
@@ -120,13 +127,66 @@ export class Units {
   loadSpawns(json) {
     this.spawns = json;
     this.placed = [...(json?.placed ?? [])];
+    this.spawnAreas = [...(json?.spawnAreas ?? [])];
     this.pick(null);
     this.draw();
   }
 
   // spawns.json as it is now, with the mobs as placed.
   spawnsJSON() {
-    return { ...this.spawns, version: 1, regions: this.spawns?.regions ?? [], placed: this.placed };
+    const { regions, ...kept } = this.spawns ?? {}; // spawn areas took regions' place
+    return { ...kept, version: 1, spawnAreas: this.spawnAreas, placed: this.placed };
+  }
+
+  // The spawn area pointing at an area, or null.
+  spawnAreaOf(areaId) {
+    return this.spawnAreas.find((s) => s.area === areaId) ?? null;
+  }
+
+  // Makes the area with that id a spawn area, of the mob tool's creature, and scatters its mobs
+  // inside `points`. Gives it.
+  addSpawnArea(areaId, points) {
+    const { creature, levels, respawn } = this.mobSettings;
+    const spawnArea = { id: spawnAreaId(this.spawnAreas), area: areaId, spawns: creature ? [newSpawn(creature, levels, respawn)] : [] };
+    this.spawnAreas.push(spawnArea);
+    this.fill(spawnArea, points);
+    return spawnArea;
+  }
+
+  // Gives a spawn area these spawns, scattering its mobs again inside `points`.
+  setSpawns(spawnArea, spawns, points) {
+    spawnArea.spawns = spawns;
+    this.fill(spawnArea, points);
+  }
+
+  // Takes a spawn area away, and the mobs it scattered.
+  removeSpawnArea(spawnArea) {
+    this.spawnAreas = this.spawnAreas.filter((s) => s !== spawnArea);
+    this.fill(spawnArea, null);
+  }
+
+  // Scatters a spawn area's mobs again inside `points`, in place of those it had, or takes them
+  // away with no points.
+  fill(spawnArea, points) {
+    if (this.isMob(this.picked) && this.picked.spawnArea === spawnArea.id) this.pick(null);
+    this.placed = this.placed.filter((p) => p.spawnArea !== spawnArea.id);
+    if (points) {
+      const taken = [...this.placed];
+      const id = () => {
+        const next = placedId(taken);
+        taken.push({ id: next });
+        return next;
+      };
+      const packs = [];
+      const packId = () => {
+        const next = newId("pack", packs, Math.random);
+        packs.push({ id: next });
+        return next;
+      };
+      this.placed.push(...scatter(spawnArea, points, { standAt: this.standAt, id, packId }));
+    }
+    this.draw();
+    this.mobChanged();
   }
 
   // The mobs placed on this continent.
@@ -154,6 +214,7 @@ export class Units {
       return;
     }
     const mob = this.picked;
+    delete mob.spawnArea; // edited by hand, it's yours now
     const next = mobSettings({ ...mob, wander: mob.wander ?? null, ...settings });
     for (const key of Object.keys(MOB_DEFAULTS)) delete mob[key];
     Object.assign(mob, next);
@@ -277,6 +338,7 @@ export class Units {
     if (this.dragging && at) {
       const { unit } = this.dragging;
       unit.at = this.isMob(unit) ? at.map(round) : [round(at[0]), round(at[2])];
+      if (this.isMob(unit)) delete unit.spawnArea; // moved by hand, it's yours now
       this.stand(this.meshes.get(unit), Units.spot(unit));
       this.dragging.moved = true;
       this.showPicked();

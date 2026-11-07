@@ -11,6 +11,7 @@ import { BIOME_NAMES } from "../v2/biomes.js";
 import { waterPath } from "../v2/water.js";
 import { mapPinsPath } from "../v2/mapPins.js";
 import { spawnsPath } from "../world/paths.js";
+import { newSpawn } from "./spawnAreas.js";
 import { moveRestAreas, regionsPath } from "../v2/regions.js";
 import { roadsPath } from "../v2/roads.js";
 import { allEdges, wetIn } from "../v2/roadEdges.js";
@@ -363,9 +364,9 @@ function start(world, changes, fresh) {
   // The continent's areas, which rest points point at. A world with none gets no regions file,
   // unless it had one.
   ownFiles.add({ path: regionsPath(continent), load: (j) => tools.areas.load(j), ...json(tools.areas), keep: (had) => had || tools.areas.areas.length > 0 }, 0);
-  // Mobs placed by hand, in spawns.json beside the regions and NPCs. A world with none gets no
+  // Mobs placed by hand and spawn areas, in spawns.json beside the NPCs. A world with none gets no
   // spawns file, unless it had one.
-  ownFiles.add({ path: spawnsPath(continent), load: (j) => tools.units.loadSpawns(j), toJSON: () => tools.units.spawnsJSON(), version: () => tools.units.mobVersion, keep: (had) => had || tools.units.mobs().length > 0 }, 0);
+  ownFiles.add({ path: spawnsPath(continent), load: (j) => tools.units.loadSpawns(j), toJSON: () => tools.units.spawnsJSON(), version: () => tools.units.mobVersion, keep: (had) => had || tools.units.mobs().length > 0 || tools.units.spawnAreas.length > 0 }, 0);
   ownFiles.add({ path: layoutPath(continent), ...json(layout), keep: (had) => had || layout.networks.size > 0 || layout.carved.size > 0 }, layout.dropped ? -1 : layout.version);
   lineRoads();
   startup.step("files");
@@ -456,7 +457,7 @@ function start(world, changes, fresh) {
     // An area a rest point stops pointing at, when it's taken away or given another, goes too.
     const pointed = new Set(restPoints.filter((r) => r.continent === continent && r.area).map((r) => r.area));
     for (const id of restAreaIds) {
-      const area = !pointed.has(id) && tools.areas.byId(id);
+      const area = !pointed.has(id) && !tools.units.spawnAreaOf(id) && tools.areas.byId(id);
       if (area) tools.areas.removeArea(area);
     }
     restAreaIds = pointed;
@@ -535,7 +536,110 @@ function start(world, changes, fresh) {
   tools.areas.onChange = () => {
     for (const rest of tools.units.here(tools.units.restPoints)) if (rest.area && !tools.areas.byId(rest.area)) delete rest.area;
     tools.units.changed();
+    refill();
   };
+  // Spawn areas scatter their mobs again when their areas move or change shape, and go with them.
+  const scattered = new Map(); // spawn area id -> its area's points as last scattered, as JSON
+  const outline = (spawnArea) => tools.areas.byId(spawnArea.area)?.points ?? null;
+  for (const spawnArea of tools.units.spawnAreas) scattered.set(spawnArea.id, JSON.stringify(outline(spawnArea)));
+  const refill = () => {
+    for (const spawnArea of [...tools.units.spawnAreas]) {
+      const points = outline(spawnArea);
+      const key = JSON.stringify(points);
+      if (scattered.get(spawnArea.id) === key) continue;
+      scattered.set(spawnArea.id, key);
+      if (points) tools.units.fill(spawnArea, points);
+      else tools.units.removeSpawnArea(spawnArea);
+    }
+  };
+  tools.areas.spawnAreas = () => tools.units.spawnAreas.map((s) => s.area);
+  tools.areas.onSpawn = (id, points) => {
+    const spawnArea = tools.units.addSpawnArea(id, points);
+    scattered.set(spawnArea.id, JSON.stringify(points));
+  };
+  tools.areas.recolor();
+  // The spawn area tool's panel: the picked area's spawns, each a creature, its density, levels,
+  // respawn, pack and wander.
+  let spawnsShown = null;
+  const spawnPanel = $("spawnAreaSpawns");
+  const field = (text, input, after = "") => {
+    const label = document.createElement("label");
+    label.append(`${text} `, input, after);
+    return label;
+  };
+  const numberInput = (value, { min = 0, step = 1, placeholder = "" } = {}) => Object.assign(document.createElement("input"), { type: "number", min, step, placeholder, value: value ?? "" });
+  const showSpawnArea = (area) => {
+    const spawnArea = area && tools.units.spawnAreaOf(area.id);
+    const key = JSON.stringify([area?.id ?? null, spawnArea?.spawns ?? null, spawnArea && tools.units.placed.filter((p) => p.spawnArea === spawnArea.id).length]);
+    if (key === spawnsShown) return;
+    spawnsShown = key;
+    spawnPanel.replaceChildren();
+    if (!area) return;
+    const button = (text, onClick) => Object.assign(document.createElement("button"), { type: "button", textContent: text, onclick: onClick });
+    if (!spawnArea) {
+      spawnPanel.append(
+        button("make it a spawn area", () => {
+          tools.areas.onSpawn(area.id, area.points);
+          tools.areas.recolor();
+        }),
+      );
+      return;
+    }
+    const rows = spawnArea.spawns.map((spawn) => {
+      const row = document.createElement("div");
+      row.className = "create-spawn";
+      const creature = document.createElement("select");
+      creature.append(...creatureOptions());
+      if (spawn.creature && !creatures.some((c) => c.id === spawn.creature)) creature.append(new Option(`${spawn.creature} (not in this world)`, spawn.creature));
+      creature.value = spawn.creature ?? "";
+      const [lo, hi] = Array.isArray(spawn.levels) ? spawn.levels : [spawn.levels ?? 1, spawn.levels ?? 1];
+      const [packLo, packHi] = spawn.pack ?? [1, 1];
+      const inputs = {
+        creature,
+        density: numberInput(spawn.density, { step: 0.1 }),
+        lo: numberInput(lo, { min: 1 }),
+        hi: numberInput(hi, { min: 1 }),
+        respawn: numberInput(spawn.respawn, { min: 1 }),
+        packLo: numberInput(packLo, { min: 1 }),
+        packHi: numberInput(packHi, { min: 1 }),
+        wander: numberInput(spawn.wander, { step: 5, placeholder: "30" }),
+      };
+      const remove = button("remove", () => setSpawns(spawnArea.spawns.filter((s) => s !== spawn)));
+      row.append(field("creature", creature), field("density", inputs.density, " per 512 ft square"), field("levels", inputs.lo, " to "), inputs.hi, field("respawn", inputs.respawn, " seconds"), field("packs of", inputs.packLo, " to "), inputs.packHi, field("wander", inputs.wander, " feet"), remove);
+      row.querySelectorAll("input, select").forEach((input) => input.addEventListener("change", () => setSpawns(spawnArea.spawns.map((s) => (s === spawn ? readSpawn(inputs) : s)))));
+      return row;
+    });
+    const count = tools.units.placed.filter((p) => p.spawnArea === spawnArea.id).length;
+    const note = Object.assign(document.createElement("p"), { className: "create-note", textContent: `${count || "no"} ${count === 1 ? "mob" : "mobs"} scattered here` });
+    const first = creatures[0]?.id;
+    const { levels, respawn } = tools.units.mobSettings;
+    spawnPanel.append(
+      ...rows,
+      note,
+      button("add a creature", () => first && setSpawns([...spawnArea.spawns, newSpawn(first, levels, respawn)])),
+      button("scatter again", () => tools.units.fill(spawnArea, area.points)),
+      button("stop spawning here", () => {
+        tools.units.removeSpawnArea(spawnArea);
+        tools.areas.recolor();
+      }),
+    );
+    function setSpawns(spawns) {
+      tools.units.setSpawns(spawnArea, spawns, area.points);
+    }
+  };
+  const readSpawn = (inputs) => {
+    const number = (input, fallback) => (input.value === "" || !Number.isFinite(Number(input.value)) ? fallback : Number(input.value));
+    const lo = Math.max(1, Math.round(number(inputs.lo, 1)));
+    const hi = Math.max(lo, Math.round(number(inputs.hi, lo)));
+    const packLo = Math.max(1, Math.round(number(inputs.packLo, 1)));
+    const packHi = Math.max(packLo, Math.round(number(inputs.packHi, packLo)));
+    const spawn = { creature: inputs.creature.value || null, density: Math.max(0, number(inputs.density, 1)), levels: lo === hi ? lo : [lo, hi], respawn: Math.max(1, number(inputs.respawn, 300)) };
+    if (packHi > 1) spawn.pack = [packLo, packHi];
+    const wander = number(inputs.wander, null);
+    if (wander !== null) spawn.wander = Math.max(0, wander);
+    return spawn;
+  };
+  tools.areas.onSync = showSpawnArea;
   showSpawn();
   showDummies();
   $("spawnGo").addEventListener("click", () => {

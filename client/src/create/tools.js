@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { Units } from "./units.js";
+import { STEEP_DEG } from "../v2/look.js";
 import { ContinentAreas } from "./continentAreas.js";
 import { CAVE_THEMES, VOXEL_FT } from "../v2/caves.js";
 import { slabHome } from "../world/slabs.js";
@@ -102,7 +103,7 @@ export class Tools {
     this.courses = new Courses(scene, (x, z) => this.surface(x, z), parent, (x, z) => renditions.baseAt(x, z), stillAt);
     this.areas = new ContinentAreas(scene, (x, z) => this.surface(x, z), parent, () => this.units.here(this.units.restPoints));
     this.roads = new Roads(scene, (x, z) => this.surface(x, z), parent, (x, z) => renditions.baseAt(x, z));
-    this.outlined = { biomes: this.biomes, water: this.water, courses: this.courses, roads: this.roads, restArea: this.areas }; // each tool that draws areas, its areas
+    this.outlined = { biomes: this.biomes, water: this.water, courses: this.courses, roads: this.roads, restArea: this.areas, spawnArea: this.areas }; // each tool that draws areas, its areas
     this.drawTool = new DrawTool(this, { scene, parent, renditions, ground, heightAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, biomes: this.biomes });
     this.draw = this.drawTool.draw;
     this.build = new Build({
@@ -125,7 +126,15 @@ export class Tools {
     this.build.onPick = (tool) => this.tool !== tool && this.pick(tool);
     this.plan = new CavePlan({ scene, camera, canvas, layout, caves, ray: () => this.build.ray(), groundHit: () => this.hit(), groundAt: (x, z) => renditions.cellHeightAt(x, z) ?? EMPTY_FT, here: () => [builder.state.x, builder.state.y, builder.state.z] });
     builder.wheel = (e) => PLANS.has(this.tool) && this.plan.wheel(e);
-    this.units = new Units({ scene, groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, hit: () => this.hit(), ray: () => this.build.ray() });
+    // Where spawn areas scatter mobs: dry ground, not too steep to walk.
+    const standAt = (x, z) => {
+      const height = renditions.heightAt(x, z);
+      if (height === null || height === undefined || renditions.seaAt(x, z)) return null;
+      const water = renditions.waterAt(x, z);
+      const steep = (renditions.slopeAt(x, z) ?? 0) > Math.tan((STEEP_DEG * Math.PI) / 180);
+      return steep || (water !== null && water > height) ? null : height;
+    };
+    this.units = new Units({ scene, groundAt: (x, z) => renditions.heightAt(x, z) ?? EMPTY_FT, standAt, hit: () => this.hit(), ray: () => this.build.ray() });
     this.polish = new CavePolish({ scene, caves, layout, camera, ray: () => this.build.ray() });
     this.paths = new Paths(scene, parent, renditions, (x, z) => this.surface(x, z), (text) => ($("pathStatus").textContent = text));
     this.brush = new BrushTool(this, scene);
@@ -364,8 +373,8 @@ export class Tools {
     this.water.setShown(tool === "water" || tool === "courses");
     this.courses.setShown(tool === "courses" || tool === "water");
     this.roads.setShown(tool === "roads");
-    this.areas.setShown(tool === "restArea" || UNITS.has(tool));
-    this.areas.forRest = tool === "restArea";
+    this.areas.setShown(tool === "restArea" || tool === "spawnArea" || UNITS.has(tool));
+    this.areas.mode = { restArea: "rest", spawnArea: "spawn" }[tool] ?? null;
     if (tool === "map") this.map.refresh();
     this.map.toggle(tool === "map");
     if (BUILD.has(tool) || BUILD.has(this.build.tool)) this.build.setTool(BUILD.has(tool) ? tool : null);

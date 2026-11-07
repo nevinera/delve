@@ -39,12 +39,12 @@ describe("a continent's areas", () => {
   it("drawn for rest points go to their owner, and others go to none", () => {
     const here = rests();
     const a = areas(here);
-    a.forRest = true;
+    a.mode = "rest";
     const resting = a.addArea("area", square(100, 0, 10));
     expect(here[1].area).toBe(resting.id);
     expect(resting.id).toMatch(/^area[0-9a-z]{4}$/);
     expect(resting.kind).toBe("resting");
-    a.forRest = false;
+    a.mode = null;
     const plain = a.addArea("area", square(0, 0, 10));
     expect(here[0].area).toBeUndefined();
     expect(plain.kind).toBe("area");
