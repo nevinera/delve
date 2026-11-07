@@ -168,98 +168,114 @@ func (cm *Combat) resolved(u *unit, a *combat.Ability, now time.Time) *combat.Ab
 
 // check says whether a player can use an ability now: the ability and its target, or why not.
 func (cm *Combat) check(u *unit, m incoming, now time.Time) (*combat.Ability, int64, string) {
+	ability, why := cm.ready(u, m, now)
+	if why != "" {
+		return nil, 0, why
+	}
+	target, at, why := cm.aim(u, ability, m, now)
+	if why != "" {
+		return nil, 0, why
+	}
+	if at == nil {
+		if why := cm.unmet(u, ability, 0, now); why != "" {
+			return nil, 0, why
+		}
+		return ability, 0, ""
+	}
+	if why := cm.reachable(u, ability, target, *at); why != "" {
+		return nil, 0, why
+	}
+	if why := cm.unmet(u, ability, target, now); why != "" {
+		return nil, 0, why
+	}
+	return ability, target, ""
+}
+
+// ready is the ability a use asks for as the player's statuses change it, or why they can't use it
+// now, whoever it's aimed at.
+func (cm *Combat) ready(u *unit, m incoming, now time.Time) (*combat.Ability, string) {
 	f := u.fight
 	if f.class == nil {
-		return nil, 0, "you have no class"
+		return nil, "you have no class"
 	}
 	ability := f.class.Ability(m.Ability)
 	if ability == nil || !f.class.Knows(ability, f.level, f.build) {
-		return nil, 0, "you don't know that"
+		return nil, "you don't know that"
 	}
 	ability = cm.resolved(u, cm.inForce(u, ability, now), now)
 	if f.cast != nil && !ability.WhileCasting {
-		return nil, 0, "you're busy"
+		return nil, "you're busy"
 	}
 	gcd := combat.GCDSeconds
 	if ability.GCD != nil {
 		gcd = *ability.GCD
 	}
 	if gcd > 0 && now.Before(f.gcdUntil) {
-		return nil, 0, "not ready yet"
+		return nil, "not ready yet"
 	}
 	if !slices.Contains(ability.Ignores, "cooldown") && len(live(f.cooldowns[ability.ID], now)) >= max(ability.Charges, 1) {
-		return nil, 0, "not ready yet"
+		return nil, "not ready yet"
 	}
 	if why := combat.Blocked(cm.controlsOn(&f.unit), ability); why != "" {
-		return nil, 0, why
+		return nil, why
 	}
 	if lockedOut(f, ability, now) {
-		return nil, 0, "that school is locked out"
+		return nil, "that school is locked out"
 	}
 	if why := cm.affordable(u, ability, m.Target, now); why != "" {
-		return nil, 0, why
+		return nil, why
 	}
 	waits := ability.CastTime > 0 || ability.Channel != nil
 	if waits && !ability.CastWhileMoving && movingNow(u.char.Move) {
-		return nil, 0, "you can't do that while moving"
+		return nil, "you can't do that while moving"
 	}
-	var target int64
-	var at [3]float64
-	switch ability.Target {
-	case "enemy":
-		d := cm.state.dummy(m.Target, u.char.Continent)
-		if d == nil {
-			return nil, 0, "you need an enemy targeted"
-		}
-		if cm.untargetable(&d.unit, now) {
-			return nil, 0, "you can't target that"
-		}
-		target, at = d.ID, d.state.At
-	case "ally", "any":
-		if d := cm.state.dummy(m.Target, u.char.Continent); d != nil && ability.Target == "any" {
-			if cm.untargetable(&d.unit, now) {
-				return nil, 0, "you can't target that"
-			}
-			target, at = d.ID, d.state.At
-			break
-		}
-		o := cm.state.unit(m.Target, u.char.Continent)
-		if o == nil || o.fight == nil {
-			o = u // with no one else targeted, it goes on you
-		}
-		if o != u && cm.untargetable(o, now) {
-			return nil, 0, "you can't target that"
-		}
-		target, at = o.ID, o.char.At
-	case "ground":
+	return ability, ""
+}
+
+// aim is who and where a use goes. An ability with no target has no spot. One for an ally goes on
+// the player when no ally is targeted.
+func (cm *Combat) aim(u *unit, ability *combat.Ability, m incoming, now time.Time) (int64, *[3]float64, string) {
+	if ability.Target == "ground" {
 		if m.Spot == nil || !finite(*m.Spot, 0, 0) {
-			return nil, 0, "you need to pick a spot"
+			return 0, nil, "you need to pick a spot"
 		}
-		at = *m.Spot
-	default:
-		if why := cm.unmet(u, ability, 0, now); why != "" {
-			return nil, 0, why
-		}
-		return ability, 0, ""
+		return 0, m.Spot, ""
 	}
+	if ability.Target != "enemy" && ability.Target != "ally" && ability.Target != "any" {
+		return 0, nil, ""
+	}
+	t := cm.state.unit(m.Target, u.char.Continent)
+	enemy := t != nil && t.dummy != nil // only dummies are enemies, for now
+	switch {
+	case ability.Target == "enemy" && !enemy:
+		return 0, nil, "you need an enemy targeted"
+	case ability.Target == "ally" && enemy, t == nil:
+		t = u
+	}
+	if t != u && cm.untargetable(t, now) {
+		return 0, nil, "you can't target that"
+	}
+	return t.ID, &t.char.At, ""
+}
+
+// reachable says why a player can't reach a spot with an ability: too far, too near, facing away,
+// or out of sight.
+func (cm *Combat) reachable(u *unit, ability *combat.Ability, target int64, at [3]float64) string {
 	gap := distance(u.char.At, at)
 	reach := ability.Range.Feet
 	if ability.Range.Melee {
 		reach = combat.MeleeFt
 	}
 	if (reach > 0 && gap > reach) || gap < ability.MinRange {
-		return nil, 0, "out of range"
+		return "out of range"
 	}
 	if needsFacing(ability) && !facing(u.char.At, u.char.Yaw, at) {
-		return nil, 0, "you're not facing it"
+		return "you're not facing it"
 	}
 	if target != u.ID && !cm.sees(u.char.Continent, u.char.At, at) {
-		return nil, 0, cantSee
+		return cantSee
 	}
-	if why := cm.unmet(u, ability, target, now); why != "" {
-		return nil, 0, why
-	}
-	return ability, target, ""
+	return ""
 }
 
 func needsFacing(a *combat.Ability) bool {
