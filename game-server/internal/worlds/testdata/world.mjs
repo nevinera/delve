@@ -155,6 +155,19 @@ const surface = Array.from({ length: 100 }, (_, n) => 30 - 1.2 * Math.min(10, Ma
 const water = { version: 1, bodies: [], courses: [{ type: "stream", seed: 3, points: [[40, 700, 6], [740, 690, 6]], surface }] };
 files.set("places/continents/main/water.json", strToU8(`${JSON.stringify(water)}\n`));
 files.set("places/continents/main/biomes.json", strToU8(`${JSON.stringify({ version: 1, areas: AREAS })}\n`));
+// A goblin, and three placed near the spawn point, one of them at a range of levels.
+const goblin = { id: "gobl0001", name: "Goblin", creatureType: "humanoid", look: { body: "goblin" }, reaction: "hostile", attack: { speed: 2 } };
+files.set("creatures/gobl0001.json", strToU8(`${JSON.stringify(goblin, null, 2)}\n`));
+const spawns = {
+  version: 1,
+  regions: [],
+  placed: [
+    { id: "gob00001", creature: "gobl0001", at: [276, 0, 60], yaw: 180, levels: 2, respawn: 60 },
+    { id: "gob00002", creature: "gobl0001", at: [290, 0, 40], yaw: 270, levels: [1, 3], respawn: 60 },
+    { id: "gob00003", creature: "gobl0001", at: [240, 0, 80], yaw: 90, levels: 2, respawn: 60 },
+  ],
+};
+files.set("places/continents/main/spawns.json", strToU8(`${JSON.stringify(spawns, null, 2)}\n`));
 const world = { version: 2, name: "Fixture", continents: [{ key: "main", name: "Main" }], dungeons: [], spawn: { continent: "main", at: [256, 51.2] } };
 files.set("world.json", strToU8(`${JSON.stringify(world, null, 2)}\n`));
 fs.rmSync(new URL("world", here), { recursive: true, force: true });

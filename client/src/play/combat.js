@@ -548,7 +548,7 @@ export class PlayCombat {
     this.targetFrame.root.hidden = !drawn;
     this.targetRing.visible = Boolean(drawn);
     if (!drawn) return;
-    this.targetFrame.name.textContent = drawn.name;
+    this.targetFrame.name.textContent = drawn.level ? `${drawn.name} (${drawn.level})` : drawn.name;
     this.drawFrame(this.targetFrame, drawn.health, drawn.maxHealth);
     this.targetFrame.resources.textContent = drawn.dps ? `${drawn.dps} damage a second` : "";
   }

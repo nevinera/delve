@@ -53,6 +53,11 @@ function seeded(seed) {
   };
 }
 
+// A character's name, with its level if it's a mob: players' levels show in frames, not over heads.
+export function nameWithLevel({ id, name, level, dummy }) {
+  return id < 0 && level && !dummy ? `${name} (${level})` : name;
+}
+
 // A name to hang over a character's head: white with a dark edge, readable over sky or ground,
 // and not dimmed by fog.
 function nameplate(name) {
@@ -102,11 +107,12 @@ export class Others {
       look,
       own: character.look,
       class: character.class,
+      level: character.level,
       dummy,
       health: character.health,
       maxHealth: character.maxHealth,
       model,
-      nameplate: nameplate(character.name),
+      nameplate: nameplate(nameWithLevel(character)),
       height: dummy ? DUMMY_FT : look.height,
       mixer: new THREE.AnimationMixer(model),
       clips: null,
@@ -132,8 +138,8 @@ export class Others {
   look({ id, look }) {
     const drawn = this.characters.get(id);
     if (!drawn) return;
-    const { name, class: classId, dummy, health, maxHealth, dps, at, yaw, move, own } = drawn;
-    this.appear({ id, name, look: look ?? own, class: classId, dummy, health, maxHealth, at: [at.x, at.y, at.z], yaw, move });
+    const { name, class: classId, level, dummy, health, maxHealth, dps, at, yaw, move, own } = drawn;
+    this.appear({ id, name, look: look ?? own, class: classId, level, dummy, health, maxHealth, at: [at.x, at.y, at.z], yaw, move });
     const next = this.characters.get(id);
     next.own = own;
     next.dps = dps;

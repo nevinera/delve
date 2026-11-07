@@ -7,22 +7,18 @@ import (
 	"github.com/delve-mmo/delve3d/game-server/internal/combat"
 )
 
-// Training dummies: where they stand, what they tally, and sparring with them.
+// Mobs: where they stand, and training dummies' tallies and sparring.
 
-// placeDummies puts a world's training dummies on the layer, standing on the ground.
-func (l *Layer) placeDummies() {
+// placeMobs puts a world's training dummies and the creatures placed in its spawns files on the
+// layer, standing on the ground. Mobs' ids are negative, as characters' are positive.
+func (l *Layer) placeMobs() {
 	if l.mobs != nil {
 		return
 	}
 	l.mobs = []*mob{}
-	for i, d := range l.world.Dummies {
-		at := [3]float64{d.At[0], 0, d.At[1]}
-		if g := l.ground(d.Continent); g != nil {
-			if s, ok, err := g.At(at[0], at[2]); ok && err == nil {
-				at[1] = s.Ground
-			}
-		}
-		id := int64(-1 - i) // characters' ids are positive
+	for _, d := range l.world.Dummies {
+		id := int64(-1 - len(l.mobs))
+		at := l.onGround(d.Continent, d.At[0], d.At[1])
 		made := &mob{
 			unit:     unit{ID: id, base: combat.Plain(dummyHealth), Health: dummyHealth, MaxHealth: dummyHealth, Statuses: map[statusKey]*activeStatus{}},
 			training: true,
@@ -31,6 +27,20 @@ func (l *Layer) placeDummies() {
 		made.char, made.mob = &made.state, made
 		l.mobs = append(l.mobs, made)
 	}
+	for _, p := range l.world.Placed {
+		l.mobs = append(l.mobs, l.placed(int64(-1-len(l.mobs)), p))
+	}
+}
+
+// onGround is the place at (x, z) on a continent, on the ground there if the layer knows it.
+func (l *Layer) onGround(continent string, x, z float64) [3]float64 {
+	at := [3]float64{x, 0, z}
+	if g := l.ground(continent); g != nil {
+		if s, ok, err := g.At(x, z); ok && err == nil {
+			at[1] = s.Ground
+		}
+	}
+	return at
 }
 
 func (l *Layer) mobsOn(continent string) []Character {

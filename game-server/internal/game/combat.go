@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/delve-mmo/delve3d/game-server/internal/combat"
+	"github.com/delve-mmo/delve3d/game-server/internal/worlds"
 )
 
 // Combat on a layer: using abilities, casts and channels, what lands and when. Clients say what
@@ -75,7 +76,9 @@ type activeStatus struct {
 type mob struct {
 	unit
 	state    Character
-	training bool // it's a training dummy
+	training bool             // it's a training dummy
+	creature *worlds.Creature // what it is, if it was placed in a spawns file
+	home     [3]float64       // where it was placed
 	firstHit time.Time
 	lastHit  time.Time
 	damage   float64

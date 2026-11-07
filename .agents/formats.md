@@ -655,7 +655,7 @@ A humanoid's areas are its look's color slots, and an area with no rule takes th
 
 ## Game data
 
-The game server and `/classes` read classes, as [Combat](#combat) describes. The game server reads creatures and the creatures placed in spawns files, but doesn't play them yet. Nothing reads the rest yet, so this section is their only definition. What a world defines for combat: classes, abilities, statuses, items, creatures, NPCs, dialogue and spawns. Each is a JSON file in the world, with a schema in [docs/schema](../docs/schema). The rules follow the genre's modern standard as closely as we can: its stats, rating conversions, attack table, GCD and resources.
+The game server and `/classes` read classes, as [Combat](#combat) describes. The game server puts the creatures placed in spawns files in the world, where they stand still, and can be hit but can't die yet. Nothing reads the rest yet, so this section is their only definition. What a world defines for combat: classes, abilities, statuses, items, creatures, NPCs, dialogue and spawns. Each is a JSON file in the world, with a schema in [docs/schema](../docs/schema). The rules follow the genre's modern standard as closely as we can: its stats, rating conversions, attack table, GCD and resources.
 
 | Path | What it is | Schema |
 | --- | --- | --- |
@@ -1114,7 +1114,7 @@ Each line has the NPC's `text` and your `choices`. A choice goes to the line `ne
 ```
 
 - `regions`: areas marked on the map, named or not. `area` is a multipolygon in units of 512 ft, which isn't a tile's size now: settle this when spawns are built. Each of its `spawns` scatters `density` mobs per 512 ft square of `creature` across the area at random, at a level from `levels` (a number, or `[min, max]`), each coming back `respawn` seconds after it dies. `pack`, `[min, max]`, spawns them in packs of that many, 1 by default. `wander` is how far each strays from where it spawned, 30 ft by default.
-- `placed`: one `creature` or `npc` each, `at` a point in feet, facing `yaw`. Creatures take `levels`, `respawn`, `wander`, `pack` and `patrol`:
+- `placed`: one `creature` or `npc` each, `at` a point in feet, facing `yaw` in degrees (0 toward +z, 90 toward +x). A placed creature stands on the ground under `at`. Creatures take `levels`, `respawn`, `wander`, `pack` and `patrol`:
   - `pack`: an id that placed creatures share. When one is pulled, the rest join.
   - `patrol`: `points`, each `[x, z]` in feet, that it walks between, on the ground. With `loop` it goes back to the first; without, it turns back. A patrolling creature doesn't wander.
 

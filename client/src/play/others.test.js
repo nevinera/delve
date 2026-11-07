@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { Others, speedOf, stepOf } from "./others.js";
+import { nameWithLevel, Others, speedOf, stepOf } from "./others.js";
 
 const move = (m) => ({ forward: 0, strafe: 0, turn: 0, gait: "run", swim: false, jump: false, ...m });
 
@@ -47,5 +47,13 @@ describe("gear", () => {
     const drawn = { own: {}, transformed: true };
     expect(seen(drawn)).toEqual([]);
     expect(drawn.own).toEqual({ weapon: "maul" });
+  });
+});
+
+describe("nameWithLevel", () => {
+  it("puts a mob's level after its name, but not a player's or a training dummy's", () => {
+    expect(nameWithLevel({ id: -2, name: "Goblin", level: 3 })).toBe("Goblin (3)");
+    expect(nameWithLevel({ id: 7, name: "Ann", level: 3 })).toBe("Ann");
+    expect(nameWithLevel({ id: -1, name: "Training Dummy", dummy: true })).toBe("Training Dummy");
   });
 });

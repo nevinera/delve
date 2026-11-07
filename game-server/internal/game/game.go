@@ -296,7 +296,7 @@ func (l *Layer) join(p *Player) {
 		l.combat.dropFrom(p.ID()) // the same character, entering again before its old connection left
 	}
 	l.players[p.ID()] = p
-	l.placeDummies()
+	l.placeMobs()
 	p.send(encode(welcome{"welcome", l.seen(p.state), l.number}))
 	near := l.mobsOn(p.state.Continent)
 	for _, o := range l.near(p) {
