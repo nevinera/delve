@@ -1,3 +1,3 @@
 web: bin/rails server -p 8000
-game: PORT=8090 GAME_TOKEN_SECRET=${GAME_TOKEN_SECRET:-local-game-token-secret} RAILS_INTERNAL_TOKEN=${RAILS_INTERNAL_TOKEN:-local-internal-token} go -C game-server run .
+game: go -C game-server build -o ../tmp/game-server . && PORT=8090 GAME_TOKEN_SECRET=${GAME_TOKEN_SECRET:-local-game-token-secret} RAILS_INTERNAL_TOKEN=${RAILS_INTERNAL_TOKEN:-local-internal-token} exec tmp/game-server
 client: npm run build:watch
