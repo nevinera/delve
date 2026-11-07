@@ -2,7 +2,6 @@ package game
 
 import (
 	"bytes"
-	"cmp"
 	"log"
 	"math"
 	"slices"
@@ -220,36 +219,17 @@ func (cm *Combat) tickOf(u *unit, holder *unit, id string, held *activeStatus, e
 
 // around is who an area periodic reaches around its holder, nearest first.
 func (cm *Combat) around(e *combat.StatusEffect, at [3]float64, continent string) []*unit {
-	type reach struct {
-		v   *unit
-		gap float64
-	}
 	var found []reach
 	for v := range cm.state.units() {
-		there := v.char.At
-		on := v.char.Continent
-		isEnemy := v.ID < 0 // only dummies are enemies, for now
-		if on != continent || isEnemy != (e.Affects == "enemies") {
+		isEnemy := v.dummy != nil // only dummies are enemies, for now
+		if v.char.Continent != continent || isEnemy != (e.Affects == "enemies") {
 			continue
 		}
-		if gap := distance(at, there); e.Radius <= 0 || gap <= e.Radius {
+		if gap := distance(at, v.char.At); e.Radius <= 0 || gap <= e.Radius {
 			found = append(found, reach{v, gap})
 		}
 	}
-	slices.SortFunc(found, func(a, b reach) int {
-		if n := cmp.Compare(a.gap, b.gap); n != 0 {
-			return n
-		}
-		return cmp.Compare(a.v.ID, b.v.ID)
-	})
-	if e.Max > 0 && len(found) > e.Max {
-		found = found[:e.Max]
-	}
-	out := make([]*unit, len(found))
-	for i, each := range found {
-		out[i] = each.v
-	}
-	return out
+	return areaOf{most: e.Max}.ranked(found)
 }
 
 // statusChanged tells those near a unit how a status on it stands now.

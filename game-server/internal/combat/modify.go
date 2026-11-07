@@ -147,38 +147,24 @@ func (e *StatusEffect) byHits() bool {
 // Resolve is an ability with what its user holds counted. It gives back the same ability if
 // nothing changes it. `roll` gives numbers in [0, 1), for a `modify` with a `chance`.
 func (c *Class) Resolve(a *Ability, mods []Mod, mastery float64, roll func() float64) *Ability {
-	var picked []Mod
-	out := *a
-	copied := false
+	out, copied := a, false
 	own := func() {
-		if copied {
-			return
-		}
-		copied = true
-		out.Tags = slices.Clone(a.Tags)
-		out.Cost = slices.Clone(a.Cost)
-		out.Effects = slices.Clone(a.Effects)
-		if a.Channel != nil {
-			channel := *a.Channel
-			out.Channel = &channel
+		if !copied {
+			out, copied = a.copied(), true
 		}
 	}
 	// Tags come first, as what they add can bring other changes in.
 	for _, m := range mods {
-		if len(m.Effect.AddTags) > 0 && m.Effect.picks(&out) {
+		if len(m.Effect.AddTags) > 0 && m.Effect.picks(out) {
 			own()
 			out.Tags = append(out.Tags, m.Effect.AddTags...)
 		}
 	}
+	var picked []Mod
 	for _, m := range mods {
-		e := m.Effect
-		if !e.picks(&out) || (e.Change == "" && len(e.AddEffects) == 0 && len(e.Overrides) == 0 && len(e.Ignores) == 0 && e.SpentAs == 0 && !e.SpentAsMax && e.SpendsUpTo == 0 && e.ByExtraSpent == 0 && !e.AlwaysCrit && len(e.AlwaysCritWhen) == 0 && !e.ScalesWithCrit && e.CritMultiplier == 0) {
-			continue
+		if m.Effect.picks(out) && m.Effect.changesAbility() && (m.Effect.Chance <= 0 || roll() < m.Effect.Chance) {
+			picked = append(picked, m)
 		}
-		if e.Chance > 0 && roll() >= e.Chance {
-			continue
-		}
-		picked = append(picked, m)
 	}
 	if len(picked) == 0 && !copied {
 		return a
@@ -186,28 +172,7 @@ func (c *Class) Resolve(a *Ability, mods []Mod, mastery float64, roll func() flo
 	own()
 	// What changes the ability's shape comes before its numbers, so they cover what's added.
 	for _, m := range picked {
-		override(&out, m.Effect.Overrides)
-		out.Effects = append(out.Effects, m.Effect.AddEffects...)
-		out.Ignores = append(out.Ignores, m.Effect.Ignores...)
-		if m.Effect.SpentAs != 0 {
-			out.SpentAs = m.Effect.SpentAs
-		}
-		out.SpentAsMax = out.SpentAsMax || m.Effect.SpentAsMax
-		out.SpendsUpTo += m.Effect.SpendsUpTo
-		if e := m.Effect; e.AlwaysCrit || len(e.AlwaysCritWhen) > 0 || e.ScalesWithCrit || e.CritMultiplier != 0 {
-			for i := range out.Effects {
-				o := &out.Effects[i]
-				o.AlwaysCrit = o.AlwaysCrit || e.AlwaysCrit
-				o.AlwaysCritWhen = append(o.AlwaysCritWhen, e.AlwaysCritWhen...)
-				o.ScalesWithCrit = o.ScalesWithCrit || e.ScalesWithCrit
-				if e.CritMultiplier != 0 {
-					o.CritMultiplier = e.CritMultiplier
-				}
-			}
-		}
-		if m.Effect.ByExtraSpent != 0 {
-			out.ByExtraSpent = m.Effect.ByExtraSpent
-		}
+		out.reshape(m.Effect)
 	}
 	for i := range out.Effects {
 		if e := &out.Effects[i]; e.Type == "status" && e.Duration == 0 {
@@ -232,15 +197,68 @@ func (c *Class) Resolve(a *Ability, mods []Mod, mastery float64, roll func() flo
 			}
 		}
 	}
-	out.Cooldown, out.CastTime, out.Range.Feet = max(out.Cooldown, 0), max(out.CastTime, 0), max(out.Range.Feet, 0)
-	for i := range out.Cost {
-		out.Cost[i].Amount, out.Cost[i].Percent = max(out.Cost[i].Amount, 0), max(out.Cost[i].Percent, 0)
-	}
-	for i := range out.Effects {
-		e := &out.Effects[i]
-		e.Radius, e.Cone, e.Duration = max(e.Radius, 0), max(e.Cone, 0), max(e.Duration, 0)
+	out.noNegatives()
+	return out
+}
+
+// changesAbility says whether a `modify` does anything to an ability as it's used.
+func (e *StatusEffect) changesAbility() bool {
+	return e.Change != "" || len(e.AddEffects) > 0 || len(e.Overrides) > 0 || len(e.Ignores) > 0 || e.SpentAs != 0 || e.SpentAsMax || e.SpendsUpTo != 0 ||
+		e.ByExtraSpent != 0 || e.changesCrits()
+}
+
+// changesCrits says whether a `modify` changes how its ability's effects crit.
+func (e *StatusEffect) changesCrits() bool {
+	return e.AlwaysCrit || len(e.AlwaysCritWhen) > 0 || e.ScalesWithCrit || e.CritMultiplier != 0
+}
+
+// copied is an ability that can be changed without changing this one.
+func (a *Ability) copied() *Ability {
+	out := *a
+	out.Tags, out.Cost, out.Effects = slices.Clone(a.Tags), slices.Clone(a.Cost), slices.Clone(a.Effects)
+	if a.Channel != nil {
+		channel := *a.Channel
+		out.Channel = &channel
 	}
 	return &out
+}
+
+// reshape makes a `modify`'s changes to what an ability does, before its numbers change.
+func (a *Ability) reshape(e *StatusEffect) {
+	override(a, e.Overrides)
+	a.Effects = append(a.Effects, e.AddEffects...)
+	a.Ignores = append(a.Ignores, e.Ignores...)
+	if e.SpentAs != 0 {
+		a.SpentAs = e.SpentAs
+	}
+	a.SpentAsMax = a.SpentAsMax || e.SpentAsMax
+	a.SpendsUpTo += e.SpendsUpTo
+	if e.changesCrits() {
+		for i := range a.Effects {
+			o := &a.Effects[i]
+			o.AlwaysCrit = o.AlwaysCrit || e.AlwaysCrit
+			o.AlwaysCritWhen = append(o.AlwaysCritWhen, e.AlwaysCritWhen...)
+			o.ScalesWithCrit = o.ScalesWithCrit || e.ScalesWithCrit
+			if e.CritMultiplier != 0 {
+				o.CritMultiplier = e.CritMultiplier
+			}
+		}
+	}
+	if e.ByExtraSpent != 0 {
+		a.ByExtraSpent = e.ByExtraSpent
+	}
+}
+
+// noNegatives raises what changes took below nothing back to nothing.
+func (a *Ability) noNegatives() {
+	a.Cooldown, a.CastTime, a.Range.Feet = max(a.Cooldown, 0), max(a.CastTime, 0), max(a.Range.Feet, 0)
+	for i := range a.Cost {
+		a.Cost[i].Amount, a.Cost[i].Percent = max(a.Cost[i].Amount, 0), max(a.Cost[i].Percent, 0)
+	}
+	for i := range a.Effects {
+		e := &a.Effects[i]
+		e.Radius, e.Cone, e.Duration = max(e.Radius, 0), max(e.Cone, 0), max(e.Duration, 0)
+	}
 }
 
 // isChangedBy says whether a `change` of amounts covers this effect.

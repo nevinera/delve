@@ -323,55 +323,63 @@ type areaOf struct {
 
 // inArea is who of a side is in an area, nearest first, up to its most.
 func (cm *Combat) inArea(a areaOf) []*unit {
-	type reach struct {
-		v   *unit
-		gap float64
-	}
 	var found []reach
-	near := func(at [3]float64) (float64, bool) {
-		gap := distance(a.center, at)
-		if a.height > 0 && math.Abs(at[1]-a.center[1]) > a.height {
-			return gap, false
+	for u := range cm.state.units() {
+		if u.char.Continent != a.continent || !a.side(u) || !a.counts(u) {
+			continue
 		}
-		if len(a.holding) > 0 {
-			return gap, true
+		gap, ok := a.reaches(u.char.At)
+		if ok && len(a.holding) == 0 {
+			ok = cm.sees(a.continent, a.center, u.char.At)
 		}
-		if a.line {
-			dx, dz := at[0]-a.center[0], at[2]-a.center[2]
-			along, across := dx*a.dir[0]+dz*a.dir[1], dx*a.dir[1]-dz*a.dir[0]
-			return gap, along >= 0 && along <= a.radius && math.Abs(across) <= a.width/2
-		}
-		if a.radius > 0 && gap > a.radius {
-			return gap, false
-		}
-		return gap, a.cone == 0 || withinCone(a.center, a.yaw, a.cone, at)
-	}
-	inside := func(at [3]float64) (float64, bool) {
-		gap, ok := near(at)
-		if !ok || len(a.holding) > 0 {
-			return gap, ok
-		}
-		return gap, cm.sees(a.continent, a.center, at)
-	}
-	if a.affects == "enemies" {
-		for _, d := range cm.state.dummyList() {
-			if d.state.Continent != a.continent {
-				continue
-			}
-			if gap, ok := inside(d.state.At); ok && a.counts(&d.unit) {
-				found = append(found, reach{&d.unit, gap})
-			}
-		}
-	} else if a.affects == "allies" {
-		for o := range cm.state.playerUnits() {
-			if o.char.Continent != a.continent {
-				continue
-			}
-			if gap, ok := inside(o.char.At); ok && a.counts(o) {
-				found = append(found, reach{o, gap})
-			}
+		if ok {
+			found = append(found, reach{u, gap})
 		}
 	}
+	return a.ranked(found)
+}
+
+// reach is a unit an area reaches, and how far it is from the area's middle.
+type reach struct {
+	v   *unit
+	gap float64
+}
+
+// side says whether a unit is on the side an area affects. Only dummies are enemies, for now.
+func (a areaOf) side(u *unit) bool {
+	switch a.affects {
+	case "enemies":
+		return u.dummy != nil
+	case "allies":
+		return u.fight != nil
+	}
+	return false
+}
+
+// reaches says whether `at` is within the area's shape, and how far it is from its middle. An
+// area of those `holding` something reaches them wherever they are.
+func (a areaOf) reaches(at [3]float64) (float64, bool) {
+	gap := distance(a.center, at)
+	if a.height > 0 && math.Abs(at[1]-a.center[1]) > a.height {
+		return gap, false
+	}
+	if len(a.holding) > 0 {
+		return gap, true
+	}
+	if a.line {
+		dx, dz := at[0]-a.center[0], at[2]-a.center[2]
+		along, across := dx*a.dir[0]+dz*a.dir[1], dx*a.dir[1]-dz*a.dir[0]
+		return gap, along >= 0 && along <= a.radius && math.Abs(across) <= a.width/2
+	}
+	if a.radius > 0 && gap > a.radius {
+		return gap, false
+	}
+	return gap, a.cone == 0 || withinCone(a.center, a.yaw, a.cone, at)
+}
+
+// ranked is those found in the order the area prefers them, nearest first by default, up to its
+// most.
+func (a areaOf) ranked(found []reach) []*unit {
 	slices.SortFunc(found, func(x, y reach) int {
 		switch a.prefers {
 		case "farthest":
